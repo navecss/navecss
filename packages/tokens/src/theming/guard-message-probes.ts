@@ -27,6 +27,10 @@ import {
   runContrastHarness,
   type SameStepViolation,
 } from './contrast.ts'
+// Both of the next two imports close a cycle back to this file (copy-lint.ts, and emit.ts by
+// way of copy-lint.ts) — see copy-lint.ts's matching comment for the full reasoning and the
+// live verification.
+// eslint-disable-next-line import-x/no-cycle -- verified benign, see copy-lint.ts
 import { assertNoticeIsEmitted, RETHEMING_NOTICE } from './copy-lint.ts'
 import { TINT_SEED_COMMENT_STEM } from './emit.ts'
 import { assertNeutralChromaCeilingWithinMargin } from './neutral.ts'

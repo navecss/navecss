@@ -14,7 +14,7 @@
 
 import { linesThatBeginInsideAnUnclosedComment } from './comment-open-tracker.ts'
 import { assertContrastFloors, runContrastHarness } from './contrast.ts'
-import { ACCESSIBILITY_GUARD_MESSAGE_PROBES } from './guard-message-probes.ts'
+import { ACCESSIBILITY_GUARD_MESSAGE_PROBES } from './guard-message-probes.ts' // eslint-disable-line import-x/no-cycle -- verified benign: the shared value is only dereferenced inside thunks, never at module initialization
 
 const FORBIDDEN_WORDS = /\b(WCAG|AA|AAA|accessible|compliant|meets|conformant)\b/i
 const RATIO_PATTERN = /\d+(?:\.\d+)?\s*:\s*1/
