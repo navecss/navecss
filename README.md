@@ -1,4 +1,4 @@
-# Nave
+# NaveCSS
 
 > Your north star for design systems.
 
