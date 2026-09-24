@@ -9,13 +9,11 @@
  * directory; `validate` takes exactly one, its source. No config-file discovery, and no
  * `env` (R2's `{ distDir, env, seeds }` shape is never re-exported).
  *
- * R9: context-free. Every path read is (i) inside THIS package's own installed directory,
- * (ii) a path the caller named, or (iii) a path Node's module resolver returns for another
- * package's `exports` entry (`resolveInstalledCoreVersion`'s `@navecss/core` `"./package.json"`
- * read, R14's mandated route) — never `scanCoreContractFromDisk`, `core-source.ts`, any
- * `packages/core/src` path, or `build-step.ts`. The two non-public seed defaults (`danger`,
- * the declared tint hue) come from `shipped-seeds.ts`, shared with `build-step.ts` so the two
- * paths never drift.
+ * R9: context-free. Every path read is (i) inside THIS package's own installed directory, (ii)
+ * a path the caller named, or (iii) a path Node's module resolver returns for another package's
+ * `exports` entry (`core-version.ts`'s `@navecss/core` `"./package.json"` read, the mandated
+ * core-version resolution route) — never a monorepo path. The two non-public seed defaults come from
+ * `shipped-seeds.ts`, shared with `build-step.ts` so they never drift.
  *
  * R16: `build` validates the UNION
  * of both halves' emitted names — the DTCG half's (the consumer's source, O(1) name
@@ -24,8 +22,8 @@
  * lives here, not in `composeConsumerBuild` (whose own constant-only check, before this
  * validation existed, could not fail for any consumer, ever).
  *
- * R23: a refusal is always a THROW; `build` composes every artifact in memory and writes
- * once, last, via `writeOutputs`, so a thrown error leaves no artifact on disk.
+ * R23: a refusal is always a THROW; `build` composes every artifact in memory and writes once,
+ * last, via `writeOutputs`, so a thrown error leaves no artifact on disk.
  */
 
 import { existsSync } from 'node:fs'
@@ -34,18 +32,18 @@ import path from 'node:path'
 
 import type { OutputFile } from './builder.ts'
 import type { SeedNormalization } from './theming/color-math.ts'
-import type { CoreContractManifest } from './theming/core-contract.ts'
+import type { CoreContractManifest, ManifestVersionSkew } from './theming/core-contract.ts'
 
 import { writeOutputs } from './builder.ts'
 import { detectCollidingNames, refuseOnCollision } from './collision.ts'
-import { resolveInstalledCoreVersion } from './core-version.ts'
+import { detectVersionSkew } from './core-version.ts'
 import { composeDtcgOutputs } from './dtcg-outputs.ts'
 import { MissingContractTokensError, UsageError } from './errors.ts'
 import { readOverrides } from './overrides.ts'
 import { findPackageRoot } from './package-root.ts'
 import { formatOklch } from './theming/color-math.ts'
 import { composeConsumerBuild } from './theming/consumer-build.ts'
-import { checkManifestVersionSkew, validateAgainstManifest } from './theming/core-contract.ts'
+import { validateAgainstManifest } from './theming/core-contract.ts'
 import { shippedThemingPropertyNames } from './theming/emit.ts'
 import { parseSeed } from './theming/seed-ingest.ts'
 import { SHIPPED_SEEDS } from './theming/shipped-seeds.ts'
@@ -78,6 +76,9 @@ export type { SeedNormalization } from './theming/color-math.ts'
 // TypeScript consumer could not `satisfies` their own override file against anything.
 export type { PerStepOverrides } from './theming/pipeline.ts'
 export { SeedIngestRefusal } from './theming/seed-ingest.ts'
+// Re-exported so `bin.ts` (façade-only imports, AC-token-build-02) can render `build`'s skew
+// advisory with `validate`'s own wording, never a second rendering.
+export { formatVersionSkewFact } from './validate-report.ts'
 
 const PACKAGE_ROOT = findPackageRoot(import.meta.url)
 
@@ -118,9 +119,7 @@ export interface TokensBuildResult {
    * was not moved. `resolvedSeed` is the normalised value whenever this is not `'none'`.
    */
   seedNormalization: SeedNormalization
-  /**
-  R35: every file written, output-directory-relative, sorted.
-   */
+  // R35: every file written, output-directory-relative, sorted.
   files: string[]
   /**
    * Always empty on a successful return — a non-empty set
@@ -128,16 +127,24 @@ export interface TokensBuildResult {
    * detection the refusal reads, without catching.
    */
   collidingNames: string[]
+  /**
+   * The version-skew fact `validate` already detects, which `build` used
+   * to silently skip. `undefined` when it matches, or the installed core could not be resolved
+   * at all (`coreProbe.status !== 'resolved'` — a different situation, not a skew). ADVISORY
+   * only, never changes `build`'s exit code; `producerName` lets `bin.ts` render the shared
+   * `formatVersionSkewFact`. Widening the exit-code contract's `{0, 1, 2}` set for a skew is a
+   * deliberately separate, out-of-scope decision.
+   */
+  versionSkew?: (ManifestVersionSkew & { producerName: string }) | undefined
 }
 
 /**
  * R1/R2/R3/R6/R7/R9/R10/R16/R23/R24-R26: the consumer-invocable build. Ingests `seed`
  * (R21-R23's refusal classes), reads `overrides` and `source` if given, validates the UNION
- * of both halves' emitted names against the manifest (R16) BEFORE either is composed,
- * composes the theming half and the DTCG-reader half over the token source into the SAME
- * `tokens.presets` layer (R10), merges the two exactly as Nave's own `withThemingLayer`
- * merges its two halves (string-appends the theming CSS onto the composed `tokens.css`),
- * and writes every artifact in ONE phase, last (R7/R23).
+ * of both halves' emitted names against the manifest (R16) BEFORE either is composed, composes
+ * the theming half and the DTCG-reader half into the SAME `tokens.presets` layer (R10) exactly
+ * as Nave's own `withThemingLayer` merges its two halves, and writes every artifact in ONE
+ * phase, last (R7/R23).
  */
 export async function build(options: TokensBuildOptions): Promise<TokensBuildResult> {
   const sourcePath = options.source ?? path.join(PACKAGE_ROOT, 'tokens.json')
@@ -188,6 +195,9 @@ export async function build(options: TokensBuildOptions): Promise<TokensBuildRes
 
   await writeOutputs(allFiles)
 
+  // Same check `validate` runs. Advisory only, never affects the above.
+  const { skew } = await detectVersionSkew(manifest)
+
   return {
     resolvedSeed: formatOklch(theming.primaryRecord.usedSeed),
     seedNormalization: theming.primaryRecord.normalization,
@@ -195,6 +205,7 @@ export async function build(options: TokensBuildOptions): Promise<TokensBuildRes
       .map((file) => path.relative(options.outDir, file.destination))
       .toSorted((a, b) => a.localeCompare(b)),
     collidingNames,
+    versionSkew: skew === undefined ? undefined : { ...skew, producerName: manifest.producer.name },
   }
 }
 
@@ -215,9 +226,7 @@ export interface TokensValidateResult {
    * not be read or parsed.
    */
   exitCode: 0 | 1 | 2
-  /**
-  R17/R18's rendered output, one line per array member.
-   */
+  // The validator's own rendered report, one line per array member.
   output: string[]
 }
 
@@ -246,11 +255,7 @@ export async function validate(options: TokensValidateOptions): Promise<TokensVa
   // R4/AC-token-build-04's sense — only the genuinely-missing subset drives the exit code.
   const { missing, supplied } = splitMissingBySupply(kind, notDeclared)
 
-  const coreProbe = await resolveInstalledCoreVersion()
-  const versionSkew =
-    coreProbe.status === 'resolved'
-      ? checkManifestVersionSkew(manifest, coreProbe.version)
-      : undefined
+  const { probe: coreProbe, skew: versionSkew } = await detectVersionSkew(manifest)
   const formatRefusal = checkManifestFormatSupport(manifest)
 
   const output = formatValidateReport(manifest, missing, versionSkew, { ...coreProbe, supplied })

@@ -58,6 +58,24 @@ const NAMESPACE_PREAMBLE =
   'prefix dropped and hyphens read as a dotted path (color.surface.base).'
 
 /**
+ * R14: the shared "these two versions differ" fact, named ONCE so
+ * `validate`'s version-skew refusal and `build`'s version-skew ADVISORY never state it in two
+ * separately-worded renderings of the same check. Names both versions and nothing else — no
+ * consequence clause — because the two callers' consequences differ (`validate`: don't trust
+ * this result; `build`: the generated file may not carry every custom-property name the
+ * installed core actually renders), so each composes its own sentence around this fact.
+ */
+export function formatVersionSkewFact(
+  producerName: string,
+  versionSkew: ManifestVersionSkew,
+): string {
+  return (
+    `this manifest was recorded against ${producerName}@${versionSkew.recorded}, but the ` +
+    `installed ${producerName} is @${versionSkew.installed}`
+  )
+}
+
+/**
  * R17 clause 4 / R18: the check's scope, stated in every outcome — one-directional (an
  * extra token in the source is never an error) — and never a claim about the palette.
  */
@@ -245,9 +263,8 @@ export function formatValidateReport(
 
   if (versionSkew) {
     return [
-      `Version skew: this manifest was recorded against ${manifest.producer.name}@` +
-        `${versionSkew.recorded}, but the installed ${manifest.producer.name} is @` +
-        `${versionSkew.installed}. Reinstall matching versions before trusting this result.`,
+      `Version skew: ${formatVersionSkewFact(manifest.producer.name, versionSkew)}. Reinstall ` +
+        `matching versions before trusting this result.`,
     ]
   }
 

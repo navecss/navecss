@@ -7,7 +7,11 @@
  * pure UX; it must never own the pipeline, and neither does this file.
  *
  * R4: the exit-code SET is `{0, 1, 2}` and nothing else ever sets `process.exitCode`.
- * `0` — built, `validate` found nothing missing, or `--help`/`-h` printed usage.
+ * `0` — built, `validate` found nothing missing, or `--help`/`-h` printed usage. A `build`
+ *   whose installed `@navecss/core` is skewed against the manifest's recorded producer
+ *   version is STILL `0` — the skew is printed to stderr as an advisory alongside the R35
+ *   stdout line, never as a merits failure; widening `build`'s exit-code behaviour for a
+ *   skew is a deliberately separate, out-of-scope decision.
  * `1` — the thing failed on its merits: a seed the pipeline accepted but the composed
  *   result could not satisfy the contract (`MissingContractTokensError`), a name declared by
  *   both the token source and the generated theming layer in one run (`TokenCollisionRefusal`),
@@ -33,6 +37,7 @@ import { parseArgs } from 'node:util'
 import {
   build,
   DuplicateTokenNameRefusal,
+  formatVersionSkewFact,
   MissingContractTokensError,
   SeedIngestRefusal,
   TokenCollisionRefusal,
@@ -150,6 +155,17 @@ async function main(): Promise<number> {
     console.log(
       `Built from seed ${result.resolvedSeed}${normalizationQualifier(result.seedNormalization)}: ${result.files.join(', ')}`,
     )
+    // An ADVISORY only — printed alongside the R35 line above, to stderr, never replacing it,
+    // and never changing the exit-code contract's `{0, 1, 2}` set (still exactly `0` here in
+    // every case, skew or no skew; widening `build`'s exit-code behaviour for a skew is a
+    // deliberately separate, out-of-scope decision).
+    if (result.versionSkew) {
+      const { producerName, ...skew } = result.versionSkew
+      console.error(
+        `Version skew: ${formatVersionSkewFact(producerName, skew)}. The generated file may ` +
+          `not carry every custom-property name the installed ${producerName} actually renders.`,
+      )
+    }
     return 0
   }
 

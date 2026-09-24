@@ -5,7 +5,7 @@
  * already produced `dist/` (this package's own `test` script depends on `build` in
  * `turbo.json`, same convention as `test/no-inlined-dependency.test.ts`).
  */
-import { execFileSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import {
   cpSync,
   existsSync,
@@ -32,22 +32,27 @@ interface RunResult {
   stderr: string
 }
 
+/**
+ * `execFileSync` (the prior implementation) only ever returns the
+ * child's STDOUT on a successful (exit `0`) run — its own docs: "stderr by default will be
+ * output to the parent process' stderr unless stdio is specified" — so every caller of this
+ * helper that inspected `.stderr` after a `status === 0` run was reading a hardcoded `''`,
+ * never the child's real stderr. That was invisible until `build`'s new version-skew advisory
+ * (stderr, exit `0`) needed asserting for real. `spawnSync` captures BOTH streams on every
+ * exit status uniformly, so this switches to it rather than adding a second, differently-shaped
+ * helper for the success case alone.
+ */
 function runNode(
   scriptPath: string,
   args: string[],
   cwd: string,
   nodeFlags: string[] = [],
 ): RunResult {
-  try {
-    const stdout = execFileSync(process.execPath, [...nodeFlags, scriptPath, ...args], {
-      cwd,
-      encoding: 'utf8',
-    })
-    return { status: 0, stdout, stderr: '' }
-  } catch (error) {
-    const failure = error as { status: number | null; stderr: string; stdout: string }
-    return { status: failure.status ?? 1, stdout: failure.stdout, stderr: failure.stderr }
-  }
+  const result = spawnSync(process.execPath, [...nodeFlags, scriptPath, ...args], {
+    cwd,
+    encoding: 'utf8',
+  })
+  return { status: result.status ?? 1, stdout: result.stdout, stderr: result.stderr }
 }
 
 /**
@@ -928,6 +933,90 @@ describe('R3-03 covers: R15/R21 (the file label is delimited at every door)', ()
     expect(result.status).toBe(2)
     expect(result.stderr).toContain(`"${source}"`)
     expect(isEveryMentionQuoted(result.stderr, source)).toBe(true)
+  })
+})
+
+/**
+ * Simulates a real, RESOLVABLE `@navecss/core` install — declares `"./package.json"` in its
+ * own `exports` map, the mandated core-version resolution route, at the given `version`. The population
+ * `checkManifestVersionSkew` exists for: a consumer whose installed `@navecss/core` does not
+ * match this manifest's recorded producer version (`0.1.0`, per `dist/core-contract.json` at
+ * the time this test runs).
+ */
+function installResolvableCore(projectDir: string, version: string): void {
+  const coreDir = path.join(projectDir, 'node_modules', '@navecss', 'core')
+  mkdirSync(coreDir, { recursive: true })
+  writeFileSync(path.join(coreDir, 'index.js'), 'export default {}\n')
+  writeFileSync(
+    path.join(coreDir, 'package.json'),
+    JSON.stringify({
+      exports: { '.': './index.js', './package.json': './package.json' },
+      name: '@navecss/core',
+      type: 'module',
+      version,
+    }),
+  )
+}
+
+/**
+ * `build` gains the SAME version-skew check `validate` already runs
+ * (`resolveInstalledCoreVersion`/`checkManifestVersionSkew`) — previously `build` only guarded
+ * `MissingContractTokensError`, a self-consistency check against this package's OWN manifest
+ * that cannot see a skewed `@navecss/core`, so a consumer with a skewed installed core got a
+ * silently-incomplete build with nothing printed. Real, out-of-process, both directions: a
+ * genuinely skewed resolvable core (the fixture that matters most — `build` must still exit
+ * `0`, explicitly asserted, not just "didn't throw"), and each `coreProbe.status !== 'resolved'`
+ * population (no core at all, and an older core `validate`'s own R14 route cannot read),
+ * which must print NOTHING about skew at all.
+ */
+describe('build() surfaces a version-skew advisory to stderr, never changing its exit code', () => {
+  it("a resolvable @navecss/core at a version different from the manifest's recorded producer version: build prints the skew to stderr, alongside (not replacing) the R35 stdout line, and STILL exits 0", () => {
+    const { binPath, projectDir } = scratchInstall()
+    installResolvableCore(projectDir, '9.9.9') // manifest's recorded producer version is 0.1.0
+    const outDir = path.join(projectDir, 'out')
+
+    const result = runNode(
+      binPath,
+      ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+      projectDir,
+    )
+
+    // The one assertion that matters most: an advisory print must never touch the exit code.
+    expect(result.status).toBe(0)
+    expect(result.stdout).toMatch(/^Built from seed/)
+    expect(result.stderr).toMatch(/version skew/i)
+    expect(result.stderr).toMatch(/@navecss\/core@0\.1\.0/)
+    expect(result.stderr).toMatch(/@9\.9\.9/)
+    expect(result.stderr).toMatch(/may not carry every custom-property name/i)
+  })
+
+  it('no installed @navecss/core at all (not-installed): build prints no skew advisory and exits 0', () => {
+    const { binPath, projectDir } = scratchInstall()
+    const outDir = path.join(projectDir, 'out')
+
+    const result = runNode(
+      binPath,
+      ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+      projectDir, // no node_modules/@navecss/core exists in this scratch project
+    )
+
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe('')
+  })
+
+  it('an older installed @navecss/core with no "./package.json" export (unresolvable, not "skewed"): build prints no skew advisory and exits 0', () => {
+    const { binPath, projectDir } = scratchInstall()
+    installOlderCoreWithNoPackageJsonExport(projectDir, '9.9.9')
+    const outDir = path.join(projectDir, 'out')
+
+    const result = runNode(
+      binPath,
+      ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+      projectDir,
+    )
+
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe('')
   })
 })
 

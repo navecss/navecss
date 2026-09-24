@@ -9,6 +9,10 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
+import type { CoreContractManifest, ManifestVersionSkew } from './theming/core-contract.ts'
+
+import { checkManifestVersionSkew } from './theming/core-contract.ts'
+
 /**
  * `resolved` — real module resolution against `@navecss/core`'s own `"./package.json"`
  * export succeeded and the parsed version is in hand. `not-installed` — a rung-5 consumer
@@ -45,9 +49,13 @@ function canResolveCoreDefaultEntry(): boolean {
 }
 
 /**
-Resolves the installed `@navecss/core`'s version via its own declared `"./package.json"` export, distinguishing every way that can fail.
+ * Resolves the installed `@navecss/core`'s version via its own declared `"./package.json"`
+ * export, distinguishing every way that can fail. No longer exported — `detectVersionSkew`
+ * below is now the one call site, shared by `facade.ts`'s `build` and `validate`; a direct
+ * caller wanting the raw probe without a skew comparison can still reach it through
+ * `detectVersionSkew`'s own `probe` field.
  */
-export async function resolveInstalledCoreVersion(): Promise<CoreVersionProbe> {
+async function resolveInstalledCoreVersion(): Promise<CoreVersionProbe> {
   let resolved: string
   try {
     resolved = import.meta.resolve('@navecss/core/package.json')
@@ -87,4 +95,18 @@ export async function resolveInstalledCoreVersion(): Promise<CoreVersionProbe> {
   } catch (error) {
     return { message: (error as Error).message, status: 'unreadable' }
   }
+}
+
+/**
+ * R14: the ONE place `facade.ts`'s `build` and `validate` both call
+ * `resolveInstalledCoreVersion`/`checkManifestVersionSkew` — never `resolved`, no skew check
+ * (see `TokensBuildResult.versionSkew`'s own doc for why that is not itself a skew).
+ */
+export async function detectVersionSkew(
+  manifest: CoreContractManifest,
+): Promise<{ probe: CoreVersionProbe; skew: ManifestVersionSkew | undefined }> {
+  const probe = await resolveInstalledCoreVersion()
+  const skew =
+    probe.status === 'resolved' ? checkManifestVersionSkew(manifest, probe.version) : undefined
+  return { probe, skew }
 }

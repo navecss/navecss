@@ -1,0 +1,5 @@
+---
+'@navecss/tokens': patch
+---
+
+`navecss-tokens build` now checks the installed `@navecss/core`'s version against the manifest's recorded producer version, the same check `navecss-tokens validate` already ran. Previously `build` only guarded against its own manifest's self-consistency (`MissingContractTokensError`), which cannot see a skewed `@navecss/core`: a consumer whose installed `@navecss/core` did not match the version this package's contract was recorded against got a successful build that silently emitted a `tokens.css` missing some of the custom-property names the installed core actually renders, with nothing printed. `build` now prints a "Version skew" advisory to stderr, alongside its existing stdout summary, naming both versions and the resulting gap. This is advisory only: a skew is never reported when the installed `@navecss/core` could not be resolved at all (no core installed, or an older core with no readable version), and `build`'s exit code is unchanged in every case — it still never fails on this check.
