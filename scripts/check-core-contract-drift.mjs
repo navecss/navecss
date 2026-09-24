@@ -63,13 +63,34 @@ export function formatDrift(drift) {
 }
 
 /**
+ * The real, run-time scan `main()` performs, extracted and parameterised so a test can assert
+ * this SEAM rather than only the underlying `discoverSourceFiles` walk in isolation
+ * (`core-contract.test.ts` already covers that half). Before this existed, `main()`'s call
+ * site — `scanCoreContractFromDisk(discoverSourceFiles(CORE_SRC_DIR))` — was reachable by no
+ * test at all: reverting it to the exact pre-#219 hardcoded two-file census
+ * (`[reset.css, atoms.ts]`) left the whole suite, the drift check itself, and the shipped
+ * manifest all unchanged, measured directly — today's tree happens to have no third file
+ * carrying a real reference, so nothing distinguishes the hardcoded census from the real rule.
+ *
+ * `dir` defaults to `CORE_SRC_DIR`, the real directory a production run scans — a test MUST
+ * assert this default explicitly, not only an injected fixture directory. Parameterising a
+ * function to make it testable does not remove the untested surface, it relocates it into the
+ * default that only production ever supplies, so the seam this adds is itself the next place
+ * to probe: asserting only the injected value would leave the one input production actually
+ * takes unverified.
+ */
+export function scanSources(dir = CORE_SRC_DIR) {
+  return new Set(scanCoreContractFromDisk(discoverSourceFiles(dir)))
+}
+
+/**
  * With `--write`, regenerates the recorded core contract from core's real source. Otherwise
  * compares the recorded contract against what core actually emits and exits non-zero on any
  * drift between them.
  */
 function main() {
   const write = process.argv.includes('--write')
-  const emitted = new Set(scanCoreContractFromDisk(discoverSourceFiles(CORE_SRC_DIR)))
+  const emitted = scanSources()
 
   if (write) {
     const sorted = [...emitted].toSorted((a, b) => a.localeCompare(b))

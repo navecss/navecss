@@ -17,34 +17,102 @@ import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const NAVE_VAR_PATTERN = /var\((--nave-[a-z0-9-]+)/g
-const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g
+
+const QUOTE_CHARS = new Set(['"', "'", '`'])
 
 /**
- * The R31 guard's OWN audit pattern and comment stripper (raised by a quality reviewer during
- * an early review round). These deliberately DUPLICATE `NAVE_VAR_PATTERN` and `BLOCK_COMMENT_RE`
- * above rather than sharing them, and the duplication is the mechanism, not an oversight: a guard
- * that derives its EXPECTED set from the same pattern as the subject it guards measures wiring and
- * never content. Sharing made `assertContractPreconditions`'s limb (b) structurally incapable of
- * firing — `referenced` was a subset of `scanned` by construction for every possible input, so
- * narrowing `NAVE_VAR_PATTERN` back to the pre-#219 colour-only form produced the old 6-token
- * manifest with no throw at all, which is the exact regression the guard is named for. The audit
- * pattern is the INDEPENDENT statement of what a `--nave-*` reference is; the scan pattern is the
- * subject under audit. If the scan's pattern is ever narrowed, these must NOT be narrowed with it —
- * that divergence is the signal.
+ * Scan step while INSIDE a quoted string (split out for `stripComments`'s complexity budget):
+ * honours a backslash escape (`\'` does not close early), closes on the matching quote.
+ */
+function stepInsideQuote(
+  content: string,
+  index: number,
+  quote: string,
+): { index: number; out: string; quote: string | undefined } {
+  const ch = content[index]!
+  if (ch === '\\' && index + 1 < content.length) {
+    return { index: index + 2, out: ch + content[index + 1], quote }
+  }
+  return { index: index + 1, out: ch, quote: ch === quote ? undefined : quote }
+}
+
+/**
+ * Scan step while OUTSIDE any quote: opens one, skips a block comment to its close (or EOF),
+ * skips a `//` comment to its newline unless preceded by `:` (a URL's `://`), or copies through.
+ */
+function stepOutsideQuote(
+  content: string,
+  index: number,
+): { index: number; out: string; quote: string | undefined } {
+  const ch = content[index]!
+  if (QUOTE_CHARS.has(ch)) return { index: index + 1, out: ch, quote: ch }
+  if (ch === '/' && content[index + 1] === '*') {
+    const end = content.indexOf('*/', index + 2)
+    return { index: end === -1 ? content.length : end + 2, out: '', quote: undefined }
+  }
+  if (ch === '/' && content[index + 1] === '/' && content[index - 1] !== ':') {
+    const end = content.indexOf('\n', index)
+    return { index: end === -1 ? content.length : end, out: '', quote: undefined }
+  }
+  return { index: index + 1, out: ch, quote: undefined }
+}
+
+/**
+ * Strips both CSS/TS comment forms from `content` before matching. A block-comment-only regex
+ * is right for CSS, which has no line-comment syntax, but the widened scan now walks every
+ * `.ts` file, where `//` is the dominant form, and a block-comment-only stripper leaves every
+ * `//` comment unstripped — a dead `var(--nave-*)` example after `//` in a `.ts` file would be
+ * silently recorded as live.
+ *
+ * A naive `//`-to-EOL strip is wrong two ways, which is why this is a scanner and not a second
+ * regex: CSS's `url(https://…)` contains `//` that is not a comment (would drop a same-line
+ * reference), and a TS string/template literal may contain `//` with no comment meaning at all
+ * (where `atoms.ts` emits CSS text FROM). A false negative here is worse than the false
+ * positive it replaces, so this tracks quote state and refuses to open a comment inside a
+ * string, or a `//` preceded by `:`. Not attempted: CSS's own string-escape grammar.
+ * Unreachable from real source today; `check-core-contract-drift.mjs`'s CI comparison would
+ * surface it if that changes.
+ *
+ * SHARED with `assertContractPreconditions`'s audit below, unlike `NAVE_VAR_PATTERN`/
+ * `CONTRACT_AUDIT_PATTERN` (see that doc for why): stripping carries no matching judgement, so
+ * a defect here is equally visible both sides, never a one-sided narrowing.
+ */
+function stripComments(content: string): string {
+  let out = ''
+  let quote: string | undefined
+  let i = 0
+  while (i < content.length) {
+    const step = quote ? stepInsideQuote(content, i, quote) : stepOutsideQuote(content, i)
+    out += step.out
+    i = step.index
+    quote = step.quote
+  }
+  return out
+}
+
+/**
+ * The R31 guard's OWN audit pattern (raised by a quality reviewer during an early review
+ * round). Deliberately DUPLICATES `NAVE_VAR_PATTERN` above rather than sharing it: a guard
+ * that derives its EXPECTED set from the same pattern as the subject it guards measures
+ * wiring, never content — sharing made `assertContractPreconditions`'s limb (b) structurally
+ * incapable of firing (narrowing `NAVE_VAR_PATTERN` to the pre-#219 colour-only form produced
+ * the old manifest with no throw at all, the exact regression the guard is named for). If the
+ * scan's pattern is ever narrowed, this must NOT be narrowed with it. `stripComments` above IS
+ * shared between the scan and this guard's own audit; see its own doc for why that differs
+ * from the pattern above.
  */
 const CONTRACT_AUDIT_PATTERN = /var\((--nave-[a-z0-9-]+)/g
-const CONTRACT_AUDIT_BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g
 
 /**
  * Scans a set of CSS/TS source file contents for `var(--nave-*)` usage and returns the
  * sorted, de-duplicated list of referenced custom property names — the required core
- * contract (`G1 R27`/R12). Block comments are stripped first, so a reference that appears
- * only inside a doc-comment example counts for nothing.
+ * contract (`G1 R27`/R12). Both block comments and `//` line comments are stripped first, so
+ * a reference that appears only inside a doc-comment example counts for nothing.
  */
 export function scanCoreContract(fileContents: readonly string[]): string[] {
   const found = new Set<string>()
   for (const content of fileContents) {
-    const stripped = content.replaceAll(BLOCK_COMMENT_RE, '')
+    const stripped = stripComments(content)
     for (const match of stripped.matchAll(NAVE_VAR_PATTERN)) {
       found.add(match[1]!)
     }
@@ -197,7 +265,7 @@ export function assertContractPreconditions(names: readonly string[], rawSourceT
   }
 
   // The guard's own pattern, NOT the scan's — see `CONTRACT_AUDIT_PATTERN`'s doc.
-  const stripped = rawSourceText.replaceAll(CONTRACT_AUDIT_BLOCK_COMMENT_RE, '')
+  const stripped = stripComments(rawSourceText)
   const referenced = new Set(stripped.matchAll(CONTRACT_AUDIT_PATTERN).map((match) => match[1]!))
   const scanned = new Set(names)
   const unscanned = referenced.difference(scanned)
