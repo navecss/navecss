@@ -1,0 +1,45 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // A co-located `.d.mts` ambient declaration for a plain-JS repo
+  // script (scripts/check-license-allowlist.mjs), so packages/tokens/test's `.ts` test can
+  // import its pure classification functions typed. TypeScript's module resolution picks it
+  // up implicitly (same convention as a `.d.ts` beside a `.js` file in node_modules); knip's
+  // static import analysis has no import statement to see it through and flags it dead,
+  // which it is not — declaration-only files with no runtime code are never "imported" in
+  // the sense knip's default entry heuristic checks for `scripts/*.mjs`.
+  "ignore": ["scripts/check-license-allowlist.d.mts"],
+  // Every package's `check:pack` script runs `publint`/`attw` through
+  // `node ../../scripts/without-dry-run.mjs <bin> ...` rather than invoking the binary as the
+  // script's first token, so knip's script-string heuristic (which looks for a known binary
+  // NAME at the start of a script) no longer sees either as used. Both are real, live
+  // dependencies — every `check:pack` still runs them, one layer indirect through the wrapper.
+  "ignoreDependencies": ["@arethetypeswrong/cli", "publint"],
+  "workspaces": {
+    "packages/bridge": {
+      // @navecss/bridge maps Nave semantic tokens onto Base UI / Radix CSS
+      // variable contracts by CSS custom-property name (see src/*.css). It
+      // never imports @navecss/tokens as JS/CSS, so knip's static import
+      // analysis cannot see the relationship; the dependency documents a
+      // real version-compatibility contract, not dead weight.
+      "ignoreDependencies": ["@navecss/tokens"],
+    },
+    "packages/tokens": {
+      // `src/bin.ts` is the SOURCE for `bin: navecss-tokens`
+      // (`package.json`'s `bin` field points at the COMPILED `dist/lib/bin.js`) — a
+      // real entry point knip's default heuristics do not infer from a `bin` field the way
+      // they infer `src/index.ts` from `exports["."]`. `src/facade.ts` is the same shape one
+      // export map entry over: `exports["./build"]` points at the
+      // COMPILED `dist/lib/facade.js`/`.d.ts`, so a type like `PerStepOverrides` that is
+      // public API through that export but has no in-tree importer (bin.ts calls the
+      // runtime functions and never names the type) reads as unused without this entry.
+      "entry": ["src/bin.ts", "src/facade.ts"],
+      // `facade.ts` resolves the INSTALLED `@navecss/core`'s version
+      // at runtime (`import.meta.resolve('@navecss/core/package.json')`) purely to detect
+      // manifest/core version skew — never imports its code. Declaring it a real dependency
+      // would add a package-graph edge in the WRONG direction (`core` already depends on
+      // `tokens`, a deliberately tokens-free entry point), so this documents an intentional
+      // runtime-resolved reference, the same shape as bridge's own entry above.
+      "ignoreDependencies": ["@navecss/core"],
+    },
+  },
+}

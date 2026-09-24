@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # npm/pnpm workspace: pnpm-workspace.yaml roots every package under packages/*, so the single
+  # root directory entry covers the whole monorepo (dependabot resolves the workspace itself).
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    groups:
+      # tokens/core ride the Changesets `fixed` group; keep their
+      # own devDependency bumps from opening a flood of one-line PRs.
+      dev-dependencies:
+        dependency-type: 'development'
+    ignore:
+      # TypeScript 7 breaks the build today: typescript-eslint 8.70 throws "does not support
+      # TS 7.0" at plugin load (so nothing can be linted), and tsup's bundled rollup-plugin-dts
+      # crashes producing declaration files for core and cli. Revisit once typescript-eslint
+      # ships TS 7 support and rollup-plugin-dts no longer crashes under it.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      # eslint-plugin-unicorn 75's recommended preset adds 49 new lint failures across the
+      # monorepo (mostly prefer-ternary, plus prefer-combined-guards, a rule that didn't exist
+      # in 73). Revisit once someone is willing to make the readability case for adopting them.
+      - dependency-name: 'eslint-plugin-unicorn'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'

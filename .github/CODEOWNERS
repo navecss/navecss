@@ -1,0 +1,10 @@
+# Ownership for the release-critical surface: CI workflows, the pnpm/npm install-time
+# controls, and the guard scripts they run. Requires the paired branch-protection setting
+# ("Require review from Code Owners") to actually gate a merge; this file alone documents
+# ownership but does not enforce it.
+
+/.github/workflows/  @drixsonic
+/.github/CODEOWNERS  @drixsonic
+/.npmrc               @drixsonic
+/pnpm-workspace.yaml   @drixsonic
+/scripts/              @drixsonic

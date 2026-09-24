@@ -1,0 +1,43 @@
+{
+  "name": "@navecss/cli",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "navecss": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only",
+    "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsup": "^8.5.1",
+    "typescript": "6.0.3",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navecss/navecss.git",
+    "directory": "packages/cli"
+  }
+}

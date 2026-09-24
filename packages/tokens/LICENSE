@@ -1,0 +1,55 @@
+MIT License
+
+Copyright (c) 2026 Nave Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+THIRD-PARTY MATERIAL
+
+This package includes material copied from or derived from the CSS Color Module
+Level 4 specification and its published sample code (css-color-4/conversions.js
+in the w3c/csswg-drafts repository, at commit
+af8661bfe903aac7dbb9c5d1e1eccb725b8c331d, and
+https://drafts.csswg.org/css-color-4/#color-conversion-code). Copyright (c) 2026
+World Wide Web Consortium. That specification, and the repository carrying its
+sample code, are published under the W3C Software and Document License
+(https://www.w3.org/copyright/software-license-2023/).
+
+What is copied is the numeric constants used by src/theming/css-color-4.ts,
+published as dist/lib/theming/css-color-4.js, and the order of the conversion
+steps: the D50 white point, the CIE Lab kappa and epsilon, the Bradford D50 to
+D65 adaptation matrix, the linear display-p3 to XYZ matrix, and the two XYZ to
+OKLab matrices. The names, the types and the function bodies around them are
+this package's own, and everything in this package is offered under the MIT
+licence above.
+
+Also copied from that specification are the names of its colour keywords, held
+in src/theming/css-named-colours.ts and published as
+dist/lib/theming/css-named-colours.js. What is copied there is the keyword names
+alone, in alphabetical order, with none of the colour values the specification
+gives for them.
+
+This package implements the Design Tokens Format Module 2025.10 and the Design
+Tokens Color Module 2025.10, Final Community Group Reports published 28 October
+2025 by the Design Tokens Community Group under the W3C Community Final
+Specification Agreement. Those documents are not W3C Standards. What this
+package takes from them is the format's property names, type names and value
+structures, and the Color Module's colour-space identifiers; the reader, its
+diagnostics and everything around them are this package's own, and everything in
+this package is offered under the MIT licence above.

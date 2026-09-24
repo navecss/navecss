@@ -1,0 +1,7 @@
+[tools]
+# Exact pins, matching the repo's own exact-pin policy (syncpack enforces it for dependencies;
+# this is the same discipline applied to the toolchain). Bump deliberately, not implicitly.
+# pnpm mirrors package.json's "packageManager" field exactly - one source of truth, two readers
+# (a local machine via corepack, CI via mise) - bump both together.
+node = "24.17.0"
+pnpm = "10.30.3"

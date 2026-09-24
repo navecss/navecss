@@ -1,0 +1,9 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"]
+  },
+  "include": ["**/*.ts", "../../vitest.browser.config.ts"]
+}

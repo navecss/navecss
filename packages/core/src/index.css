@@ -1,0 +1,48 @@
+/*
+ * Nave Design System — core entry point
+ * Import this once in your app, before any stylesheet of yours that
+ * declares a layer.
+ *
+ * The @layer statement below is the cascade contract: seven names across five
+ * top-level layers (tokens, reset, atomic, components, overrides), each name
+ * beating every name before it. Do not reorder. The contract holds only if
+ * this statement is the first @layer declaration the document sees: a layer
+ * your CSS declares earlier keeps that earlier position, and the order
+ * inverts. Author into a sublayer, never into a bare parent (a parent
+ * outranks its own sublayers). Unlayered CSS beats every layer. All of this
+ * is for normal declarations: !important reverses layer order, which the
+ * reset uses on purpose. Full contract:
+ * https://github.com/navecss/navecss/blob/main/docs/04-adr/0003-layer-cascade-contract.md
+ *
+ *   tokens.defaults     → CSS custom properties (read-only, set by @navecss/tokens)
+ *   tokens.presets      → RESERVED: 0.1.0 ships zero presets, but the
+ *                         slot is declared now so a preset always beats the defaults
+ *                         regardless of import order, and a consumer's `overrides`
+ *                         always beats a preset. Retrofitting this slot later would be
+ *                         a breaking change to the published cascade contract.
+ *                         A project's own `navecss-tokens build` output lands here too.
+ *   reset               → Cross-browser normalisation
+ *   atomic              → Global atom classes that cx() names: defaults, below
+ *                         component CSS (@nave inlines into your own rule instead)
+ *   components.nave     → Components Nave publishes
+ *   components.consumer → Your component CSS: @layer components.consumer { … }
+ *   overrides           → Your deliberate exceptions to everything above
+ */
+@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;
+
+/* Token layer — all CSS custom properties.
+ * Imported plain: tokens.css declares its own `@layer tokens.defaults` so that
+ * consumers importing @navecss/tokens/css directly are layered correctly too.
+ * Adding layer(tokens.defaults) here would nest it a second time. */
+@import url('@navecss/tokens/css');
+
+/* Reset layer. Imported plain: dist/reset.css now declares its own
+ * `@layer reset` so that consumers importing ./reset directly are layered
+ * correctly too. Adding layer(reset) here would nest it a second time. */
+@import url('./reset.css');
+
+/* Atomic layer. Imported plain: dist/atomic.css now declares its own
+ * `@layer atomic` so that consumers importing ./atomic directly are
+ * layered correctly too. Adding layer(atomic) here would nest it a second
+ * time. */
+@import url('./atomic.css');

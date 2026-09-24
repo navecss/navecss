@@ -1,0 +1,15 @@
+/*
+ * Nave Design System — the @layer order statement, alone.
+ *
+ * Import this first, before any other stylesheet. CSS fixes a layer's
+ * position the first time the page declares it, so if a stylesheet of yours
+ * that declares a layer loads before this statement, that layer's position is
+ * fixed first and Nave's order inverts with no error. Imported first, this one
+ * line keeps the order wherever the rest of Nave and your own stylesheets land
+ * in the import graph. Importing '@navecss/core' afterwards is correct: its
+ * own copy of this statement is identical and changes nothing.
+ *
+ * Full contract:
+ * https://github.com/navecss/navecss/blob/main/docs/04-adr/0003-layer-cascade-contract.md
+ */
+@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;

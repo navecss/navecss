@@ -1,0 +1,111 @@
+name: code-quality
+
+# The local `pnpm ci:check` gate, made real in CI. Two jobs on purpose: `matrix` isolates
+# typecheck/lint/test/build so one failure never masks the rest; `full-gate` proves the REST of
+# local `ci:check` (packaging validation - publint/attw via check:pack, knip, syncpack, the CSS
+# contract snapshots, the browser tests, the bundling and license-allowlist guard scripts)
+# actually runs here too, not only on a maintainer's machine.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  matrix:
+    name: ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [typecheck, lint, test, build]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install mise-pinned toolchain (node + pnpm)
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
+        with:
+          version: 2026.8.3
+
+      - name: Resolve pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ${{ matrix.task }}
+        run: pnpm run ${{ matrix.task }}
+
+  full-gate:
+    name: full local gate (ci:check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install mise-pinned toolchain (node + pnpm)
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
+        with:
+          version: 2026.8.3
+
+      - name: Resolve pnpm store path
+        id: pnpm-cache
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright's browser engine
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright's browser engine (test:browser)
+        run: pnpm --filter @navecss/core exec playwright install --with-deps chromium
+
+      - name: pnpm run ci:check
+        run: pnpm run ci:check
+
+  node-floor:
+    name: node engines floor (22.18)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Node 22.18 (the package.json "engines" floor)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.18.0'
+
+      - name: Activate pnpm via corepack (version from package.json's "packageManager")
+        run: corepack enable
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and test on the claimed floor
+        run: pnpm run build && pnpm run test

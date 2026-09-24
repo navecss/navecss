@@ -1,0 +1,44 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "never",
+    "source.fixAll.stylelint": "never"
+  },
+  "eslint.validate": ["javascript", "typescript", "json", "jsonc"],
+  "stylelint.validate": ["css"],
+  "stylelint.enable": true,
+  "css.validate": false,
+  "editor.rulers": [100],
+  "files.associations": {
+    "*.css": "css"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "workbench.colorCustomizations": {
+    "activityBar.activeBackground": "#101006",
+    "activityBar.activeBorder": "#EFC9B3",
+    "activityBar.background": "#222D5C",
+    "activityBar.foreground": "#E6E6D3",
+    "activityBar.inactiveForeground": "#E6E6D399",
+    "activityBarBadge.background": "#EFC9B3",
+    "activityBarBadge.foreground": "#ebf8ff",
+    "sash.hoverBorder": "#222D5C",
+    "statusBar.background": "#101006",
+    "statusBar.foreground": "#E6E6D3",
+    "statusBarItem.hoverBackground": "#222D5C",
+    "statusBarItem.remoteBackground": "#101006",
+    "statusBarItem.remoteForeground": "#E6E6D3",
+    "titleBar.activeBackground": "#222D5C",
+    "titleBar.activeForeground": "#E6E6D3",
+    "titleBar.inactiveBackground": "#222D5C99",
+    "titleBar.inactiveForeground": "#E6E6D399"
+  }
+}

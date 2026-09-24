@@ -1,0 +1,26 @@
+{
+  "$comment": "The recorded core-usage contract, checked in deliberately. Regenerate ONLY when a change to var(--nave-*) usage anywhere under @navecss/core's src/ directory is intended: `node scripts/check-core-contract-drift.mjs --write` from the repo root. A CI mismatch here means core's real custom-property dependency moved and this file was not regenerated with it, not that the check is wrong.",
+  "tokens": [
+    "--nave-border-width-focus",
+    "--nave-border-width-sm",
+    "--nave-color-border-default",
+    "--nave-color-border-disabled",
+    "--nave-color-border-focus",
+    "--nave-color-content-disabled",
+    "--nave-color-content-primary",
+    "--nave-color-surface-base",
+    "--nave-font-family-base",
+    "--nave-font-family-display",
+    "--nave-font-family-mono",
+    "--nave-font-size-md",
+    "--nave-font-weight-bold",
+    "--nave-line-height-base",
+    "--nave-line-height-tight",
+    "--nave-motion-duration-base",
+    "--nave-motion-easing-standard",
+    "--nave-radius-card",
+    "--nave-radius-control",
+    "--nave-radius-full",
+    "--nave-spacing-content-md"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "removeComments": true,
+    "outDir": "dist/lib",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src"]
+}

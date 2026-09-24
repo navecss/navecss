@@ -1,0 +1,293 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`dist/atomic.css contract > matches the checked-in snapshot 1`] = `
+"/*
+ * Nave atomic utilities — generated from src/atoms.ts
+ * Do not edit directly. Run \`pnpm build\` in packages/core to regenerate.
+ *
+ * Primary path:  .root { @nave interactive focusRing; }  (postcss plugin)
+ * Escape hatch:  \`\${cx('interactive', 'focusRing')} \${styles.root}\`
+ *
+ * Classes are global, namespaced with nave- prefix.
+ * Consumer atoms (navePlugin extend) are NOT included —
+ * they are resolved inline by the PostCSS plugin only.
+ *
+ * Self-layered under @layer atomic: this file ships as a published subpath
+ * export (./atomic) and is imported directly by some consumers, so the
+ * layer guarantee has to be a property of the artifact rather than of
+ * index.css's import site.
+ */
+
+@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;
+
+@layer atomic {
+  .nave-flex {
+    display: flex;
+  }
+
+  .nave-inline-flex {
+    display: inline-flex;
+  }
+
+  .nave-grid {
+    display: grid;
+  }
+
+  .nave-block {
+    display: block;
+  }
+
+  .nave-inline-block {
+    display: inline-block;
+  }
+
+  .nave-hidden {
+    display: none;
+  }
+
+  .nave-flex-col {
+    flex-direction: column;
+  }
+
+  .nave-flex-wrap {
+    flex-wrap: wrap;
+  }
+
+  .nave-items-center {
+    align-items: center;
+  }
+
+  .nave-items-start {
+    align-items: flex-start;
+  }
+
+  .nave-items-end {
+    align-items: flex-end;
+  }
+
+  .nave-justify-center {
+    justify-content: center;
+  }
+
+  .nave-justify-between {
+    justify-content: space-between;
+  }
+
+  .nave-justify-end {
+    justify-content: flex-end;
+  }
+
+  .nave-flex-grow {
+    flex-grow: 1;
+  }
+
+  .nave-flex-shrink0 {
+    flex-shrink: 0;
+  }
+
+  .nave-gap {
+    gap: var(--nave-spacing-content-md);
+  }
+
+  .nave-relative {
+    position: relative;
+  }
+
+  .nave-absolute {
+    position: absolute;
+  }
+
+  .nave-inset-full {
+    inset: 0;
+  }
+
+  .nave-w-full {
+    width: 100%;
+  }
+
+  .nave-h-full {
+    height: 100%;
+  }
+
+  .nave-min-w0 {
+    min-width: 0;
+  }
+
+  .nave-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nave-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .nave-sr-only-focusable {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+
+    &:focus-visible {
+      position: static;
+      width: auto;
+      height: auto;
+      margin: 0;
+      overflow: visible;
+      clip-path: none;
+      white-space: normal;
+    }
+
+    &:focus-within {
+      position: static;
+      width: auto;
+      height: auto;
+      margin: 0;
+      overflow: visible;
+      clip-path: none;
+      white-space: normal;
+    }
+  }
+
+  .nave-no-wrap {
+    white-space: nowrap;
+  }
+
+  .nave-break-word {
+    overflow-wrap: break-word;
+  }
+
+  .nave-text-left {
+    text-align: left;
+  }
+
+  .nave-text-center {
+    text-align: center;
+  }
+
+  .nave-text-right {
+    text-align: right;
+  }
+
+  .nave-interactive {
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .nave-focus-ring {
+    outline: none;
+
+    &:focus-visible {
+      outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus);
+      outline-offset: 2px;
+    }
+  }
+
+  .nave-disabled-state {
+    &:disabled, &[aria-disabled="true"] {
+      color: var(--nave-color-content-disabled);
+      border-color: var(--nave-color-border-disabled);
+      pointer-events: none;
+    }
+  }
+
+  .nave-rounded {
+    border-radius: var(--nave-radius-control);
+  }
+
+  .nave-rounded-card {
+    border-radius: var(--nave-radius-card);
+  }
+
+  .nave-rounded-full {
+    border-radius: var(--nave-radius-full);
+  }
+
+  .nave-border {
+    border: var(--nave-border-width-sm) solid var(--nave-color-border-default);
+  }
+
+  .nave-overflow-hidden {
+    overflow: hidden;
+  }
+
+  .nave-overflow-auto {
+    overflow: auto;
+  }
+
+  .nave-transition {
+    transition-property: color, background-color, border-color, opacity, box-shadow;
+    transition-duration: var(--nave-motion-duration-base);
+    transition-timing-function: var(--nave-motion-easing-standard);
+  }
+
+  .nave-container {
+    container-type: inline-size;
+  }
+
+  .nave-hide-phone-only {
+    @media (width < 37.5em) {
+      & {
+        display: none;
+      }
+    }
+  }
+
+  .nave-hide-tablet-portrait-up {
+    @media (width >= 37.5em) {
+      & {
+        display: none;
+      }
+    }
+  }
+
+  .nave-hide-tablet-landscape-up {
+    @media (width >= 56.25em) {
+      & {
+        display: none;
+      }
+    }
+  }
+
+  .nave-hide-desktop-up {
+    @media (width >= 75em) {
+      & {
+        display: none;
+      }
+    }
+  }
+
+  .nave-stack-phone-only {
+    @media (width < 37.5em) {
+      & {
+        flex-direction: column;
+      }
+    }
+  }
+
+  .nave-w-full-phone-only {
+    @media (width < 37.5em) {
+      & {
+        width: 100%;
+      }
+    }
+  }
+}
+"
+`;

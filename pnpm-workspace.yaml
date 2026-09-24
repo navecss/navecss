@@ -1,0 +1,13 @@
+packages:
+  - 'packages/*'
+
+# Supply-chain hardening. The cooldown keeps a freshly published version out of any install for
+# three days, long enough for most malicious releases to be caught and pulled first. Dependency
+# install scripts stay off, which is pnpm's default: the two packages `pnpm install` reports as
+# wanting one are listed below as deliberately ignored, because the whole suite builds and passes
+# without either script. Moving one to `onlyBuiltDependencies` would run its script on every
+# contributor's machine and in CI, so it needs a reason stronger than silencing a warning.
+minimumReleaseAge: 4320 # minutes (3 days)
+ignoredBuiltDependencies:
+  - esbuild
+  - unrs-resolver

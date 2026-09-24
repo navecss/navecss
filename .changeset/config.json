@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [["@navecss/tokens", "@navecss/core"]],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": ["@navecss/cli", "@navecss/bridge"]
+}

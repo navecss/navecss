@@ -1,0 +1,28 @@
+/*
+ * Nave → Radix UI token bridge
+ * Maps Nave semantic tokens to Radix CSS variable expectations.
+ * Import after @navecss/core in your app entry.
+ *
+ * Usage: import '@navecss/bridge/radix'
+ *
+ * Self-layered under tokens.defaults, restating the cascade order statement.
+ * A mapping is Nave's shipped default for one Radix variable, so it sits in
+ * the lowest layer, below a project's generated tokens (tokens.presets) and
+ * every consumer layer. It reads its value through var(--nave-*), so a
+ * preset that changes a Nave token changes the mapped value too. Map Radix
+ * names only, never a --nave-* one: that keeps these mappings disjoint from
+ * @navecss/tokens, which writes the same layer. Never a bare `@layer tokens`,
+ * which would outrank every tokens sublayer
+ * (docs/04-adr/0003-layer-cascade-contract.md, decisions 1 and 3).
+ */
+@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;
+
+@layer tokens.defaults {
+  :root {
+    /* Placeholder — populate as Radix components are integrated.
+     * Pattern: --[radix-token]: var(--[nave-token]);
+     * Every Nave token carries the --nave- prefix: they are --nave-color-*,
+     * --nave-spacing-*, --nave-radius-*, --nave-motion-* and so on. See
+     * @navecss/tokens/css. */
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ESNext"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "erasableSyntaxOnly": true,
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    // tsup@8.5.1's dts rollup step always injects a `baseUrl`, which TS 6+
+    // treats as a deprecation error ahead of removal in 7.0. No newer tsup
+    // fixes this yet; this is TS's own documented interim escape hatch.
+    "ignoreDeprecations": "6.0"
+  }
+}

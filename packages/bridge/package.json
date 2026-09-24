@@ -1,0 +1,42 @@
+{
+  "name": "@navecss/bridge",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./base-ui": "./src/base-ui.css",
+    "./radix": "./src/radix.css"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "stylelint \"src/**/*.css\" --max-warnings 0",
+    "lint:fix": "stylelint \"src/**/*.css\" --fix",
+    "test": "vitest run",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack .",
+    "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
+  },
+  "dependencies": {
+    "@navecss/tokens": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "postcss": "^8.5.28",
+    "typescript": "6.0.3",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navecss/navecss.git",
+    "directory": "packages/bridge"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ]
+}

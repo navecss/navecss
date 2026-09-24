@@ -1,0 +1,433 @@
+/* Nave Design System — generated, do not edit */
+@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;
+
+/**
+ * @property declarations provide:
+ *   - Type safety (browsers reject invalid values)
+ *   - CSS transitions on custom properties (e.g. color tokens)
+ *   - IDE autocomplete in supported editors
+ *
+ * Only tokens whose initial-value is computationally independent are
+ * registered. Font-relative values (rem/em) cannot be, so those tokens
+ * ship as plain custom properties below.
+ */
+  @property --nave-font-weight-regular {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 400;
+  }
+
+  @property --nave-font-weight-medium {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 500;
+  }
+
+  @property --nave-font-weight-semibold {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 600;
+  }
+
+  @property --nave-font-weight-bold {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 700;
+  }
+
+  @property --nave-line-height-none {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 1;
+  }
+
+  @property --nave-line-height-tight {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 1.2;
+  }
+
+  @property --nave-line-height-snug {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 1.375;
+  }
+
+  @property --nave-line-height-base {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 1.5;
+  }
+
+  @property --nave-line-height-relaxed {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 1.625;
+  }
+
+  @property --nave-line-height-loose {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 2;
+  }
+
+  @property --nave-spacing-content-xs {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 4px;
+  }
+
+  @property --nave-spacing-content-sm {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 8px;
+  }
+
+  @property --nave-spacing-content-md {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 16px;
+  }
+
+  @property --nave-spacing-content-lg {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 24px;
+  }
+
+  @property --nave-spacing-content-xl {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 32px;
+  }
+
+  @property --nave-spacing-layout-xs {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 48px;
+  }
+
+  @property --nave-spacing-layout-sm {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 64px;
+  }
+
+  @property --nave-spacing-layout-md {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 96px;
+  }
+
+  @property --nave-spacing-layout-lg {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 128px;
+  }
+
+  @property --nave-spacing-control-xs {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 4px;
+  }
+
+  @property --nave-spacing-control-sm {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 6px;
+  }
+
+  @property --nave-spacing-control-md {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 8px;
+  }
+
+  @property --nave-spacing-control-lg {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 12px;
+  }
+
+  @property --nave-border-width-none {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 0px;
+  }
+
+  @property --nave-border-width-sm {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 1px;
+  }
+
+  @property --nave-border-width-focus {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 2px;
+  }
+
+  @property --nave-border-width-lg {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 4px;
+  }
+
+  @property --nave-radius-none {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 0px;
+  }
+
+  @property --nave-radius-sm {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 4px;
+  }
+
+  @property --nave-radius-control {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 6px;
+  }
+
+  @property --nave-radius-card {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 12px;
+  }
+
+  @property --nave-radius-overlay {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 12px;
+  }
+
+  @property --nave-radius-full {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 9999px;
+  }
+
+  @property --nave-opacity-disabled {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 0.4;
+  }
+
+  @property --nave-layer-base {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 0;
+  }
+
+  @property --nave-layer-dropdown {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 100;
+  }
+
+  @property --nave-layer-sticky {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 200;
+  }
+
+  @property --nave-layer-overlay {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 300;
+  }
+
+  @property --nave-layer-modal {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 400;
+  }
+
+  @property --nave-layer-toast {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 500;
+  }
+
+  @property --nave-layer-tooltip {
+    syntax: '<number>';
+    inherits: true;
+    initial-value: 600;
+  }
+
+  @property --nave-motion-duration-instant {
+    syntax: '<time>';
+    inherits: true;
+    initial-value: 0ms;
+  }
+
+  @property --nave-motion-duration-fast {
+    syntax: '<time>';
+    inherits: true;
+    initial-value: 100ms;
+  }
+
+  @property --nave-motion-duration-base {
+    syntax: '<time>';
+    inherits: true;
+    initial-value: 200ms;
+  }
+
+  @property --nave-motion-duration-slow {
+    syntax: '<time>';
+    inherits: true;
+    initial-value: 400ms;
+  }
+
+/**
+ * Token values scoped under @layer tokens.defaults.
+ * Override in @layer overrides — no specificity battles, ever.
+ */
+@layer tokens.defaults {
+  :root {
+    --nave-font-family-base: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --nave-font-family-display: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --nave-font-family-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+    --nave-font-size-xs: 0.75rem;
+    --nave-font-size-sm: 0.875rem;
+    --nave-font-size-md: 1rem;
+    --nave-font-size-lg: 1.125rem;
+    --nave-font-size-xl: 1.25rem;
+    --nave-font-size-2xl: 1.5rem;
+    --nave-font-size-3xl: 1.875rem;
+    --nave-font-size-4xl: 2.25rem;
+    --nave-font-weight-regular: 400;
+    --nave-font-weight-medium: 500;
+    --nave-font-weight-semibold: 600;
+    --nave-font-weight-bold: 700;
+    --nave-line-height-none: 1;
+    --nave-line-height-tight: 1.2;
+    --nave-line-height-snug: 1.375;
+    --nave-line-height-base: 1.5;
+    --nave-line-height-relaxed: 1.625;
+    --nave-line-height-loose: 2;
+    --nave-letter-spacing-tight: -0.025em;
+    --nave-letter-spacing-normal: 0em;
+    --nave-letter-spacing-wide: 0.075em;
+    --nave-spacing-content-xs: 4px;
+    --nave-spacing-content-sm: 8px;
+    --nave-spacing-content-md: 16px;
+    --nave-spacing-content-lg: 24px;
+    --nave-spacing-content-xl: 32px;
+    --nave-spacing-layout-xs: 48px;
+    --nave-spacing-layout-sm: 64px;
+    --nave-spacing-layout-md: 96px;
+    --nave-spacing-layout-lg: 128px;
+    --nave-spacing-control-xs: 4px;
+    --nave-spacing-control-sm: 6px;
+    --nave-spacing-control-md: 8px;
+    --nave-spacing-control-lg: 12px;
+    --nave-size-control-xs: 1.5rem;
+    --nave-size-control-sm: 2rem;
+    --nave-size-control-md: 2.5rem;
+    --nave-size-control-lg: 3rem;
+    --nave-size-icon-xs: 0.75rem;
+    --nave-size-icon-sm: 1rem;
+    --nave-size-icon-md: 1.25rem;
+    --nave-size-icon-lg: 1.5rem;
+    --nave-size-icon-xl: 2rem;
+    --nave-size-avatar-sm: 1.5rem;
+    --nave-size-avatar-md: 2rem;
+    --nave-size-avatar-lg: 3rem;
+    --nave-border-width-none: 0px;
+    --nave-border-width-sm: 1px;
+    --nave-border-width-focus: 2px;
+    --nave-border-width-lg: 4px;
+    --nave-radius-none: 0px;
+    --nave-radius-sm: 4px;
+    --nave-radius-control: 6px;
+    --nave-radius-card: 12px;
+    --nave-radius-overlay: 12px;
+    --nave-radius-full: 9999px;
+    --nave-shadow-none: none;
+    --nave-shadow-raised: 0 0.0625rem 0.1875rem oklch(0 0 0 / 0.08), 0 0.0625rem 0.125rem oklch(0 0 0 / 0.06);
+    --nave-shadow-overlay: 0 0.25rem 0.75rem oklch(0 0 0 / 0.1), 0 0.125rem 0.375rem oklch(0 0 0 / 0.08);
+    --nave-shadow-modal: 0 1rem 2rem oklch(0 0 0 / 0.15), 0 0.5rem 1rem oklch(0 0 0 / 0.1);
+    --nave-opacity-disabled: 0.4;
+    --nave-layer-base: 0;
+    --nave-layer-dropdown: 100;
+    --nave-layer-sticky: 200;
+    --nave-layer-overlay: 300;
+    --nave-layer-modal: 400;
+    --nave-layer-toast: 500;
+    --nave-layer-tooltip: 600;
+    --nave-motion-duration-instant: 0ms;
+    --nave-motion-duration-fast: 100ms;
+    --nave-motion-duration-base: 200ms;
+    --nave-motion-duration-slow: 400ms;
+    --nave-motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --nave-motion-easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+    --nave-motion-easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  }
+
+  /**
+   * Collapse all motion durations for users who prefer reduced motion.
+   * Any component using --nave-motion-duration-* gets this for free.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --nave-motion-duration-fast: 0.01ms;
+      --nave-motion-duration-base: 0.01ms;
+      --nave-motion-duration-slow: 0.01ms;
+    }
+  }
+}
+
+/* Nave theming — generated, do not edit. See this package's README ("Theming"). */
+
+@property --nave-color-tint {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: oklch(0.7859 0.1316 186.17);
+}
+
+@layer tokens.defaults {
+  :root {
+    /* color-scheme lives here, not in @navecss/core's reset, so
+     * light-dark() resolves even for a tokens-only consumer. */
+    color-scheme: light dark;
+    /* Tint seed: Changing this changes everything Nave derives from it. The contrast of the resulting palette follows from what you set, and checking it is yours. */
+    --nave-color-tint: oklch(0.7859 0.1316 186.17);
+    --nave-color-surface-base: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+    --nave-color-surface-raised: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.225 0.0067 h));
+    --nave-color-surface-overlay: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.27 0.0067 h));
+    --nave-color-surface-sunken: light-dark(oklch(from var(--nave-color-tint) 0.985 0.0067 h), oklch(from var(--nave-color-tint) 0.12 0.0067 h));
+    --nave-color-surface-inverse: light-dark(oklch(from var(--nave-color-tint) 0.18 0.0067 h), oklch(from var(--nave-color-tint) 0.965 0.0067 h));
+    --nave-color-content-primary: light-dark(oklch(from var(--nave-color-tint) 0.18 0.0067 h), oklch(from var(--nave-color-tint) 0.965 0.0067 h));
+    --nave-color-content-secondary: light-dark(oklch(from var(--nave-color-tint) 0.37 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
+    --nave-color-content-tertiary: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.72 0.0067 h));
+    --nave-color-content-disabled: light-dark(oklch(from var(--nave-color-tint) 0.835 0.0067 h), oklch(from var(--nave-color-tint) 0.37 0.0067 h));
+    --nave-color-content-inverse: light-dark(oklch(from var(--nave-color-tint) 0.965 0.0067 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+    --nave-color-content-link: light-dark(oklch(0.47 0.0748 186.17), oklch(0.835 0.123 186.17));
+    --nave-color-border-default: light-dark(oklch(from var(--nave-color-tint) 0.905 0.0067 h), oklch(from var(--nave-color-tint) 0.37 0.0067 h));
+    --nave-color-border-strong: light-dark(oklch(from var(--nave-color-tint) 0.72 0.0067 h), oklch(from var(--nave-color-tint) 0.47 0.0067 h));
+    --nave-color-border-control: light-dark(oklch(from var(--nave-color-tint) 0.59 0.0067 h), oklch(from var(--nave-color-tint) 0.59 0.0067 h));
+    --nave-color-border-disabled: light-dark(oklch(from var(--nave-color-tint) 0.94 0.0067 h), oklch(from var(--nave-color-tint) 0.27 0.0067 h));
+    --nave-color-border-focus: light-dark(oklch(0.59 0.0939 186.17), oklch(0.59 0.0939 186.17));
+    --nave-color-action-primary: light-dark(oklch(0.47 0.0748 186.17), oklch(0.835 0.123 186.17));
+    --nave-color-action-primary-hover: light-dark(oklch(0.37 0.0589 186.17), oklch(0.905 0.1106 186.17));
+    --nave-color-action-primary-active: light-dark(oklch(0.27 0.0398 186.17), oklch(0.94 0.0574 186.17));
+    --nave-color-on-action-primary: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+    --nave-color-action-secondary: light-dark(oklch(from var(--nave-color-tint) 0.965 0.0067 h), oklch(from var(--nave-color-tint) 0.27 0.0067 h));
+    --nave-color-feedback-danger: light-dark(oklch(0.47 0.1455 15.02), oklch(0.835 0.0661 15.02));
+    --nave-color-feedback-danger-foreground: light-dark(oklch(0.47 0.1455 15.02), oklch(0.835 0.0661 15.02));
+    --nave-color-on-feedback-danger: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+    /* Feedback tokens: warning, success and info, and their -foreground variants, resolve to one shared value here; only danger differs. Colour alone therefore cannot tell those three states apart, so wherever a feedback token carries meaning, give it a text label naming the state and a distinct icon or shape that differs per state. */
+    --nave-color-feedback-warning: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
+    --nave-color-feedback-warning-foreground: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
+    --nave-color-on-feedback-warning: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+    --nave-color-feedback-success: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
+    --nave-color-feedback-success-foreground: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
+    --nave-color-on-feedback-success: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+    --nave-color-feedback-info: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
+    --nave-color-feedback-info-foreground: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
+    --nave-color-on-feedback-info: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+  }
+}

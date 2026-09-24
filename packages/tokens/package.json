@@ -1,0 +1,86 @@
+{
+  "name": "@navecss/tokens",
+  "version": "0.1.0",
+  "description": "DTCG 2025.10 design tokens for Nave: seed-derived semantic colours, typography, spacing, and the rest of the token layer, built by a first-party DTCG 2025.10 reader.",
+  "keywords": [
+    "css",
+    "design-tokens",
+    "dtcg",
+    "w3c-design-tokens",
+    "design-system"
+  ],
+  "homepage": "https://github.com/navecss/navecss/tree/main/packages/tokens#readme",
+  "license": "MIT",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "navecss-tokens": "./dist/lib/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/tokens.d.ts",
+      "import": "./dist/tokens.js",
+      "default": "./dist/tokens.js"
+    },
+    "./css": "./dist/tokens.css",
+    "./js": {
+      "types": "./dist/tokens.d.ts",
+      "import": "./dist/tokens.js",
+      "default": "./dist/tokens.js"
+    },
+    "./breakpoints": {
+      "types": "./dist/breakpoints.d.ts",
+      "import": "./dist/breakpoints.js",
+      "default": "./dist/breakpoints.js"
+    },
+    "./core-contract": "./dist/core-contract.json",
+    "./build": {
+      "types": "./dist/lib/facade.d.ts",
+      "import": "./dist/lib/facade.js",
+      "default": "./dist/lib/facade.js"
+    },
+    "./package.json": "./package.json",
+    "./tokens.json": "./tokens.json"
+  },
+  "files": [
+    "dist",
+    "!dist/contact-sheet.html",
+    "tokens.json",
+    "TOKENS.md"
+  ],
+  "scripts": {
+    "build": "node build.ts && tsc -p tsconfig.build.json",
+    "dev": "node --watch build.ts",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint build.ts generate-tokens-doc.ts src test --max-warnings 0",
+    "lint:fix": "eslint build.ts generate-tokens-doc.ts src test --fix",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints css",
+    "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@vitest/coverage-v8": "5.0.1",
+    "prettier": "3.9.8",
+    "typescript": "6.0.3",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navecss/navecss.git",
+    "directory": "packages/tokens"
+  },
+  "bugs": {
+    "url": "https://github.com/navecss/navecss/issues"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ]
+}

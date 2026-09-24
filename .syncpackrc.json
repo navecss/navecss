@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/syncpack/schema.json",
+  "versionGroups": [
+    {
+      "label": "peerDependencies declare a compatibility range for consumers, not an install pin; do not force them to match devDependencies/dependencies of the same name.",
+      "dependencyTypes": ["peer"],
+      "packages": ["**"],
+      "isIgnored": true
+    }
+  ]
+}

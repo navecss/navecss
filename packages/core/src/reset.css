@@ -1,0 +1,336 @@
+/*
+ * Nave Reset — opinionated modern cross-browser reset.
+ * Every rule fixes a real, documented cross-browser inconsistency.
+ * Tokens are available here because @layer tokens is declared first.
+ */
+
+/* ── Box model ───────────────────────────────────────────────────────────────
+ * Border-box everywhere. The alternative is layout math errors.
+ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* ── Root ────────────────────────────────────────────────────────────────────
+ * 1. Stop Safari on iPhone enlarging body text by itself (for example on an orientation
+ *    change), so a Nave layout renders at the size it declares. Safari reads only the
+ *    -webkit- prefixed property; the unprefixed one is the standard spelling. This does not
+ *    take away a reader's own text-size setting in Safari, in Chrome from version 143, in
+ *    Android WebView from version 145, or in Firefox: each applies that setting whatever the
+ *    value here. Chrome no longer autosizes text, and Firefox for Android accepts only auto
+ *    or none here, so it ignores this declaration. -moz-text-size-adjust is left out on
+ *    purpose: none, its only opt-out value, would switch off Firefox's own font inflation.
+ *    The value is 100%, the convention normalize.css set; on iPad and in Firefox, none
+ *    would not behave the same.
+ * 2. Smooth scroll — reduced motion override is at the bottom of this file.
+ * 3. hanging-punctuation: Safari only, progressive enhancement.
+ *    Punctuation hangs outside the text box correctly.
+ * 4. Font smoothing: prefer grayscale AA on macOS/iOS.
+ *    subpixel-antialiased is less consistent across displays.
+ * 5. text-rendering: optimizelegibility — enables kerning and ligatures in Firefox and
+ *    Safari; a no-op elsewhere. Unrelated to font-size inflation (1); kept as its own number.
+ */
+html {
+  -webkit-font-smoothing: antialiased; /* 4 */
+  -moz-osx-font-smoothing: grayscale; /* 4 */
+  hanging-punctuation: first last; /* 3 */
+  scroll-behavior: smooth; /* 2 */
+  text-rendering: optimizelegibility; /* 5 */
+  -webkit-text-size-adjust: 100%; /* 1 */
+  text-size-adjust: 100%; /* 1 */
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────────
+ * min-height: 100dvh — dynamic viewport height.
+ * Fixes iOS Safari bottom bar eating into 100vh layouts.
+ * dvh is Baseline 2023, safe for all modern browsers.
+ */
+body {
+  background-color: var(--nave-color-surface-base);
+  color: var(--nave-color-content-primary);
+  font-family: var(--nave-font-family-base);
+  font-size: var(--nave-font-size-md);
+  line-height: var(--nave-line-height-base);
+  margin: 0;
+  min-height: 100dvh;
+}
+
+/* ── Remove default margins ──────────────────────────────────────────────────
+ * Browsers apply inconsistent margins to these elements.
+ * Spacing is a layout concern, not an element default.
+ */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+figure,
+blockquote,
+dl,
+dd,
+pre {
+  margin: 0;
+}
+
+/* ── Lists ───────────────────────────────────────────────────────────────────
+ * Only remove list styles when role="list" is present.
+ * VoiceOver (Safari) removes list semantics when list-style is removed.
+ * Adding role="list" signals intentional non-list usage to the browser.
+ * Pattern: Scott O'Hara / Andy Bell.
+ */
+ul[role='list'],
+ol[role='list'] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Headings ─────────────────────────────────────────────────────────────────
+ * 1. Tighter line-height — body line-height is too loose for headings.
+ * 2. text-wrap: balance — prevents single orphan words on the last line.
+ *    Baseline since May 2024 (Chrome 114, Firefox 121, Safari 17.5), so it is
+ *    inside the browser floor (ADR 0005) and applies everywhere Nave supports.
+ */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--nave-font-family-display);
+  font-weight: var(--nave-font-weight-bold);
+  line-height: var(--nave-line-height-tight); /* 1 */
+  overflow-wrap: break-word;
+  text-wrap: balance; /* 2 */
+}
+
+/* ── Paragraphs ───────────────────────────────────────────────────────────────
+ * text-wrap: pretty — optimises last 4 lines, prevents orphans.
+ * Chrome and Edge 117+, Safari 26+, not yet Firefox. Past the browser floor, so
+ * progressive enhancement: without it, paragraphs wrap normally (ADR 0005).
+ */
+p {
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+
+/* ── Overflow wrap ────────────────────────────────────────────────────────────
+ * Prevents long words / URLs from breaking layouts.
+ */
+li,
+figcaption,
+dt,
+dd {
+  overflow-wrap: break-word;
+}
+
+/* ── Replaced elements ────────────────────────────────────────────────────────
+ * display: block removes phantom baseline space under images.
+ *   Caused by inline baseline alignment — one of CSS's oldest layout bugs.
+ * height: auto maintains aspect ratio when width is constrained.
+ */
+img,
+picture,
+video,
+canvas {
+  display: block;
+  height: auto;
+  max-width: 100%;
+}
+
+/* ── SVG ──────────────────────────────────────────────────────────────────────
+ * SVGs without an explicit fill inherit the parent text color.
+ * Controls icon color via CSS color — no fill attribute required.
+ */
+svg {
+  display: block;
+}
+
+svg:not([fill]) {
+  fill: currentcolor;
+}
+
+/* ── Figcaption ───────────────────────────────────────────────────────────────
+ * Safari applies font-style: italic to figcaption by default.
+ */
+figcaption {
+  font-style: normal;
+}
+
+/* ── Forms ───────────────────────────────────────────────────────────────────
+ * font: inherit — all browsers apply their own font to form controls,
+ *   ignoring the cascade. This is the most important form reset rule.
+ * letter-spacing / word-spacing: inherit — Safari ignores these on inputs.
+ */
+input,
+button,
+textarea,
+select,
+optgroup {
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  word-spacing: inherit;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────────
+ * Strip all browser button chrome, from <button> and every button-like <input>.
+ * The text-input rule below also unsets appearance/background for
+ * input[type=submit|reset|button] (it excludes only checkbox/radio/range), but leaves the
+ * UA's own outset border since it never targeted the button rule's selector; listed here too
+ * so all four get the same border: none.
+ * The three input types are wrapped in :where() so they carry zero specificity, same as a
+ * bare `button` selector: without it, `input[type='submit']` etc. sit at (0,1,1), which beats
+ * the Disabled rule's `[disabled], [aria-disabled='true']` at (0,1,0) and makes this rule's
+ * `cursor: pointer` win on a disabled button-like input even though the Disabled rule runs
+ * later in the file. :where() keeps this rule at (0,0,1), so the Disabled rule's cursor still
+ * wins, and a consumer overriding button chrome never needs a specificity escalation either.
+ * This rule is placed before the text-input rule below (rather than after, its previous
+ * position) because a (0,0,1) selector following a (0,1,1) one that can match the same element
+ * (a submit/reset/button input matches both) is a descending-specificity smell the linter
+ * flags; placing the lower-specificity rule first avoids that without changing which
+ * declaration wins for any element — specificity, not source order, still decides.
+ * Nave component styles define all button appearance explicitly.
+ */
+button,
+input:where([type='button'], [type='reset'], [type='submit']) {
+  appearance: none;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+/* ── Text inputs & textareas ──────────────────────────────────────────────────
+ * 1. Removes iOS Safari grey background on inputs.
+ * 2. appearance: none removes Safari's rounded pill input style. Unprefixed
+ *    (Baseline) rather than -webkit-appearance.
+ * 3. border-radius: 0 — iOS Safari rounds inputs regardless of appearance.
+ * Scoped to text-like inputs and textarea only (excludes checkbox, radio,
+ * range, and select) — a bare `input` or `select` selector here would strip
+ * native rendering from checkboxes/radios (invisible empty boxes) and the
+ * select dropdown indicator.
+ */
+input:not([type='checkbox'], [type='radio'], [type='range']),
+textarea {
+  /* 2 */
+  appearance: none; /* 2 */
+  background-color: transparent; /* 1 */
+  border-radius: 0; /* 3 */
+}
+
+/* ── Links ────────────────────────────────────────────────────────────────────
+ * color: inherit — link color is a design decision, not a browser default.
+ * text-decoration-skip-ink: prevents underline from clipping descenders (g, y, p).
+ */
+a {
+  color: inherit;
+  text-decoration-skip-ink: auto;
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────────────
+ * border-collapse: collapse removes double borders between cells.
+ * border-color: inherit — Firefox bug where table borders don't inherit color.
+ */
+table {
+  border-collapse: collapse;
+  border-color: inherit;
+}
+
+/* ── Code ─────────────────────────────────────────────────────────────────────
+ * font-size: 1em — browsers render code at ~13px by default. This overrides it.
+ */
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--nave-font-family-mono);
+  font-size: 1em;
+}
+
+/* ── Horizontal rule ──────────────────────────────────────────────────────────
+ * Chrome and Firefox disagree on hr height and border rendering.
+ * border: none clears the UA default first — Chrome leaves border-bottom-width: 1px,
+ * border-left-width: 1px and border-bottom-style: inset when only border-top is set,
+ * rendering a three-sided box under the token-coloured top border. border-top then
+ * normalises to a single 1px line.
+ */
+hr {
+  border: none;
+  border-top: var(--nave-border-width-sm) solid var(--nave-color-border-default);
+  color: inherit;
+  height: 0;
+}
+
+/* ── Hidden attribute ─────────────────────────────────────────────────────────
+ * display: flex / grid overrides [hidden] in some browsers.
+ * !important is correct here — [hidden] must always mean hidden — except
+ * hidden="until-found": excluded via :where() (contributes zero specificity, so the
+ * selector stays exactly as specific as plain [hidden]), so find-in-page can still reveal it.
+ * The `i` flag makes the attribute-value match case-insensitive: `hidden` is an HTML
+ * enumerated attribute, whose keywords (including "until-found") are matched ASCII
+ * case-insensitively by the spec, and a browser resolving hidden="UNTIL-FOUND" into the
+ * until-found state must not fall through to this !important display: none.
+ */
+[hidden]:where(:not([hidden='until-found' i])) {
+  display: none !important;
+}
+
+/* ── Disabled ─────────────────────────────────────────────────────────────────
+ * Consistent disabled cursor across all interactive elements.
+ */
+[disabled],
+[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+/* ── Focus ───────────────────────────────────────────────────────────────────
+ * The reset does not remove the user agent's focus indicator, and it does
+ * not replace it either. That is a statement about what Nave declines to
+ * do: no rule here strips outline from a selector that is not itself gated
+ * on :focus-visible, and no rule here ships an author-styled indicator at
+ * document scope. The user-agent default is the baseline. Consumers who
+ * want a different treatment override it via the @layer contract (reset
+ * sits early; every consumer layer wins over it).
+ */
+
+/* ── Color scheme ─────────────────────────────────────────────────────────────
+ * `color-scheme` is now emitted by the TOKENS layer (`@navecss/tokens`, which
+ * ships full light+dark values via `light-dark()`), not by this reset. A
+ * declaration here would win over anything the tokens package emits
+ * (`@layer tokens` loads before `@layer reset`), which would make
+ * `light-dark()` inert and leave a tokens-only consumer (a documented tier) with
+ * no dark mode at all. Do not reintroduce a `color-scheme` declaration here.
+ */
+
+/* ── Reduced motion ───────────────────────────────────────────────────────────
+ * Belt-and-suspenders alongside the token-level reduced motion in tokens.css.
+ * Catches animations not using Nave tokens (third-party, consumer code).
+ * 0.01ms, not 0ms — avoids triggering animationend event bugs in some browsers.
+ * The four !important flags are DELIBERATE. Important declarations reverse
+ * cascade-layer order, so these beat a consumer's own !important in any later
+ * layer; without them a universal-selector rule in an early layer loses to
+ * almost anything, and the collapse would be inert over exactly the
+ * third-party and consumer motion it exists to reach. The cost is accepted
+ * knowingly: a consumer who wants a GENTLER reduced-motion treatment rather
+ * than none cannot have one here, because their shorter duration is
+ * clobbered too. This is a deliberate exception to Nave's otherwise-
+ * overridable defaults, not an oversight. Do not remove the flags; if you
+ * think the trade is wrong, open an issue rather than editing them out.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
