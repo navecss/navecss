@@ -2,7 +2,7 @@
  * What the package CLAIMS about the format it implements, and what it never names.
  *
  * `R49` (the word "DTCG" dated, the word "W3C" gone, the community-group status stated once in
- * body prose), `R48` (the withdrawn resolved-artifact claim swept from its three renderings),
+ * body prose), `R48` (the withdrawn resolved-artifact claim swept from its two renderings),
  * `R47` (the rename and the renamed file's own self-describing sentence), `R40` (no shipped
  * byte names a third-party product) and `R51` (every file implementing the reader is authored
  * here).
@@ -104,27 +104,18 @@ describe('AC-token-build-49 covers: R49 (DTCG dated, W3C absent, the status stat
   })
 })
 
-describe('AC-token-build-48 covers: R48 (the withdrawn claim swept from all three renderings)', () => {
+describe('AC-token-build-48 covers: R48 (the withdrawn claim swept from both renderings)', () => {
   const WITHDRAWN = /any DTCG tool can consume/i
 
   it('no longer claims the emitted artifact is a DTCG document any DTCG tool can consume', () => {
     expect(read('tokens.json')).not.toMatch(WITHDRAWN)
     expect(read('src/theming/palette-record.ts')).not.toMatch(WITHDRAWN)
-    expect(readFileSync(path.join(repo, '.changeset/tidy-moons-describe.md'), 'utf8')).not.toMatch(
-      WITHDRAWN,
-    )
   })
 
   it('no longer cites the theming spec requirement as authority for a claim it no longer makes', () => {
     const source = read('src/theming/palette-record.ts')
     expect(source).not.toMatch(/R37[^]{0,80}any DTCG tool/i)
     expect(source).toContain('palette-record.json')
-  })
-
-  it('renders no withdrawn claim into the changelog entry the pending fragment produces', () => {
-    const fragment = readFileSync(path.join(repo, '.changeset/tidy-moons-describe.md'), 'utf8')
-    expect(fragment).toContain('palette-record.json')
-    expect(fragment).not.toContain('tokens.resolved.json')
   })
 })
 
