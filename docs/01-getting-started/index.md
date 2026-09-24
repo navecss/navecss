@@ -14,7 +14,7 @@ pnpm install
 pnpm run build     # builds the full Turborepo graph: tokens -> core -> bridge -> cli
 ```
 
-`pnpm run dev` runs the package watchers. `pnpm run ci:check` is the full local gate (typecheck, lint, test, build); it must be green before a PR is marked ready.
+`pnpm run dev` runs the package watchers. `pnpm run ci:check` is the full local gate; it must be green before a PR is marked ready. Its steps are enumerated once, in [`.github/CONTRIBUTING.md`](../../.github/CONTRIBUTING.md).
 
 ## Where things live
 
