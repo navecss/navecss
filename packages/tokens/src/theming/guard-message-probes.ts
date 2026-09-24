@@ -17,7 +17,14 @@
 
 import type { PipelineResult, ResolvedSlot } from './pipeline.ts'
 
-import { ADJACENCY, assertNoOrphanedSemanticSlot } from './adjacency.ts'
+import {
+  ADJACENCY,
+  type Adjacency,
+  assertCoverageFloor,
+  assertNoFocusableAdjacentToActionFill,
+  assertNoForbiddenAdjacency,
+  assertNoOrphanedSemanticSlot,
+} from './adjacency.ts'
 import {
   assertContrastFloors,
   assertFloorProvenance,
@@ -104,7 +111,7 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * other places a guard in this family registers, neither mechanically tied to this one; a future
  * guard added there without a probe here repeats this gap.
  *
- * Three more on THIS round, from its review (blue row 2):
+ * Three more, from its review (blue row 2):
  * `assertNoticeIsEmitted`'s absent-notice, multi-line-notice and not-a-self-contained-comment
  * refusals — three of the four reachable `assertNoticeIsEmitted` messages, all four of which
  * were already inside that earlier round's eight. That leaves five of its residual, on a
@@ -116,6 +123,21 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * leaves "unprobed" either. The five are therefore four ordinarily-probeable messages still
  * open plus this one structurally-excluded message, not five messages all waiting on a future
  * probe.
+ *
+ * Three more on this round, per Cédric's ruling to build the residual out rather than continue
+ * recording it: `assertCoverageFloor`, `assertNoForbiddenAdjacency`,
+ * `assertNoFocusableAdjacentToActionFill` — starting with the three a quality reviewer used to
+ * demonstrate the hole was still live: a poisoned wording injected into any of the three real
+ * functions passed `assertHarnessFramingIsClean()` with the whole 102-test suite green, since
+ * none of the three was in this registry. Reproduced that live before adding the probes; each
+ * now catches the injection for the right reason. **Residual after this round:
+ * `assertOnStarShape`'s two position-stating messages** (`on-star.ts` — the declared resting
+ * partner not being the family's solid-background anchor, and the anchor being a state or
+ * foreground role rather than a resting background), deliberately NOT built this round: this
+ * registry's own scope is Nave's own `assertHarnessFramingIsClean` lint, and
+ * `assertOnStarShape`'s exact classification against `assertNoticeIsClean`'s two throw sites
+ * needs a fresh read against the project's accessibility steward's own grading before a probe
+ * is added under either name, which this round did not have room for and is not guessing at.
  */
 export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = [
   {
@@ -170,6 +192,42 @@ export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = 
     // A slot absent from the shipped adjacency declaration, exclusions and open records —
     // the same construction `contrast.test.ts`'s own AC-theming-26 coverage uses.
     capture: () => capturedFailureMessage(() => assertNoOrphanedSemanticSlot(['content.brandNew'])),
+  },
+  {
+    label: 'the adjacency coverage-floor output',
+    // One of the three guards a quality reviewer used to demonstrate this gap: a poisoned
+    // wording injected into each of these three real functions still passed
+    // assertHarnessFramingIsClean, because none of the three was in this registry. Same
+    // fixture as contrast.test.ts's own full-content pin: dropping every `border.control`
+    // declaration is C5's minimum-coverage narrowing, caught naming the missing category.
+    capture: () =>
+      capturedFailureMessage(() =>
+        assertCoverageFloor(ADJACENCY.filter((a) => a.subject !== 'border.control')),
+      ),
+  },
+  {
+    label: 'the forbidden-adjacency output',
+    // R22 entry 1's own single named pair (content.secondary/surface.inverse), same fixture
+    // as contrast.test.ts's full-content pin — the smallest construction that trips this
+    // guard's real failing direction without touching any other guard's shipped behaviour.
+    capture: () =>
+      capturedFailureMessage(() =>
+        assertNoForbiddenAdjacency([
+          { subject: 'content.secondary', against: 'surface.inverse', class: 'text' },
+        ] satisfies Adjacency[]),
+      ),
+  },
+  {
+    label: 'the focusable-adjacent-to-action-fill output',
+    // R22 entry 5: the one focusable slot (border.focus) declared against an action.* fill,
+    // same fixture as contrast.test.ts's full-content pin.
+    capture: () =>
+      capturedFailureMessage(() =>
+        assertNoFocusableAdjacentToActionFill([
+          ...ADJACENCY,
+          { subject: 'border.focus', against: 'action.primary', class: 'non-text' },
+        ] satisfies Adjacency[]),
+      ),
   },
   {
     label: "the same-step lint's real violation output (build-step.ts's runResultGuards)",

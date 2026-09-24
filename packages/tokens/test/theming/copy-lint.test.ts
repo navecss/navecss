@@ -620,6 +620,67 @@ describe('AC-theming-42 covers: R36', () => {
         /Copy-check violation: the same-step lint's real violation output/,
       )
     })
+
+    // One of the three guards a quality reviewer used to demonstrate this gap. Before this
+    // probe existed, injecting this exact poisoned wording into the real assertCoverageFloor
+    // left assertHarnessFramingIsClean() green — verified live on this branch before the
+    // probe was added, reproducing that demonstration.
+    it('a conformance word injected into assertCoverageFloor fails assertHarnessFramingIsClean', async () => {
+      vi.resetModules()
+      vi.doMock('../../src/theming/adjacency.ts', async () => {
+        const actual: Record<string, unknown> = await vi.importActual(
+          '../../src/theming/adjacency.ts',
+        )
+        return {
+          ...actual,
+          assertCoverageFloor: () => {
+            throw new Error('This coverage is WCAG AA compliant at 4.5:1.')
+          },
+        }
+      })
+      const copyLint = await import('../../src/theming/copy-lint.ts')
+      expect(() => copyLint.assertHarnessFramingIsClean()).toThrow(
+        /Copy-check violation: the adjacency coverage-floor output/,
+      )
+    })
+
+    it('a conformance word injected into assertNoForbiddenAdjacency fails assertHarnessFramingIsClean', async () => {
+      vi.resetModules()
+      vi.doMock('../../src/theming/adjacency.ts', async () => {
+        const actual: Record<string, unknown> = await vi.importActual(
+          '../../src/theming/adjacency.ts',
+        )
+        return {
+          ...actual,
+          assertNoForbiddenAdjacency: () => {
+            throw new Error('This pair is WCAG AA compliant at 4.5:1.')
+          },
+        }
+      })
+      const copyLint = await import('../../src/theming/copy-lint.ts')
+      expect(() => copyLint.assertHarnessFramingIsClean()).toThrow(
+        /Copy-check violation: the forbidden-adjacency output/,
+      )
+    })
+
+    it('a conformance word injected into assertNoFocusableAdjacentToActionFill fails assertHarnessFramingIsClean', async () => {
+      vi.resetModules()
+      vi.doMock('../../src/theming/adjacency.ts', async () => {
+        const actual: Record<string, unknown> = await vi.importActual(
+          '../../src/theming/adjacency.ts',
+        )
+        return {
+          ...actual,
+          assertNoFocusableAdjacentToActionFill: () => {
+            throw new Error('This slot is WCAG AA compliant at 4.5:1.')
+          },
+        }
+      })
+      const copyLint = await import('../../src/theming/copy-lint.ts')
+      expect(() => copyLint.assertHarnessFramingIsClean()).toThrow(
+        /Copy-check violation: the focusable-adjacent-to-action-fill output/,
+      )
+    })
   })
 })
 
