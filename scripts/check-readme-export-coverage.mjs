@@ -163,11 +163,24 @@ Walk `packages/`, returning the violations plus the census the printed line repo
  */
 function survey() {
   const violations = []
-  const counts = { checkedPackages: 0, checkedSubpaths: 0, skippedPackages: 0, skippedSubpaths: 0 }
+  const counts = {
+    checkedPackages: 0,
+    checkedSubpaths: 0,
+    skippedPackages: 0,
+    skippedSubpaths: 0,
+    // The two silent `continue`s below used to leave no trace in the
+    // printed census. Both are bare directory/manifest facts, counted and printed
+    // unconditionally, never phrased in terms of what may be published under which licence.
+    skippedNoManifest: 0,
+    skippedNoInScopeSubpaths: 0,
+  }
 
   for (const dir of listPackageDirs()) {
     const manifestPath = path.join(PACKAGES_DIR, dir, 'package.json')
-    if (!existsSync(manifestPath)) continue
+    if (!existsSync(manifestPath)) {
+      counts.skippedNoManifest += 1
+      continue
+    }
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
     const keys = inScopeExportKeys(manifest)
 
@@ -176,7 +189,10 @@ function survey() {
       counts.skippedSubpaths += keys.length
       continue
     }
-    if (keys.length === 0) continue
+    if (keys.length === 0) {
+      counts.skippedNoInScopeSubpaths += 1
+      continue
+    }
     counts.checkedPackages += 1
     counts.checkedSubpaths += keys.length
 
@@ -242,6 +258,15 @@ function main() {
     `${counts.skippedPackages} private package(s) carrying ` +
     `${counts.skippedSubpaths} in-scope subpath(s)`
 
+  // These two facts are printed UNCONDITIONALLY, even when zero, in both
+  // this branch and the normal branch below — bare counts of directory/manifest state, never
+  // phrased in terms of what may be published under which licence or what a consumer receives,
+  // so a reader cannot mistake either for a reason. Phrasing converges with the sibling gate
+  // `check-license-parity.mjs`'s own zero-scope census line rather than drifting further from it.
+  const uncounted =
+    `${counts.skippedNoManifest} director(ies) under packages/ carry no package.json and ` +
+    `${counts.skippedNoInScopeSubpaths} non-private package(s) declare no in-scope subpath`
+
   if (counts.checkedSubpaths === 0) {
     // A run that compared nothing must not read as a run that compared and passed (the rider
     // published `licensing` overview §4/§5 carries). The exit stays 0
@@ -250,12 +275,14 @@ function main() {
     // `counts.checkedSubpaths === 0`, which an all-private tree reaches and so does a tree
     // with no private package at all whose packages simply declare no in-scope subpath, so
     // any reason phrased as a fact about privateness is false on the second tree while the
-    // census beside it reads `0 private package(s)`.
+    // census beside it reads `0 private package(s)`. `uncounted` above is what tells the two
+    // apart without diagnosing either.
     console.log(
       'README export coverage: 0 in-scope subpath(s) examined, so this run compared NOTHING ' +
         `and must not be read as a run that compared and passed; ${skipped} were skipped, ` +
-        'because a private package publishes no tarball. Exiting 0 because having nothing in ' +
-        'scope to examine is a legitimate state, not because anything was checked.',
+        `because a private package publishes no tarball; ${uncounted}. Exiting 0 because ` +
+        'having nothing in scope to examine is a legitimate state, not because anything was ' +
+        'checked.',
     )
     return
   }
@@ -263,7 +290,7 @@ function main() {
   console.log(
     `README export coverage: ${counts.checkedSubpaths} subpath(s) across ` +
       `${counts.checkedPackages} non-private package(s) examined; ${skipped} not examined, ` +
-      'because a private package publishes no tarball.\n' +
+      `because a private package publishes no tarball; ${uncounted}.\n` +
       "Every specifier is present as a whole name in its own package's README.md — presence " +
       'of the name only, never that the README describes it.',
   )

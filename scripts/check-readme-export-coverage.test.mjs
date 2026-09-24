@@ -69,7 +69,7 @@ const TRACKER_REFERENCE_PATTERN = /[\w-]+#\d+/
  * is the clause a reader must not miss and so is the one the output ends on.
  */
 const SUCCESS_LINE_SHAPE =
-  /^README export coverage: \d+ subpath\(s\) across \d+ non-private package\(s\) examined; \d+ private package\(s\) carrying \d+ in-scope subpath\(s\) not examined, because a private package publishes no tarball\.\nEvery specifier is present as a whole name in its own package's README\.md — presence of the name only, never that the README describes it\.$/
+  /^README export coverage: \d+ subpath\(s\) across \d+ non-private package\(s\) examined; \d+ private package\(s\) carrying \d+ in-scope subpath\(s\) not examined, because a private package publishes no tarball; \d+ director\(ies\) under packages\/ carry no package\.json and \d+ non-private package\(s\) declare no in-scope subpath\.\nEvery specifier is present as a whole name in its own package's README\.md — presence of the name only, never that the README describes it\.$/
 
 /**
  * A throwaway workspace the SHIPPED script can be run against: a `scripts/` holding a copy
@@ -91,9 +91,13 @@ function buildFixture(packages) {
   for (const name of [SCRIPT_NAME, SIBLING_NAME]) {
     cpSync(path.join(ROOT, 'scripts', name), path.join(dir, 'scripts', name))
   }
-  for (const [packageDir, { manifest, readme }] of Object.entries(packages)) {
+  for (const [packageDir, entry] of Object.entries(packages)) {
     const packagePath = path.join(dir, 'packages', packageDir)
     mkdirSync(packagePath, { recursive: true })
+    // `skipManifest` builds a directory under packages/ with NO
+    // package.json at all — the other silent `continue` the census used to leave uncounted.
+    if (entry.skipManifest) continue
+    const { manifest, readme } = entry
     writeFileSync(path.join(packagePath, 'package.json'), JSON.stringify(manifest, null, 2))
     if (readme !== null) {
       writeFileSync(path.join(packagePath, 'README.md'), readme)
@@ -400,6 +404,30 @@ const NO_IN_SCOPE_SUBPATHS_FIXTURE = {
   },
 }
 
+/**
+ * The shape that reaches the NORMAL (non-zero) branch rather than the zero-scope one:
+ * `alpha` has an in-scope subpath, so `counts.checkedSubpaths` is non-zero and the summary
+ * line takes the other branch entirely. Before this fix, `delta` (non-private,
+ * zero in-scope subpaths) and `orphan` (no package.json at all) were both silent `continue`s
+ * with no counter anywhere — a package or directory in this exact shape simply VANISHED from
+ * every printed count, on the branch a maintainer is least likely to double-check because it
+ * is the one that already looks like a normal pass.
+ */
+const UNCOUNTED_CONTINUES_FIXTURE = {
+  alpha: {
+    manifest: {
+      exports: { '.': './dist/index.js', './one': './dist/one.js' },
+      name: '@navecss/alpha',
+    },
+    readme: '# alpha\n\nSee `@navecss/alpha/one`.\n',
+  },
+  delta: {
+    manifest: { exports: { '.': './dist/index.js' }, name: '@navecss/delta' },
+    readme: '# delta\n',
+  },
+  orphan: { skipManifest: true },
+}
+
 test('end to end: a clean fixture exits 0 and prints the scope, the skip and the presence-only caveat', () => {
   const dir = buildFixture(CLEAN_FIXTURE)
   try {
@@ -409,7 +437,8 @@ test('end to end: a clean fixture exits 0 and prints the scope, the skip and the
       stdout.trim(),
       'README export coverage: 6 subpath(s) across 3 non-private package(s) examined; 1 ' +
         'private package(s) carrying 4 in-scope subpath(s) not examined, because a private ' +
-        'package publishes no tarball.\n' +
+        'package publishes no tarball; 0 director(ies) under packages/ carry no package.json ' +
+        'and 0 non-private package(s) declare no in-scope subpath.\n' +
         "Every specifier is present as a whole name in its own package's README.md — " +
         'presence of the name only, never that the README describes it.',
     )
@@ -454,8 +483,9 @@ test('end to end: a run that examined nothing says so instead of printing the su
       'README export coverage: 0 in-scope subpath(s) examined, so this run compared NOTHING ' +
         'and must not be read as a run that compared and passed; 1 private package(s) ' +
         'carrying 1 in-scope subpath(s) were skipped, because a private package publishes no ' +
-        'tarball. Exiting 0 because having nothing in scope to examine is a legitimate state, ' +
-        'not because anything was checked.',
+        'tarball; 0 director(ies) under packages/ carry no package.json and 0 non-private ' +
+        'package(s) declare no in-scope subpath. Exiting 0 because having nothing in scope to ' +
+        'examine is a legitimate state, not because anything was checked.',
     )
   } finally {
     rmSync(dir, { force: true, recursive: true })
@@ -493,10 +523,30 @@ test('end to end: the zero-scope line explains itself without claiming the tree 
       'README export coverage: 0 in-scope subpath(s) examined, so this run compared NOTHING ' +
         'and must not be read as a run that compared and passed; 0 private package(s) ' +
         'carrying 0 in-scope subpath(s) were skipped, because a private package publishes no ' +
-        'tarball. Exiting 0 because having nothing in scope to examine is a legitimate state, ' +
-        'not because anything was checked.',
+        'tarball; 0 director(ies) under packages/ carry no package.json and 1 non-private ' +
+        'package(s) declare no in-scope subpath. Exiting 0 because having nothing in scope to ' +
+        'examine is a legitimate state, not because anything was checked.',
     )
     assert.doesNotMatch(stdout, /all-private/)
+  } finally {
+    rmSync(dir, { force: true, recursive: true })
+  }
+})
+
+test('end to end: a non-private package with zero in-scope subpaths, and a directory with no package.json, both appear in the census instead of silently vanishing', () => {
+  const dir = buildFixture(UNCOUNTED_CONTINUES_FIXTURE)
+  try {
+    const { status, stdout } = runScript(dir)
+    assert.equal(status, 0)
+    assert.equal(
+      stdout.trim(),
+      'README export coverage: 1 subpath(s) across 1 non-private package(s) examined; 0 ' +
+        'private package(s) carrying 0 in-scope subpath(s) not examined, because a private ' +
+        'package publishes no tarball; 1 director(ies) under packages/ carry no package.json ' +
+        'and 1 non-private package(s) declare no in-scope subpath.\n' +
+        "Every specifier is present as a whole name in its own package's README.md — " +
+        'presence of the name only, never that the README describes it.',
+    )
   } finally {
     rmSync(dir, { force: true, recursive: true })
   }
