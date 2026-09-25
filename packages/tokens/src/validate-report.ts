@@ -57,6 +57,32 @@ const NAMESPACE_PREAMBLE =
   '--nave-color-surface-base). Your DTCG 2025.10 source names the same node with the "--nave-" ' +
   'prefix dropped and hyphens read as a dotted path (color.surface.base).'
 
+// One rendering for both callers: `validate`'s refusal and `build`'s advisory each compose
+// their own sentence around this fact rather than stating it twice, differently worded.
+/**
+ * Describes a version mismatch in words: the core contract this package ships was recorded
+ * against one `@navecss/core` version, and a different one is installed. This is the same
+ * description `navecss-tokens build` and `navecss-tokens validate` print.
+ *
+ * Pass it the `versionSkew` field of a `build()` result: that field's `producerName` first,
+ * then the field itself (only `recorded` and `installed` are read). What comes back is a
+ * clause rather than a finished message, with no label and no final full stop, so it can sit
+ * inside a message of your own.
+ *
+ * The wording is for people to read and may change in any release. To decide what to do,
+ * read the `versionSkew` field itself; never match on this text.
+ */
+export function formatVersionSkewFact(
+  producerName: string,
+  versionSkew: ManifestVersionSkew,
+): string {
+  return (
+    `the core contract this @navecss/tokens ships was recorded against ` +
+    `${producerName}@${versionSkew.recorded}, but the installed ${producerName} is ` +
+    `@${versionSkew.installed}`
+  )
+}
+
 /**
  * R17 clause 4 / R18: the check's scope, stated in every outcome — one-directional (an
  * extra token in the source is never an error) — and never a claim about the palette.
@@ -245,9 +271,8 @@ export function formatValidateReport(
 
   if (versionSkew) {
     return [
-      `Version skew: this manifest was recorded against ${manifest.producer.name}@` +
-        `${versionSkew.recorded}, but the installed ${manifest.producer.name} is @` +
-        `${versionSkew.installed}. Reinstall matching versions before trusting this result.`,
+      `Version skew: ${formatVersionSkewFact(manifest.producer.name, versionSkew)}. Reinstall ` +
+        `matching versions before trusting this result.`,
     ]
   }
 

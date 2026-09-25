@@ -164,6 +164,50 @@ describe('AC-token-build-02 covers: R2', () => {
   it("the compiled facade.d.ts's TokensValidateOptions interface declares EXACTLY R3's one member", () => {
     expect(declaredMembersOf('TokensValidateOptions')).toEqual(['source'])
   })
+
+  // A review round found `formatVersionSkewFact` re-exported here with no test pinning the
+  // module's runtime export set — an incidental public export could slip in (or a real one
+  // drop out) with nothing here to catch it. Read directly from `../src/facade.ts` (rather
+  // than `dist/lib/facade.js`) so the pin holds before a build step runs, matching this
+  // file's own in-process style; `declaredMembersOf` above already covers the compiled
+  // `.d.ts` surface for the TYPE side.
+  it('the façade module exports EXACTLY this sorted list of runtime bindings — a public export is a decision made here, not a side effect', async () => {
+    const facadeModule: Record<string, unknown> = await import('../src/facade.ts')
+    expect(Object.keys(facadeModule).toSorted((a, b) => a.localeCompare(b))).toEqual([
+      'build',
+      'DuplicateTokenNameRefusal',
+      'formatVersionSkewFact',
+      'MissingContractTokensError',
+      'SeedIngestRefusal',
+      'TokenCollisionRefusal',
+      'UsageError',
+      'validate',
+    ])
+  })
+})
+
+/**
+ * `TokensBuildResult.files` and `TokensValidateResult.output` keep a JSDoc comment in the
+ * SOURCE. Pinned there rather than against the compiled `.d.ts`: this package's own
+ * `tsconfig.build.json` sets `removeComments: true`, which strips every comment, JSDoc and
+ * line comments alike, from `dist/lib/*.d.ts`, so no test against the compiled output could
+ * tell a JSDoc comment from none. The source is what a contributor reads, so that is what
+ * this pins.
+ */
+describe('TokensBuildResult.files and TokensValidateResult.output keep a JSDoc comment in the source', () => {
+  const facadeSource = readFileSync(path.join(PACKAGE_ROOT, 'src/facade.ts'), 'utf8')
+
+  it('TokensBuildResult.files carries a JSDoc comment directly above it in the source', () => {
+    expect(facadeSource).toMatch(
+      /\/\*\*(?:(?!\*\/)[\s\S])*?[A-Za-z](?:(?!\*\/)[\s\S])*?\*\/\s*\n\s*files\s*[?:]/,
+    )
+  })
+
+  it('TokensValidateResult.output carries a JSDoc comment directly above it in the source', () => {
+    expect(facadeSource).toMatch(
+      /\/\*\*(?:(?!\*\/)[\s\S])*?[A-Za-z](?:(?!\*\/)[\s\S])*?\*\/\s*\n\s*output\s*[?:]/,
+    )
+  })
 })
 
 describe('AC-token-build-03 covers: R3', () => {

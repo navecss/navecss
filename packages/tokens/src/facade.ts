@@ -34,18 +34,18 @@ import path from 'node:path'
 
 import type { OutputFile } from './builder.ts'
 import type { SeedNormalization } from './theming/color-math.ts'
-import type { CoreContractManifest } from './theming/core-contract.ts'
+import type { CoreContractManifest, ManifestVersionSkew } from './theming/core-contract.ts'
 
 import { writeOutputs } from './builder.ts'
 import { detectCollidingNames, refuseOnCollision } from './collision.ts'
-import { resolveInstalledCoreVersion } from './core-version.ts'
+import { detectVersionSkew } from './core-version.ts'
 import { composeDtcgOutputs } from './dtcg-outputs.ts'
 import { MissingContractTokensError, UsageError } from './errors.ts'
 import { readOverrides } from './overrides.ts'
 import { findPackageRoot } from './package-root.ts'
 import { formatOklch } from './theming/color-math.ts'
 import { composeConsumerBuild } from './theming/consumer-build.ts'
-import { checkManifestVersionSkew, validateAgainstManifest } from './theming/core-contract.ts'
+import { validateAgainstManifest } from './theming/core-contract.ts'
 import { shippedThemingPropertyNames } from './theming/emit.ts'
 import { parseSeed } from './theming/seed-ingest.ts'
 import { SHIPPED_SEEDS } from './theming/shipped-seeds.ts'
@@ -78,6 +78,10 @@ export type { SeedNormalization } from './theming/color-math.ts'
 // TypeScript consumer could not `satisfies` their own override file against anything.
 export type { PerStepOverrides } from './theming/pipeline.ts'
 export { SeedIngestRefusal } from './theming/seed-ingest.ts'
+// A deliberate public export of `@navecss/tokens/build`: the compiled bin may import only
+// the façade (pinned in test/bin.test.ts, AC-token-build-01), and this renders
+// `TokensBuildResult.versionSkew` with the same wording `bin.ts` prints.
+export { formatVersionSkewFact } from './validate-report.ts'
 
 const PACKAGE_ROOT = findPackageRoot(import.meta.url)
 
@@ -119,7 +123,7 @@ export interface TokensBuildResult {
    */
   seedNormalization: SeedNormalization
   /**
-  R35: every file written, output-directory-relative, sorted.
+  Every file written, output-directory-relative, sorted.
    */
   files: string[]
   /**
@@ -128,6 +132,15 @@ export interface TokensBuildResult {
    * detection the refusal reads, without catching.
    */
   collidingNames: string[]
+  /**
+   * The version-skew fact `validate` already detects, which `build` used
+   * to silently skip. `undefined` when it matches, or the installed core could not be resolved
+   * at all (`coreProbe.status !== 'resolved'` — a different situation, not a skew). ADVISORY
+   * only, never changes `build`'s exit code; `producerName` lets `bin.ts` render the shared
+   * `formatVersionSkewFact`. Widening the exit-code contract's `{0, 1, 2}` set for a skew is a
+   * deliberately separate, out-of-scope decision.
+   */
+  versionSkew?: (ManifestVersionSkew & { producerName: string }) | undefined
 }
 
 /**
@@ -159,6 +172,13 @@ export async function build(options: TokensBuildOptions): Promise<TokensBuildRes
   const emittedNames = new Set([...sourceNames, ...shippedThemingPropertyNames()])
   const missing = validateAgainstManifest(manifest, emittedNames)
   if (missing.length > 0) throw new MissingContractTokensError(missing)
+
+  // Same check `validate` runs. Run BEFORE any artifact is written — not merely before
+  // `writeOutputs`'s own call — so a malformed manifest (an unchecked `readManifest` cast
+  // whose `producer` field a later check dereferences) fails loud here, pre-write, keeping
+  // R23 rather than degrading a write that already succeeded into a reported failure.
+  // Advisory only when it succeeds: never affects what follows.
+  const { skew } = await detectVersionSkew(manifest)
 
   const theming = composeConsumerBuild({
     seedInputs: { primary },
@@ -195,6 +215,7 @@ export async function build(options: TokensBuildOptions): Promise<TokensBuildRes
       .map((file) => path.relative(options.outDir, file.destination))
       .toSorted((a, b) => a.localeCompare(b)),
     collidingNames,
+    versionSkew: skew === undefined ? undefined : { ...skew, producerName: manifest.producer.name },
   }
 }
 
@@ -216,7 +237,7 @@ export interface TokensValidateResult {
    */
   exitCode: 0 | 1 | 2
   /**
-  R17/R18's rendered output, one line per array member.
+  The validator's rendered report, one line per array member.
    */
   output: string[]
 }
@@ -246,11 +267,7 @@ export async function validate(options: TokensValidateOptions): Promise<TokensVa
   // R4/AC-token-build-04's sense — only the genuinely-missing subset drives the exit code.
   const { missing, supplied } = splitMissingBySupply(kind, notDeclared)
 
-  const coreProbe = await resolveInstalledCoreVersion()
-  const versionSkew =
-    coreProbe.status === 'resolved'
-      ? checkManifestVersionSkew(manifest, coreProbe.version)
-      : undefined
+  const { probe: coreProbe, skew: versionSkew } = await detectVersionSkew(manifest)
   const formatRefusal = checkManifestFormatSupport(manifest)
 
   const output = formatValidateReport(manifest, missing, versionSkew, { ...coreProbe, supplied })
