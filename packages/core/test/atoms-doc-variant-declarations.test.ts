@@ -96,3 +96,46 @@ describe('renderVariants renders pseudos nested inside a media or container bloc
     expect(rendered).toContain('color: red;')
   })
 })
+
+describe('renderVariants suppresses a bare block entry only when the block has no declarations and does have nested pseudos', () => {
+  it('a media block with ONLY nested pseudos renders no entry for the bare block', () => {
+    const synthetic: AtomDefinition = {
+      declarations: {},
+      media: {
+        '(width < 1px)': {
+          pseudos: { ':hover': { color: 'red' } },
+        },
+      },
+    }
+    const entries = renderVariants(synthetic).split('<br>')
+    expect(entries).toHaveLength(1)
+    expect(entries.some((entry) => entry.startsWith('`@media (width < 1px)` '))).toBe(false)
+  })
+
+  it('a media block with BOTH declarations and a nested pseudo renders the block entry, then the pseudo entry', () => {
+    const synthetic: AtomDefinition = {
+      declarations: {},
+      media: {
+        '(width < 1px)': {
+          declarations: { display: 'none' },
+          pseudos: { ':hover': { color: 'red' } },
+        },
+      },
+    }
+    const entries = renderVariants(synthetic).split('<br>')
+    expect(entries).toEqual([
+      '`@media (width < 1px)` — `display: none;`',
+      '`@media (width < 1px) :hover` — `color: red;`',
+    ])
+  })
+
+  it('a media block with neither declarations nor pseudos still renders its own entry, with —', () => {
+    const synthetic: AtomDefinition = {
+      declarations: {},
+      media: {
+        '(width < 1px)': {},
+      },
+    }
+    expect(renderVariants(synthetic)).toBe('`@media (width < 1px)` — —')
+  })
+})

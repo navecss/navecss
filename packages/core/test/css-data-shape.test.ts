@@ -226,11 +226,39 @@ describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference'
   })
 })
 
+/**
+ * True when `source`, with every run of whitespace collapsed to a single space, contains the
+ * correct realpath comparison — tolerant of a lawful reformat (the comparison wrapped across
+ * lines), the same tolerance `check-main-guard-spaced-path.test.mjs`'s own `GUARD_PATTERN`
+ * already gives the repo-root scripts it sweeps. A byte-exact `toContain` would red a
+ * behaviourally-correct file the moment it is reformatted.
+ */
+function hasRealpathGuard(source: string): boolean {
+  return source
+    .replaceAll(/\s+/g, ' ')
+    .includes('realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])')
+}
+
 describe('generate-css-data.ts guards its file-writing driver for spaced and symlinked invocation paths', () => {
   it('does not use the broken `file://${process.argv[1]}` template, and does use the realpath comparison', () => {
     expect(GENERATOR_SRC).not.toContain('file://${process.argv[1]}')
-    expect(GENERATOR_SRC).toContain(
+    expect(hasRealpathGuard(GENERATOR_SRC)).toBe(true)
+  })
+
+  it('still passes a lawful reformat that wraps the comparison across two lines', () => {
+    const reformatted = GENERATOR_SRC.replace(
       'realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])',
+      'realpathSync(fileURLToPath(import.meta.url)) ===\n    realpathSync(process.argv[1])',
     )
+    expect(hasRealpathGuard(reformatted)).toBe(true)
+  })
+
+  it('still fails on a copy carrying the old broken template', () => {
+    const oldTemplateGuard = [
+      'if (import.meta.url === ',
+      '`file://${process.argv[1]}`',
+      ') {',
+    ].join('')
+    expect(hasRealpathGuard(oldTemplateGuard)).toBe(false)
   })
 })

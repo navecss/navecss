@@ -27,6 +27,32 @@ export interface PackedCoreTarball {
 let cached: PackedCoreTarball | undefined
 
 /**
+ * The tarball filename `npm pack --json` reports for its first entry, reading BOTH reply shapes:
+ * npm 11 and earlier answer with an array of tarball entries, npm 12 answers with an object
+ * keyed by package name (mirrors `scripts/check-no-orphaned-chunks.mjs`'s `tarballEntries` — the
+ * release workflow pins npm 12 while local and pull-request runs use npm 11, so both are real).
+ * `parsed[0]!.filename` alone reads only the first shape and crashes with a bare `TypeError`
+ * under the second, since an array index into an object is always `undefined`.
+ */
+export function tarballFilename(raw: string): string {
+  const parsed: unknown = JSON.parse(raw)
+  const entries = Array.isArray(parsed)
+    ? parsed
+    : parsed !== null && typeof parsed === 'object'
+      ? Object.values(parsed)
+      : []
+  const entry: unknown = entries[0]
+  if (entry === null || typeof entry !== 'object') {
+    throw new Error('npm pack --json produced no tarball entry')
+  }
+  const filename = (entry as { filename?: unknown }).filename
+  if (typeof filename !== 'string') {
+    throw new Error('npm pack --json produced a tarball entry with no filename')
+  }
+  return filename
+}
+
+/**
  * Runs `command` (always `npm` or `tar`, never taken from input) resolved from PATH.
  *
  * NOSONAR on the one spawn line below (rule S4036, PATH-resolved executable): resolving the tool
@@ -52,9 +78,7 @@ export function packCoreTarball(): PackedCoreTarball {
     maxBuffer: 64 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
-  const parsed = JSON.parse(raw) as Array<{ filename: string }>
-  if (parsed.length === 0) throw new Error('npm pack --json produced no tarball entry')
-  const tarballPath = path.join(packDestination, parsed[0]!.filename)
+  const tarballPath = path.join(packDestination, tarballFilename(raw))
 
   const fileList = runTool('tar', ['-tzf', tarballPath], { encoding: 'utf8' })
     .split('\n')

@@ -56,30 +56,50 @@ describe('AC-consumer-constraints-01: immune to a package-version change', () =>
     expect(output).not.toContain(tokensPkg.version)
   })
 
+  const cssDataSrc = readFileSync(path.resolve(HERE, '../scripts/generate-css-data.ts'), 'utf8')
+  const atomsDocSrc = readFileSync(path.resolve(HERE, '../scripts/generate-atoms-doc.ts'), 'utf8')
+
+  /**
+   * The `label`s of every source in `sources` whose `text` mentions `package.json`. A real scan
+   * function, not a bare regex match on a string literal: calling it is what makes "the widened
+   * scan catches the plant" a claim about the scan's own behaviour rather than a fact about the
+   * plant string being true by construction.
+   */
+  function sourcesMentioningPackageJson(sources: Array<{ label: string; text: string }>): string[] {
+    return sources
+      .filter((source) => /package\.json/.test(source.text))
+      .map((source) => source.label)
+  }
+
   // Structural rather than a scratch-copy dual run: `generate()` never reads either package.json,
   // only `src/atoms.ts` (via `readSections`, itself defined in `generate-atoms-doc.ts`), so its
-  // output cannot vary with a package version by construction. Grepping BOTH generators' own
-  // imports is what makes that claim checkable rather than asserted — scanning only
+  // output cannot vary with a package version by construction. Scanning BOTH generators' own
+  // sources is what makes that claim checkable rather than asserted — scanning only
   // `generate-css-data.ts` proves it for one file, not for the transitive graph the claim is
   // actually about.
   it('neither generator imports from package.json to build its output', () => {
-    const cssDataSrc = readFileSync(path.resolve(HERE, '../scripts/generate-css-data.ts'), 'utf8')
-    const atomsDocSrc = readFileSync(path.resolve(HERE, '../scripts/generate-atoms-doc.ts'), 'utf8')
-    for (const src of [cssDataSrc, atomsDocSrc]) {
-      expect(src).not.toMatch(/package\.json/)
-    }
+    expect(
+      sourcesMentioningPackageJson([
+        { label: 'generate-css-data.ts', text: cssDataSrc },
+        { label: 'generate-atoms-doc.ts', text: atomsDocSrc },
+      ]),
+    ).toEqual([])
   })
 
-  it('the widened scan catches a package.json read planted in generate-atoms-doc.ts, which the narrower single-file scan would miss', () => {
-    const cssDataSrc = readFileSync(path.resolve(HERE, '../scripts/generate-css-data.ts'), 'utf8')
-    const atomsDocSrc = readFileSync(path.resolve(HERE, '../scripts/generate-atoms-doc.ts'), 'utf8')
-    const planted = `${atomsDocSrc}\nreadFileSync(path.resolve(HERE, '../package.json'), 'utf8')\n`
+  it('the widened scan catches a package.json read planted in generate-atoms-doc.ts, which a single-file scan would miss', () => {
+    const plantedAtomsDocSrc = `${atomsDocSrc}\nreadFileSync(path.resolve(HERE, '../package.json'), 'utf8')\n`
 
-    // The narrower, pre-fix scan reads only generate-css-data.ts's own source, so it never sees
-    // this file at all and would report clean even with the plant in place.
-    expect(cssDataSrc).not.toMatch(/package\.json/)
+    // A scan reading only generate-css-data.ts's own source never sees the plant at all.
+    expect(
+      sourcesMentioningPackageJson([{ label: 'generate-css-data.ts', text: cssDataSrc }]),
+    ).toEqual([])
 
-    // The widened scan includes generate-atoms-doc.ts and catches the same plant.
-    expect(planted).toMatch(/package\.json/)
+    // The widened scan, given both sources, catches it and names which one.
+    expect(
+      sourcesMentioningPackageJson([
+        { label: 'generate-css-data.ts', text: cssDataSrc },
+        { label: 'generate-atoms-doc.ts', text: plantedAtomsDocSrc },
+      ]),
+    ).toEqual(['generate-atoms-doc.ts'])
   })
 })
