@@ -78,8 +78,16 @@ test('the job runs on a GitHub-hosted runner', () => {
 
 test('npm is installed at an exact 12.x version and checked before anything is staged', () => {
   const code = workflowCode()
-  assert.match(code, /npm install --global npm@12\.1\.0$/m)
+  assert.match(code, /npm install --global (?:--\S+ )*npm@12\.1\.0$/m)
   assert.match(code, /test "\$\(npm --version\)" = 12\.1\.0$/m)
+})
+
+// ROW: this job holds the OIDC permission that can stage a release, so neither install in it may
+// run a lifecycle script from the package being installed.
+test('both installs in the job run with lifecycle scripts off', () => {
+  const code = workflowCode()
+  assert.match(code, /^ {8}run: pnpm install --frozen-lockfile --ignore-scripts$/m)
+  assert.match(code, /npm install --global --ignore-scripts npm@12\.1\.0$/m)
 })
 
 test('the release step is the root release script, and nothing publishes directly', () => {

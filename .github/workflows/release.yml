@@ -24,10 +24,11 @@ name: release
 #
 # npm is pinned exactly to 12.1.0, above every floor this path has (trusted publishing 11.5.1,
 # `npm stage` 11.15.0, provenance 9.5.0), and on the Node the mise pin installs (npm 12 needs
-# ^22.22.2 or ^24.15.0). npm 12 no longer runs dependency install scripts by default. That changes
-# nothing here: npm installs nothing but itself in this job, dependencies are installed by pnpm,
-# which already runs no dependency install scripts (see `pnpm-workspace.yaml`), and npm stages a
-# packed tarball, for which it runs no lifecycle script either.
+# ^22.22.2 or ^24.15.0). npm 12 no longer runs dependency install scripts by default; this job
+# goes further and runs no install-time lifecycle script at all, since it is the one job that can
+# stage a release. Both installs pass `--ignore-scripts` (nothing here needs one: the repository's
+# own `prepare` only sets up local git hooks, and `pnpm-workspace.yaml` already keeps dependency
+# build scripts off), and npm stages a packed tarball, for which it runs no lifecycle script.
 
 on:
   workflow_dispatch:
@@ -58,11 +59,11 @@ jobs:
           version: 2026.8.3
 
       - name: Install dependencies (frozen lockfile)
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Install npm 12.1.0 and confirm it is the npm on PATH
         run: |
-          npm install --global npm@12.1.0
+          npm install --global --ignore-scripts npm@12.1.0
           test "$(npm --version)" = 12.1.0
 
       - name: Build, check and stage (the root release script)

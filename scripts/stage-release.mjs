@@ -137,6 +137,19 @@ function readWorkspaceManifests() {
 }
 
 /**
+ * Runs `command` (always `npm` or `pnpm`, never taken from input) resolved from PATH.
+ *
+ * NOSONAR on the one spawn line below (rule S4036, PATH-resolved executable): resolving the tool
+ * from PATH is deliberate. In the release workflow PATH is the toolchain that workflow installs
+ * and then checks (`npm --version` must read 12.1.0 before this script runs), so an absolute
+ * path would bypass the very npm that was verified; run by hand, it is the maintainer's own
+ * toolchain, and the npm floor below is checked either way.
+ */
+function runTool(command, args, options) {
+  return execFileSync(command, args, options) // NOSONAR
+}
+
+/**
  * True if `name@version` is on the registry, read from the package's full list of published
  * versions (a staged, unapproved version is not in it). Not `npm view name@version`: npm 12
  * answers a missing version with an E404 exit rather than empty output, and telling that E404
@@ -144,7 +157,7 @@ function readWorkspaceManifests() {
  * package that does not exist at all) is thrown, because guessing could stage the wrong set.
  */
 function isOnRegistry(name, version) {
-  const output = execFileSync('npm', ['view', name, 'versions', '--json'], { encoding: 'utf8' })
+  const output = runTool('npm', ['view', name, 'versions', '--json'], { encoding: 'utf8' })
   return [JSON.parse(output)].flat().includes(version)
 }
 
@@ -153,7 +166,7 @@ Packs the package in `dir` with pnpm into `destination` and returns the tarball'
  */
 function packTarball(dir, destination) {
   const before = new Set(readdirSync(destination))
-  execFileSync('pnpm', ['pack', '--pack-destination', destination], { cwd: dir, stdio: 'inherit' })
+  runTool('pnpm', ['pack', '--pack-destination', destination], { cwd: dir, stdio: 'inherit' })
   const created = readdirSync(destination).filter((file) => !before.has(file))
   if (created.length !== 1) {
     throw new Error(
@@ -167,7 +180,7 @@ function packTarball(dir, destination) {
 Checks the npm floor, plans the release, then packs and stages each package in order.
  */
 function main() {
-  const npmVersion = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim()
+  const npmVersion = runTool('npm', ['--version'], { encoding: 'utf8' }).trim()
   if (!meetsStageFloor(npmVersion)) {
     console.error(
       `Staging: npm ${npmVersion} has no \`stage\` command; npm ${NPM_STAGE_FLOOR} or newer is required.`,
@@ -194,7 +207,7 @@ function main() {
   const destination = mkdtempSync(path.join(os.tmpdir(), 'navecss-stage-'))
   for (const manifest of toStage) {
     const tarball = packTarball(manifest.dir, destination)
-    execFileSync('npm', stagePublishArgs(tarball), { stdio: 'inherit' })
+    runTool('npm', stagePublishArgs(tarball), { stdio: 'inherit' })
   }
 
   console.log(
