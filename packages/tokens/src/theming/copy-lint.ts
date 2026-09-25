@@ -24,8 +24,10 @@ import { assertContrastFloors, runContrastHarness } from './contrast.ts'
 // after all three modules have finished loading.
 // Verified against the built output by importing each of the three modules first, in a fresh
 // Node process each, and reading through to the other two: no throw and no `undefined` in any
-// order. A top-level read of any of those values would break that, so keep them inside
-// functions.
+// order. A top-level read of any of the four constants would break that, so they stay inside
+// functions. assertNoticeIsEmitted is grouped with them because it, too, is never read outside
+// a thunk here, not because it shares their hazard: a function declaration is hoisted whole
+// before any module body runs, so a top-level read of it would not break the same way.
 // eslint-disable-next-line import-x/no-cycle -- safe, see the comment above
 import { ACCESSIBILITY_GUARD_MESSAGE_PROBES } from './guard-message-probes.ts'
 
