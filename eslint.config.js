@@ -321,10 +321,11 @@ export default defineConfig([
       // Same shape, a one-line "regenerated N fixture(s)" progress
       // line for a script package.json's test:browser runs before every browser test suite.
       '**/scripts/generate-consumer-theming-fixtures.ts',
-      // Same shape again: a one-line "Wrote <path>" progress line for the two doc generators
-      // (ATOMS.md, TOKENS.md) run by hand or from a maintainer's own terminal, never imported
-      // for their output.
+      // Same shape again: a one-line "Wrote <path>" progress line for the doc/data generators
+      // (ATOMS.md, TOKENS.md, nave.css-data.json) run by hand or from a maintainer's own
+      // terminal, never imported for their output.
       '**/scripts/generate-atoms-doc.ts',
+      '**/scripts/generate-css-data.ts',
       'packages/tokens/generate-tokens-doc.ts',
     ],
     rules: {

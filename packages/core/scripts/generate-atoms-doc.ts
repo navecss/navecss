@@ -117,18 +117,41 @@ function renderDeclarations(declarations: Record<string, string>): string {
 }
 
 /**
-The atom's pseudo-class, `@media` and `@container` selectors/conditions, `<br>`-joined.
+One variant entry: its selector/condition beside the declarations it applies, so a reader never
+has to cross-reference `atoms.ts` to see what a `:focus-visible` or `@media` variant actually
+does (a selector-only list previously let `focusRing`'s row show its resting `outline: none;`
+with no hint that the `:focus-visible` variant restores it).
+ */
+function renderVariantEntry(selector: string, declarations: Record<string, string>): string {
+  return `\`${selector}\` — ${renderDeclarations(declarations)}`
+}
+
+/**
+The atom's pseudo-class, `@media` and `@container` variants, each beside the declarations it
+applies, `<br>`-joined.
  */
 function renderVariants(atom: AtomDefinition): string {
   const parts: string[] = []
   if (atom.pseudos) {
-    parts.push(...Object.keys(atom.pseudos).map((selector) => `\`${selector}\``))
+    parts.push(
+      ...Object.entries(atom.pseudos).map(([selector, declarations]) =>
+        renderVariantEntry(selector, declarations),
+      ),
+    )
   }
   if (atom.media) {
-    parts.push(...Object.keys(atom.media).map((query) => `\`@media ${query}\``))
+    parts.push(
+      ...Object.entries(atom.media).map(([query, block]) =>
+        renderVariantEntry(`@media ${query}`, block.declarations ?? {}),
+      ),
+    )
   }
   if (atom.container) {
-    parts.push(...Object.keys(atom.container).map((query) => `\`@container ${query}\``))
+    parts.push(
+      ...Object.entries(atom.container).map(([query, block]) =>
+        renderVariantEntry(`@container ${query}`, block.declarations ?? {}),
+      ),
+    )
   }
   return parts.length === 0 ? '—' : parts.join('<br>')
 }
