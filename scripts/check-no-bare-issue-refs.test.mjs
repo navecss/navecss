@@ -394,6 +394,7 @@ test('only a word character directly before the hash excludes a reference', () =
     '!',
     '?',
     '@',
+    '#',
     '$',
     '%',
     '^',
