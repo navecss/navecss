@@ -23,9 +23,12 @@
  * The lookbehind excludes exactly one shape: a word character directly before the `#`, which is
  * what a fully qualified `owner/repo#N` reference always has right there (`repo` ends in a word
  * character), so any `owner/repo#N` or `repo#N` spelling is excluded by construction rather than
- * by a list of spellings. Nothing else is excused by this lookbehind; a URL or SVG fragment
- * identifier (`url(#123)`, `href="#123"`) is handled separately, by `isLawfulNonReference`'s own
- * `url(`/`href=` clause below.
+ * by a list of spellings. Nothing else is excused by this lookbehind. A URL or SVG fragment
+ * written directly after `url(` or `href=` and a quote (`url(#N)`, `href="#N"`) is excused
+ * separately, by `isLawfulNonReference`'s own clause below. A fragment after a path segment
+ * (`url(dir/#N)`, `href="page/#N"`) is not, and is reported: no such spelling exists in this
+ * repository today, so that residual is pinned as a reported row below rather than fenced out.
+ * Widen that clause, not this lookbehind, if a real one ever appears.
  *
  * THE CLASS USED TO ALSO CARRY `-` AND `/` MEMBERS, BOTH REMOVED because they excluded the wrong
  * population. The stated reason for both was the same "qualified form" reasoning above, but a
@@ -432,6 +435,19 @@ test('only a word character directly before the hash excludes a reference', () =
       `${JSON.stringify(c)} is a word character and still excludes the reference`,
     )
   }
+})
+
+// A fragment after a path segment is outside the `url(`/`href=` clause and is reported (see the
+// docblock above `BARE_ISSUE_REF`). Pinned so that residual is a stated trade, not a surprise.
+test('a URL fragment after a path segment is reported, not excused', () => {
+  const reported = (text) => sitesInText(text).map((site) => site.n)
+  assert.deepEqual(reported(`see url(dir/${HASH}123) here`), [123])
+  assert.deepEqual(reported(`<a href="page/${HASH}456">`), [456])
+  assert.deepEqual(
+    reported(`<use href="${HASH}456" />`),
+    [],
+    'control: the direct form stays excused',
+  )
 })
 
 test('a six-digit hex colour is out of range, and a CSS comment body is still scanned', () => {

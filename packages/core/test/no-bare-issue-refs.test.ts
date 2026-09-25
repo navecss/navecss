@@ -59,9 +59,11 @@ const PACKAGE_DIR = 'packages/core/'
 
 /** A bare `#<digits>`, excluded when the character right before `#` is a word character — the
  * shape a fully qualified `owner/repo#N` reference (e.g. `owner/repo#N`) always has right there,
- * since `repo` ends in a word character. Nothing else is excused by this lookbehind; a URL or SVG
- * fragment identifier is handled separately, by `isLawfulNonReference`'s own `url(`/`href=` clause
- * below.
+ * since `repo` ends in a word character. Nothing else is excused by this lookbehind. A URL or SVG
+ * fragment written directly after `url(` or `href=` and a quote is excused separately, by
+ * `isLawfulNonReference`'s own clause below; a fragment after a path segment (`url(dir/#N)`) is
+ * not, and is reported, a residual pinned as a reported row rather than fenced out (see the
+ * canonical copy's docblock).
  *
  * THE CLASS USED TO ALSO CARRY `-` AND `/` MEMBERS, BOTH REMOVED because they excluded the wrong
  * population: a qualified reference's repo segment ends in a word character, never a bare hyphen
@@ -470,6 +472,18 @@ describe('isLawfulNonReference: the excluded shapes (ported, both directions)', 
         `${JSON.stringify(c)} is a word character and still excludes the reference`,
       ).toEqual([])
     }
+  })
+
+  // A fragment after a path segment is outside the `url(`/`href=` clause and is reported (see
+  // the docblock above `BARE_ISSUE_REF`). Pinned so that residual is a stated trade, not a
+  // surprise.
+  it('a URL fragment after a path segment is reported, not excused', () => {
+    expect(sitesInLine(`see url(dir/${HASH}123) here`)).toEqual([123])
+    expect(sitesInLine(`<a href="page/${HASH}456">`)).toEqual([456])
+    expect(
+      sitesInLine(`<use href="${HASH}456" />`),
+      'control: the direct form stays excused',
+    ).toEqual([])
   })
 })
 
