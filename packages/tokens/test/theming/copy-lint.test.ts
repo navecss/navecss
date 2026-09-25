@@ -254,9 +254,10 @@ describe('AC-theming-40 covers: R34', () => {
     // this guard exists to catch (the test above) or refuse less than the rest of that
     // requirement demands. The
     // scan now tracks whether it is inside a quoted string while outside a comment and skips
-    // quoted content entirely: a `/*` or `*/` inside a string is ordinary text there, matching
-    // real CSS tokenization (a string is consumed as one token before the tokenizer ever looks
-    // for a comment start again).
+    // quoted content entirely: a `/*` or `*/` inside a string that CLOSES on its own line is
+    // ordinary text there, matching real CSS tokenization (a closed string is consumed as one
+    // token before the tokenizer ever looks for a comment start again). An UNTERMINATED string
+    // is deliberately not skipped this way; see the dedicated test below.
     //
     // If you touch the scan again and this first assertion starts throwing, you have
     // reintroduced the false alarm rather than fixed something: keep this assertion AND the
@@ -270,6 +271,84 @@ describe('AC-theming-40 covers: R34', () => {
     expect(() =>
       assertNoticeIsEmitted(closerInAValue, RETHEMING_NOTICE, 'Retheming notice'),
     ).not.toThrow()
+  })
+
+  it('an UNTERMINATED string on a line above the notice does not swallow a real comment opener after it — one fixture per quote character', () => {
+    // The two rows right above this one cover a comment delimiter inside a string that CLOSES
+    // on its own line (content: "/*", content: "*/"): a closed string is consumed as one token,
+    // so the delimiter inside it is ordinary text and neither row opens a comment. This row
+    // covers the other shape: a string that does NOT close on its own line. A real tokenizer
+    // consumes that as a bad-string token to the end of the line, but the requirement this
+    // guard serves is stated over what a READER sees, and a reader does not stop reading at an
+    // unclosed quote: a `/*` sitting after one on the same line still opens a comment to them,
+    // which then swallows the notice line below it exactly as the dropped-delimiter case above
+    // does.
+    //
+    // Verify this row is ARMED, not merely present: dropping the resume-past-the-quote reading
+    // that recognises later strings, and dropping the resume-with-no-further-strings reading,
+    // both at once, reds this row (SILENT PASS, not.toThrow() would then be the wrong
+    // expectation) — the tokenizer's own reading alone treats the string as running to the end
+    // of its line and never opens the comment either fixture below needs.
+    const singleQuoteUnterminated = `:root {\n  --a: 'x; /* This palette meets WCAG AA.\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
+    expect(() =>
+      assertNoticeIsEmitted(singleQuoteUnterminated, RETHEMING_NOTICE, 'Retheming notice'),
+    ).toThrow(
+      /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
+    )
+
+    const doubleQuoteUnterminated = `:root {\n  --a: "x; /* This palette meets WCAG AA.\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
+    expect(() =>
+      assertNoticeIsEmitted(doubleQuoteUnterminated, RETHEMING_NOTICE, 'Retheming notice'),
+    ).toThrow(
+      /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
+    )
+  })
+
+  it("a SECOND, overlapping comment delimiter one line below the unterminated string still refuses — the tokenizer's own reading is the one that has to catch it", () => {
+    // Resuming past the stray quote can open a comment on line 1 that the tokenizer's reading
+    // never opens; if that reading is followed alone, the comment it opens can then close on a
+    // `*/` that is itself the tail of an overlapping `/*/` — exactly where the tokenizer's
+    // reading opens ITS OWN comment and keeps it open, because that reading never saw the
+    // resume-based comment start in the first place. Following the tokenizer's reading too, and
+    // taking the union, is what refuses this line: only that reading stays inside past the
+    // overlap.
+    //
+    // Verify this row is ARMED, not merely present: dropping the tokenizer's own reading reds
+    // this row. Neither resume-based reading refuses it on its own; the tokenizer's reading is
+    // the only one that does.
+    const overlappingDelimiter = `:root {\n  --a: 'x "/*\n  /*/ This palette meets WCAG AA.\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
+    expect(() =>
+      assertNoticeIsEmitted(overlappingDelimiter, RETHEMING_NOTICE, 'Retheming notice'),
+    ).toThrow(
+      /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
+    )
+  })
+
+  it('an unterminated quote followed by a BALANCED pair of the other quote character still refuses, in both quote orders — the no-further-strings reading is the one that has to catch it', () => {
+    // Resuming past the stray quote and still recognising later strings lets the following
+    // balanced pair of the OTHER quote character swallow the real comment opener between them,
+    // in either order: a stray `'` followed by a balanced `"..."`, or a stray `"` followed by a
+    // balanced `'...'`. Once one quote on a line is stray, how any later quote on that line
+    // would pair is a guess, so the reading that stops recognising strings after the first
+    // unclosed one is the one that keeps the comment open here.
+    //
+    // Verify this row is ARMED, not merely present: dropping the resume-with-no-further-strings
+    // reading reds both fixtures below. Neither the tokenizer's own reading nor the other resume
+    // reading refuses either fixture on its own; the no-further-strings reading is the only one
+    // that does.
+    const singleThenDouble = `:root {\n  --a: 'x "; /* This palette meets WCAG AA."\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
+    expect(() =>
+      assertNoticeIsEmitted(singleThenDouble, RETHEMING_NOTICE, 'Retheming notice'),
+    ).toThrow(
+      /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
+    )
+
+    const doubleThenSingle = `:root {\n  --a: "x '; /* This palette meets WCAG AA.'\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
+    expect(() =>
+      assertNoticeIsEmitted(doubleThenSingle, RETHEMING_NOTICE, 'Retheming notice'),
+    ).toThrow(
+      /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
+    )
   })
 })
 

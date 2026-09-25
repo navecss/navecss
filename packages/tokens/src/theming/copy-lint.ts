@@ -237,19 +237,28 @@ export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
  * `emit.ts`, and this guard stayed silent while `dist/tokens.css` shipped that note and the
  * notice as one comment, conformance claim and all. A single pass over the emitted lines now
  * tracks whether each line BEGINS inside an open comment, and a carrying line that does throws
- * the refusal above from the same shared string: the reader's act is identical (put the notice
- * and the rest of its comment on one line, in `emit.ts`), so a second message would double the
- * cleared surface. What sharing it may NOT do is assert one shape as though it were the other:
- * a line reaching this tracker IS self-contained by the predicate above, so the string names
- * BOTH shapes and lets its elided remainder show which one a reader is in (per the
- * accessibility steward's review). Two bounds on that tracker, both from that same review.
- * It may only ever ADD a refusal and must never change WHICH text is linted, so it runs LAST of the
- * three per-line checks and no message that fires today is replaced by it. Its scan is quote-aware
+ * the not-self-contained refusal above, byte for byte and unchanged: the reader's act is
+ * identical (put the notice and the rest of its comment on one line, in `emit.ts`), so a second
+ * near-identical message would double the cleared surface to discriminate on a fact they do not
+ * need. What sharing it may NOT do is assert one shape as though it were the other: a line
+ * reaching this tracker IS self-contained by the predicate above, so the string names BOTH
+ * shapes and lets its elided remainder show which one a reader is in (per the accessibility
+ * steward's review). Two bounds on that tracker, both from that same review. It may only ever
+ * ADD a refusal and must never change WHICH text is linted, so it runs LAST of the three
+ * per-line checks and no message that fires today is replaced by it. Its scan is quote-aware
  * while outside a comment (the accessibility steward's condition S12, applied path), so a
- * declaration VALUE carrying a comment delimiter inside a string is read as ordinary string
- * content, not as an open comment; it stays quote-blind while inside a comment, because a real CSS
- * comment closes at the first literal closing delimiter regardless of quoting, and tracking quotes
- * there would risk exactly the silent pass this tracker exists to prevent.
+ * declaration VALUE carrying a comment delimiter inside a string that CLOSES on its own line is
+ * read as ordinary string content, not as an open comment. A string that does not close on its
+ * line has no single reading: where an unescaped line break cuts it off, CSS consumes it as a
+ * bad-string token to the end of the line, so a comment opener after it is string content to a
+ * parser, while a reader can take the quote as stray and see that opener open a comment. Where
+ * the check cannot tell which of those a reader takes, the requirement above says refuse, so
+ * the tracker follows three readings of such a line (set out in `comment-open-tracker.ts`) and
+ * reports a line as beginning inside a comment if any of them does. That can only add a
+ * refusal to what the tokenizer's reading alone would give, never remove one. It stays
+ * quote-blind while inside a comment, because a real CSS comment closes at the first literal
+ * closing delimiter regardless of quoting, and tracking quotes there would risk exactly the
+ * silent pass this tracker exists to prevent.
  */
 export function assertNoticeIsEmitted(css: string, notice: string, noticeLabel: string): void {
   if (!css.includes(notice)) {
