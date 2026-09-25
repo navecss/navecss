@@ -195,6 +195,31 @@ const isGhListCall = (command) => command === 'gh'
 const isFetchCall = (command, args) => command === 'git' && args[0] === 'fetch'
 const isMergeBaseCall = (command, args) => command === 'git' && args[0] === 'merge-base'
 
+const HEALTHY_REPLIES = {
+  origin: { status: 0, stdout: ORIGIN_URL },
+  shallow: { status: 0, stdout: 'false\n' },
+  gh: { status: 0, stdout: '[]' },
+  fetch: { status: 0, stdout: '' },
+  mergeBase: { status: 0, stdout: '' },
+}
+const CALL_MATCHERS = {
+  origin: isOriginUrlCall,
+  shallow: isShallowCall,
+  gh: isGhListCall,
+  fetch: isFetchCall,
+  mergeBase: isMergeBaseCall,
+}
+
+/**
+ * A runner answering every call as a healthy checkout would, except the replies in `overrides`.
+ */
+function runWith(overrides = {}) {
+  const replies = { ...HEALTHY_REPLIES, ...overrides }
+  return makeRun(
+    Object.entries(CALL_MATCHERS).map(([key, when]) => ({ when, reply: replies[key] })),
+  )
+}
+
 test('runMergeAncestryCheck: a bad --limit exits 2 and never calls the runner', () => {
   for (const argv of [['--limit'], ['--limit=abc'], ['--limit=0'], ['--limit=-3']]) {
     const { calls, run } = makeRun([])
@@ -205,9 +230,9 @@ test('runMergeAncestryCheck: a bad --limit exits 2 and never calls the runner', 
 })
 
 test('runMergeAncestryCheck: a non-GitHub origin exits 2 and never calls gh', () => {
-  const { calls, run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: 'git@gitlab.com:owner/name.git\n' } },
-  ])
+  const { calls, run } = runWith({
+    origin: { status: 0, stdout: 'git@gitlab.com:owner/name.git\n' },
+  })
   const result = runMergeAncestryCheck([], run)
   assert.equal(result.exitCode, 2)
   assert.match(result.stderr, /not a GitHub remote/)
@@ -218,10 +243,7 @@ test('runMergeAncestryCheck: a non-GitHub origin exits 2 and never calls gh', ()
 })
 
 test('runMergeAncestryCheck: a shallow checkout exits 2, names --unshallow, never calls gh', () => {
-  const { calls, run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
-    { when: isShallowCall, reply: { status: 0, stdout: 'true\n' } },
-  ])
+  const { calls, run } = runWith({ shallow: { status: 0, stdout: 'true\n' } })
   const result = runMergeAncestryCheck([], run)
   assert.equal(result.exitCode, 2)
   assert.match(result.stderr, /--unshallow/)
@@ -232,15 +254,7 @@ test('runMergeAncestryCheck: a shallow checkout exits 2, names --unshallow, neve
 })
 
 test('runMergeAncestryCheck: gh pr list runs before git fetch origin main', () => {
-  const { calls, run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
-    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
-    {
-      when: isGhListCall,
-      reply: { status: 0, stdout: JSON.stringify([]) },
-    },
-    { when: isFetchCall, reply: { status: 0, stdout: '' } },
-  ])
+  const { calls, run } = runWith()
   const result = runMergeAncestryCheck([], run)
   assert.equal(result.exitCode, 0)
   const ghIndex = calls.findIndex((c) => isGhListCall(c.command))
@@ -250,12 +264,7 @@ test('runMergeAncestryCheck: gh pr list runs before git fetch origin main', () =
 })
 
 test('runMergeAncestryCheck: gh pr list is sorted by sort:updated-desc, not creation date', () => {
-  const { calls, run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
-    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
-    { when: isGhListCall, reply: { status: 0, stdout: JSON.stringify([]) } },
-    { when: isFetchCall, reply: { status: 0, stdout: '' } },
-  ])
+  const { calls, run } = runWith()
   runMergeAncestryCheck([], run)
   const ghCall = calls.find((c) => isGhListCall(c.command))
   const searchIndex = ghCall.args.indexOf('--search')
@@ -263,38 +272,35 @@ test('runMergeAncestryCheck: gh pr list is sorted by sort:updated-desc, not crea
   assert.equal(ghCall.args[searchIndex + 1], 'sort:updated-desc')
 })
 
-test('runMergeAncestryCheck: a failing gh call exits 2 with its stderr, never a report', () => {
-  const { run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
-    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
-    { when: isGhListCall, reply: { status: 1, stdout: '', stderr: 'gh: authentication required' } },
-  ])
-  const result = runMergeAncestryCheck([], run)
-  assert.equal(result.exitCode, 2)
-  assert.match(result.stderr, /authentication required/)
-  assert.doesNotMatch(result.stdout, /merged pull request/)
-})
-
-test('runMergeAncestryCheck: a gh call that exits with no status and no stderr still exits 2 with a non-empty message', () => {
-  const { run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
-    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
-    { when: isGhListCall, reply: { status: null, stdout: '', stderr: '' } },
-  ])
-  const result = runMergeAncestryCheck([], run)
-  assert.equal(result.exitCode, 2)
-  assert.ok(result.stderr.length > 0, 'stderr must not be empty even when the runner gave none')
+test('runMergeAncestryCheck: a failing gh call exits 2 with a stderr message, whether or not the runner supplied one', () => {
+  const cases = [
+    {
+      name: 'gh reports its own error',
+      reply: { status: 1, stdout: '', stderr: 'gh: authentication required' },
+      messagePattern: /authentication required/,
+    },
+    {
+      name: 'gh exits with no status and no stderr',
+      reply: { status: null, stdout: '', stderr: '' },
+      messagePattern: null,
+    },
+  ]
+  for (const { name, reply, messagePattern } of cases) {
+    const { run } = runWith({ gh: reply })
+    const result = runMergeAncestryCheck([], run)
+    assert.equal(result.exitCode, 2, name)
+    assert.ok(result.stderr.length > 0, `${name}: stderr must not be empty`)
+    if (messagePattern) {
+      assert.match(result.stderr, messagePattern, name)
+    }
+    assert.doesNotMatch(result.stdout, /merged pull request/, name)
+  }
 })
 
 test('runMergeAncestryCheck: a shallow check that fails to run exits 2 and never calls gh', () => {
-  const { calls, run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
-    {
-      when: isShallowCall,
-      reply: { status: 128, stdout: '', stderr: 'fatal: not a git repository' },
-    },
-    { when: isGhListCall, reply: { status: 0, stdout: JSON.stringify([]) } },
-  ])
+  const { calls, run } = runWith({
+    shallow: { status: 128, stdout: '', stderr: 'fatal: not a git repository' },
+  })
   const result = runMergeAncestryCheck([], run)
   assert.equal(result.exitCode, 2)
   assert.equal(
@@ -303,35 +309,33 @@ test('runMergeAncestryCheck: a shallow check that fails to run exits 2 and never
   )
 })
 
-test('runMergeAncestryCheck: a failing git fetch exits 2 with its stderr and makes no merge-base call', () => {
-  const { calls, run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
-    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
-    { when: isGhListCall, reply: { status: 0, stdout: JSON.stringify([]) } },
+test('runMergeAncestryCheck: a failing git fetch exits 2 with a stderr message and makes no merge-base call, whether or not the runner supplied one', () => {
+  const cases = [
     {
-      when: isFetchCall,
+      name: 'fetch reports its own error',
       reply: { status: 1, stdout: '', stderr: 'fatal: could not read from remote' },
+      messagePattern: /could not read from remote/,
     },
-  ])
-  const result = runMergeAncestryCheck([], run)
-  assert.equal(result.exitCode, 2)
-  assert.match(result.stderr, /could not read from remote/)
-  assert.equal(
-    calls.some((c) => isMergeBaseCall(c.command, c.args)),
-    false,
-  )
-})
-
-test('runMergeAncestryCheck: a failing git fetch with no stderr still exits 2 with a non-empty message', () => {
-  const { run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
-    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
-    { when: isGhListCall, reply: { status: 0, stdout: JSON.stringify([]) } },
-    { when: isFetchCall, reply: { status: 1, stdout: '', stderr: '' } },
-  ])
-  const result = runMergeAncestryCheck([], run)
-  assert.equal(result.exitCode, 2)
-  assert.ok(result.stderr.length > 0, 'stderr must not be empty even when the runner gave none')
+    {
+      name: 'fetch exits with no stderr',
+      reply: { status: 1, stdout: '', stderr: '' },
+      messagePattern: null,
+    },
+  ]
+  for (const { name, reply, messagePattern } of cases) {
+    const { calls, run } = runWith({ fetch: reply })
+    const result = runMergeAncestryCheck([], run)
+    assert.equal(result.exitCode, 2, name)
+    assert.ok(result.stderr.length > 0, `${name}: stderr must not be empty`)
+    if (messagePattern) {
+      assert.match(result.stderr, messagePattern, name)
+    }
+    assert.equal(
+      calls.some((c) => isMergeBaseCall(c.command, c.args)),
+      false,
+      name,
+    )
+  }
 })
 
 test('realRun: a command that does not exist returns status null and a non-empty ENOENT stderr', () => {
@@ -346,13 +350,7 @@ test('runMergeAncestryCheck: happy path, two merged PRs both ancestors, exit 0',
     { number: 1, mergeCommit: { oid: 'aaa' }, baseRefName: 'main', title: 'one' },
     { number: 2, mergeCommit: { oid: 'bbb' }, baseRefName: 'main', title: 'two' },
   ])
-  const { run } = makeRun([
-    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
-    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
-    { when: isGhListCall, reply: { status: 0, stdout: prsJson } },
-    { when: isFetchCall, reply: { status: 0, stdout: '' } },
-    { when: isMergeBaseCall, reply: { status: 0, stdout: '' } },
-  ])
+  const { run } = runWith({ gh: { status: 0, stdout: prsJson } })
   const result = runMergeAncestryCheck([], run)
   assert.equal(result.exitCode, 0)
   assert.match(result.stdout, /2 merged pull request\(s\) checked, all 2 an ancestor/)
