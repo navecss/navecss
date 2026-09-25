@@ -18,6 +18,7 @@ import {
   checkAncestryAndReport,
   mapGhPrListOutput,
   parseArgs,
+  realRun,
   repoFromRemoteUrl,
   runMergeAncestryCheck,
 } from './check-pr-merge-ancestry.mjs'
@@ -68,6 +69,14 @@ test('repoFromRemoteUrl: https://github.com/owner/name (no .git suffix)', () => 
 
 test('repoFromRemoteUrl: ssh://git@github.com/owner/name.git, trailing newline tolerated', () => {
   assert.equal(repoFromRemoteUrl('ssh://git@github.com/owner/name.git\n'), 'owner/name')
+})
+
+test('repoFromRemoteUrl: ssh://git@github.com:22/owner/name.git, explicit port', () => {
+  assert.equal(repoFromRemoteUrl('ssh://git@github.com:22/owner/name.git'), 'owner/name')
+})
+
+test('repoFromRemoteUrl: ssh://git@github.com:22/owner/name, explicit port, no .git suffix', () => {
+  assert.equal(repoFromRemoteUrl('ssh://git@github.com:22/owner/name'), 'owner/name')
 })
 
 test('repoFromRemoteUrl: a non-GitHub remote returns null', () => {
@@ -292,6 +301,44 @@ test('runMergeAncestryCheck: a shallow check that fails to run exits 2 and never
     calls.some((c) => isGhListCall(c.command)),
     false,
   )
+})
+
+test('runMergeAncestryCheck: a failing git fetch exits 2 with its stderr and makes no merge-base call', () => {
+  const { calls, run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
+    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
+    { when: isGhListCall, reply: { status: 0, stdout: JSON.stringify([]) } },
+    {
+      when: isFetchCall,
+      reply: { status: 1, stdout: '', stderr: 'fatal: could not read from remote' },
+    },
+  ])
+  const result = runMergeAncestryCheck([], run)
+  assert.equal(result.exitCode, 2)
+  assert.match(result.stderr, /could not read from remote/)
+  assert.equal(
+    calls.some((c) => isMergeBaseCall(c.command, c.args)),
+    false,
+  )
+})
+
+test('runMergeAncestryCheck: a failing git fetch with no stderr still exits 2 with a non-empty message', () => {
+  const { run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
+    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
+    { when: isGhListCall, reply: { status: 0, stdout: JSON.stringify([]) } },
+    { when: isFetchCall, reply: { status: 1, stdout: '', stderr: '' } },
+  ])
+  const result = runMergeAncestryCheck([], run)
+  assert.equal(result.exitCode, 2)
+  assert.ok(result.stderr.length > 0, 'stderr must not be empty even when the runner gave none')
+})
+
+test('realRun: a command that does not exist returns status null and a non-empty ENOENT stderr', () => {
+  const result = realRun('navecss-no-such-command-for-test', [])
+  assert.equal(result.status, null)
+  assert.ok(result.stderr.length > 0, 'stderr must not be empty on a spawn failure')
+  assert.match(result.stderr, /ENOENT/)
 })
 
 test('runMergeAncestryCheck: happy path, two merged PRs both ancestors, exit 0', () => {

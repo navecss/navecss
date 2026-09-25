@@ -306,8 +306,9 @@ test('the real workspace passes today: every non-private package’s in-scope su
  * mutation survived instead. Shrinking this fixture, or letting any count drift onto one of
  * the workspace's, gives one of the two blindnesses back silently. The two counts the census
  * added later (directories with no package.json, non-private packages with no in-scope
- * subpath) read 0 and 0 here; the zero-scope fixture below prints 0 and 1 for them, which is
- * what discriminates those two from each other.
+ * subpath) read 0 and 0 here; `NO_IN_SCOPE_SUBPATHS_FIXTURE` below prints 0 and 1 for them
+ * (`ALL_PRIVATE_FIXTURE` prints 0 and 0), which is what discriminates those two from each
+ * other.
  */
 const CLEAN_FIXTURE = {
   alpha: {

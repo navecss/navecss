@@ -87,17 +87,17 @@ function parseLimit(raw) {
 /**
  * Extracts `owner/name` from a `git remote get-url origin` GitHub URL, in every shape `git`
  * actually hands back (`git@github.com:owner/name.git`, `https://github.com/owner/name.git`,
- * `https://github.com/owner/name`, `ssh://git@github.com/owner/name.git`; a trailing newline
- * from the subprocess call is tolerated). Returns `null` for anything not on `github.com`:
- * `gh pr list` only ever talks to GitHub, so a non-GitHub origin has no repository this script
- * can meaningfully query.
+ * `https://github.com/owner/name`, `ssh://git@github.com/owner/name.git`, with or without an
+ * explicit port; a trailing newline from the subprocess call is tolerated). Returns `null` for
+ * anything not on `github.com`: `gh pr list` only ever talks to GitHub, so a non-GitHub origin
+ * has no repository this script can meaningfully query.
  */
 export function repoFromRemoteUrl(url) {
   const trimmed = url.trim()
   const patterns = [
     /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/,
     /^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/,
-    /^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/,
+    /^ssh:\/\/git@github\.com(?::\d+)?\/([^/]+)\/(.+?)(?:\.git)?$/,
   ]
   for (const pattern of patterns) {
     const match = trimmed.match(pattern)
@@ -287,9 +287,10 @@ export function runMergeAncestryCheck(argv, run) {
 
 /**
  * The one spawn line in this file, wiring `runMergeAncestryCheck`'s injected `run` to a real
- * subprocess call.
+ * subprocess call. Exported so its spawn-failure fallback (a command that fails to start at
+ * all, not merely one that exits non-zero) can be pinned by a test.
  */
-function realRun(command, args) {
+export function realRun(command, args) {
   // NOSONAR on the one spawn line in this file (rule S4036, PATH-resolved executable): this
   // is a manual tool a maintainer runs in their own checkout, and running THEIR git and gh is
   // the point. It never runs in CI and never takes a command from its input. The shipped
