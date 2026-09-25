@@ -123,7 +123,7 @@ describe('AC-theming-56 covers: R26a (shipped artifact, both builds)', () => {
     consumerJs = readFileSync(path.join(outDir, 'tokens.js'), 'utf8')
   })
 
-  it("Nave's own build: ColorPropertyName's members equal the declared --nave-color-* names, tint included, no ramp step", () => {
+  it("Nave's own build: ColorPropertyName's members equal the defined (declared or @property-registered) --nave-color-* names, tint included, no ramp step", () => {
     const declared = definedColorProperties(naveCss)
     expect(declared.length).toBeGreaterThan(0)
     expect(declared).toContain('--nave-color-tint')
@@ -132,7 +132,7 @@ describe('AC-theming-56 covers: R26a (shipped artifact, both builds)', () => {
     expect(new Set(union)).toEqual(new Set(declared))
   })
 
-  it('consumer build (non-default seed): ColorPropertyName members equal the declared --nave-color-* names', () => {
+  it('consumer build (non-default seed): ColorPropertyName members equal the defined (declared or @property-registered) --nave-color-* names', () => {
     const declared = definedColorProperties(consumerCss)
     expect(declared.length).toBeGreaterThan(0)
     const union = colorPropertyNameMembers(consumerDts)
