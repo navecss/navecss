@@ -17,7 +17,14 @@
 
 import type { PipelineResult, ResolvedSlot } from './pipeline.ts'
 
-import { ADJACENCY, assertNoOrphanedSemanticSlot } from './adjacency.ts'
+import {
+  ADJACENCY,
+  type Adjacency,
+  assertCoverageFloor,
+  assertNoFocusableAdjacentToActionFill,
+  assertNoForbiddenAdjacency,
+  assertNoOrphanedSemanticSlot,
+} from './adjacency.ts'
 import {
   assertContrastFloors,
   assertFloorProvenance,
@@ -110,18 +117,31 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * other places a guard in this family registers, neither mechanically tied to this one; a future
  * guard added there without a probe here repeats this gap.
  *
- * Three more on THIS round, from its review (blue row 2):
- * `assertNoticeIsEmitted`'s absent-notice, multi-line-notice and not-a-self-contained-comment
- * refusals — three of the four reachable `assertNoticeIsEmitted` messages, all four of which
- * were already inside that earlier round's eight. That leaves five of its residual, on a
- * convention made explicit here rather than left for the next reader to re-derive: the fourth
+ * Three more, from its review: `assertNoticeIsEmitted`'s absent-notice, multi-line-notice and
+ * not-a-self-contained-comment refusals, three of its four reachable messages. These were not
+ * among the eight above: the original measurement listed no `assertNoticeIsEmitted` message,
+ * so probing them widened the registry without shrinking that residual. The fourth
  * `assertNoticeIsEmitted` message (the composed-comment-line refusal) is permanently excluded
- * rather than probed this round — see `STRUCTURALLY_UNPROBEABLE_GUARD_MESSAGES` below, which
- * is the whole point of that row — and a permanently-excluded message STAYS counted in the
- * residual rather than being discharged from it: it can never move to "probed", so it never
- * leaves "unprobed" either. The five are therefore four ordinarily-probeable messages still
- * open plus this one structurally-excluded message, not five messages all waiting on a future
- * probe.
+ * rather than probed — see `STRUCTURALLY_UNPROBEABLE_GUARD_MESSAGES` below, which is the whole
+ * point of that row — and since it can never move to "probed", it never leaves "unprobed"
+ * either.
+ *
+ * Three more after that: `assertCoverageFloor`, `assertNoForbiddenAdjacency` and
+ * `assertNoFocusableAdjacentToActionFill`, the three guards used to show the gap was still
+ * live. A conformance phrase written into any of their real messages passed
+ * `assertHarnessFramingIsClean()` with the test suite green, because none of the three was in
+ * this registry; with these probes, the same edit fails it.
+ *
+ * **What remains unprobed of the eight above: five messages**, the eight less these three. The
+ * permanently excluded refusal above sits outside that eight and stays unprobed as well.
+ * - Two cannot be probed by this check at all: `assertDescriptionsAreClean`'s message and
+ *   `assertNoticeIsClean`'s framing refusal both quote the phrase they caught, so any input
+ *   that makes them throw also makes their message fail this check. `copy-lint.test.ts` pins
+ *   that property.
+ * - Three can be, and are not yet: `assertNoticeIsClean`'s warranty-wording refusal and
+ *   `assertOnStarShape`'s two refusals in `on-star.ts` (the declared resting partner not being
+ *   the family's solid-background anchor, and the anchor being a state or foreground role
+ *   rather than a resting background). Each needs its own hand-built failing input.
  */
 export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = [
   {
@@ -178,6 +198,42 @@ export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = 
     capture: () => capturedFailureMessage(() => assertNoOrphanedSemanticSlot(['content.brandNew'])),
   },
   {
+    label: 'the adjacency coverage-floor output',
+    // One of the three guards a quality reviewer used to demonstrate this gap: a poisoned
+    // wording injected into each of these three real functions still passed
+    // assertHarnessFramingIsClean, because none of the three was in this registry. Same
+    // fixture as contrast.test.ts's own full-content pin: dropping every `border.control`
+    // declaration is C5's minimum-coverage narrowing, caught naming the missing category.
+    capture: () =>
+      capturedFailureMessage(() =>
+        assertCoverageFloor(ADJACENCY.filter((a) => a.subject !== 'border.control')),
+      ),
+  },
+  {
+    label: 'the forbidden-adjacency output',
+    // R22 entry 1's own single named pair (content.secondary/surface.inverse), same fixture
+    // as contrast.test.ts's full-content pin — the smallest construction that trips this
+    // guard's real failing direction without touching any other guard's shipped behaviour.
+    capture: () =>
+      capturedFailureMessage(() =>
+        assertNoForbiddenAdjacency([
+          { subject: 'content.secondary', against: 'surface.inverse', class: 'text' },
+        ] satisfies Adjacency[]),
+      ),
+  },
+  {
+    label: 'the focusable-adjacent-to-action-fill output',
+    // R22 entry 5: the one focusable slot (border.focus) declared against an action.* fill,
+    // same fixture as contrast.test.ts's full-content pin.
+    capture: () =>
+      capturedFailureMessage(() =>
+        assertNoFocusableAdjacentToActionFill([
+          ...ADJACENCY,
+          { subject: 'border.focus', against: 'action.primary', class: 'non-text' },
+        ] satisfies Adjacency[]),
+      ),
+  },
+  {
     label: "the same-step lint's real violation output (build-step.ts's runResultGuards)",
     // The probe above reads checkSameStepLint's FAIL-CLOSED branch only;
     // this is the branch that prints on a real 'fail' hit. Pins content.primary (ADJACENCY
@@ -197,7 +253,7 @@ export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = 
   },
   {
     label: "the emitted-notice guard's absent-notice refusal",
-    // Review blue row 2. CSS carrying no notice at all is that refusal's own
+    // CSS carrying no notice at all is that refusal's own
     // failing direction; the notice argument is the real shipped constant, never a literal.
     capture: () =>
       capturedFailureMessage(() =>
@@ -235,8 +291,8 @@ export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = 
 
 /**
  * The one reachable `assertNoticeIsEmitted` message that CANNOT join the registry above, and
- * why — that round's review, blue row 2, whose whole content is that this is a
- * STRUCTURAL exclusion rather than an oversight. Its composed-comment-line refusal interpolates
+ * why: this is a STRUCTURAL exclusion rather than an oversight. Its composed-comment-line
+ * refusal interpolates
  * `findConformanceFraming`'s own `${reason}`, and a reason always quotes the forbidden phrase
  * it found ("contains the word \"meets\""). Probing it would therefore feed that phrase straight
  * back into `findConformanceFraming` and report an R36 violation against the guard that just
