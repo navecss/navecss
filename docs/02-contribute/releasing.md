@@ -86,7 +86,7 @@ A new publishable package's first version goes live by hand, the same way the fi
    pnpm --filter <package-name> pack
    npm publish <tarball> --access public
    ```
-   `pnpm pack` writes the tarball into the package's own directory. `--access public` is needed because npm publishes a scoped package as restricted unless told otherwise. This first version carries no provenance statement, the same accepted cost `0.1.0` carried.
+   `pnpm pack` writes the tarball to the directory it is run from, here the repository root, and prints its path. `--access public` is needed because npm publishes a scoped package as restricted unless told otherwise. This first version carries no provenance statement, the same accepted cost `0.1.0` carried.
 4. On npmjs.com, give the package the settings the other packages carry: a trusted publisher (`navecss/navecss`, workflow `release.yml`, staging only, with the same environment if theirs names one), and the same publishing access (two-factor authentication required, tokens not allowed to bypass it).
 5. Run the **release** workflow. It finds the version you just published already live, skips it, and stages everything else that is pending.
 
