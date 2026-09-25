@@ -12,11 +12,9 @@ import { describe, expect, it } from 'vitest'
 import {
   derivePaletteDescriptions,
   generate,
-  readDeclaredPropertyNames,
   readTokenDescriptions,
 } from '../scripts/generate-skill.ts'
-import { readSections } from '../scripts/generate-atoms-doc.ts'
-import { atoms } from '../src/atoms.ts'
+import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const GENERATOR_SRC = [
@@ -135,23 +133,11 @@ describe('AC-consumer-constraints-33: description fidelity', () => {
   })
 
   it('generate(), given a substituted palette record whose light/dark descriptions differ, propagates the throw naming that slot', async () => {
-    const layerStatement =
-      '@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;'
-    const badPaletteDescriptions = new Map<string, string>() // valid on its own
     // generate() itself takes already-derived sources; the throw for a mismatched record is
     // exercised directly against derivePaletteDescriptions above (the function generate() calls
     // internally when collecting real sources) — this test pins that generate() does not
     // swallow such a throw when it occurs during real source collection.
-    await expect(
-      generate({
-        sections: readSections(),
-        atomTable: atoms,
-        tokenDescriptions: readTokenDescriptions(),
-        declaredPropertyNames: readDeclaredPropertyNames(),
-        paletteDescriptions: badPaletteDescriptions,
-        layerStatement,
-      }),
-    ).resolves.toBeTypeOf('string')
+    await expect(generate(baseSkillGuideSources())).resolves.toBeTypeOf('string')
   })
 })
 

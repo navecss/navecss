@@ -13,13 +13,9 @@ import { describe, expect, it } from 'vitest'
 import type { AtomDefinition, AtomName } from '../src/atoms.ts'
 
 import { readSections } from '../scripts/generate-atoms-doc.ts'
-import {
-  generate,
-  OUTPUT_PATH,
-  readDeclaredPropertyNames,
-  readTokenDescriptions,
-} from '../scripts/generate-skill.ts'
+import { generate, OUTPUT_PATH, readDeclaredPropertyNames } from '../scripts/generate-skill.ts'
 import { atoms } from '../src/atoms.ts'
+import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
@@ -31,20 +27,11 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
 
   it('fails after one atom declaration in atoms.ts is edited without regenerating', async () => {
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
-    const sections = readSections()
     const mutatedAtoms: Record<string, AtomDefinition> = {
       ...atoms,
       flex: { declarations: { display: 'PLANTED-EDIT' } },
     }
-    const mutated = await generate({
-      sections,
-      atomTable: mutatedAtoms,
-      tokenDescriptions: readTokenDescriptions(),
-      declaredPropertyNames: readDeclaredPropertyNames(),
-      paletteDescriptions: new Map(),
-      layerStatement:
-        '@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;',
-    })
+    const mutated = await generate(baseSkillGuideSources({ atomTable: mutatedAtoms }))
     expect(mutated).not.toBe(committed)
   })
 
@@ -105,7 +92,7 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
   it('the layer order it renders equals the @layer statement in @navecss/core/layers, and names components.consumer as where consumer CSS goes', () => {
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
     const layersSrc = readFileSync(path.resolve(HERE, '../src/layers.css'), 'utf8')
-    const real = /^@layer\s+[^;]+;/m.exec(layersSrc)![0]
+    const real = /^@layer [^;]+;/m.exec(layersSrc)![0]
     expect(committed).toContain(real)
     expect(committed).toContain('`@layer components.consumer`')
   })

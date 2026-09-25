@@ -13,20 +13,13 @@ import { describe, expect, it } from 'vitest'
 import type { AtomDefinition } from '../src/atoms.ts'
 
 import { readSections } from '../scripts/generate-atoms-doc.ts'
-import {
-  generate,
-  OUTPUT_PATH,
-  readDeclaredPropertyNames,
-  readTokenDescriptions,
-} from '../scripts/generate-skill.ts'
+import { generate, OUTPUT_PATH, readTokenDescriptions } from '../scripts/generate-skill.ts'
 import { atoms } from '../src/atoms.ts'
+import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const committed = readFileSync(OUTPUT_PATH, 'utf8')
 const GENERATOR_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-skill.ts'), 'utf8')
-
-const LAYER_STATEMENT =
-  '@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;'
 
 const ARIA_DISABLED_SENTENCE =
   'On the aria-disabled branch the element stays focusable by design: this atom only blocks ' +
@@ -36,15 +29,7 @@ const ARIA_DISABLED_SENTENCE =
 
 describe('AC-consumer-constraints-40: composes no prose around the vocabulary', () => {
   async function renderWith(overrides: Partial<Parameters<typeof generate>[0]>): Promise<string> {
-    return generate({
-      sections: readSections(),
-      atomTable: atoms,
-      tokenDescriptions: readTokenDescriptions(),
-      declaredPropertyNames: readDeclaredPropertyNames(),
-      paletteDescriptions: new Map(),
-      layerStatement: LAYER_STATEMENT,
-      ...overrides,
-    })
+    return generate(baseSkillGuideSources(overrides))
   }
 
   it('adding one atom changes only that atom’s entry', async () => {

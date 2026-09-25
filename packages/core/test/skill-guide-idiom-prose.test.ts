@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest'
 
 import { generate, OUTPUT_PATH } from '../scripts/generate-skill.ts'
 import { atomClassMap } from '../src/atoms.ts'
+import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const committed = readFileSync(OUTPUT_PATH, 'utf8')
@@ -108,18 +109,7 @@ describe("AC-consumer-constraints-39: cx('container')/cx.raw('container') appear
 
 describe('AC-consumer-constraints-01/-40 (immune to source perturbation, seam check)', () => {
   it('generate() accepts substituted sources without touching the real tree', async () => {
-    const { readSections } = await import('../scripts/generate-atoms-doc.ts')
-    const { readDeclaredPropertyNames, readTokenDescriptions } =
-      await import('../scripts/generate-skill.ts')
-    const output = await generate({
-      sections: readSections(),
-      atomTable: { ...(await import('../src/atoms.ts')).atoms },
-      tokenDescriptions: readTokenDescriptions(),
-      declaredPropertyNames: readDeclaredPropertyNames(),
-      paletteDescriptions: new Map(),
-      layerStatement:
-        '@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;',
-    })
+    const output = await generate(baseSkillGuideSources())
     expect(output).toContain('# navecss')
   })
 })

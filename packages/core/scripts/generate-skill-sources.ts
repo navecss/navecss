@@ -184,7 +184,11 @@ function readLayerStatement(): string {
   // "the @layer order statement, alone" in prose, and an unanchored scan would greedily
   // match from that first mid-comment occurrence through to the real statement's semicolon,
   // swallowing the whole comment block into the "layer order" this generator renders.
-  const match = /^@layer\s+[^;]+;/m.exec(css)
+  // A single literal space (never `\s+`) between `@layer` and the class list: an adjacent
+  // `\s+` followed by `[^;]+` gives a static analyzer nothing to rule out backtracking with,
+  // since both can consume whitespace: `[^;]+` alone already does, because the real file's
+  // one leading space is well inside what it matches.
+  const match = /^@layer [^;]+;/m.exec(css)
   if (!match) throw new Error('generate-skill: could not find the @layer statement in layers.css')
   return match[0]
 }
