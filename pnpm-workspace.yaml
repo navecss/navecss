@@ -11,3 +11,13 @@ minimumReleaseAge: 4320 # minutes (3 days)
 ignoredBuiltDependencies:
   - esbuild
   - unrs-resolver
+
+# esbuild 0.27.3 up to 0.28.0 carry GHSA-g7r4-m6w7-qqqr (path traversal in esbuild's `serve` dev
+# server on Windows, fixed in 0.28.1). Nothing here uses that server, and esbuild is a
+# development-only dependency that ships in no package, but the lockfile should not pin a
+# known-vulnerable version. It arrives through tsup, whose latest release still declares
+# `esbuild: ^0.27.0`, so no ordinary update can lift it; this override does. The whole suite
+# (build and pack checks included) passes on 0.28. Remove this entry once tsup's own range admits
+# a fixed esbuild.
+overrides:
+  esbuild: ^0.28.1
