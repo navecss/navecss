@@ -11,10 +11,10 @@ import type { PipelineResult } from './pipeline.ts'
 
 import { formatOklch } from './color-math.ts'
 // This file -> copy-lint.ts -> guard-message-probes.ts -> back to this file
-// (TINT_SEED_COMMENT_STEM) is a genuine three-node cycle, introduced alongside the cleared-copy
-// stem machinery above and left in place deliberately (see the matching comment in
-// copy-lint.ts for the full reasoning and the live verification both cycles share).
-// eslint-disable-next-line import-x/no-cycle -- verified benign, see copy-lint.ts
+// (TINT_SEED_COMMENT_STEM) is a genuine three-node cycle, kept deliberately. The comment on
+// copy-lint.ts's import of guard-message-probes.ts states why it is safe and how that was
+// verified.
+// eslint-disable-next-line import-x/no-cycle -- safe, see copy-lint.ts
 import { FEEDBACK_SHARED_IDENTITY_NOTICE, RETHEMING_NOTICE } from './copy-lint.ts'
 import {
   ACTION_SECONDARY_BORDER,
