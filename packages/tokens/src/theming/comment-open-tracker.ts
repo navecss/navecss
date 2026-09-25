@@ -94,7 +94,7 @@ interface UnclosedQuoteReading {
  */
 const AS_THE_TOKENIZER_READS_IT: UnclosedQuoteReading = {
   resumesAtEndOfLineAfterAnUnclosedQuote: true,
-  aLaterQuoteCanStillOpenAString: true,
+  aLaterQuoteCanStillOpenAString: false,
 }
 
 /**
