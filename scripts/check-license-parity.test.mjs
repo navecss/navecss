@@ -11,10 +11,10 @@ import assert from 'node:assert/strict'
  * as a child process against a throwaway workspace, because the zero-scope wording lives
  * only in `main()`, which is not exported and runs only under the entry-point guard.
  *
- * A third layer reads the shipped script's own SOURCE and pins two comment blocks that carry
+ * A third layer reads the shipped script's own SOURCE and pins three comment blocks that carry
  * a cleared licensing position, so that deleting or re-wording one goes red instead of green.
- * See `normalizedDocblockBefore` and `commentBlocksIn` for what that layer does and does not
- * claim to be.
+ * See `normalizedDocblockBefore`, `commentBlocksIn` and
+ * `normalizedLineCommentBlockBetween` for what that layer does and does not claim to be.
  */
 import { spawnSync } from 'node:child_process'
 import {
@@ -495,23 +495,86 @@ function normalizedDocblockBefore(source, needle) {
 }
 
 /**
- * The two expected literals below are a BACKSTOP, not the gate. The primary control is the
+ * The zero-scope verdict's own cleared comment is `//`-style line comments inside `main()`,
+ * not a `/** *\/` docblock, so `normalizedDocblockBefore` cannot locate it (it
+ * has no `/**` to anchor on). Same WHITESPACE-ONLY discriminator, same "located by content,
+ * never by line number" property, adapted to a block bounded by two content anchors instead of
+ * one: the block is the UNBROKEN run of `//` lines that opens immediately after `startNeedle`,
+ * with `//` plus at most one following space stripped and whitespace collapsed.
+ * Deleting the block, or every line moving elsewhere, leaves nothing collected (RED, via the
+ * length assertion); re-wrapping or reindenting the same lines changes nothing this compares
+ * (GREEN); re-wording or dropping a comma changes the joined text (RED).
+ *
+ * The run is required to be CONTIGUOUS, and that is a position property rather than a wording
+ * one: collecting every `//` line in the region (an earlier draft of this helper filtered
+ * rather than walked) silently skips over anything spliced INTO the cleared block, so a
+ * statement dropped between two of its lines rejoined to byte-identical text and shipped
+ * green. Measured, not reasoned about. The trailing assertion states the other half — nothing
+ * but blank lines may sit between the block and `stopNeedle` — so a splice fails by name
+ * instead of as a confusing text mismatch.
+ *
+ * What it still does NOT claim, stated because the header docblock points here for exactly
+ * this: it pins the block, its contiguity, and the fact that it is the only comment content
+ * between its two anchors — never anything OUTSIDE them. A contradicting comment placed above
+ * `startNeedle`, or anywhere else in the file, sits in a region this helper does not read and
+ * stays green; inserted BETWEEN the anchors, it correctly reddens. The claim is about the
+ * zero-scope branch's own block, never about the whole file.
+ */
+function normalizedLineCommentBlockBetween(source, startNeedle, stopNeedle) {
+  const start = source.indexOf(startNeedle)
+  assert.notEqual(start, -1, `start anchor not found in the shipped script: ${startNeedle}`)
+  const stop = source.indexOf(stopNeedle, start)
+  assert.notEqual(stop, -1, `stop anchor not found after the start anchor: ${stopNeedle}`)
+  const between = source
+    .slice(start, stop)
+    .split('\n')
+    .slice(1)
+    .map((line) => line.trim())
+  const commentLines = []
+  for (const line of between) {
+    if (!line.startsWith('//')) break
+    commentLines.push(line)
+  }
+  assert.ok(
+    commentLines.length > 0,
+    `no line-comment block found between ${startNeedle} and ${stopNeedle}`,
+  )
+  assert.deepEqual(
+    between.slice(commentLines.length).filter((line) => line !== ''),
+    [],
+    `unexpected content spliced between the cleared comment block and ${stopNeedle}`,
+  )
+  return commentLines
+    .map((line) => line.replace(/^\/\/[ \t]?/, ''))
+    .join('\n')
+    .replaceAll(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * The three expected literals below are a BACKSTOP, not the gate. The primary control is the
  * licensing review these blocks passed; this only makes deleting or re-wording one loud, and
  * it cannot tell a deliberate re-wording from an accidental one.
  *
- * CHANGING EITHER LITERAL IS A LICENSING-REVIEW CHANGE, NOT A TEST FIXUP. If one of these goes
+ * CHANGING ANY LITERAL IS A LICENSING-REVIEW CHANGE, NOT A TEST FIXUP. If one of these goes
  * red because the comment it mirrors was edited, do NOT update the expected value to match the
  * file: updating both in one commit buys a green suite and an uncleared re-wording. Restore the
  * wording the file had, or open an issue proposing the new wording and get the maintainer's
  * approval before this literal moves. Re-wrapping or reindenting the same words is lawful and
- * stays green here without touching anything, which is exactly the case the normalizer above is
- * built to let through.
+ * stays green here without touching anything, which is exactly the case the normalizers above
+ * are built to let through.
  */
 const EXPECTED_HEADER_DOCBLOCK =
   'Tripwire for the project\'s published licensing requirement. Condition 2 of the published `licensing` overview §2, signed off by the project\'s maintainer, requires each published tarball to carry its own licence text, and names its remedy in a preference order: "a copy, or a build step, or a verified-packing symlink, in that order of preference". The project took the first — `packages/{tokens,core,bridge,cli}/LICENSE` are copies of the root `LICENSE` — and nothing before this script asserted the copies actually still MATCH the root they were taken from. `pnpm check:pack` (`publint` + `attw`) asserts a `LICENSE` is PRESENT in each packed tarball, never that it agrees with the root. So the equality that makes Condition 2 true was held by whoever remembered to update all five files together, and it had already been exercised once by hand: an earlier review named `LICENSE` and the copyright line turned out to live in five files, caught by the developer-relations reviewer running the class rather than the list. This script converts "whoever remembers" into an assertion. The package set is every directory under `packages/` that carries a manifest, not a hand-listed set, so a new package added there is covered the day it is created. That is the whole workspace only while the workspace is defined as exactly `packages/*`. Scanning a directory cannot establish that, so `findWorkspaceGlobViolation` checks the definition itself before any package is scanned, and refuses rather than reporting a pass over a narrower set than the workspace actually holds. Widening the workspace is therefore a deliberate act that has to change this gate in the same commit. Only NON-PRIVATE packages are checked: a `private: true` package never produces a published tarball, so Condition 2 does not apply to it (mirrors the `!manifest.private` publishable test `scripts/check-publishable-set.mjs` uses for the same reason, on a different question). Source tree only, and deliberately so: a packed tarball\'s LICENSE presence is already asserted by `check:pack` (`publint`/`attw`), and a byte-copy of the source-tree file is exactly what npm packs (no build step touches `LICENSE`), so re-running this check against `npm pack` output would duplicate the source-tree check without covering anything new. This script decides no licensing question and never will: it is an instrument, in the shape `scripts/check-license-allowlist.mjs` and `scripts/check-bundling-guard-coverage.mjs` already use. Its only job is to make Condition 2\'s equality trip instead of drifting silently.'
 
 const EXPECTED_IS_NON_PRIVATE_DOCBLOCK =
   "True if `manifest` would ship a published tarball (private packages never do, so Condition 2's per-tarball licence-text requirement does not apply to them). Reused by scripts/check-readme-export-coverage.mjs (a documentation gate) to scope which packages' READMEs it checks; that reuse does not make this predicate a documentation concern — it stays Condition 2's, and moves only for Condition 2 reasons."
+
+// Cleared by the project's licensing steward: the zero-scope verdict's own comment,
+// stating what the branch covers (an empty non-private set) as distinct from why it is empty
+// (a discovery that legitimately found nothing, vs. one that skipped everything).
+const EXPECTED_ZERO_SCOPE_COMMENT =
+  "A run that compared nothing must not read as a run that compared and passed (published `licensing` overview §4/§5's rider). Two halves, both load-bearing. The closing clause names what the branch actually tested, an empty non-private set, and not why it is empty: a set emptied by directories carrying no package.json is not an all-private workspace. The census is what tells a legitimately empty set from one emptied by a discovery that skipped everything. The exit stays 0 in both cases, because a package that publishes no tarball breaches nothing; the defect this wording fixes is the explanation, never the exit."
 
 test('source anchor: the reviewed docblocks in the shipped script are unchanged, word for word', () => {
   const source = readFileSync(SCRIPT_PATH, 'utf8')
@@ -555,6 +618,14 @@ test('source anchor: each cleared docblock is the only comment block in its home
         )}`,
     )
   }
+})
+
+test('source anchor: the zero-scope verdict comment in the shipped script is unchanged, word for word', () => {
+  const source = readFileSync(SCRIPT_PATH, 'utf8')
+  assert.equal(
+    normalizedLineCommentBlockBetween(source, 'if (packages.length === 0) {', 'console.log('),
+    EXPECTED_ZERO_SCOPE_COMMENT,
+  )
 })
 
 test('isNonPrivate: a manifest with no "private" field is non-private', () => {
