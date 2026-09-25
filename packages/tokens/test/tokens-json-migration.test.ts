@@ -47,6 +47,54 @@ function withoutPostMigrationLines(text: string): string {
 }
 
 /**
+ * Both artifacts' own doc comments grew a longer colour-layer sentence AFTER this migration,
+ * for reasons that have nothing to do with it: the semantic colour layer's typed surface (a
+ * type-only `ColorPropertyName` union naming its emitted custom-property names — values stay
+ * CSS-only) is now documented instead of merely disclaimed. Folded back to its pre-addition
+ * single-sentence shape before the exhaustive delta check below, so that check stays about the
+ * migration alone — the same reasoning `withoutPostMigrationLines` applies to `tokens.js`'s
+ * other later addition. Identical text in both `tokens.js` and `tokens.d.ts`, so one pair of
+ * constants covers both.
+ */
+const PRE_COLOR_LAYER_DOC_SENTENCE =
+  ' *  (`--nave-color-*`) ships as CSS custom properties in `dist/tokens.css`\n' +
+  ' *  and is not part of this export.\n'
+const POST_COLOR_LAYER_DOC_SENTENCE =
+  ' *  (`--nave-color-*`) ships as CSS custom properties in `dist/tokens.css` and is\n' +
+  ' *  not part of this object; its property NAMES are typed separately as\n' +
+  ' *  `ColorPropertyName`, and its VALUES are reachable only through CSS (e.g.\n' +
+  ' *  `var(--nave-color-action-primary)`): the browser resolves each one for the\n' +
+  ' *  active colour scheme, and the neutral-derived ones also follow the tint.\n'
+
+function withoutColorLayerDocExpansion(text: string): string {
+  expect(text).toContain(POST_COLOR_LAYER_DOC_SENTENCE)
+  return text.replace(POST_COLOR_LAYER_DOC_SENTENCE, () => PRE_COLOR_LAYER_DOC_SENTENCE)
+}
+
+/**
+ * `tokens.d.ts` gained a whole new block AFTER this migration too, for reasons that have
+ * nothing to do with it: a type-only `ColorPropertyName` union naming the semantic colour
+ * layer's emitted custom-property names (values stay CSS-only). It is appended as a pure
+ * suffix following `TokenValue`'s declaration line, so trimming back to that anchor restores
+ * the pre-addition shape, the same reasoning `withoutPostMigrationLines` applies to
+ * `tokens.js`'s own later addition above. The trim first checks that what it drops is exactly
+ * that block, so nothing else appended after the `TokenValue` line can escape the accounting
+ * below.
+ */
+const DTS_MIGRATION_BOUNDARY = 'export declare type TokenValue = typeof tokens[TokenName]'
+
+const COLOR_PROPERTY_NAME_BLOCK =
+  /^\n\n\/\*\* Every `--nave-color-\*` custom property[\s\S]*?\*\/\nexport declare type ColorPropertyName =\n(?: {2}\| '--nave-color-[\w-]+'\n)+$/
+
+function withoutColorPropertyNameBlock(text: string): string {
+  const index = text.indexOf(DTS_MIGRATION_BOUNDARY)
+  expect(index).toBeGreaterThan(-1)
+  const end = index + DTS_MIGRATION_BOUNDARY.length
+  expect(text.slice(end)).toMatch(COLOR_PROPERTY_NAME_BLOCK)
+  return `${text.slice(0, end)}\n`
+}
+
+/**
 One token node, narrowed to the fields the scenarios below actually ask about.
  */
 interface TokenNode {
@@ -213,7 +261,8 @@ describe('AC-token-build-44 covers: R44 (the five specifics, and the EXHAUSTIVE 
    * nineteenth row moving for a reason nobody named fails this scenario.
    */
   it('accounts for EVERY tokens.js and tokens.d.ts delta, with nothing left over', () => {
-    const jsDeltas = lineDeltas(fixture('tokens.js'), withoutPostMigrationLines(built('tokens.js')))
+    const builtJs = withoutPostMigrationLines(built('tokens.js'))
+    const jsDeltas = lineDeltas(fixture('tokens.js'), withoutColorLayerDocExpansion(builtJs))
     const jsHeader = jsDeltas.filter((d) => d.before.includes('The DTCG token set'))
     const jsNumeric = jsDeltas.filter((d) => d.after === d.before.replaceAll('"', ''))
     const jsShadow = jsDeltas.filter((d) => d.before.includes('--nave-shadow-'))
@@ -224,13 +273,19 @@ describe('AC-token-build-44 covers: R44 (the five specifics, and the EXHAUSTIVE 
     expect(jsHeader.length + jsNumeric.length + jsShadow.length).toBe(jsDeltas.length)
     for (const delta of jsHeader) expect(delta.after).toContain('DTCG 2025.10 token set')
 
-    const dtsDeltas = lineDeltas(fixture('tokens.d.ts'), built('tokens.d.ts'))
+    const builtDts = withoutColorPropertyNameBlock(built('tokens.d.ts'))
+    const dtsDeltas = lineDeltas(fixture('tokens.d.ts'), withoutColorLayerDocExpansion(builtDts))
     const dtsHeader = dtsDeltas.filter((d) => d.before.includes('The DTCG token set'))
     const dtsTypes = dtsDeltas.filter((d) => d.after === d.before.replace(/: string$/, ': number'))
 
     expect(dtsHeader).toHaveLength(1)
     expect(dtsTypes).toHaveLength(18)
     expect(dtsHeader.length + dtsTypes.length).toBe(dtsDeltas.length)
+  })
+
+  it('refuses to trim a tokens.d.ts suffix that is anything other than the ColorPropertyName block', () => {
+    const withExtra = `${built('tokens.d.ts')}export declare type Unaccounted = 1\n`
+    expect(() => withoutColorPropertyNameBlock(withExtra)).toThrow()
   })
 })
 
