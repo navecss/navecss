@@ -98,9 +98,9 @@ async function resolveInstalledCoreVersion(): Promise<CoreVersionProbe> {
 }
 
 /**
- * R14: the ONE place `facade.ts`'s `build` and `validate` both call
- * `resolveInstalledCoreVersion`/`checkManifestVersionSkew` — never `resolved`, no skew check
- * (see `TokensBuildResult.versionSkew`'s own doc for why that is not itself a skew).
+ * R14: the one place `facade.ts`'s `build` and `validate` both run the installed-core probe
+ * and the version comparison. When the probe is not `resolved`, no comparison runs and `skew`
+ * is `undefined` (see `TokensBuildResult.versionSkew`'s doc for why that is not itself a skew).
  */
 export async function detectVersionSkew(
   manifest: CoreContractManifest,

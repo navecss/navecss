@@ -163,7 +163,8 @@ async function main(): Promise<number> {
       const { producerName, ...skew } = result.versionSkew
       console.error(
         `Version skew: ${formatVersionSkewFact(producerName, skew)}. The generated file may ` +
-          `not carry every custom-property name the installed ${producerName} actually renders.`,
+          `not carry every custom-property name the installed ${producerName} reads. Reinstall ` +
+          `matching versions, then build again.`,
       )
     }
     return 0

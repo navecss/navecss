@@ -388,6 +388,8 @@ describe('AC-token-build-17 covers: R17', () => {
     expect(joined).toContain('0.1.0')
     expect(joined).toContain('0.2.0')
     expect(joined).toContain('@navecss/core')
+    expect(joined).toMatch(/core contract this @navecss\/tokens ships/)
+    expect(joined).toMatch(/Reinstall matching versions before trusting this result/)
     expect(joined).not.toMatch(/0 missing/)
     expect(joined).not.toMatch(/missing name\(s\)/)
     expect(joined).not.toContain('--nave-color-b')
@@ -455,7 +457,7 @@ describe('AC-token-build-18 covers: R18', () => {
     expect(joined).not.toContain('--nave-color-a')
   })
 
-  it('the version-skew line predicates the MANIFEST, never the palette or the token source', () => {
+  it('the version-skew line predicates the CORE CONTRACT this package ships, never the palette or the token source', () => {
     const manifest = manifestOf(['--nave-color-a'])
     const lines = formatValidateReport(manifest, [], { recorded: '0.1.0', installed: '0.2.0' })
     for (const line of lines) {
@@ -463,7 +465,7 @@ describe('AC-token-build-18 covers: R18', () => {
       expect(line.toLowerCase()).not.toMatch(
         /your (token source|theme|palette) is (valid|ready|complete)/,
       )
-      expect(line.toLowerCase()).toContain('manifest')
+      expect(line.toLowerCase()).toContain('core contract')
     }
   })
 })

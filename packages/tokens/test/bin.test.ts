@@ -963,7 +963,7 @@ function installResolvableCore(projectDir: string, version: string): void {
  * (`resolveInstalledCoreVersion`/`checkManifestVersionSkew`) — previously `build` only guarded
  * `MissingContractTokensError`, a self-consistency check against this package's OWN manifest
  * that cannot see a skewed `@navecss/core`, so a consumer with a skewed installed core got a
- * silently-incomplete build with nothing printed. Real, out-of-process, both directions: a
+ * silently-incomplete build with no warning. Real, out-of-process, both directions: a
  * genuinely skewed resolvable core (the fixture that matters most — `build` must still exit
  * `0`, explicitly asserted, not just "didn't throw"), and each `coreProbe.status !== 'resolved'`
  * population (no core at all, and an older core `validate`'s own R14 route cannot read),
@@ -985,9 +985,11 @@ describe('build() surfaces a version-skew advisory to stderr, never changing its
     expect(result.status).toBe(0)
     expect(result.stdout).toMatch(/^Built from seed/)
     expect(result.stderr).toMatch(/version skew/i)
+    expect(result.stderr).toMatch(/core contract this @navecss\/tokens ships/)
     expect(result.stderr).toMatch(/@navecss\/core@0\.1\.0/)
     expect(result.stderr).toMatch(/@9\.9\.9/)
     expect(result.stderr).toMatch(/may not carry every custom-property name/i)
+    expect(result.stderr).toMatch(/Reinstall matching versions/)
   })
 
   it('no installed @navecss/core at all (not-installed): build prints no skew advisory and exits 0', () => {
@@ -1018,6 +1020,85 @@ describe('build() surfaces a version-skew advisory to stderr, never changing its
     expect(result.status).toBe(0)
     expect(result.stderr).toBe('')
   })
+})
+
+/**
+ * `detectVersionSkew`'s comparison is the first read of `manifest.producer` in `build()`'s
+ * call graph. Run after `writeOutputs`, a malformed shipped manifest (valid JSON, no `producer`
+ * field) would throw a bare `TypeError` once artifacts were already on disk, so a caller
+ * reading the exit code would see a merits failure for a build whose files had in fact been
+ * written, the shape R23 forbids. The check runs before `writeOutputs`, so the same manifest
+ * fails loud and writes nothing.
+ */
+describe('build() and a malformed shipped manifest (the skew check fails BEFORE writing, never after)', () => {
+  it('a dist/core-contract.json with no producer field: build rejects, and no tokens.css is ever written', () => {
+    const { binPath, projectDir } = scratchInstall()
+    installResolvableCore(projectDir, '9.9.9')
+    const manifestPath = path.join(
+      projectDir,
+      'node_modules',
+      '@navecss',
+      'tokens',
+      'dist',
+      'core-contract.json',
+    )
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
+    delete manifest.producer
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+    const outDir = path.join(projectDir, 'out')
+
+    const result = runNode(
+      binPath,
+      ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+      projectDir,
+    )
+
+    expect(result.status).not.toBe(0)
+    expect(existsSync(path.join(outDir, 'tokens.css'))).toBe(false)
+  }, 20_000)
+})
+
+describe('build() and the two remaining core-probe populations (unreadable, and resolved at a matching version)', () => {
+  it('an installed but unreadable @navecss/core (unparseable package.json): build prints nothing about a version skew and exits 0', () => {
+    const { binPath, projectDir } = scratchInstall()
+    installCoreWithUnparseablePackageJson(projectDir)
+    const outDir = path.join(projectDir, 'out')
+
+    const result = runNode(
+      binPath,
+      ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+      projectDir,
+    )
+
+    expect(result.status).toBe(0)
+    expect(result.stderr).not.toMatch(/version skew/i)
+  }, 20_000)
+
+  it("a resolvable @navecss/core at the manifest's own recorded producer version: build prints nothing to stderr and exits 0", () => {
+    const { binPath, projectDir } = scratchInstall()
+    const manifestPath = path.join(
+      projectDir,
+      'node_modules',
+      '@navecss',
+      'tokens',
+      'dist',
+      'core-contract.json',
+    )
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      producer: { version: string }
+    }
+    installResolvableCore(projectDir, manifest.producer.version)
+    const outDir = path.join(projectDir, 'out')
+
+    const result = runNode(
+      binPath,
+      ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+      projectDir,
+    )
+
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe('')
+  }, 20_000)
 })
 
 describe('AC-token-build-07 covers: R8 (the compiled bin locates its own root by NAME)', () => {

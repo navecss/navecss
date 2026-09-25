@@ -57,21 +57,29 @@ const NAMESPACE_PREAMBLE =
   '--nave-color-surface-base). Your DTCG 2025.10 source names the same node with the "--nave-" ' +
   'prefix dropped and hyphens read as a dotted path (color.surface.base).'
 
+// One rendering for both callers: `validate`'s refusal and `build`'s advisory each compose
+// their own sentence around this fact rather than stating it twice, differently worded.
 /**
- * R14: the shared "these two versions differ" fact, named ONCE so
- * `validate`'s version-skew refusal and `build`'s version-skew ADVISORY never state it in two
- * separately-worded renderings of the same check. Names both versions and nothing else — no
- * consequence clause — because the two callers' consequences differ (`validate`: don't trust
- * this result; `build`: the generated file may not carry every custom-property name the
- * installed core actually renders), so each composes its own sentence around this fact.
+ * Describes a version mismatch in words: the core contract this package ships was recorded
+ * against one `@navecss/core` version, and a different one is installed. This is the same
+ * description `navecss-tokens build` and `navecss-tokens validate` print.
+ *
+ * Pass it the `versionSkew` field of a `build()` result: that field's `producerName` first,
+ * then the field itself (only `recorded` and `installed` are read). What comes back is a
+ * clause rather than a finished message, with no label and no final full stop, so it can sit
+ * inside a message of your own.
+ *
+ * The wording is for people to read and may change in any release. To decide what to do,
+ * read the `versionSkew` field itself; never match on this text.
  */
 export function formatVersionSkewFact(
   producerName: string,
   versionSkew: ManifestVersionSkew,
 ): string {
   return (
-    `this manifest was recorded against ${producerName}@${versionSkew.recorded}, but the ` +
-    `installed ${producerName} is @${versionSkew.installed}`
+    `the core contract this @navecss/tokens ships was recorded against ` +
+    `${producerName}@${versionSkew.recorded}, but the installed ${producerName} is ` +
+    `@${versionSkew.installed}`
   )
 }
 
