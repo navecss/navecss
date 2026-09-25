@@ -33,23 +33,26 @@ function workflowCode() {
     .join('\n')
 }
 
+// ROW: an allowlist, not a blocklist of named triggers. A blocklist only catches the triggers it
+// names; any other key added under `on:` (a typo, a future trigger nobody thought to list here)
+// would pass silently. Reading the whole block and requiring its keys to equal exactly
+// `['workflow_dispatch']` catches every one of those instead of only the ones enumerated by hand.
 test('the workflow is triggered by hand only', () => {
   const code = workflowCode()
   assert.match(code, /^on:\n {2}workflow_dispatch:/m)
-  for (const trigger of [
-    'push',
-    'pull_request',
-    'pull_request_target',
-    'schedule',
-    'workflow_run',
-    'release',
-  ]) {
-    assert.doesNotMatch(
-      code,
-      new RegExp(`^ {2}${trigger}:`, 'm'),
-      `release.yml must not run on ${trigger}`,
-    )
+  const lines = code.split('\n')
+  const onIndex = lines.indexOf('on:')
+  assert.ok(onIndex !== -1, 'release.yml must have an on: block')
+  const blockLines = []
+  for (let index = onIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (line.length > 0 && !line.startsWith(' ')) break
+    blockLines.push(line)
   }
+  const keys = blockLines
+    .filter((line) => /^ {2}\S/.test(line))
+    .map((line) => line.trim().replace(/:.*$/, ''))
+  assert.deepEqual(keys, ['workflow_dispatch'])
 })
 
 // ROW: a manual run can target any branch, and the trusted publisher does not restrict the ref,
@@ -58,10 +61,13 @@ test('the staging job runs only from main', () => {
   assert.match(workflowCode(), /^ {4}if: github\.ref == 'refs\/heads\/main'$/m)
 })
 
+// ROW: widened past the one form (`secrets.NAME`) the previous pattern caught. `secrets['NAME']`
+// (bracket form) reads the same secret and was not matched before, and `NPM_AUTH_TOKEN` /
+// `_authToken` are the other two names npm itself reads a credential from.
 test('the job asks for an OIDC token and uses no stored npm credential', () => {
   const code = workflowCode()
   assert.match(code, /^ {6}id-token: write$/m)
-  assert.doesNotMatch(code, /NPM_TOKEN|NODE_AUTH_TOKEN|secrets\./)
+  assert.doesNotMatch(code, /\bsecrets\s*[.[]|NPM_TOKEN|NODE_AUTH_TOKEN|NPM_AUTH_TOKEN|_authToken/)
 })
 
 test('the id-token permission is granted to the job, not to the whole workflow', () => {
@@ -90,10 +96,20 @@ test('both installs in the job run with lifecycle scripts off', () => {
   assert.match(code, /npm install --global --ignore-scripts npm@12\.1\.0$/m)
 })
 
+// ROW: widened to the bare word `publish`, so any spelling of a direct publish call (`npm
+// publish`, `pnpm publish`, `pnpm -r publish`, `changeset publish`, a future one nobody has
+// written yet) is caught rather than only the three forms named by hand. `stage publish` is the
+// one lawful use of the word and is the only form the negative lookbehind lets through.
 test('the release step is the root release script, and nothing publishes directly', () => {
   const code = workflowCode()
   assert.match(code, /^ {8}run: pnpm run release$/m)
-  assert.doesNotMatch(code, /(?<!stage )\bnpm publish\b|pnpm publish|changeset publish/)
+  assert.doesNotMatch(code, /(?<!\bstage )\bpublish\b/)
+})
+
+// ROW: the stage job must not be able to hold the one OIDC-capable job open indefinitely; a hung
+// registry call needs a ceiling, not an unbounded wait.
+test('the stage job has a bounded timeout', () => {
+  assert.match(workflowCode(), /^ {4}timeout-minutes: \d+$/m)
 })
 
 test('the checkout does not keep a credential and no cache is restored', () => {

@@ -26,12 +26,26 @@
  * dependency order, which is also the order to approve them in: approving `core` before the
  * `tokens` version it depends on would leave a live `core` whose dependency does not resolve.
  * A version that is already live is skipped. A run with nothing to stage fails, because on a
- * release that almost always means `changeset version` was not run first.
+ * release that almost always means `pnpm changeset version` was not run first.
+ *
+ * Every package is packed FIRST, as one pass, before any of them is staged: a pack failure never
+ * leaves a partial staging behind. Staging then runs in order, and if one package fails to
+ * stage, the failure names every package already staged and waiting for approval (or says
+ * plainly that nothing was staged yet), so a maintainer knows what state the queue was left in
+ * without re-reading the whole log.
  *
  * It refuses to run on an npm older than 11.15.0, the first version with `npm stage`.
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -177,6 +191,52 @@ function packTarball(dir, destination) {
 }
 
 /**
+ * Runs `fn` with a fresh temporary directory (created under `os.tmpdir()` with `prefix`) as its
+ * only argument, and removes that directory again once `fn` settles, whether it returns or
+ * throws. Returns whatever `fn` returns.
+ */
+export function withTempDir(prefix, fn) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), prefix))
+  try {
+    return fn(dir)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+/**
+ * Packs every manifest in `toStage` with `pack` FIRST, as one pass, so a pack failure on any of
+ * them throws before `stage` is called for any: nothing reaches the registry over a release that
+ * was never going to finish packing. Only once every tarball exists does it call `stage` on each
+ * in order, collecting `name@version` labels as it goes.
+ *
+ * A `stage` failure throws a new Error, with `cause` set to the original one, naming what is
+ * already staged and waiting for approval, or saying plainly that nothing was staged yet, so a
+ * maintainer reading the failure knows what state the release left the queue in without
+ * re-reading the whole log. Returns the staged labels, in order, on success.
+ */
+export function stageAll(toStage, pack, stage) {
+  const packed = toStage.map((manifest) => ({ manifest, tarball: pack(manifest) }))
+  const staged = []
+  for (const { manifest, tarball } of packed) {
+    const label = `${manifest.name}@${manifest.version}`
+    try {
+      stage(tarball)
+    } catch (error) {
+      const detail =
+        staged.length > 0
+          ? `Staging: ${label} failed to stage. Already staged and waiting for approval: ` +
+            `${staged.join(', ')}. Approve or reject those before running the release again: ` +
+            'it checks which versions are live, not which are staged.'
+          : `Staging: ${label} failed to stage. Nothing was staged.`
+      throw new Error(detail, { cause: error })
+    }
+    staged.push(label)
+  }
+  return staged
+}
+
+/**
 Checks the npm floor, plans the release, then packs and stages each package in order.
  */
 function main() {
@@ -198,22 +258,24 @@ function main() {
   if (toStage.length === 0) {
     console.error(
       'Staging: nothing to stage. Every publishable version is already on the registry; run ' +
-        '`changeset version` and merge the result before releasing.',
+        '`pnpm changeset version` and merge the result before releasing.',
     )
     process.exitCode = 1
     return
   }
 
-  const destination = mkdtempSync(path.join(os.tmpdir(), 'navecss-stage-'))
-  for (const manifest of toStage) {
-    const tarball = packTarball(manifest.dir, destination)
-    runTool('npm', stagePublishArgs(tarball), { stdio: 'inherit' })
-  }
+  const labels = withTempDir('navecss-stage-', (destination) =>
+    stageAll(
+      toStage,
+      (manifest) => packTarball(manifest.dir, destination),
+      (tarball) => runTool('npm', stagePublishArgs(tarball), { stdio: 'inherit' }),
+    ),
+  )
 
   console.log(
-    `Staging: staged ${toStage.map((manifest) => `${manifest.name}@${manifest.version}`).join(', ')}. ` +
-      'Nothing is live yet. Approve each with two-factor authentication, in this order, with ' +
-      '`npm stage approve <id>` or from the Staged Packages tab on npmjs.com.',
+    `Staging: staged ${labels.join(', ')}. Nothing is live yet. Approve each with two-factor ` +
+      'authentication, in this order, with `npm stage approve <id>` or from the Staged Packages ' +
+      'tab on npmjs.com. Do not run the release again until each is approved or rejected.',
   )
 }
 

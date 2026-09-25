@@ -41,12 +41,14 @@ test('the release script runs check:pack, and runs it before the staging step', 
 
 // ROW: the release ENDS by staging, as its own && token, and nothing in it publishes directly.
 // A direct publish would be refused by a stage-only trusted publisher in CI, but run by hand it
-// would put a version live with no approval step and no provenance.
+// would put a version live with no approval step and no provenance. Widened to the bare word
+// `publish` (the last token, `node scripts/stage-release.mjs`, contains no such word), so any
+// spelling of a direct publish call is caught, not only the three named by hand.
 test('the release ends with the staging step and runs no direct publish', () => {
   const release = rootScripts().release
   const tokens = release.split(' && ').map((token) => token.trim())
   assert.equal(tokens.at(-1), STAGE_STEP, `release must end by staging; it reads: ${release}`)
-  assert.doesNotMatch(release, /changeset publish|pnpm publish|npm publish/)
+  assert.doesNotMatch(release, /\bpublish\b/)
 })
 
 // ROW: pins the SHELL SEMANTICS of the wiring, not just substring order, the same mutant

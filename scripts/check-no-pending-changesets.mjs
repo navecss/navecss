@@ -113,9 +113,9 @@ export const IGNORED_CHANGESET_MD_FILES = [/^README\.md$/i, 'AGENTS.md', 'CLAUDE
  * against.
  */
 export const PENDING_CHANGESET_HEADER =
-  'Pending changeset fragment(s) on the release path: the release publishes each ' +
-  "package manifest's version exactly as written and never reads .changeset/, so every " +
-  'fragment below survives this publish unconsumed and is then folded into whatever ' +
+  'Pending changeset fragment(s) on the release path: the release stages (and, once approved, ' +
+  "publishes) each package manifest's version exactly as written and never reads .changeset/, " +
+  'so every fragment below survives this release unconsumed and is then folded into whatever ' +
   'version comes next, describing work the release below it already shipped:\n'
 
 /**

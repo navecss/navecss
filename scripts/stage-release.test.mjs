@@ -4,9 +4,16 @@
  * registry lookup is passed in as a predicate, so the planning logic is exercised on its own.
  */
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { test } from 'node:test'
 
-import { meetsStageFloor, planStaging, stagePublishArgs } from './stage-release.mjs'
+import {
+  meetsStageFloor,
+  planStaging,
+  stageAll,
+  stagePublishArgs,
+  withTempDir,
+} from './stage-release.mjs'
 
 const tokens = { name: '@navecss/tokens', version: '0.1.1' }
 const core = {
@@ -96,4 +103,98 @@ test('the npm arguments stage the packed tarball and never publish it directly',
     'publish',
     '/tmp/navecss-tokens-0.1.1.tgz',
   ])
+})
+
+// ---------------------------------------------------------------------------------------------
+// stageAll: packs every manifest before staging any of them, so a pack failure never leaves a
+// partial staging behind, and reports exactly what was already staged when a stage call fails.
+// ---------------------------------------------------------------------------------------------
+
+const alpha = { name: 'alpha', version: '1.0.0' }
+const beta = { name: 'beta', version: '1.0.0' }
+
+// ROW: packing is a whole pass BEFORE any staging starts, so a pack failure on the second
+// package must never call `stage` at all, not even for the first (nothing reaches the registry).
+test('stageAll: a pack failure on the second package means stage is never called', () => {
+  let stageCalls = 0
+  const pack = (manifest) => {
+    if (manifest.name === 'beta') throw new Error('pack failed')
+    return `${manifest.name}.tgz`
+  }
+  const stage = () => {
+    stageCalls += 1
+  }
+  assert.throws(() => stageAll([alpha, beta], pack, stage), /pack failed/)
+  assert.equal(stageCalls, 0)
+})
+
+// ROW: a stage failure past the first package must name every package already staged, so a
+// maintainer knows what is sitting in the queue without re-reading the whole log.
+test('stageAll: a stage failure on the second package names the first as already staged', () => {
+  const pack = (manifest) => `${manifest.name}.tgz`
+  const registryError = new Error('registry unreachable')
+  const stage = (tarball) => {
+    if (tarball === 'beta.tgz') throw registryError
+  }
+  try {
+    stageAll([alpha, beta], pack, stage)
+    assert.fail('expected stageAll to throw')
+  } catch (error) {
+    assert.equal(
+      error.message,
+      'Staging: beta@1.0.0 failed to stage. Already staged and waiting for approval: ' +
+        'alpha@1.0.0. Approve or reject those before running the release again: it checks ' +
+        'which versions are live, not which are staged.',
+    )
+    assert.equal(error.cause, registryError)
+  }
+})
+
+// ROW: a stage failure on the very first package has nothing to report as already staged, so the
+// message says so rather than printing an empty list.
+test('stageAll: a stage failure on the first package says nothing was staged', () => {
+  const pack = (manifest) => `${manifest.name}.tgz`
+  const stage = () => {
+    throw new Error('registry unreachable')
+  }
+  assert.throws(
+    () => stageAll([alpha], pack, stage),
+    (error) => error.message === 'Staging: alpha@1.0.0 failed to stage. Nothing was staged.',
+  )
+})
+
+test('stageAll: success returns the staged labels in order', () => {
+  const pack = (manifest) => `${manifest.name}.tgz`
+  const staged = []
+  const stage = (tarball) => {
+    staged.push(tarball)
+  }
+  const labels = stageAll([alpha, beta], pack, stage)
+  assert.deepEqual(labels, ['alpha@1.0.0', 'beta@1.0.0'])
+  assert.deepEqual(staged, ['alpha.tgz', 'beta.tgz'])
+})
+
+// ---------------------------------------------------------------------------------------------
+// withTempDir: the scratch directory used to pack tarballs into must not outlive the call, on
+// either exit path.
+// ---------------------------------------------------------------------------------------------
+
+test('withTempDir: removes the directory after fn returns', () => {
+  let capturedDir
+  withTempDir('navecss-stage-test-', (dir) => {
+    capturedDir = dir
+    assert.ok(existsSync(dir))
+  })
+  assert.equal(existsSync(capturedDir), false)
+})
+
+test('withTempDir: removes the directory after fn throws', () => {
+  let capturedDir
+  assert.throws(() => {
+    withTempDir('navecss-stage-test-', (dir) => {
+      capturedDir = dir
+      throw new Error('boom')
+    })
+  }, /boom/)
+  assert.equal(existsSync(capturedDir), false)
 })

@@ -125,10 +125,10 @@ test('IGNORED_CHANGESET_MD_FILES transcribes the four names the shipped reader i
 test('PENDING_CHANGESET_HEADER says publish never reads the directory, so a fragment outlives this release', () => {
   assert.equal(
     PENDING_CHANGESET_HEADER,
-    'Pending changeset fragment(s) on the release path: the release publishes each ' +
-      "package manifest's version exactly as written and never reads .changeset/, so every " +
-      'fragment below survives this publish unconsumed and is then folded into whatever ' +
-      'version comes next, describing work the release below it already shipped:\n',
+    'Pending changeset fragment(s) on the release path: the release stages (and, once approved, ' +
+      "publishes) each package manifest's version exactly as written and never reads " +
+      '.changeset/, so every fragment below survives this release unconsumed and is then folded ' +
+      'into whatever version comes next, describing work the release below it already shipped:\n',
   )
 })
 
