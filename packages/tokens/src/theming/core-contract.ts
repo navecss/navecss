@@ -417,11 +417,11 @@ export class StaleContractPreconditionError extends Error {
  * then the widening, then manifest generation" as a PROPERTY of the generation step rather
  * than a fact about which change lands first.
  *
- * Two checks, two fixtures: (a) the pre-#204 shape — a name about to be recorded that is
- * not yet prefixed `--nave-`; (b) the pre-#219 shape — a scanned set narrower than the raw
- * source's own `--nave-*` usage (an old, colour-only-scoped pattern run against a source
- * that also references a non-colour `--nave-*` property). Either throws rather than the
- * generation step silently writing a stale manifest.
+ * Two checks, two fixtures: (a) a name about to be recorded that is not yet prefixed
+ * `--nave-`; (b) a scanned set narrower than the raw source's own `--nave-*` usage (an
+ * old, colour-only-scoped pattern run against a source that also references a non-colour
+ * `--nave-*` property). Either throws rather than the generation step silently writing a
+ * stale manifest.
  *
  * WHAT THIS REACHES, AND WHAT IT DOES NOT (raised by a quality reviewer during an early
  * review round).

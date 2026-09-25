@@ -482,7 +482,7 @@ describe('SUPPLIED vs MISSING — a name the theming half emits unconditionally 
   ])
 
   it("Nave's OWN bundled DTCG source (declaring none of the six contract names) reports all six SUPPLIED, none MISSING", () => {
-    // The bundled tokens.json declares zero colour tokens (R27/#409's own measurement) —
+    // The bundled tokens.json declares zero colour tokens (R27's own measurement) —
     // reproduced here as an empty DTCG source, since only the name-set matters.
     const notDeclared = computeMissing(realManifest, 'json', JSON.stringify({}))
     expect(notDeclared).toHaveLength(realManifest.tokens.length)
@@ -529,7 +529,7 @@ describe('SUPPLIED vs MISSING — a name the theming half emits unconditionally 
     for (const name of realManifest.tokens) expect(joined).toContain(name)
   })
 
-  it('formatValidateReport with no supplied names (the default) is byte-identical to the pre-#418 output', () => {
+  it('formatValidateReport with no supplied names (the default) is byte-identical to its output before the supplied-names parameter existed', () => {
     const withDefault = formatValidateReport(realManifest, ['--nave-color-x'], undefined)
     const withExplicitEmpty = formatValidateReport(realManifest, ['--nave-color-x'], undefined, {
       status: 'resolved',
