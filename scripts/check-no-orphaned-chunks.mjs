@@ -523,13 +523,19 @@ function listPackageDirs(packagesDir) {
  * read -- fail-OPEN, on the exact reply shape (`[{"name":"x"}]`) the sibling would have called
  * INCOMPLETE. Latent (no real `npm` produces it) and closed here anyway, because the cost is one
  * `throw` and the failure it prevents is silent.
+ *
+ * TWO REPLY SHAPES, one per npm major: npm 11 and earlier answer with an array of tarball
+ * entries, npm 12 with an object keyed by package name. The release workflow pins npm 12 while
+ * local and pull-request runs use npm 11, so both are real and both are read. Every throw below
+ * applies to either shape.
  */
 export function parsePackedFiles(raw) {
   const parsed = JSON.parse(raw)
-  if (!Array.isArray(parsed) || parsed.length === 0) {
+  const entries = Array.isArray(parsed) ? parsed : Object.values(parsed ?? {})
+  if (entries.length === 0) {
     throw new Error('npm pack --dry-run --json returned no tarball entry')
   }
-  const packed = parsed[0].files
+  const packed = entries[0].files
   if (!Array.isArray(packed)) {
     throw new Error('npm pack --dry-run --json returned a tarball entry with no files list')
   }
