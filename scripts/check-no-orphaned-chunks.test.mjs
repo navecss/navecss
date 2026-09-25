@@ -422,6 +422,37 @@ test('parsePackedFiles throws on an empty top-level array, naming the missing ta
   assert.throws(() => parsePackedFiles('[]'), /no tarball entry/)
 })
 
+// ROW: npm 12 changed the reply from an array of tarball entries to an object keyed by package
+// name. The release workflow pins npm 12 while local and pull-request runs use npm 11, so only
+// the release job ever saw the new shape, and it failed every package as unreadable. Both shapes
+// are read, and the object shape keeps the same fail-closed limbs as the array.
+test('parsePackedFiles reads the npm 12 reply, an object keyed by package name', () => {
+  const raw = JSON.stringify({
+    '@navecss/core': { name: '@navecss/core', files: [{ path: 'dist/index.js' }] },
+  })
+  assert.deepEqual(parsePackedFiles(raw), ['dist/index.js'])
+})
+
+test('parsePackedFiles throws on an empty npm 12 object, naming the missing tarball entry', () => {
+  assert.throws(() => parsePackedFiles('{}'), /no tarball entry/)
+})
+
+test('parsePackedFiles throws on an npm 12 entry with no files key, rather than reading it as zero packed files', () => {
+  assert.throws(() => parsePackedFiles('{"x":{"name":"x"}}'), /files list/)
+})
+
+test('parsePackedFiles throws on a JSON null reply, naming the missing tarball entry', () => {
+  assert.throws(() => parsePackedFiles('null'), /no tarball entry/)
+})
+
+// A reply that is not an array or object, or whose first entry is not an object, is named as
+// carrying no tarball entry rather than surfacing a raw TypeError or a mislabelled reason.
+test('parsePackedFiles throws on a null npm 12 entry or a bare string reply, naming the missing tarball entry', () => {
+  assert.throws(() => parsePackedFiles('{"x":null}'), /no tarball entry/)
+  assert.throws(() => parsePackedFiles('[null]'), /no tarball entry/)
+  assert.throws(() => parsePackedFiles('"abc"'), /no tarball entry/)
+})
+
 // ROW: `readPackedJsFiles` reads ONLY the packed `.js` files.
 //
 // STATED PRECISELY, BECAUSE THE OBVIOUS RATIONALE FOR THIS ROW IS WRONG. The carve-out filed this
