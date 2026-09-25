@@ -226,16 +226,38 @@ function indexAfterAStringLiteral(line: string, quoteIndex: number, quote: strin
  * machine with extra branches, which is what keeps "can only add a refusal" true without a
  * sweep standing in for the proof.
  */
+interface UrlOpaqueScanState {
+  readonly isInsideAnOpenComment: boolean
+  readonly isInsideAnOpenUrl: boolean
+}
+
+/**
+ * The url-opaque reading now also carries an unquoted `url(...)` token that does not close on
+ * the line it starts on across the line boundary (see `scanLineForOpaqueUrlContentAndComments`),
+ * so its per-line state is no longer a single open/closed comment boolean.
+ */
 function markLinesFlaggedByTheUrlOpaqueReading(lines: readonly string[], into: Set<number>): void {
-  let isInsideAnOpenComment = false
+  let state: UrlOpaqueScanState = { isInsideAnOpenComment: false, isInsideAnOpenUrl: false }
 
   for (const [index, line] of lines.entries()) {
-    if (isInsideAnOpenComment) into.add(index)
-    isInsideAnOpenComment = isLineStillInsideAnOpenCommentWithOpaqueUrlContent(
-      line,
-      isInsideAnOpenComment,
-    )
+    if (state.isInsideAnOpenComment) into.add(index)
+    state = scanLineWithOpaqueUrlContent(line, state)
   }
+}
+
+/**
+ * One line of the url-opaque reading. When `state.isInsideAnOpenUrl` carries in from the
+ * previous line, the line starts already inside that url token's content, so this resumes the
+ * search for its closing, unescaped `)` from index 0 before ordinary scanning continues; otherwise
+ * `scanLineForOpaqueUrlContentAndComments` runs the ordinary scan from index 0.
+ */
+function scanLineWithOpaqueUrlContent(line: string, state: UrlOpaqueScanState): UrlOpaqueScanState {
+  if (!state.isInsideAnOpenUrl) {
+    return scanLineForOpaqueUrlContentAndComments(line, state.isInsideAnOpenComment, 0)
+  }
+  const afterUrlContent = indexAfterUnquotedUrlContent(line, 0)
+  if (afterUrlContent === -1) return { isInsideAnOpenComment: false, isInsideAnOpenUrl: true }
+  return scanLineForOpaqueUrlContentAndComments(line, state.isInsideAnOpenComment, afterUrlContent)
 }
 
 /**
@@ -246,76 +268,99 @@ function markLinesFlaggedByTheUrlOpaqueReading(lines: readonly string[], into: S
  * body — the two are lexically incompatible, since a real `/* / *\/`  inside `url(...)` is just
  * bytes of the URL, never a comment. Reading it as a comment opener is what lets a later, real
  * closing delimiter get consumed as though it closed THIS phantom comment, leaving the tracker
- * blind to the genuine comment that opens on the character right after.
+ * blind to the genuine comment that opens on the character right after. When that url token's
+ * content does not close on this line, CSS does not end it at the line break either — an
+ * unterminated url token's remnants are consumed up to wherever its `)` actually falls, including
+ * on a later line — so this reports `isInsideAnOpenUrl: true` rather than treating the
+ * token as closed at the line's end.
  */
-function isLineStillInsideAnOpenCommentWithOpaqueUrlContent(
+function scanLineForOpaqueUrlContentAndComments(
   line: string,
   wasInsideAnOpenComment: boolean,
-): boolean {
+  cursor: number,
+): UrlOpaqueScanState {
   let isInsideAnOpenComment = wasInsideAnOpenComment
-  let cursor = 0
+  let index = cursor
 
-  while (cursor < line.length) {
+  while (index < line.length) {
     if (isInsideAnOpenComment) {
-      const closerIndex = line.indexOf('*/', cursor)
-      if (closerIndex === -1) return true
+      const closerIndex = line.indexOf('*/', index)
+      if (closerIndex === -1) return { isInsideAnOpenComment: true, isInsideAnOpenUrl: false }
       isInsideAnOpenComment = false
-      cursor = closerIndex + 2
+      index = closerIndex + 2
       continue
     }
 
-    const afterOpaqueUrlContent = indexAfterAnUnquotedUrlToken(line, cursor)
-    if (afterOpaqueUrlContent !== -1) {
-      cursor = afterOpaqueUrlContent
+    const afterUrlToken = tryToSkipAnUnquotedUrlToken(line, index)
+    if (afterUrlToken !== undefined) {
+      if (afterUrlToken === -1) return { isInsideAnOpenComment: false, isInsideAnOpenUrl: true }
+      index = afterUrlToken
       continue
     }
 
-    const character = line[cursor]
+    const character = line[index]
     if (isAQuoteCharacter(character)) {
-      const afterTheString = indexAfterAStringLiteral(line, cursor, character!)
-      cursor = afterTheString === -1 ? line.length : afterTheString
+      const afterTheString = indexAfterAStringLiteral(line, index, character!)
+      index = afterTheString === -1 ? line.length : afterTheString
       continue
     }
 
-    if (line.startsWith('/*', cursor)) {
+    if (line.startsWith('/*', index)) {
       isInsideAnOpenComment = true
-      cursor += 2
+      index += 2
       continue
     }
 
-    cursor += 1
+    index += 1
   }
 
-  return isInsideAnOpenComment
+  return { isInsideAnOpenComment, isInsideAnOpenUrl: false }
 }
 
 /**
  * True for a character CSS treats as continuing an identifier, used to keep an unquoted `url(`
- * token from matching inside a longer identifier such as a custom function named `my-url(`.
+ * token from matching inside a longer identifier such as a custom function named `my-url(` or
+ * `éurl(`. CSS ident code points are any ASCII letter, digit, `-`, `_`, or any non-ASCII code
+ * point, so this also accepts any character outside the ASCII range.
  */
 function isAnIdentifierCharacter(character: string | undefined): boolean {
-  return character !== undefined && /[A-Za-z0-9_-]/.test(character)
+  return (
+    character !== undefined && (/[A-Za-z0-9_-]/.test(character) || character.codePointAt(0)! > 0x7f)
+  )
 }
 
 /**
- * If an unquoted CSS url token starts at `cursor` — `url(` (case-insensitive), not preceded by
- * an identifier character, whose first non-whitespace character is not a quote — returns the
- * index just past its content: an unescaped closing `)`, included, or the end of the line if
- * none closes it there (this module reads one line at a time, so an unclosed url token simply
- * runs to the line's end, the same conservative choice the three readings above make for an
- * unclosed string). Returns `-1` when no such token starts here, including a `url(` immediately
- * followed by a quote, which is an ordinary quoted argument and is left to the caller's own
- * string scanning.
+ * If an unquoted CSS url token — `url(` (case-insensitive), not preceded by an identifier
+ * character, whose first non-whitespace character is not a quote — starts at `cursor`, returns
+ * the index just past its closing, unescaped `)`, or `-1` if it does not close on this line (the
+ * caller then carries that across the line boundary; see `indexAfterUnquotedUrlContent`, below).
+ * Returns `undefined` when no such token starts here at all, including a `url(` immediately
+ * followed by a quote, which is an ordinary quoted argument left to the caller's own string
+ * scanning. Shared by the url-opaque reading and the escaped-line-break reading.
  */
-function indexAfterAnUnquotedUrlToken(line: string, cursor: number): number {
-  if (isAnIdentifierCharacter(line[cursor - 1])) return -1
-  if (!/^url\(/i.test(line.slice(cursor, cursor + 4))) return -1
+function tryToSkipAnUnquotedUrlToken(line: string, cursor: number): number | undefined {
+  if (isAnIdentifierCharacter(line[cursor - 1])) return undefined
+  if (!/^url\(/i.test(line.slice(cursor, cursor + 4))) return undefined
 
   let contentStart = cursor + 4
   while (contentStart < line.length && /\s/.test(line[contentStart]!)) contentStart += 1
-  if (isAQuoteCharacter(line[contentStart])) return -1
+  if (isAQuoteCharacter(line[contentStart])) return undefined
 
+  return indexAfterUnquotedUrlContent(line, contentStart)
+}
+
+/**
+ * Shared by `tryToSkipAnUnquotedUrlToken` (above) and by both readings directly, to resume a url
+ * token already known to be open coming into a line: scans its content, starting at
+ * `contentStart`, for its closing, unescaped `)`. A backslash escapes the following character, so
+ * an escaped `)` does not close it. Returns the index just past that `)`, or `-1` if none is found
+ * on this line. `-1` is not "the token ends at the line's end": CSS consumes an unterminated url
+ * token's remnants up to the next unescaped `)` wherever it falls, including on a later line, so
+ * every caller carries `-1` across the line boundary rather than stopping here.
+ */
+function indexAfterUnquotedUrlContent(line: string, contentStart: number): number {
   let index = contentStart
+
   while (index < line.length) {
     if (line[index] === '\\' && index + 1 < line.length) {
       index += 2
@@ -325,58 +370,87 @@ function indexAfterAnUnquotedUrlToken(line: string, cursor: number): number {
     index += 1
   }
 
-  return line.length
+  return -1
 }
 
 /**
- * The second new reading (see the docblock above `markLinesFlaggedByTheUrlOpaqueReading`):
- * carries a quoted string across a line boundary when the one reason it did not close on its
- * opening line is a backslash escaping the line break itself — CSS's own escape rule for a
- * string, which continues the string onto the next line rather than ending it, unlike every
- * other way a string can fail to close on its line (an ambiguity the three readings above
- * already cover). Unlike the other new reading, this one needs state beyond a single open/closed
- * comment boolean — it also remembers which quote character, if any, is still open coming into
- * a line — so it carries a small state object across lines instead of reusing
+ * The second new reading (see the docblock above `markLinesFlaggedByTheUrlOpaqueReading`): the
+ * faithful tokenizer model. It carries a quoted string across a line boundary when the one
+ * reason it did not close on its opening line is a backslash escaping the line break itself —
+ * CSS's own escape rule for a string, which continues the string onto the next line rather than
+ * ending it, unlike every other way a string can fail to close on its line (an ambiguity the
+ * three readings above already cover). Because `copy-lint.ts` splits emitted CSS on `\n` only, a
+ * line ending in `\r\n` in the original source arrives here as a "line" ending in `\r`; this
+ * reading treats a backslash immediately before that trailing `\r` the same as a backslash at the
+ * true end of the line, since CSS normalizes CRLF to one line break before tokenizing (see
+ * `isAnEscapedLineBreakAtEndOfLine`). It also treats an unquoted `url(...)` token's content as
+ * opaque, the same way `markLinesFlaggedByTheUrlOpaqueReading` does, carrying an unclosed one
+ * across the line boundary too (see `indexAfterUnquotedUrlContent`, shared by both readings).
+ * Three carried states are mutually exclusive at any line boundary — inside a comment, inside an
+ * open string (remembering which quote character), or inside an unclosed url token's content —
+ * so it carries a small state object across lines instead of reusing
  * `isLineStillInsideAnOpenComment`.
  */
 function markLinesFlaggedByTheEscapedLineBreakReading(
   lines: readonly string[],
   into: Set<number>,
 ): void {
-  let isInsideAnOpenComment = false
-  let openStringQuote: string | undefined
+  let state: EscapedLineBreakScanState = NOTHING_IS_OPEN
 
   for (const [index, line] of lines.entries()) {
-    if (isInsideAnOpenComment) into.add(index)
-    ;({ isInsideAnOpenComment, openStringQuote } = scanLineAcrossEscapedLineBreaks(
-      line,
-      isInsideAnOpenComment,
-      openStringQuote,
-    ))
+    if (state.isInsideAnOpenComment) into.add(index)
+    state = scanLineAcrossEscapedLineBreaksAndUrls(line, state)
   }
 }
 
 interface EscapedLineBreakScanState {
   readonly isInsideAnOpenComment: boolean
+  readonly isInsideAnOpenUrl: boolean
   readonly openStringQuote: string | undefined
+}
+
+// Three fixed shapes `EscapedLineBreakScanState` returns to over and over, named once so that a
+// return site spreads or references one instead of re-listing all three fields (which routinely
+// pushed a single return past this file's line-length limit and onto four lines instead of one).
+const NOTHING_IS_OPEN: EscapedLineBreakScanState = {
+  isInsideAnOpenComment: false,
+  isInsideAnOpenUrl: false,
+  openStringQuote: undefined,
+}
+const STILL_INSIDE_AN_OPEN_COMMENT: EscapedLineBreakScanState = {
+  ...NOTHING_IS_OPEN,
+  isInsideAnOpenComment: true,
+}
+const CARRYING_AN_UNCLOSED_URL_TOKEN: EscapedLineBreakScanState = {
+  ...NOTHING_IS_OPEN,
+  isInsideAnOpenUrl: true,
 }
 
 /**
  * One line of the escaped-line-break reading (see `markLinesFlaggedByTheEscapedLineBreakReading`
- * above). When `openStringQuote` carries in from the previous line, the line starts already
- * inside that string, and resuming its close is split into its own step
- * (`resumeAnOpenStringCarriedIntoThisLine`) purely to keep this function's branching low; when it
- * does not, the ordinary left-to-right scan (`scanFromStartOfLine`) runs from index 0.
+ * above). Whichever of the two carried states is active coming in resumes first: an unclosed url
+ * token's content resumes inline (its own search for `)` is one call, so a separate step would
+ * only add one), while an open string resumes in its own step
+ * (`resumeAnOpenStringCarriedIntoThisLine`) purely to keep this function's branching low. With
+ * neither carried in, the ordinary left-to-right scan (`scanFromStartOfLine`) runs from index 0.
  */
-function scanLineAcrossEscapedLineBreaks(
+function scanLineAcrossEscapedLineBreaksAndUrls(
   line: string,
-  wasInsideAnOpenComment: boolean,
-  openStringQuote: string | undefined,
+  state: EscapedLineBreakScanState,
 ): EscapedLineBreakScanState {
-  if (openStringQuote !== undefined) {
-    return resumeAnOpenStringCarriedIntoThisLine(line, wasInsideAnOpenComment, openStringQuote)
+  if (state.isInsideAnOpenUrl) {
+    const afterUrlContent = indexAfterUnquotedUrlContent(line, 0)
+    if (afterUrlContent === -1) return CARRYING_AN_UNCLOSED_URL_TOKEN
+    return scanFromStartOfLine(line, state.isInsideAnOpenComment, afterUrlContent)
   }
-  return scanFromStartOfLine(line, wasInsideAnOpenComment, 0)
+  if (state.openStringQuote !== undefined) {
+    return resumeAnOpenStringCarriedIntoThisLine(
+      line,
+      state.isInsideAnOpenComment,
+      state.openStringQuote,
+    )
+  }
+  return scanFromStartOfLine(line, state.isInsideAnOpenComment, 0)
 }
 
 /**
@@ -394,19 +468,21 @@ function resumeAnOpenStringCarriedIntoThisLine(
 ): EscapedLineBreakScanState {
   const outcome = scanAPossiblyContinuedStringLiteral(line, -1, openStringQuote)
   if (outcome.kind === 'continuesAcrossAnEscapedLineBreak') {
-    return { isInsideAnOpenComment, openStringQuote }
+    return { ...NOTHING_IS_OPEN, isInsideAnOpenComment, openStringQuote }
   }
   if (outcome.kind === 'doesNotClose') {
-    return { isInsideAnOpenComment, openStringQuote: undefined }
+    return { ...NOTHING_IS_OPEN, isInsideAnOpenComment }
   }
   return scanFromStartOfLine(line, isInsideAnOpenComment, outcome.indexAfter)
 }
 
 /**
- * The ordinary left-to-right scan, from `cursor`, with no string already open coming in: outside
- * a comment, the next opening delimiter opens one, unless a quote opens a string first (skipped
- * to its close, or, if it is escape-continued past this line, reported as still open); inside a
- * comment, the next closing delimiter closes it.
+ * The ordinary left-to-right scan, from `cursor`, with no string or url token already open coming
+ * in: outside a comment, an unquoted url token's content is skipped opaquely first (carried
+ * across the line boundary if it does not close here); failing that, the next opening delimiter
+ * opens a comment, unless a quote opens a string first (skipped to its close, or, if it is
+ * escape-continued past this line, reported as still open); inside a comment, the next closing
+ * delimiter closes it.
  */
 function scanFromStartOfLine(
   line: string,
@@ -419,9 +495,16 @@ function scanFromStartOfLine(
   while (index < line.length) {
     if (isInsideAnOpenComment) {
       const closerIndex = line.indexOf('*/', index)
-      if (closerIndex === -1) return { isInsideAnOpenComment: true, openStringQuote: undefined }
+      if (closerIndex === -1) return STILL_INSIDE_AN_OPEN_COMMENT
       isInsideAnOpenComment = false
       index = closerIndex + 2
+      continue
+    }
+
+    const afterUrlToken = tryToSkipAnUnquotedUrlToken(line, index)
+    if (afterUrlToken !== undefined) {
+      if (afterUrlToken === -1) return CARRYING_AN_UNCLOSED_URL_TOKEN
+      index = afterUrlToken
       continue
     }
 
@@ -433,7 +516,7 @@ function scanFromStartOfLine(
         continue
       }
       if (outcome.kind === 'continuesAcrossAnEscapedLineBreak') {
-        return { isInsideAnOpenComment, openStringQuote: character }
+        return { ...NOTHING_IS_OPEN, openStringQuote: character }
       }
       index = line.length
       continue
@@ -448,7 +531,7 @@ function scanFromStartOfLine(
     index += 1
   }
 
-  return { isInsideAnOpenComment, openStringQuote: undefined }
+  return NOTHING_IS_OPEN
 }
 
 type StringLiteralScanOutcome =
@@ -459,9 +542,10 @@ type StringLiteralScanOutcome =
 /**
  * Like `indexAfterAStringLiteral`, but distinguishes the one case with a single, unambiguous CSS
  * reading from every other way a string can fail to close on its line: the string's last
- * character being a backslash with nothing after it escapes the line break itself, which is
- * valid CSS and carries the string onto the next line rather than ending it. `quoteIndex` is
- * `-1` when the string is already open coming into this line, so scanning starts at index 0.
+ * character being a backslash that escapes the line break itself (see
+ * `isAnEscapedLineBreakAtEndOfLine` for the CRLF-aware check of what counts as "last"), which is
+ * valid CSS and carries the string onto the next line rather than ending it. `quoteIndex` is `-1`
+ * when the string is already open coming into this line, so scanning starts at index 0.
  */
 function scanAPossiblyContinuedStringLiteral(
   line: string,
@@ -472,7 +556,9 @@ function scanAPossiblyContinuedStringLiteral(
 
   while (cursor < line.length) {
     if (line[cursor] === '\\') {
-      if (cursor === line.length - 1) return { kind: 'continuesAcrossAnEscapedLineBreak' }
+      if (isAnEscapedLineBreakAtEndOfLine(line, cursor)) {
+        return { kind: 'continuesAcrossAnEscapedLineBreak' }
+      }
       cursor += 2
       continue
     }
@@ -481,4 +567,18 @@ function scanAPossiblyContinuedStringLiteral(
   }
 
   return { kind: 'doesNotClose' }
+}
+
+/**
+ * Whether the backslash at `cursor` escapes the line break itself rather than an ordinary
+ * character on this line: either it is the very last character of `line`, or `line` ends with
+ * that backslash immediately followed by a single trailing `\r`. The second case is what a line
+ * that ended `\r\n` in the original CSS looks like here, because `copy-lint.ts` splits the
+ * emitted CSS on `\n` only and leaves the `\r` attached to the line it preceded; CSS itself
+ * normalizes a CRLF pair to one line break during input preprocessing, so a real tokenizer treats
+ * both the same way.
+ */
+function isAnEscapedLineBreakAtEndOfLine(line: string, cursor: number): boolean {
+  if (cursor === line.length - 1) return true
+  return cursor === line.length - 2 && line[cursor + 1] === '\r'
 }
