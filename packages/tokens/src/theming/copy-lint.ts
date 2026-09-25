@@ -19,8 +19,9 @@ import { assertContrastFloors, runContrastHarness } from './contrast.ts'
 //   emit.ts -> copy-lint.ts -> guard-message-probes.ts -> emit.ts
 // They are safe because no module in either cycle reads an imported value while it is still
 // initialising. The values that cross them (RETHEMING_NOTICE, FEEDBACK_SHARED_IDENTITY_NOTICE,
-// TINT_SEED_COMMENT_STEM, ACCESSIBILITY_GUARD_MESSAGE_PROBES) are read only inside a function
-// body or a probe's `capture` thunk, which runs after all three modules have finished loading.
+// TINT_SEED_COMMENT_STEM, ACCESSIBILITY_GUARD_MESSAGE_PROBES, and the assertNoticeIsEmitted
+// function) are read only inside a function body or a probe's `capture` thunk, which runs
+// after all three modules have finished loading.
 // Verified against the built output by importing each of the three modules first, in a fresh
 // Node process each, and reading through to the other two: no throw and no `undefined` in any
 // order. A top-level read of any of those values would break that, so keep them inside
