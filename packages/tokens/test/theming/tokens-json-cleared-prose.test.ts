@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest'
  * relationship between this declarative block and the code that actually computes the shipped
  * values. A clearance of BYTES is anchorable by comparing bytes; a clearance whose subject is a
  * RELATION (a docblock's relationship to the code it documents) is not, and this file does not
- * attempt that half — a separate instrument covers that side instead.
+ * attempt it.
  *
  * Construction requirements this file honours: compares the RESOLVED string value parsed from
  * the JSON, never a source line or byte offset, so a `prettier` re-wrap or a change to JSON key
@@ -55,9 +55,9 @@ const EXPECTED_ACHROMATIC_BRANCH =
   'an exactly-zero-chroma primary seed is a legal input, not an error: it selects the achromatic branch, under which action.primary and its hover and active states, on-action.primary, content.link and border.focus all resolve against the neutral ramp rather than the chroma-zero primary ramp. The values are computed by packages/tokens/src/theming/, never read from this block.'
 
 // Sourced from the value actually shipped in tokens.json today (820 bytes), deliberately NOT
-// from an earlier pre-clearance draft of the same key (740 bytes) that a stale record still
-// carries. Transcribing the stale draft here would pin the wrong text and redden this test
-// against the correct, already-shipped file.
+// from an earlier, shorter pre-clearance draft of the same key (740 bytes). Transcribing that
+// draft here would pin the wrong text and redden this test against the correct, already-shipped
+// file.
 const EXPECTED_ADJACENCY_COMMENT =
   "Each subject's legal partners: the contract for which colour pairs this package documents and checks a contrast floor for. packages/tokens/src/theming/adjacency-source.ts materializes this block into its ADJACENCY export at build time, and the contrast harness and any published pair documentation read that export rather than this block, so a second implementation cannot drift from it. This list is a MINIMUM, not the full slot cross-product: a pair that is not here is documented nowhere and is promised nothing. Removing an entry is therefore not a local edit, it changes what this project documents; if an entry looks wrong, open an issue rather than deleting it here. No contrast conclusion is drawn from this data and none may be read out of it: a floor or an admissible window is not something this file records."
 
