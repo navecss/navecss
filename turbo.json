@@ -11,7 +11,8 @@
     },
     "lint": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.stylelintrc.json"]
     },
     "lint:fix": {
       "dependsOn": ["^build"],
