@@ -1,6 +1,6 @@
 {
   "name": "@navecss/tokens",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DTCG 2025.10 design tokens for Nave: seed-derived semantic colours, typography, spacing, and the rest of the token layer, built by a first-party DTCG 2025.10 reader.",
   "keywords": [
     "css",
