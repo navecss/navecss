@@ -8,6 +8,8 @@
 
 import type { FlatToken } from './reader.ts'
 
+import { shippedThemingPropertyNames } from './theming/emit.ts'
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -209,8 +211,11 @@ export function formatJsTokens(tokens: FlatToken[]): string {
     '',
     '/** The DTCG 2025.10 token set as a typed const object (e.g. `--nave-font-size-md`).',
     ' *  Keys are CSS custom property names. The semantic colour layer',
-    ' *  (`--nave-color-*`) ships as CSS custom properties in `dist/tokens.css`',
-    ' *  and is not part of this export.',
+    ' *  (`--nave-color-*`) ships as CSS custom properties in `dist/tokens.css` and is',
+    ' *  not part of this object; its property NAMES are typed separately as',
+    ' *  `ColorPropertyName`, and its VALUES are reachable only through CSS (e.g.',
+    ' *  `var(--nave-color-action-primary)`), computed in the browser from the scheme',
+    ' *  and the tint.',
     ' */',
     'export const tokens = {',
     entries,
@@ -238,13 +243,26 @@ export function formatTsDeclarations(tokens: FlatToken[]): string {
     .map((t) => `  '${PREFIX}${t.name}': ${typeof t.value === 'number' ? 'number' : 'string'}`)
     .join('\n')
 
+  // The semantic colour layer's typed surface is NAMES ONLY, generated from the same source
+  // `emitCss` reads (seed-invariant, per that function's own contract), never hand-written
+  // and never folded into `tokens`/`TokenName`: a values map would be a static snapshot of
+  // colour values this build computes live in the browser from the seed and the scheme,
+  // which would silently opt a consumer out of that live computation with no error anywhere.
+  const colorPropertyNameMembers = [...shippedThemingPropertyNames()]
+    .toSorted((a, b) => a.localeCompare(b))
+    .map((name) => `  | '${name}'`)
+    .join('\n')
+
   return [
     HEADER,
     '',
     '/** The DTCG 2025.10 token set as a typed const object (e.g. `--nave-font-size-md`).',
     ' *  Keys are CSS custom property names. The semantic colour layer',
-    ' *  (`--nave-color-*`) ships as CSS custom properties in `dist/tokens.css`',
-    ' *  and is not part of this export.',
+    ' *  (`--nave-color-*`) ships as CSS custom properties in `dist/tokens.css` and is',
+    ' *  not part of this object; its property NAMES are typed separately as',
+    ' *  `ColorPropertyName`, and its VALUES are reachable only through CSS (e.g.',
+    ' *  `var(--nave-color-action-primary)`), computed in the browser from the scheme',
+    ' *  and the tint.',
     ' */',
     'export declare const tokens: {',
     keys,
@@ -252,6 +270,14 @@ export function formatTsDeclarations(tokens: FlatToken[]): string {
     '',
     'export declare type TokenName = keyof typeof tokens',
     'export declare type TokenValue = typeof tokens[TokenName]',
+    '',
+    '/** Every `--nave-color-*` custom property the semantic colour layer emits: names',
+    ' *  only, no value (see the doc comment above `tokens` for where the values live).',
+    ' *  Disjoint from `TokenName` — a consumer who wants both writes',
+    ' *  `TokenName | ColorPropertyName`.',
+    ' */',
+    'export declare type ColorPropertyName =',
+    colorPropertyNameMembers,
     '',
   ].join('\n')
 }
