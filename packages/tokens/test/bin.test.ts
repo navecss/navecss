@@ -17,7 +17,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '..')
 const DIST_DIR = path.join(PACKAGE_ROOT, 'dist')
@@ -1229,3 +1229,33 @@ describe(
     )
   },
 )
+
+// The guard above, pinned: each case must refuse before any process is spawned, and name a fix
+// that applies to it.
+describe('runNode refuses to spawn outside a sequential test carrying the spawn timeout', () => {
+  const refusal = /runNode needs a sequential test.*spawn only from a non-concurrent `it`/
+  let hookError: unknown
+  beforeAll(() => {
+    try {
+      runNode(process.execPath, [], PACKAGE_ROOT)
+    } catch (error) {
+      hookError = error
+    }
+  })
+
+  it('in a test still on the default timeout', () => {
+    expect(() => runNode(process.execPath, [], PACKAGE_ROOT)).toThrow(refusal)
+  })
+
+  it('in a hook', () => {
+    expect(String(hookError)).toMatch(refusal)
+  })
+
+  it.concurrent(
+    'in a concurrent test, whatever its own timeout',
+    { timeout: SPAWN_TEST_TIMEOUT_MS },
+    ({ expect }) => {
+      expect(() => runNode(process.execPath, [], PACKAGE_ROOT)).toThrow(refusal)
+    },
+  )
+})
