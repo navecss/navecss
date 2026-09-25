@@ -72,7 +72,13 @@ describe('AC-theming-31 covers: R26 (packages/core shipped artifact)', () => {
 
   it('reads every .css file the build ships, so a missing build fails loudly', () => {
     expect(cssFilesUnder(DIST)).toEqual(
-      expect.arrayContaining(['atomic.css', 'index.css', 'layers.css', 'no-tokens.css', 'reset.css']),
+      expect.arrayContaining([
+        'atomic.css',
+        'index.css',
+        'layers.css',
+        'no-tokens.css',
+        'reset.css',
+      ]),
     )
   })
 
