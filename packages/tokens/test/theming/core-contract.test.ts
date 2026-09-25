@@ -266,57 +266,53 @@ describe('AC-theming-32 covers: R27', () => {
 // both the fix and the two named failure modes a naive `//`-to-end-of-line strip would
 // introduce (a CSS url()'s `://`, and `//` inside a TS string/template literal).
 describe('// line comments are stripped, without over-stripping CSS url() or TS string literals', () => {
-  it('a dead reference after // in a .ts-shaped source no longer counts', () => {
-    const contract = scanCoreContract([
-      "// dead example: var(--nave-color-should-not-count)\nconst x = 'var(--nave-color-content-primary)'",
-    ])
-    expect(contract).toEqual(['--nave-color-content-primary'])
-  })
-
-  it('a // comment on its own line does not swallow a real reference on the NEXT line', () => {
-    const contract = scanCoreContract([
-      '// a leading comment\nconst x = "var(--nave-color-content-primary)"',
-    ])
-    expect(contract).toEqual(['--nave-color-content-primary'])
-  })
-
-  it("an unquoted CSS url()'s :// is not mistaken for a line-comment opener, so a real reference on the SAME line still counts", () => {
-    const contract = scanCoreContract([
-      'background: url(https://example.com/x.png), var(--nave-color-surface-base);',
-    ])
-    expect(contract).toEqual(['--nave-color-surface-base'])
-  })
-
-  it('a // sequence inside a quoted TS string literal is not mistaken for a comment opener, so a reference later on the same line still counts', () => {
-    const contract = scanCoreContract([
-      'const url = "https://example.com"; const decl = \'var(--nave-color-content-primary)\'',
-    ])
-    expect(contract).toEqual(['--nave-color-content-primary'])
-  })
-
-  it('a // sequence inside a template literal is not mistaken for a comment opener', () => {
-    const contract = scanCoreContract([
-      'const url = `https://example.com`; const decl = `var(--nave-color-content-primary)`',
-    ])
-    expect(contract).toEqual(['--nave-color-content-primary'])
-  })
-
-  it('an escaped quote inside a string does not end the string early: the reference immediately after it is inside the same string, never a comment, so it still counts', () => {
-    const contract = scanCoreContract([
-      String.raw`const s = 'it\'s var(--nave-color-content-primary)'`,
-    ])
-    expect(contract).toEqual(['--nave-color-content-primary'])
-  })
-
-  it('block comments and line comments both still strip correctly when mixed in one source', () => {
-    const contract = scanCoreContract([
-      [
+  it.each([
+    {
+      label: 'a dead reference after // in a .ts-shaped source no longer counts',
+      source:
+        "// dead example: var(--nave-color-should-not-count)\nconst x = 'var(--nave-color-content-primary)'",
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label: 'a // comment on its own line does not swallow a real reference on the NEXT line',
+      source: '// a leading comment\nconst x = "var(--nave-color-content-primary)"',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        "an unquoted CSS url()'s :// is not mistaken for a line-comment opener, so a real reference on the SAME line still counts",
+      source: 'background: url(https://example.com/x.png), var(--nave-color-surface-base);',
+      expected: ['--nave-color-surface-base'],
+    },
+    {
+      label:
+        'a // sequence inside a quoted TS string literal is not mistaken for a comment opener, so a reference later on the same line still counts',
+      source:
+        'const url = "https://example.com"; const decl = \'var(--nave-color-content-primary)\'',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label: 'a // sequence inside a template literal is not mistaken for a comment opener',
+      source: 'const url = `https://example.com`; const decl = `var(--nave-color-content-primary)`',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        'an escaped quote inside a string does not end the string early: the reference immediately after it is inside the same string, never a comment, so it still counts',
+      source: String.raw`const s = 'it\'s var(--nave-color-content-primary)'`,
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label: 'block comments and line comments both still strip correctly when mixed in one source',
+      source: [
         '/* doc example: var(--nave-color-dead-block) */',
         '// dead line example: var(--nave-color-dead-line)',
         "const live = 'var(--nave-color-content-primary)'",
       ].join('\n'),
-    ])
-    expect(contract).toEqual(['--nave-color-content-primary'])
+      expected: ['--nave-color-content-primary'],
+    },
+  ])('$label', ({ source, expected }) => {
+    expect(scanCoreContract([source])).toEqual(expected)
   })
 })
 
