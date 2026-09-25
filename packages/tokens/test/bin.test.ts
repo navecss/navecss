@@ -61,11 +61,6 @@ interface RunResult {
  * (stderr, exit `0`) needed asserting for real. `spawnSync` captures BOTH streams on every
  * exit status uniformly, so this switches to it rather than adding a second, differently-shaped
  * helper for the success case alone.
- *
- * A child that ends with NO exit code (killed by the timeout below, killed by a signal, or never
- * started) throws rather than reporting a status: read as exit `1` it would pass every case that
- * asserts a non-zero exit. The timeout is what bounds a hung child at all, since vitest's own
- * budget cannot interrupt a synchronous `spawnSync` and only reports once it returns.
  */
 function runNode(
   scriptPath: string,
@@ -78,14 +73,26 @@ function runNode(
       `runNode needs a sequential test with a timeout of at least ${SPAWN_TEST_TIMEOUT_MS}ms but read ${currentTest.timeout}ms (0 means a hook or a concurrent test); spawn only from a non-concurrent \`it\` inside a describe carrying { timeout: SPAWN_TEST_TIMEOUT_MS }`,
     )
   }
-  const result = spawnSync(process.execPath, [...nodeFlags, scriptPath, ...args], {
+  return spawnNode([...nodeFlags, scriptPath, ...args], cwd, SPAWN_TEST_TIMEOUT_MS)
+}
+
+/**
+ * A child that ends with NO exit code (killed at `killAfterMs`, killed by a signal, or never
+ * started) throws rather than reporting a status: read as exit `1` it would pass every case that
+ * asserts a non-zero exit. `killAfterMs` is what bounds a hung child at all, since vitest's own
+ * budget cannot interrupt a synchronous `spawnSync` and only reports once it returns; the kill is
+ * SIGKILL because a child can trap the default SIGTERM and keep `spawnSync` waiting.
+ */
+function spawnNode(nodeArgs: string[], cwd: string, killAfterMs: number): RunResult {
+  const result = spawnSync(process.execPath, nodeArgs, {
     cwd,
     encoding: 'utf8',
-    timeout: SPAWN_TEST_TIMEOUT_MS,
+    timeout: killAfterMs,
+    killSignal: 'SIGKILL',
   })
   if (result.status === null) {
     const reason = result.error?.message ?? `signal ${result.signal}`
-    throw new Error(`runNode: ${scriptPath} ended with no exit code (${reason})`)
+    throw new Error(`node ${nodeArgs.join(' ')} ended with no exit code (${reason})`)
   }
   return { status: result.status, stdout: result.stdout, stderr: result.stderr }
 }
@@ -1271,16 +1278,29 @@ describe('runNode refuses to spawn outside a sequential test carrying the spawn 
 })
 
 describe(
-  'runNode throws when a child ends with no exit code',
+  'a spawned child that ends with no exit code throws',
   { timeout: SPAWN_TEST_TIMEOUT_MS },
   () => {
-    it('a child killed by a signal throws instead of reading as exit 1', () => {
+    it('a child still running at the kill budget is killed and throws, even one that traps SIGTERM', () => {
       const prefix = path.join(tmpdir(), 'navecss-tokens-bin-')
-      const script = path.join(realpathSync(mkdtempSync(prefix)), 'kill-self.mjs')
-      writeFileSync(script, "process.kill(process.pid, 'SIGKILL')\n")
-      expect(() => runNode(script, [], PACKAGE_ROOT)).toThrow(
-        /ended with no exit code \(signal SIGKILL\)/,
+      const script = path.join(realpathSync(mkdtempSync(prefix)), 'outlive.mjs')
+      writeFileSync(script, "process.on('SIGTERM', () => {})\nsetTimeout(() => {}, 30_000)\n")
+      expect(() => spawnNode([script], PACKAGE_ROOT, 500)).toThrow(
+        /ended with no exit code \(.*ETIMEDOUT\)/,
       )
     })
+
+    // POSIX signals only: on Windows `process.kill` terminates without a signal to report.
+    it.skipIf(process.platform === 'win32')(
+      'a child killed by a signal throws instead of reading as exit 1',
+      () => {
+        const prefix = path.join(tmpdir(), 'navecss-tokens-bin-')
+        const script = path.join(realpathSync(mkdtempSync(prefix)), 'kill-self.mjs')
+        writeFileSync(script, "process.kill(process.pid, 'SIGKILL')\n")
+        expect(() => runNode(script, [], PACKAGE_ROOT)).toThrow(
+          /ended with no exit code \(signal SIGKILL\)/,
+        )
+      },
+    )
   },
 )
