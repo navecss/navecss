@@ -70,7 +70,7 @@ function runNode(
 ): RunResult {
   if (currentTest.timeout < SPAWN_TEST_TIMEOUT_MS) {
     throw new Error(
-      `runNode needs a sequential test with a timeout of at least ${SPAWN_TEST_TIMEOUT_MS}ms but read ${currentTest.timeout}ms (0 means a hook or a concurrent test); move the call into a test inside a describe carrying { timeout: SPAWN_TEST_TIMEOUT_MS }`,
+      `runNode needs a sequential test with a timeout of at least ${SPAWN_TEST_TIMEOUT_MS}ms but read ${currentTest.timeout}ms (0 means a hook or a concurrent test); spawn only from a non-concurrent \`it\` inside a describe carrying { timeout: SPAWN_TEST_TIMEOUT_MS }`,
     )
   }
   const result = spawnSync(process.execPath, [...nodeFlags, scriptPath, ...args], {
