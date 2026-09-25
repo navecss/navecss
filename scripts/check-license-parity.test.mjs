@@ -553,14 +553,16 @@ function normalizedLineCommentBlockBetween(source, startNeedle, stopNeedle) {
 
 /**
  * The three expected literals below are a BACKSTOP, not the gate. The primary control is the
- * licensing review these blocks passed; this only makes deleting or re-wording one loud.
+ * licensing review these blocks passed; this only makes deleting or re-wording one loud, and
+ * it cannot tell a deliberate re-wording from an accidental one.
  *
  * CHANGING ANY LITERAL IS A LICENSING-REVIEW CHANGE, NOT A TEST FIXUP. If one of these goes
- * red because the comment it mirrors was edited, the edit needs fresh licensing clearance
- * before the literal moves; updating both sides in one commit buys a green suite and an
- * uncleared re-wording. Re-wrapping or reindenting the same words is lawful and stays green
- * here without touching anything, which is exactly the case the normalizers above are built to
- * let through.
+ * red because the comment it mirrors was edited, do NOT update the expected value to match the
+ * file: updating both in one commit buys a green suite and an uncleared re-wording. Restore the
+ * wording the file had, or open an issue proposing the new wording and get the maintainer's
+ * approval before this literal moves. Re-wrapping or reindenting the same words is lawful and
+ * stays green here without touching anything, which is exactly the case the normalizers above
+ * are built to let through.
  */
 const EXPECTED_HEADER_DOCBLOCK =
   'Tripwire for the project\'s published licensing requirement. Condition 2 of the published `licensing` overview §2, signed off by the project\'s maintainer, requires each published tarball to carry its own licence text, and names its remedy in a preference order: "a copy, or a build step, or a verified-packing symlink, in that order of preference". The project took the first — `packages/{tokens,core,bridge,cli}/LICENSE` are copies of the root `LICENSE` — and nothing before this script asserted the copies actually still MATCH the root they were taken from. `pnpm check:pack` (`publint` + `attw`) asserts a `LICENSE` is PRESENT in each packed tarball, never that it agrees with the root. So the equality that makes Condition 2 true was held by whoever remembered to update all five files together, and it had already been exercised once by hand: an earlier review named `LICENSE` and the copyright line turned out to live in five files, caught by the developer-relations reviewer running the class rather than the list. This script converts "whoever remembers" into an assertion. The package set is every directory under `packages/` that carries a manifest, not a hand-listed set, so a new package added there is covered the day it is created. That is the whole workspace only while the workspace is defined as exactly `packages/*`. Scanning a directory cannot establish that, so `findWorkspaceGlobViolation` checks the definition itself before any package is scanned, and refuses rather than reporting a pass over a narrower set than the workspace actually holds. Widening the workspace is therefore a deliberate act that has to change this gate in the same commit. Only NON-PRIVATE packages are checked: a `private: true` package never produces a published tarball, so Condition 2 does not apply to it (mirrors the `!manifest.private` publishable test `scripts/check-publishable-set.mjs` uses for the same reason, on a different question). Source tree only, and deliberately so: a packed tarball\'s LICENSE presence is already asserted by `check:pack` (`publint`/`attw`), and a byte-copy of the source-tree file is exactly what npm packs (no build step touches `LICENSE`), so re-running this check against `npm pack` output would duplicate the source-tree check without covering anything new. This script decides no licensing question and never will: it is an instrument, in the shape `scripts/check-license-allowlist.mjs` and `scripts/check-bundling-guard-coverage.mjs` already use. Its only job is to make Condition 2\'s equality trip instead of drifting silently.'

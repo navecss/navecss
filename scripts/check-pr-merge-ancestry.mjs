@@ -11,10 +11,15 @@
  * before this script asserted that a PR GitHub calls "merged" actually lands its content on
  * the tree that matters.
  *
- * For each of the last N merged pull requests on a repo, this fetches the PR's merge commit
- * SHA and asserts `git merge-base --is-ancestor <mergeCommit> origin/main`. A PR whose merge
- * commit is not an ancestor of `origin/main` is exactly that shape: GitHub calls it merged,
- * and the tree that matters never received it.
+ * For the N most recently updated merged pull requests on a repo, this fetches the PR's merge
+ * commit SHA and asserts `git merge-base --is-ancestor <mergeCommit> origin/main`. A PR whose
+ * merge commit is not an ancestor of `origin/main` is exactly that shape: GitHub calls it
+ * merged, and the tree that matters never received it.
+ *
+ * The repository is derived from the local checkout's `origin` remote, not a flag: the
+ * ancestry assertion reads the LOCAL `origin/main`, so the pull requests listed must be
+ * `origin`'s own — a repository named on the command line could check some other project's
+ * pull requests against this checkout's history, which asserts nothing meaningful.
  *
  * This script decides no product or process question and never will: it is an instrument, in
  * the shape every sibling `scripts/check-*.mjs` already uses. Its only job is to make a
@@ -27,39 +32,74 @@
  * tree alone. For that reason this is NOT wired into `scripts:check` or `ci:check` — doing so
  * would make an ordinary offline `pnpm run ci:check` fail on a machine with no network or no
  * `gh` auth, for a reason unrelated to the code under test. It is meant to be run manually
- * (`node scripts/check-pr-merge-ancestry.mjs`) or from a dedicated scheduled CI job, not as
- * part of the offline chain.
+ * (`node scripts/check-pr-merge-ancestry.mjs`), not as part of the offline chain.
  */
-import { execFileSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const DEFAULT_LIMIT = 30
-const DEFAULT_REPO = 'navecss/navecss'
 
 /**
- * Parses `--limit <n>` / `--limit=<n>` and `--repo <owner/name>` / `--repo=<owner/name>` out
- * of `argv` (already sliced past `node script.mjs`), falling back to `defaults` for either
- * one left unset. Unrecognised arguments are ignored rather than rejected, matching this
- * repo's other flag-parsing scripts (e.g. `check-core-contract-drift.mjs`'s bare `--write`).
+ * Parses `--limit <n>` / `--limit=<n>` out of `argv` (already sliced past `node script.mjs`),
+ * falling back to `defaults` for a limit left unset. Unrecognised arguments are ignored rather
+ * than rejected, matching this repo's other flag-parsing scripts (e.g.
+ * `check-core-contract-drift.mjs`'s bare `--write`).
+ *
+ * Throws when `--limit`'s value is missing, not an integer, or less than 1: a limit of 0 or
+ * fewer asks `gh` for a window that cannot contain a PR, and a non-integer is a typo, neither
+ * of which should run any command and report a hollow pass.
  */
 export function parseArgs(argv, defaults) {
   const args = { ...defaults }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--limit') {
-      args.limit = Number(argv[i + 1])
+      args.limit = parseLimit(argv[i + 1])
       i += 1
     } else if (arg.startsWith('--limit=')) {
-      args.limit = Number(arg.slice('--limit='.length))
-    } else if (arg === '--repo') {
-      args.repo = argv[i + 1]
-      i += 1
-    } else if (arg.startsWith('--repo=')) {
-      args.repo = arg.slice('--repo='.length)
+      args.limit = parseLimit(arg.slice('--limit='.length))
     }
   }
   return args
+}
+
+/**
+ * Coerces `raw` (a `--limit` value, still a string or `undefined`) to a positive integer,
+ * throwing when it is missing, not an integer, or less than 1.
+ */
+function parseLimit(raw) {
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error(
+      `--limit must be a positive integer, got: ${raw === undefined ? '(missing)' : raw}`,
+    )
+  }
+  return n
+}
+
+/**
+ * Extracts `owner/name` from a `git remote get-url origin` GitHub URL, in every shape `git`
+ * actually hands back (`git@github.com:owner/name.git`, `https://github.com/owner/name.git`,
+ * `https://github.com/owner/name`, `ssh://git@github.com/owner/name.git`; a trailing newline
+ * from the subprocess call is tolerated). Returns `null` for anything not on `github.com`:
+ * `gh pr list` only ever talks to GitHub, so a non-GitHub origin has no repository this script
+ * can meaningfully query.
+ */
+export function repoFromRemoteUrl(url) {
+  const trimmed = url.trim()
+  const patterns = [
+    /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/,
+    /^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/,
+    /^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/,
+  ]
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern)
+    if (match) {
+      return `${match[1]}/${match[2]}`
+    }
+  }
+  return null
 }
 
 /**
@@ -122,53 +162,132 @@ export function checkAncestryAndReport(prs, isAncestor) {
 }
 
 /**
- * `git merge-base --is-ancestor <sha> origin/main`, run inside this checkout.
+ * The orchestration, with every subprocess call factored out to the injected `run(command,
+ * args)` (returning `{ status, stdout, stderr }`, mirroring `spawnSync`'s shape closely enough
+ * that the real wiring in `main()` is a thin pass-through). Nothing in here spawns anything
+ * itself, so a test drives every branch — bad `--limit`, a non-GitHub origin, a shallow
+ * checkout, a failing `gh` or `git fetch`, and the happy path — with a synthetic `run` and no
+ * real subprocess, network call, or `gh` auth.
+ *
+ * The call order is deliberate and each step short-circuits the rest on failure:
+ *
+ * 1. `--limit` is validated before any command runs — a bad flag should not spend a network
+ *    call before reporting.
+ * 2. `origin`'s remote URL is read and mapped to `owner/name`; a non-GitHub origin stops here,
+ *    before any `gh` or `git` history call, because `gh pr list` cannot query a repository
+ *    that is not on GitHub.
+ * 3. The checkout is asserted non-shallow before `gh pr list` runs. In a shallow clone an
+ *    older merge commit is simply absent from history, `git merge-base --is-ancestor` exits
+ *    non-zero on the missing object, and every such PR would be reported as not reaching
+ *    `main` — a false failure, not a true one.
+ * 4. `gh pr list` runs BEFORE `git fetch origin main`, not after: a pull request merged in the
+ *    gap between an earlier fetch and a later list would carry a merge commit not yet in the
+ *    fetched `origin/main`, and would read as a false failure too. Listing first and fetching
+ *    second closes that gap.
+ * 5. Only then does the ancestry check run, against the just-fetched `origin/main`.
+ *
+ * `gh pr list` sorts by `sort:updated-desc`, not creation date (`gh`'s default): a long-lived
+ * pull request merged yesterday can fall outside a creation-ordered window, while merging a
+ * pull request updates it, so an update-ordered window contains every recently merged pull
+ * request unless N others were updated even more recently.
  */
-function isAncestorOfOriginMain(sha) {
-  // NOSONAR on the three spawn lines in this file (rule S4036, PATH-resolved executable): this
-  // is a manual tool a maintainer runs in their own checkout, and running THEIR git and gh is
-  // the point. It never runs in CI and never takes a command from its input. The shipped
-  // gates spawn pnpm and npm the same way.
-  const result = spawnSync('git', ['merge-base', '--is-ancestor', sha, 'origin/main']) // NOSONAR
-  return result.status === 0
+export function runMergeAncestryCheck(argv, run) {
+  let limit
+  try {
+    ;({ limit } = parseArgs(argv, { limit: DEFAULT_LIMIT }))
+  } catch (error) {
+    return { exitCode: 2, stdout: '', stderr: error.message }
+  }
+
+  const originResult = run('git', ['remote', 'get-url', 'origin'])
+  if (originResult.status !== 0) {
+    return {
+      exitCode: 2,
+      stdout: '',
+      stderr: originResult.stderr || 'could not read the `origin` remote URL',
+    }
+  }
+
+  const repo = repoFromRemoteUrl(originResult.stdout)
+  if (repo === null) {
+    return {
+      exitCode: 2,
+      stdout: '',
+      stderr:
+        '`origin` is not a GitHub remote. The ancestry assertion reads the local ' +
+        "`origin/main`, so the pull requests listed must be `origin`'s own.",
+    }
+  }
+
+  const shallowResult = run('git', ['rev-parse', '--is-shallow-repository'])
+  if (shallowResult.stdout.trim() === 'true') {
+    return {
+      exitCode: 2,
+      stdout: '',
+      stderr:
+        'this checkout is shallow: run `git fetch --unshallow origin` first. In a shallow ' +
+        'clone an older merge commit is simply absent, and `git merge-base --is-ancestor` ' +
+        'would report every such pull request as not reaching main.',
+    }
+  }
+
+  const ghResult = run('gh', [
+    'pr',
+    'list',
+    '--repo',
+    repo,
+    '--state',
+    'merged',
+    '--search',
+    'sort:updated-desc',
+    '--limit',
+    String(limit),
+    '--json',
+    'number,mergeCommit,baseRefName,title',
+  ])
+  if (ghResult.status !== 0) {
+    return { exitCode: 2, stdout: '', stderr: ghResult.stderr }
+  }
+  const prs = mapGhPrListOutput(JSON.parse(ghResult.stdout))
+
+  const fetchResult = run('git', ['fetch', 'origin', 'main'])
+  if (fetchResult.status !== 0) {
+    return { exitCode: 2, stdout: '', stderr: fetchResult.stderr }
+  }
+
+  const isAncestor = (sha) =>
+    run('git', ['merge-base', '--is-ancestor', sha, 'origin/main']).status === 0
+
+  const { report, exitCode } = checkAncestryAndReport(prs, isAncestor)
+  return exitCode === 0
+    ? { exitCode, stdout: report, stderr: '' }
+    : { exitCode: 1, stdout: '', stderr: report }
 }
 
 /**
- * Fetches `origin/main`, then checks the last N merged PRs on `repo` for a PR GitHub reports
- * as merged whose merge commit never reached `origin/main`.
+ * The one spawn line in this file, wiring `runMergeAncestryCheck`'s injected `run` to a real
+ * subprocess call.
+ */
+function realRun(command, args) {
+  // NOSONAR on the one spawn line in this file (rule S4036, PATH-resolved executable): this
+  // is a manual tool a maintainer runs in their own checkout, and running THEIR git and gh is
+  // the point. It never runs in CI and never takes a command from its input. The shipped
+  // gates spawn pnpm and npm the same way.
+  const result = spawnSync(command, args, { encoding: 'utf8' }) // NOSONAR
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
+}
+
+/**
+ * Entry point: wires `runMergeAncestryCheck` to the real subprocess runner and prints its
+ * result.
  */
 function main() {
-  const { limit, repo } = parseArgs(process.argv.slice(2), {
-    limit: DEFAULT_LIMIT,
-    repo: DEFAULT_REPO,
-  })
-
-  // The ancestry assertion below is only as good as `origin/main` being current.
-  execFileSync('git', ['fetch', 'origin', 'main'], { stdio: 'inherit' }) // NOSONAR
-
-  const raw = execFileSync(
-    'gh', // NOSONAR
-    [
-      'pr',
-      'list',
-      '--repo',
-      repo,
-      '--state',
-      'merged',
-      '--limit',
-      String(limit),
-      '--json',
-      'number,mergeCommit,baseRefName,title',
-    ],
-    { encoding: 'utf8' },
-  )
-  const prs = mapGhPrListOutput(JSON.parse(raw))
-
-  const { report, exitCode } = checkAncestryAndReport(prs, isAncestorOfOriginMain)
-  if (exitCode === 0) {
-    console.log(report)
-  } else {
-    console.error(report)
+  const { exitCode, stdout, stderr } = runMergeAncestryCheck(process.argv.slice(2), realRun)
+  if (stdout) {
+    console.log(stdout)
+  }
+  if (stderr) {
+    console.error(stderr)
   }
   process.exitCode = exitCode
 }

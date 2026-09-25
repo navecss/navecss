@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
  *
  * The second layer drives the SHIPPED script as a child process against a throwaway
  * workspace. That layer exists because everything `main()` adds on top of the pure
- * predicate — the private-package limb, the two counters, the printed text and the exit
+ * predicate — the private-package limb, the skip counters, the printed text and the exit
  * code — was reachable from no test at all: `main()` is not exported and runs only under
  * the entry-point guard, so deleting `process.exitCode = 1` (the gate stops gating) or
  * replacing the `isNonPrivate` limb with `continue` (the gate examines nothing and still
@@ -293,8 +293,8 @@ test('the real workspace passes today: every non-private package’s in-scope su
 // printed text and the exit code assertable at all.
 
 /**
- * The four counts the green line prints are DISCRIMINATING here, and that is what the extra
- * packages buy rather than tidiness. This fixture prints 6 examined subpath(s) across 3
+ * The first four counts the green line prints are DISCRIMINATING here, and that is what the
+ * extra packages buy rather than tidiness. This fixture prints 6 examined subpath(s) across 3
  * non-private package(s), 1 private package carrying 4 skipped subpath(s): four values, all
  * different from each other AND all different from the real workspace's 11/2/2/2. Both
  * properties are needed and they are not the same property. Distinct from EACH OTHER kills
@@ -304,7 +304,10 @@ test('the real workspace passes today: every non-private package’s in-scope su
  * here and all 2 in the real workspace, so two cross-substitutions survived; under a first
  * attempt at 2/5/1/3, `checkedPackages` matched the real workspace's 2 and the hardcode
  * mutation survived instead. Shrinking this fixture, or letting any count drift onto one of
- * the workspace's, gives one of the two blindnesses back silently.
+ * the workspace's, gives one of the two blindnesses back silently. The two counts the census
+ * added later (directories with no package.json, non-private packages with no in-scope
+ * subpath) read 0 and 0 here; the zero-scope fixture below prints 0 and 1 for them, which is
+ * what discriminates those two from each other.
  */
 const CLEAN_FIXTURE = {
   alpha: {

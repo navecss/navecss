@@ -3,48 +3,75 @@
  * test runner.
  *
  * This script's own reason for existing is a dependency shape none of its siblings have: it
- * needs network access and `gh` CLI auth to enumerate merged pull requests. So the tests here
- * cover only the PURE logic — `parseArgs`, `mapGhPrListOutput`, and `checkAncestryAndReport` —
- * with the GitHub API call and the `git merge-base` call both factored out and injected,
- * never a real `gh` invocation or a real git checkout.
+ * needs network access and `gh` CLI auth to enumerate merged pull requests. The pure logic —
+ * `parseArgs`, `repoFromRemoteUrl`, `mapGhPrListOutput`, and `checkAncestryAndReport` — is
+ * covered directly. The orchestration in `runMergeAncestryCheck` routes every subprocess call
+ * through one injected `run(command, args)`, so its branching (bad `--limit`, a non-GitHub
+ * origin, a shallow checkout, a failing `gh` or `git fetch`, call ordering, and the happy path)
+ * is covered the same way, with a synthetic `run` and never a real subprocess, network call, or
+ * `gh` auth.
  */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { checkAncestryAndReport, mapGhPrListOutput, parseArgs } from './check-pr-merge-ancestry.mjs'
+import {
+  checkAncestryAndReport,
+  mapGhPrListOutput,
+  parseArgs,
+  repoFromRemoteUrl,
+  runMergeAncestryCheck,
+} from './check-pr-merge-ancestry.mjs'
 
 test('parseArgs: defaults survive when nothing is passed', () => {
-  assert.deepEqual(parseArgs([], { limit: 30, repo: 'navecss/temp-navecss' }), {
-    limit: 30,
-    repo: 'navecss/temp-navecss',
-  })
+  assert.deepEqual(parseArgs([], { limit: 30 }), { limit: 30 })
 })
 
-test('parseArgs: --limit and --repo, space-separated', () => {
-  assert.deepEqual(
-    parseArgs(['--limit', '10', '--repo', 'navecss/other'], {
-      limit: 30,
-      repo: 'navecss/temp-navecss',
-    }),
-    { limit: 10, repo: 'navecss/other' },
-  )
+test('parseArgs: --limit, space-separated', () => {
+  assert.deepEqual(parseArgs(['--limit', '10'], { limit: 30 }), { limit: 10 })
 })
 
-test('parseArgs: --limit= and --repo=, equals-joined', () => {
-  assert.deepEqual(
-    parseArgs(['--limit=5', '--repo=navecss/other'], { limit: 30, repo: 'navecss/temp-navecss' }),
-    { limit: 5, repo: 'navecss/other' },
-  )
+test('parseArgs: --limit=, equals-joined', () => {
+  assert.deepEqual(parseArgs(['--limit=5'], { limit: 30 }), { limit: 5 })
 })
 
 test('parseArgs: an unrecognised flag is ignored, not rejected', () => {
-  assert.deepEqual(
-    parseArgs(['--verbose', '--limit=7'], { limit: 30, repo: 'navecss/temp-navecss' }),
-    {
-      limit: 7,
-      repo: 'navecss/temp-navecss',
-    },
-  )
+  assert.deepEqual(parseArgs(['--verbose', '--limit=7'], { limit: 30 }), { limit: 7 })
+})
+
+test('parseArgs: --limit with no value throws', () => {
+  assert.throws(() => parseArgs(['--limit'], { limit: 30 }))
+})
+
+test('parseArgs: --limit=abc (non-integer) throws', () => {
+  assert.throws(() => parseArgs(['--limit=abc'], { limit: 30 }))
+})
+
+test('parseArgs: --limit=0 throws', () => {
+  assert.throws(() => parseArgs(['--limit=0'], { limit: 30 }))
+})
+
+test('parseArgs: --limit=-3 throws', () => {
+  assert.throws(() => parseArgs(['--limit=-3'], { limit: 30 }))
+})
+
+test('repoFromRemoteUrl: git@github.com:owner/name.git', () => {
+  assert.equal(repoFromRemoteUrl('git@github.com:owner/name.git'), 'owner/name')
+})
+
+test('repoFromRemoteUrl: https://github.com/owner/name.git', () => {
+  assert.equal(repoFromRemoteUrl('https://github.com/owner/name.git'), 'owner/name')
+})
+
+test('repoFromRemoteUrl: https://github.com/owner/name (no .git suffix)', () => {
+  assert.equal(repoFromRemoteUrl('https://github.com/owner/name'), 'owner/name')
+})
+
+test('repoFromRemoteUrl: ssh://git@github.com/owner/name.git, trailing newline tolerated', () => {
+  assert.equal(repoFromRemoteUrl('ssh://git@github.com/owner/name.git\n'), 'owner/name')
+})
+
+test('repoFromRemoteUrl: a non-GitHub remote returns null', () => {
+  assert.equal(repoFromRemoteUrl('git@gitlab.com:owner/name.git'), null)
 })
 
 test('mapGhPrListOutput: unwraps the mergeCommit Commit object to its bare oid', () => {
@@ -132,4 +159,126 @@ test('checkAncestryAndReport: zero merged PRs is a legitimate, non-failing state
   assert.deepEqual(result.failed, [])
   assert.equal(result.exitCode, 0)
   assert.match(result.report, /0 merged pull request\(s\) checked, all 0 an ancestor/)
+})
+
+// ── runMergeAncestryCheck: the orchestration, with a synthetic `run` ─────────────────────
+
+const ORIGIN_URL = 'https://github.com/navecss/navecss.git'
+
+function makeRun(responses) {
+  const calls = []
+  const run = (command, args) => {
+    calls.push({ command, args })
+    for (const { when, reply } of responses) {
+      if (when(command, args)) {
+        return reply
+      }
+    }
+    throw new Error(`unexpected call: ${command} ${JSON.stringify(args)}`)
+  }
+  return { calls, run }
+}
+
+const isOriginUrlCall = (command, args) =>
+  command === 'git' && args[0] === 'remote' && args[1] === 'get-url'
+const isShallowCall = (command, args) => command === 'git' && args[0] === 'rev-parse'
+const isGhListCall = (command) => command === 'gh'
+const isFetchCall = (command, args) => command === 'git' && args[0] === 'fetch'
+const isMergeBaseCall = (command, args) => command === 'git' && args[0] === 'merge-base'
+
+test('runMergeAncestryCheck: a bad --limit exits 2 and never calls the runner', () => {
+  for (const argv of [['--limit'], ['--limit=abc'], ['--limit=0'], ['--limit=-3']]) {
+    const { calls, run } = makeRun([])
+    const result = runMergeAncestryCheck(argv, run)
+    assert.equal(result.exitCode, 2, `argv ${JSON.stringify(argv)}`)
+    assert.equal(calls.length, 0, `argv ${JSON.stringify(argv)} should call the runner zero times`)
+  }
+})
+
+test('runMergeAncestryCheck: a non-GitHub origin exits 2 and never calls gh', () => {
+  const { calls, run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: 'git@gitlab.com:owner/name.git\n' } },
+  ])
+  const result = runMergeAncestryCheck([], run)
+  assert.equal(result.exitCode, 2)
+  assert.match(result.stderr, /not a GitHub remote/)
+  assert.equal(
+    calls.some((c) => isGhListCall(c.command)),
+    false,
+  )
+})
+
+test('runMergeAncestryCheck: a shallow checkout exits 2, names --unshallow, never calls gh', () => {
+  const { calls, run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
+    { when: isShallowCall, reply: { status: 0, stdout: 'true\n' } },
+  ])
+  const result = runMergeAncestryCheck([], run)
+  assert.equal(result.exitCode, 2)
+  assert.match(result.stderr, /--unshallow/)
+  assert.equal(
+    calls.some((c) => isGhListCall(c.command)),
+    false,
+  )
+})
+
+test('runMergeAncestryCheck: gh pr list runs before git fetch origin main', () => {
+  const { calls, run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
+    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
+    {
+      when: isGhListCall,
+      reply: { status: 0, stdout: JSON.stringify([]) },
+    },
+    { when: isFetchCall, reply: { status: 0, stdout: '' } },
+  ])
+  const result = runMergeAncestryCheck([], run)
+  assert.equal(result.exitCode, 0)
+  const ghIndex = calls.findIndex((c) => isGhListCall(c.command))
+  const fetchIndex = calls.findIndex((c) => isFetchCall(c.command, c.args))
+  assert.ok(ghIndex !== -1 && fetchIndex !== -1, 'both gh and fetch must be called')
+  assert.ok(ghIndex < fetchIndex, 'gh pr list must run before git fetch origin main')
+})
+
+test('runMergeAncestryCheck: gh pr list is sorted by sort:updated-desc, not creation date', () => {
+  const { calls, run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
+    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
+    { when: isGhListCall, reply: { status: 0, stdout: JSON.stringify([]) } },
+    { when: isFetchCall, reply: { status: 0, stdout: '' } },
+  ])
+  runMergeAncestryCheck([], run)
+  const ghCall = calls.find((c) => isGhListCall(c.command))
+  const searchIndex = ghCall.args.indexOf('--search')
+  assert.ok(searchIndex !== -1, '--search must be present')
+  assert.equal(ghCall.args[searchIndex + 1], 'sort:updated-desc')
+})
+
+test('runMergeAncestryCheck: a failing gh call exits 2 with its stderr, never a report', () => {
+  const { run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
+    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
+    { when: isGhListCall, reply: { status: 1, stdout: '', stderr: 'gh: authentication required' } },
+  ])
+  const result = runMergeAncestryCheck([], run)
+  assert.equal(result.exitCode, 2)
+  assert.match(result.stderr, /authentication required/)
+  assert.doesNotMatch(result.stdout, /merged pull request/)
+})
+
+test('runMergeAncestryCheck: happy path, two merged PRs both ancestors, exit 0', () => {
+  const prsJson = JSON.stringify([
+    { number: 1, mergeCommit: { oid: 'aaa' }, baseRefName: 'main', title: 'one' },
+    { number: 2, mergeCommit: { oid: 'bbb' }, baseRefName: 'main', title: 'two' },
+  ])
+  const { run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
+    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
+    { when: isGhListCall, reply: { status: 0, stdout: prsJson } },
+    { when: isFetchCall, reply: { status: 0, stdout: '' } },
+    { when: isMergeBaseCall, reply: { status: 0, stdout: '' } },
+  ])
+  const result = runMergeAncestryCheck([], run)
+  assert.equal(result.exitCode, 0)
+  assert.match(result.stdout, /2 merged pull request\(s\) checked, all 2 an ancestor/)
 })
