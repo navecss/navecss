@@ -20,7 +20,7 @@
  * WHAT THIS PROVES AND WHAT IT DOES NOT. A green run here shows only that the pinned bytes have
  * not moved since somebody recorded their digest. It does NOT show that the recorded digest is
  * itself correct, that the wording is legally sound, or that a passage not listed here needs no
- * review of its own, this file is not exhaustive over the repository, only over the passages
+ * review of its own: this file is not exhaustive over the repository, only over the passages
  * enumerated below. Treat a red run as "this text moved", never as "this text is wrong", and a
  * green run as "this text is unchanged", never as "this text was checked here for the first
  * time".
@@ -55,11 +55,11 @@
  * a fenced code block (its delimiters included, not just its content) and an HTML comment block
  * (a line starting `<!--`, closed at the first line containing `-->`, or otherwise running to the
  * end of the file). Text inside a gap is not read as prose, not read as a heading, and not
- * matched by the checklist or affirmation locators either, because none of it is text a reader
- * ever sees rendered. Extraction that finds zero or more than one match throws `LocateError`,
- * immediately, distinctly, and BEFORE any digest is compared: a location failure must never fall
- * through to comparing an empty or wrong string against a pin, which would either miss a real
- * change or invent one.
+ * matched by the checklist or affirmation locators either, because a fenced block renders as code
+ * rather than as prose, and a comment does not render at all. Extraction that finds zero or more
+ * than one match throws `LocateError`, immediately, distinctly, and BEFORE any digest is compared:
+ * a location failure must never fall through to comparing an empty or wrong string against a pin,
+ * which would either miss a real change or invent one.
  *
  * This still asserts only what it names. Whole files and sections pinned as one unit, and three
  * runs pinned as complete lists (the contributor licence terms and the Developer Certificate of
@@ -136,42 +136,19 @@ function fold(text) {
 class LocateError extends Error {}
 
 /**
- * The line indexes an HTML comment block occupies in `lines`, per CommonMark's type-2 HTML block:
- * a line whose content opens with `<!--` starts one, and it ends on the first line containing
- * `-->` (which may be the opening line itself), or otherwise runs to the end of the document.
- * Read in one pass, in document order, skipping every line already claimed by `fenceLines`: a
- * `<!--` inside a fence is literal text there, never the start of a comment.
- */
-function scanCommentLines(lines, fenceLines) {
-  const commentLines = new Set()
-  let open = false
-  for (const [i, line] of lines.entries()) {
-    if (fenceLines.has(i)) continue
-    if (open) {
-      commentLines.add(i)
-      if (line.includes('-->')) open = false
-      continue
-    }
-    if (/^ {0,3}<!--/.test(line)) {
-      commentLines.add(i)
-      open = !line.slice(line.indexOf('<!--') + 4).includes('-->')
-    }
-  }
-  return commentLines
-}
-
-/**
  * Builds the fence-and-comment-aware view of `text` that every locator in this file reads:
  * `lines` (the raw split), `fenceLines` (every line a fenced code block occupies, delimiters
- * included, from `scanFences()`), `commentLines` (every line an HTML comment block occupies),
- * `gapLines` (the union of the two), and `headings` (the `#`-prefixed lines that sit outside
- * every gap). `label` is carried through so a `LocateError` can name the document it failed
- * against instead of a hardcoded file name.
+ * included), `commentLines` (every line an HTML comment block occupies), `gapLines` (the union of
+ * the two), and `headings` (the `#`-prefixed lines that sit outside every gap). `fenceLines` and
+ * `commentLines` both come from the one shared `scanFences()`, never from a second scanner: a
+ * fence and a comment suppress each other (a fence marker inside an open comment is not a fence,
+ * and `<!--` inside a fence is literal), which only one pass in document order can track. `label`
+ * is carried through so a `LocateError` can name the document it failed against instead of a
+ * hardcoded file name.
  */
 function docOf(text, label) {
   const lines = text.split('\n')
-  const { fenceLines } = scanFences(text)
-  const commentLines = scanCommentLines(lines, fenceLines)
+  const { fenceLines, commentLines } = scanFences(text)
   const gapLines = new Set([...fenceLines, ...commentLines])
   const headings = new Set()
   for (const [i, line] of lines.entries()) {
@@ -275,14 +252,19 @@ function locateParagraph(doc, range, description, spec) {
 
 /**
  * The one line in `doc.lines[range.start, range.end)` that matches `pattern` and sits outside
- * every gap. Throws `LocateError`, naming `doc.label` and `description`, if zero or more than one
- * line matches: a checklist line hidden inside an HTML comment does not count, because it never
- * renders in the pull request a contributor opens.
+ * every gap, returned as `{ index, line }`. Throws `LocateError`, naming `doc.label` and
+ * `description`, if zero or more than one line matches: a checklist line hidden inside an HTML
+ * comment does not count, because it never renders in the pull request a contributor opens. The
+ * INDEX is part of the return value on purpose: a caller that needs it back (to build a range
+ * starting after the matched line, say) must not re-derive it with `doc.lines.indexOf(line)`,
+ * which finds the first line with that TEXT regardless of gaps and can silently pick a gapped
+ * copy of the same wording over the one this function just located.
  */
 function locateLine(doc, range, pattern, description) {
   const matches = []
   for (let i = range.start; i < range.end; i += 1) {
-    if (!doc.gapLines.has(i) && pattern.test(doc.lines[i])) matches.push(doc.lines[i])
+    if (!doc.gapLines.has(i) && pattern.test(doc.lines[i]))
+      matches.push({ index: i, line: doc.lines[i] })
   }
   if (matches.length !== 1) {
     throw new LocateError(
@@ -350,9 +332,11 @@ function blocksInRange(doc, range) {
 
 /**
  * Asserts that `doc`'s blocks in `range` are EXACTLY `expected`, in the same order: same count,
- * same kind at each position, and (where `expected[i].firstLine` is given) the same opening
- * pattern. Catches a paragraph interposed, reordered, or appended, and a fence or comment block
- * added where none was reviewed.
+ * same kind at each position, (where `expected[i].firstLine` is given) the same opening pattern,
+ * and (where `expected[i].from` is given) the same starting line. Catches a paragraph interposed,
+ * reordered, or appended, and a fence or comment block added where none was reviewed. `from` is
+ * for a block whose IDENTITY matters, not only its kind: a fence sitting in the right slot but
+ * opened somewhere else in the file is a different fence, not the one the run was reviewed with.
  */
 function assertCompleteRun(doc, range, label, expected) {
   const blocks = blocksInRange(doc, range)
@@ -375,23 +359,32 @@ function assertCompleteRun(doc, range, label, expected) {
         `"${label}" block ${i + 1} does not start with the expected wording`,
       )
     }
+    if (spec.from !== undefined) {
+      assert.equal(
+        block.from,
+        spec.from,
+        `"${label}" block ${i + 1} is expected to start at line ${spec.from}; found line ${block.from}`,
+      )
+    }
   })
 }
 
 /**
- * Asserts `text` contains exactly one markdown link and that its target is `expectedTarget`,
+ * Locates exactly one markdown link in `text` and asserts that its target is `expectedTarget`,
  * then returns `text` with the link markup stripped down to its label, for the caller's own
- * digest. The target is pinned as its own property: the label wording and the destination a
- * contributor is sent to are two separate things a change could move independently.
+ * digest. Zero or more than one link is a LOCATION failure (`LocateError`, naming `label`), not a
+ * wording change: it means the text this function was asked to read does not have the single,
+ * known link shape it was written for. A wrong target, once a single link is found, is a wording
+ * change instead, and stays an assertion: the target is pinned as its own property, because the
+ * label wording and the destination a contributor is sent to are two separate things a change
+ * could move independently.
  */
 function locateSingleLink(label, text, expectedTarget) {
   const linkPattern = /\[([^[\]]*)\]\(([^()]*)\)/g
   const links = [...text.matchAll(linkPattern)]
-  assert.equal(
-    links.length,
-    1,
-    `expected exactly one markdown link in "${label}"; found ${links.length}`,
-  )
+  if (links.length !== 1) {
+    throw new LocateError(`expected exactly one markdown link in "${label}"; found ${links.length}`)
+  }
   assert.equal(
     links[0][2],
     expectedTarget,
@@ -627,11 +620,79 @@ test('row: an extra paragraph appended after the affirmation is red', () => {
     'One more paragraph nobody reviewed.',
   ].join('\n')
   const doc = docOf(text, 'fixture-template.md')
-  const ruleLine = locateLine(doc, { start: 0, end: doc.lines.length }, /^---$/, 'rule')
-  const ruleIndex = doc.lines.indexOf(ruleLine)
+  const { index: ruleIndex } = locateLine(doc, { start: 0, end: doc.lines.length }, /^---$/, 'rule')
   assert.throws(() => {
     assertCompleteRun(doc, { start: ruleIndex + 1, end: doc.lines.length }, 'affirmation run', [
       { type: 'paragraph', firstLine: /^By opening this pull request\b/ },
+    ])
+  }, assert.AssertionError)
+})
+
+test('row: a `---` line inside a comment above the real rule still finds the real rule', () => {
+  const text = [
+    '<!--',
+    '---',
+    '-->',
+    '',
+    '## Summary',
+    '',
+    '---',
+    '',
+    'By opening this pull request, I confirm this.',
+  ].join('\n')
+  const doc = docOf(text, 'fixture-template.md')
+  const { index: ruleIndex } = locateLine(doc, { start: 0, end: doc.lines.length }, /^---$/, 'rule')
+  assertCompleteRun(doc, { start: ruleIndex + 1, end: doc.lines.length }, 'affirmation run', [
+    { type: 'paragraph', firstLine: /^By opening this pull request\b/ },
+  ])
+})
+
+test('row: a comment holding a lone fence marker does not swallow the heading below it', () => {
+  const text = ['<!--', '```', '-->', '', '## Pinned Heading', 'body'].join('\n')
+  const doc = docOf(text, 'fixture.md')
+  const range = locateSection(doc, /^## Pinned Heading\b/, 2)
+  assert.equal(range.start, 4)
+})
+
+test('row: a bullet with two links throws LocateError, not an assertion', () => {
+  const text = '- [one](https://example.invalid/a) and [two](https://example.invalid/b).'
+  assert.throws(
+    () => locateSingleLink('two-link bullet', text, 'https://example.invalid/a'),
+    LocateError,
+  )
+})
+
+test("row: a fixture where the run's own fence is not the DCO fence is red", () => {
+  const text = [
+    '## Licensing your contribution',
+    '',
+    'Nave is MIT licensed, first paragraph.',
+    '',
+    'By submitting a contribution you also certify, second paragraph.',
+    '',
+    '```text',
+    'not the dco',
+    '```',
+    '',
+    '### Content you did not write yourself',
+    '',
+    '```text',
+    'Developer Certificate of Origin elsewhere',
+    '```',
+  ].join('\n')
+  const doc = docOf(text, 'fixture.md')
+  const licRange = locateSection(doc, /^## Licensing your contribution\b/, 2)
+  const nextRange = locateSection(doc, /^### Content you did not write yourself\b/, 3)
+  const dcoFence = locateFence(
+    fences(text),
+    (fence) => fence.content.startsWith('Developer Certificate of Origin'),
+    'Developer Certificate of Origin',
+  )
+  assert.throws(() => {
+    assertCompleteRun(doc, { start: licRange.start + 1, end: nextRange.start }, 'licensing run', [
+      { type: 'paragraph', firstLine: /^Nave is MIT licensed\b/ },
+      { type: 'paragraph', firstLine: /^By submitting a contribution\b/ },
+      { type: 'fence', from: dcoFence.from - 1 },
     ])
   }, assert.AssertionError)
 })
@@ -826,6 +887,16 @@ test('CONTRIBUTING.md: the contributor licence terms run, complete, and the DCO'
   )
   const paragraphRange = afterHeading(range)
 
+  // Located FIRST, so the run below can check that its own third block IS the DCO fence (the
+  // same opener line), not merely a fence somewhere in the file: the by-act certification
+  // paragraph says the text in this fence is the full document it refers to, which is a claim
+  // about THIS fence sitting right here, not about a fence of this shape existing anywhere.
+  const dcoFence = locateFence(
+    fences(CONTRIBUTING),
+    (fence) => fence.content.startsWith('Developer Certificate of Origin'),
+    'Developer Certificate of Origin',
+  )
+
   assertCompleteRun(
     CONTRIBUTING_DOC,
     { start: paragraphRange.start, end: disclosureRange.start },
@@ -833,7 +904,7 @@ test('CONTRIBUTING.md: the contributor licence terms run, complete, and the DCO'
     [
       { type: 'paragraph', firstLine: /^Nave is MIT licensed\b/ },
       { type: 'paragraph', firstLine: /^By submitting a contribution you also certify\b/ },
-      { type: 'fence' },
+      { type: 'fence', from: dcoFence.from - 1 },
     ],
   )
 
@@ -853,11 +924,6 @@ test('CONTRIBUTING.md: the contributor licence terms run, complete, and the DCO'
     '92b4002b5ad1fac06a56d686200600a6370c78e61a5807fca719035a2930d034',
   )
 
-  const dcoFence = locateFence(
-    fences(CONTRIBUTING),
-    (fence) => fence.content.startsWith('Developer Certificate of Origin'),
-    'Developer Certificate of Origin',
-  )
   const fenceLines = CONTRIBUTING_DOC.lines.slice(dcoFence.from - 1, dcoFence.to + 2)
   assertVerbatim(
     'CONTRIBUTING.md Developer Certificate of Origin fence (with markers)',
@@ -883,7 +949,7 @@ const TEMPLATE_DOC = docOf(TEMPLATE, '.github/PULL_REQUEST_TEMPLATE.md')
 const TEMPLATE_FULL_RANGE = { start: 0, end: TEMPLATE_DOC.lines.length }
 
 test('PULL_REQUEST_TEMPLATE.md: the disclosure checklist line', () => {
-  const line = locateLine(
+  const { line } = locateLine(
     TEMPLATE_DOC,
     TEMPLATE_FULL_RANGE,
     /^- \[ \] Anything in this change that was copied or adapted from outside this repository/,
@@ -897,7 +963,7 @@ test('PULL_REQUEST_TEMPLATE.md: the disclosure checklist line', () => {
 })
 
 test('PULL_REQUEST_TEMPLATE.md: the printed-text checklist line', () => {
-  const line = locateLine(
+  const { line } = locateLine(
     TEMPLATE_DOC,
     TEMPLATE_FULL_RANGE,
     /^- \[ \] Any text this change prints or ships states its constraint in words/,
@@ -911,8 +977,12 @@ test('PULL_REQUEST_TEMPLATE.md: the printed-text checklist line', () => {
 })
 
 test('PULL_REQUEST_TEMPLATE.md: the licence affirmation run, complete', () => {
-  const ruleLine = locateLine(TEMPLATE_DOC, TEMPLATE_FULL_RANGE, /^---$/, 'horizontal rule')
-  const ruleIndex = TEMPLATE_DOC.lines.indexOf(ruleLine)
+  const { index: ruleIndex } = locateLine(
+    TEMPLATE_DOC,
+    TEMPLATE_FULL_RANGE,
+    /^---$/,
+    'horizontal rule',
+  )
   const affirmationRange = { start: ruleIndex + 1, end: TEMPLATE_DOC.lines.length }
 
   assertCompleteRun(TEMPLATE_DOC, affirmationRange, 'PULL_REQUEST_TEMPLATE.md affirmation run', [

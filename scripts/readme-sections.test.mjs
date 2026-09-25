@@ -17,7 +17,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { bodyOf, fences, headingLines, readReadme, sectionRange } from './readme-sections.mjs'
+import {
+  bodyOf,
+  fences,
+  headingLines,
+  readReadme,
+  scanFences,
+  sectionRange,
+} from './readme-sections.mjs'
 
 const headingsOf = (text) => {
   const lines = text.split('\n')
@@ -116,4 +123,26 @@ test("a fence's info string is trimmed, and `lang` is its first word lowercased"
   const [fence] = fences(['```  JSON  title=x  ', '{}', '```'].join('\n'))
   assert.equal(fence.info, 'JSON  title=x')
   assert.equal(fence.lang, 'json')
+})
+
+// scanFences is also the one place HTML comment blocks are tracked, so a second, independent
+// comment scanner never has to reconcile its own state against the fence state (or vice versa).
+test('a lone fence marker inside a comment opens no fence, and the paragraph after the comment stays outside every fence', () => {
+  const md = ['<!--', '```', '-->', '', 'A real paragraph, not fenced.'].join('\n')
+  const { fences: found, fenceLines } = scanFences(md)
+  assert.deepEqual(found, [])
+  assert.equal(fenceLines.has(4), false, 'the paragraph after the comment must not be a fence line')
+})
+
+test('a complete fence inside a comment is not returned by fences()', () => {
+  const md = ['<!--', '```text', 'hidden', '```', '-->', ''].join('\n')
+  assert.deepEqual(fences(md), [])
+})
+
+test('`<!--` inside a fence opens no comment', () => {
+  const md = ['```text', '<!--', 'still fence content', '```', '', 'After.'].join('\n')
+  const { fences: found, commentLines } = scanFences(md)
+  assert.equal(found.length, 1)
+  assert.equal(found[0].content, '<!--\nstill fence content')
+  assert.equal(commentLines.size, 0)
 })
