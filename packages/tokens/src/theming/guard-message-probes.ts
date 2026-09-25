@@ -253,7 +253,7 @@ export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = 
   },
   {
     label: "the emitted-notice guard's absent-notice refusal",
-    // Review blue row 2. CSS carrying no notice at all is that refusal's own
+    // CSS carrying no notice at all is that refusal's own
     // failing direction; the notice argument is the real shipped constant, never a literal.
     capture: () =>
       capturedFailureMessage(() =>
@@ -291,8 +291,8 @@ export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = 
 
 /**
  * The one reachable `assertNoticeIsEmitted` message that CANNOT join the registry above, and
- * why — that round's review, blue row 2, whose whole content is that this is a
- * STRUCTURAL exclusion rather than an oversight. Its composed-comment-line refusal interpolates
+ * why: this is a STRUCTURAL exclusion rather than an oversight. Its composed-comment-line
+ * refusal interpolates
  * `findConformanceFraming`'s own `${reason}`, and a reason always quotes the forbidden phrase
  * it found ("contains the word \"meets\""). Probing it would therefore feed that phrase straight
  * back into `findConformanceFraming` and report an R36 violation against the guard that just
