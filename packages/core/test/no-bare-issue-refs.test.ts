@@ -415,6 +415,61 @@ describe('isLawfulNonReference: the excluded shapes (ported, both directions)', 
     expect(qualified.matchAll(BARE_ISSUE_REF).toArray()).toEqual([])
     expect(sitesInLine(`see ${HASH}343 for the ruling`)).toEqual([343])
   })
+
+  // The lookbehind's whole contract, pinned as a property rather than as the two characters it
+  // has already had to lose: no character other than a word character directly before the hash
+  // excludes a reference. A new punctuation member added to the class reds here even before any
+  // site in the tree uses that spelling.
+  it('only a word character directly before the hash excludes a reference', () => {
+    const nonWord = [
+      '/',
+      '-',
+      '.',
+      ',',
+      ';',
+      ':',
+      '!',
+      '?',
+      '@',
+      '$',
+      '%',
+      '^',
+      '&',
+      '*',
+      '+',
+      '=',
+      '~',
+      '`',
+      '|',
+      '<',
+      '>',
+      '(',
+      ')',
+      '[',
+      ']',
+      '{',
+      '}',
+      '"',
+      "'",
+      '\\',
+      ' ',
+    ]
+    for (const c of nonWord) {
+      expect(
+        `x${c}${HASH}12 y`
+          .matchAll(BARE_ISSUE_REF)
+          .map((m) => m[1])
+          .toArray(),
+        `${JSON.stringify(c)} directly before the hash must not excuse a reference`,
+      ).toEqual(['12'])
+    }
+    for (const c of ['a', 'Z', '0', '_']) {
+      expect(
+        `x${c}${HASH}12 y`.matchAll(BARE_ISSUE_REF).toArray(),
+        `${JSON.stringify(c)} is a word character and still excludes the reference`,
+      ).toEqual([])
+    }
+  })
 })
 
 /**

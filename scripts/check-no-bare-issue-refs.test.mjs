@@ -34,12 +34,13 @@
  * repository's own hyphenated-prefix prose for "before/after issue N" (a hyphen directly followed
  * by a bare reference, e.g. `pre-` or `post-` immediately before the `#`), and what `/` silently
  * excluded was prose ending a path-like segment directly before a bare reference (e.g. `R27/`
- * immediately before the `#`) plus a handful of test fixtures asserting on a different guard's
- * formatted `#<number>` output text. Both are the bare form this guard exists to catch, not a
- * spelling to spare. Every site either shape had protected was swept across the tree (the
- * reasoning relocated into words, per this file's own rule); only the sites pinned as rows below
- * sit in this file itself, and a pinned row per spelling stops the class from quietly regaining
- * either member.
+ * immediately before the `#`). Both are the bare form this guard exists to catch, not a spelling
+ * to spare, and every such site was swept across the tree with its reasoning relocated into words,
+ * per this file's own rule. Removing `/` also exposed three test fixtures that were never
+ * references at all: regex literals asserting on another script's printed `#<number>` output
+ * format. Those keep their digits and spell the `#` apart instead, as the rows in this file do.
+ * The rows below pin the general property rather than a list of characters: no character other
+ * than a word character directly before the `#` excuses a reference.
  *
  * The digit run is capped at four and `.css` files are skipped from the main
  * scan, both for one reason: a CSS hex colour is also a `#` followed by digits, and an all-decimal
@@ -376,6 +377,60 @@ test('a slash directly before the hash no longer excuses a genuine reference', (
     ['409'],
     'the same shape written as bare prose citing a requirement number',
   )
+})
+
+// The lookbehind's whole contract, pinned as a property rather than as the two characters it
+// has already had to lose: no character other than a word character directly before the hash
+// excludes a reference. A new punctuation member added to the class reds here even before any
+// site in the tree uses that spelling.
+test('only a word character directly before the hash excludes a reference', () => {
+  const nonWord = [
+    '/',
+    '-',
+    '.',
+    ',',
+    ';',
+    ':',
+    '!',
+    '?',
+    '@',
+    '$',
+    '%',
+    '^',
+    '&',
+    '*',
+    '+',
+    '=',
+    '~',
+    '`',
+    '|',
+    '<',
+    '>',
+    '(',
+    ')',
+    '[',
+    ']',
+    '{',
+    '}',
+    '"',
+    "'",
+    '\\',
+    ' ',
+  ]
+  for (const c of nonWord) {
+    assert.deepEqual(
+      [...`x${c}${HASH}12 y`.matchAll(BARE_ISSUE_REF)].map((m) => m[1]),
+      ['12'],
+      `${JSON.stringify(c)} directly before the hash must not excuse a reference`,
+    )
+  }
+  for (const c of ['a', 'Z', '0', '_']) {
+    assert.deepEqual(
+      [...`x${c}${HASH}12 y`.matchAll(BARE_ISSUE_REF)],
+      [],
+      `${JSON.stringify(c)} is a word character and still excludes the reference`,
+    )
+  }
 })
 
 test('a six-digit hex colour is out of range, and a CSS comment body is still scanned', () => {
