@@ -125,7 +125,11 @@ export function checkAncestryAndReport(prs, isAncestor) {
  * `git merge-base --is-ancestor <sha> origin/main`, run inside this checkout.
  */
 function isAncestorOfOriginMain(sha) {
-  const result = spawnSync('git', ['merge-base', '--is-ancestor', sha, 'origin/main'])
+  // NOSONAR on the three spawn lines in this file (rule S4036, PATH-resolved executable): this
+  // is a manual tool a maintainer runs in their own checkout, and running THEIR git and gh is
+  // the point. It never runs in CI and never takes a command from its input. The shipped
+  // gates spawn pnpm and npm the same way.
+  const result = spawnSync('git', ['merge-base', '--is-ancestor', sha, 'origin/main']) // NOSONAR
   return result.status === 0
 }
 
@@ -140,10 +144,10 @@ function main() {
   })
 
   // The ancestry assertion below is only as good as `origin/main` being current.
-  execFileSync('git', ['fetch', 'origin', 'main'], { stdio: 'inherit' })
+  execFileSync('git', ['fetch', 'origin', 'main'], { stdio: 'inherit' }) // NOSONAR
 
   const raw = execFileSync(
-    'gh',
+    'gh', // NOSONAR
     [
       'pr',
       'list',
