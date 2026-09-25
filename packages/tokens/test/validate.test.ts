@@ -482,7 +482,7 @@ describe('SUPPLIED vs MISSING — a name the theming half emits unconditionally 
   ])
 
   it("Nave's OWN bundled DTCG source (declaring none of the six contract names) reports all six SUPPLIED, none MISSING", () => {
-    // The bundled tokens.json declares zero colour tokens (R27/#409's own measurement) —
+    // The bundled tokens.json declares zero colour tokens (R27's own measurement) —
     // reproduced here as an empty DTCG source, since only the name-set matters.
     const notDeclared = computeMissing(realManifest, 'json', JSON.stringify({}))
     expect(notDeclared).toHaveLength(realManifest.tokens.length)

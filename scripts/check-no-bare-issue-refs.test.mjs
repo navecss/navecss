@@ -18,25 +18,28 @@
  *
  * THE REGEX, stated rather than left to be read off the source:
  *
- *     /(?<![\w/])#(\d{1,4})(?!\d)/g
+ *     /(?<!\w)#(\d{1,4})(?!\d)/g
  *
- * The lookbehind excludes the shape a fully qualified `owner/repo#N` reference always has right
- * before the `#` (a word character, since `repo` ends in one), so any `owner/repo#N` or
- * `repo#N` spelling is excluded by construction rather than by a
- * list of spellings. The `/` member is a narrower, separate exclusion for a path- or
- * URL-fragment-like `word/#N` spelling (a bare fragment identifier outside an `href=`/`url(`
- * context); it is not needed for the qualified form above, which the word-character member
- * already excludes on its own.
+ * The lookbehind excludes exactly one shape: a word character directly before the `#`, which is
+ * what a fully qualified `owner/repo#N` reference always has right there (`repo` ends in a word
+ * character), so any `owner/repo#N` or `repo#N` spelling is excluded by construction rather than
+ * by a list of spellings. Nothing else is excused by this lookbehind; a URL or SVG fragment
+ * identifier (`url(#123)`, `href="#123"`) is handled separately, by `isLawfulNonReference`'s own
+ * `url(`/`href=` clause below.
  *
- * THE CLASS USED TO ALSO CARRY A `-` MEMBER, REMOVED because it excluded the wrong population.
- * The stated reason for it was the same "qualified form" reasoning above, but a qualified
- * reference's repo segment ends in a word character, never a bare hyphen, so `-` excluded no
- * qualified spelling at all. What it silently excluded instead was this repository's own
- * hyphenated-prefix prose for "before/after issue N" (a hyphen directly followed by a bare
- * reference, e.g. `pre-` or `post-` immediately before the `#`), which IS the bare form this
- * guard exists to catch, not a spelling to spare. Every site that
- * shape had protected is swept below (the reasoning relocated into words, per this file's own
- * rule), and a pinned row per spelling stops the class from quietly regaining it.
+ * THE CLASS USED TO ALSO CARRY `-` AND `/` MEMBERS, BOTH REMOVED because they excluded the wrong
+ * population. The stated reason for both was the same "qualified form" reasoning above, but a
+ * qualified reference's repo segment ends in a word character, never a bare hyphen or slash, so
+ * neither excluded a single qualified spelling. What `-` silently excluded instead was this
+ * repository's own hyphenated-prefix prose for "before/after issue N" (a hyphen directly followed
+ * by a bare reference, e.g. `pre-` or `post-` immediately before the `#`), and what `/` silently
+ * excluded was prose ending a path-like segment directly before a bare reference (e.g. `R27/`
+ * immediately before the `#`) plus a handful of test fixtures asserting on a different guard's
+ * formatted `#<number>` output text. Both are the bare form this guard exists to catch, not a
+ * spelling to spare. Every site either shape had protected was swept across the tree (the
+ * reasoning relocated into words, per this file's own rule); only the sites pinned as rows below
+ * sit in this file itself, and a pinned row per spelling stops the class from quietly regaining
+ * either member.
  *
  * The digit run is capped at four and `.css` files are skipped from the main
  * scan, both for one reason: a CSS hex colour is also a `#` followed by digits, and an all-decimal
@@ -110,7 +113,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 /**
  * A bare `#<digits>`, fenced as the docblock above describes.
  */
-const BARE_ISSUE_REF = /(?<![\w/])#(\d{1,4})(?!\d)/g
+const BARE_ISSUE_REF = /(?<!\w)#(\d{1,4})(?!\d)/g
 
 /**
  * A `#` followed by digits that is lawfully NOT an issue reference. Judged on the characters
@@ -354,22 +357,24 @@ test('the qualified forms are excluded, and the same number written bare is not'
   )
 })
 
-// A residual left DELIBERATELY excluded, not closed by this pass: a `/` directly before the
-// `#` is excluded whether or not it sits inside a qualified `owner/repo#N` reference, because
-// closing it would also flag several unrelated fixtures elsewhere in this repository that
-// assert on formatted `#<number>` output text (a different guard's PR-number fixtures), which
-// is out of this fix's scope. Pinned here so a future narrowing of the class states that
-// trade-off rather than closing it by accident.
-test('a slash directly before the hash still excludes the reference, even in bare prose', () => {
+// The class used to also carry a `/` member, which excused these two shapes by mistake (see the
+// docblock above `BARE_ISSUE_REF` for the full history). Pinned here so the class cannot quietly
+// regain it.
+test('a slash directly before the hash no longer excuses a genuine reference', () => {
   assert.deepEqual(
     [...`see word${HASH}123 here`.matchAll(BARE_ISSUE_REF)],
     [],
-    'a word character immediately before the hash already excludes this (unaffected by this fix)',
+    'a word character immediately before the hash still excludes this (unaffected by this fix)',
   )
   assert.deepEqual(
-    [...`see a/${HASH}123 here`.matchAll(BARE_ISSUE_REF)],
-    [],
-    'a slash immediately before the hash stays excluded, as a known residual',
+    [...`see a/${HASH}123 here`.matchAll(BARE_ISSUE_REF)].map((m) => m[1]),
+    ['123'],
+    'a slash immediately before the hash no longer excludes a bare-prose reference',
+  )
+  assert.deepEqual(
+    [...`the R27/${HASH}409 measurement`.matchAll(BARE_ISSUE_REF)].map((m) => m[1]),
+    ['409'],
+    'the same shape written as bare prose citing a requirement number',
   )
 })
 
