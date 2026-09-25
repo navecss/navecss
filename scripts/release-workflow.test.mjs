@@ -4,10 +4,10 @@
  * The npm-side trusted publisher for each package names this workflow by FILENAME and allows it
  * to stage only. Nothing on the registry checks the workflow's contents, so the properties that
  * make the arrangement safe live in this file and are pinned here as text: the exact filename,
- * a manual trigger that can only run from `main`, an OIDC token and no stored one, a
- * GitHub-hosted runner, an exactly pinned npm, no cache a pull request could have written, and a
- * single release step that is the root `release` script. Parsed as plain text, the same choice
- * `check-actions-pinned-shas.mjs` makes for the same files.
+ * a manual trigger that can only run from `main`, the `release` environment, an OIDC token and
+ * no stored one, a GitHub-hosted runner, an exactly pinned npm, no cache a pull request could
+ * have written, and a single release step that is the root `release` script. Parsed as plain
+ * text, the same choice `check-actions-pinned-shas.mjs` makes for the same files.
  */
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -55,10 +55,36 @@ test('the workflow is triggered by hand only', () => {
   assert.deepEqual(keys, ['workflow_dispatch'])
 })
 
-// ROW: a manual run can target any branch, and the trusted publisher does not restrict the ref,
-// so the guard that keeps a release to reviewed code on main has to be in the workflow.
+// ROW: a manual run can target any branch, so the first guard that keeps a release to reviewed
+// code on main is in the workflow itself. A branch that edits this file can drop it, which is why
+// the next row exists.
 test('the staging job runs only from main', () => {
   assert.match(workflowCode(), /^ {4}if: github\.ref == 'refs\/heads\/main'$/m)
+})
+
+// ROW: the `if:` above is only the first guard, and a branch that edits this file can drop it.
+// The `release` environment is the second, resting on two settings kept outside this repo: the
+// environment's deployment branches restricted to `main` (GitHub then refuses to run the job from
+// another branch while it names the environment), and each package's npm trusted publisher
+// naming the same environment (npm then refuses a token from a run that dropped the line). This
+// test pins only the workflow text, `environment: release`; it cannot see either setting.
+test('the staging job runs in the release environment', () => {
+  assert.match(workflowCode(), /^ {4}environment: release$/m)
+})
+
+// ROW: the two rows above match any line indented as a job-level key, which scopes them to the
+// staging job only while it is the workflow's one job. A second job would let them pass on its
+// lines instead, so adding one has to revisit them.
+test('the staging job is the only job in the workflow', () => {
+  const lines = workflowCode().split('\n')
+  const jobsIndex = lines.indexOf('jobs:')
+  assert.ok(jobsIndex !== -1, 'release.yml must have a jobs: block')
+  const rest = lines.slice(jobsIndex + 1)
+  const end = rest.findIndex((line) => line.length > 0 && !line.startsWith(' '))
+  const jobIds = (end === -1 ? rest : rest.slice(0, end))
+    .filter((line) => /^ {2}\S/.test(line))
+    .map((line) => line.trim().replace(/:.*$/, ''))
+  assert.deepEqual(jobIds, ['stage'])
 })
 
 // ROW: widened past the one form (`secrets.NAME`) the previous pattern caught. `secrets['NAME']`
