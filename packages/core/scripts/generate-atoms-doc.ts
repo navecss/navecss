@@ -108,9 +108,11 @@ export function readSections(
 }
 
 /**
-The atom's base declarations as inline-code `prop: value;` entries, `<br>`-joined.
+The atom's base declarations as inline-code `prop: value;` entries, `<br>`-joined. Exported so
+`generate-skill.ts` renders the same atom entries in `SKILL.md` without re-typing this shape
+(AC-consumer-constraints-32: identical in content to `ATOMS.md`'s row).
  */
-function renderDeclarations(declarations: Record<string, string>): string {
+export function renderDeclarations(declarations: Record<string, string>): string {
   const entries = Object.entries(declarations)
   if (entries.length === 0) return '—'
   return entries.map(([prop, value]) => `\`${prop}: ${value};\``).join('<br>')
