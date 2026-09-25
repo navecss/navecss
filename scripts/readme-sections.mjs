@@ -124,15 +124,16 @@ export function fences(body) {
 }
 
 /**
- * The line indexes that are REAL markdown headings: `#`-prefixed and outside every fence. A
- * `#` line inside a fence is a shell comment, and reading it as a heading truncates the
- * section that contains it.
+ * The line indexes that are REAL markdown headings: `#`-prefixed and outside every fence and
+ * every HTML comment block. A `#` line inside a fence is a shell comment, and a `#` line inside
+ * an HTML comment is never rendered at all; reading either as a heading truncates the section
+ * that contains it.
  */
 export function headingLines(lines) {
-  const { fenceLines } = scanFences(lines.join('\n'))
+  const { fenceLines, commentLines } = scanFences(lines.join('\n'))
   const headings = new Set()
   for (const [i, line] of lines.entries()) {
-    if (!fenceLines.has(i) && /^#{1,6}\s/.test(line)) headings.add(i)
+    if (!fenceLines.has(i) && !commentLines.has(i) && /^#{1,6}\s/.test(line)) headings.add(i)
   }
   return headings
 }

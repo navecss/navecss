@@ -415,6 +415,17 @@ function assertClearedText(label, text, expectedSha256) {
 }
 
 /**
+ * Locates the one paragraph in `doc` restricted to `range` whose first line matches
+ * `spec.firstLine`, using `label` as both the locator's own description and `assertClearedText`'s
+ * label, and asserts its folded digest equals `spec.digest`. The single combination every
+ * paragraph pin in this file needs, so a table of `{ label, firstLine, digest }` rows can drive
+ * them without repeating the `locateParagraph` / `assertClearedText` pairing at each one.
+ */
+function assertClearedParagraph(doc, range, label, spec) {
+  assertClearedText(label, locateParagraph(doc, range, label, spec), spec.digest)
+}
+
+/**
  * The text of a heading's whole section, HEADING INCLUDED, from `lines[range.start]` up to (but
  * not including) the next heading of the same or shallower depth, so a subsection stays inside
  * the section it belongs to, with any trailing blank separator lines trimmed off the end. This
@@ -567,49 +578,60 @@ test('row: a bullet whose link points somewhere else fails the link-target asser
   }, assert.AssertionError)
 })
 
-test('row: an interposed paragraph inside a complete run is red', () => {
-  const text = [
+/**
+ * A "## Licensing your contribution" ... "### Content you did not write yourself" fixture whose
+ * middle is exactly `blocks`, one per line group, so the three mutations of that run (a paragraph
+ * interposed, two paragraphs swapped, a comment block interposed) can share one builder and one
+ * expectation instead of three copies of the same surrounding markdown.
+ */
+function licensingRunFixture(blocks) {
+  return [
     '## Licensing your contribution',
     '',
-    'Nave is MIT licensed, first paragraph.',
-    '',
-    'An interposed paragraph that was never reviewed.',
-    '',
-    'By submitting a contribution you also certify, second paragraph.',
-    '',
+    ...blocks.flatMap((block) => [block, '']),
     '### Content you did not write yourself',
   ].join('\n')
-  const doc = docOf(text, 'fixture.md')
-  const licRange = locateSection(doc, /^## Licensing your contribution\b/, 2)
-  const nextRange = locateSection(doc, /^### Content you did not write yourself\b/, 3)
-  assert.throws(() => {
-    assertCompleteRun(doc, { start: licRange.start + 1, end: nextRange.start }, 'licensing run', [
-      { type: 'paragraph', firstLine: /^Nave is MIT licensed\b/ },
-      { type: 'paragraph', firstLine: /^By submitting a contribution\b/ },
-    ])
-  }, assert.AssertionError)
-})
+}
 
-test('row: two paragraphs swapped inside a complete run is red', () => {
-  const text = [
-    '## Licensing your contribution',
-    '',
-    'By submitting a contribution you also certify, second paragraph.',
-    '',
-    'Nave is MIT licensed, first paragraph.',
-    '',
-    '### Content you did not write yourself',
-  ].join('\n')
-  const doc = docOf(text, 'fixture.md')
-  const licRange = locateSection(doc, /^## Licensing your contribution\b/, 2)
-  const nextRange = locateSection(doc, /^### Content you did not write yourself\b/, 3)
-  assert.throws(() => {
-    assertCompleteRun(doc, { start: licRange.start + 1, end: nextRange.start }, 'licensing run', [
-      { type: 'paragraph', firstLine: /^Nave is MIT licensed\b/ },
-      { type: 'paragraph', firstLine: /^By submitting a contribution\b/ },
-    ])
-  }, assert.AssertionError)
-})
+const LICENSING_RUN_MUTATIONS = [
+  {
+    name: 'row: an interposed paragraph inside a complete run is red',
+    blocks: [
+      'Nave is MIT licensed, first paragraph.',
+      'An interposed paragraph that was never reviewed.',
+      'By submitting a contribution you also certify, second paragraph.',
+    ],
+  },
+  {
+    name: 'row: two paragraphs swapped inside a complete run is red',
+    blocks: [
+      'By submitting a contribution you also certify, second paragraph.',
+      'Nave is MIT licensed, first paragraph.',
+    ],
+  },
+  {
+    name: 'row: an extra comment block inside the licensing run is red',
+    blocks: [
+      'Nave is MIT licensed, first paragraph.',
+      '<!-- an aside nobody reviewed -->',
+      'By submitting a contribution you also certify, second paragraph.',
+    ],
+  },
+]
+
+for (const { name, blocks } of LICENSING_RUN_MUTATIONS) {
+  test(name, () => {
+    const doc = docOf(licensingRunFixture(blocks), 'fixture.md')
+    const licRange = locateSection(doc, /^## Licensing your contribution\b/, 2)
+    const nextRange = locateSection(doc, /^### Content you did not write yourself\b/, 3)
+    assert.throws(() => {
+      assertCompleteRun(doc, { start: licRange.start + 1, end: nextRange.start }, 'licensing run', [
+        { type: 'paragraph', firstLine: /^Nave is MIT licensed\b/ },
+        { type: 'paragraph', firstLine: /^By submitting a contribution\b/ },
+      ])
+    }, assert.AssertionError)
+  })
+}
 
 test('row: an extra paragraph appended after the affirmation is red', () => {
   const text = [
@@ -697,52 +719,39 @@ test("row: a fixture where the run's own fence is not the DCO fence is red", () 
   }, assert.AssertionError)
 })
 
-test('row: an extra comment block inside the licensing run is red', () => {
-  const text = [
-    '## Licensing your contribution',
-    '',
-    'Nave is MIT licensed, first paragraph.',
-    '',
-    '<!-- an aside nobody reviewed -->',
-    '',
-    'By submitting a contribution you also certify, second paragraph.',
-    '',
-    '### Content you did not write yourself',
-  ].join('\n')
-  const doc = docOf(text, 'fixture.md')
-  const licRange = locateSection(doc, /^## Licensing your contribution\b/, 2)
-  const nextRange = locateSection(doc, /^### Content you did not write yourself\b/, 3)
-  assert.throws(() => {
-    assertCompleteRun(doc, { start: licRange.start + 1, end: nextRange.start }, 'licensing run', [
-      { type: 'paragraph', firstLine: /^Nave is MIT licensed\b/ },
-      { type: 'paragraph', firstLine: /^By submitting a contribution\b/ },
-    ])
-  }, assert.AssertionError)
-})
+const FOLD_DIGEST_CASES = [
+  {
+    name: 'row: a heading joined onto the paragraph above it changes the folded digest',
+    before: 'A promise paragraph that ends here.\n\n### A heading\n\nMore text.',
+    after: 'A promise paragraph that ends here. ### A heading\n\nMore text.',
+    same: false,
+  },
+  {
+    name: 'row: two list items merged onto one line changes the folded digest',
+    before: '- First item.\n- Second item.',
+    after: '- First item. Second item.',
+    same: false,
+  },
+  {
+    name: 'row: a paragraph re-wrapped across different line breaks keeps the same folded digest',
+    before: 'One two three four five six seven eight.',
+    after: 'One two three four\nfive six seven eight.',
+    same: true,
+  },
+  {
+    name: 'row: a list item re-wrapped across different line breaks keeps the same folded digest',
+    before: '- One two three four five six.',
+    after: '- One two three\n  four five six.',
+    same: true,
+  },
+]
 
-test('row: a heading joined onto the paragraph above it changes the folded digest', () => {
-  const before = 'A promise paragraph that ends here.\n\n### A heading\n\nMore text.'
-  const after = 'A promise paragraph that ends here. ### A heading\n\nMore text.'
-  assert.notEqual(sha256(fold(before)), sha256(fold(after)))
-})
-
-test('row: two list items merged onto one line changes the folded digest', () => {
-  const before = '- First item.\n- Second item.'
-  const after = '- First item. Second item.'
-  assert.notEqual(sha256(fold(before)), sha256(fold(after)))
-})
-
-test('row: a paragraph re-wrapped across different line breaks keeps the same folded digest', () => {
-  const before = 'One two three four five six seven eight.'
-  const after = 'One two three four\nfive six seven eight.'
-  assert.equal(sha256(fold(before)), sha256(fold(after)))
-})
-
-test('row: a list item re-wrapped across different line breaks keeps the same folded digest', () => {
-  const before = '- One two three four five six.'
-  const after = '- One two three\n  four five six.'
-  assert.equal(sha256(fold(before)), sha256(fold(after)))
-})
+for (const { name, before, after, same } of FOLD_DIGEST_CASES) {
+  test(name, () => {
+    const compare = same ? assert.equal : assert.notEqual
+    compare(sha256(fold(before)), sha256(fold(after)))
+  })
+}
 
 // ---------------------------------------------------------------------------------------------
 // .github/CONTRIBUTING.md
@@ -810,121 +819,98 @@ test('CONTRIBUTING.md: the "Adding a dependency" change-control item', () => {
   )
 })
 
-test('CONTRIBUTING.md: the "Text the build prints or ships" paragraphs run, complete', () => {
-  const range = locateSection(CONTRIBUTING_DOC, /^### Text the build prints or ships\b/, 3)
-  const commitsRange = locateSection(CONTRIBUTING_DOC, /^## Commits\b/, 2)
-  const paragraphRange = afterHeading(range)
+const PRINTED_TEXT_RANGE = afterHeading(
+  locateSection(CONTRIBUTING_DOC, /^### Text the build prints or ships\b/, 3),
+)
+const COMMITS_RANGE = locateSection(CONTRIBUTING_DOC, /^## Commits\b/, 2)
 
+const PRINTED_TEXT_PARAGRAPHS = [
+  {
+    label: 'CONTRIBUTING.md printed-text rule, paragraph 1',
+    firstLine: /^Anything this build can print\b/,
+    digest: '86167c6340875137b57964e33a5fa1980399df70e8bd031eeccc6a99d44bbd8f',
+  },
+  {
+    label: 'CONTRIBUTING.md printed-text rule, paragraph 2',
+    firstLine: /^Two things follow\b/,
+    digest: 'c411688adf284132f6d1ab8feaf69408a038bcc3368ea8a7caf5ecd40da9ece4',
+  },
+  {
+    label: 'CONTRIBUTING.md comments/docblocks/test-names paragraph',
+    firstLine: /^Comments, docblocks and test names are read by contributors\b/,
+    digest: '14e5bc1a2bb431f7d090a236aa73e71d232b6f9ae0e596b6e2ad1d50742b57d1',
+  },
+  {
+    label: 'CONTRIBUTING.md comments/test-names-treated-alike paragraph',
+    firstLine: /^Comments and test names are treated alike\b/,
+    digest: 'a453cca5960313e932e5233a19fc36f7c2ba538a87d7226a71d47a5862524e00',
+  },
+  {
+    label: 'CONTRIBUTING.md "No gate checks any of this" paragraph',
+    firstLine: /^No gate checks any of this\b/,
+    digest: '869d9ea753b3daf0fdd659dff8c6db4a3f4675492e53c28df4f9408cf6561159',
+  },
+]
+
+test('CONTRIBUTING.md: the "Text the build prints or ships" paragraphs run, complete', () => {
   assertCompleteRun(
     CONTRIBUTING_DOC,
-    { start: paragraphRange.start, end: commitsRange.start },
+    { start: PRINTED_TEXT_RANGE.start, end: COMMITS_RANGE.start },
     'CONTRIBUTING.md printed-text paragraphs run',
-    [
-      { type: 'paragraph', firstLine: /^Anything this build can print\b/ },
-      { type: 'paragraph', firstLine: /^Two things follow\b/ },
-      {
-        type: 'paragraph',
-        firstLine: /^Comments, docblocks and test names are read by contributors\b/,
-      },
-      { type: 'paragraph', firstLine: /^Comments and test names are treated alike\b/ },
-      { type: 'paragraph', firstLine: /^No gate checks any of this\b/ },
-    ],
-  )
-
-  assertClearedText(
-    'CONTRIBUTING.md printed-text rule, paragraph 1',
-    locateParagraph(CONTRIBUTING_DOC, paragraphRange, 'printed-text rule paragraph 1', {
-      firstLine: /^Anything this build can print\b/,
-    }),
-    '86167c6340875137b57964e33a5fa1980399df70e8bd031eeccc6a99d44bbd8f',
-  )
-
-  assertClearedText(
-    'CONTRIBUTING.md printed-text rule, paragraph 2',
-    locateParagraph(CONTRIBUTING_DOC, paragraphRange, 'printed-text rule paragraph 2', {
-      firstLine: /^Two things follow\b/,
-    }),
-    'c411688adf284132f6d1ab8feaf69408a038bcc3368ea8a7caf5ecd40da9ece4',
-  )
-
-  assertClearedText(
-    'CONTRIBUTING.md comments/docblocks/test-names paragraph',
-    locateParagraph(
-      CONTRIBUTING_DOC,
-      paragraphRange,
-      'comments, docblocks and test names paragraph',
-      { firstLine: /^Comments, docblocks and test names are read by contributors\b/ },
-    ),
-    '14e5bc1a2bb431f7d090a236aa73e71d232b6f9ae0e596b6e2ad1d50742b57d1',
-  )
-
-  assertClearedText(
-    'CONTRIBUTING.md comments/test-names-treated-alike paragraph',
-    locateParagraph(
-      CONTRIBUTING_DOC,
-      paragraphRange,
-      'comments and test names treated alike paragraph',
-      { firstLine: /^Comments and test names are treated alike\b/ },
-    ),
-    'a453cca5960313e932e5233a19fc36f7c2ba538a87d7226a71d47a5862524e00',
-  )
-
-  assertClearedText(
-    'CONTRIBUTING.md "No gate checks any of this" paragraph',
-    locateParagraph(CONTRIBUTING_DOC, paragraphRange, 'no gate checks any of this paragraph', {
-      firstLine: /^No gate checks any of this\b/,
-    }),
-    '869d9ea753b3daf0fdd659dff8c6db4a3f4675492e53c28df4f9408cf6561159',
+    PRINTED_TEXT_PARAGRAPHS.map(({ firstLine }) => ({ type: 'paragraph', firstLine })),
   )
 })
 
+for (const paragraph of PRINTED_TEXT_PARAGRAPHS) {
+  test(paragraph.label, () => {
+    assertClearedParagraph(CONTRIBUTING_DOC, PRINTED_TEXT_RANGE, paragraph.label, paragraph)
+  })
+}
+
+const LICENSING_TERMS_RANGE = afterHeading(
+  locateSection(CONTRIBUTING_DOC, /^## Licensing your contribution\b/, 2),
+)
+const DISCLOSURE_RANGE = locateSection(
+  CONTRIBUTING_DOC,
+  /^### Content you did not write yourself\b/,
+  3,
+)
+
+// Located FIRST, so the run below can check that its own third block IS the DCO fence (the same
+// opener line), not merely a fence somewhere in the file: the by-act certification paragraph
+// says the text in this fence is the full document it refers to, which is a claim about THIS
+// fence sitting right here, not about a fence of this shape existing anywhere.
+const DCO_FENCE = locateFence(
+  fences(CONTRIBUTING),
+  (fence) => fence.content.startsWith('Developer Certificate of Origin'),
+  'Developer Certificate of Origin',
+)
+
+const LICENSING_TERMS_PARAGRAPHS = [
+  {
+    label: 'CONTRIBUTING.md MIT contribution-licence grant',
+    firstLine: /^Nave is MIT licensed\b/,
+    digest: 'eea4185413babd1589a0b8dbdd5ace95edea346df0941232144443c27a0ffd85',
+  },
+  {
+    label: 'CONTRIBUTING.md by-act DCO certification paragraph',
+    firstLine: /^By submitting a contribution you also certify\b/,
+    digest: '92b4002b5ad1fac06a56d686200600a6370c78e61a5807fca719035a2930d034',
+  },
+]
+
 test('CONTRIBUTING.md: the contributor licence terms run, complete, and the DCO', () => {
-  const range = locateSection(CONTRIBUTING_DOC, /^## Licensing your contribution\b/, 2)
-  const disclosureRange = locateSection(
-    CONTRIBUTING_DOC,
-    /^### Content you did not write yourself\b/,
-    3,
-  )
-  const paragraphRange = afterHeading(range)
-
-  // Located FIRST, so the run below can check that its own third block IS the DCO fence (the
-  // same opener line), not merely a fence somewhere in the file: the by-act certification
-  // paragraph says the text in this fence is the full document it refers to, which is a claim
-  // about THIS fence sitting right here, not about a fence of this shape existing anywhere.
-  const dcoFence = locateFence(
-    fences(CONTRIBUTING),
-    (fence) => fence.content.startsWith('Developer Certificate of Origin'),
-    'Developer Certificate of Origin',
-  )
-
   assertCompleteRun(
     CONTRIBUTING_DOC,
-    { start: paragraphRange.start, end: disclosureRange.start },
+    { start: LICENSING_TERMS_RANGE.start, end: DISCLOSURE_RANGE.start },
     'CONTRIBUTING.md licensing terms run',
     [
-      { type: 'paragraph', firstLine: /^Nave is MIT licensed\b/ },
-      { type: 'paragraph', firstLine: /^By submitting a contribution you also certify\b/ },
-      { type: 'fence', from: dcoFence.from - 1 },
+      ...LICENSING_TERMS_PARAGRAPHS.map(({ firstLine }) => ({ type: 'paragraph', firstLine })),
+      { type: 'fence', from: DCO_FENCE.from - 1 },
     ],
   )
 
-  assertClearedText(
-    'CONTRIBUTING.md MIT contribution-licence grant',
-    locateParagraph(CONTRIBUTING_DOC, paragraphRange, 'MIT contribution-licence grant', {
-      firstLine: /^Nave is MIT licensed\b/,
-    }),
-    'eea4185413babd1589a0b8dbdd5ace95edea346df0941232144443c27a0ffd85',
-  )
-
-  assertClearedText(
-    'CONTRIBUTING.md by-act DCO certification paragraph',
-    locateParagraph(CONTRIBUTING_DOC, paragraphRange, 'by-act DCO certification paragraph', {
-      firstLine: /^By submitting a contribution you also certify\b/,
-    }),
-    '92b4002b5ad1fac06a56d686200600a6370c78e61a5807fca719035a2930d034',
-  )
-
-  const fenceLines = CONTRIBUTING_DOC.lines.slice(dcoFence.from - 1, dcoFence.to + 2)
+  const fenceLines = CONTRIBUTING_DOC.lines.slice(DCO_FENCE.from - 1, DCO_FENCE.to + 2)
   assertVerbatim(
     'CONTRIBUTING.md Developer Certificate of Origin fence (with markers)',
     fenceLines.join('\n'),
@@ -935,10 +921,16 @@ test('CONTRIBUTING.md: the contributor licence terms run, complete, and the DCO'
   // the unit this disclosure was originally reviewed and recorded as.
   assertClearedText(
     'CONTRIBUTING.md "Content you did not write yourself" disclosure',
-    wholeSectionText(CONTRIBUTING_DOC.lines, disclosureRange),
+    wholeSectionText(CONTRIBUTING_DOC.lines, DISCLOSURE_RANGE),
     '5ce4e731003a2bea76600066edfe0335784403297ee1802ac6fc033989ee8181',
   )
 })
+
+for (const paragraph of LICENSING_TERMS_PARAGRAPHS) {
+  test(paragraph.label, () => {
+    assertClearedParagraph(CONTRIBUTING_DOC, LICENSING_TERMS_RANGE, paragraph.label, paragraph)
+  })
+}
 
 // ---------------------------------------------------------------------------------------------
 // .github/PULL_REQUEST_TEMPLATE.md
@@ -948,33 +940,28 @@ const TEMPLATE = read('.github/PULL_REQUEST_TEMPLATE.md')
 const TEMPLATE_DOC = docOf(TEMPLATE, '.github/PULL_REQUEST_TEMPLATE.md')
 const TEMPLATE_FULL_RANGE = { start: 0, end: TEMPLATE_DOC.lines.length }
 
-test('PULL_REQUEST_TEMPLATE.md: the disclosure checklist line', () => {
-  const { line } = locateLine(
-    TEMPLATE_DOC,
-    TEMPLATE_FULL_RANGE,
-    /^- \[ \] Anything in this change that was copied or adapted from outside this repository/,
-    'disclosure checklist line',
-  )
-  assertClearedText(
-    'PULL_REQUEST_TEMPLATE.md disclosure checklist line',
-    line,
-    '464381c42595679977a879e4964cbfdc1440a507ba91c53dd9a84b5423cba3b1',
-  )
-})
+const TEMPLATE_CHECKLIST_LINES = [
+  {
+    label: 'PULL_REQUEST_TEMPLATE.md disclosure checklist line',
+    description: 'disclosure checklist line',
+    pattern:
+      /^- \[ \] Anything in this change that was copied or adapted from outside this repository/,
+    digest: '464381c42595679977a879e4964cbfdc1440a507ba91c53dd9a84b5423cba3b1',
+  },
+  {
+    label: 'PULL_REQUEST_TEMPLATE.md printed-text checklist line',
+    description: 'printed-text checklist line',
+    pattern: /^- \[ \] Any text this change prints or ships states its constraint in words/,
+    digest: 'd4dfd907586824bcceef8e422dde54dddf5474bd2ee9546a181784d134aef811',
+  },
+]
 
-test('PULL_REQUEST_TEMPLATE.md: the printed-text checklist line', () => {
-  const { line } = locateLine(
-    TEMPLATE_DOC,
-    TEMPLATE_FULL_RANGE,
-    /^- \[ \] Any text this change prints or ships states its constraint in words/,
-    'printed-text checklist line',
-  )
-  assertClearedText(
-    'PULL_REQUEST_TEMPLATE.md printed-text checklist line',
-    line,
-    'd4dfd907586824bcceef8e422dde54dddf5474bd2ee9546a181784d134aef811',
-  )
-})
+for (const { label, description, pattern, digest } of TEMPLATE_CHECKLIST_LINES) {
+  test(label, () => {
+    const { line } = locateLine(TEMPLATE_DOC, TEMPLATE_FULL_RANGE, pattern, description)
+    assertClearedText(label, line, digest)
+  })
+}
 
 test('PULL_REQUEST_TEMPLATE.md: the licence affirmation run, complete', () => {
   const { index: ruleIndex } = locateLine(

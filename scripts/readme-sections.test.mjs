@@ -146,3 +146,8 @@ test('`<!--` inside a fence opens no comment', () => {
   assert.equal(found[0].content, '<!--\nstill fence content')
   assert.equal(commentLines.size, 0)
 })
+
+test('a heading-shaped line inside a comment is not in headingLines()', () => {
+  const md = ['<!--', '## Not really a heading', '-->', '', '## Real'].join('\n')
+  assert.deepEqual(headingsOf(md), ['## Real'])
+})
