@@ -2,10 +2,10 @@
 /**
  * Wiring test for the release packaging checks.
  *
- * `changeset publish` publishes packages in dependency order, so a failure in a later package's
- * own publish hook can fire after an earlier package has already been published to an immutable
- * version. So the release runs `check:pack` for the whole workspace once, with the cache
- * bypassed, before `changeset publish` starts. Each package's `prepublishOnly` also keeps
+ * The release stages packages one after another in dependency order, and it stages packed
+ * tarballs, for which npm runs no lifecycle script: a package's own `prepublishOnly` never fires
+ * on this path. So the release runs `check:pack` for the whole workspace once, with the cache
+ * bypassed, before the staging step starts. Each package's `prepublishOnly` also keeps
  * `check:pack`, because a package published on its own by hand never runs the root `release`
  * script, and that per-package hook is the only packaging check on that path.
  */
@@ -25,14 +25,30 @@ function packageScripts(pkg) {
   return JSON.parse(readFileSync(path.join(ROOT, 'packages', pkg, 'package.json'), 'utf8')).scripts
 }
 
-test('the release script runs check:pack, and runs it before changeset publish', () => {
+const STAGE_STEP = 'node scripts/stage-release.mjs'
+
+test('the release script runs check:pack, and runs it before the staging step', () => {
   const release = rootScripts().release
   const gateIndex = release.indexOf('turbo run check:pack --force')
+  const stageIndex = release.indexOf(STAGE_STEP)
   assert.ok(gateIndex !== -1, `release must run check:pack; it reads: ${release}`)
+  assert.ok(stageIndex !== -1, `release must run the staging step; it reads: ${release}`)
   assert.ok(
-    gateIndex < release.indexOf('changeset publish'),
-    `check:pack must run BEFORE changeset publish; release reads: ${release}`,
+    gateIndex < stageIndex,
+    `check:pack must run BEFORE the staging step; release reads: ${release}`,
   )
+})
+
+// ROW: the release ENDS by staging, as its own && token, and nothing in it publishes directly.
+// A direct publish would be refused by a stage-only trusted publisher in CI, but run by hand it
+// would put a version live with no approval step and no provenance. Widened to the bare word
+// `publish` (the last token, `node scripts/stage-release.mjs`, contains no such word), so any
+// spelling of a direct publish call is caught, not only the three named by hand.
+test('the release ends with the staging step and runs no direct publish', () => {
+  const release = rootScripts().release
+  const tokens = release.split(' && ').map((token) => token.trim())
+  assert.equal(tokens.at(-1), STAGE_STEP, `release must end by staging; it reads: ${release}`)
+  assert.doesNotMatch(release, /\bpublish\b/)
 })
 
 // ROW: pins the SHELL SEMANTICS of the wiring, not just substring order, the same mutant

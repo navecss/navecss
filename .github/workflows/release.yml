@@ -1,0 +1,74 @@
+name: release
+
+# Stages a release of the publishable packages on npm. Nothing this workflow does can make a
+# version installable: each package's trusted publisher on npm names this file and allows
+# `npm stage publish` only, so a run uploads the release into the package's staging queue, and a
+# maintainer approves it with two-factor authentication before it goes live. The credential that
+# builds and the credential that publishes are different things, so a compromised pipeline ships
+# nothing on its own.
+#
+# How to release: run `pnpm changeset version`, merge the result to main, then run this workflow
+# from main (Actions tab, "Run workflow"). Approve the staged versions in the order the last step
+# prints, with `npm stage approve <id>` or from the Staged Packages tab on npmjs.com.
+#
+# Properties the arrangement depends on, pinned by scripts/release-workflow.test.mjs:
+# - The file name. npm matches the trusted publisher on it, case-sensitively.
+# - Manual trigger, main only. The trusted publisher does not restrict the branch, so the `if:`
+#   below is what skips a run started from any other ref. A run uses the copy of this file on the
+#   ref it was started from, so a branch that edits this file can drop that check; what stops such
+#   a run from shipping is the approval, and a maintainer approves only what a run on main staged.
+# - Authentication by OIDC (`id-token: write`, granted to this job alone) and no stored token.
+#   npm attaches provenance on its own for a public repository and a public package, so no
+#   `--provenance` flag is passed.
+# - A GitHub-hosted runner; npm does not accept trusted publishing from a self-hosted one.
+# - No dependency cache. A cache written by a pull-request run could otherwise feed the one job
+#   that can stage a release.
+# - A bounded timeout, so a hung registry call cannot hold the OIDC-capable job for hours.
+#
+# npm is pinned exactly to 12.1.0, above every floor this path has (trusted publishing 11.5.1,
+# `npm stage` 11.15.0, provenance 9.5.0), and on the Node the mise pin installs (npm 12 needs
+# ^22.22.2 or ^24.15.0). npm 12 no longer runs dependency install scripts by default; this job
+# goes further and runs no install-time lifecycle script at all, since it is the one job that can
+# stage a release. Both installs pass `--ignore-scripts` (nothing here needs one: the repository's
+# own `prepare` only sets up local git hooks, and `pnpm-workspace.yaml` already keeps dependency
+# build scripts off), and npm stages a packed tarball, for which it runs no lifecycle script.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    name: stage the release on npm
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install mise-pinned toolchain (node + pnpm)
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
+        with:
+          version: 2026.8.3
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install npm 12.1.0 and confirm it is the npm on PATH
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          test "$(npm --version)" = 12.1.0
+
+      - name: Build, check and stage (the root release script)
+        run: pnpm run release

@@ -26,7 +26,7 @@
     "typecheck": "turbo run typecheck",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "pnpm -r run clean && node scripts/check-no-pending-changesets.mjs && turbo run build --force && node scripts/check-no-orphaned-chunks.mjs && turbo run check:pack --force && changeset publish",
+    "release": "pnpm -r run clean && node scripts/check-no-pending-changesets.mjs && turbo run build --force && node scripts/check-no-orphaned-chunks.mjs && turbo run check:pack --force && node scripts/stage-release.mjs",
     "prepare": "husky"
   },
   "devDependencies": {
