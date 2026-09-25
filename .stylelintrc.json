@@ -48,9 +48,9 @@
     ],
 
     "custom-property-pattern": [
-      "^([a-z][a-z0-9]*(-[a-z0-9]+)*)(--[a-z][a-z0-9]*(-[a-z0-9]+)*)?$",
+      "^nave-[a-z][a-z0-9]*(-[a-z0-9]+)*$",
       {
-        "message": "Custom properties must follow --category-name-modifier pattern."
+        "message": "Custom properties must begin with --nave- (R26: every custom property Nave's source authors carries this prefix)."
       }
     ],
 
