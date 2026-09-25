@@ -16,6 +16,12 @@
  * merge commit is not an ancestor of `origin/main` is exactly that shape: GitHub calls it
  * merged, and the tree that matters never received it.
  *
+ * A red means "not on `main` now", which is not always "never": a pull request merged into a
+ * feature branch that is itself still open and headed for `main` reads the same until that
+ * branch lands. The report prints each failing pull request's base branch for exactly that
+ * reason: a base still open is a wait, a base already retired is the loss this check exists
+ * to find.
+ *
  * The repository is derived from the local checkout's `origin` remote, not a flag: the
  * ancestry assertion reads the LOCAL `origin/main`, so the pull requests listed must be
  * `origin`'s own — a repository named on the command line could check some other project's
@@ -220,6 +226,13 @@ export function runMergeAncestryCheck(argv, run) {
   }
 
   const shallowResult = run('git', ['rev-parse', '--is-shallow-repository'])
+  if (shallowResult.status !== 0) {
+    return {
+      exitCode: 2,
+      stdout: '',
+      stderr: shallowResult.stderr || 'could not determine whether this checkout is shallow',
+    }
+  }
   if (shallowResult.stdout.trim() === 'true') {
     return {
       exitCode: 2,
@@ -246,13 +259,21 @@ export function runMergeAncestryCheck(argv, run) {
     'number,mergeCommit,baseRefName,title',
   ])
   if (ghResult.status !== 0) {
-    return { exitCode: 2, stdout: '', stderr: ghResult.stderr }
+    return {
+      exitCode: 2,
+      stdout: '',
+      stderr: ghResult.stderr || '`gh pr list` failed with no output',
+    }
   }
   const prs = mapGhPrListOutput(JSON.parse(ghResult.stdout))
 
   const fetchResult = run('git', ['fetch', 'origin', 'main'])
   if (fetchResult.status !== 0) {
-    return { exitCode: 2, stdout: '', stderr: fetchResult.stderr }
+    return {
+      exitCode: 2,
+      stdout: '',
+      stderr: fetchResult.stderr || '`git fetch origin main` failed with no output',
+    }
   }
 
   const isAncestor = (sha) =>
@@ -274,7 +295,11 @@ function realRun(command, args) {
   // the point. It never runs in CI and never takes a command from its input. The shipped
   // gates spawn pnpm and npm the same way.
   const result = spawnSync(command, args, { encoding: 'utf8' }) // NOSONAR
-  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
+  return {
+    status: result.status,
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? (result.error ? `${command}: ${result.error.message}` : ''),
+  }
 }
 
 /**

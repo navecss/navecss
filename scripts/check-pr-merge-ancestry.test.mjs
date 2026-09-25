@@ -266,6 +266,34 @@ test('runMergeAncestryCheck: a failing gh call exits 2 with its stderr, never a 
   assert.doesNotMatch(result.stdout, /merged pull request/)
 })
 
+test('runMergeAncestryCheck: a gh call that exits with no status and no stderr still exits 2 with a non-empty message', () => {
+  const { run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
+    { when: isShallowCall, reply: { status: 0, stdout: 'false\n' } },
+    { when: isGhListCall, reply: { status: null, stdout: '', stderr: '' } },
+  ])
+  const result = runMergeAncestryCheck([], run)
+  assert.equal(result.exitCode, 2)
+  assert.ok(result.stderr.length > 0, 'stderr must not be empty even when the runner gave none')
+})
+
+test('runMergeAncestryCheck: a shallow check that fails to run exits 2 and never calls gh', () => {
+  const { calls, run } = makeRun([
+    { when: isOriginUrlCall, reply: { status: 0, stdout: ORIGIN_URL } },
+    {
+      when: isShallowCall,
+      reply: { status: 128, stdout: '', stderr: 'fatal: not a git repository' },
+    },
+    { when: isGhListCall, reply: { status: 0, stdout: JSON.stringify([]) } },
+  ])
+  const result = runMergeAncestryCheck([], run)
+  assert.equal(result.exitCode, 2)
+  assert.equal(
+    calls.some((c) => isGhListCall(c.command)),
+    false,
+  )
+})
+
 test('runMergeAncestryCheck: happy path, two merged PRs both ancestors, exit 0', () => {
   const prsJson = JSON.stringify([
     { number: 1, mergeCommit: { oid: 'aaa' }, baseRefName: 'main', title: 'one' },
