@@ -819,10 +819,13 @@ test('CONTRIBUTING.md: the "Adding a dependency" change-control item', () => {
   )
 })
 
-const PRINTED_TEXT_RANGE = afterHeading(
-  locateSection(CONTRIBUTING_DOC, /^### Text the build prints or ships\b/, 3),
-)
-const COMMITS_RANGE = locateSection(CONTRIBUTING_DOC, /^## Commits\b/, 2)
+// Every location below is a FUNCTION, called inside the test that needs it, never a module-level
+// constant: a locate failure evaluated at load time aborts the whole file, which hides every
+// unrelated pin's result behind one missing heading. Called per test, it reds only the tests that
+// depend on that location.
+const printedTextRange = () =>
+  afterHeading(locateSection(CONTRIBUTING_DOC, /^### Text the build prints or ships\b/, 3))
+const commitsRange = () => locateSection(CONTRIBUTING_DOC, /^## Commits\b/, 2)
 
 const PRINTED_TEXT_PARAGRAPHS = [
   {
@@ -855,7 +858,7 @@ const PRINTED_TEXT_PARAGRAPHS = [
 test('CONTRIBUTING.md: the "Text the build prints or ships" paragraphs run, complete', () => {
   assertCompleteRun(
     CONTRIBUTING_DOC,
-    { start: PRINTED_TEXT_RANGE.start, end: COMMITS_RANGE.start },
+    { start: printedTextRange().start, end: commitsRange().start },
     'CONTRIBUTING.md printed-text paragraphs run',
     PRINTED_TEXT_PARAGRAPHS.map(({ firstLine }) => ({ type: 'paragraph', firstLine })),
   )
@@ -863,28 +866,25 @@ test('CONTRIBUTING.md: the "Text the build prints or ships" paragraphs run, comp
 
 for (const paragraph of PRINTED_TEXT_PARAGRAPHS) {
   test(paragraph.label, () => {
-    assertClearedParagraph(CONTRIBUTING_DOC, PRINTED_TEXT_RANGE, paragraph.label, paragraph)
+    assertClearedParagraph(CONTRIBUTING_DOC, printedTextRange(), paragraph.label, paragraph)
   })
 }
 
-const LICENSING_TERMS_RANGE = afterHeading(
-  locateSection(CONTRIBUTING_DOC, /^## Licensing your contribution\b/, 2),
-)
-const DISCLOSURE_RANGE = locateSection(
-  CONTRIBUTING_DOC,
-  /^### Content you did not write yourself\b/,
-  3,
-)
+const licensingTermsRange = () =>
+  afterHeading(locateSection(CONTRIBUTING_DOC, /^## Licensing your contribution\b/, 2))
+const disclosureRange = () =>
+  locateSection(CONTRIBUTING_DOC, /^### Content you did not write yourself\b/, 3)
 
 // Located FIRST, so the run below can check that its own third block IS the DCO fence (the same
 // opener line), not merely a fence somewhere in the file: the by-act certification paragraph
 // says the text in this fence is the full document it refers to, which is a claim about THIS
 // fence sitting right here, not about a fence of this shape existing anywhere.
-const DCO_FENCE = locateFence(
-  fences(CONTRIBUTING),
-  (fence) => fence.content.startsWith('Developer Certificate of Origin'),
-  'Developer Certificate of Origin',
-)
+const dcoFence = () =>
+  locateFence(
+    fences(CONTRIBUTING),
+    (fence) => fence.content.startsWith('Developer Certificate of Origin'),
+    'Developer Certificate of Origin',
+  )
 
 const LICENSING_TERMS_PARAGRAPHS = [
   {
@@ -900,9 +900,11 @@ const LICENSING_TERMS_PARAGRAPHS = [
 ]
 
 test('CONTRIBUTING.md: the contributor licence terms run, complete, and the DCO', () => {
+  const DCO_FENCE = dcoFence()
+  const DISCLOSURE_RANGE = disclosureRange()
   assertCompleteRun(
     CONTRIBUTING_DOC,
-    { start: LICENSING_TERMS_RANGE.start, end: DISCLOSURE_RANGE.start },
+    { start: licensingTermsRange().start, end: DISCLOSURE_RANGE.start },
     'CONTRIBUTING.md licensing terms run',
     [
       ...LICENSING_TERMS_PARAGRAPHS.map(({ firstLine }) => ({ type: 'paragraph', firstLine })),
@@ -928,7 +930,7 @@ test('CONTRIBUTING.md: the contributor licence terms run, complete, and the DCO'
 
 for (const paragraph of LICENSING_TERMS_PARAGRAPHS) {
   test(paragraph.label, () => {
-    assertClearedParagraph(CONTRIBUTING_DOC, LICENSING_TERMS_RANGE, paragraph.label, paragraph)
+    assertClearedParagraph(CONTRIBUTING_DOC, licensingTermsRange(), paragraph.label, paragraph)
   })
 }
 
