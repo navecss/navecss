@@ -1059,7 +1059,7 @@ describe('build() and a malformed shipped manifest (the skew check fails BEFORE 
 })
 
 describe('build() and the two remaining core-probe populations (unreadable, and resolved at a matching version)', () => {
-  it('an installed but unreadable @navecss/core (unparseable package.json): build prints nothing about a version skew and exits 0', () => {
+  it('an installed but unreadable @navecss/core (unparseable package.json): build prints nothing to stderr and exits 0', () => {
     const { binPath, projectDir } = scratchInstall()
     installCoreWithUnparseablePackageJson(projectDir)
     const outDir = path.join(projectDir, 'out')
@@ -1071,7 +1071,7 @@ describe('build() and the two remaining core-probe populations (unreadable, and 
     )
 
     expect(result.status).toBe(0)
-    expect(result.stderr).not.toMatch(/version skew/i)
+    expect(result.stderr).toBe('')
   }, 20_000)
 
   it("a resolvable @navecss/core at the manifest's own recorded producer version: build prints nothing to stderr and exits 0", () => {

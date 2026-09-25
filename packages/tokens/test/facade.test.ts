@@ -198,11 +198,15 @@ describe('TokensBuildResult.files and TokensValidateResult.output keep a JSDoc c
   const facadeSource = readFileSync(path.join(PACKAGE_ROOT, 'src/facade.ts'), 'utf8')
 
   it('TokensBuildResult.files carries a JSDoc comment directly above it in the source', () => {
-    expect(facadeSource).toMatch(/\/\*\*[\s\S]*?\*\/\s*\n\s*files: string\[\]/)
+    expect(facadeSource).toMatch(
+      /\/\*\*(?:(?!\*\/)[\s\S])*?[A-Za-z](?:(?!\*\/)[\s\S])*?\*\/\s*\n\s*files\s*[?:]/,
+    )
   })
 
   it('TokensValidateResult.output carries a JSDoc comment directly above it in the source', () => {
-    expect(facadeSource).toMatch(/\/\*\*[\s\S]*?\*\/\s*\n\s*output: string\[\]/)
+    expect(facadeSource).toMatch(
+      /\/\*\*(?:(?!\*\/)[\s\S])*?[A-Za-z](?:(?!\*\/)[\s\S])*?\*\/\s*\n\s*output\s*[?:]/,
+    )
   })
 })
 
