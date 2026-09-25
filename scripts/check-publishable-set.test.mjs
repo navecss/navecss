@@ -278,6 +278,41 @@ test('nothing this gate prints down ANY path names a tracker a reader cannot ope
   }
 })
 
+// A prior review round (consulting the licensing steward) named this report as one whose
+// docblock made no byte-exact claim, without measuring it. Measured here: the row above (and
+// every other test in this file that touches the mismatch path) checks SHAPE and OPACITY, never
+// the bytes. The header, the two per-package line templates and the closing guidance are
+// composed inline in main() and had no byte-exact anchor anywhere — a paraphrase of any of them
+// would pass every existing test in this file. This is the byte-exact backstop, not the gate:
+// the primary control is a reviewer reading main()'s own source. CHANGING THIS LITERAL IS A
+// WORDING CHANGE TO A CHECK'S OWN OUTPUT, NOT A TEST FIXUP — if this goes red because the
+// source message was reworded, restore the wording or get it decided, never edit the literal
+// to match. Exercises both per-package line shapes (unexpectedly publishable AND unexpectedly
+// private) in one fixture so both are anchored.
+test('the mismatch report is byte-exact, not only opacity- and shape-checked', () => {
+  const mismatched = buildFixture(VALID_WORKSPACE_YAML, {
+    core: { name: '@navecss/core', private: true },
+    surprise: { name: '@navecss/surprise' },
+    tokens: { name: '@navecss/tokens' },
+  })
+  try {
+    const { calls, exitCode } = runMain(mismatched)
+    assert.equal(exitCode, 1)
+    assert.deepEqual(calls.error, [
+      'The publishable package set does not match the set this repository intends to publish:\n',
+      '  - @navecss/surprise: publishable (no "private": true) but not in the expected set',
+      '  - @navecss/core: "private": true but expected to publish at 0.1.0',
+      '\nIf this is a deliberate scope change, update PUBLISHABLE_SET in ' +
+        'scripts/check-publishable-set.mjs alongside the manifest change. Making a package ' +
+        'publish for the first time is a release decision and not only a manifest edit: do not ' +
+        'flip it in a pull request on its own, open an issue proposing it.',
+    ])
+    assert.equal(calls.log.length, 0)
+  } finally {
+    rmSync(mismatched, { recursive: true, force: true })
+  }
+})
+
 test("composeManifestUnreadableMessage composes this gate's own bytes, never the license-parity gate's cleared ones", () => {
   const message = composeManifestUnreadableMessage(
     '/repo/packages/tokens/package.json',

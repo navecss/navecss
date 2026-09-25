@@ -293,3 +293,46 @@ for (const { packages, expectedLine } of BUNDLING_FIXTURE_CASES) {
     }
   })
 }
+
+// A prior review round (consulting the licensing steward) named this report as one whose
+// docblock made no byte-exact claim, without measuring it. Measured here: every test above
+// exercises the SUCCESS path (`formatCoverageSummary`) or the shape of `uncovered` (the R28
+// tripwire tests). Nothing pinned the FAILURE path's own printed bytes — the header, the
+// per-package reason line and the closing guidance are all composed inline in main()'s
+// `uncovered.length > 0` branch, reachable only by driving the real gate end to end against a
+// capable-but-unguarded package. This is the byte-exact backstop, not the gate: the primary
+// control is a reviewer reading main()'s own source. CHANGING THIS LITERAL IS A WORDING CHANGE
+// TO A CHECK'S OWN OUTPUT, NOT A TEST FIXUP — if this goes red because the source message was
+// reworded, restore the wording or get it decided, never edit the literal to match.
+test('the uncovered-package failure report is byte-exact, not only shape-checked', () => {
+  const dir = bundlingFixtureDir({
+    'x-unguarded': {
+      manifest: { name: '@navecss/x-unguarded', scripts: { build: 'tsup' } },
+      guarded: false,
+    },
+  })
+  try {
+    const result = spawnSync(process.execPath, [path.join('scripts', SCRIPT_NAME)], {
+      cwd: dir,
+      encoding: 'utf8',
+    })
+    assert.equal(result.status, 1, `expected a refusal, got stdout: ${result.stdout}`)
+    assert.equal(
+      result.stderr,
+      'Packages capable of bundling a third-party dependency have no no-inlining guard:\n' +
+        '\n' +
+        '  - @navecss/x-unguarded: bundler step in build script\n' +
+        '\n' +
+        'Add packages/<name>/test/no-inlined-dependency.test.ts. If <name> has a real bundler ' +
+        'step, use packages/core/test/no-inlined-dependency.test.ts as the template; if it only ' +
+        "generates output and runs no bundler, core's bundler-shaped check would assert a " +
+        'property with no subject there, so use packages/tokens/test/no-inlined-dependency.test.ts ' +
+        'as the generator-shaped template instead. If a package now bundles third-party code ' +
+        'into what it publishes, or if neither template fits it, that is more than a missing ' +
+        'test: do not silence, narrow or work around this check in your pull request, open an ' +
+        'issue.\n',
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

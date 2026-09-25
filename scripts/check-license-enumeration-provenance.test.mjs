@@ -267,6 +267,28 @@ test('the duplicate message identifies both entries by POSITION (RED)', () => {
   assert.match(violations[0].reason, /index 1/)
 })
 
+// A prior review round (consulting the licensing steward) named this reason as one whose
+// docblock made no byte-exact claim, without measuring it. Measured here: every prior assertion
+// on this reason matched only a FRAGMENT (/duplicate "id"/, /index 0/, /index 1/), which is
+// what let the STATIC words around those fragments drift with the whole suite staying green —
+// rewording "each id must appear at most once in prodPermissive" to a paraphrase left every
+// test above green. This is the byte-exact backstop, not the gate: the primary control is the
+// reasoning comment above `findProvenanceViolations`'s duplicate-detection block. CHANGING THIS
+// LITERAL IS A WORDING CHANGE TO A CHECK'S OWN OUTPUT, NOT A TEST FIXUP — if this goes red
+// because the source message was reworded, restore the wording or get it decided, never edit
+// the literal to match.
+test('the duplicate message is byte-exact, not only fragment-matched', () => {
+  const violations = findProvenanceViolations({
+    prodPermissive: [{ id: 'MIT' }, { id: 'MIT' }],
+  })
+  assert.equal(violations.length, 1)
+  assert.equal(
+    violations[0].reason,
+    'duplicate "id" ("MIT"): the entry at index 1 repeats the id first carried by the entry ' +
+      'at index 0; each id must appear at most once in prodPermissive',
+  )
+})
+
 test('an untrimmed "id" is caught at the per-entry stage before the duplicate pass ever sees it (RED)', () => {
   // Before the per-entry whitespace check existed, an untrimmed id reached the
   // duplicate-detection pass unflagged, and that pass's own defensive `.trim()` on the map
