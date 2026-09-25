@@ -1,0 +1,44 @@
+name: dependency-review
+
+# PR-time backstop for supply-chain risk on dependency changes: vulnerable versions and
+# disallowed licences. This is the licence BACKSTOP, not the primary licence gate — the primary
+# gate is the local allow-list (`license-policy.json` + `scripts/check-license-allowlist.mjs`,
+# run through `pnpm run scripts:check`), which expresses the bucket split (bundled output vs.
+# dependencies vs. devDependencies) this action cannot: `fail-on-scopes` covers vulnerabilities
+# only, so licence enforcement here applies across every scope with no dev/runtime
+# differentiation. `allow-licenses` is used and never `deny-licenses` (deprecated, and mutually
+# exclusive with allow-licenses), set wide enough to cover the permissive and weak-copyleft
+# licences already in the dependency tree plus the broader OSI-approved set devDependencies are
+# allowed to carry, so this does not fight the toolchain on every dev-dependency bump. The
+# licences it deliberately excludes by omission are strong copyleft (GPL-*, AGPL-*) and the
+# source-available, USE-restricting licences already blocked by the local gate (BUSL, SSPL,
+# Elastic-2.0, PolyForm, Commons-Clause).
+#
+# `actions/dependency-review-action` is public-repository-only without GitHub Advanced Security
+# and runs only on `pull_request` (or `merge_group`, unused here — this repo has no merge queue).
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-review-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          allow-licenses: >-
+            MIT, MIT-0, ISC, 0BSD, BSD-2-Clause, BSD-3-Clause, BSD-3-Clause-Clear, Apache-2.0,
+            CC0-1.0, CC-BY-3.0, CC-BY-4.0, Unlicense, BlueOak-1.0.0, Python-2.0, PSF-2.0,
+            Zlib, WTFPL, Artistic-2.0, MPL-1.1, MPL-2.0,
+            LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later
