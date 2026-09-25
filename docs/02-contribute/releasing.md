@@ -38,7 +38,7 @@ It only runs on `main`: started from any other branch, the job is skipped.
 
 Approve `@navecss/tokens` first, then `@navecss/core`. `core` depends on the matching `tokens` version, so approving it first would put a `core` release live whose dependency does not exist yet.
 
-Approve only what the run you started on `main` staged: its log lists each staged version. Anything else waiting in the queue was not staged by that run, so reject it rather than approve it.
+Approve only versions staged by a release workflow run on `main`: each run's log lists what it staged. If the queue holds a version you cannot match to such a run, do not approve it; find out where it came from first.
 
 On npmjs.com, open each package, go to the **Staged Packages** tab, review the version and approve it with your two-factor code.
 
