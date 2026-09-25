@@ -117,18 +117,14 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * other places a guard in this family registers, neither mechanically tied to this one; a future
  * guard added there without a probe here repeats this gap.
  *
- * Three more, from its review:
- * `assertNoticeIsEmitted`'s absent-notice, multi-line-notice and not-a-self-contained-comment
- * refusals — three of the four reachable `assertNoticeIsEmitted` messages, all four of which
- * were already inside that earlier round's eight. That leaves five of its residual, on a
- * convention made explicit here rather than left for the next reader to re-derive: the fourth
+ * Three more, from its review: `assertNoticeIsEmitted`'s absent-notice, multi-line-notice and
+ * not-a-self-contained-comment refusals, three of its four reachable messages. These were not
+ * among the eight above: the original measurement listed no `assertNoticeIsEmitted` message,
+ * so probing them widened the registry without shrinking that residual. The fourth
  * `assertNoticeIsEmitted` message (the composed-comment-line refusal) is permanently excluded
- * rather than probed this round — see `STRUCTURALLY_UNPROBEABLE_GUARD_MESSAGES` below, which
- * is the whole point of that row — and a permanently-excluded message STAYS counted in the
- * residual rather than being discharged from it: it can never move to "probed", so it never
- * leaves "unprobed" either. The five are therefore four ordinarily-probeable messages still
- * open plus this one structurally-excluded message, not five messages all waiting on a future
- * probe.
+ * rather than probed — see `STRUCTURALLY_UNPROBEABLE_GUARD_MESSAGES` below, which is the whole
+ * point of that row — and since it can never move to "probed", it never leaves "unprobed"
+ * either.
  *
  * Three more after that: `assertCoverageFloor`, `assertNoForbiddenAdjacency` and
  * `assertNoFocusableAdjacentToActionFill`, the three guards used to show the gap was still
@@ -136,9 +132,7 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * `assertHarnessFramingIsClean()` with the test suite green, because none of the three was in
  * this registry; with these probes, the same edit fails it.
  *
- * **What remains unprobed: five messages**, counted against the original measurement rather
- * than the running count above (that count included `assertNoticeIsEmitted`'s refusals, which
- * the original measurement did not list).
+ * **What remains unprobed: five messages**, the eight above less these three.
  * - Two cannot be probed by this check at all: `assertDescriptionsAreClean`'s message and
  *   `assertNoticeIsClean`'s framing refusal both quote the phrase they caught, so any input
  *   that makes them throw also makes their message fail this check. `copy-lint.test.ts` pins

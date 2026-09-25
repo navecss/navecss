@@ -44,13 +44,14 @@ function captureThrownMessage(fn: () => void): string {
  * fixture stops reproducing its own failing direction rather than silently reporting an empty
  * comparison.
  *
- * Parameterized over `notice`/`noticeLabel` (the quality reviewer, round 3 terminal read,
- * finding 3): the original bound this to `RETHEMING_NOTICE`/`'Retheming notice'` while
+ * Parameterized over `notice`/`noticeLabel`: the original bound this to
+ * `RETHEMING_NOTICE`/`'Retheming notice'` while
  * living at module scope, which reads as reusable but silently checks any `css` it is given
  * against the Retheming notice regardless — a future Feedback-notice caller reaching for it the
  * way its name and position invite would get the wrong thrown message
  * ("the notice is not present, verbatim") rather than the intended violation. The Feedback
- * analogue of Row 3 below is the row that pinned that failure red before this parameterization.
+ * analogue of the shared-string test below is the test that pinned that failure red before
+ * this parameterization.
  */
 function captureNoticeViolation(css: string, notice: string, noticeLabel: string): string {
   return captureThrownMessage(() => assertNoticeIsEmitted(css, notice, noticeLabel))
@@ -120,7 +121,7 @@ describe('AC-theming-40 covers: R34', () => {
   })
 
   it('the REAL shipped stem, read from emit.ts rather than retyped, does not trip the composed-line check', () => {
-    // The stem is imported, never retyped (blue row 1): this test
+    // The stem is imported, never retyped: this test
     // and its Feedback sibling below used to inline `/* Tint seed: ` as a test-local literal
     // while their names claimed to be checking the shipped one, so dirtying the stem in
     // emit.ts left both green. Composing from the export makes the negative control assert
@@ -129,12 +130,12 @@ describe('AC-theming-40 covers: R34', () => {
     expect(() => assertNoticeIsEmitted(css, RETHEMING_NOTICE, 'Retheming notice')).not.toThrow()
   })
 
-  it('round 12: the lint runs over BOTH cleared notice texts wherever either appears, not the canonical one alone', () => {
-    // R34's input set doubled in round 12 (applied path): the
+  it('the lint runs over BOTH cleared notice texts wherever either appears, not the canonical one alone', () => {
+    // R34's input set has two texts: the
     // separately-cleared transcription variant (README rung 2's "Neutral actions" worked
     // example) is a second wherever-it-appears instance this lint constrains exactly as it
-    // constrains the canonical text. This package carries no constant for that text (it
-    // lives in the internal companion repository's docs, never here — see copy-lint.ts's
+    // constrains the canonical text. This package carries no constant for that text and never
+    // emits it (it ships only in the repository README's rung 2 — see copy-lint.ts's
     // RETHEMING_NOTICE comment), so it is inlined here purely to prove the SHARED, generic lint
     // function accepts it clean; this scenario asserts no ratio, verdict or conformance claim about
     // either text.
@@ -142,7 +143,7 @@ describe('AC-theming-40 covers: R34', () => {
     expect(findConformanceFraming(TRANSCRIPTION_VARIANT)).toBeUndefined()
   })
 
-  it('round 2 (accessibility-steward ask 1): a notice containing a newline refuses loudly — no single emitted line carries it whole, so this passed silently before the refusal existed', () => {
+  it('a notice containing a newline refuses loudly — no single emitted line carries it whole, so this passed silently before the refusal existed', () => {
     const brokenNotice = `${RETHEMING_NOTICE.slice(0, 10)}\n${RETHEMING_NOTICE.slice(10)}`
     const css = `:root {\n  /* Tint seed: ${brokenNotice} */\n}`
     expect(() => assertNoticeIsEmitted(css, brokenNotice, 'Retheming notice')).toThrow(
@@ -150,14 +151,14 @@ describe('AC-theming-40 covers: R34', () => {
     )
   })
 
-  it('round 2 (accessibility-steward ask 2): every carrying line is linted, not only the first — emitted twice, first clean, second dirty, still throws (the earlier `.find()`-based check passed this silently)', () => {
+  it('every carrying line is linted, not only the first — emitted twice, first clean, second dirty, still throws (the earlier `.find()`-based check passed this silently)', () => {
     const css = `:root {\n  /* Tint seed: ${RETHEMING_NOTICE} */\n  /* WCAG AA Tint seed: ${RETHEMING_NOTICE} */\n}`
     expect(() => assertNoticeIsEmitted(css, RETHEMING_NOTICE, 'Retheming notice')).toThrow(
       /^Retheming notice violation: a comment line carrying the notice contains the word "WCAG"\. The notice text itself is present byte for byte/,
     )
   })
 
-  it('round 2 (accessibility-steward ask 3, disposition b): a wrapped comment with the framing word on line 1 and the notice on line 2 refuses — the carrying line alone reads clean but is not a self-contained comment', () => {
+  it('a wrapped comment with the framing word on line 1 and the notice on line 2 refuses — the carrying line alone reads clean but is not a self-contained comment', () => {
     const css = `:root {\n  /* WCAG AA, so\n   * Tint seed: ${RETHEMING_NOTICE} */\n}`
     expect(() => assertNoticeIsEmitted(css, RETHEMING_NOTICE, 'Retheming notice')).toThrow(
       /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
@@ -224,7 +225,8 @@ describe('AC-theming-40 covers: R34', () => {
   })
 
   it("the not-self-contained-comment refusal (site 1) and the begins-inside-an-earlier-comment refusal (site 2) throw the SAME shared string, once each one's own `${rest}` clause is sanitized out", () => {
-    // Row 1/Row 2 above widen each anchor through the accessibility steward's new disjunct, but a
+    // The refusal tests above anchor on the widened clause ("or sits inside a comment opened on
+    // an earlier line"), but a
     // widened anchor alone tolerates two separately-worded consts that happen to share that clause
     // — it says nothing about whether site 1 and site 2 throw the SAME string. The accessibility
     // steward ruled they must ("one shared const stands"). `${rest}` is the one clause the two
@@ -245,11 +247,12 @@ describe('AC-theming-40 covers: R34', () => {
     expect(site1Message).toBe(site2Message)
   })
 
-  it('round with the accessibility steward, item S12: the comment-state scan is now quote-aware, so a declaration VALUE carrying an opening comment delimiter inside a string no longer over-refuses — closing the one false alarm the accessibility steward recorded and left open', () => {
-    // The accessibility steward (round 3, item S12): the over-refusal was the safe side of
+  it('the comment-state scan is quote-aware, so a declaration VALUE carrying an opening comment delimiter inside a string does not over-refuse — closing the one false alarm the accessibility steward recorded and left open', () => {
+    // The accessibility steward: the over-refusal was the safe side of
     // the requirement and was explicitly left open as "a legitimate later improvement, not a
     // defect being deferred" — on the condition that fixing it cannot touch the subset case
-    // this guard exists to catch (the test above) or refuse less than S1-S11 require. The
+    // this guard exists to catch (the test above) or refuse less than the rest of that
+    // requirement demands. The
     // scan now tracks whether it is inside a quoted string while outside a comment and skips
     // quoted content entirely: a `/*` or `*/` inside a string is ordinary text there, matching
     // real CSS tokenization (a string is consumed as one token before the tokenizer ever looks
@@ -273,12 +276,12 @@ describe('AC-theming-40 covers: R34', () => {
 describe('the two comment stems are cleared bytes with no anchor of their own', () => {
   it('TINT_SEED_COMMENT_STEM and FEEDBACK_TOKENS_COMMENT_STEM match their cleared, hardcoded literals exactly', () => {
     // The accessibility steward's applied-path ruling: both stems are cleared as EXACT
-    // bytes. "Changing either stem is a change to cleared text and returns here." The quality
-    // reviewer measured (round 1 §1/§2) that neither constant had a byte anchor anywhere in this
-    // diff: mutating either one's VALUE at its definition left every test THIS package's own
+    // bytes. "Changing either stem is a change to cleared text and returns here." Before this
+    // test, the quality reviewer measured that neither constant had a byte anchor of its own:
+    // mutating either one's VALUE at its definition left every test THIS package's own
     // theming suite runs green, caught only by test/theming/remaining-ac.test.ts (AC-theming-39)
-    // and test/theming/emit-r20-notice.test.ts, both out of this diff's own footprint and both
-    // anchored on their own deliberately RETYPED literal rather than on this export.
+    // and test/theming/emit-r20-notice.test.ts, both anchored on their own deliberately RETYPED
+    // literal rather than on this export.
     //
     // Deliberately hardcoded rather than composed from any constant — a comparison built from
     // the same export on both sides is the tautology this test exists to close. Do NOT
@@ -353,14 +356,14 @@ describe('AC-theming-22 covers: R20 obligation 1: the feedback shared-identity n
   })
 
   it('the REAL shipped stem, read from emit.ts rather than retyped, does not trip the composed-line check', () => {
-    // Imported, never retyped — see the Retheming sibling above (blue row 1).
+    // Imported, never retyped — see the Retheming sibling above.
     const css = `:root {\n  ${FEEDBACK_TOKENS_COMMENT_STEM}${FEEDBACK_SHARED_IDENTITY_NOTICE} */\n}`
     expect(() =>
       assertNoticeIsEmitted(css, FEEDBACK_SHARED_IDENTITY_NOTICE, 'Feedback notice'),
     ).not.toThrow()
   })
 
-  it('round 2 (accessibility-steward ask 1): a notice containing a newline refuses loudly — no single emitted line carries it whole', () => {
+  it('a notice containing a newline refuses loudly — no single emitted line carries it whole', () => {
     const brokenNotice = `${FEEDBACK_SHARED_IDENTITY_NOTICE.slice(0, 10)}\n${FEEDBACK_SHARED_IDENTITY_NOTICE.slice(10)}`
     const css = `:root {\n  /* Feedback tokens: ${brokenNotice} */\n}`
     expect(() => assertNoticeIsEmitted(css, brokenNotice, 'Feedback notice')).toThrow(
@@ -368,7 +371,7 @@ describe('AC-theming-22 covers: R20 obligation 1: the feedback shared-identity n
     )
   })
 
-  it('round 2 (accessibility-steward ask 2): every carrying line is linted, not only the first — emitted twice, first clean, second dirty, still throws', () => {
+  it('every carrying line is linted, not only the first — emitted twice, first clean, second dirty, still throws', () => {
     const css = `:root {\n  /* Feedback tokens: ${FEEDBACK_SHARED_IDENTITY_NOTICE} */\n  /* meets AA Feedback tokens: ${FEEDBACK_SHARED_IDENTITY_NOTICE} */\n}`
     expect(() =>
       assertNoticeIsEmitted(css, FEEDBACK_SHARED_IDENTITY_NOTICE, 'Feedback notice'),
@@ -377,7 +380,7 @@ describe('AC-theming-22 covers: R20 obligation 1: the feedback shared-identity n
     )
   })
 
-  it('round 2 (accessibility-steward ask 3, disposition b): a wrapped comment with the framing word on line 1 and the notice on line 2 refuses — the carrying line alone reads clean but is not a self-contained comment', () => {
+  it('a wrapped comment with the framing word on line 1 and the notice on line 2 refuses — the carrying line alone reads clean but is not a self-contained comment', () => {
     const css = `:root {\n  /* meets AA, so\n   * Feedback tokens: ${FEEDBACK_SHARED_IDENTITY_NOTICE} */\n}`
     expect(() =>
       assertNoticeIsEmitted(css, FEEDBACK_SHARED_IDENTITY_NOTICE, 'Feedback notice'),
@@ -404,16 +407,17 @@ describe('AC-theming-22 covers: R20 obligation 1: the feedback shared-identity n
     )
   })
 
-  it("the quality reviewer's finding 3: the Feedback-notice analogue of the Retheming shared-const identity pin — captureNoticeViolation reached for the way a future caller naturally would, now parameterized over the notice constant and its label", () => {
-    // The quality reviewer (round 3, finding 3): captureNoticeViolation was hoisted to module scope
+  it('the Feedback-notice analogue of the Retheming shared-const identity pin — captureNoticeViolation reached for the way a future caller naturally would, now parameterized over the notice constant and its label', () => {
+    // The quality reviewer found that captureNoticeViolation was hoisted to module scope
     // but its body was hardcoded to RETHEMING_NOTICE/'Retheming notice', despite its name and
-    // position reading as general-purpose. Red-first evidence for this row: before
+    // position reading as general-purpose. Red-first evidence for this test: before
     // parameterization, calling the helper over Feedback fixtures the way a future caller naturally
     // would silently checked them against RETHEMING_NOTICE, which neither contains, so both
     // fixtures threw the unrelated "notice is not present, verbatim" message instead of the
     // not-self-contained-comment refusal this test means to compare, failing at
     // `.toContain('<REST>')`. Now that the helper takes `notice`/`noticeLabel` explicitly, this is
-    // the same "one shared const" property Row 3 pins for Retheming, pinned here for Feedback: site
+    // the same "one shared const" property the shared-string test above pins for Retheming,
+    // pinned here for Feedback: site
     // 1 opens a comment but does not close it on the carrying line; site 2's carrying line begins
     // inside a comment still open from an earlier line.
     const site1Css = `:root {\n  /* Feedback tokens: ${FEEDBACK_SHARED_IDENTITY_NOTICE}\n  */\n}` // not self-contained
