@@ -21,6 +21,7 @@ import {
   createCompilerHost,
   createProgram,
   createSourceFile,
+  flattenDiagnosticMessageText,
   ModuleKind,
   ModuleResolutionKind,
   ScriptTarget,
@@ -55,6 +56,28 @@ function declaredCustomProperties(css: string): string[] {
     .matchAll(/^[ \t]*(--[\w-]+)\s*:/gm)
     .map((m) => m[1]!)
     .toArray()
+}
+
+/**
+ * Custom-property names REGISTERED by an `@property` rule in a built stylesheet (comments
+ * stripped). R26a property 1 counts a name as defined when it is declared OR registered, so
+ * the membership comparison reads both.
+ */
+function registeredCustomProperties(css: string): string[] {
+  return css
+    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+    .matchAll(/@property\s+(--[\w-]+)/g)
+    .map((m) => m[1]!)
+    .toArray()
+}
+
+/**
+Every `--nave-color-*` name a built stylesheet defines, declared or registered.
+ */
+function definedColorProperties(css: string): string[] {
+  return [...declaredCustomProperties(css), ...registeredCustomProperties(css)].filter((n) =>
+    n.startsWith('--nave-color-'),
+  )
 }
 
 /**
@@ -101,7 +124,7 @@ describe('AC-theming-56 covers: R26a (shipped artifact, both builds)', () => {
   })
 
   it("Nave's own build: ColorPropertyName's members equal the declared --nave-color-* names, tint included, no ramp step", () => {
-    const declared = declaredCustomProperties(naveCss).filter((n) => n.startsWith('--nave-color-'))
+    const declared = definedColorProperties(naveCss)
     expect(declared.length).toBeGreaterThan(0)
     expect(declared).toContain('--nave-color-tint')
     const union = colorPropertyNameMembers(naveDts)
@@ -110,9 +133,7 @@ describe('AC-theming-56 covers: R26a (shipped artifact, both builds)', () => {
   })
 
   it('consumer build (non-default seed): ColorPropertyName members equal the declared --nave-color-* names', () => {
-    const declared = declaredCustomProperties(consumerCss).filter((n) =>
-      n.startsWith('--nave-color-'),
-    )
+    const declared = definedColorProperties(consumerCss)
     expect(declared.length).toBeGreaterThan(0)
     const union = colorPropertyNameMembers(consumerDts)
     expect(new Set(union)).toEqual(new Set(declared))
@@ -156,6 +177,42 @@ describe('AC-theming-56 covers: R26a (shipped artifact, both builds)', () => {
       expect(text).not.toMatch(/tokens object carries colou?rs?/i)
     }
   })
+
+  it('no ColorPropertyName member is a ramp step (R11)', () => {
+    const union = colorPropertyNameMembers(naveDts)
+    expect(union.length).toBeGreaterThan(0)
+    for (const name of union) expect(name).not.toMatch(/-\d+$/)
+  })
+
+  it('outside its doc comments, dist/tokens.js carries no name or value of the semantic colour layer', () => {
+    for (const js of [naveJs, consumerJs]) {
+      const code = js.replaceAll(/\/\*[\s\S]*?\*\//g, '')
+      expect(code).not.toContain('--nave-color-')
+      expect(code).not.toContain('light-dark(')
+    }
+  })
+
+  it("the README's JS/TS row says colour names are typed through ColorPropertyName and colour values ship in the stylesheet", () => {
+    const readme = readFileSync(path.join(PACKAGE_ROOT, 'README.md'), 'utf8')
+    const row = readme.split('\n').find((line) => line.startsWith('| `@navecss/tokens/js`'))
+    expect(row).toBeDefined()
+    expect(row).toContain('ColorPropertyName')
+    expect(row).toContain('ships as a value in the stylesheet above and not through this export')
+    expect(row).not.toMatch(/tokens object carries colou?rs?/i)
+  })
+
+  it("the doc copy does not say every colour value follows the tint: in Nave's own build the example slot does not", () => {
+    const actionPrimary = /^[ \t]*--nave-color-action-primary\s*:\s*([^;]+);/m.exec(naveCss)?.[1]
+    expect(actionPrimary).toBeDefined()
+    expect(actionPrimary).not.toContain('var(--nave-color-tint)')
+    expect(naveCss).toMatch(/^[ \t]*--nave-color-surface-base\s*:[^;]*var\(--nave-color-tint\)/m)
+    for (const text of [naveJs, naveDts]) {
+      expect(text).not.toMatch(/from the scheme\s*\*?\s*and the tint/)
+      expect(text).toContain(
+        'active colour scheme, and the neutral-derived ones also follow the tint.',
+      )
+    }
+  })
 })
 
 /**
@@ -194,7 +251,7 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
     host.readFile = (fileName) => (fileName === probeFileName ? source : sys.readFile(fileName))
     const program = createProgram([probeFileName], COMPILER_OPTIONS, host)
     const diagnostics = program.getSemanticDiagnostics(program.getSourceFile(probeFileName))
-    return diagnostics.map((d) => (typeof d.messageText === 'string' ? d.messageText : 'error'))
+    return diagnostics.map((d) => flattenDiagnosticMessageText(d.messageText, '\n'))
   }
 
   it('a real emitted colour property compiles clean', () => {
@@ -207,20 +264,22 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
   })
 
   it('a ramp step (never emitted, R11) does not compile', () => {
+    const diagnostics = compileProbe(
+      `import type { ColorPropertyName } from './tokens.js'\n` +
+        `export const bad: ColorPropertyName = '--nave-color-primary-500'\n`,
+    )
     expect(
-      compileProbe(
-        `import type { ColorPropertyName } from './tokens.js'\n` +
-          `export const bad: ColorPropertyName = '--nave-color-primary-500'\n`,
-      ).length,
-    ).toBeGreaterThan(0)
+      diagnostics.some((m) => m.includes("is not assignable to type 'ColorPropertyName'")),
+    ).toBe(true)
   })
 
   it('an unprefixed name does not compile', () => {
+    const diagnostics = compileProbe(
+      `import type { ColorPropertyName } from './tokens.js'\n` +
+        `export const bad: ColorPropertyName = '--color-surface-base'\n`,
+    )
     expect(
-      compileProbe(
-        `import type { ColorPropertyName } from './tokens.js'\n` +
-          `export const bad: ColorPropertyName = '--color-surface-base'\n`,
-      ).length,
-    ).toBeGreaterThan(0)
+      diagnostics.some((m) => m.includes("is not assignable to type 'ColorPropertyName'")),
+    ).toBe(true)
   })
 })

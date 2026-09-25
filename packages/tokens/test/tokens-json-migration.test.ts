@@ -63,8 +63,8 @@ const POST_COLOR_LAYER_DOC_SENTENCE =
   ' *  (`--nave-color-*`) ships as CSS custom properties in `dist/tokens.css` and is\n' +
   ' *  not part of this object; its property NAMES are typed separately as\n' +
   ' *  `ColorPropertyName`, and its VALUES are reachable only through CSS (e.g.\n' +
-  ' *  `var(--nave-color-action-primary)`), computed in the browser from the scheme\n' +
-  ' *  and the tint.\n'
+  ' *  `var(--nave-color-action-primary)`): the browser resolves each one for the\n' +
+  ' *  active colour scheme, and the neutral-derived ones also follow the tint.\n'
 
 function withoutColorLayerDocExpansion(text: string): string {
   expect(text).toContain(POST_COLOR_LAYER_DOC_SENTENCE)
@@ -77,14 +77,21 @@ function withoutColorLayerDocExpansion(text: string): string {
  * layer's emitted custom-property names (values stay CSS-only). It is appended as a pure
  * suffix following `TokenValue`'s declaration line, so trimming back to that anchor restores
  * the pre-addition shape, the same reasoning `withoutPostMigrationLines` applies to
- * `tokens.js`'s own later addition above.
+ * `tokens.js`'s own later addition above. The trim first checks that what it drops is exactly
+ * that block, so nothing else appended after the `TokenValue` line can escape the accounting
+ * below.
  */
 const DTS_MIGRATION_BOUNDARY = 'export declare type TokenValue = typeof tokens[TokenName]'
+
+const COLOR_PROPERTY_NAME_BLOCK =
+  /^\n\n\/\*\* Every `--nave-color-\*` custom property[\s\S]*?\*\/\nexport declare type ColorPropertyName =\n(?: {2}\| '--nave-color-[\w-]+'\n)+$/
 
 function withoutColorPropertyNameBlock(text: string): string {
   const index = text.indexOf(DTS_MIGRATION_BOUNDARY)
   expect(index).toBeGreaterThan(-1)
-  return `${text.slice(0, index + DTS_MIGRATION_BOUNDARY.length)}\n`
+  const end = index + DTS_MIGRATION_BOUNDARY.length
+  expect(text.slice(end)).toMatch(COLOR_PROPERTY_NAME_BLOCK)
+  return `${text.slice(0, end)}\n`
 }
 
 /**
@@ -274,6 +281,11 @@ describe('AC-token-build-44 covers: R44 (the five specifics, and the EXHAUSTIVE 
     expect(dtsHeader).toHaveLength(1)
     expect(dtsTypes).toHaveLength(18)
     expect(dtsHeader.length + dtsTypes.length).toBe(dtsDeltas.length)
+  })
+
+  it('refuses to trim a tokens.d.ts suffix that is anything other than the ColorPropertyName block', () => {
+    const withExtra = `${built('tokens.d.ts')}export declare type Unaccounted = 1\n`
+    expect(() => withoutColorPropertyNameBlock(withExtra)).toThrow()
   })
 })
 
