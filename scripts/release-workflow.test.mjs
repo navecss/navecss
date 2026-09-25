@@ -62,11 +62,13 @@ test('the staging job runs only from main', () => {
 })
 
 // ROW: the `if:` above is only the first guard, and a branch that edits this file can drop it.
-// The `release` environment is the second, independent one: its deployment branch policy
-// restricts it to `main` (repository setting, not pinned here), so GitHub refuses to run the job
-// at all from another branch, and each package's npm trusted publisher names this same
-// environment, so npm refuses a token carrying no claim for it. A branch run then cannot stage
-// even if it drops the `if:` check.
+// The `release` environment is the second, independent one, once its deployment branch policy
+// restricts it to `main` (repository setting, done once outside this repo, not pinned here):
+// GitHub then refuses to run the job at all from another branch, and each package's npm trusted
+// publisher names this same environment, so npm refuses a token carrying no claim for it. With
+// that setting in place, a branch run cannot stage even if it drops the `if:` check. This test
+// pins only the workflow text, `environment: release`; it cannot see the environment's own
+// branch-restriction setting, which lives outside this repository.
 test('the staging job runs in the release environment', () => {
   assert.match(workflowCode(), /^ {4}environment: release$/m)
 })
