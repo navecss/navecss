@@ -294,7 +294,7 @@ for (const { packages, expectedLine } of BUNDLING_FIXTURE_CASES) {
   })
 }
 
-// A prior review round (consulting the licensing steward) named this constant as one whose
+// A prior review round (consulting the licensing steward) named this report as one whose
 // docblock made no byte-exact claim, without measuring it. Measured here: every test above
 // exercises the SUCCESS path (`formatCoverageSummary`) or the shape of `uncovered` (the R28
 // tripwire tests). Nothing pinned the FAILURE path's own printed bytes — the header, the
