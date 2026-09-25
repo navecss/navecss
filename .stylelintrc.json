@@ -201,7 +201,7 @@
       "rules": {
         "custom-property-pattern": null,
         "property-disallowed-list": [
-          ["/^--nave/"],
+          ["/^--nave-/"],
           {
             "message": "A bridge maps a UI library's own variable names onto Nave's tokens and never declares a --nave- name itself: @navecss/tokens writes those names in the same tokens.defaults layer, and the two never setting the same property is what makes the order between them irrelevant (docs/04-adr/0003-layer-cascade-contract.md). Read the Nave value through var(--nave-*) instead."
           }

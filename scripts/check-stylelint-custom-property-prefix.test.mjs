@@ -66,6 +66,15 @@ test('a bridge declaring a --nave- name is rejected (bridge override)', async ()
   assert.ok(warning, 'expected a property-disallowed-list warning for --nave-color-primary')
 })
 
+test('a bridge variable that merely starts with "nave" is not a Nave name and passes the declaration ban', async () => {
+  const warning = await lintWarning(
+    '--navel-color: red;',
+    BRIDGE_CSS_PATH,
+    'property-disallowed-list',
+  )
+  assert.equal(warning, undefined, `expected no warning, got: ${JSON.stringify(warning)}`)
+})
+
 test('a bridge mapping of a library variable onto a Nave token does not trip the declaration ban', async () => {
   const warning = await lintWarning(
     '--accent-9: var(--nave-color-primary-500);',
