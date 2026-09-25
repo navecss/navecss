@@ -67,7 +67,7 @@ export function formatDrift(drift) {
  * this SEAM rather than only the underlying `discoverSourceFiles` walk in isolation
  * (`core-contract.test.ts` already covers that half). Before this existed, `main()`'s call
  * site — `scanCoreContractFromDisk(discoverSourceFiles(CORE_SRC_DIR))` — was reachable by no
- * test at all: reverting it to the exact pre-#219 hardcoded two-file census
+ * test at all: reverting it to the exact old hardcoded two-file census
  * (`[reset.css, atoms.ts]`) left the whole suite, the drift check itself, and the shipped
  * manifest all unchanged, measured directly — today's tree happens to have no third file
  * carrying a real reference, so nothing distinguishes the hardcoded census from the real rule.

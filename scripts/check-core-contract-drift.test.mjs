@@ -185,7 +185,7 @@ test('end to end: the pass line reports the recorded array it read, not the de-d
 })
 
 // `main()`'s own scan call site had no seam a test could reach, so reverting it to the
-// pre-#219 hardcoded two-file census (`[reset.css, atoms.ts]`) was invisible to the whole
+// old hardcoded two-file census (`[reset.css, atoms.ts]`) was invisible to the whole
 // suite, the drift check itself, and the shipped manifest — measured directly, one mutation
 // at a time. `scanSources` is the extracted seam; these two tests assert both halves a
 // parameterised default needs: the DEFAULT (what a real, unparameterised call — the shape
