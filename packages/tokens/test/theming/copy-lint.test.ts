@@ -61,6 +61,19 @@ function sanitizeRestClause(message: string): string {
   )
 }
 
+/**
+ * Runs `fn`, expecting it to throw, and returns the thrown message, failing loudly if the
+ * fixture stops reproducing its own failing direction.
+ */
+function captureThrownMessage(fn: () => void): string {
+  try {
+    fn()
+  } catch (error) {
+    return (error as Error).message
+  }
+  throw new Error('fixture did not throw — test setup is broken, not the guard')
+}
+
 describe('AC-theming-40 covers: R34', () => {
   it('the shipped notice text carries no ratio, no WCAG/SC identifier, and none of the forbidden words', () => {
     expect(() => assertNoticeIsClean()).not.toThrow()
@@ -448,6 +461,25 @@ describe('AC-theming-42 covers: R36', () => {
     expect(() => assertHarnessFramingIsClean()).not.toThrow()
   })
 
+  it('two residual messages quote what they caught, so no probe can read them clean; the warranty refusal does not', () => {
+    // Pins the split the probe registry's docblock states: two of the residual messages quote
+    // the very phrase they caught, so this check cannot read them clean; one does not.
+    const descriptionMessage = captureThrownMessage(() =>
+      assertDescriptionsAreClean(new Map([['x', 'reads at 4.5:1']])),
+    )
+    expect(findConformanceFraming(descriptionMessage)).toBeDefined()
+
+    const framingMessage = captureThrownMessage(() =>
+      assertNoticeIsClean('This is WCAG compliant.', 'Retheming notice'),
+    )
+    expect(findConformanceFraming(framingMessage)).toBeDefined()
+
+    const warrantyMessage = captureThrownMessage(() =>
+      assertNoticeIsClean('No warranty is given.', 'Retheming notice'),
+    )
+    expect(findConformanceFraming(warrantyMessage)).toBeUndefined()
+  })
+
   it('the real R21 harness fail-closed message is what gets checked (a conformance word injected into it fails the run)', () => {
     // capturedFailureMessage's own invariant: assertContrastFloors is real, but if
     // runContrastHarness stopped throwing on an empty adjacency set the check itself
@@ -514,7 +546,7 @@ describe('AC-theming-42 covers: R36', () => {
     expect(() => assertNoOrphanedSemanticSlot(['content.brandNew'])).toThrow(/Adjacency coverage/)
   })
 
-  describe('the widened check is actually wired to the four new probes, not vacuously green', () => {
+  describe('the widened check is actually wired to the probes named below, not vacuously green', () => {
     afterEach(() => {
       vi.resetModules()
       vi.doUnmock('../../src/theming/contrast.ts')
@@ -623,8 +655,7 @@ describe('AC-theming-42 covers: R36', () => {
 
     // One of the three guards a quality reviewer used to demonstrate this gap. Before this
     // probe existed, injecting this exact poisoned wording into the real assertCoverageFloor
-    // left assertHarnessFramingIsClean() green — verified live on this branch before the
-    // probe was added, reproducing that demonstration.
+    // left assertHarnessFramingIsClean() green.
     it('a conformance word injected into assertCoverageFloor fails assertHarnessFramingIsClean', async () => {
       vi.resetModules()
       vi.doMock('../../src/theming/adjacency.ts', async () => {

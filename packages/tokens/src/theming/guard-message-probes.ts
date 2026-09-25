@@ -111,7 +111,7 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * other places a guard in this family registers, neither mechanically tied to this one; a future
  * guard added there without a probe here repeats this gap.
  *
- * Three more, from its review (blue row 2):
+ * Three more, from its review:
  * `assertNoticeIsEmitted`'s absent-notice, multi-line-notice and not-a-self-contained-comment
  * refusals — three of the four reachable `assertNoticeIsEmitted` messages, all four of which
  * were already inside that earlier round's eight. That leaves five of its residual, on a
@@ -124,20 +124,23 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * open plus this one structurally-excluded message, not five messages all waiting on a future
  * probe.
  *
- * Three more on this round, per Cédric's ruling to build the residual out rather than continue
- * recording it: `assertCoverageFloor`, `assertNoForbiddenAdjacency`,
- * `assertNoFocusableAdjacentToActionFill` — starting with the three a quality reviewer used to
- * demonstrate the hole was still live: a poisoned wording injected into any of the three real
- * functions passed `assertHarnessFramingIsClean()` with the whole 102-test suite green, since
- * none of the three was in this registry. Reproduced that live before adding the probes; each
- * now catches the injection for the right reason. **Residual after this round:
- * `assertOnStarShape`'s two position-stating messages** (`on-star.ts` — the declared resting
- * partner not being the family's solid-background anchor, and the anchor being a state or
- * foreground role rather than a resting background), deliberately NOT built this round: this
- * registry's own scope is Nave's own `assertHarnessFramingIsClean` lint, and
- * `assertOnStarShape`'s exact classification against `assertNoticeIsClean`'s two throw sites
- * needs a fresh read against the project's accessibility steward's own grading before a probe
- * is added under either name, which this round did not have room for and is not guessing at.
+ * Three more after that: `assertCoverageFloor`, `assertNoForbiddenAdjacency` and
+ * `assertNoFocusableAdjacentToActionFill`, the three guards used to show the gap was still
+ * live. A conformance phrase written into any of their real messages passed
+ * `assertHarnessFramingIsClean()` with the test suite green, because none of the three was in
+ * this registry; with these probes, the same edit fails it.
+ *
+ * **What remains unprobed: five messages**, counted against the original measurement rather
+ * than the running count above (that count included `assertNoticeIsEmitted`'s refusals, which
+ * the original measurement did not list).
+ * - Two cannot be probed by this check at all: `assertDescriptionsAreClean`'s message and
+ *   `assertNoticeIsClean`'s framing refusal both quote the phrase they caught, so any input
+ *   that makes them throw also makes their message fail this check. `copy-lint.test.ts` pins
+ *   that property.
+ * - Three can be, and are not yet: `assertNoticeIsClean`'s warranty-wording refusal and
+ *   `assertOnStarShape`'s two refusals in `on-star.ts` (the declared resting partner not being
+ *   the family's solid-background anchor, and the anchor being a state or foreground role
+ *   rather than a resting background). Each needs its own hand-built failing input.
  */
 export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = [
   {
