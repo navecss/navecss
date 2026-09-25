@@ -11,7 +11,9 @@
  * that actually keeps a workspace package off npm on a real `changeset
  * publish` run is its own manifest's `private: true`, and nothing before
  * this script asserted that the set of non-private packages matched the
- * publishing scope decided for this release.
+ * publishing scope decided for this release. The release now ends in
+ * `stage-release.mjs` rather than `changeset publish`, and it applies the
+ * same filter by importing `isPublishable` below, so all of this holds for it.
  *
  * At 0.1.0 exactly `@navecss/tokens` and `@navecss/core` are meant to
  * publish (`@navecss/bridge` publishes the
@@ -25,8 +27,8 @@
  * This script decides no product or launch-scope question and never will:
  * PUBLISHABLE_SET is the current scope call, not
  * derived here. Its only job is to make a manifest drifting from that
- * call trip instead of rotting silently until a real `changeset publish`
- * run finds out on launch day.
+ * call trip instead of rotting silently until a real release finds out on
+ * release day.
  */
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
@@ -144,8 +146,9 @@ function listPackageDirs(packagesDir) {
 }
 
 /**
- * True if `manifest` would be published by a real `changeset publish` run
- * (the `!pkg.packageJson.private` filter `@changesets/cli` actually uses).
+ * True if `manifest` would be published by a real release: the
+ * `!pkg.packageJson.private` filter `@changesets/cli` uses, which
+ * `stage-release.mjs` applies through this function.
  */
 export function isPublishable(manifest) {
   return manifest.private !== true

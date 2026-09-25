@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process'
  * delete them first). So the instant a chunk's content changes, its hash changes, the new
  * chunk is written, and the OLD one is never deleted. `packages/core`'s `files` field is
  * `["dist"]`, so `npm pack` takes every file under `dist/` whether referenced or not, and the
- * release path (`turbo run build && changeset publish`) has no clean step between them. The
+ * release path (`turbo run build`, then the staging step) has no clean step between them. The
  * measured instance: a stale chunk shipped a pre-fix `srOnly` docblock side by side with its
  * own already-fixed replacement.
  *

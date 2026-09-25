@@ -125,7 +125,7 @@ test('IGNORED_CHANGESET_MD_FILES transcribes the four names the shipped reader i
 test('PENDING_CHANGESET_HEADER says publish never reads the directory, so a fragment outlives this release', () => {
   assert.equal(
     PENDING_CHANGESET_HEADER,
-    'Pending changeset fragment(s) on the release path: `changeset publish` publishes each ' +
+    'Pending changeset fragment(s) on the release path: the release publishes each ' +
       "package manifest's version exactly as written and never reads .changeset/, so every " +
       'fragment below survives this publish unconsumed and is then folded into whatever ' +
       'version comes next, describing work the release below it already shipped:\n',
@@ -485,19 +485,21 @@ function rootScripts() {
   return JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).scripts
 }
 
-test('the release script runs this gate, and runs it before changeset publish', () => {
+test('the release script runs this gate, and runs it before the staging step', () => {
   const release = rootScripts().release
   const gateIndex = release.indexOf('check-no-pending-changesets.mjs')
+  const stageIndex = release.indexOf('node scripts/stage-release.mjs')
   assert.ok(gateIndex !== -1, `release must run this gate; it reads: ${release}`)
+  assert.ok(stageIndex !== -1, `release must run the staging step; it reads: ${release}`)
   assert.ok(
-    gateIndex < release.indexOf('changeset publish'),
-    `the gate must run BEFORE changeset publish; release reads: ${release}`,
+    gateIndex < stageIndex,
+    `the gate must run BEFORE the staging step; release reads: ${release}`,
   )
 })
 
 // ROW: pins the SHELL SEMANTICS of the wiring, not just substring order. `indexOf` above passes
 // against a mutant like `"node scripts/check-no-pending-changesets.mjs || true && turbo run
-// build && ... && changeset publish"`, where `|| true` swallows the gate's non-zero exit and the
+// build && ... && node scripts/stage-release.mjs"`, where `|| true` swallows the gate's non-zero exit and the
 // release proceeds regardless. Splitting `release` on `' && '` and requiring one WHOLE trimmed
 // token to equal the invocation exactly catches that: the mutant's token is the invocation PLUS
 // `|| true`, which is not a member of this list.
@@ -510,12 +512,12 @@ test('the gate is its own whole && token in release, not merely a substring of o
   )
 })
 
-// ROW: pins FIRST ahead of the BUILD specifically, not only ahead of `changeset publish` (which
+// ROW: pins FIRST ahead of the BUILD specifically, not only ahead of the staging step (which
 // the row above already covers). The header's own placement rationale is that a full workspace
 // build must not be spent on a release this gate was always going to refuse; a mutant that moved
-// the gate to run after `turbo run build` but still before `changeset publish` would pass the row
+// the gate to run after `turbo run build` but still before the staging step would pass the row
 // above and fail only this one.
-test('the gate runs before turbo run build, not merely before changeset publish', () => {
+test('the gate runs before turbo run build, not merely before the staging step', () => {
   const release = rootScripts().release
   assert.ok(
     release.indexOf('check-no-pending-changesets.mjs') < release.indexOf('turbo run build'),

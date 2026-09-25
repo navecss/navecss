@@ -2,12 +2,12 @@
 /**
  * Refusal on the release path while any changeset fragment is still pending.
  *
- * `changeset publish` publishes each workspace manifest's `version` exactly as written and
- * never reads `.changeset/` at all -- that directory is `changeset version`'s input, not
- * `publish`'s. So a fragment sitting there at publish time is not consumed, not rendered, and
+ * The release stages (and, once approved, publishes) each workspace manifest's `version`
+ * exactly as written and never reads `.changeset/` at all -- that directory is `changeset
+ * version`'s input, not the release's. So a fragment sitting there at publish time is not consumed, not rendered, and
  * not deleted: it survives into the working tree and is folded into whatever version is cut
  * NEXT, under that next version's heading, describing work the release just published already
- * shipped. Nothing about that is visible at the moment it happens. `publish` prints success.
+ * shipped. Nothing about that is visible at the moment it happens. The release prints success.
  *
  * THE PROPERTY ASSERTED: at the moment `pnpm run release` runs, `.changeset/` holds no fragment
  * for a later `changeset version` to pick up. It is enumerable rather than a judgement about
@@ -50,7 +50,7 @@
  *   between the build and the publish. That gate reads the packed output and so cannot run
  *   before the build; this one reads a directory listing and costs milliseconds, so running it
  *   first means the refusal lands before a full workspace build is spent on a release that was
- *   never going to be correct. It is still ahead of `changeset publish`, which is what this
+ *   never going to be correct. It is still ahead of the staging step, which is what this
  *   gate was asked for, and the companion suite pins that ordering rather than the position.
  *
  * WHAT COUNTS AS A PENDING FRAGMENT: the rule `@changesets/read`'s own `readChangesets` applies
@@ -113,7 +113,7 @@ export const IGNORED_CHANGESET_MD_FILES = [/^README\.md$/i, 'AGENTS.md', 'CLAUDE
  * against.
  */
 export const PENDING_CHANGESET_HEADER =
-  'Pending changeset fragment(s) on the release path: `changeset publish` publishes each ' +
+  'Pending changeset fragment(s) on the release path: the release publishes each ' +
   "package manifest's version exactly as written and never reads .changeset/, so every " +
   'fragment below survives this publish unconsumed and is then folded into whatever ' +
   'version comes next, describing work the release below it already shipped:\n'
