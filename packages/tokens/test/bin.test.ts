@@ -17,7 +17,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '..')
 const DIST_DIR = path.join(PACKAGE_ROOT, 'dist')
@@ -36,9 +36,14 @@ const SPAWN_TEST_TIMEOUT_MS = 20_000
 // The running test's effective timeout, read by `runNode` so that a spawn inside a test still on
 // the 5s default fails on every run, not only on a loaded one. Without it, a new spawn case
 // added outside a `{ timeout: SPAWN_TEST_TIMEOUT_MS }` describe passes alone and flakes later.
+// One shared value can only describe one running test, so it reads 0 (and `runNode` refuses)
+// between tests, which covers hooks, and for concurrent tests, whose runs interleave.
 const currentTest = { timeout: 0 }
 beforeEach(({ task }) => {
-  currentTest.timeout = task.timeout
+  currentTest.timeout = task.concurrent ? 0 : task.timeout
+})
+afterEach(() => {
+  currentTest.timeout = 0
 })
 
 interface RunResult {
@@ -65,7 +70,7 @@ function runNode(
 ): RunResult {
   if (currentTest.timeout < SPAWN_TEST_TIMEOUT_MS) {
     throw new Error(
-      `runNode spawned a process in a test with a ${currentTest.timeout}ms timeout; move the test into a describe carrying { timeout: SPAWN_TEST_TIMEOUT_MS }`,
+      `runNode needs a sequential test with a timeout of at least ${SPAWN_TEST_TIMEOUT_MS}ms but read ${currentTest.timeout}ms (0 means a hook or a concurrent test); move the call into a test inside a describe carrying { timeout: SPAWN_TEST_TIMEOUT_MS }`,
     )
   }
   const result = spawnSync(process.execPath, [...nodeFlags, scriptPath, ...args], {
