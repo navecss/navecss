@@ -464,15 +464,19 @@ describe('AC-theming-42 covers: R36', () => {
   it('two residual messages quote what they caught, so no probe can read them clean; the warranty refusal does not', () => {
     // Pins the split the probe registry's docblock states: two of the residual messages quote
     // the very phrase they caught, so this check cannot read them clean; one does not.
-    const descriptionMessage = captureThrownMessage(() =>
-      assertDescriptionsAreClean(new Map([['x', 'reads at 4.5:1']])),
-    )
-    expect(findConformanceFraming(descriptionMessage)).toBeDefined()
+    // One input per branch of findConformanceFraming (word, ratio, success-criterion id): the
+    // docblock's "any input" holds only while every branch quotes what it matched.
+    for (const text of ['is compliant', 'reads at 4.5:1', 'per SC 1.4.3']) {
+      const descriptionMessage = captureThrownMessage(() =>
+        assertDescriptionsAreClean(new Map([['x', text]])),
+      )
+      expect(findConformanceFraming(descriptionMessage)).toBeDefined()
 
-    const framingMessage = captureThrownMessage(() =>
-      assertNoticeIsClean('This is WCAG compliant.', 'Retheming notice'),
-    )
-    expect(findConformanceFraming(framingMessage)).toBeDefined()
+      const framingMessage = captureThrownMessage(() =>
+        assertNoticeIsClean(text, 'Retheming notice'),
+      )
+      expect(findConformanceFraming(framingMessage)).toBeDefined()
+    }
 
     const warrantyMessage = captureThrownMessage(() =>
       assertNoticeIsClean('No warranty is given.', 'Retheming notice'),
