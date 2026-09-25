@@ -1,13 +1,21 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import { diffContract } from '../packages/tokens/src/theming/core-contract.ts'
-import { formatDrift, readRecordedContract } from './check-core-contract-drift.mjs'
+import { formatDrift, readRecordedContract, scanSources } from './check-core-contract-drift.mjs'
 
 test('readRecordedContract reads the tokens array from a fixture file', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'core-contract-'))
@@ -173,5 +181,47 @@ test('end to end: the pass line reports the recorded array it read, not the de-d
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// `main()`'s own scan call site had no seam a test could reach, so reverting it to the
+// old hardcoded two-file census (`[reset.css, atoms.ts]`) was invisible to the whole
+// suite, the drift check itself, and the shipped manifest — measured directly, one mutation
+// at a time. `scanSources` is the extracted seam; these two tests assert both halves a
+// parameterised default needs: the DEFAULT (what a real, unparameterised call — the shape
+// `main()` actually uses — resolves to), and the INJECTED value (proving the walk is a real
+// recursive directory scan, not a disguised list). Asserting only the injected value would
+// leave the default — the one input production actually supplies — unverified.
+
+test('scanSources with no argument resolves to the real packages/core/src directory (the default a production run actually takes)', () => {
+  const realManifest = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, 'packages/tokens/core-contract.recorded.json'), 'utf8'),
+  )
+  const emitted = scanSources()
+  assert.deepEqual([...emitted].toSorted(), [...realManifest.tokens].toSorted())
+})
+
+test('scanSources(dir) walks dir recursively rather than reading a hardcoded file list — a file the old two-file census would have missed is picked up', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'core-contract-scan-'))
+  try {
+    writeFileSync(path.join(dir, 'reset.css'), ':root { color: var(--nave-color-old); }')
+    writeFileSync(path.join(dir, 'atoms.ts'), "const x = 'var(--nave-color-also-old)'")
+    const nested = path.join(dir, 'nested')
+    mkdirSync(nested)
+    writeFileSync(
+      path.join(nested, 'new-file.ts'),
+      "const y = 'var(--nave-radius-pill)' // not in the old two-file census",
+    )
+    const emitted = scanSources(dir)
+    assert.ok(
+      emitted.has('--nave-radius-pill'),
+      'a var(--nave-*) reference in a file outside the old hardcoded census must still be scanned',
+    )
+    assert.deepEqual(
+      [...emitted].toSorted(),
+      ['--nave-color-also-old', '--nave-color-old', '--nave-radius-pill'].toSorted(),
+    )
+  } finally {
+    rmSync(dir, { force: true, recursive: true })
   }
 })

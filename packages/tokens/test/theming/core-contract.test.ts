@@ -260,6 +260,163 @@ describe('AC-theming-32 covers: R27', () => {
   })
 })
 
+// The block-comment-only stripper left `//` line comments unstripped, so a dead
+// var(--nave-*) example written after `//` in a .ts file was recorded as live usage. Fixed
+// by replacing the regex with a small context-stack scanner (`stripComments`): a template
+// literal's ${...} interpolation is scanned as code (so a // inside it is a real comment, and
+// template TEXT outside the interpolation stays literal), an unquoted CSS url-token (url( not
+// followed by a quote) is recognised directly and copied through verbatim rather than guarded
+// by a preceding colon, and a '/" string ends at an unescaped newline the same way ECMAScript
+// and CSS Syntax both bound a string literal, so a stray quote (for example inside an unlexed
+// regex literal) cannot swallow lines it was never part of. These tests pin the fix and the
+// failure modes each of those choices closes.
+describe('// line comments are stripped, without over-stripping CSS url() or TS string literals', () => {
+  it.each([
+    {
+      label: 'a dead reference after // in a .ts-shaped source no longer counts',
+      source:
+        "// dead example: var(--nave-color-should-not-count)\nconst x = 'var(--nave-color-content-primary)'",
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label: 'a // comment on its own line does not swallow a real reference on the NEXT line',
+      source: '// a leading comment\nconst x = "var(--nave-color-content-primary)"',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        "an unquoted CSS url()'s :// is not mistaken for a line-comment opener, so a real reference on the SAME line still counts",
+      source: 'background: url(https://example.com/x.png), var(--nave-color-surface-base);',
+      expected: ['--nave-color-surface-base'],
+    },
+    {
+      label:
+        'a // sequence inside a quoted TS string literal is not mistaken for a comment opener, so a reference later on the same line still counts',
+      source:
+        'const url = "https://example.com"; const decl = \'var(--nave-color-content-primary)\'',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label: 'a // sequence inside a template literal is not mistaken for a comment opener',
+      source: 'const url = `https://example.com`; const decl = `var(--nave-color-content-primary)`',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        'an escaped quote inside a string does not end the string early, and a // right after it is still just string content, not a comment: the reference at the end still counts',
+      source: String.raw`const s = 'it\'s // not a comment var(--nave-color-content-primary)'`,
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label: 'block comments and line comments both still strip correctly when mixed in one source',
+      source: [
+        '/* doc example: var(--nave-color-dead-block) */',
+        '// dead line example: var(--nave-color-dead-line)',
+        "const live = 'var(--nave-color-content-primary)'",
+      ].join('\n'),
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        "a // inside a template literal's ${...} interpolation is a real comment: the interpolation is code, not CSS text",
+      source: '`x${foo // var(--nave-color-dead)\n  ? "a" : "b"}`',
+      expected: [],
+    },
+    {
+      label: "a nested template literal's own ${...} interpolation is pinned as code, not text",
+      source: '`a${`b${c // var(--nave-color-dead)\n}`}`',
+      expected: [],
+    },
+    {
+      label:
+        'a nested template that closes inside the FIRST interpolation does not leave the SECOND interpolation mistaken for template text: its // is still a real comment',
+      source: '`a${`b`} ${c // var(--nave-color-dead)\n}`',
+      expected: [],
+    },
+    {
+      label:
+        'template TEXT after a closed interpolation stays literal: a // there is not a comment',
+      source: '`${a} // not a comment var(--nave-color-content-primary)`',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        "a quoted '}' and a nested object literal's own braces inside an interpolation do not close the interpolation early",
+      source: "`${ {k: '}'}.k } // text var(--nave-color-content-primary)`",
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        'a // right after a colon (a type annotation or an object key) is a real comment, not a guarded false positive',
+      source:
+        "const theme:// var(--nave-color-dead)\nconst x = 'var(--nave-color-content-primary)'",
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        'an unquoted protocol-relative url(//…) is a CSS url-token, not a line comment, so a real reference on the same line still counts',
+      source: 'background: url(//cdn.example.com/x.png), var(--nave-color-surface-base);',
+      expected: ['--nave-color-surface-base'],
+    },
+    {
+      label:
+        'the CSS url-token match is ASCII case-insensitive: URL(//…) is recognised the same way',
+      source: 'background: URL(//cdn.example.com/x.png), var(--nave-color-surface-base);',
+      expected: ['--nave-color-surface-base'],
+    },
+    {
+      label:
+        'a stray quote outside any string (here, inside an unlexed regex literal) does not open a phantom string that swallows a later real comment',
+      source:
+        "const r = /'/\n// var(--nave-color-dead)\nconst y = 'var(--nave-color-content-primary)'",
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        'a stray quote outside any string does not merge with a later real string, so a // inside that real string is still plain string content, not a comment',
+      source: 'const r = /"/\nconst s = "a //b var(--nave-color-content-primary)"',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        "an unquoted url-token's verbatim span stops at a newline rather than crossing it to reach a ) on a later line, so a real comment after that newline is still stripped",
+      source: 'url(x\n// var(--nave-color-dead)\n) + "var(--nave-color-content-primary)"',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        "an unquoted url-token's verbatim span stops before a quote rather than crossing it to reach a ) inside that string, so the string is scanned normally and its own // is not a comment",
+      source: 'url(x, "a) // var(--nave-color-content-primary)")',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        'an unquoted url-token spanning whitespace and a newline before its closing ) is still copied through verbatim',
+      source: 'a{background:url( x.png\n);color:var(--nave-color-content-primary)}',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        'an escaped ) inside an unquoted url-token does not end the token early, so the real closing ) further on is what ends it, and a same-line reference after it still counts',
+      source: String.raw`a{background:url(a\)b//x.png), var(--nave-color-surface-base);}`,
+      expected: ['--nave-color-surface-base'],
+    },
+    {
+      label:
+        'a backslash-newline inside an unquoted url is not a CSS escape, so the url-token still ends at the newline and the real comment right after it is still stripped',
+      source:
+        'url(a\\' +
+        '\n' +
+        '// var(--nave-color-dead)' +
+        '\n' +
+        "const y = 'var(--nave-color-content-primary)'",
+      expected: ['--nave-color-content-primary'],
+    },
+  ])('$label', ({ source, expected }) => {
+    expect(scanCoreContract([source])).toEqual(expected)
+  })
+})
+
 describe('AC-theming-33 covers: R28', () => {
   it('the manifest is generated by the R27 scan, not hand-written, and enumerates every token by name', () => {
     const contract = scanCoreContract(['var(--nave-color-a)', 'var(--nave-color-b)'])
