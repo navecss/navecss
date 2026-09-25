@@ -50,7 +50,7 @@
     "custom-property-pattern": [
       "^nave-[a-z][a-z0-9]*(-[a-z0-9]+)*$",
       {
-        "message": "Custom properties must begin with --nave-: every custom property Nave's own stylesheets declare or reference carries the namespace, so none can collide with a consumer's (R26). The bridge stylesheets are exempt through the override below, because they declare a UI library's own variable names and never a --nave- one (docs/04-adr/0003-layer-cascade-contract.md); packages/bridge/test/custom-property-prefix.test.ts holds that side."
+        "message": "Custom properties must begin with --nave-: every custom property Nave's own stylesheets declare or reference carries the namespace, so none can collide with a consumer's (R26). The bridge stylesheets are exempt through the override below, because they declare a UI library's own variable names and never a --nave- one (docs/04-adr/0003-layer-cascade-contract.md); a property-disallowed-list rule in that override holds the bridge's side instead."
       }
     ],
 
@@ -199,7 +199,13 @@
     {
       "files": ["packages/bridge/src/**/*.css"],
       "rules": {
-        "custom-property-pattern": null
+        "custom-property-pattern": null,
+        "property-disallowed-list": [
+          ["/^--nave/"],
+          {
+            "message": "A bridge maps a UI library's own variable names onto Nave's tokens and never declares a --nave- name itself: @navecss/tokens writes those names in the same tokens.defaults layer, and the two never setting the same property is what makes the order between them irrelevant (docs/04-adr/0003-layer-cascade-contract.md). Read the Nave value through var(--nave-*) instead."
+          }
+        ]
       }
     }
   ]
