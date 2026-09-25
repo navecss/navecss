@@ -73,19 +73,21 @@ gh release create @navecss/core@0.1.1 --target <commit> --title "@navecss/core 0
 
 ## A package's first release
 
-Trusted publishing cannot create a package: every credential-free path npm offers requires the package to already exist on the registry. Staging a release checks every publishable package's registry status up front, so a package that has never been published blocks staging the whole release, not only its own — running the workflow fails immediately with a message naming the package and pointing back to this section.
+Trusted publishing cannot create a package: every credential-free path npm offers requires the package to already exist on the registry. Staging a release checks every publishable package's registry status before it stages anything, so a package that has never been published blocks staging the whole release, not only its own: the workflow fails before staging anything, with a message naming the package and pointing back to this section.
 
-A new publishable package's first version goes live by hand, the same way `@navecss/tokens` and `@navecss/core`'s first version (`0.1.0`) did:
+A new publishable package's first version goes live by hand, the same way the first version (`0.1.0`) of `@navecss/tokens` and `@navecss/core` did:
 
-1. Merge the pull request that adds the package, changeset included, as usual.
-2. Run `pnpm changeset version` and merge the resulting version pull request (step 1 above).
-3. From that commit, pack and publish the package by hand, under two-factor authentication:
+1. Merge the pull request that adds the package, as usual: with its changeset, and with the package added to `PUBLISHABLE_SET` in `scripts/check-publishable-set.mjs` (the full check fails until it is).
+2. Version it as in "1. Version the packages" above, and merge the version pull request.
+3. From that commit, with a clean working tree, build, then pack and publish the package by hand under two-factor authentication. `dist` is not committed, so packing without building first would publish a package with nothing in it, and a published version can never be replaced:
    ```sh
+   pnpm install --frozen-lockfile
+   pnpm run build
    pnpm --filter <package-name> pack
-   npm publish <tarball>
+   npm publish <tarball> --access public
    ```
-   This first version carries no provenance statement, the same accepted cost `0.1.0` carried.
-4. Create the package's trusted publisher on npmjs.com: `navecss/navecss`, workflow `release.yml`, staging only, with the same two-factor and no-bypass-token settings the other packages carry.
+   `pnpm pack` writes the tarball into the package's own directory. `--access public` is needed because npm publishes a scoped package as restricted unless told otherwise. This first version carries no provenance statement, the same accepted cost `0.1.0` carried.
+4. On npmjs.com, give the package the settings the other packages carry: a trusted publisher (`navecss/navecss`, workflow `release.yml`, staging only, with the same environment if theirs names one), and the same publishing access (two-factor authentication required, tokens not allowed to bypass it).
 5. Run the **release** workflow. It finds the version you just published already live, skips it, and stages everything else that is pending.
 
 After that, the package releases through the flow above like every other package.
@@ -93,7 +95,7 @@ After that, the package releases through the flow above like every other package
 ## When something goes wrong
 
 - **"nothing to stage"**: every version is already on npm. Step 1 was skipped, or its pull request is not merged yet.
-- **"is not on the npm registry yet"**: a publishable package has never been published, which blocks staging every package, not only its own. See "A package's first release" above.
+- **"is not on the npm registry yet"**: a publishable package has never been published (or is restricted and not visible to the workflow), which blocks staging every package, not only its own. See "A package's first release" above.
 - **The job was skipped**: the workflow was started from a branch other than `main`.
 - **A check fails in the workflow**: nothing was staged. Fix it through a normal pull request and run the workflow again.
 - **Staging failed partway**: the log names what was already staged before the failure. Approve or reject those first, then fix the problem and run the workflow again.

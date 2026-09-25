@@ -167,12 +167,14 @@ function runTool(command, args, options) {
  * True if `error` (thrown by the `npm view <name> versions --json` call below) is npm's own
  * structured 404 for a package that has never been published at all - never a version mismatch,
  * because this script never asks `npm view` for one specific version, only for the whole
- * `versions` list, so a 404 on that call has exactly one cause. Verified directly against the
- * installed npm 12 CLI (not inferred from docs): npm writes `{"error":{"code":"E404",...}}` to
- * STDOUT for this case, the same "an E404 exit, not empty output" surprise `isOnRegistry`'s own
- * call already has to handle for a missing version. Reads the structured `error.code` field,
- * never `error.message` or stderr prose, so a real failure with a different or absent code (a
- * network error, an auth error) is left for the caller to throw unchanged.
+ * `versions` list, so a 404 on that call means the package itself is missing: never published, or
+ * restricted and not visible to this run (npm answers both the same way; no package here is meant
+ * to be restricted). Verified directly against the installed npm 12 CLI (not inferred from docs):
+ * npm writes `{"error":{"code":"E404",...}}` to STDOUT for this case, the same "an E404 exit, not
+ * empty output" surprise `isOnRegistry`'s own call already has to handle for a missing version.
+ * Reads the structured `error.code` field, never `error.message` or stderr prose, so a real
+ * failure with a different or absent code (a network error, an auth error) is left for the caller
+ * to throw unchanged.
  */
 export function isMissingPackageError(error) {
   const stdout = Buffer.isBuffer(error.stdout) ? error.stdout.toString('utf8') : error.stdout
@@ -193,11 +195,12 @@ export function isMissingPackageError(error) {
  */
 export function composeMissingPackageMessage(name) {
   return (
-    `Staging: ${name} is not on the npm registry yet. npm's trusted publishing cannot create a ` +
-    'package - every credential-free path it offers requires the package to already exist - ' +
-    `so this run cannot stage anything until ${name}'s first version is published by hand. See ` +
-    '"A package\'s first release" in docs/02-contribute/releasing.md for the steps, then run ' +
-    'this release again.'
+    `Staging: ${name} is not on the npm registry yet, or is not visible to this run (npm ` +
+    "answers a restricted package it cannot read the same way). npm's trusted publishing " +
+    'cannot create a package - every credential-free path it offers requires the package to ' +
+    `already exist - so this run cannot stage anything until ${name}'s first version is ` +
+    'published by hand. See "A package\'s first release" in docs/02-contribute/releasing.md ' +
+    'for the steps, then run this release again.'
   )
 }
 
@@ -209,12 +212,12 @@ export function composeMissingPackageMessage(name) {
  * at all, `npm view` 404s the same way and this throws a named remedy instead
  * (`composeMissingPackageMessage`) rather than npm's raw error. Any OTHER failure here (a
  * network error, an auth error) is still thrown as-is, because guessing could stage the wrong
- * set.
+ * set. `run` defaults to spawning npm; tests pass a stub.
  */
-function isOnRegistry(name, version) {
+export function isOnRegistry(name, version, run = runTool) {
   let output
   try {
-    output = runTool('npm', ['view', name, 'versions', '--json'], { encoding: 'utf8' })
+    output = run('npm', ['view', name, 'versions', '--json'], { encoding: 'utf8' })
   } catch (error) {
     if (isMissingPackageError(error)) {
       throw new Error(composeMissingPackageMessage(name), { cause: error })
