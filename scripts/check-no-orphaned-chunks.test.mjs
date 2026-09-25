@@ -523,7 +523,7 @@ function runScriptIn(rootDir) {
   const copied = path.join(scriptsDir, path.basename(SCRIPT_PATH))
   copyFileSync(SCRIPT_PATH, copied)
   try {
-    const stdout = execFileSync('node', [copied], { encoding: 'utf8' })
+    const stdout = execFileSync(process.execPath, [copied], { encoding: 'utf8' })
     return { status: 0, out: stdout }
   } catch (error) {
     return { status: error.status, out: `${error.stdout ?? ''}${error.stderr ?? ''}` }
