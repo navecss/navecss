@@ -23,7 +23,9 @@ Nave has one maintainer, so the aim is to acknowledge a report within 14 days.
 After that you hear whether it is accepted as a vulnerability. If it is, the fix
 and the advisory are worked on with you in the private report, and you are
 credited in the published advisory unless you ask not to be. Please keep the
-problem private until that advisory is published.
+problem private until that advisory is published. If it is not accepted, the
+private report is closed and the problem can go to a public issue like any other
+bug.
 
 ## Supported versions
 
