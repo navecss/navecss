@@ -940,8 +940,8 @@ describe('R3-03 covers: R15/R21 (the file label is delimited at every door)', ()
  * Simulates a real, RESOLVABLE `@navecss/core` install — declares `"./package.json"` in its
  * own `exports` map, the mandated core-version resolution route, at the given `version`. The population
  * `checkManifestVersionSkew` exists for: a consumer whose installed `@navecss/core` does not
- * match this manifest's recorded producer version (`0.1.0`, per `dist/core-contract.json` at
- * the time this test runs).
+ * match this manifest's recorded producer version (whatever `dist/core-contract.json` records
+ * at the time this test runs, which follows `@navecss/core`'s own version).
  */
 function installResolvableCore(projectDir: string, version: string): void {
   const coreDir = path.join(projectDir, 'node_modules', '@navecss', 'core')
@@ -972,7 +972,15 @@ function installResolvableCore(projectDir: string, version: string): void {
 describe('build() surfaces a version-skew advisory to stderr, never changing its exit code', () => {
   it("a resolvable @navecss/core at a version different from the manifest's recorded producer version: build prints the skew to stderr, alongside (not replacing) the R35 stdout line, and STILL exits 0", () => {
     const { binPath, projectDir } = scratchInstall()
-    installResolvableCore(projectDir, '9.9.9') // manifest's recorded producer version is 0.1.0
+    installResolvableCore(projectDir, '9.9.9')
+    // Read, not hardcoded: the recorded version follows @navecss/core's own, so a literal here
+    // goes stale on every release.
+    const manifest = JSON.parse(
+      readFileSync(path.join(DIST_DIR, 'core-contract.json'), 'utf8'),
+    ) as {
+      producer: { version: string }
+    }
+    expect(manifest.producer.version).not.toBe('9.9.9')
     const outDir = path.join(projectDir, 'out')
 
     const result = runNode(
@@ -986,7 +994,7 @@ describe('build() surfaces a version-skew advisory to stderr, never changing its
     expect(result.stdout).toMatch(/^Built from seed/)
     expect(result.stderr).toMatch(/version skew/i)
     expect(result.stderr).toMatch(/core contract this @navecss\/tokens ships/)
-    expect(result.stderr).toMatch(/@navecss\/core@0\.1\.0/)
+    expect(result.stderr).toContain(`@navecss/core@${manifest.producer.version}`)
     expect(result.stderr).toMatch(/@9\.9\.9/)
     expect(result.stderr).toMatch(/may not carry every custom-property name/i)
     expect(result.stderr).toMatch(/Reinstall matching versions/)
