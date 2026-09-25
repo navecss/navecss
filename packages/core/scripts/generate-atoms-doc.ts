@@ -9,7 +9,7 @@
  * Checked for drift by test/atoms-doc-drift.test.ts, which imports `generate` and diffs it
  * against the committed file rather than re-deriving the rule.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { format, resolveConfig } from 'prettier'
@@ -117,19 +117,58 @@ function renderDeclarations(declarations: Record<string, string>): string {
 }
 
 /**
-The atom's pseudo-class, `@media` and `@container` selectors/conditions, `<br>`-joined.
+One variant entry: its selector/condition beside the declarations it applies, so a reader never
+has to cross-reference `atoms.ts` to see what a `:focus-visible` or `@media` variant actually
+does (a selector-only list previously let `focusRing`'s row show its resting `outline: none;`
+with no hint that the `:focus-visible` variant restores it).
  */
-function renderVariants(atom: AtomDefinition): string {
+function renderVariantEntry(selector: string, declarations: Record<string, string>): string {
+  return `\`${selector}\` — ${renderDeclarations(declarations)}`
+}
+
+/**
+Every variant entry a `media`/`container` block of `kind` (`@media` or `@container`) contributes:
+the block's own entry, THEN one entry per pseudo-class nested inside it (selector
+`` `${kind} ${query} ${pseudo}` ``). The block's own entry is skipped when it has no declarations
+and DOES have nested pseudos, so a block that exists only to hold pseudos never emits an empty
+`— —` row.
+ */
+function renderMediaBlockVariants(
+  kind: '@container' | '@media',
+  blocks: NonNullable<AtomDefinition['media']>,
+): string[] {
+  const parts: string[] = []
+  for (const [query, block] of Object.entries(blocks)) {
+    const hasDeclarations = Object.keys(block.declarations ?? {}).length > 0
+    if (hasDeclarations || !block.pseudos) {
+      parts.push(renderVariantEntry(`${kind} ${query}`, block.declarations ?? {}))
+    }
+    if (block.pseudos) {
+      parts.push(
+        ...Object.entries(block.pseudos).map(([pseudo, declarations]) =>
+          renderVariantEntry(`${kind} ${query} ${pseudo}`, declarations),
+        ),
+      )
+    }
+  }
+  return parts
+}
+
+/**
+The atom's pseudo-class, `@media` and `@container` variants — including a pseudo-class nested
+inside a `media`/`container` block — each beside the declarations it applies, `<br>`-joined.
+ */
+export function renderVariants(atom: AtomDefinition): string {
   const parts: string[] = []
   if (atom.pseudos) {
-    parts.push(...Object.keys(atom.pseudos).map((selector) => `\`${selector}\``))
+    parts.push(
+      ...Object.entries(atom.pseudos).map(([selector, declarations]) =>
+        renderVariantEntry(selector, declarations),
+      ),
+    )
   }
-  if (atom.media) {
-    parts.push(...Object.keys(atom.media).map((query) => `\`@media ${query}\``))
-  }
-  if (atom.container) {
-    parts.push(...Object.keys(atom.container).map((query) => `\`@container ${query}\``))
-  }
+  if (atom.media) parts.push(...renderMediaBlockVariants('@media', atom.media))
+  if (atom.container) parts.push(...renderMediaBlockVariants('@container', atom.container))
   return parts.length === 0 ? '—' : parts.join('<br>')
 }
 
@@ -186,7 +225,14 @@ export async function generate(): Promise<string> {
   })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Compare REALPATHS rather than a raw `file://` URL built from process.argv[1] (that older form
+// silently writes nothing under a spaced or symlinked invocation path; see build-css.ts's isMain
+// for the full rationale).
+const isMain =
+  process.argv[1] !== undefined &&
+  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+
+if (isMain) {
   writeFileSync(OUTPUT_PATH, await generate())
   console.log(`Wrote ${OUTPUT_PATH}`)
 }
