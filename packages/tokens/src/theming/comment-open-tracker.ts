@@ -27,12 +27,19 @@
  * Deliberately not a CSS parser: reading a line left to right, while outside a comment the
  * next opening delimiter opens one; while inside, the next closing delimiter closes it, and an
  * opening delimiter seen between them is ordinary text. While outside a comment, a quoted
- * string is skipped whole before that scan resumes, matching the one piece of real CSS
- * tokenization this module needs: a string is consumed as a single token before the tokenizer
- * ever looks for a comment start again, so an opening or closing comment delimiter inside one
- * is ordinary string content, never a delimiter (the project's accessibility and licensing
- * reviewer's S12, applied path — closes the false alarm S12 recorded and explicitly left open as "a
- * legitimate later improvement, not a defect being deferred"). A quote seen WHILE inside a comment
+ * string that CLOSES on its own line is skipped whole before that scan resumes, matching the
+ * one piece of real CSS tokenization this module needs: a closed string is consumed as a
+ * single token before the tokenizer ever looks for a comment start again, so an opening or
+ * closing comment delimiter inside one is ordinary string content, never a delimiter (the
+ * project's accessibility and licensing reviewer's S12, applied path — closes the false alarm
+ * S12 recorded for exactly that closed-string shape). A string that does NOT close on its line
+ * is deliberately not skipped, and that is this module's one intentional departure from the
+ * tokenizer: CSS consumes an unterminated string as a bad-string token running to the end of
+ * the line, so a comment opener inside it is string content to a parser while a reader sees a
+ * comment opening, and the requirement this module serves is stated over what a reader sees.
+ * The departure can only ADD a refusal: resuming the scan just past the opening quote can open
+ * a comment the tokenizer would not, and can never close one the tokenizer would leave open.
+ * A quote seen WHILE inside a comment
  * is not given the same treatment: a real CSS comment closes at the first literal closing
  * delimiter, quoted or not, so tracking quotes there would let a string-shaped comment body
  * suppress a real close and turn an over-refusal into the silent pass this module exists to
@@ -78,7 +85,8 @@ function isLineStillInsideAnOpenCommentAfterScanning(
 
     const character = line[cursor]
     if (character === '"' || character === "'") {
-      cursor = indexAfterAStringLiteral(line, cursor, character)
+      const afterTheString = indexAfterAStringLiteral(line, cursor, character)
+      cursor = afterTheString === -1 ? cursor + 1 : afterTheString
       continue
     }
 
@@ -95,9 +103,18 @@ function isLineStillInsideAnOpenCommentAfterScanning(
 }
 
 /**
- * Returns the index just past the closing quote matching the one at `quoteIndex`, or the end of
- * the line if the string never closes. A backslash escapes the following character (CSS's own
+ * Returns the index just past the closing quote matching the one at `quoteIndex`, or `-1` if the
+ * string never closes on this line. A backslash escapes the following character (CSS's own
  * escape rule), so an escaped quote never ends the string early.
+ *
+ * `-1`, never `line.length`: an unterminated string is a genuine CSS bad-string token, correctly
+ * consumed to the end of the line by a real tokenizer, but this module's own bound is stated in
+ * terms of what a READER sees, and a reader does not stop reading at an unclosed quote — the
+ * caller resumes scanning one character past the opening quote instead, so a real comment
+ * opener sitting on the same line after it is still seen. Monotone by construction (swept
+ * against generated line-sets covering every CSS-shaped combination of quotes, comment
+ * delimiters and backslashes): this can only ever flag a line the old rule missed, never one it
+ * caught, because the only case that changes is one where the tokenizer and the reader disagree.
  */
 function indexAfterAStringLiteral(line: string, quoteIndex: number, quote: string): number {
   let cursor = quoteIndex + 1
@@ -111,5 +128,5 @@ function indexAfterAStringLiteral(line: string, quoteIndex: number, quote: strin
     cursor += 1
   }
 
-  return line.length
+  return -1
 }

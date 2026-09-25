@@ -243,9 +243,10 @@ describe('AC-theming-40 covers: R34', () => {
     // defect being deferred" — on the condition that fixing it cannot touch the subset case
     // this guard exists to catch (the test above) or refuse less than S1-S11 require. The
     // scan now tracks whether it is inside a quoted string while outside a comment and skips
-    // quoted content entirely: a `/*` or `*/` inside a string is ordinary text there, matching
-    // real CSS tokenization (a string is consumed as one token before the tokenizer ever looks
-    // for a comment start again).
+    // quoted content entirely: a `/*` or `*/` inside a string that CLOSES on its own line is
+    // ordinary text there, matching real CSS tokenization (a closed string is consumed as one
+    // token before the tokenizer ever looks for a comment start again). An UNTERMINATED string
+    // is deliberately not skipped this way; see the dedicated test below.
     //
     // If you touch the scan again and this first assertion starts throwing, you have
     // reintroduced the false alarm rather than fixed something: keep this assertion AND the
@@ -259,6 +260,35 @@ describe('AC-theming-40 covers: R34', () => {
     expect(() =>
       assertNoticeIsEmitted(closerInAValue, RETHEMING_NOTICE, 'Retheming notice'),
     ).not.toThrow()
+  })
+
+  it('an UNTERMINATED string on a line above the notice does not swallow a real comment opener after it — one fixture per quote character', () => {
+    // The shape S12 did not cover: S12's own fixtures use only CLOSED strings
+    // (content: "/*", content: "*/"), so the fix for THIS issue is one character away from
+    // D4/D5 above and no existing row could have caught its regression. An unterminated
+    // string is a genuine CSS bad-string token consumed to the end of the line by a real
+    // tokenizer, but the requirement this guard serves is stated over what a READER sees, and
+    // a reader does not stop reading at an unclosed quote: a `/*` sitting after one on the
+    // same line still opens a comment to them, which then swallows the notice line below it
+    // exactly as the dropped-delimiter case above does.
+    //
+    // Verify this row is ARMED, not merely present, before trusting it: temporarily restore
+    // `indexAfterAStringLiteral`'s old `return line.length` and confirm both assertions below
+    // go red (SILENT PASS, not.toThrow() would then be the wrong expectation), then restore
+    // the fix. Done live for this change; not re-verified by CI, which can only run the fix.
+    const singleQuoteUnterminated = `:root {\n  --a: 'x; /* This palette meets WCAG AA.\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
+    expect(() =>
+      assertNoticeIsEmitted(singleQuoteUnterminated, RETHEMING_NOTICE, 'Retheming notice'),
+    ).toThrow(
+      /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
+    )
+
+    const doubleQuoteUnterminated = `:root {\n  --a: "x; /* This palette meets WCAG AA.\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
+    expect(() =>
+      assertNoticeIsEmitted(doubleQuoteUnterminated, RETHEMING_NOTICE, 'Retheming notice'),
+    ).toThrow(
+      /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
+    )
   })
 })
 
