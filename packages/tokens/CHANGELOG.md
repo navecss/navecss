@@ -1,0 +1,7 @@
+# @navecss/tokens
+
+## 0.1.1
+
+### Patch Changes
+
+- 180a423: `navecss-tokens build` now warns when the installed `@navecss/core` is not the version this package's core contract was recorded against, the same check `navecss-tokens validate` already made. Until now `build` finished normally in that case and said nothing about the mismatch, although the `tokens.css` it wrote could be missing custom-property names the installed `@navecss/core` reads. The warning goes to stderr, alongside the usual `Built from seed` summary on stdout, and names both versions. It is advisory only: `build`'s exit code never changes because of it, and no warning is printed when no `@navecss/core` is installed or its version cannot be read. Called through the JavaScript API, `build()` prints nothing and returns the same fact as `versionSkew` (`recorded`, `installed` and `producerName`), which is `undefined` when the versions match or cannot be compared. `@navecss/tokens/build` also exports `formatVersionSkewFact(producerName, versionSkew)`, which turns that field into the same description of the mismatch the command prints; its wording may change in any release, so decide what to do from the field, not from the text. `validate`'s version-skew message now names the core contract this package ships instead of "this manifest"; what it reports is unchanged.
