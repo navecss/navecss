@@ -160,6 +160,26 @@ export default defineConfig([
         },
       ],
     },
+    settings: {
+      // eslint-plugin-import-x's own file-extension allowlist
+      // (`import-x/extensions`) defaults to `['.js', '.mjs', '.cjs']` when unset — it does NOT
+      // read `import-x/resolver`'s configured extensions, and this repository is TypeScript
+      // throughout. Every rule built on the plugin's ExportMap (no-cycle among them) silently
+      // no-ops on every `.ts` import target: `ExportMap.for`'s `hasValidExtension` gate
+      // rejects the file before any parsing is attempted, which is indistinguishable from "no
+      // cycle found" in the rule's own output. Root-caused by patching a scratch copy of
+      // `eslint-plugin-import-x`'s own `no-cycle.js`/`export-map.js`/`ignore.js` with
+      // temporary debug logging and reverting it, never the tracked node_modules; not a
+      // config guess. `import-x/no-unresolved` and `no-unresolved`-adjacent rules are
+      // unaffected because they resolve PATHS only and never consult this allowlist.
+      //
+      // Scoped to `.ts` files on purpose. Set globally, it also admits `.ts` and `.d.ts`
+      // targets reached from `.js`/`.mjs` files (the TypeScript resolver hands back
+      // declaration files for plain packages), and those files are linted with the default
+      // JavaScript parser, which cannot parse TypeScript: every such import then reports a
+      // parse error instead of a result.
+      'import-x/extensions': ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.tsx'],
+    },
   },
 
   // ── JSDoc ──────────────────────────────────────────────────────────────────
