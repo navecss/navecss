@@ -8,6 +8,8 @@ You need publish rights on both packages on npmjs.com, with two-factor authentic
 
 Nobody publishes from their own machine and no npm token exists anywhere. A GitHub Actions workflow builds the packages and **stages** them on npm: the new versions are uploaded but cannot be installed. They go live only when a maintainer **approves** each one with two-factor authentication. The workflow authenticates to npm through each package's trusted publisher, which allows staging only, so the pipeline that builds a release can never make it live on its own. npm attaches a provenance statement to every version released this way.
 
+The workflow can only run from `main`. That is enforced twice: the workflow itself skips a run started from any other branch, and its job runs in a `release` GitHub environment whose deployment branches are restricted to `main`, which each package's trusted publisher also names, so npm additionally refuses a token that carries no claim for that environment. A run from any other branch cannot stage a release at all.
+
 The workflow's own header comment ([`.github/workflows/release.yml`](../../.github/workflows/release.yml)) explains why each part of it is the way it is.
 
 ## 1. Version the packages
@@ -87,7 +89,7 @@ A new publishable package's first version goes live by hand, the same way the fi
    npm publish <tarball> --access public
    ```
    `pnpm pack` writes the tarball to the directory it is run from, here the repository root, and prints its path. `--access public` is needed because npm publishes a scoped package as restricted unless told otherwise. This first version carries no provenance statement, the same accepted cost `0.1.0` carried.
-4. On npmjs.com, give the package the settings the other packages carry: a trusted publisher (`navecss/navecss`, workflow `release.yml`, staging only, with the same environment if theirs names one), and the same publishing access (two-factor authentication required, tokens not allowed to bypass it).
+4. On npmjs.com, give the package the settings the other packages carry: a trusted publisher (`navecss/navecss`, workflow `release.yml`, environment `release`, staging only), and the same publishing access (two-factor authentication required, tokens not allowed to bypass it).
 5. Run the **release** workflow. It finds the version you just published already live, skips it, and stages everything else that is pending.
 
 After that, the package releases through the flow above like every other package.

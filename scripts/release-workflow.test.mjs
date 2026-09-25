@@ -61,6 +61,16 @@ test('the staging job runs only from main', () => {
   assert.match(workflowCode(), /^ {4}if: github\.ref == 'refs\/heads\/main'$/m)
 })
 
+// ROW: the `if:` above is only the first guard, and a branch that edits this file can drop it.
+// The `release` environment is the second, independent one: its deployment branch policy
+// restricts it to `main` (repository setting, not pinned here), so GitHub refuses to run the job
+// at all from another branch, and each package's npm trusted publisher names this same
+// environment, so npm refuses a token carrying no claim for it. A branch run then cannot stage
+// even if it drops the `if:` check.
+test('the staging job runs in the release environment', () => {
+  assert.match(workflowCode(), /^ {4}environment: release$/m)
+})
+
 // ROW: widened past the one form (`secrets.NAME`) the previous pattern caught. `secrets['NAME']`
 // (bracket form) reads the same secret and was not matched before, and `NPM_AUTH_TOKEN` /
 // `_authToken` are the other two names npm itself reads a credential from.
