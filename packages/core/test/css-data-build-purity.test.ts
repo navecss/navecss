@@ -7,11 +7,12 @@
  * package's own `build` per `turbo.json`) carries no reference to the new file.
  *
  * Whether the package's public `exports` map gained a key for the new file is covered by
- * AC-06's own check instead of a test here (`css-data-shape.test.ts`: no exports-map key
- * resolves to `nave.css-data.json` or `skills/`), plus a head-vs-merge-base double build run as
- * review-time evidence. A hard-coded, sorted list of every current export key is a standing
- * trip-wire against any later, unrelated, lawful export the package adds — it fails on someone
- * else's PR, not on a regression in this one.
+ * AC-06's own check instead of a test here (`css-data-shape.test.ts`: the packed tarball's
+ * `exports` map has no key resolving to `nave.css-data.json` or `skills/`). This file covers the
+ * other half: `dist/` (built fresh, since `test` depends on this package's own `build` per
+ * `turbo.json`) carries no reference to the new file. A hard-coded, sorted list of every current
+ * export key is a standing trip-wire against any later, unrelated, lawful export the package
+ * adds — it fails on someone else's PR, not on a regression in this one.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'

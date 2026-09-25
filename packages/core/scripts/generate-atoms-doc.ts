@@ -9,7 +9,7 @@
  * Checked for drift by test/atoms-doc-drift.test.ts, which imports `generate` and diffs it
  * against the committed file rather than re-deriving the rule.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { format, resolveConfig } from 'prettier'
@@ -225,7 +225,14 @@ export async function generate(): Promise<string> {
   })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Compare REALPATHS rather than a raw `file://` URL built from process.argv[1] (that older form
+// silently writes nothing under a spaced or symlinked invocation path; see build-css.ts's isMain
+// for the full rationale).
+const isMain =
+  process.argv[1] !== undefined &&
+  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+
+if (isMain) {
   writeFileSync(OUTPUT_PATH, await generate())
   console.log(`Wrote ${OUTPUT_PATH}`)
 }

@@ -18,6 +18,7 @@ import { packCoreTarball } from './helpers/pack-core.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const GENERATOR_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-css-data.ts'), 'utf8')
+const ATOMS_DOC_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-atoms-doc.ts'), 'utf8')
 
 interface CssCustomData {
   version: number
@@ -32,6 +33,16 @@ function readCommittedCssData(): CssCustomData {
   return JSON.parse(
     readFileSync(path.resolve(HERE, '../nave.css-data.json'), 'utf8'),
   ) as CssCustomData
+}
+
+/**
+ * Every module specifier `src` imports, static or dynamic, single- or double-quoted: covers
+ * `from '...'`, `from "..."`, `import('...')` and `import("...")`. The prior regex
+ * (`/from '([^']+)'/g`) matched only single-quoted static imports, so a double-quoted static
+ * import or a dynamic `import(...)` of a disallowed package would pass unseen.
+ */
+function importSpecifiers(src: string): string[] {
+  return [...src.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)(['"])([^'"]+)\1/g)].map((m) => m[2]!)
 }
 
 describe('AC-consumer-constraints-06: the packed tarball ships the file at the package root only', () => {
@@ -97,7 +108,7 @@ describe('AC-consumer-constraints-08: the @nave entry claims only what it delive
   })
 
   it('the generator imports no third-party CSS/browser data package', () => {
-    const specifiers = [...GENERATOR_SRC.matchAll(/from '([^']+)'/g)].map((m) => m[1])
+    const specifiers = importSpecifiers(GENERATOR_SRC)
     const allowed = new Set([
       'node:fs',
       'node:path',
@@ -107,9 +118,14 @@ describe('AC-consumer-constraints-08: the @nave entry claims only what it delive
       '../src/atoms.ts',
     ])
     for (const specifier of specifiers) {
-      expect(allowed.has(specifier!), `unexpected import: ${specifier}`).toBe(true)
+      expect(allowed.has(specifier), `unexpected import: ${specifier}`).toBe(true)
     }
     expect(GENERATOR_SRC).not.toMatch(/mdn-data|@vscode\/web-custom-data|@mdn\/browser-compat-data/)
+  })
+
+  it('importSpecifiers catches both quote styles and a dynamic import', () => {
+    const planted = `import x from "mdn-data"\nawait import('evil-pkg')\n`
+    expect(importSpecifiers(planted)).toEqual(['mdn-data', 'evil-pkg'])
   })
 })
 
@@ -227,6 +243,16 @@ describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference'
 })
 
 /**
+ * The correct realpath comparison, held as its own constant rather than only inline inside
+ * `hasRealpathGuard`, so the reformat-tolerance test below can build its wrapped fixture FROM
+ * this string directly instead of `.replace`-ing it out of a live source file: a fixture derived
+ * from the real file goes vacuous the moment that file is reformatted for an unrelated reason
+ * (the replace target silently stops matching and the row starts asserting nothing).
+ */
+const CANONICAL_REALPATH_GUARD =
+  'realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])'
+
+/**
  * True when `source`, with every run of whitespace collapsed to a single space, contains the
  * correct realpath comparison — tolerant of a lawful reformat (the comparison wrapped across
  * lines), the same tolerance `check-main-guard-spaced-path.test.mjs`'s own `GUARD_PATTERN`
@@ -234,23 +260,21 @@ describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference'
  * behaviourally-correct file the moment it is reformatted.
  */
 function hasRealpathGuard(source: string): boolean {
-  return source
-    .replaceAll(/\s+/g, ' ')
-    .includes('realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])')
+  return source.replaceAll(/\s+/g, ' ').includes(CANONICAL_REALPATH_GUARD)
 }
 
-describe('generate-css-data.ts guards its file-writing driver for spaced and symlinked invocation paths', () => {
+describe('generate-css-data.ts and generate-atoms-doc.ts guard their file-writing drivers for spaced and symlinked invocation paths', () => {
   it('does not use the broken `file://${process.argv[1]}` template, and does use the realpath comparison', () => {
-    expect(GENERATOR_SRC).not.toContain('file://${process.argv[1]}')
-    expect(hasRealpathGuard(GENERATOR_SRC)).toBe(true)
+    for (const src of [GENERATOR_SRC, ATOMS_DOC_SRC]) {
+      expect(src).not.toContain('file://${process.argv[1]}')
+      expect(hasRealpathGuard(src)).toBe(true)
+    }
   })
 
   it('still passes a lawful reformat that wraps the comparison across two lines', () => {
-    const reformatted = GENERATOR_SRC.replace(
-      'realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])',
-      'realpathSync(fileURLToPath(import.meta.url)) ===\n    realpathSync(process.argv[1])',
-    )
-    expect(hasRealpathGuard(reformatted)).toBe(true)
+    const wrapped = CANONICAL_REALPATH_GUARD.replace(' === ', ' ===\n    ')
+    expect(wrapped).toContain('\n')
+    expect(hasRealpathGuard(wrapped)).toBe(true)
   })
 
   it('still fails on a copy carrying the old broken template', () => {

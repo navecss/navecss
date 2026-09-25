@@ -31,13 +31,14 @@ function rowFor(atomName: string): string {
 }
 
 /**
- * Every `prop: value;` declaration string every variant of `atomName` applies — top-level
- * pseudos, and each `media`/`container` block's own declarations plus its nested pseudos — that
- * does NOT appear in `row` (a rendered `ATOMS.md` table row). An atom with no variants returns
- * `[]` trivially: it has no declarations to look for.
+ * Every `prop: value;` declaration string every variant of `atom` applies — top-level pseudos,
+ * and each `media`/`container` block's own declarations plus its nested pseudos — that does NOT
+ * appear in `row` (a rendered `ATOMS.md` table row, or any other rendered variant text). An atom
+ * with no variants returns `[]` trivially: it has no declarations to look for. Takes the
+ * `AtomDefinition` directly so a synthetic, non-registered atom can be checked too, not only a
+ * live one looked up by name (see `missingVariantDeclarations` below for that case).
  */
-function missingVariantDeclarations(row: string, atomName: AtomName): string[] {
-  const atom: AtomDefinition = atoms[atomName]
+function missingVariantDeclarationsForAtom(row: string, atom: AtomDefinition): string[] {
   const expected: string[] = []
   const collect = (declarations: Record<string, string>) => {
     for (const [prop, value] of Object.entries(declarations)) {
@@ -57,6 +58,11 @@ function missingVariantDeclarations(row: string, atomName: AtomName): string[] {
     }
   }
   return expected.filter((declaration) => !row.includes(declaration))
+}
+
+/** `missingVariantDeclarationsForAtom`, looked up by the name of a live built-in atom. */
+function missingVariantDeclarations(row: string, atomName: AtomName): string[] {
+  return missingVariantDeclarationsForAtom(row, atoms[atomName])
 }
 
 describe('AC-consumer-constraints-10: ATOMS.md renders each variant’s own declarations', () => {
@@ -94,6 +100,21 @@ describe('renderVariants renders pseudos nested inside a media or container bloc
     const rendered = renderVariants(synthetic)
     expect(rendered).toContain('@media (width < 1px) :hover')
     expect(rendered).toContain('color: red;')
+  })
+
+  it('a synthetic atom with a nested container pseudo renders its selector and declarations, and missingVariantDeclarationsForAtom covers the container branch', () => {
+    const synthetic: AtomDefinition = {
+      declarations: {},
+      container: {
+        '(width > 1px)': {
+          pseudos: { ':focus': { color: 'blue' } },
+        },
+      },
+    }
+    const rendered = renderVariants(synthetic)
+    expect(rendered).toContain('@container (width > 1px) :focus')
+    expect(rendered).toContain('color: blue;')
+    expect(missingVariantDeclarationsForAtom(rendered, synthetic)).toEqual([])
   })
 })
 

@@ -5,17 +5,11 @@
  * editor would ever see (`test/helpers/pack-core.ts`, never the working-tree copy).
  */
 import { beforeAll, describe, expect, it } from 'vitest'
-// `vscode-css-languageservice` ships CommonJS at its `main` entry; Vitest's Vite-based resolver
-// follows `module`/`exports` to the real ESM build, where these ARE named exports — but typing
-// the import as a default+destructure, as plain Node's ESM loader would require for the CJS
-// entry, keeps this file correct under either resolution.
-import cssLanguageService from 'vscode-css-languageservice'
+import { getCSSLanguageService, newCSSDataProvider, TextDocument } from 'vscode-css-languageservice'
 
 import { readSections } from '../scripts/generate-atoms-doc.ts'
 import { atoms } from '../src/atoms.ts'
 import { packCoreTarball } from './helpers/pack-core.ts'
-
-const { getCSSLanguageService, newCSSDataProvider, TextDocument } = cssLanguageService
 
 interface PackedCssData {
   atDirectives: Array<{ description: { kind: string; value: string } }>
