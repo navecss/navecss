@@ -17,7 +17,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '..')
 const DIST_DIR = path.join(PACKAGE_ROOT, 'dist')
@@ -26,11 +26,20 @@ const PACKAGE_JSON = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.js
   version: string
 }
 
-// Every case that spawns a real `node` process (via `runNode`/`scratchInstall`) queues behind
-// the OS scheduler when the whole monorepo's tests run in parallel, and can exceed the 5s
-// default even though the same case takes well under a second in isolation. Cases that assert
-// on static values with no spawn keep the default, so a genuine hang still shows up fast.
+// Every case that copies `dist/` into a scratch install and spawns a real `node` process via
+// `runNode` queues behind the OS scheduler when the whole monorepo's tests run in parallel, and
+// can exceed the 5s default even though the same case takes well under a second in isolation.
+// Cases that assert on static values with no spawn keep the default, so a genuine hang still
+// shows up fast.
 const SPAWN_TEST_TIMEOUT_MS = 20_000
+
+// The running test's effective timeout, read by `runNode` so that a spawn inside a test still on
+// the 5s default fails on every run, not only on a loaded one. Without it, a new spawn case
+// added outside a `{ timeout: SPAWN_TEST_TIMEOUT_MS }` describe passes alone and flakes later.
+const currentTest = { timeout: 0 }
+beforeEach(({ task }) => {
+  currentTest.timeout = task.timeout
+})
 
 interface RunResult {
   status: number
@@ -54,6 +63,11 @@ function runNode(
   cwd: string,
   nodeFlags: string[] = [],
 ): RunResult {
+  if (currentTest.timeout < SPAWN_TEST_TIMEOUT_MS) {
+    throw new Error(
+      `runNode spawned a process in a test with a ${currentTest.timeout}ms timeout; move the test into a describe carrying { timeout: SPAWN_TEST_TIMEOUT_MS }`,
+    )
+  }
   const result = spawnSync(process.execPath, [...nodeFlags, scriptPath, ...args], {
     cwd,
     encoding: 'utf8',
