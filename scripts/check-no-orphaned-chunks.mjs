@@ -530,12 +530,11 @@ function listPackageDirs(packagesDir) {
  * applies to either shape.
  */
 export function parsePackedFiles(raw) {
-  const parsed = JSON.parse(raw)
-  const entries = Array.isArray(parsed) ? parsed : Object.values(parsed ?? {})
-  if (entries.length === 0) {
+  const entry = tarballEntries(JSON.parse(raw))[0]
+  if (entry === null || typeof entry !== 'object') {
     throw new Error('npm pack --dry-run --json returned no tarball entry')
   }
-  const packed = entries[0].files
+  const packed = entry.files
   if (!Array.isArray(packed)) {
     throw new Error('npm pack --dry-run --json returned a tarball entry with no files list')
   }
@@ -543,6 +542,16 @@ export function parsePackedFiles(raw) {
     throw new Error('npm pack --dry-run --json reported zero packed files for this package')
   }
   return packed.map((file) => file.path)
+}
+
+/**
+ * The tarball entries of one parsed reply, in either npm shape (see `parsePackedFiles`). Any
+ * other JSON value yields no entries, so it is reported as a missing tarball entry.
+ */
+function tarballEntries(parsed) {
+  if (Array.isArray(parsed)) return parsed
+  if (parsed !== null && typeof parsed === 'object') return Object.values(parsed)
+  return []
 }
 
 /**

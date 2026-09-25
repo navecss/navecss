@@ -445,6 +445,14 @@ test('parsePackedFiles throws on a JSON null reply, naming the missing tarball e
   assert.throws(() => parsePackedFiles('null'), /no tarball entry/)
 })
 
+// A reply that is not an array or object, or whose first entry is not an object, is named as
+// carrying no tarball entry rather than surfacing a raw TypeError or a mislabelled reason.
+test('parsePackedFiles throws on a null npm 12 entry or a bare string reply, naming the missing tarball entry', () => {
+  assert.throws(() => parsePackedFiles('{"x":null}'), /no tarball entry/)
+  assert.throws(() => parsePackedFiles('[null]'), /no tarball entry/)
+  assert.throws(() => parsePackedFiles('"abc"'), /no tarball entry/)
+})
+
 // ROW: `readPackedJsFiles` reads ONLY the packed `.js` files.
 //
 // STATED PRECISELY, BECAUSE THE OBVIOUS RATIONALE FOR THIS ROW IS WRONG. The carve-out filed this
