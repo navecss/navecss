@@ -14,6 +14,21 @@
 
 import { linesThatBeginInsideAnUnclosedComment } from './comment-open-tracker.ts'
 import { assertContrastFloors, runContrastHarness } from './contrast.ts'
+// Two import cycles close through the next line, and both are kept on purpose:
+//   copy-lint.ts -> guard-message-probes.ts -> copy-lint.ts
+//   emit.ts -> copy-lint.ts -> guard-message-probes.ts -> emit.ts
+// They are safe because no module in either cycle reads an imported value while it is still
+// initialising. The values that cross them (RETHEMING_NOTICE, FEEDBACK_SHARED_IDENTITY_NOTICE,
+// TINT_SEED_COMMENT_STEM, ACCESSIBILITY_GUARD_MESSAGE_PROBES, and the assertNoticeIsEmitted
+// function) are read only inside a function body or a probe's `capture` thunk, which runs
+// after all three modules have finished loading.
+// Verified against the built output by importing each of the three modules first, in a fresh
+// Node process each, and reading through to the other two: no throw and no `undefined` in any
+// order. A top-level read of any of the four constants would break that, so they stay inside
+// functions. assertNoticeIsEmitted is grouped with them because it, too, is never read outside
+// a thunk here, not because it shares their hazard: a function declaration is hoisted whole
+// before any module body runs, so a top-level read of it would not break the same way.
+// eslint-disable-next-line import-x/no-cycle -- safe, see the comment above
 import { ACCESSIBILITY_GUARD_MESSAGE_PROBES } from './guard-message-probes.ts'
 
 const FORBIDDEN_WORDS = /\b(WCAG|AA|AAA|accessible|compliant|meets|conformant)\b/i
