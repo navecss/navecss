@@ -25,13 +25,25 @@ export function readReadme() {
 }
 
 /**
- * Every backtick fence in `body`, plus the set of line indexes any fence occupies (delimiters
- * included). CommonMark's own rule, not a ``` toggle: a toggle closes on the first ``` it
- * meets, so a four-backtick fence nesting a three-backtick one would invert the fence state
- * for the rest of the document and move every section boundary below it.
+ * Every backtick fence in `body`, the set of line indexes any fence occupies (delimiters
+ * included), and the set of line indexes any HTML comment block occupies. Both are tracked in
+ * ONE pass, in document order, because they suppress each other: while a comment is open, a line
+ * that looks like a fence marker is not one (so a stray ``` inside a comment cannot swallow the
+ * rest of the document into a phantom fence, and a real fence inside a comment is not a fence a
+ * reader ever sees rendered); while a fence is open, `<!--` is literal fence content, not the
+ * start of a comment. A second, independent scan of either kind over the same text could not
+ * honour this, because each one's state depends on the other's.
  *
- * `content` keeps each line's own indentation, so `contentStart` / `contentEnd` are exact
- * offsets into `body` and a command can be located in the artifact it was found in.
+ * FENCES: CommonMark's own rule, not a ``` toggle: a toggle closes on the first ``` it meets, so
+ * a four-backtick fence nesting a three-backtick one would invert the fence state for the rest of
+ * the document and move every section boundary below it. `content` keeps each line's own
+ * indentation, so `contentStart` / `contentEnd` are exact offsets into `body` and a command can be
+ * located in the artifact it was found in.
+ *
+ * COMMENTS: CommonMark's type-2 HTML block. Outside a fence and outside an already-open comment,
+ * a line whose content opens with `<!--` (indented no more than three spaces) starts one; it ends
+ * on the first line containing `-->` (which may be the opening line itself, after the `<!--`), or
+ * otherwise runs to the end of the document.
  */
 export function scanFences(body) {
   const lines = body.split('\n')
@@ -52,6 +64,7 @@ export function scanFences(body) {
 
   const fences = []
   const fenceLines = new Set()
+  const commentLines = new Set()
   const close = (open, to) => {
     const content = lines.slice(open.from, to).join('\n')
     const contentStart = offset[open.from] ?? body.length
@@ -67,25 +80,39 @@ export function scanFences(body) {
   }
 
   let open = null
+  let commentOpen = false
   for (const [i, line] of lines.entries()) {
-    const found = marker(line)
-    if (open === null) {
-      if (found !== null) {
-        open = { ...found, from: i + 1 }
-        fenceLines.add(i)
+    if (open !== null) {
+      // Inside a fence: `<!--` is literal content, so only a closer is ever looked for.
+      fenceLines.add(i)
+      const found = marker(line)
+      if (found !== null && found.info === '' && found.length >= open.length) {
+        close(open, i)
+        open = null
       }
       continue
     }
-    fenceLines.add(i)
-    if (found !== null && found.info === '' && found.length >= open.length) {
-      close(open, i)
-      open = null
+    if (commentOpen) {
+      // Inside a comment: a fence marker is not recognised, so only the closer is looked for.
+      commentLines.add(i)
+      if (line.includes('-->')) commentOpen = false
+      continue
+    }
+    const found = marker(line)
+    if (found !== null) {
+      open = { ...found, from: i + 1 }
+      fenceLines.add(i)
+      continue
+    }
+    if (/^ {0,3}<!--/.test(line)) {
+      commentLines.add(i)
+      commentOpen = !line.slice(line.indexOf('<!--') + 4).includes('-->')
     }
   }
-  // An unclosed fence runs to the end of the document (CommonMark).
+  // An unclosed fence runs to the end of the document (CommonMark); so does an unclosed comment.
   if (open !== null) close(open, lines.length)
 
-  return { fences, fenceLines }
+  return { fences, fenceLines, commentLines }
 }
 
 /**
@@ -97,15 +124,16 @@ export function fences(body) {
 }
 
 /**
- * The line indexes that are REAL markdown headings: `#`-prefixed and outside every fence. A
- * `#` line inside a fence is a shell comment, and reading it as a heading truncates the
- * section that contains it.
+ * The line indexes that are REAL markdown headings: `#`-prefixed and outside every fence and
+ * every HTML comment block. A `#` line inside a fence is a shell comment, and a `#` line inside
+ * an HTML comment is never rendered at all; reading either as a heading truncates the section
+ * that contains it.
  */
 export function headingLines(lines) {
-  const { fenceLines } = scanFences(lines.join('\n'))
+  const { fenceLines, commentLines } = scanFences(lines.join('\n'))
   const headings = new Set()
   for (const [i, line] of lines.entries()) {
-    if (!fenceLines.has(i) && /^#{1,6}\s/.test(line)) headings.add(i)
+    if (!fenceLines.has(i) && !commentLines.has(i) && /^#{1,6}\s/.test(line)) headings.add(i)
   }
   return headings
 }
