@@ -50,7 +50,7 @@
     "custom-property-pattern": [
       "^nave-[a-z][a-z0-9]*(-[a-z0-9]+)*$",
       {
-        "message": "Custom properties must begin with --nave- (R26: every custom property Nave's source authors carries this prefix)."
+        "message": "Custom properties must begin with --nave-: every custom property Nave's own stylesheets declare or reference carries the namespace, so none can collide with a consumer's (R26). The bridge stylesheets are exempt through the override below, because they declare a UI library's own variable names and never a --nave- one (docs/04-adr/0003-layer-cascade-contract.md); packages/bridge/test/custom-property-prefix.test.ts holds that side."
       }
     ],
 
@@ -194,6 +194,12 @@
             "ignoreProperties": ["-webkit-text-size-adjust"]
           }
         ]
+      }
+    },
+    {
+      "files": ["packages/bridge/src/**/*.css"],
+      "rules": {
+        "custom-property-pattern": null
       }
     }
   ]
