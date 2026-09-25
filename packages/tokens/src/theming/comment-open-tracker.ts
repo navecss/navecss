@@ -28,46 +28,108 @@
  * next opening delimiter opens one; while inside, the next closing delimiter closes it, and an
  * opening delimiter seen between them is ordinary text. While outside a comment, a quoted
  * string that CLOSES on its own line is skipped whole before that scan resumes, matching the
- * one piece of real CSS tokenization this module needs: a closed string is consumed as a
+ * one piece of real CSS tokenization this module models: a closed string is consumed as a
  * single token before the tokenizer ever looks for a comment start again, so an opening or
  * closing comment delimiter inside one is ordinary string content, never a delimiter (the
  * project's accessibility and licensing reviewer's S12, applied path — closes the false alarm
  * S12 recorded for exactly that closed-string shape). A string that does NOT close on its line
- * is deliberately not skipped, and that is this module's one intentional departure from the
- * tokenizer: CSS consumes an unterminated string as a bad-string token running to the end of
- * the line, so a comment opener inside it is string content to a parser while a reader sees a
- * comment opening, and the requirement this module serves is stated over what a reader sees.
- * The departure can only ADD a refusal: resuming the scan just past the opening quote can open
- * a comment the tokenizer would not, and can never close one the tokenizer would leave open.
- * A quote seen WHILE inside a comment
- * is not given the same treatment: a real CSS comment closes at the first literal closing
- * delimiter, quoted or not, so tracking quotes there would let a string-shaped comment body
- * suppress a real close and turn an over-refusal into the silent pass this module exists to
- * prevent.
+ * has no single reading, so this module does not pick one. Where an unescaped line break cuts
+ * it off, CSS consumes it as a bad-string token running to the end of the line, which makes a
+ * comment opener after the quote string content to a parser, while a reader can take the quote
+ * as a stray character and see that opener open a comment. The module therefore reads every
+ * line three ways: as the tokenizer does; resuming just past a quote that does not close, with
+ * later strings on that line still recognised; and resuming just past it with no new string
+ * started on the rest of that line, because once one quote is stray, how the later ones pair is
+ * a guess. Each reading carries its own comment state from line to line, and a line counts as
+ * beginning inside an unclosed comment if ANY of the three says so. That makes this a pure
+ * addition by construction, not by sampling: the lines reported always include every line any
+ * single reading reports (the tokenizer's reading among them, which was this module's earlier
+ * rule), so a reading can add a refusal but can never remove one another reading gives. The
+ * readings are followed separately, never collapsed into one answer per line, because they can
+ * disagree about which delimiter a shared asterisk belongs to: given a slash, an asterisk and a
+ * slash in a row, a reading already inside a comment closes it on the last two characters,
+ * while a reading outside opens a comment on the first two and is still inside it after the
+ * third, so following only one reading can drop a refusal another gives. A quote seen WHILE
+ * inside a comment is not given the same treatment: a real CSS comment closes at the first
+ * literal closing delimiter, quoted or not, so tracking quotes there would let a string-shaped
+ * comment body suppress a real close and turn an over-refusal into the silent pass this module
+ * exists to prevent.
  */
 export function linesThatBeginInsideAnUnclosedComment(
   lines: readonly string[],
 ): ReadonlySet<number> {
   const beginningsInsideAnUnclosedComment = new Set<number>()
-  let isInsideAnOpenComment = false
+  const readings = [
+    isLineStillInsideAnOpenCommentAsTheTokenizerReadsIt,
+    isLineStillInsideAnOpenCommentResumingPastAnUnclosedQuote,
+    isLineStillInsideAnOpenCommentResumingWithNoFurtherStrings,
+  ]
 
-  for (const [index, line] of lines.entries()) {
-    if (isInsideAnOpenComment) beginningsInsideAnUnclosedComment.add(index)
-    isInsideAnOpenComment = isLineStillInsideAnOpenCommentAfterScanning(line, isInsideAnOpenComment)
+  for (const scanOneLine of readings) {
+    let isInsideAnOpenComment = false
+
+    for (const [index, line] of lines.entries()) {
+      if (isInsideAnOpenComment) beginningsInsideAnUnclosedComment.add(index)
+      isInsideAnOpenComment = scanOneLine(line, isInsideAnOpenComment)
+    }
   }
 
   return beginningsInsideAnUnclosedComment
 }
 
 /**
- * Scans one line left to right from `wasInsideAnOpenComment`'s state, per the module docblock's
- * rule (outside a comment, a quoted string is skipped whole and the next opener opens one;
- * inside, the next closer closes it regardless of quotes; an opener seen while inside is
- * ordinary text). Returns whether the line ends still inside an open comment. Its own function,
- * rather than a `while` nested in the `for` loop above, only to keep this file's per-line scan
- * at one level of nesting.
+ * Reading one of three (module docblock): as the tokenizer does. Scans one line left to right
+ * from `wasInsideAnOpenComment`'s state. Outside a comment, a quoted string that closes on its
+ * own line is skipped whole and the next opening delimiter opens one; a string that does not
+ * close on this line runs to the end of it, so nothing after it on this line is looked at.
+ * Inside a comment, the next closing delimiter closes it regardless of quoting, and an opening
+ * delimiter seen while inside is ordinary text. Returns whether the line ends still inside an
+ * open comment.
  */
-function isLineStillInsideAnOpenCommentAfterScanning(
+function isLineStillInsideAnOpenCommentAsTheTokenizerReadsIt(
+  line: string,
+  wasInsideAnOpenComment: boolean,
+): boolean {
+  let isInsideAnOpenComment = wasInsideAnOpenComment
+  let cursor = 0
+
+  while (cursor < line.length) {
+    if (isInsideAnOpenComment) {
+      const closerIndex = line.indexOf('*/', cursor)
+      if (closerIndex === -1) return true
+      isInsideAnOpenComment = false
+      cursor = closerIndex + 2
+      continue
+    }
+
+    const character = line[cursor]
+    if (character === '"' || character === "'") {
+      const afterTheString = indexAfterAStringLiteral(line, cursor, character)
+      cursor = afterTheString === -1 ? line.length : afterTheString
+      continue
+    }
+
+    if (line.startsWith('/*', cursor)) {
+      isInsideAnOpenComment = true
+      cursor += 2
+      continue
+    }
+
+    cursor += 1
+  }
+
+  return isInsideAnOpenComment
+}
+
+/**
+ * Reading two of three (module docblock): resuming just past a quote that does not close, with
+ * later strings on that line still recognised. Same outside/inside rules as the tokenizer's
+ * reading above, except that a string which does not close on this line does not consume the
+ * rest of it: the scan resumes one character past the opening quote, so a real comment
+ * delimiter after it is still seen, and a later quote on the same line can still open a string
+ * of its own.
+ */
+function isLineStillInsideAnOpenCommentResumingPastAnUnclosedQuote(
   line: string,
   wasInsideAnOpenComment: boolean,
 ): boolean {
@@ -103,18 +165,54 @@ function isLineStillInsideAnOpenCommentAfterScanning(
 }
 
 /**
+ * Reading three of three (module docblock): resuming just past a quote that does not close,
+ * with no new string started for the rest of that line. Same as the previous reading up to the
+ * first quote that does not close on this line; from there, because how any later quote on this
+ * line would pair is a guess, this reading stops treating quote characters as string openers
+ * for the remainder of the line and reads them, like everything else outside a comment, as
+ * ordinary text.
+ */
+function isLineStillInsideAnOpenCommentResumingWithNoFurtherStrings(
+  line: string,
+  wasInsideAnOpenComment: boolean,
+): boolean {
+  let isInsideAnOpenComment = wasInsideAnOpenComment
+  let hasPassedAnUnclosedQuote = false
+  let cursor = 0
+
+  while (cursor < line.length) {
+    if (isInsideAnOpenComment) {
+      const closerIndex = line.indexOf('*/', cursor)
+      if (closerIndex === -1) return true
+      isInsideAnOpenComment = false
+      cursor = closerIndex + 2
+      continue
+    }
+
+    const character = line[cursor]
+    if (!hasPassedAnUnclosedQuote && (character === '"' || character === "'")) {
+      const afterTheString = indexAfterAStringLiteral(line, cursor, character)
+      hasPassedAnUnclosedQuote = afterTheString === -1
+      cursor = hasPassedAnUnclosedQuote ? cursor + 1 : afterTheString
+      continue
+    }
+
+    if (line.startsWith('/*', cursor)) {
+      isInsideAnOpenComment = true
+      cursor += 2
+      continue
+    }
+
+    cursor += 1
+  }
+
+  return isInsideAnOpenComment
+}
+
+/**
  * Returns the index just past the closing quote matching the one at `quoteIndex`, or `-1` if the
  * string never closes on this line. A backslash escapes the following character (CSS's own
  * escape rule), so an escaped quote never ends the string early.
- *
- * `-1`, never `line.length`: an unterminated string is a genuine CSS bad-string token, correctly
- * consumed to the end of the line by a real tokenizer, but this module's own bound is stated in
- * terms of what a READER sees, and a reader does not stop reading at an unclosed quote — the
- * caller resumes scanning one character past the opening quote instead, so a real comment
- * opener sitting on the same line after it is still seen. Monotone by construction (swept
- * against generated line-sets covering every CSS-shaped combination of quotes, comment
- * delimiters and backslashes): this can only ever flag a line the old rule missed, never one it
- * caught, because the only case that changes is one where the tokenizer and the reader disagree.
  */
 function indexAfterAStringLiteral(line: string, quoteIndex: number, quote: string): number {
   let cursor = quoteIndex + 1

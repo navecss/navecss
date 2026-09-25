@@ -234,12 +234,16 @@ export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
  * while outside a comment (the accessibility steward's condition S12, applied path), so a
  * declaration VALUE carrying a comment delimiter inside a string that CLOSES on its own line is
  * read as ordinary string content, not as an open comment. A string that does not close on its
- * line is not skipped: CSS consumes it as a bad-string token to the end of the line, so a
- * comment opener inside it is string content to a parser while a reader sees a comment opening,
- * and this requirement is stated over what the reader sees. It stays quote-blind while inside a
- * comment, because a real CSS comment closes at the first literal closing delimiter regardless
- * of quoting, and tracking quotes there would risk exactly the silent pass this tracker exists
- * to prevent.
+ * line has no single reading: where an unescaped line break cuts it off, CSS consumes it as a
+ * bad-string token to the end of the line, so a comment opener after it is string content to a
+ * parser, while a reader can take the quote as stray and see that opener open a comment. Where
+ * the check cannot tell which of those a reader takes, the requirement above says refuse, so
+ * the tracker follows three readings of such a line (set out in `comment-open-tracker.ts`) and
+ * reports a line as beginning inside a comment if any of them does. That can only add a
+ * refusal to what the tokenizer's reading alone would give, never remove one. It stays
+ * quote-blind while inside a comment, because a real CSS comment closes at the first literal
+ * closing delimiter regardless of quoting, and tracking quotes there would risk exactly the
+ * silent pass this tracker exists to prevent.
  */
 export function assertNoticeIsEmitted(css: string, notice: string, noticeLabel: string): void {
   if (!css.includes(notice)) {
