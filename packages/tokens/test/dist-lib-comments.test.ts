@@ -24,9 +24,18 @@
  * test permanently red for a reason unrelated to what it exists to pin. A synthetic,
  * self-contained probe has neither confound.
  */
+import type { CompilerOptions, ParseConfigHost } from 'typescript'
+
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import ts from 'typescript'
+import {
+  createCompilerHost,
+  createProgram,
+  createSourceFile,
+  parseJsonConfigFileContent,
+  readConfigFile,
+  sys,
+} from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -70,27 +79,33 @@ export const PROBE_VALUE: number = 1
 `
 
 /**
+ * Reads a file through TypeScript's own system host, the same reader `tsc` uses.
+ */
+function readFile(fileName: string): string | undefined {
+  return sys.readFile(fileName)
+}
+
+/**
  * Reads `tsconfig.build.json`'s compiler options by resolving its `extends` chain the same
  * way `tsc` does, rather than reading only its own top-level `compilerOptions`. A raw
  * `JSON.parse` of that file alone would silently ignore its `"extends": "../../tsconfig.base.json"`
  * and compile the probe with TypeScript's DEFAULT target/module/strict settings instead of the
  * build's own, which is not the exact compiler options the build declares.
  */
-function readCompilerOptionsFromTsconfigBuild(): ts.CompilerOptions {
-  const readFile = (fileName: string): string | undefined => ts.sys.readFile(fileName)
-  const raw = ts.readConfigFile(TSCONFIG_BUILD_PATH, readFile)
+function readCompilerOptionsFromTsconfigBuild(): CompilerOptions {
+  const raw = readConfigFile(TSCONFIG_BUILD_PATH, readFile)
   // Checked separately: when the config file itself is missing, `raw.error` is set and
   // `raw.config` is undefined, in which case `parsed.errors` below comes back EMPTY and would
   // pass. Without this the case is still caught, but by the `removeComments` assertion, whose
   // message does not name the missing file.
   expect(raw.error).toBeUndefined()
-  const host: ts.ParseConfigHost = {
+  const host: ParseConfigHost = {
     useCaseSensitiveFileNames: true,
     readDirectory: () => [SOURCE_FILE_NAME],
     fileExists: () => true,
     readFile,
   }
-  const parsed = ts.parseJsonConfigFileContent(raw.config, host, path.dirname(TSCONFIG_BUILD_PATH))
+  const parsed = parseJsonConfigFileContent(raw.config, host, path.dirname(TSCONFIG_BUILD_PATH))
   expect(parsed.errors).toEqual([])
   expect(parsed.options.removeComments).toBe(true)
   return parsed.options
@@ -106,21 +121,21 @@ function readCompilerOptionsFromTsconfigBuild(): ts.CompilerOptions {
 function compileProbe(): Map<string, string> {
   const options = readCompilerOptionsFromTsconfigBuild()
   const outputs = new Map<string, string>()
-  const host = ts.createCompilerHost(options)
+  const host = createCompilerHost(options)
   host.getSourceFile = (fileName, languageVersion) =>
     fileName === SOURCE_FILE_NAME
-      ? ts.createSourceFile(fileName, PROBE_SOURCE, languageVersion, true)
+      ? createSourceFile(fileName, PROBE_SOURCE, languageVersion, true)
       : undefined
   host.writeFile = (fileName, text) => outputs.set(fileName, text)
   // Fall through to the real filesystem for everything that is NOT the probe. Under
   // `moduleResolution: NodeNext` the module format is resolved per file from the nearest
   // `package.json`, so a host that answers only for the probe cannot see this package's
   // `"type": "module"` and silently compiles the fixture as CommonJS.
-  host.fileExists = (fileName) => fileName === SOURCE_FILE_NAME || ts.sys.fileExists(fileName)
+  host.fileExists = (fileName) => fileName === SOURCE_FILE_NAME || sys.fileExists(fileName)
   host.readFile = (fileName) =>
-    fileName === SOURCE_FILE_NAME ? PROBE_SOURCE : ts.sys.readFile(fileName)
+    fileName === SOURCE_FILE_NAME ? PROBE_SOURCE : sys.readFile(fileName)
 
-  const program = ts.createProgram([SOURCE_FILE_NAME], options, host)
+  const program = createProgram([SOURCE_FILE_NAME], options, host)
   expect(program.getSemanticDiagnostics()).toEqual([])
   program.emit()
   return outputs
