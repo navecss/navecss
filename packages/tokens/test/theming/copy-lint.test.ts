@@ -26,6 +26,19 @@ import { assertNeutralChromaCeilingWithinMargin } from '../../src/theming/neutra
 import { TRANSCRIPTION_VARIANT } from './cleared-copy.ts'
 
 /**
+ * Runs `fn`, expecting it to throw, and returns the thrown message, failing loudly if the
+ * fixture stops reproducing its own failing direction.
+ */
+function captureThrownMessage(fn: () => void): string {
+  try {
+    fn()
+  } catch (error) {
+    return (error as Error).message
+  }
+  throw new Error('fixture did not throw — test setup is broken, not the guard')
+}
+
+/**
  * Runs `assertNoticeIsEmitted` over `css` for the
  * given `notice`/`noticeLabel` pair and returns the thrown message, failing loudly if the
  * fixture stops reproducing its own failing direction rather than silently reporting an empty
@@ -40,12 +53,7 @@ import { TRANSCRIPTION_VARIANT } from './cleared-copy.ts'
  * analogue of Row 3 below is the row that pinned that failure red before this parameterization.
  */
 function captureNoticeViolation(css: string, notice: string, noticeLabel: string): string {
-  try {
-    assertNoticeIsEmitted(css, notice, noticeLabel)
-  } catch (error) {
-    return (error as Error).message
-  }
-  throw new Error('fixture did not throw — test setup is broken, not the guard')
+  return captureThrownMessage(() => assertNoticeIsEmitted(css, notice, noticeLabel))
 }
 
 /**
@@ -59,19 +67,6 @@ function sanitizeRestClause(message: string): string {
     /that line reads ".*?", and it is built/,
     'that line reads "<REST>", and it is built',
   )
-}
-
-/**
- * Runs `fn`, expecting it to throw, and returns the thrown message, failing loudly if the
- * fixture stops reproducing its own failing direction.
- */
-function captureThrownMessage(fn: () => void): string {
-  try {
-    fn()
-  } catch (error) {
-    return (error as Error).message
-  }
-  throw new Error('fixture did not throw — test setup is broken, not the guard')
 }
 
 describe('AC-theming-40 covers: R34', () => {
@@ -465,7 +460,9 @@ describe('AC-theming-42 covers: R36', () => {
     // Pins the split the probe registry's docblock states: two of the residual messages quote
     // the very phrase they caught, so this check cannot read them clean; one does not.
     // One input per branch of findConformanceFraming (word, ratio, success-criterion id): the
-    // docblock's "any input" holds only while every branch quotes what it matched.
+    // docblock's "any input" holds only while each branch's message still fails the check.
+    // Today that is by quoting the match, and the success-criterion reason also names WCAG;
+    // either keeps it true, so this asserts the outcome rather than the quote.
     for (const text of ['is compliant', 'reads at 4.5:1', 'per SC 1.4.3']) {
       const descriptionMessage = captureThrownMessage(() =>
         assertDescriptionsAreClean(new Map([['x', text]])),
