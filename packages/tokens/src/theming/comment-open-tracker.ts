@@ -60,17 +60,17 @@ export function linesThatBeginInsideAnUnclosedComment(
 ): ReadonlySet<number> {
   const beginningsInsideAnUnclosedComment = new Set<number>()
   const readings = [
-    isLineStillInsideAnOpenCommentAsTheTokenizerReadsIt,
-    isLineStillInsideAnOpenCommentResumingPastAnUnclosedQuote,
-    isLineStillInsideAnOpenCommentResumingWithNoFurtherStrings,
+    AS_THE_TOKENIZER_READS_IT,
+    RESUMING_PAST_AN_UNCLOSED_QUOTE,
+    RESUMING_WITH_NO_FURTHER_STRINGS,
   ]
 
-  for (const scanOneLine of readings) {
+  for (const reading of readings) {
     let isInsideAnOpenComment = false
 
     for (const [index, line] of lines.entries()) {
       if (isInsideAnOpenComment) beginningsInsideAnUnclosedComment.add(index)
-      isInsideAnOpenComment = scanOneLine(line, isInsideAnOpenComment)
+      isInsideAnOpenComment = isLineStillInsideAnOpenComment(line, isInsideAnOpenComment, reading)
     }
   }
 
@@ -78,90 +78,34 @@ export function linesThatBeginInsideAnUnclosedComment(
 }
 
 /**
- * Reading one of three (module docblock): as the tokenizer does. Scans one line left to right
- * from `wasInsideAnOpenComment`'s state. Outside a comment, a quoted string that closes on its
- * own line is skipped whole and the next opening delimiter opens one; a string that does not
- * close on this line runs to the end of it, so nothing after it on this line is looked at.
- * Inside a comment, the next closing delimiter closes it regardless of quoting, and an opening
- * delimiter seen while inside is ordinary text. Returns whether the line ends still inside an
- * open comment.
+ * What one reading (module docblock: the three named below) says about a quoted string that
+ * does NOT close on the line it opens on: where the scan resumes, and whether a later quote on
+ * the same line can still open a string of its own. Nothing about a reading is a caller-supplied
+ * flag; each of the three below is its own named, fixed constant.
  */
-function isLineStillInsideAnOpenCommentAsTheTokenizerReadsIt(
-  line: string,
-  wasInsideAnOpenComment: boolean,
-): boolean {
-  let isInsideAnOpenComment = wasInsideAnOpenComment
-  let cursor = 0
+interface UnclosedQuoteReading {
+  readonly resumesAtEndOfLineAfterAnUnclosedQuote: boolean
+  readonly aLaterQuoteCanStillOpenAString: boolean
+}
 
-  while (cursor < line.length) {
-    if (isInsideAnOpenComment) {
-      const closerIndex = line.indexOf('*/', cursor)
-      if (closerIndex === -1) return true
-      isInsideAnOpenComment = false
-      cursor = closerIndex + 2
-      continue
-    }
-
-    const character = line[cursor]
-    if (character === '"' || character === "'") {
-      const afterTheString = indexAfterAStringLiteral(line, cursor, character)
-      cursor = afterTheString === -1 ? line.length : afterTheString
-      continue
-    }
-
-    if (line.startsWith('/*', cursor)) {
-      isInsideAnOpenComment = true
-      cursor += 2
-      continue
-    }
-
-    cursor += 1
-  }
-
-  return isInsideAnOpenComment
+/**
+ * Reading one of three (module docblock): as the tokenizer does. An unclosed string runs to the
+ * end of the line, so nothing after it on this line is looked at.
+ */
+const AS_THE_TOKENIZER_READS_IT: UnclosedQuoteReading = {
+  resumesAtEndOfLineAfterAnUnclosedQuote: true,
+  aLaterQuoteCanStillOpenAString: true,
 }
 
 /**
  * Reading two of three (module docblock): resuming just past a quote that does not close, with
- * later strings on that line still recognised. Same outside/inside rules as the tokenizer's
- * reading above, except that a string which does not close on this line does not consume the
- * rest of it: the scan resumes one character past the opening quote, so a real comment
- * delimiter after it is still seen, and a later quote on the same line can still open a string
- * of its own.
+ * later strings on that line still recognised. The scan resumes one character past the opening
+ * quote, so a real comment delimiter after it is still seen, and a later quote on the same line
+ * can still open a string of its own.
  */
-function isLineStillInsideAnOpenCommentResumingPastAnUnclosedQuote(
-  line: string,
-  wasInsideAnOpenComment: boolean,
-): boolean {
-  let isInsideAnOpenComment = wasInsideAnOpenComment
-  let cursor = 0
-
-  while (cursor < line.length) {
-    if (isInsideAnOpenComment) {
-      const closerIndex = line.indexOf('*/', cursor)
-      if (closerIndex === -1) return true
-      isInsideAnOpenComment = false
-      cursor = closerIndex + 2
-      continue
-    }
-
-    const character = line[cursor]
-    if (character === '"' || character === "'") {
-      const afterTheString = indexAfterAStringLiteral(line, cursor, character)
-      cursor = afterTheString === -1 ? cursor + 1 : afterTheString
-      continue
-    }
-
-    if (line.startsWith('/*', cursor)) {
-      isInsideAnOpenComment = true
-      cursor += 2
-      continue
-    }
-
-    cursor += 1
-  }
-
-  return isInsideAnOpenComment
+const RESUMING_PAST_AN_UNCLOSED_QUOTE: UnclosedQuoteReading = {
+  resumesAtEndOfLineAfterAnUnclosedQuote: false,
+  aLaterQuoteCanStillOpenAString: true,
 }
 
 /**
@@ -172,12 +116,26 @@ function isLineStillInsideAnOpenCommentResumingPastAnUnclosedQuote(
  * for the remainder of the line and reads them, like everything else outside a comment, as
  * ordinary text.
  */
-function isLineStillInsideAnOpenCommentResumingWithNoFurtherStrings(
+const RESUMING_WITH_NO_FURTHER_STRINGS: UnclosedQuoteReading = {
+  resumesAtEndOfLineAfterAnUnclosedQuote: false,
+  aLaterQuoteCanStillOpenAString: false,
+}
+
+/**
+ * Scans one line left to right from `wasInsideAnOpenComment`'s state, following `reading`'s
+ * policy (above) for a quoted string that does not close on this line. Outside a comment, a
+ * quoted string that closes on its own line is skipped whole and the next opening delimiter
+ * opens one. Inside a comment, the next closing delimiter closes it regardless of quoting, and
+ * an opening delimiter seen while inside is ordinary text. Returns whether the line ends still
+ * inside an open comment.
+ */
+function isLineStillInsideAnOpenComment(
   line: string,
   wasInsideAnOpenComment: boolean,
+  reading: UnclosedQuoteReading,
 ): boolean {
   let isInsideAnOpenComment = wasInsideAnOpenComment
-  let hasPassedAnUnclosedQuote = false
+  let hasPassedAnUnclosedQuoteOnThisLine = false
   let cursor = 0
 
   while (cursor < line.length) {
@@ -190,10 +148,19 @@ function isLineStillInsideAnOpenCommentResumingWithNoFurtherStrings(
     }
 
     const character = line[cursor]
-    if (!hasPassedAnUnclosedQuote && (character === '"' || character === "'")) {
-      const afterTheString = indexAfterAStringLiteral(line, cursor, character)
-      hasPassedAnUnclosedQuote = afterTheString === -1
-      cursor = hasPassedAnUnclosedQuote ? cursor + 1 : afterTheString
+    const canThisQuoteOpenAString =
+      isAQuoteCharacter(character) &&
+      (reading.aLaterQuoteCanStillOpenAString || !hasPassedAnUnclosedQuoteOnThisLine)
+
+    if (canThisQuoteOpenAString) {
+      // Reaches here only once isAQuoteCharacter(character) has already held above.
+      const afterTheString = indexAfterAStringLiteral(line, cursor, character!)
+      if (afterTheString === -1) {
+        hasPassedAnUnclosedQuoteOnThisLine = true
+        cursor = reading.resumesAtEndOfLineAfterAnUnclosedQuote ? line.length : cursor + 1
+      } else {
+        cursor = afterTheString
+      }
       continue
     }
 
@@ -207,6 +174,13 @@ function isLineStillInsideAnOpenCommentResumingWithNoFurtherStrings(
   }
 
   return isInsideAnOpenComment
+}
+
+/**
+ * Whether `character` opens a CSS string literal (a single or double quote).
+ */
+function isAQuoteCharacter(character: string | undefined): boolean {
+  return character === '"' || character === "'"
 }
 
 /**

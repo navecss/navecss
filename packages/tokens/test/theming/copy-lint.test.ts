@@ -303,7 +303,8 @@ describe('AC-theming-40 covers: R34', () => {
     // overlap.
     //
     // Verify this row is ARMED, not merely present: dropping the tokenizer's own reading reds
-    // this row; either resume-based reading alone still refuses it.
+    // this row. Neither resume-based reading refuses it on its own; the tokenizer's reading is
+    // the only one that does.
     const overlappingDelimiter = `:root {\n  --a: 'x "/*\n  /*/ This palette meets WCAG AA.\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
     expect(() =>
       assertNoticeIsEmitted(overlappingDelimiter, RETHEMING_NOTICE, 'Retheming notice'),
@@ -321,8 +322,9 @@ describe('AC-theming-40 covers: R34', () => {
     // unclosed one is the one that keeps the comment open here.
     //
     // Verify this row is ARMED, not merely present: dropping the resume-with-no-further-strings
-    // reading reds both fixtures below; the tokenizer's own reading and the other resume
-    // reading each still refuse them individually.
+    // reading reds both fixtures below. Neither the tokenizer's own reading nor the other resume
+    // reading refuses either fixture on its own; the no-further-strings reading is the only one
+    // that does.
     const singleThenDouble = `:root {\n  --a: 'x "; /* This palette meets WCAG AA."\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
     expect(() =>
       assertNoticeIsEmitted(singleThenDouble, RETHEMING_NOTICE, 'Retheming notice'),
