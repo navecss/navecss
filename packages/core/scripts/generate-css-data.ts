@@ -12,12 +12,10 @@
  * Checked for drift by test/css-data-drift.test.ts, which imports `generate` and diffs it
  * against the committed file rather than re-deriving the rule.
  */
-import { writeFileSync } from 'node:fs'
+import { realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { format, resolveConfig } from 'prettier'
-
-import type { AtomName } from '../src/atoms.ts'
 
 import { readSections } from './generate-atoms-doc.ts'
 
@@ -32,31 +30,29 @@ const NAVE_DESCRIPTION_INTRO =
 const EXTEND_LINE = 'Atoms registered through `extend` are valid and are not listed here.'
 
 /**
- * Every built-in atom name the description lists, in the same section groups and order as
- * `ATOMS.md` (`readSections()`), flattened. Exported so a test can assert this set against
- * `Object.keys(atoms)` without re-parsing the rendered description text.
- */
-export function listedAtomNames(): AtomName[] {
-  return readSections().values().toArray().flat()
-}
-
-/**
-One `Section: name, name, ...` line per section, in `readSections()`'s order.
+One `- **Section:** \`name\`, \`name\`, ...` markdown list item per section, in `readSections()`'s
+order. Atom names are code spans: they are literal, case-sensitive identifiers, `ATOMS.md`
+already renders them the same way, and a code span stops the markdown renderer from
+interpreting a name containing `_` as emphasis.
  */
 function renderAtomSections(): string {
-  return [...readSections()].map(([section, names]) => `${section}: ${names.join(', ')}`).join('\n')
+  return [...readSections()]
+    .map(([section, names]) => `- **${section}:** ${names.map((name) => `\`${name}\``).join(', ')}`)
+    .join('\n')
 }
 
 /**
-The full `@nave` entry description: what it does, the atom-name sections, then the `extend` line.
+The full `@nave` entry description: what it does, the atom-name sections as a markdown list, then
+the `extend` line, as three blocks separated by a blank line.
  */
 function renderDescription(): string {
-  return [NAVE_DESCRIPTION_INTRO, '', renderAtomSections(), '', EXTEND_LINE].join('\n')
+  return [NAVE_DESCRIPTION_INTRO, renderAtomSections(), EXTEND_LINE].join('\n\n')
 }
 
 /**
 Renders the full `nave.css-data.json` contents, formatted with the repository's own Prettier
-config.
+config. `description` ships as `MarkupContent` (`kind: 'markdown'`) rather than a plain string, so
+an editor renders the section list instead of escaping it into one run-on paragraph.
  */
 export async function generate(): Promise<string> {
   const data = {
@@ -64,7 +60,7 @@ export async function generate(): Promise<string> {
     atDirectives: [
       {
         name: '@nave',
-        description: renderDescription(),
+        description: { kind: 'markdown', value: renderDescription() },
       },
     ],
   }
@@ -74,7 +70,14 @@ export async function generate(): Promise<string> {
   })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Compare REALPATHS rather than a raw `file://` URL built from process.argv[1] (that older form
+// silently writes nothing under a spaced or symlinked invocation path; see build-css.ts's isMain
+// for the full rationale).
+const isMain =
+  process.argv[1] !== undefined &&
+  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+
+if (isMain) {
   writeFileSync(OUTPUT_PATH, await generate())
   console.log(`Wrote ${OUTPUT_PATH}`)
 }

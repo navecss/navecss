@@ -127,10 +127,38 @@ function renderVariantEntry(selector: string, declarations: Record<string, strin
 }
 
 /**
-The atom's pseudo-class, `@media` and `@container` variants, each beside the declarations it
-applies, `<br>`-joined.
+Every variant entry a `media`/`container` block of `kind` (`@media` or `@container`) contributes:
+the block's own entry, THEN one entry per pseudo-class nested inside it (selector
+`` `${kind} ${query} ${pseudo}` ``). The block's own entry is skipped when it has no declarations
+and DOES have nested pseudos, so a block that exists only to hold pseudos never emits an empty
+`— —` row.
  */
-function renderVariants(atom: AtomDefinition): string {
+function renderMediaBlockVariants(
+  kind: '@container' | '@media',
+  blocks: NonNullable<AtomDefinition['media']>,
+): string[] {
+  const parts: string[] = []
+  for (const [query, block] of Object.entries(blocks)) {
+    const hasDeclarations = Object.keys(block.declarations ?? {}).length > 0
+    if (hasDeclarations || !block.pseudos) {
+      parts.push(renderVariantEntry(`${kind} ${query}`, block.declarations ?? {}))
+    }
+    if (block.pseudos) {
+      parts.push(
+        ...Object.entries(block.pseudos).map(([pseudo, declarations]) =>
+          renderVariantEntry(`${kind} ${query} ${pseudo}`, declarations),
+        ),
+      )
+    }
+  }
+  return parts
+}
+
+/**
+The atom's pseudo-class, `@media` and `@container` variants — including a pseudo-class nested
+inside a `media`/`container` block — each beside the declarations it applies, `<br>`-joined.
+ */
+export function renderVariants(atom: AtomDefinition): string {
   const parts: string[] = []
   if (atom.pseudos) {
     parts.push(
@@ -139,20 +167,8 @@ function renderVariants(atom: AtomDefinition): string {
       ),
     )
   }
-  if (atom.media) {
-    parts.push(
-      ...Object.entries(atom.media).map(([query, block]) =>
-        renderVariantEntry(`@media ${query}`, block.declarations ?? {}),
-      ),
-    )
-  }
-  if (atom.container) {
-    parts.push(
-      ...Object.entries(atom.container).map(([query, block]) =>
-        renderVariantEntry(`@container ${query}`, block.declarations ?? {}),
-      ),
-    )
-  }
+  if (atom.media) parts.push(...renderMediaBlockVariants('@media', atom.media))
+  if (atom.container) parts.push(...renderMediaBlockVariants('@container', atom.container))
   return parts.length === 0 ? '—' : parts.join('<br>')
 }
 

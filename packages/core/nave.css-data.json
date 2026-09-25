@@ -3,7 +3,10 @@
   "atDirectives": [
     {
       "name": "@nave",
-      "description": "The `@nave` at-rule applies one or more of Nave’s built-in atomic utilities to the CSS rule it appears in. Loading this file stops an editor from reporting `@nave` as an unknown at-rule and shows this description on hover; it does not complete atom names.\n\nDisplay: flex, inlineFlex, grid, block, inlineBlock, hidden\nFlex: flexCol, flexWrap, itemsCenter, itemsStart, itemsEnd, justifyCenter, justifyBetween, justifyEnd, flexGrow, flexShrink0, gap\nPosition: relative, absolute, insetFull\nSizing: wFull, hFull, minW0\nTypography: truncate, srOnly, srOnlyFocusable, noWrap, breakWord, textLeft, textCenter, textRight\nInteraction: interactive, focusRing, disabledState\nVisual: rounded, roundedCard, roundedFull, border, overflowHidden, overflowAuto\nTransition: transition\nContainment: container\nResponsive: hidePhoneOnly, hideTabletPortraitUp, hideTabletLandscapeUp, hideDesktopUp, stackPhoneOnly, wFullPhoneOnly\n\nAtoms registered through `extend` are valid and are not listed here."
+      "description": {
+        "kind": "markdown",
+        "value": "The `@nave` at-rule applies one or more of Nave’s built-in atomic utilities to the CSS rule it appears in. Loading this file stops an editor from reporting `@nave` as an unknown at-rule and shows this description on hover; it does not complete atom names.\n\n- **Display:** `flex`, `inlineFlex`, `grid`, `block`, `inlineBlock`, `hidden`\n- **Flex:** `flexCol`, `flexWrap`, `itemsCenter`, `itemsStart`, `itemsEnd`, `justifyCenter`, `justifyBetween`, `justifyEnd`, `flexGrow`, `flexShrink0`, `gap`\n- **Position:** `relative`, `absolute`, `insetFull`\n- **Sizing:** `wFull`, `hFull`, `minW0`\n- **Typography:** `truncate`, `srOnly`, `srOnlyFocusable`, `noWrap`, `breakWord`, `textLeft`, `textCenter`, `textRight`\n- **Interaction:** `interactive`, `focusRing`, `disabledState`\n- **Visual:** `rounded`, `roundedCard`, `roundedFull`, `border`, `overflowHidden`, `overflowAuto`\n- **Transition:** `transition`\n- **Containment:** `container`\n- **Responsive:** `hidePhoneOnly`, `hideTabletPortraitUp`, `hideTabletLandscapeUp`, `hideDesktopUp`, `stackPhoneOnly`, `wFullPhoneOnly`\n\nAtoms registered through `extend` are valid and are not listed here."
+      }
     }
   ]
 }

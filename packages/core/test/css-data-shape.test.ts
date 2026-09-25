@@ -10,7 +10,9 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
+
+import type { PackedCoreTarball } from './helpers/pack-core.ts'
 
 import { packCoreTarball } from './helpers/pack-core.ts'
 
@@ -21,7 +23,7 @@ interface CssCustomData {
   version: number
   atDirectives?: Array<{
     name: string
-    description?: string
+    description?: { kind: string; value: string }
     references?: unknown
   }>
 }
@@ -33,8 +35,16 @@ function readCommittedCssData(): CssCustomData {
 }
 
 describe('AC-consumer-constraints-06: the packed tarball ships the file at the package root only', () => {
+  // Packing and extracting is one real `npm pack` plus two `tar` spawns; every test in this
+  // describe wants the SAME tarball, so it is packed once here rather than once per `it()`
+  // (which is what pushed `ci:check` past vitest's 5s default under load).
+  let tarball: PackedCoreTarball
+
+  beforeAll(() => {
+    tarball = packCoreTarball()
+  }, 120_000)
+
   it('lists package/nave.css-data.json, and it parses declaring @nave', () => {
-    const tarball = packCoreTarball()
     expect(tarball.files).toContain('package/nave.css-data.json')
     expect(
       tarball.files.some(
@@ -48,7 +58,6 @@ describe('AC-consumer-constraints-06: the packed tarball ships the file at the p
   })
 
   it('is not named by any key of the packed exports map', () => {
-    const tarball = packCoreTarball()
     const pkg = JSON.parse(tarball.read('package/package.json')) as {
       exports: Record<string, string | Record<string, string>>
     }
@@ -69,18 +78,18 @@ describe('AC-consumer-constraints-08: the @nave entry claims only what it delive
   })
 
   it('contains no URL', () => {
-    expect(entry().description).not.toMatch(/https?:\/\//)
+    expect(entry().description!.value).not.toMatch(/https?:\/\//)
   })
 
   it('lists no atom declaration in property: value form', () => {
     // A declaration line always ends `;` right after the value (renderDeclarations' own
     // shape in generate-atoms-doc.ts); the description never emits that shape.
-    expect(entry().description).not.toMatch(/[a-z-]+:\s*[^:]+;/)
+    expect(entry().description!.value).not.toMatch(/[a-z-]+:\s*[^:]+;/)
   })
 
   it('mentions extend exactly once, saying extend-registered atoms are valid and unlisted', () => {
     const matches = entry()
-      .description!.split('\n')
+      .description!.value.split('\n')
       .filter((line) => line.includes('extend'))
     expect(matches).toHaveLength(1)
     expect(matches[0]).toContain('valid')
@@ -130,10 +139,10 @@ describe('AC-consumer-constraints-09: no README/changeset sentence overclaims co
 
 describe('AC-consumer-constraints-02 (scoped to this slice): no prose count', () => {
   const COUNT_NEAR_VOCAB =
-    /\b(?:[2-9]|1[0-9]|[2-9]\d+|two|three|four|five|six|seven|eight|nine|ten|dozens)\b[^.]{0,40}\b(?:atoms?|tokens?|custom propert(?:y|ies)|propert(?:y|ies)|rules?)\b/i
+    /\b(?:[2-9]|[1-9]\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundreds?|thousands?|dozens?)\b[^.]{0,40}\b(?:atoms?|tokens?|custom propert(?:y|ies)|propert(?:y|ies)|rules?)\b/i
 
   it('the description and this slice’s changeset carry no numeral or number word near the vocabulary', () => {
-    const description = readCommittedCssData().atDirectives![0]!.description!
+    const description = readCommittedCssData().atDirectives![0]!.description!.value
     expect(description).not.toMatch(COUNT_NEAR_VOCAB)
     expect(
       readFileSync(path.resolve(HERE, '../../../.changeset/ship-editor-custom-data.md'), 'utf8'),
@@ -142,6 +151,21 @@ describe('AC-consumer-constraints-02 (scoped to this slice): no prose count', ()
 
   it('the scan reports a planted count', () => {
     const planted = 'Nave ships ' + '48' + ' atoms today.'
+    expect(COUNT_NEAR_VOCAB.test(planted)).toBe(true)
+  })
+
+  it('the scan reports a planted three-digit count', () => {
+    const planted = 'Nave ships ' + '150' + ' tokens today.'
+    expect(COUNT_NEAR_VOCAB.test(planted)).toBe(true)
+  })
+
+  it('the scan reports a planted number word above ten', () => {
+    const planted = 'Nave ships ' + 'twenty' + ' atoms today.'
+    expect(COUNT_NEAR_VOCAB.test(planted)).toBe(true)
+  })
+
+  it('the scan reports a planted number word for a rule count', () => {
+    const planted = 'Nave ships ' + 'eleven' + ' rules today.'
     expect(COUNT_NEAR_VOCAB.test(planted)).toBe(true)
   })
 })
@@ -199,5 +223,14 @@ describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference'
     const syntheticDatedId = join('D', '-', '20200101', '-', '01')
     const planted = `See ${HASH}1, cleared by ${join('OR', 'CH')} per ${syntheticDatedId}.`
     expect(() => scan(planted, 'planted')).toThrow()
+  })
+})
+
+describe('generate-css-data.ts guards its file-writing driver for spaced and symlinked invocation paths', () => {
+  it('does not use the broken `file://${process.argv[1]}` template, and does use the realpath comparison', () => {
+    expect(GENERATOR_SRC).not.toContain('file://${process.argv[1]}')
+    expect(GENERATOR_SRC).toContain(
+      'realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])',
+    )
   })
 })

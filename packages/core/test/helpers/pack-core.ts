@@ -9,8 +9,8 @@
  * one, and packing plus extracting is the expensive part (a subprocess spawn each), not the
  * assertions that follow.
  */
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -26,11 +26,27 @@ export interface PackedCoreTarball {
 
 let cached: PackedCoreTarball | undefined
 
+/**
+ * Runs `command` (always `npm` or `tar`, never taken from input) resolved from PATH.
+ *
+ * NOSONAR on the one spawn line below (rule S4036, PATH-resolved executable): resolving the tool
+ * from PATH is deliberate, same as `scripts/stage-release.mjs`'s `runTool` — a test that packs
+ * with an absolute path would not be packing with the developer's or CI's own installed npm/tar,
+ * which is exactly the toolchain a consumer's install uses too.
+ */
+function runTool(
+  command: string,
+  args: string[],
+  options: ExecFileSyncOptionsWithStringEncoding,
+): string {
+  return execFileSync(command, args, options) // NOSONAR
+}
+
 export function packCoreTarball(): PackedCoreTarball {
   if (cached) return cached
 
   const packDestination = mkdtempSync(path.join(tmpdir(), 'nave-core-pack-'))
-  const raw = execFileSync('npm', ['pack', '--json', '--pack-destination', packDestination], {
+  const raw = runTool('npm', ['pack', '--json', '--pack-destination', packDestination], {
     cwd: PACKAGE_DIR,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
@@ -40,12 +56,19 @@ export function packCoreTarball(): PackedCoreTarball {
   if (parsed.length === 0) throw new Error('npm pack --json produced no tarball entry')
   const tarballPath = path.join(packDestination, parsed[0]!.filename)
 
-  const fileList = execFileSync('tar', ['-tzf', tarballPath], { encoding: 'utf8' })
+  const fileList = runTool('tar', ['-tzf', tarballPath], { encoding: 'utf8' })
     .split('\n')
     .filter((line) => line.length > 0)
 
   const extractDir = mkdtempSync(path.join(tmpdir(), 'nave-core-extract-'))
-  execFileSync('tar', ['-xzf', tarballPath, '-C', extractDir], { encoding: 'utf8' })
+  runTool('tar', ['-xzf', tarballPath, '-C', extractDir], { encoding: 'utf8' })
+
+  // The packed tarball itself is no longer needed once extracted; the extraction copy is what
+  // every `read()` call serves from.
+  rmSync(packDestination, { recursive: true, force: true })
+  process.once('exit', () => {
+    rmSync(extractDir, { recursive: true, force: true })
+  })
 
   cached = {
     files: fileList,

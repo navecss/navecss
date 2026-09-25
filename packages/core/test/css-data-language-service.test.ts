@@ -4,25 +4,40 @@
  * output — a reader loads the FILE, and only the packed tarball's copy is what a consumer's
  * editor would ever see (`test/helpers/pack-core.ts`, never the working-tree copy).
  */
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 // `vscode-css-languageservice` ships CommonJS at its `main` entry; Vitest's Vite-based resolver
 // follows `module`/`exports` to the real ESM build, where these ARE named exports — but typing
 // the import as a default+destructure, as plain Node's ESM loader would require for the CJS
 // entry, keeps this file correct under either resolution.
 import cssLanguageService from 'vscode-css-languageservice'
 
+import { readSections } from '../scripts/generate-atoms-doc.ts'
+import { atoms } from '../src/atoms.ts'
 import { packCoreTarball } from './helpers/pack-core.ts'
 
 const { getCSSLanguageService, newCSSDataProvider, TextDocument } = cssLanguageService
 
-function readPackedCssData(): unknown {
-  return JSON.parse(packCoreTarball().read('package/nave.css-data.json'))
+interface PackedCssData {
+  atDirectives: Array<{ description: { kind: string; value: string } }>
+}
+
+function readPackedCssData(): PackedCssData {
+  return JSON.parse(packCoreTarball().read('package/nave.css-data.json')) as PackedCssData
 }
 
 describe('AC-consumer-constraints-05: the packed file is what it claims to an editor', () => {
+  // Packing is one real `npm pack` plus two `tar` spawns; every test below wants the SAME
+  // tarball, so it is read once here rather than once per `it()` (which is what pushed
+  // `ci:check` past vitest's 5s default under load).
+  let packed: PackedCssData
+
+  beforeAll(() => {
+    packed = readPackedCssData()
+  }, 120_000)
+
   it('silences the unknown-at-rule diagnostic for @nave, and only with the file loaded', () => {
     const withData = getCSSLanguageService({
-      customDataProviders: [newCSSDataProvider(readPackedCssData() as never)],
+      customDataProviders: [newCSSDataProvider(packed as never)],
     })
     const withoutData = getCSSLanguageService()
 
@@ -43,7 +58,7 @@ describe('AC-consumer-constraints-05: the packed file is what it claims to an ed
 
   it('still reports a misspelt at-rule naming it', () => {
     const withData = getCSSLanguageService({
-      customDataProviders: [newCSSDataProvider(readPackedCssData() as never)],
+      customDataProviders: [newCSSDataProvider(packed as never)],
     })
     const text = '.card { @nvae interactive; }'
     const doc = TextDocument.create('test://test/misspelt.css', 'css', 1, text)
@@ -53,8 +68,7 @@ describe('AC-consumer-constraints-05: the packed file is what it claims to an ed
     ).toBe(true)
   })
 
-  it('hovering @nave returns the file’s own description', () => {
-    const packed = readPackedCssData() as { atDirectives: Array<{ description: string }> }
+  it('hovering @nave returns the file’s own description, exactly', () => {
     const withData = getCSSLanguageService({
       customDataProviders: [newCSSDataProvider(packed as never)],
     })
@@ -67,16 +81,22 @@ describe('AC-consumer-constraints-05: the packed file is what it claims to an ed
       typeof hover!.contents === 'string'
         ? hover!.contents
         : (hover!.contents as { value: string }).value
-    // The language service renders the description as markdown, backslash-escaping metacharacters
-    // (`.`, `-`, backticks' surrounding punctuation, …); undoing that one-for-one escape recovers
-    // the source text exactly, which is the property AC-05 asks for ("content containing the
-    // description of the file's @nave entry"), never a rendering the file's own bytes.
-    expect(content.replace(/\\(.)/g, '$1')).toContain(packed.atDirectives[0]!.description)
+    // The description is now shipped as markdown (`kind: 'markdown'`), so the language service
+    // returns it verbatim rather than escaping it as plain text: exact equality is the property
+    // AC-05 asks for, and it is a stronger assertion than the old unescape-and-contain check.
+    expect(content).toBe(packed.atDirectives[0]!.description.value)
+  })
+
+  it('the hover value carries no backslash-escaped backtick, and one section line per readSections() section', () => {
+    const value = packed.atDirectives[0]!.description.value
+    expect(value).not.toMatch(/\\`/)
+    const sectionLines = value.split('\n').filter((line) => line.startsWith('- **'))
+    expect(sectionLines).toHaveLength(readSections().size)
   })
 
   it('completion immediately after "@nave " suggests no built-in atom name', () => {
     const withData = getCSSLanguageService({
-      customDataProviders: [newCSSDataProvider(readPackedCssData() as never)],
+      customDataProviders: [newCSSDataProvider(packed as never)],
     })
     const text = '.card { @nave interactive; }'
     const doc = TextDocument.create('test://test/complete.css', 'css', 1, text)
@@ -86,6 +106,7 @@ describe('AC-consumer-constraints-05: the packed file is what it claims to an ed
       doc.positionAt(text.indexOf('@nave ') + 6),
       stylesheet,
     )
-    expect(completions.items.some((item) => item.label === 'interactive')).toBe(false)
+    const atomNames = new Set(Object.keys(atoms))
+    expect(completions.items.some((item) => atomNames.has(item.label))).toBe(false)
   })
 })

@@ -4,8 +4,14 @@
  * source file the build graph touches — `scripts/generate-css-data.ts` is invoked by its own
  * drift test and by hand, never by `scripts/build-css.ts` or `tsup` — so the property this AC
  * asks for reduces to: the built `dist/` (already fresh here, since `test` depends on this
- * package's own `build` per `turbo.json`) carries no reference to the new file, and the package's
- * public `exports` map gained no key for it.
+ * package's own `build` per `turbo.json`) carries no reference to the new file.
+ *
+ * Whether the package's public `exports` map gained a key for the new file is covered by
+ * AC-06's own check instead of a test here (`css-data-shape.test.ts`: no exports-map key
+ * resolves to `nave.css-data.json` or `skills/`), plus a head-vs-merge-base double build run as
+ * review-time evidence. A hard-coded, sorted list of every current export key is a standing
+ * trip-wire against any later, unrelated, lawful export the package adds — it fails on someone
+ * else's PR, not on a regression in this one.
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
@@ -29,24 +35,5 @@ describe('AC-consumer-constraints-03: the editor-data file is build-inert', () =
       .filter((file) => file.endsWith('.css') || file.endsWith('.js'))
       .filter((file) => readFileSync(file, 'utf8').includes('nave.css-data.json'))
     expect(offenders).toEqual([])
-  })
-
-  it('the package.json exports map is unchanged by this slice', () => {
-    const pkg = JSON.parse(readFileSync(path.resolve(HERE, '../package.json'), 'utf8')) as {
-      exports: Record<string, unknown>
-    }
-    expect(Object.keys(pkg.exports).sort()).toEqual(
-      [
-        '.',
-        './atomic',
-        './atoms',
-        './cx',
-        './layers',
-        './no-tokens',
-        './package.json',
-        './postcss',
-        './reset',
-      ].sort(),
-    )
   })
 })
