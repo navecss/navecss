@@ -134,11 +134,11 @@ describe('AC-theming-40 covers: R34', () => {
     // R34's input set has two texts: the
     // separately-cleared transcription variant (README rung 2's "Neutral actions" worked
     // example) is a second wherever-it-appears instance this lint constrains exactly as it
-    // constrains the canonical text. This package carries no constant for that text and never
-    // emits it (it ships only in the repository README's rung 2 — see copy-lint.ts's
-    // RETHEMING_NOTICE comment), so it is inlined here purely to prove the SHARED, generic lint
-    // function accepts it clean; this scenario asserts no ratio, verdict or conformance claim about
-    // either text.
+    // constrains the canonical text. This package has no production constant for that text and
+    // never emits it: it ships only in the repository README's rung 2, and its test-purposes
+    // declaration is cleared-copy.ts (see copy-lint.ts's RETHEMING_NOTICE comment). It is read
+    // from there purely to prove the SHARED, generic lint function accepts it clean; this
+    // scenario asserts no ratio, verdict or conformance claim about either text.
     expect(() => assertNoticeIsClean(TRANSCRIPTION_VARIANT)).not.toThrow()
     expect(findConformanceFraming(TRANSCRIPTION_VARIANT)).toBeUndefined()
   })

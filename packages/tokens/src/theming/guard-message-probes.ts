@@ -132,7 +132,8 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * `assertHarnessFramingIsClean()` with the test suite green, because none of the three was in
  * this registry; with these probes, the same edit fails it.
  *
- * **What remains unprobed: five messages**, the eight above less these three.
+ * **What remains unprobed of the eight above: five messages**, the eight less these three. The
+ * permanently excluded refusal above sits outside that eight and stays unprobed as well.
  * - Two cannot be probed by this check at all: `assertDescriptionsAreClean`'s message and
  *   `assertNoticeIsClean`'s framing refusal both quote the phrase they caught, so any input
  *   that makes them throw also makes their message fail this check. `copy-lint.test.ts` pins
