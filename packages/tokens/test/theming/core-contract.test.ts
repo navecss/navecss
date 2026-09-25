@@ -395,6 +395,23 @@ describe('// line comments are stripped, without over-stripping CSS url() or TS 
       source: 'a{background:url( x.png\n);color:var(--nave-color-content-primary)}',
       expected: ['--nave-color-content-primary'],
     },
+    {
+      label:
+        'an escaped ) inside an unquoted url-token does not end the token early, so the real closing ) further on is what ends it, and a same-line reference after it still counts',
+      source: String.raw`a{background:url(a\)b//x.png), var(--nave-color-surface-base);}`,
+      expected: ['--nave-color-surface-base'],
+    },
+    {
+      label:
+        'a backslash-newline inside an unquoted url is not a CSS escape, so the url-token still ends at the newline and the real comment right after it is still stripped',
+      source:
+        'url(a\\' +
+        '\n' +
+        '// var(--nave-color-dead)' +
+        '\n' +
+        "const y = 'var(--nave-color-content-primary)'",
+      expected: ['--nave-color-content-primary'],
+    },
   ])('$label', ({ source, expected }) => {
     expect(scanCoreContract([source])).toEqual(expected)
   })

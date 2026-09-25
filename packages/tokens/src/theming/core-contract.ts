@@ -55,15 +55,37 @@ function findSpanEnd(content: string, found: number, offset: number): number {
 }
 
 /**
+ * Scans an unquoted url-token's body from `start` (just past `url(`), honouring a CSS escape:
+ * a `\` whose next character exists and is not a newline consumes both (CSS Syntax Level 3,
+ * consume a url token — a valid escape consumes the escaped code point), so an escaped `)`
+ * does not end the token. A `\` immediately before a newline is NOT a valid escape and is
+ * scanned as an ordinary character, leaving the newline to end the token as usual. Returns the
+ * exclusive end index: past an unescaped `)` (included), at an unescaped `'`, `"` or newline
+ * (excluded, so normal scanning resumes there), or at EOF.
+ */
+function findUrlTokenEnd(content: string, start: number): number {
+  let end = start
+  while (end < content.length) {
+    const ch = content[end]!
+    if (ch === '\\' && end + 1 < content.length && content[end + 1] !== '\n') {
+      end += 2
+    } else if (ch === ')') {
+      return end + 1
+    } else if (['\n', '"', "'"].includes(ch)) {
+      return end
+    } else {
+      end++
+    }
+  }
+  return end
+}
+
+/**
  * Detects an unquoted CSS url-token (CSS Syntax Level 3, consume a url token) starting at
  * `index`: `url(` (case-insensitive), not preceded by an identifier character, whose first
  * non-whitespace character is not a quote. Returns the exclusive end index of the verbatim
- * span, or `undefined` if this is not an unquoted url-token — including when a quote follows
- * `url(`, which gets ordinary string handling instead. The span ends at the FIRST of: a `)`
- * (included in the span), or immediately BEFORE a `'`, `"` or newline (excluded, so string
- * tracking and the newline are scanned normally from there), or EOF — never at a `)` found by
- * searching past one of those, since a quote or a raw newline inside an unquoted url is
- * already invalid CSS.
+ * span (see `findUrlTokenEnd`), or `undefined` if this is not an unquoted url-token —
+ * including when a quote follows `url(`, which gets ordinary string handling instead.
  */
 function matchUrlToken(content: string, index: number): number | undefined {
   if (!/^url\(/i.test(content.slice(index, index + 4))) return undefined
@@ -71,10 +93,7 @@ function matchUrlToken(content: string, index: number): number | undefined {
   let i = index + 4
   while (i < content.length && /\s/.test(content[i]!)) i++
   if (content[i] === "'" || content[i] === '"') return undefined
-  const stop = content.slice(index).search(/[)'"\n]/)
-  if (stop === -1) return content.length
-  const end = index + stop
-  return content[end] === ')' ? end + 1 : end
+  return findUrlTokenEnd(content, index + 4)
 }
 
 /**
