@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import prettier from 'prettier'
+import { format, resolveConfig } from 'prettier'
 
 import { type AtomDefinition, type AtomName, atoms, toClassName } from '../src/atoms.ts'
 
@@ -180,8 +180,8 @@ export async function generate(): Promise<string> {
   }
 
   const markdown = `${lines.join('\n').trimEnd()}\n`
-  return prettier.format(markdown, {
-    ...(await prettier.resolveConfig(OUTPUT_PATH)),
+  return format(markdown, {
+    ...(await resolveConfig(OUTPUT_PATH)),
     parser: 'markdown',
   })
 }
