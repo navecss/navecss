@@ -377,6 +377,24 @@ describe('// line comments are stripped, without over-stripping CSS url() or TS 
       source: 'const r = /"/\nconst s = "a //b var(--nave-color-content-primary)"',
       expected: ['--nave-color-content-primary'],
     },
+    {
+      label:
+        "an unquoted url-token's verbatim span stops at a newline rather than crossing it to reach a ) on a later line, so a real comment after that newline is still stripped",
+      source: 'url(x\n// var(--nave-color-dead)\n) + "var(--nave-color-content-primary)"',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        "an unquoted url-token's verbatim span stops before a quote rather than crossing it to reach a ) inside that string, so the string is scanned normally and its own // is not a comment",
+      source: 'url(x, "a) // var(--nave-color-content-primary)")',
+      expected: ['--nave-color-content-primary'],
+    },
+    {
+      label:
+        'an unquoted url-token spanning whitespace and a newline before its closing ) is still copied through verbatim',
+      source: 'a{background:url( x.png\n);color:var(--nave-color-content-primary)}',
+      expected: ['--nave-color-content-primary'],
+    },
   ])('$label', ({ source, expected }) => {
     expect(scanCoreContract([source])).toEqual(expected)
   })

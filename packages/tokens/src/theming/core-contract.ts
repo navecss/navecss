@@ -58,9 +58,12 @@ function findSpanEnd(content: string, found: number, offset: number): number {
  * Detects an unquoted CSS url-token (CSS Syntax Level 3, consume a url token) starting at
  * `index`: `url(` (case-insensitive), not preceded by an identifier character, whose first
  * non-whitespace character is not a quote. Returns the exclusive end index of the verbatim
- * span (through the next `)`, or the next newline/EOF if none), or `undefined` if this is not
- * an unquoted url-token — including when a quote follows `url(`, which gets ordinary string
- * handling instead.
+ * span, or `undefined` if this is not an unquoted url-token — including when a quote follows
+ * `url(`, which gets ordinary string handling instead. The span ends at the FIRST of: a `)`
+ * (included in the span), or immediately BEFORE a `'`, `"` or newline (excluded, so string
+ * tracking and the newline are scanned normally from there), or EOF — never at a `)` found by
+ * searching past one of those, since a quote or a raw newline inside an unquoted url is
+ * already invalid CSS.
  */
 function matchUrlToken(content: string, index: number): number | undefined {
   if (!/^url\(/i.test(content.slice(index, index + 4))) return undefined
@@ -68,9 +71,10 @@ function matchUrlToken(content: string, index: number): number | undefined {
   let i = index + 4
   while (i < content.length && /\s/.test(content[i]!)) i++
   if (content[i] === "'" || content[i] === '"') return undefined
-  const closeParen = content.indexOf(')', index)
-  if (closeParen !== -1) return closeParen + 1
-  return findSpanEnd(content, content.indexOf('\n', index), 0)
+  const stop = content.slice(index).search(/[)'"\n]/)
+  if (stop === -1) return content.length
+  const end = index + stop
+  return content[end] === ')' ? end + 1 : end
 }
 
 /**
@@ -214,7 +218,12 @@ function step(content: string, index: number, stack: Frame[]): StepResult {
  *
  * Not attempted: CSS's own string-escape grammar, and regex literals are not lexed at all —
  * telling a regex from a division needs parser context, so a lexer-only rule would just trade
- * one heuristic for another. The residue: a quote character inside a regex literal (`/'/`,
+ * one heuristic for another. Also not attempted, for the same content-only reason: telling CSS
+ * source from TypeScript source apart, so an unquoted `//` inside real CSS (lawful only inside
+ * a custom property's value) that is not part of a url-token is still read as a comment and
+ * strips the rest of its line — CSS has no line-comment syntax of its own, so this is a false
+ * negative, unreachable from real source today like the residue below. The residue: a quote
+ * character inside a regex literal (`/'/`,
  * `/"/`) can still open a phantom string, now bounded to the rest of its own line by the
  * newline rule above rather than running unbounded to the next real quote anywhere in the
  * file. Within that one line the misread still goes both ways: a real `//` or block comment
