@@ -23,6 +23,11 @@ import {
   runMergeAncestryCheck,
 } from './check-pr-merge-ancestry.mjs'
 
+/**
+ * Every `--limit` form that must be rejected, shared by the parser and orchestration tests.
+ */
+const BAD_LIMIT_ARGVS = [['--limit'], ['--limit=abc'], ['--limit=0'], ['--limit=-3']]
+
 test('parseArgs: defaults survive when nothing is passed', () => {
   assert.deepEqual(parseArgs([], { limit: 30 }), { limit: 30 })
 })
@@ -40,7 +45,7 @@ test('parseArgs: an unrecognised flag is ignored, not rejected', () => {
 })
 
 test('parseArgs: a --limit that is missing, non-integer or below 1 throws', () => {
-  for (const argv of [['--limit'], ['--limit=abc'], ['--limit=0'], ['--limit=-3']]) {
+  for (const argv of BAD_LIMIT_ARGVS) {
     assert.throws(() => parseArgs(argv, { limit: 30 }), undefined, `argv ${JSON.stringify(argv)}`)
   }
 })
@@ -191,14 +196,22 @@ const CALL_MATCHERS = {
  * A runner answering every call as a healthy checkout would, except the replies in `overrides`.
  */
 function runWith(overrides = {}) {
+  const unknown = Object.keys(overrides).filter((key) => !Object.hasOwn(CALL_MATCHERS, key))
+  if (unknown.length > 0) {
+    throw new Error(`runWith: unknown override key(s): ${unknown.join(', ')}`)
+  }
   const replies = { ...HEALTHY_REPLIES, ...overrides }
   return makeRun(
     Object.entries(CALL_MATCHERS).map(([key, when]) => ({ when, reply: replies[key] })),
   )
 }
 
+test('runWith: a misspelled override key throws instead of falling back to the healthy reply', () => {
+  assert.throws(() => runWith({ fetech: { status: 1, stdout: '', stderr: '' } }), /fetech/)
+})
+
 test('runMergeAncestryCheck: a bad --limit exits 2 and never calls the runner', () => {
-  for (const argv of [['--limit'], ['--limit=abc'], ['--limit=0'], ['--limit=-3']]) {
+  for (const argv of BAD_LIMIT_ARGVS) {
     const { calls, run } = makeRun([])
     const result = runMergeAncestryCheck(argv, run)
     assert.equal(result.exitCode, 2, `argv ${JSON.stringify(argv)}`)
