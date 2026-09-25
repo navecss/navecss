@@ -8,6 +8,8 @@ import { existsSync } from 'node:fs'
 import { test } from 'node:test'
 
 import {
+  composeMissingPackageMessage,
+  isMissingPackageError,
   meetsStageFloor,
   planStaging,
   stageAll,
@@ -197,4 +199,76 @@ test('withTempDir: removes the directory after fn throws', () => {
     })
   }, /boom/)
   assert.equal(existsSync(capturedDir), false)
+})
+
+// ---------------------------------------------------------------------------------------------
+// isMissingPackageError / composeMissingPackageMessage: telling "this package has never been
+// published" apart from a genuine registry/network failure, from the SAME `npm view <name>
+// versions --json` call `isOnRegistry` already makes. The fixtures below are npm 12's own
+// stdout, verified by running that exact command against the live registry for a package that
+// does not exist (`npm view <name> versions --json`, no version argument - so a 404 here can
+// only mean the PACKAGE is missing, never a version mismatch): npm exits non-zero and writes
+// `{"error":{"code":"E404",...}}` to stdout, not just prose to stderr.
+// ---------------------------------------------------------------------------------------------
+
+const realMissingPackageError = Object.assign(new Error('Command failed'), {
+  status: 1,
+  stdout: JSON.stringify({
+    error: {
+      code: 'E404',
+      summary: 'Not Found - GET https://registry.npmjs.org/%40navecss%2feslint-plugin - Not found',
+      detail:
+        "The requested resource '@navecss/eslint-plugin@*' could not be found or you do not " +
+        'have permission to access it.\n\nNote that you can also install from a\ntarball, ' +
+        'folder, http url, or git url.',
+    },
+  }),
+  stderr: 'npm error code E404\nnpm error 404 Not Found\n',
+})
+
+test("isMissingPackageError: true for npm's own E404 JSON envelope on stdout", () => {
+  assert.equal(isMissingPackageError(realMissingPackageError), true)
+})
+
+test('isMissingPackageError: false for a different npm error code (a genuine failure, not a missing package)', () => {
+  const authError = Object.assign(new Error('Command failed'), {
+    status: 1,
+    stdout: '{\n  "error": {\n    "code": "E403",\n    "summary": "Forbidden"\n  }\n}\n',
+    stderr: 'npm error code E403\n',
+  })
+  assert.equal(isMissingPackageError(authError), false)
+})
+
+test('isMissingPackageError: false when stdout carries no JSON at all (a network failure)', () => {
+  const networkError = Object.assign(new Error('Command failed'), {
+    status: 1,
+    stdout: '',
+    stderr: 'npm error network request failed\n',
+  })
+  assert.equal(isMissingPackageError(networkError), false)
+})
+
+test('isMissingPackageError: false when stdout is JSON but carries no error envelope', () => {
+  const weirdError = Object.assign(new Error('Command failed'), {
+    status: 1,
+    stdout: '["1.0.0"]',
+    stderr: '',
+  })
+  assert.equal(isMissingPackageError(weirdError), false)
+})
+
+test('isMissingPackageError: false when stdout is a Buffer rather than a string', () => {
+  const bufferedError = Object.assign(new Error('Command failed'), {
+    status: 1,
+    stdout: Buffer.from('{"error":{"code":"E404"}}'),
+    stderr: '',
+  })
+  assert.equal(isMissingPackageError(bufferedError), true)
+})
+
+test('composeMissingPackageMessage: names the package and points at the runbook section', () => {
+  const message = composeMissingPackageMessage('@navecss/eslint-plugin')
+  assert.match(message, /@navecss\/eslint-plugin/)
+  assert.match(message, /A package's first release/)
+  assert.match(message, /docs\/02-contribute\/releasing\.md/)
 })
