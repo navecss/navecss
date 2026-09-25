@@ -350,6 +350,47 @@ describe('AC-theming-40 covers: R34', () => {
       /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
     )
   })
+
+  it('an unquoted url() carrying a comment delimiter in its content does not swallow a real comment opener one line below it — the tokenizer treats url() content as opaque, and this check must too', () => {
+    // None of the three readings above models an unquoted CSS `url(...)` token, so a `/*` inside
+    // one is misread as a REAL comment opener. That phantom open then closes on the `*/` that a
+    // correct reading instead uses to open the genuine comment one line below: in a stateful
+    // scanner, over-approximating the comment state on one line is not a safe over-approximation
+    // downstream, because a phantom open can close on a delimiter the real reading uses to open a
+    // different, still-open comment. The net effect is a silent pass — every one of the three
+    // readings reports NO open comment going into the notice line, while a real CSS tokenizer (and
+    // a reader) place the notice inside a genuine, still-open comment.
+    //
+    // Verify this row is ARMED, not merely present: dropping the url-opaque reading reds it —
+    // none of the original three readings catches this shape, which is the whole defect.
+    const urlContentOverlap = `:root {\n  --a: url(x/*);\n  */* filler stays open, no closer on this line\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
+    expect(() =>
+      assertNoticeIsEmitted(urlContentOverlap, RETHEMING_NOTICE, 'Retheming notice'),
+    ).toThrow(
+      /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
+    )
+  })
+
+  it('a quoted string continued onto the next line by a backslash escaping the line break itself does not swallow a real comment opener that follows its close — the escape is CSS-valid continuation, not an unterminated string', () => {
+    // A backslash immediately before the line break is a valid CSS string-continuation escape
+    // (the string carries on to the next line rather than ending), unlike every other way a
+    // string can fail to close on its line, which the three readings above already treat as
+    // ambiguous. None of the three carries an open string across lines, so each treats the quote
+    // that actually CLOSES the continued string, on the next line, as opening a brand-new one
+    // instead — and a second, unrelated quote later on that same line then closes THAT one,
+    // swallowing the real `/*` between them as ordinary string content. A real CSS tokenizer (and
+    // a reader, who sees the string close right after "y") both place the notice line inside a
+    // genuine, still-open comment; every existing reading reports it clean.
+    //
+    // Verify this row is ARMED, not merely present: dropping the escaped-line-break-aware reading
+    // reds it — none of the original three readings catches this shape either.
+    const escapedLineBreakContinuation = `:root {\n  --a: "x\\\n  y" /* filler stays open, no closer "\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`
+    expect(() =>
+      assertNoticeIsEmitted(escapedLineBreakContinuation, RETHEMING_NOTICE, 'Retheming notice'),
+    ).toThrow(
+      /^Retheming notice violation: a line of emitted CSS carrying the notice is not a self-contained comment, or sits inside a comment opened on an earlier line,/,
+    )
+  })
 })
 
 describe('the two comment stems are cleared bytes with no anchor of their own', () => {
