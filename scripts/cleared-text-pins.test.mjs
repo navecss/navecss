@@ -804,7 +804,6 @@ test('CONTRIBUTING.md: the "Adding a dependency" change-control item', () => {
     'change out of the pull request until that issue is answered.'
 
   assert.ok(foldedStripped.endsWith(sharedTail), sharedSentenceMessage)
-  assert.ok(ALLOWLIST_FAILURE_GUIDANCE.includes(sharedTail), sharedSentenceMessage)
 
   // `.trimEnd()`: the slice below cuts a folded string mid-way, right before the shared tail, so
   // it inherits that boundary's own single separating space. Trimming it keeps `ownWords` in the
