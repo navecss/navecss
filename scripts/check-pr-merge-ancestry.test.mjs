@@ -39,48 +39,25 @@ test('parseArgs: an unrecognised flag is ignored, not rejected', () => {
   assert.deepEqual(parseArgs(['--verbose', '--limit=7'], { limit: 30 }), { limit: 7 })
 })
 
-test('parseArgs: --limit with no value throws', () => {
-  assert.throws(() => parseArgs(['--limit'], { limit: 30 }))
+test('parseArgs: a --limit that is missing, non-integer or below 1 throws', () => {
+  for (const argv of [['--limit'], ['--limit=abc'], ['--limit=0'], ['--limit=-3']]) {
+    assert.throws(() => parseArgs(argv, { limit: 30 }), undefined, `argv ${JSON.stringify(argv)}`)
+  }
 })
 
-test('parseArgs: --limit=abc (non-integer) throws', () => {
-  assert.throws(() => parseArgs(['--limit=abc'], { limit: 30 }))
-})
-
-test('parseArgs: --limit=0 throws', () => {
-  assert.throws(() => parseArgs(['--limit=0'], { limit: 30 }))
-})
-
-test('parseArgs: --limit=-3 throws', () => {
-  assert.throws(() => parseArgs(['--limit=-3'], { limit: 30 }))
-})
-
-test('repoFromRemoteUrl: git@github.com:owner/name.git', () => {
-  assert.equal(repoFromRemoteUrl('git@github.com:owner/name.git'), 'owner/name')
-})
-
-test('repoFromRemoteUrl: https://github.com/owner/name.git', () => {
-  assert.equal(repoFromRemoteUrl('https://github.com/owner/name.git'), 'owner/name')
-})
-
-test('repoFromRemoteUrl: https://github.com/owner/name (no .git suffix)', () => {
-  assert.equal(repoFromRemoteUrl('https://github.com/owner/name'), 'owner/name')
-})
-
-test('repoFromRemoteUrl: ssh://git@github.com/owner/name.git, trailing newline tolerated', () => {
-  assert.equal(repoFromRemoteUrl('ssh://git@github.com/owner/name.git\n'), 'owner/name')
-})
-
-test('repoFromRemoteUrl: ssh://git@github.com:22/owner/name.git, explicit port', () => {
-  assert.equal(repoFromRemoteUrl('ssh://git@github.com:22/owner/name.git'), 'owner/name')
-})
-
-test('repoFromRemoteUrl: ssh://git@github.com:22/owner/name, explicit port, no .git suffix', () => {
-  assert.equal(repoFromRemoteUrl('ssh://git@github.com:22/owner/name'), 'owner/name')
-})
-
-test('repoFromRemoteUrl: a non-GitHub remote returns null', () => {
-  assert.equal(repoFromRemoteUrl('git@gitlab.com:owner/name.git'), null)
+test('repoFromRemoteUrl: every GitHub remote shape maps to owner/name, anything else to null', () => {
+  const cases = [
+    ['git@github.com:owner/name.git', 'owner/name'],
+    ['https://github.com/owner/name.git', 'owner/name'],
+    ['https://github.com/owner/name', 'owner/name'],
+    ['ssh://git@github.com/owner/name.git\n', 'owner/name'],
+    ['ssh://git@github.com:22/owner/name.git', 'owner/name'],
+    ['ssh://git@github.com:22/owner/name', 'owner/name'],
+    ['git@gitlab.com:owner/name.git', null],
+  ]
+  for (const [url, expected] of cases) {
+    assert.equal(repoFromRemoteUrl(url), expected, `url ${JSON.stringify(url)}`)
+  }
 })
 
 test('mapGhPrListOutput: unwraps the mergeCommit Commit object to its bare oid', () => {
