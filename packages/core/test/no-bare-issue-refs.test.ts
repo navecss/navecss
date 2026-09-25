@@ -57,9 +57,20 @@ import { describe, expect, it } from 'vitest'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const PACKAGE_DIR = 'packages/core/'
 
-/** A bare `#<digits>`, excluded when the character right before `#` is a word character,
- * `/` or `-` — the shape a fully qualified `owner/repo#N` reference (e.g.
- * `owner/repo#N`) always has right there, since `repo` ends in a word character.
+/** A bare `#<digits>`, excluded when the character right before `#` is a word character or
+ * `/` — the shape a fully qualified `owner/repo#N` reference (e.g. `owner/repo#N`) always has
+ * right there, since `repo` ends in a word character. The `/` member is a narrower, separate
+ * exclusion for a path- or URL-fragment-like `word/#N` spelling; it is not needed for the
+ * qualified form, which the word-character member already excludes on its own.
+ *
+ * THE CLASS USED TO ALSO CARRY A `-` MEMBER, REMOVED because it excluded the wrong population:
+ * a qualified reference's repo segment ends in a word character, never a bare hyphen, so `-`
+ * excluded no qualified spelling at all. What it silently excluded instead was this
+ * repository's own hyphenated-prefix prose for "before/after issue N" (a hyphen directly
+ * followed by a bare reference, e.g. `pre-` or `post-` immediately before the `#`), which IS
+ * the bare form this guard exists to catch. Mirrors the canonical copy's
+ * removal in `scripts/check-no-bare-issue-refs.test.mjs`; see that file's docblock for the full
+ * rationale.
  *
  * The digit run is capped at four, and `.css` files are skipped entirely (below), for one
  * reason: a CSS hex colour is also a `#` followed by digits, and an all-decimal one
@@ -70,7 +81,7 @@ const PACKAGE_DIR = 'packages/core/'
  * number this repository can reach for the life of this pin (it is in the low hundreds),
  * while excluding the 6- and 8-digit hex forms outright. The 3- and 4-digit hex shorthands
  * are what the `.css` skip covers, since that is the only place this package writes them. */
-const BARE_ISSUE_REF = /(?<![\w/-])#(\d{1,4})(?!\d)/g
+const BARE_ISSUE_REF = /(?<![\w/])#(\d{1,4})(?!\d)/g
 
 /**
  * A `#` followed by digits that is lawfully NOT an issue reference. Ported from
@@ -383,6 +394,11 @@ describe('isLawfulNonReference: the excluded shapes (ported, both directions)', 
       [123, 456],
       'an unrecognised function name must not borrow the light-dark exclusion',
     ],
+    // The class used to also carry a `-` member, which excluded these two shapes by mistake
+    // (see the docblock above `BARE_ISSUE_REF` for the full history). Pinned here so the class
+    // cannot quietly regain it.
+    [`the pre-${HASH}219 shape`, [219], 'a hyphenated "before" prefix'],
+    [`the post-${HASH}204 shape`, [204], 'a hyphenated "after" prefix'],
   ]
 
   for (const [sample, expected, shape] of reported) {
@@ -395,6 +411,15 @@ describe('isLawfulNonReference: the excluded shapes (ported, both directions)', 
     const qualified = `see owner/repo${HASH}343, some-owner/some-repo${HASH}102 and repo${HASH}74`
     expect(qualified.matchAll(BARE_ISSUE_REF).toArray()).toEqual([])
     expect(sitesInLine(`see ${HASH}343 for the ruling`)).toEqual([343])
+  })
+
+  // A residual left DELIBERATELY excluded, not closed by this pass: a `/` directly before the
+  // `#` is excluded whether or not it sits inside a qualified `owner/repo#N` reference, because
+  // closing it would also flag unrelated fixtures elsewhere in this repository that assert on
+  // formatted `#<number>` output text, which is out of this fix's scope. Pinned here so a
+  // future narrowing of the class states that trade-off rather than closing it by accident.
+  it('a slash directly before the hash still excludes the reference, even in bare prose', () => {
+    expect(sitesInLine(`see a/${HASH}123 here`)).toEqual([])
   })
 })
 

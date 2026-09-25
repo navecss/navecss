@@ -529,7 +529,7 @@ describe('SUPPLIED vs MISSING — a name the theming half emits unconditionally 
     for (const name of realManifest.tokens) expect(joined).toContain(name)
   })
 
-  it('formatValidateReport with no supplied names (the default) is byte-identical to the pre-#418 output', () => {
+  it('formatValidateReport with no supplied names (the default) is byte-identical to its output before the supplied-names parameter existed', () => {
     const withDefault = formatValidateReport(realManifest, ['--nave-color-x'], undefined)
     const withExplicitEmpty = formatValidateReport(realManifest, ['--nave-color-x'], undefined, {
       status: 'resolved',

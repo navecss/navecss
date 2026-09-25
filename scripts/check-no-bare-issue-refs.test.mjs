@@ -18,12 +18,27 @@
  *
  * THE REGEX, stated rather than left to be read off the source:
  *
- *     /(?<![\w/-])#(\d{1,4})(?!\d)/g
+ *     /(?<![\w/])#(\d{1,4})(?!\d)/g
  *
  * The lookbehind excludes the shape a fully qualified `owner/repo#N` reference always has right
  * before the `#` (a word character, since `repo` ends in one), so any `owner/repo#N` or
  * `repo#N` spelling is excluded by construction rather than by a
- * list of spellings. The digit run is capped at four and `.css` files are skipped from the main
+ * list of spellings. The `/` member is a narrower, separate exclusion for a path- or
+ * URL-fragment-like `word/#N` spelling (a bare fragment identifier outside an `href=`/`url(`
+ * context); it is not needed for the qualified form above, which the word-character member
+ * already excludes on its own.
+ *
+ * THE CLASS USED TO ALSO CARRY A `-` MEMBER, REMOVED because it excluded the wrong population.
+ * The stated reason for it was the same "qualified form" reasoning above, but a qualified
+ * reference's repo segment ends in a word character, never a bare hyphen, so `-` excluded no
+ * qualified spelling at all. What it silently excluded instead was this repository's own
+ * hyphenated-prefix prose for "before/after issue N" (a hyphen directly followed by a bare
+ * reference, e.g. `pre-` or `post-` immediately before the `#`), which IS the bare form this
+ * guard exists to catch, not a spelling to spare. Every site that
+ * shape had protected is swept below (the reasoning relocated into words, per this file's own
+ * rule), and a pinned row per spelling stops the class from quietly regaining it.
+ *
+ * The digit run is capped at four and `.css` files are skipped from the main
  * scan, both for one reason: a CSS hex colour is also a `#` followed by digits, and an all-decimal
  * one (`#001122`) is indistinguishable from an issue number by shape alone. Four digits covers
  * every issue number this project can reach for the life of these pins while excluding the 6- and
@@ -95,7 +110,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 /**
  * A bare `#<digits>`, fenced as the docblock above describes.
  */
-const BARE_ISSUE_REF = /(?<![\w/-])#(\d{1,4})(?!\d)/g
+const BARE_ISSUE_REF = /(?<![\w/])#(\d{1,4})(?!\d)/g
 
 /**
  * A `#` followed by digits that is lawfully NOT an issue reference. Judged on the characters
@@ -339,6 +354,25 @@ test('the qualified forms are excluded, and the same number written bare is not'
   )
 })
 
+// A residual left DELIBERATELY excluded, not closed by this pass: a `/` directly before the
+// `#` is excluded whether or not it sits inside a qualified `owner/repo#N` reference, because
+// closing it would also flag several unrelated fixtures elsewhere in this repository that
+// assert on formatted `#<number>` output text (a different guard's PR-number fixtures), which
+// is out of this fix's scope. Pinned here so a future narrowing of the class states that
+// trade-off rather than closing it by accident.
+test('a slash directly before the hash still excludes the reference, even in bare prose', () => {
+  assert.deepEqual(
+    [...`see word${HASH}123 here`.matchAll(BARE_ISSUE_REF)],
+    [],
+    'a word character immediately before the hash already excludes this (unaffected by this fix)',
+  )
+  assert.deepEqual(
+    [...`see a/${HASH}123 here`.matchAll(BARE_ISSUE_REF)],
+    [],
+    'a slash immediately before the hash stays excluded, as a known residual',
+  )
+})
+
 test('a six-digit hex colour is out of range, and a CSS comment body is still scanned', () => {
   assert.deepEqual([...'body { color: #001122; }'.matchAll(BARE_ISSUE_REF)], [])
   const css = `/* see ${HASH}343 for the ruling */\n.a { color: #001122; }\n`
@@ -418,6 +452,15 @@ test('a genuine bare reference is still reported, in each shape it is written in
   assert.deepEqual(reported(`(${HASH}150)`), [150], 'a parenthesised reference')
   assert.deepEqual(reported(`Refs ${HASH}452`), [452], 'a trailer-style reference')
   assert.deepEqual(reported(`round 20, ${HASH}407`), [407], 'a reference after a comma')
+})
+
+// The class used to also carry a `-` member, which excluded these two shapes by mistake (see
+// the docblock above `BARE_ISSUE_REF` for the full history). Pinned here so the class cannot
+// quietly regain it.
+test('a hyphen directly before the hash no longer excuses a genuine reference', () => {
+  const reported = (text) => sitesInText(text).map((site) => site.n)
+  assert.deepEqual(reported(`the pre-${HASH}219 shape`), [219], 'a hyphenated "before" prefix')
+  assert.deepEqual(reported(`the post-${HASH}204 shape`), [204], 'a hyphenated "after" prefix')
 })
 
 // `COLOUR_DECLARATION`'s tail used to run `[^;{]*$` — everything to end of line, stopped only by

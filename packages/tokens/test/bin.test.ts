@@ -634,8 +634,9 @@ describe('AC-token-build-08 covers: R9 (out-of-process black-box clause)', () =>
  * this file that calls `validate` after `build`.
  */
 /**
- * Simulates a real, pre-#398-export `@navecss/core` install: present on disk, resolvable as
- * a package, but declaring no `"./package.json"` entry in its own `exports` map.
+ * Simulates a real, older `@navecss/core` install from before the `"./package.json"` export
+ * existed: present on disk, resolvable as a package, but declaring no `"./package.json"` entry
+ * in its own `exports` map.
  */
 function installOlderCoreWithNoPackageJsonExport(projectDir: string, version: string): void {
   const coreDir = path.join(projectDir, 'node_modules', '@navecss', 'core')
