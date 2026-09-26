@@ -2,8 +2,7 @@
  * AC-consumer-constraints-25 covers: R16.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -141,26 +140,27 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
     const m = manifest() as { name: string; version: string }
     expect(m.version).toBe('0.0.0')
 
-    const scratchDir = mkdtempSync(path.join(tmpdir(), 'nave-changeset-status-'))
-    const statusPath = path.join(scratchDir, 'status.json')
-    interface ChangesetStatus {
-      releases: { name: string; newVersion: string; type: string }[]
-    }
-    let status: ChangesetStatus
-    try {
-      execFileSync(
-        path.join(ROOT, 'node_modules/.bin/changeset'),
-        ['status', `--output=${statusPath}`],
-        { cwd: ROOT, encoding: 'utf8' },
-      )
-      status = JSON.parse(readFileSync(statusPath, 'utf8')) as ChangesetStatus
-    } finally {
-      rmSync(scratchDir, { recursive: true, force: true })
-    }
-    const release = status.releases.find((r) => r.name === m.name)
-    expect(release).toBeDefined()
-    expect(release!.type).toBe('minor')
-    expect(release!.newVersion).toBe('0.1.0')
+    // Reads the committed `.changeset/*.md` frontmatter directly, never `changeset status`:
+    // that command computes changed packages via `git merge-base` against `main`, which needs
+    // a local `main` ref with history the current checkout can diverge-compute against — true
+    // in this worktree, not guaranteed in CI's own checkout of a pull request head. Reading the
+    // committed fragments is what the release step itself consumes, and it needs no git state
+    // beyond the files already on disk.
+    const changesetDir = path.join(ROOT, '.changeset')
+    const matchingBumps = readdirSync(changesetDir)
+      .filter((f) => f.endsWith('.md') && f !== 'README.md')
+      .flatMap((f) => {
+        const content = readFileSync(path.join(changesetDir, f), 'utf8')
+        const frontmatter = /^---\n([\s\S]*?)\n---/.exec(content)?.[1] ?? ''
+        return frontmatter
+          .matchAll(/^['"]?([^'":\n]+)['"]?:\s*(major|minor|patch)\s*$/gm)
+          .filter((match) => match[1] === m.name)
+          .map((match) => ({ file: f, type: match[2] }))
+          .toArray()
+      })
+
+    expect(matchingBumps).toHaveLength(1)
+    expect(matchingBumps[0]!.type).toBe('minor')
   })
 })
 
