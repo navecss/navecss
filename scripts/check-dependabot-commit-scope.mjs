@@ -37,38 +37,66 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
- * Slices `dependabotText` down to every `package-ecosystem: npm` block (quoted, double-quoted,
- * or bare, with or without a trailing comment): from each such line up to (not including) the
- * next top-level `- package-ecosystem:` entry of ANY ecosystem, or end of file. Returns an
- * empty array if no npm block is found at all — the fail-closed signal `main()` checks for.
- * Dependabot's own schema permits any of the three quoting styles, so a repository free to
- * write `npm` unquoted is not a shape this check may treat as absent.
+ * Slices `dependabotText` into one block per top-level list item under `updates:` (any
+ * ecosystem), keeping only the ones that are `npm`. An entry starts at every `- ` list-item
+ * line whose indentation matches the FIRST such list item under `updates:` EXACTLY
+ * (`findEntryIndent`): a deeper list nested inside an entry — an `ignore:` item, a `groups:`
+ * pattern — is indented further and so is never mistaken for a new entry boundary, and this is
+ * true regardless of which key (if any) sits on the dash line itself, since a boundary is a
+ * property of indentation, not of naming an ecosystem. Whether an entry IS `npm` is then read
+ * from ANY line inside its block (`isNpmBlock`), because YAML key order inside a mapping is not
+ * part of its schema and Dependabot accepts `package-ecosystem` in any position within an
+ * entry, not only as the first key on the dash line. Returns an empty array when there is no
+ * `updates:` key, no list item follows it, or no entry in the list is `npm` — the fail-closed
+ * signal `main()` checks for.
  */
 export function extractNpmEcosystemBlocks(dependabotText) {
   const lines = dependabotText.split('\n')
+  const entryIndent = findEntryIndent(lines)
+  if (entryIndent === null) return []
+
+  const entryStartPattern = new RegExp(String.raw`^${entryIndent}-[ \t]`)
   const entryStartIndexes = []
   for (const [index, line] of lines.entries()) {
-    if (/^\s*-\s*package-ecosystem:/.test(line)) entryStartIndexes.push(index)
+    if (entryStartPattern.test(line)) entryStartIndexes.push(index)
   }
 
   const npmBlocks = []
   for (const [position, startIndex] of entryStartIndexes.entries()) {
-    if (!isNpmEcosystemLine(lines[startIndex])) continue
     const nextStartIndex = entryStartIndexes[position + 1] ?? lines.length
-    npmBlocks.push(lines.slice(startIndex, nextStartIndex).join('\n'))
+    const block = lines.slice(startIndex, nextStartIndex).join('\n')
+    if (isNpmBlock(block)) npmBlocks.push(block)
   }
 
   return npmBlocks
 }
 
 /**
- * Whether `line` is a `- package-ecosystem:` entry naming `npm`, in any of the three styles
- * YAML allows for a scalar (single-quoted, double-quoted, bare) and tolerating a trailing
- * comment. The lookahead after the bare form stops it matching a longer word that merely
- * starts with `npm` (there is no such ecosystem today, but nothing rules one out).
+ * The exact leading-whitespace string of the FIRST `- ` list item found after the `updates:`
+ * line — the indentation every top-level entry boundary must match EXACTLY, so that a deeper
+ * nested list is never mistaken for one. Returns `null` when there is no `updates:` key, or no
+ * list item follows it.
  */
-function isNpmEcosystemLine(line) {
-  return /^\s*-\s*package-ecosystem:\s*(?:'npm'|"npm"|npm(?=[\s#]|$))/.test(line)
+function findEntryIndent(lines) {
+  const updatesIndex = lines.findIndex((line) => /^[ \t]*updates:[ \t]*$/.test(line))
+  if (updatesIndex === -1) return null
+
+  for (const line of lines.slice(updatesIndex + 1)) {
+    const match = /^([ \t]*)-[ \t]/.exec(line)
+    if (match !== null) return match[1]
+  }
+  return null
+}
+
+/**
+ * Whether any line in `block` — the dash line itself, or a sibling key line at any deeper
+ * indentation — sets `package-ecosystem` to `npm`, in any of the three scalar styles YAML
+ * allows (single-quoted, double-quoted, bare), tolerating a trailing comment. The lookahead
+ * after the bare form stops it matching a longer word that merely starts with `npm`.
+ */
+function isNpmBlock(block) {
+  const npmEcosystemLine = /^[ \t]*-?[ \t]*package-ecosystem:[ \t]*(?:'npm'|"npm"|npm(?=[ \t#]|$))/
+  return block.split('\n').some((line) => npmEcosystemLine.test(line))
 }
 
 /**
@@ -88,32 +116,75 @@ export function extractCommitMessageConfig(ecosystemBlock) {
 
   if (prefix === null || prefixDevelopment === null) return null
 
-  const includeScope = /^\s*include:\s*['"]?scope['"]?\s*(?:#.*)?$/m.test(ecosystemBlock)
+  const includeScope = extractYamlScalar(ecosystemBlock, 'include') === 'scope'
 
   return { prefix, prefixDevelopment, includeScope }
 }
 
 /**
- * Reads the first `key: value` line's scalar value out of `text`, tolerating a trailing YAML
- * comment. Handles a single-quoted, double-quoted, or bare scalar. Returns `null` when no such
- * line exists at all; returns `''` when the line is present with an empty quoted value.
+ * Reads the first `key: <value>` line's scalar value out of `text`, tolerating a trailing YAML
+ * comment, by scanning ONE line at a time and matching each against a single anchored,
+ * non-multiline pattern, rather than searching the whole (possibly multi-line) text with one
+ * pattern. The key may sit on a list item's dash line or a sibling line at any indentation
+ * (the optional leading `-`), since which is which is not this function's concern. Returns
+ * `null` when no line sets `key` at all — the caller's fail-closed signal; otherwise the parsed
+ * value (`parseYamlScalarRemainder`), which is `''` for a key present with an empty quoted
+ * value, and — deliberately — the raw, unparsed remainder for a line whose value cannot be made
+ * sense of, so the caller's own `<type>(<scope>)` check reports "does not parse" rather than
+ * this function guessing at a value.
  *
- * Each alternative uses a single, non-overlapping greedy quantifier (no alternative can start
- * where another left off ambiguously), so a pathological line — many quote characters, or many
- * spaces before the value — cannot make the match backtrack super-linearly: measured against
- * adversarial 10k/50k/200k-character single lines, this stays linear (see the checker's test
- * timings, run and reported alongside its change).
+ * Parsed one line at a time with a single anchored match per line and a hand-written scan of
+ * the value, rather than one multi-line pattern: a pattern whose leading blanks, bare value and
+ * trailing blanks can all match the same run of spaces backtracks polynomially on a line that
+ * fails to match, so a malformed line could stall this check instead of failing it.
  */
 function extractYamlScalar(text, key) {
-  const pattern = new RegExp(
-    String.raw`^\s*${key}:\s*(?:'([^'\n]*)'|"([^"\n]*)"|([^'"#\n]*))\s*(?:#.*)?$`,
-    'm',
-  )
-  const match = pattern.exec(text)
-  if (match === null) return null
+  const lineMatcher = new RegExp(String.raw`^[ \t]*-?[ \t]*${key}:(.*)$`)
+  for (const line of text.split('\n')) {
+    const match = lineMatcher.exec(line)
+    if (match !== null) return parseYamlScalarRemainder(match[1])
+  }
+  return null
+}
 
-  const [, single, double, bare] = match
-  return single ?? double ?? bare.trimEnd()
+/**
+ * Parses the remainder of a `key:<remainder>` line into its scalar value: leading blanks are
+ * trimmed, then a leading `'` or `"` scans character by character for its closing quote (a
+ * doubled `''` inside a single-quoted value is an escaped literal `'`; a double-quoted value
+ * carries no such escape here), or, with no leading quote, the bare value runs up to the first
+ * unquoted ` #` (a comment) or end of line, trimmed at the end. Text after a closing quote must
+ * itself be blanks and optionally a `#` comment; anything else, or a quote that never closes,
+ * means this line does not parse as a scalar this reader understands, and the leading-blank-
+ * trimmed remainder is returned AS IS instead, so the caller's own parse check reports the
+ * failure rather than this reader silently guessing at a value.
+ */
+function parseYamlScalarRemainder(remainder) {
+  const value = remainder.replace(/^[ \t]+/, '')
+  const quote = value[0]
+
+  if (quote === "'" || quote === '"') {
+    let scanned = ''
+    let index = 1
+    while (index < value.length) {
+      const char = value[index]
+      if (char === quote) {
+        if (quote === "'" && value[index + 1] === "'") {
+          scanned += "'"
+          index += 2
+          continue
+        }
+        const trailing = value.slice(index + 1).replace(/^[ \t]+/, '')
+        return trailing === '' || trailing[0] === '#' ? scanned : value
+      }
+      scanned += char
+      index += 1
+    }
+    return value // unclosed quote: unparseable, return the raw remainder
+  }
+
+  const commentIndex = value.indexOf(' #')
+  const bare = commentIndex === -1 ? value : value.slice(0, commentIndex)
+  return bare.replace(/[ \t]+$/, '')
 }
 
 /**

@@ -377,3 +377,107 @@ test('R10: a `!` breaking-change marker on prefix stays a violation (ruled, not 
   assert.equal(r.code, 1)
   assert.match(r.err, /does not parse as/)
 })
+
+// --- Round 2 rows -----------------------------------------------------------------------
+
+test('N6: a bare prefix value with trailing blanks and no comment still trims cleanly', () => {
+  const block = `  - package-ecosystem: 'npm'
+    commit-message:
+      prefix: chore(deps)
+      prefix-development: chore(deps)
+`
+  assert.deepEqual(extractCommitMessageConfig(block), {
+    prefix: 'chore(deps)',
+    prefixDevelopment: 'chore(deps)',
+    includeScope: false,
+  })
+})
+
+test('N2: package-ecosystem: npmx is not an npm entry', () => {
+  const yaml = `version: 2
+updates:
+  - package-ecosystem: npmx
+    directory: '/'
+`
+  assert.deepEqual(extractNpmEcosystemBlocks(yaml), [])
+})
+
+test("a doubled single-quote escape ('it''s') parses to it's, then fails to parse as <type>(<scope>)", async () => {
+  const brokenYaml = BASELINE_YAML.replace("prefix: 'chore(deps)'", "prefix: 'it''s'")
+  const r = await runMain(fixtureRoot(brokenYaml))
+  assert.equal(r.code, 1)
+  assert.match(r.err, /does not parse as/)
+  assert.match(r.err, /it's/)
+})
+
+const REORDERED_SECOND_NPM_YAML = `version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps)'
+
+  - directory: '/packages/tokens'
+    package-ecosystem: npm
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+`
+
+test('NEW-1 Row A: a reordered SECOND npm entry (ecosystem key not first) after a good one is still checked and named', async () => {
+  const r = await runMain(fixtureRoot(REORDERED_SECOND_NPM_YAML))
+  assert.equal(r.code, 1)
+  assert.match(r.err, /packages\/tokens/)
+  assert.match(r.err, /scope-enum/)
+})
+
+const REORDERED_ALONE_NPM_YAML = `version: 2
+updates:
+  - directory: '/packages/tokens'
+    package-ecosystem: npm
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+`
+
+test('NEW-1 Row B: a reordered npm entry ALONE is found and its defect named, not a not-found refusal', async () => {
+  const r = await runMain(fixtureRoot(REORDERED_ALONE_NPM_YAML))
+  assert.equal(r.code, 1)
+  assert.doesNotMatch(r.err, /refusing to run/)
+  assert.match(r.err, /scope-enum/)
+})
+
+const TIMING_BUDGET_MS = 2000
+const TIMING_TEST_TIMEOUT_MS = 5000
+
+test(
+  'R2-1b: 5000 blank lines then a bare "x" line returns within budget (quadratic-but-small at this n)',
+  { timeout: TIMING_TEST_TIMEOUT_MS },
+  () => {
+    const block = `${'\n'.repeat(5000)}x`
+    const start = performance.now()
+    extractCommitMessageConfig(block)
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < TIMING_BUDGET_MS, `took ${elapsed}ms, budget ${TIMING_BUDGET_MS}ms`)
+  },
+)
+
+test(
+  'R2-1a: a 5000-space unclosed-quote prefix line returns within budget, not cubically',
+  { timeout: TIMING_TEST_TIMEOUT_MS },
+  () => {
+    const block = `  - package-ecosystem: 'npm'
+    commit-message:
+      prefix: ${' '.repeat(5000)}'
+      prefix-development: 'chore(deps)'
+`
+    const start = performance.now()
+    extractCommitMessageConfig(block)
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < TIMING_BUDGET_MS, `took ${elapsed}ms, budget ${TIMING_BUDGET_MS}ms`)
+  },
+)
