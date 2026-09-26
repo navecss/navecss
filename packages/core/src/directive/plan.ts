@@ -78,7 +78,7 @@ function readNames(components: readonly PreludeComponent[]): { diagnostics: Diag
       names.push(component.name)
       continue
     }
-    diagnostics.push({ code: 'bad-token', offset: component.offset, endOffset: component.endOffset })
+    diagnostics.push({ code: 'bad-token', text: component.text, offset: component.offset, endOffset: component.endOffset })
   }
   return { names, diagnostics }
 }

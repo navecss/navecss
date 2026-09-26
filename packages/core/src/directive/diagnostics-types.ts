@@ -23,4 +23,12 @@ export interface Diagnostic {
   readonly endOffset: number
   readonly name?: string
   readonly hint?: string
+  /**
+  The offending token as written (`bad-token`'s own text, quoted verbatim in its message).
+   */
+  readonly text?: string
+  /**
+  `bad-parent` only: whether the refused parent sits inside another rule (names the `& { }` workaround) or at the true top level.
+   */
+  readonly detail?: 'nested-group'
 }
