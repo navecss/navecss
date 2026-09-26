@@ -91,46 +91,31 @@ describe('every bridge custom property is a bare reference to a Nave token', () 
  * `null` if it has not finished within `timeoutMs`. A hard `timeoutMs` bound cannot be enforced
  * on the MAIN thread: the call is synchronous and, when the pattern under test backtracks
  * catastrophically, blocks the event loop outright, so a `setTimeout` racing it on the same
- * thread never gets to fire. Running it inside a `Worker` and calling `worker.terminate()` from
- * a timer on the main thread is the only way to bound it for real. The regex source and flags
- * are read off the live `VAR_TOKEN` (never re-typed), so this cannot silently stop covering the
- * actual pattern if a future edit changes it. Mirrors
- * `packages/core/test/no-bare-issue-refs.test.ts`'s own `measureColourDeclarationOnWorker`.
+ * thread never gets to fire — but the SAME race on the main thread works fine against a
+ * WORKER's result, since the worker's own blocking computation runs on a different thread and
+ * never blocks this one. `Promise.race` against a timeout, terminating the worker in `finally`
+ * regardless of which side wins, bounds it for real with no manual settled-flag bookkeeping. The
+ * regex source and flags are read off the live `VAR_TOKEN` (never re-typed), so this cannot
+ * silently stop covering the actual pattern if a future edit changes it.
  */
 function measureVarOnlyCheckOnWorker(value: string, timeoutMs: number): Promise<number | null> {
-  return new Promise((resolve) => {
-    const workerSource = `
-      const { parentPort, workerData } = require('node:worker_threads')
-      const re = new RegExp(workerData.source, workerData.flags)
-      const t0 = Date.now()
-      workerData.value.replace(re, '').trim()
-      parentPort.postMessage(Date.now() - t0)
-    `
-    const worker = new Worker(workerSource, {
-      eval: true,
-      workerData: { source: VAR_TOKEN.source, flags: VAR_TOKEN.flags, value },
-    })
-    let settled = false
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      worker.terminate()
-      resolve(null)
-    }, timeoutMs)
-    worker.once('message', (elapsedMs: number) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      worker.terminate()
-      resolve(elapsedMs)
-    })
-    worker.once('error', () => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      resolve(null)
-    })
+  const workerSource = `
+    const { parentPort, workerData } = require('node:worker_threads')
+    const re = new RegExp(workerData.source, workerData.flags)
+    const t0 = Date.now()
+    workerData.value.replace(re, '').trim()
+    parentPort.postMessage(Date.now() - t0)
+  `
+  const worker = new Worker(workerSource, {
+    eval: true,
+    workerData: { source: VAR_TOKEN.source, flags: VAR_TOKEN.flags, value },
   })
+  const result = new Promise<number | null>((resolve) => {
+    worker.once('message', resolve)
+    worker.once('error', () => resolve(null))
+  })
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
+  return Promise.race([result, timeout]).finally(() => worker.terminate())
 }
 
 describe('isVarOnlyValue: the shapes it accepts and refuses, and its linear time bound', () => {
