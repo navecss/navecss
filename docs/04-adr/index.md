@@ -12,13 +12,14 @@ ADRs record significant architectural choices: the context, the options consider
 
 ## Records
 
-| ADR                                                     | Title                                                                                                        | Status   |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------- |
-| [0001](0001-native-css-nesting.md)                      | `@nave` emits native CSS nesting; browser floor rises to Baseline 2024                                       | accepted |
-| [0002](0002-dtcg-2025-10-token-format.md)               | The token pipeline targets DTCG 2025.10, reads one shape, and refuses the pre-stable draft by name           | accepted |
-| [0003](0003-layer-cascade-contract.md)                  | The `@layer` cascade contract: seven names, one precondition, and where consumer CSS goes                    | accepted |
-| [0004](0004-zero-runtime-scope.md)                      | Zero runtime: nothing Nave ships computes or applies a style in the browser                                  | accepted |
-| [0005](0005-browser-floor.md)                           | The browser floor is Chrome and Edge 125, Firefox 128, Safari 18, and relative colour syntax is what sets it | accepted |
-| [0006](0006-nave-directive-stands-in-for-css-mixins.md) | `@nave` is a build-time stand-in for native CSS mixins, with a mapping, an adoption path and a sunset        | accepted |
+| ADR                                                     | Title                                                                                                          | Status   |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------- |
+| [0001](0001-native-css-nesting.md)                      | `@nave` emits native CSS nesting; browser floor rises to Baseline 2024                                         | accepted |
+| [0002](0002-dtcg-2025-10-token-format.md)               | The token pipeline targets DTCG 2025.10, reads one shape, and refuses the pre-stable draft by name             | accepted |
+| [0003](0003-layer-cascade-contract.md)                  | The `@layer` cascade contract: seven names, one precondition, and where consumer CSS goes                      | accepted |
+| [0004](0004-zero-runtime-scope.md)                      | Zero runtime: nothing Nave ships computes or applies a style in the browser                                    | accepted |
+| [0005](0005-browser-floor.md)                           | The browser floor is Chrome and Edge 125, Firefox 128, Safari 18, and relative colour syntax is what sets it   | accepted |
+| [0006](0006-nave-directive-stands-in-for-css-mixins.md) | `@nave` is a build-time stand-in for native CSS mixins, with a mapping, an adoption path and a sunset          | accepted |
+| [0008](0008-test-placement.md)                          | A test lives beside the one source file it tests; package-level tests live in `test/`; no test file ever ships | accepted |
 
 _Still to back-fill: the first-party token build pipeline (its mechanism; the format it targets is 0002), pnpm + Turborepo + Changesets as the release topology, and the headless-bridge approach (Base UI / Radix)._
