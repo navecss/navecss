@@ -33,9 +33,9 @@ const cleanupState = { hasRegistered: false }
 
 /**
  * Registers `afterAll(cleanupScratchDirs)` for this module instance. Call it once at the file's
- * top level before any `scratchDir` call; `scratchDir` throws, naming this function, if it has
- * not been called in this module instance. A second call registers a second hook, which finds
- * nothing left to remove.
+ * top level before any `scratchDir` call; `scratchDir` throws, naming this function, if it has not
+ * been called in this module instance. A second call registers a second hook; whichever of the two
+ * runs first removes everything tracked, and the other finds nothing left to remove.
  */
 export function registerScratchCleanup(): void {
   cleanupState.hasRegistered = true
