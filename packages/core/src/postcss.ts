@@ -255,4 +255,11 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
 
 navePlugin.postcss = true
 
+/**
+ * R22: a host-loaded entry point also carries a default export, since
+ * hosts and every peer library load it that way (`import nave from
+ * '@navecss/core/postcss'`). `navePlugin` stays the documented, named form.
+ */
+export default navePlugin
+
 export { type AtomDefinition } from './atoms.ts'
