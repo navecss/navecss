@@ -17,6 +17,15 @@
  * the declared tint hue) come from `shipped-seeds.ts`, shared with `build-step.ts` so the two
  * paths never drift.
  *
+ * A static scanner reads clause (ii) as path traversal: `build` and `validate` read, and `build`
+ * writes, whatever path their caller names. That is the contract, and nothing here bounds it.
+ * Through the `navecss-tokens` command the caller is the person running it, who can already
+ * read and write anything this process can, and a relative path resolves against the working
+ * directory they ran it from, as for any other command. Through this `./build` export the caller
+ * is another program, and these functions are not a sandbox: a program that forwards a path it
+ * did not choose itself (from a request, an upload, a file it does not trust) must check that
+ * path before passing it in. Marked at each read site below.
+ *
  * R16: `build` validates the UNION
  * of both halves' emitted names — the DTCG half's (the consumer's source, O(1) name
  * computation) and the theming half's (the shipped property constant) — against the manifest
@@ -167,6 +176,7 @@ export async function build(options: TokensBuildOptions): Promise<TokensBuildRes
 
   // R16: validate the union (see this file's own header) before either half is composed, so
   // a source-completeness gap surfaces as this named list, not an internal lookup failure.
+  // `sourcePath` is the caller's own `--source` (or its default); see this file's header, R9.
   const sourceContent = await readFile(sourcePath, 'utf8')
   const sourceNames = namesFromSource('json', sourceContent, { path: sourcePath })
   const emittedNames = new Set([...sourceNames, ...shippedThemingPropertyNames()])
@@ -261,6 +271,7 @@ export async function validate(options: TokensValidateOptions): Promise<TokensVa
   }
 
   const manifest = await readManifest()
+  // `options.source` is the caller's own argument; see this file's header, R9.
   const content = await readFile(options.source, 'utf8')
   const notDeclared = computeMissing(manifest, kind, content, { path: options.source })
   // A name the theming half emits unconditionally was never "missing" in

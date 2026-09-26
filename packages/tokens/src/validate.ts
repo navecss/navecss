@@ -33,8 +33,35 @@ export function detectSourceKind(filePath: string): ValidateSourceKind | undefin
   return undefined
 }
 
-const DECLARED_CUSTOM_PROPERTY_RE = /(--[a-zA-Z0-9-]+)\s*:/g
-const CSS_COMMENT_RE = /\/\*[\s\S]*?\*\//g
+// Both halves of the scan below run over a consumer's own `--source` CSS (R15 clause 1), so both
+// are linear. A match of `DECLARED_CUSTOM_PROPERTY_RE` can only START where a name starts: the
+// lookbehind refuses a start right after any character a CSS name can contain (a letter, a digit,
+// `_`, `-`, or anything outside ASCII). So a long run of name characters with no `:` after it is
+// tried once rather than once per character, which was quadratic, and a `--` inside a longer
+// name (`.btn--primary:hover`, `.btn_--primary:hover`) is not read as declaring `--primary`,
+// which it does not. Comments are removed by `stripCssComments`, one forward pass, rather than by
+// a lazy regex that re-scans to the end of the text from every unclosed `/*`, which was
+// quadratic too. `validate.test.ts` pins both bounds.
+const DECLARED_CUSTOM_PROPERTY_RE = /(?<![\w\u{80}-\u{10FFFF}-])(--[a-zA-Z0-9-]+)\s*:/gu
+
+/**
+ * Removes every block comment in one forward pass. CSS comments do not nest, so each one ends at
+ * the first `*\/` after its opener. An unclosed opener and everything after it stay in place,
+ * exactly as the regex this replaced left them.
+ */
+function stripCssComments(css: string): string {
+  let kept = ''
+  let from = 0
+  for (;;) {
+    const open = css.indexOf('/*', from)
+    if (open === -1) break
+    const close = css.indexOf('*/', open + 2)
+    if (close === -1) break
+    kept += css.slice(from, open)
+    from = close + 2
+  }
+  return kept + css.slice(from)
+}
 
 /**
  * R15 clause 1: the CSS case is the honest subject, because what core needs at run time is
@@ -49,7 +76,7 @@ const CSS_COMMENT_RE = /\/\*[\s\S]*?\*\//g
  */
 export function scanDeclaredCustomProperties(css: string): Set<string> {
   const found = new Set<string>()
-  const declarations = css.replaceAll(CSS_COMMENT_RE, '')
+  const declarations = stripCssComments(css)
   for (const match of declarations.matchAll(DECLARED_CUSTOM_PROPERTY_RE)) found.add(match[1]!)
   return found
 }
