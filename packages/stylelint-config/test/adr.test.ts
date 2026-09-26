@@ -31,10 +31,10 @@ describe('AC-consumer-constraints-30 covers: R19', () => {
     ).not.toThrow()
   })
 
-  const ADR_FILE = readdirSync(ADR_DIR).find((f) => f.startsWith('0007-'))
+  const ADR_FILE = readdirSync(ADR_DIR).find((f) => f.startsWith('0008-'))
 
-  it('the ADR numbered 0007 is the release-topology record', () => {
-    expect(ADR_FILE).toBe('0007-release-topology.md')
+  it('the ADR numbered 0008 is the release-topology record', () => {
+    expect(ADR_FILE).toBe('0008-release-topology.md')
   })
 
   it('its Decision states the fixed pair and that this package versions independently, with the reason', () => {

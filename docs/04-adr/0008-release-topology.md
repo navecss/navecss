@@ -3,7 +3,7 @@ supersedes: '-'
 superseded-by: '-'
 ---
 
-# 0007 — Release topology: which packages version together, and why `@navecss/stylelint-config` does not
+# 0008 — Release topology: which packages version together, and why `@navecss/stylelint-config` does not
 
 - **Status:** accepted
 - **Date:** 2026-09-25
