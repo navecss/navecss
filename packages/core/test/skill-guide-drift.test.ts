@@ -4,9 +4,9 @@
  * not accompanied by regenerating the guide reds here rather than shipping a stale reference
  * (the same shape `atoms-doc-drift.test.ts` and `css-data-drift.test.ts` already guard).
  */
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
@@ -18,6 +18,7 @@ import { atoms } from '../src/atoms.ts'
 import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
+const ATOMS_SRC_PATH = path.resolve(HERE, '../src/atoms.ts')
 
 describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts', () => {
   it('the committed file matches what the generator produces', async () => {
@@ -25,21 +26,39 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
     expect(committed).toBe(await generate())
   })
 
-  it('fails after one atom declaration in atoms.ts is edited without regenerating', async () => {
+  it('fails after one atom declaration in atoms.ts is edited on disk without regenerating — a real file mutation flowing through the real drift comparison, not an in-memory object that differs by construction', async () => {
+    // The pre-fix control built a plain object literal carrying a string ('PLANTED-EDIT') that
+    // could not possibly already be in the committed guide, so the two sides differed by
+    // construction — it never reproduced "someone edited atoms.ts and forgot to regenerate"
+    // (finding 12). This mutates the real FILE TEXT and imports the result, so the mutated
+    // value flows through the same `atoms` shape a real contributor's edit would produce.
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
-    const mutatedAtoms: Record<string, AtomDefinition> = {
-      ...atoms,
-      flex: { declarations: { display: 'PLANTED-EDIT' } },
+    const realSource = readFileSync(ATOMS_SRC_PATH, 'utf8')
+    const mutatedSource = realSource.replace(
+      "declarations: { display: 'flex' }",
+      "declarations: { display: 'planted-mutation' }",
+    )
+    expect(mutatedSource, 'the mutation target text was not found in atoms.ts').not.toBe(realSource)
+
+    const dir = mkdtempSync(path.join(HERE, '.atoms-mutation-'))
+    try {
+      const file = path.join(dir, 'atoms.ts')
+      writeFileSync(file, mutatedSource)
+      const mutatedModule = (await import(pathToFileURL(file).href)) as {
+        atoms: Record<string, AtomDefinition>
+      }
+      const mutated = await generate(baseSkillGuideSources({ atomTable: mutatedModule.atoms }))
+      expect(mutated).not.toBe(committed)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
-    const mutated = await generate(baseSkillGuideSources({ atomTable: mutatedAtoms }))
-    expect(mutated).not.toBe(committed)
   })
 
   it('the set of atom names it renders equals the key set of atoms, under the same headings and order as ATOMS.md', () => {
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
     const atomsSection = committed.slice(
       committed.indexOf('## Atoms'),
-      committed.indexOf('## Notes'),
+      committed.indexOf('## Custom properties'),
     )
     const headings = [...atomsSection.matchAll(/^### (.+)$/gm)].map((m) => m[1]!)
     const names = [...atomsSection.matchAll(/^\| `([a-zA-Z0-9]+)` +\|/gm)].map((m) => m[1]!)

@@ -7,12 +7,13 @@
  */
 import type { SkillGuideSources } from '../../scripts/generate-skill-sources.ts'
 
-import { readSections } from '../../scripts/generate-atoms-doc.ts'
-import { readDeclaredPropertyNames, readTokenDescriptions } from '../../scripts/generate-skill.ts'
+import { readDisabledStateNote, readSections } from '../../scripts/generate-atoms-doc.ts'
+import {
+  readDeclaredPropertyNames,
+  readLayerStatement,
+  readTokenDescriptions,
+} from '../../scripts/generate-skill.ts'
 import { atoms } from '../../src/atoms.ts'
-
-export const LAYER_STATEMENT =
-  '@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;'
 
 export function baseSkillGuideSources(
   overrides: Partial<SkillGuideSources> = {},
@@ -23,7 +24,8 @@ export function baseSkillGuideSources(
     tokenDescriptions: readTokenDescriptions(),
     declaredPropertyNames: readDeclaredPropertyNames(),
     paletteDescriptions: new Map(),
-    layerStatement: LAYER_STATEMENT,
+    layerStatement: readLayerStatement(),
+    disabledStateNote: readDisabledStateNote(),
     ...overrides,
   }
 }

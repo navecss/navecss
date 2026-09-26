@@ -10,13 +10,17 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { generate, OUTPUT_PATH } from '../scripts/generate-skill.ts'
+import { generate, OUTPUT_PATH, renderNaveSection } from '../scripts/generate-skill.ts'
 import { atomClassMap } from '../src/atoms.ts'
 import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const committed = readFileSync(OUTPUT_PATH, 'utf8')
 const coreReadme = readFileSync(path.resolve(HERE, '../README.md'), 'utf8')
+
+function escapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 function extractButtonFence(markdown: string): string {
   const match = /```css\n(\/\* button\.module\.css \*\/[\s\S]*?)```/.exec(markdown)
@@ -53,14 +57,19 @@ describe('AC-consumer-constraints-39: required prose statements, each present an
     'Consumer rules go in `@layer components.consumer`',
     'a deliberate exception',
     'never write an unlayered rule',
-    'closed sets',
-    'A name not on this page is not used',
+    'closed sets: the built-in atom names',
+    'neither on this page nor in the project’s own `navePlugin({ extend })`',
+    'say so rather than invent one',
+    'valid in `@nave` only, never in `cx()`',
+    '[CONSUMER-ATOMS.md](../../CONSUMER-ATOMS.md)',
+    '`@nave` applies the project’s atom and `cx()` still returns the built-in',
     'An undeclared `--nave-*` name passes lint and the build and renders nothing',
     'the camelCase keys',
     'never the `nave-` class',
     'A type error from',
     '`cx()` means the name is wrong',
     'never a reason to reach for `cx.raw()` or a cast',
+    'Its type check is TypeScript only: a JavaScript consumer gets none of it.',
     'a class from outside any system Nave sees',
     'the project’s own classes',
     "`cx('container')` is Nave’s atom",
@@ -69,15 +78,38 @@ describe('AC-consumer-constraints-39: required prose statements, each present an
     '`cx.raw(isActive && styles.active)`',
     'naming `false`, `undefined` and `0`',
     'where `@nave` is valid',
+    'is the first `@layer` declaration the page sees',
+    'keep `@navecss/core/layers`, the order statement alone, as the first import',
   ]
 
   it.each(REQUIRED_STATEMENTS)('contains: %s', (statement) => {
     expect(committed).toContain(statement)
   })
 
-  it('removing any one statement from the generator’s template output fails the corresponding assertion', async () => {
-    const withoutOne = committed.replace('never write an unlayered rule', '')
+  // Retired by PM's ruling on finding 6 (R22 is scoped to built-in atom names): the guide no
+  // longer asserts atom-name closure without the qualifier, and no sentence places an `extend`
+  // atom inside `cx()`.
+  const ASSERT_ABSENT = [
+    'atom and `--nave-*` names are exactly',
+    'this guide says so',
+    'Nave declares one `@layer` order',
+    'type-checked against the same closed set',
+    'A name not on this page is not used',
+  ]
+
+  it.each(ASSERT_ABSENT)('does not contain: %s', (statement) => {
+    expect(committed).not.toContain(statement)
+  })
+
+  it('removing any one statement from the generator’s OWN template array fails — a real regeneration, never string-surgery on the already-rendered committed file', () => {
+    const lines = renderNaveSection()
+    const targetIndex = lines.findIndex((line) => line.includes('never write an unlayered rule'))
+    expect(targetIndex).toBeGreaterThan(-1)
+    const withoutOne = lines.filter((_, i) => i !== targetIndex).join('\n')
     expect(withoutOne).not.toContain('never write an unlayered rule')
+    // The unmodified array still carries it: this is genuinely testing the splice, not a
+    // statement that was never there.
+    expect(lines.join('\n')).toContain('never write an unlayered rule')
   })
 })
 
@@ -86,7 +118,7 @@ describe("AC-consumer-constraints-39: cx('container')/cx.raw('container') appear
     expect(Object.hasOwn(atomClassMap, 'container')).toBe(true)
   })
 
-  it('the code spans appear outside any fence', () => {
+  it('every occurrence of the code spans sits outside any fence', () => {
     const fenceRanges: Array<[number, number]> = [...committed.matchAll(/```[\s\S]*?```/g)].map(
       (m) => [m.index!, m.index! + m[0].length],
     )
@@ -94,10 +126,27 @@ describe("AC-consumer-constraints-39: cx('container')/cx.raw('container') appear
       fenceRanges.some(([start, end]) => index >= start && index < end)
 
     for (const span of ["cx('container')", "cx.raw('container')"]) {
-      const index = committed.indexOf(span)
-      expect(index, `expected to find ${span}`).toBeGreaterThan(-1)
-      expect(insideAFence(index), `${span} unexpectedly inside a fence`).toBe(false)
+      // matchAll, never indexOf: a SECOND occurrence placed inside a fence would sit past the
+      // first (correctly outside) one, and an indexOf-based check never looks past it
+      // (Phase 3, slice 3, finding 17).
+      const occurrences = [...committed.matchAll(new RegExp(escapeRegExp(span), 'g'))]
+      expect(occurrences.length, `expected to find ${span}`).toBeGreaterThan(0)
+      for (const occurrence of occurrences) {
+        expect(insideAFence(occurrence.index!), `${span} unexpectedly inside a fence`).toBe(false)
+      }
     }
+  })
+
+  it('the matchAll check above does catch a second occurrence placed inside a fence', () => {
+    const withPlantedFence = `${committed}\n\n\`\`\`tsx\ncx('container')\n\`\`\`\n`
+    const fenceRanges: Array<[number, number]> = [
+      ...withPlantedFence.matchAll(/```[\s\S]*?```/g),
+    ].map((m) => [m.index!, m.index! + m[0].length] as [number, number])
+    const insideAFence = (index: number) =>
+      fenceRanges.some(([start, end]) => index >= start && index < end)
+    const occurrences = [...withPlantedFence.matchAll(/cx\('container'\)/g)]
+    expect(occurrences.length).toBeGreaterThan(1)
+    expect(occurrences.some((occurrence) => insideAFence(occurrence.index!))).toBe(true)
   })
 
   it('the cx.raw(isActive && styles.active) code span is byte-identical to core README’s', () => {

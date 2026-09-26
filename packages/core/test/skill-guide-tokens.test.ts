@@ -12,6 +12,8 @@ import { describe, expect, it } from 'vitest'
 import {
   derivePaletteDescriptions,
   generate,
+  kebab,
+  readDeclaredPropertyNames,
   readTokenDescriptions,
 } from '../scripts/generate-skill.ts'
 import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
@@ -27,13 +29,18 @@ const GENERATOR_SRC = [
  * literal `import` keyword anchors this branch, and no quote may sit between it and `from` — a
  * prose string ending in the word "from" followed by another string's opening quote, as this
  * generator's own template literals do, is NOT anchored by a preceding `import` and so cannot
- * match), a dynamic `import('...')`, or `import.meta.resolve('...')`.
+ * match), a dynamic `import('...')`, `import.meta.resolve('...')`, or a literal argument to this
+ * generator's own `resolveExport('...')` wrapper — the shape every real
+ * `@navecss/tokens`-reaching call in `generate-skill-sources.ts` actually takes (neither
+ * `readTokenDescriptions` nor `readDeclaredPropertyNames` calls `import.meta.resolve` directly;
+ * both go through `resolveExport`, which was invisible to this scanner before finding 16).
  */
 function importSpecifiers(src: string): string[] {
   return [
     ...[...src.matchAll(/\bimport\b[^'";]*\bfrom\s*(['"])([^'"]+)\1/g)].map((m) => m[2]!),
     ...[...src.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1/g)].map((m) => m[2]!),
     ...[...src.matchAll(/import\.meta\.resolve\(\s*(['"])([^'"]+)\1/g)].map((m) => m[2]!),
+    ...[...src.matchAll(/\bresolveExport\(\s*(['"])([^'"]+)\1/g)].map((m) => m[2]!),
   ]
 }
 
@@ -46,6 +53,7 @@ describe('AC-consumer-constraints-33: no path into packages/tokens/src', () => {
       'node:path',
       'node:url',
       'prettier',
+      './disabled-state-note.ts',
       './generate-atoms-doc.ts',
       './generate-skill-sources.ts',
       '../src/atoms.ts',
@@ -68,6 +76,21 @@ describe('AC-consumer-constraints-33: no path into packages/tokens/src', () => {
     expect(importSpecifiers(planted)).toEqual(['@navecss/tokens/src/theming/descriptions.ts'])
   })
 
+  it('importSpecifiers catches a resolveExport(...) literal of a disallowed deep path (finding 16)', () => {
+    const planted = `resolveExport('@navecss/tokens/src/theming/descriptions.ts')`
+    expect(importSpecifiers(planted)).toEqual(['@navecss/tokens/src/theming/descriptions.ts'])
+  })
+
+  it('importSpecifiers now actually extracts the two deep-read specifiers the real source reaches through resolveExport', () => {
+    // Before finding 16, neither `'@navecss/tokens/tokens.json'` nor `'@navecss/tokens/css'`
+    // was ever matched by this scanner (both sit in resolveExport(...) calls, not a bare
+    // import.meta.resolve(...) or import ... from), so the AC-33 allowlist check below was
+    // vacuously satisfied for exactly the two paths it exists to guard.
+    const specifiers = importSpecifiers(GENERATOR_SRC)
+    expect(specifiers).toContain('@navecss/tokens/tokens.json')
+    expect(specifiers).toContain('@navecss/tokens/css')
+  })
+
   it('@navecss/tokens’ exports map has the same keys as before this slice (no new export)', () => {
     const tokensPkg = JSON.parse(
       readFileSync(path.resolve(HERE, '../../tokens/package.json'), 'utf8'),
@@ -88,21 +111,54 @@ describe('AC-consumer-constraints-33: no path into packages/tokens/src', () => {
 })
 
 describe('AC-consumer-constraints-33: description fidelity', () => {
-  it('every non-colour token rendered with a description is byte-identical to its $description in ./tokens.json', () => {
+  it('the description map is complete: every $description leaf in tokens.json is represented, byte for byte, none dropped', () => {
+    // A loop over EVERY leaf, not 3 hand-picked names: a leaf this loop misses is a leaf a
+    // hand-picked check could never have named in the first place (Phase 3, slice 3, finding
+    // 11). Walks the same DTCG tree `readTokenDescriptions()` itself walks, independently
+    // collecting VALUES only (never re-deriving the `kebab()` name transform a second time,
+    // which NEW-2's own test covers) — so a dropped or wrong-value leaf reds here regardless of
+    // whether its computed NAME would also have been right.
     const descriptions = readTokenDescriptions()
     const raw = readFileSync(path.resolve(HERE, '../../tokens/tokens.json'), 'utf8')
-    const doc = JSON.parse(raw) as unknown
-    // Cross-check a handful of known entries directly against the source, byte-for-byte.
+    const doc: unknown = JSON.parse(raw)
+
+    const expectedValues: string[] = []
+    function walk(node: unknown, segments: string[]): void {
+      if (node === null || typeof node !== 'object') return
+      const obj = node as Record<string, unknown>
+      if ('$value' in obj) {
+        if (segments[0] === 'breakpoint' || segments.some((s) => s.startsWith('_'))) return
+        if (typeof obj.$description === 'string') expectedValues.push(obj.$description)
+        return
+      }
+      for (const [key, value] of Object.entries(obj)) {
+        if (key.startsWith('$')) continue
+        walk(value, [...segments, key])
+      }
+    }
+    walk(doc, [])
+
+    expect(expectedValues.length).toBeGreaterThan(0)
+    // A dropped-one-token subset (the pre-fix "tautology" control) fails THIS assertion, since
+    // the size no longer matches the independently-walked count.
+    expect(descriptions.size).toBe(expectedValues.length)
+    expect([...descriptions.values()].toSorted()).toEqual(expectedValues.toSorted())
+
+    // Three of the real entries, still pinned by name (not just by value-set membership), so a
+    // wrong NAME for a right value would still be visible somewhere in this file's other tests
+    // (drift, cell-identity) even though this particular assertion is value-only.
     expect(descriptions.get('--nave-radius-control')).toBe('Inputs, buttons, tags')
     expect(descriptions.get('--nave-spacing-content-md')).toBe('Default component gap and padding')
     expect(descriptions.get('--nave-motion-duration-instant')).toBe(
       'No animation — kept at 0ms even under prefers-reduced-motion',
     )
-    // A subset dropping one known-described token fails the completeness a full render needs.
+  })
+
+  it('a subset dropping one known-described token fails the completeness check above', () => {
+    const descriptions = readTokenDescriptions()
     const dropped = new Map(descriptions)
     dropped.delete('--nave-radius-control')
-    expect(dropped.has('--nave-radius-control')).toBe(false)
-    expect(doc).toBeTruthy()
+    expect(dropped.size).not.toBe(descriptions.size)
   })
 
   it('every colour slot carries text byte-identical to its description in palette-record.json', async () => {
@@ -132,12 +188,53 @@ describe('AC-consumer-constraints-33: description fidelity', () => {
     expect(() => derivePaletteDescriptions(planted)).toThrow(/content\.link/)
   })
 
-  it('generate(), given a substituted palette record whose light/dark descriptions differ, propagates the throw naming that slot', async () => {
-    // generate() itself takes already-derived sources; the throw for a mismatched record is
-    // exercised directly against derivePaletteDescriptions above (the function generate() calls
-    // internally when collecting real sources) — this test pins that generate() does not
-    // swallow such a throw when it occurs during real source collection.
+  it('collectRealSources, given a mismatched palette-record override, propagates the throw naming that slot — the REAL collection path, not derivePaletteDescriptions called directly', async () => {
+    // Before finding 11's fix, the only test on this clause called generate(baseSkillGuideSources())
+    // — sources it had already derived itself — so no mismatch was ever constructed and the
+    // throw path through the real collection pipeline (collectRealSources -> buildPaletteRecord
+    // -> derivePaletteDescriptions) was never exercised end to end. The override parameter below
+    // is the seam that lets a test inject a real mismatch through that pipeline with no need to
+    // run the tokens build twice for one throw.
+    const { collectRealSources } = await import('../scripts/generate-skill-sources.ts')
+    const mismatched = {
+      'color.content.link.light': { $type: 'color', $value: 'x', $description: 'left' },
+      'color.content.link.dark': { $type: 'color', $value: 'y', $description: 'right' },
+    }
+    await expect(collectRealSources(mismatched)).rejects.toThrow(/content\.link/)
+  })
+
+  it('generate(), given the real tree, still resolves (the happy path the seam above does not disturb)', async () => {
     await expect(generate(baseSkillGuideSources())).resolves.toBeTypeOf('string')
+  })
+})
+
+describe('AC-consumer-constraints-33: kebab() matches the real @navecss/tokens build transform (NEW-2)', () => {
+  it('every non-colour token name it computes is a member of the declared --nave-* set (completeness, not 3 hand-picked names)', () => {
+    // Before this test, AC-33's only cross-check between the two maps was 3 hand-picked names,
+    // none of which would ever exercise a kebab() naming mismatch — every OTHER name could have
+    // silently missed the declared set with nothing here to notice.
+    const declared = new Set(readDeclaredPropertyNames())
+    const names = [...readTokenDescriptions().keys()]
+    expect(names.length).toBeGreaterThan(0)
+    for (const name of names) {
+      expect(declared.has(name), `${name} is not in the declared --nave-* set`).toBe(true)
+    }
+  })
+
+  it('kebab() is byte-identical to the real build’s transform on an adjacent-capitals (acronym-shaped) segment', async () => {
+    // The real transform this generator's own docblock says it re-derives
+    // (`@navecss/tokens/src/token-name.ts`'s `kebabName`), reached here only for this TEST's
+    // own verification — R20's restriction on reading `@navecss/tokens` through its public
+    // exports only binds the GENERATOR, never what verifies it (the same rule
+    // skill-guide-cleared-copy.test.ts’s FEEDBACK_SHARED_IDENTITY_NOTICE check already relies
+    // on). No such segment exists in the real tokens.json today, which is exactly why nothing
+    // catches a mismatch without this test.
+    const { kebabName } = (await import(path.resolve(HERE, '../../tokens/src/token-name.ts'))) as {
+      kebabName: (path: readonly string[]) => string
+    }
+    const adversarial = 'URLPath'
+    expect(kebab(adversarial)).toBe(kebabName([adversarial]))
+    expect(kebab(adversarial)).toBe('url-path')
   })
 })
 

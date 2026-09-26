@@ -23,13 +23,15 @@ import { format, resolveConfig } from 'prettier'
 
 import type { SkillGuideSources } from './generate-skill-sources.ts'
 
-import { renderDeclarations, renderVariants } from './generate-atoms-doc.ts'
+import { renderDeclarations, renderVariantsCell } from './generate-atoms-doc.ts'
 import { collectRealSources } from './generate-skill-sources.ts'
 
 export type { SkillGuideSources } from './generate-skill-sources.ts'
 export {
   derivePaletteDescriptions,
+  kebab,
   readDeclaredPropertyNames,
+  readLayerStatement,
   readTokenDescriptions,
 } from './generate-skill-sources.ts'
 
@@ -51,18 +53,21 @@ function readButtonFence(): string {
 }
 
 /**
- * The built-in atom table, grouped exactly as `ATOMS.md`'s own sections, plus `disabledState`'s
- * aria-disabled sentence (R23), named beside it in a "Notes" callout — mirroring `ATOMS.md`'s
- * own "Pairing notes" precedent — wherever its name or declarations appear, including its own
- * row above.
+ * The built-in atom table, grouped exactly as `ATOMS.md`'s own sections. `disabledState`'s
+ * aria-disabled sentence (R23) rides in its own row, appended to the Variants cell beside the
+ * `pointer-events: none;` declaration it qualifies (`renderVariantsCell`, shared with
+ * `generate-atoms-doc.ts`) — never a separate notes section, which would let the sentence and
+ * the declarations it explains drift apart (AC-consumer-constraints-40).
  */
 function renderAtomsSection(sources: SkillGuideSources): string[] {
   const lines: string[] = [
     '## Atoms',
     '',
     'Every built-in atom: the name as written in `@nave` and `cx()`, the declarations it',
-    'applies, and its pseudo-class, `@media` or `@container` variants. A name not on this list',
-    'is not an atom — do not invent one.',
+    'applies, and its pseudo-class, `@media` or `@container` variants.',
+    'A name not on this list is not a built-in atom.',
+    'A project’s own `navePlugin({ extend })` atoms are not listed here (see Using `@nave` above);',
+    'a name that is in neither is not used, so do not invent one.',
     '',
   ]
   for (const [section, names] of sources.sections) {
@@ -74,21 +79,11 @@ function renderAtomsSection(sources: SkillGuideSources): string[] {
     )
     for (const name of names) {
       const atom = sources.atomTable[name]!
-      lines.push(
-        `| \`${name}\` | ${renderDeclarations(atom.declarations)} | ${renderVariants(atom)} |`,
-      )
+      const variants = renderVariantsCell(name, atom, sources.disabledStateNote)
+      lines.push(`| \`${name}\` | ${renderDeclarations(atom.declarations)} | ${variants} |`)
     }
     lines.push('')
   }
-  lines.push(
-    '## Notes',
-    '',
-    '- `disabledState`: On the aria-disabled branch the element stays focusable by design: this ' +
-      'atom only blocks pointer activation (pointer-events: none), so the component’s own ' +
-      'activation handler must also check the attribute and no-op on Enter and Space, since CSS ' +
-      'cannot prevent keyboard activation.',
-    '',
-  )
   return lines
 }
 
@@ -96,7 +91,7 @@ function renderAtomsSection(sources: SkillGuideSources): string[] {
  * A markdown list, one bullet per `--nave-*` name, its description appended where one exists —
  * never a table: a markdown table pads every cell in a column to its widest cell, so the one
  * paragraph-length description among a hundred one-line entries would have padded every other
- * row to match it (measured: this alone pushed the guide well past the 32 KiB ceiling, R34).
+ * row to match it (measured: this alone pushed the guide well past the 32 KiB ceiling, R20).
  * A bare name with no description carries none — never a placeholder dash repeated a hundred
  * times, which is exactly the kind of composed-around-the-vocabulary text R2/R23 forbid.
  */
@@ -127,34 +122,58 @@ function renderLayersSection(sources: SkillGuideSources): string[] {
   return [
     '## Layers',
     '',
-    `Nave declares one \`@layer\` order, first, before any other stylesheet: \`${sources.layerStatement}\``,
+    `Nave’s layer order: \`${sources.layerStatement}\``,
+    '',
+    'The order holds only if it is the first `@layer` declaration the page sees:',
+    'a stylesheet that declares a layer and loads earlier fixes that layer’s position first,',
+    'and the order inverts with no error.',
+    'So keep `@navecss/core/layers`, the order statement alone, as the first import of the',
+    'entry stylesheet, and load that stylesheet before anything that brings its own stylesheet,',
+    'components included.',
     '',
     'Your own component CSS goes in `@layer components.consumer`; a deliberate exception goes in',
     '`@layer overrides`, which beats every other layer. A rule left outside any layer beats them',
-    'all, `overrides` included — never write unlayered CSS.',
+    'all, `overrides` included, so never write unlayered CSS.',
+    'That is the order for normal declarations. `!important` reverses it: an `!important` in',
+    '`overrides` loses to one in any earlier layer, Nave’s reset included, and one outside any',
+    'layer loses to every layered one.',
     '',
   ]
 }
 
 /**
 `@nave`/`var(--nave-*)`: the primary idiom, presented first (AC-consumer-constraints-39).
+Exported so a test's removal control can splice a line out of the generator's OWN returned
+array and re-join it, rather than string-surgery on the already-rendered, Prettier-formatted
+`committed` file (AC-consumer-constraints-39's own removal-control clause).
  */
-function renderNaveSection(): string[] {
+export function renderNaveSection(): string[] {
   return [
     '## Using `@nave` and `var(--nave-*)`',
     '',
     'Apply built-in atoms with the `@nave` at-rule inside a CSS rule; read values through',
-    '`var(--nave-*)`. Both vocabularies are closed sets: atom and `--nave-*` names are exactly',
-    'the ones on this page. A name not on this page is not used — this guide says so rather than',
-    'inventing one. An undeclared `--nave-*` name passes lint and the build and renders nothing.',
+    '`var(--nave-*)`. Both vocabularies are closed sets: the built-in atom names and the',
+    '`--nave-*` names are exactly the ones on this page.',
+    'An atom name that is neither on this page nor in the project’s own `navePlugin({ extend })`',
+    'configuration is not used, and a `--nave-*` name not on this page is not used either:',
+    'when the name you need does not exist, say so rather than invent one.',
+    'An undeclared `--nave-*` name passes lint and the build and renders nothing.',
+    '',
+    'Atoms a project registers through `navePlugin({ extend })` are not listed on this page.',
+    'They are valid in `@nave` only, never in `cx()`, and they live in that project’s own',
+    '`navePlugin({ extend })` configuration, so look for them there',
+    '(their shape is in [CONSUMER-ATOMS.md](../../CONSUMER-ATOMS.md)).',
+    'Where one shares a built-in atom’s name,',
+    '`@nave` applies the project’s atom and `cx()` still returns the built-in,',
+    'so the declarations this page shows for that name are not what `@nave` applies there.',
     '',
     '```css',
     readButtonFence(),
     '```',
     '',
     'Consumer rules go in `@layer components.consumer`, and a deliberate exception in',
-    '`@layer overrides`; never write an unlayered rule. Atom names are the camelCase keys shown',
-    'above (`focusRing`, `disabledState`), never the `nave-` class they emit.',
+    '`@layer overrides`; never write an unlayered rule. Atom names are the camelCase keys listed',
+    'under Atoms below (`focusRing`, `justifyBetween`), never the `nave-` class they emit.',
     '',
     'See where `@nave` is valid (nesting depth, `@media`/`@container`, `@keyframes`) in',
     '[the package README](../../README.md#where-nave-is-valid).',
@@ -169,9 +188,10 @@ function renderCxSection(): string[] {
   return [
     '## `cx()`',
     '',
-    "The JavaScript escape hatch: `cx('interactive', 'focusRing')` resolves to the same",
-    'built-in atoms `@nave` applies, type-checked against the same closed set. A type error from',
-    '`cx()` means the name is wrong — it is never a reason to reach for `cx.raw()` or a cast.',
+    "The JavaScript escape hatch: `cx('interactive', 'focusRing')` returns the class of each",
+    'built-in atom it names, and `cx()` takes built-in atoms and nothing else.',
+    'Its type check is TypeScript only: a JavaScript consumer gets none of it. A type error from',
+    '`cx()` means the name is wrong: it is never a reason to reach for `cx.raw()` or a cast.',
     '',
   ]
 }

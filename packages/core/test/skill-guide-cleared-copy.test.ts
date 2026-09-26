@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { AtomDefinition } from '../src/atoms.ts'
 
-import { readSections } from '../scripts/generate-atoms-doc.ts'
+import { readDisabledStateNote, readSections } from '../scripts/generate-atoms-doc.ts'
 import { generate, OUTPUT_PATH, readTokenDescriptions } from '../scripts/generate-skill.ts'
 import { atoms } from '../src/atoms.ts'
 import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
@@ -20,12 +20,6 @@ import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const committed = readFileSync(OUTPUT_PATH, 'utf8')
 const GENERATOR_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-skill.ts'), 'utf8')
-
-const ARIA_DISABLED_SENTENCE =
-  'On the aria-disabled branch the element stays focusable by design: this atom only blocks ' +
-  'pointer activation (pointer-events: none), so the component’s own activation handler must ' +
-  'also check the attribute and no-op on Enter and Space, since CSS cannot prevent keyboard ' +
-  'activation.'
 
 describe('AC-consumer-constraints-40: composes no prose around the vocabulary', () => {
   async function renderWith(overrides: Partial<Parameters<typeof generate>[0]>): Promise<string> {
@@ -75,19 +69,42 @@ describe('AC-consumer-constraints-40: composes no prose around the vocabulary', 
 })
 
 describe('AC-consumer-constraints-40: disabledState / interactive', () => {
-  it('wherever disabledState’s name or declarations appear, the aria-disabled sentence is beside it', () => {
-    const lines = committed.split('\n')
-    const disabledStateLines = lines
-      .map((line, i) => (line.includes('disabledState') ? i : -1))
-      .filter((i) => i !== -1)
+  it('the guide’s aria-disabled sentence is byte-identical to the one read fresh from atoms.ts', () => {
+    // Read at TEST time, never a second hardcoded copy of the sentence: a homoglyph or a reworded
+    // atoms.ts docblock has to change this assertion's own expected value, not just the guide's
+    // (Phase 3, slice 3, finding 1/9 — the two hardcoded copies previously disagreed by one
+    // apostrophe code point and neither test caught it).
+    const freshNote = readDisabledStateNote()
+    expect(committed).toContain(freshNote)
+  })
+
+  it('wherever disabledState’s name or declarations appear, the same line carries the sentence', () => {
+    const freshNote = readDisabledStateNote()
+    const disabledStateLines = committed
+      .split('\n')
+      .filter((line) => line.includes('disabledState'))
     expect(disabledStateLines.length).toBeGreaterThan(0)
-    expect(committed).toContain(ARIA_DISABLED_SENTENCE)
+    for (const line of disabledStateLines) {
+      expect(line, `"${line}" does not carry the sentence beside disabledState`).toContain(
+        freshNote,
+      )
+    }
   })
 
   it('fails on a guide missing the aria-disabled sentence beside disabledState', () => {
-    const withoutSentence = committed.replace(ARIA_DISABLED_SENTENCE, '')
+    const freshNote = readDisabledStateNote()
+    const withoutSentence = committed.replace(freshNote, '')
     expect(withoutSentence).toContain('disabledState')
-    expect(withoutSentence).not.toContain(ARIA_DISABLED_SENTENCE)
+    expect(withoutSentence).not.toContain(freshNote)
+  })
+
+  it('a hardcoded copy one apostrophe code point off the fresh reading is caught as a mismatch', () => {
+    // The exact drift finding 1 found: a curly apostrophe (U+2019) typed into the generator where
+    // atoms.ts itself uses a straight one (U+0027). Self-tests the byte-identity check above: if
+    // this ever passed, that check would be unable to tell the two apostrophes apart.
+    const freshNote = readDisabledStateNote()
+    const homoglyphCopy = freshNote.replace("component's", 'component’s')
+    expect(homoglyphCopy).not.toBe(freshNote)
   })
 
   it('interactive’s docblock line never appears', () => {

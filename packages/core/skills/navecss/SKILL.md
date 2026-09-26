@@ -16,9 +16,20 @@ changes the seed colour and everything derived from it.
 ## Using `@nave` and `var(--nave-*)`
 
 Apply built-in atoms with the `@nave` at-rule inside a CSS rule; read values through
-`var(--nave-*)`. Both vocabularies are closed sets: atom and `--nave-*` names are exactly
-the ones on this page. A name not on this page is not used — this guide says so rather than
-inventing one. An undeclared `--nave-*` name passes lint and the build and renders nothing.
+`var(--nave-*)`. Both vocabularies are closed sets: the built-in atom names and the
+`--nave-*` names are exactly the ones on this page.
+An atom name that is neither on this page nor in the project’s own `navePlugin({ extend })`
+configuration is not used, and a `--nave-*` name not on this page is not used either:
+when the name you need does not exist, say so rather than invent one.
+An undeclared `--nave-*` name passes lint and the build and renders nothing.
+
+Atoms a project registers through `navePlugin({ extend })` are not listed on this page.
+They are valid in `@nave` only, never in `cx()`, and they live in that project’s own
+`navePlugin({ extend })` configuration, so look for them there
+(their shape is in [CONSUMER-ATOMS.md](../../CONSUMER-ATOMS.md)).
+Where one shares a built-in atom’s name,
+`@nave` applies the project’s atom and `cx()` still returns the built-in,
+so the declarations this page shows for that name are not what `@nave` applies there.
 
 ```css
 /* button.module.css */
@@ -34,17 +45,18 @@ inventing one. An undeclared `--nave-*` name passes lint and the build and rende
 ```
 
 Consumer rules go in `@layer components.consumer`, and a deliberate exception in
-`@layer overrides`; never write an unlayered rule. Atom names are the camelCase keys shown
-above (`focusRing`, `disabledState`), never the `nave-` class they emit.
+`@layer overrides`; never write an unlayered rule. Atom names are the camelCase keys listed
+under Atoms below (`focusRing`, `justifyBetween`), never the `nave-` class they emit.
 
 See where `@nave` is valid (nesting depth, `@media`/`@container`, `@keyframes`) in
 [the package README](../../README.md#where-nave-is-valid).
 
 ## `cx()`
 
-The JavaScript escape hatch: `cx('interactive', 'focusRing')` resolves to the same
-built-in atoms `@nave` applies, type-checked against the same closed set. A type error from
-`cx()` means the name is wrong — it is never a reason to reach for `cx.raw()` or a cast.
+The JavaScript escape hatch: `cx('interactive', 'focusRing')` returns the class of each
+built-in atom it names, and `cx()` takes built-in atoms and nothing else.
+Its type check is TypeScript only: a JavaScript consumer gets none of it. A type error from
+`cx()` means the name is wrong: it is never a reason to reach for `cx.raw()` or a cast.
 
 ## `cx.raw()`
 
@@ -59,8 +71,10 @@ condition’s own value — naming `false`, `undefined` and `0` — as a class.
 ## Atoms
 
 Every built-in atom: the name as written in `@nave` and `cx()`, the declarations it
-applies, and its pseudo-class, `@media` or `@container` variants. A name not on this list
-is not an atom — do not invent one.
+applies, and its pseudo-class, `@media` or `@container` variants.
+A name not on this list is not a built-in atom.
+A project’s own `navePlugin({ extend })` atoms are not listed here (see Using `@nave` above);
+a name that is in neither is not used, so do not invent one.
 
 ### Display
 
@@ -120,11 +134,11 @@ is not an atom — do not invent one.
 
 ### Interaction
 
-| Atom            | Declarations                                                                                                              | Variants                                                                                                                                                            |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `interactive`   | `cursor: pointer;`<br>`-webkit-user-select: none;`<br>`user-select: none;`<br>`-webkit-tap-highlight-color: transparent;` | —                                                                                                                                                                   |
-| `focusRing`     | `outline: none;`                                                                                                          | `:focus-visible` — `outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus);`<br>`outline-offset: 2px;`                                        |
-| `disabledState` | —                                                                                                                         | `:disabled, [aria-disabled="true"]` — `color: var(--nave-color-content-disabled);`<br>`border-color: var(--nave-color-border-disabled);`<br>`pointer-events: none;` |
+| Atom            | Declarations                                                                                                              | Variants                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `interactive`   | `cursor: pointer;`<br>`-webkit-user-select: none;`<br>`user-select: none;`<br>`-webkit-tap-highlight-color: transparent;` | —                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `focusRing`     | `outline: none;`                                                                                                          | `:focus-visible` — `outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus);`<br>`outline-offset: 2px;`                                                                                                                                                                                                                                                                                                                                   |
+| `disabledState` | —                                                                                                                         | `:disabled, [aria-disabled="true"]` — `color: var(--nave-color-content-disabled);`<br>`border-color: var(--nave-color-border-disabled);`<br>`pointer-events: none;`<br>On the aria-disabled branch the element stays focusable by design: this atom only blocks pointer activation (pointer-events: none), so the component's own activation handler must also check the attribute and no-op on Enter and Space, since CSS cannot prevent keyboard activation. |
 
 ### Visual
 
@@ -159,10 +173,6 @@ is not an atom — do not invent one.
 | `hideDesktopUp`         | —            | `@media (width >= 75em)` — `display: none;`           |
 | `stackPhoneOnly`        | —            | `@media (width < 37.5em)` — `flex-direction: column;` |
 | `wFullPhoneOnly`        | —            | `@media (width < 37.5em)` — `width: 100%;`            |
-
-## Notes
-
-- `disabledState`: On the aria-disabled branch the element stays focusable by design: this atom only blocks pointer activation (pointer-events: none), so the component’s own activation handler must also check the attribute and no-op on Enter and Space, since CSS cannot prevent keyboard activation.
 
 ## Custom properties
 
@@ -285,8 +295,18 @@ renders nothing.
 
 ## Layers
 
-Nave declares one `@layer` order, first, before any other stylesheet: `@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;`
+Nave’s layer order: `@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;`
+
+The order holds only if it is the first `@layer` declaration the page sees:
+a stylesheet that declares a layer and loads earlier fixes that layer’s position first,
+and the order inverts with no error.
+So keep `@navecss/core/layers`, the order statement alone, as the first import of the
+entry stylesheet, and load that stylesheet before anything that brings its own stylesheet,
+components included.
 
 Your own component CSS goes in `@layer components.consumer`; a deliberate exception goes in
 `@layer overrides`, which beats every other layer. A rule left outside any layer beats them
-all, `overrides` included — never write unlayered CSS.
+all, `overrides` included, so never write unlayered CSS.
+That is the order for normal declarations. `!important` reverses it: an `!important` in
+`overrides` loses to one in any earlier layer, Nave’s reset included, and one outside any
+layer loses to every layered one.

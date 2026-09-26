@@ -15,6 +15,9 @@ import { fileURLToPath } from 'node:url'
 import { format, resolveConfig } from 'prettier'
 
 import { type AtomDefinition, type AtomName, atoms, toClassName } from '../src/atoms.ts'
+import { readDisabledStateNote } from './disabled-state-note.ts'
+
+export { readDisabledStateNote } from './disabled-state-note.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ATOMS_SRC = path.resolve(HERE, '../src/atoms.ts')
@@ -174,6 +177,22 @@ export function renderVariants(atom: AtomDefinition): string {
   return parts.length === 0 ? '—' : parts.join('<br>')
 }
 
+/**
+`renderVariants(atom)`, with `disabledState`'s aria-disabled sentence appended after its own
+`pointer-events: none;` entry — the one row an agent meets together with the declarations it
+qualifies, never a separate notes section (steward's gant §8; AC-consumer-constraints-40).
+Shared by this file's own `generate()` and `generate-skill.ts`'s, so neither re-derives the
+placement or the sentence.
+ */
+export function renderVariantsCell(
+  name: AtomName,
+  atom: AtomDefinition,
+  disabledStateNote: string,
+): string {
+  const variants = renderVariants(atom)
+  return name === 'disabledState' ? `${variants}<br>${disabledStateNote}` : variants
+}
+
 const PAIRING_NOTES: Partial<Record<AtomName, string>> = {
   truncate:
     'pairs with `minW0` on a flex or grid child, or the text never has a width to truncate against',
@@ -184,6 +203,7 @@ Renders the full `ATOMS.md` markdown, formatted with the repository's own Pretti
  */
 export async function generate(): Promise<string> {
   const sections = readSections()
+  const disabledStateNote = readDisabledStateNote()
   const lines: string[] = [
     '# ATOMS.md',
     '',
@@ -205,7 +225,7 @@ export async function generate(): Promise<string> {
     for (const name of names) {
       const atom: AtomDefinition = atoms[name]
       lines.push(
-        `| \`${name}\` | \`${toClassName(name)}\` | ${renderDeclarations(atom.declarations)} | ${renderVariants(atom)} |`,
+        `| \`${name}\` | \`${toClassName(name)}\` | ${renderDeclarations(atom.declarations)} | ${renderVariantsCell(name, atom, disabledStateNote)} |`,
       )
     }
     lines.push('')

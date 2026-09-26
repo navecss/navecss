@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 import type { AtomDefinition, AtomName } from '../src/atoms.ts'
 
 import { atoms } from '../src/atoms.ts'
+import { readDisabledStateNote } from './disabled-state-note.ts'
 import { readSections } from './generate-atoms-doc.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -50,15 +51,38 @@ export interface SkillGuideSources {
   The raw `@layer` order statement, read from `src/layers.css`.
    */
   layerStatement: string
+  /**
+  `disabledState`'s aria-disabled sentence, read from its own docblock in `src/atoms.ts`
+  (`readDisabledStateNote()`) — a field so a test's perturbation seam can substitute it without
+  touching the real tree (AC-consumer-constraints-40).
+   */
+  disabledStateNote: string
 }
+
+// Mirrors `@navecss/tokens/src/token-name.ts`'s own `splitWords` boundaries (ASCII subset: DTCG
+// path segments are plain camelCase identifiers, never the full Unicode range that reader
+// handles): a lower/digit-to-upper boundary, THEN an upper-to-upper-lower boundary, in that
+// order. Splitting only at those two boundaries — never inserting a hyphen before EVERY
+// uppercase letter — is what keeps an acronym-shaped segment (`URLPath`) splitting as one word
+// per real boundary (`url-path`) instead of one hyphen per letter (`-u-r-l-path`).
+const SPLIT_LOWER_UPPER = /([a-z0-9])([A-Z])/g
+const SPLIT_UPPER_UPPER_LOWER = /([A-Z])([A-Z][a-z])/g
 
 /**
  * A camelCase segment (a DTCG path component, e.g. `lineHeight`) to its kebab-case CSS form
  * (`line-height`) — the transform `@navecss/tokens`'s own build already applies when it
- * composes a `--nave-*` name, re-derived here because that transform is not itself exported.
+ * composes a `--nave-*` name, re-derived here because that transform is not itself exported
+ * (R20/Q11: this generator reads only `@navecss/tokens`'s public exports, never its internal
+ * `src/token-name.ts`). Verified empirically against the transform it re-derives: byte-identical
+ * on every segment the real `tokens.json` declares today, and unlike the earlier one-hyphen-
+ * per-capital shape, also byte-identical on an adjacent-capitals (acronym-shaped) segment that
+ * does not exist in the real source yet (skill-guide-tokens.test.ts, NEW-2).
  */
-function kebab(segment: string): string {
-  return segment.replaceAll(/([A-Z])/g, '-$1').toLowerCase()
+export function kebab(segment: string): string {
+  return segment
+    .replaceAll(SPLIT_LOWER_UPPER, '$1-$2')
+    .replaceAll(SPLIT_UPPER_UPPER_LOWER, '$1-$2')
+    .toLowerCase()
 }
 
 /**
@@ -177,8 +201,11 @@ async function buildPaletteRecord(): Promise<Record<string, unknown>> {
 /**
  * The real `@layer` order statement, as `src/layers.css` declares it — the same file
  * `@navecss/core/layers` publishes unchanged (confirmed byte-identical to `dist/layers.css`).
+ * Exported (alongside `derivePaletteDescriptions`, `readDeclaredPropertyNames` and
+ * `readTokenDescriptions`) so a test can read the real statement too, rather than hand-copy it
+ * into a fixture constant that a future layer-order edit would never touch.
  */
-function readLayerStatement(): string {
+export function readLayerStatement(): string {
   const css = readFileSync(LAYERS_CSS_PATH, 'utf8')
   // Anchored to the START of a line: the docblock above the real statement itself says
   // "the @layer order statement, alone" in prose, and an unanchored scan would greedily
@@ -196,11 +223,21 @@ function readLayerStatement(): string {
 /**
  * Collects every real source `generate()` needs, in one call. A test bypasses this entirely by
  * passing its own `SkillGuideSources` to `generate()` directly.
+ *
+ * `paletteRecordOverride`, when given, is used INSTEAD of running the real tokens build — the
+ * seam a test uses to inject a mismatched palette record through this REAL collection path
+ * (`derivePaletteDescriptions`'s own throw, naming the slot), rather than only ever calling
+ * `derivePaletteDescriptions` directly and never exercising the pipeline that actually calls it
+ * (AC-consumer-constraints-33, finding 11).
  */
-export async function collectRealSources(): Promise<SkillGuideSources> {
+export async function collectRealSources(
+  paletteRecordOverride?: Record<string, unknown>,
+): Promise<SkillGuideSources> {
   const [tokenDescriptions, paletteRecord] = await Promise.all([
     Promise.resolve(readTokenDescriptions()),
-    buildPaletteRecord(),
+    paletteRecordOverride === undefined
+      ? buildPaletteRecord()
+      : Promise.resolve(paletteRecordOverride),
   ])
   return {
     sections: readSections(),
@@ -209,5 +246,6 @@ export async function collectRealSources(): Promise<SkillGuideSources> {
     declaredPropertyNames: readDeclaredPropertyNames(),
     paletteDescriptions: derivePaletteDescriptions(paletteRecord),
     layerStatement: readLayerStatement(),
+    disabledStateNote: readDisabledStateNote(),
   }
 }
