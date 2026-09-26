@@ -314,6 +314,16 @@ export default defineConfig([
     },
   },
 
+  // ── navecss-core bin (R10, navecss-core check) ──────────────────────────────
+  // Same shape as navecss-tokens' own bin.ts override above: stdout/stderr IS this
+  // entry point's whole output channel.
+  {
+    files: ['packages/core/src/bin.ts'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+
   // ── Build scripts — the progress line is the point ─────────────────────────
   {
     files: [

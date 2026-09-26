@@ -34,7 +34,14 @@
       "types": "./dist/postcss.d.ts",
       "import": "./dist/postcss.js"
     },
+    "./check": {
+      "types": "./dist/check.d.ts",
+      "import": "./dist/check.js"
+    },
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "navecss-core": "./dist/bin.js"
   },
   "files": [
     "dist",
