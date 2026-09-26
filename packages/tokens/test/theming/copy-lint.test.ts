@@ -470,6 +470,24 @@ describe('AC-theming-40 covers: R34', () => {
       // checkable change in verdict.
       `:root {\n  --a: éurl(x/*);\n  */* filler stays open, no closer on this line\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
     ],
+    [
+      'a hash token immediately before ( also makes it not the url() token, so #url( is not opaque',
+      // Armed: matching url( right after a leading '#' misreads this hash token plus '(' as the
+      // real url() token, treats its content as opaque, and so misses the '/*' it actually opens;
+      // a later, unrelated '/*' on the filler line then reopens what the phantom skip closed.
+      // That is a false refusal against css-tree's own reading, not a silent pass, but still a
+      // real, checkable change in verdict.
+      `:root {\n  --a: #url(x/*);\n  */* filler stays open, no closer on this line\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
+    ],
+    [
+      'an at-keyword immediately before ( also makes it not the url() token, so @url( is not opaque',
+      // Armed: matching url( right after a leading '@' misreads this at-keyword plus '(' as the
+      // real url() token, treats its content as opaque, and so misses the '/*' it actually opens;
+      // a later, unrelated '/*' on the filler line then reopens what the phantom skip closed.
+      // That is a false refusal against css-tree's own reading, not a silent pass, but still a
+      // real, checkable change in verdict.
+      `:root {\n  --a: @url(x/*);\n  */* filler stays open, no closer on this line\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
+    ],
   ])('%s', (_description, css) => {
     expect(() => assertNoticeIsEmitted(css, RETHEMING_NOTICE, 'Retheming notice')).not.toThrow()
   })

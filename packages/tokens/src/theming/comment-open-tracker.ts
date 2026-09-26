@@ -27,7 +27,7 @@
  * Deliberately not a CSS parser: reading a line left to right, while outside a comment the
  * next opening delimiter opens one; while inside, the next closing delimiter closes it, and an
  * opening delimiter seen between them is ordinary text. While outside a comment, a quoted
- * string that CLOSES on its own line is skipped whole before that scan resumes, matching the
+ * string that CLOSES on its own line is skipped whole before that scan resumes, matching
  * one piece of real CSS tokenization this module models: a closed string is consumed as a
  * single token before the tokenizer ever looks for a comment start again, so an opening or
  * closing comment delimiter inside one is ordinary string content, never a delimiter (the
@@ -37,11 +37,15 @@
  * it off, CSS consumes it as a bad-string token running to the end of the line, which makes a
  * comment opener after the quote string content to a parser, while a reader can take the quote
  * as a stray character and see that opener open a comment. The module therefore reads every
- * line three ways: as the tokenizer does; resuming just past a quote that does not close, with
- * later strings on that line still recognised; and resuming just past it with no new string
- * started on the rest of that line, because once one quote is stray, how the later ones pair is
- * a guess. Each reading carries its own comment state from line to line, and a line counts as
- * beginning inside an unclosed comment if ANY of the three says so. That makes this a pure
+ * line three ways that differ only on such a string: as the tokenizer does; resuming just past a
+ * quote that does not close, with later strings on that line still recognised; and resuming just
+ * past it with no new string started on the rest of that line, because once one quote is stray,
+ * how the later ones pair is a guess. It also reads every line two further ways, set out further
+ * down this file, that treat an unquoted `url()` token's content as opaque up to its closing
+ * parenthesis, even on a later line, one of them also carrying a string continued by an escaped
+ * line break onto the next line. Each reading carries its own comment state from line to line,
+ * and a line counts as beginning inside an unclosed comment if ANY of the five says so. That
+ * makes this a pure
  * addition by construction, not by sampling: the lines reported always include every line any
  * single reading reports (the tokenizer's reading among them, which was this module's earlier
  * rule), so a reading can add a refusal but can never remove one another reading gives. The
@@ -207,7 +211,7 @@ function indexAfterAStringLiteral(line: string, quoteIndex: number, quote: strin
 }
 
 /**
- * Two further, wholly separate readings, added to the union the module docblock describes
+ * Two further, separate readings, added to the union the module docblock describes
  * rather than folded into the three above: each is its own independent pass over `lines`, and
  * its output is only ever ADDED to `beginningsInsideAnUnclosedComment` (never replaces or
  * narrows it), so the result stays a superset of the three readings' own by construction, the
@@ -216,15 +220,18 @@ function indexAfterAStringLiteral(line: string, quoteIndex: number, quote: strin
  * Neither of the three readings above models an unquoted CSS `url(...)` token or a string
  * continued across a line break by a trailing backslash, because neither is the kind of
  * genuine reader ambiguity the three exist to cover — a real CSS tokenizer has exactly one
- * reading of both, and it is not "unterminated". Treating either as an ordinary unclosed quote
- * (the three readings' shared fallback) can misplace where a comment opens or stays open by a
- * full line, in the specific shape where a scanner's own over-approximated comment state on one
- * line closes on a delimiter that a correct reading instead uses to open a DIFFERENT, still-open
- * comment one line down. Both new readings are independent from the three above and from one
- * another, and from the shared `isLineStillInsideAnOpenComment`/`indexAfterAStringLiteral` pair,
- * on purpose: the union is a set union of independently-scanned lines, not a shared state
- * machine with extra branches, which is what keeps "can only add a refusal" true without a
- * sweep standing in for the proof.
+ * reading of both, and it is not "unterminated". Reading url content as ordinary text, or an
+ * escape-continued string as an ordinary unclosed quote, as the three readings do, can misplace
+ * where a comment opens or stays open by a full line, in the specific shape where a scanner's
+ * own over-approximated comment state on one line closes on a delimiter that a correct reading
+ * instead uses to open a DIFFERENT, still-open comment one line down. Each new reading carries
+ * its own state from line to line in its own pass, apart from the three above and from the other
+ * new one. They do share per-line helpers: the url-token helpers below serve both, and the
+ * url-opaque reading calls `indexAfterAStringLiteral`, as the three do. No helper in this file
+ * keeps any state between calls, so sharing one lets no reading's state reach another's: the
+ * union is a set union of separately carried readings, not a shared state machine with extra
+ * branches, which is what keeps "can only add a refusal" true without a sweep standing in for
+ * the proof.
  */
 interface UrlOpaqueScanState {
   readonly isInsideAnOpenComment: boolean
@@ -256,11 +263,11 @@ function markLinesFlaggedByTheUrlOpaqueReading(lines: readonly string[], into: S
 
 /**
  * Resolves what `urlCarry` (`UrlOpaqueScanState`'s field of the same name) means for THIS line
- * into an index to resume ordinary scanning at — `0` when nothing was carried, same as a fresh
- * line, since neither sentinel-producing function below ever resolves to exactly `0` on its own
- * (a real close is never at index 0, and a quote right at index 0 is ordinary scanning's own job
- * to notice, not a reason to skip it) — or a negative sentinel for the caller's own carried state
- * instead. Shared by both readings, since both carry the same convention.
+ * into an index to resume ordinary scanning at, or a negative sentinel the caller carries on to
+ * the next line. With nothing carried (`0`) scanning resumes at index 0, as on a fresh line. A
+ * carried url token can also resolve to index 0, when the line opens with the quote that makes an
+ * undecided `url(` a function token, and that is correct: ordinary scanning then reads the quote.
+ * Shared by both readings, since both carry the same convention.
  */
 function resumeUrlCarry(line: string, urlCarry: number): number {
   if (urlCarry === 0) return 0
@@ -285,8 +292,8 @@ function scanLineWithOpaqueUrlContent(line: string, state: UrlOpaqueScanState): 
  * difference: before treating a `/*` or a quote as meaningful, it first checks whether an
  * unquoted CSS `url(...)` token starts here, and if so skips straight past its content. A CSS
  * tokenizer does not look for a comment delimiter, or a string, inside an unquoted url token's
- * body — the two are lexically incompatible, since a real `/* / *\/`  inside `url(...)` is just
- * bytes of the URL, never a comment. Reading it as a comment opener is what lets a later, real
+ * body, so a comment opener or closer inside `url(...)` is just bytes of the URL, never a
+ * comment. Reading it as a comment opener is what lets a later, real
  * closing delimiter get consumed as though it closed THIS phantom comment, leaving the tracker
  * blind to the genuine comment that opens on the character right after. When that url token's
  * content does not close on this line, CSS does not end it at the line break either — an
@@ -355,13 +362,15 @@ function isAnIdentifierCharacter(character: string | undefined): boolean {
 
 /**
  * If an unquoted CSS url token — `url(` (case-insensitive), not preceded by an identifier
- * character — starts at `cursor`, returns where its content is (`urlContentSentinel`, called
- * right after the `url(`). Returns `undefined` when no such token starts here at all: `cursor` is
- * not immediately after an identifier character, and does not spell `url(`. Shared by the
- * url-opaque reading and the escaped-line-break reading.
+ * character, a `#` (which would make it a hash token followed by a separate `(`), or an `@`
+ * (which would make it an at-keyword followed by a separate `(`) — starts at `cursor`, returns
+ * where its content is (`urlContentSentinel`, called right after the `url(`). Returns `undefined`
+ * when no such token starts here at all: `cursor` is not immediately after one of those three
+ * characters, and does not spell `url(`. Shared by the url-opaque reading and the
+ * escaped-line-break reading.
  */
 function tryToSkipAnUnquotedUrlToken(line: string, cursor: number): number | undefined {
-  if (isAnIdentifierCharacter(line[cursor - 1])) return undefined
+  if (isAnIdentifierCharacter(line[cursor - 1]) || /[#@]/.test(line[cursor - 1]!)) return undefined
   if (!/^url\(/i.test(line.slice(cursor, cursor + 4))) return undefined
 
   return urlContentSentinel(line, cursor + 4)
@@ -412,8 +421,8 @@ function indexAfterUnquotedUrlContent(line: string, contentStart: number): numbe
 }
 
 /**
- * The second new reading (see the docblock above `markLinesFlaggedByTheUrlOpaqueReading`): the
- * faithful tokenizer model. It carries a quoted string across a line boundary when the one
+ * The second new reading (see the docblock above `markLinesFlaggedByTheUrlOpaqueReading`). It
+ * carries a quoted string across a line boundary when the one
  * reason it did not close on its opening line is a backslash escaping the line break itself —
  * CSS's own escape rule for a string, which continues the string onto the next line rather than
  * ending it, unlike every other way a string can fail to close on its line (an ambiguity the
