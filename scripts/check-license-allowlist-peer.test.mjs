@@ -84,10 +84,10 @@ test('the real-tree positive control: the gate reds while the policy admits neit
 })
 
 /**
- * navecss-cowork#354: bucket B must cover an optional peer and `optionalDependencies`, derived
- * from the workspace manifests, never from `pnpm licenses list --prod`'s own scope alone (that
- * flag's coverage of an optional peer with no other install path is a property of the installed
- * pnpm version, measured to differ between an older pnpm and the one this repository pins).
+ * Bucket B must cover an optional peer and `optionalDependencies`, derived from the workspace
+ * manifests, never from `pnpm licenses list --prod`'s own scope alone (that flag's coverage of
+ * an optional peer with no other install path is a property of the installed pnpm version,
+ * measured to differ between an older pnpm and the one this repository pins).
  */
 
 function buildScratchWorkspace(manifests) {
