@@ -14,8 +14,10 @@ superseded-by: '-'
 
 `@navecss/tokens` and `@navecss/core` version together (Changesets' `fixed` group): they share
 one design-token contract, and a consumer who bumps one without the other can land on an
-incompatible pair. `@navecss/bridge` and `@navecss/cli` are excluded from publishing entirely
-(Changesets' `ignore` list) until each has real content to ship.
+incompatible pair. `@navecss/bridge` and `@navecss/cli` do not publish yet: each keeps
+`"private": true` in its manifest until it has real content to ship, and that field is what
+keeps a package off npm, because the publish step skips every private package. Both are also in
+Changesets' `ignore` list, which governs versioning and tagging, not publishing.
 
 A third published package, `@navecss/stylelint-config`, now exists. Whether it joins the fixed
 pair, or versions on its own, is a release-topology decision worth recording once rather than
@@ -36,10 +38,9 @@ other, with no shared contract to justify it.
 
 **Revisit trigger:** the day `@navecss/stylelint-config` reads the atom or token vocabulary
 directly (for example, checking that a `var(--nave-*)` name is one Nave actually declares), it
-takes a dependency on that package and gains a corresponding peer or dependency range on it —
-but it still does not join the `fixed` group. A version range, not fixed versioning, is the
-right coupling for a real dependency: the two packages should be compatible across a range of
-versions, not forced to release together.
+takes a peer dependency on that package, with a version range, and it still does not join the
+`fixed` group. A range, not fixed versioning, is the right coupling for that relationship: the
+two packages should be compatible across a range of versions, not forced to release together.
 
 ## Consequences
 

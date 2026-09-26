@@ -1,7 +1,8 @@
 # @navecss/stylelint-config
 
 Nave's own stylelint rules, published for a consumer's project: `@nave` known to the language,
-tokens-only values against `--nave-*`, and the outline focus guard.
+a check that values on its listed properties use a `var()` or an admitted keyword, and
+a check that flags `outline: none` and `outline: 0`.
 
 ## Installation
 
@@ -27,6 +28,10 @@ These are stated as rules, not as gaps to be filled later:
 
 - A `var()` passes whatever it names. This package does not check whether the custom property
   it references is declared anywhere.
+- A `var()` fallback is not checked either: `color: var(--x, red)` and
+  `padding: var(--x, 13px)` pass.
+- A preprocessor variable, a name starting with `$` or `@`, is not checked: `color: $red`,
+  `color: @red` and `padding: $space` pass.
 - A function consuming a `var()` passes even with a literal elsewhere in it, for example
   `light-dark(#fff, var(--x))`.
 - Properties outside its own list are not checked. The list lives in
@@ -58,8 +63,10 @@ Use stylelint's own `overrides` to phase it in by path, rather than fixing every
 
 ## The outline guard
 
-This package flags `outline: none` and `outline: 0`. To turn it off, either set the rule to
-`null` in your own config, or disable it for one declaration with a stylelint disable comment.
+This package flags `outline: none` and `outline: 0`, through stylelint's
+`declaration-property-value-disallowed-list` rule. To turn it off, set that rule to `null` in
+your own config, or disable it for one declaration with a stylelint disable comment. Setting that
+rule to anything else in your own config also replaces this check, as described above.
 
 ## License
 

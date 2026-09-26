@@ -1,7 +1,7 @@
 {
   "name": "@navecss/stylelint-config",
   "version": "0.0.0",
-  "description": "Nave's own stylelint rules for a consumer's project: @nave known to stylelint, tokens-only values against --nave-*, and the outline focus guard.",
+  "description": "Nave's own stylelint rules for a consumer's project: @nave known to stylelint, a check that values on its listed properties use a var() or an admitted keyword, and a check that flags outline: none and outline: 0.",
   "keywords": [
     "css",
     "stylelint",

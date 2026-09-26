@@ -2,7 +2,8 @@ import strictValue from 'stylelint-declaration-strict-value'
 
 /**
  * Nave's own stylelint rules, corrected for a consumer's project: `@nave` known to the
- * language, tokens-only values against `--nave-*`, and the outline focus guard.
+ * language, a check that values on its listed properties use a `var()` or an admitted keyword,
+ * and a check that flags `outline: none` and `outline: 0`.
  *
  * Everything here is a rendering of Nave's design-system constraints, never a copy of any
  * shared config: this package extends nothing and declares `stylelint` as a peer, never a
@@ -24,11 +25,16 @@ const CSS_WIDE_KEYWORDS_SOURCE = 'inherit|initial|unset|revert|revert-layer'
  */
 const CONSUMES_VAR_SOURCE = String.raw`(?<![\w-])var\(\s*--`
 
-// Source: CSS Color Module Level 4 (W3C) §6.2's current system-colour keyword list,
-// transcribed from the specification and never read from the plugin. Whole-value,
-// case-insensitive admission on the colour entry, fill, stroke and the
-// accent-color/caret-color/scrollbar-color entry. The deprecated keywords of that
-// specification's Appendix A are deliberately NOT here, and stay reported.
+// Each keyword below is admitted as a whole value, case-insensitive, on every colour entry
+// (the colour entry, the border-color entry and the accent-color/caret-color/scrollbar-color
+// entry) and on fill and stroke.
+//
+// The keyword names below are the nineteen current <system-color> keywords, the names alone,
+// copied from the System Colors section
+// (https://www.w3.org/TR/css-color-4/#css-system-colors) of CSS Color Module Level 4 (W3C).
+// Copyright (c) 2026 World Wide Web Consortium. That specification is published under the
+// W3C Software and Document License (https://www.w3.org/copyright/software-license-2023/).
+// The deprecated keywords of its Appendix A are not copied here, and stay reported.
 const SYSTEM_COLOR_KEYWORDS = [
   'AccentColor',
   'AccentColorText',
@@ -207,18 +213,16 @@ const STRICT_VALUE_PROPERTIES = [
 ]
 
 /**
- * The `outline: none` / `outline: 0` guard, shipped in the default export after the
- * maintainer's accessibility review of exactly this bytes-and-conditions shape (see this
- * package's README for the opt-out). The pattern is exported separately so a root-level
- * consuming module can read it rather than copy it, and can throw if this export ever
- * disappears.
+ * The `outline` values the default export flags: `none` and `0`, as the whole value,
+ * case-insensitive. Exported separately so a root-level consuming module can read it rather
+ * than copy it, and can throw if this export ever disappears. This package's README says how
+ * to turn the check off.
  */
 export const OUTLINE_GUARD_PATTERN = ['/^(none|0)$/i']
 
 /**
- * Transcribed verbatim from the cleared consumer-facing wording, never reworded: 444 bytes,
- * ASCII, sha256 prefix `6fa2f3c5590d13b4`. This message speaks to the consumer's own project
- * and describes the rule by what it flags, not by the outcome it protects.
+ * The message printed when `outline: none` or `outline: 0` is reported, kept byte for byte:
+ * 444 bytes, ASCII, sha256 prefix `6fa2f3c5590d13b4`. It speaks to the consumer's own project.
  */
 export const OUTLINE_GUARD_CONSUMER_MESSAGE =
   "'outline: none' and 'outline: 0' remove the browser's default focus indicator, the visible " +
@@ -228,8 +232,9 @@ export const OUTLINE_GUARD_CONSUMER_MESSAGE =
   'replaces it. An indicator drawn only with box-shadow is not painted in forced-colors mode.'
 
 /**
- * The default export: `@nave` known to the language, tokens-only values, and the outline
- * guard. Extends no shared config: no `selector-class-pattern`, `custom-property-pattern`,
+ * The default export: `@nave` known to the language, a check that values on its listed
+ * properties use a `var()` or an admitted keyword, and the outline guard. Extends no shared
+ * config: no `selector-class-pattern`, `custom-property-pattern`,
  * `order/properties-alphabetical-order`, `declaration-no-important` or the two performance
  * plugins, and no opt-in house-style export.
  */

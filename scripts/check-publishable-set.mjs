@@ -15,12 +15,12 @@
  * `stage-release.mjs` rather than `changeset publish`, and it applies the
  * same filter by importing `isPublishable` below, so all of this holds for it.
  *
- * At 0.1.0 exactly `@navecss/tokens` and `@navecss/core` are meant to
- * publish (`@navecss/bridge` publishes the
- * first time it ships non-empty content; `@navecss/cli` stays unpublished
- * until the component registry exists). `@navecss/stylelint-config` joins the publishable set
- * from its own first release, versioning independently of the `tokens`/`core` pair (it depends
- * on neither; its contract is with Stylelint and the `@nave` grammar). This script fails the moment a
+ * Exactly `@navecss/tokens`, `@navecss/core` and `@navecss/stylelint-config`
+ * are meant to publish (`@navecss/bridge` publishes the first time it ships
+ * non-empty content; `@navecss/cli` stays unpublished until the component
+ * registry exists). `@navecss/stylelint-config` versions independently of
+ * the `tokens`/`core` pair, because it depends on neither and its contract is
+ * with Stylelint and the `@nave` grammar. This script fails the moment a
  * workspace package's `private` field stops matching that set — in either
  * direction, so a package that SHOULD stay private losing that field is
  * caught, and so is a package that should start publishing being left

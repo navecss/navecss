@@ -274,8 +274,8 @@ else, declare it under `languageOptions.syntax.atRules`:
 
 This needs stylelint 16.17.0 or later. `@navecss/stylelint-config`'s own peer range is
 `^17.0.0`; the two are stated separately because the config does more than this one line, and
-this line works on its own, with no config installed, from 16.17.0 on. For a check that colour,
-spacing and other design-system-shaped values use a token rather than a literal, extend
+this line works on its own, with no config installed, from 16.17.0 on. For a check that values
+on a list of properties (colour, spacing and others) use a `var()` or an admitted keyword, extend
 [`@navecss/stylelint-config`](https://github.com/navecss/navecss/tree/main/packages/stylelint-config#readme)
 beside this line; it never replaces it.
 
@@ -290,8 +290,11 @@ Code reads `AGENTS.md` only where there is no `CLAUDE.md`):
 
 Before writing or changing CSS or a `className`, read
 `node_modules/@navecss/core/skills/navecss/SKILL.md`, resolved from the
-package that depends on `@navecss/core`. Use only the atoms and custom
-properties it lists.
+package that depends on `@navecss/core`. The Nave custom properties and
+built-in atoms it lists are the only ones there are. Atoms this project
+registers through `navePlugin({ extend })` are valid too, in `@nave` only,
+never in `cx()`. If a name you need is in neither place, say so rather
+than invent one.
 ```
 
 Consumers of `@navecss/tokens` alone get no guide: it ships only in this package.

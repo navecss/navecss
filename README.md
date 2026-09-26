@@ -45,11 +45,11 @@ without claiming conformance, certification or endorsement.
 
 ## Packages
 
-| Package                                                         | Description                                                             |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                  |
-| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, PostCSS plugin             |
-| [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, tokens-only values, the outline focus guard |
+| Package                                                         | Description                                                                                                         |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                              |
+| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, PostCSS plugin                                                         |
+| [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check |
 
 ## Who this is for
 
