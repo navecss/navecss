@@ -219,7 +219,9 @@ runs.** That option replaces Vite's CSS pipeline with Lightning CSS, which does
 not run PostCSS plugins at all: the build stays green, `@nave` reaches the
 browser as an unknown at-rule, and the browser drops it, so the rule renders
 with none of the declarations its atoms were going to give it. Leave the
-default transformer in place on a project using `@nave`.
+default transformer in place on a project using `@nave`. Or add
+`navecss-core check` to your build script, so this failure mode fails the
+build instead of shipping silently.
 
 ### Plugin order
 
@@ -250,6 +252,38 @@ failure, not a silently incomplete build):
 
 ---
 
+## `navecss-core check`
+
+A survival check: it reads built CSS and reports every `@nave` directive that
+reached it, so a missing PostCSS pipeline or a bypassed one (Vite's
+`css.transformer: 'lightningcss'`, for one) fails the build instead of
+shipping a page with none of the declarations its atoms were going to give
+it.
+
+```json
+{
+  "scripts": {
+    "build": "vite build && navecss-core check --source=dist"
+  }
+}
+```
+
+`--source=` is repeatable, and each value is a file or a directory read
+recursively for `.css`. Exit codes:
+
+- `0` — at least one stylesheet was read, and none held `@nave`.
+- `1` — at least one stylesheet held `@nave`; the findings are printed, one
+  line each (file, line, column, the directive as written, and its enclosing
+  selector when known).
+- `2` — a usage error, an unreadable `--source` path, or no stylesheet found
+  at all.
+
+Run it only inside a `package.json` script chained with `&&`, after the build
+that is supposed to have resolved every directive — never as a bare `npx
+navecss-core check`.
+
+---
+
 ## Exports
 
 | Export                    | Description                                                                                           |
@@ -262,3 +296,4 @@ failure, not a silently incomplete build):
 | `@navecss/core/cx`        | `cx()` / `cx.raw()` utilities + `AtomName` type                                                       |
 | `@navecss/core/atoms`     | Atom definitions + `atomClassMap`                                                                     |
 | `@navecss/core/postcss`   | PostCSS plugin — `navePlugin()`                                                                       |
+| `@navecss/core/check`     | The survival check as a function — `check({ source })`                                                |

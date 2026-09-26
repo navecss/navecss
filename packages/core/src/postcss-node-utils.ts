@@ -10,13 +10,17 @@ import type {
 } from 'postcss'
 
 /**
- * True when `rule` sits inside a @keyframes block, at any depth. A keyframe
- * step (`to`, `from`, `50%`) parses as a Rule, so a plain parent-is-a-rule
- * check does not catch this; `&` has no meaning inside @keyframes, and the
- * browser drops nesting generated there with no other symptom.
+ * True when `container` itself, or any of its ancestors, is a @keyframes
+ * at-rule. A keyframe step (`to`, `from`, `50%`) parses as a Rule, so a
+ * plain parent-is-a-rule check does not catch this; `&` has no meaning
+ * inside @keyframes, and the browser drops nesting generated there with
+ * no other symptom. Checking `container` itself (never true for a Rule,
+ * which is the only type the original caller ever passed) is what lets a
+ * directive whose immediate parent IS the @keyframes at-rule — no step
+ * wrapper between them — be caught too.
  */
-export function isInsideKeyframes(rule: Rule): boolean {
-  let node: PostCSSContainer | PostCSSDocument | undefined = rule.parent
+export function isInsideKeyframes(container: PostCSSContainer | PostCSSDocument): boolean {
+  let node: PostCSSContainer | PostCSSDocument | undefined = container
   while (node) {
     if (node.type === 'atrule' && /keyframes$/i.test((node as PostCSSAtRule).name)) return true
     node = node.parent

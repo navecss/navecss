@@ -1,11 +1,12 @@
 /**
  * Nave PostCSS plugin — resolves @nave directives.
  *
- * Inlines atomic utility declarations at build time.
- * Pseudo rules, @media and @container blocks are emitted as native CSS
- * nesting inside the parent rule (`&:focus-visible { … }`), never hoisted
- * out as sibling rules. Browser floor: Baseline 2024.
- * See https://github.com/navecss/navecss/blob/main/docs/04-adr/0001-native-css-nesting.md
+ * A thin adapter over the host-free directive core (`src/directive/`):
+ * `plan()` decides what a directive expands to and where it goes, this
+ * file only walks the PostCSS AST to answer `plan()`'s three facts and
+ * splices its result back in as PostCSS nodes. Setup, options and
+ * observable behaviour are unchanged except where the slice-1 changeset
+ * says so (R5).
  *
  * Setup:
  *   import { navePlugin } from '@navecss/core/postcss'
@@ -40,8 +41,16 @@ import type { Plugin, AtRule as PostCSSAtRule, Result } from 'postcss'
 
 import postcss from 'postcss'
 
-import { type AtomDefinition, atoms } from './atoms.ts'
-import { buildNested, DIRECTIVE, isFollowingNestedNode } from './postcss-nested-builders.ts'
+import type { AtomDefinition } from './atoms.ts'
+import type { Diagnostic } from './directive/diagnostics-types.ts'
+import type { ExtendMap } from './directive/resolve.ts'
+import type { FoldEntry } from './postcss-fold.ts'
+
+import { formatDiagnostic } from './directive/diagnostics-format.ts'
+import { type AnchoredBlock, type Declaration, plan, type PlanResult } from './directive/plan.ts'
+import { tokenize } from './directive/tokenizer.ts'
+import { foldMessage } from './postcss-fold.ts'
+import { isFollowingNestedNode } from './postcss-nested-builders.ts'
 import { isInsideKeyframes, stampSource } from './postcss-node-utils.ts'
 
 export interface NavePluginOptions {
@@ -62,160 +71,212 @@ export interface NavePluginOptions {
   onUnknown?: 'warn' | 'error' | 'ignore'
 }
 
-interface UnknownAtomContext {
+interface DirectiveContext {
   atRule: PostCSSAtRule
   onUnknown: NavePluginOptions['onUnknown']
   result: Result
+  extend: ExtendMap
+  /**
+  Where an `'error'`-mode diagnostic lands instead of throwing immediately — R6's fold is per stylesheet, not per directive.
+   */
+  fold: FoldEntry[]
 }
 
 /**
- * Reports a directive problem per `onUnknown`, defaulting to a THROW: an
- * unrecognised `onUnknown` value must not select the most permissive mode on
- * the one option whose purpose is to make a mistake fail loudly.
+The at-keyword's decoded, ASCII-lowercased name — R5(a): case-insensitive on the unescaped value (`@NAVE`, `@n\61ve`). PostCSS's own `.name` keeps escapes literal.
  */
-function reportUnknown(msg: string, ctx: UnknownAtomContext): void {
-  const { atRule, onUnknown, result } = ctx
-  if (onUnknown === 'warn') {
-    atRule.warn(result, msg)
+function decodedAtRuleName(atRule: PostCSSAtRule): string {
+  const token = tokenize(`@${atRule.name}`)[0]
+  return token?.type === 'at-keyword-token' ? (token.structured?.value as string).toLowerCase() : ''
+}
+
+/**
+ * The `atRule.error()`/`.warn()` `index` option, relative to the at-rule's
+ * OWN source text (`@` at index 0): `unknown-atom` and `bad-token` position
+ * at their own token inside the prelude (R6 "unknown-atom at the name"), so
+ * this adds back everything PostCSS's `index` counts from the `@` that a
+ * prelude-relative `diagnostic.offset` does not — the name, and the exact
+ * (possibly comment-carrying) text between the name and the prelude.
+ */
+function atRuleErrorIndex(atRule: PostCSSAtRule, diagnostic: Diagnostic): number | undefined {
+  if (diagnostic.code !== 'unknown-atom' && diagnostic.code !== 'bad-token') return undefined
+  const afterName = atRule.raws.afterName ?? ' '
+  return 1 + atRule.name.length + afterName.length + diagnostic.offset
+}
+
+/**
+ * Reports one diagnostic per `onUnknown`, defaulting to fold-and-throw: an
+ * unrecognised `onUnknown` value must not select the most permissive mode.
+ * `'error'` never throws HERE — every diagnostic in the stylesheet lands in
+ * `ctx.fold` first, so R6's fold covers every directive, not just the one
+ * that happened to be walked first (AC-directive-core-16).
+ */
+function reportDiagnostic(diagnostic: Diagnostic, ctx: DirectiveContext): void {
+  const isNestedGroup = diagnostic.code === 'bad-parent' && ctx.atRule.parent?.type !== 'root'
+  const text = formatDiagnostic(
+    isNestedGroup ? { ...diagnostic, detail: 'nested-group' } : diagnostic,
+    {
+      extend: ctx.extend,
+    },
+  )
+  const index = atRuleErrorIndex(ctx.atRule, diagnostic)
+  if (ctx.onUnknown === 'warn') {
+    ctx.atRule.warn(ctx.result, text, index === undefined ? {} : { index })
     return
   }
-  if (onUnknown === 'ignore') return
-  throw atRule.error(msg)
+  if (ctx.onUnknown === 'ignore') return
+  ctx.fold.push({ atRule: ctx.atRule, text, index })
 }
 
 /**
- * Warns or throws for any atom name not in `validAtomNames`, and for a
- * directive naming no atom at all (a bare `@nave`), per `onUnknown`.
+One rendered declaration, stamped with the directive's own source.
  */
-function checkUnknownAtoms(
-  names: string[],
-  validAtomNames: Set<string>,
-  ctx: UnknownAtomContext,
-): void {
-  if (names.length === 0) {
-    reportUnknown('@nave: directive names no atom', ctx)
-    return
-  }
-  for (const name of names) {
-    if (validAtomNames.has(name)) continue
-    reportUnknown(
-      `@nave: unknown atom "${name}". Available: ${[...validAtomNames].join(', ')}`,
-      ctx,
-    )
-  }
+function declNode(atRule: PostCSSAtRule, decl: Declaration): ReturnType<typeof postcss.decl> {
+  const node = postcss.decl({ prop: decl.prop, value: decl.value })
+  if (atRule.source) node.source = atRule.source
+  return node
 }
 
 /**
- * Inserts an atom's declarations at the directive's authored position: bare
- * when nothing precedes them that requires nesting, or wrapped in a single
- * `& { … }` (same trick buildInnerRules uses for at-rule inner blocks) when
- * `isFollowingNested` is true.
+ * Inserts the inline declarations at the directive's authored position:
+ * bare when nothing precedes them that requires nesting, or wrapped in a
+ * single `& { … }` when `wrapInAmpersand` is true.
  */
 function insertDeclarations(
   atRule: PostCSSAtRule,
-  declNodes: ReturnType<typeof postcss.decl>[],
-  isFollowingNested: boolean,
+  declarations: readonly Declaration[],
+  isWrapped: boolean,
 ): void {
-  if (declNodes.length === 0) return
-  if (!isFollowingNested) {
-    for (const decl of declNodes) atRule.before(decl)
+  if (declarations.length === 0) return
+  if (!isWrapped) {
+    for (const decl of declarations) atRule.before(declNode(atRule, decl))
     return
   }
   const wrapper = postcss.rule({ selector: '&' })
   if (atRule.source) wrapper.source = atRule.source
-  for (const decl of declNodes) wrapper.append(decl)
+  for (const decl of declarations) wrapper.append(declNode(atRule, decl))
   atRule.before(wrapper)
+}
+
+/**
+A rule node with `selector`, holding `declarations`.
+ */
+function buildRule(
+  selector: string,
+  declarations: readonly Declaration[],
+): ReturnType<typeof postcss.rule> {
+  const rule = postcss.rule({ selector })
+  for (const decl of declarations) rule.append(postcss.decl({ prop: decl.prop, value: decl.value }))
+  return rule
+}
+
+/**
+The PostCSS nodes one appended block contributes, in `plan()`'s already-anchored, already-ordered shape.
+ */
+function buildAppendedNode(
+  block: AnchoredBlock,
+): ReturnType<typeof postcss.rule> | ReturnType<typeof postcss.atRule> {
+  if (block.kind === 'pseudo') return buildRule(block.selector, block.declarations)
+  const node = postcss.atRule({ name: block.kind, params: block.condition })
+  if (block.declarations.length > 0) node.append(buildRule('&', block.declarations))
+  for (const pseudo of block.pseudos) node.append(buildRule(pseudo.selector, pseudo.declarations))
+  return node
+}
+
+/**
+Converts a `resolve()` malformed-atom throw into a positioned PostCSS error (R2, outside onUnknown and outside R6's fold).
+ */
+function throwMalformedAtom(atRule: PostCSSAtRule, error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error)
+  throw atRule.error(message)
+}
+
+interface PlanAtRuleResult {
+  readonly isStyleRuleParent: boolean
+  readonly parent: PostCSSAtRule['parent']
+  readonly result: PlanResult
+}
+
+/**
+`plan()`'s three facts, answered from the PostCSS AST, plus the call itself (a malformed atom's throw is repositioned onto the at-rule).
+ */
+function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap): PlanAtRuleResult {
+  const parent = atRule.parent
+  const isStyleRuleParent = parent?.type === 'rule'
+  const isFollowingNestedNodeHere = isStyleRuleParent
+    ? isFollowingNestedNode(parent, atRule)
+    : false
+
+  try {
+    return {
+      isStyleRuleParent,
+      parent,
+      result: plan(
+        atRule.raws.params?.raw ?? atRule.params,
+        {
+          isStyleRuleParent,
+          isInsideKeyframes: parent !== undefined && isInsideKeyframes(parent),
+          isFollowingNestedNode: isFollowingNestedNodeHere,
+        },
+        { extend },
+      ),
+    }
+  } catch (error) {
+    return throwMalformedAtom(atRule, error)
+  }
 }
 
 // ── Plugin factory ────────────────────────────────────────────────────────────
 
 export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
   const { onUnknown = 'error', extend = {} } = options
-  const allAtoms: Record<string, AtomDefinition> = { ...atoms, ...extend }
-  // A key carrying no definition is not a valid atom name: `Object.keys` alone
-  // would admit it, the unknown check would pass it, and `if (!atom) return []`
-  // below would then swallow it into a rule with no declarations. A truthiness
-  // filter rather than a check against `undefined` alone, because JSON cannot
-  // express `undefined`: a JSON-authored atom map spells a missing definition
-  // `null`, and that is the spelling a config file can actually produce.
-  const validAtomNames = new Set(
-    Object.entries(allAtoms)
-      .filter(([, definition]) => definition)
-      .map(([name]) => name),
-  )
+  const fold: FoldEntry[] = []
 
   return {
     postcssPlugin: 'postcss-nave',
 
+    Once() {
+      fold.length = 0
+    },
+
     AtRule(atRule: PostCSSAtRule, { result }) {
-      if (atRule.name !== DIRECTIVE) return
+      if (decodedAtRuleName(atRule) !== 'nave') return
 
-      const ctx: UnknownAtomContext = { atRule, onUnknown, result }
+      const ctx: DirectiveContext = { atRule, onUnknown, result, extend, fold }
+      const { isStyleRuleParent, parent, result: planResult } = planAtRule(atRule, extend)
 
-      // @nave must be the direct child of a rule; bare inside @media/
-      // @container it used to silently drop the block. Routed through
-      // onUnknown like an unknown atom name, so the default now fails.
-      const parent = atRule.parent
-      if (parent?.type !== 'rule') {
-        reportUnknown('@nave must be the direct child of a CSS rule selector block', ctx)
-        atRule.remove()
-        return
-      }
+      for (const diagnostic of planResult.diagnostics) reportDiagnostic(diagnostic, ctx)
 
-      const rule = parent
-
-      // A keyframe step parses as a Rule, so the check above misses @nave
-      // inside @keyframes; `&` is meaningless there. Same onUnknown routing.
-      if (isInsideKeyframes(rule)) {
-        reportUnknown('@nave cannot be used inside @keyframes', ctx)
-        atRule.remove()
-        return
-      }
-
-      const names = atRule.params.trim().split(/\s+/).filter(Boolean)
-
-      checkUnknownAtoms(names, validAtomNames, ctx)
-
-      // Declarations land at the directive's authored position (bare, or
-      // wrapped in `&` when the directive follows a nested node, see
-      // isFollowingNestedNode); nested rules are appended to the end of the
-      // parent rule, in the order the directives were written. Both hold
-      // across multiple @nave directives in one rule, which sibling hoisting
-      // could not do.
-      const declNodes: ReturnType<typeof postcss.decl>[] = []
-      const nested = names.flatMap((name) => {
-        // Object.hasOwn, not bracket access: under onUnknown !== 'error' a
-        // prototype-chain name ("toString") would otherwise resolve the
-        // inherited member and crash below instead of being skipped.
-        const atom = Object.hasOwn(allAtoms, name) ? allAtoms[name] : undefined
-        if (!atom) return []
-        if (
-          typeof atom.declarations !== 'object' ||
-          atom.declarations === null ||
-          Array.isArray(atom.declarations)
-        ) {
-          throw atRule.error(`@nave: atom "${name}" is registered without a declarations object`)
-        }
-        for (const [prop, value] of Object.entries(atom.declarations)) {
-          const decl = postcss.decl({ prop, value })
-          if (atRule.source) decl.source = atRule.source
-          declNodes.push(decl)
-        }
-        return buildNested(atom)
-      })
-
-      insertDeclarations(atRule, declNodes, isFollowingNestedNode(rule, atRule))
-
+      insertDeclarations(atRule, planResult.declarations, planResult.wrapInAmpersand)
       atRule.remove()
 
-      for (const node of nested) {
-        stampSource(node, atRule.source)
-        rule.append(node)
+      if (isStyleRuleParent && parent) {
+        for (const block of planResult.blocks) {
+          const node = buildAppendedNode(block)
+          stampSource(node, atRule.source)
+          parent.append(node)
+        }
       }
+    },
+
+    OnceExit() {
+      if (fold.length === 0) return
+      const first = fold[0]!
+      throw first.atRule.error(
+        foldMessage(fold),
+        first.index === undefined ? {} : { index: first.index },
+      )
     },
   }
 }
 
 navePlugin.postcss = true
+
+/**
+ * R22: a host-loaded entry point also carries a default export, since
+ * hosts and every peer library load it that way (`import nave from
+ * '@navecss/core/postcss'`). `navePlugin` stays the documented, named form.
+ */
+export default navePlugin
 
 export { type AtomDefinition } from './atoms.ts'

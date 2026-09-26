@@ -394,25 +394,30 @@ describe('onUnknown default is error', () => {
   // a build that fails must say WHERE. `rejects.toThrow(/unknown atom/)` alone
   // stays green when `atRule.error(msg)` is replaced by a bare `new Error(msg)`,
   // which strips the file, the line and the column.
+  //
+  // Column 9, not 3 (this file's pin before the slice-1 changeset): R6 positions
+  // `unknown-atom` at the name token, not at the directive's `@` (round-3
+  // decision 4, AC-directive-core-13).
   it('fails by default with a PostCSS CssSyntaxError carrying the directive line and column', async () => {
     const source = '.x {\n  color: blue;\n  @nave nope;\n}'
 
     await expect(
       postcss([navePlugin()]).process(source, { from: 'src/app.css' }),
-    ).rejects.toMatchObject({ name: 'CssSyntaxError', line: 3, column: 3 })
+    ).rejects.toMatchObject({ name: 'CssSyntaxError', line: 3, column: 9 })
   })
 
   // The other half of the same ground: the error names the vocabulary the typo
-  // missed, INCLUDING the consumer's own extend atoms. Deleting the whole
-  // `Available: …` clause from the message leaves every other test in this file
-  // green.
+  // missed, INCLUDING the consumer's own extend atoms — now via R6's hint rule
+  // rather than the `Available:` list (this file's pin before the slice-1
+  // changeset asserted the old `Available: .*brandBox` text; "brandBoxx" is
+  // now a distance-1 typo of the extend atom "brandBox" itself).
   it('names the consumer extend atoms in the Available list when the typo is on an extension', async () => {
     const extend: Record<string, AtomDefinition> = {
       brandBox: { declarations: { color: 'red' } },
     }
 
     await expect(run('.x { @nave brandBoxx; }', { extend })).rejects.toThrow(
-      /unknown atom "brandBoxx"\. Available: .*\bbrandBox\b/,
+      /unknown atom "brandBoxx"\. Did you mean "brandBox"\?/,
     )
   })
 

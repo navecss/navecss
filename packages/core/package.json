@@ -34,7 +34,14 @@
       "types": "./dist/postcss.d.ts",
       "import": "./dist/postcss.js"
     },
+    "./check": {
+      "types": "./dist/check.d.ts",
+      "import": "./dist/check.js"
+    },
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "navecss-core": "./dist/bin.js"
   },
   "files": [
     "dist",
@@ -67,6 +74,7 @@
     "@navecss/tokens": "workspace:^"
   },
   "devDependencies": {
+    "@rmenke/css-tokenizer-tests": "1.4.0",
     "@types/node": "^26.6.2",
     "@vitest/browser": "5.0.1",
     "@vitest/browser-playwright": "5.0.1",
@@ -74,8 +82,10 @@
     "playwright": "1.63.0",
     "postcss": "^8.5.28",
     "prettier": "3.9.8",
+    "source-map": "^0.7.6",
     "tsup": "^8.5.1",
     "typescript": "6.0.3",
+    "vite": "7.3.6",
     "vitest": "5.0.1",
     "vscode-css-languageservice": "6.3.10"
   },
