@@ -84,7 +84,7 @@ describe('AC-directive-core-29 — every documented config fence names a real su
 
   it("reds on a fence importing a subpath that is not a key of core's exports (control)", () => {
     const imp: CoreImport = {
-      names: [{ isType: false, name: 'navePlugin' }],
+      names: [{ isDefault: false, isType: false, name: 'navePlugin' }],
       specifier: '@navecss/core/webpack',
     }
     expect(checkCoreImport(imp, realExportsMap(), realEntryMap(), readRealSource)).toEqual([
@@ -94,7 +94,7 @@ describe('AC-directive-core-29 — every documented config fence names a real su
 
   it('reds on a fence importing a misspelled name from a real subpath (control)', () => {
     const imp: CoreImport = {
-      names: [{ isType: false, name: 'navePlugn' }],
+      names: [{ isDefault: false, isType: false, name: 'navePlugn' }],
       specifier: '@navecss/core/postcss',
     }
     expect(checkCoreImport(imp, realExportsMap(), realEntryMap(), readRealSource)).toEqual([

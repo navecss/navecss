@@ -23,6 +23,7 @@ export function extractFences(doc: string, text: string): Fence[] {
 }
 
 export interface ImportedName {
+  readonly isDefault: boolean
   readonly isType: boolean
   readonly name: string
 }
@@ -45,7 +46,7 @@ function parseNamedClause(namedRaw: string, isWholeClauseType: boolean): Importe
     const withoutType = item.replace(/^type\s+/, '')
     const asMatch = withoutType.split(/\s+as\s+/)
     const name = (asMatch[1] ?? asMatch[0])!.trim()
-    return { isType, name }
+    return { isDefault: false, isType, name }
   })
 }
 
@@ -59,7 +60,9 @@ export function extractCoreImports(body: string): CoreImport[] {
     )
     .map((m): CoreImport => {
       const [, isWholeType, defaultName, namedRaw, specifier] = m
-      const names: ImportedName[] = defaultName ? [{ isType: false, name: defaultName }] : []
+      const names: ImportedName[] = defaultName
+        ? [{ isDefault: true, isType: false, name: defaultName }]
+        : []
       names.push(...parseNamedClause(namedRaw ?? '', Boolean(isWholeType)))
       return { names, specifier: specifier! }
     })
@@ -166,14 +169,18 @@ function checkImportedNames(
   readSource: (relPath: string) => string,
 ): string[] {
   const exported = collectExportedNames(readSource(srcFile))
-  return imp.names
-    .filter(
-      ({ isType, name }) =>
-        !(isType
-          ? exported.types.has(name) || exported.values.has(name)
-          : exported.values.has(name)),
-    )
-    .map(({ isType, name }) => `${imp.specifier} exports no ${isType ? 'type ' : ''}"${name}"`)
+  const problems: string[] = []
+  for (const { isDefault, isType, name } of imp.names) {
+    if (isDefault) {
+      if (!exported.hasDefault) problems.push(`${imp.specifier} has no default export`)
+      continue
+    }
+    const isKnown = isType
+      ? exported.types.has(name) || exported.values.has(name)
+      : exported.values.has(name)
+    if (!isKnown) problems.push(`${imp.specifier} exports no ${isType ? 'type ' : ''}"${name}"`)
+  }
+  return problems
 }
 
 /**
