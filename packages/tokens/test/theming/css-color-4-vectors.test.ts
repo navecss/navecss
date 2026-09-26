@@ -22,8 +22,7 @@
  * act, so it reads the build record's `input.value` (the conversion's own output) and never the
  * normalised `resolved` triple.
  */
-import { mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -31,6 +30,9 @@ import type { Oklch } from '../../src/theming/color-math.ts'
 
 import { build } from '../../src/facade.ts'
 import { ingestSeed } from '../../src/theming/seed-ingest.ts'
+import { scratchDir as makeScratchDir, registerScratchCleanup } from '../helpers/scratch-dir.ts'
+
+registerScratchCleanup()
 
 /**
  * The pipeline states exactly one numeric tolerance, `SAME_COLOUR_TOLERANCE = 1e-4` on OKLCH
@@ -135,7 +137,7 @@ const CORROBORATING_ROWS: readonly { expected: Oklch; input: string; source: str
 ]
 
 function scratchDir(): string {
-  return mkdtempSync(path.join(tmpdir(), 'navecss-tokens-css-color-4-'))
+  return makeScratchDir('navecss-tokens-css-color-4-')
 }
 
 /**
