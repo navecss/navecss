@@ -10,20 +10,22 @@
  * exit-code mapping. Every case below plants its own scratch tree; nothing here reads or
  * writes the real package.
  */
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { findPackageRoot, OWN_PACKAGE_NAME } from '../src/package-root.ts'
+import { registerScratchCleanup, scratchDir } from './helpers/scratch-dir.ts'
+
+registerScratchCleanup()
 
 /**
  * A scratch tree shaped exactly like this package as installed: a root `package.json`
  * declaring `OWN_PACKAGE_NAME`, plus the two real depths a module runs from.
  */
 function scratchPackage(): string {
-  const root = mkdtempSync(path.join(tmpdir(), 'navecss-package-root-'))
+  const root = scratchDir('navecss-package-root-')
   writeFileSync(
     path.join(root, 'package.json'),
     JSON.stringify({ name: OWN_PACKAGE_NAME, type: 'module', version: '0.0.0' }),
@@ -99,7 +101,7 @@ describe('findPackageRoot refuses rather than returning a confidently wrong root
   // but the consumer saw a raw ENOENT for a path inside their own project with nothing naming
   // the cause.
   it("throws when no ancestor declares this package's name, naming the cause rather than ENOENT-ing later", () => {
-    const consumerRoot = mkdtempSync(path.join(tmpdir(), 'navecss-consumer-'))
+    const consumerRoot = scratchDir('navecss-consumer-')
     writeFileSync(
       path.join(consumerRoot, 'package.json'),
       JSON.stringify({ name: 'some-consumer-app', type: 'module' }),
@@ -112,7 +114,7 @@ describe('findPackageRoot refuses rather than returning a confidently wrong root
   })
 
   it('names the package it was looking for, so the message is actionable without reading this source', () => {
-    const consumerRoot = mkdtempSync(path.join(tmpdir(), 'navecss-consumer-'))
+    const consumerRoot = scratchDir('navecss-consumer-')
     writeFileSync(path.join(consumerRoot, 'package.json'), JSON.stringify({ name: 'app' }))
 
     expect(() => findPackageRoot(moduleUrlAt(consumerRoot, 'bundle.js'))).toThrow(
@@ -121,7 +123,7 @@ describe('findPackageRoot refuses rather than returning a confidently wrong root
   })
 
   it('keeps the remedy beside the constraint, so a reword cannot leave a bare "cannot be bundled"', () => {
-    const consumerRoot = mkdtempSync(path.join(tmpdir(), 'navecss-consumer-'))
+    const consumerRoot = scratchDir('navecss-consumer-')
     writeFileSync(path.join(consumerRoot, 'package.json'), JSON.stringify({ name: 'app' }))
 
     expect(() => findPackageRoot(moduleUrlAt(consumerRoot, 'bundle.js'))).toThrow(

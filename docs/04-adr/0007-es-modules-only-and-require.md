@@ -46,10 +46,11 @@ Node has been able to `require()` an ES module since 22.12, without a flag and,
 on 22.18 and 24.17, without a warning (`process.features.require_module` is
 `true` on both, measured). The one thing that stops it is top-level `await`
 anywhere in the module graph being required, which makes `require()` throw
-`ERR_REQUIRE_ASYNC_MODULE`. All six JavaScript entry points of the two packages
-were loaded through `require()` by file path on Node 22.18.0, and all six
-succeeded. None uses top-level `await`, so the only thing refusing `require()` in
-`@navecss/core` is its export map.
+`ERR_REQUIRE_ASYNC_MODULE`. The seven JavaScript entry points of the two
+packages resolve to six files, because `@navecss/tokens`'s `.` and `./js` share
+one. All six were loaded through `require()` by file path on Node 22.18.0, and
+all six succeeded. None uses top-level `await`, so the only thing refusing
+`require()` in `@navecss/core` is its export map.
 
 ## Decision
 
@@ -71,6 +72,12 @@ changes no file), so it is a minor release under 0.x.
 and `require()`s every JavaScript subpath in its export map, by package name, on
 the lowest supported Node version. A sentence in this record is not the check.
 
+This decision was taken before the test was written. It cannot land before
+decision 2's change to `@navecss/core`, because until then `require()` of that
+package's entries fails at the export map whatever the modules contain. Until
+it lands, 0.1.x keeps the rule because no published module uses top-level
+`await` (measured above), not because anything checks all of them.
+
 **4. The consequences for consumers are accepted and stated where they will see
 them.** Each package's README states: ES modules, no CommonJS build; `import`,
 and `require()` on Node 22.18 or later; in TypeScript, `moduleResolution` set to
@@ -90,8 +97,10 @@ standing in for a decision nobody wrote down.
 - A consumer whose TypeScript uses `moduleResolution: node10`, or whose bundler
   predates `exports` maps, still cannot resolve subpaths. That was true before
   this record and stays true.
-- Adding top-level `await` to any published module becomes a breaking change,
-  and the test in decision 3 turns it red rather than letting it ship.
+- Adding top-level `await` to any published module becomes a breaking change.
+  Once the test in decision 3 exists, it turns such a change red rather than
+  letting it ship. Until then, only the module graph of `@navecss/tokens`'s
+  main entry is checked, by an existing test that loads it through `require()`.
 - Stylesheet entry points are unaffected. They are not JavaScript and are
   resolved by CSS tooling, not by `require()`.
 - The Node floor stays 22.18 (the `engines` field). Decision 2 needs 22.12 or
