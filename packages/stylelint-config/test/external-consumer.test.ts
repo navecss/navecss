@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(HERE, '..')
+const ROOT = path.resolve(PACKAGE_DIR, '../..')
 
 const dir: { consumer?: string } = {}
 
@@ -33,6 +34,15 @@ beforeAll(() => {
   const [entry] = JSON.parse(raw) as { filename: string }[]
   const tarballPath = path.join(packDestination, entry!.filename)
 
+  // Pinned to this repo's own `packageManager`, not a hardcoded literal: without a pin,
+  // corepack can't tell which pnpm the consumer wants and falls back to auto-detecting and
+  // fetching an unrelated version, which a network-restricted CI runner has been measured to
+  // fail. Pinning to the version corepack has already activated for the workspace install in
+  // the same job lets it resolve here with no further download.
+  const { packageManager } = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+    packageManager: string
+  }
+
   writeFileSync(
     path.join(consumerDir, 'package.json'),
     JSON.stringify(
@@ -40,6 +50,7 @@ beforeAll(() => {
         name: 'nave-stylelint-config-consumer',
         version: '1.0.0',
         private: true,
+        packageManager,
         dependencies: {
           stylelint: '^17.0.0',
           '@navecss/stylelint-config': `file:${tarballPath}`,
