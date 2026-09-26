@@ -6,6 +6,14 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    # commitlint.config.js's scope-enum allows `deps` but not the `deps-dev` Dependabot writes
+    # for development-dependency updates by default (`include: scope` would produce that split
+    # itself, so this deliberately sets prefix-development to the SAME literal prefix as prefix
+    # instead of using include: scope). Without this, a dev-dependency bump carries a subject
+    # the local commit-msg hook would reject, and nothing in CI catches it before merge.
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps)'
     groups:
       # tokens/core ride the Changesets `fixed` group; keep their
       # own devDependency bumps from opening a flood of one-line PRs.

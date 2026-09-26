@@ -187,9 +187,15 @@ pnpm ci:check:fix
 9. **`deps:lint`** — `syncpack lint`: consistent dependency versions
    across the workspace (respecting the Changesets `fixed` group for
    tokens + core).
-10. **`scripts:test`** — `node --test` over the repo-root `scripts/`
+10. **`deps:dedupe-check`** — `pnpm dedupe --check`: fails when the
+    lockfile holds a duplicate resolution `pnpm dedupe` could collapse
+    (each caret range already satisfied by a single copy). Catches a
+    grouped Dependabot bump that updates the lockfile minimally instead
+    of collapsing it. Needs the npm registry reachable: it re-reads
+    package metadata, so it fails offline even with a warm pnpm cache.
+11. **`scripts:test`** — `node --test` over the repo-root `scripts/`
     gates' own unit coverage (`scripts/*.test.mjs`).
-11. **`scripts:check`** — the repo-root gates in `scripts/`, run in the
+12. **`scripts:check`** — the repo-root gates in `scripts/`, run in the
     order `package.json` chains them: the licence and provenance gates,
     the packaging and publishable-set gates, the scans over the
     repository's own docs, manifests and generated output, and the
