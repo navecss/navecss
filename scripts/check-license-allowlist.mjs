@@ -602,9 +602,10 @@ function readInstalledManifest(packageDir) {
 
 /**
  * The `name@version` keys of every package in the dependency closure, as installed, of each
- * `allPackages` entry named in `names`: the named package itself, then its `dependencies` and
- * `optionalDependencies`, transitively, each resolved from the directory the package is
- * installed in. An entry with no installed `path` contributes itself only.
+ * `allPackages` entry named in `names`: the named package itself, then its `dependencies`,
+ * `optionalDependencies` and `peerDependencies`, transitively, each resolved from the directory
+ * the package is installed in. A peer is followed only where one is installed, which is where
+ * a consumer can end up with it too. An entry with no installed `path` contributes itself only.
  */
 export function installedDependencyClosure(allPackages, names) {
   const keys = new Set()
@@ -624,6 +625,7 @@ export function installedDependencyClosure(allPackages, names) {
     const dependencyNames = [
       ...Object.keys(manifest.dependencies ?? {}),
       ...Object.keys(manifest.optionalDependencies ?? {}),
+      ...Object.keys(manifest.peerDependencies ?? {}),
     ]
     for (const dependencyName of dependencyNames) {
       const dependencyDir = installedDependencyDir(packageDir, dependencyName)

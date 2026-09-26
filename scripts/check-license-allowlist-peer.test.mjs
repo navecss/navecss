@@ -21,6 +21,7 @@
  * `stylelint` has here.
  */
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import {
   copyFileSync,
   mkdirSync,
@@ -37,6 +38,7 @@ import { fileURLToPath } from 'node:url'
 
 import {
   flattenLicenseGroups,
+  installedDependencyClosure,
   main,
   peerAndOptionalDependencyNames,
   runLicensesList,
@@ -287,4 +289,167 @@ test('peerAndOptionalDependencyNames skips a dangling entry under packages/ rath
 test("this repository's own @navecss/core optional peer (postcss) is in the manifest-derived peer set", () => {
   const names = peerAndOptionalDependencyNames(ROOT)
   assert.ok(names.has('postcss'))
+})
+
+/**
+ * Installs `packages` into `dir` in pnpm's layout: each package's real directory is
+ * `node_modules/.pnpm/<key>/node_modules/<name>`, and each of its dependencies is a symlink
+ * beside it in that same `node_modules`, pointing at the dependency's own real directory. Only
+ * the named top-level packages are linked from `node_modules/<name>`. Returns each package's
+ * top-level path (a symlink, as `pnpm licenses list` can report one) or real path.
+ */
+function installPnpmLayout(dir, packages, topLevel) {
+  const storeModules = (name) =>
+    path.join(dir, 'node_modules', '.pnpm', `${name.replace('/', '+')}@1.0.0`, 'node_modules')
+  const realDir = (name) => path.join(storeModules(name), ...name.split('/'))
+  for (const [name, manifest] of Object.entries(packages)) {
+    mkdirSync(realDir(name), { recursive: true })
+    writeFileSync(
+      path.join(realDir(name), 'package.json'),
+      JSON.stringify({ name, version: '1.0.0', ...manifest }),
+    )
+  }
+  for (const [name, manifest] of Object.entries(packages)) {
+    const linked = {
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+      ...manifest.peerDependencies,
+    }
+    for (const dependency of Object.keys(linked)) {
+      if (!Object.hasOwn(packages, dependency)) continue
+      const link = path.join(storeModules(name), ...dependency.split('/'))
+      mkdirSync(path.dirname(link), { recursive: true })
+      symlinkSync(realDir(dependency), link)
+    }
+  }
+  const paths = {}
+  for (const name of Object.keys(packages)) paths[name] = realDir(name)
+  for (const name of topLevel) {
+    const link = path.join(dir, 'node_modules', ...name.split('/'))
+    mkdirSync(path.dirname(link), { recursive: true })
+    symlinkSync(realDir(name), link)
+    paths[name] = link
+  }
+  return paths
+}
+
+function closureOf(packages, topLevel, names) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-closure-'))
+  try {
+    const paths = installPnpmLayout(dir, packages, topLevel)
+    const allPackages = Object.keys(packages).map((name) => ({
+      name,
+      version: '1.0.0',
+      license: 'MIT',
+      path: paths[name],
+    }))
+    return [...installedDependencyClosure(allPackages, new Set(names))].sort()
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+test('the closure walk is transitive through the pnpm layout: p -> q -> r, reached from p through its symlink', () => {
+  const closure = closureOf(
+    { p: { dependencies: { q: '1' } }, q: { dependencies: { r: '1' } }, r: {} },
+    ['p'],
+    ['p'],
+  )
+  assert.deepEqual(closure, ['p@1.0.0', 'q@1.0.0', 'r@1.0.0'])
+})
+
+test('the closure walk follows optionalDependencies', () => {
+  const closure = closureOf({ p: { optionalDependencies: { o: '1' } }, o: {} }, ['p'], ['p'])
+  assert.deepEqual(closure, ['o@1.0.0', 'p@1.0.0'])
+})
+
+test('the closure walk follows each walked package installed peerDependencies', () => {
+  const closure = closureOf(
+    { p: { peerDependencies: { q: '1' } }, q: { dependencies: { r: '1' } }, r: {} },
+    ['p'],
+    ['p'],
+  )
+  assert.deepEqual(closure, ['p@1.0.0', 'q@1.0.0', 'r@1.0.0'])
+})
+
+test('the closure walk resolves scoped names', () => {
+  const closure = closureOf(
+    { '@s/p': { dependencies: { '@s/q': '1' } }, '@s/q': {} },
+    ['@s/p'],
+    ['@s/p'],
+  )
+  assert.deepEqual(closure, ['@s/p@1.0.0', '@s/q@1.0.0'])
+})
+
+test('the closure walk terminates on a cycle, p <-> q', () => {
+  // Run in a child process with a deadline: a walk that loops never returns control to this
+  // runner, so only a separate process can turn a hang into a failure.
+  const script = `
+    import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs'
+    import { tmpdir } from 'node:os'
+    import path from 'node:path'
+    import { installedDependencyClosure } from ${JSON.stringify(
+      path.join(ROOT, 'scripts/check-license-allowlist.mjs'),
+    )}
+    const dir = mkdtempSync(path.join(tmpdir(), 'nave-closure-cycle-'))
+    const real = (n) => path.join(dir, 'node_modules', '.pnpm', n + '@1.0.0', 'node_modules', n)
+    for (const [n, d] of [['p', 'q'], ['q', 'p']]) {
+      mkdirSync(real(n), { recursive: true })
+      writeFileSync(path.join(real(n), 'package.json'),
+        JSON.stringify({ name: n, version: '1.0.0', dependencies: { [d]: '1' } }))
+    }
+    for (const [n, d] of [['p', 'q'], ['q', 'p']]) symlinkSync(real(d), path.join(path.dirname(real(n)), d))
+    const all = [{ name: 'p', version: '1.0.0', license: 'MIT', path: real('p') }]
+    console.log(JSON.stringify([...installedDependencyClosure(all, new Set(['p']))].sort()))
+  `
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    encoding: 'utf8',
+    timeout: 10_000,
+  })
+  assert.equal(result.signal, null, 'the walk did not finish within 10 seconds')
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(JSON.parse(result.stdout), ['p@1.0.0', 'q@1.0.0'])
+})
+
+test('the real licence listing reports an installed path for every package version, so the walk has somewhere to start', () => {
+  const listed = flattenLicenseGroups(runLicensesList([], ROOT))
+  assert.ok(listed.length > 0)
+  const withoutPath = listed.filter((pkg) => typeof pkg.path !== 'string')
+  assert.deepEqual(
+    withoutPath.map((pkg) => `${pkg.name}@${pkg.version}`),
+    [],
+    'entries with no installed path are widened by name only',
+  )
+})
+
+test("main() grades an optional peer's own installed peer, with an out-of-set licence, as bucket B", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-peer-of-peer-'))
+  try {
+    writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'root', private: true }))
+    copyFileSync(path.join(ROOT, 'license-policy.json'), path.join(dir, 'license-policy.json'))
+    mkdirSync(path.join(dir, 'packages', 'pub'), { recursive: true })
+    writeFileSync(
+      path.join(dir, 'packages', 'pub', 'package.json'),
+      JSON.stringify({
+        name: 'pub',
+        peerDependencies: { p: '^1.0.0' },
+        peerDependenciesMeta: { p: { optional: true } },
+      }),
+    )
+    const paths = installPnpmLayout(dir, { p: { peerDependencies: { q: '1' } }, q: {} }, ['p'])
+    const listings = {
+      prod: {},
+      all: {
+        MIT: [{ name: 'p', versions: ['1.0.0'], paths: [paths.p] }],
+        'GPL-3.0-only': [{ name: 'q', versions: ['1.0.0'], paths: [paths.q] }],
+      },
+    }
+    const { exitCode, output } = runGate(dir, (extraArgs) =>
+      extraArgs.includes('--prod') ? listings.prod : listings.all,
+    )
+    assert.equal(exitCode, 1, output)
+    assert.match(output, /\[bucket B \(prod\)\] q@1\.0\.0: "GPL-3\.0-only"/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
