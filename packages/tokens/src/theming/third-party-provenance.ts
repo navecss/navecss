@@ -96,8 +96,11 @@ export const THIRD_PARTY_RESIDUE_PATTERNS: readonly RegExp[] = RESIDUE_FRAGMENTS
  * deny-list over generator names cannot enumerate every tool that was never used; an allow-list
  * over what Nave's own generator actually writes is the checkable, non-speculative form.
  *
- * Anchored, no nested or ambiguous quantifier, tested against artifacts this package generates
- * itself, never consumer input. Structurally safe and not consumer-reachable; accepted.
+ * Not linear in the worst case: its three `\s*` runs are separated only by optional characters,
+ * so one long run of blanks after the opening `/**` can be split between them in many ways, and
+ * a header that is only blanks backtracks through all of them (measured: 5,000 spaces did not
+ * finish within 60 s). Accepted because it only reads the headers of files this package
+ * generates itself, which never carry such a run, and never a consumer's text.
  */
 const NAVE_ATTRIBUTION_PATTERN = /^\/\*\*?\s*\n?\s*\*?\s*Nave (Design System|breakpoints)\b/
 

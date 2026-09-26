@@ -143,8 +143,10 @@ export function checkStatusRules(adrs, byId) {
       continue
     }
     if (!ADR_STATUS.has(adr.status)) {
+      // Plain `.sort()`: code-unit order is the same on every CI runner, where `localeCompare`
+      // would follow the runner's locale.
       problems.push(
-        `${adr.filename}: status '${adr.status}' not in the set ${[...ADR_STATUS].sort((a, b) => a.localeCompare(b)).join(', ')}`,
+        `${adr.filename}: status '${adr.status}' not in the set ${[...ADR_STATUS].sort().join(', ')}`,
       )
     }
 

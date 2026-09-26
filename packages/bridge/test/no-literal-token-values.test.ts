@@ -43,7 +43,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src')
 const srcCssFiles = readdirSync(SRC).filter((file) => file.endsWith('.css'))
 
 /** One bare `var(--token)` reference, the documented bridge mapping pattern's atom. Matched
- * with a global `matchAll`, never wrapped in a repeated group (see `isVarOnlyValue` below). */
+ * with a global `replace`, never wrapped in a repeated group (see `isVarOnlyValue` below). */
 const VAR_TOKEN = /var\(\s*--[a-zA-Z][a-zA-Z0-9-]*\s*\)/g
 
 /**
@@ -86,17 +86,18 @@ describe('every bridge custom property is a bare reference to a Nave token', () 
 })
 
 /**
- * Runs `VAR_TOKEN.replace(...).trim() === ''` (the body of `isVarOnlyValue`, minus the
- * empty-value guard) inside a worker thread and resolves with the elapsed milliseconds, or
- * `null` if it has not finished within `timeoutMs`. A hard `timeoutMs` bound cannot be enforced
- * on the MAIN thread: the call is synchronous and, when the pattern under test backtracks
- * catastrophically, blocks the event loop outright, so a `setTimeout` racing it on the same
- * thread never gets to fire — but the SAME race on the main thread works fine against a
- * WORKER's result, since the worker's own blocking computation runs on a different thread and
- * never blocks this one. `Promise.race` against a timeout, terminating the worker in `finally`
- * regardless of which side wins, bounds it for real with no manual settled-flag bookkeeping. The
- * regex source and flags are read off the live `VAR_TOKEN` (never re-typed), so this cannot
- * silently stop covering the actual pattern if a future edit changes it.
+ * Runs `VAR_TOKEN.replace(...).trim() === ''` (the body of `isVarOnlyValue`, minus the empty-
+ * value guard) inside a worker thread and resolves with the elapsed milliseconds, or `null` if
+ * it has not finished within `timeoutMs`: a worker that throws rejects with its own error rather
+ * than reading as a timeout. A hard `timeoutMs` bound cannot be enforced on the MAIN thread: the
+ * call is synchronous and, when the pattern under test backtracks catastrophically, blocks the
+ * event loop outright, so a `setTimeout` racing it on the same thread never gets to fire — but
+ * the SAME race on the main thread works fine against a WORKER's result, since the worker's own
+ * blocking computation runs on a different thread and never blocks this one. `Promise.race`
+ * against a timeout, terminating the worker in `finally` regardless of which side wins, bounds
+ * it for real with no manual settled-flag bookkeeping. The regex source and flags are read off
+ * the live `VAR_TOKEN` (never re-typed), so this cannot silently stop covering the actual
+ * pattern if a future edit changes it.
  */
 function measureVarOnlyCheckOnWorker(value: string, timeoutMs: number): Promise<number | null> {
   const workerSource = `
@@ -110,9 +111,9 @@ function measureVarOnlyCheckOnWorker(value: string, timeoutMs: number): Promise<
     eval: true,
     workerData: { source: VAR_TOKEN.source, flags: VAR_TOKEN.flags, value },
   })
-  const result = new Promise<number | null>((resolve) => {
+  const result = new Promise<number | null>((resolve, reject) => {
     worker.once('message', resolve)
-    worker.once('error', () => resolve(null))
+    worker.once('error', reject)
   })
   const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
   return Promise.race([result, timeout]).finally(() => worker.terminate())
@@ -158,10 +159,10 @@ describe('isVarOnlyValue: the shapes it accepts and refuses, and its linear time
   // a value that ultimately fails to match (real CSS values commonly do) walked every split
   // before giving up — exponential backtracking. `isVarOnlyValue` has no repeated group at all
   // (a single global, non-repeating pattern consumed via `replace`), so it has nothing to be
-  // ambiguous about. This row is RED against the old pattern (measured: 24 repetitions already
-  // took ~800ms, 26 took ~2.8s, doubling roughly every 2) and GREEN here; if a future edit
-  // reintroduces a repeated group over this shape, this test times out and reds rather than the
-  // next hung CI job doing the catching.
+  // ambiguous about. This row is RED against the old pattern (measured: 20, 22, 24 and 26
+  // repetitions took ~0.2 s, ~0.9 s, ~3.6 s and ~15 s, doubling with every added repetition) and
+  // GREEN here; if a future edit reintroduces a repeated group over this shape, this test times
+  // out and reds rather than the next hung CI job doing the catching.
   it('many repeated var() tokens with no valid closing shape must not exponentially backtrack', async () => {
     const TIMEOUT_MS = 3000
     const pathological = 'var(--A) '.repeat(30) + 'X'
@@ -174,8 +175,8 @@ describe('isVarOnlyValue: the shapes it accepts and refuses, and its linear time
     ).not.toBeNull()
     expect(
       elapsedMs,
-      `took ${elapsedMs}ms on 30 repeated tokens; expected well under a millisecond for a ` +
-        'linear-time match',
-    ).toBeLessThan(50)
+      `took ${elapsedMs}ms on 30 repeated tokens; a linear-time match finishes in well under a ` +
+        'second, and the exponential one it replaced takes over a minute',
+    ).toBeLessThan(1000)
   }, 10_000)
 })

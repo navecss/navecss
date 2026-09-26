@@ -34,7 +34,7 @@ const CSS_WHITESPACE_CHARS = ' \t\n\r\f'
  * string built as `<non-space><tabs>*N<non-space>` (a channel value inside a function call, so
  * neither space touches an edge of the whole `args` string `cssTrim` runs on) is exactly that
  * shape and is exactly what a hostile or malformed seed/DTCG value can contain (see the
- * linearity test in `seed-ingest.test.ts`, which measures this). A two-pointer scan can only
+ * linearity test in `seed-channel-split.test.ts`, which measures this). A two-pointer scan can only
  * ever move each pointer forward once, so it is O(n) regardless of where the whitespace runs
  * fall.
  */

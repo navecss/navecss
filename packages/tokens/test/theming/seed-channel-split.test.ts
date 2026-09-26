@@ -36,9 +36,10 @@ describe('CSS-whitespace-only trimming', () => {
   // whole `args` string) is exactly what a hostile or malformed seed value can contain, and
   // exactly the reported trigger shape ("many repetitions of '\t'"). Measured against the old
   // regex-based implementation directly (not reproduced here, to avoid shipping a slow path):
-  // 20,000 tabs took ~160ms, 40,000 took ~2.6s, roughly quadratic. `cssTrim` is now a two-pointer
-  // scan with no regex in the whitespace-edge path at all, so it has nothing to backtrack on;
-  // this pins the bound going forward without needing to run the vulnerable shape to prove it.
+  // 20,000 tabs took ~0.75 s, 40,000 ~3.2 s and 80,000 ~12 s, four times the time for twice the
+  // input: quadratic. `cssTrim` is now a two-pointer scan with no regex in the whitespace-edge
+  // path at all, so it has nothing to backtrack on; this pins the bound going forward without
+  // needing to run the vulnerable shape to prove it.
   it('a long run of tabs neither leading nor trailing the whole args string does not blow up quadratically', () => {
     const pathological = `1${'\t'.repeat(200_000)}2`
     const t0 = performance.now()
@@ -49,8 +50,9 @@ describe('CSS-whitespace-only trimming', () => {
     // nothing to strip here (neither edge is whitespace) but is exercised first regardless, on
     // the full pathological string, which is what the timing bound below pins.
     expect(parts).toEqual(['1', '2'])
-    // A quadratic (or worse) implementation would take seconds to minutes here (see the
-    // measurement above); a linear one finishes in well under a second.
-    expect(elapsedMs).toBeLessThan(200)
+    // A quadratic implementation takes about a minute here (see the measurement above); a
+    // linear one takes tens of milliseconds, so the bound leaves room for a loaded CI runner
+    // without letting the quadratic path through.
+    expect(elapsedMs).toBeLessThan(2000)
   })
 })

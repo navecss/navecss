@@ -235,8 +235,10 @@ export function main(rootDir = ROOT) {
     return
   }
 
+  // Plain `.sort()`: code-unit order is the same on every CI runner, where `localeCompare` would
+  // follow the runner's locale.
   console.log(
-    `Publishable set: exactly {${[...PUBLISHABLE_SET].sort((a, b) => a.localeCompare(b)).join(', ')}} would publish, as intended.`,
+    `Publishable set: exactly {${[...PUBLISHABLE_SET].sort().join(', ')}} would publish, as intended.`,
   )
 }
 

@@ -40,10 +40,11 @@ const CSS_CONFIG: BuildConfig = {
 // (non-greedy, so a following declaration's `;` is never swallowed) is safe regardless of how
 // many lines the value spans.
 //
-// A lazy scan up to a required literal has no nested or ambiguous quantifier to backtrack on
-// (the same shape as the CSS-comment stripper below, and as `validate.ts`'s
-// `CSS_COMMENT_RE`), and it runs over CSS this generator composes itself from `tokens.json`,
-// never over a consumer's input. Structurally safe and not consumer-reachable; accepted.
+// Neither this nor the comment stripper below is linear in the worst case: a lazy scan to a
+// required literal restarts at every candidate start, so text with many `--nave-x:` openers and
+// no `;` after them takes quadratic time (measured: 10,000 openers ~0.19 s, 20,000 ~0.76 s).
+// Accepted because this script ships in no package and its only input is the CSS it composes
+// itself from `tokens.json`, which closes every declaration and every comment.
 const PROPERTY_DECL = /(--nave-[\w-]+):\s*([\s\S]*?);/g
 
 // Strips CSS comments before `PROPERTY_DECL` scans: a comment mentioning a `--nave-*` name (as

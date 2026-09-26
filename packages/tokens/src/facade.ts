@@ -17,13 +17,14 @@
  * the declared tint hue) come from `shipped-seeds.ts`, shared with `build-step.ts` so the two
  * paths never drift.
  *
- * A static scanner reads clause (ii) as path traversal ("faulty LLM-supplied CLI arguments"
- * reading/writing a caller-named path). Measured and accepted, not bounded further: the
- * operator invoking this CLI already has whatever filesystem access this OS process has: their
- * own shell resolves `--source`/`--overrides` against their own cwd before this package ever
- * sees the string, so there is no privilege boundary between the invoker and the paths their
- * own invocation names, the same trust argument `core`'s `navePlugin({ extend })` already
- * carries for consumer-authored build config. Marked at each read site below.
+ * A static scanner reads clause (ii) as path traversal: `build` and `validate` read, and `build`
+ * writes, whatever path their caller names. That is the contract, and nothing here bounds it.
+ * Through the `navecss-tokens` command the caller is the person running it, who can already
+ * read and write anything this process can, and a relative path resolves against the working
+ * directory they ran it from, as for any other command. Through this `./build` export the caller
+ * is another program, and these functions are not a sandbox: a program that forwards a path it
+ * did not choose itself (from a request, an upload, a file it does not trust) must check that
+ * path before passing it in. Marked at each read site below.
  *
  * R16: `build` validates the UNION
  * of both halves' emitted names — the DTCG half's (the consumer's source, O(1) name

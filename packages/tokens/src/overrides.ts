@@ -86,11 +86,11 @@ export async function readOverrides(filePath: string | undefined): Promise<PerSt
   if (!filePath) return {}
   let raw: string
   try {
-    // `filePath` is the caller's own `--overrides` argument. A static scanner reads this as
-    // path traversal; accepted, not bounded further, for the same reason `facade.ts`'s header
-    // (R9) gives for `--source`/`--out`: the operator invoking this CLI already has whatever
-    // filesystem access this process has, so there is no privilege boundary between them and a
-    // path their own invocation names.
+    // `filePath` is the path the caller named: `--overrides=<file>` on the command line, or the
+    // `overrides` option of `build()` from `@navecss/tokens/build`. A static scanner reads this
+    // as path traversal. It is read as given, by design, for the reason `facade.ts`'s header
+    // gives under R9: this is not a sandbox, and a program forwarding a path it did not choose
+    // itself must check that path before passing it in.
     raw = await readFile(filePath, 'utf8')
   } catch (error) {
     throw new UsageError(
