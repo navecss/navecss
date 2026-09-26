@@ -399,33 +399,56 @@ describe('AC-theming-40 covers: R34', () => {
   // rather than one `it` per row, keeps these near-identical fixtures out of the duplication
   // gate.
   //
-  // Every row (including the three pinning rows) is checked against css-tree 3.2.1's own
-  // tokenizer before being fixed to a table here, and every ARMED claim below is checked against
-  // a mutant of comment-open-tracker.ts with just that behavior removed, not merely reasoned.
+  // Every row below (including the two rows that add coverage without changing a verdict) is
+  // checked against css-tree 3.2.1's own tokenizer before being added to this table, and every
+  // "armed" claim in a comment is checked against a mutant of comment-open-tracker.ts with just
+  // that behavior removed, not merely reasoned.
   it.each([
     [
-      'a url() token whose content closes on the same line, followed by a string continued across an escaped line break, still lets a later real comment opener through — ARMED: removing url() awareness from the escaped-line-break reading alone (leaving the older, independent url-opaque reading in place) reds this row, because that reading alone loses the comment delimiter to the same-line string scan before it ever sees the escape',
+      'a url() token that closes on its own line, followed by a string continued across an escaped line break, still lets a later comment opener through',
+      // Armed: removing url() awareness from the escaped-line-break reading alone (leaving the
+      // older, independent url-opaque reading in place) reds this row, because that reading alone
+      // loses the comment delimiter to the same-line string scan before it ever sees the escape.
       `:root {\n  --a: url(x/*); --b: "x\\\n  y" */* filler "\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
     ],
     [
-      "the row directly above with every line break written CRLF — `copy-lint.ts` splits emitted CSS on '\\n' only, so a line that ended '\\r\\n' arrives here as a line ending in a bare trailing '\\r' — ARMED: checking only for a backslash at the true end of the line, not one immediately before a trailing '\\r', reds this row",
+      String.raw`the row above with every line break written CRLF, since copy-lint.ts splits emitted CSS on '\n' only and leaves a trailing '\r' on each line`,
+      // Armed: checking only for a backslash at the true end of the line, not one immediately
+      // before a trailing '\r', reds this row.
       `:root {\r\n  --a: "x\\\r\n  y" /* filler stays open, no closer "\r\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\r\n}`,
     ],
     [
-      "an unquoted url() token left open at the end of its line does not end there — CSS consumes an unterminated url token's remnants up to wherever its ')' actually falls, including a later line — ARMED: ending the token at the line's end instead of carrying it forward reds this row",
+      "an unquoted url() token left open at the end of its line does not end there; its remnants run to wherever the closing ')' actually falls",
+      // Armed: ending the token at the line's end instead of carrying it forward reds this row.
       `:root {\n  --a: url(y\n  /*x ) */* filler\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
     ],
     [
-      'the same unclosed url() token, but the line ends on the escaping backslash itself rather than on an ordinary character — ARMED: the same mutation as the row above reds this row too',
+      'the same unclosed url() token, but the line ends on the escaping backslash itself rather than on an ordinary character',
+      // Armed: the same mutation as the row above reds this row too.
       `:root {\n  --a: url(y\\\n  /*x ) */* filler\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
     ],
     [
-      "a backslash escaping the closing ')' inside an unquoted url() token does not end its content early (pinning round-1 finding 7, already correct at HEAD; this row only adds coverage)",
+      "a backslash escaping the closing ')' inside an unquoted url() token does not end its content early",
       `:root {\n  --a: url(x\\)/*);\n  */* filler\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
     ],
     [
-      'the url() match is case-insensitive (pinning round-1 finding 8, already correct at HEAD; this row only adds coverage)',
+      'the url() match is case-insensitive',
       `:root {\n  --a: URL(x/*);\n  */* filler\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
+    ],
+    [
+      'a comment opener that is the very last two characters of a line still opens a comment that carries into the next line',
+      // Armed: returning a fixed "nothing is open" result at the end of a line, instead of the
+      // scan's own current state, reds this row — the state is silently dropped exactly when the
+      // opener falls at the line's end, with no further input on that line to reveal the loss.
+      `:root {\n  --a: url(x/*); --b: "x\\\n  y" */*\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
+    ],
+    [
+      'url( followed by nothing but whitespace to the end of its line, then a quote on the next line, is a function token taking a quoted argument, not an opaque url() token',
+      // Armed: treating this shape as already-opaque url content, rather than an undecided state
+      // that resumes on the next line, reds this row: the quote is then read as an ordinary
+      // string close, letting the real comment opener between it and the filler text through
+      // unflagged.
+      `:root {\n  --a: url(x/*); --b: url(\n  "s" */* open ) filler\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
     ],
   ])('%s', (_description, css) => {
     expect(() => assertNoticeIsEmitted(css, RETHEMING_NOTICE, 'Retheming notice')).toThrow(
@@ -435,11 +458,16 @@ describe('AC-theming-40 covers: R34', () => {
 
   it.each([
     [
-      'a custom function named my-url( is not the url() token, so its content is NOT treated as opaque (pinning round-1 finding 9, already correct at HEAD; this row only adds coverage)',
+      'a custom function named my-url( is not the url() token, so its content is not treated as opaque',
       `:root {\n  --a: my-url(x/*);\n  */* filler\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
     ],
     [
-      "a non-ASCII character immediately before url( also makes it a longer identifier, not the url() token — ARMED: an ASCII-only identifier-boundary check reads 'urlContentOverlap' when preceded by a non-ASCII character too, so it treats the fake url()'s content as opaque, misses the '/*' it actually opens, and that phantom skip is what a later, unrelated '/*' on the filler line then (wrongly) reopens; this row is a false REFUSAL at HEAD's ASCII-only check, not a silent pass, but it is a real, checkable verdict change against css-tree",
+      'a non-ASCII character immediately before url( also makes it a longer identifier, not the url() token',
+      // Armed: an ASCII-only identifier-boundary check misreads this fake url() as the real
+      // token, treats its content as opaque, and so misses the '/*' it actually opens; a later,
+      // unrelated '/*' on the filler line then reopens what the phantom skip closed. That is a
+      // false refusal against css-tree's own reading, not a silent pass, but still a real,
+      // checkable change in verdict.
       `:root {\n  --a: éurl(x/*);\n  */* filler stays open, no closer on this line\n  ${TINT_SEED_COMMENT_STEM}${RETHEMING_NOTICE} */\n}`,
     ],
   ])('%s', (_description, css) => {
