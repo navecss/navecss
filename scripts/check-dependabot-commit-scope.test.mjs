@@ -19,6 +19,7 @@ import {
   findCommitScopeViolations,
   main,
 } from './check-dependabot-commit-scope.mjs'
+import { runGateMain } from './run-gate-main.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -221,28 +222,7 @@ function fixtureRoot(dependabotYaml, rules = COMMITLINT_RULES) {
   return dir
 }
 
-/**
-Runs `main()` against a fixture root, capturing its exit code and output without leaking either.
- */
-async function runMain(rootDir) {
-  const priorExit = process.exitCode
-  const priorLog = console.log
-  const priorError = console.error
-  const out = []
-  const err = []
-  process.exitCode = 0
-  console.log = (...args) => out.push(args.join(' '))
-  console.error = (...args) => err.push(args.join(' '))
-  try {
-    await main(rootDir)
-  } finally {
-    console.log = priorLog
-    console.error = priorError
-  }
-  const code = process.exitCode ?? 0
-  process.exitCode = priorExit
-  return { code, out: out.join('\n'), err: err.join('\n') }
-}
+const runMain = (rootDir) => runGateMain(main, rootDir)
 
 test('main() exits 0 on a sound baseline fixture', async () => {
   const r = await runMain(fixtureRoot(BASELINE_YAML))
