@@ -549,6 +549,15 @@ describe('scanDeclaredCustomProperties: linear on hostile CSS, names start where
     expect(scanDeclaredCustomProperties('.btn--primary:hover { color: red; }')).toEqual(new Set())
   })
 
+  it('does not read a `--` after an underscore or a non-ASCII name character as a declaration', () => {
+    expect(scanDeclaredCustomProperties('.btn_--nave-a:hover { color: red; }')).toEqual(new Set())
+    expect(scanDeclaredCustomProperties('.café--nave-a:hover { color: red; }')).toEqual(new Set())
+  })
+
+  it('still reads a name written after a backslash escape, as before', () => {
+    expect(scanDeclaredCustomProperties(String.raw`\--nave-a: 1;`)).toEqual(new Set(['--nave-a']))
+  })
+
   it('still reads a declaration whose name begins with more than two dashes', () => {
     expect(scanDeclaredCustomProperties(':root { ---a: 1; }')).toEqual(new Set(['---a']))
   })

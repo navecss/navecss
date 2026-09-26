@@ -34,14 +34,15 @@ export function detectSourceKind(filePath: string): ValidateSourceKind | undefin
 }
 
 // Both halves of the scan below run over a consumer's own `--source` CSS (R15 clause 1), so both
-// are linear. A match of `DECLARED_CUSTOM_PROPERTY_RE` can only START where a name starts (the
-// lookbehind), so a long run of name characters with no `:` after it is tried once rather than
-// once per character, which was quadratic; it also stops a `--` inside a longer name
-// (`.btn--primary:hover`) from being read as declaring `--primary`, which it does not. Comments
-// are removed by `stripCssComments`, one forward pass, rather than by a lazy regex that re-scans
-// to the end of the text from every unclosed `/*`, which was quadratic too.
-// `validate.test.ts` pins both bounds.
-const DECLARED_CUSTOM_PROPERTY_RE = /(?<![a-zA-Z0-9-])(--[a-zA-Z0-9-]+)\s*:/g
+// are linear. A match of `DECLARED_CUSTOM_PROPERTY_RE` can only START where a name starts: the
+// lookbehind refuses a start right after any character a CSS name can contain (a letter, a digit,
+// `_`, `-`, or anything outside ASCII). So a long run of name characters with no `:` after it is
+// tried once rather than once per character, which was quadratic, and a `--` inside a longer
+// name (`.btn--primary:hover`, `.btn_--primary:hover`) is not read as declaring `--primary`,
+// which it does not. Comments are removed by `stripCssComments`, one forward pass, rather than by
+// a lazy regex that re-scans to the end of the text from every unclosed `/*`, which was
+// quadratic too. `validate.test.ts` pins both bounds.
+const DECLARED_CUSTOM_PROPERTY_RE = /(?<![\w\u{80}-\u{10FFFF}-])(--[a-zA-Z0-9-]+)\s*:/gu
 
 /**
  * Removes every block comment in one forward pass. CSS comments do not nest, so each one ends at
