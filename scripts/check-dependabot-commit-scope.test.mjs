@@ -481,3 +481,57 @@ test(
     assert.ok(elapsed < TIMING_BUDGET_MS, `took ${elapsed}ms, budget ${TIMING_BUDGET_MS}ms`)
   },
 )
+
+test(
+  'R2-1c: a block with valid prefix lines plus one line of 60_000 blanks then "x" returns within budget',
+  { timeout: TIMING_TEST_TIMEOUT_MS },
+  () => {
+    const block = `  - package-ecosystem: 'npm'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps)'
+${' '.repeat(60_000)}x
+`
+    const start = performance.now()
+    extractCommitMessageConfig(block)
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < TIMING_BUDGET_MS, `took ${elapsed}ms, budget ${TIMING_BUDGET_MS}ms`)
+  },
+)
+
+test(
+  'R2-1d: a prefix-development line with 60_000 trailing blanks before a bare tail returns within budget',
+  { timeout: TIMING_TEST_TIMEOUT_MS },
+  () => {
+    const block = `  - package-ecosystem: 'npm'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: x${' '.repeat(60_000)}y
+`
+    const start = performance.now()
+    extractCommitMessageConfig(block)
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < TIMING_BUDGET_MS, `took ${elapsed}ms, budget ${TIMING_BUDGET_MS}ms`)
+  },
+)
+
+test(
+  'R2-1e: extractNpmEcosystemBlocks returns within budget when a line of 60_000 blanks then "z" ' +
+    'precedes the package-ecosystem line (so isNpmBlock cannot short-circuit on an earlier match)',
+  { timeout: TIMING_TEST_TIMEOUT_MS },
+  () => {
+    // The spam line sits BEFORE the matching package-ecosystem line: isNpmBlock's `.some()`
+    // stops at the first matching line, so if the spam line came after a match `.some()` would
+    // never test it and this row would be vacuous regardless of the regex's own cost.
+    const yaml = `version: 2
+updates:
+  - directory: '/'
+${' '.repeat(60_000)}z
+    package-ecosystem: 'npm'
+`
+    const start = performance.now()
+    extractNpmEcosystemBlocks(yaml)
+    const elapsed = performance.now() - start
+    assert.ok(elapsed < TIMING_BUDGET_MS, `took ${elapsed}ms, budget ${TIMING_BUDGET_MS}ms`)
+  },
+)

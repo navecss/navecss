@@ -95,7 +95,8 @@ function findEntryIndent(lines) {
  * after the bare form stops it matching a longer word that merely starts with `npm`.
  */
 function isNpmBlock(block) {
-  const npmEcosystemLine = /^[ \t]*-?[ \t]*package-ecosystem:[ \t]*(?:'npm'|"npm"|npm(?=[ \t#]|$))/
+  const npmEcosystemLine =
+    /^[ \t]*(?:-[ \t]*)?package-ecosystem:[ \t]*(?:'npm'|"npm"|npm(?=[ \t#]|$))/
   return block.split('\n').some((line) => npmEcosystemLine.test(line))
 }
 
@@ -139,7 +140,7 @@ export function extractCommitMessageConfig(ecosystemBlock) {
  * fails to match, so a malformed line could stall this check instead of failing it.
  */
 function extractYamlScalar(text, key) {
-  const lineMatcher = new RegExp(String.raw`^[ \t]*-?[ \t]*${key}:(.*)$`)
+  const lineMatcher = new RegExp(String.raw`^[ \t]*(?:-[ \t]*)?${key}:(.*)$`)
   for (const line of text.split('\n')) {
     const match = lineMatcher.exec(line)
     if (match !== null) return parseYamlScalarRemainder(match[1])
@@ -184,7 +185,7 @@ function parseYamlScalarRemainder(remainder) {
 
   const commentIndex = value.indexOf(' #')
   const bare = commentIndex === -1 ? value : value.slice(0, commentIndex)
-  return bare.replace(/[ \t]+$/, '')
+  return bare.trimEnd()
 }
 
 /**
