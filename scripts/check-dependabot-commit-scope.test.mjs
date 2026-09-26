@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 
 import {
   extractCommitMessageConfig,
-  extractNpmEcosystemBlock,
+  extractNpmEcosystemBlocks,
   findCommitScopeViolations,
   main,
 } from './check-dependabot-commit-scope.mjs'
@@ -47,22 +47,39 @@ updates:
       interval: 'weekly'
 `
 
-test('extractNpmEcosystemBlock slices from the npm entry up to the next ecosystem entry', () => {
-  const block = extractNpmEcosystemBlock(BASELINE_YAML)
+test('extractNpmEcosystemBlocks slices from the npm entry up to the next ecosystem entry', () => {
+  const [block] = extractNpmEcosystemBlocks(BASELINE_YAML)
   assert.match(block, /package-ecosystem: 'npm'/)
   assert.match(block, /prefix: 'chore\(deps\)'/)
   assert.doesNotMatch(block, /github-actions/)
 })
 
-test('extractNpmEcosystemBlock returns null when there is no npm entry', () => {
-  assert.equal(
-    extractNpmEcosystemBlock("version: 2\nupdates:\n  - package-ecosystem: 'github-actions'\n"),
-    null,
+test('extractNpmEcosystemBlocks returns an empty array when there is no npm entry', () => {
+  assert.deepEqual(
+    extractNpmEcosystemBlocks("version: 2\nupdates:\n  - package-ecosystem: 'github-actions'\n"),
+    [],
   )
 })
 
+test('extractNpmEcosystemBlocks returns one block per npm entry', () => {
+  const twoNpmYaml = `version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+  - package-ecosystem: 'npm'
+    directory: '/packages/tokens'
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+`
+  const blocks = extractNpmEcosystemBlocks(twoNpmYaml)
+  assert.equal(blocks.length, 2)
+  assert.match(blocks[0], /directory: '\/'/)
+  assert.match(blocks[1], /directory: '\/packages\/tokens'/)
+  assert.doesNotMatch(blocks[1], /github-actions/)
+})
+
 test('extractCommitMessageConfig reads prefix and prefix-development', () => {
-  const block = extractNpmEcosystemBlock(BASELINE_YAML)
+  const [block] = extractNpmEcosystemBlocks(BASELINE_YAML)
   assert.deepEqual(extractCommitMessageConfig(block), {
     prefix: 'chore(deps)',
     prefixDevelopment: 'chore(deps)',
@@ -85,6 +102,60 @@ test('extractCommitMessageConfig detects include: scope', () => {
       include: 'scope'
 `
   assert.equal(extractCommitMessageConfig(withIncludeScope).includeScope, true)
+})
+
+// R1: prefix and prefix-development carry DIFFERENT literal values, so a field-swap mutation
+// (prefixMatch and prefixDevMatch assigned to the wrong output field) would flip them and this
+// assertion would catch it. The existing "reads prefix and prefix-development" test above uses
+// the SAME value for both fields, so it cannot: swapping two identical values is invisible.
+test('R1: extractCommitMessageConfig keeps prefix and prefix-development in their own fields', () => {
+  const block = `  - package-ecosystem: 'npm'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(repo)'
+`
+  assert.deepEqual(extractCommitMessageConfig(block), {
+    prefix: 'chore(deps)',
+    prefixDevelopment: 'chore(repo)',
+    includeScope: false,
+  })
+})
+
+test('R2: extractCommitMessageConfig parses a prefix line carrying a trailing YAML comment', () => {
+  const block = `  - package-ecosystem: 'npm'
+    commit-message:
+      prefix: 'chore(deps)' # note
+      prefix-development: 'chore(deps)'
+`
+  assert.equal(extractCommitMessageConfig(block)?.prefix, 'chore(deps)')
+})
+
+test('R3: extractCommitMessageConfig detects include: scope with a trailing comment', () => {
+  const block = `  - package-ecosystem: 'npm'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps)'
+      include: scope # note
+`
+  assert.equal(extractCommitMessageConfig(block)?.includeScope, true)
+})
+
+test('R4: extractNpmEcosystemBlocks finds an unquoted npm ecosystem line', () => {
+  const yaml = `version: 2
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+`
+  assert.equal(extractNpmEcosystemBlocks(yaml).length, 1)
+})
+
+test('R4: extractNpmEcosystemBlocks finds a double-quoted npm line with a trailing comment', () => {
+  const yaml = `version: 2
+updates:
+  - package-ecosystem: "npm" # note
+    directory: '/'
+`
+  assert.equal(extractNpmEcosystemBlocks(yaml).length, 1)
 })
 
 test('baseline: a matching prefix/prefix-development pair has no violations', () => {
@@ -212,4 +283,97 @@ test('end to end: the real repo tree passes today', async () => {
   const r = await runMain(ROOT)
   assert.equal(r.code, 0, r.err)
   assert.equal(r.err, '')
+})
+
+/**
+Builds a throwaway repo root with no `.github/dependabot.yml` at all (R6's fixture).
+ */
+function fixtureRootMissingDependabot() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dependabot-scope-'))
+  writeFileSync(
+    path.join(dir, 'commitlint.config.js'),
+    `export default { rules: { 'scope-enum': [2, 'always', ${JSON.stringify(
+      COMMITLINT_RULES.scopeEnum,
+    )}], 'type-enum': [2, 'always', ${JSON.stringify(COMMITLINT_RULES.typeEnum)}] } }\n`,
+  )
+  return dir
+}
+
+/**
+Builds a throwaway repo root with the given dependabot.yml text and the EXACT given
+commitlint.config.js source, for R7/R8's malformed-config fixtures.
+ */
+function fixtureRootWithCommitlintSource(dependabotYaml, commitlintSource) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'dependabot-scope-'))
+  mkdirSync(path.join(dir, '.github'), { recursive: true })
+  writeFileSync(path.join(dir, '.github', 'dependabot.yml'), dependabotYaml)
+  writeFileSync(path.join(dir, 'commitlint.config.js'), commitlintSource)
+  return dir
+}
+
+const TWO_NPM_YAML = `version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps)'
+
+  - package-ecosystem: 'npm'
+    directory: '/packages/tokens'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+`
+
+test('R5: main() exits 1 when a SECOND npm entry carries the deps-dev defect, and names it', async () => {
+  const r = await runMain(fixtureRoot(TWO_NPM_YAML))
+  assert.equal(r.code, 1)
+  assert.match(r.err, /packages\/tokens/)
+})
+
+test('R6: main() EXITS 1 refusing to run when .github/dependabot.yml is missing', async () => {
+  const r = await runMain(fixtureRootMissingDependabot())
+  assert.equal(r.code, 1)
+  assert.match(r.err, /refusing to run/)
+})
+
+test('R7: main() EXITS 1 refusing to run when commitlint.config.js throws on import', async () => {
+  const r = await runMain(
+    fixtureRootWithCommitlintSource(BASELINE_YAML, "throw new Error('synthetic import failure')\n"),
+  )
+  assert.equal(r.code, 1)
+  assert.match(r.err, /refusing to run/)
+})
+
+test('R8: main() EXITS 1 refusing to run when commitlint.config.js exports no type-enum', async () => {
+  const r = await runMain(
+    fixtureRootWithCommitlintSource(
+      BASELINE_YAML,
+      "export default { rules: { 'scope-enum': [2, 'always', ['deps']] } }\n",
+    ),
+  )
+  assert.equal(r.code, 1)
+  assert.match(r.err, /refusing to run/)
+})
+
+test('R9: an empty quoted prefix yields a parse violation, not "carries no prefix"', async () => {
+  const brokenYaml = BASELINE_YAML.replace("prefix: 'chore(deps)'", "prefix: ''")
+  const r = await runMain(fixtureRoot(brokenYaml))
+  assert.equal(r.code, 1)
+  assert.doesNotMatch(r.err, /carries no commit-message/)
+  assert.match(r.err, /does not parse as/)
+})
+
+test('R10: a `!` breaking-change marker on prefix stays a violation (ruled, not a bug)', async () => {
+  const brokenYaml = BASELINE_YAML.replace(
+    "prefix: 'chore(deps)'\n      prefix-development: 'chore(deps)'",
+    "prefix: 'chore(deps)!'\n      prefix-development: 'chore(deps)!'",
+  )
+  const r = await runMain(fixtureRoot(brokenYaml))
+  assert.equal(r.code, 1)
+  assert.match(r.err, /does not parse as/)
 })

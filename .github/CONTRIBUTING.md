@@ -191,7 +191,8 @@ pnpm ci:check:fix
     lockfile holds a duplicate resolution `pnpm dedupe` could collapse
     (each caret range already satisfied by a single copy). Catches a
     grouped Dependabot bump that updates the lockfile minimally instead
-    of collapsing it.
+    of collapsing it. Needs the npm registry reachable: it re-reads
+    package metadata, so it fails offline even with a warm pnpm cache.
 11. **`scripts:test`** — `node --test` over the repo-root `scripts/`
     gates' own unit coverage (`scripts/*.test.mjs`).
 12. **`scripts:check`** — the repo-root gates in `scripts/`, run in the
