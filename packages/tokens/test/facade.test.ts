@@ -3,17 +3,9 @@
  * `test/bin.test.ts` covers the compiled, out-of-process
  * `bin: navecss-tokens` surface (AC-01's third/fourth clauses, R4's real exit codes, R8, R9).
  */
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { afterAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import type * as BuilderModule from '../src/builder.ts'
 import type { SeedNormalization, TokensBuildResult } from '../src/facade.ts'
@@ -29,6 +21,9 @@ import {
   validate,
 } from '../src/facade.ts'
 import { CONSUMER_LAYER } from '../src/theming/consumer-build.ts'
+import { cleanupScratchDirs, scratchDir as makeScratchDir } from './helpers/scratch-dir.ts'
+
+afterAll(cleanupScratchDirs)
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '..')
 const PACKAGE_JSON = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')) as {
@@ -37,7 +32,7 @@ const PACKAGE_JSON = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.js
 }
 
 function scratchDir(prefix = 'navecss-tokens-facade-'): string {
-  return mkdtempSync(path.join(tmpdir(), prefix))
+  return makeScratchDir(prefix)
 }
 
 /**

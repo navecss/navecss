@@ -1,7 +1,6 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 
 import type * as CoreContractModule from '../../src/theming/core-contract.ts'
 
@@ -18,6 +17,9 @@ import {
   validateAgainstManifest,
 } from '../../src/theming/core-contract.ts'
 import { buildCoreContractManifest } from '../../src/theming/core-source.ts'
+import { cleanupScratchDirs, scratchDir } from '../helpers/scratch-dir.ts'
+
+afterAll(cleanupScratchDirs)
 
 /**
  * This file reads `packages/core/src/**` directly, one of four
@@ -146,7 +148,7 @@ describe('AC-theming-32 covers: R27', () => {
    * a temp tree, and nothing under `packages/core/src` is created or touched.
    */
   it('AC-theming-32: discoverSourceFiles walks NESTED directories, not only the top level (a package that grows a subdirectory joins the scan)', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'navecss-discover-'))
+    const root = scratchDir('navecss-discover-')
     const nestedDir = path.join(root, 'sub', 'deeper')
     mkdirSync(nestedDir, { recursive: true })
     const topLevel = path.join(root, 'top.css')

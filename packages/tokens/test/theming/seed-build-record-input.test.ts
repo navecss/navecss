@@ -11,13 +11,15 @@
  * because the record is the consumer-readable half of the obligation and the type alone proves
  * nothing about what lands on disk.
  */
-import { mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
 import { build } from '../../src/facade.ts'
 import { SHIPPED_SEEDS } from '../../src/theming/shipped-seeds.ts'
+import { cleanupScratchDirs, scratchDir } from '../helpers/scratch-dir.ts'
+
+afterAll(cleanupScratchDirs)
 
 const ACCEPTED_FORMS: readonly {
   expected: Record<string, unknown>
@@ -57,7 +59,7 @@ interface RecordedSeed {
 async function buildRecordFor(
   seed: string,
 ): Promise<{ danger: RecordedSeed; primary: RecordedSeed }> {
-  const outDir = mkdtempSync(path.join(tmpdir(), 'navecss-tokens-build-record-'))
+  const outDir = scratchDir('navecss-tokens-build-record-')
   await build({ outDir, seed })
   const record = JSON.parse(readFileSync(path.join(outDir, 'build-record.json'), 'utf8')) as {
     seeds: { danger: RecordedSeed; primary: RecordedSeed }

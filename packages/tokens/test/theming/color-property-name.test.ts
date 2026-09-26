@@ -14,8 +14,7 @@
  */
 import type { CompilerOptions } from 'typescript'
 
-import { mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   createCompilerHost,
@@ -27,9 +26,12 @@ import {
   ScriptTarget,
   sys,
 } from 'typescript'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { build } from '../../src/facade.ts'
+import { cleanupScratchDirs, scratchDir as makeScratchDir } from '../helpers/scratch-dir.ts'
+
+afterAll(cleanupScratchDirs)
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '../..')
 const NAVE_DIST = path.join(PACKAGE_ROOT, 'dist')
@@ -41,7 +43,7 @@ const NAVE_DIST = path.join(PACKAGE_ROOT, 'dist')
 const CONSUMER_SEED = 'oklch(0.55 0.18 250)'
 
 function scratchDir(): string {
-  return mkdtempSync(path.join(tmpdir(), 'navecss-tokens-color-property-name-'))
+  return makeScratchDir('navecss-tokens-color-property-name-')
 }
 
 /**
