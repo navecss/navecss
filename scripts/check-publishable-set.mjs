@@ -236,7 +236,7 @@ export function main(rootDir = ROOT) {
   }
 
   console.log(
-    `Publishable set: exactly {${[...PUBLISHABLE_SET].sort().join(', ')}} would publish, as intended.`,
+    `Publishable set: exactly {${[...PUBLISHABLE_SET].sort((a, b) => a.localeCompare(b)).join(', ')}} would publish, as intended.`,
   )
 }
 
