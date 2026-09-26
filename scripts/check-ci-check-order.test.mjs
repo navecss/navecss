@@ -2,13 +2,11 @@
  * Coverage for check-ci-check-order.mjs, run with Node's built-in test
  * runner.
  *
- * Armed-not-vacuous is the whole point of this gate (a lesson generalised from an earlier
- * finding: a rule existing in source proves it is configured, never that it would fire), so
- * the first
- * two tests reproduce the two real defects this class has actually produced: a MEMBERSHIP
- * drop (a gate landed with no corresponding list entry) and an ORDER
- * transposition (`a6555fd`, items 5 and 6 swapped, false for days). Both must turn a real
- * `equal: True` into `equal: False`, or this gate is decorative.
+ * Armed-not-vacuous is the whole point of this gate (a rule existing in source proves it is
+ * configured, never that it would fire), so the first two tests reproduce the two real defects
+ * this class has actually produced: a MEMBERSHIP drop (a gate landed with no corresponding list
+ * entry) and an ORDER transposition (`a6555fd`, items 5 and 6 swapped, false for days). Both
+ * must turn a real `equal: True` into `equal: False`, or this gate is decorative.
  */
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
