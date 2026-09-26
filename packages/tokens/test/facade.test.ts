@@ -5,7 +5,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterAll, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import type * as BuilderModule from '../src/builder.ts'
 import type { SeedNormalization, TokensBuildResult } from '../src/facade.ts'
@@ -21,9 +21,9 @@ import {
   validate,
 } from '../src/facade.ts'
 import { CONSUMER_LAYER } from '../src/theming/consumer-build.ts'
-import { cleanupScratchDirs, scratchDir as makeScratchDir } from './helpers/scratch-dir.ts'
+import { scratchDir as makeScratchDir, registerScratchCleanup } from './helpers/scratch-dir.ts'
 
-afterAll(cleanupScratchDirs)
+registerScratchCleanup()
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '..')
 const PACKAGE_JSON = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')) as {

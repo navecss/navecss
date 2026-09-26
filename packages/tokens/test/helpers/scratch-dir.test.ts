@@ -1,15 +1,19 @@
 /**
  * The shared scratch-directory helper's own contract. `cleanupScratchDirs` is exercised directly
- * inside `it` bodies (in addition to the `afterAll` below, which only sweeps whatever the first
- * `describe` leaves behind) so its result — which paths it actually removed — is observable
- * inside a test, not just trusted to run silently.
+ * inside `it` bodies; the second `describe`'s first `it` already sweeps the first `describe`'s
+ * directories as a side effect of testing its own, so `registerScratchCleanup()`'s `afterAll`
+ * below is a safety net with nothing left to do against this file's own tests by the time it
+ * runs, kept because it is the same registration every consuming file carries.
  */
-import { existsSync } from 'node:fs'
-import { afterAll, describe, expect, it } from 'vitest'
+import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 
-import { cleanupScratchDirs, scratchDir } from './scratch-dir.ts'
+import type * as ScratchDirModule from './scratch-dir.ts'
 
-afterAll(cleanupScratchDirs)
+import { cleanupScratchDirs, registerScratchCleanup, scratchDir } from './scratch-dir.ts'
+
+registerScratchCleanup()
 
 describe('scratchDir', () => {
   it('hands out a fresh, existing directory each call', () => {
@@ -36,5 +40,53 @@ describe('cleanupScratchDirs', () => {
     scratchDir('navecss-scratch-dir-helper-cleanup-')
     cleanupScratchDirs()
     expect(() => cleanupScratchDirs()).not.toThrow()
+  })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'still removes a directory tracked after one that cannot be removed, and names the survivor',
+    () => {
+      const unremovable = scratchDir('navecss-scratch-dir-helper-unremovable-')
+      const blocked = path.join(unremovable, 'blocked')
+      mkdirSync(blocked)
+      writeFileSync(path.join(blocked, 'file.txt'), '')
+      chmodSync(blocked, 0o555)
+
+      const ordinary = scratchDir('navecss-scratch-dir-helper-ordinary-')
+
+      try {
+        let thrown: unknown
+        try {
+          cleanupScratchDirs()
+        } catch (error) {
+          thrown = error
+        }
+        expect(thrown).toBeInstanceOf(Error)
+        expect((thrown as Error).message).toContain(unremovable)
+        expect(existsSync(ordinary)).toBe(false)
+      } finally {
+        chmodSync(blocked, 0o755)
+        rmSync(unremovable, { recursive: true, force: true })
+        rmSync(ordinary, { recursive: true, force: true })
+      }
+    },
+  )
+})
+
+describe('registerScratchCleanup', () => {
+  it('makes scratchDir refuse to hand out a directory until it has been called', async () => {
+    vi.resetModules()
+    const fresh: typeof ScratchDirModule = await import('./scratch-dir.ts')
+    expectTypeOf(fresh.registerScratchCleanup).toBeFunction()
+
+    let leaked: string | undefined
+    try {
+      expect(() => {
+        leaked = fresh.scratchDir('navecss-scratch-dir-helper-unregistered-')
+      }).toThrowError(/registerScratchCleanup/)
+    } finally {
+      if (leaked !== undefined) {
+        rmSync(leaked, { recursive: true, force: true })
+      }
+    }
   })
 })

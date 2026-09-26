@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterAll, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type * as CoreContractModule from '../../src/theming/core-contract.ts'
 
@@ -17,9 +17,9 @@ import {
   validateAgainstManifest,
 } from '../../src/theming/core-contract.ts'
 import { buildCoreContractManifest } from '../../src/theming/core-source.ts'
-import { cleanupScratchDirs, scratchDir } from '../helpers/scratch-dir.ts'
+import { registerScratchCleanup, scratchDir } from '../helpers/scratch-dir.ts'
 
-afterAll(cleanupScratchDirs)
+registerScratchCleanup()
 
 /**
  * This file reads `packages/core/src/**` directly, one of four

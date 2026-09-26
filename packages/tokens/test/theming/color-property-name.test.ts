@@ -26,12 +26,12 @@ import {
   ScriptTarget,
   sys,
 } from 'typescript'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { build } from '../../src/facade.ts'
-import { cleanupScratchDirs, scratchDir as makeScratchDir } from '../helpers/scratch-dir.ts'
+import { scratchDir as makeScratchDir, registerScratchCleanup } from '../helpers/scratch-dir.ts'
 
-afterAll(cleanupScratchDirs)
+registerScratchCleanup()
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '../..')
 const NAVE_DIST = path.join(PACKAGE_ROOT, 'dist')

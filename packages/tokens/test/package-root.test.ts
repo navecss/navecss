@@ -13,12 +13,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { findPackageRoot, OWN_PACKAGE_NAME } from '../src/package-root.ts'
-import { cleanupScratchDirs, scratchDir } from './helpers/scratch-dir.ts'
+import { registerScratchCleanup, scratchDir } from './helpers/scratch-dir.ts'
 
-afterAll(cleanupScratchDirs)
+registerScratchCleanup()
 
 /**
  * A scratch tree shaped exactly like this package as installed: a root `package.json`

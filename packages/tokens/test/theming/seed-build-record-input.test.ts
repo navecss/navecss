@@ -13,13 +13,13 @@
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { build } from '../../src/facade.ts'
 import { SHIPPED_SEEDS } from '../../src/theming/shipped-seeds.ts'
-import { cleanupScratchDirs, scratchDir } from '../helpers/scratch-dir.ts'
+import { registerScratchCleanup, scratchDir } from '../helpers/scratch-dir.ts'
 
-afterAll(cleanupScratchDirs)
+registerScratchCleanup()
 
 const ACCEPTED_FORMS: readonly {
   expected: Record<string, unknown>

@@ -8,11 +8,11 @@
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-import { cleanupScratchDirs, scratchDir } from './helpers/scratch-dir.ts'
+import { registerScratchCleanup, scratchDir } from './helpers/scratch-dir.ts'
 
-afterAll(cleanupScratchDirs)
+registerScratchCleanup()
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '..')
 const DIST_DIR = path.join(PACKAGE_ROOT, 'dist')

@@ -24,15 +24,15 @@
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import type { Oklch } from '../../src/theming/color-math.ts'
 
 import { build } from '../../src/facade.ts'
 import { ingestSeed } from '../../src/theming/seed-ingest.ts'
-import { cleanupScratchDirs, scratchDir as makeScratchDir } from '../helpers/scratch-dir.ts'
+import { scratchDir as makeScratchDir, registerScratchCleanup } from '../helpers/scratch-dir.ts'
 
-afterAll(cleanupScratchDirs)
+registerScratchCleanup()
 
 /**
  * The pipeline states exactly one numeric tolerance, `SAME_COLOUR_TOLERANCE = 1e-4` on OKLCH
