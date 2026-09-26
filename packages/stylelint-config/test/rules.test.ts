@@ -2,10 +2,19 @@
  * AC-consumer-constraints 11-16, 22-24: the default export's rules, exercised through
  * `stylelint.lint` against inline CSS, exactly as a consumer's project would resolve them.
  */
-import stylelint, { type LintResult } from 'stylelint'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import stylelint, { type Config, type LintResult } from 'stylelint'
 import { describe, expect, it } from 'vitest'
 
 import config, { OUTLINE_GUARD_CONSUMER_MESSAGE } from '../index.js'
+import { cssPropertyNames, isMatchedByEntry } from './helpers/css-properties.ts'
+
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const PACKAGE_DIR = path.resolve(HERE, '..')
+const ROOT = path.resolve(HERE, '../../..')
 
 async function lint(code: string, extraConfig: Record<string, unknown> = {}): Promise<LintResult> {
   const result = await stylelint.lint({
@@ -64,11 +73,24 @@ describe('AC-consumer-constraints-12 covers: R11a', () => {
 })
 
 describe('AC-consumer-constraints-13 covers: R11a', () => {
-  it('an SCSS-style config nulling at-rule-no-unknown keeps it off after extending the package', async () => {
-    const result = await lint('.card { @include mixin; @nave interactive; }', {
-      rules: { ...config.rules, 'at-rule-no-unknown': undefined },
-    })
-    expect(ruleIds(result.warnings)).not.toContain('at-rule-no-unknown')
+  it('extending an SCSS-style config that nulls at-rule-no-unknown, then the package, keeps it off', async () => {
+    // A real extends chain: stylelint-config-standard turns at-rule-no-unknown on, a config of
+    // the kind an SCSS setup ships turns it off, then this package is extended last.
+    const scratch = mkdtempSync(path.join(tmpdir(), 'nave-stylelint-config-scss-style-'))
+    try {
+      const scssStyle = path.join(scratch, 'scss-style.json')
+      writeFileSync(scssStyle, '{ "rules": { "at-rule-no-unknown": null } }')
+      const result = await stylelint.lint({
+        code: '.card { @include mixin; @nave interactive; }',
+        config: {
+          extends: ['stylelint-config-standard', scssStyle, '@navecss/stylelint-config'],
+        },
+        configBasedir: ROOT,
+      })
+      expect(ruleIds(result.results[0]!.warnings)).not.toContain('at-rule-no-unknown')
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
   })
 })
 
@@ -123,35 +145,85 @@ describe('AC-consumer-constraints-22 covers: R13', () => {
   })
 })
 
-describe('AC-consumer-constraints-23 covers: R14', () => {
+function strictValueReports(result: LintResult): LintResult['warnings'] {
+  return result.warnings.filter((w) => w.rule === 'scale-unlimited/declaration-strict-value')
+}
+
+const checkedPropertyList = (
+  config.rules?.['scale-unlimited/declaration-strict-value'] as unknown[]
+)[0] as string[]
+
+describe('AC-consumer-constraints-23 covers: R14, R11b', () => {
   it.each([
-    ['padding: 13px', 1],
-    ['padding: 0 13px', 1],
-    ['margin: 1px 2px 3px 4px', 4],
-    ['background-color: red', 1],
-    ['border: 1px solid red', 1],
-    ['transition: opacity 200ms ease', 1],
-    ['accent-color: red', 1],
-  ])('%s produces exactly one strict-value report', async (declaration, _longhands) => {
+    'padding: 13px',
+    'padding: 0 13px',
+    'margin: 1px 2px 3px 4px',
+    'background-color: red',
+    'border: 1px solid red',
+    'transition: opacity 200ms ease',
+    'accent-color: red',
+    'border-color: red',
+    'border-top-color: red',
+    'text-decoration-color: red',
+  ])('%s produces exactly one strict-value report', async (declaration) => {
     const result = await lint(`.a { ${declaration}; }`)
-    const strictValueWarnings = result.warnings.filter(
-      (w) => w.rule === 'scale-unlimited/declaration-strict-value',
-    )
-    expect(strictValueWarnings).toHaveLength(1)
+    expect(strictValueReports(result)).toHaveLength(1)
+  })
+
+  it.each([
+    'border-right-color: red',
+    'border-bottom-color: red',
+    'border-left-color: #fff',
+    'border-top: 1px solid red',
+    'border-bottom: 2px solid #000',
+  ])('the border side colour %s produces exactly one strict-value report', async (declaration) => {
+    const result = await lint(`.a { ${declaration}; }`)
+    expect(strictValueReports(result)).toHaveLength(1)
   })
 
   it('.c { padding: 13px; margin: 7px; } produces one report per declaration', async () => {
     const result = await lint('.c { padding: 13px; margin: 7px; }')
-    const strictValueWarnings = result.warnings.filter(
-      (w) => w.rule === 'scale-unlimited/declaration-strict-value',
+    const reports = strictValueReports(result)
+    expect(reports).toHaveLength(2)
+    // Columns are 1-based; each report sits inside its own declaration's span.
+    const marginColumn = '.c { padding: 13px; margin: 7px; }'.indexOf('margin') + 1
+    const columns = reports.map((w) => w.column).toSorted((a, b) => a - b)
+    expect(columns[0]).toBeLessThan(marginColumn)
+    expect(columns[1]).toBeGreaterThanOrEqual(marginColumn)
+  })
+
+  // Over mdn-data's property list, never one derived from this package.
+  const independentPropertyNames = cssPropertyNames()
+
+  it('no CSS property name is matched by more than one entry of the shipped property list', () => {
+    const overlapping = independentPropertyNames
+      .map(
+        (name) =>
+          [name, checkedPropertyList.filter((entry) => isMatchedByEntry(entry, name))] as const,
+      )
+      .filter(([, entries]) => entries.length > 1)
+    expect(overlapping).toEqual([])
+  })
+
+  it('every property named color or ending in -color, vendor-prefixed names excepted, is matched by exactly one entry', () => {
+    const colourProperties = independentPropertyNames.filter(
+      (name) => !name.startsWith('-') && (name === 'color' || name.endsWith('-color')),
     )
-    expect(strictValueWarnings).toHaveLength(2)
+    expect(colourProperties).toContain('border-top-color')
+    const notExactlyOne = colourProperties
+      .map(
+        (name) =>
+          [
+            name,
+            checkedPropertyList.filter((entry) => isMatchedByEntry(entry, name)).length,
+          ] as const,
+      )
+      .filter(([, count]) => count !== 1)
+    expect(notExactlyOne).toEqual([])
   })
 
   it('font-size, font-weight, line-height, letter-spacing and font-family are each their own entry', () => {
-    const properties = (
-      config.rules?.['scale-unlimited/declaration-strict-value'] as unknown[]
-    )[0] as string[]
+    const properties = checkedPropertyList
     for (const name of [
       'font-size',
       'font-weight',
@@ -185,21 +257,49 @@ describe('AC-consumer-constraints-24 covers: R15, R11, R12', () => {
 
   it('has only the root export (plus package.json) and no extends', () => {
     expect(config).not.toHaveProperty('extends')
+    const manifest = JSON.parse(readFileSync(path.join(PACKAGE_DIR, 'package.json'), 'utf8')) as {
+      exports: Record<string, string>
+    }
+    expect(Object.keys(manifest.exports).toSorted((a, b) => a.localeCompare(b))).toEqual([
+      '.',
+      './package.json',
+    ])
   })
 
-  it('house rules are absent from the default export', async () => {
-    const result = await lint('.Block__elem--mod { color: red !important; }', {
-      rules: {
-        ...config.rules,
-        'selector-class-pattern': '^[a-z]+$',
-        'custom-property-pattern': '^nave-',
-        'order/properties-alphabetical-order': true,
-        'declaration-no-important': true,
-      },
+  it('names stylelint-config-standard in no dependency field', () => {
+    const manifest = JSON.parse(
+      readFileSync(path.join(PACKAGE_DIR, 'package.json'), 'utf8'),
+    ) as Record<string, Record<string, string> | undefined>
+    for (const field of [
+      'dependencies',
+      'devDependencies',
+      'peerDependencies',
+      'optionalDependencies',
+    ]) {
+      expect(Object.keys(manifest[field] ?? {}), `${field} names it`).not.toContain(
+        'stylelint-config-standard',
+      )
+    }
+  })
+
+  it('the same rule, in a core src file linted with the root config, is reported by the four house rules', async () => {
+    const rootConfig = JSON.parse(
+      readFileSync(path.join(ROOT, '.stylelintrc.json'), 'utf8'),
+    ) as Config
+    const result = await stylelint.lint({
+      code: '.Block__elem--mod { --brandColor: var(--x); color: var(--a); background-color: var(--b) !important; }',
+      codeFilename: path.join(ROOT, 'packages/core/src/x.css'),
+      config: rootConfig,
+      configBasedir: ROOT,
     })
-    expect(ruleIds(result.warnings)).toEqual(
-      expect.arrayContaining(['selector-class-pattern', 'declaration-no-important']),
-    )
+    const warnings = result.results[0]!.warnings
+    const textOf = (rule: string): string => warnings.find((w) => w.rule === rule)?.text ?? ''
+    // stylelint-config-standard sets three of these rules too, so each is identified as the
+    // root's own by the message only the root config gives it.
+    expect(textOf('selector-class-pattern')).toContain('nave-kebab-case')
+    expect(textOf('custom-property-pattern')).toContain('must begin with --nave-')
+    expect(textOf('declaration-no-important')).toContain('Avoid !important')
+    expect(ruleIds(warnings)).toContain('order/properties-alphabetical-order')
   })
 })
 

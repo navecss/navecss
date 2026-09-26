@@ -1,17 +1,19 @@
 /**
  * AC-consumer-constraints-35, -36, -37 cover: R21.
  *
- * Neither slice 1 nor slice 3 shipped R21's "Editor, linter and coding agent" section: each
- * needed a piece from a slice not yet landed when it ran (slice 1 needed slice 2's package
- * name; slice 3 needed slice 2's package too). This is that completing head.
+ * The README's "Editor, linter and coding agent" section needs the name of the published
+ * stylelint config it offers beside the one-line fence, so it lands with that package rather
+ * than with the css data file or the skill guide it also describes.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import stylelint from 'stylelint'
 import { describe, expect, it } from 'vitest'
+
+import { PUBLISHABLE_SET } from '../../../scripts/check-publishable-set.mjs'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const CORE_DIR = path.resolve(HERE, '..')
@@ -81,6 +83,29 @@ describe('AC-consumer-constraints-35 covers: R21', () => {
     expect(editorParagraph.toLowerCase()).toContain('reload')
   })
 })
+
+/**
+ * Runs the scratch project's own stylelint over `test.css` and parses the JSON report it writes
+ * to `--output-file`, and nothing else. The CLI prints the same report to stdout on a clean run
+ * and to stderr once it finds a problem, so reading "whichever stream is non-empty" would parse
+ * any other text a failing run printed. A run that wrote no parseable report throws with its exit
+ * status and stderr instead.
+ */
+function stylelintJsonReport(cwd: string): { warnings: { rule: string }[] }[] {
+  const reportPath = path.join(cwd, 'stylelint-report.json')
+  const result = spawnSync(
+    path.join(cwd, 'node_modules/.bin/stylelint'),
+    ['test.css', '--formatter', 'json', '--output-file', reportPath],
+    { cwd, encoding: 'utf8' },
+  )
+  try {
+    return JSON.parse(readFileSync(reportPath, 'utf8')) as { warnings: { rule: string }[] }[]
+  } catch {
+    throw new Error(
+      `stylelint wrote no JSON report (status ${String(result.status)}): ${result.stderr}`,
+    )
+  }
+}
 
 describe('AC-consumer-constraints-36 covers: R21, R11a', () => {
   const section = coreSection()
@@ -152,17 +177,11 @@ describe('AC-consumer-constraints-36 covers: R21, R11a', () => {
           writeFileSync(path.join(scratch, 'test.css'), '.a { @nave interactive; }')
           writeFileSync(path.join(scratch, '.stylelintrc.json'), config)
 
-          execFileSync('npm', ['install', `stylelint@${version}`], {
+          execFileSync('npm', ['install', '--ignore-scripts', `stylelint@${version}`], {
             cwd: scratch,
             encoding: 'utf8',
           })
-          const result = spawnSync(
-            path.join(scratch, 'node_modules/.bin/stylelint'),
-            ['test.css', '--formatter', 'json'],
-            { cwd: scratch, encoding: 'utf8' },
-          )
-          const raw = result.stdout || result.stderr
-          const [fileResult] = JSON.parse(raw) as { warnings: { rule: string }[] }[]
+          const [fileResult] = stylelintJsonReport(scratch)
           const isReported = fileResult!.warnings.some((w) => w.rule === 'at-rule-no-unknown')
           expect(isReported, `stylelint ${version}`).toBe(expectReported)
         } finally {
@@ -225,32 +244,49 @@ describe('AC-consumer-constraints-37 covers: R21', () => {
     expect(section.toLowerCase()).toContain('no guide')
   })
 
-  it('no published package manifest has a preinstall/install/postinstall/prepare script (no lifecycle hook could write the block)', () => {
+  function publishedManifests(): {
+    bin?: unknown
+    name: string
+    scripts?: Record<string, string>
+  }[] {
     const packagesDir = path.join(ROOT, 'packages')
-    for (const name of ['core', 'tokens', 'stylelint-config']) {
-      const manifest = JSON.parse(
-        readFileSync(path.join(packagesDir, name, 'package.json'), 'utf8'),
-      ) as { scripts?: Record<string, string> }
+    const manifests = readdirSync(packagesDir)
+      .map((entry) => path.join(packagesDir, entry, 'package.json'))
+      .filter((manifestPath) => existsSync(manifestPath))
+      .map(
+        (manifestPath) =>
+          JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+            bin?: unknown
+            name: string
+            scripts?: Record<string, string>
+          },
+      )
+      .filter((manifest) => PUBLISHABLE_SET.has(manifest.name))
+    expect(manifests.map((m) => m.name).toSorted((a, b) => a.localeCompare(b))).toEqual(
+      [...PUBLISHABLE_SET].toSorted((a, b) => a.localeCompare(b)),
+    )
+    return manifests
+  }
+
+  it('no published package manifest has a preinstall/install/postinstall/prepare script (no lifecycle hook could write the block)', () => {
+    for (const manifest of publishedManifests()) {
       for (const script of ['preinstall', 'install', 'postinstall', 'prepare']) {
-        expect(manifest.scripts?.[script], `${name}:${script}`).toBeUndefined()
+        expect(manifest.scripts?.[script], `${manifest.name}:${script}`).toBeUndefined()
       }
     }
   })
 
-  it("neither core nor this slice's new package has a bin (standing per the AC's own text)", () => {
-    // AC-consumer-constraints-37's own text reads "no published package's manifest has a
-    // bin", full stop, but @navecss/tokens has shipped `bin: navecss-tokens` (its own CLI,
-    // AC-token-build-01 and siblings) since before this spec existed, for a reason unrelated
-    // to this guide. Read literally across every published package the AC is already false on
-    // `main`, independent of anything in this slice. Checked narrowly, against the two
-    // packages this slice's own mechanism touches, rather than silently widened or silently
-    // dropped: flagged in the handover for the reviewer to confirm the AC's own intended scope.
-    const packagesDir = path.join(ROOT, 'packages')
-    for (const name of ['core', 'stylelint-config']) {
-      const manifest = JSON.parse(
-        readFileSync(path.join(packagesDir, name, 'package.json'), 'utf8'),
-      ) as { bin?: unknown }
-      expect(manifest.bin).toBeUndefined()
-    }
+  it("the only bin any published package declares is @navecss/tokens' navecss-tokens", () => {
+    // The token build CLI predates this section and writes build output only; a new bin on any
+    // published package is a tool that could write the block, and reds this row.
+    const bins = publishedManifests().flatMap((manifest) => {
+      if (manifest.bin === undefined) return []
+      // A string `bin` installs one command named after the package.
+      if (typeof manifest.bin === 'string') return [`${manifest.name}:${manifest.name}`]
+      return Object.keys(manifest.bin as Record<string, string>).map(
+        (bin) => `${manifest.name}:${bin}`,
+      )
+    })
+    expect(bins).toEqual(['@navecss/tokens:navecss-tokens'])
   })
 })

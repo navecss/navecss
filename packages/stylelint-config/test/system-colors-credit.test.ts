@@ -1,9 +1,17 @@
 /**
  * AC-consumer-constraints-43 covers: R11b, R16.
  */
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import config from '../index.js'
+import { commentText, findOutcomeWords, type Surface } from './helpers/outcome-words.ts'
 import { packTarball } from './helpers/pack.ts'
+
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const ROOT = path.resolve(HERE, '../../..')
 
 const FORBIDDEN_WORDS = [
   'accessib',
@@ -15,6 +23,21 @@ const FORBIDDEN_WORDS = [
   'safe',
   'protect',
 ]
+
+const SYSTEM_COLOUR_SCAN = {
+  mentions: /system[- ]colou?r|forced-colors/i,
+  words: FORBIDDEN_WORDS,
+  unit: 'sentence',
+} as const
+
+function configMessages(): string[] {
+  return Object.values(config.rules ?? {}).flatMap((setting) => {
+    const options = Array.isArray(setting)
+      ? (setting[1] as { message?: unknown } | undefined)
+      : undefined
+    return typeof options?.message === 'string' ? [options.message] : []
+  })
+}
 
 describe('AC-consumer-constraints-43 covers: R11b, R16', () => {
   const tarball = packTarball()
@@ -30,29 +53,38 @@ describe('AC-consumer-constraints-43 covers: R11b, R16', () => {
 
   it('LICENSE stays byte-identical to the root LICENSE (the credit is never there)', () => {
     const packedLicense = tarball.read('package/LICENSE')
+    expect(packedLicense).toBe(readFileSync(path.join(ROOT, 'LICENSE'), 'utf8'))
     expect(packedLicense).not.toMatch(/CSS Color/)
   })
 
-  it('no shipped surface mentioning system colours or forced-colors contains an outcome word', () => {
-    const packedIndex = tarball.read('package/index.js')
-    const packedReadme = tarball.read('package/README.md')
+  function shippedSurfaces(packedIndex: string): Surface[] {
     const packageJson = JSON.parse(tarball.read('package/package.json')) as { description: string }
+    return [
+      { name: 'packed index.js comments', text: commentText(packedIndex) },
+      { name: 'README.md', text: tarball.read('package/README.md') },
+      { name: 'package.json description', text: packageJson.description },
+      {
+        name: 'changeset',
+        text: readFileSync(path.join(ROOT, '.changeset/ship-stylelint-config.md'), 'utf8'),
+      },
+      ...configMessages().map((text) => ({ name: 'config message', text })),
+    ]
+  }
 
-    const surfaces = [packedIndex, packedReadme, packageJson.description]
-    for (const text of surfaces) {
-      const sentences = text.split(/(?<=[.!?])\s+|\n/)
-      const relevant = sentences.filter((s) => /system colou?r|forced-colors/i.test(s))
-      for (const sentence of relevant) {
-        for (const word of FORBIDDEN_WORDS) {
-          expect(sentence.toLowerCase()).not.toContain(word.toLowerCase())
-        }
-      }
-    }
+  it('no shipped sentence mentioning system colours or forced-colors contains an outcome word', () => {
+    const packedIndex = tarball.read('package/index.js')
+    expect(commentText(packedIndex)).toMatch(/system-color/)
+    expect(findOutcomeWords(shippedSurfaces(packedIndex), SYSTEM_COLOUR_SCAN)).toEqual([])
   })
 
-  it('the check reports a planted sentence describing the admission by outcome', () => {
-    const planted = 'Admitted so forced-colors users keep a readable page.'
-    const isHit = FORBIDDEN_WORDS.some((word) => planted.toLowerCase().includes(word.toLowerCase()))
-    expect(isHit).toBe(true)
+  it('the same scan reports a planted comment beside the list', () => {
+    const packedIndex = tarball.read('package/index.js')
+    const planted = packedIndex.replace(
+      'const SYSTEM_COLOR_KEYWORDS = [',
+      '// Admitted so forced-colors users keep a readable page.\nconst SYSTEM_COLOR_KEYWORDS = [',
+    )
+    expect(planted).not.toBe(packedIndex)
+    const hits = findOutcomeWords(shippedSurfaces(planted), SYSTEM_COLOUR_SCAN)
+    expect(hits.map((hit) => hit.word)).toContain('users')
   })
 })

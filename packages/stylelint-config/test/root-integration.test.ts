@@ -2,7 +2,15 @@
  * AC-consumer-constraints-20 and -21 cover: R10.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -110,11 +118,51 @@ describe('AC-consumer-constraints-20 covers: R10, R12', () => {
     )
   })
 
-  it('the root reset.css override is still present, and pnpm run lint / pnpm run knip exit 0', () => {
+  it('the root reset.css override is still present (pnpm run lint and pnpm run knip are held by the repository gate)', () => {
     const config = rootConfig() as { overrides: { files: string[] }[] }
     expect(config.overrides.some((o) => o.files.includes('packages/core/src/reset.css'))).toBe(true)
-  }, 20_000)
+  })
 })
+
+/**
+ * A copy of every tracked file, taken with plain file copies (no links back into this tree),
+ * so the whitespace edits below never touch the working tree. It carries no `.git`, and turbo
+ * hashes its inputs from the files themselves there.
+ */
+function scratchCopyOfTrackedFiles(): string {
+  const scratchTmp = mkdtempSync(path.join(tmpdir(), 'nave-turbo-hash-'))
+  const scratch = realpathSync(scratchTmp)
+  const listing = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' })
+  const tracked = listing.split('\0').filter((file) => file.length > 0)
+  for (const file of tracked) {
+    mkdirSync(path.join(scratch, path.dirname(file)), { recursive: true })
+    copyFileSync(path.join(ROOT, file), path.join(scratch, file))
+  }
+  return scratch
+}
+
+/**
+ * The turbo task hashes of the two packages that run stylelint, from a dry run in `cwd`.
+ */
+function stylelintTaskHashes(cwd: string): Record<string, string> {
+  const dryRun = JSON.parse(
+    execFileSync(path.join(ROOT, 'node_modules/.bin/turbo'), ['run', 'lint', '--dry=json'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }),
+  ) as { tasks: { hash: string; taskId: string }[] }
+  const hashes = Object.fromEntries(
+    dryRun.tasks
+      .filter((t) => t.taskId === '@navecss/core#lint' || t.taskId === '@navecss/bridge#lint')
+      .map((t) => [t.taskId, t.hash]),
+  )
+  expect(Object.keys(hashes).toSorted((a, b) => a.localeCompare(b))).toEqual([
+    '@navecss/bridge#lint',
+    '@navecss/core#lint',
+  ])
+  return hashes
+}
 
 describe('AC-consumer-constraints-21 covers: R10', () => {
   it("turbo's lint task inputs contain the literal $TURBO_DEFAULT$ and the new sources", () => {
@@ -128,17 +176,28 @@ describe('AC-consumer-constraints-21 covers: R10', () => {
     expect(inputs).toContain('$TURBO_ROOT$/packages/stylelint-config/**')
   })
 
-  it('a whitespace-only edit to the root config, the package, reset.css or the module changes stylelint-running packages hashes', () => {
-    const dryRun = JSON.parse(
-      execFileSync(path.join(ROOT, 'node_modules/.bin/turbo'), ['run', 'lint', '--dry=json'], {
-        cwd: ROOT,
-        encoding: 'utf8',
-      }),
-    ) as { tasks: { hash: string; taskId: string }[] }
-    const stylelintTasks = dryRun.tasks.filter(
-      (t) =>
-        t.taskId.endsWith('#lint') && (t.taskId.includes('core') || t.taskId.includes('bridge')),
-    )
-    expect(stylelintTasks.length).toBeGreaterThan(0)
-  })
+  it.each([
+    ['.stylelintrc.json', ['@navecss/bridge#lint', '@navecss/core#lint']],
+    ['packages/stylelint-config/README.md', ['@navecss/bridge#lint', '@navecss/core#lint']],
+    ['stylelint.outline-guard.mjs', ['@navecss/bridge#lint', '@navecss/core#lint']],
+    ['packages/core/src/reset.css', ['@navecss/core#lint']],
+  ])(
+    'a whitespace-only edit to %s changes exactly the hashes of %j',
+    (file, expectedChanged) => {
+      const scratch = scratchCopyOfTrackedFiles()
+      try {
+        const before = stylelintTaskHashes(scratch)
+        const target = path.join(scratch, file)
+        writeFileSync(target, `${readFileSync(target, 'utf8')}\n`)
+        const after = stylelintTaskHashes(scratch)
+        const changed = Object.keys(before)
+          .filter((taskId) => before[taskId] !== after[taskId])
+          .toSorted((a, b) => a.localeCompare(b))
+        expect(changed).toEqual(expectedChanged)
+      } finally {
+        rmSync(scratch, { recursive: true, force: true })
+      }
+    },
+    120_000,
+  )
 })

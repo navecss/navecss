@@ -39,11 +39,23 @@ describe('AC-consumer-constraints-44 covers: R16', () => {
   })
 
   it('the tarball contains no image file and the README embeds no image', () => {
-    const imageFiles = tarball.files.filter((f) => /\.(png|jpe?g|gif|svg|webp)$/i.test(f))
+    const imageFiles = tarball.files.filter((f) =>
+      /\.(png|jpe?g|gif|svg|webp|ico|avif|bmp|tiff?|apng)$/i.test(f),
+    )
     expect(imageFiles).toEqual([])
 
     const readme = tarball.read('package/README.md')
     expect(readme).not.toMatch(/!\[/)
     expect(readme).not.toMatch(/<img/i)
+  })
+
+  it('no shipped text file carries an inline data:image', () => {
+    const textFiles = tarball.files.filter(
+      (f) => /\.(js|ts|json|md)$/.test(f) || f.endsWith('/LICENSE'),
+    )
+    expect(textFiles).toEqual(expect.arrayContaining(['package/index.js', 'package/README.md']))
+    for (const file of textFiles) {
+      expect(tarball.read(file), `${file} carries data:image`).not.toMatch(/data:image/i)
+    }
   })
 })

@@ -9,11 +9,14 @@
  * anything the consumer happens to hoist).
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+
+import { tarballFilename } from './helpers/pack.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(HERE, '..')
@@ -27,12 +30,39 @@ beforeAll(() => {
   const consumerDir = dir.consumer
 
   const packDestination = mkdtempSync(path.join(tmpdir(), 'nave-stylelint-config-consumer-pack-'))
+  try {
+    installConsumer(consumerDir, packDestination)
+  } finally {
+    rmSync(packDestination, { recursive: true, force: true })
+  }
+}, 120_000)
+
+/**
+ * The exact stylelint version this workspace resolves, read from the installed package, so the
+ * consumer installs the stylelint the rest of this suite ran against rather than whatever the
+ * registry's newest `^17` is on the day.
+ */
+function workspaceStylelintVersion(): string {
+  const fromPackage = createRequire(path.join(PACKAGE_DIR, 'package.json'))
+  let candidate = path.dirname(fromPackage.resolve('stylelint'))
+  while (
+    path.basename(candidate) !== 'stylelint' ||
+    !existsSync(path.join(candidate, 'package.json'))
+  ) {
+    const parent = path.dirname(candidate)
+    if (parent === candidate) throw new Error('no installed stylelint package.json found')
+    candidate = parent
+  }
+  const manifestPath = path.join(candidate, 'package.json')
+  return (JSON.parse(readFileSync(manifestPath, 'utf8')) as { version: string }).version
+}
+
+function installConsumer(consumerDir: string, packDestination: string): void {
   const raw = execFileSync('npm', ['pack', '--json', '--pack-destination', packDestination], {
     cwd: PACKAGE_DIR,
     encoding: 'utf8',
   })
-  const [entry] = JSON.parse(raw) as { filename: string }[]
-  const tarballPath = path.join(packDestination, entry!.filename)
+  const tarballPath = path.join(packDestination, tarballFilename(raw))
 
   // Pinned to this repo's own `packageManager`, not a hardcoded literal: without a pin,
   // corepack can't tell which pnpm the consumer wants and falls back to auto-detecting and
@@ -52,7 +82,7 @@ beforeAll(() => {
         private: true,
         packageManager,
         dependencies: {
-          stylelint: '^17.0.0',
+          stylelint: workspaceStylelintVersion(),
           '@navecss/stylelint-config': `file:${tarballPath}`,
         },
       },
@@ -66,8 +96,7 @@ beforeAll(() => {
     JSON.stringify({ extends: ['@navecss/stylelint-config'] }, undefined, 2),
   )
   execFileSync('pnpm', ['install', '--no-lockfile'], { cwd: consumerDir, encoding: 'utf8' })
-  rmSync(packDestination, { recursive: true, force: true })
-}, 120_000)
+}
 
 afterAll(() => {
   if (dir.consumer) rmSync(dir.consumer, { recursive: true, force: true })
@@ -78,21 +107,33 @@ interface StylelintJsonResult {
 }
 
 /**
- * stylelint's CLI exits non-zero when it finds a warning, so `spawnSync` (never
- * `execFileSync`, which throws and discards captured output on a non-zero exit) is used to
- * read the JSON report regardless of the exit code.
+ * Lints `code` as the consumer's own `test.css` with the consumer's installed stylelint CLI, and
+ * parses the JSON report it writes to `--output-file`, and nothing else: the CLI prints that
+ * report to stdout on a clean run and to stderr once it finds a problem, so reading whichever
+ * stream is non-empty would parse any other text a failing run printed. A run that wrote no
+ * parseable report throws with its exit status and stderr. `spawnSync`, not `execFileSync`,
+ * because the CLI exits non-zero whenever it reports anything.
  */
-function runStylelintJson(): StylelintJsonResult[] {
+function lintInConsumer(code: string): StylelintJsonResult {
   const consumerDir = dir.consumer!
+  writeFileSync(path.join(consumerDir, 'test.css'), code)
+  const reportPath = path.join(consumerDir, 'stylelint-report.json')
+  rmSync(reportPath, { force: true })
   const result = spawnSync(
     path.join(consumerDir, 'node_modules/.bin/stylelint'),
-    ['test.css', '--formatter', 'json'],
+    ['test.css', '--formatter', 'json', '--output-file', reportPath],
     { cwd: consumerDir, encoding: 'utf8' },
   )
-  // stylelint's CLI writes the JSON report to stdout when clean, but to STDERR when it finds
-  // any warning (its exit code is then non-zero too) — read whichever stream is non-empty.
-  const raw = result.stdout || result.stderr
-  return JSON.parse(raw) as StylelintJsonResult[]
+  let report: StylelintJsonResult[]
+  try {
+    report = JSON.parse(readFileSync(reportPath, 'utf8')) as StylelintJsonResult[]
+  } catch {
+    throw new Error(
+      `stylelint wrote no JSON report (status ${String(result.status)}): ${result.stderr}`,
+    )
+  }
+  expect(report).toHaveLength(1)
+  return report[0]!
 }
 
 describe('AC-consumer-constraints-26 covers: R16', () => {
@@ -105,20 +146,12 @@ describe('AC-consumer-constraints-26 covers: R16', () => {
   })
 
   it('.a { padding: 13px; } is reported (the plugin resolves from the package, not the consumer)', () => {
-    writeFileSync(
-      path.join(dir.consumer!, 'test.css'),
-      '.a { padding: 13px; }\n.b { @nave interactive; }',
-    )
-    const [result] = runStylelintJson()
-    const byLine = new Map<number, string[]>()
-    for (const w of result!.warnings) byLine.set(w.line, [...(byLine.get(w.line) ?? []), w.rule])
-
-    expect(byLine.get(1)).toContain('scale-unlimited/declaration-strict-value')
+    const result = lintInConsumer('.a { padding: 13px; }')
+    expect(result.warnings.map((w) => w.rule)).toContain('scale-unlimited/declaration-strict-value')
   })
 
   it('.b { @nave interactive; } produces no report from any rule the package ships', () => {
-    const [result] = runStylelintJson()
-    const line2Rules = result!.warnings.filter((w) => w.line === 2).map((w) => w.rule)
-    expect(line2Rules).toEqual([])
+    const result = lintInConsumer('.b { @nave interactive; }')
+    expect(result.warnings).toEqual([])
   })
 })

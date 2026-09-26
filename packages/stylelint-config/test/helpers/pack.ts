@@ -57,7 +57,7 @@ export function tarballFilename(raw: string): string {
  * Runs `command` (always `npm` or `tar`, never taken from input) resolved from PATH.
  *
  * NOSONAR on the one spawn line below (rule S4036, PATH-resolved executable): resolving the
- * tool from PATH is deliberate — a test that packs with an absolute path would not be packing
+ * tool from PATH is deliberate: a test that packs with an absolute path would not be packing
  * with the developer's or CI's own installed npm/tar, which is exactly the toolchain a
  * consumer's install uses too.
  */
@@ -76,25 +76,28 @@ export function packTarball(): PackedTarball {
   if (cache.value) return cache.value
 
   const packDestination = mkdtempSync(path.join(tmpdir(), 'nave-stylelint-config-pack-'))
-  const raw = runTool('npm', ['pack', '--json', '--pack-destination', packDestination], {
-    cwd: PACKAGE_DIR,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  const tarballPath = path.join(packDestination, tarballFilename(raw))
-
-  const fileList = runTool('tar', ['-tzf', tarballPath], { encoding: 'utf8' })
-    .split('\n')
-    .filter((line) => line.length > 0)
-
   const extractDir = mkdtempSync(path.join(tmpdir(), 'nave-stylelint-config-extract-'))
-  runTool('tar', ['-xzf', tarballPath, '-C', extractDir], { encoding: 'utf8' })
-
-  rmSync(packDestination, { recursive: true, force: true })
   process.once('exit', () => {
     rmSync(extractDir, { recursive: true, force: true })
   })
+  let fileList: string[]
+  try {
+    const raw = runTool('npm', ['pack', '--json', '--pack-destination', packDestination], {
+      cwd: PACKAGE_DIR,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const tarballPath = path.join(packDestination, tarballFilename(raw))
+
+    fileList = runTool('tar', ['-tzf', tarballPath], { encoding: 'utf8' })
+      .split('\n')
+      .filter((line) => line.length > 0)
+
+    runTool('tar', ['-xzf', tarballPath, '-C', extractDir], { encoding: 'utf8' })
+  } finally {
+    rmSync(packDestination, { recursive: true, force: true })
+  }
 
   cache.value = {
     files: fileList,

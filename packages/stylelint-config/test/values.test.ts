@@ -1,8 +1,9 @@
 /**
- * AC-consumer-constraints 14, 15, 16: the strict-value rule's (a') semantics — a var(), a
- * function consuming one, or an admitted keyword passes; everything else is reported — and the
+ * AC-consumer-constraints 14, 15, 16: the strict-value rule's (a') semantics (a var(), a
+ * function consuming one, or an admitted keyword passes; everything else is reported) and the
  * exact admitted-keyword set, read back from the shipped config rather than retyped here.
  */
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,6 +11,8 @@ import stylelint from 'stylelint'
 import { describe, expect, it } from 'vitest'
 
 import config from '../index.js'
+import { FAED6E4_STRICT_VALUE_RULE } from './fixtures/faed6e4-strict-value-rule.ts'
+import { cssPropertyNames, isMatchedByEntry } from './helpers/css-properties.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../../..')
@@ -75,17 +78,60 @@ const DEPRECATED_SYSTEM_COLOR_KEYWORDS = [
   'WindowText',
 ]
 
-function readmeQuickStartColorSchemeFence(): string {
+/**
+ * Whether this checkout carries `sha`. The `faed6e4` fixture is committed because a shallow CI
+ * checkout does not carry that commit; where the history exists, it is compared with `git show`.
+ */
+function hasCommit(sha: string): boolean {
+  try {
+    const type = execFileSync('git', ['cat-file', '-t', sha], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return type.trim() === 'commit'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Every property/keyword pair `faed6e4` admitted, `/color/` exercised through `color`, minus
+ * `none` on the two colour-valued entries (`/color/` and `background-color`), which the colour
+ * allowlist no longer admits and AC-15 requires reported.
+ */
+function faed6e4AdmittedPairs(): [string, string][] {
+  const { ignoreKeywords } = FAED6E4_STRICT_VALUE_RULE[1]
+  return Object.entries(ignoreKeywords as Record<string, readonly string[]>).flatMap(
+    ([entry, keywords]) => {
+      const property = entry === '/color/' ? 'color' : entry
+      const isColourValued = entry === '/color/' || entry === 'background-color'
+      return keywords
+        .filter((keyword) => !(isColourValued && keyword === 'none'))
+        .map((keyword): [string, string] => [property, keyword])
+    },
+  )
+}
+
+/**
+ * The fenced css block that follows the root README's "set `color-scheme` on the root element"
+ * sentence, whole: the stylesheet a reader copies, never the prose around it.
+ */
+function readmeColorSchemeFence(): string {
   const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
-  const match = /color-scheme:\s*([^;]+);/.exec(readme)
-  if (!match) throw new Error('root README no longer contains a color-scheme declaration')
-  return `color-scheme: ${match[1]};`
+  const anchor = readme.indexOf('set `color-scheme` on the root element')
+  if (anchor === -1) throw new Error('root README no longer introduces the color-scheme fence')
+  const fence = /```css\n([\s\S]*?)```/.exec(readme.slice(anchor))
+  if (!fence) throw new Error('no css fence follows the color-scheme sentence in the root README')
+  return fence[1]!
 }
 
 describe('AC-consumer-constraints-14 covers: R11b, R18 (none of these is reported)', () => {
-  it('the root README color-scheme fence, extracted at test time', async () => {
-    const [warnings] = await warningsFor([readmeQuickStartColorSchemeFence().replace(/;$/, '')])
-    expect(warnings).toEqual([])
+  it('the root README color-scheme fence, extracted at test time and linted whole', async () => {
+    const fence = readmeColorSchemeFence()
+    expect(fence.match(/color-scheme:/g)).toHaveLength(2)
+    const result = await stylelint.lint({ code: fence, config })
+    expect(result.results[0]!.warnings).toEqual([])
   })
 
   it.each([
@@ -157,7 +203,7 @@ describe('AC-consumer-constraints-15 covers: R11b, R14 (each is reported)', () =
     'background-color: auto',
     'color: none',
     'background-color: none',
-    'border-color: none',
+    'border-top-color: none',
     'color: Canvas2',
     'background: url(x.png) red',
     'box-shadow: 0 1px 2px red',
@@ -187,31 +233,56 @@ describe('AC-consumer-constraints-16 covers: R11b', () => {
   )[0] as string[]
   const colorFamilyEntry = properties.find((p) => p.includes('color'))!
 
-  it('CSS-wide keywords are admitted on every checked property/family, lower and upper case', async () => {
-    const exemplars = [
-      'color',
-      'accent-color',
-      'fill',
-      'stroke',
-      'font-size',
-      'padding',
-      'margin',
-      'z-index',
-      'opacity',
-      'box-shadow',
-      'gap',
-      'border-radius',
-    ]
-    const keywords = ['inherit', 'initial', 'unset', 'revert', 'revert-layer']
-    for (const property of exemplars) {
-      for (const keyword of keywords) {
-        const [lower] = await warningsFor([`${property}: ${keyword}`])
-        const [upper] = await warningsFor([`${property}: ${keyword.toUpperCase()}`])
-        expect(lower, `${property}: ${keyword}`).toEqual([])
-        expect(upper, `${property}: ${keyword.toUpperCase()}`).toEqual([])
-      }
+  // Every property the list names, read from the list itself: a plain entry is its own
+  // property, and a pattern entry stands for every non-prefixed property of an independent
+  // property list it matches (the colour pattern for `color`, `background-color` and the rest).
+  const listedProperties = cssPropertyNames()
+    .filter((name) => !name.startsWith('-'))
+    .filter((name) => properties.some((entry) => isMatchedByEntry(entry, name)))
+
+  it('reads a checked-property list covering every entry the config ships', () => {
+    for (const entry of properties) {
+      expect(
+        listedProperties.some((name) => isMatchedByEntry(entry, name)),
+        `no property exercises the entry ${entry}`,
+      ).toBe(true)
     }
   })
+
+  it.each(['inherit', 'initial', 'unset', 'revert', 'revert-layer'])(
+    'the CSS-wide keyword %s is admitted on every checked property, lower and upper case',
+    async (keyword) => {
+      for (const value of [keyword, keyword.toUpperCase()]) {
+        const declarations = listedProperties.map((name) => `${name}: ${value}`)
+        const warnings = await warningsFor(declarations)
+        const reported = declarations.filter((_, i) => warnings[i]!.length > 0)
+        expect(reported).toEqual([])
+      }
+    },
+  )
+
+  it('every property/keyword pair the root top-level rule admitted at faed6e4 still passes, in three cases', async () => {
+    const pairs = faed6e4AdmittedPairs()
+    expect(pairs.length).toBeGreaterThan(0)
+    const declarations = pairs.flatMap(([property, keyword]) =>
+      [keyword, keyword.toLowerCase(), keyword.toUpperCase()].map((v) => `${property}: ${v}`),
+    )
+    const warnings = await warningsFor(declarations)
+    const reported = declarations.filter((_, i) => warnings[i]!.length > 0)
+    expect(reported).toEqual([])
+  })
+
+  it.skipIf(!hasCommit('faed6e4'))(
+    "the faed6e4 fixture is that commit's own top-level strict-value rule, byte for byte",
+    () => {
+      const historical = JSON.parse(
+        execFileSync('git', ['show', 'faed6e4:.stylelintrc.json'], { cwd: ROOT, encoding: 'utf8' }),
+      ) as { rules: Record<string, unknown> }
+      expect(historical.rules['scale-unlimited/declaration-strict-value']).toEqual(
+        FAED6E4_STRICT_VALUE_RULE,
+      )
+    },
+  )
 
   it('the colour family entry exists and admits transparent/currentColor in every case', async () => {
     expect(colorFamilyEntry).toBeDefined()
@@ -240,5 +311,20 @@ describe('AC-consumer-constraints-16 covers: R11b', () => {
     )[1] as Record<string, unknown>
     expect(options).toHaveProperty('ignoreValues')
     expect(options).not.toHaveProperty('ignoreKeywords')
+  })
+})
+
+describe('a var() reference is admitted with whitespace inside it, and only as a var() call', () => {
+  it.each(['padding: calc( var( --x ) * 2)', 'color: var( --x )'])(
+    '%s is not reported',
+    async (declaration) => {
+      const [warnings] = await warningsFor([declaration])
+      expect(warnings).toEqual([])
+    },
+  )
+
+  it('color: somevar(--x) is reported (a function whose name ends in var is not var())', async () => {
+    const [warnings] = await warningsFor(['color: somevar(--x)'])
+    expect(warnings).toContain('scale-unlimited/declaration-strict-value')
   })
 })
