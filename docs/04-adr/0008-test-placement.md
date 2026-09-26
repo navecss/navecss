@@ -51,6 +51,12 @@ Nothing today checks that a published tarball contains no test file.
 
 ## Decision
 
+This decision was taken before any of it was applied. Until the move lands,
+every package test stays in `test/`, and neither the configuration changes that
+decisions 3 and 5 call for nor the release-check assertion in decision 5 is in
+place. Today `@navecss/core`'s Node-environment Vitest configuration excludes
+browser tests by their directory, `test/browser/`, not by their suffix.
+
 **1. The subject decides where a test lives.** A test whose subject is one
 source file lives beside that file, whatever the file's language:
 `src/cx.ts` → `src/cx.test.ts`, `src/reset.css` → `src/reset.test.ts`. When one

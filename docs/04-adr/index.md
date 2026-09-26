@@ -14,7 +14,7 @@ ADRs record significant architectural choices: the context, the options consider
 ## Records
 
 | ADR                                                     | Title                                                                                                                      | Status   |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------- |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
 | [0001](0001-native-css-nesting.md)                      | `@nave` emits native CSS nesting; browser floor rises to Baseline 2024                                                     | accepted |
 | [0002](0002-dtcg-2025-10-token-format.md)               | The token pipeline targets DTCG 2025.10, reads one shape, and refuses the pre-stable draft by name                         | accepted |
 | [0003](0003-layer-cascade-contract.md)                  | The `@layer` cascade contract: seven names, one precondition, and where consumer CSS goes                                  | accepted |
