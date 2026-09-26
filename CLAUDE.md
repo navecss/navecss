@@ -1,6 +1,6 @@
 # NaveCSS — Claude Code Context
 
-Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo publishing `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, PostCSS `@nave` plugin), `bridge` (Base UI / Radix token bridges), `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
+Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo publishing `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `bridge` (Base UI / Radix token bridges), `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
 
 ## Principles
 
@@ -37,7 +37,7 @@ For multi-step tasks, state a brief plan with a verify step per item before exec
 
 ```
 packages/tokens/   → DTCG token source (tokens.json) + first-party DTCG reader (build.ts); emits CSS custom properties + JS/TS
-packages/core/     → reset.css, @layer stack (index.css), generated atomic utilities, cx()/atoms, PostCSS @nave plugin
+packages/core/     → reset.css, @layer stack (index.css), generated atomic utilities, cx()/atoms, implements @nave (PostCSS is one adapter)
 packages/bridge/   → base-ui.css / radix.css token bridges (CSS-only; depends on tokens)
 packages/cli/      → navecss CLI (component registry: `navecss add ...`); thin registry client
 ```

@@ -486,7 +486,7 @@ export const toClassName = (name: AtomName): string =>
 
 /**
  * Map of atom name → global CSS class name.
- * Used by cx() and the PostCSS plugin.
+ * Used by cx() and the directive core's diagnostic hints.
  * Only covers Nave built-in atoms — consumer atoms are @nave-directive only.
  */
 export const atomClassMap = Object.fromEntries(

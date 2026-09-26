@@ -106,6 +106,14 @@ the same atom data, so the emitter is the only thing that changes. None of
 this is built yet: it follows the launch (decision 6, step 1), and until then
 the PostCSS plugin is the only host.
 
+- **Correction (2026-09-26):** the core landed: `resolve()`, `plan()` and
+  `expandText()` in `packages/core/src/directive/`, host-free and tested
+  against the CSS Syntax Level 3 token stream. `@navecss/core/postcss` is now
+  a thin adapter over it, and `navecss-core check` (the survival check named
+  above) ships alongside it. The bundler plugin, Lightning CSS visitor and
+  no-bundler command line are still ahead; PostCSS is the only host until
+  they land.
+
 **5. `@nave` stays the stable authoring syntax through 0.x.** A consumer's
 stylesheet should not track an Editor's Draft that is still changing its model.
 The directive is the insulation: Nave's reader absorbs the draft's churn, the
