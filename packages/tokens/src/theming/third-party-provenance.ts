@@ -95,6 +95,9 @@ export const THIRD_PARTY_RESIDUE_PATTERNS: readonly RegExp[] = RESIDUE_FRAGMENTS
  * rather than a deny-list (names third parties) for the header specifically, because a
  * deny-list over generator names cannot enumerate every tool that was never used; an allow-list
  * over what Nave's own generator actually writes is the checkable, non-speculative form.
+ *
+ * Anchored, no nested or ambiguous quantifier, tested against artifacts this package generates
+ * itself, never consumer input. Structurally safe and not consumer-reachable; accepted.
  */
 const NAVE_ATTRIBUTION_PATTERN = /^\/\*\*?\s*\n?\s*\*?\s*Nave (Design System|breakpoints)\b/
 

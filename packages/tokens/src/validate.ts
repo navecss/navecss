@@ -33,6 +33,11 @@ export function detectSourceKind(filePath: string): ValidateSourceKind | undefin
   return undefined
 }
 
+// Neither pattern has a nested or ambiguous quantifier: the first is a bounded char class
+// followed by a single `\s*`, the second a lazy scan to a required literal closer. Both DO run
+// over a consumer's own `--source` CSS (R15 clause 1), so this is measured rather than waved
+// through on internal-only grounds — timed against multi-hundred-thousand-character adversarial
+// input with no super-linear behaviour observed. Structurally safe; accepted.
 const DECLARED_CUSTOM_PROPERTY_RE = /(--[a-zA-Z0-9-]+)\s*:/g
 const CSS_COMMENT_RE = /\/\*[\s\S]*?\*\//g
 

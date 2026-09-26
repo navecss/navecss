@@ -31,6 +31,10 @@ import { assertContrastFloors, runContrastHarness } from './contrast.ts'
 // eslint-disable-next-line import-x/no-cycle -- safe, see the comment above
 import { ACCESSIBILITY_GUARD_MESSAGE_PROBES } from './guard-message-probes.ts'
 
+// None of the three below has a nested or ambiguous quantifier to backtrack on, and all three
+// run only over this package's OWN generated copy at build time, never over a consumer's input
+// (a scanner flagging them as consumer-reachable is not — this module is Nave's own internal
+// build). Structurally safe and not consumer-reachable; accepted.
 const FORBIDDEN_WORDS = /\b(WCAG|AA|AAA|accessible|compliant|meets|conformant)\b/i
 const RATIO_PATTERN = /\d+(?:\.\d+)?\s*:\s*1/
 const SUCCESS_CRITERION_PATTERN = /\bSC\s*\d+\.\d+\.\d+\b/i

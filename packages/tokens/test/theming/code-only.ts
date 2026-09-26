@@ -25,6 +25,11 @@
  * back to be fixed. It is not a test file and registers no tests, the same shape as
  * `cleared-copy.ts` and `markdown-headings.ts` beside it — the latter being this package's
  * first consolidation of exactly this class.
+ *
+ * Both patterns below are structurally safe (a lazy scan to a required literal closer, or a
+ * single greedy class anchored to end-of-line; neither has a nested or ambiguous quantifier)
+ * and run only over this package's own tracked source files, scanned as a build-time guard,
+ * never over a consumer's input. Not consumer-reachable; accepted.
  */
 export function codeOnly(source: string): string {
   return source.replaceAll(/^[ \t]*\/\*[\s\S]*?\*\//gm, '').replaceAll(/\/\/.*$/gm, '')

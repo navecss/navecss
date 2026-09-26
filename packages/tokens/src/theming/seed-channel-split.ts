@@ -19,13 +19,31 @@ import { clamp01 } from './seed-refusal.ts'
  * finding B, elected for fix by Cédric at GATE 2). Every trimming and splitting step below uses
  * this set, so an NBSP stays INSIDE the token it was typed in, where `readNumericToken` refuses it.
  */
-const CSS_WHITESPACE_EDGES = /^[ \t\n\r\f]+|[ \t\n\r\f]+$/g
+const CSS_WHITESPACE_CHARS = ' \t\n\r\f'
 
 /**
  * Trims CSS whitespace only, leaving any other Unicode space in place to be refused as a value.
+ *
+ * A hand-rolled two-pointer scan, not `text.replaceAll(/^[ \t\n\r\f]+|[ \t\n\r\f]+$/g, '')`: that
+ * regex is a real polynomial-time ReDoS on library input (CodeQL `js/polynomial-redos`), because
+ * its two alternatives anchor at OPPOSITE ends (`^` vs `$`). Only the leading alternative can
+ * ever match at position 0, so every interior starting position falls through to the trailing
+ * one, which greedily consumes the whitespace run starting there and then backtracks it one
+ * character at a time hunting for a `$` that a run not reaching the string's end can never
+ * produce — O(run length) wasted work at EVERY position inside that run, O(n²) total. A seed
+ * string built as `<non-space><tabs>*N<non-space>` (a channel value inside a function call, so
+ * neither space touches an edge of the whole `args` string `cssTrim` runs on) is exactly that
+ * shape and is exactly what a hostile or malformed seed/DTCG value can contain (see the
+ * linearity test in `seed-ingest.test.ts`, which measures this). A two-pointer scan can only
+ * ever move each pointer forward once, so it is O(n) regardless of where the whitespace runs
+ * fall.
  */
 function cssTrim(text: string): string {
-  return text.replaceAll(CSS_WHITESPACE_EDGES, '')
+  let start = 0
+  let end = text.length
+  while (start < end && CSS_WHITESPACE_CHARS.includes(text[start]!)) start += 1
+  while (end > start && CSS_WHITESPACE_CHARS.includes(text[end - 1]!)) end -= 1
+  return text.slice(start, end)
 }
 
 /**
@@ -73,6 +91,11 @@ const CSS_NUMBER = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/
  * Shared with `seed-form-parsers-css-color-4.ts` so the six channel-list forms (`rgb()`, `hsl()`,
  * `oklch()`, `lab()`, `lch()`, `color()`) refuse the same way -- hex is the seventh accepted form
  * and has no channel list to tokenise (see the header comment).
+ *
+ * Returns bare `NaN`, not `Number.NaN`: this repository's own ESLint config
+ * (`unicorn/prefer-global-number-constants`) requires the bare global here, the opposite of a
+ * scanner rule recommending `Number.NaN`. Kept as `NaN` — the project's own lint gate, not a
+ * dashboard heuristic, is the applicable convention.
  */
 export function readNumericToken(text: string): number {
   if (text.trim() === '') return NaN
@@ -107,8 +130,6 @@ function parseAlphaToken(token: string): number {
   if (t.endsWith('%')) return clamp01(readNumericToken(t.slice(0, -1)) / 100)
   return clamp01(readNumericToken(t))
 }
-
-const CSS_WHITESPACE_CHARS = ' \t\n\r\f'
 
 /**
  * Splits `text` at every occurrence of a character `isSeparator` accepts, EXCEPT while inside a

@@ -17,6 +17,14 @@
  * the declared tint hue) come from `shipped-seeds.ts`, shared with `build-step.ts` so the two
  * paths never drift.
  *
+ * A static scanner reads clause (ii) as path traversal ("faulty LLM-supplied CLI arguments"
+ * reading/writing a caller-named path). Measured and accepted, not bounded further: the
+ * operator invoking this CLI already has whatever filesystem access this OS process has: their
+ * own shell resolves `--source`/`--overrides` against their own cwd before this package ever
+ * sees the string, so there is no privilege boundary between the invoker and the paths their
+ * own invocation names, the same trust argument `core`'s `navePlugin({ extend })` already
+ * carries for consumer-authored build config. Marked at each read site below.
+ *
  * R16: `build` validates the UNION
  * of both halves' emitted names — the DTCG half's (the consumer's source, O(1) name
  * computation) and the theming half's (the shipped property constant) — against the manifest
@@ -167,6 +175,7 @@ export async function build(options: TokensBuildOptions): Promise<TokensBuildRes
 
   // R16: validate the union (see this file's own header) before either half is composed, so
   // a source-completeness gap surfaces as this named list, not an internal lookup failure.
+  // `sourcePath` is the caller's own `--source` (or its default); see this file's header, R9.
   const sourceContent = await readFile(sourcePath, 'utf8')
   const sourceNames = namesFromSource('json', sourceContent, { path: sourcePath })
   const emittedNames = new Set([...sourceNames, ...shippedThemingPropertyNames()])
@@ -261,6 +270,7 @@ export async function validate(options: TokensValidateOptions): Promise<TokensVa
   }
 
   const manifest = await readManifest()
+  // `options.source` is the caller's own argument; see this file's header, R9.
   const content = await readFile(options.source, 'utf8')
   const notDeclared = computeMissing(manifest, kind, content, { path: options.source })
   // A name the theming half emits unconditionally was never "missing" in

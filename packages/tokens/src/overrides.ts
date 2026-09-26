@@ -86,6 +86,11 @@ export async function readOverrides(filePath: string | undefined): Promise<PerSt
   if (!filePath) return {}
   let raw: string
   try {
+    // `filePath` is the caller's own `--overrides` argument. A static scanner reads this as
+    // path traversal; accepted, not bounded further, for the same reason `facade.ts`'s header
+    // (R9) gives for `--source`/`--out`: the operator invoking this CLI already has whatever
+    // filesystem access this process has, so there is no privilege boundary between them and a
+    // path their own invocation names.
     raw = await readFile(filePath, 'utf8')
   } catch (error) {
     throw new UsageError(
