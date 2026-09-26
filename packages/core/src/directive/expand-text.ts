@@ -1,5 +1,6 @@
 import type { Diagnostic } from './diagnostics-types.ts'
 import type { ExtendMap } from './resolve.ts'
+import type { Position, SourceMap } from './source-map.ts'
 
 /**
  * R3: `expandText(css, options)` reads a stylesheet as CSS Syntax Level 3
@@ -9,17 +10,20 @@ import type { ExtendMap } from './resolve.ts'
  * unchanged.
  */
 import { atKeywordName, isNaveAtKeyword, type Item, readItem } from './block-reader.ts'
+import { type AppendPart, buildOutput, type Edit } from './expand-text-output.ts'
 import { type AnchoredBlock, type Declaration, plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
 
 export interface ExpandTextOptions {
   readonly extend?: ExtendMap | undefined
   readonly onUnknown?: 'warn' | 'error' | 'ignore'
+  readonly from?: string | undefined
+  readonly inputSourceMap?: SourceMap | undefined
 }
 
 export interface ExpandTextResult {
   readonly css: string
-  readonly map: undefined
+  readonly map: string
   readonly diagnostics: readonly Diagnostic[]
 }
 
@@ -28,10 +32,21 @@ interface WalkContext {
   readonly isInsideKeyframes: boolean
 }
 
-interface Edit {
-  readonly start: number
-  readonly end: number
-  readonly text: string
+/**
+1-based line, 0-based column (source-map convention) for `offset` in `text`.
+ */
+function inputPositionAt(text: string, offset: number): Position {
+  let line = 1
+  let lineStart = 0
+  for (let i = 0; i < offset; i++) {
+    if (text[i] !== '\n') {
+    	continue;
+    }
+
+    line++
+    lineStart = i + 1
+  }
+  return { line, column: offset - lineStart }
 }
 
 /**
@@ -48,6 +63,10 @@ class Walker {
     this.css = css
     this.tokens = tokenize(css)
     this.options = options
+  }
+
+  positionAt(offset: number): Position {
+    return inputPositionAt(this.css, offset)
   }
 }
 
@@ -120,7 +139,7 @@ function repositionDiagnostics(
 }
 
 interface Frame {
-  appendText: string
+  parts: AppendPart[]
 }
 
 interface DirectiveSite {
@@ -137,6 +156,7 @@ function processDirective(w: Walker, site: DirectiveSite): void {
   const { item, context, hasNestedNode, frame } = site
   const directiveStart = w.tokens[item.start]!.startIndex
   const directiveEnd = w.tokens[item.end - 1]!.endIndex
+  const source = w.positionAt(directiveStart)
   const prelude = w.css.slice(item.preludeOffset ?? 0, item.preludeEndOffset ?? 0)
 
   const result = plan(
@@ -149,8 +169,9 @@ function processDirective(w: Walker, site: DirectiveSite): void {
   if (item.blockStart !== undefined) positioned.push({ code: 'has-block', offset: directiveStart, endOffset: directiveEnd })
   w.diagnostics.push(...positioned)
 
-  w.edits.push({ start: directiveStart, end: directiveEnd, text: renderInline(result.declarations, result.wrapInAmpersand) })
-  for (const block of result.blocks) frame.appendText += ` ${renderBlock(block)}`
+  const inline = renderInline(result.declarations, result.wrapInAmpersand)
+  w.edits.push({ start: directiveStart, end: directiveEnd, parts: inline === '' ? [] : [{ text: inline, source }] })
+  for (const block of result.blocks) frame.parts.push({ text: ` ${renderBlock(block)}`, source })
 }
 
 /**
@@ -180,8 +201,8 @@ function closePositionOf(w: Walker, blockEndIndex: number): number {
  *
  */
 function flushFrame(w: Walker, closeAt: number, frame: Frame): void {
-  if (frame.appendText === '') return
-  w.edits.push({ start: closeAt, end: closeAt, text: frame.appendText })
+  if (frame.parts.length === 0) return
+  w.edits.push({ start: closeAt, end: closeAt, parts: frame.parts })
 }
 
 /**
@@ -221,7 +242,7 @@ interface BlockBounds {
  */
 function walkBlock(w: Walker, bounds: BlockBounds): void {
   const { limit, closeAt, context } = bounds
-  const frame: Frame = { appendText: '' }
+  const frame: Frame = { parts: [] }
   let hasNestedNode = false
   let i = skipInert(w.tokens, bounds.start, limit)
 
@@ -242,26 +263,11 @@ function walkBlock(w: Walker, bounds: BlockBounds): void {
 }
 
 /**
- *
- */
-function applyEdits(css: string, edits: readonly Edit[]): string {
-  const sorted = [...edits].toSorted((a, b) => a.start - b.start || a.end - b.end)
-  let result = ''
-  let cursor = 0
-  for (const edit of sorted) {
-    result += css.slice(cursor, edit.start)
-    result += edit.text
-    cursor = Math.max(cursor, edit.end)
-  }
-  result += css.slice(cursor)
-  return result
-}
-
-/**
  * `expandText(css, options)`. Reads `css` as CSS Syntax Level 3 tokens and
  * blocks (R3, R4), finds every `@nave` at-rule that is an item of the
  * stylesheet or of a block, answers `plan()`'s three facts itself, and
- * splices. Source maps land separately (R7); `map` is `undefined` until then.
+ * splices. Returns a version-3 source map, chained through an incoming one
+ * when `options.inputSourceMap` is given (R7).
  */
 export function expandText(css: string, options: ExpandTextOptions = {}): ExpandTextResult {
   const w = new Walker(css, options)
@@ -271,5 +277,13 @@ export function expandText(css: string, options: ExpandTextOptions = {}): Expand
     closeAt: css.length,
     context: { isStyleRuleParent: false, isInsideKeyframes: false },
   })
-  return { css: applyEdits(css, w.edits), map: undefined, diagnostics: w.diagnostics }
+  const { css: outputCss, map } = buildOutput({
+    css: w.css,
+    tokens: w.tokens,
+    edits: w.edits,
+    from: options.from,
+    inputSourceMap: options.inputSourceMap,
+    positionAt: (offset) => w.positionAt(offset),
+  })
+  return { css: outputCss, map, diagnostics: w.diagnostics }
 }
