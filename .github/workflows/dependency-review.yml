@@ -1,0 +1,70 @@
+name: dependency-review
+
+# PR-time backstop for supply-chain risk on dependency changes: vulnerable versions and
+# disallowed licences. This is the licence BACKSTOP, not the primary licence gate — the primary
+# gate is the local allow-list (`license-policy.json` + `scripts/check-license-allowlist.mjs`,
+# run through `pnpm run scripts:check`), which expresses the bucket split (bundled output vs.
+# dependencies vs. devDependencies) this action cannot. GitHub's dependency graph reports every
+# `pnpm-lock.yaml` entry as a `runtime` dependency, devDependencies included, so the action has
+# no way to tell the two apart. `fail-on-scopes` filters the changes that BOTH the vulnerability
+# and the licence checks read (the action's README describes it as vulnerability-only; its code
+# applies it to both), so it is set to all three scopes: both checks cover every dependency, and
+# keep doing so if GitHub ever starts scoping lockfile entries. A dependency whose licence GitHub
+# cannot read is reported but does not fail the check; a licence string that is not valid SPDX
+# does.
+#
+# `allow-licenses` is used and never `deny-licenses` (deprecated, and mutually exclusive with
+# allow-licenses). The list holds the licences the dependency tree's packages declare today plus
+# others that are common in JavaScript tooling, weak copyleft (MPL, LGPL) included, so that a
+# routine devDependency update does not turn this check red. It is not the project's set of
+# acceptable licences, and a licence being on it clears nothing: that decision lives in the local
+# allow-list. Anything not listed turns this check red, including a permissive licence that has
+# simply not been added yet. Two families are left off on purpose. Strong copyleft (GPL-*,
+# AGPL-*) must not reach a consumer through `dependencies` or `peerDependencies`, but is
+# acceptable in a devDependency, which is only run here and never redistributed, provided nothing
+# it generates carries its licence into a published package. This check cannot tell the two
+# apart, so it flags both, and a red on a devDependency for that reason alone is a prompt to
+# confirm it is development-only, not a rejection. The source-available licences that restrict
+# use rather than distribution (BUSL, SSPL, Elastic-2.0, PolyForm, Commons Clause) are blocked by
+# the local allow-list for dependencies and devDependencies alike, because "it is only a build
+# tool" is an argument about distribution and these licences condition on use.
+#
+# The licence this check reads is GitHub's own reading of a package's files, which can differ
+# from the licence the package declares. `allow-dependencies-licenses` names the packages whose
+# declared licence is on the list but whose GitHub reading adds one that is not, where adding
+# that licence to the list would widen it for every other package: vscode-css-languageservice
+# (declared MIT, read as also CC-BY-SA-2.5 for documentation data it bundles) and
+# parse-statements (declared MIT, read as also JSON). The local allow-list still classifies both
+# on the licence they declare.
+#
+# `actions/dependency-review-action` is public-repository-only without GitHub Advanced Security
+# and runs only on `pull_request` (or `merge_group`, unused here — this repo has no merge queue).
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-review-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime, development, unknown
+          allow-licenses: >-
+            MIT, MIT-0, ISC, 0BSD, BSD-2-Clause, BSD-2-Clause-Views, BSD-3-Clause,
+            BSD-3-Clause-Clear, Apache-2.0, CC0-1.0, CC-BY-3.0, CC-BY-4.0, Unlicense,
+            BlueOak-1.0.0, Python-2.0, PSF-2.0, Zlib, WTFPL, Artistic-2.0, MPL-1.1, MPL-2.0,
+            LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later
+          allow-dependencies-licenses: >-
+            pkg:npm/vscode-css-languageservice, pkg:npm/parse-statements

@@ -506,7 +506,7 @@ describe('AC-token-build-14 covers: R14', () => {
 })
 
 describe('AC-token-build-31 covers: R31', () => {
-  it('fails loud and would write no manifest when a name about to be recorded is not yet prefixed --nave- (the pre-#204 shape, simulated)', () => {
+  it('fails loud and would write no manifest when a name about to be recorded is not yet prefixed --nave- (simulated)', () => {
     const names = ['--nave-color-a', '--border-width-md']
     expect(() =>
       assertContractPreconditions(
@@ -516,7 +516,7 @@ describe('AC-token-build-31 covers: R31', () => {
     ).toThrow(StaleContractPreconditionError)
   })
 
-  it("fails loud rather than silently shipping a manifest narrower than core's real run-time dependency (the pre-#219 shape, simulated: an old colour-only scan result against a source that also references a non-colour --nave-* property)", () => {
+  it("fails loud rather than silently shipping a manifest narrower than core's real run-time dependency (simulated: an old colour-only scan result against a source that also references a non-colour --nave-* property)", () => {
     const narrowlyScannedNames = ['--nave-color-a'] // as if only the old --nave-color-* pattern had run
     const rawSource = 'color: var(--nave-color-a); outline: var(--nave-spacing-md);'
     expect(() => assertContractPreconditions(narrowlyScannedNames, rawSource)).toThrow(
@@ -524,7 +524,7 @@ describe('AC-token-build-31 covers: R31', () => {
     )
   })
 
-  it('does not fire on a fully-prefixed, fully-scanned set (the post-#204/#219 shape)', () => {
+  it('does not fire on a fully-prefixed, fully-scanned set', () => {
     const names = ['--nave-color-a', '--nave-spacing-md']
     const rawSource = 'color: var(--nave-color-a); outline: var(--nave-spacing-md);'
     expect(() => assertContractPreconditions(names, rawSource)).not.toThrow()
@@ -549,7 +549,7 @@ describe('AC-token-build-31 covers: R31', () => {
    * point and stub only the scan it feeds the guard, so deleting the
    * `assertContractPreconditions(...)` call from `core-source.ts` reddens both.
    */
-  it('AC-token-build-31: the WIRED entry point refuses when the scan it runs returns a set narrower than the source real --nave-* usage (the pre-#219 shape, driven through buildCoreContractManifest rather than the guard in isolation)', async () => {
+  it('AC-token-build-31: the WIRED entry point refuses when the scan it runs returns a set narrower than the source real --nave-* usage (driven through buildCoreContractManifest rather than the guard in isolation)', async () => {
     try {
       const { build, ErrorClass } = await withStubbedScan((actual, paths) =>
         actual.scanCoreContractFromDisk(paths).filter((name) => name.startsWith('--nave-color-')),
@@ -569,7 +569,7 @@ describe('AC-token-build-31 covers: R31', () => {
     }
   })
 
-  it('AC-token-build-31: the WIRED entry point refuses when the scan it runs returns a name that is not yet prefixed --nave- (the pre-#204 shape, driven through buildCoreContractManifest rather than the guard in isolation)', async () => {
+  it('AC-token-build-31: the WIRED entry point refuses when the scan it runs returns a name that is not yet prefixed --nave- (driven through buildCoreContractManifest rather than the guard in isolation)', async () => {
     try {
       const { build, ErrorClass } = await withStubbedScan((actual, paths) => [
         ...actual.scanCoreContractFromDisk(paths),

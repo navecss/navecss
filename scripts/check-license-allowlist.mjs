@@ -376,6 +376,10 @@ export class LicenseEnumeratorError extends Error {}
 export function runLicensesList(extraArgs, cwd = ROOT) {
   let raw
   try {
+    // Spawns `pnpm` by name, resolved via PATH. Accepted: this is a repo-only lint script run
+    // by this repo's own CI/dev workflows, which already control PATH; there is no untrusted
+    // input choosing which `pnpm` runs, and pinning an absolute binary path here would only
+    // trade that for a platform-specific path this script would then have to rediscover anyway.
     raw = execFileSync('pnpm', ['licenses', 'list', ...extraArgs, '--json'], {
       cwd,
       encoding: 'utf8',

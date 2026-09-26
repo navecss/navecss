@@ -482,7 +482,7 @@ describe('SUPPLIED vs MISSING — a name the theming half emits unconditionally 
   ])
 
   it("Nave's OWN bundled DTCG source (declaring none of the six contract names) reports all six SUPPLIED, none MISSING", () => {
-    // The bundled tokens.json declares zero colour tokens (R27/#409's own measurement) —
+    // The bundled tokens.json declares zero colour tokens (R27's own measurement) —
     // reproduced here as an empty DTCG source, since only the name-set matters.
     const notDeclared = computeMissing(realManifest, 'json', JSON.stringify({}))
     expect(notDeclared).toHaveLength(realManifest.tokens.length)
@@ -529,7 +529,7 @@ describe('SUPPLIED vs MISSING — a name the theming half emits unconditionally 
     for (const name of realManifest.tokens) expect(joined).toContain(name)
   })
 
-  it('formatValidateReport with no supplied names (the default) is byte-identical to the pre-#418 output', () => {
+  it('formatValidateReport with no supplied names (the default) is byte-identical to its output before the supplied-names parameter existed', () => {
     const withDefault = formatValidateReport(realManifest, ['--nave-color-x'], undefined)
     const withExplicitEmpty = formatValidateReport(realManifest, ['--nave-color-x'], undefined, {
       status: 'resolved',
@@ -541,5 +541,47 @@ describe('SUPPLIED vs MISSING — a name the theming half emits unconditionally 
 
   it('SEMANTIC_SLOTS sanity: the real slot set is non-empty, so the split above is exercising real data', () => {
     expect(SEMANTIC_SLOTS.length).toBeGreaterThan(0)
+  })
+})
+
+describe('scanDeclaredCustomProperties: linear on hostile CSS, names start where a name starts', () => {
+  it('does not read a `--` inside a longer name as a declaration', () => {
+    expect(scanDeclaredCustomProperties('.btn--primary:hover { color: red; }')).toEqual(new Set())
+  })
+
+  it('does not read a `--` after an underscore or a non-ASCII name character as a declaration', () => {
+    expect(scanDeclaredCustomProperties('.btn_--nave-a:hover { color: red; }')).toEqual(new Set())
+    expect(scanDeclaredCustomProperties('.café--nave-a:hover { color: red; }')).toEqual(new Set())
+  })
+
+  it('still reads a name written after a backslash escape, as before', () => {
+    expect(scanDeclaredCustomProperties(String.raw`\--nave-a: 1;`)).toEqual(new Set(['--nave-a']))
+  })
+
+  it('still reads a declaration whose name begins with more than two dashes', () => {
+    expect(scanDeclaredCustomProperties(':root { ---a: 1; }')).toEqual(new Set(['---a']))
+  })
+
+  it('leaves an unclosed comment and what follows it in place, as before', () => {
+    expect(scanDeclaredCustomProperties('--nave-a: 1; /* --nave-b: 2;')).toEqual(
+      new Set(['--nave-a', '--nave-b']),
+    )
+  })
+
+  // Both shapes took quadratic time under the regex pair this replaced (measured: 40,000 dashes
+  // ~7 s; 80,000 unclosed `/*a` ~3.7 s). A linear scan does either in about a millisecond, so the
+  // bound leaves room for a loaded CI runner without letting the quadratic path through.
+  it('a long run of dashes with no colon after it is scanned in linear time', () => {
+    const hostile = `--${'-'.repeat(60_000)}`
+    const t0 = performance.now()
+    scanDeclaredCustomProperties(hostile)
+    expect(performance.now() - t0).toBeLessThan(1000)
+  })
+
+  it('many unclosed comment openers are stripped in linear time', () => {
+    const hostile = '/*a'.repeat(100_000)
+    const t0 = performance.now()
+    scanDeclaredCustomProperties(hostile)
+    expect(performance.now() - t0).toBeLessThan(1000)
   })
 })

@@ -15,8 +15,8 @@
  * must be an array, every entry must be a non-null, non-array object
  * carrying a non-empty, already-trimmed `id`, and no two entries may
  * share an `id`. The tests below were rewritten rather than trimmed, so
- * every remaining assertion exercises the POST-#365 fixture shape
- * (`{ id }` only) rather than an accidentally-still-passing pre-#365 one.
+ * every remaining assertion exercises the current fixture shape
+ * (`{ id }` only) rather than an accidentally-still-passing older one.
  *
  * Also carries the `scripts:check` CHAIN ORDER assertion at the bottom:
  * this gate must run before its consumer, and
@@ -437,7 +437,7 @@ test('readLicensePolicy prints the cleared invalid-JSON guidance, appended to th
 
 // --- The `scripts:check` chain order ---
 
-test('scripts:check runs the provenance gate BEFORE the allow-list gate (RED against the pre-#43 order)', () => {
+test('scripts:check runs the provenance gate BEFORE the allow-list gate (RED against the earlier order)', () => {
   // Green on this branch by construction: an earlier fix already
   // set the order. Verified red by running this file against origin/main's
   // package.json, which still has the allow-list gate first.
