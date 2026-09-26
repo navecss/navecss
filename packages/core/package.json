@@ -67,6 +67,7 @@
     "@navecss/tokens": "workspace:^"
   },
   "devDependencies": {
+    "@rmenke/css-tokenizer-tests": "1.4.0",
     "@types/node": "^26.6.2",
     "@vitest/browser": "5.0.1",
     "@vitest/browser-playwright": "5.0.1",
