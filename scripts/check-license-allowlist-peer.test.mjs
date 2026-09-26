@@ -21,7 +21,15 @@
  * `stylelint` has here.
  */
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -29,6 +37,7 @@ import { fileURLToPath } from 'node:url'
 
 import {
   flattenLicenseGroups,
+  main,
   peerAndOptionalDependencyNames,
   runLicensesList,
   widenBucketBWithPeers,
@@ -68,26 +77,123 @@ test('an ordinary root devDependency with no peer relationship to any prod packa
   }
 })
 
-test('the real-tree positive control: the gate reds while the policy admits neither MIT-0 nor Python-2.0', () => {
+/**
+ * Runs `main(rootDir, listLicenses)` with console output captured and `process.exitCode`
+ * restored afterwards (it outlives the call and would otherwise fail the whole run).
+ */
+function runGate(rootDir, listLicenses) {
+  const originalError = console.error
+  const originalLog = console.log
+  const originalExitCode = process.exitCode
+  const printed = []
+  console.error = (message) => printed.push(String(message))
+  console.log = (message) => printed.push(String(message))
+  let exitCode
+  try {
+    process.exitCode = undefined
+    main(rootDir, listLicenses)
+    exitCode = process.exitCode
+  } finally {
+    console.error = originalError
+    console.log = originalLog
+    process.exitCode = originalExitCode
+  }
+  return { exitCode, output: printed.join('\n') }
+}
+
+test('the real-tree positive control: the gate names MIT-0 and Python-2.0 while the policy admits neither, and is green once it admits both', () => {
   const policy = JSON.parse(readFileSync(path.join(ROOT, 'license-policy.json'), 'utf8'))
   const admitsMit0 = policy.prodPermissive.some((entry) => entry.id === 'MIT-0')
   const admitsPython2 = policy.prodPermissive.some((entry) => entry.id === 'Python-2.0')
-  // This test's OWN claim is conditional on the landing order (`E-20260925-01` before the
-  // policy entries): once both ids are admitted, the real workspace passes by design, and that
-  // green state is exactly what `check-license-allowlist.test.mjs` and this file's own peer
-  // tests above already hold the gate to. Nothing here re-asserts a red the shipped policy no
-  // longer produces.
-  if (admitsMit0 && admitsPython2) return
+  const { exitCode, output } = runGate(ROOT)
+  // The two ids reach this workspace only through the required `stylelint` peer's own tree, so
+  // which verdict is right depends on whether the policy admits them. The ids were added to the
+  // policy only after their enumeration was recorded, so the green branch is the one the shipped
+  // policy takes; the red branch is what the same gate printed before that entry landed.
+  if (admitsMit0 && admitsPython2) {
+    assert.notEqual(exitCode, 1, output)
+    assert.match(output, /all clear\.$/)
+  } else {
+    assert.equal(exitCode, 1)
+    assert.match(output, /"MIT-0"/)
+    assert.match(output, /"Python-2.0"/)
+  }
+})
 
-  const names = prodPackageNames()
-  assert.ok(names.has('@csstools/selector-specificity') || names.has('argparse'))
+/**
+ * A fixture root for driving `main()` itself: a workspace whose one package declares `p` as an
+ * optional peer, `p` installed at `node_modules/p` with a dependency `p-dep` installed beside
+ * it, and a copy of this repository's policy. The licence listings are supplied by the test in
+ * place of `pnpm licenses list`, shaped as that command prints them, with `--prod` leaving both
+ * packages out: the shape of an optional peer that is also a devDependency of the package
+ * declaring it.
+ */
+function buildPeerClosureFixture({ declarePeer }) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-peer-closure-'))
+  writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'root', private: true }))
+  copyFileSync(path.join(ROOT, 'license-policy.json'), path.join(dir, 'license-policy.json'))
+  mkdirSync(path.join(dir, 'packages', 'pub'), { recursive: true })
+  writeFileSync(
+    path.join(dir, 'packages', 'pub', 'package.json'),
+    JSON.stringify(
+      declarePeer
+        ? {
+            name: 'pub',
+            peerDependencies: { p: '^1.0.0' },
+            peerDependenciesMeta: { p: { optional: true } },
+          }
+        : { name: 'pub' },
+    ),
+  )
+  const installed = {
+    p: { name: 'p', version: '1.0.0', dependencies: { 'p-dep': '^1.0.0' } },
+    'p-dep': { name: 'p-dep', version: '1.0.0' },
+  }
+  for (const [name, manifest] of Object.entries(installed)) {
+    mkdirSync(path.join(dir, 'node_modules', name), { recursive: true })
+    writeFileSync(path.join(dir, 'node_modules', name, 'package.json'), JSON.stringify(manifest))
+  }
+  const entry = (name, license) => ({
+    [license]: [{ name, versions: ['1.0.0'], paths: [path.join(dir, 'node_modules', name)] }],
+  })
+  const listings = {
+    prod: {},
+    all: { ...entry('p', 'GPL-3.0-only'), ...entry('p-dep', 'WTFPL') },
+  }
+  const listLicenses = (extraArgs) => (extraArgs.includes('--prod') ? listings.prod : listings.all)
+  return { dir, listLicenses }
+}
+
+test('main() grades a declared optional peer that --prod left out, with the packages it depends on, as bucket B', () => {
+  const { dir, listLicenses } = buildPeerClosureFixture({ declarePeer: true })
+  try {
+    const { exitCode, output } = runGate(dir, listLicenses)
+    assert.equal(exitCode, 1, output)
+    assert.match(output, /\[bucket B \(prod\)\] p@1\.0\.0: "GPL-3\.0-only"/)
+    assert.match(output, /\[bucket B \(prod\)\] p-dep@1\.0\.0: "WTFPL"/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('main() on the same fixture with the peer declaration removed passes (the control that attributes the red to the peer)', () => {
+  const { dir, listLicenses } = buildPeerClosureFixture({ declarePeer: false })
+  try {
+    const { exitCode, output } = runGate(dir, listLicenses)
+    assert.notEqual(exitCode, 1, output)
+    assert.match(output, /0 prod package\(s\), 2 dev-only package\(s\), all clear\.$/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 /**
  * Bucket B must cover an optional peer and `optionalDependencies`, derived from the workspace
- * manifests, never from `pnpm licenses list --prod`'s own scope alone (that flag's coverage of
- * an optional peer with no other install path is a property of the installed pnpm version,
- * measured to differ between an older pnpm and the one this repository pins).
+ * manifests, never from `pnpm licenses list --prod`'s own scope alone. On the pnpm this
+ * repository pins (10.30.3), an optional peer that the declaring package also lists in its own
+ * `devDependencies` (as `@navecss/core` does with `postcss`) is outside `--prod`, while an
+ * optional peer with no other install path is inside it: which shapes the flag covers is a
+ * property of the package manager, not of this repository.
  */
 
 function buildScratchWorkspace(manifests) {
@@ -143,12 +249,12 @@ test('peerAndOptionalDependencyNames skips a malformed manifest rather than thro
   }
 })
 
-test('widenBucketBWithPeers adds an allPackages entry --prod entirely missed, because its name is a declared peer (the exact older-pnpm gap)', () => {
+test('widenBucketBWithPeers adds an allPackages entry --prod entirely missed, because its name is a declared peer (an optional peer that is also a devDependency)', () => {
   const prodPackages = [{ name: 'stylelint', version: '17.15.0', license: 'MIT' }]
   const allPackages = [
     ...prodPackages,
-    // Not in prodPackages at all: the shape an optional peer with no other install path
-    // produced on the older, measured pnpm.
+    // Not in prodPackages at all: the shape `--prod` gives an optional peer that the declaring
+    // package also lists in its own devDependencies.
     { name: 'optional-peer', version: '1.0.0', license: 'GPL-3.0-only' },
     { name: 'unrelated-dev-tool', version: '1.0.0', license: 'MIT' },
   ]
@@ -166,6 +272,16 @@ test('widenBucketBWithPeers never double-counts an entry --prod already reported
   const allPackages = [...prodPackages]
   const widened = widenBucketBWithPeers(prodPackages, allPackages, new Set(['stylelint']))
   assert.equal(widened.length, 1)
+})
+
+test('peerAndOptionalDependencyNames skips a dangling entry under packages/ rather than aborting', () => {
+  const dir = buildScratchWorkspace({ a: { name: 'a', peerDependencies: { 'a-peer': '^1.0.0' } } })
+  symlinkSync(path.join(dir, 'does-not-exist'), path.join(dir, 'packages', 'dangling'))
+  try {
+    assert.deepEqual([...peerAndOptionalDependencyNames(dir)], ['a-peer'])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test("this repository's own @navecss/core optional peer (postcss) is in the manifest-derived peer set", () => {
