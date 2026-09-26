@@ -1,11 +1,10 @@
 /**
  * Coverage for check-dependabot-commit-scope.mjs, run with Node's built-in test runner.
  *
- * Armed-not-vacuous is the point (a lesson generalised from an earlier finding: a rule existing
- * in source proves it is configured, never that it would fire), so the ARMED tests below
- * reproduce the actual defect this gate exists to catch — a `deps-dev` scope commitlint's
- * scope-enum rejects — and must turn a real pass into a real failure, or this gate is
- * decorative.
+ * Armed-not-vacuous is the point (a rule existing in source proves it is configured, never that it
+ * would fire), so the ARMED tests below reproduce the actual defect this gate exists to catch — a
+ * `deps-dev` scope commitlint's scope-enum rejects — and must turn a real pass into a real
+ * failure, or this gate is decorative.
  */
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -104,11 +103,11 @@ test('extractCommitMessageConfig detects include: scope', () => {
   assert.equal(extractCommitMessageConfig(withIncludeScope).includeScope, true)
 })
 
-// R1: prefix and prefix-development carry DIFFERENT literal values, so a field-swap mutation
-// (prefixMatch and prefixDevMatch assigned to the wrong output field) would flip them and this
-// assertion would catch it. The existing "reads prefix and prefix-development" test above uses
-// the SAME value for both fields, so it cannot: swapping two identical values is invisible.
-test('R1: extractCommitMessageConfig keeps prefix and prefix-development in their own fields', () => {
+// prefix and prefix-development carry DIFFERENT literal values, so a reader that assigned each
+// line's value to the wrong field would flip them and this assertion would catch it. The "reads
+// prefix and prefix-development" test above uses the SAME value for both fields, so it cannot:
+// swapping two identical values is invisible.
+test('extractCommitMessageConfig keeps prefix and prefix-development in their own fields', () => {
   const block = `  - package-ecosystem: 'npm'
     commit-message:
       prefix: 'chore(deps)'
@@ -121,7 +120,7 @@ test('R1: extractCommitMessageConfig keeps prefix and prefix-development in thei
   })
 })
 
-test('R2: extractCommitMessageConfig parses a prefix line carrying a trailing YAML comment', () => {
+test('extractCommitMessageConfig parses a prefix line carrying a trailing YAML comment', () => {
   const block = `  - package-ecosystem: 'npm'
     commit-message:
       prefix: 'chore(deps)' # note
@@ -130,7 +129,7 @@ test('R2: extractCommitMessageConfig parses a prefix line carrying a trailing YA
   assert.equal(extractCommitMessageConfig(block)?.prefix, 'chore(deps)')
 })
 
-test('R3: extractCommitMessageConfig detects include: scope with a trailing comment', () => {
+test('extractCommitMessageConfig detects include: scope with a trailing comment', () => {
   const block = `  - package-ecosystem: 'npm'
     commit-message:
       prefix: 'chore(deps)'
@@ -140,7 +139,7 @@ test('R3: extractCommitMessageConfig detects include: scope with a trailing comm
   assert.equal(extractCommitMessageConfig(block)?.includeScope, true)
 })
 
-test('R4: extractNpmEcosystemBlocks finds an unquoted npm ecosystem line', () => {
+test('extractNpmEcosystemBlocks finds an unquoted npm ecosystem line', () => {
   const yaml = `version: 2
 updates:
   - package-ecosystem: npm
@@ -149,7 +148,7 @@ updates:
   assert.equal(extractNpmEcosystemBlocks(yaml).length, 1)
 })
 
-test('R4: extractNpmEcosystemBlocks finds a double-quoted npm line with a trailing comment', () => {
+test('extractNpmEcosystemBlocks finds a double-quoted npm line with a trailing comment', () => {
   const yaml = `version: 2
 updates:
   - package-ecosystem: "npm" # note
@@ -279,6 +278,17 @@ test('FAILS CLOSED: main() EXITS 1 when the npm entry carries no commit-message 
   assert.match(r.err, /carries no commit-message/)
 })
 
+test('main() EXITS 1 on an entry with prefix but no prefix-development, stating the repo rule rather than claiming inference', async () => {
+  const r = await runMain(
+    fixtureRoot(
+      "version: 2\nupdates:\n  - package-ecosystem: 'npm'\n    directory: '/'\n    commit-message:\n      prefix: 'chore(deps)'\n",
+    ),
+  )
+  assert.equal(r.code, 1)
+  assert.match(r.err, /requires both/)
+  assert.doesNotMatch(r.err, /infers/)
+})
+
 test('end to end: the real repo tree passes today', async () => {
   const r = await runMain(ROOT)
   assert.equal(r.code, 0, r.err)
@@ -286,7 +296,7 @@ test('end to end: the real repo tree passes today', async () => {
 })
 
 /**
-Builds a throwaway repo root with no `.github/dependabot.yml` at all (R6's fixture).
+Builds a throwaway repo root with no `.github/dependabot.yml` at all.
  */
 function fixtureRootMissingDependabot() {
   const dir = mkdtempSync(path.join(tmpdir(), 'dependabot-scope-'))
@@ -301,7 +311,7 @@ function fixtureRootMissingDependabot() {
 
 /**
 Builds a throwaway repo root with the given dependabot.yml text and the EXACT given
-commitlint.config.js source, for R7/R8's malformed-config fixtures.
+commitlint.config.js source, for the malformed-config fixtures.
  */
 function fixtureRootWithCommitlintSource(dependabotYaml, commitlintSource) {
   const dir = mkdtempSync(path.join(tmpdir(), 'dependabot-scope-'))
@@ -329,19 +339,19 @@ updates:
     directory: '/'
 `
 
-test('R5: main() exits 1 when a SECOND npm entry carries the deps-dev defect, and names it', async () => {
+test('main() exits 1 when a SECOND npm entry carries the deps-dev defect, and names it', async () => {
   const r = await runMain(fixtureRoot(TWO_NPM_YAML))
   assert.equal(r.code, 1)
   assert.match(r.err, /packages\/tokens/)
 })
 
-test('R6: main() EXITS 1 refusing to run when .github/dependabot.yml is missing', async () => {
+test('main() EXITS 1 refusing to run when .github/dependabot.yml is missing', async () => {
   const r = await runMain(fixtureRootMissingDependabot())
   assert.equal(r.code, 1)
   assert.match(r.err, /refusing to run/)
 })
 
-test('R7: main() EXITS 1 refusing to run when commitlint.config.js throws on import', async () => {
+test('main() EXITS 1 refusing to run when commitlint.config.js throws on import', async () => {
   const r = await runMain(
     fixtureRootWithCommitlintSource(BASELINE_YAML, "throw new Error('synthetic import failure')\n"),
   )
@@ -349,7 +359,7 @@ test('R7: main() EXITS 1 refusing to run when commitlint.config.js throws on imp
   assert.match(r.err, /refusing to run/)
 })
 
-test('R8: main() EXITS 1 refusing to run when commitlint.config.js exports no type-enum', async () => {
+test('main() EXITS 1 refusing to run when commitlint.config.js exports no type-enum', async () => {
   const r = await runMain(
     fixtureRootWithCommitlintSource(
       BASELINE_YAML,
@@ -360,7 +370,7 @@ test('R8: main() EXITS 1 refusing to run when commitlint.config.js exports no ty
   assert.match(r.err, /refusing to run/)
 })
 
-test('R9: an empty quoted prefix yields a parse violation, not "carries no prefix"', async () => {
+test('an empty quoted prefix yields a parse violation, not "carries no prefix"', async () => {
   const brokenYaml = BASELINE_YAML.replace("prefix: 'chore(deps)'", "prefix: ''")
   const r = await runMain(fixtureRoot(brokenYaml))
   assert.equal(r.code, 1)
@@ -368,7 +378,7 @@ test('R9: an empty quoted prefix yields a parse violation, not "carries no prefi
   assert.match(r.err, /does not parse as/)
 })
 
-test('R10: a `!` breaking-change marker on prefix stays a violation (ruled, not a bug)', async () => {
+test('a `!` breaking-change marker on prefix stays a violation: it would mark every dependency bump as breaking', async () => {
   const brokenYaml = BASELINE_YAML.replace(
     "prefix: 'chore(deps)'\n      prefix-development: 'chore(deps)'",
     "prefix: 'chore(deps)!'\n      prefix-development: 'chore(deps)!'",
@@ -378,9 +388,7 @@ test('R10: a `!` breaking-change marker on prefix stays a violation (ruled, not 
   assert.match(r.err, /does not parse as/)
 })
 
-// --- Round 2 rows -----------------------------------------------------------------------
-
-test('N6: a bare prefix value with trailing blanks and no comment still trims cleanly', () => {
+test('a bare prefix value with trailing blanks and no comment still trims cleanly', () => {
   const block = `  - package-ecosystem: 'npm'
     commit-message:
       prefix: chore(deps)
@@ -393,7 +401,7 @@ test('N6: a bare prefix value with trailing blanks and no comment still trims cl
   })
 })
 
-test('N2: package-ecosystem: npmx is not an npm entry', () => {
+test('package-ecosystem: npmx is not an npm entry', () => {
   const yaml = `version: 2
 updates:
   - package-ecosystem: npmx
@@ -428,7 +436,7 @@ updates:
     directory: '/'
 `
 
-test('NEW-1 Row A: a reordered SECOND npm entry (ecosystem key not first) after a good one is still checked and named', async () => {
+test('a reordered SECOND npm entry (ecosystem key not first) after a good one is still checked and named', async () => {
   const r = await runMain(fixtureRoot(REORDERED_SECOND_NPM_YAML))
   assert.equal(r.code, 1)
   assert.match(r.err, /packages\/tokens/)
@@ -444,7 +452,7 @@ updates:
       prefix-development: 'chore(deps-dev)'
 `
 
-test('NEW-1 Row B: a reordered npm entry ALONE is found and its defect named, not a not-found refusal', async () => {
+test('a reordered npm entry ALONE is found and its defect named, not a not-found refusal', async () => {
   const r = await runMain(fixtureRoot(REORDERED_ALONE_NPM_YAML))
   assert.equal(r.code, 1)
   assert.doesNotMatch(r.err, /refusing to run/)
@@ -455,7 +463,7 @@ const TIMING_BUDGET_MS = 2000
 const TIMING_TEST_TIMEOUT_MS = 5000
 
 test(
-  'R2-1b: 5000 blank lines then a bare "x" line returns within budget (quadratic-but-small at this n)',
+  '5000 blank lines then a bare "x" line returns within budget',
   { timeout: TIMING_TEST_TIMEOUT_MS },
   () => {
     const block = `${'\n'.repeat(5000)}x`
@@ -467,7 +475,7 @@ test(
 )
 
 test(
-  'R2-1a: a 5000-space unclosed-quote prefix line returns within budget, not cubically',
+  'a 5000-space unclosed-quote prefix line returns within budget',
   { timeout: TIMING_TEST_TIMEOUT_MS },
   () => {
     const block = `  - package-ecosystem: 'npm'
@@ -483,7 +491,7 @@ test(
 )
 
 test(
-  'R2-1c: a block with valid prefix lines plus one line of 60_000 blanks then "x" returns within budget',
+  'a block with valid prefix lines plus one line of 60_000 blanks then "x" returns within budget',
   { timeout: TIMING_TEST_TIMEOUT_MS },
   () => {
     const block = `  - package-ecosystem: 'npm'
@@ -500,7 +508,7 @@ ${' '.repeat(60_000)}x
 )
 
 test(
-  'R2-1d: a prefix-development line with 60_000 trailing blanks before a bare tail returns within budget',
+  'a prefix-development line with 60_000 trailing blanks before a bare tail returns within budget',
   { timeout: TIMING_TEST_TIMEOUT_MS },
   () => {
     const block = `  - package-ecosystem: 'npm'
@@ -516,13 +524,13 @@ test(
 )
 
 test(
-  'R2-1e: extractNpmEcosystemBlocks returns within budget when a line of 60_000 blanks then "z" ' +
+  'extractNpmEcosystemBlocks returns within budget when a line of 60_000 blanks then "z" ' +
     'precedes the package-ecosystem line (so isNpmBlock cannot short-circuit on an earlier match)',
   { timeout: TIMING_TEST_TIMEOUT_MS },
   () => {
     // The spam line sits BEFORE the matching package-ecosystem line: isNpmBlock's `.some()`
     // stops at the first matching line, so if the spam line came after a match `.some()` would
-    // never test it and this row would be vacuous regardless of the regex's own cost.
+    // never test it and this test would be vacuous regardless of the regex's own cost.
     const yaml = `version: 2
 updates:
   - directory: '/'

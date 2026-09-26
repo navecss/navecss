@@ -321,9 +321,8 @@ export async function main(rootDir = ROOT) {
     const config = extractCommitMessageConfig(block)
     if (config === null) {
       taggedViolations.push(
-        `${entryLabel}: carries no commit-message.prefix / prefix-development pair. Without ` +
-          "one, Dependabot infers a prefix and a development-dependency bump gets 'deps-dev', " +
-          "a scope commitlint.config.js's scope-enum rejects.",
+        `${entryLabel}: carries no commit-message.prefix / prefix-development pair; this ` +
+          'repository requires both keys, set to the same allowed literal.',
       )
       return
     }

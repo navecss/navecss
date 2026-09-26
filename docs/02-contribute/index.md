@@ -13,7 +13,7 @@
 
 ## The check set
 
-`pnpm run ci:check` runs an 11-step chain (typecheck, lint, test, build, packaging and dependency checks, and the repo-root gates in `scripts/`, in that order); `.github/CONTRIBUTING.md` carries the canonical, gated, ordered list. `pnpm run ci:check:fix` auto-fixes what it can first. Never invoke the underlying linters with ad-hoc flags; the package scripts are the interface.
+`pnpm run ci:check` runs a fixed chain of steps (typecheck, lint, test, build, packaging and dependency checks, and the repo-root gates in `scripts/`, in that order); `.github/CONTRIBUTING.md` carries the canonical, gated, ordered list. `pnpm run ci:check:fix` auto-fixes what it can first. Never invoke the underlying linters with ad-hoc flags; the package scripts are the interface.
 
 ## Invariants every change respects
 
