@@ -17,11 +17,12 @@ const CSS_WIDE_KEYWORDS_SOURCE = 'inherit|initial|unset|revert|revert-layer'
  * A value "consumes a var()" when a var(--...) reference appears anywhere inside it: the plugin
  * has no per-argument view into a function call, so a function admitting one var() reference
  * anywhere admits the whole value, literal siblings included (`light-dark(#fff, var(--x))`
- * passes; documented as a stated limitation in this package's README). Matches CUSTOM
- * properties only (the two-dash prefix), never a bare `var(--x, fallback)` fallback keyword
- * collision.
+ * passes; documented as a stated limitation in this package's README). Matches a call to
+ * `var()` itself whose first argument is a custom property name (the two-dash prefix), with
+ * any whitespace after the opening parenthesis (`var( --x )`). The lookbehind keeps a function
+ * whose name merely ends in `var` (`somevar(--x)`) from counting as one.
  */
-const CONSUMES_VAR_SOURCE = String.raw`var\(--`
+const CONSUMES_VAR_SOURCE = String.raw`(?<![\w-])var\(\s*--`
 
 // Source: CSS Color Module Level 4 (W3C) §6.2's current system-colour keyword list,
 // transcribed from the specification and never read from the plugin. Whole-value,
@@ -82,23 +83,23 @@ const COLOR_VALUE_PATTERN = admit(
 
 // The colour entry itself: `color`, and every property ending `-color` EXCEPT
 // accent-color/caret-color/scrollbar-color (their own entry below, admitting `auto` too) and
-// border-color and its four longhands (their own entry further below). A regex (not an
+// border-color and its four physical longhands (their own entry below). A regex (not an
 // enumerated list) so a future `-color` property is covered by construction.
 //
-// border-color is excluded here for a measured reason, not a stylistic one: `border-color` is
-// itself a CSS shorthand (for its four directional longhands), and `expandShorthand` expands
-// it whenever checking THIS entry too, even though `border-color` never matches this entry's
-// own pattern directly. The plugin then evaluates the declaration against this entry a SECOND
-// time through the expansion path, on top of the direct hit its own dedicated entry (below)
-// already produces, which is a duplicate report R14 forbids. Giving `border-color` and its
-// four longhands their own entry, excluded here, keeps each declaration matched by exactly
-// one entry, as R14 requires.
+// `border-color` is a shorthand the plugin expands (`expandShorthand`) into its four side
+// longhands, and it checks every expanded longhand against each entry that matches it. With
+// those longhands in this entry and a plain `border-color` entry beside it, `border-color: red`
+// is reported twice: once directly, once through the expansion. So the shorthand and its
+// longhands share one entry of their own, excluded here, and each colour property is matched
+// by exactly one entry.
 const COLOR_PROPERTY_PATTERN =
   '/^(?:color|(?!accent-color$|caret-color$|scrollbar-color$|border-(top-|right-|bottom-|left-)?color$)[a-z-]+-color)$/'
 
-// border-color (and, incidentally, its four longhands) gets its own entry rather than folding
-// into COLOR_PROPERTY_PATTERN above, for the reason recorded on that pattern's own comment.
-const BORDER_COLOR_PATTERN = 'border-color'
+// `border-color` and its four physical longhands, one entry sharing the colour allowlist. A
+// plain `'border-color'` string would match that exact property name only, leaving the four
+// longhands, and the side shorthands (`border-top` and the rest) that expand into them,
+// unchecked.
+const BORDER_COLOR_PATTERN = '/^border(-(top|right|bottom|left))?-color$/'
 
 const ACCENT_CARET_SCROLLBAR_PATTERN = '/^(?:accent-color|caret-color|scrollbar-color)$/'
 const ACCENT_CARET_SCROLLBAR_VALUE_PATTERN = admit(
