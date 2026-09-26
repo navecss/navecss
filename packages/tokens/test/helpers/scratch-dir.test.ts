@@ -5,7 +5,8 @@
  * below is a safety net with nothing left to do against this file's own tests by the time it
  * runs, kept because it is the same registration every consuming file carries.
  */
-import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 
@@ -43,15 +44,16 @@ describe('cleanupScratchDirs', () => {
   })
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'still removes a directory tracked after one that cannot be removed, and names the survivor',
+    'still removes the ordinary directories tracked before and after one that cannot be removed, and names the survivor',
     () => {
+      const before = scratchDir('navecss-scratch-dir-helper-before-')
       const unremovable = scratchDir('navecss-scratch-dir-helper-unremovable-')
       const blocked = path.join(unremovable, 'blocked')
       mkdirSync(blocked)
       writeFileSync(path.join(blocked, 'file.txt'), '')
       chmodSync(blocked, 0o555)
 
-      const ordinary = scratchDir('navecss-scratch-dir-helper-ordinary-')
+      const after = scratchDir('navecss-scratch-dir-helper-after-')
 
       try {
         let thrown: unknown
@@ -62,11 +64,13 @@ describe('cleanupScratchDirs', () => {
         }
         expect(thrown).toBeInstanceOf(Error)
         expect((thrown as Error).message).toContain(unremovable)
-        expect(existsSync(ordinary)).toBe(false)
+        expect(existsSync(before)).toBe(false)
+        expect(existsSync(after)).toBe(false)
       } finally {
         chmodSync(blocked, 0o755)
+        rmSync(before, { recursive: true, force: true })
         rmSync(unremovable, { recursive: true, force: true })
-        rmSync(ordinary, { recursive: true, force: true })
+        rmSync(after, { recursive: true, force: true })
       }
     },
   )
@@ -78,14 +82,18 @@ describe('registerScratchCleanup', () => {
     const fresh: typeof ScratchDirModule = await import('./scratch-dir.ts')
     expectTypeOf(fresh.registerScratchCleanup).toBeFunction()
 
-    let leaked: string | undefined
+    const prefix = 'navecss-scratch-dir-helper-unregistered-'
+    const before = readdirSync(tmpdir()).filter((name) => name.startsWith(prefix))
     try {
-      expect(() => {
-        leaked = fresh.scratchDir('navecss-scratch-dir-helper-unregistered-')
-      }).toThrowError(/registerScratchCleanup/)
+      expect(() => fresh.scratchDir(prefix)).toThrowError(/registerScratchCleanup/)
+      const after = readdirSync(tmpdir()).filter((name) => name.startsWith(prefix))
+      expect(after).toEqual(before)
     } finally {
-      if (leaked !== undefined) {
-        rmSync(leaked, { recursive: true, force: true })
+      const leftover = readdirSync(tmpdir()).filter(
+        (name) => name.startsWith(prefix) && !before.includes(name),
+      )
+      for (const name of leftover) {
+        rmSync(path.join(tmpdir(), name), { recursive: true, force: true })
       }
     }
   })

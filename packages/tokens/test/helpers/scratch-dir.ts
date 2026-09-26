@@ -1,13 +1,14 @@
 /**
- * One scratch-directory helper for every `@navecss/tokens` test, shared instead of the near-
- * duplicate mkdtemp-plus-cleanup IMPLEMENTATION each test file's own `scratchDir`/`scratchPackage`/
- * `scratchInstall` function used to carry: those functions remain as thin wrappers over this
- * module, and what was eliminated is the duplicated implementation, not the call sites.
+ * One scratch-directory helper for every `@navecss/tokens` test that needs an OS-temp directory:
+ * it creates each directory and removes it again. Test files that need a shaped scratch tree
+ * (`scratchPackage`, `scratchInstall`, the local `scratchDir` wrappers) build it on top of this
+ * module rather than calling `mkdtempSync` themselves.
  *
  * A file that imports `scratchDir` must call `registerScratchCleanup()` at its own top level
  * first. `scratchDir` refuses to create a directory, throwing and naming `registerScratchCleanup`
- * in its message, until this module instance has one registration; cleanup is opt-in, not
- * automatic, and forgetting to opt in is now a loud failure instead of a silent leak.
+ * in its message, until this module instance has one registration; registration is per file, not
+ * automatic, and a file that forgets it fails on its first `scratchDir` call instead of leaking
+ * its directories.
  *
  * `cleanupScratchDirs` tries to remove every directory `scratchDir` has handed out since the
  * last cleanup, even when some removals throw: a failure on one tracked directory does not stop
@@ -31,14 +32,12 @@ const created: string[] = []
 const cleanupState = { hasRegistered: false }
 
 /**
- * Registers `afterAll(cleanupScratchDirs)` for this module instance, at most once: a second
- * call in the same file is a no-op. Must run before any call to `scratchDir` in that file;
- * `scratchDir` throws, naming this function, if it has not.
+ * Registers `afterAll(cleanupScratchDirs)` for this module instance. Call it once at the file's
+ * top level before any `scratchDir` call; `scratchDir` throws, naming this function, if it has
+ * not been called in this module instance. A second call registers a second hook, which finds
+ * nothing left to remove.
  */
 export function registerScratchCleanup(): void {
-  if (cleanupState.hasRegistered) {
-    return
-  }
   cleanupState.hasRegistered = true
   afterAll(cleanupScratchDirs)
 }
