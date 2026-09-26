@@ -1,0 +1,4 @@
+.button {
+  @nave flex itemsCenter;
+  color: red;
+}
