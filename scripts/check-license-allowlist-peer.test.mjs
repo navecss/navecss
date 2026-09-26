@@ -21,12 +21,18 @@
  * `stylelint` has here.
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { flattenLicenseGroups, runLicensesList } from './check-license-allowlist.mjs'
+import {
+  flattenLicenseGroups,
+  peerAndOptionalDependencyNames,
+  runLicensesList,
+  widenBucketBWithPeers,
+} from './check-license-allowlist.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -75,4 +81,94 @@ test('the real-tree positive control: the gate reds while the policy admits neit
 
   const names = prodPackageNames()
   assert.ok(names.has('@csstools/selector-specificity') || names.has('argparse'))
+})
+
+/**
+ * navecss-cowork#354: bucket B must cover an optional peer and `optionalDependencies`, derived
+ * from the workspace manifests, never from `pnpm licenses list --prod`'s own scope alone (that
+ * flag's coverage of an optional peer with no other install path is a property of the installed
+ * pnpm version, measured to differ between an older pnpm and the one this repository pins).
+ */
+
+function buildScratchWorkspace(manifests) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-peer-manifest-'))
+  mkdirSync(path.join(dir, 'packages'), { recursive: true })
+  for (const [name, manifest] of Object.entries(manifests)) {
+    const packageDir = path.join(dir, 'packages', name)
+    mkdirSync(packageDir, { recursive: true })
+    writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(manifest))
+  }
+  return dir
+}
+
+test('peerAndOptionalDependencyNames collects peerDependencies (required and optional) and optionalDependencies, across every workspace package', () => {
+  const dir = buildScratchWorkspace({
+    a: {
+      name: 'a',
+      peerDependencies: { 'required-peer': '^1.0.0', 'optional-peer': '^1.0.0' },
+      peerDependenciesMeta: { 'optional-peer': { optional: true } },
+    },
+    b: { name: 'b', optionalDependencies: { 'optional-dep': '^1.0.0' } },
+    c: { name: 'c' },
+  })
+  try {
+    const names = peerAndOptionalDependencyNames(dir)
+    assert.deepEqual([...names].sort(), ['optional-dep', 'optional-peer', 'required-peer'].sort())
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('peerAndOptionalDependencyNames also reads the root package.json, and tolerates a missing packages/ directory', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-peer-manifest-root-'))
+  writeFileSync(
+    path.join(dir, 'package.json'),
+    JSON.stringify({ name: 'root', peerDependencies: { 'root-peer': '^1.0.0' } }),
+  )
+  try {
+    assert.deepEqual([...peerAndOptionalDependencyNames(dir)], ['root-peer'])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('peerAndOptionalDependencyNames skips a malformed manifest rather than throwing', () => {
+  const dir = buildScratchWorkspace({ broken: {} })
+  writeFileSync(path.join(dir, 'packages', 'broken', 'package.json'), '{ not json')
+  try {
+    assert.doesNotThrow(() => peerAndOptionalDependencyNames(dir))
+    assert.deepEqual([...peerAndOptionalDependencyNames(dir)], [])
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('widenBucketBWithPeers adds an allPackages entry --prod entirely missed, because its name is a declared peer (the exact older-pnpm gap)', () => {
+  const prodPackages = [{ name: 'stylelint', version: '17.15.0', license: 'MIT' }]
+  const allPackages = [
+    ...prodPackages,
+    // Not in prodPackages at all: the shape an optional peer with no other install path
+    // produced on the older, measured pnpm.
+    { name: 'optional-peer', version: '1.0.0', license: 'GPL-3.0-only' },
+    { name: 'unrelated-dev-tool', version: '1.0.0', license: 'MIT' },
+  ]
+  const widened = widenBucketBWithPeers(prodPackages, allPackages, new Set(['optional-peer']))
+  assert.deepEqual(widened.map((pkg) => pkg.name).sort(), ['optional-peer', 'stylelint'].sort())
+  // The original array is untouched; widenBucketBWithPeers returns a new one.
+  assert.deepEqual(
+    prodPackages.map((pkg) => pkg.name),
+    ['stylelint'],
+  )
+})
+
+test('widenBucketBWithPeers never double-counts an entry --prod already reported', () => {
+  const prodPackages = [{ name: 'stylelint', version: '17.15.0', license: 'MIT' }]
+  const allPackages = [...prodPackages]
+  const widened = widenBucketBWithPeers(prodPackages, allPackages, new Set(['stylelint']))
+  assert.equal(widened.length, 1)
+})
+
+test("this repository's own @navecss/core optional peer (postcss) is in the manifest-derived peer set", () => {
+  const names = peerAndOptionalDependencyNames(ROOT)
+  assert.ok(names.has('postcss'))
 })

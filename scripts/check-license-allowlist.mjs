@@ -23,8 +23,18 @@
  *      by scripts/check-bundling-guard-coverage.mjs). This script does not
  *      re-derive bucket A membership from the licenses list, because
  *      "bundled" is a build-output fact, not a licence-list fact.
- *   B. `dependencies` / `peerDependencies` (pnpm's own `--prod` scope):
- *      permissive only auto-passes (license-policy.json `prodPermissive`,
+ *   B. `dependencies` and `peerDependencies`, INCLUDING a peer declared optional, plus
+ *      `optionalDependencies`. The bucket is keyed on what a consumer can end up installing,
+ *      and a consumer who opts into an optional peer, or who installs `optionalDependencies`,
+ *      installs it on this project's own instruction. Grading this from `pnpm licenses list
+ *      --prod` ALONE was measured to miss an optional peer on an older pnpm; re-measured
+ *      against the pnpm version this repository actually pins, that specific gap was closed,
+ *      which is itself the reason not to rely on the flag alone — its scope is a property of
+ *      the installed package manager, not of this repository, and can drift again without a
+ *      diff here. So this gate unions `--prod`'s own scope with every package named in any
+ *      workspace manifest's `peerDependencies` or `optionalDependencies`
+ *      (`peerAndOptionalDependencyNames`), and grades that union, never the flag's scope alone.
+ *      Permissive only auto-passes (license-policy.json `prodPermissive`,
  *      an array of `{ id }` objects — an earlier revision carried a
  *      per-entry `signedBy`/`finding` field and a top-level `$source`,
  *      both later removed once the policy's provenance was reworked to be
@@ -80,7 +90,7 @@
  *      script cannot make from a licence string and does not attempt to.
  */
 import { execFileSync } from 'node:child_process'
-import { readFileSync, realpathSync } from 'node:fs'
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -473,6 +483,92 @@ export function reportAllowlistViolations(violations) {
 }
 
 /**
+ * Every workspace package manifest (root plus each `packages/*`), read best-effort: a
+ * directory with no readable, parseable `package.json` object is skipped rather than thrown,
+ * because this function's only job is to widen bucket B, never to duplicate the workspace-glob
+ * or manifest-shape gates other scripts already own.
+ */
+function readWorkspaceManifests(rootDir) {
+  const manifests = []
+  const tryRead = (manifestPath) => {
+    try {
+      const parsed = JSON.parse(readFileSync(manifestPath, 'utf8'))
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        manifests.push(parsed)
+      }
+    } catch {
+      // Best-effort: an unreadable or malformed manifest here is caught by a dedicated gate
+      // elsewhere (check-license-parity.mjs, check-publishable-set.mjs); this function only
+      // widens bucket B and must not duplicate that reporting.
+    }
+  }
+
+  tryRead(path.join(rootDir, 'package.json'))
+
+  const packagesDir = path.join(rootDir, 'packages')
+  let entries
+  try {
+    entries = readdirSync(packagesDir)
+  } catch {
+    return manifests
+  }
+  for (const entry of entries) {
+    const dir = path.join(packagesDir, entry)
+    if (!statSync(dir).isDirectory()) continue
+    tryRead(path.join(dir, 'package.json'))
+  }
+  return manifests
+}
+
+/**
+ * Every package NAME declared anywhere in the workspace's `peerDependencies` (required or
+ * optional) or `optionalDependencies`. `swbs` §1 keys bucket B on "what a consumer can end up
+ * installing", and a consumer who opts into an optional peer, or who installs
+ * `optionalDependencies`, installs it on this project's own instruction — the same ground that
+ * makes a REQUIRED peer bucket B, with no separate carve-out for the optional case.
+ *
+ * `pnpm licenses list --prod` was measured (2026-08-29, an older pnpm) to leave an optional
+ * peer with no other install path out of its scope entirely. Re-measured against this
+ * repository's own pinned pnpm (10.30.3): a scratch optional peer with no other install path,
+ * and its own transitive dependencies, now DO appear under `--prod`. That is a property of the
+ * installed pnpm version, which is not this repository's to pin down by reading a flag's
+ * current behaviour once and trusting it forever — the exact drift risk this function exists to
+ * remove. So this gate does not rely on `--prod` alone for these names: every one of them is
+ * unioned into the prod-graded set from the manifests directly, regardless of what any pnpm
+ * version's `--prod` flag does with it this month.
+ */
+export function peerAndOptionalDependencyNames(rootDir = ROOT) {
+  const names = new Set()
+  for (const manifest of readWorkspaceManifests(rootDir)) {
+    for (const name of Object.keys(manifest.peerDependencies ?? {})) names.add(name)
+    for (const name of Object.keys(manifest.optionalDependencies ?? {})) names.add(name)
+  }
+  return names
+}
+
+/**
+ * Bucket B's real subject: `prodPackages` (whatever `--prod` already reported) UNIONED with
+ * every `allPackages` entry whose name is in `peerOrOptionalNames`, even one `--prod` left out
+ * entirely. A pure function, deliberately taking its three inputs as plain data rather than
+ * calling `runLicensesList`/`peerAndOptionalDependencyNames` itself, so a test can drive it
+ * with a synthetic `allPackages` that has no matching `--prod` entry at all — the exact shape
+ * an older pnpm produces for an optional peer with no other install path, and the shape this
+ * function exists to grade correctly regardless of which pnpm produced `prodPackages`.
+ */
+export function widenBucketBWithPeers(prodPackages, allPackages, peerOrOptionalNames) {
+  const prodKeys = new Set(prodPackages.map((pkg) => `${pkg.name}@${pkg.version}`))
+  const widened = [...prodPackages]
+  for (const pkg of allPackages) {
+    const key = `${pkg.name}@${pkg.version}`
+    if (!prodKeys.has(key) && peerOrOptionalNames.has(pkg.name)) {
+      prodKeys.add(key)
+      widened.push(pkg)
+    }
+  }
+  return widened
+}
+
+/**
  * Classifies every prod and dev-only package licence in the pnpm project at `rootDir` against
  * that tree's `license-policy.json`, printing the composed red-run message and setting a
  * non-zero exit code on any violation.
@@ -514,6 +610,11 @@ export function main(rootDir = ROOT) {
     return
   }
 
+  prodPackages = widenBucketBWithPeers(
+    prodPackages,
+    allPackages,
+    peerAndOptionalDependencyNames(rootDir),
+  )
   const prodKeys = new Set(prodPackages.map((pkg) => `${pkg.name}@${pkg.version}`))
   const devOnlyPackages = allPackages.filter((pkg) => !prodKeys.has(`${pkg.name}@${pkg.version}`))
 
