@@ -6,8 +6,10 @@
   // up implicitly (same convention as a `.d.ts` beside a `.js` file in node_modules); knip's
   // static import analysis has no import statement to see it through and flags it dead,
   // which it is not — declaration-only files with no runtime code are never "imported" in
-  // the sense knip's default entry heuristic checks for `scripts/*.mjs`.
-  "ignore": ["scripts/check-license-allowlist.d.mts"],
+  // the sense knip's default entry heuristic checks for `scripts/*.mjs`. Same shape for
+  // `check-publishable-set.d.mts`, co-located for `packages/stylelint-config/test`'s own
+  // `.ts` import of `PUBLISHABLE_SET`.
+  "ignore": ["scripts/check-license-allowlist.d.mts", "scripts/check-publishable-set.d.mts"],
   // Every package's `check:pack` script runs `publint`/`attw` through
   // `node ../../scripts/without-dry-run.mjs <bin> ...` rather than invoking the binary as the
   // script's first token, so knip's script-string heuristic (which looks for a known binary

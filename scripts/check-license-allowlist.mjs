@@ -23,8 +23,18 @@
  *      by scripts/check-bundling-guard-coverage.mjs). This script does not
  *      re-derive bucket A membership from the licenses list, because
  *      "bundled" is a build-output fact, not a licence-list fact.
- *   B. `dependencies` / `peerDependencies` (pnpm's own `--prod` scope):
- *      permissive only auto-passes (license-policy.json `prodPermissive`,
+ *   B. `dependencies` and `peerDependencies`, INCLUDING a peer declared optional, plus
+ *      `optionalDependencies`. The bucket is keyed on what a consumer can end up installing:
+ *      a consumer who opts into an optional peer installs it on this project's own
+ *      instruction, and an `optionalDependencies` entry is one a consumer can receive with the
+ *      package that declares it. `pnpm licenses list --prod` is NARROWER than that set: on
+ *      the pnpm this repository pins (10.30.3), an optional peer that the declaring package
+ *      also lists in its own `devDependencies` (as `@navecss/core` does with `postcss`) is
+ *      left out of the `--prod` scope. So this gate unions the `--prod` scope with every
+ *      package named in a workspace manifest's `peerDependencies` or `optionalDependencies`
+ *      (`peerAndOptionalDependencyNames`). The union takes each named package with the
+ *      packages it depends on. The bucket is not narrowed to fit what one command can see.
+ *      Permissive only auto-passes (license-policy.json `prodPermissive`,
  *      an array of `{ id }` objects — an earlier revision carried a
  *      per-entry `signedBy`/`finding` field and a top-level `$source`,
  *      both later removed once the policy's provenance was reworked to be
@@ -80,7 +90,7 @@
  *      script cannot make from a licence string and does not attempt to.
  */
 import { execFileSync } from 'node:child_process'
-import { readFileSync, realpathSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -116,14 +126,22 @@ export function parseLicensesJson(rawOutput) {
 
 /**
  * Flattens `pnpm licenses list --json` output (license string -> package
- * entries) into `{ name, version, license }` records.
+ * entries) into `{ name, version, license }` records, each carrying the
+ * installed directory as `path` too where the listing reports one (its
+ * `paths` array runs parallel to `versions`).
  */
 export function flattenLicenseGroups(licensesJson) {
   const packages = []
   for (const [license, entries] of Object.entries(licensesJson)) {
     for (const entry of entries) {
-      for (const version of entry.versions ?? ['unknown']) {
-        packages.push({ name: entry.name, version, license })
+      const versions = entry.versions ?? ['unknown']
+      for (const [index, version] of versions.entries()) {
+        const installedPath = entry.paths?.[index]
+        packages.push(
+          typeof installedPath === 'string'
+            ? { name: entry.name, version, license, path: installedPath }
+            : { name: entry.name, version, license },
+        )
       }
     }
   }
@@ -477,6 +495,174 @@ export function reportAllowlistViolations(violations) {
 }
 
 /**
+ * Every workspace package manifest (root plus each `packages/*`), read best-effort: a
+ * directory with no readable, parseable `package.json` object is skipped rather than thrown,
+ * because this function's only job is to widen bucket B, never to duplicate the workspace-glob
+ * or manifest-shape gates other scripts already own.
+ */
+function readWorkspaceManifests(rootDir) {
+  const manifests = []
+  const tryRead = (manifestPath) => {
+    try {
+      const parsed = JSON.parse(readFileSync(manifestPath, 'utf8'))
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        manifests.push(parsed)
+      }
+    } catch {
+      // Best-effort: an unreadable or malformed manifest here is caught by a dedicated gate
+      // elsewhere (check-license-parity.mjs, check-publishable-set.mjs); this function only
+      // widens bucket B and must not duplicate that reporting.
+    }
+  }
+
+  tryRead(path.join(rootDir, 'package.json'))
+
+  const packagesDir = path.join(rootDir, 'packages')
+  let entries
+  try {
+    entries = readdirSync(packagesDir)
+  } catch {
+    return manifests
+  }
+  for (const entry of entries) {
+    const dir = path.join(packagesDir, entry)
+    let isDirectory
+    try {
+      isDirectory = statSync(dir).isDirectory()
+    } catch {
+      // Best-effort, as tryRead: a dangling link or an entry that vanished is skipped.
+      continue
+    }
+    if (isDirectory) tryRead(path.join(dir, 'package.json'))
+  }
+  return manifests
+}
+
+/**
+ * Every package NAME declared anywhere in the workspace's `peerDependencies` (required or
+ * optional) or `optionalDependencies`. Bucket B is keyed on what a consumer can end up
+ * installing, and a consumer who opts into an optional peer installs it on this project's own
+ * instruction, the same ground that makes a required peer bucket B.
+ *
+ * `pnpm licenses list --prod` does not cover every such name: on the pnpm this repository pins
+ * (10.30.3), an optional peer that the declaring package also lists in its own
+ * `devDependencies` (`@navecss/core`'s `postcss`) is left out of its scope, while an optional
+ * peer with no other install path is in it. Which shapes that flag covers is a property of the
+ * package manager, not of this repository, so these names are read from the manifests.
+ */
+export function peerAndOptionalDependencyNames(rootDir = ROOT) {
+  const names = new Set()
+  for (const manifest of readWorkspaceManifests(rootDir)) {
+    for (const name of Object.keys(manifest.peerDependencies ?? {})) names.add(name)
+    for (const name of Object.keys(manifest.optionalDependencies ?? {})) names.add(name)
+  }
+  return names
+}
+
+/**
+ * The installed directory of `dependencyName` as seen from the package installed at
+ * `packageDir`, found the way Node resolves a bare specifier: `node_modules/<name>` in that
+ * directory and then in each ancestor, skipping ancestors that are themselves a `node_modules`
+ * directory. Reads the realpath first, so a package reached through pnpm's symlinked layout
+ * resolves its dependencies from its own store entry, where pnpm places them. `undefined` when
+ * nothing is installed under that name.
+ */
+function installedDependencyDir(packageDir, dependencyName) {
+  let dir
+  try {
+    dir = realpathSync(packageDir)
+  } catch {
+    return undefined
+  }
+  for (;;) {
+    if (path.basename(dir) !== 'node_modules') {
+      const candidate = path.join(dir, 'node_modules', dependencyName)
+      if (existsSync(path.join(candidate, 'package.json'))) return candidate
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir) return undefined
+    dir = parent
+  }
+}
+
+/**
+ * The parsed `package.json` object installed at `packageDir`, or `undefined` when there is none
+ * or it is not a JSON object.
+ */
+function readInstalledManifest(packageDir) {
+  try {
+    const parsed = JSON.parse(readFileSync(path.join(packageDir, 'package.json'), 'utf8'))
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The `name@version` keys of every package in the dependency closure, as installed, of each
+ * `allPackages` entry named in `names`: the named package itself, then its `dependencies`,
+ * `optionalDependencies` and `peerDependencies`, transitively, each resolved from the directory
+ * the package is installed in. A peer is followed only where one is installed, which is where
+ * a consumer can end up with it too. An entry with no installed `path` contributes itself only.
+ */
+export function installedDependencyClosure(allPackages, names) {
+  const keys = new Set()
+  const queue = []
+  for (const pkg of allPackages) {
+    if (!names.has(pkg.name)) continue
+    keys.add(`${pkg.name}@${pkg.version}`)
+    if (pkg.path) queue.push(pkg.path)
+  }
+  const visited = new Set()
+  while (queue.length > 0) {
+    const packageDir = queue.shift()
+    if (visited.has(packageDir)) continue
+    visited.add(packageDir)
+    const manifest = readInstalledManifest(packageDir)
+    if (manifest === undefined) continue
+    const dependencyNames = [
+      ...Object.keys(manifest.dependencies ?? {}),
+      ...Object.keys(manifest.optionalDependencies ?? {}),
+      ...Object.keys(manifest.peerDependencies ?? {}),
+    ]
+    for (const dependencyName of dependencyNames) {
+      const dependencyDir = installedDependencyDir(packageDir, dependencyName)
+      if (dependencyDir === undefined) continue
+      const dependency = readInstalledManifest(dependencyDir)
+      if (dependency === undefined) continue
+      keys.add(`${dependency.name}@${dependency.version}`)
+      queue.push(dependencyDir)
+    }
+  }
+  return keys
+}
+
+/**
+ * Bucket B's real subject: `prodPackages` (whatever `--prod` already reported) UNIONED with
+ * every `allPackages` entry in the installed dependency closure of a name in
+ * `peerOrOptionalNames` (`installedDependencyClosure`), even one `--prod` left out entirely.
+ * Takes the listings and the names as plain data rather than calling
+ * `runLicensesList`/`peerAndOptionalDependencyNames` itself, so a test can drive it with a
+ * synthetic `allPackages` that has no matching `--prod` entry at all: the shape `--prod` gives
+ * an optional peer that the declaring package also lists in its own `devDependencies`.
+ */
+export function widenBucketBWithPeers(prodPackages, allPackages, peerOrOptionalNames) {
+  const closure = installedDependencyClosure(allPackages, peerOrOptionalNames)
+  const prodKeys = new Set(prodPackages.map((pkg) => `${pkg.name}@${pkg.version}`))
+  const widened = [...prodPackages]
+  for (const pkg of allPackages) {
+    const key = `${pkg.name}@${pkg.version}`
+    if (!prodKeys.has(key) && closure.has(key)) {
+      prodKeys.add(key)
+      widened.push(pkg)
+    }
+  }
+  return widened
+}
+
+/**
  * Classifies every prod and dev-only package licence in the pnpm project at `rootDir` against
  * that tree's `license-policy.json`, printing the composed red-run message and setting a
  * non-zero exit code on any violation.
@@ -487,8 +673,14 @@ export function reportAllowlistViolations(violations) {
  * a `main()` that stops calling the reporter entirely prints nothing on either stream and
  * still exits 1: the composed-output anchor cannot see it, because it calls the reporter
  * itself.
+ *
+ * `listLicenses` is the licence enumerator, `runLicensesList` unless a test supplies listings of
+ * its own, shaped as `pnpm licenses list --json` prints them. It takes the same
+ * `(extraArgs, rootDir)` arguments, so a test can drive this function, and so the wiring from
+ * the listings through bucket B's widening to the verdict, over package shapes a real install
+ * cannot be made to produce on demand.
  */
-export function main(rootDir = ROOT) {
+export function main(rootDir = ROOT, listLicenses = runLicensesList) {
   const policy = readLicensePolicy(rootDir)
   if (policy === undefined) {
     process.exitCode = 1
@@ -509,8 +701,8 @@ export function main(rootDir = ROOT) {
   let prodPackages
   let allPackages
   try {
-    prodPackages = flattenLicenseGroups(runLicensesList(['--prod'], rootDir))
-    allPackages = flattenLicenseGroups(runLicensesList([], rootDir))
+    prodPackages = flattenLicenseGroups(listLicenses(['--prod'], rootDir))
+    allPackages = flattenLicenseGroups(listLicenses([], rootDir))
   } catch (error) {
     if (!(error instanceof LicenseEnumeratorError)) throw error
     console.error(composeLicenseEnumeratorUnrunnableMessage(error.message))
@@ -518,6 +710,11 @@ export function main(rootDir = ROOT) {
     return
   }
 
+  prodPackages = widenBucketBWithPeers(
+    prodPackages,
+    allPackages,
+    peerAndOptionalDependencyNames(rootDir),
+  )
   const prodKeys = new Set(prodPackages.map((pkg) => `${pkg.name}@${pkg.version}`))
   const devOnlyPackages = allPackages.filter((pkg) => !prodKeys.has(`${pkg.name}@${pkg.version}`))
 

@@ -216,6 +216,8 @@ export default defineConfig([
       'commitlint.config.js',
       '**/vitest.config.ts',
       '**/tsup.config.ts',
+      'stylelint.outline-guard.mjs',
+      'packages/stylelint-config/index.js',
     ],
     rules: {
       'no-restricted-syntax': 'off',

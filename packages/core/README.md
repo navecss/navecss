@@ -250,6 +250,57 @@ failure, not a silently incomplete build):
 
 ---
 
+## Editor, linter and coding agent
+
+`@nave` is new to these tools, so each one needs a step, and this package ships what each of
+them reads.
+
+**VS Code.** This package ships a data file that declares `@nave` to the CSS language service:
+
+```json
+{ "css.customData": ["./node_modules/@navecss/core/nave.css-data.json"] }
+```
+
+In a monorepo, the path is relative to the folder you open, so it goes through the
+`node_modules` of the package that depends on `@navecss/core`. VS Code reads the file at
+startup, so reload the window once it is installed.
+
+**Stylelint.** To have `@nave` accepted without disabling `at-rule-no-unknown` for anything
+else, declare it under `languageOptions.syntax.atRules`:
+
+```json
+{ "languageOptions": { "syntax": { "atRules": { "nave": { "prelude": "<custom-ident>+" } } } } }
+```
+
+This needs stylelint 16.17.0 or later. `@navecss/stylelint-config`'s own peer range is
+`^17.0.0`; the two are stated separately because the config does more than this one line, and
+this line works on its own, with no config installed, from 16.17.0 on. For a check that values
+on a list of properties (colour, spacing and others) use a `var()` or an admitted keyword, extend
+[`@navecss/stylelint-config`](https://github.com/navecss/navecss/tree/main/packages/stylelint-config#readme)
+beside this line; it never replaces it.
+
+**Coding agents.** This package ships a guide for coding agents at `skills/navecss/SKILL.md`:
+the built-in atoms, the custom properties this build emits, the layer order, and where consumer
+CSS goes, for the version you have installed. No agent looks inside `node_modules` on its own,
+so add a pointer to your own `AGENTS.md` (and to `CLAUDE.md` too if you have one, since Claude
+Code reads `AGENTS.md` only where there is no `CLAUDE.md`):
+
+```md
+## Styling: NaveCSS
+
+Before writing or changing CSS or a `className`, read
+`node_modules/@navecss/core/skills/navecss/SKILL.md`, resolved from the
+package that depends on `@navecss/core`. The Nave custom properties and
+built-in atoms it lists are the only ones there are. Atoms this project
+registers through `navePlugin({ extend })` are valid too, in `@nave` only,
+never in `cx()`. If a name you need is in neither place, say so rather
+than invent one.
+```
+
+Consumers of `@navecss/tokens` alone get no guide: it ships only in this package.
+
+---
+
 ## Exports
 
 | Export                    | Description                                                                                           |
