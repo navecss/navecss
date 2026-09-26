@@ -233,14 +233,16 @@ export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
  * comment per line would refuse a line the check reads in full, which is the one thing the
  * refusal above tells its reader it is not doing.
  *
- * The MIRROR of that shape is the subset case, and it is now refused rather than recorded: a
- * carrying line that opens a comment delimiter of its own while a comment opened on an
- * EARLIER line is still unclosed. It looks self-contained, so both checks above pass it, but
+ * The MIRROR of that shape is the subset case: a carrying line that opens a comment delimiter
+ * of its own while a comment opened on an EARLIER line is still unclosed. It is now refused
+ * rather than recorded wherever the comment tracker described below finds it, and that tracker
+ * is not a CSS parser (what it models is set out below). Such a line looks self-contained, so
+ * both checks above pass it, but
  * CSS comments do not nest, so the reader is inside the earlier comment and the text this
  * check reads is a SUBSET of the comment they see. The live route was real and cheap: drop
  * the closing delimiter from the two-line `color-scheme` note three lines above the notice in
  * `emit.ts`, and this guard stayed silent while `dist/tokens.css` shipped that note and the
- * notice as one comment, conformance claim and all. A single pass over the emitted lines now
+ * notice as one comment, conformance claim and all. A scan of the emitted lines now
  * tracks whether each line BEGINS inside an open comment, and a carrying line that does throws
  * the not-self-contained refusal above, byte for byte and unchanged: the reader's act is
  * identical (put the notice and the rest of its comment on one line, in `emit.ts`), so a second
@@ -258,9 +260,13 @@ export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
  * bad-string token to the end of the line, so a comment opener after it is string content to a
  * parser, while a reader can take the quote as stray and see that opener open a comment. Where
  * the check cannot tell which of those a reader takes, the requirement above says refuse, so
- * the tracker follows three readings of such a line (set out in `comment-open-tracker.ts`) and
- * reports a line as beginning inside a comment if any of them does. That can only add a
- * refusal to what the tokenizer's reading alone would give, never remove one. It stays
+ * the tracker follows three readings of such a line, plus two that also treat an unquoted
+ * `url()` token's content as opaque up to its closing parenthesis, even on a later line, one of
+ * them also carrying a string continued by an escaped line break onto the next line. What it
+ * models is comment delimiters, quoted strings and unquoted `url()` tokens, on lines split at
+ * each line feed. All five readings are set out in `comment-open-tracker.ts`, and a line is
+ * reported as beginning inside a comment if any of them does. That can only add a refusal to
+ * what the tokenizer's reading alone would give, never remove one. It stays
  * quote-blind while inside a comment, because a real CSS comment closes at the first literal
  * closing delimiter regardless of quoting, and tracking quotes there would risk exactly the
  * silent pass this tracker exists to prevent.
