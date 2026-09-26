@@ -2,7 +2,7 @@ import type { Diagnostic } from './diagnostics-types.ts'
 import type { ExtendMap } from './resolve.ts'
 
 /**
- * R6: the diagnostic texts, owned by the core (#566). Every host prints
+ * R6: the diagnostic texts, owned by the core. Every host prints
  * these bodies unchanged apart from its own prefix and frame.
  */
 import { atomClassMap, type AtomDefinition, atoms } from '../atoms.ts'
