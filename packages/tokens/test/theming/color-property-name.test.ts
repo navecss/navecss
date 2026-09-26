@@ -293,8 +293,11 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
     ).toBe(true)
   })
 
-  it('compiles against ES2022 only: a DOM type is not in scope, so the DOM lib stays out of every probe', () => {
-    const diagnostics = compileProbe(`export const el: HTMLElement | undefined = undefined\n`)
+  it('compiles against ES2022 only: a DOM type is not in scope, with dist/tokens.d.ts loaded, so the DOM lib stays out of every probe', () => {
+    const diagnostics = compileProbe(
+      `import type { ColorPropertyName } from './tokens.js'\n` +
+        `export const el: HTMLElement | ColorPropertyName | undefined = undefined\n`,
+    )
     expect(diagnostics.some((m) => m.includes("Cannot find name 'HTMLElement'"))).toBe(true)
   })
 })
