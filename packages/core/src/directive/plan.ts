@@ -11,6 +11,8 @@ import { anchorSelectorList } from '../selector-utils.ts'
 import { type PreludeComponent, readPreludeComponents } from './prelude-components.ts'
 import { type Declaration, type ExtendMap, resolve, type ResolvedBlock } from './resolve.ts'
 
+export type { Declaration } from './resolve.ts'
+
 export interface PlanContext {
   readonly isStyleRuleParent: boolean
   readonly isInsideKeyframes: boolean
@@ -18,7 +20,7 @@ export interface PlanContext {
 }
 
 export interface PlanOptions {
-  readonly extend?: ExtendMap
+  readonly extend?: ExtendMap | undefined
 }
 
 export interface AnchoredPseudoBlock {
@@ -110,7 +112,7 @@ function planNames(prelude: string, options: PlanOptions): PlanResult {
   const declarations: Declaration[] = []
   const blocks: AnchoredBlock[] = []
   for (const name of names) {
-    const atom = resolved[name]
+    const atom = Object.hasOwn(resolved, name) ? resolved[name] : undefined
     if (!atom) continue
     declarations.push(...atom.declarations)
     blocks.push(...atom.blocks.map((block) => anchorBlock(block)))
