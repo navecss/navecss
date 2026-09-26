@@ -31,10 +31,17 @@ describe('AC-consumer-constraints-30 covers: R19', () => {
     ).not.toThrow()
   })
 
-  const ADR_FILE = readdirSync(ADR_DIR).find((f) => f.startsWith('0008-'))
+  // Found by its slug, never by its number: a number is taken by whichever record merges first.
+  const RELEASE_TOPOLOGY_FILES = readdirSync(ADR_DIR).filter((f) =>
+    /^\d{4}-release-topology\.md$/.test(f),
+  )
+  const ADR_FILE = RELEASE_TOPOLOGY_FILES[0]
 
-  it('the ADR numbered 0008 is the release-topology record', () => {
-    expect(ADR_FILE).toBe('0008-release-topology.md')
+  it('exactly one ADR is the release-topology record, and its heading carries its filename number', () => {
+    expect(RELEASE_TOPOLOGY_FILES).toHaveLength(1)
+    const number = ADR_FILE!.slice(0, 4)
+    const content = readFileSync(path.join(ADR_DIR, ADR_FILE!), 'utf8')
+    expect(content).toMatch(new RegExp(`^# ${number} `, 'm'))
   })
 
   it('its Decision states the fixed pair and that this package versions independently, with the reason', () => {
@@ -65,8 +72,9 @@ describe('AC-consumer-constraints-30 covers: R19', () => {
     expect(context).toContain('governs versioning and tagging, not publishing')
   })
 
-  it('the ADR index lists the new record', () => {
+  it('the ADR index links the record under its own number', () => {
     const index = readFileSync(path.join(ADR_DIR, 'index.md'), 'utf8')
-    expect(index).toMatch(/release topology/i)
+    const number = ADR_FILE!.slice(0, 4)
+    expect(index).toContain(`[${number}](${ADR_FILE})`)
   })
 })
