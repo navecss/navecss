@@ -6,11 +6,12 @@
  * Dependabot infers a conventional-commit-shaped prefix from the repository's own history when
  * `.github/dependabot.yml` sets none, and for a development-dependency update that inferred
  * prefix is `chore(deps-dev)` — a scope `commitlint.config.js`'s `scope-enum` does not list
- * (only `deps` is). Nothing catches this before merge: Dependabot commits via the GitHub API,
- * never through a local `git commit`, so the `commit-msg` hook that would reject the same
- * subject from a human author never runs against it. `pr-title.yml` does check the pull
- * request title, which a squash merge lands as the commit subject, but it sets no `scopes:`
- * list, so it accepts `deps-dev` there too.
+ * (only `deps` is). Before this was fixed where Dependabot writes it, nothing stopped that
+ * subject reaching `main`: Dependabot commits via the GitHub API, never through a local
+ * `git commit`, so the `commit-msg` hook never runs against it, and `pr-title.yml` accepted any
+ * scope. `pr-title.yml` now holds the title to the same lists
+ * (`scripts/check-pr-title-scopes.mjs`), but it is not a required check and never sees the
+ * commits a rebase merge lands, so the prefix is still fixed at its source.
  *
  * The fix lives in `.github/dependabot.yml`'s `commit-message` block: `prefix` AND
  * `prefix-development` set to the SAME literal string (deliberately not `include: scope`, which
@@ -256,6 +257,38 @@ function labelNpmEntry(block, ordinal) {
 }
 
 /**
+ * Reads `commitlint.config.js`'s own `type-enum`/`scope-enum` arrays back out of `rootDir` — the
+ * canonical lists this gate compares Dependabot's prefix against, and the same lists
+ * `scripts/check-pr-title-scopes.mjs` compares the PR-title workflow's `types:`/`scopes:` inputs
+ * against, imported live in both places rather than restated, so neither caller can drift from
+ * commitlint silently. Returns `{ typeEnum, scopeEnum }`. Throws a plain `Error` (a message with
+ * no gate-specific prefix, since each caller names its own gate) when `commitlint.config.js`
+ * cannot be imported, or does not export non-empty `rules['type-enum'][2]` /
+ * `rules['scope-enum'][2]` arrays — the caller's own fail-closed signal.
+ */
+export async function readCommitlintEnums(rootDir) {
+  const commitlintPath = path.join(rootDir, 'commitlint.config.js')
+
+  let commitlintModule
+  try {
+    commitlintModule = await import(pathToFileURL(commitlintPath).href)
+  } catch (error) {
+    throw new Error(`Could not import ${commitlintPath} (${error.message}).`)
+  }
+
+  const typeEnum = commitlintModule.default?.rules?.['type-enum']?.[2] ?? []
+  const scopeEnum = commitlintModule.default?.rules?.['scope-enum']?.[2] ?? []
+  if (typeEnum.length === 0 || scopeEnum.length === 0) {
+    throw new Error(
+      `${commitlintPath} does not export the expected rules['type-enum'][2] / ` +
+        "rules['scope-enum'][2] arrays.",
+    )
+  }
+
+  return { typeEnum, scopeEnum }
+}
+
+/**
  * Runs the gate against `rootDir` (defaults to this repository's own root; a parameter so a
  * test can drive it over a scratch tree). Reads `.github/dependabot.yml` and
  * `commitlint.config.js`, verifies EVERY npm ecosystem entry's `commit-message` block per
@@ -265,7 +298,6 @@ function labelNpmEntry(block, ordinal) {
  */
 export async function main(rootDir = ROOT) {
   const dependabotPath = path.join(rootDir, '.github', 'dependabot.yml')
-  const commitlintPath = path.join(rootDir, 'commitlint.config.js')
 
   let dependabotText
   try {
@@ -290,27 +322,11 @@ export async function main(rootDir = ROOT) {
     return
   }
 
-  let commitlintModule
+  let commitlintRules
   try {
-    commitlintModule = await import(pathToFileURL(commitlintPath).href)
+    commitlintRules = await readCommitlintEnums(rootDir)
   } catch (error) {
-    console.error(
-      `Dependabot commit-scope gate: refusing to run. Could not import ${commitlintPath} ` +
-        `(${error.message}).`,
-    )
-    process.exitCode = 1
-    return
-  }
-
-  const commitlintRules = {
-    typeEnum: commitlintModule.default?.rules?.['type-enum']?.[2] ?? [],
-    scopeEnum: commitlintModule.default?.rules?.['scope-enum']?.[2] ?? [],
-  }
-  if (commitlintRules.typeEnum.length === 0 || commitlintRules.scopeEnum.length === 0) {
-    console.error(
-      `Dependabot commit-scope gate: refusing to run. ${commitlintPath} does not export the ` +
-        "expected rules['type-enum'][2] / rules['scope-enum'][2] arrays.",
-    )
+    console.error(`Dependabot commit-scope gate: refusing to run. ${error.message}`)
     process.exitCode = 1
     return
   }
