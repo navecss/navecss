@@ -561,6 +561,10 @@ function tarballEntries(parsed) {
  * Throws on anything it cannot make sense of; the caller turns that into a loud violation.
  */
 function listPackedFiles(packageDir) {
+  // Spawns `npm` by name, resolved via PATH. Accepted: this is a repo-only build guard run by
+  // this repo's own CI/dev workflows, which already control PATH; there is no untrusted input
+  // choosing which `npm` runs, and pinning an absolute binary path here would only trade that
+  // for a platform-specific path this script would then have to rediscover anyway.
   const raw = execFileSync('npm', ['pack', '--dry-run', '--json'], {
     cwd: packageDir,
     encoding: 'utf8',

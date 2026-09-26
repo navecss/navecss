@@ -33,6 +33,10 @@ const ADR_DIR = path.join(ROOT, 'docs', '04-adr')
  * regex-based parse rather than a full YAML parser (no new dependency).
  */
 export function parseFrontmatter(text) {
+  // Anchored, lazy scan to a required literal closer: no nested or ambiguous quantifier to
+  // backtrack on. Runs only over this repository's own tracked `docs/04-adr/` files as a
+  // build-time guard, never over external input. Structurally safe and not consumer-reachable;
+  // accepted.
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
   if (!match) return { fields: {}, body: text }
   const fields = {}
@@ -139,6 +143,8 @@ export function checkStatusRules(adrs, byId) {
       continue
     }
     if (!ADR_STATUS.has(adr.status)) {
+      // Plain `.sort()`: code-unit order is the same on every CI runner, where `localeCompare`
+      // would follow the runner's locale.
       problems.push(
         `${adr.filename}: status '${adr.status}' not in the set ${[...ADR_STATUS].sort().join(', ')}`,
       )
