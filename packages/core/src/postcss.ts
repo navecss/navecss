@@ -44,10 +44,12 @@ import postcss from 'postcss'
 import type { AtomDefinition } from './atoms.ts'
 import type { Diagnostic } from './directive/diagnostics-types.ts'
 import type { ExtendMap } from './directive/resolve.ts'
+import type { FoldEntry } from './postcss-fold.ts'
 
 import { formatDiagnostic } from './directive/diagnostics-format.ts'
 import { type AnchoredBlock, type Declaration, plan, type PlanResult } from './directive/plan.ts'
 import { tokenize } from './directive/tokenizer.ts'
+import { foldMessage } from './postcss-fold.ts'
 import { isFollowingNestedNode } from './postcss-nested-builders.ts'
 import { isInsideKeyframes, stampSource } from './postcss-node-utils.ts'
 
@@ -74,6 +76,10 @@ interface DirectiveContext {
   onUnknown: NavePluginOptions['onUnknown']
   result: Result
   extend: ExtendMap
+  /**
+  Where an `'error'`-mode diagnostic lands instead of throwing immediately — R6's fold is per stylesheet, not per directive.
+   */
+  fold: FoldEntry[]
 }
 
 /**
@@ -99,7 +105,11 @@ function atRuleErrorIndex(atRule: PostCSSAtRule, diagnostic: Diagnostic): number
 }
 
 /**
-Reports one diagnostic's text per `onUnknown`, defaulting to a THROW: an unrecognised `onUnknown` value must not select the most permissive mode.
+ * Reports one diagnostic per `onUnknown`, defaulting to fold-and-throw: an
+ * unrecognised `onUnknown` value must not select the most permissive mode.
+ * `'error'` never throws HERE — every diagnostic in the stylesheet lands in
+ * `ctx.fold` first, so R6's fold covers every directive, not just the one
+ * that happened to be walked first (AC-directive-core-16).
  */
 function reportDiagnostic(diagnostic: Diagnostic, ctx: DirectiveContext): void {
   const isNestedGroup = diagnostic.code === 'bad-parent' && ctx.atRule.parent?.type !== 'root'
@@ -107,17 +117,16 @@ function reportDiagnostic(diagnostic: Diagnostic, ctx: DirectiveContext): void {
     extend: ctx.extend,
   })
   const index = atRuleErrorIndex(ctx.atRule, diagnostic)
-  const opts = index === undefined ? {} : { index }
   if (ctx.onUnknown === 'warn') {
-    ctx.atRule.warn(ctx.result, text, opts)
+    ctx.atRule.warn(ctx.result, text, index === undefined ? {} : { index })
     return
   }
   if (ctx.onUnknown === 'ignore') return
-  throw ctx.atRule.error(text, opts)
+  ctx.fold.push({ atRule: ctx.atRule, text, index })
 }
 
 /**
- *
+One rendered declaration, stamped with the directive's own source.
  */
 function declNode(atRule: PostCSSAtRule, decl: Declaration): ReturnType<typeof postcss.decl> {
   const node = postcss.decl({ prop: decl.prop, value: decl.value })
@@ -143,7 +152,7 @@ function insertDeclarations(atRule: PostCSSAtRule, declarations: readonly Declar
 }
 
 /**
- *
+A rule node with `selector`, holding `declarations`.
  */
 function buildRule(selector: string, declarations: readonly Declaration[]): ReturnType<typeof postcss.rule> {
   const rule = postcss.rule({ selector })
@@ -163,7 +172,7 @@ function buildAppendedNode(block: AnchoredBlock): ReturnType<typeof postcss.rule
 }
 
 /**
- *
+Converts a `resolve()` malformed-atom throw into a positioned PostCSS error (R2, outside onUnknown and outside R6's fold).
  */
 function throwMalformedAtom(atRule: PostCSSAtRule, error: unknown): never {
   const message = error instanceof Error ? error.message : String(error)
@@ -207,14 +216,19 @@ function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap): PlanAtRuleResult 
 
 export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
   const { onUnknown = 'error', extend = {} } = options
+  const fold: FoldEntry[] = []
 
   return {
     postcssPlugin: 'postcss-nave',
 
+    Once() {
+      fold.length = 0
+    },
+
     AtRule(atRule: PostCSSAtRule, { result }) {
       if (decodedAtRuleName(atRule) !== 'nave') return
 
-      const ctx: DirectiveContext = { atRule, onUnknown, result, extend }
+      const ctx: DirectiveContext = { atRule, onUnknown, result, extend, fold }
       const { isStyleRuleParent, parent, result: planResult } = planAtRule(atRule, extend)
 
       for (const diagnostic of planResult.diagnostics) reportDiagnostic(diagnostic, ctx)
@@ -229,6 +243,12 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
           parent.append(node)
         }
       }
+    },
+
+    OnceExit() {
+      if (fold.length === 0) return
+      const first = fold[0]!
+      throw first.atRule.error(foldMessage(fold), first.index === undefined ? {} : { index: first.index })
     },
   }
 }
