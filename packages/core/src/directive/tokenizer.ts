@@ -2,7 +2,9 @@ import type { Token, TokenType } from './tokenizer/token-types.ts'
 
 /**
  * A first-party CSS Syntax Level 3 tokenizer (§4.3
- * https://www.w3.org/TR/css-syntax-3/#tokenization). No module reachable
+ * https://drafts.csswg.org/css-syntax-3/#tokenization, the Editor's Draft —
+ * the published TR narrows one classification the Draft has since revised;
+ * see `tokenizer/scanner.ts`'s docblock on `NON_ASCII_IDENT_RANGES`). No module reachable
  * from `tokenize` imports a host (PostCSS, Vite, Lightning CSS) or a
  * third-party CSS parsing library: `resolve`, `plan` and `expandText`
  * (R1-R3) are built on this and `block-reader.ts` alone. Character

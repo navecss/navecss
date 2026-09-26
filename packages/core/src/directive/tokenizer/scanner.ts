@@ -47,14 +47,14 @@ type Range = readonly [number, number]
 
 /**
  * The non-ASCII ranges accepted as an ident-start / ident code point. Not
- * every code point >= U+0080, which is what CSS Syntax Level 3's literal
- * definition reads: matched against the conformance corpus instead (R4),
- * which excludes symbol and punctuation ranges inside and past Latin-1
- * Supplement — U+00D7 MULTIPLICATION SIGN and U+00F7 DIVISION SIGN sit in
- * two of the gaps below, the same gaps real-world CSS tokenizers carve out
- * of the range for identifier safety. A surrogate code unit (lone, or half
- * of a pair) and U+0000 both qualify: `consumeLiteralCodePoint` reads either
- * back as U+FFFD, which IS ident-forming once decoded.
+ * every code point >= U+0080, which is the 2021 TR text: the current CSS
+ * Syntax Level 3 Editor's Draft narrows "non-ASCII ident code point" to
+ * exactly these fourteen ranges, and this table is that list, range for
+ * range — excluding symbol and punctuation ranges inside and past Latin-1
+ * Supplement, so U+00D7 MULTIPLICATION SIGN and U+00F7 DIVISION SIGN sit in
+ * two of the gaps below. A surrogate code unit (lone, or half of a pair) and
+ * U+0000 both qualify: `consumeLiteralCodePoint` reads either back as
+ * U+FFFD, which IS ident-forming once decoded.
  */
 const NON_ASCII_IDENT_RANGES: readonly Range[] = [
   [0x00, 0x00], // NUL, read back as U+FFFD by consumeLiteralCodePoint
