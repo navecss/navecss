@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 import config from '../index.js'
 import { bareNamesPerListOrTable, checkedPropertyNames } from './helpers/bare-names.ts'
 import { cssPropertyNames } from './helpers/css-properties.ts'
+import { foldProse } from './helpers/outcome-words.ts'
 import { packTarball } from './helpers/pack.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -161,9 +162,29 @@ describe('AC-consumer-constraints-29 covers: R18', () => {
     ],
     ['an inline run of names in one item', '- Checked: `fill`, `stroke`, `gap`.\n'],
     ['a loose list, blank lines between its items', '- `fill`\n\n- `stroke`\n'],
+    [
+      'a table without leading pipes',
+      'Property | Admits\n--- | ---\n`font-size` | `1em`\n`opacity` | `0`\n',
+    ],
   ])('a copy of the list pasted as %s counts more than one', (_, pasted) => {
     const readme = tarball.read('package/README.md')
     expect(mostBareNamesInOneListOrTable(`${readme}\n\n${pasted}`)).toBeGreaterThan(1)
+  })
+
+  it('names inside a fenced code block, backticks or tildes, are not counted', () => {
+    const fenced = [
+      '~~~yaml',
+      '- color',
+      '- padding',
+      '- margin',
+      '~~~',
+      '',
+      '```',
+      '- fill',
+      '- stroke',
+      '```',
+    ].join('\n')
+    expect(mostBareNamesInOneListOrTable(fenced)).toBe(0)
   })
 
   it('names used in example declarations or as words in a sentence are not counted', () => {
@@ -230,7 +251,7 @@ describe('AC-consumer-constraints-29 covers: R18', () => {
       expect(text.trim().length, `${site} is empty`).toBeGreaterThan(0)
     }
     const scopedSites = Object.entries(sites)
-      .filter(([, text]) => scoped.test(text))
+      .filter(([, text]) => scoped.test(foldProse(text)))
       .map(([site]) => site)
     expect(scopedSites).toEqual([])
   })

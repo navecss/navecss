@@ -31,12 +31,53 @@ const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s+/
 
 type LineKind = 'blank' | 'row' | 'item' | 'continuation' | 'other'
 
+const PIPE_LED = /^\s*\|/
+const DELIMITER_ROW = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$/
+
+/**
+ * The indexes of the run of non-blank lines holding a `|` that starts at `start`.
+ */
+function tableRunFrom(lines: readonly string[], start: number): number[] {
+  let end = start
+  while (end < lines.length && lines[end]!.trim() !== '' && lines[end]!.includes('|')) end++
+  return Array.from({ length: end - start }, (_, offset) => start + offset)
+}
+
+/**
+ * The indexes of the lines that belong to a table written without leading pipes: a line holding
+ * a `|` followed by a delimiter row (`--- | ---`), then every following non-blank line holding a
+ * `|`. A table whose rows start with `|` is found line by line in `lineKind`.
+ */
+function unledTableRows(lines: readonly string[]): Set<number> {
+  const rows = new Set<number>()
+  for (const [index, line] of lines.entries()) {
+    const next = lines[index + 1] ?? ''
+    if (rows.has(index) || PIPE_LED.test(line) || !line.includes('|')) continue
+    if (!DELIMITER_ROW.test(next)) continue
+    for (const row of tableRunFrom(lines, index)) rows.add(row)
+  }
+  return rows
+}
+
+/**
+ * The cells of a table row: between the pipes of a row that starts with one, as before, and
+ * every `|`-separated part of a row that does not.
+ */
+function cellsOf(line: string): string[] {
+  return PIPE_LED.test(line) ? line.split('|').slice(1, -1) : line.split('|')
+}
+
 /**
  * What one line is, given the block open above it and whether the line before it was blank.
  */
-function lineKind(line: string, current: Block | undefined, wasBlank: boolean): LineKind {
+function lineKind(
+  line: string,
+  current: Block | undefined,
+  wasBlank: boolean,
+  isUnledTableRow: boolean,
+): LineKind {
   if (line.trim() === '') return 'blank'
-  if (/^\s*\|/.test(line)) return 'row'
+  if (isUnledTableRow || PIPE_LED.test(line)) return 'row'
   if (LIST_ITEM.test(line)) return 'item'
   // An indented line continues the item above it, and so does an unindented one with no blank
   // line before it (Markdown's lazy continuation).
@@ -58,7 +99,7 @@ function blockFor(kind: 'row' | 'item', current: Block | undefined, blocks: Bloc
 }
 
 /**
- * The lists and tables of `markdown`, fenced code removed first. A list's units are its items,
+ * The lists and tables of `markdown`, fenced code (backticks or tildes) removed first. A list's units are its items,
  * nested items included, each with its continuation lines; blank lines between items keep one
  * list, as they do in Markdown. A table's units are its cells.
  */
@@ -66,14 +107,14 @@ function listsAndTables(markdown: string): Block[] {
   const blocks: Block[] = []
   let current: Block | undefined
   let wasBlank = false
-  for (const line of markdown.replaceAll(/```[\s\S]*?```/g, '').split('\n')) {
-    const kind = lineKind(line, current, wasBlank)
+  const lines = markdown.replaceAll(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, '').split('\n')
+  const tableRows = unledTableRows(lines)
+  for (const [index, line] of lines.entries()) {
+    const kind = lineKind(line, current, wasBlank, tableRows.has(index))
     wasBlank = kind === 'blank'
     if (kind === 'row' || kind === 'item') {
       current = blockFor(kind, current, blocks)
-      current.units.push(
-        ...(kind === 'row' ? line.split('|').slice(1, -1) : [line.replace(LIST_ITEM, '')]),
-      )
+      current.units.push(...(kind === 'row' ? cellsOf(line) : [line.replace(LIST_ITEM, '')]))
     } else if (kind === 'continuation') {
       current!.units[current!.units.length - 1] += ` ${line.trim()}`
     } else if (kind === 'other' || current?.kind === 'table') {

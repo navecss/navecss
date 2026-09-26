@@ -53,6 +53,14 @@ function fold(text: string): string {
 }
 
 /**
+ * `text` with every line break and run of whitespace folded to one space, a docblock's ` * `
+ * gutter at the start of a line included, so a phrase matches however the text is wrapped.
+ */
+export function foldProse(text: string): string {
+  return text.replaceAll(/\s*\n[ \t]*\*(?!\/)[ \t]*|\s+/g, ' ')
+}
+
+/**
  * The passages of `text` a scan reads: its paragraphs, or the sentences of its paragraphs.
  */
 function passagesOf(text: string, unit: OutcomeWordScan['unit']): string[] {

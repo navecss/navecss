@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest'
 
 import config, { OUTLINE_GUARD_CONSUMER_MESSAGE, OUTLINE_GUARD_PATTERN } from '../index.js'
 import { pendingChangesetSurfaces } from './helpers/changesets.ts'
-import { commentText, findOutcomeWords, type Surface } from './helpers/outcome-words.ts'
+import { commentText, findOutcomeWords, foldProse, type Surface } from './helpers/outcome-words.ts'
 import { packTarball } from './helpers/pack.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -183,7 +183,7 @@ describe('AC-consumer-constraints-19 covers: R12', () => {
     const textFiles = tarball.files.filter((f) => /\.(md|js|ts|json)$/.test(f))
     expect(textFiles).toContain('package/README.md')
     const naming = textFiles.filter((file) =>
-      /focus guard|accessibility review/i.test(tarball.read(file)),
+      /focus guard|accessibility review/i.test(foldProse(tarball.read(file))),
     )
     expect(naming).toEqual([])
   })

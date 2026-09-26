@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { PUBLISHABLE_SET } from '../../../scripts/check-publishable-set.mjs'
+import { pendingChangesetSurfaces } from './helpers/changesets.ts'
 import { packTarball } from './helpers/pack.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -194,6 +195,18 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
     expect(config.linked.flat()).not.toContain('@navecss/stylelint-config')
     expect(config.ignore).not.toContain('@navecss/stylelint-config')
   })
+
+  it.runIf(manifest().version === '0.0.0')(
+    'until its first release, the copy scans read every pending changeset naming this package',
+    async () => {
+      const pending = await readPendingChangesets(ROOT)
+      const naming = pending.filter((changeset) =>
+        changeset.releases.some((release) => release.name === '@navecss/stylelint-config'),
+      )
+      expect(naming.length).toBeGreaterThan(0)
+      expect(pendingChangesetSurfaces()).toHaveLength(naming.length)
+    },
+  )
 
   it('until its first release: version 0.0.0, one minor changeset naming only this package, next version 0.1.0', async () => {
     await expect(assertFirstReleaseShape(ROOT)).resolves.toBeUndefined()
