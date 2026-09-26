@@ -327,4 +327,28 @@ describe('a var() reference is admitted with whitespace inside it, and only as a
     const [warnings] = await warningsFor(['color: somevar(--x)'])
     expect(warnings).toContain('scale-unlimited/declaration-strict-value')
   })
+
+  it.each([
+    'padding: var(/* c */--x)',
+    'color: var( /* c */ --x )',
+    'padding: calc(var(/* a *//* b */ --x) * 2)',
+    `color: var(/*${'c'.repeat(64)}*/--x)`,
+  ])('%s is not reported (a comment may sit before the name)', async (declaration) => {
+    const [warnings] = await warningsFor([declaration])
+    expect(warnings).toEqual([])
+  })
+
+  it.each([
+    // A function whose name ends in var with a non-ASCII letter before it is not var() either.
+    'color: évar(--x)',
+    'color: \u{1D465}var(--x)',
+    // The name sits inside the comment, so this var() has no custom property name at all.
+    'color: var(/* --x */ red)',
+    // The stated bound: a comment longer than 64 characters, or holding a `*`, is not skipped.
+    `color: var(/*${'c'.repeat(65)}*/--x)`,
+    'color: var(/* a*b */--x)',
+  ])('%s is reported', async (declaration) => {
+    const [warnings] = await warningsFor([declaration])
+    expect(warnings).toContain('scale-unlimited/declaration-strict-value')
+  })
 })
