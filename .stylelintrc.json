@@ -32,7 +32,7 @@
     "declaration-no-important": [
       true,
       {
-        "message": "Avoid !important. Two deliberate exceptions ship, both in packages/core/src/reset.css and both explained in a comment beside the declarations they cover: `[hidden] { display: none !important }`, and the four declarations under `@media (prefers-reduced-motion: reduce)`. This rule is switched off for that whole file by the override below, not by inline disables, so a NEW !important added there passes this gate silently: read the comment above the block you are editing before you add one. Anywhere else, change the rule you are writing rather than this guard. If you think the guard itself is wrong, open an issue."
+        "message": "Avoid !important. Change the rule you are writing rather than this guard, and do not move a declaration into packages/core/src/reset.css to get around it: that file's two exceptions are exempted here for reasons stated beside them, and adding to them is not a way to pass this check. If you think the guard itself is wrong, open an issue."
       }
     ],
 
