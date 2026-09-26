@@ -365,8 +365,8 @@ function isAnIdentifierCharacter(character: string | undefined): boolean {
  * character, a `#` (which would make it a hash token followed by a separate `(`), or an `@`
  * (which would make it an at-keyword followed by a separate `(`) — starts at `cursor`, returns
  * where its content is (`urlContentSentinel`, called right after the `url(`). Returns `undefined`
- * when no such token starts here at all: `cursor` is not immediately after one of those three
- * characters, and does not spell `url(`. Shared by the url-opaque reading and the
+ * when no such token starts here at all: `cursor` is immediately after one of those three
+ * characters, or does not spell `url(`. Shared by the url-opaque reading and the
  * escaped-line-break reading.
  */
 function tryToSkipAnUnquotedUrlToken(line: string, cursor: number): number | undefined {
