@@ -13,15 +13,27 @@ import { describe, expect, it } from 'vitest'
 // (part of this repo's typecheck gate, run alongside these tests) fails loudly
 // if a future change drops one — "has no exported member" — same as a runtime
 // removal would fail the assertions below.
-import type { AtomDefinition as AtomDefinitionFromAtoms, AtomName as AtomNameFromAtoms } from '../src/atoms.ts'
+import type {
+  AtomDefinition as AtomDefinitionFromAtoms,
+  AtomName as AtomNameFromAtoms,
+} from '../src/atoms.ts'
 import type { AtomName as AtomNameFromCx } from '../src/cx.ts'
-import type { AtomDefinition as AtomDefinitionFromPostcss, NavePluginOptions } from '../src/postcss.ts'
+import type {
+  AtomDefinition as AtomDefinitionFromPostcss,
+  NavePluginOptions,
+} from '../src/postcss.ts'
 
 import * as atomsModule from '../src/atoms.ts'
 import * as cxModule from '../src/cx.ts'
 import * as postcssModule from '../src/postcss.ts'
 
-type _TypeOnly0_1_0NamesStillExist = [AtomNameFromCx, AtomNameFromAtoms, AtomDefinitionFromAtoms, AtomDefinitionFromPostcss, NavePluginOptions]
+type _TypeOnly0_1_0NamesStillExist = [
+  AtomNameFromCx,
+  AtomNameFromAtoms,
+  AtomDefinitionFromAtoms,
+  AtomDefinitionFromPostcss,
+  NavePluginOptions,
+]
 
 const PUBLISHED_0_1_0_EXPORTS = {
   '.': './dist/index.css',
@@ -72,11 +84,18 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
     expect(pkg.bundledDependencies).toBeUndefined()
   })
 
-  it.each(Object.entries(PUBLISHED_0_1_0_DECLARED_VALUE_NAMES))('%s still exports every 0.1.0 value name', (subpath, names) => {
-    const modules = { './cx': cxModule, './atoms': atomsModule, './postcss': postcssModule } as const
-    const mod = modules[subpath as keyof typeof modules]
-    for (const name of names) expect(mod).toHaveProperty(name)
-  })
+  it.each(Object.entries(PUBLISHED_0_1_0_DECLARED_VALUE_NAMES))(
+    '%s still exports every 0.1.0 value name',
+    (subpath, names) => {
+      const modules = {
+        './cx': cxModule,
+        './atoms': atomsModule,
+        './postcss': postcssModule,
+      } as const
+      const mod = modules[subpath as keyof typeof modules]
+      for (const name of names) expect(mod).toHaveProperty(name)
+    },
+  )
 
   it("keeps slice-1's own public surface unchanged: the bin name and the plugin names", () => {
     const pkg = manifest()
