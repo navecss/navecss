@@ -7,6 +7,9 @@ import { fileURLToPath } from 'node:url'
 import stylelint, { type Config } from 'stylelint'
 import { describe, expect, it } from 'vitest'
 
+import config from '../index.js'
+import { bareNamesPerListOrTable, checkedPropertyNames } from './helpers/bare-names.ts'
+import { cssPropertyNames } from './helpers/css-properties.ts'
 import { packTarball } from './helpers/pack.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -35,6 +38,15 @@ const STATED_LIMITATIONS: readonly (readonly [string, string, boolean])[] = [
   ['Properties outside its own list are not checked', '.a { width: 13px; }', false],
   ['`border: 1px solid red` is reported', '.a { border: 1px solid red; }', true],
   ['`border: red 1px solid` is not', '.a { border: red 1px solid; }', false],
+  ['`border: 1px red`', '.a { border: 1px red; }', false],
+  ['`text-decoration: underline red`', '.a { text-decoration: underline red; }', false],
+  ['`border-block: 1px solid red`', '.a { border-block: 1px solid red; }', false],
+  ['`border-inline-start: 1px solid red`', '.a { border-inline-start: 1px solid red; }', false],
+  [
+    '`border-block-color: red` written on its own is reported',
+    '.a { border-block-color: red; }',
+    true,
+  ],
   [
     'A comma-separated `transition` list is not checked',
     '.a { transition: opacity 200ms, color 300ms; }',
@@ -125,9 +137,42 @@ describe('AC-consumer-constraints-29 covers: R18', () => {
     expect(result.results[0]!.warnings[0]?.text).toContain('sans-serif')
   })
 
-  it('links to the file holding the property list', () => {
+  const checkedNames = checkedPropertyNames(
+    (config.rules!['scale-unlimited/declaration-strict-value'] as [string[]])[0],
+    cssPropertyNames(),
+  )
+  const mostBareNamesInOneListOrTable = (markdown: string): number =>
+    Math.max(0, ...bareNamesPerListOrTable(markdown, checkedNames).map((names) => names.length))
+
+  it('links to the file holding the property list, and no list or table in it holds more than one checked property name in bare form', () => {
     const readme = tarball.read('package/README.md')
     expect(readme).toMatch(/\[`index\.js`\]\(index\.js\)/)
+    expect(checkedNames.size).toBeGreaterThan(19)
+    expect(mostBareNamesInOneListOrTable(readme)).toBeLessThanOrEqual(1)
+  })
+
+  it.each([
+    ['a bullet list of code spans', '- `color`\n- `padding`\n- `margin`\n- `gap`\n'],
+    ['a plain-text bullet list', '- fill\n- stroke\n'],
+    ['a nested list', '- Checked:\n  - `opacity`.\n  - `z-index`,\n'],
+    [
+      'a table of names',
+      '| Property | Admits |\n| --- | --- |\n| `font-size` | `1em` |\n| `opacity` | `0` |\n',
+    ],
+    ['an inline run of names in one item', '- Checked: `fill`, `stroke`, `gap`.\n'],
+    ['a loose list, blank lines between its items', '- `fill`\n\n- `stroke`\n'],
+  ])('a copy of the list pasted as %s counts more than one', (_, pasted) => {
+    const readme = tarball.read('package/README.md')
+    expect(mostBareNamesInOneListOrTable(`${readme}\n\n${pasted}`)).toBeGreaterThan(1)
+  })
+
+  it('names used in example declarations or as words in a sentence are not counted', () => {
+    const examples = [
+      '- `color: var(--x, red)` and `padding: $space` pass.',
+      '- The color and padding entries admit a var().',
+      '- `font-family: var(--x), sans-serif` is reported.',
+    ].join('\n')
+    expect(mostBareNamesInOneListOrTable(examples)).toBe(0)
   })
 
   it('the adoption fence, used verbatim over stylelint-config-standard, reports padding: 13px only in files matching its overrides', async () => {
@@ -153,6 +198,41 @@ describe('AC-consumer-constraints-29 covers: R18', () => {
   it("the root README's Packages table links packages/stylelint-config", () => {
     const rootReadme = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
     expect(rootReadme).toMatch(/\[`@navecss\/stylelint-config`\]\(packages\/stylelint-config/)
+  })
+
+  it('no site describing the check says it is scoped to Nave tokens: any var() passes', () => {
+    const scoped = /tokens-only|against `?--nave-|use a token/i
+    const manifest = JSON.parse(tarball.read('package/package.json')) as { description: string }
+    const rootReadme = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
+    const claudeMd = readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8')
+    const coreReadme = readFileSync(path.join(ROOT, 'packages/core/README.md'), 'utf8')
+    const coreStart = coreReadme.indexOf('## Editor, linter and coding agent')
+    expect(coreStart).toBeGreaterThan(-1)
+    const sites = {
+      'README.md': tarball.read('package/README.md'),
+      'package.json description': manifest.description,
+      'index.js': tarball.read('package/index.js'),
+      'index.d.ts': tarball.read('package/index.d.ts'),
+      "root README's Packages row": rootReadme
+        .split('\n')
+        .filter((line) => line.includes('[`@navecss/stylelint-config`]'))
+        .join('\n'),
+      "CLAUDE.md's Architecture line": claudeMd
+        .split('\n')
+        .filter((line) => line.startsWith('packages/stylelint-config/'))
+        .join('\n'),
+      "core README's editor and linter section": coreReadme.slice(
+        coreStart,
+        coreReadme.indexOf('\n## ', coreStart + 1),
+      ),
+    }
+    for (const [site, text] of Object.entries(sites)) {
+      expect(text.trim().length, `${site} is empty`).toBeGreaterThan(0)
+    }
+    const scopedSites = Object.entries(sites)
+      .filter(([, text]) => scoped.test(text))
+      .map(([site]) => site)
+    expect(scopedSites).toEqual([])
   })
 
   it("CLAUDE.md's Architecture block names packages/stylelint-config/", () => {

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import config from '../index.js'
+import { pendingChangesetSurfaces } from './helpers/changesets.ts'
 import { commentText, findOutcomeWords, type Surface } from './helpers/outcome-words.ts'
 import { packTarball } from './helpers/pack.ts'
 
@@ -63,10 +64,8 @@ describe('AC-consumer-constraints-43 covers: R11b, R16', () => {
       { name: 'packed index.js comments', text: commentText(packedIndex) },
       { name: 'README.md', text: tarball.read('package/README.md') },
       { name: 'package.json description', text: packageJson.description },
-      {
-        name: 'changeset',
-        text: readFileSync(path.join(ROOT, '.changeset/ship-stylelint-config.md'), 'utf8'),
-      },
+      // Pending changesets only: a release consumes them.
+      ...pendingChangesetSurfaces(),
       ...configMessages().map((text) => ({ name: 'config message', text })),
     ]
   }

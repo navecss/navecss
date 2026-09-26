@@ -2,7 +2,7 @@
  * AC-consumer-constraints-25 covers: R16.
  */
 import { execFileSync } from 'node:child_process'
-import { cpSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -44,22 +44,22 @@ async function readPendingChangesets(rootDir: string): Promise<Changeset[]> {
 }
 
 /**
- * The release-shape clauses that hold only while this package's first changeset is pending:
- * the manifest is still at `0.0.0`, exactly one changeset names the package, that changeset is
- * a `minor` naming no other package, and so the next version is `0.1.0`. Once that changeset has
- * been consumed by a release, there is nothing pending to check and the clauses do not apply.
+ * The release-shape clauses that hold only until this package's first release: while the
+ * manifest is still at `0.0.0`, exactly one changeset names the package, that changeset is a
+ * `minor` naming no other package, and so the next version is `0.1.0`. Once a release has taken
+ * the version past `0.0.0`, the clauses do not apply, whether or not a later changeset for the
+ * package is pending. The changesets are read either way, so a malformed one still fails here.
  */
 async function assertFirstReleaseShape(rootDir: string): Promise<void> {
   const { name, version } = JSON.parse(
     readFileSync(path.join(rootDir, 'packages/stylelint-config/package.json'), 'utf8'),
   ) as { name: string; version: string }
   const pending = await readPendingChangesets(rootDir)
+  if (version !== '0.0.0') return
+
   const naming = pending.filter((changeset) =>
     changeset.releases.some((release) => release.name === name),
   )
-  if (naming.length === 0) return
-
-  expect(version).toBe('0.0.0')
   expect(naming).toHaveLength(1)
   expect(naming[0]!.releases).toEqual([{ name, type: 'minor' }])
   const [major, minor] = version.split('.').map(Number)
@@ -195,20 +195,28 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
     expect(config.ignore).not.toContain('@navecss/stylelint-config')
   })
 
-  it('while its first changeset is pending: version 0.0.0, one minor changeset naming only this package, next version 0.1.0', async () => {
-    const pending = await readPendingChangesets(ROOT)
-    expect(
-      pending.some((changeset) =>
-        changeset.releases.some((release) => release.name === '@navecss/stylelint-config'),
-      ),
-    ).toBe(true)
-    await assertFirstReleaseShape(ROOT)
+  it('until its first release: version 0.0.0, one minor changeset naming only this package, next version 0.1.0', async () => {
+    await expect(assertFirstReleaseShape(ROOT)).resolves.toBeUndefined()
   })
 
-  it('once that changeset has been released (removed, version 0.1.0), the first-release clauses no longer apply', async () => {
+  it('at version 0.0.0 with no changeset naming the package, the first-release clauses fail', async () => {
     const scratch = scratchReleaseRoot()
     try {
-      unlinkSync(path.join(scratch, '.changeset/ship-stylelint-config.md'))
+      rmSync(path.join(scratch, '.changeset/ship-stylelint-config.md'), { force: true })
+      writeFileSync(
+        path.join(scratch, 'packages/stylelint-config/package.json'),
+        JSON.stringify({ ...manifest(), version: '0.0.0' }, undefined, 2),
+      )
+      await expect(assertFirstReleaseShape(scratch)).rejects.toThrow()
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('once that changeset has been released (removed, version 0.1.0), the first-release clauses no longer apply, even with a later changeset for the package pending', async () => {
+    const scratch = scratchReleaseRoot()
+    try {
+      rmSync(path.join(scratch, '.changeset/ship-stylelint-config.md'), { force: true })
       const manifestPath = path.join(scratch, 'packages/stylelint-config/package.json')
       const manifestBefore = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<
         string,
@@ -216,6 +224,11 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
       >
       const released = { ...manifestBefore, version: '0.1.0' }
       writeFileSync(manifestPath, JSON.stringify(released, undefined, 2))
+      await expect(assertFirstReleaseShape(scratch)).resolves.toBeUndefined()
+      writeFileSync(
+        path.join(scratch, '.changeset/a-later-fix.md'),
+        "---\n'@navecss/stylelint-config': patch\n---\n\nA later fix.\n",
+      )
       await expect(assertFirstReleaseShape(scratch)).resolves.toBeUndefined()
     } finally {
       rmSync(scratch, { recursive: true, force: true })

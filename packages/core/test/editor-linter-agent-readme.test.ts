@@ -234,6 +234,15 @@ describe('AC-consumer-constraints-37 covers: R21', () => {
     }
   })
 
+  it('every sentence of it saying the atoms it lists are the only ones qualifies them as built-in', () => {
+    const sentences = pointerBlock.replaceAll(/\s+/g, ' ').split(/(?<=\.) /)
+    const closing = sentences.filter((s) => /\batoms\b/i.test(s) && /\bonly (the|ones)\b/i.test(s))
+    expect(closing.length).toBeGreaterThan(0)
+    for (const sentence of closing) {
+      expect(sentence).toMatch(/built-in atoms/i)
+    }
+  })
+
   it("the section says the block goes in the consumer's AGENTS.md, and CLAUDE.md too where they have one", () => {
     expect(section).toMatch(/AGENTS\.md/)
     expect(section).toMatch(/CLAUDE\.md/)
