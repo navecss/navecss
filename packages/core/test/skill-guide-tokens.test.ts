@@ -33,7 +33,7 @@ const GENERATOR_SRC = [
  * generator's own `resolveExport('...')` wrapper — the shape every real
  * `@navecss/tokens`-reaching call in `generate-skill-sources.ts` actually takes (neither
  * `readTokenDescriptions` nor `readDeclaredPropertyNames` calls `import.meta.resolve` directly;
- * both go through `resolveExport`, which was invisible to this scanner before finding 16).
+ * both go through `resolveExport`, which this scanner could not see until this clause was added).
  */
 function importSpecifiers(src: string): string[] {
   return [
@@ -76,13 +76,13 @@ describe('AC-consumer-constraints-33: no path into packages/tokens/src', () => {
     expect(importSpecifiers(planted)).toEqual(['@navecss/tokens/src/theming/descriptions.ts'])
   })
 
-  it('importSpecifiers catches a resolveExport(...) literal of a disallowed deep path (finding 16)', () => {
+  it('importSpecifiers catches a resolveExport(...) literal of a disallowed deep path', () => {
     const planted = `resolveExport('@navecss/tokens/src/theming/descriptions.ts')`
     expect(importSpecifiers(planted)).toEqual(['@navecss/tokens/src/theming/descriptions.ts'])
   })
 
   it('importSpecifiers now actually extracts the two deep-read specifiers the real source reaches through resolveExport', () => {
-    // Before finding 16, neither `'@navecss/tokens/tokens.json'` nor `'@navecss/tokens/css'`
+    // Until this clause was added, neither `'@navecss/tokens/tokens.json'` nor `'@navecss/tokens/css'`
     // was ever matched by this scanner (both sit in resolveExport(...) calls, not a bare
     // import.meta.resolve(...) or import ... from), so the AC-33 allowlist check below was
     // vacuously satisfied for exactly the two paths it exists to guard.
@@ -113,10 +113,10 @@ describe('AC-consumer-constraints-33: no path into packages/tokens/src', () => {
 describe('AC-consumer-constraints-33: description fidelity', () => {
   it('the description map is complete: every $description leaf in tokens.json is represented, byte for byte, none dropped', () => {
     // A loop over EVERY leaf, not 3 hand-picked names: a leaf this loop misses is a leaf a
-    // hand-picked check could never have named in the first place (Phase 3, slice 3, finding
-    // 11). Walks the same DTCG tree `readTokenDescriptions()` itself walks, independently
-    // collecting VALUES only (never re-deriving the `kebab()` name transform a second time,
-    // which NEW-2's own test covers) — so a dropped or wrong-value leaf reds here regardless of
+    // hand-picked check could never have named in the first place. Walks the same DTCG tree
+    // `readTokenDescriptions()` itself walks, independently collecting VALUES only (never
+    // re-deriving the `kebab()` name transform a second time, which a separate test below
+    // covers) — so a dropped or wrong-value leaf reds here regardless of
     // whether its computed NAME would also have been right.
     const descriptions = readTokenDescriptions()
     const raw = readFileSync(path.resolve(HERE, '../../tokens/tokens.json'), 'utf8')
@@ -189,7 +189,7 @@ describe('AC-consumer-constraints-33: description fidelity', () => {
   })
 
   it('collectRealSources, given a mismatched palette-record override, propagates the throw naming that slot — the REAL collection path, not derivePaletteDescriptions called directly', async () => {
-    // Before finding 11's fix, the only test on this clause called generate(baseSkillGuideSources())
+    // Before this seam was added, the only test on this clause called generate(baseSkillGuideSources())
     // — sources it had already derived itself — so no mismatch was ever constructed and the
     // throw path through the real collection pipeline (collectRealSources -> buildPaletteRecord
     // -> derivePaletteDescriptions) was never exercised end to end. The override parameter below
@@ -208,7 +208,7 @@ describe('AC-consumer-constraints-33: description fidelity', () => {
   })
 })
 
-describe('AC-consumer-constraints-33: kebab() matches the real @navecss/tokens build transform (NEW-2)', () => {
+describe('AC-consumer-constraints-33: kebab() matches the real @navecss/tokens build transform', () => {
   it('every non-colour token name it computes is a member of the declared --nave-* set (completeness, not 3 hand-picked names)', () => {
     // Before this test, AC-33's only cross-check between the two maps was 3 hand-picked names,
     // none of which would ever exercise a kebab() naming mismatch — every OTHER name could have

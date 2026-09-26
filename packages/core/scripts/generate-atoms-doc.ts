@@ -180,7 +180,8 @@ export function renderVariants(atom: AtomDefinition): string {
 /**
 `renderVariants(atom)`, with `disabledState`'s aria-disabled sentence appended after its own
 `pointer-events: none;` entry — the one row an agent meets together with the declarations it
-qualifies, never a separate notes section (steward's gant §8; AC-consumer-constraints-40).
+qualifies, never a separate notes section, so the caveat cannot be read apart from the
+declaration it explains (AC-consumer-constraints-40).
 Shared by this file's own `generate()` and `generate-skill.ts`'s, so neither re-derives the
 placement or the sentence.
  */

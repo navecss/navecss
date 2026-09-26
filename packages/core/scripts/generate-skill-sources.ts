@@ -76,7 +76,7 @@ const SPLIT_UPPER_UPPER_LOWER = /([A-Z])([A-Z][a-z])/g
  * `src/token-name.ts`). Verified empirically against the transform it re-derives: byte-identical
  * on every segment the real `tokens.json` declares today, and unlike the earlier one-hyphen-
  * per-capital shape, also byte-identical on an adjacent-capitals (acronym-shaped) segment that
- * does not exist in the real source yet (skill-guide-tokens.test.ts, NEW-2).
+ * does not exist in the real source yet (see skill-guide-tokens.test.ts).
  */
 export function kebab(segment: string): string {
   return segment
@@ -228,7 +228,7 @@ export function readLayerStatement(): string {
  * seam a test uses to inject a mismatched palette record through this REAL collection path
  * (`derivePaletteDescriptions`'s own throw, naming the slot), rather than only ever calling
  * `derivePaletteDescriptions` directly and never exercising the pipeline that actually calls it
- * (AC-consumer-constraints-33, finding 11).
+ * (AC-consumer-constraints-33).
  */
 export async function collectRealSources(
   paletteRecordOverride?: Record<string, unknown>,

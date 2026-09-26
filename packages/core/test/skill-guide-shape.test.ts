@@ -98,7 +98,7 @@ describe('AC-consumer-constraints-34: byte ceiling', () => {
 
   /** The one guard both tests below exercise, so the padded-copy "control" runs through the
    * SAME code path as the real-file check — not a bare `Buffer.byteLength` call that would stay
-   * green even if this function's own logic were stubbed to always pass (finding 12). */
+   * green even if this function's own logic were stubbed to always pass. */
   function exceedsByteCeiling(content: string): boolean {
     return Buffer.byteLength(content, 'utf8') > BYTE_CEILING
   }
@@ -133,7 +133,7 @@ describe('AC-consumer-constraints-03 (scoped to this slice): the guide is build-
 })
 
 describe('AC-consumer-constraints-02 (scoped to this slice): no prose count', () => {
-  // `[^.#|]`, never bare `[^.]`: removing SKILL.md's `## Notes` section (finding 2) shortened
+  // `[^.#|]`, never bare `[^.]`: removing SKILL.md's `## Notes` section shortened
   // the gap between the Responsive table's last `width: 100%;` cell and the following
   // `## Custom properties` heading (which itself contains the word "properties") to under 40
   // characters — a false positive across a table cell's own `|` delimiter and into an unrelated

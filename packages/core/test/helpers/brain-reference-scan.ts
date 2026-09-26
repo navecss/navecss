@@ -28,8 +28,8 @@ export const PERSONA_IDS = [
 
 export const DATED_ID = /\b(?:F|D|E|LE|L|Lc)-\d{8}(?:-[a-z0-9]+)*\b/
 
-/** A requirement/acceptance-criteria id, e.g. `AC-consumer-constraints-39` (Phase 3 finding 14:
- * this had no clause of its own, so a copy carrying only this kind of reference scanned clean). */
+/** A requirement/acceptance-criteria id, e.g. `AC-consumer-constraints-39`: earlier this scan had
+ * no clause for this shape at all, so a copy carrying only this kind of reference scanned clean. */
 export const AC_ID = /\bAC-[a-z0-9-]+-\d+\b/
 
 export const HASH = String.fromCharCode(35)
@@ -44,9 +44,9 @@ const BARE_HASH_REF = /(?<![\w/-])#(\d{1,4})(?!\d)/g
 /**
  * Whether the `#digits` match at `matchIndex` in `text` is an all-decimal, 3/4/6/8-digit hex
  * colour literal sitting inside a backtick-fenced code span, rather than a tracker reference —
- * the false positive Phase 3 finding 14 named, since a hex value of one of those widths is also
- * a valid bare `#N` shape. A colour outside any code span is not exempted: nothing marks it as a
- * colour rather than a reference.
+ * the false positive this guard exists to avoid, since a hex value of one of those widths is
+ * also a valid bare `#N` shape. A colour outside any code span is not exempted: nothing marks it
+ * as a colour rather than a reference.
  */
 function isHexColourContext(text: string, matchIndex: number, digits: string): boolean {
   const looksHex = /^[0-9a-fA-F]+$/.test(digits) && [3, 4, 6, 8].includes(digits.length)
@@ -60,7 +60,7 @@ function isHexColourContext(text: string, matchIndex: number, digits: string): b
  * Every check `scanForBrainReferences` runs, each independent of the others rather than
  * short-circuited by `expect`'s throw-on-first-failure — so a single composite planted string
  * violating more than one check proves EVERY violated check fires, not only whichever happened
- * to run first (Phase 3, slice 3, finding 14). Returns the label of each violation found, `[]`
+ * to run first. Returns the label of each violation found, `[]`
  * when `text` is clean.
  */
 function findBrainReferenceViolations(text: string): string[] {

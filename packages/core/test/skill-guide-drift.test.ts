@@ -29,8 +29,8 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
   it('fails after one atom declaration in atoms.ts is edited on disk without regenerating — a real file mutation flowing through the real drift comparison, not an in-memory object that differs by construction', async () => {
     // The pre-fix control built a plain object literal carrying a string ('PLANTED-EDIT') that
     // could not possibly already be in the committed guide, so the two sides differed by
-    // construction — it never reproduced "someone edited atoms.ts and forgot to regenerate"
-    // (finding 12). This mutates the real FILE TEXT and imports the result, so the mutated
+    // construction — it never reproduced "someone edited atoms.ts and forgot to regenerate".
+    // This mutates the real FILE TEXT and imports the result, so the mutated
     // value flows through the same `atoms` shape a real contributor's edit would produce.
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
     const realSource = readFileSync(ATOMS_SRC_PATH, 'utf8')

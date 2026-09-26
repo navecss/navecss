@@ -71,9 +71,9 @@ describe('AC-consumer-constraints-40: composes no prose around the vocabulary', 
 describe('AC-consumer-constraints-40: disabledState / interactive', () => {
   it('the guide’s aria-disabled sentence is byte-identical to the one read fresh from atoms.ts', () => {
     // Read at TEST time, never a second hardcoded copy of the sentence: a homoglyph or a reworded
-    // atoms.ts docblock has to change this assertion's own expected value, not just the guide's
-    // (Phase 3, slice 3, finding 1/9 — the two hardcoded copies previously disagreed by one
-    // apostrophe code point and neither test caught it).
+    // atoms.ts docblock has to change this assertion's own expected value, not just the guide's.
+    // Two hardcoded copies of this sentence once disagreed by one apostrophe code point and
+    // neither test caught it, which is the drift this check exists to prevent.
     const freshNote = readDisabledStateNote()
     expect(committed).toContain(freshNote)
   })
@@ -99,7 +99,7 @@ describe('AC-consumer-constraints-40: disabledState / interactive', () => {
   })
 
   it('a hardcoded copy one apostrophe code point off the fresh reading is caught as a mismatch', () => {
-    // The exact drift finding 1 found: a curly apostrophe (U+2019) typed into the generator where
+    // The exact drift once shipped: a curly apostrophe (U+2019) typed into the generator where
     // atoms.ts itself uses a straight one (U+0027). Self-tests the byte-identity check above: if
     // this ever passed, that check would be unable to tell the two apostrophes apart.
     const freshNote = readDisabledStateNote()

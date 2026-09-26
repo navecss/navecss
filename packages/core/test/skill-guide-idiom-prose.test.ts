@@ -86,8 +86,8 @@ describe('AC-consumer-constraints-39: required prose statements, each present an
     expect(committed).toContain(statement)
   })
 
-  // Retired by PM's ruling on finding 6 (R22 is scoped to built-in atom names): the guide no
-  // longer asserts atom-name closure without the qualifier, and no sentence places an `extend`
+  // The atom closed-set claim is scoped to built-in atom names: the guide no longer asserts
+  // atom-name closure without that qualifier, and no sentence places an `extend`
   // atom inside `cx()`.
   const ASSERT_ABSENT = [
     'atom and `--nave-*` names are exactly',
@@ -127,8 +127,7 @@ describe("AC-consumer-constraints-39: cx('container')/cx.raw('container') appear
 
     for (const span of ["cx('container')", "cx.raw('container')"]) {
       // matchAll, never indexOf: a SECOND occurrence placed inside a fence would sit past the
-      // first (correctly outside) one, and an indexOf-based check never looks past it
-      // (Phase 3, slice 3, finding 17).
+      // first (correctly outside) one, and an indexOf-based check never looks past it.
       const occurrences = [...committed.matchAll(new RegExp(escapeRegExp(span), 'g'))]
       expect(occurrences.length, `expected to find ${span}`).toBeGreaterThan(0)
       for (const occurrence of occurrences) {

@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 const ATOMS_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/atoms.ts')
 
 const DISABLED_STATE_KEY_LINE = '  disabledState: {'
+const DISABLED_STATE_HEADER = 'disabledState — visual + behavioural disabled treatment.'
 const DISABLED_STATE_NOTE_START = 'On the aria-disabled branch'
 const DISABLED_STATE_NOTE_END = 'keyboard activation.'
 
@@ -57,10 +58,17 @@ function findDocblockAbove(
 }
 
 /**
- * Fails loud: throws, naming what is missing, when the key line, the docblock around it, or
- * either anchor is not found — a reader that returned an empty string on a reworded docblock
- * would drop the sentence with no signal (steward's gant §8's condition exists to prevent
- * exactly that).
+ * Fails loud: throws, naming what is missing, when the key line, the docblock around it, either
+ * anchor, or the docblock's own header line is not found — a reader that returned an empty
+ * string on a reworded docblock would drop the accessibility caveat below with no signal at
+ * all, and a keyboard-activation warning that silently disappears is worse than one that never
+ * shipped.
+ *
+ * `findDocblockAbove` only ever returns the NEAREST docblock before the key line, so a decoy
+ * docblock inserted between the real one and `disabledState: {` — one that happens to also carry
+ * both sentence anchors — would otherwise be accepted silently. Requiring the located docblock
+ * to open with `disabledState`'s own header line ties the extraction to the atom's identifying
+ * comment, not to mere proximity to the key line.
  */
 export function readDisabledStateNote(
   sourceText: string = readFileSync(ATOMS_SRC, 'utf8'),
@@ -71,6 +79,13 @@ export function readDisabledStateNote(
     .slice(start + 1, end)
     .map((line) => line.trim().replace(/^\*\s?/, ''))
     .join(' ')
+  if (!text.startsWith(DISABLED_STATE_HEADER)) {
+    throw new Error(
+      'generate-atoms-doc: the docblock directly above "disabledState: {" does not open with ' +
+        `its own header line ("${DISABLED_STATE_HEADER}") — a nearer, unrelated docblock may ` +
+        'have been matched instead of the one that belongs to disabledState',
+    )
+  }
   const startAt = text.indexOf(DISABLED_STATE_NOTE_START)
   const endAt = text.indexOf(DISABLED_STATE_NOTE_END)
   if (startAt === -1 || endAt === -1) {

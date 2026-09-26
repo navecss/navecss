@@ -47,7 +47,7 @@ describe('AC-consumer-constraints-38: every css fence compiles through the real 
     const declared = new Set(readDeclaredPropertyNames())
     // Every fence, not only cssFences: a var(--nave-*) inside a future non-css fence (a tsx
     // template literal, say) is just as much a claim about a declared property, and cssFences
-    // would miss it entirely (Phase 3, slice 3, finding 17).
+    // would miss it entirely.
     for (const fence of fences) {
       for (const match of fence.content.matchAll(/var\((--nave-[\w-]+)/g)) {
         expect(declared.has(match[1]!), `${match[1]} in fence`).toBe(true)
@@ -114,8 +114,7 @@ describe('AC-consumer-constraints-38: every css fence compiles through the real 
  * publishes), and returns whatever diagnostics come back. This is the harness AC-38's `tsc`
  * clause promises: earlier, the clause was satisfied by a regex existence-detector for
  * `cx(`/`cx.raw(` that never invoked `tsc`, `ts-morph`, or any type-checking API at all — a
- * detector for whether a fence CALLS `cx`, not for whether that call type-checks
- * (Phase 3, slice 3, NEW-1).
+ * detector for whether a fence CALLS `cx`, not for whether that call type-checks.
  */
 function typeCheckAgainstPublishedCx(snippet: string): readonly ts.Diagnostic[] {
   const dir = mkdtempSync(path.join(tmpdir(), 'nave-skill-tsc-'))
