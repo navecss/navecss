@@ -233,16 +233,22 @@ function indexAfterAStringLiteral(line: string, quoteIndex: number, quote: strin
  * branches, which is what keeps "can only add a refusal" true without a sweep standing in for
  * the proof.
  */
+// What a line hands to the next about an unquoted `url(...)` token: `'none'` when nothing
+// url-related is carried; `'contentOpen'` when the token's content is open and did not close on
+// this line (`indexAfterUnquotedUrlContent`'s own state); `'pending'` when even that
+// content has not started yet, only whitespace having followed `url(` so far
+// (`resolveUrlContent`'s own state).
+type UrlCarry = 'none' | 'contentOpen' | 'pending'
+
+// What resolving a carried url state against a fresh line comes back as: an index to resume
+// ordinary scanning at, or one of the two non-`'none'` `UrlCarry` states carried on again.
+type UrlContentPosition = number | 'contentOpen' | 'pending'
+
 interface UrlOpaqueScanState {
   readonly isInsideAnOpenComment: boolean
-  // 0 when nothing url-related is carried into the next line; `-1` when an unquoted url token's
-  // content is open and does not close on this line (`indexAfterUnquotedUrlContent`'s own
-  // sentinel); `-2` when even that content has not started yet, only whitespace having followed
-  // `url(` so far (`urlContentSentinel`'s own sentinel). One field instead of two booleans
-  // because the two carried states are mutually exclusive by construction (a line reports at
-  // most one of them), and because both sentinels already exist for a real reason elsewhere
-  // (below), so storing them verbatim needs no third vocabulary just for this state's own sake.
-  readonly urlCarry: number
+  // See `UrlCarry` above. One field instead of two booleans because the two carried states are
+  // mutually exclusive by construction: a line reports at most one of them.
+  readonly urlCarry: UrlCarry
 }
 
 /**
@@ -253,7 +259,7 @@ interface UrlOpaqueScanState {
  * open/closed comment boolean.
  */
 function markLinesFlaggedByTheUrlOpaqueReading(lines: readonly string[], into: Set<number>): void {
-  let state: UrlOpaqueScanState = { isInsideAnOpenComment: false, urlCarry: 0 }
+  let state: UrlOpaqueScanState = { isInsideAnOpenComment: false, urlCarry: 'none' }
 
   for (const [index, line] of lines.entries()) {
     if (state.isInsideAnOpenComment) into.add(index)
@@ -263,27 +269,27 @@ function markLinesFlaggedByTheUrlOpaqueReading(lines: readonly string[], into: S
 
 /**
  * Resolves what `urlCarry` (`UrlOpaqueScanState`'s field of the same name) means for THIS line
- * into an index to resume ordinary scanning at, or a negative sentinel the caller carries on to
- * the next line. With nothing carried (`0`) scanning resumes at index 0, as on a fresh line. A
+ * into an index to resume ordinary scanning at, or a carried state the caller carries on to the
+ * next line. With nothing carried (`'none'`) scanning resumes at index 0, as on a fresh line. A
  * carried url token can also resolve to index 0, when the line opens with the quote that makes an
  * undecided `url(` a function token, and that is correct: ordinary scanning then reads the quote.
  * Shared by both readings, since both carry the same convention.
  */
-function resumeUrlCarry(line: string, urlCarry: number): number {
-  if (urlCarry === 0) return 0
-  return urlCarry === -2 ? urlContentSentinel(line, 0) : indexAfterUnquotedUrlContent(line, 0)
+function resumeUrlCarry(line: string, urlCarry: UrlCarry): UrlContentPosition {
+  if (urlCarry === 'none') return 0
+  return urlCarry === 'pending' ? resolveUrlContent(line, 0) : indexAfterUnquotedUrlContent(line, 0)
 }
 
 /**
  * One line of the url-opaque reading. A url token whose content was still undecided, or one
- * already known to be open (`state.urlCarry`, either sentinel), resumes that same decision
+ * already known to be open (`state.urlCarry`, either carried state), resumes that same decision
  * against this line's own leading characters (`resumeUrlCarry`, shared with the
  * escaped-line-break reading below). With neither carried in,
  * `scanLineForOpaqueUrlContentAndComments` runs the ordinary scan from index 0.
  */
 function scanLineWithOpaqueUrlContent(line: string, state: UrlOpaqueScanState): UrlOpaqueScanState {
   const cursor = resumeUrlCarry(line, state.urlCarry)
-  if (cursor < 0) return { isInsideAnOpenComment: false, urlCarry: cursor }
+  if (typeof cursor === 'string') return { isInsideAnOpenComment: false, urlCarry: cursor }
   return scanLineForOpaqueUrlContentAndComments(line, state.isInsideAnOpenComment, cursor)
 }
 
@@ -298,11 +304,11 @@ function scanLineWithOpaqueUrlContent(line: string, state: UrlOpaqueScanState): 
  * blind to the genuine comment that opens on the character right after. When that url token's
  * content does not close on this line, CSS does not end it at the line break either — an
  * unterminated url token's remnants are consumed up to wherever its `)` actually falls, including
- * on a later line — so this carries `-1` forward (`urlCarry`) rather than treating the token as
- * closed at the line's end. When even the url token's content has not started yet because only
- * whitespace followed `url(` up to this line's end, this carries `-2` forward instead, since CSS
- * has not yet decided whether the token is an opaque url token or a function token taking a
- * quoted argument (see `urlContentSentinel`).
+ * on a later line — so this carries `'contentOpen'` forward (`urlCarry`) rather than treating the
+ * token as closed at the line's end. When even the url token's content has not started yet
+ * because only whitespace followed `url(` up to this line's end, this carries `'pending'`
+ * forward instead, since CSS has not yet decided whether the token is an opaque url token or a
+ * function token taking a quoted argument (see `resolveUrlContent`).
  */
 function scanLineForOpaqueUrlContentAndComments(
   line: string,
@@ -315,15 +321,15 @@ function scanLineForOpaqueUrlContentAndComments(
   while (index < line.length) {
     if (isInsideAnOpenComment) {
       const closerIndex = line.indexOf('*/', index)
-      if (closerIndex === -1) return { isInsideAnOpenComment: true, urlCarry: 0 }
+      if (closerIndex === -1) return { isInsideAnOpenComment: true, urlCarry: 'none' }
       isInsideAnOpenComment = false
       index = closerIndex + 2
       continue
     }
 
     const urlLookup = tryToSkipAnUnquotedUrlToken(line, index)
+    if (typeof urlLookup === 'string') return { isInsideAnOpenComment: false, urlCarry: urlLookup }
     if (urlLookup !== undefined) {
-      if (urlLookup < 0) return { isInsideAnOpenComment: false, urlCarry: urlLookup }
       index = urlLookup
       continue
     }
@@ -344,8 +350,7 @@ function scanLineForOpaqueUrlContentAndComments(
     index += 1
   }
 
-  if (isInsideAnOpenComment) return { isInsideAnOpenComment: true, urlCarry: 0 }
-  return { isInsideAnOpenComment: false, urlCarry: 0 }
+  return { isInsideAnOpenComment, urlCarry: 'none' }
 }
 
 /**
@@ -364,48 +369,49 @@ function isAnIdentifierCharacter(character: string | undefined): boolean {
  * If an unquoted CSS url token — `url(` (case-insensitive), not preceded by an identifier
  * character, a `#` (which would make it a hash token followed by a separate `(`), or an `@`
  * (which would make it an at-keyword followed by a separate `(`) — starts at `cursor`, returns
- * where its content is (`urlContentSentinel`, called right after the `url(`). Returns `undefined`
+ * where its content is (`resolveUrlContent`, called right after the `url(`). Returns `undefined`
  * when no such token starts here at all: `cursor` is immediately after one of those three
  * characters, or does not spell `url(`. Shared by the url-opaque reading and the
  * escaped-line-break reading.
  */
-function tryToSkipAnUnquotedUrlToken(line: string, cursor: number): number | undefined {
+function tryToSkipAnUnquotedUrlToken(line: string, cursor: number): UrlContentPosition | undefined {
   if (isAnIdentifierCharacter(line[cursor - 1]) || /[#@]/.test(line[cursor - 1]!)) return undefined
   if (!/^url\(/i.test(line.slice(cursor, cursor + 4))) return undefined
 
-  return urlContentSentinel(line, cursor + 4)
+  return resolveUrlContent(line, cursor + 4)
 }
 
 /**
  * Decides what an unquoted url token's content is once its `url(` (or a carried-over "awaiting
  * content" state from an earlier line) is behind `cursor`: CSS consumes any whitespace there,
- * including across a line break, before either the content itself or a quote. Returns `-2` when
- * this line runs out before a non-whitespace code point is seen (the same decision resumes on the
- * next line, from its own index 0). Returns the index of that code point itself when it is a
- * quote, since this is then not an opaque url token at all but a FUNCTION token taking a quoted
- * argument (per CSS Syntax), so ordinary scanning resumes right there. Otherwise the url content
- * has started, and `indexAfterUnquotedUrlContent` (below) reports where it ends, `-1` included.
+ * including across a line break, before either the content itself or a quote. Returns
+ * `'pending'` when this line runs out before a non-whitespace code point is seen (the
+ * same decision resumes on the next line, from its own index 0). Returns the index of that code
+ * point itself when it is a quote, since this is then not an opaque url token at all but a
+ * FUNCTION token taking a quoted argument (per CSS Syntax), so ordinary scanning resumes right
+ * there. Otherwise the url content has started, and `indexAfterUnquotedUrlContent` (below)
+ * reports where it ends, `'contentOpen'` included.
  */
-function urlContentSentinel(line: string, cursor: number): number {
+function resolveUrlContent(line: string, cursor: number): UrlContentPosition {
   let index = cursor
   while (index < line.length && /\s/.test(line[index]!)) index += 1
-  if (index === line.length) return -2
+  if (index === line.length) return 'pending'
   if (isAQuoteCharacter(line[index])) return index
   return indexAfterUnquotedUrlContent(line, index)
 }
 
 /**
- * Shared by `urlContentSentinel` (above, deciding a url token's content — fresh via
+ * Shared by `resolveUrlContent` (above, deciding a url token's content — fresh via
  * `tryToSkipAnUnquotedUrlToken`, or resumed once its whitespace-only prefix has already been
  * skipped) and by both readings directly, to resume a url token already known to be open coming
  * into a line: scans its content, starting at `contentStart`, for its closing, unescaped `)`. A
  * backslash escapes the following character, so an escaped `)` does not close it. Returns the
- * index just past that `)`, or `-1` if none is found on this line. `-1` is not "the token ends at
- * the line's end": CSS consumes an unterminated url token's remnants up to the next unescaped `)`
- * wherever it falls, including on a later line, so every caller carries `-1` across the line
- * boundary rather than stopping here.
+ * index just past that `)`, or `'contentOpen'` if none is found on this line. `'contentOpen'` is
+ * not "the token ends at the line's end": CSS consumes an unterminated url token's remnants up to
+ * the next unescaped `)` wherever it falls, including on a later line, so every caller carries
+ * `'contentOpen'` across the line boundary rather than stopping here.
  */
-function indexAfterUnquotedUrlContent(line: string, contentStart: number): number {
+function indexAfterUnquotedUrlContent(line: string, contentStart: number): number | 'contentOpen' {
   let index = contentStart
 
   while (index < line.length) {
@@ -417,7 +423,7 @@ function indexAfterUnquotedUrlContent(line: string, contentStart: number): numbe
     index += 1
   }
 
-  return -1
+  return 'contentOpen'
 }
 
 /**
@@ -433,7 +439,7 @@ function indexAfterUnquotedUrlContent(line: string, contentStart: number): numbe
  * `isAnEscapedLineBreakAtEndOfLine`). It also treats an unquoted `url(...)` token's content as
  * opaque, the same way `markLinesFlaggedByTheUrlOpaqueReading` does, carrying an unclosed one, or
  * an undecided one, across the line boundary too (`EscapedLineBreakScanState.urlCarry`, the same
- * two sentinels as `UrlOpaqueScanState.urlCarry` above). The three carried states are mutually
+ * carried states as `UrlOpaqueScanState.urlCarry` above). The three carried states are mutually
  * exclusive at any line boundary — inside a comment, inside or awaiting an unclosed url token's
  * content (`urlCarry`), or inside an open string (remembering which quote character) — so it
  * carries a small state object across lines instead of reusing `isLineStillInsideAnOpenComment`.
@@ -452,7 +458,7 @@ function markLinesFlaggedByTheEscapedLineBreakReading(
 
 interface EscapedLineBreakScanState {
   readonly isInsideAnOpenComment: boolean
-  readonly urlCarry: number // same convention as `UrlOpaqueScanState.urlCarry` above
+  readonly urlCarry: UrlCarry // same convention as `UrlOpaqueScanState.urlCarry` above
   readonly openStringQuote: string | undefined
 }
 
@@ -461,7 +467,7 @@ interface EscapedLineBreakScanState {
 // pushed a single return past this file's line-length limit and onto four lines instead of one).
 const NOTHING_IS_OPEN: EscapedLineBreakScanState = {
   isInsideAnOpenComment: false,
-  urlCarry: 0,
+  urlCarry: 'none',
   openStringQuote: undefined,
 }
 const STILL_INSIDE_AN_OPEN_COMMENT: EscapedLineBreakScanState = {
@@ -491,7 +497,7 @@ function scanLineAcrossEscapedLineBreaksAndUrls(
     )
   }
   const cursor = resumeUrlCarry(line, state.urlCarry)
-  if (cursor < 0) return { ...NOTHING_IS_OPEN, urlCarry: cursor }
+  if (typeof cursor === 'string') return { ...NOTHING_IS_OPEN, urlCarry: cursor }
   return scanFromStartOfLine(line, state.isInsideAnOpenComment, cursor)
 }
 
@@ -538,7 +544,7 @@ function stringStep(outcome: StringLiteralScanOutcome, endOfLine: number): numbe
  * awaiting its content) coming in: outside a comment, an unquoted url token's content is skipped
  * opaquely first (carried across the line boundary if it does not close here, or, if only
  * whitespace followed `url(` up to this line's end, carried as awaiting content instead — see
- * `urlContentSentinel`); failing that, the next opening delimiter opens a comment, unless a quote
+ * `resolveUrlContent`); failing that, the next opening delimiter opens a comment, unless a quote
  * opens a string first (skipped to its close, or, if it is escape-continued past this line,
  * reported as still open); inside a comment, the next closing delimiter closes it.
  *
@@ -569,7 +575,7 @@ function scanFromStartOfLine(
 
     const urlLookup = tryToSkipAnUnquotedUrlToken(line, index)
     if (urlLookup !== undefined) {
-      if (urlLookup < 0) return { ...NOTHING_IS_OPEN, urlCarry: urlLookup }
+      if (typeof urlLookup === 'string') return { ...NOTHING_IS_OPEN, urlCarry: urlLookup }
       index = urlLookup
       continue
     }
@@ -592,8 +598,7 @@ function scanFromStartOfLine(
     index += 1
   }
 
-  if (isInsideAnOpenComment) return STILL_INSIDE_AN_OPEN_COMMENT
-  return NOTHING_IS_OPEN
+  return { ...NOTHING_IS_OPEN, isInsideAnOpenComment }
 }
 
 type StringLiteralScanOutcome =
