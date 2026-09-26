@@ -40,7 +40,11 @@ These are stated as rules, not as gaps to be filled later:
   the way `extends` always composes: it does not merge with it.
 - Shorthands are expanded by POSITION, not by grammar: a literal inside a shorthand is reported
   only where it sits in its longhand's position. `border: 1px solid red` is reported;
-  `border: red 1px solid` is not.
+  `border: red 1px solid` is not. Leaving a part out moves the parts after it, so
+  `border: 1px red` and `text-decoration: underline red` are not reported either.
+- The logical border shorthands are not expanded at all, so nothing inside one is checked:
+  `border-block: 1px solid red` and `border-inline-start: 1px solid red` pass, although
+  `border-block-color: red` written on its own is reported.
 - A comma-separated `transition` list is not checked.
 - The `font` shorthand is, in effect, not checked.
 - Each space-separated part of a value is checked on its own: `font-family: var(--x), sans-serif`
