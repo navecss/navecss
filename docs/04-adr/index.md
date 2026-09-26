@@ -20,5 +20,6 @@ ADRs record significant architectural choices: the context, the options consider
 | [0004](0004-zero-runtime-scope.md)                      | Zero runtime: nothing Nave ships computes or applies a style in the browser                                  | accepted |
 | [0005](0005-browser-floor.md)                           | The browser floor is Chrome and Edge 125, Firefox 128, Safari 18, and relative colour syntax is what sets it | accepted |
 | [0006](0006-nave-directive-stands-in-for-css-mixins.md) | `@nave` is a build-time stand-in for native CSS mixins, with a mapping, an adoption path and a sunset        | accepted |
+| [0007](0007-release-topology.md)                        | Release topology: which packages version together, and why `@navecss/stylelint-config` does not              | accepted |
 
 _Still to back-fill: the first-party token build pipeline (its mechanism; the format it targets is 0002), pnpm + Turborepo + Changesets as the release topology, and the headless-bridge approach (Base UI / Radix)._

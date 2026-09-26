@@ -18,7 +18,9 @@
  * At 0.1.0 exactly `@navecss/tokens` and `@navecss/core` are meant to
  * publish (`@navecss/bridge` publishes the
  * first time it ships non-empty content; `@navecss/cli` stays unpublished
- * until the component registry exists). This script fails the moment a
+ * until the component registry exists). `@navecss/stylelint-config` joins the publishable set
+ * from its own first release, versioning independently of the `tokens`/`core` pair (it depends
+ * on neither; its contract is with Stylelint and the `@nave` grammar). This script fails the moment a
  * workspace package's `private` field stops matching that set — in either
  * direction, so a package that SHOULD stay private losing that field is
  * caught, and so is a package that should start publishing being left
@@ -41,7 +43,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 /**
 The set of package names meant to publish at 0.1.0.
  */
-export const PUBLISHABLE_SET = new Set(['@navecss/tokens', '@navecss/core'])
+export const PUBLISHABLE_SET = new Set([
+  '@navecss/tokens',
+  '@navecss/core',
+  '@navecss/stylelint-config',
+])
 
 /**
  * This gate's own refusal, printed when `findWorkspaceGlobViolation` (imported from

@@ -78,10 +78,11 @@ test('a manifest with private: false is publishable (changesets checks strict !=
   assert.equal(isPublishable({ name: '@navecss/bridge', private: false }), true)
 })
 
-test('the shipped 0.1.0 set (tokens + core publishable, bridge + cli private) matches with no mismatches', () => {
+test('the shipped set (tokens + core + stylelint-config publishable, bridge + cli private) matches with no mismatches', () => {
   const manifests = [
     { name: '@navecss/tokens' },
     { name: '@navecss/core' },
+    { name: '@navecss/stylelint-config' },
     { name: '@navecss/bridge', private: true },
     { name: '@navecss/cli', private: true },
   ]
@@ -106,6 +107,7 @@ test('an expected-set member gaining "private: true" by mistake is caught as une
   const manifests = [
     { name: '@navecss/tokens', private: true },
     { name: '@navecss/core' },
+    { name: '@navecss/stylelint-config' },
     { name: '@navecss/bridge', private: true },
     { name: '@navecss/cli', private: true },
   ]
@@ -113,8 +115,12 @@ test('an expected-set member gaining "private: true" by mistake is caught as une
   assert.deepEqual(unexpectedlyPrivate, ['@navecss/tokens'])
 })
 
-test('PUBLISHABLE_SET is exactly {tokens, core} today', () => {
-  assert.deepEqual([...PUBLISHABLE_SET].sort(), ['@navecss/core', '@navecss/tokens'])
+test('PUBLISHABLE_SET is exactly {tokens, core, stylelint-config} today', () => {
+  assert.deepEqual([...PUBLISHABLE_SET].sort(), [
+    '@navecss/core',
+    '@navecss/stylelint-config',
+    '@navecss/tokens',
+  ])
 })
 
 /**
@@ -180,6 +186,7 @@ test('main(): a confirmed workspace with the expected publishable set passes wit
     bridge: { name: '@navecss/bridge', private: true },
     cli: { name: '@navecss/cli', private: true },
     core: { name: '@navecss/core' },
+    'stylelint-config': { name: '@navecss/stylelint-config' },
     tokens: { name: '@navecss/tokens' },
   })
   try {
@@ -292,6 +299,7 @@ test('nothing this gate prints down ANY path names a tracker a reader cannot ope
 test('the mismatch report is byte-exact, not only opacity- and shape-checked', () => {
   const mismatched = buildFixture(VALID_WORKSPACE_YAML, {
     core: { name: '@navecss/core', private: true },
+    'stylelint-config': { name: '@navecss/stylelint-config' },
     surprise: { name: '@navecss/surprise' },
     tokens: { name: '@navecss/tokens' },
   })

@@ -40,6 +40,7 @@ packages/tokens/   → DTCG token source (tokens.json) + first-party DTCG reader
 packages/core/     → reset.css, @layer stack (index.css), generated atomic utilities, cx()/atoms, PostCSS @nave plugin
 packages/bridge/   → base-ui.css / radix.css token bridges (CSS-only; depends on tokens)
 packages/cli/      → navecss CLI (component registry: `navecss add ...`); thin registry client
+packages/stylelint-config/ → published stylelint rules for a consumer's project (`@nave` known, tokens-only values, the outline guard); depends on neither tokens nor core
 ```
 
 Dependency direction: `core`, `bridge` -> `tokens`. `cli` orchestrates, owns no styles. Public-API and token-contract changes are deliberate, versioned events (Changesets), not incidental.
