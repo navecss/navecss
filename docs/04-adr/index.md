@@ -4,7 +4,8 @@ ADRs record significant architectural choices: the context, the options consider
 
 ## Conventions
 
-- Files are numbered `NNNN-short-slug.md`, immutable once accepted; a change of mind is a NEW ADR that amends or supersedes the old one (state which, in both). `NNNN` is the ADR's id: unique, derived from the filename, never restated in frontmatter.
+- Files are numbered `NNNN-short-slug.md`. `NNNN` is the ADR's id: unique, derived from the filename, never restated in frontmatter.
+- Once an ADR is accepted, its decisions and its filename do not change: a change of mind is a NEW ADR that amends or supersedes the old one (state which, in both). Everything else is corrected in place. An error in the ADR's own text (a wrong count, a plan stated as if it had shipped, a stale link or title) is fixed where it stands, because the old text was never true. A later event that changes what the ADR reports (a planned piece ships, code it cites moves or changes) is added as a dated `**Correction (YYYY-MM-DD):**` bullet beside the passage it updates, because the original text was true when written and stays readable.
 - Detailed ADRs live HERE and version with the code. One canonical home per fact: an ADR carries its decision's full reasoning, and any other page that mentions the decision links to the ADR rather than restating it.
 - An ADR is the technical record of a decision, not its approval. A decision that affects accessibility conformance or licensing also needs the maintainer's approval of that side of it: if you are proposing one, [open an issue](https://github.com/navecss/navecss/issues) for it.
 - An ADR's status lives in its own `- **Status:**` bullet below (accepted / superseded / deprecated) and nowhere else — it is not duplicated into frontmatter; only facts with no other home are structured there.
@@ -12,14 +13,15 @@ ADRs record significant architectural choices: the context, the options consider
 
 ## Records
 
-| ADR                                                     | Title                                                                                                        | Status   |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------- |
-| [0001](0001-native-css-nesting.md)                      | `@nave` emits native CSS nesting; browser floor rises to Baseline 2024                                       | accepted |
-| [0002](0002-dtcg-2025-10-token-format.md)               | The token pipeline targets DTCG 2025.10, reads one shape, and refuses the pre-stable draft by name           | accepted |
-| [0003](0003-layer-cascade-contract.md)                  | The `@layer` cascade contract: seven names, one precondition, and where consumer CSS goes                    | accepted |
-| [0004](0004-zero-runtime-scope.md)                      | Zero runtime: nothing Nave ships computes or applies a style in the browser                                  | accepted |
-| [0005](0005-browser-floor.md)                           | The browser floor is Chrome and Edge 125, Firefox 128, Safari 18, and relative colour syntax is what sets it | accepted |
-| [0006](0006-nave-directive-stands-in-for-css-mixins.md) | `@nave` is a build-time stand-in for native CSS mixins, with a mapping, an adoption path and a sunset        | accepted |
-| [0007](0007-es-modules-only-and-require.md)             | ES modules only, no CommonJS build, and every JavaScript entry point also loads through `require()`          | accepted |
+| ADR                                                     | Title                                                                                                                      | Status   |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
+| [0001](0001-native-css-nesting.md)                      | `@nave` emits native CSS nesting; browser floor rises to Baseline 2024                                                     | accepted |
+| [0002](0002-dtcg-2025-10-token-format.md)               | The token pipeline targets DTCG 2025.10, reads one shape, and refuses the pre-stable draft by name                         | accepted |
+| [0003](0003-layer-cascade-contract.md)                  | The `@layer` cascade contract: seven names, one precondition, and where consumer CSS goes                                  | accepted |
+| [0004](0004-zero-runtime-scope.md)                      | Zero runtime: nothing Nave ships computes or applies a style in the browser                                                | accepted |
+| [0005](0005-browser-floor.md)                           | The browser floor is Chrome and Edge 125, Firefox 128, Safari 18, and relative colour syntax is what sets it               | accepted |
+| [0006](0006-nave-directive-stands-in-for-css-mixins.md) | `@nave` is a build-time stand-in for native CSS mixins, with a mapping, an adoption path and a sunset                      | accepted |
+| [0007](0007-es-modules-only-and-require.md)             | Nave ships ES modules only, with no CommonJS build, and every JavaScript entry point also loads through `require()`        | accepted |
+| [0008](0008-test-placement.md)                          | A test lives beside the one source file it tests; tests of the package as a whole live in `test/`; no test file ever ships | accepted |
 
 _Still to back-fill: the first-party token build pipeline (its mechanism; the format it targets is 0002), pnpm + Turborepo + Changesets as the release topology, and the headless-bridge approach (Base UI / Radix)._
