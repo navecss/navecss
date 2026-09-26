@@ -3,7 +3,13 @@
  * the edit list its block walk produced. Split out of `expand-text.ts` to
  * keep that file under the project's file-length lint.
  */
-import { decodeIncomingMap, type IncomingMap, MappingsBuilder, type Position, type SourceMap } from './source-map.ts'
+import {
+  decodeIncomingMap,
+  type IncomingMap,
+  MappingsBuilder,
+  type Position,
+  type SourceMap,
+} from './source-map.ts'
 import { type Token, tokenize } from './tokenizer.ts'
 
 /**
@@ -45,7 +51,11 @@ interface MappedRangeContext {
 /**
 Appends one range to `ctx.output`/`ctx.builder`, marking one segment per token start, each token's own position (via `sourceForToken`) chained through the incoming map.
  */
-function appendMappedRange(ctx: MappedRangeContext, range: MappedRange, sourceForToken: (token: Token) => Position): void {
+function appendMappedRange(
+  ctx: MappedRangeContext,
+  range: MappedRange,
+  sourceForToken: (token: Token) => Position,
+): void {
   const { builder, output, incoming } = ctx
   const { text, rangeStart, rangeEnd, tokensInRange } = range
   let cursor = rangeStart
@@ -85,7 +95,12 @@ An untouched slice of the original css: every token in it maps to its own input 
 function appendGap(ctx: MappedRangeContext, gap: GapInput): void {
   appendMappedRange(
     ctx,
-    { text: gap.css, rangeStart: gap.start, rangeEnd: gap.end, tokensInRange: tokensBetween(gap.tokens, gap.start, gap.end) },
+    {
+      text: gap.css,
+      rangeStart: gap.start,
+      rangeEnd: gap.end,
+      tokensInRange: tokensBetween(gap.tokens, gap.start, gap.end),
+    },
     (t) => gap.positionAt(t.startIndex),
   )
 }
@@ -123,11 +138,23 @@ export function buildOutput(input: BuildOutputInput): { css: string; map: string
   let cursor = 0
 
   for (const edit of sorted) {
-    appendGap(ctx, { css: input.css, tokens: input.tokens, start: cursor, end: edit.start, positionAt: input.positionAt })
+    appendGap(ctx, {
+      css: input.css,
+      tokens: input.tokens,
+      start: cursor,
+      end: edit.start,
+      positionAt: input.positionAt,
+    })
     appendEditParts(ctx, edit)
     cursor = Math.max(cursor, edit.end)
   }
-  appendGap(ctx, { css: input.css, tokens: input.tokens, start: cursor, end: input.css.length, positionAt: input.positionAt })
+  appendGap(ctx, {
+    css: input.css,
+    tokens: input.tokens,
+    start: cursor,
+    end: input.css.length,
+    positionAt: input.positionAt,
+  })
 
   const sources = incoming ? [...incoming.sources] : [input.from ?? '<input>']
   const map: SourceMap = { version: 3, sources, names: [], mappings: ctx.builder.toMappings() }

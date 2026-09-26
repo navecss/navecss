@@ -36,13 +36,16 @@ describe('AC-directive-core-16 — every problem in one stylesheet, in one repor
   })
 
   it('gives exactly three warnings, no fold, under warn', async () => {
-    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(CSS, { from: undefined })
+    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(CSS, {
+      from: undefined,
+    })
 
     expect(result.warnings()).toHaveLength(3)
     expect(result.warnings()[0]).toMatchObject({ line: 2, column: 9 })
     expect(result.warnings()[1]).toMatchObject({ line: 2, column: 13 })
     expect(result.warnings()[2]).toMatchObject({ line: 5, column: 9 })
-    for (const warning of result.warnings()) expect(warning.text).not.toContain('more in this stylesheet')
+    for (const warning of result.warnings())
+      expect(warning.text).not.toContain('more in this stylesheet')
   })
 
   it('folds per stylesheet: two independent processes give two independent reports', async () => {

@@ -50,7 +50,11 @@ export interface PlanResult {
  */
 function anchorBlock(block: ResolvedBlock): AnchoredBlock {
   if (block.kind === 'pseudo') {
-    return { kind: 'pseudo', selector: anchorSelectorList(block.selector), declarations: block.declarations }
+    return {
+      kind: 'pseudo',
+      selector: anchorSelectorList(block.selector),
+      declarations: block.declarations,
+    }
   }
   return {
     kind: block.kind,
@@ -70,7 +74,10 @@ function emptyResult(diagnostics: readonly Diagnostic[]): PlanResult {
 /**
 The candidate atom names, plus one `bad-token` diagnostic per non-ident component.
  */
-function readNames(components: readonly PreludeComponent[]): { diagnostics: Diagnostic[]; names: string[]; } {
+function readNames(components: readonly PreludeComponent[]): {
+  diagnostics: Diagnostic[]
+  names: string[]
+} {
   const names: string[] = []
   const diagnostics: Diagnostic[] = []
   for (const component of components) {
@@ -78,7 +85,12 @@ function readNames(components: readonly PreludeComponent[]): { diagnostics: Diag
       names.push(component.name)
       continue
     }
-    diagnostics.push({ code: 'bad-token', text: component.text, offset: component.offset, endOffset: component.endOffset })
+    diagnostics.push({
+      code: 'bad-token',
+      text: component.text,
+      offset: component.offset,
+      endOffset: component.endOffset,
+    })
   }
   return { names, diagnostics }
 }
@@ -92,7 +104,12 @@ function readUnknownAtomDiagnostics(
 ): Diagnostic[] {
   return unresolved.map((name) => {
     const component = components.find((c) => c.kind === 'ident' && c.name === name)
-    return { code: 'unknown-atom', name, offset: component?.offset ?? 0, endOffset: component?.endOffset ?? 0 }
+    return {
+      code: 'unknown-atom',
+      name,
+      offset: component?.offset ?? 0,
+      endOffset: component?.endOffset ?? 0,
+    }
   })
 }
 

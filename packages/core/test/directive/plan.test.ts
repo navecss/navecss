@@ -16,7 +16,9 @@ describe('AC-directive-core-03 — plan() takes the authored prelude and three f
 
     expect(result.declarations).toEqual([{ prop: 'display', value: 'flex' }])
     expect(result.wrapInAmpersand).toBe(false)
-    expect(result.diagnostics).toEqual([{ code: 'unknown-atom', name: 'interactve', offset: 13, endOffset: 23 }])
+    expect(result.diagnostics).toEqual([
+      { code: 'unknown-atom', name: 'interactve', offset: 13, endOffset: 23 },
+    ])
   })
 
   it('sets the wrap flag from isFollowingNestedNode alone', () => {

@@ -88,16 +88,39 @@ export function consumeNumericToken(s: Scanner, start: number): Token {
 
   if (isIdentSequenceStartAt(s)) {
     const unit = consumeName(s)
-    const structured: DimensionStructured = { value: num.value, type: num.type, unit, ...signCharacter }
-    return { type: 'dimension-token', raw: s.input.slice(start, s.pos), startIndex: start, endIndex: s.pos, structured }
+    const structured: DimensionStructured = {
+      value: num.value,
+      type: num.type,
+      unit,
+      ...signCharacter,
+    }
+    return {
+      type: 'dimension-token',
+      raw: s.input.slice(start, s.pos),
+      startIndex: start,
+      endIndex: s.pos,
+      structured,
+    }
   }
 
   if (s.peek() === '%') {
     s.advance()
     const structured: PercentageStructured = { value: num.value, ...signCharacter }
-    return { type: 'percentage-token', raw: s.input.slice(start, s.pos), startIndex: start, endIndex: s.pos, structured }
+    return {
+      type: 'percentage-token',
+      raw: s.input.slice(start, s.pos),
+      startIndex: start,
+      endIndex: s.pos,
+      structured,
+    }
   }
 
   const structured: NumberStructured = { value: num.value, type: num.type, ...signCharacter }
-  return { type: 'number-token', raw: s.input.slice(start, s.pos), startIndex: start, endIndex: s.pos, structured }
+  return {
+    type: 'number-token',
+    raw: s.input.slice(start, s.pos),
+    startIndex: start,
+    endIndex: s.pos,
+    structured,
+  }
 }

@@ -20,7 +20,6 @@ async function listDirectory(dir: string): Promise<string[]> {
   for (const entry of entries) {
     const entryPath = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-       
       files.push(...(await listDirectory(entryPath)))
     } else if (entry.isFile() && path.extname(entry.name) === '.css') {
       files.push(entryPath)

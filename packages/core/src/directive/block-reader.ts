@@ -67,7 +67,7 @@ function closeOne(
   depth: number,
   i: number,
   type: string,
-): { closedBlock?: TrailingBlock; depth: number; } | undefined {
+): { closedBlock?: TrailingBlock; depth: number } | undefined {
   if (depth === 0) return undefined
   const openIndex = opens.pop()!
   const nextDepth = depth - 1
@@ -101,14 +101,19 @@ function scanItem(tokens: readonly Token[], start: number, limit: number): ScanR
       if (!closed) return { end: i, consumedSemicolon: false } // belongs to the enclosing block
       depth = closed.depth
       i++
-      if (closed.closedBlock) return { end: i, consumedSemicolon: false, trailingBlock: closed.closedBlock }
+      if (closed.closedBlock)
+        return { end: i, consumedSemicolon: false, trailingBlock: closed.closedBlock }
       continue
     }
     if (depth === 0 && type === 'semicolon-token') return { end: i + 1, consumedSemicolon: true }
     i++
   }
   if (opens.length > 0 && tokens[opens[0]!]!.type === '{-token') {
-    return { end: i, consumedSemicolon: false, trailingBlock: { openIndex: opens[0]!, closeIndex: undefined } }
+    return {
+      end: i,
+      consumedSemicolon: false,
+      trailingBlock: { openIndex: opens[0]!, closeIndex: undefined },
+    }
   }
   return { end: i, consumedSemicolon: false }
 }
@@ -167,7 +172,12 @@ function toDeclarationItem(start: number, end: number): Item {
 /**
 The character offset just past the last token the item's PRELUDE (not its block) actually contains.
  */
-function preludeEndOffset(tokens: readonly Token[], start: number, scan: ScanResult, preludeStart: number): number {
+function preludeEndOffset(
+  tokens: readonly Token[],
+  start: number,
+  scan: ScanResult,
+  preludeStart: number,
+): number {
   if (scan.trailingBlock) return tokens[scan.trailingBlock.openIndex]!.startIndex
   // The token just before the `;` when one was consumed, else the last content token before EOF/the enclosing `}`.
   const lastContentIndex = scan.consumedSemicolon ? scan.end - 2 : scan.end - 1

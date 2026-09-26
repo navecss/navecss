@@ -32,7 +32,7 @@ export interface ResolvedAtom {
   readonly blocks: readonly ResolvedBlock[]
 }
 
-export type ExtendMap = Readonly<Record<string, AtomDefinition | null | undefined>>;
+export type ExtendMap = Readonly<Record<string, AtomDefinition | null | undefined>>
 
 export interface ResolveOptions {
   readonly extend?: ExtendMap | undefined

@@ -21,7 +21,9 @@ describe('AC-directive-core-01 — resolve() returns the expansion as plain data
   }
 
   it('gives declarations in definition order and blocks pseudos, then media, then container', () => {
-    const { resolved } = resolve(['focusRing', 'deep', 'nope', 'toString', 'ghost', 'brandBox'], { extend })
+    const { resolved } = resolve(['focusRing', 'deep', 'nope', 'toString', 'ghost', 'brandBox'], {
+      extend,
+    })
 
     expect(resolved.focusRing?.declarations).toEqual([{ prop: 'outline', value: 'none' }])
     expect(resolved.brandBox?.declarations).toEqual([
@@ -47,10 +49,9 @@ describe('AC-directive-core-01 — resolve() returns the expansion as plain data
   })
 
   it('reports the unresolved names as exactly the own keys with no truthy definition', () => {
-    const { unresolved } = resolve(
-      ['focusRing', 'deep', 'nope', 'toString', 'ghost', 'brandBox'],
-      { extend },
-    )
+    const { unresolved } = resolve(['focusRing', 'deep', 'nope', 'toString', 'ghost', 'brandBox'], {
+      extend,
+    })
 
     expect(unresolved).toEqual(['nope', 'toString', 'ghost'])
   })

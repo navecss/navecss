@@ -91,7 +91,10 @@ function findHint(typed: string, extend: ExtendMap): Hint | undefined {
  */
 function quoteList(items: readonly string[]): string {
   if (items.length === 1) return `"${items[0]}"`
-  return `${items.slice(0, -1).map((i) => `"${i}"`).join(', ')} or "${items.at(-1)}"`
+  return `${items
+    .slice(0, -1)
+    .map((i) => `"${i}"`)
+    .join(', ')} or "${items.at(-1)}"`
 }
 
 /**
@@ -110,7 +113,8 @@ function formatUnknownAtom(name: string, extend: ExtendMap): string {
   return `${first} If it is an atom of your own, pass it in the extend option.\nAvailable: ${available}`
 }
 
-const BAD_PARENT_WORKAROUND = ' A directive here can be written `& { @nave ...; }` inside the group rule instead.'
+const BAD_PARENT_WORKAROUND =
+  ' A directive here can be written `& { @nave ...; }` inside the group rule instead.'
 
 /**
  *
@@ -123,12 +127,15 @@ function formatBadParent(diagnostic: Diagnostic): string {
 /**
 Every diagnostic whose text needs nothing beyond the diagnostic itself — no vocabulary, no hint.
  */
-const FIXED_TEXTS: Readonly<Record<Exclude<Diagnostic['code'], 'unknown-atom' | 'bad-parent'>, (d: Diagnostic) => string>> = {
+const FIXED_TEXTS: Readonly<
+  Record<Exclude<Diagnostic['code'], 'unknown-atom' | 'bad-parent'>, (d: Diagnostic) => string>
+> = {
   'bad-token': (d) => `@nave: unexpected "${d.text ?? ''}"; separate atom names with spaces`,
   'bare-import': () => '@import specifies a bare module: a browser cannot load it',
   'has-block': () => '@nave: a directive with a {} block is not supported',
   'in-keyframes': () => '@nave cannot be used inside @keyframes',
-  'missing-declarations': (d) => `@nave: atom "${d.name ?? ''}" is registered without a declarations object`,
+  'missing-declarations': (d) =>
+    `@nave: atom "${d.name ?? ''}" is registered without a declarations object`,
   'no-atom': () => '@nave: directive names no atom',
 }
 
@@ -137,7 +144,8 @@ const FIXED_TEXTS: Readonly<Record<Exclude<Diagnostic['code'], 'unknown-atom' | 
  * `diagnostic`, its own prefix/frame aside.
  */
 export function formatDiagnostic(diagnostic: Diagnostic, options: FormatOptions = {}): string {
-  if (diagnostic.code === 'unknown-atom') return formatUnknownAtom(diagnostic.name!, options.extend ?? {})
+  if (diagnostic.code === 'unknown-atom')
+    return formatUnknownAtom(diagnostic.name!, options.extend ?? {})
   if (diagnostic.code === 'bad-parent') return formatBadParent(diagnostic)
   return FIXED_TEXTS[diagnostic.code](diagnostic)
 }

@@ -59,7 +59,9 @@ True at a `!` delim immediately followed by an ident — R5(b)'s `!important`-sh
  */
 function isBangIdent(tokens: readonly Token[], i: number): boolean {
   const t = tokens[i]!
-  return t.type === 'delim-token' && t.structured?.value === '!' && tokens[i + 1]?.type === 'ident-token'
+  return (
+    t.type === 'delim-token' && t.structured?.value === '!' && tokens[i + 1]?.type === 'ident-token'
+  )
 }
 
 /**
@@ -68,7 +70,12 @@ A `!` plus the ident after it, as one `bad-token` component.
 function readBangIdent(tokens: readonly Token[], i: number): BadTokenComponent {
   const bang = tokens[i]!
   const ident = tokens[i + 1]!
-  return { kind: 'bad-token', text: bang.raw + ident.raw, offset: bang.startIndex, endOffset: ident.endIndex }
+  return {
+    kind: 'bad-token',
+    text: bang.raw + ident.raw,
+    offset: bang.startIndex,
+    endOffset: ident.endIndex,
+  }
 }
 
 /**
@@ -76,7 +83,12 @@ An ident becomes a candidate atom name; anything else is its own one-token `bad-
  */
 function readSingleToken(t: Token): PreludeComponent {
   if (t.type === 'ident-token') {
-    return { kind: 'ident', name: t.structured?.value as string, offset: t.startIndex, endOffset: t.endIndex }
+    return {
+      kind: 'ident',
+      name: t.structured?.value as string,
+      offset: t.startIndex,
+      endOffset: t.endIndex,
+    }
   }
   return { kind: 'bad-token', text: t.raw, offset: t.startIndex, endOffset: t.endIndex }
 }
@@ -85,7 +97,9 @@ function readSingleToken(t: Token): PreludeComponent {
 The prelude's component values, comments and whitespace already skipped.
  */
 export function readPreludeComponents(prelude: string): PreludeComponent[] {
-  const tokens = tokenize(prelude).filter((t) => t.type !== 'whitespace-token' && t.type !== 'comment')
+  const tokens = tokenize(prelude).filter(
+    (t) => t.type !== 'whitespace-token' && t.type !== 'comment',
+  )
   const components: PreludeComponent[] = []
 
   let i = 0

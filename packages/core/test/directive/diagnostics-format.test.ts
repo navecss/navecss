@@ -4,15 +4,22 @@ import { formatDiagnostic } from '../../src/directive/diagnostics-format.ts'
 
 describe('AC-directive-core-14 — the texts, owned by the core', () => {
   it('gives the hint clause for a close typo', () => {
-    expect(formatDiagnostic({ code: 'unknown-atom', name: 'interactve', offset: 0, endOffset: 0 })).toBe(
-      '@nave: unknown atom "interactve". Did you mean "interactive"?',
-    )
+    expect(
+      formatDiagnostic({ code: 'unknown-atom', name: 'interactve', offset: 0, endOffset: 0 }),
+    ).toBe('@nave: unknown atom "interactve". Did you mean "interactive"?')
   })
 
   it('gives the extend-option clause plus Available for a far typo, printed once and last', () => {
-    const text = formatDiagnostic({ code: 'unknown-atom', name: 'fancyShadow', offset: 0, endOffset: 0 })
+    const text = formatDiagnostic({
+      code: 'unknown-atom',
+      name: 'fancyShadow',
+      offset: 0,
+      endOffset: 0,
+    })
 
-    expect(text).toContain('@nave: unknown atom "fancyShadow". If it is an atom of your own, pass it in the extend option.')
+    expect(text).toContain(
+      '@nave: unknown atom "fancyShadow". If it is an atom of your own, pass it in the extend option.',
+    )
     expect(text).toContain('Available: ')
     expect(text.indexOf('Available:')).toBe(text.lastIndexOf('Available:'))
     expect(text.endsWith(text.split('\n').at(-1)!)).toBe(true)
@@ -28,7 +35,9 @@ describe('AC-directive-core-14 — the texts, owned by the core', () => {
   })
 
   it('gives the bare-directive text exactly', () => {
-    expect(formatDiagnostic({ code: 'no-atom', offset: 0, endOffset: 0 })).toBe('@nave: directive names no atom')
+    expect(formatDiagnostic({ code: 'no-atom', offset: 0, endOffset: 0 })).toBe(
+      '@nave: directive names no atom',
+    )
   })
 
   it('gives the top-level bad-parent text alone, with no workaround sentence', () => {
@@ -38,7 +47,12 @@ describe('AC-directive-core-14 — the texts, owned by the core', () => {
   })
 
   it('appends the & workaround sentence when nested in a group rule', () => {
-    const text = formatDiagnostic({ code: 'bad-parent', offset: 0, endOffset: 0, detail: 'nested-group' })
+    const text = formatDiagnostic({
+      code: 'bad-parent',
+      offset: 0,
+      endOffset: 0,
+      detail: 'nested-group',
+    })
 
     expect(text).toContain('@nave must be the direct child of a CSS rule selector block')
     expect(text).toContain('& { @nave')
@@ -70,14 +84,24 @@ describe('AC-directive-core-15 — the hint rule, boundaries', () => {
   })
 
   it('adds the camelCase sentence for a hyphenated input that normalises to one atom', () => {
-    const text = formatDiagnostic({ code: 'unknown-atom', name: 'sr-only', offset: 0, endOffset: 0 })
+    const text = formatDiagnostic({
+      code: 'unknown-atom',
+      name: 'sr-only',
+      offset: 0,
+      endOffset: 0,
+    })
 
     expect(text).toContain('Did you mean "srOnly"?')
     expect(text).toContain('Atom names are camelCase; "nave-sr-only" is its class.')
   })
 
   it('does not add the camelCase sentence for a non-hyphenated input', () => {
-    const text = formatDiagnostic({ code: 'unknown-atom', name: 'flexcol', offset: 0, endOffset: 0 })
+    const text = formatDiagnostic({
+      code: 'unknown-atom',
+      name: 'flexcol',
+      offset: 0,
+      endOffset: 0,
+    })
 
     expect(text).toContain('Did you mean "flexCol"?')
     expect(text).not.toContain('camelCase')

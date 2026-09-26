@@ -113,9 +113,12 @@ function atRuleErrorIndex(atRule: PostCSSAtRule, diagnostic: Diagnostic): number
  */
 function reportDiagnostic(diagnostic: Diagnostic, ctx: DirectiveContext): void {
   const isNestedGroup = diagnostic.code === 'bad-parent' && ctx.atRule.parent?.type !== 'root'
-  const text = formatDiagnostic(isNestedGroup ? { ...diagnostic, detail: 'nested-group' } : diagnostic, {
-    extend: ctx.extend,
-  })
+  const text = formatDiagnostic(
+    isNestedGroup ? { ...diagnostic, detail: 'nested-group' } : diagnostic,
+    {
+      extend: ctx.extend,
+    },
+  )
   const index = atRuleErrorIndex(ctx.atRule, diagnostic)
   if (ctx.onUnknown === 'warn') {
     ctx.atRule.warn(ctx.result, text, index === undefined ? {} : { index })
@@ -139,7 +142,11 @@ function declNode(atRule: PostCSSAtRule, decl: Declaration): ReturnType<typeof p
  * bare when nothing precedes them that requires nesting, or wrapped in a
  * single `& { … }` when `wrapInAmpersand` is true.
  */
-function insertDeclarations(atRule: PostCSSAtRule, declarations: readonly Declaration[], isWrapped: boolean): void {
+function insertDeclarations(
+  atRule: PostCSSAtRule,
+  declarations: readonly Declaration[],
+  isWrapped: boolean,
+): void {
   if (declarations.length === 0) return
   if (!isWrapped) {
     for (const decl of declarations) atRule.before(declNode(atRule, decl))
@@ -154,7 +161,10 @@ function insertDeclarations(atRule: PostCSSAtRule, declarations: readonly Declar
 /**
 A rule node with `selector`, holding `declarations`.
  */
-function buildRule(selector: string, declarations: readonly Declaration[]): ReturnType<typeof postcss.rule> {
+function buildRule(
+  selector: string,
+  declarations: readonly Declaration[],
+): ReturnType<typeof postcss.rule> {
   const rule = postcss.rule({ selector })
   for (const decl of declarations) rule.append(postcss.decl({ prop: decl.prop, value: decl.value }))
   return rule
@@ -163,7 +173,9 @@ function buildRule(selector: string, declarations: readonly Declaration[]): Retu
 /**
 The PostCSS nodes one appended block contributes, in `plan()`'s already-anchored, already-ordered shape.
  */
-function buildAppendedNode(block: AnchoredBlock): ReturnType<typeof postcss.rule> | ReturnType<typeof postcss.atRule> {
+function buildAppendedNode(
+  block: AnchoredBlock,
+): ReturnType<typeof postcss.rule> | ReturnType<typeof postcss.atRule> {
   if (block.kind === 'pseudo') return buildRule(block.selector, block.declarations)
   const node = postcss.atRule({ name: block.kind, params: block.condition })
   if (block.declarations.length > 0) node.append(buildRule('&', block.declarations))
@@ -191,7 +203,9 @@ interface PlanAtRuleResult {
 function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap): PlanAtRuleResult {
   const parent = atRule.parent
   const isStyleRuleParent = parent?.type === 'rule'
-  const isFollowingNestedNodeHere = isStyleRuleParent ? isFollowingNestedNode(parent, atRule) : false
+  const isFollowingNestedNodeHere = isStyleRuleParent
+    ? isFollowingNestedNode(parent, atRule)
+    : false
 
   try {
     return {
@@ -248,7 +262,10 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
     OnceExit() {
       if (fold.length === 0) return
       const first = fold[0]!
-      throw first.atRule.error(foldMessage(fold), first.index === undefined ? {} : { index: first.index })
+      throw first.atRule.error(
+        foldMessage(fold),
+        first.index === undefined ? {} : { index: first.index },
+      )
     },
   }
 }

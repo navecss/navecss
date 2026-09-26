@@ -31,12 +31,12 @@ export interface CheckResult {
 /**
 1-based line/column (UTF-16 code units) for `offset` in `text`.
  */
-function positionAt(text: string, offset: number): { column: number; line: number; } {
+function positionAt(text: string, offset: number): { column: number; line: number } {
   let line = 1
   let lineStart = 0
   for (let i = 0; i < offset; i++) {
     if (text[i] !== '\n') {
-    	continue;
+      continue
     }
 
     line++
@@ -99,7 +99,11 @@ export async function check(options: CheckOptions): Promise<CheckResult> {
 /**
 `2` on a usage/read error or nothing read at all; `1` when something survived; `0` on a clean read.
  */
-function statusFor(hasUnreadableSource: boolean, stylesheetsRead: number, findingCount: number): 0 | 1 | 2 {
+function statusFor(
+  hasUnreadableSource: boolean,
+  stylesheetsRead: number,
+  findingCount: number,
+): 0 | 1 | 2 {
   if (hasUnreadableSource || stylesheetsRead === 0) return 2
   return findingCount > 0 ? 1 : 0
 }

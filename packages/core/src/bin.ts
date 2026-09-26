@@ -22,7 +22,11 @@ The repeatable `--source=` values, or `undefined` on a usage error.
  */
 function parseSourceArgs(args: readonly string[]): string[] | undefined {
   try {
-    const { values } = parseArgs({ args, options: { source: { type: 'string', multiple: true } }, strict: true })
+    const { values } = parseArgs({
+      args,
+      options: { source: { type: 'string', multiple: true } },
+      strict: true,
+    })
     return values.source
   } catch {
     return undefined
@@ -45,7 +49,9 @@ The pass line: what was read, stated plainly, no cause list.
 function printCleanSummary(result: CheckResult): void {
   if (result.status !== 0) return
   const plural = result.stylesheetsRead === 1 ? 'stylesheet' : 'stylesheets'
-  console.log(`Checked ${result.stylesheetsRead} ${plural} under the given --source; found no @nave directive.`)
+  console.log(
+    `Checked ${result.stylesheetsRead} ${plural} under the given --source; found no @nave directive.`,
+  )
 }
 
 /**
@@ -67,7 +73,9 @@ async function runCheck(args: readonly string[]): Promise<number> {
   printFindings(result)
   printCleanSummary(result)
   if (result.status === 2) {
-    console.error('No stylesheet could be checked: a --source path is unreadable, or none names a stylesheet.')
+    console.error(
+      'No stylesheet could be checked: a --source path is unreadable, or none names a stylesheet.',
+    )
   }
   return result.status
 }

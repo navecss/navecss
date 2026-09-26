@@ -26,12 +26,18 @@ describe('AC-directive-core-18 — a version-3 source map, one segment per token
 
     const outlineAt = output.indexOf('outline: none')
     const outlinePos = positionOf(output, outlineAt)
-    const insertedOriginal = consumer.originalPositionFor({ line: outlinePos.line, column: outlinePos.column })
+    const insertedOriginal = consumer.originalPositionFor({
+      line: outlinePos.line,
+      column: outlinePos.column,
+    })
     expect(insertedOriginal).toMatchObject({ line: 3, column: 2 })
 
     const focusVisibleAt = output.indexOf('&:focus-visible')
     const focusVisiblePos = positionOf(output, focusVisibleAt)
-    const blockOriginal = consumer.originalPositionFor({ line: focusVisiblePos.line, column: focusVisiblePos.column })
+    const blockOriginal = consumer.originalPositionFor({
+      line: focusVisiblePos.line,
+      column: focusVisiblePos.column,
+    })
     expect(blockOriginal).toMatchObject({ line: 3, column: 2 })
 
     consumer.destroy()
@@ -50,7 +56,10 @@ describe('AC-directive-core-18 — a version-3 source map, one segment per token
 
     const marginAt = output.indexOf('margin: 0')
     const marginPos = positionOf(output, marginAt)
-    const original = consumer.originalPositionFor({ line: marginPos.line, column: marginPos.column })
+    const original = consumer.originalPositionFor({
+      line: marginPos.line,
+      column: marginPos.column,
+    })
 
     expect(original.source).toBe('src.scss')
     expect(original.line).toBe(14)
@@ -76,12 +85,12 @@ describe('AC-directive-core-18 — a version-3 source map, one segment per token
 /**
 1-based line, 0-based column (source-map convention) for `offset` in `text`.
  */
-function positionOf(text: string, offset: number): { column: number; line: number; } {
+function positionOf(text: string, offset: number): { column: number; line: number } {
   let line = 1
   let lineStart = 0
   for (let i = 0; i < offset; i++) {
     if (text[i] !== '\n') {
-    	continue;
+      continue
     }
 
     line++

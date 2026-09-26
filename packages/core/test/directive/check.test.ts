@@ -70,11 +70,16 @@ describe('AC-directive-core-23 — what the check counts as a surviving directiv
   })
 
   it('does not flag a comment, a string, a url(), or an unrelated at-keyword', async () => {
-    const rows = ['/* @nave flex */', '.a{content:"@nave flex"}', '.a{background:url(@nave.png)}', '.a{@navex flex}']
+    const rows = [
+      '/* @nave flex */',
+      '.a{content:"@nave flex"}',
+      '.a{background:url(@nave.png)}',
+      '.a{@navex flex}',
+    ]
 
     for (const content of rows) {
       const filePath = await writeCss('row.css', content)
-       
+
       const result = await check({ source: [filePath] })
       expect(result.findings).toEqual([])
     }

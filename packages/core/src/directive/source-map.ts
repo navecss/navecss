@@ -27,7 +27,7 @@ const BASE64_VALUE = new Map([...BASE64_DIGITS].map((c, i) => [c, i]))
 /**
 One field's VLQ base64 decoding, starting at `start`; `next` is the index just past it.
  */
-function decodeVLQSegment(mappings: string, start: number): { next: number; value: number; } {
+function decodeVLQSegment(mappings: string, start: number): { next: number; value: number } {
   let value = 0
   let shift = 0
   let i = start
@@ -86,11 +86,16 @@ export class MappingsBuilder {
 
   mark(position: Position): void {
     const sourceLine = position.line - 1 // mappings are 0-based
-    const generatedColumnDelta = this.hasSegmentOnLine ? this.outputColumn - this.prevGeneratedColumn : this.outputColumn
+    const generatedColumnDelta = this.hasSegmentOnLine
+      ? this.outputColumn - this.prevGeneratedColumn
+      : this.outputColumn
     const sourceLineDelta = sourceLine - this.prevSourceLine
     const sourceColumnDelta = position.column - this.prevSourceColumn
     this.lines[this.outputLine]!.push(
-      encodeVLQ(generatedColumnDelta) + encodeVLQ(0) + encodeVLQ(sourceLineDelta) + encodeVLQ(sourceColumnDelta),
+      encodeVLQ(generatedColumnDelta) +
+        encodeVLQ(0) +
+        encodeVLQ(sourceLineDelta) +
+        encodeVLQ(sourceColumnDelta),
     )
     this.prevGeneratedColumn = this.outputColumn
     this.prevSourceLine = sourceLine
@@ -113,13 +118,18 @@ interface DecodedSegment {
 
 export interface IncomingMap {
   readonly sources: readonly string[]
-  originalPositionFor(position: Position): { column: number; line: number; source: string; } | undefined
+  originalPositionFor(
+    position: Position,
+  ): { column: number; line: number; source: string } | undefined
 }
 
 /**
 The last decoded segment whose generated position is at or before `position`.
  */
-function findCandidate(segments: readonly DecodedSegment[], position: Position): DecodedSegment | undefined {
+function findCandidate(
+  segments: readonly DecodedSegment[],
+  position: Position,
+): DecodedSegment | undefined {
   const generatedLine = position.line - 1
   let candidate: DecodedSegment | undefined
   for (const segment of segments) {
@@ -145,7 +155,11 @@ export function decodeIncomingMap(map: SourceMap): IncomingMap {
     originalPositionFor(position) {
       const candidate = findCandidate(segments, position)
       if (!candidate) return
-      return { source: sources[candidate.sourceIndex]!, line: candidate.sourceLine + 1, column: candidate.sourceColumn }
+      return {
+        source: sources[candidate.sourceIndex]!,
+        line: candidate.sourceLine + 1,
+        column: candidate.sourceColumn,
+      }
     },
   }
 }
@@ -163,7 +177,11 @@ interface DecoderState {
 /**
 One comma-separated segment, decoded and folded into `state`; `undefined` for a generated-only segment (no source mapping).
  */
-function decodeOneSegment(state: DecoderState, raw: string, generatedLine: number): DecodedSegment | undefined {
+function decodeOneSegment(
+  state: DecoderState,
+  raw: string,
+  generatedLine: number,
+): DecodedSegment | undefined {
   const col = decodeVLQSegment(raw, 0)
   state.generatedColumn += col.value
   if (col.next >= raw.length) return undefined

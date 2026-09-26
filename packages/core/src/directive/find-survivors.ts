@@ -66,10 +66,20 @@ class Scan {
 /**
 Every `nave`-named at-keyword token in `[start, end)` — a declaration's value may carry one (R5f).
  */
-function scanForNaveTokens(scan: Scan, start: number, end: number, selector: string | undefined): void {
+function scanForNaveTokens(
+  scan: Scan,
+  start: number,
+  end: number,
+  selector: string | undefined,
+): void {
   for (let i = start; i < end; i++) {
     const token = scan.tokens[i]!
-    if (isNaveAtKeyword(token)) scan.survivors.push({ offset: token.startIndex, text: naturalTextAfter(scan.css, token.startIndex), selector })
+    if (isNaveAtKeyword(token))
+      scan.survivors.push({
+        offset: token.startIndex,
+        text: naturalTextAfter(scan.css, token.startIndex),
+        selector,
+      })
   }
 }
 
@@ -77,8 +87,10 @@ function scanForNaveTokens(scan: Scan, start: number, end: number, selector: str
 The literal text of a `rule` item's own selector, from its start to its `{`.
  */
 function ruleSelector(scan: Scan, item: Item): string {
-  const braceIndex = (item.blockStart!) - 1
-  return scan.css.slice(scan.tokens[item.start]!.startIndex, scan.tokens[braceIndex]!.startIndex).trim()
+  const braceIndex = item.blockStart! - 1
+  return scan.css
+    .slice(scan.tokens[item.start]!.startIndex, scan.tokens[braceIndex]!.startIndex)
+    .trim()
 }
 
 /**
@@ -87,7 +99,12 @@ Recurses into `item`'s own `{}` content, if it has one.
 function walkChildBlock(scan: Scan, item: Item, selector: string | undefined): void {
   if (item.blockStart === undefined || item.blockEnd === undefined) return
   const childSelector = item.kind === 'rule' ? ruleSelector(scan, item) : selector
-  walkBlock(scan, skipInert(scan.tokens, item.blockStart, item.blockEnd), item.blockEnd, childSelector)
+  walkBlock(
+    scan,
+    skipInert(scan.tokens, item.blockStart, item.blockEnd),
+    item.blockEnd,
+    childSelector,
+  )
 }
 
 /**
@@ -98,7 +115,11 @@ function visitItem(scan: Scan, item: Item, selector: string | undefined): void {
     case 'at-rule': {
       if (isNaveAtKeyword(scan.tokens[item.start]!)) {
         const atToken = scan.tokens[item.start]!
-        scan.survivors.push({ offset: atToken.startIndex, text: naturalTextAfter(scan.css, atToken.startIndex), selector })
+        scan.survivors.push({
+          offset: atToken.startIndex,
+          text: naturalTextAfter(scan.css, atToken.startIndex),
+          selector,
+        })
       }
       walkChildBlock(scan, item, selector)
       return

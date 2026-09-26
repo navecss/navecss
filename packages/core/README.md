@@ -296,4 +296,4 @@ navecss-core check`.
 | `@navecss/core/cx`        | `cx()` / `cx.raw()` utilities + `AtomName` type                                                       |
 | `@navecss/core/atoms`     | Atom definitions + `atomClassMap`                                                                     |
 | `@navecss/core/postcss`   | PostCSS plugin — `navePlugin()`                                                                       |
-| `@navecss/core/check`     | The survival check as a function — `check({ source })`                                               |
+| `@navecss/core/check`     | The survival check as a function — `check({ source })`                                                |

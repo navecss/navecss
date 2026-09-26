@@ -2,7 +2,13 @@
  * §4.3.6 "consume a url token" and §4.3.14 "consume the remnants of a bad url".
  */
 import { consumeEscapedCodePoint } from './escape.ts'
-import { consumeLiteralCodePoint, isNonPrintable, isValidEscapeAt, isWhitespace, type Scanner } from './scanner.ts'
+import {
+  consumeLiteralCodePoint,
+  isNonPrintable,
+  isValidEscapeAt,
+  isWhitespace,
+  type Scanner,
+} from './scanner.ts'
 
 interface UrlResult {
   readonly value: string

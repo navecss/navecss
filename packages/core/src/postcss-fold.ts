@@ -49,7 +49,9 @@ export function foldMessage(entries: readonly FoldEntry[]): string {
   if (rest.length > 0) {
     lines.push(`${rest.length} more in this stylesheet:`)
     for (const entry of rest) {
-      const position = entry.atRule.positionBy(entry.index === undefined ? {} : { index: entry.index })
+      const position = entry.atRule.positionBy(
+        entry.index === undefined ? {} : { index: entry.index },
+      )
       lines.push(`${position.line}:${position.column}: ${withoutNavePrefix(firstLine(entry.text))}`)
     }
   }

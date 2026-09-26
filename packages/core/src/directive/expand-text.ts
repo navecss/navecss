@@ -40,7 +40,7 @@ function inputPositionAt(text: string, offset: number): Position {
   let lineStart = 0
   for (let i = 0; i < offset; i++) {
     if (text[i] !== '\n') {
-    	continue;
+      continue
     }
 
     line++
@@ -161,16 +161,25 @@ function processDirective(w: Walker, site: DirectiveSite): void {
 
   const result = plan(
     prelude,
-    { isStyleRuleParent: context.isStyleRuleParent, isInsideKeyframes: context.isInsideKeyframes, isFollowingNestedNode: hasNestedNode },
+    {
+      isStyleRuleParent: context.isStyleRuleParent,
+      isInsideKeyframes: context.isInsideKeyframes,
+      isFollowingNestedNode: hasNestedNode,
+    },
     { extend: w.options.extend },
   )
 
   const positioned = repositionDiagnostics(result.diagnostics, item, directiveStart, directiveEnd)
-  if (item.blockStart !== undefined) positioned.push({ code: 'has-block', offset: directiveStart, endOffset: directiveEnd })
+  if (item.blockStart !== undefined)
+    positioned.push({ code: 'has-block', offset: directiveStart, endOffset: directiveEnd })
   w.diagnostics.push(...positioned)
 
   const inline = renderInline(result.declarations, result.wrapInAmpersand)
-  w.edits.push({ start: directiveStart, end: directiveEnd, parts: inline === '' ? [] : [{ text: inline, source }] })
+  w.edits.push({
+    start: directiveStart,
+    end: directiveEnd,
+    parts: inline === '' ? [] : [{ text: inline, source }],
+  })
   for (const block of result.blocks) frame.parts.push({ text: ` ${renderBlock(block)}`, source })
 }
 
@@ -209,9 +218,10 @@ function flushFrame(w: Walker, closeAt: number, frame: Frame): void {
 The child context a `rule`/`at-rule` item's own block is walked under.
  */
 function childContext(w: Walker, item: Item, context: WalkContext): WalkContext {
-  if (item.kind === 'rule') return { isStyleRuleParent: true, isInsideKeyframes: context.isInsideKeyframes }
+  const { isInsideKeyframes } = context
+  if (item.kind === 'rule') return { isStyleRuleParent: true, isInsideKeyframes }
   const name = atKeywordName(w.tokens[item.start]!)
-  return { isStyleRuleParent: false, isInsideKeyframes: context.isInsideKeyframes || isKeyframesName(name) }
+  return { isStyleRuleParent: false, isInsideKeyframes: isInsideKeyframes || isKeyframesName(name) }
 }
 
 /**

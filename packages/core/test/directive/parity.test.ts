@@ -37,7 +37,13 @@ const CORPUS: readonly string[] = [
 
 function normalize(node: ChildNode): unknown {
   if (node.type === 'comment') return { type: 'comment', text: node.text }
-  if (node.type === 'decl') return { type: 'decl', prop: node.prop, value: node.value.replaceAll(/\s+/g, ' '), important: node.important }
+  if (node.type === 'decl')
+    return {
+      type: 'decl',
+      prop: node.prop,
+      value: node.value.replaceAll(/\s+/g, ' '),
+      important: node.important,
+    }
   if (node.type === 'atrule') {
     return {
       type: 'atrule',
@@ -46,7 +52,11 @@ function normalize(node: ChildNode): unknown {
       nodes: normalizeChildren(node),
     }
   }
-  return { type: 'rule', selector: node.selector.replaceAll(/\s+/g, ' '), nodes: normalizeChildren(node) }
+  return {
+    type: 'rule',
+    selector: node.selector.replaceAll(/\s+/g, ' '),
+    nodes: normalizeChildren(node),
+  }
 }
 
 function normalizeChildren(container: Container): unknown[] {
@@ -57,13 +67,15 @@ function normalizeChildren(container: Container): unknown[] {
 R8's equivalence: same node kinds, in the same order and nesting, on the fields that matter (selector/name+prelude/prop+value+important/comment text); whitespace and semicolon raws ignored.
  */
 function isEquivalent(cssA: string, cssB: string): boolean {
-  const treeA = normalizeChildren(postcss.parse(cssA));
+  const treeA = normalizeChildren(postcss.parse(cssA))
   const treeB = normalizeChildren(postcss.parse(cssB))
   return JSON.stringify(treeA) === JSON.stringify(treeB)
 }
 
 async function throughPostcss(css: string): Promise<string> {
-  const result = await postcss([navePlugin({ onUnknown: 'warn', extend: EXTEND })]).process(css, { from: undefined })
+  const result = await postcss([navePlugin({ onUnknown: 'warn', extend: EXTEND })]).process(css, {
+    from: undefined,
+  })
   return result.css
 }
 
@@ -84,7 +96,9 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
   })
 
   it('reds on swapped declaration order (equivalence control)', () => {
-    expect(isEquivalent('.a { color: red; display: flex; }', '.a { display: flex; color: red; }')).toBe(false)
+    expect(
+      isEquivalent('.a { color: red; display: flex; }', '.a { display: flex; color: red; }'),
+    ).toBe(false)
   })
 
   it('reds on a missing nested rule (equivalence control)', () => {
@@ -100,6 +114,8 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
   })
 
   it('greens on whitespace-only differences (equivalence control)', () => {
-    expect(isEquivalent('.a{color:red;display:flex}', '.a { color: red; display: flex; }')).toBe(true)
+    expect(isEquivalent('.a{color:red;display:flex}', '.a { color: red; display: flex; }')).toBe(
+      true,
+    )
   })
 })
