@@ -489,3 +489,209 @@ describe('onUnknown default is error', () => {
     expect(await run('.x { @nave flex; }')).toContain('display: flex')
   })
 })
+
+describe('an extend atom cannot break out of the declaration or rule it is spliced into', () => {
+  it('refuses a declaration value containing a brace before any directive runs it', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { background: 'blue } body { display:none } /*' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+
+  it('refuses a declaration property containing a semicolon', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { 'color; --injected': 'red' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration property/)
+  })
+
+  it('refuses a pseudo declaration value carrying a comment opener', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: {
+        declarations: { color: 'red' },
+        pseudos: { ':hover': { background: '/* } .y { color:red' } },
+      },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/pseudo ":hover"/)
+  })
+
+  it('refuses a media condition string carrying a brace', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: {
+        declarations: { color: 'red' },
+        media: { '(width) { } body { color:red } /*': { declarations: { color: 'blue' } } },
+      },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/media condition/)
+  })
+
+  it('validates extend atoms at plugin creation, even when the directive is never invoked', () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red; --injected: 1' } },
+    }
+
+    expect(() => navePlugin({ extend })).toThrow(/declaration value/)
+  })
+
+  it('never validates the built-in atom map, only consumer-supplied extend entries', async () => {
+    // A built-in atom's own declarations never carry these characters, so this
+    // is just confirming the check is scoped to `extend` and does not walk `atoms`
+    // on every plugin creation for no reason.
+    expect(() => navePlugin()).not.toThrow()
+  })
+
+  it('refuses a pseudo key that opens a second rule instead of staying a same-element selector', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: {
+        declarations: { color: 'red' },
+        pseudos: { ':hover {} body { display: none } .z:hover': { color: 'blue' } },
+      },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/pseudo/)
+  })
+
+  it('refuses a declaration value carrying an unterminated comment', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red /*' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+
+  it('refuses a declaration property containing a semicolon on its own, apart from the value', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { 'foo;bar': 'red' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration property/)
+  })
+
+  it('refuses a declaration value with a trailing semicolon', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red;' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+
+  it('refuses a declaration value with a trailing semicolon and a trailing space', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red; ' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+
+  it('refuses a declaration value with a trailing, closed comment', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red /* note */' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+})
+
+describe('an extend atom accepts CSS-lawful strings a character blocklist used to refuse', () => {
+  it('accepts a background value using a data URL with a semicolon', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { background: 'url(data:image/png;base64,AAAA)' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain(
+      'background: url(data:image/png;base64,AAAA)',
+    )
+  })
+
+  it('accepts a background value using a quoted data URL containing markup', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { background: 'url("data:image/svg+xml;utf8,<svg/>")' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain(
+      'background: url("data:image/svg+xml;utf8,<svg/>")',
+    )
+  })
+
+  it('accepts a content value that is a quoted semicolon', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { content: '";"' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('content: ";"')
+  })
+
+  it('accepts a content value that is a quoted brace', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { content: '"{"' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('content: "{"')
+  })
+
+  it('accepts a content value that is a quoted comment opener', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { content: '"/*"' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('content: "/*"')
+  })
+
+  it('accepts a pseudo key that is a plain pseudo-class', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { color: 'red' }, pseudos: { ':focus-visible': { outline: 'none' } } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('&:focus-visible')
+  })
+
+  it('anchors a pseudo key whose only & sits inside a comment, rather than emitting a descendant match', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      noted: {
+        declarations: { color: 'red' },
+        pseudos: { '/* note & */:hover': { color: 'blue' } },
+      },
+    }
+
+    expect(await run('.x { @nave noted; }', { extend })).toContain('&/* note & */:hover {')
+  })
+
+  it('accepts a media condition that is a plain width query', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: {
+        declarations: { color: 'red' },
+        media: { '(min-width: 40rem)': { declarations: { color: 'blue' } } },
+      },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('(min-width: 40rem)')
+  })
+
+  it('accepts a declaration value carrying !important', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { color: 'red !important' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('color: red !important')
+  })
+
+  it('accepts a declaration value with trailing whitespace', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { color: 'red ' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('color: red')
+  })
+
+  it('accepts a multi-line declaration value ending in a newline', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { 'grid-template-areas': '\n  "a b"\n  "c d"\n' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('"a b"')
+  })
+})

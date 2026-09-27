@@ -24,124 +24,118 @@
  * relative to the parent and must be left untouched: `'.foo &'` is a complete, valid,
  * already-relative selector, and prepending `&` to it (`'&.foo &'`) demands the element
  * match `.foo` AND have a descendant matching the parent, which is not what the author
- * wrote. The check is quote- and escape-aware so a literal `&` inside an attribute value
- * (`[data-label="A & B"]`) is not mistaken for an anchor and left unanchored, which would
+ * wrote. The check is quote-, escape- and comment-aware so a literal `&` inside an attribute
+ * value (`[data-label="A & B"]`) or a comment is not mistaken for an anchor and left unanchored, which would
  * reproduce this same issue's original bug on that shape.
  */
 
 type Quote = '"' | "'" | undefined
 
-interface SplitState {
-  branches: string[]
-  depth: number
+interface ScanState {
   quote: Quote
   isEscaped: boolean
-  current: string
+  commentStart: number | undefined
 }
 
 /**
- * The next quote state after consuming `char`, given the current one: closes on a matching
- * quote, opens on an unquoted `"`/`'`, otherwise unchanged. Split out purely to keep
- * `consumeSplitChar`'s own complexity within this package's lint budget.
+ * Whether `text[index]` closes the comment opened at `commentStart`: a `*` then `/`, where
+ * the `*` is not the opener's own (`/*` followed directly by `/` does not close itself).
  */
-function nextQuote(quote: Quote, char: string): Quote {
-  if (quote) return char === quote ? undefined : quote
-  return char === '"' || char === "'" ? char : quote
+function isCommentClose(text: string, index: number, commentStart: number): boolean {
+  return text[index] === '/' && text[index - 1] === '*' && index - 1 >= commentStart + 2
 }
 
 /**
- * The change in bracket/paren depth `char` contributes, ignoring anything inside a quoted
- * string (a literal `(`/`[` inside `[data-x="(a"]` is not a nesting boundary).
+ * Advances `state` past `text[index]` when that character is literal text rather than
+ * selector code: inside a comment, the character a backslash escapes, a backslash itself, or
+ * inside a quoted string (where an escaped quote, `[data-x="a\"b"]`, must not close the
+ * string early). False, with `state` untouched, for anything else.
  */
-function depthDelta(quote: Quote, char: string): number {
-  if (quote) return 0
-  if (char === '(' || char === '[') return 1
-  if (char === ')' || char === ']') return -1
-  return 0
+function isConsumedAsLiteral(state: ScanState, text: string, index: number): boolean {
+  if (state.commentStart !== undefined) {
+    if (isCommentClose(text, index, state.commentStart)) state.commentStart = undefined
+    return true
+  }
+  if (state.isEscaped) {
+    state.isEscaped = false
+    return true
+  }
+  if (text[index] === '\\') {
+    state.isEscaped = true
+    return true
+  }
+  if (!state.quote) return false
+  if (text[index] === state.quote) state.quote = undefined
+  return true
 }
 
 /**
- * Consumes one character of a top-level-comma split, tracking paren/bracket depth, quote
- * state and backslash-escaping so a comma inside `:is(a, b)` or `[data-x="a,b"]` is never
- * treated as a branch separator, and an escaped quote (`[data-x="a\"b"]`) never closes the
- * string early (this splitter's original failure mode, reachable again through this same
- * splitter until escape-awareness was added here). Split out of
- * `anchorSelectorList` purely to keep that function's own complexity within this package's
- * lint budget.
+ * Advances `state` past `text[index]` and reports whether that character is selector CODE:
+ * outside any quoted string and any CSS comment, and neither a backslash nor the character
+ * it escapes. So a comma inside `[data-x="a,b"]` or `/* a, b *\/`, and a `&` inside
+ * `[data-label="A & B"]` or `/* note & *\/`, are never read as selector syntax.
  */
-function consumeSplitChar(state: SplitState, char: string): SplitState {
-  const { branches, depth, quote, isEscaped, current } = state
-  if (isEscaped) {
-    return { branches, depth, quote, isEscaped: false, current: current + char }
+function isCodeChar(state: ScanState, text: string, index: number): boolean {
+  if (isConsumedAsLiteral(state, text, index)) return false
+  const char = text[index]
+  if (char === '"' || char === "'") {
+    state.quote = char
+    return false
   }
-  if (char === '\\') {
-    return { branches, depth, quote, isEscaped: true, current: current + char }
+  if (char === '/' && text[index + 1] === '*') {
+    state.commentStart = index
+    return false
   }
-  const nextDepth = depth + depthDelta(quote, char)
-  if (!quote && char === ',' && nextDepth === 0) {
-    return {
-      branches: [...branches, current],
-      depth: nextDepth,
-      quote,
-      isEscaped: false,
-      current: '',
-    }
-  }
-  return {
-    branches,
-    depth: nextDepth,
-    quote: nextQuote(quote, char),
-    isEscaped: false,
-    current: current + char,
-  }
+  return true
 }
 
 /**
- * Splits `selectorList` on top-level commas only (ignoring commas inside parentheses,
- * brackets or quoted strings — `:is(a, b)`, `[data-x="a,b"]`).
+ * One flag per UTF-16 index of `text`: true where it holds selector code, false inside a
+ * quoted string, a comment or an escape. The single scan both the top-level-comma split and
+ * the anchor check read, so the two can never disagree about what is code.
+ */
+function codeMask(text: string): boolean[] {
+  const state: ScanState = { quote: undefined, isEscaped: false, commentStart: undefined }
+  return Array.from({ length: text.length }, (_, index) => isCodeChar(state, text, index))
+}
+
+/**
+ * Splits `selectorList` on top-level commas only, ignoring commas inside parentheses,
+ * brackets, quoted strings or comments (`:is(a, b)`, `[data-x="a,b"]`, `/* a, b *\/`).
  */
 function splitTopLevel(selectorList: string): string[] {
-  let state: SplitState = {
-    branches: [],
-    depth: 0,
-    quote: undefined,
-    isEscaped: false,
-    current: '',
+  const mask = codeMask(selectorList)
+  const branches: string[] = []
+  let depth = 0
+  let start = 0
+  for (const [index, isCode] of mask.entries()) {
+    if (!isCode) continue
+    const char = selectorList[index]
+    if (char === '(' || char === '[') depth += 1
+    else if (char === ')' || char === ']') depth -= 1
+    else if (char === ',' && depth === 0) {
+      branches.push(selectorList.slice(start, index))
+      start = index + 1
+    }
   }
-  for (const char of selectorList) state = consumeSplitChar(state, char)
-  return [...state.branches, state.current]
+  return [...branches, selectorList.slice(start)]
 }
 
 /**
- * True if `branch` contains a `&` (the CSS Nesting selector) outside any quoted string and
- * not itself escaped, i.e. an actual nesting-selector token rather than a literal `&`
- * character inside an attribute value. Quote- and escape-aware for the same reason
- * `consumeSplitChar` is: a naive `includes('&')` would misread `[data-label="A & B"]` as
- * already anchored and leave it untouched.
+ * True if `branch` contains a `&` (the CSS Nesting selector) as selector code, i.e. an actual
+ * nesting-selector token rather than a literal `&` inside an attribute value or a comment. A
+ * naive `includes('&')` would misread `[data-label="A & B"]` or `/* note & *\/:hover` as
+ * already anchored and leave it an implicit descendant match.
  */
-function hasUnquotedAmpersand(branch: string): boolean {
-  let quote: Quote
-  let isEscaped = false
-  for (const char of branch) {
-    if (isEscaped) {
-      isEscaped = false
-      continue
-    }
-    if (char === '\\') {
-      isEscaped = true
-      continue
-    }
-    if (!quote && char === '&') return true
-    quote = nextQuote(quote, char)
-  }
-  return false
+function hasNestingSelector(branch: string): boolean {
+  return codeMask(branch).some((isCode, index) => isCode && branch[index] === '&')
 }
 
 /**
  * Splits `selectorList` on top-level commas and prepends `&` to every branch that does not
- * already contain one outside a quoted string. A branch already containing `&` anywhere
- * (the `disabledState`-style embedded anchor, or an author-written relative branch like
- * `.foo &`) is left untouched, so this is safe to run over a key an author already anchored
+ * already contain one as selector code (outside a quoted string or a comment). A branch
+ * already containing `&` anywhere (the `disabledState`-style embedded anchor, or an
+ * author-written relative branch like `.foo &`) is left untouched, so this is safe to run over a key an author already anchored
  * by hand. An empty branch (a stray or trailing comma) is an author error, not a silently
  * compiled bare `&`: it throws naming the offending key.
  */
@@ -156,7 +150,7 @@ export function anchorSelectorList(selectorList: string): string {
             'to a bare "&", matching the atom unconditionally.',
         )
       }
-      return hasUnquotedAmpersand(trimmed) ? trimmed : `&${trimmed}`
+      return hasNestingSelector(trimmed) ? trimmed : `&${trimmed}`
     })
     .join(', ')
 }
