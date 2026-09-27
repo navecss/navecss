@@ -3,10 +3,17 @@
  *
  * A consumer project OUTSIDE the workspace, with pnpm's isolated `node_modules` (never
  * `node-linker=hoisted`, which would mask a resolution bug this test exists to catch),
- * depending on `stylelint` and on the real tarball this package's own `pnpm pack` produces,
- * and explicitly NOT depending on `stylelint-declaration-strict-value` itself (so a pass here
- * proves the plugin resolves from `@navecss/stylelint-config`'s own dependency, not from
- * anything the consumer happens to hoist).
+ * depending on `stylelint` and on the real tarballs this package's and `@navecss/tokens`' own
+ * `pnpm pack` produce, and explicitly NOT depending on `stylelint-declaration-strict-value`
+ * itself (so a pass here proves the plugin resolves from `@navecss/stylelint-config`'s own
+ * dependency, not from anything the consumer happens to hoist).
+ *
+ * `@navecss/tokens` is a required peer (R16) but is packed and installed here as a `file:`
+ * tarball, the same as this package itself, rather than left for pnpm to satisfy from the
+ * registry: pnpm auto-installs a missing peer from the registry by default, and a registry with
+ * a minimum release age configured can refuse every matching version of a package this young,
+ * which would test pnpm's own resolution rather than this package's rule against real,
+ * workspace-built tokens.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -21,6 +28,7 @@ import { tarballFilename } from './helpers/pack.ts'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(HERE, '..')
 const ROOT = path.resolve(PACKAGE_DIR, '../..')
+const TOKENS_PACKAGE_DIR = path.resolve(PACKAGE_DIR, '../tokens')
 
 const dir: { consumer?: string } = {}
 
@@ -36,6 +44,19 @@ beforeAll(() => {
     rmSync(packDestination, { recursive: true, force: true })
   }
 }, 120_000)
+
+/**
+ * Packs `packageDir` with `npm pack --json` into `packDestination` and returns the tarball's
+ * absolute path. Used for both this package and `@navecss/tokens`, so the consumer installs the
+ * workspace's own build of each, never a registry copy.
+ */
+function packWorkspacePackage(packageDir: string, packDestination: string): string {
+  const raw = execFileSync('npm', ['pack', '--json', '--pack-destination', packDestination], {
+    cwd: packageDir,
+    encoding: 'utf8',
+  })
+  return path.join(packDestination, tarballFilename(raw))
+}
 
 /**
  * The exact stylelint version this workspace resolves, read from the installed package, so the
@@ -58,11 +79,8 @@ function workspaceStylelintVersion(): string {
 }
 
 function installConsumer(consumerDir: string, packDestination: string): void {
-  const raw = execFileSync('npm', ['pack', '--json', '--pack-destination', packDestination], {
-    cwd: PACKAGE_DIR,
-    encoding: 'utf8',
-  })
-  const tarballPath = path.join(packDestination, tarballFilename(raw))
+  const tarballPath = packWorkspacePackage(PACKAGE_DIR, packDestination)
+  const tokensTarballPath = packWorkspacePackage(TOKENS_PACKAGE_DIR, packDestination)
 
   // Pinned to this repo's own `packageManager`, not a hardcoded literal: without a pin,
   // corepack can't tell which pnpm the consumer wants and falls back to auto-detecting and
@@ -84,6 +102,10 @@ function installConsumer(consumerDir: string, packDestination: string): void {
         dependencies: {
           stylelint: workspaceStylelintVersion(),
           '@navecss/stylelint-config': `file:${tarballPath}`,
+          // Satisfies the package's required `@navecss/tokens` peer with the workspace's own
+          // tarball, so pnpm never reaches for the registry to resolve it (see the file
+          // docblock for why that matters).
+          '@navecss/tokens': `file:${tokensTarballPath}`,
         },
       },
       undefined,
@@ -153,5 +175,69 @@ describe('AC-consumer-constraints-26 covers: R16', () => {
   it('.b { @nave interactive; } produces no report from any rule the package ships', () => {
     const result = lintInConsumer('.b { @nave interactive; }')
     expect(result.warnings).toEqual([])
+  })
+})
+
+describe('the required @navecss/tokens peer, installed as a workspace tarball rather than left to the registry', () => {
+  it("the consumer's installed @navecss/tokens is the workspace's own build, byte for byte", () => {
+    const installedTokensCss = readFileSync(
+      path.join(dir.consumer!, 'node_modules/@navecss/tokens/dist/tokens.css'),
+      'utf8',
+    )
+    const installedManifest = JSON.parse(
+      readFileSync(path.join(dir.consumer!, 'node_modules/@navecss/tokens/package.json'), 'utf8'),
+    ) as { version: string }
+    const workspaceManifest = JSON.parse(
+      readFileSync(path.join(TOKENS_PACKAGE_DIR, 'package.json'), 'utf8'),
+    ) as { version: string }
+    const workspaceTokensCss = readFileSync(
+      path.join(TOKENS_PACKAGE_DIR, 'dist/tokens.css'),
+      'utf8',
+    )
+
+    expect(installedManifest.version).toBe(workspaceManifest.version)
+    expect(installedTokensCss).toBe(workspaceTokensCss)
+  })
+})
+
+describe("rule 3 (declared-custom-properties) busts stylelint's own --cache through its default digest", () => {
+  it('a name that passes cold and under a warm --cache is reported once removed from the installed tokens, with no cache clear', () => {
+    const consumerDir = dir.consumer!
+    const tokensCssPath = path.join(consumerDir, 'node_modules/@navecss/tokens/dist/tokens.css')
+    const originalTokensCss = readFileSync(tokensCssPath, 'utf8')
+    const match = /^\s*(--nave-[a-z0-9-]+):[^;]*;\s*$/m.exec(originalTokensCss)
+    if (!match) throw new Error('the installed tokens.css declares no --nave- custom property')
+    const [declarationLine, name] = [match[0], match[1]!]
+
+    const cachePath = path.join(consumerDir, '.cache-test.stylelintcache')
+    const cssPath = path.join(consumerDir, 'cache-test.css')
+    rmSync(cachePath, { force: true })
+    writeFileSync(cssPath, `.a { color: var(${name}); }\n`)
+
+    const runCli = (): { status: number | null; stderr: string; stdout: string } =>
+      spawnSync(
+        path.join(consumerDir, 'node_modules/.bin/stylelint'),
+        ['cache-test.css', '--cache', '--cache-location', cachePath],
+        { cwd: consumerDir, encoding: 'utf8' },
+      )
+
+    try {
+      const cold = runCli()
+      if (cold.status !== 0) throw new Error(`stylelint failed: ${cold.stderr}`)
+
+      // The installed tokens.css changes; the config the consumer's stylelintrc resolves does
+      // not (it names no path into the workspace, nothing in the consumer's own text changed),
+      // so only the default stylesheet's digest, baked into that config by this rule, can make
+      // stylelint's cache see a different config and re-check this file.
+      writeFileSync(tokensCssPath, originalTokensCss.replace(declarationLine, ''))
+
+      const warm = runCli()
+      expect(warm.status).not.toBe(0)
+      expect(warm.stdout + warm.stderr).toContain(name)
+    } finally {
+      writeFileSync(tokensCssPath, originalTokensCss)
+      rmSync(cachePath, { force: true })
+      rmSync(cssPath, { force: true })
+    }
   })
 })

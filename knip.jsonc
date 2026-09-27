@@ -25,6 +25,15 @@
       // real version-compatibility contract, not dead weight.
       "ignoreDependencies": ["@navecss/tokens"],
     },
+    "packages/stylelint-config": {
+      // `declared-custom-properties.js` resolves its default stylesheet with
+      // `import.meta.resolve('@navecss/tokens/css')`, a runtime string knip's static import
+      // analysis does not follow: it never imports `@navecss/tokens`' code or types. The
+      // devDependency documents that real resolution contract (mirrored by the peer
+      // dependency of the same name), the same shape as `packages/tokens`' own
+      // `ignoreDependencies` entry below for `@navecss/core`.
+      "ignoreDependencies": ["@navecss/tokens"],
+    },
     "packages/tokens": {
       // `src/bin.ts` is the SOURCE for `bin: navecss-tokens`
       // (`package.json`'s `bin` field points at the COMPILED `dist/lib/bin.js`) — a

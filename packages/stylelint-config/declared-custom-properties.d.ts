@@ -1,16 +1,11 @@
-import type { Declaration, Root } from 'postcss'
+import type { AtRule, Declaration, Root } from 'postcss'
 import type { Plugin } from 'stylelint'
 
 /**
- * Rule 3's id: `@navecss/declared-custom-properties`. Re-exported from `index.d.ts` too, so a
+ * This rule's id: `@navecss/declared-custom-properties`. Re-exported from `index.d.ts` too, so a
  * consuming module can read it rather than retype it.
  */
 export declare const ruleName: string
-
-/** The rule's messages, keyed the way `stylelint.utils.ruleMessages` returns them. */
-export declare const messages: {
-  undeclared: (name: string) => string
-}
 
 /**
  * Every custom property whose name begins `--nave-`, declared anywhere in `source` (a raw CSS
@@ -20,17 +15,27 @@ export declare function collectDeclaredCustomProperties(source: string | Root): 
 
 /**
  * Every `var(--nave-*)` reference in `source` (a raw CSS string, or an already-parsed postcss
- * `Root`), one `{ decl, name }` pair per reference.
+ * `Root`), one `{ decl, name }` pair per reference: `decl` is the declaration a reference in a
+ * value was found in, or the at-rule a reference in a prelude (`@supports (...)`) was found in.
  */
 export declare function findNaveVarReferences(
   source: string | Root,
-): { decl: Declaration; name: string }[]
+): { decl: Declaration | AtRule; name: string }[]
 
 /** A stable SHA-256 hex digest of `content`. */
 export declare function computeStylesheetDigest(content: string): string
 
-/** The specifier this rule resolves its default stylesheet from: `@navecss/tokens/css`. */
-export declare const DEFAULT_STYLESHEET_SPECIFIER: string
+/**
+ * Reads and parses the stylesheet at `absolutePath`, through this rule's own process-lifetime
+ * memoisation by path, modification time and size: the same entry object for a repeat call
+ * against an unchanged file, a new one once its modification time or size changes.
+ */
+export declare function readStylesheet(absolutePath: string): {
+  mtimeMs: number
+  size: number
+  content: string
+  names: Set<string>
+}
 
 /** This rule's default secondary options: a digest of the default stylesheet's content. */
 export declare const defaultRuleOptions: { digest: string }

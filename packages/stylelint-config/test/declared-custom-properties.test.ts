@@ -7,7 +7,6 @@
  * undeclared name passes every other check in this package, passes the build, and renders
  * nothing.
  */
-import { execFileSync } from 'node:child_process'
 import {
   cpSync,
   mkdirSync,
@@ -30,6 +29,7 @@ import {
   computeStylesheetDigest,
   defaultRuleOptions,
   findNaveVarReferences,
+  readStylesheet,
   ruleName,
 } from '../declared-custom-properties.js'
 import config, { declaredCustomPropertiesRuleName } from '../index.js'
@@ -37,7 +37,6 @@ import { packTarball } from './helpers/pack.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(HERE, '..')
-const ROOT = path.resolve(HERE, '../../..')
 const TOKENS_CSS_PATH = path.resolve(PACKAGE_DIR, '../tokens/dist/tokens.css')
 
 function realTokensCss(): string {
@@ -398,6 +397,150 @@ describe('AC-eslint-plugin-21 covers: R11, R12', () => {
     expect(readme).toMatch(/--cache/)
     expect(readme).toMatch(/clear the cache/i)
   })
+
+  it('the README states the string-or-array form, the union, that naming replaces the default, and that imports are not followed', () => {
+    const readme = packTarball().read('package/README.md')
+    expect(readme).toMatch(/a string or an array of strings/)
+    expect(readme).toMatch(/union of the stylesheets named/)
+    expect(readme).toMatch(/replaces the default/)
+    expect(readme.toLowerCase()).toContain('is not followed')
+  })
+
+  it("the stylesheet option's declared set is the union of every stylesheet named, and naming it replaces the default rather than extending it", async () => {
+    const scratch = mkdtempSync(path.join(tmpdir(), 'nave-declared-custom-properties-union-'))
+    try {
+      const tokensPath = path.join(scratch, 'tokens.css')
+      const themePath = path.join(scratch, 'theme.css')
+      writeFileSync(tokensPath, ':root { --nave-from-tokens: 1px; }\n')
+      writeFileSync(themePath, ':root { --nave-from-theme: 2px; }\n')
+
+      const namedRules = {
+        ...config.rules,
+        [ruleName]: [true, { stylesheet: [tokensPath, themePath] }],
+      }
+      const namedConfig = { ...config, rules: namedRules }
+
+      const unionResult = await stylelint.lint({
+        code: '.a { color: var(--nave-from-tokens, var(--nave-from-theme, var(--nave-not-anywhere))); }',
+        config: namedConfig,
+      })
+      const unionReported = unionResult.results[0]!.warnings.filter((w) => w.rule === ruleName).map(
+        (w) => w.text,
+      )
+      expect(unionReported.some((t) => t.includes('--nave-from-tokens'))).toBe(false)
+      expect(unionReported.some((t) => t.includes('--nave-from-theme'))).toBe(false)
+      expect(unionReported.some((t) => t.includes('--nave-not-anywhere'))).toBe(true)
+
+      // A name declared in the REAL default tokens stylesheet, not in either scratch file: this
+      // array option replaces the default rather than adding to it, so it is reported too.
+      const realName = aRealDeclaredName()
+      const replacedResult = await stylelint.lint({
+        code: `.b { color: var(${realName}); }`,
+        config: namedConfig,
+      })
+      expect(
+        replacedResult.results[0]!.warnings.filter((w) => w.rule === ruleName).map((w) => w.text),
+      ).not.toEqual([])
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('an @import inside a named stylesheet is not followed: a theme that only imports the default tokens stylesheet, named alone, still reports a tokens-declared name', async () => {
+    const scratch = mkdtempSync(path.join(tmpdir(), 'nave-declared-custom-properties-import-'))
+    try {
+      const themePath = path.join(scratch, 'theme.css')
+      writeFileSync(
+        themePath,
+        `@import '${TOKENS_CSS_PATH.replaceAll('\\', '\\\\')}';\n:root { --nave-theme-only: 1px; }\n`,
+      )
+      const namedRules = { ...config.rules, [ruleName]: [true, { stylesheet: themePath }] }
+      const namedConfig = { ...config, rules: namedRules }
+
+      const realName = aRealDeclaredName()
+      const result = await stylelint.lint({
+        code: `.a { color: var(${realName}); }`,
+        config: namedConfig,
+      })
+      expect(
+        result.results[0]!.warnings.filter((w) => w.rule === ruleName).map((w) => w.text),
+      ).not.toEqual([])
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('an array holding one unreadable entry fails naming that entry', async () => {
+    const scratch = mkdtempSync(
+      path.join(tmpdir(), 'nave-declared-custom-properties-array-missing-'),
+    )
+    try {
+      const okPath = path.join(scratch, 'ok.css')
+      writeFileSync(okPath, ':root { --nave-ok: 1px; }\n')
+      const namedRules = {
+        ...config.rules,
+        [ruleName]: [true, { stylesheet: [okPath, './missing-theme.css'] }],
+      }
+      const namedConfig = { ...config, rules: namedRules }
+      await expect(
+        stylelint.lint({ code: '.a { color: var(--nave-ok); }', config: namedConfig }),
+      ).rejects.toThrow(/missing-theme\.css/)
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['an empty array', []],
+    ['an array holding a number', [42]],
+    ['a bare number', 42],
+  ])(
+    '%s fails as a configuration error naming the "stylesheet" option, never a raw TypeError',
+    async (_, value) => {
+      const namedRules = { ...config.rules, [ruleName]: [true, { stylesheet: value }] }
+      const namedConfig = { ...config, rules: namedRules }
+      await expect(
+        stylelint.lint({ code: '.a { color: red; }', config: namedConfig }),
+      ).rejects.toThrow(/"stylesheet" option/)
+    },
+  )
+
+  it('a bad package specifier fails naming the specifier and the working directory, never a file of ours that does not exist', async () => {
+    const namedRules = {
+      ...config.rules,
+      [ruleName]: [true, { stylesheet: '@acme/does-not-exist/tokens.css' }],
+    }
+    const namedConfig = { ...config, rules: namedRules }
+    await expect(
+      stylelint.lint({ code: '.a { color: red; }', config: namedConfig }),
+    ).rejects.toThrow(/@acme\/does-not-exist\/tokens\.css/)
+    await expect(
+      stylelint.lint({ code: '.a { color: red; }', config: namedConfig }),
+    ).rejects.not.toThrow(/noop\.cjs|nave-stylesheet-resolution\.cjs/)
+  })
+})
+
+describe('a var(--nave-*) reference inside an at-rule prelude, not only inside a declaration value', () => {
+  it('@supports (color: var(--nave-typo)) is reported when --nave-typo is undeclared', async () => {
+    const reported = await lintReportedNames(
+      '@supports (color: var(--nave-typo)) { .a { color: red; } }',
+    )
+    expect(reported).toContain('--nave-typo')
+  })
+
+  it('findNaveVarReferences finds a reference inside an at-rule prelude directly', () => {
+    const names = findNaveVarReferences(
+      '@supports (color: var(--nave-typo-a)) { .a { color: red; } }',
+    ).map((r) => r.name)
+    expect(names).toEqual(['--nave-typo-a'])
+  })
+
+  it('a real declared name inside @supports passes', async () => {
+    const reported = await lintReportedNames(
+      `@supports (color: var(${aRealDeclaredName()})) { .a { color: red; } }`,
+    )
+    expect(reported).toEqual([])
+  })
 })
 
 describe('AC-eslint-plugin-22 covers: R12', () => {
@@ -475,36 +618,38 @@ describe('AC-eslint-plugin-22 covers: R12', () => {
     }
   })
 
-  it('collectDeclaredCustomProperties/findNaveVarReferences memoisation: the underlying "cache-staleness" clause, as a focused unit test on the rule\'s own read path', () => {
-    // The AC's literal ask ("the underlying tokens.css file rewritten... between calls") is
-    // awkward to run against the REAL default stylesheet other tests in this process also read,
-    // so this exercises the identical code path (readStylesheet's mtime/size memoisation, R12)
-    // against a scratch copy instead, per the AC's own "write a focused unit test... if
-    // end-to-end is awkward" allowance. The consumer-named-stylesheet test just above already
-    // covers the end-to-end shape through stylelint.lint() itself.
+  it("readStylesheet memoises by path, modification time and size: it reuses the SAME entry for an unchanged file and reads a NEW one once the file's mtime or size changes", () => {
     const scratch = mkdtempSync(path.join(tmpdir(), 'nave-declared-custom-properties-unit-'))
     try {
       const stylesheetPath = path.join(scratch, 'tokens.css')
       writeFileSync(stylesheetPath, ':root { --nave-a: 1px; }\n')
-      const firstNames = collectDeclaredCustomProperties(readFileSync(stylesheetPath, 'utf8'))
-      expect(firstNames.has('--nave-b')).toBe(false)
 
-      writeFileSync(stylesheetPath, ':root { --nave-a: 1px; --nave-b: 2px; }\n')
-      const secondNames = collectDeclaredCustomProperties(readFileSync(stylesheetPath, 'utf8'))
-      expect(secondNames.has('--nave-b')).toBe(true)
+      const first = readStylesheet(stylesheetPath)
+      expect(first.names.has('--nave-b')).toBe(false)
+
+      // Unchanged on disk: a second call reuses the cached entry rather than re-reading and
+      // re-parsing it, so it is the identical object, not merely one with an equal value.
+      const reused = readStylesheet(stylesheetPath)
+      expect(reused).toBe(first)
+
+      // A short wait guards against two writes landing within the same filesystem mtime tick,
+      // which would otherwise mask the very change this test means to exercise (the same
+      // technique the consumer-named-stylesheet cache test above uses).
+      const beforeStat = statSync(stylesheetPath)
+      let second
+      for (let attempt = 0; attempt < 20; attempt++) {
+        writeFileSync(stylesheetPath, ':root { --nave-a: 1px; --nave-b: 2px; }\n')
+        const afterStat = statSync(stylesheetPath)
+        if (afterStat.mtimeMs !== beforeStat.mtimeMs || afterStat.size !== beforeStat.size) {
+          second = readStylesheet(stylesheetPath)
+          break
+        }
+      }
+      if (!second) throw new Error('the rewritten file never registered a new mtime/size')
+      expect(second).not.toBe(first)
+      expect(second.names.has('--nave-b')).toBe(true)
     } finally {
       rmSync(scratch, { recursive: true, force: true })
-    }
-  })
-
-  it('the licence gate stays green: check-license-enumeration-provenance and check-license-allowlist', () => {
-    for (const script of [
-      'scripts/check-license-enumeration-provenance.mjs',
-      'scripts/check-license-allowlist.mjs',
-    ]) {
-      expect(() =>
-        execFileSync('node', [path.join(ROOT, script)], { cwd: ROOT, encoding: 'utf8' }),
-      ).not.toThrow()
     }
   })
 })

@@ -12,5 +12,5 @@ consuming one, or an admitted keyword, rather than a raw literal; a check that f
 nested inside another `var()`'s fallback or inside a custom property's own value) — this passes
 the build and renders nothing otherwise. The default declaration source is `@navecss/tokens`'
 published stylesheet, which this package takes as a peer dependency (`>=0.1.0 <1.0.0`); a rule
-option can name your own stylesheet instead. See the package README for what it does not check,
-and how to turn any of it off.
+option can name one stylesheet of your own instead, or several, and the declared set is their
+union. See the package README for what it does not check, and how to turn any of it off.

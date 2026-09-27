@@ -82,34 +82,64 @@ rule to anything else in your own config also replaces this check, as described 
 
 ## Declared custom properties
 
-This package flags a `var(--nave-*)` reference whose name is not declared anywhere in your
-token stylesheet, through its own rule: `@navecss/declared-custom-properties`. "Declared" means
-a plain `--nave-*` declaration somewhere in that stylesheet — at its top level, inside `@layer`,
-inside `@media`, inside a nested rule — never a name merely declared in the file being linted:
-declaring your own `--nave-*` custom property locally does not exempt a reference to it
-elsewhere.
+This package flags a `var(--nave-*)` reference whose name is not declared anywhere in the
+stylesheet(s) your tokens come from, through its own rule: `@navecss/declared-custom-properties`.
+"Declared" means a plain `--nave-*` declaration somewhere in one of those stylesheets (at its
+top level, inside `@layer`, inside `@media`, inside a nested rule), never a name merely declared
+in the file being linted: declaring your own `--nave-*` custom property locally does not exempt a
+reference to it elsewhere.
 
 By default it reads `@navecss/tokens/css`, the stylesheet `@navecss/tokens` itself publishes.
-Point it at a stylesheet of your own instead with the rule's `stylesheet` option:
+Point it at a stylesheet of your own instead with the rule's `stylesheet` option.
+
+The option takes a string or an array of strings; the declared set is the union of the stylesheets named:
 
 ```json
 {
   "rules": {
-    "@navecss/declared-custom-properties": [true, { "stylesheet": "./src/tokens.css" }]
+    "@navecss/declared-custom-properties": [
+      true,
+      { "stylesheet": ["@navecss/tokens/css", "./src/theme.css"] }
+    ]
   }
 }
 ```
 
-A path there resolves from the working directory you run stylelint from. Either way, the
-stylesheet must exist before lint runs: one that is missing or unreadable, default or named,
-fails the run with a configuration error rather than linting anything.
+Naming `stylesheet` replaces the default rather than adding to it, so a project layering a theme
+on top of the published tokens lists both, as above. Each entry resolves from the working directory
+you run stylelint from, whether it is a path or a package specifier, and an `@import` inside a
+named stylesheet is not followed: list every stylesheet your names come from, rather than one
+that only imports the rest.
 
-If you run stylelint with `--cache` and later change a stylesheet you named with this option,
-clear the cache. Stylelint's own cache key is the resolved config plus its version, never the
-bytes of a file this rule merely reads by path, so a stale cache entry can go on reporting last
-run's verdict for a custom property that no longer exists, or none at all for one just added.
-The default stylesheet does not have this problem: this package carries a digest of its content
-in the rule's own options, so a change there changes the config itself.
+Either way, the stylesheet must exist before lint runs. Stylelint constructs this rule anew for
+every file it checks, so this package reads (and validates) its stylesheet(s) the first time the
+rule runs, not before the whole run starts, and reuses that read (memoised by path, modification
+time and size) for every file after; one that is missing or unreadable, default or named, fails
+the run there, on that first file, rather than linting anything.
+
+If you run stylelint with `--cache`, clear the cache after changing, adding, removing or moving
+any stylesheet you named with this option. Stylelint's own cache key is the resolved config plus
+its version, never the bytes of a file this rule merely reads by path, and a run that considers a
+file unchanged never asks this rule about it again, so a stylesheet you deleted or edited since
+the last cold run goes unnoticed there until you clear the cache. The default stylesheet mostly
+avoids this: this package carries a digest of its content in the rule's own default options, so a
+change to it changes the config itself and busts the cache too. That only holds while you leave
+those options alone, though: setting the rule's own options in your config, even only `severity`,
+replaces them wholesale (as every stylelint rule's options do) and drops the digest with them. If
+you need to set an option on this rule, spread its default entry from this package's own default
+export first, so the digest survives:
+
+```js
+import config from '@navecss/stylelint-config'
+
+const rules = {
+  ...config.rules,
+  '@navecss/declared-custom-properties': [
+    true,
+    { ...config.rules['@navecss/declared-custom-properties'][1], severity: 'warning' },
+  ],
+}
+```
 
 To turn this check off, set `@navecss/declared-custom-properties` to `null` in your own config,
 or disable it for one declaration with a stylelint disable comment.
