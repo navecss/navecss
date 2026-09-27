@@ -106,6 +106,23 @@ describe('AC-directive-core-18 — a version-3 source map, one segment per token
     consumer.destroy()
   })
 
+  it('keeps sourceRoot and sourcesContent from the incoming map', () => {
+    const incoming = {
+      version: 3 as const,
+      sources: ['src.scss'],
+      sourceRoot: '/proj',
+      sourcesContent: ['.a { color: red; }'],
+      names: [],
+      mappings: buildIdentityMappingsShiftedBy10(css),
+    }
+
+    const { map } = expandText(css, { from: 'a.css', inputSourceMap: incoming })
+    const parsed = JSON.parse(map) as { sourceRoot?: string; sourcesContent?: string[] }
+
+    expect(parsed.sourceRoot).toBe('/proj')
+    expect(parsed.sourcesContent).toEqual(['.a { color: red; }'])
+  })
+
   it('gives a stylesheet with no directive a map sending every token to itself', async () => {
     const plain = '.a {\n  color: red;\n}'
     const { css: output, map } = expandText(plain, { from: 'a.css' })

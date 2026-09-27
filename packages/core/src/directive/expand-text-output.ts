@@ -159,6 +159,17 @@ export function buildOutput(input: BuildOutputInput): { css: string; map: string
   })
 
   const sources = incoming ? [...incoming.sources] : [input.from ?? '<input>']
-  const map: SourceMap = { version: 3, sources, names: [], mappings: ctx.builder.toMappings() }
+  const map: SourceMap = {
+    version: 3,
+    sources,
+    names: [],
+    mappings: ctx.builder.toMappings(),
+    // Kept as authored, not re-derived: the incoming map's own sourceRoot
+    // and sourcesContent describe ITS sources, unrelated to anything this
+    // pass computes, and dropping them silently would strand a devtools
+    // "view source" that only ever worked because they were there.
+    ...(incoming?.sourceRoot !== undefined && { sourceRoot: incoming.sourceRoot }),
+    ...(incoming?.sourcesContent !== undefined && { sourcesContent: incoming.sourcesContent }),
+  }
   return { css: ctx.output.join(''), map: JSON.stringify(map) }
 }

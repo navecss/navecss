@@ -55,6 +55,8 @@ export interface Position {
 export interface SourceMap {
   readonly version: 3
   readonly sources: readonly string[]
+  readonly sourceRoot?: string
+  readonly sourcesContent?: readonly (string | null)[]
   readonly names: readonly string[]
   readonly mappings: string
 }
@@ -133,6 +135,8 @@ interface DecodedSegment {
 
 export interface IncomingMap {
   readonly sources: readonly string[]
+  readonly sourceRoot: string | undefined
+  readonly sourcesContent: readonly (string | null)[] | undefined
   originalPositionFor(
     position: Position,
   ): { column: number; line: number; source: string; sourceIndex: number } | undefined
@@ -167,6 +171,8 @@ export function decodeIncomingMap(map: SourceMap): IncomingMap {
 
   return {
     sources,
+    sourceRoot: map.sourceRoot,
+    sourcesContent: map.sourcesContent,
     originalPositionFor(position) {
       const candidate = findCandidate(segments, position)
       if (!candidate) return
