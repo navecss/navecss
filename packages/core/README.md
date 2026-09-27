@@ -145,12 +145,12 @@ What that buys you, and what it does not:
   `hidden`, `grid`, `flex`, `block`, `border`, `rounded`, `transition`,
   `relative`, `absolute`, `gap`, `truncate`, `interactive`) belong on the
   `cx.raw()` side when you mean your own.
-- **Nothing checks the rest of the `className` attribute.** A bare
-  `'legacy-card'` sitting beside these calls is seen by nothing and still works.
-  So `cx.raw()` is a **declared** escape channel, not an enforced one: its value
-  today is that every deliberate step outside the system leaves a token you can
-  find (`grep -r 'cx.raw'`). A lint that closes the attribute itself is not part
-  of this release.
+- **The rest of the `className` attribute is checked by
+  [`@navecss/eslint-plugin`](https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#readme).**
+  A bare `'legacy-card'` sitting beside these calls is not seen by `tsc` or by
+  `@nave`, so `cx.raw()` is a **declared** escape channel — install that plugin
+  for an **enforced** one, with every deliberate step outside the system left
+  as a reasoned, countable `cx.raw()` call.
 
 ### Tokens only
 
@@ -281,6 +281,20 @@ this line works on its own, with no config installed, from 16.17.0 on. For a che
 on a list of properties (colour, spacing and others) use a `var()` or an admitted keyword, extend
 [`@navecss/stylelint-config`](https://github.com/navecss/navecss/tree/main/packages/stylelint-config#readme)
 beside this line; it never replaces it.
+
+**ESLint.** For the JSX side of the same idea — a literal class in `className`, or a literal
+value on a tokenized `style` property — install
+[`@navecss/eslint-plugin`](https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#readme):
+
+```js
+// eslint.config.js
+import nave from '@navecss/eslint-plugin'
+
+export default [
+  // ...your existing config
+  nave.configs.recommended,
+]
+```
 
 **Coding agents.** This package ships a guide for coding agents at `skills/navecss/SKILL.md`:
 the built-in atoms, the custom properties this build emits, the layer order, and where consumer

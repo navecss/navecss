@@ -215,6 +215,20 @@ function renderCxRawSection(): string[] {
 }
 
 /**
+ * The one sentence R13 requires, naming no rule: `@navecss/eslint-plugin`'s reports already
+ * list their own remedies in order, so the guide adds nothing beyond pointing at that and
+ * warning against the two ways an agent could otherwise satisfy a report without fixing it.
+ */
+function renderEslintPluginSection(): string[] {
+  return [
+    'If the project runs `@navecss/eslint-plugin`, its reports name their remedies, most',
+    'preferred first: take the first one that fits. Never answer a report with a disable',
+    'comment, and never write a `cx.raw()` reason to make a report go away.',
+    '',
+  ]
+}
+
+/**
  * Renders the full `SKILL.md` markdown, formatted with the repository's own Prettier config.
  * `sources` defaults to the real tree; a test passes its own to exercise a substitution without
  * touching it (AC-consumer-constraints-01, -33, -40).
@@ -243,6 +257,7 @@ export async function generate(sources?: SkillGuideSources): Promise<string> {
     ...renderNaveSection(),
     ...renderCxSection(),
     ...renderCxRawSection(),
+    ...renderEslintPluginSection(),
     ...renderAtomsSection(real),
     ...renderCustomPropertiesSection(real),
     ...renderLayersSection(real),
