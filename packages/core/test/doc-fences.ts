@@ -60,14 +60,17 @@ function parseNamedClause(namedRaw: string, isWholeClauseType: boolean): Importe
 Every JS/TS `import ... from '@navecss/core...'` and every CSS `@import url('@navecss/core...')` in `body`. A CSS `@import` carries no names.
  */
 export function extractCoreImports(body: string): CoreImport[] {
-  // `([\w$]+),?\s*`, not `([\w$]+)\s*,?\s*`: a formatted default-import clause never carries
-  // whitespace before its own comma, and dropping that leading \s* removes the one adjacent
-  // pair of independent quantifiers a static ReDoS scanner flags here on principle (measured:
-  // this regex was already linear on adversarial input even before the change, since `[\w$]+`
-  // and `\s` never overlap, but a fixed, simpler shape needs no such argument to trust).
-  const jsImports = body
+  // Collapsed to single spaces first, so the regex below can spell every gap as one literal
+  // ' ' instead of \s*/\s+: a static ReDoS scanner flags the ORIGINAL's several independent
+  // whitespace quantifiers sitting next to optional groups on principle (measured: the original
+  // was already linear on adversarial input, since none of its character classes actually
+  // overlap, but a shape with no quantifier left to flag needs no such argument to trust). Only
+  // the NAMES and specifier this function returns matter to every caller, never a source
+  // position in `body`, so losing the original whitespace here costs nothing.
+  const normalizedBody = body.replaceAll(/\s+/g, ' ')
+  const jsImports = normalizedBody
     .matchAll(
-      /import\s+(type\s+)?(?:([\w$]+),?\s*)?(?:\{([^}]*)\})?\s*from\s*['"](@navecss\/core[^'"]*)['"]/g,
+      /import (type )?(?:([\w$]+),? ?)?(?:\{([^}]*)\})? ?from ?['"](@navecss\/core[^'"]*)['"]/g,
     )
     .map((m): CoreImport => {
       const [, isWholeType, defaultName, namedRaw, specifier] = m
