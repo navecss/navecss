@@ -123,17 +123,21 @@ Stated as rules, not as gaps to be filled later:
   is reported.
 - A literal routed through a custom property (`style={{ '--w': 'legacy-card' }}`) is not seen by
   the style rule: setting a custom property per element is lawful.
+- A CSS shorthand that is not itself on the style rule's checked property list (`background`,
+  `border` and its sides, `font`, `transition`, `animation`, and any other) is not checked, even
+  though `@navecss/stylelint-config`'s own config reports it by expanding the shorthand into the
+  longhands it sets.
 - The counting rule's denominator is exactly what `@navecss/raw-reason` counts in the linted
   files — see above for what that excludes.
 
 ## Rules
 
-| Rule                     | Description                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------------------- |
-| `@navecss/class-channel` | A literal class in `className`/`class` must be declared or a real `cx()` atom            |
-| `@navecss/raw-reason`    | A `cx.raw()` call carrying undeclared class text needs a `nave-escape` reason comment    |
-| `@navecss/count-escapes` | Off by default; reports every escape and disable comment, for ESLint's bulk suppressions |
-| `@navecss/style-values`  | A literal value in a JSX `style` object, on a property the design system tokenizes       |
+| Rule                     | Description                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| `@navecss/class-channel` | A literal class in `className`/`class` must be declared or a real `cx()` atom             |
+| `@navecss/raw-reason`    | A `cx.raw()` call carrying undeclared class text needs a `nave-escape` reason comment     |
+| `@navecss/count-escapes` | Off by default; reports every escape and disable comment, for ESLint's bulk suppressions  |
+| `@navecss/style-values`  | A literal value in a JSX `style` object, on a listed property the design system tokenizes |
 
 ## Trademark
 
