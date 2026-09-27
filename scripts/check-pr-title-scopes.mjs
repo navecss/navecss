@@ -43,7 +43,7 @@ import { readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { readCommitlintEnums } from './check-dependabot-commit-scope.mjs'
+import { blockScalarContentLines, readCommitlintEnums } from './check-dependabot-commit-scope.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -60,15 +60,19 @@ const LITERAL_WORD = /^[a-z][a-z0-9-]*$/
  * `amannn/action-semantic-pull-request` — from that step's own `- uses:` line up to (but not
  * including) the next line at the SAME leading-whitespace length that itself starts a new step
  * (`-` followed by `[ \t]`), or to the end of the file when this is the last step. Returns `null`
- * when no `uses:` line anywhere in the file names that action.
+ * when no `uses:` line anywhere in the file names that action. Lines inside a multi-line value
+ * (a `run: |` script, say) are text, not steps, so they are never matched as the step or as the
+ * next step's boundary (`blockScalarContentLines`).
  */
 export function findActionStepBlock(workflowText) {
   const lines = workflowText.split('\n')
+  const content = blockScalarContentLines(lines)
   const usesLine = /^([ \t]*)-[ \t]+uses:(.*)$/
 
   let dashIndent = null
   let startIndex = null
   for (const [index, line] of lines.entries()) {
+    if (content.has(index)) continue
     const match = usesLine.exec(line)
     if (match === null) continue
     if (!match[2].includes(ACTION_SPECIFIER)) continue
@@ -81,7 +85,7 @@ export function findActionStepBlock(workflowText) {
   const siblingStepLine = new RegExp(String.raw`^${dashIndent}-[ \t]`)
   let endIndex = lines.length
   for (let index = startIndex + 1; index < lines.length; index += 1) {
-    if (siblingStepLine.test(lines[index])) {
+    if (!content.has(index) && siblingStepLine.test(lines[index])) {
       endIndex = index
       break
     }
@@ -97,11 +101,13 @@ export function findActionStepBlock(workflowText) {
  */
 export function findWithBlockText(stepBlock) {
   const lines = stepBlock.split('\n')
+  const content = blockScalarContentLines(lines)
   const withLine = /^([ \t]*)with:[ \t]*$/
 
   let withIndent = null
   let startIndex = null
   for (const [index, line] of lines.entries()) {
+    if (content.has(index)) continue
     const match = withLine.exec(line)
     if (match === null) continue
     withIndent = match[1]
@@ -131,11 +137,13 @@ export function findWithBlockText(stepBlock) {
  */
 export function extractBlockScalarEntries(withBlockText, key) {
   const lines = withBlockText.split('\n')
+  const content = blockScalarContentLines(lines)
   const keyLine = new RegExp(String.raw`^([ \t]*)${key}:[ \t]*\|[ \t]*$`)
 
   let keyIndent = null
   let startIndex = null
   for (const [index, line] of lines.entries()) {
+    if (content.has(index)) continue
     const match = keyLine.exec(line)
     if (match === null) continue
     keyIndent = match[1]

@@ -14,6 +14,7 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import {
+  blockScalarContentLines,
   extractCommitMessageConfig,
   extractNpmEcosystemBlocks,
   findCommitScopeViolations,
@@ -523,3 +524,62 @@ ${' '.repeat(60_000)}z
     assert.ok(elapsed < TIMING_BUDGET_MS, `took ${elapsed}ms, budget ${TIMING_BUDGET_MS}ms`)
   },
 )
+
+// A YAML multi-line value (a block scalar, opened by `|` or `>`) is text, not structure: a
+// line inside one that happens to read `package-ecosystem: npm` or `prefix: ...` declares
+// nothing, and must not be mistaken for an entry or a key.
+const MULTILINE_IMPOSTOR_YAML = `version: 2
+updates:
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - |
+        package-ecosystem: npm
+        prefix: 'chore(deps)'
+        prefix-development: 'chore(deps)'
+`
+
+test('text inside a multi-line value that imitates an npm entry is not an npm entry, so the gate refuses', async () => {
+  const r = await runMain(fixtureRoot(MULTILINE_IMPOSTOR_YAML))
+  assert.equal(r.code, 1)
+  assert.match(r.err, /refusing to run/)
+})
+
+const MULTILINE_PREFIX_DECOY_YAML = `version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    labels:
+      - >-
+        prefix: 'chore(vendor)'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps)'
+`
+
+test('a prefix line inside a multi-line value is not read in place of the real commit-message prefix', async () => {
+  const r = await runMain(fixtureRoot(MULTILINE_PREFIX_DECOY_YAML))
+  assert.equal(r.code, 0, r.err)
+  assert.equal(r.err, '')
+})
+
+test('blockScalarContentLines marks only the lines inside each multi-line value', () => {
+  const lines = [
+    'labels:', //                       0 structure
+    '  - |', //                         1 header (list item)
+    '    package-ecosystem: npm', //    2 content
+    '', //                              3 blank inside the value: content
+    '    prefix: x', //                 4 content
+    '  - plain', //                     5 back at the header's indent: structure
+    'note: >- # folded', //             6 header with chomping and a comment
+    '  text', //                        7 content
+    "quoted: 'a |'", //                 8 a pipe inside a quoted value opens nothing
+    '  indented', //                    9 so this stays structure
+    'run: |2', //                       10 header with an indentation indicator
+    '  - uses: something', //           11 content
+    'after: 1', //                      12 structure
+  ]
+  assert.deepEqual([...blockScalarContentLines(lines)], [2, 3, 4, 7, 11])
+})

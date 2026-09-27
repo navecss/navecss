@@ -229,3 +229,25 @@ test(
     assert.equal(r.code, 1)
   },
 )
+
+test('a run script that merely mentions the action is not a step using it, so the gate refuses', async () => {
+  const mentionOnlyYaml = `name: pr-title
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50
+            with:
+              scopes: |
+                .*
+`
+  const r = await runMain(fixtureRoot(mentionOnlyYaml))
+  assert.equal(r.code, 1)
+  assert.match(r.err, /Could not find a step using/)
+})

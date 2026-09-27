@@ -47,12 +47,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
  * property of indentation, not of naming an ecosystem. Whether an entry IS `npm` is then read
  * from ANY line inside its block (`isNpmBlock`), because YAML key order inside a mapping is not
  * part of its schema and Dependabot accepts `package-ecosystem` in any position within an
- * entry, not only as the first key on the dash line. Returns an empty array when there is no
+ * entry, not only as the first key on the dash line. Lines inside a multi-line value are text,
+ * not structure, and are skipped by every search here (`blockScalarContentLines`), so a label
+ * that merely reads like an npm entry never becomes one. Returns an empty array when there is no
  * `updates:` key, no list item follows it, or no entry in the list is `npm` — the fail-closed
  * signal `main()` checks for.
  */
 export function extractNpmEcosystemBlocks(dependabotText) {
-  const lines = dependabotText.split('\n')
+  const lines = structuralLines(dependabotText)
   const entryIndent = findEntryIndent(lines)
   if (entryIndent === null) return []
 
@@ -70,6 +72,65 @@ export function extractNpmEcosystemBlocks(dependabotText) {
   }
 
   return npmBlocks
+}
+
+/**
+ * The indexes of every line in `lines` that is CONTENT of a YAML block scalar: a multi-line
+ * value opened by `|` or `>`, with optional chomping and indentation indicators (`key: |`,
+ * `- >-`, `key: |2 # note`). Such a line is text, never structure, so a line inside one that
+ * happens to read `package-ecosystem: npm` or `prefix: ...` declares nothing, and every key or
+ * entry search here must skip it. Content runs from the line after the header for as long as
+ * lines are blank or indented deeper than the header line. One pass, one small anchored check
+ * per line, and no pattern that can backtrack.
+ */
+export function blockScalarContentLines(lines) {
+  const content = new Set()
+  let headerIndent = null
+  for (const [index, line] of lines.entries()) {
+    const indent = leadingBlankCount(line)
+    if (headerIndent !== null) {
+      if (line.trim() === '' || indent > headerIndent) {
+        content.add(index)
+        continue
+      }
+      headerIndent = null
+    }
+    if (opensBlockScalar(line)) headerIndent = indent
+  }
+  return content
+}
+
+/**
+ * `text` split into lines, with every block-scalar content line (`blockScalarContentLines`)
+ * blanked: the same line count and positions, but only the lines that are YAML structure.
+ */
+function structuralLines(text) {
+  const lines = text.split('\n')
+  const content = blockScalarContentLines(lines)
+  return lines.map((line, index) => (content.has(index) ? '' : line))
+}
+
+/**
+ * How many spaces and tabs open `line`, counted by hand so no pattern can backtrack over them.
+ */
+function leadingBlankCount(line) {
+  let count = 0
+  while (count < line.length && (line[count] === ' ' || line[count] === '\t')) count += 1
+  return count
+}
+
+/**
+ * Whether `line`'s value, after any trailing ` #` comment, is a block-scalar indicator (`|` or
+ * `>`, then at most two chomping/indentation characters) following a key's `:` or a list
+ * item's `-`.
+ */
+function opensBlockScalar(line) {
+  const commentIndex = line.indexOf(' #')
+  const body = (commentIndex === -1 ? line : line.slice(0, commentIndex)).trimEnd()
+  const lastBlank = Math.max(body.lastIndexOf(' '), body.lastIndexOf('\t'))
+  if (!/^[|>][-+0-9]{0,2}$/.test(body.slice(lastBlank + 1))) return false
+  const before = body.slice(0, lastBlank + 1).trimEnd()
+  return before.endsWith(':') || before.endsWith('-')
 }
 
 /**
@@ -98,7 +159,7 @@ function findEntryIndent(lines) {
 function isNpmBlock(block) {
   const npmEcosystemLine =
     /^[ \t]*(?:-[ \t]*)?package-ecosystem:[ \t]*(?:'npm'|"npm"|npm(?=[ \t#]|$))/
-  return block.split('\n').some((line) => npmEcosystemLine.test(line))
+  return structuralLines(block).some((line) => npmEcosystemLine.test(line))
 }
 
 /**
@@ -142,7 +203,7 @@ export function extractCommitMessageConfig(ecosystemBlock) {
  */
 function extractYamlScalar(text, key) {
   const lineMatcher = new RegExp(String.raw`^[ \t]*(?:-[ \t]*)?${key}:(.*)$`)
-  for (const line of text.split('\n')) {
+  for (const line of structuralLines(text)) {
     const match = lineMatcher.exec(line)
     if (match !== null) return parseYamlScalarRemainder(match[1])
   }
