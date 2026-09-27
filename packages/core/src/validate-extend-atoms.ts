@@ -105,7 +105,7 @@ function conditionIsValid(atName: 'container' | 'media', condition: string): boo
     node.type === 'atrule' &&
     node.name === atName &&
     node.params === condition.trim() &&
-    node.nodes.length === 0
+    (node.nodes?.length ?? 0) === 0
   )
 }
 
