@@ -86,7 +86,11 @@ function atRuleErrorIndex(preludeStartIndex: number, diagnostic: Diagnostic): nu
  * `ctx.fold` first, so R6's fold covers every directive, not just the one
  * that happened to be walked first (AC-directive-core-16).
  */
-function reportDiagnostic(diagnostic: Diagnostic, ctx: DirectiveContext, preludeStartIndex: number): void {
+function reportDiagnostic(
+  diagnostic: Diagnostic,
+  ctx: DirectiveContext,
+  preludeStartIndex: number,
+): void {
   // The workaround sentence names a group rule the directive can be moved
   // into via `& { }` — only meaningful when that group rule itself sits
   // inside a style rule (`.a { @media (x) { @nave flex; } }`), never for a
@@ -230,11 +234,11 @@ export function handleAtRule(atRule: PostCSSAtRule, ctx: Omit<DirectiveContext, 
   if (!match.isNave) return
 
   const fullCtx: DirectiveContext = { ...ctx, atRule }
-  const { isStyleRuleParent, parent, result: planResult } = planAtRule(
-    atRule,
-    ctx.extend,
-    match.prelude,
-  )
+  const {
+    isStyleRuleParent,
+    parent,
+    result: planResult,
+  } = planAtRule(atRule, ctx.extend, match.prelude)
 
   for (const diagnostic of planResult.diagnostics) {
     reportDiagnostic(diagnostic, fullCtx, match.preludeStartIndex)

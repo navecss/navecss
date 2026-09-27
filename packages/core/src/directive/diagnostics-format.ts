@@ -86,7 +86,11 @@ function groupByDistance(
  * sentence would either be wrong, a shadowed built-in's stale class, or
  * print "undefined").
  */
-function hasCamelCaseNote(typed: string, candidates: readonly string[], minDistance: number): boolean {
+function hasCamelCaseNote(
+  typed: string,
+  candidates: readonly string[],
+  minDistance: number,
+): boolean {
   if (minDistance !== 0 || candidates.length !== 1) return false
   if (!typed.includes('-')) return false
   return Object.hasOwn(atomClassMap, candidates[0]!)

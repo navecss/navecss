@@ -107,7 +107,11 @@ interface BlockFrame {
 /**
 `item`'s own `{}` content as a new frame to walk, if it has one — pushed onto the work stack rather than recursed into, so nesting depth never grows the JS call stack (deeply nested CSS is otherwise a stack overflow, not a parse error, AC-25).
  */
-function childFrameFor(scan: Scan, item: Item, selector: string | undefined): BlockFrame | undefined {
+function childFrameFor(
+  scan: Scan,
+  item: Item,
+  selector: string | undefined,
+): BlockFrame | undefined {
   if (item.blockStart === undefined || item.blockEnd === undefined) return undefined
   const childSelector = item.kind === 'rule' ? ruleSelector(scan, item) : selector
   return {

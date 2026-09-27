@@ -17,7 +17,10 @@ import { findSurvivors } from '../../src/directive/find-survivors.ts'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const BIN = path.resolve(HERE, '..', '..', 'dist', 'bin.js')
 
-function runCheck(cwd: string, ...args: string[]): { status: number | null; signal: string | null } {
+function runCheck(
+  cwd: string,
+  ...args: string[]
+): { status: number | null; signal: string | null } {
   const result = spawnSync(process.execPath, [BIN, 'check', ...args], {
     cwd,
     encoding: 'utf8',
