@@ -1,4 +1,9 @@
-# NaveCSS
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-horizontal-noorbit.dark.svg">
+    <img src=".github/assets/logo-horizontal-noorbit.light.svg" alt="NaveCSS" height="64">
+  </picture>
+</h1>
 
 > Your north star for design systems.
 
