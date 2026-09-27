@@ -218,3 +218,13 @@ describe('AC-directive-core-07 — expander-only rows, Syntax 3 recovery', () =>
     expect(css).toBe(input)
   })
 })
+
+describe('AC-directive-core-25 — expandText() stays fast on a large stylesheet', () => {
+  it('runs a 20000-line stylesheet with no directive in under 2 seconds', () => {
+    const css = '.a { color: red; }\n'.repeat(20_000)
+
+    const start = performance.now()
+    expandText(css)
+    expect(performance.now() - start).toBeLessThan(2000)
+  })
+})

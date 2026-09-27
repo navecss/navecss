@@ -10,7 +10,11 @@ import type { Position, SourceMap } from './source-map.ts'
  * unchanged.
  */
 import { atKeywordName, isNaveAtKeyword, type Item, readItem } from './block-reader.ts'
-import { type ExpandedDiagnostic, inputPositionAt, reportDiagnostics } from './expand-text-diagnostics.ts'
+import {
+  createPositionFinder,
+  type ExpandedDiagnostic,
+  reportDiagnostics,
+} from './expand-text-diagnostics.ts'
 import { type AppendPart, buildOutput, type Edit } from './expand-text-output.ts'
 import { renderBlock, renderInline } from './expand-text-render.ts'
 import { plan } from './plan.ts'
@@ -43,6 +47,13 @@ class Walker {
   readonly css: string
   readonly diagnostics: Diagnostic[] = []
   readonly edits: Edit[] = []
+  // Built once per call, not once per query: `positionAt` runs once per
+  // output token, and a fresh linear scan on every call made the whole
+  // pass quadratic in the stylesheet's size (AC-25). Not private: this
+  // project's class-member-order and class-sort lint rules disagree with
+  // each other on where a private field goes relative to the surrounding
+  // public ones, which a field with no access modifier sidesteps.
+  readonly findPosition: (offset: number) => Position
   readonly options: ExpandTextOptions
   readonly tokens: readonly Token[]
 
@@ -50,10 +61,11 @@ class Walker {
     this.css = css
     this.tokens = tokenize(css)
     this.options = options
+    this.findPosition = createPositionFinder(css)
   }
 
   positionAt(offset: number): Position {
-    return inputPositionAt(this.css, offset)
+    return this.findPosition(offset)
   }
 }
 
