@@ -108,10 +108,13 @@ describe('AC-07: the message floor', () => {
     'Preact',
   ]
 
-  it.each(noInternalWords)('no message names our path/process or a third-party product ("%s")', (word) => {
-    const hits = collected.filter((message) => message.includes(word))
-    expect(hits).toEqual([])
-  })
+  it.each(noInternalWords)(
+    'no message names our path/process or a third-party product ("%s")',
+    (word) => {
+      const hits = collected.filter((message) => message.includes(word))
+      expect(hits).toEqual([])
+    },
+  )
 
   it('no message contains a bare "#" followed by a digit (a tracker reference)', () => {
     const hits = collected.filter((message) => /#\d/.test(message))
@@ -129,10 +132,13 @@ describe('AC-07: the message floor', () => {
     'users',
   ]
 
-  it.each(noAccessibilityWords)('no message names an accessibility consequence, case-insensitively ("%s")', (word) => {
-    const hits = collected.filter((message) => message.toLowerCase().includes(word.toLowerCase()))
-    expect(hits).toEqual([])
-  })
+  it.each(noAccessibilityWords)(
+    'no message names an accessibility consequence, case-insensitively ("%s")',
+    (word) => {
+      const hits = collected.filter((message) => message.toLowerCase().includes(word.toLowerCase()))
+      expect(hits).toEqual([])
+    },
+  )
 
   it('a planted control catches a violation (proves the scan itself reports)', () => {
     const planted = ['this message offers eslint-disable as a fix', 'reported by React']

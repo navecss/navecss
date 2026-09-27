@@ -14,7 +14,15 @@ import { RuleTester } from 'eslint'
  * a browser build could pull in.
  */
 import { execSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -48,7 +56,9 @@ describe('AC-05: zero-runtime (R2)', () => {
     }
     expect(manifest.browser).toBeUndefined()
     const conditionKeys = Object.values(manifest.exports).flatMap((value) =>
-      typeof value === 'object' && value !== null ? Object.keys(value as Record<string, unknown>) : [],
+      typeof value === 'object' && value !== null
+        ? Object.keys(value as Record<string, unknown>)
+        : [],
     )
     expect(conditionKeys).not.toContain('browser')
   })
@@ -77,7 +87,11 @@ describe('AC-05: zero-runtime (R2)', () => {
         optionalDependencies?: Record<string, string>
         peerDependencies?: Record<string, string>
       }
-      for (const field of [manifest.dependencies, manifest.peerDependencies, manifest.optionalDependencies]) {
+      for (const field of [
+        manifest.dependencies,
+        manifest.peerDependencies,
+        manifest.optionalDependencies,
+      ]) {
         expect(Object.keys(field ?? {})).not.toContain(PACKAGE_NAME)
       }
     }
