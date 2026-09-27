@@ -2,8 +2,8 @@
 
 **The files in this folder are not covered by the MIT licence.** A file's
 licence is normally assumed to be the repository's, so this note says plainly
-that these ones are not: `logo-horizontal-noorbit.light.svg` and
-`logo-horizontal-noorbit.dark.svg` are the Nave compass mark with the NaveCSS
+that these ones are not: `logo-horizontal.light.svg` and
+`logo-horizontal.dark.svg` are the Nave compass mark with the NaveCSS
 name, and a mark is not code.
 
 "NaveCSS" and the Nave compass mark are trademarks of the NaveCSS project, and

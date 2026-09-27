@@ -1116,6 +1116,6 @@ test('.github/assets/LICENSE.md: the whole file', () => {
   assertClearedText(
     '.github/assets/LICENSE.md',
     read('.github/assets/LICENSE.md'),
-    'd0c3fd1ab5aee471bc098504473a938987845af050e537104626dcbc033ecad6',
+    '87fde5a29edf3b279b3390e12b55e68f592f97cb318a5bba712eb9d6a30a484e',
   )
 })
