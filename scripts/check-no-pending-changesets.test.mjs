@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -23,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 // namespace, a missing export is `undefined` at the call site, so each row fails on its own
 // assertion and its red is its own evidence.
 import * as subject from './check-no-pending-changesets.mjs'
+import { runScriptIn as runScriptInHelper } from './run-script-in-test-helper.mjs'
 
 const {
   findPendingChangesets,
@@ -213,22 +212,8 @@ function mainVerdict(rootDir) {
   return { exitCode, out }
 }
 
-/**
- * Runs the REAL script as its own process against `rootDir`, by copying it into
- * `<rootDir>/scripts/` (the script resolves its own ROOT from its own location, one directory
- * up). Returns `{ status, out }` with stdout and stderr concatenated.
- */
 function runScriptIn(rootDir) {
-  const scriptsDir = path.join(rootDir, 'scripts')
-  mkdirSync(scriptsDir, { recursive: true })
-  const copied = path.join(scriptsDir, path.basename(SCRIPT_PATH))
-  copyFileSync(SCRIPT_PATH, copied)
-  try {
-    const stdout = execFileSync(process.execPath, [copied], { encoding: 'utf8' })
-    return { out: stdout, status: 0 }
-  } catch (error) {
-    return { out: `${error.stdout ?? ''}${error.stderr ?? ''}`, status: error.status }
-  }
+  return runScriptInHelper(SCRIPT_PATH, rootDir)
 }
 
 test('main(rootDir): a changeset directory holding only config.json and README.md exits 0', () => {

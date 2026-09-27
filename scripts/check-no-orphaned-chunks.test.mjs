@@ -1,14 +1,5 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  realpathSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -20,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 // own red behind the first missing symbol. Through the namespace, a missing export is `undefined`
 // at the call site, so each row fails on its own assertion and its red is its own evidence.
 import * as subject from './check-no-orphaned-chunks.mjs'
+import { runScriptIn as runScriptInHelper } from './run-script-in-test-helper.mjs'
 
 const {
   collectDeclaredEntries,
@@ -543,22 +535,8 @@ function mainVerdict(rootDir) {
   return { exitCode, out }
 }
 
-/**
- * Runs the REAL script as its own process against `rootDir`, by copying it to
- * `<rootDir>/scripts/` (the script resolves its own ROOT from its location, one directory up).
- * Returns `{ status, out }` with stdout and stderr concatenated.
- */
 function runScriptIn(rootDir) {
-  const scriptsDir = path.join(rootDir, 'scripts')
-  mkdirSync(scriptsDir, { recursive: true })
-  const copied = path.join(scriptsDir, path.basename(SCRIPT_PATH))
-  copyFileSync(SCRIPT_PATH, copied)
-  try {
-    const stdout = execFileSync(process.execPath, [copied], { encoding: 'utf8' })
-    return { status: 0, out: stdout }
-  } catch (error) {
-    return { status: error.status, out: `${error.stdout ?? ''}${error.stderr ?? ''}` }
-  }
+  return runScriptInHelper(SCRIPT_PATH, rootDir)
 }
 
 const CLEAN_PACKAGE = {
