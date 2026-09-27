@@ -72,6 +72,17 @@ describe('AC-consumer-constraints-30 covers: R19', () => {
     expect(context).toContain('governs versioning and tagging, not publishing')
   })
 
+  it('names @navecss/eslint-plugin as versioning independently, with its peers on eslint and @navecss/core', () => {
+    const content = readFileSync(path.join(ADR_DIR, ADR_FILE!), 'utf8')
+    const headingIndex = content.indexOf('## Update: `@navecss/eslint-plugin` joins')
+    expect(headingIndex).toBeGreaterThan(-1)
+    const update = content.slice(headingIndex)
+    expect(update).toMatch(/`@navecss\/eslint-plugin`/)
+    expect(update).toMatch(/versions independently/)
+    expect(update).toMatch(/peer dependency on `@navecss\/core`/)
+    expect(update).toMatch(/peer on\s+`eslint`/)
+  })
+
   it('the ADR index links the record under its own number', () => {
     const index = readFileSync(path.join(ADR_DIR, 'index.md'), 'utf8')
     const number = ADR_FILE!.slice(0, 4)

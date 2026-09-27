@@ -50,9 +50,10 @@
  *
  * What is NOT checked:
  *   Nothing here looks at the rest of the className attribute. @navecss/eslint-plugin does:
- *   install it for an ENFORCED escape channel, with every bare string outside cx()/cx.raw()
- *   reported. Without it, cx.raw() is only a DECLARED escape channel (greppable:
- *   `grep -r 'cx.raw'`).
+ *   install it for an ENFORCED escape channel, reporting an undeclared literal class written
+ *   in className and requiring a reason on a cx.raw() call that carries one (a class the
+ *   project declares as its own passes by design). Without it, cx.raw() is only a DECLARED
+ *   escape channel (greppable: `grep -r 'cx.raw'`).
  *
  * Note on consumer atoms:
  *   Atoms defined via navePlugin({ extend }) are @nave-directive only.

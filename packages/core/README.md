@@ -149,8 +149,9 @@ What that buys you, and what it does not:
   [`@navecss/eslint-plugin`](https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#readme).**
   A bare `'legacy-card'` sitting beside these calls is not seen by `tsc` or by
   `@nave`, so `cx.raw()` is a **declared** escape channel — install that plugin
-  for an **enforced** one, with every deliberate step outside the system left
-  as a reasoned, countable `cx.raw()` call.
+  for an **enforced** one: it reports an undeclared literal class written in
+  `className`, and requires a reason on a `cx.raw()` call that carries one, so
+  a deliberate step outside the system stays a reasoned, countable call.
 
 ### Tokens only
 

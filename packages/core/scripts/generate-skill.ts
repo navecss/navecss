@@ -157,7 +157,7 @@ export function renderNaveSection(): string[] {
     'An atom name that is neither on this page nor in the project’s own `navePlugin({ extend })`',
     'configuration is not used, and a `--nave-*` name not on this page is not used either:',
     'when the name you need does not exist, say so rather than invent one.',
-    'An undeclared `--nave-*` name passes lint and the build and renders nothing.',
+    'An undeclared `--nave-*` name renders nothing; `@navecss/stylelint-config` reports it.',
     '',
     'Atoms a project registers through `navePlugin({ extend })` are not listed on this page.',
     'They are valid in `@nave` only, never in `cx()`, and they live in that project’s own',
@@ -218,12 +218,12 @@ function renderCxRawSection(): string[] {
  * The one sentence R13 requires, naming no rule: `@navecss/eslint-plugin`'s reports already
  * list their own remedies in order, so the guide adds nothing beyond pointing at that and
  * warning against the two ways an agent could otherwise satisfy a report without fixing it.
+ * Emitted as ONE array entry, never split across several, so the committed file holds it as
+ * one unwrapped line and a byte-exact match does not depend on collapsing whitespace first.
  */
-function renderEslintPluginSection(): string[] {
+export function renderEslintPluginSection(): string[] {
   return [
-    'If the project runs `@navecss/eslint-plugin`, its reports name their remedies, most',
-    'preferred first: take the first one that fits. Never answer a report with a disable',
-    'comment, and never write a `cx.raw()` reason to make a report go away.',
+    'If the project runs `@navecss/eslint-plugin`, its reports name their remedies, most preferred first: take the first one that fits. Never answer a report with a disable comment, and never write a `cx.raw()` reason to make a report go away.',
     '',
   ]
 }

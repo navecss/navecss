@@ -60,3 +60,20 @@ own reasoning: the two packages need to stay compatible across a range of versio
 forced to release together. `@navecss/stylelint-config` still does not join the `fixed` group,
 is not `linked`, and is not `ignore`d — the peer dependency changes what it reads, not how it
 versions.
+
+## Update: `@navecss/eslint-plugin` joins, versioning independently
+
+A fourth published package, `@navecss/eslint-plugin`, closes the class-channel side of the same
+constraint `@navecss/stylelint-config` closes for CSS: no class text written as a literal outside
+`cx.raw()`, a reason required of every `cx.raw()` call that carries one, a count of how many, and
+a check on literal values in a JSX `style` object. It **versions independently**, for the same
+reasoning as `@navecss/stylelint-config` above: its contract is with ESLint and the JSX it reads,
+not with the token or component contract `tokens` and `core` share, so it is not added to the
+`fixed` group, is not `linked`, and is not `ignore`d.
+
+Unlike `@navecss/stylelint-config`, this package needs no revisit trigger to take a peer: it
+reads `@navecss/core`'s public `./atoms` export from the day it ships, to recognise a Nave atom
+name passed to `cx()`, so it takes a required peer dependency on `@navecss/core` at
+`>=0.1.0 <1.0.0` (a range, never `fixed`) from its first release, alongside a required peer on
+`eslint` at `^9.24.0 || ^10.0.0`. Its build is `tsc` to `dist/`, the same shape as
+`@navecss/stylelint-config`'s own plain-JavaScript package, no bundler either.
