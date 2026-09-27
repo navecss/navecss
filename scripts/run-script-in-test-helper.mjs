@@ -1,5 +1,5 @@
 // Shared by `check-no-orphaned-chunks.test.mjs` and `check-no-pending-changesets.test.mjs`, which
-// carried identical copies of this function before they were extracted here. Named without a
+// each carried their own copy of this function before it was extracted here. Named without a
 // `.test.mjs` suffix so `scripts:test` (`node --test scripts/*.test.mjs`) does not collect it as
 // a test file.
 import { execFileSync } from 'node:child_process'
@@ -8,8 +8,8 @@ import path from 'node:path'
 
 /**
  * Runs a script as its own process against a scratch workspace root, by copying it into
- * `<rootDir>/scripts/` (the calling scripts resolve their own ROOT from their own location, one
- * directory up). Returns `{ status, out }` with stdout and stderr concatenated.
+ * `<rootDir>/scripts/` (the script resolves its own ROOT from its own location, one directory
+ * up). Returns `{ status, out }` with stdout and stderr concatenated.
  */
 export function runScriptIn(scriptPath, rootDir) {
   const scriptsDir = path.join(rootDir, 'scripts')
