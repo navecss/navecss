@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `navecss-core` — a bin whose logic lives entirely behind `check()` (R10).
+ * `navecss-core` — a bin whose logic lives entirely behind `check()`.
  * Flags follow `navecss-tokens`' own vocabulary and equals form.
  */
 import { access, constants } from 'node:fs/promises'

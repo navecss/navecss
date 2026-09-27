@@ -1,5 +1,5 @@
 /**
- * AC-directive-core-26 (slice 1 rows only): building a real Vite app with
+ * AC-directive-core-26: building a real Vite app with
  * `navePlugin()` wired into `css.postcss` adds nothing to the emitted
  * JavaScript — every JS file is byte-identical to the same app built with
  * no adapter at all, once hash-bearing filenames are normalized to a

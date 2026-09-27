@@ -1,5 +1,5 @@
 /**
- * AC-directive-core-25 (R15): re-reading an `extend` path specifier on
+ * AC-directive-core-25: re-reading an `extend` path specifier on
  * change must not be fooled by a content edit that leaves the file's mtime
  * and size exactly where they were — a size-preserving edit, or a build
  * step that restores an old mtime, both leave `mtime`/`size` alone even

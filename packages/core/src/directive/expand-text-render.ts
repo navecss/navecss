@@ -9,7 +9,7 @@ import type { AnchoredBlock, Declaration } from './plan.ts'
  * Every line terminator (a CRLF pair as one) becomes a single space: an
  * `extend` declaration value is free to carry one (`grid-template-areas`'s
  * multi-row string is the shipped example), but inserted text must never
- * contain one (R3) — an untouched byte's line number would otherwise shift
+ * contain one — an untouched byte's line number would otherwise shift
  * by however many an inserted value happened to add.
  */
 function withoutLineTerminators(value: string): string {

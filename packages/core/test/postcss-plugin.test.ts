@@ -522,9 +522,9 @@ describe('onUnknown default is error', () => {
   // stays green when `atRule.error(msg)` is replaced by a bare `new Error(msg)`,
   // which strips the file, the line and the column.
   //
-  // Column 9, not 3 (this file's pin before the slice-1 changeset): R6 positions
-  // `unknown-atom` at the name token, not at the directive's `@` (round-3
-  // decision 4, AC-directive-core-13).
+  // Column 9, not 3 (this file's earlier pin expected column 3): the diagnostic
+  // positions `unknown-atom` at the name token, not at the directive's `@`
+  // (AC-directive-core-13).
   it('fails by default with a PostCSS CssSyntaxError carrying the directive line and column', async () => {
     const source = '.x {\n  color: blue;\n  @nave nope;\n}'
 
@@ -549,10 +549,10 @@ describe('onUnknown default is error', () => {
   })
 
   // The other half of the same ground: the error names the vocabulary the typo
-  // missed, INCLUDING the consumer's own extend atoms — now via R6's hint rule
-  // rather than the `Available:` list (this file's pin before the slice-1
-  // changeset asserted the old `Available: .*brandBox` text; "brandBoxx" is
-  // now a distance-1 typo of the extend atom "brandBox" itself).
+  // missed, INCLUDING the consumer's own extend atoms — now via the hint rule
+  // rather than the `Available:` list (this file's earlier pin asserted the old
+  // `Available: .*brandBox` text; "brandBoxx" is now a distance-1 typo of the
+  // extend atom "brandBox" itself).
   it('hints at a consumer extend atom directly, by name, when the typo is close to one', async () => {
     const extend: Record<string, AtomDefinition> = {
       brandBox: { declarations: { color: 'red' } },

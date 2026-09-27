@@ -80,7 +80,7 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
     assertPublishedExportsPresent(exports)
   })
 
-  it('adds exactly ./check beyond the 0.1.0 keys, at slice 1', () => {
+  it('adds exactly ./check beyond the 0.1.0 keys', () => {
     const exports = manifest().exports as Record<string, unknown>
     const added = Object.keys(exports).filter((k) => !Object.hasOwn(PUBLISHED_0_1_0_EXPORTS, k))
     expect(added).toEqual(['./check'])
@@ -108,7 +108,7 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
     },
   )
 
-  it("keeps slice-1's own public surface unchanged: the bin name and the plugin names", () => {
+  it("keeps this release's own public surface unchanged: the bin name and the plugin names", () => {
     const pkg = manifest()
     expect(Object.keys(pkg.bin as Record<string, unknown>)).toContain('navecss-core')
     expect(postcssModule.navePlugin().postcssPlugin).toBe('postcss-nave')

@@ -88,9 +88,9 @@ export interface NavePluginOptions {
 
 export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
   const { onUnknown = 'error', extend: extendOption } = options
-  // R15: a string `extend` resolves to an absolute path at construction, so
+  // A string `extend` resolves to an absolute path at construction, so
   // an unresolvable specifier fails when the host's config loads rather than
-  // on the first stylesheet (round-3 decision 11).
+  // on the first stylesheet.
   const extendFile =
     typeof extendOption === 'string' ? resolveExtendSpecifier(extendOption) : undefined
   const staticExtend: ExtendMap = typeof extendOption === 'object' ? extendOption : {}
@@ -129,7 +129,7 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
           })
           return applyExtendModule(extendFile, loadCache, (value) => {
             // Validated after every load, not once at construction: a
-            // specifier's default export can change on every rebuild (R15),
+            // specifier's default export can change on every rebuild,
             // and each one is trusted, consumer-authored code the same way
             // the object form is. Runs before `extend` is assigned, so a
             // bad edit fails this run rather than splicing into generated
@@ -159,7 +159,7 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
 navePlugin.postcss = true
 
 /**
- * R22: a host-loaded entry point also carries a default export, since
+ * A host-loaded entry point also carries a default export, since
  * hosts and every peer library load it that way (`import nave from
  * '@navecss/core/postcss'`). `navePlugin` stays the documented, named form.
  * @public

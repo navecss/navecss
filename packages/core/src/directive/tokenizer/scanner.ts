@@ -15,7 +15,7 @@
  * ORIGINAL input: CR, LF, FF and CRLF are each treated as a single
  * whitespace/newline event for tokenization purposes, but nothing is
  * rewritten first, so a CRLF pair stays two bytes long — required for
- * `expandText` to leave every untouched byte alone (R3).
+ * `expandText` to leave every untouched byte alone.
  */
 
 /**

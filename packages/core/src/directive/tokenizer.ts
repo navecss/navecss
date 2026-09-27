@@ -7,7 +7,7 @@ import type { Token, TokenType } from './tokenizer/token-types.ts'
  * see `tokenizer/scanner.ts`'s docblock on `NON_ASCII_IDENT_RANGES`). No module reachable
  * from `tokenize` imports a host (PostCSS, Vite, Lightning CSS) or a
  * third-party CSS parsing library: `resolve`, `plan` and `expandText`
- * (R1-R3) are built on this and `block-reader.ts` alone. Character
+ * are built on this and `block-reader.ts` alone. Character
  * classification and the scanner live in `tokenizer/scanner.ts`; each
  * `consume*` production from the spec has its own file beside it.
  */

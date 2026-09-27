@@ -1,6 +1,6 @@
 /**
  * AC-directive-core-28: host-loaded entry points also carry a default
- * export (R22) — `./postcss` is the one that exists at slice 1.
+ * export — `./postcss` is the only one shipped so far.
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'

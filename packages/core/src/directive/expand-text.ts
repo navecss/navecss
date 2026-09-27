@@ -3,9 +3,9 @@ import type { ExtendMap } from './resolve.ts'
 import type { Position, SourceMap } from './source-map.ts'
 
 /**
- * R3: `expandText(css, options)` reads a stylesheet as CSS Syntax Level 3
+ * `expandText(css, options)` reads a stylesheet as CSS Syntax Level 3
  * tokens and blocks, finds every `@nave` at-rule that is an item of the
- * stylesheet or of a block, answers `plan()`'s three facts itself (R2), and
+ * stylesheet or of a block, answers `plan()`'s three facts itself, and
  * splices. Every byte outside a directive's span and the inserted text is
  * unchanged.
  */
@@ -147,7 +147,7 @@ function processDirective(w: Walker, site: DirectiveSite): void {
 }
 
 /**
-True for a `rule` or `at-rule` item other than `@nave` itself — a nested node (R2's context bullet).
+True for a `rule` or `at-rule` item other than `@nave` itself — a nested node, one of the facts `plan()` needs to decide the `& { … }` wrap.
  */
 function isNestedNode(tokens: readonly Token[], item: Item): boolean {
   if (item.kind === 'rule') return true
@@ -247,10 +247,10 @@ function walkBlock(w: Walker, bounds: BlockBounds): void {
 
 /**
  * `expandText(css, options)`. Reads `css` as CSS Syntax Level 3 tokens and
- * blocks (R3, R4), finds every `@nave` at-rule that is an item of the
+ * blocks, finds every `@nave` at-rule that is an item of the
  * stylesheet or of a block, answers `plan()`'s three facts itself, and
  * splices. Returns a version-3 source map, chained through an incoming one
- * when `options.inputSourceMap` is given (R7).
+ * when `options.inputSourceMap` is given.
  */
 export function expandText(css: string, options: ExpandTextOptions = {}): ExpandTextResult {
   const w = new Walker(css, options)

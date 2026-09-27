@@ -1,5 +1,5 @@
 /**
- * R15: resolving and loading a PostCSS `extend` module specifier, split out
+ * Resolving and loading a PostCSS `extend` module specifier, split out
  * of `postcss.ts` to keep that file under the project's file-length lint.
  */
 import crypto from 'node:crypto'
@@ -11,7 +11,7 @@ import type { ExtendMap } from './directive/resolve.ts'
 
 /**
  * Resolves an `extend` module specifier against `process.cwd()` at plugin
- * construction (round-3 decision 11): an unresolvable specifier fails right
+ * construction: an unresolvable specifier fails right
  * there, naming the specifier and the directory, so the error surfaces when
  * the host's config loads rather than on the first stylesheet.
  *
@@ -55,7 +55,7 @@ async function importExtendMap(moduleUrl: string, file: string): Promise<ExtendM
 /**
  * Loads `file`'s default export as one run's extend map. Cache-busts on the
  * file's own content hash so a dev server sees an edit without a process
- * restart (round-3 decision 11 — Node's `import()` cache cannot otherwise be
+ * restart (Node's `import()` cache cannot otherwise be
  * invalidated) — a `mtime`/size key would miss a size-preserving edit, or one
  * whose mtime a build step restores to its old value. `cache` is the plugin
  * instance's own map, so concurrent runs against an unchanged file share one
@@ -78,7 +78,7 @@ function loadExtendModule(
 /**
  * Awaits `loadExtendModule` and applies its result via `setExtend`. Kept as
  * its own `async` function so `postcss.ts`'s `Once` hook — which must return
- * a bare `undefined`, not a promise, for the object form (R15: only the
+ * a bare `undefined`, not a promise, for the object form (only the
  * specifier form is async) — never has to be declared `async` itself; an
  * `async` function always returns a promise, awaited or not.
  */

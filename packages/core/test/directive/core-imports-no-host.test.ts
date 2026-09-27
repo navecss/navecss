@@ -1,6 +1,6 @@
 /**
  * AC-directive-core-02: the core imports no host, and atomic.css renders
- * from the same data `resolve()` produces (R1).
+ * from the same data `resolve()` produces.
  */
 import { spawn } from 'node:child_process'
 import {

@@ -1,5 +1,5 @@
 /**
- * R2: placement lives in the core, once. `plan()` takes the directive's
+ * Placement lives in the core, once. `plan()` takes the directive's
  * prelude as authored and the three facts any host can answer, and returns
  * the inline declarations with their wrap flag, the blocks to append (already
  * positioned and anchored — no adapter re-implements a placement rule), and

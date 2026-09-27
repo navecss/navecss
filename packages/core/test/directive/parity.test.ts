@@ -64,7 +64,7 @@ function normalizeChildren(container: Container): unknown[] {
 }
 
 /**
-R8's equivalence: same node kinds, in the same order and nesting, on the fields that matter (selector/name+prelude/prop+value+important/comment text); whitespace and semicolon raws ignored.
+Node-kind equivalence: same node kinds, in the same order and nesting, on the fields that matter (selector/name+prelude/prop+value+important/comment text); whitespace and semicolon raws ignored.
  */
 function isEquivalent(cssA: string, cssB: string): boolean {
   const treeA = normalizeChildren(postcss.parse(cssA))

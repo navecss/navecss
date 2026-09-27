@@ -44,7 +44,7 @@ describe('AC-directive-core-23 — what the check counts as a surviving directiv
     expect(escapedResult.findings).toHaveLength(1)
   })
 
-  it('finds a directive inside a declaration value (R5f)', async () => {
+  it('finds a directive inside a declaration value', async () => {
     const filePath = await writeCss('a.css', '.a{color:@nave flex}')
 
     const result = await check({ source: [filePath] })

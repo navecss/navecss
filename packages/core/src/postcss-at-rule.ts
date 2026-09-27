@@ -24,14 +24,14 @@ export interface DirectiveContext {
   result: Result
   extend: ExtendMap
   /**
-  Where an `'error'`-mode diagnostic lands instead of throwing immediately — R6's fold is per stylesheet, not per directive.
+  Where an `'error'`-mode diagnostic lands instead of throwing immediately — the fold is per stylesheet, not per directive.
    */
   fold: FoldEntry[]
 }
 
 interface NaveMatch {
   /**
-  Whether `atRule` is a `@nave` directive — R5(a): case-insensitive on the unescaped value (`@NAVE`, `@n\61ve`). PostCSS's own `.name` keeps escapes literal, and worse: its name/params split is a naive, escape-unaware character scan, so an escape spanning what PostCSS thinks is that boundary (`@n\61ve flex;` splits `"n"` / `"\61ve flex"`) makes it miss a directive whose real, unescaped name is "nave".
+  Whether `atRule` is a `@nave` directive — case-insensitive on the unescaped value (`@NAVE`, `@n\61ve`). PostCSS's own `.name` keeps escapes literal, and worse: its name/params split is a naive, escape-unaware character scan, so an escape spanning what PostCSS thinks is that boundary (`@n\61ve flex;` splits `"n"` / `"\61ve flex"`) makes it miss a directive whose real, unescaped name is "nave".
    */
   readonly isNave: boolean
   /**
@@ -70,7 +70,7 @@ function matchNaveAtRule(atRule: PostCSSAtRule): NaveMatch {
 /**
  * The `atRule.error()`/`.warn()` `index` option, relative to the at-rule's
  * OWN source text (`@` at index 0): `unknown-atom` and `bad-token` position
- * at their own token inside the prelude (R6 "unknown-atom at the name"), so
+ * at their own token inside the prelude, so
  * this adds back everything PostCSS's `index` counts from the `@` that a
  * prelude-relative `diagnostic.offset` does not.
  */
@@ -83,7 +83,7 @@ function atRuleErrorIndex(preludeStartIndex: number, diagnostic: Diagnostic): nu
  * Reports one diagnostic per `onUnknown`, defaulting to fold-and-throw: an
  * unrecognised `onUnknown` value must not select the most permissive mode.
  * `'error'` never throws HERE — every diagnostic in the stylesheet lands in
- * `ctx.fold` first, so R6's fold covers every directive, not just the one
+ * `ctx.fold` first, so the fold covers every directive, not just the one
  * that happened to be walked first (AC-directive-core-16).
  */
 function reportDiagnostic(
@@ -172,7 +172,7 @@ function buildAppendedNode(
 }
 
 /**
-Converts a `resolve()` malformed-atom throw into a positioned PostCSS error (R2, outside onUnknown and outside R6's fold).
+Converts a `resolve()` malformed-atom throw into a positioned PostCSS error (a registration defect, outside onUnknown and outside the fold).
  */
 function throwMalformedAtom(atRule: PostCSSAtRule, error: unknown): never {
   const message = error instanceof Error ? error.message : String(error)
@@ -215,7 +215,7 @@ function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap, prelude: string): 
 }
 
 /**
- * R5(c): a directive with a `{}` block is a diagnostic through `onUnknown`,
+ * A directive with a `{}` block is a diagnostic through `onUnknown`,
  * never a silent deletion — `plan()` never sees this (it only receives the
  * prelude text, not whether a block follows), so it is entirely the
  * adapter's own structural fact to report, mirroring `expandText()`'s own

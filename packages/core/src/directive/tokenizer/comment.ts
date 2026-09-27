@@ -2,7 +2,7 @@
  * §4.3.2 "consume comments". Emitted here as its own `comment` token
  * (`@rmenke/css-tokenizer-tests`' format) rather than silently discarded:
  * the spec does not require exposing it, but `expandText` needs comment
- * spans to never touch a `@nave`-looking run of text inside one (R3).
+ * spans to never touch a `@nave`-looking run of text inside one.
  */
 import type { Scanner } from './scanner.ts'
 import type { Token } from './token-types.ts'

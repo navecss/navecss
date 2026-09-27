@@ -1,6 +1,6 @@
 /**
- * R4: "the block reader" — the structural scanner `expandText()` (R3) is
- * built on. It walks a stylesheet's token stream one item at a time and
+ * "The block reader" — the structural scanner `expandText()` is built on.
+ * It walks a stylesheet's token stream one item at a time and
  * tells the caller what each item IS (a declaration, a qualified rule, an
  * at-rule with or without a block, or an invalid item), without knowing
  * anything about `@nave` itself.
@@ -53,7 +53,7 @@ const CLOSERS = new Set([')-token', ']-token', '}-token'])
 interface TrailingBlock {
   readonly openIndex: number
   /**
-  `undefined` when the block never closes: R5(d), an unclosed rule at end of input.
+  `undefined` when the block never closes: an unclosed rule at end of input.
    */
   readonly closeIndex: number | undefined
 }
@@ -133,8 +133,8 @@ function stepOverCloser(
 /**
  * Scans one item to its natural end: a top-level `;` (consumed), a
  * top-level `{}` block that closes back to depth 0 (the item ends right
- * there), EOF while still inside a top-level `{}` (R5(d): the block is
- * unclosed, the item still ends there), or EOF/the enclosing block's own
+ * there), EOF while still inside a top-level `{}` (the block is unclosed,
+ * the item still ends there), or EOF/the enclosing block's own
  * `}` with no block ever opened (neither consumed).
  */
 function scanItem(tokens: readonly Token[], start: number, limit: number): ScanResult {
@@ -207,7 +207,7 @@ function isCustomPropertyName(token: Token): boolean {
 }
 
 /**
-The at-keyword's decoded name, ASCII-lowercased, matching R5(a)'s case-insensitive-on-unescaped-value rule.
+The at-keyword's decoded name, ASCII-lowercased, so `@NAVE` and an escaped spelling like `@n\61ve` compare equal to `@nave`.
  */
 export function atKeywordName(token: Token): string {
   return (token.structured?.value as string).toLowerCase()

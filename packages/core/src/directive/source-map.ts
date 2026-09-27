@@ -1,5 +1,5 @@
 /**
- * R4/R7: a first-party version-3 source map encoder (VLQ base64) and the
+ * A first-party version-3 source map encoder (VLQ base64) and the
  * minimal decoder `expandText()` needs to chain through an incoming map.
  * No `@jridgewell/*`, `magic-string` or `source-map*` package is imported
  * anywhere in the core's import graph (AC-directive-core-02, AC-08).

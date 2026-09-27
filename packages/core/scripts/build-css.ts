@@ -3,7 +3,7 @@
  *   atoms.ts       → dist/atomic.css     (generated)
  *   index.css      → dist/index.css      (copied)
  *   layers.css     → dist/layers.css     (copied)
- *   no-tokens.css  → dist/no-tokens.css  (copied; R11)
+ *   no-tokens.css  → dist/no-tokens.css  (copied)
  *   reset.css      → dist/reset.css      (transformed, not copied verbatim — see the
  *                                          comment at this file's reset-handling code below)
  *
@@ -107,7 +107,7 @@ const renderDecls = (decls: readonly Declaration[]): string =>
   decls.map(({ prop, value }) => `${INDENT}${prop}: ${value};`).join('\n')
 
 /**
- * Renders one already-resolved @media / @container block (R1's `resolve()`
+ * Renders one already-resolved @media / @container block (`resolve()`
  * — build-css.ts never reads an atom's `media`/`container` shape itself,
  * AC-directive-core-02). Declarations are wrapped in `& { … }` for the same
  * reason the PostCSS plugin wraps them: bare declarations inside a nested
@@ -210,7 +210,7 @@ if (isMain) {
   )
 
   /**
-   * no-tokens.css (R11): the tokens-free entry, copied
+   * no-tokens.css: the tokens-free entry, copied
    * unmodified for the same reason index.css is — it declares its own order
    * statement and imports reset.css/atomic.css plain, exactly like index.css,
    * just without the @navecss/tokens/css import.

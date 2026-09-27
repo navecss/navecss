@@ -1,5 +1,5 @@
 /**
- * R7: builds `expandText()`'s final CSS and its source map together, from
+ * Builds `expandText()`'s final CSS and its source map together, from
  * the edit list its block walk produced. Split out of `expand-text.ts` to
  * keep that file under the project's file-length lint.
  */
@@ -13,7 +13,7 @@ import {
 import { type Token, tokenize } from './tokenizer.ts'
 
 /**
-One inserted run of text, and the single input position every token inside it maps to (R7).
+One inserted run of text, and the single input position every token inside it maps to.
  */
 export interface AppendPart {
   readonly text: string

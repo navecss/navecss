@@ -1,7 +1,6 @@
 /**
- * R10: resolves one `--source` entry into the files `check()` reads. A
- * file is read regardless of its extension (round-3 decision 8: "a file
- * named explicitly without a `.css` extension is read"); a directory is
+ * Resolves one `--source` entry into the files `check()` reads. A file
+ * named explicitly is read regardless of its extension; a directory is
  * read recursively for `.css` files only, following symlinks (a build
  * tool's output directory is often one), loop-safe against a symlink that
  * points back at an ancestor.

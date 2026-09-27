@@ -1,7 +1,7 @@
 /**
- * R10: what `navecss-core check` counts as a surviving directive. Finds
+ * What `navecss-core check` counts as a surviving directive. Finds
  * every at-keyword whose unescaped, ASCII-lowercased name is `nave`,
- * outside comments and strings, declaration values included (R5f) — the
+ * outside comments and strings, declaration values included — the
  * one place `expandText()` deliberately never looks, because a directive
  * inside a value is not a directive there, but IS a bug if it reaches
  * built CSS unexpanded.
@@ -64,7 +64,7 @@ class Scan {
 }
 
 /**
-Every `nave`-named at-keyword token in `[start, end)` — a declaration's value may carry one (R5f).
+Every `nave`-named at-keyword token in `[start, end)` — a declaration's value may carry one.
  */
 function scanForNaveTokens(
   scan: Scan,

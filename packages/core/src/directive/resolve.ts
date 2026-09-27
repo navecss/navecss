@@ -1,5 +1,5 @@
 /**
- * R1: `resolve(names, options)` turns `@nave` atom names into plain,
+ * `resolve(names, options)` turns `@nave` atom names into plain,
  * host-agnostic data — no PostCSS node, no class instance, nothing that
  * fails `structuredClone`. `scripts/build-css.ts` renders `atomic.css` from
  * this same function, so there is exactly one source of atom expansion data
@@ -64,8 +64,8 @@ function isDeclarationsObject(value: unknown): value is Record<string, string> {
 
 /**
  * The atom's own definition-order declarations. Throws when `declarations`
- * is present but not a plain object (R2): a registration defect, routed
- * around `onUnknown` and never folded into a diagnostic (R6, AC-05).
+ * is present but not a plain object: a registration defect, routed
+ * around `onUnknown` and never folded into a diagnostic (AC-05).
  */
 function resolveDeclarations(name: string, atom: AtomDefinition): Declaration[] {
   if (!isDeclarationsObject(atom.declarations)) {
@@ -98,14 +98,14 @@ function resolveConditionalBlocks(
   for (const [condition, block] of Object.entries(blocks)) {
     const declarations = block.declarations ? toDeclarations(block.declarations) : []
     const pseudos = resolvePseudoBlocks(block.pseudos)
-    if (declarations.length === 0 && pseudos.length === 0) continue // R2: an empty block is never emitted
+    if (declarations.length === 0 && pseudos.length === 0) continue // an empty block is never emitted
     result.push({ kind, condition, declarations, pseudos })
   }
   return result
 }
 
 /**
-One atom's declarations plus its blocks, pseudos first, then `@media`, then `@container` (R1).
+One atom's declarations plus its blocks, pseudos first, then `@media`, then `@container`.
  */
 function resolveAtom(name: string, atom: AtomDefinition): ResolvedAtom {
   return {
@@ -131,7 +131,7 @@ function lookupAtom(name: string, extend: ExtendMap): AtomDefinition | undefined
 }
 
 /**
-R1: names in, plain per-name expansion data out, plus the names that resolved to nothing.
+Names in, plain per-name expansion data out, plus the names that resolved to nothing.
  */
 export function resolve(names: readonly string[], options: ResolveOptions = {}): ResolveResult {
   const extend = options.extend ?? {}

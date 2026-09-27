@@ -1,5 +1,5 @@
 /**
- * R6's fold (round-3 decision 2), for the PostCSS adapter: under `'error'`,
+ * The fold, for the PostCSS adapter: under `'error'`,
  * every diagnostic in one stylesheet becomes one thrown report instead of
  * one throw per directive. Split out of `postcss.ts` to keep that file
  * under the project's file-length lint.

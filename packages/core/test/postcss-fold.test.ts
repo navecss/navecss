@@ -72,7 +72,7 @@ describe('AC-directive-core-16 — every problem in one stylesheet, in one repor
     await expect(second).rejects.toMatchObject({ line: 1, column: 12 })
   })
 
-  it('folds per RUN, not per shared plugin instance, once postcss runs async (found while implementing R15/AC-directive-core-25)', async () => {
+  it('folds per RUN, not per shared plugin instance, once postcss runs async (found while implementing AC-directive-core-25)', async () => {
     const shared = navePlugin()
 
     const bad = postcss([shared, asyncGap()]).process('.bad { @nave nope; }', { from: undefined })

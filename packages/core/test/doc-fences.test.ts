@@ -4,7 +4,7 @@
  * export of that subpath's own source file, and (for the bin) a real
  * subcommand and flag. Reads core's live `package.json` and `tsup.config.ts`
  * at test time — unlike AC-27's pinned baseline, this AC is about what is
- * true NOW, at whichever slice head this runs at.
+ * true NOW, at whatever commit this runs at.
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'

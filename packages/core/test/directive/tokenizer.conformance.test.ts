@@ -1,7 +1,7 @@
 /**
  * AC-directive-core-08: the tokenizer is first-party and is checked against
  * the published CSS Syntax Level 3 conformance corpus, never by copying its
- * cases into this repository (R4).
+ * cases into this repository.
  */
 import { testCorpus } from '@rmenke/css-tokenizer-tests'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

@@ -1,6 +1,6 @@
 /**
- * AC-directive-core-17 (slice 1 rows only — the Vite-specific rows are slice
- * 2): a diagnostic's `file`/`line` are mapped back through the incoming
+ * AC-directive-core-17 (the Vite-specific rows are covered separately): a
+ * diagnostic's `file`/`line` are mapped back through the incoming
  * source map when the host provides one, and are the path the host passed
  * when it does not.
  */

@@ -2,7 +2,7 @@ import type { Diagnostic } from './diagnostics-types.ts'
 import type { ExtendMap } from './resolve.ts'
 
 /**
- * R6: the diagnostic texts, owned by the core. Every host prints
+ * The diagnostic texts, owned by the core. Every host prints
  * these bodies unchanged apart from its own prefix and frame.
  */
 import { atomClassMap, type AtomDefinition, atoms } from '../atoms.ts'
@@ -12,7 +12,7 @@ export interface FormatOptions {
 }
 
 /**
-Every currently-valid atom name, built-ins first (in definition order), then `extend`'s own (round-3 decision 2, AC-14).
+Every currently-valid atom name, built-ins first (in definition order), then `extend`'s own (AC-14).
  */
 function vocabulary(extend: ExtendMap): string[] {
   const extendKeys = new Set(Object.keys(extend))
@@ -97,7 +97,7 @@ function hasCamelCaseNote(
 }
 
 /**
-R6's hint rule: candidates at the minimum distance, when that distance is <= 2 and strictly below half the normalized typed name's length.
+The hint rule: candidates at the minimum distance, when that distance is <= 2 and strictly below half the normalized typed name's length.
  */
 function findHint(typed: string, extend: ExtendMap): Hint | undefined {
   const normalizedTyped = normalize(typed)

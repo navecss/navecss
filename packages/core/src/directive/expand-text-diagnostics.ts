@@ -18,7 +18,7 @@ export interface DiagnosticReportOptions {
 }
 
 /**
- * R6: one of `expandText()`'s returned diagnostics, positioned in the
+ * One of `expandText()`'s returned diagnostics, positioned in the
  * authored file's own line/column space rather than only the plain
  * `offset`/`endOffset` `plan()` itself deals in.
  */
@@ -91,7 +91,7 @@ export function createPositionFinder(text: string): (offset: number) => Position
 }
 
 /**
- * Every code in R6's closed set is routed through `onUnknown`: under
+ * Every diagnostic code is routed through `onUnknown`: under
  * `'ignore'` none is returned at all; otherwise each gets the mode's own
  * severity and, mapped through `css`'s own line/column space, a 1-based
  * `line` and `column` beside the `offset`/`endOffset` `plan()` already gave

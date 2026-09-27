@@ -1,5 +1,5 @@
 /**
- * R10: `check({ source })`, the core logic behind both the `navecss-core
+ * `check({ source })`, the core logic behind both the `navecss-core
  * check` bin and the `@navecss/core/check` subpath. Exit contract mirrors
  * `navecss-tokens`: `0` read at least one stylesheet and found none, `1`
  * found at least one, `2` a usage error, an unreadable path, or no

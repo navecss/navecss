@@ -1,5 +1,5 @@
 /**
- * R5(b): the directive's prelude is read as CSS component values, not split
+ * The directive's prelude is read as CSS component values, not split
  * on whitespace. An ident is a candidate atom name; a comma, a string, a
  * number, a function together with its arguments, a simple `[...]`/`{...}`
  * block, and a `!` together with the ident that follows it are each ONE
@@ -64,7 +64,7 @@ function readGroup(tokens: readonly Token[], start: number, prelude: string): Ba
 }
 
 /**
-True at a `!` delim immediately followed by an ident — R5(b)'s `!important`-shaped pair.
+True at a `!` delim immediately followed by an ident — the `!important`-shaped pair.
  */
 function isBangIdent(tokens: readonly Token[], i: number): boolean {
   const t = tokens[i]!

@@ -1,7 +1,7 @@
 /**
  * Whether a `@nave` directive's authored position already follows a
  * nested node — the one fact about the PostCSS AST `plan()` cannot answer
- * itself (R2's "any host can answer" facts). Building the nested output
+ * itself, one of the facts `plan()` asks any host to answer. Building the nested output
  * (pseudo rules, `@media`/`@container` blocks) is `plan()`'s job now; this
  * file is left with only the position check, split out to keep
  * `postcss.ts` under the project's file-length lint.

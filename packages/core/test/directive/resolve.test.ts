@@ -66,7 +66,7 @@ describe('AC-directive-core-01 — resolve() returns the expansion as plain data
     expect(cloned).toEqual(result)
   })
 
-  it('emits no block for an extend atom whose only @media condition has no declarations and no pseudos (R2)', () => {
+  it('emits no block for an extend atom whose only @media condition has no declarations and no pseudos', () => {
     const { resolved } = resolve(['empty'], {
       extend: { empty: { declarations: { color: 'red' }, media: { '(min-width: 1px)': {} } } },
     })
