@@ -13,6 +13,12 @@
  *   navePlugin({ extend: myAtoms })      // Nave + consumer atoms
  *   navePlugin({ onUnknown: 'warn' })    // Log and skip instead of failing the build
  *
+ * `extend` is trusted, consumer-authored code, run at build time in the same file that could
+ * already run arbitrary JavaScript — it is not sanitised input. `validateExtendAtoms` still
+ * rejects a declaration, pseudo/media condition, or property name carrying `{`, `}`, `;` or a
+ * `/*` comment opener, since a typo there is otherwise silent CSS injection into the generated
+ * output rather than a build error at the point of the mistake.
+ *
  * Consumer atoms:
  *   import type { AtomDefinition } from '@navecss/core/postcss'
  *   import { media } from '@navecss/tokens/breakpoints'
@@ -43,6 +49,7 @@ import postcss from 'postcss'
 import { type AtomDefinition, atoms } from './atoms.ts'
 import { buildNested, DIRECTIVE, isFollowingNestedNode } from './postcss-nested-builders.ts'
 import { isInsideKeyframes, stampSource } from './postcss-node-utils.ts'
+import { validateExtendAtoms } from './validate-extend-atoms.ts'
 
 export interface NavePluginOptions {
   /**
@@ -131,6 +138,7 @@ function insertDeclarations(
 
 export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
   const { onUnknown = 'error', extend = {} } = options
+  validateExtendAtoms(extend)
   const allAtoms: Record<string, AtomDefinition> = { ...atoms, ...extend }
   // A key carrying no definition is not a valid atom name: `Object.keys` alone
   // would admit it, the unknown check would pass it, and `if (!atom) return []`

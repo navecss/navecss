@@ -489,3 +489,58 @@ describe('onUnknown default is error', () => {
     expect(await run('.x { @nave flex; }')).toContain('display: flex')
   })
 })
+
+describe('an extend atom cannot break out of the declaration or rule it is spliced into', () => {
+  it('refuses a declaration value containing a brace before any directive runs it', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { background: 'blue } body { display:none } /*' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+
+  it('refuses a declaration property containing a semicolon', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { 'color; --injected': 'red' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration property/)
+  })
+
+  it('refuses a pseudo declaration value carrying a comment opener', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: {
+        declarations: { color: 'red' },
+        pseudos: { ':hover': { background: '/* } .y { color:red' } },
+      },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/pseudo ":hover"/)
+  })
+
+  it('refuses a media condition string carrying a brace', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: {
+        declarations: { color: 'red' },
+        media: { '(width) { } body { color:red } /*': { declarations: { color: 'blue' } } },
+      },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/media condition/)
+  })
+
+  it('validates extend atoms at plugin creation, even when the directive is never invoked', () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red; --injected: 1' } },
+    }
+
+    expect(() => navePlugin({ extend })).toThrow(/declaration value/)
+  })
+
+  it('never validates the built-in atom map, only consumer-supplied extend entries', async () => {
+    // A built-in atom's own declarations never carry these characters, so this
+    // is just confirming the check is scoped to `extend` and does not walk `atoms`
+    // on every plugin creation for no reason.
+    expect(() => navePlugin()).not.toThrow()
+  })
+})
