@@ -60,13 +60,24 @@ function manifest(): Record<string, unknown> {
   return JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>
 }
 
+/**
+ * The real guard: every 0.1.0 key is still present, each with every 0.1.0
+ * condition, exactly as published. A function, not inlined into the test
+ * body below, so the "removed key" control can run this SAME check against
+ * a tampered map and show it throws, rather than asserting a fact about
+ * the tampered map alone that never exercises the guard at all.
+ */
+function assertPublishedExportsPresent(exports: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(PUBLISHED_0_1_0_EXPORTS)) {
+    expect(exports).toHaveProperty(key)
+    expect(exports[key]).toEqual(value)
+  }
+}
+
 describe('AC-directive-core-27 — the export map only grows, and core gains no dependency', () => {
   it('keeps every 0.1.0 key, each with every 0.1.0 condition', () => {
     const exports = manifest().exports as Record<string, unknown>
-    for (const [key, value] of Object.entries(PUBLISHED_0_1_0_EXPORTS)) {
-      expect(exports).toHaveProperty(key)
-      expect(exports[key]).toEqual(value)
-    }
+    assertPublishedExportsPresent(exports)
   })
 
   it('adds exactly ./check beyond the 0.1.0 keys, at slice 1', () => {
@@ -103,9 +114,9 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
     expect(postcssModule.navePlugin().postcssPlugin).toBe('postcss-nave')
   })
 
-  it('reds a scratch manifest with one 0.1.0 key removed (control)', () => {
-    const scratch: Record<string, unknown> = { ...PUBLISHED_0_1_0_EXPORTS }
-    delete scratch['./atoms']
-    expect(Object.keys(scratch)).not.toContain('./atoms')
+  it('reds the real guard against a manifest with one 0.1.0 key removed (control)', () => {
+    const tampered: Record<string, unknown> = { ...PUBLISHED_0_1_0_EXPORTS }
+    delete tampered['./atoms']
+    expect(() => assertPublishedExportsPresent(tampered)).toThrow()
   })
 })

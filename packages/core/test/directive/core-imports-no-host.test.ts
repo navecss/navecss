@@ -110,13 +110,24 @@ describe('AC-directive-core-02 — the core imports no host', () => {
     expect(disallowed).toEqual([])
   })
 
-  it('never imports a host build tool, directly or transitively', () => {
-    const { bareSpecifiers } = walkSourceGraph(CORE_ENTRIES)
-
+  /**
+   * The real guard: none of `FORBIDDEN_HOSTS` appears in `bareSpecifiers`. A
+   * function, not inlined into the test body below, so the control can run
+   * this SAME check against a tampered specifier set and show it throws,
+   * rather than asserting a fact about the tampered text alone that never
+   * exercises the guard at all.
+   */
+  function assertNoForbiddenHost(bareSpecifiers: ReadonlySet<string>): void {
     for (const host of FORBIDDEN_HOSTS) {
       const hit = [...bareSpecifiers].find((specifier) => specifier.startsWith(host))
       expect(hit, `${host} must not appear in the core's import graph`).toBeUndefined()
     }
+  }
+
+  it('never imports a host build tool, directly or transitively', () => {
+    const { bareSpecifiers } = walkSourceGraph(CORE_ENTRIES)
+
+    assertNoForbiddenHost(bareSpecifiers)
   })
 
   it('control: a scratch copy importing postcss from expandText’s own module reds the check', () => {
@@ -132,6 +143,12 @@ describe('AC-directive-core-02 — the core imports no host', () => {
     const tampered = `import postcss from 'postcss'\n${original}`
     const specifiers = extractSpecifiers(tampered)
     expect(specifiers).toContain('postcss')
+
+    // The real assertion, run against the tampered specifier set: this is
+    // what actually shows the guard catches the injected import, not just
+    // that the low-level regex found the string "postcss" somewhere.
+    const tamperedSpecifiers = new Set([...before, ...specifiers])
+    expect(() => assertNoForbiddenHost(tamperedSpecifiers)).toThrow()
   })
 
   it('dist/: no entry other than postcss.js, and no shared chunk, mentions a host build tool', () => {
