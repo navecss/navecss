@@ -17,5 +17,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
+        # Mirrors commitlint.config.js's type-enum and scope-enum: a squash merge lands this title
+        # as the commit subject on main, where no commit-msg hook ever sees it. The action reads
+        # each entry as a regular expression, so every entry stays a plain word.
+        # scripts/check-pr-title-scopes.mjs keeps both lists identical to commitlint's.
+        with:
+          types: |
+            feat
+            fix
+            chore
+            docs
+            test
+            refactor
+            perf
+            ci
+            build
+            style
+            revert
+          scopes: |
+            tokens
+            core
+            bridge
+            cli
+            stylelint-config
+            repo
+            deps
+            release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -6,18 +6,13 @@
  * `turbo.json`, same convention as `test/no-inlined-dependency.test.ts`).
  */
 import { spawnSync } from 'node:child_process'
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  writeFileSync,
-} from 'node:fs'
-import { tmpdir } from 'node:os'
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+
+import { registerScratchCleanup, scratchDir } from './helpers/scratch-dir.ts'
+
+registerScratchCleanup()
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '..')
 const DIST_DIR = path.join(PACKAGE_ROOT, 'dist')
@@ -107,8 +102,7 @@ function spawnNode(nodeArgs: string[], cwd: string, killAfterMs: number): RunRes
  * resolved up front).
  */
 function scratchInstall(): { binPath: string; projectDir: string } {
-  const prefix = path.join(tmpdir(), 'navecss-tokens-bin-')
-  const projectDir = realpathSync(mkdtempSync(prefix))
+  const projectDir = realpathSync(scratchDir('navecss-tokens-bin-'))
   const pkgDir = path.join(projectDir, 'node_modules', '@navecss', 'tokens')
   mkdirSync(pkgDir, { recursive: true })
   cpSync(DIST_DIR, path.join(pkgDir, 'dist'), { recursive: true })
@@ -682,8 +676,7 @@ describe(
     })
 
     it('a real permission fence refuses a read outside the granted subtree at the runtime level, on a bare control script (proves the instrument itself refuses, independent of this package)', () => {
-      const prefix = path.join(tmpdir(), 'navecss-tokens-perm-')
-      const scratch = realpathSync(mkdtempSync(prefix))
+      const scratch = realpathSync(scratchDir('navecss-tokens-perm-'))
       const controlScript = path.join(scratch, 'read-etc-hosts.mjs')
       writeFileSync(
         controlScript,
@@ -1283,8 +1276,7 @@ describe(
   { timeout: SPAWN_TEST_TIMEOUT_MS },
   () => {
     it('a child still running at the kill budget is killed and throws, even one that traps SIGTERM', () => {
-      const prefix = path.join(tmpdir(), 'navecss-tokens-bin-')
-      const script = path.join(realpathSync(mkdtempSync(prefix)), 'outlive.mjs')
+      const script = path.join(realpathSync(scratchDir('navecss-tokens-bin-')), 'outlive.mjs')
       writeFileSync(script, "process.on('SIGTERM', () => {})\nsetTimeout(() => {}, 30_000)\n")
       expect(() => spawnNode([script], PACKAGE_ROOT, 500)).toThrow(
         /ended with no exit code \(.*ETIMEDOUT\)/,
@@ -1295,8 +1287,7 @@ describe(
     it.skipIf(process.platform === 'win32')(
       'a child killed by a signal throws instead of reading as exit 1',
       () => {
-        const prefix = path.join(tmpdir(), 'navecss-tokens-bin-')
-        const script = path.join(realpathSync(mkdtempSync(prefix)), 'kill-self.mjs')
+        const script = path.join(realpathSync(scratchDir('navecss-tokens-bin-')), 'kill-self.mjs')
         writeFileSync(script, "process.kill(process.pid, 'SIGKILL')\n")
         expect(() => runNode(script, [], PACKAGE_ROOT)).toThrow(
           /ended with no exit code \(signal SIGKILL\)/,

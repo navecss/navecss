@@ -19,6 +19,12 @@ packages/*/coverage/
 # same treatment as dist/.
 packages/core/test/browser/fixtures/
 
+# Scratch copy of atoms.ts the skill-guide drift test mutates on disk, inside the tracked test
+# directory rather than os.tmpdir() (the mutated module needs workspace node_modules
+# resolution). A finally block removes it on any normal exit; this line only guards against an
+# abnormal test-process kill leaving it behind untracked.
+packages/core/test/.atoms-mutation-*/
+
 # OS
 .DS_Store
 Thumbs.db

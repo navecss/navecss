@@ -25,6 +25,12 @@
  * back to be fixed. It is not a test file and registers no tests, the same shape as
  * `cleared-copy.ts` and `markdown-headings.ts` beside it — the latter being this package's
  * first consolidation of exactly this class.
+ *
+ * The first pattern below is not linear in the worst case: a line opening `/*` with no `*\/`
+ * anywhere after it makes the scan run to the end of the text from every such line (measured:
+ * 40,000 unclosed openers ~0.9 s, 80,000 ~3.7 s). The second, `//` to the end of a line, is
+ * linear. Accepted because both run only over this package's own tracked source files, as a
+ * build-time guard, never over a consumer's text.
  */
 export function codeOnly(source: string): string {
   return source.replaceAll(/^[ \t]*\/\*[\s\S]*?\*\//gm, '').replaceAll(/\/\/.*$/gm, '')

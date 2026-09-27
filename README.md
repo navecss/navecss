@@ -33,7 +33,8 @@ Nave takes a different path:
   Nave's layer order is the first one your page declares
   ([why, and where your CSS goes](docs/04-adr/0003-layer-cascade-contract.md))
 - **`@nave` directives** apply atomic utilities inside CSS files, not in markup
-- **Headless components** (Base UI, Radix) handle behaviour — Nave handles style
+- **Headless components** (Base UI, Radix, or your own) handle behaviour, and Nave handles
+  style. Nave ships no integration with Base UI or Radix today.
 
 Markup stays semantic. CSS stays in CSS files.
 Design tokens are the single source of truth from Figma to production.
@@ -45,10 +46,11 @@ without claiming conformance, certification or endorsement.
 
 ## Packages
 
-| Package           | Description                                                 |
-| ----------------- | ----------------------------------------------------------- |
-| `@navecss/tokens` | DTCG 2025.10 token source + first-party build pipeline      |
-| `@navecss/core`   | Layer architecture, reset, atomic utilities, PostCSS plugin |
+| Package                                                         | Description                                                                                                         |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                              |
+| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, PostCSS plugin                                                         |
+| [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check |
 
 ## Who this is for
 
@@ -92,14 +94,17 @@ Do not set that option on a project using `@nave`.
 unknown at-rule to those too. In `.vscode/settings.json`:
 
 ```json
-{ "css.lint.unknownAtRules": "ignore" }
+{ "css.customData": ["./node_modules/@navecss/core/nave.css-data.json"] }
 ```
 
 And, if you run stylelint, in your stylelint config:
 
 ```json
-{ "rules": { "at-rule-no-unknown": [true, { "ignoreAtRules": ["nave"] }] } }
+{ "languageOptions": { "syntax": { "atRules": { "nave": { "prelude": "<custom-ident>+" } } } } }
 ```
+
+For value checks as well, and for coding agents, see
+[Editor, linter and coding agent](packages/core/README.md#editor-linter-and-coding-agent).
 
 Then:
 
