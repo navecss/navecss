@@ -604,8 +604,11 @@ function readInstalledManifest(packageDir) {
  * The `name@version` keys of every package in the dependency closure, as installed, of each
  * `allPackages` entry named in `names`: the named package itself, then its `dependencies`,
  * `optionalDependencies` and `peerDependencies`, transitively, each resolved from the directory
- * the package is installed in. A peer is followed only where one is installed, which is where
- * a consumer can end up with it too. An entry with no installed `path` contributes itself only.
+ * the package is installed in. A peer is resolved the way Node would resolve it from that
+ * package's directory, so where nothing installed satisfies the declared range, the walk can
+ * reach a hoisted copy that does not; following that copy can only grade more packages as
+ * bucket B, never fewer, and the walk errs that way by design. An entry with no installed
+ * `path` contributes itself only.
  */
 export function installedDependencyClosure(allPackages, names) {
   const keys = new Set()

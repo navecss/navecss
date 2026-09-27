@@ -1,5 +1,5 @@
 /**
- * AC-consumer-constraints-27 and -28 cover: R17.
+ * AC-consumer-constraints-27 and AC-consumer-constraints-28 cover: R17.
  *
  * Bucket B (`dependencies`/`peerDependencies` with their transitive trees) must be measured
  * over a REQUIRED peer that is also a root `devDependency` (exactly `@navecss/stylelint-config`'s
@@ -449,6 +449,35 @@ test("main() grades an optional peer's own installed peer, with an out-of-set li
     )
     assert.equal(exitCode, 1, output)
     assert.match(output, /\[bucket B \(prod\)\] q@1\.0\.0: "GPL-3\.0-only"/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a peer no installed copy satisfies is followed to whatever copy Node resolution reaches, erring toward bucket B', () => {
+  // p peers on q@^2, nothing provides q@2, and pnpm has hoisted an unrelated q@1 into
+  // node_modules/.pnpm/node_modules. Walking up from p's store directory reaches that copy.
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-closure-hoisted-'))
+  try {
+    const store = (name) =>
+      path.join(dir, 'node_modules', '.pnpm', `${name}@1.0.0`, 'node_modules', name)
+    mkdirSync(store('p'), { recursive: true })
+    writeFileSync(
+      path.join(store('p'), 'package.json'),
+      JSON.stringify({ name: 'p', version: '1.0.0', peerDependencies: { q: '^2.0.0' } }),
+    )
+    mkdirSync(store('q'), { recursive: true })
+    writeFileSync(
+      path.join(store('q'), 'package.json'),
+      JSON.stringify({ name: 'q', version: '1.0.0' }),
+    )
+    mkdirSync(path.join(dir, 'node_modules', '.pnpm', 'node_modules'), { recursive: true })
+    symlinkSync(store('q'), path.join(dir, 'node_modules', '.pnpm', 'node_modules', 'q'))
+    const allPackages = [{ name: 'p', version: '1.0.0', license: 'MIT', path: store('p') }]
+    assert.deepEqual([...installedDependencyClosure(allPackages, new Set(['p']))].sort(), [
+      'p@1.0.0',
+      'q@1.0.0',
+    ])
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
