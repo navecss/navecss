@@ -219,10 +219,10 @@ importers:
   packages/stylelint-config:
     dependencies:
       postcss:
-        specifier: 8.5.28
+        specifier: ^8.5.28
         version: 8.5.28
       postcss-value-parser:
-        specifier: 4.2.0
+        specifier: ^4.2.0
         version: 4.2.0
       stylelint:
         specifier: ^17.0.0
