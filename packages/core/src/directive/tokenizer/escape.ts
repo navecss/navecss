@@ -41,8 +41,11 @@ export function consumeEscapedCodePoint(s: Scanner): string {
   if (!isHexDigit(s.peek())) return consumeLiteralCodePoint(s)
 
   const hex = consumeEscapeHexDigits(s)
-  didConsumeNewline(s) // trailing whitespace after the hex digits, CRLF as one unit
-  if (s.peek() === ' ' || s.peek() === '\t') s.advance()
+  // At most one trailing whitespace code point is consumed after the hex
+  // digits, CRLF counting as one (didConsumeNewline), never both a newline
+  // AND a following space/tab: consuming two here would eat a code point the
+  // escape never owned, splitting one token where the input meant two.
+  if (!didConsumeNewline(s) && (s.peek() === ' ' || s.peek() === '\t')) s.advance()
 
   const value = Number.parseInt(hex, 16)
   return isMaxAllowedCodePoint(value) ? String.fromCodePoint(value) : '�'

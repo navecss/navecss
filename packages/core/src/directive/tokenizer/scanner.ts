@@ -147,10 +147,16 @@ export class Scanner {
 /**
  * §4.3.8 "check if two code points are a valid escape": a `\` not followed
  * by a newline — an escape at EOF is also valid, and resolved to U+FFFD by
- * `consumeEscapedCodePoint`.
+ * `consumeEscapedCodePoint`. "Newline" here is CR, LF or FF, and not only LF:
+ * the spec's own preprocessing step normalises CR/CRLF/FF to LF before
+ * tokenizing, so its "not a newline" check only ever sees LF; this tokenizer
+ * skips that rewrite to keep every position a plain index into the input it
+ * was given, so the same three code points must all be excluded here by hand.
  */
 export function isValidEscapeAt(s: Scanner, offset = 0): boolean {
-  return s.peek(offset) === '\\' && s.peek(offset + 1) !== '\n'
+  if (s.peek(offset) !== '\\') return false
+  const next = s.peek(offset + 1)
+  return next !== '\n' && next !== '\r' && next !== '\f'
 }
 
 /**
