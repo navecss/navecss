@@ -65,7 +65,7 @@ describe('AC-theming-12 covers: R10', () => {
   it('the RCS formula only ever takes hue `from` the tint source; L and C are numeric literals', () => {
     const literals = generateNeutralRampLiterals()
     const formula = neutralRcsFormula(600, literals)
-    expect(formula).toMatch(/^oklch\(from var\(--nave-color-tint\) [\d.]+ [\d.]+ h\)$/)
+    expect(formula).toMatch(/^oklch\(from var\(--nave-color-tint\) [\d.]+ [\d.]+ h \/ 1\)$/)
   })
 
   it('reconstructing the tinted value in Node equals the browser-resolved value exactly, at any hue', () => {
@@ -85,6 +85,12 @@ describe('AC-theming-12 covers: R10', () => {
     for (const hue of [0, 45, 186.17, 300]) {
       expect(resolveNeutralStep(500, hue, literals).l).toBe(step500.l)
     }
+  })
+
+  it("pins its own alpha to 1 rather than inheriting the tint source's: a semi-transparent --nave-color-tint must not make every derived neutral surface semi-transparent too", () => {
+    const literals = generateNeutralRampLiterals()
+    const formula = neutralRcsFormula(600, literals)
+    expect(formula).toMatch(/^oklch\(from var\(--nave-color-tint\) [\d.]+ [\d.]+ h \/ 1\)$/)
   })
 })
 

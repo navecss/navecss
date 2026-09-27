@@ -6,7 +6,15 @@
  * `turbo.json`, same convention as `test/no-inlined-dependency.test.ts`).
  */
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -324,6 +332,109 @@ describe(
       ]
       const statuses = new Set(outcomes.map((outcome) => outcome.status))
       expect(statuses).toEqual(new Set([0, 1, 2]))
+    })
+  },
+)
+
+describe(
+  'build and validate name the fix rather than leaking a raw filesystem errno',
+  { timeout: SPAWN_TEST_TIMEOUT_MS },
+  () => {
+    it('build --out pointing at an existing FILE (not a directory) exits 2 naming --out, never a raw EEXIST at exit 1', () => {
+      const { binPath, projectDir } = scratchInstall()
+      const outAsFile = path.join(projectDir, 'blocked-out')
+      writeFileSync(outAsFile, 'not a directory')
+      const result = runNode(
+        binPath,
+        ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outAsFile],
+        projectDir,
+      )
+      expect(result.status).toBe(2)
+      expect(result.stderr).toMatch(/could not write to --out/)
+    })
+
+    it('build with the installed dist/core-contract.json missing (a broken install) exits 2 naming a broken install, never a raw ENOENT at exit 1', () => {
+      const { binPath, projectDir } = scratchInstall()
+      const manifestPath = path.join(
+        projectDir,
+        'node_modules',
+        '@navecss',
+        'tokens',
+        'dist',
+        'core-contract.json',
+      )
+      rmSync(manifestPath)
+      const result = runNode(
+        binPath,
+        ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', path.join(projectDir, 'out')],
+        projectDir,
+      )
+      expect(result.status).toBe(2)
+      expect(result.stderr).toMatch(/broken install/i)
+      expect(result.stderr).toMatch(/reinstall/i)
+    })
+
+    it('validate with the installed dist/core-contract.json missing (a broken install) exits 2, naming the fix rather than a bare errno', () => {
+      const { binPath, projectDir } = scratchInstall()
+      const manifestPath = path.join(
+        projectDir,
+        'node_modules',
+        '@navecss',
+        'tokens',
+        'dist',
+        'core-contract.json',
+      )
+      rmSync(manifestPath)
+      const source = path.join(projectDir, 'consumer.css')
+      writeFileSync(source, ':root {}')
+      const result = runNode(binPath, ['validate', '--source', source], projectDir)
+      expect(result.status).toBe(2)
+      expect(result.stderr).toMatch(/broken install/i)
+      expect(result.stderr).toMatch(/reinstall/i)
+    })
+  },
+)
+
+describe(
+  'a duplicated flag is refused rather than silently taking the last value',
+  { timeout: SPAWN_TEST_TIMEOUT_MS },
+  () => {
+    it('build --seed given twice exits 2 naming --seed, rather than silently building from the second value', () => {
+      const { binPath, projectDir } = scratchInstall()
+      const result = runNode(
+        binPath,
+        [
+          'build',
+          '--seed',
+          'oklch(0.55 0.18 250)',
+          '--seed',
+          'oklch(0.7 0.1 30)',
+          '--out',
+          path.join(projectDir, 'out'),
+        ],
+        projectDir,
+      )
+      expect(result.status).toBe(2)
+      expect(result.stderr).toMatch(/--seed/)
+    })
+
+    it('build --out given twice exits 2 naming --out', () => {
+      const { binPath, projectDir } = scratchInstall()
+      const result = runNode(
+        binPath,
+        [
+          'build',
+          '--seed',
+          'oklch(0.55 0.18 250)',
+          '--out',
+          path.join(projectDir, 'o1'),
+          '--out',
+          path.join(projectDir, 'o2'),
+        ],
+        projectDir,
+      )
+      expect(result.status).toBe(2)
+      expect(result.stderr).toMatch(/--out/)
     })
   },
 )

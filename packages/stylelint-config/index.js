@@ -1,9 +1,16 @@
 import strictValue from 'stylelint-declaration-strict-value'
 
+import {
+  defaultRuleOptions as declaredCustomPropertiesDefaultOptions,
+  declaredCustomPropertiesPlugin,
+  ruleName as declaredCustomPropertiesRuleName,
+} from './declared-custom-properties.js'
+
 /**
  * Nave's own stylelint rules, corrected for a consumer's project: `@nave` known to the
  * language, a check that values on its listed properties use a `var()` or an admitted keyword,
- * and a check that flags `outline: none` and `outline: 0`.
+ * a check that flags `outline: none` and `outline: 0`, and a check that a `var(--nave-*)`
+ * reference names a custom property declared in the consumer's own token stylesheet(s).
  *
  * Everything here is a rendering of Nave's design-system constraints, never a copy of any
  * shared config: this package extends nothing and declares `stylelint` as a peer, never a
@@ -238,10 +245,10 @@ export const OUTLINE_GUARD_CONSUMER_MESSAGE =
 
 /**
  * The default export: `@nave` known to the language, a check that values on its listed
- * properties use a `var()` or an admitted keyword, and the outline guard. Extends no shared
- * config: no `selector-class-pattern`, `custom-property-pattern`,
- * `order/properties-alphabetical-order`, `declaration-no-important` or the two performance
- * plugins, and no opt-in house-style export.
+ * properties use a `var()` or an admitted keyword, the outline guard, and the declared
+ * custom-property check. Extends no shared config: no `selector-class-pattern`,
+ * `custom-property-pattern`, `order/properties-alphabetical-order`, `declaration-no-important`
+ * or the two performance plugins, and no opt-in house-style export.
  */
 const config = {
   languageOptions: {
@@ -251,14 +258,21 @@ const config = {
       },
     },
   },
-  plugins: [strictValue],
+  plugins: [strictValue, declaredCustomPropertiesPlugin],
   rules: {
     'scale-unlimited/declaration-strict-value': [STRICT_VALUE_PROPERTIES, STRICT_VALUE_OPTIONS],
     'declaration-property-value-disallowed-list': [
       { outline: OUTLINE_GUARD_PATTERN },
       { message: OUTLINE_GUARD_CONSUMER_MESSAGE },
     ],
+    [declaredCustomPropertiesRuleName]: [true, declaredCustomPropertiesDefaultOptions],
   },
 }
 
 export default config
+
+/**
+ * Re-exported so a consuming module can read the rule id rather than retype it (the same
+ * convention `OUTLINE_GUARD_PATTERN` and `OUTLINE_GUARD_CONSUMER_MESSAGE` above already follow).
+ */
+export { ruleName as declaredCustomPropertiesRuleName } from './declared-custom-properties.js'

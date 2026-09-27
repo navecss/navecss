@@ -238,12 +238,13 @@ describe('AC-consumer-constraints-23 covers: R14, R11b', () => {
 })
 
 describe('AC-consumer-constraints-24 covers: R15, R11, R12', () => {
-  it('rule ids are exactly scale-unlimited/declaration-strict-value and declaration-property-value-disallowed-list', async () => {
+  it('rule ids are exactly scale-unlimited/declaration-strict-value, declaration-property-value-disallowed-list and @navecss/declared-custom-properties (rule 3, R11/R12)', async () => {
     const resolved = await stylelint.resolveConfig(process.cwd(), { config })
     expect(Object.keys(resolved?.rules ?? {}).toSorted((a, b) => a.localeCompare(b))).toEqual(
       [
         'declaration-property-value-disallowed-list',
         'scale-unlimited/declaration-strict-value',
+        '@navecss/declared-custom-properties',
       ].toSorted((a, b) => a.localeCompare(b)),
     )
   })

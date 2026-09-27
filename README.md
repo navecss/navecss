@@ -1,4 +1,9 @@
-# NaveCSS
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-horizontal.dark.svg">
+    <img src=".github/assets/logo-horizontal.light.svg" alt="NaveCSS" height="64">
+  </picture>
+</h1>
 
 > Your north star for design systems.
 
@@ -46,11 +51,12 @@ without claiming conformance, certification or endorsement.
 
 ## Packages
 
-| Package                                                         | Description                                                                                                         |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                              |
-| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, PostCSS plugin                                                         |
-| [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check |
+| Package                                                         | Description                                                                                                                                    |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                                                         |
+| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, PostCSS plugin                                                                                    |
+| [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check, declared `--nave-*` names |
+| [`@navecss/eslint-plugin`](packages/eslint-plugin#readme)       | A literal class in `className` unless declared, or a literal value on a tokenized `style` property, reported                                   |
 
 ## Who this is for
 
@@ -101,6 +107,20 @@ And, if you run stylelint, in your stylelint config:
 
 ```json
 { "languageOptions": { "syntax": { "atRules": { "nave": { "prelude": "<custom-ident>+" } } } } }
+```
+
+**ESLint®.** For the JSX side of the same idea — a literal class in `className`, or a literal
+value on a tokenized `style` property — install
+[`@navecss/eslint-plugin`](https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#readme):
+
+```js
+// eslint.config.js
+import nave from '@navecss/eslint-plugin'
+
+export default [
+  // ...your existing config
+  nave.configs.recommended,
+]
 ```
 
 For value checks as well, and for coding agents, see

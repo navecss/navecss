@@ -82,7 +82,7 @@
     "@vitest/coverage-v8": "5.0.1",
     "playwright": "1.63.0",
     "postcss": "^8.5.28",
-    "prettier": "3.9.8",
+    "prettier": "3.9.9",
     "source-map": "^0.7.6",
     "tsup": "^8.5.1",
     "typescript": "6.0.3",

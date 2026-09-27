@@ -40,6 +40,7 @@ jobs:
             bridge
             cli
             stylelint-config
+            eslint-plugin
             repo
             deps
             release

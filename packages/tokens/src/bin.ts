@@ -75,6 +75,27 @@ const USAGE =
   '  navecss-tokens validate --source=<file>'
 
 /**
+ * Every flag this binary declares takes exactly one value (`node:util`'s `parseArgs` never
+ * sets `multiple: true` anywhere below), so a SECOND occurrence of the same flag does not
+ * accumulate — it silently overwrites the first, and the caller who repeated it by mistake
+ * (a copy-paste, a shell history repeat) gets no signal that anything but the last one was
+ * ever read. `tokens: true` is what makes every occurrence visible at all: `values` alone
+ * only ever reports the winner.
+ */
+function assertNoDuplicateFlags(tokens: readonly { kind: string; name?: string }[]): void {
+  const seen = new Set<string>()
+  for (const token of tokens) {
+    if (token.kind !== 'option' || token.name === undefined) continue
+    if (seen.has(token.name)) {
+      throw new UsageError(
+        `--${token.name} was given more than once; each flag accepts exactly one value.\n${USAGE}`,
+      )
+    }
+    seen.add(token.name)
+  }
+}
+
+/**
  * R3: the `build` subcommand's argv surface is exactly R3's four inputs plus `--out`; no
  * other flag exists (`node:util`'s `parseArgs` runs in `strict` mode, which refuses any
  * flag not declared below on its own).
@@ -82,7 +103,7 @@ const USAGE =
 function parseBuildArgs(args: string[]): TokensBuildOptions {
   let values: { out?: string; overrides?: string; seed?: string; source?: string }
   try {
-    ;({ values } = parseArgs({
+    const parsed = parseArgs({
       args,
       options: {
         out: { type: 'string' },
@@ -91,8 +112,12 @@ function parseBuildArgs(args: string[]): TokensBuildOptions {
         source: { type: 'string' },
       },
       strict: true,
-    }))
+      tokens: true,
+    })
+    assertNoDuplicateFlags(parsed.tokens)
+    values = parsed.values
   } catch (error) {
+    if (error instanceof UsageError) throw error
     throw new UsageError((error as Error).message)
   }
   if (!values.seed) throw new UsageError(`build requires --seed=<colour>.\n${USAGE}`)
@@ -113,8 +138,16 @@ function parseBuildArgs(args: string[]): TokensBuildOptions {
 function parseValidateArgs(args: string[]): TokensValidateOptions {
   let values: { source?: string }
   try {
-    ;({ values } = parseArgs({ args, options: { source: { type: 'string' } }, strict: true }))
+    const parsed = parseArgs({
+      args,
+      options: { source: { type: 'string' } },
+      strict: true,
+      tokens: true,
+    })
+    assertNoDuplicateFlags(parsed.tokens)
+    values = parsed.values
   } catch (error) {
+    if (error instanceof UsageError) throw error
     throw new UsageError((error as Error).message)
   }
   if (!values.source) throw new UsageError(`validate requires --source=<file>.\n${USAGE}`)

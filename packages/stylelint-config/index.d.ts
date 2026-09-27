@@ -12,5 +12,12 @@ export declare const OUTLINE_GUARD_PATTERN: string[]
  */
 export declare const OUTLINE_GUARD_CONSUMER_MESSAGE: string
 
+/**
+ * The rule id the "declared custom properties" check registers itself under:
+ * `@navecss/declared-custom-properties`. Re-exported from `./declared-custom-properties.js` so
+ * a consuming module can read it rather than retype it.
+ */
+export declare const declaredCustomPropertiesRuleName: string
+
 declare const config: Config
 export default config

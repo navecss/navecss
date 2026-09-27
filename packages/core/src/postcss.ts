@@ -15,6 +15,13 @@
  *   navePlugin({ extend: myAtoms })      // Nave + consumer atoms
  *   navePlugin({ onUnknown: 'warn' })    // Log and skip instead of failing the build
  *
+ * `extend` is trusted, consumer-authored code, run at build time in the same file that could
+ * already run arbitrary JavaScript — it is not sanitised input. `validateExtendAtoms` still
+ * parses every declaration, pseudo selector key, and media/container condition an atom carries,
+ * and rejects any that does not parse as exactly that one construct, since a typo there is
+ * otherwise silent CSS injection into the generated output rather than a build error at the
+ * point of the mistake.
+ *
  * Consumer atoms:
  *   import type { AtomDefinition } from '@navecss/core/postcss'
  *   import { media } from '@navecss/tokens/breakpoints'
@@ -47,6 +54,7 @@ import type { FoldEntry } from './postcss-fold.ts'
 import { handleAtRule } from './postcss-at-rule.ts'
 import { applyExtendModule, resolveExtendSpecifier } from './postcss-extend-module.ts'
 import { foldMessage } from './postcss-fold.ts'
+import { validateExtendAtoms } from './validate-extend-atoms.ts'
 
 export interface NavePluginOptions {
   /**
@@ -54,7 +62,7 @@ export interface NavePluginOptions {
    * Consumer atoms win on name collision — your system owns its vocabulary.
    * These atoms resolve via @nave only. No global class. Not available in cx().
    *
-   * A string is a module specifier instead: resolved against `process.cwd()`
+   * A string is a path instead: resolved against `process.cwd()`
    * at construction (an unresolvable specifier throws right there, naming
    * the specifier and the directory), then loaded for its default export on
    * every run and re-read whenever the file's mtime or size changes. Pass a
@@ -83,6 +91,13 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
   const extendFile =
     typeof extendOption === 'string' ? resolveExtendSpecifier(extendOption) : undefined
   const staticExtend: ExtendMap = typeof extendOption === 'object' ? extendOption : {}
+  // The object form is trusted, consumer-authored code that can splice raw
+  // strings into generated CSS: validate it once, at construction, same as
+  // before this option grew a second (module-specifier) shape. The
+  // specifier form has nothing to validate yet at this point — it is
+  // validated after every load, below, since a dev server can hand it a
+  // different object on every rebuild.
+  validateExtendAtoms(staticExtend)
   const loadCache = new Map<string, Promise<ExtendMap>>()
 
   return {
@@ -110,6 +125,13 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
             parent: result.opts.from,
           })
           return applyExtendModule(extendFile, loadCache, (value) => {
+            // Validated after every load, not once at construction: a
+            // specifier's default export can change on every rebuild (R15),
+            // and each one is trusted, consumer-authored code the same way
+            // the object form is. Runs before `extend` is assigned, so a
+            // bad edit fails this run rather than splicing into generated
+            // CSS first.
+            validateExtendAtoms(value)
             extend = value
           })
         },

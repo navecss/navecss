@@ -2,11 +2,14 @@
  * A BACKSTOP, NOT A GATE, ON PROSE THAT WAS REVIEWED BEFORE IT SHIPPED.
  *
  * Some of the plain-English text in this repository's contributor and consumer-facing surfaces
- * states a term of the project rather than describing what the code does: the contributor
- * licence terms and the Developer Certificate of Origin in `.github/CONTRIBUTING.md`, the licence
- * checklist and affirmation in the pull request template, the whole of `TRADEMARKS.md`, and the
- * `README.md` sections stating what this project promises and does not promise about
- * accessibility. Each of those passages was reviewed and agreed before it shipped. THIS TEST
+ * states a term of the project rather than describing what the code does: in
+ * `.github/CONTRIBUTING.md`, the "Adding a dependency" change-control item, the paragraphs on text
+ * the build prints or ships, and the contributor licence terms with the Developer Certificate of
+ * Origin; the licence checklist and affirmation in the pull request template; the whole of
+ * `TRADEMARKS.md`; the `README.md` sections stating what this project promises and does not
+ * promise about accessibility, and its brand and name section; and the whole of
+ * `.github/assets/LICENSE.md`, the note saying the logo files beside it are not covered by the MIT
+ * licence. Each of those passages was reviewed and agreed before it shipped. THIS TEST
  * PINS EACH ONE AGAINST A DIGEST TAKEN AT THAT MOMENT AND FAILS IF THE SHIPPED BYTES MOVE.
  *
  * THIS TEXT WAS REVIEWED AND AGREED BEFORE IT SHIPPED. If this test fails because you changed,
@@ -1099,5 +1102,20 @@ test('README.md: the "## Brand and name" section', () => {
     'README.md ## Brand and name',
     wholeSectionText(README_DOC.lines, range),
     '3568193eea6a12eb64760e2c386991f01377cc07e8ea262f6ac53886725dd041',
+  )
+})
+
+// ---------------------------------------------------------------------------------------------
+// .github/assets/LICENSE.md — the whole file. States that the two brand SVGs beside it are not
+// covered by the root MIT licence and are governed by TRADEMARKS.md instead; it has no
+// package-local home (`.github/` belongs to no package), so it is pinned here as one unit, the
+// same way TRADEMARKS.md is pinned above.
+// ---------------------------------------------------------------------------------------------
+
+test('.github/assets/LICENSE.md: the whole file', () => {
+  assertClearedText(
+    '.github/assets/LICENSE.md',
+    read('.github/assets/LICENSE.md'),
+    '87fde5a29edf3b279b3390e12b55e68f592f97cb318a5bba712eb9d6a30a484e',
   )
 })

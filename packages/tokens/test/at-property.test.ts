@@ -58,4 +58,16 @@ describe('C5 — @property registrations are valid or absent', () => {
     expect(registrations.some((r) => r.name.startsWith('--nave-font-size-'))).toBe(false)
     expect(css).toContain('--nave-font-size-md:')
   })
+
+  it('registers the stacking-order (z-index-shaped) layer tokens as <integer>, never the wider <number>', () => {
+    // <number> accepts a fractional override (400.5), which registers cleanly under that
+    // syntax and then produces an invalid z-index at the point of use — invalid per the CSS
+    // property, silently discarded back to the property's own initial value, with no error
+    // anywhere. <integer> refuses the override at registration instead.
+    const layerRegistrations = registrations.filter((r) => r.name.startsWith('--nave-layer-'))
+    expect(layerRegistrations.length).toBeGreaterThan(0)
+    for (const { body, name } of layerRegistrations) {
+      expect(body, `${name} should register as <integer>`).toContain("syntax: '<integer>'")
+    }
+  })
 })
