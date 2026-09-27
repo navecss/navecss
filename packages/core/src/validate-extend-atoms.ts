@@ -52,7 +52,7 @@ function isDeclarationValid(prop: string, value: string): boolean {
   if (rule.type !== 'rule' || rule.nodes.length !== 1) return false
   const decl = rule.nodes[0] as Declaration
   if (decl.type !== 'decl') return false
-  return decl.prop === prop && decl.toString() === `${prop}:${value}`
+  return decl.prop === prop && decl.toString() === `${prop}:${value}`.trimEnd()
 }
 
 /**

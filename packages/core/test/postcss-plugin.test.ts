@@ -570,6 +570,30 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
 
     await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration property/)
   })
+
+  it('refuses a declaration value with a trailing semicolon', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red;' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+
+  it('refuses a declaration value with a trailing semicolon and a trailing space', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red; ' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+
+  it('refuses a declaration value with a trailing, closed comment', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red /* note */' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
 })
 
 describe('an extend atom accepts CSS-lawful strings a character blocklist used to refuse', () => {
@@ -642,5 +666,21 @@ describe('an extend atom accepts CSS-lawful strings a character blocklist used t
     }
 
     expect(await run('.x { @nave good; }', { extend })).toContain('color: red !important')
+  })
+
+  it('accepts a declaration value with trailing whitespace', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { color: 'red ' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('color: red')
+  })
+
+  it('accepts a multi-line declaration value ending in a newline', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { 'grid-template-areas': '\n  "a b"\n  "c d"\n' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('"a b"')
   })
 })
