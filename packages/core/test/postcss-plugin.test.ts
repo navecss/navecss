@@ -543,4 +543,104 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
     // on every plugin creation for no reason.
     expect(() => navePlugin()).not.toThrow()
   })
+
+  it('refuses a pseudo key that opens a second rule instead of staying a same-element selector', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: {
+        declarations: { color: 'red' },
+        pseudos: { ':hover {} body { display: none } .z:hover': { color: 'blue' } },
+      },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/pseudo/)
+  })
+
+  it('refuses a declaration value carrying an unterminated comment', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { color: 'red /*' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+
+  it('refuses a declaration property containing a semicolon on its own, apart from the value', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      evil: { declarations: { 'foo;bar': 'red' } },
+    }
+
+    await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration property/)
+  })
+})
+
+describe('an extend atom accepts CSS-lawful strings a character blocklist used to refuse', () => {
+  it('accepts a background value using a data URL with a semicolon', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { background: 'url(data:image/png;base64,AAAA)' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain(
+      'background: url(data:image/png;base64,AAAA)',
+    )
+  })
+
+  it('accepts a background value using a quoted data URL containing markup', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { background: 'url("data:image/svg+xml;utf8,<svg/>")' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain(
+      'background: url("data:image/svg+xml;utf8,<svg/>")',
+    )
+  })
+
+  it('accepts a content value that is a quoted semicolon', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { content: '";"' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('content: ";"')
+  })
+
+  it('accepts a content value that is a quoted brace', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { content: '"{"' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('content: "{"')
+  })
+
+  it('accepts a content value that is a quoted comment opener', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { content: '"/*"' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('content: "/*"')
+  })
+
+  it('accepts a pseudo key that is a plain pseudo-class', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { color: 'red' }, pseudos: { ':focus-visible': { outline: 'none' } } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('&:focus-visible')
+  })
+
+  it('accepts a media condition that is a plain width query', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: {
+        declarations: { color: 'red' },
+        media: { '(min-width: 40rem)': { declarations: { color: 'blue' } } },
+      },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('(min-width: 40rem)')
+  })
+
+  it('accepts a declaration value carrying !important', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      good: { declarations: { color: 'red !important' } },
+    }
+
+    expect(await run('.x { @nave good; }', { extend })).toContain('color: red !important')
+  })
 })

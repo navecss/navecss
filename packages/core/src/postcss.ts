@@ -15,9 +15,10 @@
  *
  * `extend` is trusted, consumer-authored code, run at build time in the same file that could
  * already run arbitrary JavaScript — it is not sanitised input. `validateExtendAtoms` still
- * rejects a declaration, pseudo/media condition, or property name carrying `{`, `}`, `;` or a
- * `/*` comment opener, since a typo there is otherwise silent CSS injection into the generated
- * output rather than a build error at the point of the mistake.
+ * parses every declaration, pseudo selector key, and media/container condition an atom carries,
+ * and rejects any that does not parse as exactly that one construct, since a typo there is
+ * otherwise silent CSS injection into the generated output rather than a build error at the
+ * point of the mistake.
  *
  * Consumer atoms:
  *   import type { AtomDefinition } from '@navecss/core/postcss'
