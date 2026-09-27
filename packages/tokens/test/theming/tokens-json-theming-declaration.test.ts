@@ -82,7 +82,7 @@ describe('tokens.json theming declaration matches its source of truth', () => {
     expect(stepLightness(fact!.step)).toBe(fact!.lightness)
   })
 
-  it('reads the named row the same when the stepTable sentence ends in a full stop', () => {
-    expect(namedRowFact(`${theming.stepTable}.`)).toEqual(namedRowFact(theming.stepTable))
+  it('captures the named-row lightness when a full stop immediately follows it', () => {
+    expect(namedRowFact('the 850 row at L 0.225.')).toEqual({ lightness: 0.225, step: 850 })
   })
 })
