@@ -34,7 +34,7 @@ Nave takes a different path:
   ([why, and where your CSS goes](docs/04-adr/0003-layer-cascade-contract.md))
 - **`@nave` directives** apply atomic utilities inside CSS files, not in markup
 - **Headless components** (Base UI, Radix, or your own) handle behaviour, and Nave handles
-  style. Nave ships no integration with either library today.
+  style. Nave ships no integration with Base UI or Radix today.
 
 Markup stays semantic. CSS stays in CSS files.
 Design tokens are the single source of truth from Figma to production.
