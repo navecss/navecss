@@ -21,6 +21,15 @@ describe('AC-directive-core-03 — plan() takes the authored prelude and three f
     ])
   })
 
+  it('gives each occurrence of a repeated unknown name its own offset, not the first one twice', () => {
+    const result = plan('flex flx grid flx', STYLE_RULE)
+
+    expect(result.diagnostics).toEqual([
+      { code: 'unknown-atom', name: 'flx', offset: 5, endOffset: 8 },
+      { code: 'unknown-atom', name: 'flx', offset: 14, endOffset: 17 },
+    ])
+  })
+
   it('sets the wrap flag from isFollowingNestedNode alone', () => {
     const result = plan('flex', { ...STYLE_RULE, isFollowingNestedNode: true })
 

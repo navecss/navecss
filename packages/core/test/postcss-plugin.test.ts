@@ -539,6 +539,15 @@ describe('onUnknown default is error', () => {
     await expect(run('.a😀{@nave nope;}')).rejects.toMatchObject({ line: 1, column: 12 })
   })
 
+  it('gives each occurrence of a name repeated in one prelude its own column, under warn', async () => {
+    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(
+      '.a { @nave flex flx grid flx; }',
+      { from: undefined },
+    )
+
+    expect(result.warnings().map((w) => w.column)).toEqual([17, 26])
+  })
+
   // The other half of the same ground: the error names the vocabulary the typo
   // missed, INCLUDING the consumer's own extend atoms — now via R6's hint rule
   // rather than the `Available:` list (this file's pin before the slice-1

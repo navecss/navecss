@@ -9,7 +9,13 @@ import type { Diagnostic } from './diagnostics-types.ts'
 
 import { anchorSelectorList } from '../selector-utils.ts'
 import { type PreludeComponent, readPreludeComponents } from './prelude-components.ts'
-import { type Declaration, type ExtendMap, resolve, type ResolvedBlock } from './resolve.ts'
+import {
+  type Declaration,
+  type ExtendMap,
+  resolve,
+  type ResolvedBlock,
+  type ResolveResult,
+} from './resolve.ts'
 
 export type { Declaration } from './resolve.ts'
 
@@ -105,21 +111,27 @@ function readNames(components: readonly PreludeComponent[]): {
 }
 
 /**
-One `unknown-atom` diagnostic per name `resolve()` could not find, positioned at its own component.
+ * One `unknown-atom` diagnostic per ident component whose name did not
+ * resolve, walked in the prelude's own order so a name repeated more than
+ * once (`flex flx grid flx`) gets one diagnostic per occurrence, each at
+ * its own position — matching by component, not by a `.find()` on the
+ * name, which would give every occurrence the first one's position.
  */
 function readUnknownAtomDiagnostics(
-  unresolved: readonly string[],
   components: readonly PreludeComponent[],
+  resolved: ResolveResult['resolved'],
 ): Diagnostic[] {
-  return unresolved.map((name) => {
-    const component = components.find((c) => c.kind === 'ident' && c.name === name)
-    return {
+  const diagnostics: Diagnostic[] = []
+  for (const component of components) {
+    if (component.kind !== 'ident' || Object.hasOwn(resolved, component.name)) continue
+    diagnostics.push({
       code: 'unknown-atom',
-      name,
-      offset: component?.offset ?? 0,
-      endOffset: component?.endOffset ?? 0,
-    }
-  })
+      name: component.name,
+      offset: component.offset,
+      endOffset: component.endOffset,
+    })
+  }
+  return diagnostics
 }
 
 /**
@@ -132,8 +144,8 @@ function planNames(prelude: string, options: PlanOptions): PlanResult {
   }
 
   const { names, diagnostics } = readNames(components)
-  const { resolved, unresolved } = resolve(names, { extend: options.extend })
-  diagnostics.push(...readUnknownAtomDiagnostics(unresolved, components))
+  const { resolved } = resolve(names, { extend: options.extend })
+  diagnostics.push(...readUnknownAtomDiagnostics(components, resolved))
 
   const declarations: Declaration[] = []
   const blocks: AnchoredBlock[] = []
