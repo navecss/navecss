@@ -190,6 +190,30 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
     })
   })
 
+  it('a TypeScript namespace holding only types, in an inner scope, shadows nothing', () => {
+    const prelude = `import { cx } from '@navecss/core/cx'\n`
+    const settings = { '@navecss': { allow: ['app-'] } }
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [
+        `namespace N { namespace cx { export type T = 1 } const e = <div className={cx('flex')} /> }`,
+        `namespace N { declare namespace cx { interface I {} } const e = <div className={cx('flex')} /> }`,
+        `namespace N { namespace cx {} const e = <div className={cx('flex')} /> }`,
+      ].map((body) => ({
+        code: `${prelude}${body}`,
+        languageOptions: tsLanguageOptions,
+        settings,
+      })),
+      invalid: [
+        {
+          code: `${prelude}namespace N { namespace cx { export const v = 1 } const e = <div className={cx('flex')} /> }`,
+          languageOptions: tsLanguageOptions,
+          settings,
+          errors: [{ message: /^"flex" is not a CSS Module class/ }],
+        },
+      ],
+    })
+  })
+
   it('a namespace import reaches cx and cx.raw; an optional call and a template-literal key are recognised', () => {
     const ns = `import * as c from '@navecss/core/cx'\n`
     const named = `import { cx } from '@navecss/core/cx'\n`
@@ -207,7 +231,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
         {
           code: `${ns}const el = <div className={c.cx('legacy-card')} />`,
           languageOptions,
-          errors: [{ message: /^c\.cx\("legacy-card"\) is not a Nave atom/ }],
+          errors: [{ message: /^c\.cx\('legacy-card'\) is not a Nave atom/ }],
         },
         {
           code: `${named}const el = <div className={cx?.('legacy-card')} />`,
@@ -316,7 +340,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
               languageOptions,
               settings: cxModulesSettings,
               filename: path.join(root, 'src/a/x.jsx'),
-              errors: [{ message: /^cx\("app-card"\) is not a Nave atom/ }],
+              errors: [{ message: /^cx\('app-card'\) is not a Nave atom/ }],
             },
           ],
         })

@@ -75,10 +75,10 @@ function hitMessage(
   if (hit.kind === 'atom') {
     const callee = sourceCode.getText(hit.callee as never)
     return hit.isContainer
-      ? cxContainerMessage(callee, hit.rendered, declared)
-      : cxAtomMessage(callee, hit.rendered, declared)
+      ? cxContainerMessage(callee, hit.rendered, declared, rawCallee)
+      : cxAtomMessage(callee, hit.rendered, declared, rawCallee)
   }
-  return literalClassMessage(hit.text, declared)
+  return literalClassMessage(hit.text, declared, rawCallee)
 }
 
 export const classChannelRule: Rule.RuleModule = {
@@ -117,7 +117,7 @@ export const classChannelRule: Rule.RuleModule = {
         // One report per offending construct: the same literal reached twice (one `const`
         // named in both branches of a conditional) is still one class written once.
         const reported = new Set<string>()
-        const wording = { allowEntries, declared, rawCallee: rawCalleeText(bindings) }
+        const wording = { allowEntries, declared, rawCallee: rawCalleeText(bindings, scope) }
         for (const hit of collectValueHits(ctx, expression, scope)) {
           const message = hitMessage(hit, context, wording)
           const key = `${hit.node.range.join(':')}|${message}`

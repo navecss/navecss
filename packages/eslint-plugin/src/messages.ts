@@ -32,25 +32,43 @@ function preferredRemedies(declared: string, text?: string): string {
 }
 
 /**
-A literal class in a class position that the project does not declare.
+ * A literal class in a class position that the project does not declare, with the escape named
+ * as the file binds `cx.raw` (`rawCallee`).
  */
-export function literalClassMessage(text: string, declared: string): string {
-  return `"${text}" is not a CSS Module class, a Nave atom, or a class this project declares as its own. ${preferredRemedies(declared, text)} cx.raw() with a reason.`
+export function literalClassMessage(text: string, declared: string, rawCallee: string): string {
+  return `"${text}" is not a CSS Module class, a Nave atom, or a class this project declares as its own. ${preferredRemedies(declared, text)} ${rawCallee}() with a reason.`
 }
 
 /**
-An argument of Nave's `cx()` that is not one atom name, with the callee as the file names it.
+An argument of Nave's `cx()` that is not one atom name, with each callee as the file names it.
  */
-export function cxAtomMessage(callee: string, rendered: string, declared: string): string {
-  return `${callee}(${rendered}) is not a Nave atom: a string passed to ${callee}() must name one. ${preferredRemedies(declared)} cx.raw() with a reason.`
+export function cxAtomMessage(
+  callee: string,
+  rendered: string,
+  declared: string,
+  rawCallee: string,
+): string {
+  return `${callee}(${rendered}) is not a Nave atom: a string passed to ${callee}() must name one. ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
 }
 
 /**
- * An array or object literal passed to Nave's `cx()`, with the callee as the file names it:
- * `cx()` turns it into one string, so the remedy is one atom name per argument.
+ * Why an array or object passed to Nave's `cx()` is not an atom name, and what to write instead:
+ * `cx()` maps each argument whole, so the remedy is one atom name per argument.
  */
-export function cxContainerMessage(callee: string, rendered: string, declared: string): string {
-  return `${callee}(${rendered}) is not a Nave atom: ${callee}() turns an array or object into one string, never into atom classes. Pass atom names as separate arguments, each with its own condition if it needs one: ${callee}('flex', on && 'block'). ${preferredRemedies(declared)} cx.raw() with a reason.`
+function containerExplanation(callee: string): string {
+  return `${callee}() maps each argument whole, so an array or object is stringified first: ['flex', 'block'] renders the class "flex,block" and { flex: on } renders "[object Object]". Pass atom names as separate arguments, each with its own condition if it needs one: ${callee}('flex', on && 'block').`
+}
+
+/**
+An array or object literal passed to Nave's `cx()`, with each callee as the file names it.
+ */
+export function cxContainerMessage(
+  callee: string,
+  rendered: string,
+  declared: string,
+  rawCallee: string,
+): string {
+  return `${callee}(${rendered}) is not a Nave atom: ${containerExplanation(callee)} ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
 }
 
 const NAVE_PREFIX = 'nave-'
@@ -76,17 +94,21 @@ export const isNaveOutputLike = (text: string): boolean => text.startsWith(NAVE_
 /**
  * The problem half of a `cx.raw()` missing-reason message: what the offending literal is, the
  * `nave-` explanation when it is one of Nave's output classes, the inner call when it is an
- * argument of Nave's `cx()` that names no atom, with each callee as written.
+ * argument of Nave's `cx()` that names no atom (a string, or an array or object), with each
+ * callee as written.
  */
 export function rawProblemText(
   text: string,
   callee: string,
   atomName: string | undefined,
-  atomCall?: { callee: string; rendered: string },
+  atomCall?: { callee: string; isContainer: boolean; rendered: string },
 ): string {
   if (isNaveOutputLike(text)) return naveOutputMessage(text, atomName)
   if (atomCall) {
-    return `${atomCall.callee}(${atomCall.rendered}) in ${callee}() is not a Nave atom: a string passed to ${atomCall.callee}() must name one.`
+    const why = atomCall.isContainer
+      ? containerExplanation(atomCall.callee)
+      : `a string passed to ${atomCall.callee}() must name one.`
+    return `${atomCall.callee}(${atomCall.rendered}) in ${callee}() is not a Nave atom: ${why}`
   }
   return `"${text}" in ${callee}() is class text this project does not declare as its own.`
 }

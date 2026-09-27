@@ -11,6 +11,8 @@ import { existsSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
+import { isValueVariable } from './value-variable.ts'
+
 const CORE_CX_SPECIFIER = '@navecss/core/cx'
 
 export interface CxBindings {
@@ -164,16 +166,14 @@ export function collectCxBindings(
 
 /**
  * Finds the value `name` resolves to from `scope`, walking scopes outward, or `undefined`. A
- * TypeScript type-only declaration (a type alias, an interface, a type parameter) sits in the
- * same scope set but names a type, never a value, so the walk goes on past it.
+ * TypeScript declaration of types (a type alias, an interface, a type parameter, a namespace
+ * holding only types) sits in the same scope set but names no value, so the walk goes on past it.
  */
 function findVariable(name: string, scope: Scope.Scope): Scope.Variable | undefined {
   let current: Scope.Scope | null = scope
   while (current) {
     const variable = current.set.get(name)
-    if (variable && (variable as { isValueVariable?: boolean }).isValueVariable !== false) {
-      return variable
-    }
+    if (variable && isValueVariable(variable)) return variable
     current = current.upper
   }
   return undefined
@@ -257,14 +257,16 @@ function isOneHopRawAccess(
 }
 
 /**
- * How the file names Nave's `cx.raw`, for a message that suggests a call to it: through its first
- * named `cx` import (`ncx.raw` when aliased), else its first namespace import (`c.cx.raw`), else
- * `cx.raw` when the file imports neither.
+ * How a message at `scope` names Nave's `cx.raw`: through the first named `cx` import that name
+ * still reaches there (`ncx.raw` when aliased), else the first such namespace import
+ * (`c.cx.raw`), else `cx.raw`, so a local that shadows an import is never named as Nave's.
  */
-export function rawCalleeText(bindings: CxBindings): string {
-  const [cxVariable] = bindings.cxVariables
+export function rawCalleeText(bindings: CxBindings, scope: Scope.Scope): string {
+  const isReached = (variable: Scope.Variable): boolean =>
+    findVariable(variable.name, scope) === variable
+  const cxVariable = [...bindings.cxVariables].find((variable) => isReached(variable))
   if (cxVariable) return `${cxVariable.name}.raw`
-  const [namespaceVariable] = bindings.namespaceVariables
+  const namespaceVariable = [...bindings.namespaceVariables].find((variable) => isReached(variable))
   if (namespaceVariable) return `${namespaceVariable.name}.cx.raw`
   return 'cx.raw'
 }

@@ -131,7 +131,52 @@ describe('AC-09: literal-piece reading rows', () => {
           code: jsx("{'a ' + 'legacy' + '-card'}"),
           languageOptions,
           settings,
-          errors: [{ message: /^"a" is not/ }, { message: /^"legacy-card" is not/ }],
+          // Each piece is reported at the literal it starts in: "legacy-card" at 'legacy'.
+          errors: [
+            { message: /^"a" is not/, column: 28 },
+            { message: /^"legacy-card" is not/, column: 35 },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('a string + chain reads like a template: other operands are slots, a piece running into one is a truncation', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [
+        { code: jsx("{styles.root + '--wide'}"), languageOptions, settings },
+        {
+          code: jsx("{'card-' + size}"),
+          languageOptions,
+          settings: { '@navecss': { allow: ['card-'] } },
+        },
+      ],
+      invalid: [
+        {
+          code: jsx("{'card-' + size}"),
+          languageOptions,
+          settings: { '@navecss': { allow: ['/^card-$/u'] } },
+          errors: [{ message: /^"card-" is not/ }],
+        },
+        {
+          code: jsx("{'legacy' + x + '-card'}"),
+          languageOptions,
+          settings,
+          errors: [{ message: /^"legacy" is not/ }],
+        },
+      ],
+    })
+  })
+
+  it('inside Nave cx(), a chain of string literals is one whole name; one with any other operand is not', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [{ code: jsx("{cx('fl' + 'ex')}"), languageOptions, settings }],
+      invalid: [
+        {
+          code: jsx("{cx('fl' + x)}"),
+          languageOptions,
+          settings,
+          errors: [{ message: /^cx\('fl' \+ x\) is not a Nave atom/ }],
         },
       ],
     })

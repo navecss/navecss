@@ -168,6 +168,7 @@ export const rawReasonRule: Rule.RuleModule = {
               piece.kind === 'atom'
                 ? {
                     callee: context.sourceCode.getText(piece.callee as never),
+                    isContainer: piece.isContainer,
                     rendered: piece.rendered,
                   }
                 : undefined,

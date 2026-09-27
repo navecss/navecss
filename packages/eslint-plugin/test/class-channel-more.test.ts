@@ -108,6 +108,19 @@ describe('AC-11 (R5a): logical-AND directly as a slot or whole value', () => {
     })
   })
 
+  it("the remedy never names a local that shadows the import as Nave's cx.raw", () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `import { cx as ncx } from '@navecss/core/cx'\nfunction F(ncx) { return <div className={on && s.x} /> }`,
+          languageOptions,
+          errors: [{ message: /Use cx\.raw\(on && s\.x\) or a ternary/ }],
+        },
+      ],
+    })
+  })
+
   it('the remedy names cx.raw the way the file binds it', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
@@ -326,7 +339,7 @@ describe('AC-14 (R5): a cx() argument is one class name, read whole', () => {
         {
           code: `${PRELUDE}\nconst el = <div className={cx('flex block')} />`,
           languageOptions,
-          errors: [{ message: /^cx\("flex block"\) is not a Nave atom/ }],
+          errors: [{ message: /^cx\('flex block'\) is not a Nave atom/ }],
         },
         {
           code: `${PRELUDE}\nconst el = <div className={cx(\`flex \${n}\`)} />`,
@@ -347,7 +360,7 @@ describe('AC-14 (R5): a cx() argument is one class name, read whole', () => {
           errors: [
             {
               message:
-                'ncx("legacy-card") is not a Nave atom: a string passed to ncx() must name one. Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: none), and only then cx.raw() with a reason.',
+                "ncx('legacy-card') is not a Nave atom: a string passed to ncx() must name one. Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: none), and only then cx.raw() with a reason.",
             },
           ],
         },
@@ -362,6 +375,44 @@ describe('AC-14 (R5): a cx() argument is one class name, read whole', () => {
           ],
         },
       ],
+    })
+  })
+})
+
+describe('AC-14 (R4): messages quote the construct as written and name cx.raw as the file binds it', () => {
+  it('a cx() argument is quoted exactly as written, in its own quotes', () => {
+    const prelude = `import { cx } from '@navecss/core/cx'`
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `${prelude}\nconst el = <div className={cx('app-card')} />`,
+          languageOptions,
+          errors: [{ message: /^cx\('app-card'\) is not a Nave atom/ }],
+        },
+        {
+          code: `${prelude}\nconst el = <div className={cx("app-card")} />`,
+          languageOptions,
+          errors: [{ message: /^cx\("app-card"\) is not a Nave atom/ }],
+        },
+      ],
+    })
+  })
+
+  it('the literal, atom and container messages end with cx.raw as the file binds it', () => {
+    const prelude = `import { cx as ncx } from '@navecss/core/cx'`
+    const tail = /and only then ncx\.raw\(\) with a reason\.$/
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [],
+      invalid: [
+        'className="legacy-card"',
+        "className={ncx('legacy-card')}",
+        "className={ncx(['flex'])}",
+      ].map((attribute) => ({
+        code: `${prelude}\nconst el = <div ${attribute} />`,
+        languageOptions,
+        errors: [{ message: tail }],
+      })),
     })
   })
 })
@@ -389,7 +440,7 @@ describe('AC-14 (R5): an array or object literal passed to Nave cx() is reported
           errors: [
             {
               message:
-                "cx(['flex']) is not a Nave atom: cx() turns an array or object into one string, never into atom classes. Pass atom names as separate arguments, each with its own condition if it needs one: cx('flex', on && 'block'). Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: none), and only then cx.raw() with a reason.",
+                "cx(['flex']) is not a Nave atom: cx() maps each argument whole, so an array or object is stringified first: ['flex', 'block'] renders the class \"flex,block\" and { flex: on } renders \"[object Object]\". Pass atom names as separate arguments, each with its own condition if it needs one: cx('flex', on && 'block'). Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: none), and only then cx.raw() with a reason.",
             },
           ],
         },
@@ -397,7 +448,10 @@ describe('AC-14 (R5): an array or object literal passed to Nave cx() is reported
           code: `${PRELUDE}\nconst el = <div className={ncx({ flex: true })} />`,
           languageOptions,
           errors: [
-            { message: /^ncx\(\{ flex: true \}\) is not a Nave atom: ncx\(\) turns an array/ },
+            {
+              message:
+                /^ncx\(\{ flex: true \}\) is not a Nave atom: ncx\(\) maps each argument whole/,
+            },
           ],
         },
         {
@@ -447,7 +501,7 @@ describe('AC-09 (R5, R5a): a template anywhere in the value has its slots read',
         {
           code: `${PRELUDE}\nconst el = <div className={on ? \`\${cx('legacy-card')}\` : ''} />`,
           languageOptions,
-          errors: [{ message: /^cx\("legacy-card"\) is not a Nave atom/ }],
+          errors: [{ message: /^cx\('legacy-card'\) is not a Nave atom/ }],
         },
         {
           code: `${PRELUDE}\nconst el = <div className={on ? \`\${a && s.x}\` : ''} />`,

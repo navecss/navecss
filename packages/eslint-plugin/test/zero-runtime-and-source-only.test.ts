@@ -211,7 +211,7 @@ describe('AC-06: rules key on source, never on build output (R3)', () => {
       lintOnce()
 
       expect(verdicts[0]).toHaveLength(1)
-      expect(verdicts[0]![0]).toMatch(/^3:@navecss\/class-channel:cx\("legacy-card"\)/)
+      expect(verdicts[0]![0]).toMatch(/^3:@navecss\/class-channel:cx\('legacy-card'\)/)
       expect(verdicts[1]).toEqual(verdicts[0])
       expect(verdicts[2]).toEqual(verdicts[0])
       expect(touched.filter((target) => target.startsWith(project))).toEqual([])

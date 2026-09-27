@@ -246,6 +246,14 @@ describe('AC-consumer-constraints-29 covers: R18', () => {
     expect(rootReadme).toMatch(/\[`@navecss\/stylelint-config`\]\(packages\/stylelint-config/)
   })
 
+  it("the root README's eslint-plugin row says declaring applies to a class, never to a style value", () => {
+    const rootReadme = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
+    const row = rootReadme.split('\n').find((line) => line.includes('[`@navecss/eslint-plugin`]'))
+    expect(row).toContain(
+      'A literal class in `className` unless declared, or a literal value on a tokenized `style` property, reported',
+    )
+  })
+
   it("the root README's Packages row names all four checks", () => {
     const rootReadme = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
     const row = rootReadme

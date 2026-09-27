@@ -18,7 +18,16 @@
  */
 import { Linter } from 'eslint'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, test } from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -392,14 +401,20 @@ const COLOR_PROPERTY_PATTERN =
   '/^(?:color|(?!accent-color$|caret-color$|scrollbar-color$|border-(top-|right-|bottom-|left-)?color$)[a-z-]+-color)$/'
 
 /**
- * Builds a standalone copy of the style rule and its generated data, in a temp directory nested
- * inside the plugin package (so the copy's own `import 'postcss-value-parser'` resolves through
- * that package's `node_modules`), with one admitted keyword removed from a listed property's
+ * Builds a standalone copy of the style rule and its generated data, in an OS temp directory
+ * with the plugin package's `node_modules` linked into it (so the copy's own
+ * `import 'postcss-value-parser'` resolves, and an interrupted run leaves nothing inside the
+ * package), with one admitted keyword removed from a listed property's
  * pattern. Returns an `eslintReports`-shaped function bound to that mutated copy, and a `cleanup`
  * to remove the temp directory.
  */
 function mutatedEslintRule(propertyPattern, keywordToRemove) {
-  const dir = mkdtempSync(path.join(REPO_ROOT, 'packages/eslint-plugin', '.parity-mutant-'))
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-parity-mutant-'))
+  symlinkSync(
+    path.join(REPO_ROOT, 'packages/eslint-plugin/node_modules'),
+    path.join(dir, 'node_modules'),
+    'dir',
+  )
   mkdirSync(path.join(dir, 'rules'))
   mkdirSync(path.join(dir, 'generated'))
   writeFileSync(
@@ -426,6 +441,7 @@ function mutatedEslintRule(propertyPattern, keywordToRemove) {
   )
 
   return {
+    dir,
     async reports(jsxKey, jsxValueLiteral) {
       const { styleValuesRule: mutatedRule } = await import(
         pathToFileURL(path.join(dir, 'rules', 'style-values.ts')).href
@@ -447,6 +463,15 @@ function mutatedEslintRule(propertyPattern, keywordToRemove) {
 test('AC-27: the positive control, removing an admitted keyword from the eslint copy reds the corpus', async () => {
   const mutant = mutatedEslintRule(COLOR_PROPERTY_PATTERN, 'Canvas')
   try {
+    const pluginDir = path.join(REPO_ROOT, 'packages/eslint-plugin')
+    assert.ok(
+      path.relative(pluginDir, mutant.dir).startsWith('..'),
+      'the mutant copy lives outside the plugin package, so an interrupted run leaves nothing there',
+    )
+    assert.deepEqual(
+      readdirSync(pluginDir).filter((name) => name.startsWith('.parity-mutant-')),
+      [],
+    )
     const disagreements = []
     for (const testCase of CASES) {
       const fromStylelint = await stylelintReports(testCase.cssProperty, testCase.cssValue)

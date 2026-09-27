@@ -7,12 +7,11 @@
  *
  * The grammar: a string literal; a template literal's static text, and each `${}` slot read as a
  * class position of its own (wherever the template sits); both branches of a conditional; the
- * right side of `&&` and both sides of `||`/`??`; both sides of a string `+` (adjacent string
- * literals read as the one string they join into); an identifier bound
+ * right side of `&&` and both sides of `||`/`??`; a string `+` chain, read like a template
+ * literal (its string literals the static text, every other operand a slot); an identifier bound
  * by a `const`, followed exactly one hop; single-child wrappers (TypeScript's `as`, `satisfies`,
  * `!`, an optional chain); and calls. A call to Nave's `cx()` has each argument read as one atom
- * name, whole (the way `cx()` maps it at run time), and an array or object literal there is never
- * one, whatever it holds, since `cx()` turns it into one string; a call to a class-composition
+ * name, whole (the way `cx()` maps it at run time), and an array or object literal there is reported whatever it holds, since cx() maps each argument whole and stringifies an array or object first; a call to a class-composition
  * helper, or to a `cx` that is not Nave's, has each argument read as class text, arrays and object
  * keys included; `cx.raw()` and any other call contribute nothing.
  */
@@ -21,10 +20,10 @@ import type { Scope, SourceCode } from 'eslint'
 
 import { type CxBindings, resolveCxCallee } from '../cx-binding.ts'
 import {
+  collectConcatPieces,
   collectTemplatePieces,
   concatOperands,
   isStringLiteral,
-  joinedLiteralPieces,
   resolveConstHop,
   splitWhitespace,
   TRANSPARENT_WRAPPER_TYPES,
@@ -86,7 +85,7 @@ function stringHits(
   callee: AnyNode | undefined,
 ): ClassHit[] {
   if (callee) {
-    return [wholeAtomPiece(node, node.value, JSON.stringify(node.value), callee)]
+    return [wholeAtomPiece(node, node.value, ctx.sourceCode.getText(node), callee)]
   }
   return classHits(splitWhitespace(node.value, node, false, false))
 }
@@ -108,24 +107,41 @@ function templateHits(
 }
 
 /**
- * A string `+` chain in a class position: adjacent string literals join into the text they
- * form, and every other operand is a class position of its own.
+ * A string `+` chain in a class position, read like a template literal: its string literals are
+ * the static text, and every other operand is a slot, read as a class position of its own.
  */
 function concatHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassHit[] {
-  const hits: ClassHit[] = []
-  let run: TSESTree.StringLiteral[] = []
-  for (const operand of concatOperands(node)) {
-    if (isStringLiteral(operand)) {
-      run.push(operand)
-      continue
-    }
-    hits.push(
-      ...classHits(joinedLiteralPieces(run)),
-      ...positionHits(ctx, operand, scope, undefined),
-    )
-    run = []
+  const operands = concatOperands(node)
+  return [
+    ...classHits(collectConcatPieces(operands)),
+    ...operands
+      .filter((operand) => !isStringLiteral(operand))
+      .flatMap((slot) => slotHits(ctx, slot, scope)),
+  ]
+}
+
+/**
+ * A string `+` chain passed to `cx()`: string literals alone join into one name; with no string
+ * literal it passes through what its operands hold; with a string literal beside any other
+ * operand it is one runtime string that is never exactly an atom name as written.
+ */
+function atomConcatHits(
+  ctx: WalkContext,
+  node: AnyNode,
+  scope: Scope.Scope,
+  callee: AnyNode,
+): ClassHit[] {
+  const operands = concatOperands(node)
+  const rendered = ctx.sourceCode.getText(node as never)
+  const literals = operands.filter((operand) => isStringLiteral(operand))
+  if (literals.length === operands.length) {
+    const text = literals.map((literal) => literal.value).join('')
+    return [wholeAtomPiece(node, text, rendered, callee)]
   }
-  return [...hits, ...classHits(joinedLiteralPieces(run))]
+  if (literals.length === 0) {
+    return operands.flatMap((operand) => positionHits(ctx, operand, scope, callee))
+  }
+  return [partAtomPiece(node, rendered, callee)]
 }
 
 /**
@@ -213,15 +229,14 @@ function positionHits(
       continue
     }
 
-    if (!callee && current.type === 'BinaryExpression' && current.operator === '+') {
-      return concatHits(ctx, current, currentScope)
+    if (current.type === 'BinaryExpression' && current.operator === '+') {
+      return callee
+        ? atomConcatHits(ctx, current, currentScope, callee)
+        : concatHits(ctx, current, currentScope)
     }
 
-    if (
-      current.type === 'LogicalExpression' ||
-      (current.type === 'BinaryExpression' && current.operator === '+')
-    ) {
-      // '||' and '??': both sides are candidates for the value used; '+': both sides are text.
+    if (current.type === 'LogicalExpression') {
+      // '||' and '??': both sides are candidates for the value used.
       return [
         ...positionHits(ctx, current.left, currentScope, callee),
         ...positionHits(ctx, current.right, currentScope, callee),

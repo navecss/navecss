@@ -8,9 +8,9 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
-import { packCoreTarball } from './helpers/pack-core.ts'
+import { packCoreTarball, type PackedCoreTarball } from './helpers/pack-core.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../../..')
@@ -69,6 +69,15 @@ function notCheckedParagraph(text: string): string {
 }
 
 describe('AC-eslint-plugin-23: core’s cx() docs, the root README, CLAUDE.md and the release (23a-c)', () => {
+  // Packing and extracting is one real `npm pack` plus two `tar` spawns, so it is done once here
+  // with its own timeout rather than inside an `it()`, where it pushed `ci:check` past vitest's
+  // 5s default under load.
+  let tarball: PackedCoreTarball
+
+  beforeAll(() => {
+    tarball = packCoreTarball()
+  }, 120_000)
+
   it('core’s README no longer contains any retired claim (whitespace collapsed)', () => {
     const folded = foldWhitespace(coreReadme)
     for (const retired of RETIRED_STRINGS) expect(folded).not.toContain(retired)
@@ -91,7 +100,7 @@ describe('AC-eslint-plugin-23: core’s cx() docs, the root README, CLAUDE.md an
   })
 
   it('the packed dist/cx.d.ts carries the same paragraph, with the built package’s current bytes', () => {
-    const paragraph = notCheckedParagraph(packCoreTarball().read('package/dist/cx.d.ts'))
+    const paragraph = notCheckedParagraph(tarball.read('package/dist/cx.d.ts'))
     expect(paragraph).toContain('@navecss/eslint-plugin')
     expect(paragraph).toContain(PARAGRAPH_CLAIM)
     for (const retired of RETIRED_PARAGRAPH_STRINGS) expect(paragraph).not.toContain(retired)

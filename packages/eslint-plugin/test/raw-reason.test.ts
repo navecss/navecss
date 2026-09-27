@@ -330,7 +330,7 @@ describe('AC-16 (R4): the messages rule 2 prints', () => {
           errors: [
             {
               message:
-                'cx("app-card") in cx.raw() is not a Nave atom: a string passed to cx() must name one. Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: prefix app-), and only then a reason, first inside the parentheses: cx.raw(/* nave-escape: ... */ cx(\'app-card\')).',
+                "cx('app-card') in cx.raw() is not a Nave atom: a string passed to cx() must name one. Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: prefix app-), and only then a reason, first inside the parentheses: cx.raw(/* nave-escape: ... */ cx('app-card')).",
             },
           ],
         },
@@ -341,7 +341,26 @@ describe('AC-16 (R4): the messages rule 2 prints', () => {
           errors: [
             {
               message:
-                /^ncx\("legacy-card"\) in cx\.raw\(\) is not a Nave atom: a string passed to ncx\(\) must name one\./,
+                /^ncx\('legacy-card'\) in cx\.raw\(\) is not a Nave atom: a string passed to ncx\(\) must name one\./,
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('an array passed to cx() inside cx.raw() gets the array explanation, not the string one', () => {
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `${PRELUDE}const k = cx.raw(cx(['legacy']))`,
+          languageOptions,
+          settings,
+          errors: [
+            {
+              message:
+                /^cx\(\['legacy'\]\) in cx\.raw\(\) is not a Nave atom: cx\(\) maps each argument whole, so an array or object is stringified first: .* only then a reason/,
             },
           ],
         },
