@@ -20,37 +20,10 @@ import {
   findDenylistHits,
   jsExportEntries,
   main,
-  resolveExportTarget,
 } from './check-zero-runtime-js.mjs'
 import { runGateMain } from './run-gate-main.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-
-// ---------------------------------------------------------------------------
-// resolveExportTarget
-// ---------------------------------------------------------------------------
-
-test('resolveExportTarget returns a string export value unchanged', () => {
-  assert.equal(resolveExportTarget('./dist/index.js'), './dist/index.js')
-})
-
-test('resolveExportTarget prefers "import" over "default" over "require"', () => {
-  assert.equal(
-    resolveExportTarget({ types: './x.d.ts', import: './x.js', default: './x.cjs' }),
-    './x.js',
-  )
-  assert.equal(resolveExportTarget({ types: './x.d.ts', default: './x.cjs' }), './x.cjs')
-})
-
-test('resolveExportTarget returns null for a types-only conditions block', () => {
-  assert.equal(resolveExportTarget({ types: './x.d.ts' }), null)
-})
-
-test('resolveExportTarget returns null for null, a non-object, or an array', () => {
-  assert.equal(resolveExportTarget(null), null)
-  assert.equal(resolveExportTarget(42), null)
-  assert.equal(resolveExportTarget(['./x.js']), null)
-})
 
 // ---------------------------------------------------------------------------
 // consumerFacingSpecifier
@@ -112,6 +85,58 @@ test('jsExportEntries excludes a subpath deliberately blocked with null', () => 
   ])
 })
 
+test('jsExportEntries audits every condition target, not just the first', () => {
+  const manifest = {
+    name: '@navecss/x',
+    exports: { '.': { browser: './b.js', import: './i.js' } },
+  }
+  const entries = jsExportEntries(manifest)
+  assert.deepEqual(entries.map((entry) => entry.relativePath).sort(), ['./b.js', './i.js'])
+  assert.ok(entries.every((entry) => entry.specifier === '@navecss/x'))
+})
+
+test('jsExportEntries recurses into a nested condition object', () => {
+  const manifest = {
+    name: '@navecss/x',
+    exports: { '.': { import: { types: './i.d.ts', default: './i.js' } } },
+  }
+  assert.deepEqual(jsExportEntries(manifest), [{ specifier: '@navecss/x', relativePath: './i.js' }])
+})
+
+test('jsExportEntries accepts a bare ".mjs" target', () => {
+  const manifest = { name: '@navecss/x', exports: { '.': './index.mjs' } }
+  assert.deepEqual(jsExportEntries(manifest), [
+    { specifier: '@navecss/x', relativePath: './index.mjs' },
+  ])
+})
+
+test('jsExportEntries accepts a "require" condition target ending in ".cjs"', () => {
+  const manifest = { name: '@navecss/x', exports: { '.': { require: './index.cjs' } } }
+  assert.deepEqual(jsExportEntries(manifest), [
+    { specifier: '@navecss/x', relativePath: './index.cjs' },
+  ])
+})
+
+test('jsExportEntries accepts a custom condition name such as "node"', () => {
+  const manifest = { name: '@navecss/x', exports: { '.': { node: './n.js' } } }
+  assert.deepEqual(jsExportEntries(manifest), [{ specifier: '@navecss/x', relativePath: './n.js' }])
+})
+
+test('jsExportEntries excludes a types-only conditions block', () => {
+  const manifest = { name: '@navecss/x', exports: { '.': { types: './x.d.ts' } } }
+  assert.deepEqual(jsExportEntries(manifest), [])
+})
+
+test('jsExportEntries collapses two conditions naming the same runtime path into one entry', () => {
+  const manifest = {
+    name: '@navecss/x',
+    exports: { '.': { import: './dist/tokens.js', default: './dist/tokens.js' } },
+  }
+  assert.deepEqual(jsExportEntries(manifest), [
+    { specifier: '@navecss/x', relativePath: './dist/tokens.js' },
+  ])
+})
+
 test('jsExportEntries returns [] when "exports" is absent, null, a string, or an array', () => {
   assert.deepEqual(jsExportEntries({ name: '@navecss/x' }), [])
   assert.deepEqual(jsExportEntries({ name: '@navecss/x', exports: null }), [])
@@ -147,7 +172,9 @@ test('every DENYLIST entry has a name and fires on at least one crafted snippet'
     getComputedStyle: 'const cs = getComputedStyle(el);',
     insertRule: 'sheet.insertRule(".x{}", 0);',
     adoptedStyleSheets: 'shadowRoot.adoptedStyleSheets = [sheet];',
-    '.style assignment': 'el.style = "color: red";',
+    '.style assignment': 'el.style.color = "red";',
+    '.style method call': 'el.style.setProperty("--nave-x", v);',
+    'setAttribute("style", ...)': 'el.setAttribute("style", "color:red");',
   }
   for (const { name } of DENYLIST) {
     assert.ok(Object.hasOwn(snippets, name), `no crafted snippet for denylist entry "${name}"`)
@@ -170,12 +197,58 @@ test('findDenylistHits fires on bracket access to document', () => {
   assert.deepEqual(findDenylistHits('const t = document["title"];'), ['document'])
 })
 
+test('findDenylistHits fires on optional-chained property access to document', () => {
+  assert.deepEqual(findDenylistHits('document?.head.append(s);'), ['document'])
+})
+
+test('findDenylistHits fires on optional-chained bracket access to document', () => {
+  assert.deepEqual(findDenylistHits('document?.["title"];'), ['document'])
+})
+
 test('findDenylistHits does not fire on a .style comparison', () => {
   assert.deepEqual(findDenylistHits('if (el.style === other.style) return;'), [])
 })
 
+test('findDenylistHits does not fire on a .style read', () => {
+  assert.deepEqual(findDenylistHits('const c = el.style.color;'), [])
+})
+
+test('findDenylistHits does not fire on a loose-equality .style comparison', () => {
+  assert.deepEqual(findDenylistHits('if (el.style.color == x) return;'), [])
+})
+
 test('findDenylistHits fires on a bracketed .style assignment', () => {
   assert.deepEqual(findDenylistHits('el.style["color"] = "red";'), ['.style assignment'])
+})
+
+test('findDenylistHits fires on a .style property assignment', () => {
+  assert.deepEqual(findDenylistHits('el.style.color = "red";'), ['.style assignment'])
+})
+
+test('findDenylistHits fires on a minified .style property assignment', () => {
+  assert.deepEqual(findDenylistHits('e.style.color=t'), ['.style assignment'])
+})
+
+test('findDenylistHits fires on a .style.cssText assignment', () => {
+  assert.deepEqual(findDenylistHits('el.style.cssText = "color:red";'), ['.style assignment'])
+})
+
+test('findDenylistHits fires on a compound .style.cssText assignment', () => {
+  assert.deepEqual(findDenylistHits('el.style.cssText += "x";'), ['.style assignment'])
+})
+
+test('findDenylistHits fires on el.style.setProperty(...)', () => {
+  assert.deepEqual(findDenylistHits('el.style.setProperty("--nave-x", v);'), ['.style method call'])
+})
+
+test('findDenylistHits fires on el.style.removeProperty(...)', () => {
+  assert.deepEqual(findDenylistHits('el.style.removeProperty("color");'), ['.style method call'])
+})
+
+test('findDenylistHits fires on el.setAttribute("style", ...)', () => {
+  assert.deepEqual(findDenylistHits('el.setAttribute("style", "color:red");'), [
+    'setAttribute("style", ...)',
+  ])
 })
 
 test('findDenylistHits returns [] for code touching none of the denylist', () => {
