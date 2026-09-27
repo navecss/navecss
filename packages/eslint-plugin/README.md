@@ -75,6 +75,10 @@ Two more keys of the same object:
   bound to Nave's are the default) to check through their arguments rather than pass or flag
   outright.
 
+A later config entry that sets one of these keys replaces that key's whole value, arrays
+included; one that sets only a different key of the same `settings['@navecss']` object leaves
+this one as it was.
+
 ## Count your escapes
 
 `@navecss/count-escapes` is `off` in `recommended`. Turn it on to hold the number of `cx.raw()`
@@ -93,7 +97,9 @@ does a removed one, until `eslint --prune-suppressions` rewrites the file — th
 only in a reviewed diff. This needs ESLint `9.24.0` or later and the rule at `error`: a bulk
 suppression is never recorded for a `warn`. As a fallback that needs no cache file, `warn` plus
 `--max-warnings 0` works too, but it counts every warning your config produces, not only this
-rule's.
+rule's. A file-wide or block `eslint-disable` comment with no rule list silences every rule
+after it in that file, this one included, so a file that opens with a bare `/* eslint-disable */`
+is never in the count at all.
 
 ## Adopting on an existing codebase
 
