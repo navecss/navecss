@@ -965,9 +965,11 @@ for (const { label, description, pattern, digest } of TEMPLATE_CHECKLIST_LINES) 
 }
 
 /**
- * A minimal stand-in for GitHub's own heading-to-anchor conversion: lowercases the heading text,
- * drops every ASCII punctuation character except a hyphen or an underscore, and turns each run of
- * whitespace into one hyphen. It throws instead of guessing when the heading holds a character
+ * A minimal stand-in for GitHub's own heading-to-anchor conversion: trims the heading text as a
+ * markdown parser does, lowercases it, drops every character that is not a letter, a digit, a
+ * space, a hyphen or an underscore (so punctuation goes, and so does a tab), and turns each space
+ * into its own hyphen, so two spaces in a row give two hyphens. It throws instead of guessing when
+ * the heading holds a character
  * outside ASCII, because GitHub's real conversion keeps letters like accented ones rather than
  * dropping them, and this stand-in has no rule for that case; approximating it silently would let
  * a test pass against an anchor GitHub would not actually generate.
@@ -982,11 +984,25 @@ function headingAnchor(headingText) {
     }
   }
   return headingText
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9\s_-]/g, '')
     .trim()
-    .replaceAll(/\s+/g, '-')
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9 _-]/g, '')
+    .replaceAll(' ', '-')
 }
+
+const CONTRIBUTING_FRAGMENT = /CONTRIBUTING\.md#([a-z0-9_-]+)\)/
+
+// The stand-in above is only as good as its agreement with GitHub on the cases it claims to
+// handle, so each rule it states is held here by an example whose anchor GitHub would give.
+test('headingAnchor and the fragment pattern follow GitHub on spaces, punctuation and underscores', () => {
+  assert.equal(headingAnchor('Content  you'), 'content--you', 'each space is its own hyphen')
+  assert.equal(headingAnchor('Foo !'), 'foo-', 'punctuation goes, the space before it stays')
+  assert.equal(headingAnchor('A\tB'), 'ab', 'a tab is dropped, not turned into a hyphen')
+  assert.equal(headingAnchor("You didn't write it"), 'you-didnt-write-it')
+  assert.equal(headingAnchor('  Snake_case  '), 'snake_case', 'outer spaces are trimmed first')
+  assert.throws(() => headingAnchor('Contenu résumé'), /outside ASCII/)
+  assert.equal('(x/CONTRIBUTING.md#snake_case)'.match(CONTRIBUTING_FRAGMENT)?.[1], 'snake_case')
+})
 
 // The disclosure checklist line links to a CONTRIBUTING.md heading by that heading's generated
 // anchor, but the two are pinned by separate digests above: one for the checklist line's own
@@ -1005,7 +1021,7 @@ test('PULL_REQUEST_TEMPLATE.md: the disclosure checklist line links to the headi
     TEMPLATE_CHECKLIST_LINES[0].pattern,
     TEMPLATE_CHECKLIST_LINES[0].description,
   )
-  const linkMatch = line.match(/CONTRIBUTING\.md#([a-z0-9-]+)\)/)
+  const linkMatch = line.match(CONTRIBUTING_FRAGMENT)
   assert.ok(
     linkMatch,
     'expected the disclosure checklist line to hold a link fragment shaped like ' +
