@@ -2,9 +2,9 @@
  * R15: resolving and loading a PostCSS `extend` module specifier, split out
  * of `postcss.ts` to keep that file under the project's file-length lint.
  */
-import { existsSync, statSync } from 'node:fs'
+import fs from 'node:fs'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import url from 'node:url'
 
 import type { ExtendMap } from './directive/resolve.ts'
 
@@ -13,21 +13,30 @@ import type { ExtendMap } from './directive/resolve.ts'
  * construction (round-3 decision 11): an unresolvable specifier fails right
  * there, naming the specifier and the directory, so the error surfaces when
  * the host's config loads rather than on the first stylesheet.
+ *
+ * `fs`/`url` are namespace imports, not named ones: a named import
+ * (`import { existsSync } from 'node:fs'`) fails to even LOAD this module
+ * under a browser-targeting bundler (Vite's client externalization rejects
+ * the binding at import time, not merely on use), which breaks importing
+ * `postcss.ts` in any context that never calls this function at all — a real
+ * bundled Vitest browser-mode suite hit exactly this. A namespace import
+ * only fails on the property ACCESS these two functions never reach unless
+ * `extend` is genuinely a specifier.
  */
 export function resolveExtendSpecifier(specifier: string): string {
   const dir = process.cwd()
   const file = path.resolve(dir, specifier)
-  if (!existsSync(file)) {
+  if (!fs.existsSync(file)) {
     throw new Error(`@nave: cannot find extend module "${specifier}" from "${dir}"`)
   }
   return file
 }
 
 /**
- * Reads `url`'s default export as one run's extend map.
+ * Reads `moduleUrl`'s default export as one run's extend map.
  */
-async function importExtendMap(url: string, file: string): Promise<ExtendMap> {
-  const loaded = (await import(url)) as { default?: unknown }
+async function importExtendMap(moduleUrl: string, file: string): Promise<ExtendMap> {
+  const loaded = (await import(moduleUrl)) as { default?: unknown }
   const value = loaded.default
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(
@@ -48,13 +57,13 @@ function loadExtendModule(
   file: string,
   cache: Map<string, Promise<ExtendMap>>,
 ): Promise<ExtendMap> {
-  const stats = statSync(file)
-  const url = `${pathToFileURL(file).href}?v=${stats.mtimeMs}-${stats.size}`
-  const cached = cache.get(url)
+  const stats = fs.statSync(file)
+  const moduleUrl = `${url.pathToFileURL(file).href}?v=${stats.mtimeMs}-${stats.size}`
+  const cached = cache.get(moduleUrl)
   if (cached) return cached
 
-  const pending = importExtendMap(url, file)
-  cache.set(url, pending)
+  const pending = importExtendMap(moduleUrl, file)
+  cache.set(moduleUrl, pending)
   return pending
 }
 
