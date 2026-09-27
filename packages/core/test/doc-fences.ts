@@ -44,8 +44,14 @@ function parseNamedClause(namedRaw: string, isWholeClauseType: boolean): Importe
   return items.map((item) => {
     const isType = isWholeClauseType || item.startsWith('type ')
     const withoutType = item.replace(/^type\s+/, '')
-    const asMatch = withoutType.split(/\s+as\s+/)
-    const name = (asMatch[1] ?? asMatch[0])!.trim()
+    // A single space on each side of the collapsed whitespace, not the two-sided \s+as\s+
+    // regex a static ReDoS scanner flags on principle: this operates on one already-trimmed,
+    // short clause item from a code fence, never on untrusted or large input, but collapsing
+    // internal whitespace first and splitting on the fixed literal ' as ' needs no backtracking
+    // at all.
+    const normalized = withoutType.replaceAll(/\s+/g, ' ')
+    const asIndex = normalized.indexOf(' as ')
+    const name = (asIndex === -1 ? normalized : normalized.slice(asIndex + 4)).trim()
     return { isDefault: false, isType, name }
   })
 }
@@ -54,9 +60,14 @@ function parseNamedClause(namedRaw: string, isWholeClauseType: boolean): Importe
 Every JS/TS `import ... from '@navecss/core...'` and every CSS `@import url('@navecss/core...')` in `body`. A CSS `@import` carries no names.
  */
 export function extractCoreImports(body: string): CoreImport[] {
+  // `([\w$]+),?\s*`, not `([\w$]+)\s*,?\s*`: a formatted default-import clause never carries
+  // whitespace before its own comma, and dropping that leading \s* removes the one adjacent
+  // pair of independent quantifiers a static ReDoS scanner flags here on principle (measured:
+  // this regex was already linear on adversarial input even before the change, since `[\w$]+`
+  // and `\s` never overlap, but a fixed, simpler shape needs no such argument to trust).
   const jsImports = body
     .matchAll(
-      /import\s+(type\s+)?(?:([\w$]+)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*['"](@navecss\/core[^'"]*)['"]/g,
+      /import\s+(type\s+)?(?:([\w$]+),?\s*)?(?:\{([^}]*)\})?\s*from\s*['"](@navecss\/core[^'"]*)['"]/g,
     )
     .map((m): CoreImport => {
       const [, isWholeType, defaultName, namedRaw, specifier] = m
@@ -148,15 +159,69 @@ export function collectExportedNames(sourceText: string): ExportedNames {
   return { hasDefault, types, values }
 }
 
+const WORD_OR_DOLLAR = /[\w$]/
+
+/**
+One bare `key: 'value'` pair (tsup's own `entry` shape — unquoted keys) at or after `from` in
+`text`, or `undefined` past the last usable colon. A hand-rolled scan, not
+`/([\w$]+):\s*['"]([^'"]+)['"]/g`: that regex's `[\w$]+` has nothing to stop it trying every
+length before giving up and moving on when a colon is missing nearby, which is O(n) wasted work
+at every scanned position and O(n²) overall on a `tsup.config.ts` with few or no `entry` colons —
+the exact shape `cssTrim`'s own regex was replaced for. `indexOf` for the colon and for the
+closing quote, and the backward walk over the key's own word-character run, each advance the
+scan position monotonically and never revisit the same character twice across iterations, so the
+whole function is O(n) regardless of content.
+ */
+function nextEntryPair(
+  text: string,
+  from: number,
+): { key: string; nextFrom: number; value: string } | undefined {
+  let searchFrom = from
+  for (;;) {
+    const colonIndex = text.indexOf(':', searchFrom)
+    if (colonIndex === -1) return undefined
+
+    let keyStart = colonIndex
+    while (keyStart > searchFrom && WORD_OR_DOLLAR.test(text[keyStart - 1]!)) keyStart--
+    if (keyStart === colonIndex) {
+      searchFrom = colonIndex + 1
+      continue
+    }
+
+    let valueStart = colonIndex + 1
+    while (valueStart < text.length && /\s/.test(text[valueStart]!)) valueStart++
+    const quote = text[valueStart]
+    if (quote !== '"' && quote !== "'") {
+      searchFrom = colonIndex + 1
+      continue
+    }
+    const closeIndex = text.indexOf(quote, valueStart + 1)
+    if (closeIndex === -1) return undefined
+
+    return {
+      key: text.slice(keyStart, colonIndex),
+      nextFrom: closeIndex + 1,
+      value: text.slice(valueStart + 1, closeIndex),
+    }
+  }
+}
+
 /**
 tsup's `entry` map (subpath name -> src file), read from the object literal in `tsup.config.ts` rather than by importing it, so this needs no tsup runtime behaviour.
  */
 export function loadEntryMap(tsupConfigText: string): Record<string, string> {
   const block = /entry:\s*\{([\s\S]*?)\}/.exec(tsupConfigText)
   if (!block) return {}
+  const content = block[1]!
+
   const entries: Record<string, string> = {}
-  const pairs = block[1]!.matchAll(/([\w$]+):\s*['"]([^'"]+)['"]/g)
-  for (const m of pairs) entries[m[1]!] = m[2]!
+  let from = 0
+  for (;;) {
+    const pair = nextEntryPair(content, from)
+    if (!pair) break
+    if (pair.key) entries[pair.key] = pair.value
+    from = pair.nextFrom
+  }
   return entries
 }
 
