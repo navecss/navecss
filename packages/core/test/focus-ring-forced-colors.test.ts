@@ -66,6 +66,21 @@ function collectDeclarations(
   return found
 }
 
+/** Every `--nave-border-width-focus` declaration in a tokens stylesheet, in px (NaN when the
+ * value is not a px length). Walks every rule, not only the first match, so a later `:root`
+ * block (e.g. under `@media (prefers-contrast: more)`) is not missed. `@property` descriptors
+ * (`syntax`, `inherits`, `initial-value`) are declarations too, and `walkDecls` visits them;
+ * they are excluded here only because their names never match `--nave-border-width-focus`, the
+ * property name this walk filters on. */
+function focusWidthsPx(css: string): number[] {
+  const widths: number[] = []
+  postcss.parse(css).walkDecls('--nave-border-width-focus', (decl) => {
+    const px = /^([\d.]+)px$/.exec(decl.value.trim())
+    widths.push(px ? Number.parseFloat(px[1]!) : Number.NaN)
+  })
+  return widths
+}
+
 describe('dist/atomic.css — focusRing forced-colors indicator', () => {
   const css = readFileSync(ATOMIC, 'utf8')
   const root = postcss.parse(css)
@@ -135,5 +150,72 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
         'indicator that resizes or reshapes the component it marks is a layout change, ' +
         'not an indicator',
     ).toEqual([])
+  })
+
+  // WCAG 2.2 SC 2.4.13 Focus Appearance (Level AAA) asks that an area of the focus indicator be
+  // at least as large as the area of a 2 CSS pixel thick perimeter of the unfocused component,
+  // and have a contrast ratio of at least 3:1 between the same pixels in the focused and
+  // unfocused states. For focusRing's outline, two values in the shipped rule matter here, and
+  // the tests above check neither by value: they pin which custom property the outline width
+  // reads, not what it resolves to, and nothing above reads outline-offset at all.
+  //
+  // Thickness: at least 2px. A thinner ring's area grows more slowly with the component's size
+  // than the 2px perimeter it is measured against, so its margin turns negative on larger
+  // components.
+  //
+  // Offset: strictly positive. At zero the outline is drawn starting just outside the border
+  // edge, so a 2px ring covers exactly a 2px band around the outside of the component: if that
+  // perimeter is read as a band outside the component (its largest reading), the ring has no area
+  // to spare, and at today's thickness the whole margin comes from the offset. Below zero the
+  // outline moves into the border box, over the component's own paint: there, the unfocused
+  // pixels show the component rather than whatever it sits on, so the contrast is no longer the
+  // focus colour against the background.
+  //
+  // This file already parses focusRing's declarations from the shipped CSS, so it is the natural
+  // place for the offset check. The thickness check also reads the built tokens, because the
+  // shipped rule carries a var() reference rather than a literal.
+  it("focusRing's outline-offset is strictly positive: at zero a 2px ring has no area to spare, and below zero the ring moves into the border box", () => {
+    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const offsetDecls = decls.filter((d) => /^outline-offset$/i.test(d.prop))
+
+    expect(offsetDecls, `${FOCUS_RING_CLASS} must declare outline-offset`).toHaveLength(1)
+    expect(Number.parseFloat(offsetDecls[0]!.value)).toBeGreaterThan(0)
+  })
+
+  it("--nave-border-width-focus resolves to at least 2px in the built tokens: below that, the ring's area margin over SC 2.4.13 turns negative as components grow", () => {
+    const tokensCss = readFileSync(
+      fileURLToPath(import.meta.resolve('@navecss/tokens/css')),
+      'utf8',
+    )
+    const widths = focusWidthsPx(tokensCss)
+
+    expect(
+      widths,
+      '--nave-border-width-focus must be declared in the tokens build output',
+    ).not.toEqual([])
+    expect(
+      widths.filter((w) => !(w >= 2)),
+      '--nave-border-width-focus must resolve to at least 2px in every declaration',
+    ).toEqual([])
+  })
+
+  it('the focus-width reader sees every declaration in the tokens build, not only the first', () => {
+    const fixture = `
+      :root {
+        --nave-border-width-focus: 2px;
+      }
+      @media (prefers-contrast: more) {
+        :root {
+          --nave-border-width-focus: 1px;
+        }
+      }
+      @property --nave-border-width-focus {
+        syntax: '<length>';
+        inherits: true;
+        initial-value: 2px;
+      }
+    `
+
+    expect(focusWidthsPx(fixture)).toEqual([2, 1])
   })
 })
