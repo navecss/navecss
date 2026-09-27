@@ -7,6 +7,11 @@
  * line/column space (R6 "whose line and column").
  */
 
+/**
+ * Part of `Diagnostic.code`'s closed set; kept exported for a consumer
+ * narrowing on it directly, not yet named by any in-tree caller.
+ * @public
+ */
 export type DiagnosticCode =
   | 'unknown-atom'
   | 'no-atom'

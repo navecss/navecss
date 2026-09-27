@@ -12,6 +12,11 @@ export interface Declaration {
   readonly value: string
 }
 
+/**
+ * One arm of `ResolvedBlock`'s union; kept exported for a consumer
+ * narrowing on `kind`, not yet named by any in-tree caller.
+ * @public
+ */
 export interface PseudoBlock {
   readonly kind: 'pseudo'
   readonly selector: string

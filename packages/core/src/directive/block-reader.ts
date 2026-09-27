@@ -17,6 +17,11 @@
  */
 import type { Token } from './tokenizer.ts'
 
+/**
+ * Part of `Item.kind`'s vocabulary; kept exported for a consumer narrowing
+ * on it directly, not yet named by any in-tree caller.
+ * @public
+ */
 export type ItemKind = 'declaration' | 'rule' | 'at-rule' | 'invalid'
 
 export interface Item {

@@ -285,9 +285,12 @@ describe('AC-consumer-constraints-37 covers: R21', () => {
     }
   })
 
-  it("the only bin any published package declares is @navecss/tokens' navecss-tokens", () => {
-    // The token build CLI predates this section and writes build output only; a new bin on any
-    // published package is a tool that could write the block, and reds this row.
+  it('every published bin is read-only against a consumer project (no tool could write the block)', () => {
+    // The token build CLI writes build output only. `@navecss/core`'s own `navecss-core` bin
+    // (the @nave survival check) only reads the paths it is given and reports on them — its own
+    // contract asserts every file under `--source` is byte- and mtime-identical after it runs —
+    // so a new bin on either package is not, by itself, a tool that could write the block. A
+    // FUTURE bin still reds this row until the same review is done for it.
     const bins = publishedManifests().flatMap((manifest) => {
       if (manifest.bin === undefined) return []
       // A string `bin` installs one command named after the package.
@@ -296,6 +299,9 @@ describe('AC-consumer-constraints-37 covers: R21', () => {
         (bin) => `${manifest.name}:${bin}`,
       )
     })
-    expect(bins).toEqual(['@navecss/tokens:navecss-tokens'])
+    expect(bins.toSorted((a, b) => a.localeCompare(b))).toEqual([
+      '@navecss/core:navecss-core',
+      '@navecss/tokens:navecss-tokens',
+    ])
   })
 })

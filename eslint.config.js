@@ -196,6 +196,14 @@ export default defineConfig([
       // `@nave`, `@media` and `@container` in prose are CSS at-rules and this
       // library's own directive, not inline JSDoc tags.
       'jsdoc/escape-inline-tags': 'off',
+      // `@public` here is knip's tag (docs.knip.dev/reference/jsdoc-tsdoc-tags),
+      // not a TS-redundant visibility modifier: it marks an export knip's
+      // unused-export check should never flag, because nothing in this
+      // repository imports it by name on purpose (a documented, stable part
+      // of a type's own vocabulary, kept for a future or external consumer).
+      // The two defaults below read it as decorative JSDoc instead.
+      'jsdoc/check-tag-names': ['warn', { definedTags: ['public'] }],
+      'jsdoc/empty-tags': ['warn', { tags: ['public'] }],
     },
   },
 

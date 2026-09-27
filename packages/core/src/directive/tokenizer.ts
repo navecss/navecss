@@ -27,6 +27,15 @@ import {
 } from './tokenizer/scanner.ts'
 import { consumeStringToken } from './tokenizer/string.ts'
 
+/**
+ * A facade over `tokenizer/token-types.ts`'s own vocabulary, so a consumer
+ * of `tokenizer.ts` never has to reach into the `tokenizer/` subfolder
+ * directly. `Token`/`TokenType` are used by name elsewhere in this package;
+ * the per-token-kind shapes are re-exported for the same reason their own
+ * declarations are `@public` — kept for a consumer narrowing on
+ * `Token['type']`, not yet named by any in-tree caller of THIS facade.
+ * @public
+ */
 export type {
   AtKeywordStructured,
   DelimStructured,

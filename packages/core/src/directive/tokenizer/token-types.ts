@@ -3,42 +3,82 @@
  * `type`/`structured` vocabulary matches `@rmenke/css-tokenizer-tests`'
  * corpus format directly (AC-directive-core-08), which is the tokenizer's
  * own conformance oracle.
+ *
+ * The per-token-kind `*Structured` shapes below (and `NumberType`/`HashType`)
+ * are `@public`: real, load-bearing parts of `TokenStructured`'s union and
+ * this tokenizer's documented vocabulary, kept exported for a consumer
+ * narrowing on `Token['type']` even though no in-tree caller currently names
+ * one directly — `@public` tells the dead-export check that on purpose,
+ * rather than something to prune.
  */
 
+/**
+@public
+ */
 export type NumberType = 'integer' | 'number'
+/**
+@public
+ */
 export type HashType = 'id' | 'unrestricted'
 
+/**
+@public
+ */
 export interface AtKeywordStructured {
   readonly value: string
 }
+/**
+@public
+ */
 export interface HashStructured {
   readonly value: string
   readonly type: HashType
 }
+/**
+@public
+ */
 export interface StringStructured {
   readonly value: string
 }
+/**
+@public
+ */
 export interface DelimStructured {
   readonly value: string
 }
+/**
+@public
+ */
 export interface NumberStructured {
   readonly value: number
   readonly type: NumberType
   readonly signCharacter?: '+' | '-'
 }
+/**
+@public
+ */
 export interface DimensionStructured {
   readonly value: number
   readonly type: NumberType
   readonly unit: string
   readonly signCharacter?: '+' | '-'
 }
+/**
+@public
+ */
 export interface PercentageStructured {
   readonly value: number
   readonly signCharacter?: '+' | '-'
 }
+/**
+@public
+ */
 export interface IdentStructured {
   readonly value: string
 }
+/**
+@public
+ */
 export interface UrlStructured {
   readonly value: string
 }
@@ -70,6 +110,9 @@ export type TokenType =
   | 'bad-url-token'
   | 'comment'
 
+/**
+@public
+ */
 export type TokenStructured =
   | AtKeywordStructured
   | HashStructured

@@ -23,12 +23,21 @@ export interface PlanOptions {
   readonly extend?: ExtendMap | undefined
 }
 
+/**
+ * One arm of `AnchoredBlock`'s union; kept exported for a consumer
+ * narrowing on `kind`, not yet named by any in-tree caller.
+ * @public
+ */
 export interface AnchoredPseudoBlock {
   readonly kind: 'pseudo'
   readonly selector: string
   readonly declarations: readonly Declaration[]
 }
 
+/**
+ * See `AnchoredPseudoBlock`.
+ * @public
+ */
 export interface AnchoredConditionalBlock {
   readonly kind: 'media' | 'container'
   readonly condition: string

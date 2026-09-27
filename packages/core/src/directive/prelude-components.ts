@@ -7,6 +7,11 @@
  */
 import { type Token, tokenize } from './tokenizer.ts'
 
+/**
+ * One arm of `PreludeComponent`'s union; kept exported for a consumer
+ * narrowing on `kind`, not yet named by any in-tree caller.
+ * @public
+ */
 export interface IdentComponent {
   readonly kind: 'ident'
   readonly name: string
@@ -14,6 +19,10 @@ export interface IdentComponent {
   readonly endOffset: number
 }
 
+/**
+ * See `IdentComponent`.
+ * @public
+ */
 export interface BadTokenComponent {
   readonly kind: 'bad-token'
   readonly text: string
