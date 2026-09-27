@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -163,5 +163,70 @@ describe('AC-directive-core-25 — check() stays fast and robust on a large styl
     const result = await check({ source: [filePath] })
 
     expect(result.findings).toMatchObject([{ line: 1, column: 4 }])
+  })
+})
+
+describe('AC-directive-core-22 — an unreadable file exits 2 without losing other hits', () => {
+  it.skipIf(process.getuid?.() === 0)(
+    'keeps a readable hit when a sibling --source is unreadable',
+    async () => {
+      const hitPath = await writeCss('hit.css', '.a{@nave flex}')
+      const lockedPath = path.join(ctx.dir, 'locked.css')
+      await writeFile(lockedPath, '.a{}')
+      await chmod(lockedPath, 0)
+
+      const result = await check({ source: [hitPath, lockedPath] })
+
+      expect(result.status).toBe(2)
+      expect(result.findings).toMatchObject([{ file: hitPath }])
+    },
+  )
+
+  it.skipIf(process.getuid?.() === 0)(
+    'exits 2 on an unreadable file passed alone, with no findings',
+    async () => {
+      const lockedPath = path.join(ctx.dir, 'locked.css')
+      await writeFile(lockedPath, '.a{}')
+      await chmod(lockedPath, 0)
+
+      const result = await check({ source: [lockedPath] })
+
+      expect(result.status).toBe(2)
+      expect(result.findings).toEqual([])
+    },
+  )
+
+  it.skipIf(process.getuid?.() === 0)(
+    'exits 2 when a subdirectory is unreadable, keeping hits from sibling files',
+    async () => {
+      const hitPath = await writeCss('dir/hit.css', '.a{@nave flex}')
+      const lockedDir = path.join(ctx.dir, 'dir', 'locked')
+      await mkdir(lockedDir)
+      await chmod(lockedDir, 0)
+
+      const result = await check({ source: [path.join(ctx.dir, 'dir')] })
+
+      expect(result.status).toBe(2)
+      expect(result.findings).toMatchObject([{ file: hitPath }])
+    },
+  )
+})
+
+describe('a directory --source follows symlinks, loop-safe', () => {
+  it('follows a symlinked file and a symlinked directory that loops back, counting the real file once', async () => {
+    const distDir = path.join(ctx.dir, 'dist')
+    const realDir = path.join(ctx.dir, 'real')
+    await mkdir(distDir)
+    await mkdir(realDir)
+    const realHit = path.join(realDir, 'hit.css')
+    await writeFile(realHit, '.a{@nave flex}')
+    await symlink(realHit, path.join(distDir, 'hit.css'))
+    await symlink('..', path.join(distDir, 'up'))
+    await writeFile(path.join(distDir, 'clean.css'), '.a{}')
+
+    const result = await check({ source: [distDir] })
+
+    expect(result.status).toBe(1)
+    expect(result.findings).toHaveLength(1)
   })
 })

@@ -30,10 +30,19 @@ export interface CheckResult {
 }
 
 /**
-Reads `file` and appends one `Finding` per surviving directive it holds.
+ * Reads `file` and appends one `Finding` per surviving directive it holds.
+ * `false` when `file` itself could not be read (a mode-000 file passed
+ * directly, or one found readable at listing time but not by the time this
+ * runs): the caller counts that against the exit status without letting it
+ * stop the rest of the run, the same way an unreadable `--source` path does.
  */
-async function checkFile(file: string, findings: Finding[]): Promise<void> {
-  const raw = await readFile(file, 'utf8')
+async function wasFileRead(file: string, findings: Finding[]): Promise<boolean> {
+  let raw: string
+  try {
+    raw = await readFile(file, 'utf8')
+  } catch {
+    return false
+  }
   // A leading BOM (Node's utf8 decoding keeps it as a literal U+FEFF, unlike
   // a `TextDecoder` set to strip one) is not part of the stylesheet's own
   // content: left in, it shifts every reported column by one relative to
@@ -53,6 +62,7 @@ async function checkFile(file: string, findings: Finding[]): Promise<void> {
       ...(survivor.selector !== undefined && { selector: survivor.selector }),
     })
   }
+  return true
 }
 
 /**
@@ -80,9 +90,11 @@ export async function check(options: CheckOptions): Promise<CheckResult> {
       hasUnreadableSource = true
       continue
     }
+    if (listing.unreadablePaths.length > 0) hasUnreadableSource = true
     for (const file of listing.files) {
-      await checkFile(file, findings)
-      stylesheetsRead++
+      const wasReadable = await wasFileRead(file, findings)
+      if (wasReadable) stylesheetsRead++
+      else hasUnreadableSource = true
     }
   }
 
