@@ -28,7 +28,15 @@
 
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -39,7 +47,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 /**
  * The note this suite prints on every failure, alongside the digest details: what changed, why a
  * recomputed digest does not fix it, and what to do next. Kept as one constant so the wording is
- * identical whether the file went missing or its bytes moved.
+ * identical whether the file went missing, became a symbolic link or its bytes moved.
  */
 const RIDER =
   "This file is the project's logo, the Nave compass mark with the NaveCSS name, reproduced " +
@@ -51,14 +59,19 @@ const RIDER =
   'and in the note beside it, .github/assets/LICENSE.md.'
 
 /**
- * Asserts that the file at `absolutePath` exists and that the raw SHA-256 of its bytes (no
- * encoding, no folding: these are binary-adjacent SVGs, not prose) equals `expectedSha256`. Never
- * interpolates the file's own content into a failure message: the rider explains what to do
- * without ever needing to show the bytes themselves.
+ * Asserts that the file at `absolutePath` exists, is a regular file rather than a symbolic link,
+ * and that the raw SHA-256 of its bytes (no encoding, no folding: these are binary-adjacent SVGs,
+ * not prose) equals `expectedSha256`. Never interpolates the file's own content into a failure
+ * message: the rider explains what to do without ever needing to show the bytes themselves.
  */
 function assertExactBytes(label, absolutePath, expectedSha256) {
   if (!existsSync(absolutePath)) {
     assert.fail(`"${label}" is missing. ${RIDER}`)
+  }
+  // A symbolic link would pass the digest below through its target, yet git commits a link as
+  // the path it points to, never as these bytes, so the file itself must be a regular file.
+  if (!lstatSync(absolutePath).isFile()) {
+    assert.fail(`"${label}" is not a regular file. ${RIDER}`)
   }
   const buffer = readFileSync(absolutePath)
   const actual = createHash('sha256').update(buffer).digest('hex')
@@ -117,6 +130,27 @@ test('row: a missing file fails with the "is missing" message and the rider', ()
       () => assertExactBytes('absent.svg', file, '0'.repeat(64)),
       (error) => {
         assert.ok(error.message.startsWith('"absent.svg" is missing. '))
+        assert.ok(error.message.includes(RIDER))
+        return true
+      },
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('row: a symbolic link fails even when the file it points to has the recorded bytes', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-brand-asset-pins-'))
+  try {
+    const target = path.join(dir, 'target.svg')
+    writeFileSync(target, 'the reviewed bytes')
+    const digest = createHash('sha256').update(readFileSync(target)).digest('hex')
+    const link = path.join(dir, 'link.svg')
+    symlinkSync(target, link)
+    assert.throws(
+      () => assertExactBytes('link.svg', link, digest),
+      (error) => {
+        assert.ok(error.message.startsWith('"link.svg" is not a regular file. '))
         assert.ok(error.message.includes(RIDER))
         return true
       },
