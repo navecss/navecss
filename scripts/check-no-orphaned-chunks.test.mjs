@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 // own red behind the first missing symbol. Through the namespace, a missing export is `undefined`
 // at the call site, so each row fails on its own assertion and its red is its own evidence.
 import * as subject from './check-no-orphaned-chunks.mjs'
-import { runScriptIn as runScriptInHelper } from './run-script-in-test-helper.mjs'
+import { runScriptIn } from './run-script-in-test-helper.mjs'
 
 const {
   collectDeclaredEntries,
@@ -535,10 +535,6 @@ function mainVerdict(rootDir) {
   return { exitCode, out }
 }
 
-function runScriptIn(rootDir) {
-  return runScriptInHelper(SCRIPT_PATH, rootDir)
-}
-
 const CLEAN_PACKAGE = {
   manifest: { files: ['dist'], exports: { './atoms': { import: './dist/atoms.js' } } },
   files: {
@@ -998,7 +994,7 @@ test('the script run as a real process on a clean tree exits 0 and says so', () 
     },
   })
   try {
-    const { status, out } = runScriptIn(dir)
+    const { status, out } = runScriptIn(SCRIPT_PATH, dir)
     assert.equal(status, 0, out)
     assert.match(out, /No orphaned build chunks/)
   } finally {
@@ -1011,7 +1007,7 @@ test('the script run as a real process on a clean tree exits 0 and says so', () 
 test('the script run as a real process on a tree with an orphan exits 1 and names the file', () => {
   const dir = buildFixture({ core: ORPHANED_PACKAGE })
   try {
-    const { status, out } = runScriptIn(dir)
+    const { status, out } = runScriptIn(SCRIPT_PATH, dir)
     assert.equal(status, 1, out)
     assert.match(out, /packages\/core\/dist\/chunk-DEAD0002\.js/)
   } finally {
@@ -1028,7 +1024,7 @@ test('the script run as a real process produces the same verdict as main() on th
   const dir = buildFixture({ core: ORPHANED_PACKAGE })
   try {
     const inProcess = mainVerdict(dir)
-    const asProcess = runScriptIn(dir)
+    const asProcess = runScriptIn(SCRIPT_PATH, dir)
     assert.equal(asProcess.status, inProcess.exitCode)
     assert.equal(asProcess.out, inProcess.out)
     assert.equal(inProcess.exitCode, 1)
@@ -1053,7 +1049,7 @@ test('the script invoked through a symlinked workspace root still fires and repo
   const link = `${dir}-symlink`
   symlinkSync(dir, link)
   try {
-    const { status, out } = runScriptIn(link)
+    const { status, out } = runScriptIn(SCRIPT_PATH, link)
     assert.equal(status, 1, out)
     assert.match(out, /packages\/core\/dist\/chunk-DEAD0002\.js/)
   } finally {

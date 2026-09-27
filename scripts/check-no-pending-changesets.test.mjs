@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 // namespace, a missing export is `undefined` at the call site, so each row fails on its own
 // assertion and its red is its own evidence.
 import * as subject from './check-no-pending-changesets.mjs'
-import { runScriptIn as runScriptInHelper } from './run-script-in-test-helper.mjs'
+import { runScriptIn } from './run-script-in-test-helper.mjs'
 
 const {
   findPendingChangesets,
@@ -210,10 +210,6 @@ function mainVerdict(rootDir) {
     process.exitCode = originalExitCode
   }
   return { exitCode, out }
-}
-
-function runScriptIn(rootDir) {
-  return runScriptInHelper(SCRIPT_PATH, rootDir)
 }
 
 test('main(rootDir): a changeset directory holding only config.json and README.md exits 0', () => {
@@ -437,7 +433,7 @@ test('main(rootDir): .changeset/pre existing as a regular file fails closed, not
 test('the real script run as a process refuses over a fixture holding a fragment', () => {
   const dir = buildFixture(['README.md', 'brisk-lab-seeds.md'])
   try {
-    const { out, status } = runScriptIn(dir)
+    const { out, status } = runScriptIn(SCRIPT_PATH, dir)
     assert.equal(status, 1, out)
     assert.ok(out.includes(PENDING_CHANGESET_HEADER), out)
     assert.match(out, /\.changeset\/brisk-lab-seeds\.md/)
@@ -449,7 +445,7 @@ test('the real script run as a process refuses over a fixture holding a fragment
 test('the real script run as a process exits 0 and prints its success line over a clean fixture', () => {
   const dir = buildFixture(['README.md'])
   try {
-    const { out, status } = runScriptIn(dir)
+    const { out, status } = runScriptIn(SCRIPT_PATH, dir)
     assert.equal(status, 0, out)
     assert.match(out, /No pending changeset fragments/)
   } finally {
