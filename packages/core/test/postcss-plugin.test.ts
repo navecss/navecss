@@ -553,7 +553,7 @@ describe('onUnknown default is error', () => {
   // rather than the `Available:` list (this file's pin before the slice-1
   // changeset asserted the old `Available: .*brandBox` text; "brandBoxx" is
   // now a distance-1 typo of the extend atom "brandBox" itself).
-  it('names the consumer extend atoms in the Available list when the typo is on an extension', async () => {
+  it('hints at a consumer extend atom directly, by name, when the typo is close to one', async () => {
     const extend: Record<string, AtomDefinition> = {
       brandBox: { declarations: { color: 'red' } },
     }
