@@ -43,15 +43,17 @@ import path from 'node:path'
 
 import type { OutputFile } from './builder.ts'
 import type { SeedNormalization } from './theming/color-math.ts'
-import type { CoreContractManifest, ManifestVersionSkew } from './theming/core-contract.ts'
+import type { ManifestVersionSkew } from './theming/core-contract.ts'
 
 import { writeOutputs } from './builder.ts'
 import { detectCollidingNames, refuseOnCollision } from './collision.ts'
 import { detectVersionSkew } from './core-version.ts'
 import { composeDtcgOutputs } from './dtcg-outputs.ts'
 import { MissingContractTokensError, UsageError } from './errors.ts'
+import { isOutPathConflict } from './out-path-conflict.ts'
 import { readOverrides } from './overrides.ts'
 import { findPackageRoot } from './package-root.ts'
+import { readManifest } from './read-manifest.ts'
 import { formatOklch } from './theming/color-math.ts'
 import { composeConsumerBuild } from './theming/consumer-build.ts'
 import { validateAgainstManifest } from './theming/core-contract.ts'
@@ -93,14 +95,6 @@ export { SeedIngestRefusal } from './theming/seed-ingest.ts'
 export { formatVersionSkewFact } from './validate-report.ts'
 
 const PACKAGE_ROOT = findPackageRoot(import.meta.url)
-
-/**
- * R14: reads the manifest from THIS package's own `dist/`, never a consumer's output dir.
- */
-async function readManifest(): Promise<CoreContractManifest> {
-  const raw = await readFile(path.join(PACKAGE_ROOT, 'dist', 'core-contract.json'), 'utf8')
-  return JSON.parse(raw) as CoreContractManifest
-}
 
 // ---------------------------------------------------------------------------
 // build
@@ -216,7 +210,16 @@ export async function build(options: TokensBuildOptions): Promise<TokensBuildRes
   )
   const allFiles = [...merged, ...theming.files]
 
-  await writeOutputs(allFiles)
+  // A usage error about the caller's own argument (R4), not a pipeline failure on the
+  // input's merits — see `OUT_PATH_CONFLICT_CODES` above.
+  try {
+    await writeOutputs(allFiles)
+  } catch (error) {
+    if (isOutPathConflict(error)) {
+      throw new UsageError(`could not write to --out="${options.outDir}": ${error.message}`)
+    }
+    throw error
+  }
 
   return {
     resolvedSeed: formatOklch(theming.primaryRecord.usedSeed),

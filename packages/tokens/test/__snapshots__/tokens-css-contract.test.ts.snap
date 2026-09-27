@@ -219,43 +219,43 @@ exports[`dist/tokens.css contract > matches the checked-in snapshot 1`] = `
   }
 
   @property --nave-layer-base {
-    syntax: '<number>';
+    syntax: '<integer>';
     inherits: true;
     initial-value: 0;
   }
 
   @property --nave-layer-dropdown {
-    syntax: '<number>';
+    syntax: '<integer>';
     inherits: true;
     initial-value: 100;
   }
 
   @property --nave-layer-sticky {
-    syntax: '<number>';
+    syntax: '<integer>';
     inherits: true;
     initial-value: 200;
   }
 
   @property --nave-layer-overlay {
-    syntax: '<number>';
+    syntax: '<integer>';
     inherits: true;
     initial-value: 300;
   }
 
   @property --nave-layer-modal {
-    syntax: '<number>';
+    syntax: '<integer>';
     inherits: true;
     initial-value: 400;
   }
 
   @property --nave-layer-toast {
-    syntax: '<number>';
+    syntax: '<integer>';
     inherits: true;
     initial-value: 500;
   }
 
   @property --nave-layer-tooltip {
-    syntax: '<number>';
+    syntax: '<integer>';
     inherits: true;
     initial-value: 600;
   }
@@ -398,40 +398,40 @@ exports[`dist/tokens.css contract > matches the checked-in snapshot 1`] = `
     color-scheme: light dark;
     /* Tint seed: Changing this changes everything Nave derives from it. The contrast of the resulting palette follows from what you set, and checking it is yours. */
     --nave-color-tint: oklch(0.7859 0.1316 186.17);
-    --nave-color-surface-base: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
-    --nave-color-surface-raised: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.225 0.0067 h));
-    --nave-color-surface-overlay: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.27 0.0067 h));
-    --nave-color-surface-sunken: light-dark(oklch(from var(--nave-color-tint) 0.985 0.0067 h), oklch(from var(--nave-color-tint) 0.12 0.0067 h));
-    --nave-color-surface-inverse: light-dark(oklch(from var(--nave-color-tint) 0.18 0.0067 h), oklch(from var(--nave-color-tint) 0.965 0.0067 h));
-    --nave-color-content-primary: light-dark(oklch(from var(--nave-color-tint) 0.18 0.0067 h), oklch(from var(--nave-color-tint) 0.965 0.0067 h));
-    --nave-color-content-secondary: light-dark(oklch(from var(--nave-color-tint) 0.37 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
-    --nave-color-content-tertiary: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.72 0.0067 h));
-    --nave-color-content-disabled: light-dark(oklch(from var(--nave-color-tint) 0.835 0.0067 h), oklch(from var(--nave-color-tint) 0.37 0.0067 h));
-    --nave-color-content-inverse: light-dark(oklch(from var(--nave-color-tint) 0.965 0.0067 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+    --nave-color-surface-base: light-dark(oklch(from var(--nave-color-tint) 1 0 h / 1), oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1));
+    --nave-color-surface-raised: light-dark(oklch(from var(--nave-color-tint) 1 0 h / 1), oklch(from var(--nave-color-tint) 0.225 0.0067 h / 1));
+    --nave-color-surface-overlay: light-dark(oklch(from var(--nave-color-tint) 1 0 h / 1), oklch(from var(--nave-color-tint) 0.27 0.0067 h / 1));
+    --nave-color-surface-sunken: light-dark(oklch(from var(--nave-color-tint) 0.985 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.12 0.0067 h / 1));
+    --nave-color-surface-inverse: light-dark(oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.965 0.0067 h / 1));
+    --nave-color-content-primary: light-dark(oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.965 0.0067 h / 1));
+    --nave-color-content-secondary: light-dark(oklch(from var(--nave-color-tint) 0.37 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.835 0.0067 h / 1));
+    --nave-color-content-tertiary: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.72 0.0067 h / 1));
+    --nave-color-content-disabled: light-dark(oklch(from var(--nave-color-tint) 0.835 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.37 0.0067 h / 1));
+    --nave-color-content-inverse: light-dark(oklch(from var(--nave-color-tint) 0.965 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1));
     --nave-color-content-link: light-dark(oklch(0.47 0.0748 186.17), oklch(0.835 0.123 186.17));
-    --nave-color-border-default: light-dark(oklch(from var(--nave-color-tint) 0.905 0.0067 h), oklch(from var(--nave-color-tint) 0.37 0.0067 h));
-    --nave-color-border-strong: light-dark(oklch(from var(--nave-color-tint) 0.72 0.0067 h), oklch(from var(--nave-color-tint) 0.47 0.0067 h));
-    --nave-color-border-control: light-dark(oklch(from var(--nave-color-tint) 0.59 0.0067 h), oklch(from var(--nave-color-tint) 0.59 0.0067 h));
-    --nave-color-border-disabled: light-dark(oklch(from var(--nave-color-tint) 0.94 0.0067 h), oklch(from var(--nave-color-tint) 0.27 0.0067 h));
+    --nave-color-border-default: light-dark(oklch(from var(--nave-color-tint) 0.905 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.37 0.0067 h / 1));
+    --nave-color-border-strong: light-dark(oklch(from var(--nave-color-tint) 0.72 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.47 0.0067 h / 1));
+    --nave-color-border-control: light-dark(oklch(from var(--nave-color-tint) 0.59 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.59 0.0067 h / 1));
+    --nave-color-border-disabled: light-dark(oklch(from var(--nave-color-tint) 0.94 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.27 0.0067 h / 1));
     --nave-color-border-focus: light-dark(oklch(0.59 0.0939 186.17), oklch(0.59 0.0939 186.17));
     --nave-color-action-primary: light-dark(oklch(0.47 0.0748 186.17), oklch(0.835 0.123 186.17));
     --nave-color-action-primary-hover: light-dark(oklch(0.37 0.0589 186.17), oklch(0.905 0.1106 186.17));
     --nave-color-action-primary-active: light-dark(oklch(0.27 0.0398 186.17), oklch(0.94 0.0574 186.17));
-    --nave-color-on-action-primary: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
-    --nave-color-action-secondary: light-dark(oklch(from var(--nave-color-tint) 0.965 0.0067 h), oklch(from var(--nave-color-tint) 0.27 0.0067 h));
+    --nave-color-on-action-primary: light-dark(oklch(from var(--nave-color-tint) 1 0 h / 1), oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1));
+    --nave-color-action-secondary: light-dark(oklch(from var(--nave-color-tint) 0.965 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.27 0.0067 h / 1));
     --nave-color-feedback-danger: light-dark(oklch(0.47 0.1455 15.02), oklch(0.835 0.0661 15.02));
     --nave-color-feedback-danger-foreground: light-dark(oklch(0.47 0.1455 15.02), oklch(0.835 0.0661 15.02));
-    --nave-color-on-feedback-danger: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+    --nave-color-on-feedback-danger: light-dark(oklch(from var(--nave-color-tint) 1 0 h / 1), oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1));
     /* Feedback tokens: warning, success and info, and their -foreground variants, resolve to one shared value here; only danger differs. Colour alone therefore cannot tell those three states apart, so wherever a feedback token carries meaning, give it a text label naming the state and a distinct icon or shape that differs per state. */
-    --nave-color-feedback-warning: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
-    --nave-color-feedback-warning-foreground: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
-    --nave-color-on-feedback-warning: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
-    --nave-color-feedback-success: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
-    --nave-color-feedback-success-foreground: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
-    --nave-color-on-feedback-success: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
-    --nave-color-feedback-info: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
-    --nave-color-feedback-info-foreground: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h), oklch(from var(--nave-color-tint) 0.835 0.0067 h));
-    --nave-color-on-feedback-info: light-dark(oklch(from var(--nave-color-tint) 1 0 h), oklch(from var(--nave-color-tint) 0.18 0.0067 h));
+    --nave-color-feedback-warning: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.835 0.0067 h / 1));
+    --nave-color-feedback-warning-foreground: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.835 0.0067 h / 1));
+    --nave-color-on-feedback-warning: light-dark(oklch(from var(--nave-color-tint) 1 0 h / 1), oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1));
+    --nave-color-feedback-success: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.835 0.0067 h / 1));
+    --nave-color-feedback-success-foreground: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.835 0.0067 h / 1));
+    --nave-color-on-feedback-success: light-dark(oklch(from var(--nave-color-tint) 1 0 h / 1), oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1));
+    --nave-color-feedback-info: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.835 0.0067 h / 1));
+    --nave-color-feedback-info-foreground: light-dark(oklch(from var(--nave-color-tint) 0.47 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.835 0.0067 h / 1));
+    --nave-color-on-feedback-info: light-dark(oklch(from var(--nave-color-tint) 1 0 h / 1), oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1));
   }
 }
 "

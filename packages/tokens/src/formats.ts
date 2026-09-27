@@ -84,6 +84,24 @@ const isReducibleDuration = (token: FlatToken): boolean =>
 // ---------------------------------------------------------------------------
 
 /**
+ * The `layer` domain is Nave's stacking-order (z-index) scale: every token in it is meant to
+ * reach a `z-index` declaration. `z-index` accepts only an `<integer>`, narrower than the
+ * `<number>` syntax the bare `number` $type otherwise registers as — under `<number>`, a
+ * consumer override like `400.5` registers cleanly and then produces an INVALID `z-index` at
+ * the point of use, discarded back to the property's initial value with no error anywhere.
+ * `<integer>` refuses the fractional override at registration instead.
+ */
+const isZIndexShaped = (token: FlatToken): boolean =>
+  token.type === 'number' && token.path[0] === 'layer'
+
+/**
+ * The `@property` syntax string for a token's `$type`, narrowed to `<integer>` for the
+ * z-index-shaped `layer` domain.
+ */
+const atPropertySyntaxFor = (token: FlatToken): string | undefined =>
+  isZIndexShaped(token) ? '<integer>' : AT_PROPERTY_SYNTAX[token.type]
+
+/**
  * Whether a token can be registered as a typed custom property.
  * A non-'*' syntax MUST carry a computationally independent initial-value.
  * rem and em are not (they resolve against a font size), so browsers silently
@@ -91,7 +109,7 @@ const isReducibleDuration = (token: FlatToken): boolean =>
  * false for every font-size token.
  */
 function isRegistrable(token: FlatToken): boolean {
-  const syntax = AT_PROPERTY_SYNTAX[token.type]
+  const syntax = atPropertySyntaxFor(token)
   if (syntax === undefined) return false
   if (syntax !== '<length>') return true
   return ABSOLUTE_LENGTH.test(String(token.value).trim())
@@ -103,7 +121,7 @@ function isRegistrable(token: FlatToken): boolean {
 function buildAtProperty(token: FlatToken): string {
   return [
     `  @property ${PREFIX}${token.name} {`,
-    `    syntax: '${AT_PROPERTY_SYNTAX[token.type]}';`,
+    `    syntax: '${atPropertySyntaxFor(token)}';`,
     `    inherits: true;`,
     `    initial-value: ${token.value};`,
     `  }`,
