@@ -48,3 +48,32 @@ two packages should be compatible across a range of versions, not forced to rele
   `linked` and `ignore` is already independent versioning, Changesets' default.
 - A future package that queries "how does release topology work here" should extend this
   record's reasoning (or supersede it) rather than re-deriving the question from scratch.
+
+## Update — the revisit trigger has fired
+
+`@navecss/stylelint-config` now reads the token vocabulary directly: its "declared custom
+properties" rule (`@navecss/declared-custom-properties`) parses the stylesheet
+`@navecss/tokens` publishes to check that a `var(--nave-*)` reference names something actually
+declared there. That is exactly the trigger named above, and this package now takes a peer
+dependency on `@navecss/tokens`, at `>=0.1.0 <1.0.0` — a range, never `fixed`, per this record's
+own reasoning: the two packages need to stay compatible across a range of versions, not be
+forced to release together. `@navecss/stylelint-config` still does not join the `fixed` group,
+is not `linked`, and is not `ignore`d — the peer dependency changes what it reads, not how it
+versions.
+
+## Update: `@navecss/eslint-plugin` joins, versioning independently
+
+A fourth published package, `@navecss/eslint-plugin`, closes the class-channel side of the same
+constraint `@navecss/stylelint-config` closes for CSS: no class text written as a literal outside
+`cx.raw()`, a reason required of every `cx.raw()` call that carries one, a count of how many, and
+a check on literal values in a JSX `style` object. It **versions independently**, for the same
+reasoning as `@navecss/stylelint-config` above: its contract is with ESLint and the JSX it reads,
+not with the token or component contract `tokens` and `core` share, so it is not added to the
+`fixed` group, is not `linked`, and is not `ignore`d.
+
+Unlike `@navecss/stylelint-config`, this package needs no revisit trigger to take a peer: it
+reads `@navecss/core`'s public `./atoms` export from the day it ships, to recognise a Nave atom
+name passed to `cx()`, so it takes a required peer dependency on `@navecss/core` at
+`>=0.1.0 <1.0.0` (a range, never `fixed`) from its first release, alongside a required peer on
+`eslint` at `^9.24.0 || ^10.0.0`. Its build is `tsc` to `dist/`, the same shape as
+`@navecss/stylelint-config`'s own plain-JavaScript package, no bundler either.

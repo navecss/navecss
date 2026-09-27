@@ -21,7 +21,7 @@ Apply built-in atoms with the `@nave` at-rule inside a CSS rule; read values thr
 An atom name that is neither on this page nor in the project’s own `navePlugin({ extend })`
 configuration is not used, and a `--nave-*` name not on this page is not used either:
 when the name you need does not exist, say so rather than invent one.
-An undeclared `--nave-*` name passes lint and the build and renders nothing.
+An undeclared `--nave-*` name renders nothing; `@navecss/stylelint-config` reports it.
 
 Atoms a project registers through `navePlugin({ extend })` are not listed on this page.
 They are valid in `@nave` only, never in `cx()`, and they live in that project’s own
@@ -67,6 +67,8 @@ included. Where a project class shares an atom’s name, `cx('container')` is Na
 `cx.raw()` is also for a CSS Module class behind a condition, shown by the code span
 `cx.raw(isActive && styles.active)`, because a template-literal slot interpolates a falsy
 condition’s own value — naming `false`, `undefined` and `0` — as a class.
+
+If the project runs `@navecss/eslint-plugin`, its reports name their remedies, most preferred first: take the first one that fits. Never answer a report with a disable comment, and never write a `cx.raw()` reason to make a report go away.
 
 ## Atoms
 

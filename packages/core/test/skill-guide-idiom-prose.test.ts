@@ -63,7 +63,7 @@ describe('AC-consumer-constraints-39: required prose statements, each present an
     'valid in `@nave` only, never in `cx()`',
     '[CONSUMER-ATOMS.md](../../CONSUMER-ATOMS.md)',
     '`@nave` applies the project’s atom and `cx()` still returns the built-in',
-    'An undeclared `--nave-*` name passes lint and the build and renders nothing',
+    'An undeclared `--nave-*` name renders nothing; `@navecss/stylelint-config` reports it',
     'the camelCase keys',
     'never the `nave-` class',
     'A type error from',
