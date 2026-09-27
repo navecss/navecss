@@ -285,6 +285,21 @@ describe('AC-directive-core-12 — a directive directly in any nested group rule
   })
 })
 
+describe('the refused-parent text names the & workaround only for a group rule nested in a style rule', () => {
+  it.each([
+    '@media (x) { @nave flex; }',
+    '@layer l { @nave flex; }',
+    '@keyframes k { @nave flex; }',
+    '.a { @keyframes k { @nave flex; } }',
+  ])('%s keeps the plain text, with no workaround sentence', async (css) => {
+    await expect(run(css)).rejects.toThrow(/must be the direct child of a CSS rule selector block$/)
+  })
+
+  it('a group rule nested in a style rule appends the workaround sentence', async () => {
+    await expect(run('.a { @media (x) { @nave flex; } }')).rejects.toThrow(/& \{ @nave \.\.\.; \}/)
+  })
+})
+
 describe('AC-directive-core-12 — a directive with a {} block', () => {
   it('rejects, by default, rather than silently dropping the block', async () => {
     await expect(run('.a { @nave flex { color: red } }')).rejects.toThrow(

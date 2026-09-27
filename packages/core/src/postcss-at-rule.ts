@@ -87,7 +87,16 @@ function atRuleErrorIndex(preludeStartIndex: number, diagnostic: Diagnostic): nu
  * that happened to be walked first (AC-directive-core-16).
  */
 function reportDiagnostic(diagnostic: Diagnostic, ctx: DirectiveContext, preludeStartIndex: number): void {
-  const isNestedGroup = diagnostic.code === 'bad-parent' && ctx.atRule.parent?.type !== 'root'
+  // The workaround sentence names a group rule the directive can be moved
+  // into via `& { }` — only meaningful when that group rule itself sits
+  // inside a style rule (`.a { @media (x) { @nave flex; } }`), never for a
+  // top-level one, and never for @keyframes, where `&` has no such use.
+  const refusedParent = ctx.atRule.parent
+  const isNestedGroup =
+    diagnostic.code === 'bad-parent' &&
+    refusedParent !== undefined &&
+    !isInsideKeyframes(refusedParent) &&
+    refusedParent.parent?.type === 'rule'
   const text = formatDiagnostic(
     isNestedGroup ? { ...diagnostic, detail: 'nested-group' } : diagnostic,
     {
