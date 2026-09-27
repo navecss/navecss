@@ -2,11 +2,14 @@
  * A BACKSTOP, NOT A GATE, ON PROSE THAT WAS REVIEWED BEFORE IT SHIPPED.
  *
  * Some of the plain-English text in this repository's contributor and consumer-facing surfaces
- * states a term of the project rather than describing what the code does: the contributor
- * licence terms and the Developer Certificate of Origin in `.github/CONTRIBUTING.md`, the licence
- * checklist and affirmation in the pull request template, the whole of `TRADEMARKS.md`, and the
- * `README.md` sections stating what this project promises and does not promise about
- * accessibility. Each of those passages was reviewed and agreed before it shipped. THIS TEST
+ * states a term of the project rather than describing what the code does: in
+ * `.github/CONTRIBUTING.md`, the "Adding a dependency" change-control item, the paragraphs on text
+ * the build prints or ships, and the contributor licence terms with the Developer Certificate of
+ * Origin; the licence checklist and affirmation in the pull request template; the whole of
+ * `TRADEMARKS.md`; the `README.md` sections stating what this project promises and does not
+ * promise about accessibility, and its brand and name section; and the whole of
+ * `.github/assets/LICENSE.md`, the note saying the logo files beside it are not covered by the MIT
+ * licence. Each of those passages was reviewed and agreed before it shipped. THIS TEST
  * PINS EACH ONE AGAINST A DIGEST TAKEN AT THAT MOMENT AND FAILS IF THE SHIPPED BYTES MOVE.
  *
  * THIS TEXT WAS REVIEWED AND AGREED BEFORE IT SHIPPED. If this test fails because you changed,
@@ -947,7 +950,7 @@ const TEMPLATE_CHECKLIST_LINES = [
     description: 'disclosure checklist line',
     pattern:
       /^- \[ \] Anything in this change that was copied or adapted from outside this repository/,
-    digest: '464381c42595679977a879e4964cbfdc1440a507ba91c53dd9a84b5423cba3b1',
+    digest: '7998ef799c02b4d575e9c1ca3198e5df3f8df1094db0d5b2036816b890f7b39c',
   },
   {
     label: 'PULL_REQUEST_TEMPLATE.md printed-text checklist line',
@@ -963,6 +966,80 @@ for (const { label, description, pattern, digest } of TEMPLATE_CHECKLIST_LINES) 
     assertClearedText(label, line, digest)
   })
 }
+
+/**
+ * A minimal stand-in for GitHub's own heading-to-anchor conversion: trims the heading text as a
+ * markdown parser does, lowercases it, drops every character that is not a letter, a digit, a
+ * space, a hyphen or an underscore (so punctuation goes, and so does a tab), and turns each space
+ * into its own hyphen, so two spaces in a row give two hyphens. It throws instead of guessing when
+ * the heading holds a character
+ * outside ASCII, because GitHub's real conversion keeps letters like accented ones rather than
+ * dropping them, and this stand-in has no rule for that case; approximating it silently would let
+ * a test pass against an anchor GitHub would not actually generate.
+ */
+function headingAnchor(headingText) {
+  for (const char of headingText) {
+    if (char.codePointAt(0) > 0x7f) {
+      throw new Error(
+        `cannot work out the anchor for the heading "${headingText}": it contains a character ` +
+          `outside ASCII (${char}), and this check only knows the plain-ASCII case`,
+      )
+    }
+  }
+  return headingText
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9 _-]/g, '')
+    .replaceAll(' ', '-')
+}
+
+const CONTRIBUTING_FRAGMENT = /CONTRIBUTING\.md#([a-z0-9_-]+)\)/
+
+// The stand-in above is only as good as its agreement with GitHub on the cases it claims to
+// handle, so each rule it states is held here by an example whose anchor GitHub would give.
+test('headingAnchor and the fragment pattern follow GitHub on spaces, punctuation and underscores', () => {
+  assert.equal(headingAnchor('Content  you'), 'content--you', 'each space is its own hyphen')
+  assert.equal(headingAnchor('Foo !'), 'foo-', 'punctuation goes, the space before it stays')
+  assert.equal(headingAnchor('A\tB'), 'ab', 'a tab is dropped, not turned into a hyphen')
+  assert.equal(headingAnchor("You didn't write it"), 'you-didnt-write-it')
+  assert.equal(headingAnchor('  Snake_case  '), 'snake_case', 'outer spaces are trimmed first')
+  assert.throws(() => headingAnchor('Contenu résumé'), /outside ASCII/)
+  assert.equal('(x/CONTRIBUTING.md#snake_case)'.match(CONTRIBUTING_FRAGMENT)?.[1], 'snake_case')
+})
+
+// The disclosure checklist line links to a CONTRIBUTING.md heading by that heading's generated
+// anchor, but the two are pinned by separate digests above: one for the checklist line's own
+// text, one for the CONTRIBUTING.md section it points at. Neither pin reads the other, so a
+// reviewed rewording of the heading, re-pinned on its own new digest exactly as this file's
+// docblock instructs, would not be caught here even though it can change the anchor the link
+// depends on. This test ties the two together directly: it reads the heading currently named by
+// `disclosureRange()`, works out the anchor GitHub would give it, and checks the checklist line's
+// link fragment still matches. If this fails, the heading and the link were updated one at a
+// time; bring the link's fragment (or the heading, whichever is right) back into agreement with
+// the other.
+test('PULL_REQUEST_TEMPLATE.md: the disclosure checklist line links to the heading it names', () => {
+  const { line } = locateLine(
+    TEMPLATE_DOC,
+    TEMPLATE_FULL_RANGE,
+    TEMPLATE_CHECKLIST_LINES[0].pattern,
+    TEMPLATE_CHECKLIST_LINES[0].description,
+  )
+  const linkMatch = line.match(CONTRIBUTING_FRAGMENT)
+  assert.ok(
+    linkMatch,
+    'expected the disclosure checklist line to hold a link fragment shaped like ' +
+      '"CONTRIBUTING.md#..."; found none',
+  )
+
+  const headingLine = CONTRIBUTING_DOC.lines[disclosureRange().start]
+  const expectedFragment = headingAnchor(headingLine.replace(/^#{1,6}\s+/, ''))
+  assert.equal(
+    linkMatch[1],
+    expectedFragment,
+    `the disclosure checklist line's link fragment ("${linkMatch[1]}") no longer matches the ` +
+      `anchor for its current heading ("${headingLine}", anchor "${expectedFragment}")`,
+  )
+})
 
 test('PULL_REQUEST_TEMPLATE.md: the licence affirmation run, complete', () => {
   const { index: ruleIndex } = locateLine(
@@ -1025,5 +1102,20 @@ test('README.md: the "## Brand and name" section', () => {
     'README.md ## Brand and name',
     wholeSectionText(README_DOC.lines, range),
     '3568193eea6a12eb64760e2c386991f01377cc07e8ea262f6ac53886725dd041',
+  )
+})
+
+// ---------------------------------------------------------------------------------------------
+// .github/assets/LICENSE.md — the whole file. States that the two brand SVGs beside it are not
+// covered by the root MIT licence and are governed by TRADEMARKS.md instead; it has no
+// package-local home (`.github/` belongs to no package), so it is pinned here as one unit, the
+// same way TRADEMARKS.md is pinned above.
+// ---------------------------------------------------------------------------------------------
+
+test('.github/assets/LICENSE.md: the whole file', () => {
+  assertClearedText(
+    '.github/assets/LICENSE.md',
+    read('.github/assets/LICENSE.md'),
+    'd0c3fd1ab5aee471bc098504473a938987845af050e537104626dcbc033ecad6',
   )
 })

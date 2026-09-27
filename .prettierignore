@@ -4,3 +4,4 @@ pnpm-lock.yaml
 *.generated.*
 .claude/worktrees/
 **/test/fixtures/generated/
+.github/assets/*.svg
