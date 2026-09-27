@@ -55,6 +55,11 @@ jobs:
   full-gate:
     name: full local gate (ci:check)
     runs-on: ubuntu-latest
+    env:
+      # A step's `if:` cannot reference the `secrets` context directly (GitHub Actions rejects
+      # it as an invalid expression context there), so the truthiness check that guards the
+      # SonarCloud scan step below has to be done here, once, as a job-level env var it CAN read.
+      HAS_SONAR_TOKEN: ${{ secrets.SONAR_TOKEN != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -98,18 +103,16 @@ jobs:
       - name: 'Rewrite coverage lcov SF: paths to be repo-root-relative'
         run: node scripts/prefix-lcov-source-paths.mjs
 
-      # Two independent reasons this can be skipped, either of which must fail the step rather
-      # than the job if this ran unconditionally: (1) a pull request from a fork does not receive
-      # repository secrets on a public repo, so SONAR_TOKEN would be empty; (2) before the
+      # Two independent reasons this can be skipped, either of which must skip the step rather
+      # than fail the job if this ran unconditionally: (1) a pull request from a fork does not
+      # receive repository secrets on a public repo, so SONAR_TOKEN would be empty; (2) before the
       # SONAR_TOKEN repository secret exists at all (an admin step, tracked separately from this
-      # change), every run on every PR would otherwise fail here. `secrets.SONAR_TOKEN` is checked
-      # for truthiness directly -- `!= ''` does not work in an `if:` condition against the secrets
-      # context. Once the secret exists, this step runs and a real scan failure fails the job, as
-      # intended.
+      # change), every run on every PR would otherwise fail here. Once the secret exists, this
+      # step runs and a real scan failure fails the job, as intended.
       - name: SonarCloud scan
         if: |
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
-          secrets.SONAR_TOKEN
+          env.HAS_SONAR_TOKEN == 'true'
         uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
