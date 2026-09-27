@@ -26,6 +26,9 @@ importers:
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.11.0(jiti@2.7.0))
+      '@navecss/stylelint-config':
+        specifier: workspace:*
+        version: link:packages/stylelint-config
       '@vitest/eslint-plugin':
         specifier: 1.6.27
         version: 1.6.27(@typescript-eslint/eslint-plugin@8.70.1(@typescript-eslint/parser@8.70.1(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3)(vitest@5.0.1)
@@ -187,6 +190,25 @@ importers:
       vscode-css-languageservice:
         specifier: 6.3.10
         version: 6.3.10
+
+  packages/stylelint-config:
+    dependencies:
+      stylelint:
+        specifier: ^17.0.0
+        version: 17.15.0(typescript@6.0.3)
+      stylelint-declaration-strict-value:
+        specifier: 1.12.1
+        version: 1.12.1(stylelint@17.15.0(typescript@6.0.3))
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.2
+        version: 26.6.2
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 5.0.1
+        version: 5.0.1(@types/node@26.6.2)(@vitest/browser-playwright@5.0.1)(@vitest/coverage-v8@5.0.1)(@vitest/ui@5.0.1)(vite@8.2.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/tokens:
     devDependencies:

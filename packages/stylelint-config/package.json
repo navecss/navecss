@@ -1,0 +1,57 @@
+{
+  "name": "@navecss/stylelint-config",
+  "version": "0.0.0",
+  "description": "Nave's own stylelint rules for a consumer's project: @nave known to stylelint, a check that values on its listed properties use a var() or an admitted keyword, and a check that flags outline: none and outline: 0.",
+  "keywords": [
+    "css",
+    "stylelint",
+    "stylelint-config",
+    "design-tokens",
+    "design-system"
+  ],
+  "homepage": "https://github.com/navecss/navecss/tree/main/packages/stylelint-config#readme",
+  "license": "MIT",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "stylelint": "^17.0.0"
+  },
+  "dependencies": {
+    "stylelint-declaration-strict-value": "1.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "6.0.3",
+    "vitest": "5.0.1"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint index.js test --max-warnings 0",
+    "lint:fix": "eslint index.js test --fix",
+    "test": "vitest run",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only",
+    "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navecss/navecss.git",
+    "directory": "packages/stylelint-config"
+  },
+  "bugs": {
+    "url": "https://github.com/navecss/navecss/issues"
+  }
+}

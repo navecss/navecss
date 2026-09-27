@@ -140,7 +140,7 @@ test('the real license-policy.json prose strings equal the cleared bytes', () =>
   )
   assert.equal(
     policy.prodPermissiveComment,
-    "Bucket B (dependencies/peerDependencies): permissive only auto-passes. Apache-2.0 is accepted but is NOT free — its NOTICE duty (§4(d)) becomes a real THIRD-PARTY-LICENSES obligation the moment anything under it is bundled (bucket A), which the no-inlined-dependency guard (packages/*/test/no-inlined-dependency.test.ts) is what keeps bucket A empty. Anything not on this list — including weak copyleft (MPL-2.0, LGPL) and strong copyleft (GPL, AGPL) — fails the gate and routes to the maintainer for a written licensing review before it can be added; a 'review item' is not an auto-pass, so it is not on this list until it has been reviewed by name, not by licence-family blanket.",
+    "Bucket B (dependencies/peerDependencies): permissive only auto-passes. Apache-2.0 is accepted but is NOT free — its NOTICE duty (§4(d)) becomes a real THIRD-PARTY-LICENSES obligation the moment anything under it is bundled (bucket A), which the no-inlined-dependency guard (packages/*/test/no-inlined-dependency.test.ts) is what keeps bucket A empty. Python-2.0 is accepted on the same terms: if anything under it were bundled, its notices would have to be kept and a brief summary of the changes included. Anything not on this list — including weak copyleft (MPL-2.0, LGPL) and strong copyleft (GPL, AGPL) — fails the gate and routes to the maintainer for a written licensing review before it can be added; a 'review item' is not an auto-pass, so it is not on this list until it has been reviewed by name, not by licence-family blanket.",
   )
   assert.equal(
     policy.prodPermissiveSchemaComment,

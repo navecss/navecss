@@ -39,6 +39,7 @@ jobs:
             core
             bridge
             cli
+            stylelint-config
             repo
             deps
             release

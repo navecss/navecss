@@ -23,5 +23,6 @@ ADRs record significant architectural choices: the context, the options consider
 | [0006](0006-nave-directive-stands-in-for-css-mixins.md) | `@nave` is a build-time stand-in for native CSS mixins, with a mapping, an adoption path and a sunset                      | accepted |
 | [0007](0007-es-modules-only-and-require.md)             | Nave ships ES modules only, with no CommonJS build, and every JavaScript entry point also loads through `require()`        | accepted |
 | [0008](0008-test-placement.md)                          | A test lives beside the one source file it tests; tests of the package as a whole live in `test/`; no test file ever ships | accepted |
+| [0009](0009-release-topology.md)                        | Release topology: which packages version together, and why `@navecss/stylelint-config` does not                            | accepted |
 
 _Still to back-fill: the first-party token build pipeline (its mechanism; the format it targets is 0002), pnpm + Turborepo + Changesets as the release topology, and the headless-bridge approach (Base UI / Radix)._
