@@ -46,6 +46,38 @@ test("diffStyleProperties catches a property's ignoreValues pattern changing wit
   })
 })
 
+test('diffStyleProperties catches a property missing from the recorded properties list, even when its ignoreValues entry is still present', () => {
+  const recorded = {
+    properties: ['font-size'],
+    ignoreValues: { 'font-size': 'a', fill: 'b' },
+  }
+  const emitted = {
+    properties: ['font-size', 'fill'],
+    ignoreValues: { 'font-size': 'a', fill: 'b' },
+  }
+  assert.deepEqual(diffStyleProperties(recorded, emitted), {
+    added: ['fill'],
+    missing: [],
+    changed: [],
+  })
+})
+
+test('diffStyleProperties catches a property removed from the recorded properties list only', () => {
+  const recorded = {
+    properties: ['font-size', 'fill'],
+    ignoreValues: { 'font-size': 'a', fill: 'b' },
+  }
+  const emitted = {
+    properties: ['font-size'],
+    ignoreValues: { 'font-size': 'a', fill: 'b' },
+  }
+  assert.deepEqual(diffStyleProperties(recorded, emitted), {
+    added: [],
+    missing: ['fill'],
+    changed: [],
+  })
+})
+
 test('sortedEntries orders keys alphabetically for a stable diff-friendly file', () => {
   assert.deepEqual(sortedEntries({ zebra: 1, apple: 2 }), { apple: 2, zebra: 1 })
 })

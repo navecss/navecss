@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * R5b's drift check: `@navecss/eslint-plugin`'s style rule shares `@navecss/stylelint-config`'s
- * R11b property list and allowlist without depending on that package (AC-01 forbids it in any
- * dependency field). This script is the link: it regenerates a plain-data copy from the shipped
- * config IN MEMORY (never a hand-copy) and diffs it, both ways, against the committed recorded
- * copy `packages/eslint-plugin/src/generated/style-properties.recorded.json`. `--write`
- * regenerates that file when the stylelint config's own property list changes on purpose.
+ * `@navecss/eslint-plugin`'s style rule shares `@navecss/stylelint-config`'s property list and
+ * allowlist without depending on that package (its manifest names neither that package nor
+ * stylelint in any dependency field). This script is the link: it regenerates a plain-data copy
+ * from the shipped config IN MEMORY (never a hand-copy) and diffs it, both ways, against the
+ * committed recorded copy `packages/eslint-plugin/src/generated/style-properties.recorded.json`.
+ * `--write` regenerates that file when the stylelint config's own property list changes on
+ * purpose.
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -42,15 +43,30 @@ export function sortedEntries(record) {
 }
 
 /**
-Symmetric added/missing/changed diff between the recorded and freshly emitted copies.
+Keys present on one side only, between two sets.
+ */
+function diffKeySets(recordedSet, emittedSet) {
+  return {
+    added: [...emittedSet].filter((key) => !recordedSet.has(key)),
+    missing: [...recordedSet].filter((key) => !emittedSet.has(key)),
+  }
+}
+
+/**
+Symmetric added/missing/changed diff between the recorded and freshly emitted copies. `properties`
+(the list the rule builds its entries from) and `ignoreValues`' keys are compared independently, so
+a copy where one drifts from the shipped config without the other still fails.
  */
 export function diffStyleProperties(recorded, emitted) {
-  const recordedKeys = new Set(Object.keys(recorded.ignoreValues))
-  const emittedKeys = new Set(Object.keys(emitted.ignoreValues))
-  const added = [...emittedKeys].filter((key) => !recordedKeys.has(key))
-  const missing = [...recordedKeys].filter((key) => !emittedKeys.has(key))
-  const changed = [...emittedKeys]
-    .filter((key) => recordedKeys.has(key))
+  const properties = diffKeySets(new Set(recorded.properties), new Set(emitted.properties))
+  const ignoreValueKeys = diffKeySets(
+    new Set(Object.keys(recorded.ignoreValues)),
+    new Set(Object.keys(emitted.ignoreValues)),
+  )
+  const added = [...new Set([...properties.added, ...ignoreValueKeys.added])]
+  const missing = [...new Set([...properties.missing, ...ignoreValueKeys.missing])]
+  const changed = Object.keys(emitted.ignoreValues)
+    .filter((key) => Object.hasOwn(recorded.ignoreValues, key))
     .filter((key) => recorded.ignoreValues[key] !== emitted.ignoreValues[key])
   return { added, missing, changed }
 }
