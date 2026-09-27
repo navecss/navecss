@@ -115,6 +115,60 @@ describe('AC-25: the README has every required section', () => {
   })
 })
 
+/**
+ * The anchor GitHub renders for a README heading: the heading's text lower-cased, every character
+ * that is not a letter, mark, number, connector, hyphen or space dropped, spaces turned into
+ * hyphens, and a repeated anchor suffixed `-1`, `-2` in order.
+ */
+function headingAnchors(markdown: string): Map<string, string> {
+  const withoutFences = markdown.replaceAll(/```[\s\S]*?```/g, '')
+  const anchors = new Map<string, string>()
+  const seen = new Map<string, number>()
+  for (const [, text] of withoutFences.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)) {
+    const base = text!
+      .toLowerCase()
+      .replaceAll(/[^\p{L}\p{M}\p{N}\p{Pc}\- ]/gu, '')
+      .replaceAll(' ', '-')
+    const count = seen.get(base) ?? 0
+    seen.set(base, count + 1)
+    anchors.set(count === 0 ? base : `${base}-${count}`, text!)
+  }
+  return anchors
+}
+
+/**
+The README text from the heading `text` up to the next heading of any level.
+ */
+function sectionUnder(heading: string): string {
+  const start = README.indexOf(heading)
+  const rest = README.slice(start + heading.length)
+  const next = rest.search(/^#{1,6}\s/m)
+  return next === -1 ? rest : rest.slice(0, next)
+}
+
+describe('AC-07: every rule links to its own README entry', () => {
+  const anchors = headingAnchors(README)
+
+  it('computes anchors the way GitHub does (a control on known headings)', () => {
+    expect(anchors.get('adopting-on-an-existing-codebase')).toBe('Adopting on an existing codebase')
+    expect(anchors.has('what-it-does-not-check')).toBe(true)
+  })
+
+  it.each(Object.entries(plugin.rules))(
+    '%s: meta.docs.url ends in the anchor of a README heading whose section names the rule',
+    (name, rule) => {
+      const url = (rule as { meta?: { docs?: { url?: string } } }).meta?.docs?.url ?? ''
+      expect(
+        url.startsWith('https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#'),
+      ).toBe(true)
+      const fragment = url.slice(url.indexOf('#') + 1)
+      const heading = anchors.get(fragment)
+      expect(heading, `no README heading renders the anchor #${fragment}`).toBeDefined()
+      expect(sectionUnder(heading!)).toContain(`@navecss/${name}`)
+    },
+  )
+})
+
 describe('AC-25: "what it does not check" statements hold as fixtures', () => {
   it('a camelCase string in cx() passes only if it names a real atom of the installed core', () => {
     const code = "import { cx } from '@navecss/core/cx'\nconst el = <div className={cx('flex')} />"

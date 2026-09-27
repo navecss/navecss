@@ -160,6 +160,28 @@ Stated as rules, not as gaps to be filled later:
 | `@navecss/count-escapes` | Off by default; reports every escape and disable comment, for ESLint's bulk suppressions  |
 | `@navecss/style-values`  | A literal value in a JSX `style` object, on a listed property the design system tokenizes |
 
+### Rule 1: the class channel
+
+`@navecss/class-channel` reads a JSX `className` or `class` value and reports each literal class
+that is not declared as your own, and each argument of `cx()` that is not one atom name. A helper
+call is read through its arguments; a `cx.raw()` call is left to the next rule.
+
+### Rule 2: the `cx.raw()` reason
+
+`@navecss/raw-reason` reports a `cx.raw()` call that carries literal class text the class channel
+would report anywhere else, unless the first thing inside its parentheses is a reason:
+`cx.raw(/* nave-escape: vendor date picker renders this class */ 'legacy-card')`.
+
+### The count
+
+`@navecss/count-escapes`, `off` in `recommended`: see [Count your escapes](#count-your-escapes).
+
+### Rule: style
+
+`@navecss/style-values` checks the literal values in a JSX `style` object: its row in the table
+above says what it reports, and [What it does not check](#what-it-does-not-check) what it leaves
+out.
+
 ## Trademark
 
 ESLint® is a registered trademark of the OpenJS Foundation. This package is not affiliated with or endorsed by the OpenJS Foundation or the ESLint project.
