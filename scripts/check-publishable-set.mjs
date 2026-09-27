@@ -15,12 +15,15 @@
  * `stage-release.mjs` rather than `changeset publish`, and it applies the
  * same filter by importing `isPublishable` below, so all of this holds for it.
  *
- * Exactly `@navecss/tokens`, `@navecss/core` and `@navecss/stylelint-config`
- * are meant to publish (`@navecss/bridge` publishes the first time it ships
- * non-empty content; `@navecss/cli` stays unpublished until the component
- * registry exists). `@navecss/stylelint-config` versions independently of
- * the `tokens`/`core` pair, because it depends on neither and its contract is
- * with Stylelint and the `@nave` grammar. This script fails the moment a
+ * Exactly `@navecss/tokens`, `@navecss/core`, `@navecss/stylelint-config` and
+ * `@navecss/eslint-plugin` are meant to publish (`@navecss/bridge` publishes
+ * the first time it ships non-empty content; `@navecss/cli` stays unpublished
+ * until the component registry exists). `@navecss/stylelint-config` and
+ * `@navecss/eslint-plugin` both version independently of the `tokens`/`core`
+ * pair: neither shares that pair's token/component contract (`stylelint-config`'s
+ * is with Stylelint and the `@nave` grammar; `eslint-plugin`'s is with ESLint
+ * and a peer range on `@navecss/core`, never a `fixed` group). This script
+ * fails the moment a
  * workspace package's `private` field stops matching that set — in either
  * direction, so a package that SHOULD stay private losing that field is
  * caught, and so is a package that should start publishing being left
@@ -47,6 +50,7 @@ export const PUBLISHABLE_SET = new Set([
   '@navecss/tokens',
   '@navecss/core',
   '@navecss/stylelint-config',
+  '@navecss/eslint-plugin',
 ])
 
 /**

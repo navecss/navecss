@@ -1,0 +1,66 @@
+{
+  "name": "@navecss/eslint-plugin",
+  "version": "0.0.0",
+  "description": "Nave's ESLint plugin: closes the JSX className/style escape hatches a consumer's own lint does not see, with every deliberate escape declared, reasoned and countable.",
+  "keywords": [
+    "eslint",
+    "eslintplugin",
+    "eslint-plugin",
+    "css",
+    "design-system",
+    "jsx"
+  ],
+  "homepage": "https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#readme",
+  "license": "MIT",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test --max-warnings 0",
+    "lint:fix": "eslint src test --fix",
+    "test": "vitest run",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only",
+    "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
+  },
+  "peerDependencies": {
+    "@navecss/core": ">=0.1.0 <1.0.0",
+    "eslint": "^9.24.0 || ^10.0.0"
+  },
+  "dependencies": {
+    "postcss-value-parser": "^4.2.0"
+  },
+  "devDependencies": {
+    "@navecss/core": "workspace:*",
+    "@types/node": "^26.6.2",
+    "@typescript-eslint/types": "8.70.1",
+    "eslint": "10.11.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navecss/navecss.git",
+    "directory": "packages/eslint-plugin"
+  },
+  "bugs": {
+    "url": "https://github.com/navecss/navecss/issues"
+  }
+}

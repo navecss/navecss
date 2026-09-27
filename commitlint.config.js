@@ -13,6 +13,7 @@ export default {
         'bridge', // @navecss/bridge
         'cli', // @navecss/cli
         'stylelint-config', // @navecss/stylelint-config
+        'eslint-plugin', // @navecss/eslint-plugin
         'repo', // root-level changes (config, CI, docs)
         'deps', // dependency updates
         'release', // version bumps, changelog

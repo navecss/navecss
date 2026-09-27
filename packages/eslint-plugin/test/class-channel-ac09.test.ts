@@ -1,0 +1,129 @@
+/**
+ * AC-eslint-plugin-09 covers: R5, R7.
+ */
+import { RuleTester } from 'eslint'
+import { describe, it } from 'vitest'
+
+import { classChannelRule } from '../src/rules/class-channel.ts'
+
+const languageOptions = {
+  ecmaVersion: 2024 as const,
+  sourceType: 'module' as const,
+  parserOptions: { ecmaFeatures: { jsx: true } },
+}
+
+const { parser: tsParser } = await import('typescript-eslint')
+
+const tsLanguageOptions = {
+  ecmaVersion: 2024 as const,
+  sourceType: 'module' as const,
+  parser: tsParser,
+  parserOptions: { ecmaFeatures: { jsx: true } },
+}
+
+const PREAMBLE = `
+import { cx } from '@navecss/core/cx'
+import { cx as ncx } from '@navecss/core/cx'
+import { IMPORTED } from './constants'
+const LEGACY = 'legacy-card'
+const A = 'legacy-card'
+const B = A
+let L = 'legacy-card'
+`
+
+const settings = { '@navecss': { allow: ['app-'] } }
+
+function jsx(expr: string): string {
+  return `${PREAMBLE}\nconst el = <div className=${expr} />`
+}
+
+const ruleTester = new RuleTester()
+
+describe('AC-09: literal-piece reading rows', () => {
+  const valid: { code: string }[] = [
+    { code: jsx('{className}') },
+    { code: jsx('{props.className}') },
+    { code: jsx('"app-shell"') },
+    { code: jsx('{`app-btn--${size}`}') },
+    { code: jsx('{`${cx("flex")} ${styles.root}`}') },
+    { code: jsx('{`   ${cx("flex")}\n  ${styles.root}  `}') },
+    { code: jsx('{B}') },
+    { code: jsx('{L}') },
+    { code: jsx('{IMPORTED}') },
+    { code: jsx('{`${styles.root}--wide`}') },
+    { code: jsx('{styles[size]}') },
+    { code: jsx('{getClass()}') },
+    { code: `${PREAMBLE}\nconst el = <div className />` },
+    { code: `${PREAMBLE}\nconst el = <div {...props} />` },
+    { code: `${PREAMBLE}\nconst el = <ClassNames classNames={{ root: 'legacy-card' }} />` },
+  ]
+
+  const invalid: { code: string }[] = [
+    { code: jsx('"legacy-card"') },
+    { code: jsx("{'legacy-card'}") },
+    { code: `${PREAMBLE}\nconst el = <div class="legacy-card" />` },
+    { code: `${PREAMBLE}\nconst el = <Card className="legacy-card" />` },
+    { code: jsx('{on ? "is-on" : styles.off}') },
+    { code: jsx('{on ? styles.off : "is-on"}') },
+    { code: jsx('{styles.a ?? "fallback"}') },
+    { code: jsx("{'fallback' || styles.a}") },
+    { code: jsx("{'a ' + styles.b}") },
+    { code: jsx('{`${cx("flex")} legacy-card`}') },
+    { code: jsx('{`btn--${size}`}') },
+    { code: jsx('{LEGACY}') },
+  ]
+
+  for (const testCase of valid) {
+    it(`passes: ${testCase.code.split('\n').at(-1)}`, () => {
+      ruleTester.run('class-channel', classChannelRule, {
+        valid: [{ ...testCase, languageOptions, settings }],
+        invalid: [],
+      })
+    })
+  }
+
+  for (const testCase of invalid) {
+    it(`reports: ${testCase.code.split('\n').at(-1)}`, () => {
+      ruleTester.run('class-channel', classChannelRule, {
+        valid: [],
+        invalid: [{ ...testCase, languageOptions, settings, errors: 1 }],
+      })
+    })
+  }
+
+  it('TypeScript-only rows: as/satisfies/! wrappers report', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [],
+      invalid: [
+        {
+          code: jsx("{'legacy-card' as string}"),
+          languageOptions: tsLanguageOptions,
+          settings,
+          errors: 1,
+        },
+        {
+          code: jsx("{'legacy-card' satisfies string}"),
+          languageOptions: tsLanguageOptions,
+          settings,
+          errors: 1,
+        },
+        {
+          code: jsx('{LEGACY!}'),
+          languageOptions: tsLanguageOptions,
+          settings,
+          errors: 1,
+        },
+      ],
+    })
+  })
+
+  it('cx.raw literal passes rule 1 (rule 2 applies separately)', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [
+        { code: jsx("{cx.raw('legacy-card')}"), languageOptions, settings },
+        { code: jsx("{ncx.raw('legacy-card')}"), languageOptions, settings },
+      ],
+      invalid: [],
+    })
+  })
+})
