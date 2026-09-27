@@ -65,6 +65,34 @@ describe('AC-directive-core-14 — the texts, owned by the core', () => {
   })
 })
 
+describe('AC-directive-core-11 — the bad-token message', () => {
+  it('quotes the token as written and names the fix', () => {
+    const text = formatDiagnostic({
+      code: 'bad-token',
+      text: '!important',
+      offset: 0,
+      endOffset: 0,
+    })
+
+    expect(text).toBe('@nave: unexpected "!important"; separate atom names with spaces')
+  })
+
+  it('quotes a comma the same way', () => {
+    const text = formatDiagnostic({ code: 'bad-token', text: ',', offset: 0, endOffset: 0 })
+
+    expect(text).toContain('unexpected ","')
+    expect(text).toContain('separate atom names with spaces')
+  })
+})
+
+describe('AC-directive-core-12 — the has-block message', () => {
+  it('gives the has-block text exactly', () => {
+    expect(formatDiagnostic({ code: 'has-block', offset: 0, endOffset: 0 })).toBe(
+      '@nave: a directive with a {} block is not supported',
+    )
+  })
+})
+
 describe('AC-directive-core-15 — the hint rule, boundaries', () => {
   const hinted: readonly [typed: string, hint: string][] = [
     ['interactve', 'interactive'],

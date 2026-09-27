@@ -31,6 +31,29 @@ describe('AC-directive-core-04 — the shipped placement semantics, through expa
     expect(norm(css)).toBe(norm(expected))
   })
 
+  it.each([
+    '.a { @NAVE flex; }',
+    '.a { @Nave flex; }',
+    String.raw`.a { @n\61ve flex; }`,
+    String.raw`.a { @n\61 ve flex; }`,
+    String.raw`.a { @\6e ave flex; }`,
+  ])('AC-directive-core-10: %s expands to display: flex', (input) => {
+    const { css, diagnostics } = expandText(input, {})
+
+    expect(diagnostics).toEqual([])
+    expect(css).toContain('display: flex')
+  })
+
+  it.each(['.a { @navex flex; }', '.a { @nave-x flex; }', '.a { @ｎave flex; }'])(
+    'AC-directive-core-10: %s passes through unchanged, no diagnostic',
+    (input) => {
+      const { css, diagnostics } = expandText(input, {})
+
+      expect(diagnostics).toEqual([])
+      expect(css).toBe(input)
+    },
+  )
+
   it('refuses @nave inside @keyframes at any depth, through onUnknown', () => {
     const { css, diagnostics } = expandText('@keyframes k { to { @nave flex; } }', {
       onUnknown: 'warn',

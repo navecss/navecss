@@ -1,8 +1,8 @@
 /**
  * Turns `plan()`'s per-directive answer into PostCSS nodes for one `@nave`
  * at-rule — split out of `postcss.ts`, one level further than the
- * resolver/emitter split #616 asked for, to keep that file under the
- * project's file-length lint.
+ * resolver/PostCSS-emitter split this refactor is built around, to keep
+ * that file under the project's file-length lint.
  */
 import type { AtRule as PostCSSAtRule, Result } from 'postcss'
 
@@ -174,6 +174,17 @@ function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap): PlanAtRuleResult 
 }
 
 /**
+ * R5(c): a directive with a `{}` block is a diagnostic through `onUnknown`,
+ * never a silent deletion — `plan()` never sees this (it only receives the
+ * prelude text, not whether a block follows), so it is entirely the
+ * adapter's own structural fact to report, mirroring `expandText()`'s own
+ * `item.blockStart !== undefined` check on its own item shape.
+ */
+function hasBlock(atRule: PostCSSAtRule): boolean {
+  return atRule.nodes !== undefined
+}
+
+/**
  * Walks one `@nave` at-rule against this run's resolved `extend` and folds
  * its diagnostics.
  */
@@ -184,6 +195,9 @@ export function handleAtRule(atRule: PostCSSAtRule, ctx: Omit<DirectiveContext, 
   const { isStyleRuleParent, parent, result: planResult } = planAtRule(atRule, ctx.extend)
 
   for (const diagnostic of planResult.diagnostics) reportDiagnostic(diagnostic, fullCtx)
+  if (hasBlock(atRule)) {
+    reportDiagnostic({ code: 'has-block', offset: 0, endOffset: atRule.toString().length }, fullCtx)
+  }
 
   insertDeclarations(atRule, planResult.declarations, planResult.wrapInAmpersand)
   atRule.remove()

@@ -190,6 +190,97 @@ describe('@nave outside a direct rule child is reported through onUnknown, not s
   })
 })
 
+describe('AC-directive-core-21 — an unrecognised onUnknown value fails closed, like "error"', () => {
+  it('throws on an unknown atom, the same as the default', async () => {
+    // @ts-expect-error — exercising a value outside the closed set on purpose
+    await expect(run('.a { @nave nope; }', { onUnknown: 'bogus' })).rejects.toThrow(
+      /unknown atom "nope"/,
+    )
+  })
+
+  it('does not select the most permissive mode (ignore) for a valid name', async () => {
+    // @ts-expect-error — exercising a value outside the closed set on purpose
+    const result = await run('.a { @nave flex; }', { onUnknown: 'bogus' })
+
+    expect(result).toContain('display: flex')
+  })
+})
+
+describe('AC-directive-core-10 — the directive name matches ASCII case-insensitively', () => {
+  it.each(['.a { @NAVE flex; }', '.a { @Nave flex; }'])(
+    '%s expands to display: flex',
+    async (css) => {
+      const result = await run(css)
+
+      expect(result).toContain('display: flex')
+    },
+  )
+
+  it.each(['.a { @navex flex; }', '.a { @nave-x flex; }', '.a { @ｎave flex; }'])(
+    '%s passes through unchanged, no diagnostic',
+    async (css) => {
+      const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(css, {
+        from: undefined,
+      })
+
+      expect(result.warnings()).toHaveLength(0)
+      expect(result.css).toBe(css)
+    },
+  )
+
+  // AC-10 also lists `@n\61ve`, `@n\61 ve` and `@\6e ave` (a hex escape inside
+  // the directive name). Not exercised through THIS leg: PostCSS's own
+  // parser splits `name`/`params` on the first non-word character, so
+  // `@n\61ve flex;` parses to `name: "n"`, `params: "\61ve flex"` (silently
+  // wrong) and `@\6e ave flex;` fails PostCSS's own parse outright
+  // ("At-rule without name") before any plugin runs — proven below. Both
+  // forms are exercised, and pass, through expandText()'s first-party
+  // tokenizer (test/directive/expand-text.test.ts), which does not depend on
+  // PostCSS's split. Raised for a feasibility ruling: whether this is a
+  // stated PostCSS-adapter limitation or needs a raw-source reparse.
+  it('documents that PostCSS itself, not this plugin, cannot parse a leading-escape directive name', async () => {
+    await expect(run(String.raw`.a { @\6e ave flex; }`)).rejects.toThrow(/At-rule without name/)
+  })
+})
+
+describe('AC-directive-core-12 — a directive directly in any nested group rule, not just @media', () => {
+  it.each([
+    ['@supports', '@supports (display: grid)'],
+    ['@container', '@container (width > 1px)'],
+    ['@layer', '@layer x'],
+    ['@scope', '@scope (.b)'],
+    ['@starting-style', '@starting-style'],
+  ])('%s: rejected by default, naming the & workaround', async (_label, prelude) => {
+    await expect(run(`.card { ${prelude} { @nave flex; } }`)).rejects.toThrow(
+      /must be the direct child of a CSS rule/,
+    )
+
+    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(
+      `.card { ${prelude} { @nave flex; } }`,
+      { from: undefined },
+    )
+    expect(result.warnings()[0]?.text).toContain('& { @nave')
+    expect(result.css).not.toContain('display: flex')
+  })
+})
+
+describe('AC-directive-core-12 — a directive with a {} block', () => {
+  it('rejects, by default, rather than silently dropping the block', async () => {
+    await expect(run('.a { @nave flex { color: red } }')).rejects.toThrow(
+      /a directive with a \{\} block is not supported/,
+    )
+  })
+
+  it('under warn, the block is not silently dropped with no diagnostic', async () => {
+    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(
+      '.a { @nave flex { color: red } }',
+      { from: undefined },
+    )
+
+    expect(result.warnings()[0]?.text).toContain('a directive with a {} block is not supported')
+  })
+})
+
 describe('isInsideKeyframes matches "at any depth", not just a direct step', () => {
   it('rejects inside a vendor-prefixed @-webkit-keyframes block', async () => {
     await expect(run('@-webkit-keyframes k { to { @nave focusRing; } }')).rejects.toThrow(

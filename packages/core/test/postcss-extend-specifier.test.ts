@@ -1,9 +1,9 @@
 /**
  * AC-directive-core-25: an `extend` module specifier declares itself as a
  * PostCSS dependency and is re-read on change, so a host's persistent cache
- * invalidates correctly (R15). The Next.js webpack/Turbopack fixture rows
- * are out of scope here — they land with whichever of this slice and #706
- * merges second (spec R15's own delivery note).
+ * invalidates correctly. The Next.js webpack/Turbopack fixture rows are out
+ * of scope here — they land once a separate, not-yet-merged change to how
+ * Next.js and CommonJS load this package's PostCSS entry point ships.
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
