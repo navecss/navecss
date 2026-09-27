@@ -69,9 +69,24 @@ const FIXTURES: { code: string; settings?: Record<string, unknown> }[] = [
     code: `${PRELUDE}// eslint-disable-next-line @navecss/class-channel\nconst el = <div className={cx.raw('legacy-card')} />`,
   },
   { code: 'const el = <div style={{ padding: 13, color: "red" }} />' },
+  { code: `${PRELUDE}const el = <div className={cx('flex block')} />` },
+  { code: `${PRELUDE}const el = <div className={cx('nave-flex')} />` },
+  { code: `${PRELUDE}const k = cx.raw('nave-flex')` },
+  { code: `${PRELUDE}const k = /* nave-escape: x */ cx.raw('legacy-card')` },
+  { code: `${PRELUDE}const el = <div className={on ? \`\${a && s.x}\` : ''} />` },
 ]
 
 const collected = FIXTURES.flatMap(({ code, settings }) => lint(code, settings))
+
+/**
+The messages among `messages` containing `word`, the one scan every floor below runs.
+ */
+function hitsFor(messages: string[], word: string, isCaseInsensitive = false): string[] {
+  const needle = isCaseInsensitive ? word.toLowerCase() : word
+  return messages.filter((message) =>
+    (isCaseInsensitive ? message.toLowerCase() : message).includes(needle),
+  )
+}
 
 describe('AC-07: the message floor', () => {
   it('collected at least one message per fixture row (the premise: something to scan)', () => {
@@ -90,8 +105,7 @@ describe('AC-07: the message floor', () => {
   ]
 
   it.each(noRemedyWords)('no message offers "%s" as a remedy (R4(c)/R4(d))', (word) => {
-    const hits = collected.filter((message) => message.includes(word))
-    expect(hits).toEqual([])
+    expect(hitsFor(collected, word)).toEqual([])
   })
 
   const noInternalWords = [
@@ -111,8 +125,7 @@ describe('AC-07: the message floor', () => {
   it.each(noInternalWords)(
     'no message names our path/process or a third-party product ("%s")',
     (word) => {
-      const hits = collected.filter((message) => message.includes(word))
-      expect(hits).toEqual([])
+      expect(hitsFor(collected, word)).toEqual([])
     },
   )
 
@@ -135,14 +148,17 @@ describe('AC-07: the message floor', () => {
   it.each(noAccessibilityWords)(
     'no message names an accessibility consequence, case-insensitively ("%s")',
     (word) => {
-      const hits = collected.filter((message) => message.toLowerCase().includes(word.toLowerCase()))
-      expect(hits).toEqual([])
+      expect(hitsFor(collected, word, true)).toEqual([])
     },
   )
 
-  it('a planted control catches a violation (proves the scan itself reports)', () => {
-    const planted = ['this message offers eslint-disable as a fix', 'reported by React']
-    expect(planted.some((message) => message.includes('eslint-disable'))).toBe(true)
-    expect(planted.some((message) => message.includes('React'))).toBe(true)
+  it('a planted control: a violation rendered by the real rules is caught by the same scan', () => {
+    // The offending construct reaches a message verbatim, so a literal class spelled like a
+    // forbidden word plants one in real rendered output.
+    const planted = lint(`${PRELUDE}const el = <div className="eslint-disable React Focus" />`)
+    expect(hitsFor(planted, 'eslint-disable')).toHaveLength(1)
+    expect(hitsFor(planted, 'React')).toHaveLength(1)
+    expect(hitsFor(planted, 'focus', true)).toHaveLength(1)
+    expect(hitsFor(collected, 'styles.x').length).toBeGreaterThan(0)
   })
 })
