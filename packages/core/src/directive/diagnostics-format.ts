@@ -83,7 +83,11 @@ function findHint(typed: string, extend: ExtendMap): Hint | undefined {
 
   const isHyphenated = typed.includes('-')
   const isNormalizesToExactlyOne = candidates.length === 1 && minDistance === 0
-  return { candidates, camelCaseNote: isHyphenated && isNormalizesToExactlyOne }
+  // A built-in atom's class is `atomClassMap`'s value; an extend atom has no
+  // class at all, so the sentence naming one would either be wrong (a
+  // shadowed built-in's stale class) or, as here, print "undefined".
+  const candidateHasClass = isNormalizesToExactlyOne && Object.hasOwn(atomClassMap, candidates[0]!)
+  return { candidates, camelCaseNote: isHyphenated && candidateHasClass }
 }
 
 /**
