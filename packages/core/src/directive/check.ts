@@ -7,6 +7,7 @@
  */
 import { readFile } from 'node:fs/promises'
 
+import { createPositionFinder } from './expand-text-diagnostics.ts'
 import { findSurvivors } from './find-survivors.ts'
 import { listCssFiles, type PathListing } from './list-css-files.ts'
 
@@ -29,32 +30,25 @@ export interface CheckResult {
 }
 
 /**
-1-based line/column (UTF-16 code units) for `offset` in `text`.
- */
-function positionAt(text: string, offset: number): { column: number; line: number } {
-  let line = 1
-  let lineStart = 0
-  for (let i = 0; i < offset; i++) {
-    if (text[i] !== '\n') {
-      continue
-    }
-
-    line++
-    lineStart = i + 1
-  }
-  return { line, column: offset - lineStart + 1 }
-}
-
-/**
 Reads `file` and appends one `Finding` per surviving directive it holds.
  */
 async function checkFile(file: string, findings: Finding[]): Promise<void> {
-  const css = await readFile(file, 'utf8')
+  const raw = await readFile(file, 'utf8')
+  // A leading BOM (Node's utf8 decoding keeps it as a literal U+FEFF, unlike
+  // a `TextDecoder` set to strip one) is not part of the stylesheet's own
+  // content: left in, it shifts every reported column by one relative to
+  // what the file actually looks like once opened in an editor that hides it.
+  const css = raw.startsWith('\u{FEFF}') ? raw.slice(1) : raw
+  // Built once per file, not once per survivor: a fresh linear scan per
+  // query made a large stylesheet with many directives quadratic in its
+  // own size (AC-25).
+  const positionAt = createPositionFinder(css)
   for (const survivor of findSurvivors(css)) {
-    const position = positionAt(css, survivor.offset)
+    const position = positionAt(survivor.offset)
     findings.push({
       file,
-      ...position,
+      line: position.line,
+      column: position.column + 1,
       text: survivor.text,
       ...(survivor.selector !== undefined && { selector: survivor.selector }),
     })

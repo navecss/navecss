@@ -50,7 +50,7 @@ function skipInert(tokens: readonly Token[], i: number, limit: number): number {
 }
 
 /**
-The shared, read-only state one `findSurvivors()` call threads through every recursive block walk.
+The shared, read-only state one `findSurvivors()` call threads through every block frame its walk visits.
  */
 class Scan {
   readonly css: string
@@ -94,23 +94,33 @@ function ruleSelector(scan: Scan, item: Item): string {
 }
 
 /**
-Recurses into `item`'s own `{}` content, if it has one.
+One block's own walk, resumable: `i` is mutated as items are consumed, so a
+child block can be walked to completion and this one picked back up right
+where it left off.
  */
-function walkChildBlock(scan: Scan, item: Item, selector: string | undefined): void {
-  if (item.blockStart === undefined || item.blockEnd === undefined) return
-  const childSelector = item.kind === 'rule' ? ruleSelector(scan, item) : selector
-  walkBlock(
-    scan,
-    skipInert(scan.tokens, item.blockStart, item.blockEnd),
-    item.blockEnd,
-    childSelector,
-  )
+interface BlockFrame {
+  i: number
+  readonly limit: number
+  readonly selector: string | undefined
 }
 
 /**
-One item's contribution: a survivor when it's a `nave` at-rule, a scan of its value when it's a declaration, a recursion when it carries a block.
+`item`'s own `{}` content as a new frame to walk, if it has one — pushed onto the work stack rather than recursed into, so nesting depth never grows the JS call stack (deeply nested CSS is otherwise a stack overflow, not a parse error, AC-25).
  */
-function visitItem(scan: Scan, item: Item, selector: string | undefined): void {
+function childFrameFor(scan: Scan, item: Item, selector: string | undefined): BlockFrame | undefined {
+  if (item.blockStart === undefined || item.blockEnd === undefined) return undefined
+  const childSelector = item.kind === 'rule' ? ruleSelector(scan, item) : selector
+  return {
+    i: skipInert(scan.tokens, item.blockStart, item.blockEnd),
+    limit: item.blockEnd,
+    selector: childSelector,
+  }
+}
+
+/**
+One item's contribution: a survivor when it's a `nave` at-rule, a scan of its value when it's a declaration, a child frame to walk next when it carries a block.
+ */
+function visitItem(scan: Scan, item: Item, selector: string | undefined): BlockFrame | undefined {
   switch (item.kind) {
     case 'at-rule': {
       if (isNaveAtKeyword(scan.tokens[item.start]!)) {
@@ -121,32 +131,42 @@ function visitItem(scan: Scan, item: Item, selector: string | undefined): void {
           selector,
         })
       }
-      walkChildBlock(scan, item, selector)
-      return
+      return childFrameFor(scan, item, selector)
     }
     case 'declaration': {
       scanForNaveTokens(scan, item.start, item.end, selector)
-      return
+      return undefined
     }
     case 'invalid': {
-      return
+      return undefined
     }
     case 'rule': {
-      walkChildBlock(scan, item, selector)
-      return
+      return childFrameFor(scan, item, selector)
     }
   }
 }
 
 /**
-Walks one block's items, in `[start, limit)`, reporting every surviving directive under `selector`.
+ * Walks every block reachable from `start`, in document order, with an
+ * explicit stack standing in for the call stack a recursive walk would
+ * otherwise use one frame of per level of nesting: a frame's child is
+ * pushed and, being now the top of the stack, is walked to completion
+ * before this frame's own next item is reached, exactly as a recursive
+ * call would order it — but the stack lives on the heap, not the VM's own
+ * call stack, so nesting depth never risks overflowing it.
  */
 function walkBlock(scan: Scan, start: number, limit: number, selector: string | undefined): void {
-  let i = skipInert(scan.tokens, start, limit)
-  while (i < limit) {
-    const item = readItem(scan.tokens, i, limit)
-    visitItem(scan, item, selector)
-    i = skipInert(scan.tokens, item.end, limit)
+  const stack: BlockFrame[] = [{ i: skipInert(scan.tokens, start, limit), limit, selector }]
+  while (stack.length > 0) {
+    const frame = stack.at(-1)!
+    if (frame.i >= frame.limit) {
+      stack.pop()
+      continue
+    }
+    const item = readItem(scan.tokens, frame.i, frame.limit)
+    frame.i = skipInert(scan.tokens, item.end, frame.limit)
+    const child = visitItem(scan, item, frame.selector)
+    if (child) stack.push(child)
   }
 }
 

@@ -128,3 +128,40 @@ describe('AC-directive-core-22 — navecss-core check, the exit contract', () =>
     expect(result.stylesheetsRead).toBe(1)
   })
 })
+
+describe('AC-directive-core-25 — check() stays fast and robust on a large stylesheet', () => {
+  it('reports 20000 survivors in a single file in under 2 seconds', async () => {
+    const filePath = await writeCss('a.css', '.b{@nave flex}'.repeat(20_000))
+
+    const start = performance.now()
+    const result = await check({ source: [filePath] })
+    expect(performance.now() - start).toBeLessThan(2000)
+
+    expect(result.status).toBe(1)
+    expect(result.findings).toHaveLength(20_000)
+  })
+
+  it('does not overflow the call stack on 5000 levels of nesting', async () => {
+    const filePath = await writeCss('d.css', '.a{'.repeat(5000) + '}'.repeat(5000))
+
+    const result = await check({ source: [filePath] })
+
+    expect(result.status).toBe(0)
+  })
+
+  it('counts a lone CR and a lone form feed as line breaks, not only LF', async () => {
+    const filePath = await writeCss('a.css', '.a{\r}\r.b{@nave flex}')
+
+    const result = await check({ source: [filePath] })
+
+    expect(result.findings).toMatchObject([{ line: 3, column: 4 }])
+  })
+
+  it('a leading BOM does not shift the column', async () => {
+    const filePath = await writeCss('a.css', '﻿.a{@nave flex}')
+
+    const result = await check({ source: [filePath] })
+
+    expect(result.findings).toMatchObject([{ line: 1, column: 4 }])
+  })
+})
