@@ -122,30 +122,30 @@ function childFrameFor(
 }
 
 /**
-One item's contribution: a survivor when it's a `nave` at-rule, a scan of its value when it's a declaration, a child frame to walk next when it carries a block.
+The end of the span still to be read as flat tokens (not as a nested block): the opening `{` when the item carries a block, its own end otherwise.
+ */
+function preludeEnd(item: Item): number {
+  return item.blockStart === undefined ? item.end : item.blockStart - 1
+}
+
+/**
+One item's contribution: every `nave`-named at-keyword in its own span
+(a rule/at-rule's prelude, an invalid item's whole span, or a declaration's
+value), plus a child frame to walk next when it carries a block. Its own
+span excludes the block, which `childFrameFor` walks separately, so nothing
+is counted twice.
  */
 function visitItem(scan: Scan, item: Item, selector: string | undefined): BlockFrame | undefined {
   switch (item.kind) {
-    case 'at-rule': {
-      if (isNaveAtKeyword(scan.tokens[item.start]!)) {
-        const atToken = scan.tokens[item.start]!
-        scan.survivors.push({
-          offset: atToken.startIndex,
-          text: naturalTextAfter(scan.css, atToken.startIndex),
-          selector,
-        })
-      }
+    case 'at-rule':
+    case 'rule': {
+      scanForNaveTokens(scan, item.start, preludeEnd(item), selector)
       return childFrameFor(scan, item, selector)
     }
-    case 'declaration': {
+    case 'declaration':
+    case 'invalid': {
       scanForNaveTokens(scan, item.start, item.end, selector)
       return undefined
-    }
-    case 'invalid': {
-      return undefined
-    }
-    case 'rule': {
-      return childFrameFor(scan, item, selector)
     }
   }
 }

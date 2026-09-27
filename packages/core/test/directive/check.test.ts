@@ -84,6 +84,31 @@ describe('AC-directive-core-23 — what the check counts as a surviving directiv
       expect(result.findings).toEqual([])
     }
   })
+
+  it.each([
+    ['.a @nave{color:red}', 'a stray at-keyword ahead of a rule, in its selector prelude'],
+    ['@media @nave{.a{color:red}}', 'a stray at-keyword in a group rule prelude'],
+    ['.a{color red @nave flex}', 'a stray at-keyword inside an invalid item'],
+    ['@import url(x.css) @nave flex;', 'a stray at-keyword trailing an at-rule prelude'],
+    ['.a:is(@nave flex) { color: red }', 'a stray at-keyword inside a selector function'],
+  ])(
+    'finds a directive-named at-keyword anywhere outside comments and strings: %s (%s)',
+    async (content) => {
+      const filePath = await writeCss('row.css', content)
+
+      const result = await check({ source: [filePath] })
+
+      expect(result.findings).toHaveLength(1)
+    },
+  )
+
+  it('keeps counting the declaration-value form exactly once', async () => {
+    const filePath = await writeCss('a.css', '.a { color: @nave flex; }')
+
+    const result = await check({ source: [filePath] })
+
+    expect(result.findings).toHaveLength(1)
+  })
 })
 
 describe('AC-directive-core-22 — navecss-core check, the exit contract', () => {
