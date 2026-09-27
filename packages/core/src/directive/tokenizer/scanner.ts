@@ -48,13 +48,17 @@ type Range = readonly [number, number]
 /**
  * The non-ASCII ranges accepted as an ident-start / ident code point. Not
  * every code point >= U+0080, which is the 2021 TR text: the current CSS
- * Syntax Level 3 Editor's Draft narrows "non-ASCII ident code point" to
- * exactly these fourteen ranges, and this table is that list, range for
- * range — excluding symbol and punctuation ranges inside and past Latin-1
- * Supplement, so U+00D7 MULTIPLICATION SIGN and U+00F7 DIVISION SIGN sit in
- * two of the gaps below. A surrogate code unit (lone, or half of a pair) and
- * U+0000 both qualify: `consumeLiteralCodePoint` reads either back as
- * U+FFFD, which IS ident-forming once decoded.
+ * Syntax Level 3 Editor's Draft narrows "non-ASCII ident code point" to a
+ * list of fifteen items, and this table is that list. Twelve rows hold the
+ * first fourteen items (U+200C and U+200D share a row, as do U+203F and
+ * U+2040). The fifteenth, every code point from U+10000 up, is the surrogate
+ * row, because the check sees one UTF-16 code unit at a time and the high
+ * half of a pair stands for the whole code point. The list leaves out symbol
+ * and punctuation ranges inside and past Latin-1 Supplement, so U+00D7
+ * MULTIPLICATION SIGN and U+00F7 DIVISION SIGN sit in two of the gaps below.
+ * Two inputs the list does not name also qualify: U+0000 (its own row) and a
+ * lone surrogate (inside the surrogate row). `consumeLiteralCodePoint` reads
+ * either back as U+FFFD, which IS ident-forming once decoded.
  */
 const NON_ASCII_IDENT_RANGES: readonly Range[] = [
   [0x00, 0x00], // NUL, read back as U+FFFD by consumeLiteralCodePoint
