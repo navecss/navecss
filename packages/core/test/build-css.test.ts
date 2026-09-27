@@ -5,8 +5,9 @@
  * functions, and the only comma-separated key in the real atoms.ts (`disabledState`'s) was
  * already hand-anchored, so `atomic-css.test.ts` and `disabled-state.browser.test.ts` could
  * not distinguish fixed from unfixed generator behaviour on this shape. These tests drive
- * `renderNested`/`renderAtBlock` directly with a synthetic atom carrying a PLAIN (not
- * pre-anchored) comma-separated key, so reverting either call site turns this file red.
+ * `renderNested`/`renderAtBlock` directly with a synthetic, already-resolved atom (the shape
+ * `resolve()` returns) carrying a PLAIN (not pre-anchored) comma-separated key, so reverting
+ * either call site turns this file red.
  *
  * `renderNested` covers the `pseudos` nested-under-the-class-rule path; `renderAtBlock`
  * covers the `@media`/`@container` nested-pseudos path — both were wired to
@@ -14,17 +15,21 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import type { AtomDefinition } from '../src/atoms.ts'
+import type { ConditionalBlock, ResolvedAtom } from '../src/directive/resolve.ts'
 
 import { renderAtBlock, renderNested } from '../scripts/build-css.ts'
 
 describe('renderNested — anchors every branch of a plain comma-separated pseudo key', () => {
   it('anchors both branches, not just the first', () => {
-    const atom: AtomDefinition = {
-      declarations: {},
-      pseudos: {
-        ':disabled, [data-inactive="true"]': { opacity: '0.4' },
-      },
+    const atom: ResolvedAtom = {
+      declarations: [],
+      blocks: [
+        {
+          kind: 'pseudo',
+          selector: ':disabled, [data-inactive="true"]',
+          declarations: [{ prop: 'opacity', value: '0.4' }],
+        },
+      ],
     }
 
     const [rendered] = renderNested(atom)
@@ -38,22 +43,40 @@ describe('renderNested — anchors every branch of a plain comma-separated pseud
 
 describe('renderAtBlock — anchors every branch of a plain comma-separated pseudo key inside @media/@container', () => {
   it('anchors both branches in a @media block, not just the first', () => {
-    const rendered = renderAtBlock('media', '(width >= 40rem)', {
-      pseudos: {
-        ':hover, [data-active="true"]': { color: 'red' },
-      },
-    })
+    const block: ConditionalBlock = {
+      kind: 'media',
+      condition: '(width >= 40rem)',
+      declarations: [],
+      pseudos: [
+        {
+          kind: 'pseudo',
+          selector: ':hover, [data-active="true"]',
+          declarations: [{ prop: 'color', value: 'red' }],
+        },
+      ],
+    }
+
+    const rendered = renderAtBlock(block)
 
     expect(rendered).toContain('&:hover, &[data-active="true"]')
     expect(rendered).not.toMatch(/&:hover,\s*\[data-active="true"\]/)
   })
 
   it('anchors both branches in a @container block, not just the first', () => {
-    const rendered = renderAtBlock('container', '(width >= 28rem)', {
-      pseudos: {
-        ':focus, [data-selected="true"]': { color: 'blue' },
-      },
-    })
+    const block: ConditionalBlock = {
+      kind: 'container',
+      condition: '(width >= 28rem)',
+      declarations: [],
+      pseudos: [
+        {
+          kind: 'pseudo',
+          selector: ':focus, [data-selected="true"]',
+          declarations: [{ prop: 'color', value: 'blue' }],
+        },
+      ],
+    }
+
+    const rendered = renderAtBlock(block)
 
     expect(rendered).toContain('&:focus, &[data-selected="true"]')
     expect(rendered).not.toMatch(/&:focus,\s*\[data-selected="true"\]/)

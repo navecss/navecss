@@ -25,9 +25,11 @@ import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { AtomDefinition, AtomName } from '../src/atoms.ts'
+import type { AtomName } from '../src/atoms.ts'
+import type { ConditionalBlock, Declaration, ResolvedAtom } from '../src/directive/resolve.ts'
 
 import { atoms, toClassName } from '../src/atoms.ts'
+import { resolve } from '../src/directive/resolve.ts'
 import { anchorSelectorList } from '../src/selector-utils.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -90,11 +92,6 @@ const HEADER = `/*
  */
 `
 
-interface MediaBlock {
-  declarations?: Record<string, string>
-  pseudos?: Record<string, Record<string, string>>
-}
-
 const INDENT = '  '
 
 /**
@@ -106,72 +103,54 @@ const indent = (block: string, depth: number): string =>
     .map((line) => (line === '' ? line : INDENT.repeat(depth) + line))
     .join('\n')
 
-const renderDecls = (decls: Record<string, string>): string =>
-  Object.entries(decls)
-    .map(([p, v]) => `${INDENT}${p}: ${v};`)
-    .join('\n')
+const renderDecls = (decls: readonly Declaration[]): string =>
+  decls.map(({ prop, value }) => `${INDENT}${prop}: ${value};`).join('\n')
 
 /**
- * Renders a nested @media / @container block.
- * Declarations are wrapped in `& { … }` for the same reason the PostCSS
- * plugin wraps them: bare declarations inside a nested at-rule need
- * CSSNestedDeclarations, which is past the Baseline 2024 floor.
+ * Renders one already-resolved @media / @container block (R1's `resolve()`
+ * — build-css.ts never reads an atom's `media`/`container` shape itself,
+ * AC-directive-core-02). Declarations are wrapped in `& { … }` for the same
+ * reason the PostCSS plugin wraps them: bare declarations inside a nested
+ * at-rule need CSSNestedDeclarations, which is past the Baseline 2024 floor.
+ * `resolve()` never returns an empty block, so there is always something here.
  */
-export function renderAtBlock(
-  atName: string,
-  condition: string,
-  block: MediaBlock,
-): string | undefined {
+export function renderAtBlock(block: ConditionalBlock): string {
   const inner: string[] = []
 
-  if (block.declarations) {
+  if (block.declarations.length > 0) {
     inner.push(`& {\n${renderDecls(block.declarations)}\n}`)
   }
 
-  if (block.pseudos) {
-    for (const [pseudo, pseudoDecls] of Object.entries(block.pseudos)) {
-      inner.push(`${anchorSelectorList(pseudo)} {\n${renderDecls(pseudoDecls)}\n}`)
-    }
+  for (const pseudo of block.pseudos) {
+    inner.push(`${anchorSelectorList(pseudo.selector)} {\n${renderDecls(pseudo.declarations)}\n}`)
   }
 
-  if (inner.length === 0) return undefined
-  return `@${atName} ${condition} {\n${indent(inner.join('\n\n'), 1)}\n}`
+  return `@${block.kind} ${block.condition} {\n${indent(inner.join('\n\n'), 1)}\n}`
 }
 
 /**
- * The nested contents of an atom's class rule, in declaration order.
+ * The nested contents of a resolved atom's class rule, in `resolve()`'s own
+ * order (pseudos, then media, then container).
  */
-export function renderNested(atom: AtomDefinition): string[] {
-  const nested: string[] = []
-
-  if (atom.pseudos) {
-    for (const [pseudo, pseudoDecls] of Object.entries(atom.pseudos)) {
-      nested.push(`${anchorSelectorList(pseudo)} {\n${renderDecls(pseudoDecls)}\n}`)
-    }
-  }
-
-  for (const atName of ['media', 'container'] as const) {
-    const blocks = (atom[atName] ?? {}) as Record<string, MediaBlock>
-    for (const [condition, block] of Object.entries(blocks)) {
-      const rendered = renderAtBlock(atName, condition, block)
-      if (rendered) nested.push(rendered)
-    }
-  }
-
-  return nested
+export function renderNested(atom: ResolvedAtom): string[] {
+  return atom.blocks.map((block) =>
+    block.kind === 'pseudo'
+      ? `${anchorSelectorList(block.selector)} {\n${renderDecls(block.declarations)}\n}`
+      : renderAtBlock(block),
+  )
 }
 
 /**
  * Generates the full CSS string for a single atom: one class rule, with
- * pseudos and at-rules nested inside it. Same shape the @nave directive emits.
+ * pseudos and at-rules nested inside it. Same shape the @nave directive
+ * emits, because both render `resolve()`'s own data (AC-directive-core-02).
  */
 function generateAtomCSS(name: AtomName): string {
-  const atom = atoms[name] as AtomDefinition
+  const atom = resolve([name]).resolved[name]!
   const className = toClassName(name)
 
   const body: string[] = []
-  const baseDecls = Object.entries(atom.declarations)
-  if (baseDecls.length > 0) body.push(renderDecls(atom.declarations))
+  if (atom.declarations.length > 0) body.push(renderDecls(atom.declarations))
   body.push(...renderNested(atom).map((block) => indent(block, 1)))
 
   return `.${className} {\n${body.join('\n\n')}\n}`
