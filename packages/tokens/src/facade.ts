@@ -95,6 +95,11 @@ export { formatVersionSkewFact } from './validate-report.ts'
 
 const PACKAGE_ROOT = findPackageRoot(import.meta.url)
 
+// The write-error codes that mean `--out` (or a path inside it) already exists as something
+// other than the directory `writeOutputs` expects — see the `try`/`catch` around its call,
+// below, for why only these three are treated as a usage error.
+const OUT_PATH_CONFLICT_CODES = new Set(['EEXIST', 'EISDIR', 'ENOTDIR'])
+
 // ---------------------------------------------------------------------------
 // build
 // ---------------------------------------------------------------------------
@@ -209,14 +214,20 @@ export async function build(options: TokensBuildOptions): Promise<TokensBuildRes
   )
   const allFiles = [...merged, ...theming.files]
 
-  // A raw `EEXIST`/`ENOTDIR` here means `--out` (or a path inside it) already exists as
-  // something other than a directory — a usage error about the caller's own argument (R4),
-  // not a pipeline failure on the input's merits. Narrowed to Node's own tagged system errors
-  // (a `code` string), so a genuine bug inside `writeOutputs` still surfaces as itself.
+  // `EEXIST`/`ENOTDIR`/`EISDIR` here mean `--out` (or a path inside it) already exists as
+  // something other than the directory this write expects — a usage error about the caller's
+  // own argument (R4), not a pipeline failure on the input's merits. Narrowed to exactly those
+  // three codes, so a write failure with a different cause (`ENOSPC`, `EIO`, `EACCES`, and so
+  // on) still surfaces as itself rather than being misreported as a bad `--out`.
   try {
     await writeOutputs(allFiles)
   } catch (error) {
-    if (error instanceof Error && 'code' in error && typeof error.code === 'string') {
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      typeof error.code === 'string' &&
+      OUT_PATH_CONFLICT_CODES.has(error.code)
+    ) {
       throw new UsageError(`could not write to --out="${options.outDir}": ${error.message}`)
     }
     throw error

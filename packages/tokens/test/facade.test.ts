@@ -430,6 +430,68 @@ describe('AC-token-build-16 covers: R16', () => {
   })
 })
 
+describe('build() narrows the writeOutputs catch to a genuine --out path conflict', () => {
+  it('a write failure unrelated to --out (ENOSPC) rejects with that error, not a UsageError', async () => {
+    const scratch = scratchDir()
+    const outDir = path.join(scratch, 'out')
+    const diskFullError = Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
+
+    vi.resetModules()
+    try {
+      vi.doMock('../src/builder.ts', async () => {
+        const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
+        return {
+          ...actual,
+          writeOutputs: () => Promise.reject(diskFullError),
+        }
+      })
+      const facade = await import('../src/facade.ts')
+
+      let caught: unknown
+      try {
+        await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBe(diskFullError)
+      expect(caught).not.toBeInstanceOf(facade.UsageError)
+    } finally {
+      vi.doUnmock('../src/builder.ts')
+      vi.resetModules()
+    }
+  })
+
+  it('a write failure that IS an --out path conflict (EEXIST) rejects with a UsageError naming --out', async () => {
+    const scratch = scratchDir()
+    const outDir = path.join(scratch, 'out')
+    const pathConflict = Object.assign(new Error('file already exists'), { code: 'EEXIST' })
+
+    vi.resetModules()
+    try {
+      vi.doMock('../src/builder.ts', async () => {
+        const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
+        return {
+          ...actual,
+          writeOutputs: () => Promise.reject(pathConflict),
+        }
+      })
+      const facade = await import('../src/facade.ts')
+
+      let caught: unknown
+      try {
+        await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBeInstanceOf(facade.UsageError)
+      expect((caught as Error).message).toMatch(/--out/)
+    } finally {
+      vi.doUnmock('../src/builder.ts')
+      vi.resetModules()
+    }
+  })
+})
+
 /**
  * Mechanical detection ONLY. `composeBuild`'s DTCG-half names and the
  * theming half's emitted names are merged, string-appended, into the SAME layer and the SAME
