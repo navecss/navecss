@@ -74,24 +74,60 @@ function isMirrorCloser(openerType: string, closerType: string): boolean {
 }
 
 /**
-`undefined` when this closer belongs to the ENCLOSING block (depth was already 0); otherwise the new depth and, for a `}` that returned depth to 0, the block it closed. A closer that does not mirror the innermost open bracket closes nothing — CSS Syntax 3's "consume a component value" returns a token it does not recognise as its own rather than treating it as a terminator — so it passes through at the same depth, still searching for its OWN opener's real mirror.
+Mutable state one `scanItem()` call threads through every closer it sees: the open-bracket stack and the current depth.
  */
-function closeOne(
+interface ScanState {
+  opens: number[]
+  depth: number
+  readonly start: number
+}
+
+/**
+One step of `scanItem()`'s loop over a closer token: the index to resume scanning from, and a `result` when the item ends right here.
+ */
+interface CloserStep {
+  readonly nextIndex: number
+  readonly result?: ScanResult
+}
+
+/**
+ * Steps `state` over the closer token at `i`. A closer with nothing open at
+ * all (depth 0) belongs to the enclosing block UNLESS this is the item's own
+ * first token, in which case it is a stray closer with no opener anywhere in
+ * `[start, limit)` — consumed as its own one-token invalid item so the walk
+ * advances (ceding an EMPTY span back to a caller that re-reads the same
+ * token is what used to loop forever). A closer that does not mirror the
+ * innermost open bracket closes nothing — CSS Syntax 3's "consume a
+ * component value" returns such a token as itself, not a terminator — so
+ * it passes through at the same depth, still seeking its own mirror.
+ */
+function stepOverCloser(
   tokens: readonly Token[],
-  opens: number[],
-  depth: number,
+  state: ScanState,
   i: number,
   type: string,
-): { closedBlock?: TrailingBlock; depth: number } | undefined {
-  if (depth === 0) return undefined
-  const openIndex = opens[opens.length - 1]!
-  if (!isMirrorCloser(tokens[openIndex]!.type, type)) return { depth }
-  opens.pop()
-  const nextDepth = depth - 1
-  if (nextDepth === 0 && type === '}-token') {
-    return { depth: nextDepth, closedBlock: { openIndex, closeIndex: i } }
+): CloserStep {
+  if (state.depth === 0) {
+    if (i === state.start) {
+      return { nextIndex: i + 1, result: { end: i + 1, consumedSemicolon: false } }
+    }
+    return { nextIndex: i, result: { end: i, consumedSemicolon: false } }
   }
-  return { depth: nextDepth }
+  const openIndex = state.opens.at(-1)!
+  if (!isMirrorCloser(tokens[openIndex]!.type, type)) return { nextIndex: i + 1 }
+  state.opens.pop()
+  state.depth--
+  if (type === '}-token' && state.depth === 0) {
+    return {
+      nextIndex: i + 1,
+      result: {
+        end: i + 1,
+        consumedSemicolon: false,
+        trailingBlock: { openIndex, closeIndex: i },
+      },
+    }
+  }
+  return { nextIndex: i + 1 }
 }
 
 /**
@@ -102,44 +138,32 @@ function closeOne(
  * `}` with no block ever opened (neither consumed).
  */
 function scanItem(tokens: readonly Token[], start: number, limit: number): ScanResult {
-  const opens: number[] = []
-  let depth = 0
+  const state: ScanState = { opens: [], depth: 0, start }
   let i = start
   while (i < limit) {
     const type = tokens[i]!.type
     if (OPENERS.has(type)) {
-      opens.push(i)
-      depth++
+      state.opens.push(i)
+      state.depth++
       i++
       continue
     }
     if (CLOSERS.has(type)) {
-      const closed = closeOne(tokens, opens, depth, i, type)
-      if (!closed) {
-        // A depth-0 closer with nothing consumed yet for this item is a
-        // stray closer with no opener to match anywhere in `[start, limit)`
-        // — the caller already excludes the enclosing block's own
-        // terminator from that range. Consume it as its own one-token
-        // invalid item so the walk advances; ceding an EMPTY span back to a
-        // caller that immediately re-reads the same token is what used to
-        // loop forever.
-        if (i === start) return { end: i + 1, consumedSemicolon: false }
-        return { end: i, consumedSemicolon: false } // belongs to the enclosing block
-      }
-      depth = closed.depth
-      i++
-      if (closed.closedBlock)
-        return { end: i, consumedSemicolon: false, trailingBlock: closed.closedBlock }
+      const step = stepOverCloser(tokens, state, i, type)
+      if (step.result) return step.result
+      i = step.nextIndex
       continue
     }
-    if (depth === 0 && type === 'semicolon-token') return { end: i + 1, consumedSemicolon: true }
+    if (type === 'semicolon-token' && state.depth === 0) {
+      return { end: i + 1, consumedSemicolon: true }
+    }
     i++
   }
-  if (opens.length > 0 && tokens[opens[0]!]!.type === '{-token') {
+  if (state.opens.length > 0 && tokens[state.opens[0]!]!.type === '{-token') {
     return {
       end: i,
       consumedSemicolon: false,
-      trailingBlock: { openIndex: opens[0]!, closeIndex: undefined },
+      trailingBlock: { openIndex: state.opens[0]!, closeIndex: undefined },
     }
   }
   return { end: i, consumedSemicolon: false }

@@ -62,12 +62,12 @@ interface Hint {
 }
 
 /**
-R6's hint rule: candidates at the minimum distance, when that distance is <= 2 and strictly below half the normalized typed name's length.
+Every vocabulary name, grouped by its edit distance from `normalizedTyped`, plus the minimum distance seen.
  */
-function findHint(typed: string, extend: ExtendMap): Hint | undefined {
-  const normalizedTyped = normalize(typed)
-  const names = vocabulary(extend)
-
+function groupByDistance(
+  normalizedTyped: string,
+  names: readonly string[],
+): { byDistance: Map<number, string[]>; minDistance: number } {
   let minDistance = Infinity
   const byDistance = new Map<number, string[]>()
   for (const name of names) {
@@ -76,18 +76,34 @@ function findHint(typed: string, extend: ExtendMap): Hint | undefined {
     byDistance.get(d)!.push(name)
     if (d < minDistance) minDistance = d
   }
+  return { byDistance, minDistance }
+}
+
+/**
+ * Whether the hint rule's camelCase sentence applies: a hyphenated input
+ * that normalises to exactly one candidate, and that candidate is a
+ * built-in atom (the only ones with a class at all — an extend atom's
+ * sentence would either be wrong, a shadowed built-in's stale class, or
+ * print "undefined").
+ */
+function hasCamelCaseNote(typed: string, candidates: readonly string[], minDistance: number): boolean {
+  if (minDistance !== 0 || candidates.length !== 1) return false
+  if (!typed.includes('-')) return false
+  return Object.hasOwn(atomClassMap, candidates[0]!)
+}
+
+/**
+R6's hint rule: candidates at the minimum distance, when that distance is <= 2 and strictly below half the normalized typed name's length.
+ */
+function findHint(typed: string, extend: ExtendMap): Hint | undefined {
+  const normalizedTyped = normalize(typed)
+  const { byDistance, minDistance } = groupByDistance(normalizedTyped, vocabulary(extend))
 
   if (minDistance > 2 || minDistance >= normalizedTyped.length / 2) return undefined
   const candidates = byDistance.get(minDistance) ?? []
   if (candidates.length === 0) return undefined
 
-  const isHyphenated = typed.includes('-')
-  const isNormalizesToExactlyOne = candidates.length === 1 && minDistance === 0
-  // A built-in atom's class is `atomClassMap`'s value; an extend atom has no
-  // class at all, so the sentence naming one would either be wrong (a
-  // shadowed built-in's stale class) or, as here, print "undefined".
-  const candidateHasClass = isNormalizesToExactlyOne && Object.hasOwn(atomClassMap, candidates[0]!)
-  return { candidates, camelCaseNote: isHyphenated && candidateHasClass }
+  return { candidates, camelCaseNote: hasCamelCaseNote(typed, candidates, minDistance) }
 }
 
 /**
