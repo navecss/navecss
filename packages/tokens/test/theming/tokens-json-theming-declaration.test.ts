@@ -12,7 +12,7 @@ import { STEP_TABLE, stepLightness } from '../../src/theming/step-table.ts'
  * two, so a declared value could drift from what the source actually computes with every other
  * `@navecss/tokens` test still green.
  *
- * This file checks exactly that relation, for the two declared facts that restate a source
+ * This file checks exactly that relation, for the declared values that restate a source
  * computation: `seeds.primary.oklch`, `seeds.danger.oklch`, and the three numbers embedded in
  * the `stepTable` string (its row count, its first and last step, and the lightness of its
  * named row). It does not check `achromaticBranch` or `adjacency.comment`: those describe
@@ -39,6 +39,15 @@ function readTheming(): TokensJsonTheming {
     $extensions: { 'dev.navecss.theming': TokensJsonTheming }
   }
   return parsed.$extensions['dev.navecss.theming']
+}
+
+/**
+ * The `the <step> row at L <lightness>` fact in the `stepTable` prose, or `undefined` when
+ * absent.
+ */
+function namedRowFact(text: string): { lightness: number; step: number } | undefined {
+  const match = /the\s+(\d+)\s+row\s+at\s+L\s+(\d+(?:\.\d+)?)/.exec(text)
+  return match ? { lightness: Number(match[2]), step: Number(match[1]) } : undefined
 }
 
 describe('tokens.json theming declaration matches its source of truth', () => {
@@ -68,9 +77,12 @@ describe('tokens.json theming declaration matches its source of truth', () => {
   })
 
   it("the stepTable string's named row and its lightness match STEP_TABLE", () => {
-    const match = /the\s+(\d+)\s+row\s+at\s+L\s+([\d.]+)/.exec(theming.stepTable)
-    expect(match, `no "the <N> row at L <N>" fact found in: ${theming.stepTable}`).not.toBeNull()
-    const [, step, lightness] = match!
-    expect(stepLightness(Number(step))).toBe(Number(lightness))
+    const fact = namedRowFact(theming.stepTable)
+    expect(fact, `no "the <N> row at L <N>" fact found in: ${theming.stepTable}`).toBeDefined()
+    expect(stepLightness(fact!.step)).toBe(fact!.lightness)
+  })
+
+  it('reads the named row the same when the stepTable sentence ends in a full stop', () => {
+    expect(namedRowFact(`${theming.stepTable}.`)).toEqual(namedRowFact(theming.stepTable))
   })
 })
