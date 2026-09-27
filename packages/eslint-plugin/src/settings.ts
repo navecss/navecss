@@ -82,28 +82,57 @@ function compileAllowEntry(raw: string): CompiledAllowEntry {
   return { raw, isPattern: true, test: (token) => compiled.test(token) }
 }
 
+type SettingsField = 'allow' | 'cxModules' | 'helpers'
+
 /**
-Validates one settings field is an array (or absent), throwing a configuration error otherwise.
+How a settings entry is shown in a configuration error: a string quoted, anything else as written.
  */
-function readArrayField(
-  raw: Partial<{ allow: unknown; cxModules: unknown; helpers: unknown }> | undefined,
-  field: 'allow' | 'cxModules' | 'helpers',
-): string[] | undefined {
-  const value = raw?.[field]
+function describeEntry(entry: unknown): string {
+  if (typeof entry === 'string') return JSON.stringify(entry)
+  if (entry instanceof RegExp) return String(entry)
+  return JSON.stringify(entry) ?? String(entry)
+}
+
+/**
+ * Validates one settings field: absent, or an array of strings. Anything else is a configuration
+ * error naming the field and the offending entry, never a raw exception from further in.
+ */
+function readArrayField(raw: Record<string, unknown>, field: SettingsField): string[] | undefined {
+  const value = raw[field]
   if (value === undefined) return undefined
   if (!Array.isArray(value)) {
     throw new NaveSettingsError(`${NAMESPACE} settings: "${field}" must be an array of strings.`)
   }
+  const badIndex = value.findIndex((candidate: unknown) => typeof candidate !== 'string')
+  if (badIndex !== -1) {
+    throw new NaveSettingsError(
+      `${NAMESPACE} settings: "${field}" entry ${describeEntry(value[badIndex])} is a configuration error: every entry must be a string.`,
+    )
+  }
   return value as string[]
+}
+
+/**
+ * The `settings['@navecss']` object itself: absent, or a plain object. Keys other than the three
+ * this package reads are ignored, since `settings` is a namespace a consumer's other tools may
+ * share.
+ */
+function readNamespace(context: Rule.RuleContext): Record<string, unknown> {
+  const raw = (context.settings as Record<string, unknown>)[NAMESPACE]
+  if (raw === undefined) return {}
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new NaveSettingsError(
+      `${NAMESPACE} settings: settings['${NAMESPACE}'] must be an object with "allow", "cxModules" and "helpers" keys, not ${describeEntry(raw)}.`,
+    )
+  }
+  return raw as Record<string, unknown>
 }
 
 /**
 Reads and validates `settings['@navecss']`, applying every default.
  */
 export function getNaveSettings(context: Rule.RuleContext): NaveSettings {
-  const raw = (context.settings as Record<string, unknown>)[NAMESPACE] as
-    Partial<{ allow: unknown; cxModules: unknown; helpers: unknown }> | undefined
-
+  const raw = readNamespace(context)
   return {
     allow: readArrayField(raw, 'allow') ?? [],
     cxModules: readArrayField(raw, 'cxModules') ?? [],

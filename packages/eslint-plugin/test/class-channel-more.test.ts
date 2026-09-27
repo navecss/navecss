@@ -1,8 +1,8 @@
 /**
  * AC-eslint-plugin-08, -11, -12, -13, -14 cover: R4, R5, R5a, R6, R7.
  */
-import { RuleTester } from 'eslint'
-import { describe, it } from 'vitest'
+import { Linter, RuleTester } from 'eslint'
+import { describe, expect, it } from 'vitest'
 
 import { classChannelRule } from '../src/rules/class-channel.ts'
 
@@ -406,5 +406,51 @@ describe('one report per offending class', () => {
         },
       ],
     })
+  })
+})
+
+describe('AC-12 (R6): settings that are not the declared shape are configuration errors', () => {
+  const linter = new Linter()
+
+  function lintWith(navecss: unknown): () => void {
+    return () =>
+      linter.verify('const el = <div className="app-shell" />', {
+        languageOptions,
+        plugins: { '@navecss': { rules: { 'class-channel': classChannelRule } } },
+        rules: { '@navecss/class-channel': 'error' },
+        settings: { '@navecss': navecss },
+      })
+  }
+
+  // A settings value is JSON, so `null` is a value a consumer's config can really hold.
+  const JSON_NULL: unknown = JSON.parse('null')
+
+  it.each([
+    ['allow', 42, '42'],
+    ['allow', JSON_NULL, 'null'],
+    ['allow', /^app-/u, '/^app-/u'],
+    ['cxModules', JSON_NULL, 'null'],
+    ['helpers', 1, '1'],
+  ])(
+    'a non-string %s entry (%s) names the key and the entry, never a raw TypeError',
+    (key, entry, shown) => {
+      const run = lintWith({ [key]: [entry] })
+      expect(run).toThrow(`"${key}" entry ${shown}`)
+      expect(run).not.toThrow(TypeError)
+    },
+  )
+
+  it.each([
+    ['a string', 'app-'],
+    ['an array', ['app-']],
+    ['a number', 42],
+  ])("settings['@navecss'] that is %s is a configuration error", (_label, value) => {
+    const run = lintWith(value)
+    expect(run).toThrow(/settings\['@navecss'\] must be an object/)
+    expect(run).not.toThrow(TypeError)
+  })
+
+  it('an unknown key is ignored: the settings namespace is shared', () => {
+    expect(lintWith({ allow: ['app-'], allowed: ['x'] })).not.toThrow()
   })
 })
