@@ -19,6 +19,7 @@ import type { AtRule, Declaration, Rule } from 'postcss'
 import postcss from 'postcss'
 
 import type { AtomDefinition } from './atoms.ts'
+
 import { anchorSelectorList } from './selector-utils.ts'
 
 /**
@@ -39,7 +40,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * having to special-case comments itself: reshaped or not, only a value that comes back
  * unchanged round-trips.
  */
-function declarationIsValid(prop: string, value: string): boolean {
+function isDeclarationValid(prop: string, value: string): boolean {
   let root
   try {
     root = postcss.parse(`a{${prop}:${value}}`)
@@ -60,8 +61,8 @@ function declarationIsValid(prop: string, value: string): boolean {
  * cases can be told apart in the error message; the value placeholder (`0`) is a syntactically
  * neutral token, never itself the reason a check here fails.
  */
-function propIsValid(prop: string): boolean {
-  return declarationIsValid(prop, '0')
+function isPropValid(prop: string): boolean {
+  return isDeclarationValid(prop, '0')
 }
 
 /**
@@ -70,7 +71,7 @@ function propIsValid(prop: string): boolean {
  * that opens a second rule, or that `anchorSelectorList` itself refuses (an empty branch), is
  * invalid.
  */
-function selectorIsValid(key: string): boolean {
+function isSelectorValid(key: string): boolean {
   let selector: string
   try {
     selector = anchorSelectorList(key)
@@ -92,7 +93,7 @@ function selectorIsValid(key: string): boolean {
  * Whether `condition` parses as exactly one `@media`/`@container` at-rule of that name, with no
  * body, whose `params` is the condition's own trimmed text.
  */
-function conditionIsValid(atName: 'container' | 'media', condition: string): boolean {
+function isConditionValid(atName: 'container' | 'media', condition: string): boolean {
   let root
   try {
     root = postcss.parse(`@${atName} ${condition}{}`)
@@ -128,10 +129,10 @@ function fail(describedAs: string, value: string): never {
 function assertDeclarationsSafe(declarations: unknown, where: string): void {
   if (!isPlainObject(declarations)) return
   for (const [prop, value] of Object.entries(declarations)) {
-    if (typeof prop === 'string' && !propIsValid(prop)) {
+    if (typeof prop === 'string' && !isPropValid(prop)) {
       fail(`${where}'s declaration property "${prop}"`, prop)
     }
-    if (typeof value === 'string' && !declarationIsValid(prop, value)) {
+    if (typeof value === 'string' && !isDeclarationValid(prop, value)) {
       fail(`${where}'s declaration value for "${prop}"`, value)
     }
   }
@@ -144,7 +145,7 @@ function assertDeclarationsSafe(declarations: unknown, where: string): void {
 function assertPseudosSafe(pseudos: unknown, where: string): void {
   if (!isPlainObject(pseudos)) return
   for (const [pseudo, declarations] of Object.entries(pseudos)) {
-    if (!selectorIsValid(pseudo)) fail(`${where}'s pseudo "${pseudo}"`, pseudo)
+    if (!isSelectorValid(pseudo)) fail(`${where}'s pseudo "${pseudo}"`, pseudo)
     assertDeclarationsSafe(declarations, `${where}'s pseudo "${pseudo}"`)
   }
 }
@@ -155,7 +156,8 @@ function assertPseudosSafe(pseudos: unknown, where: string): void {
 function assertAtBlocksSafe(blocks: unknown, atName: 'container' | 'media', where: string): void {
   if (!isPlainObject(blocks)) return
   for (const [condition, block] of Object.entries(blocks)) {
-    if (!conditionIsValid(atName, condition)) fail(`${where}'s ${atName} condition "${condition}"`, condition)
+    if (!isConditionValid(atName, condition))
+      fail(`${where}'s ${atName} condition "${condition}"`, condition)
     if (!isPlainObject(block)) continue
     const blockWhere = `${where}'s ${atName} "${condition}"`
     assertDeclarationsSafe(block.declarations, blockWhere)
