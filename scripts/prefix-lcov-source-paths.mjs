@@ -1,20 +1,23 @@
 #!/usr/bin/env node
 /**
- * Rewrites each package's `coverage/lcov.info` `SF:` (source file) lines from a path relative to
- * that PACKAGE's own directory to a path relative to the REPOSITORY root, in place.
+ * Rewrites each measured package's `coverage/lcov.info` `SF:` (source file) lines from a path
+ * relative to that PACKAGE's own directory to a path relative to the REPOSITORY root, in place,
+ * and fails when a measured package produced no report.
  *
- * Vitest's v8 coverage provider writes `SF:` lines relative to the vitest root, which is each
- * package's own directory (each package runs its own `vitest.config.ts` from its own root).
- * SonarCloud resolves every `SF:` line against `sonar.sources`, which is rooted at the
- * repository root, not at any one package. Left unprefixed, two packages whose source trees ever
- * share a relative path (nothing stops two packages from both having a `src/index.ts`) collide:
- * Sonar attributes both files' coverage to whichever `SF:` line it reads for that path, and the
- * other package silently reads 0% coverage under a scan that still reports green. This is a
- * documented failure mode of lcov-based coverage in JS/TS monorepos, not specific to this repo.
+ * Vitest's v8 coverage provider writes `SF:` lines relative to each package's own root
+ * (`SF:src/atoms.ts` in `packages/core/coverage/lcov.info`). SonarCloud's JavaScript analyzer
+ * resolves such a path against the report file's own directory first (SonarJS 13.0 and later), so
+ * these paths resolve today without this rewrite. Analyzers before 13.0 tried the path from the
+ * project root and then matched its suffix against every analyzed file, taking the first match,
+ * which credits one package's coverage to another that shares a relative path (two `src/index.ts`,
+ * say). Repo-root-relative paths resolve the same way under either strategy.
  *
- * This script decides no product or process question: it is a mechanical rewrite, run once per
- * named package directory after that package's `test:coverage` has produced its `coverage/lcov.info`,
- * and before the Sonar scan step reads it.
+ * The missing-report check is what the scan cannot do for itself: a report path that matches no
+ * file is logged at INFO and the analysis carries on, so one package's coverage would read as none
+ * on a green scan. Failing here turns that into a red job.
+ *
+ * The package list is read from `sonar.javascript.lcov.reportPaths` in `sonar-project.properties`,
+ * so the reports Sonar reads and the reports this script checks are one list.
  */
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -22,21 +25,45 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-/**
- * The package directories whose `coverage/lcov.info` this rewrites when run as a script. Each
- * one is expected to have already produced coverage (its own `test:coverage` script ran first).
- * Kept in sync with `sonar.javascript.lcov.reportPaths` in `sonar-project.properties` (see that
- * file's comment for which packages are excluded, and why).
- */
-const PACKAGE_DIRS = ['packages/core', 'packages/tokens']
+const REPORT_PATHS_KEY = 'sonar.javascript.lcov.reportPaths'
 
 /**
-Rewrites every `SF:<path>` line in `content` to `SF:<prefix>/<path>` (POSIX-joined). Every other line passes through unchanged.
+ * Derives the measured package directories from the `sonar.javascript.lcov.reportPaths` line in
+ * `propertiesText` (the contents of `sonar-project.properties`), so this script's package list and
+ * Sonar's own list of reports are read from the same one place rather than hand-kept in sync.
+ */
+export function packageDirsFromReportPaths(propertiesText) {
+  const line = propertiesText.split('\n').find((l) => l.startsWith(`${REPORT_PATHS_KEY}=`))
+  if (line === undefined) {
+    throw new Error(`sonar-project.properties has no ${REPORT_PATHS_KEY} line.`)
+  }
+  const value = line.slice(`${REPORT_PATHS_KEY}=`.length)
+  return value.split(',').map((entry) => {
+    const trimmed = entry.trim()
+    const match = /^(.+)\/coverage\/lcov\.info$/.exec(trimmed)
+    if (!match) {
+      throw new Error(
+        `${REPORT_PATHS_KEY} entry "${trimmed}" is not shaped like "<dir>/coverage/lcov.info".`,
+      )
+    }
+    return match[1]
+  })
+}
+
+/**
+ * Rewrites every `SF:<path>` line in `content` to `SF:<prefix>/<path>` (POSIX-joined), except a
+ * path that is already absolute or already starts with `${prefix}/`, either of which passes
+ * through unchanged. Every other line passes through unchanged too.
  */
 export function prefixLcovSourcePaths(content, prefix) {
   return content
     .split('\n')
-    .map((line) => (line.startsWith('SF:') ? `SF:${path.posix.join(prefix, line.slice(3))}` : line))
+    .map((line) => {
+      if (!line.startsWith('SF:')) return line
+      const sourcePath = line.slice(3)
+      if (path.posix.isAbsolute(sourcePath) || sourcePath.startsWith(`${prefix}/`)) return line
+      return `SF:${path.posix.join(prefix, sourcePath)}`
+    })
     .join('\n')
 }
 
@@ -71,7 +98,8 @@ if (
   realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
 ) {
   try {
-    main(ROOT, PACKAGE_DIRS)
+    const propertiesText = readFileSync(path.join(ROOT, 'sonar-project.properties'), 'utf8')
+    main(ROOT, packageDirsFromReportPaths(propertiesText))
   } catch (error) {
     console.error(`lcov source-path prefix: ${error.message}`)
     process.exitCode = 1
