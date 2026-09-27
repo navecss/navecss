@@ -97,9 +97,15 @@ describe('AC-directive-core-15 — the hint rule, boundaries', () => {
   const hinted: readonly [typed: string, hint: string][] = [
     ['interactve', 'interactive'],
     ['flx', 'flex'],
+    ['srOnlyy', 'srOnly'],
+    ['hiden', 'hidden'],
+    ['itemCenter', 'itemsCenter'],
+    ['justifyBetwen', 'justifyBetween'],
+    ['truncte', 'truncate'],
+    ['gap2', 'gap'],
     ['blxxk', 'block'],
   ]
-  const unhinted: readonly string[] = ['gxxd', 'fancyShadow']
+  const unhinted: readonly string[] = ['gxxd', 'fancyShadow', 'shadow', 'stack']
 
   it.each(hinted)('%s -> %s', (typed, hint) => {
     const text = formatDiagnostic({ code: 'unknown-atom', name: typed, offset: 0, endOffset: 0 })
@@ -133,6 +139,38 @@ describe('AC-directive-core-15 — the hint rule, boundaries', () => {
 
     expect(text).toContain('Did you mean "flexCol"?')
     expect(text).not.toContain('camelCase')
+  })
+
+  it('w-full hints wFull only — not hFull, despite the shared "Full" tail', () => {
+    const text = formatDiagnostic({ code: 'unknown-atom', name: 'w-full', offset: 0, endOffset: 0 })
+
+    expect(text).toContain('Did you mean "wFull"?')
+    expect(text).not.toContain('hFull')
+    expect(text).toContain('Atom names are camelCase; "nave-w-full" is its class.')
+  })
+
+  it('focus-ring hints focusRing, with the camelCase sentence', () => {
+    const text = formatDiagnostic({
+      code: 'unknown-atom',
+      name: 'focus-ring',
+      offset: 0,
+      endOffset: 0,
+    })
+
+    expect(text).toContain('Did you mean "focusRing"?')
+    expect(text).toContain('Atom names are camelCase; "nave-focus-ring" is its class.')
+  })
+
+  it('a nave- prefixed input still hints its bare name, with the camelCase sentence', () => {
+    const text = formatDiagnostic({
+      code: 'unknown-atom',
+      name: 'nave-flex',
+      offset: 0,
+      endOffset: 0,
+    })
+
+    expect(text).toContain('Did you mean "flex"?')
+    expect(text).toContain('Atom names are camelCase; "nave-flex" is its class.')
   })
 
   it('names every tied candidate, in vocabulary order', () => {

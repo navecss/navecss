@@ -1,9 +1,12 @@
+import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 import type { AtomDefinition } from '../../src/atoms.ts'
 
 import { atoms } from '../../src/atoms.ts'
+import { expandText } from '../../src/directive/expand-text.ts'
 import { resolve } from '../../src/directive/resolve.ts'
+import { navePlugin } from '../../src/postcss.ts'
 
 describe('AC-directive-core-01 — resolve() returns the expansion as plain data', () => {
   const extend: Record<string, AtomDefinition | null> = {
@@ -62,6 +65,14 @@ describe('AC-directive-core-01 — resolve() returns the expansion as plain data
 
     expect(cloned).toEqual(result)
   })
+
+  it('emits no block for an extend atom whose only @media condition has no declarations and no pseudos (R2)', () => {
+    const { resolved } = resolve(['empty'], {
+      extend: { empty: { declarations: { color: 'red' }, media: { '(min-width: 1px)': {} } } },
+    })
+
+    expect(resolved.empty?.blocks).toEqual([])
+  })
 })
 
 describe('AC-directive-core-05 — an atom with no declarations object stays a throw', () => {
@@ -77,6 +88,28 @@ describe('AC-directive-core-05 — an atom with no declarations object stays a t
       )
     }
   })
+
+  it.each(['error', 'warn', 'ignore'] as const)(
+    'throws through the PostCSS adapter under onUnknown: %s, never routed through it',
+    async (onUnknown) => {
+      const extend: Record<string, AtomDefinition> = { bad: shapes.bad }
+      await expect(
+        postcss([navePlugin({ onUnknown, extend })]).process('.a { @nave bad; }', {
+          from: undefined,
+        }),
+      ).rejects.toThrow(/atom "bad" is registered without a declarations object/)
+    },
+  )
+
+  it.each(['error', 'warn', 'ignore'] as const)(
+    'throws out of expandText() under onUnknown: %s, never in its diagnostics array',
+    (onUnknown) => {
+      const extend: Record<string, AtomDefinition> = { bad: shapes.bad }
+      expect(() => expandText('.a { @nave bad; }', { onUnknown, extend })).toThrow(
+        /atom "bad" is registered without a declarations object/,
+      )
+    },
+  )
 
   it('resolves ghost (a null extend definition) as unresolved, never a throw', () => {
     // eslint-disable-next-line unicorn/no-null -- `null` is `extend`'s own spelling for "no definition", not a style choice

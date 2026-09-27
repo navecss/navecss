@@ -1,3 +1,4 @@
+import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 import { expandText } from '../../src/directive/expand-text.ts'
@@ -125,6 +126,20 @@ describe('AC-directive-core-06 — expandText() changes only directive spans', (
 })
 
 describe('AC-directive-core-07 — expander-only rows, Syntax 3 recovery', () => {
+  it('every row in this criterion genuinely throws in PostCSS’s own parser', () => {
+    const rows = [
+      '.a { color: red; @nave focusRing',
+      '.a { color: red; @nave flex;',
+      '.a { b; @nave flex; }',
+      '<!-- .a { @nave flex; } -->',
+      '.a { @nave flex; /* unclosed',
+      '.a { content: "unclosed; @nave flex; }',
+    ]
+    for (const css of rows) {
+      expect(() => postcss.parse(css), `expected PostCSS to reject: ${css}`).toThrow()
+    }
+  })
+
   it('expands an unclosed rule at end of input, appending its blocks at end of input', () => {
     const { css, diagnostics } = expandText('.a { color: red; @nave focusRing', {
       onUnknown: 'warn',
@@ -146,5 +161,27 @@ describe('AC-directive-core-07 — expander-only rows, Syntax 3 recovery', () =>
     const { css } = expandText('.a { b; @nave flex; }', { onUnknown: 'warn' })
 
     expect(norm(css)).toBe('.a { b; display: flex; }')
+  })
+
+  it('expands inside a CDO/CDC pair, keeping the <!-- and --> bytes', () => {
+    const { css, diagnostics } = expandText('<!-- .a { @nave flex; } -->', { onUnknown: 'warn' })
+
+    expect(diagnostics).toEqual([])
+    expect(css).toBe('<!-- .a { display: flex; } -->')
+  })
+
+  it('expands before an unclosed trailing comment, keeping the comment bytes', () => {
+    const { css, diagnostics } = expandText('.a { @nave flex; /* unclosed', { onUnknown: 'warn' })
+
+    expect(diagnostics).toEqual([])
+    expect(css).toBe('.a { display: flex; /* unclosed')
+  })
+
+  it('leaves a directive inside an unclosed (bad) string untouched', () => {
+    const input = '.a { content: "unclosed; @nave flex; }'
+    const { css, diagnostics } = expandText(input, { onUnknown: 'warn' })
+
+    expect(diagnostics).toEqual([])
+    expect(css).toBe(input)
   })
 })

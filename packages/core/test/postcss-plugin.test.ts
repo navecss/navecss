@@ -497,6 +497,12 @@ describe('onUnknown default is error', () => {
     ).rejects.toMatchObject({ name: 'CssSyntaxError', line: 3, column: 9 })
   })
 
+  it('columns in UTF-16 code units, not code points (a supplementary-plane emoji counts as two)', async () => {
+    // '.a' (2) + '😀' (a surrogate pair, 2 UTF-16 units) + '{@nave ' (7) = 11,
+    // so the name starts at 1-based column 12 — code points would give 11.
+    await expect(run('.a😀{@nave nope;}')).rejects.toMatchObject({ line: 1, column: 12 })
+  })
+
   // The other half of the same ground: the error names the vocabulary the typo
   // missed, INCLUDING the consumer's own extend atoms — now via R6's hint rule
   // rather than the `Available:` list (this file's pin before the slice-1
