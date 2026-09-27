@@ -23,9 +23,26 @@ function extractFences(markdown: string): Array<{ lang: string; content: string 
   }))
 }
 
+const SCRIPT_FENCE_LANGS = new Set(['js', 'jsx', 'mjs', 'ts', 'tsx', 'mts'])
+const STRING_LITERAL = /(['"`])(?:\\.|(?!\1)[^\\])*\1/g
+const CX_CALL = /\bcx(?:\.raw)?\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g
+
+/**
+ * Whether a script fence casts a `cx()` or `cx.raw()` argument with `as`. Only the call's own
+ * argument list is read, with string literals removed first, so `as` in prose-like strings or
+ * anywhere else in the fence is not a cast, and a dotted or generic target
+ * (`as React.CSSProperties`, `as Array<string>[number]`) still is.
+ */
+function hasCxArgumentCast(content: string): boolean {
+  return [...content.matchAll(CX_CALL)].some((call) =>
+    /\bas\s+[A-Za-z_$]/.test(call[1]!.replaceAll(STRING_LITERAL, '')),
+  )
+}
+
 const committed = readFileSync(OUTPUT_PATH, 'utf8')
 const fences = extractFences(committed)
 const cssFences = fences.filter((f) => f.lang === 'css')
+const scriptFences = fences.filter((f) => SCRIPT_FENCE_LANGS.has(f.lang))
 
 describe('AC-consumer-constraints-38: every css fence compiles through the real navePlugin({ onUnknown: "error" })', () => {
   it('has at least one css fence to check', () => {
@@ -78,8 +95,26 @@ describe('AC-consumer-constraints-38: every css fence compiles through the real 
       for (const match of fence.content.matchAll(/cx\.raw\(\s*['"]([^'"]+)['"]\s*\)/g)) {
         expect(atomNames.has(match[1]!), `cx.raw('${match[1]}') names a built-in atom`).toBe(false)
       }
-      expect(fence.content).not.toMatch(/\bas\s+\w+\s*\)/) // no `as` cast on a cx argument
     }
+  })
+
+  it('no script fence casts a cx() or cx.raw() argument with `as`', () => {
+    for (const fence of scriptFences) {
+      expect(hasCxArgumentCast(fence.content), fence.content).toBe(false)
+    }
+  })
+
+  it('the cast check catches a dotted or generic cast inside a cx() call', () => {
+    expect(hasCxArgumentCast("cx('flex' as React.CSSProperties)")).toBe(true)
+    expect(hasCxArgumentCast('cx(name as Array<string>[number])')).toBe(true)
+    expect(hasCxArgumentCast('cx.raw(isActive && (styles.active as string))')).toBe(true)
+  })
+
+  it('the cast check ignores `as` in a string argument, and CSS is never read as script', () => {
+    expect(hasCxArgumentCast("cx.raw('save as draft')")).toBe(false)
+    expect(hasCxArgumentCast("const label = 'saved as draft'\ncx('flex')")).toBe(false)
+    const planted = extractFences('```css\n.a { content: "as x)"; }\n```\n')
+    expect(planted.filter((f) => SCRIPT_FENCE_LANGS.has(f.lang))).toEqual([])
   })
 
   /**
