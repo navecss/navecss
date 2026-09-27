@@ -48,3 +48,15 @@ two packages should be compatible across a range of versions, not forced to rele
   `linked` and `ignore` is already independent versioning, Changesets' default.
 - A future package that queries "how does release topology work here" should extend this
   record's reasoning (or supersede it) rather than re-deriving the question from scratch.
+
+## Update — the revisit trigger has fired
+
+`@navecss/stylelint-config` now reads the token vocabulary directly: its "declared custom
+properties" rule (`@navecss/declared-custom-properties`) parses the stylesheet
+`@navecss/tokens` publishes to check that a `var(--nave-*)` reference names something actually
+declared there. That is exactly the trigger named above, and this package now takes a peer
+dependency on `@navecss/tokens`, at `>=0.1.0 <1.0.0` — a range, never `fixed`, per this record's
+own reasoning: the two packages need to stay compatible across a range of versions, not be
+forced to release together. `@navecss/stylelint-config` still does not join the `fixed` group,
+is not `linked`, and is not `ignore`d — the peer dependency changes what it reads, not how it
+versions.

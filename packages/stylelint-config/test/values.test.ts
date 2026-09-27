@@ -147,7 +147,11 @@ describe('AC-consumer-constraints-14 covers: R11b, R18 (none of these is reporte
     'color: currentColor',
     'fill: CURRENTCOLOR',
     'color: var(--i)',
-    'color: var(--nave-not-declared)',
+    // Not a --nave- name deliberately: this row is the strict-value rule's own (a')
+    // semantics (any var() passes it, declared or not); the separate declared-custom-properties
+    // rule's declared/undeclared behaviour for --nave-* names is covered in
+    // declared-custom-properties.test.ts instead, where it belongs.
+    'color: var(--not-declared)',
     'color: light-dark(#fff, var(--x))',
     'width: 13px',
     'accent-color: auto',

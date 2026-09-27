@@ -22,15 +22,21 @@
   "files": [
     "index.js",
     "index.d.ts",
+    "declared-custom-properties.js",
+    "declared-custom-properties.d.ts",
     "LICENSE"
   ],
   "peerDependencies": {
-    "stylelint": "^17.0.0"
+    "stylelint": "^17.0.0",
+    "@navecss/tokens": ">=0.1.0 <1.0.0"
   },
   "dependencies": {
-    "stylelint-declaration-strict-value": "1.12.1"
+    "stylelint-declaration-strict-value": "1.12.1",
+    "postcss": "8.5.28",
+    "postcss-value-parser": "4.2.0"
   },
   "devDependencies": {
+    "@navecss/tokens": "workspace:*",
     "@types/node": "^26.6.2",
     "typescript": "6.0.3",
     "vitest": "5.0.1"

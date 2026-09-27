@@ -122,15 +122,22 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
     }
   })
 
-  it('no dependency field names @navecss/tokens before the rule-3 head (standing, for now)', () => {
+  it('rule 3 (declared custom properties) takes @navecss/tokens as a peer, at a range, never a caret, plus a workspace devDependency for its own tests (standing, since the rule-3 head)', () => {
     const m = manifest() as {
       dependencies?: Record<string, string>
       devDependencies?: Record<string, string>
       peerDependencies?: Record<string, string>
     }
-    for (const field of [m.dependencies, m.peerDependencies, m.devDependencies]) {
-      expect(Object.keys(field ?? {})).not.toContain('@navecss/tokens')
-    }
+    expect(m.dependencies).not.toHaveProperty('@navecss/tokens')
+    expect(m.peerDependencies?.['@navecss/tokens']).toBe('>=0.1.0 <1.0.0')
+    expect(m.peerDependencies?.['@navecss/tokens']).not.toMatch(/^\^/)
+    expect(m.devDependencies?.['@navecss/tokens']).toBe('workspace:*')
+  })
+
+  it('rule 3 takes postcss and postcss-value-parser as direct dependencies (standing, since the rule-3 head)', () => {
+    const m = manifest() as { dependencies?: Record<string, string> }
+    expect(m.dependencies).toHaveProperty('postcss')
+    expect(m.dependencies).toHaveProperty('postcss-value-parser')
   })
 
   it('every plugins entry the exported config carries is an object, not a string (standing)', async () => {
@@ -261,12 +268,14 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
 
 const tarball = packTarball()
 describe('the packed tarball itself', () => {
-  it('carries package/LICENSE, package/README.md, package/index.js, package/index.d.ts', () => {
+  it('carries package/LICENSE, package/README.md, package/index.js, package/index.d.ts, package/declared-custom-properties.js, package/declared-custom-properties.d.ts', () => {
     for (const file of [
       'package/LICENSE',
       'package/README.md',
       'package/index.js',
       'package/index.d.ts',
+      'package/declared-custom-properties.js',
+      'package/declared-custom-properties.d.ts',
     ]) {
       expect(tarball.files).toContain(file)
     }

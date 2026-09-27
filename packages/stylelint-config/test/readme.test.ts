@@ -34,7 +34,7 @@ async function isReported(config: Config, code: string): Promise<boolean> {
  * saying it or when the config stops behaving as it says, so the two are corrected together.
  */
 const STATED_LIMITATIONS: readonly (readonly [string, string, boolean])[] = [
-  ['A `var()` passes whatever it names', '.a { color: var(--nave-not-declared); }', false],
+  ['A `var()` passes whatever it names', '.a { color: var(--not-declared); }', false],
   ['`light-dark(#fff, var(--x))`', '.a { color: light-dark(#fff, var(--x)); }', false],
   ['Properties outside its own list are not checked', '.a { width: 13px; }', false],
   ['`border: 1px solid red` is reported', '.a { border: 1px solid red; }', true],

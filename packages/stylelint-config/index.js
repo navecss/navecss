@@ -1,5 +1,11 @@
 import strictValue from 'stylelint-declaration-strict-value'
 
+import {
+  defaultRuleOptions as declaredCustomPropertiesDefaultOptions,
+  declaredCustomPropertiesPlugin,
+  ruleName as declaredCustomPropertiesRuleName,
+} from './declared-custom-properties.js'
+
 /**
  * Nave's own stylelint rules, corrected for a consumer's project: `@nave` known to the
  * language, a check that values on its listed properties use a `var()` or an admitted keyword,
@@ -251,14 +257,21 @@ const config = {
       },
     },
   },
-  plugins: [strictValue],
+  plugins: [strictValue, declaredCustomPropertiesPlugin],
   rules: {
     'scale-unlimited/declaration-strict-value': [STRICT_VALUE_PROPERTIES, STRICT_VALUE_OPTIONS],
     'declaration-property-value-disallowed-list': [
       { outline: OUTLINE_GUARD_PATTERN },
       { message: OUTLINE_GUARD_CONSUMER_MESSAGE },
     ],
+    [declaredCustomPropertiesRuleName]: [true, declaredCustomPropertiesDefaultOptions],
   },
 }
 
 export default config
+
+/**
+ * Re-exported so a consuming module can read the rule id rather than retype it (the same
+ * convention `OUTLINE_GUARD_PATTERN` and `OUTLINE_GUARD_CONSUMER_MESSAGE` above already follow).
+ */
+export { ruleName as declaredCustomPropertiesRuleName } from './declared-custom-properties.js'
