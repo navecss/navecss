@@ -18,11 +18,16 @@
  */
 import { Linter } from 'eslint'
 import assert from 'node:assert/strict'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, test } from 'node:test'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import stylelintDefault from 'stylelint'
 
 import { styleValuesRule } from '../packages/eslint-plugin/src/rules/style-values.ts'
 import stylelintConfig from '../packages/stylelint-config/index.js'
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const stylelint = stylelintDefault.default ?? stylelintDefault
 
@@ -64,38 +69,275 @@ function eslintReports(jsxKey, jsxValueLiteral) {
  * the value SHOULD be admitted (no report) under R11b's own stated semantics.
  */
 const CASES = [
-  { cssProperty: 'color', cssValue: 'currentcolor', jsxKey: 'color', jsxValueLiteral: "'currentcolor'", expectReported: false },
-  { cssProperty: 'color', cssValue: 'var(--nave-brand)', jsxKey: 'color', jsxValueLiteral: "'var(--nave-brand)'", expectReported: false },
-  { cssProperty: 'color', cssValue: '#ff0000', jsxKey: 'color', jsxValueLiteral: "'#ff0000'", expectReported: true },
-  { cssProperty: 'border-color', cssValue: 'transparent', jsxKey: 'borderColor', jsxValueLiteral: "'transparent'", expectReported: false },
-  { cssProperty: 'border-color', cssValue: 'red', jsxKey: 'borderColor', jsxValueLiteral: "'red'", expectReported: true },
-  { cssProperty: 'font-size', cssValue: '1em', jsxKey: 'fontSize', jsxValueLiteral: "'1em'", expectReported: false },
-  { cssProperty: 'font-size', cssValue: '16px', jsxKey: 'fontSize', jsxValueLiteral: "'16px'", expectReported: true },
-  { cssProperty: 'font-weight', cssValue: 'normal', jsxKey: 'fontWeight', jsxValueLiteral: "'normal'", expectReported: false },
-  { cssProperty: 'font-weight', cssValue: '700', jsxKey: 'fontWeight', jsxValueLiteral: '700', expectReported: true },
-  { cssProperty: 'font-family', cssValue: 'inherit', jsxKey: 'fontFamily', jsxValueLiteral: "'inherit'", expectReported: false },
-  { cssProperty: 'font-family', cssValue: 'Arial, sans-serif', jsxKey: 'fontFamily', jsxValueLiteral: "'Arial, sans-serif'", expectReported: true },
-  { cssProperty: 'line-height', cssValue: 'normal', jsxKey: 'lineHeight', jsxValueLiteral: "'normal'", expectReported: false },
-  { cssProperty: 'line-height', cssValue: '1.5', jsxKey: 'lineHeight', jsxValueLiteral: '1.5', expectReported: true },
-  { cssProperty: 'letter-spacing', cssValue: 'normal', jsxKey: 'letterSpacing', jsxValueLiteral: "'normal'", expectReported: false },
-  { cssProperty: 'letter-spacing', cssValue: '0.5px', jsxKey: 'letterSpacing', jsxValueLiteral: "'0.5px'", expectReported: true },
-  { cssProperty: 'border-radius', cssValue: '0', jsxKey: 'borderRadius', jsxValueLiteral: '0', expectReported: false },
-  { cssProperty: 'border-radius', cssValue: '8px', jsxKey: 'borderRadius', jsxValueLiteral: '8', expectReported: true },
-  { cssProperty: 'transition-duration', cssValue: '0ms', jsxKey: 'transitionDuration', jsxValueLiteral: "'0ms'", expectReported: false },
-  { cssProperty: 'transition-duration', cssValue: '300ms', jsxKey: 'transitionDuration', jsxValueLiteral: "'300ms'", expectReported: true },
-  { cssProperty: 'gap', cssValue: 'normal', jsxKey: 'gap', jsxValueLiteral: "'normal'", expectReported: false },
+  {
+    cssProperty: 'color',
+    cssValue: 'currentcolor',
+    jsxKey: 'color',
+    jsxValueLiteral: "'currentcolor'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'color',
+    cssValue: 'var(--nave-brand)',
+    jsxKey: 'color',
+    jsxValueLiteral: "'var(--nave-brand)'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'color',
+    cssValue: '#ff0000',
+    jsxKey: 'color',
+    jsxValueLiteral: "'#ff0000'",
+    expectReported: true,
+  },
+  {
+    cssProperty: 'border-color',
+    cssValue: 'transparent',
+    jsxKey: 'borderColor',
+    jsxValueLiteral: "'transparent'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'border-color',
+    cssValue: 'red',
+    jsxKey: 'borderColor',
+    jsxValueLiteral: "'red'",
+    expectReported: true,
+  },
+  {
+    cssProperty: 'font-size',
+    cssValue: '1em',
+    jsxKey: 'fontSize',
+    jsxValueLiteral: "'1em'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'font-size',
+    cssValue: '16px',
+    jsxKey: 'fontSize',
+    jsxValueLiteral: "'16px'",
+    expectReported: true,
+  },
+  {
+    cssProperty: 'font-weight',
+    cssValue: 'normal',
+    jsxKey: 'fontWeight',
+    jsxValueLiteral: "'normal'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'font-weight',
+    cssValue: '700',
+    jsxKey: 'fontWeight',
+    jsxValueLiteral: '700',
+    expectReported: true,
+  },
+  {
+    cssProperty: 'font-family',
+    cssValue: 'inherit',
+    jsxKey: 'fontFamily',
+    jsxValueLiteral: "'inherit'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'font-family',
+    cssValue: 'Arial, sans-serif',
+    jsxKey: 'fontFamily',
+    jsxValueLiteral: "'Arial, sans-serif'",
+    expectReported: true,
+  },
+  {
+    cssProperty: 'line-height',
+    cssValue: 'normal',
+    jsxKey: 'lineHeight',
+    jsxValueLiteral: "'normal'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'line-height',
+    cssValue: '1.5',
+    jsxKey: 'lineHeight',
+    jsxValueLiteral: '1.5',
+    expectReported: true,
+  },
+  {
+    cssProperty: 'letter-spacing',
+    cssValue: 'normal',
+    jsxKey: 'letterSpacing',
+    jsxValueLiteral: "'normal'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'letter-spacing',
+    cssValue: '0.5px',
+    jsxKey: 'letterSpacing',
+    jsxValueLiteral: "'0.5px'",
+    expectReported: true,
+  },
+  {
+    cssProperty: 'border-radius',
+    cssValue: '0',
+    jsxKey: 'borderRadius',
+    jsxValueLiteral: '0',
+    expectReported: false,
+  },
+  {
+    cssProperty: 'border-radius',
+    cssValue: '8px',
+    jsxKey: 'borderRadius',
+    jsxValueLiteral: '8',
+    expectReported: true,
+  },
+  {
+    cssProperty: 'transition-duration',
+    cssValue: '0ms',
+    jsxKey: 'transitionDuration',
+    jsxValueLiteral: "'0ms'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'transition-duration',
+    cssValue: '300ms',
+    jsxKey: 'transitionDuration',
+    jsxValueLiteral: "'300ms'",
+    expectReported: true,
+  },
+  {
+    cssProperty: 'gap',
+    cssValue: 'normal',
+    jsxKey: 'gap',
+    jsxValueLiteral: "'normal'",
+    expectReported: false,
+  },
   { cssProperty: 'gap', cssValue: '0', jsxKey: 'gap', jsxValueLiteral: '0', expectReported: false },
-  { cssProperty: 'gap', cssValue: '16px', jsxKey: 'gap', jsxValueLiteral: '16', expectReported: true },
-  { cssProperty: 'padding', cssValue: '0', jsxKey: 'padding', jsxValueLiteral: '0', expectReported: false },
-  { cssProperty: 'padding', cssValue: '16px', jsxKey: 'padding', jsxValueLiteral: '16', expectReported: true },
-  { cssProperty: 'margin', cssValue: '0 auto', jsxKey: 'margin', jsxValueLiteral: "'0 auto'", expectReported: false },
-  { cssProperty: 'margin', cssValue: '10px auto', jsxKey: 'margin', jsxValueLiteral: "'10px auto'", expectReported: true },
-  { cssProperty: 'z-index', cssValue: 'auto', jsxKey: 'zIndex', jsxValueLiteral: "'auto'", expectReported: false },
-  { cssProperty: 'z-index', cssValue: '999', jsxKey: 'zIndex', jsxValueLiteral: '999', expectReported: true },
-  { cssProperty: 'opacity', cssValue: '1', jsxKey: 'opacity', jsxValueLiteral: '1', expectReported: false },
-  { cssProperty: 'opacity', cssValue: '0.5', jsxKey: 'opacity', jsxValueLiteral: '0.5', expectReported: true },
-  { cssProperty: 'box-shadow', cssValue: 'none', jsxKey: 'boxShadow', jsxValueLiteral: "'none'", expectReported: false },
-  { cssProperty: 'box-shadow', cssValue: '0 1px 2px black', jsxKey: 'boxShadow', jsxValueLiteral: "'0 1px 2px black'", expectReported: true },
+  {
+    cssProperty: 'gap',
+    cssValue: '16px',
+    jsxKey: 'gap',
+    jsxValueLiteral: '16',
+    expectReported: true,
+  },
+  {
+    cssProperty: 'padding',
+    cssValue: '0',
+    jsxKey: 'padding',
+    jsxValueLiteral: '0',
+    expectReported: false,
+  },
+  {
+    cssProperty: 'padding',
+    cssValue: '16px',
+    jsxKey: 'padding',
+    jsxValueLiteral: '16',
+    expectReported: true,
+  },
+  {
+    cssProperty: 'margin',
+    cssValue: '0 auto',
+    jsxKey: 'margin',
+    jsxValueLiteral: "'0 auto'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'margin',
+    cssValue: '10px auto',
+    jsxKey: 'margin',
+    jsxValueLiteral: "'10px auto'",
+    expectReported: true,
+  },
+  {
+    cssProperty: 'z-index',
+    cssValue: 'auto',
+    jsxKey: 'zIndex',
+    jsxValueLiteral: "'auto'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'z-index',
+    cssValue: '999',
+    jsxKey: 'zIndex',
+    jsxValueLiteral: '999',
+    expectReported: true,
+  },
+  {
+    cssProperty: 'opacity',
+    cssValue: '1',
+    jsxKey: 'opacity',
+    jsxValueLiteral: '1',
+    expectReported: false,
+  },
+  {
+    cssProperty: 'opacity',
+    cssValue: '0.5',
+    jsxKey: 'opacity',
+    jsxValueLiteral: '0.5',
+    expectReported: true,
+  },
+  {
+    cssProperty: 'box-shadow',
+    cssValue: 'none',
+    jsxKey: 'boxShadow',
+    jsxValueLiteral: "'none'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'box-shadow',
+    cssValue: '0 1px 2px black',
+    jsxKey: 'boxShadow',
+    jsxValueLiteral: "'0 1px 2px black'",
+    expectReported: true,
+  },
+  {
+    cssProperty: '-webkit-text-fill-color',
+    cssValue: 'red',
+    jsxKey: 'WebkitTextFillColor',
+    jsxValueLiteral: "'red'",
+    expectReported: true,
+  },
+  {
+    cssProperty: 'padding',
+    cssValue: 'calc(var(--x) * 2)',
+    jsxKey: 'padding',
+    jsxValueLiteral: "'calc(var(--x) * 2)'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'margin',
+    cssValue: '-8px',
+    jsxKey: 'margin',
+    jsxValueLiteral: '-8',
+    expectReported: true,
+  },
+  {
+    cssProperty: 'color',
+    cssValue: 'Canvas',
+    jsxKey: 'color',
+    jsxValueLiteral: "'Canvas'",
+    expectReported: false,
+  },
+  {
+    cssProperty: 'color',
+    cssValue: 'ActiveBorder',
+    jsxKey: 'color',
+    jsxValueLiteral: "'ActiveBorder'",
+    expectReported: true,
+  },
+]
+
+/**
+ * A shorthand that is not itself on the checked property list passes the eslint rule while
+ * stylelint's own config reports it (the expansion lives inside that plugin, which this package
+ * does not depend on). This is a stated limit, not a bug the loop above should catch, so it runs
+ * as its own assertion rather than through `CASES`.
+ */
+const DOCUMENTED_DIVERGENCES = [
+  { cssProperty: 'background', cssValue: 'red', jsxKey: 'background', jsxValueLiteral: "'red'" },
+  {
+    cssProperty: 'border',
+    cssValue: '1px solid red',
+    jsxKey: 'border',
+    jsxValueLiteral: "'1px solid red'",
+  },
 ]
 
 describe('AC-27: eslint-plugin and stylelint agree on identical property/value pairs', () => {
@@ -107,5 +349,94 @@ describe('AC-27: eslint-plugin and stylelint agree on identical property/value p
       assert.equal(fromEslint, testCase.expectReported, 'eslint-plugin verdict')
       assert.equal(fromEslint, fromStylelint, 'the two tools disagree on an identical value')
     })
+  }
+})
+
+describe('AC-27: a documented divergence (a shorthand not itself on the checked list)', () => {
+  for (const testCase of DOCUMENTED_DIVERGENCES) {
+    test(`${testCase.cssProperty}: ${testCase.cssValue}`, async () => {
+      const fromStylelint = await stylelintReports(testCase.cssProperty, testCase.cssValue)
+      const fromEslint = eslintReports(testCase.jsxKey, testCase.jsxValueLiteral)
+      assert.equal(fromStylelint, true, 'stylelint reports the shorthand')
+      assert.equal(fromEslint, false, 'the eslint rule does not check a key off its own list')
+    })
+  }
+})
+
+const COLOR_PROPERTY_PATTERN =
+  '/^(?:color|(?!accent-color$|caret-color$|scrollbar-color$|border-(top-|right-|bottom-|left-)?color$)[a-z-]+-color)$/'
+
+/**
+ * Builds a standalone copy of the style rule and its generated data, in a temp directory nested
+ * inside the plugin package (so the copy's own `import 'postcss-value-parser'` resolves through
+ * that package's `node_modules`), with one admitted keyword removed from a listed property's
+ * pattern. Returns an `eslintReports`-shaped function bound to that mutated copy, and a `cleanup`
+ * to remove the temp directory.
+ */
+function mutatedEslintRule(propertyPattern, keywordToRemove) {
+  const dir = mkdtempSync(path.join(REPO_ROOT, 'packages/eslint-plugin', '.parity-mutant-'))
+  mkdirSync(path.join(dir, 'rules'))
+  mkdirSync(path.join(dir, 'generated'))
+  writeFileSync(
+    path.join(dir, 'rules', 'style-values.ts'),
+    readFileSync(path.join(REPO_ROOT, 'packages/eslint-plugin/src/rules/style-values.ts')),
+  )
+  writeFileSync(
+    path.join(dir, 'style-rule-data.ts'),
+    readFileSync(path.join(REPO_ROOT, 'packages/eslint-plugin/src/style-rule-data.ts')),
+  )
+  const recorded = JSON.parse(
+    readFileSync(
+      path.join(REPO_ROOT, 'packages/eslint-plugin/src/generated/style-properties.recorded.json'),
+      'utf8',
+    ),
+  )
+  const original = recorded.ignoreValues[propertyPattern]
+  const mutated = original.replace(`${keywordToRemove}|`, '')
+  if (mutated === original) throw new Error(`fixture did not find "${keywordToRemove}|" to remove`)
+  recorded.ignoreValues[propertyPattern] = mutated
+  writeFileSync(
+    path.join(dir, 'generated', 'style-properties.recorded.json'),
+    JSON.stringify(recorded),
+  )
+
+  return {
+    async reports(jsxKey, jsxValueLiteral) {
+      const { styleValuesRule: mutatedRule } = await import(
+        pathToFileURL(path.join(dir, 'rules', 'style-values.ts')).href
+      )
+      const code = `const el = <div style={{ ${jsxKey}: ${jsxValueLiteral} }} />`
+      const messages = linter.verify(code, {
+        languageOptions,
+        plugins: { '@navecss': { rules: { 'style-values': mutatedRule } } },
+        rules: { '@navecss/style-values': 'error' },
+      })
+      return messages.some((message) => message.ruleId === '@navecss/style-values')
+    },
+    cleanup() {
+      rmSync(dir, { recursive: true, force: true })
+    },
+  }
+}
+
+test('AC-27: the positive control, removing an admitted keyword from the eslint copy reds the corpus', async () => {
+  const mutant = mutatedEslintRule(COLOR_PROPERTY_PATTERN, 'Canvas')
+  try {
+    const fromStylelint = await stylelintReports('color', 'Canvas')
+    const fromMutatedEslint = await mutant.reports('color', "'Canvas'")
+    assert.equal(fromStylelint, false, 'sanity: the real stylelint config still admits Canvas')
+    assert.equal(fromMutatedEslint, true, 'sanity: the mutated copy no longer admits Canvas')
+    assert.throws(
+      () =>
+        assert.equal(
+          fromMutatedEslint,
+          fromStylelint,
+          'the two tools disagree on an identical value',
+        ),
+      assert.AssertionError,
+      'the same comparison the loop above runs must fail on a genuine divergence',
+    )
+  } finally {
+    mutant.cleanup()
   }
 })
