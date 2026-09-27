@@ -96,6 +96,16 @@ describe('AC-directive-core-04 — the shipped placement semantics, through expa
 })
 
 describe('AC-directive-core-06 — expandText() changes only directive spans', () => {
+  it('turns a line terminator inside an inserted extend value into one space, keeping every line number', () => {
+    const extend = { deep: { declarations: { 'grid-template-areas': '"a b"\n "c d"' } } }
+    const input = '.a {\n  color: red;\n  @nave deep;\n  color: blue;\n}\n'
+
+    const { css } = expandText(input, { onUnknown: 'warn', extend })
+
+    expect(css.split('\n')).toHaveLength(input.split('\n').length)
+    expect(css).toContain('grid-template-areas: "a b"  "c d";')
+  })
+
   it('returns an object with exactly css, map and diagnostics', () => {
     const result = expandText('.a { @nave flex; }', { onUnknown: 'warn' })
 

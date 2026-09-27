@@ -12,7 +12,8 @@ import type { Position, SourceMap } from './source-map.ts'
 import { atKeywordName, isNaveAtKeyword, type Item, readItem } from './block-reader.ts'
 import { type ExpandedDiagnostic, inputPositionAt, reportDiagnostics } from './expand-text-diagnostics.ts'
 import { type AppendPart, buildOutput, type Edit } from './expand-text-output.ts'
-import { type AnchoredBlock, type Declaration, plan } from './plan.ts'
+import { renderBlock, renderInline } from './expand-text-render.ts'
+import { plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
 
 export type { ExpandedDiagnostic } from './expand-text-diagnostics.ts'
@@ -54,40 +55,6 @@ class Walker {
   positionAt(offset: number): Position {
     return inputPositionAt(this.css, offset)
   }
-}
-
-/**
- *
- */
-function renderDeclarations(decls: readonly Declaration[]): string {
-  return decls.map((d) => `${d.prop}: ${d.value}`).join('; ')
-}
-
-/**
- *
- */
-function renderRule(selector: string, decls: readonly Declaration[]): string {
-  return `${selector} { ${renderDeclarations(decls)} }`
-}
-
-/**
- *
- */
-function renderBlock(block: AnchoredBlock): string {
-  if (block.kind === 'pseudo') return renderRule(block.selector, block.declarations)
-  const inner: string[] = []
-  if (block.declarations.length > 0) inner.push(renderRule('&', block.declarations))
-  for (const pseudo of block.pseudos) inner.push(renderRule(pseudo.selector, pseudo.declarations))
-  return `@${block.kind} ${block.condition} { ${inner.join(' ')} }`
-}
-
-/**
- *
- */
-function renderInline(declarations: readonly Declaration[], isWrapped: boolean): string {
-  if (declarations.length === 0) return ''
-  if (isWrapped) return renderRule('&', declarations)
-  return `${renderDeclarations(declarations)};`
 }
 
 /**
