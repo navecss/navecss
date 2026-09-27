@@ -8,7 +8,7 @@ import stylelint, { type Config } from 'stylelint'
 import { describe, expect, it } from 'vitest'
 
 import config from '../index.js'
-import { bareNamesPerListOrTable, checkedPropertyNames } from './helpers/bare-names.ts'
+import { bareCheckedNames, checkedPropertyNames } from './helpers/bare-names.ts'
 import { cssPropertyNames } from './helpers/css-properties.ts'
 import { foldProse } from './helpers/outcome-words.ts'
 import { packTarball } from './helpers/pack.ts'
@@ -142,58 +142,73 @@ describe('AC-consumer-constraints-29 covers: R18', () => {
     (config.rules!['scale-unlimited/declaration-strict-value'] as [string[]])[0],
     cssPropertyNames(),
   )
-  const mostBareNamesInOneListOrTable = (markdown: string): number =>
-    Math.max(0, ...bareNamesPerListOrTable(markdown, checkedNames).map((names) => names.length))
+  const bareCount = (markdown: string): number => bareCheckedNames(markdown, checkedNames).size
+  const allNames = [...checkedNames]
 
-  it('links to the file holding the property list, and no list or table in it holds more than one checked property name in bare form', () => {
+  it('links to the file holding the property list, and outside fenced code holds at most one checked property name in bare form', () => {
     const readme = tarball.read('package/README.md')
     expect(readme).toMatch(/\[`index\.js`\]\(index\.js\)/)
     expect(checkedNames.size).toBeGreaterThan(19)
-    expect(mostBareNamesInOneListOrTable(readme)).toBeLessThanOrEqual(1)
+    expect(bareCount(readme)).toBeLessThanOrEqual(1)
   })
 
   it.each([
-    ['a bullet list of code spans', '- `color`\n- `padding`\n- `margin`\n- `gap`\n'],
-    ['a plain-text bullet list', '- fill\n- stroke\n'],
-    ['a nested list', '- Checked:\n  - `opacity`.\n  - `z-index`,\n'],
+    ['bullets of code spans', '- `color`\n- `padding`\n- `margin`\n- `gap`\n'],
+    ['bullets of plain names', '- fill\n- stroke\n'],
+    ['an ordered list', '1. color\n2. fill\n'],
     [
-      'a table of names',
+      'bullets of links',
+      '- [color](https://developer.mozilla.org/docs/Web/CSS/color)\n- [padding](x)\n',
+    ],
+    ['bullets of code-span links', '- [`color`](x)\n- [`padding`](y)\n'],
+    ['bullets of bold names', '- **padding**\n- __margin__\n'],
+    ['bullets of italic names', '- *fill*\n- _stroke_\n'],
+    ['a nested list', '- Checked:\n  - `opacity`.\n  - `z-index`,\n'],
+    ['a loose list, blank lines between its items', '- `fill`\n\n- `stroke`\n'],
+    [
+      'a pipe table with a value column',
       '| Property | Admits |\n| --- | --- |\n| `font-size` | `1em` |\n| `opacity` | `0` |\n',
     ],
-    ['an inline run of names in one item', '- Checked: `fill`, `stroke`, `gap`.\n'],
-    ['a loose list, blank lines between its items', '- `fill`\n\n- `stroke`\n'],
+    ['a one-column pipe table', '| Property |\n| --- |\n| color |\n| fill |\n'],
     [
       'a table without leading pipes',
       'Property | Admits\n--- | ---\n`font-size` | `1em`\n`opacity` | `0`\n',
     ],
+    ['an inline run in an item', '- Checked: `fill`, `stroke`, `gap`.\n'],
+    ['an inline run in a paragraph', 'It checks color, fill and stroke.\n'],
+    ['an inline run of bold names and links', 'Checked: **color**, [fill](x), *stroke*.\n'],
+    ['a run in parentheses', 'Checked (`color`, `fill`, `stroke`) values.\n'],
+    ['a run joined by slashes', '`color`/`fill`/`stroke`\n'],
+    ['names one per line in one paragraph', 'color\npadding\nmargin\n'],
+    ['names one per paragraph', 'color\n\npadding\n'],
+    ['the whole list as bullets', allNames.map((name) => `- \`${name}\``).join('\n')],
+    ['the whole list inline', `Checked: ${allNames.map((name) => `\`${name}\``).join(', ')}.`],
   ])('a copy of the list pasted as %s counts more than one', (_, pasted) => {
     const readme = tarball.read('package/README.md')
-    expect(mostBareNamesInOneListOrTable(`${readme}\n\n${pasted}`)).toBeGreaterThan(1)
+    expect(bareCount(`${readme}\n\n${pasted}`)).toBeGreaterThan(1)
   })
 
-  it('names inside a fenced code block, backticks or tildes, are not counted', () => {
-    const fenced = [
-      '~~~yaml',
-      '- color',
-      '- padding',
-      '- margin',
-      '~~~',
-      '',
-      '```',
-      '- fill',
-      '- stroke',
-      '```',
-    ].join('\n')
-    expect(mostBareNamesInOneListOrTable(fenced)).toBe(0)
-  })
-
-  it('names used in example declarations or as words in a sentence are not counted', () => {
-    const examples = [
-      '- `color: var(--x, red)` and `padding: $space` pass.',
-      '- The color and padding entries admit a var().',
-      '- `font-family: var(--x), sans-serif` is reported.',
-    ].join('\n')
-    expect(mostBareNamesInOneListOrTable(examples)).toBe(0)
+  it.each([
+    [
+      'bullets that each open with a code-span name and go on to explain it',
+      '- `gap` is checked as a length.\n- `opacity` is checked against its keyword set.\n- `color` is checked against the colour allowlist.\n',
+    ],
+    [
+      'names in example declarations or used as words in a sentence',
+      '- `color: var(--x, red)` and `padding: $space` pass.\n- The color and padding entries admit a var().\n- `font-family: var(--x), sans-serif` is reported.\n',
+    ],
+    ['a pair joined by and', '`padding` and `margin` are expanded by position.\n'],
+    ['a pair in parentheses', 'Colour-valued properties (`color`, `fill`) share one allowlist.\n'],
+    [
+      'a name followed by a comma and a continuing sentence',
+      '- `gap`, for example, is checked as a length.\n- `opacity`, likewise, is checked.\n',
+    ],
+    [
+      'names inside backtick and tilde fences',
+      '```\n- color\n- padding\n- margin\n```\n\n~~~yaml\nfill\nstroke\n~~~\n',
+    ],
+  ])('%s count none', (_, prose) => {
+    expect(bareCount(prose)).toBe(0)
   })
 
   it('the adoption fence, used verbatim over stylelint-config-standard, reports padding: 13px only in files matching its overrides', async () => {
