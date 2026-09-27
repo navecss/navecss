@@ -2,6 +2,7 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 import { expandText } from '../../src/directive/expand-text.ts'
+import { tokenize } from '../../src/directive/tokenizer.ts'
 
 /**
 Collapses whitespace runs so assertions don't pin the exact spacing expandText happens to choose.
@@ -189,6 +190,14 @@ describe('AC-directive-core-07 — expander-only rows, Syntax 3 recovery', () =>
 
     expect(diagnostics).toEqual([])
     expect(css).toBe('.a { display: flex; /* unclosed')
+  })
+
+  it('places an appended block before an unclosed trailing comment, not inside it', () => {
+    const { css } = expandText('.a { @nave focusRing; /* c', { onUnknown: 'warn' })
+
+    const tokens = tokenize(css)
+    expect(tokens.some((t) => t.type === 'ident-token' && t.raw === 'focus-visible')).toBe(true)
+    expect(css.endsWith('/* c')).toBe(true)
   })
 
   it('leaves a directive inside an unclosed (bad) string untouched', () => {

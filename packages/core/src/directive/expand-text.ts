@@ -10,27 +10,18 @@ import type { Position, SourceMap } from './source-map.ts'
  * unchanged.
  */
 import { atKeywordName, isNaveAtKeyword, type Item, readItem } from './block-reader.ts'
+import { type ExpandedDiagnostic, inputPositionAt, reportDiagnostics } from './expand-text-diagnostics.ts'
 import { type AppendPart, buildOutput, type Edit } from './expand-text-output.ts'
 import { type AnchoredBlock, type Declaration, plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
+
+export type { ExpandedDiagnostic } from './expand-text-diagnostics.ts'
 
 export interface ExpandTextOptions {
   readonly extend?: ExtendMap | undefined
   readonly onUnknown?: 'warn' | 'error' | 'ignore'
   readonly from?: string | undefined
   readonly inputSourceMap?: SourceMap | undefined
-}
-
-/**
- * R6: one of `expandText()`'s returned diagnostics, positioned in the
- * authored file's own line/column space rather than only the plain
- * `offset`/`endOffset` `plan()` itself deals in.
- */
-export interface ExpandedDiagnostic extends Diagnostic {
-  readonly severity: 'error' | 'warning'
-  readonly file?: string
-  readonly line: number
-  readonly column: number
 }
 
 export interface ExpandTextResult {
@@ -42,40 +33,6 @@ export interface ExpandTextResult {
 interface WalkContext {
   readonly isStyleRuleParent: boolean
   readonly isInsideKeyframes: boolean
-}
-
-/**
- * 1-based line, 0-based column (source-map convention) for `offset` in
- * `text`. A line break is LF, CR, FF or a CRLF pair — CSS Syntax Level 3's
- * own set (§4.2 "newline"), not only LF: this tokenizer never rewrites line
- * endings up front (§4.3's preprocessing step, skipped so every position
- * stays a plain index into the caller's own bytes), so every line-break form
- * the spec recognises has to be counted here by hand, a CRLF pair as one.
- * `offset` is a plain string index throughout, so it is already in UTF-16
- * code units — no separate handling for a surrogate pair.
- */
-function inputPositionAt(text: string, offset: number): Position {
-  let line = 1
-  let lineStart = 0
-  let i = 0
-  while (i < offset) {
-    const c = text[i]
-    if (c === '\r') {
-      i++
-      if (text[i] === '\n') i++
-      line++
-      lineStart = i
-      continue
-    }
-    if (c === '\n' || c === '\f') {
-      i++
-      line++
-      lineStart = i
-      continue
-    }
-    i++
-  }
-  return { line, column: offset - lineStart }
 }
 
 /**
@@ -229,10 +186,20 @@ function isKeyframesName(name: string): boolean {
 }
 
 /**
-The character position a block's own close sits at: the `}` token's start, or the end of input when it never closes (R5d).
+ * The character position a block's own close sits at: the `}` token's
+ * start, or the end of input when it never closes (R5d) — except when the
+ * very last token is an unclosed comment, which (having nowhere to end)
+ * consumes every byte to EOF: appending there would insert real CSS text
+ * INSIDE that comment, where a re-tokenization of the output could never
+ * see it as anything but more comment bytes. Placed at the comment's own
+ * start instead, so the appended block lands before it, as real syntax.
  */
 function closePositionOf(w: Walker, blockEndIndex: number): number {
-  return w.tokens[blockEndIndex]?.startIndex ?? w.css.length
+  const closer = w.tokens[blockEndIndex]
+  if (closer) return closer.startIndex
+  const last = w.tokens.at(-1)
+  if (last?.type === 'comment' && !last.raw.endsWith('*/')) return last.startIndex
+  return w.css.length
 }
 
 /**
@@ -299,34 +266,6 @@ function walkBlock(w: Walker, bounds: BlockBounds): void {
   }
 
   flushFrame(w, closeAt, frame)
-}
-
-/**
- * Every code in R6's closed set is routed through `onUnknown`: under
- * `'ignore'` none is returned at all; otherwise each gets the mode's own
- * severity and, mapped through `css`'s own line/column space, a 1-based
- * `line` and `column` beside the `offset`/`endOffset` `plan()` already gave
- * it. `file` is `options.from`, when the host gave one — omitted, not
- * `undefined`, when it did not.
- */
-function reportDiagnostics(
-  diagnostics: readonly Diagnostic[],
-  css: string,
-  options: ExpandTextOptions,
-): ExpandedDiagnostic[] {
-  const onUnknown = options.onUnknown ?? 'error'
-  if (onUnknown === 'ignore') return []
-  const severity = onUnknown === 'warn' ? 'warning' : 'error'
-  return diagnostics.map((diagnostic) => {
-    const position = inputPositionAt(css, diagnostic.offset)
-    return {
-      ...diagnostic,
-      severity,
-      ...(options.from !== undefined && { file: options.from }),
-      line: position.line,
-      column: position.column + 1,
-    }
-  })
 }
 
 /**
