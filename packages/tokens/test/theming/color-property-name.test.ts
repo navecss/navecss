@@ -264,40 +264,52 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
     return diagnostics.map((d) => flattenDiagnosticMessageText(d.messageText, '\n'))
   }
 
-  it('a real emitted colour property compiles clean', () => {
-    expect(
-      compileProbe(
-        `import type { ColorPropertyName } from './tokens.js'\n` +
-          `export const ok: ColorPropertyName = '--nave-color-action-primary'\n`,
-      ),
-    ).toEqual([])
-  })
+  // Each probe spins up a real `ts.createProgram`, noticeably slower than the rest of this
+  // file's assertions and, under load, close enough to vitest's 5s default to be worth running
+  // once, in `beforeAll` with an explicit timeout, rather than once per `it()`.
+  let realEmittedDiagnostics: string[]
+  let rampStepDiagnostics: string[]
+  let unprefixedDiagnostics: string[]
+  let domProbeDiagnostics: string[]
 
-  it('a ramp step (never emitted, R11) does not compile', () => {
-    const diagnostics = compileProbe(
+  beforeAll(() => {
+    realEmittedDiagnostics = compileProbe(
+      `import type { ColorPropertyName } from './tokens.js'\n` +
+        `export const ok: ColorPropertyName = '--nave-color-action-primary'\n`,
+    )
+    rampStepDiagnostics = compileProbe(
       `import type { ColorPropertyName } from './tokens.js'\n` +
         `export const bad: ColorPropertyName = '--nave-color-primary-500'\n`,
     )
+    unprefixedDiagnostics = compileProbe(
+      `import type { ColorPropertyName } from './tokens.js'\n` +
+        `export const bad: ColorPropertyName = '--color-surface-base'\n`,
+    )
+    domProbeDiagnostics = compileProbe(
+      `import type { ColorPropertyName } from './tokens.js'\n` +
+        `export const el: HTMLElement | ColorPropertyName | undefined = undefined\n`,
+    )
+  }, 20_000)
+
+  it('a real emitted colour property compiles clean', () => {
+    expect(realEmittedDiagnostics).toEqual([])
+  })
+
+  it('a ramp step (never emitted, R11) does not compile', () => {
     expect(
-      diagnostics.some((m) => m.includes("is not assignable to type 'ColorPropertyName'")),
+      rampStepDiagnostics.some((m) => m.includes("is not assignable to type 'ColorPropertyName'")),
     ).toBe(true)
   })
 
   it('an unprefixed name does not compile', () => {
-    const diagnostics = compileProbe(
-      `import type { ColorPropertyName } from './tokens.js'\n` +
-        `export const bad: ColorPropertyName = '--color-surface-base'\n`,
-    )
     expect(
-      diagnostics.some((m) => m.includes("is not assignable to type 'ColorPropertyName'")),
+      unprefixedDiagnostics.some((m) =>
+        m.includes("is not assignable to type 'ColorPropertyName'"),
+      ),
     ).toBe(true)
   })
 
   it('compiles against ES2022 only: a DOM type is not in scope, with dist/tokens.d.ts loaded, so the DOM lib stays out of every probe', () => {
-    const diagnostics = compileProbe(
-      `import type { ColorPropertyName } from './tokens.js'\n` +
-        `export const el: HTMLElement | ColorPropertyName | undefined = undefined\n`,
-    )
-    expect(diagnostics.some((m) => m.includes("Cannot find name 'HTMLElement'"))).toBe(true)
+    expect(domProbeDiagnostics.some((m) => m.includes("Cannot find name 'HTMLElement'"))).toBe(true)
   })
 })

@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { AtomDefinition, AtomName } from '../src/atoms.ts'
 
@@ -21,9 +21,20 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ATOMS_SRC_PATH = path.resolve(HERE, '../src/atoms.ts')
 
 describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts', () => {
-  it('the committed file matches what the generator produces', async () => {
+  // The real generator run (a full @navecss/tokens build under the hood) takes the better part
+  // of a second on a quiet machine and comfortably longer under load — well past vitest's 5s
+  // default if it ran once per `it()`. Run it once, in `beforeAll`, with an explicit timeout
+  // room to spare, and assert on the already-produced string in the `it()` below (the same
+  // shape `css-data-shape.test.ts` and `skill-guide-shape.test.ts` use for their own real build).
+  let generated: string
+
+  beforeAll(async () => {
+    generated = await generate()
+  }, 120_000)
+
+  it('the committed file matches what the generator produces', () => {
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
-    expect(committed).toBe(await generate())
+    expect(committed).toBe(generated)
   })
 
   it('fails after one atom declaration in atoms.ts is edited on disk without regenerating — a real file mutation flowing through the real drift comparison, not an in-memory object that differs by construction', async () => {

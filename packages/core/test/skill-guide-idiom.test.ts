@@ -8,7 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import postcss from 'postcss'
 import ts from 'typescript'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { OUTPUT_PATH } from '../scripts/generate-skill.ts'
 import { navePlugin } from '../src/postcss.ts'
@@ -143,6 +143,17 @@ function typeCheckAgainstPublishedCx(snippet: string): readonly ts.Diagnostic[] 
 describe('AC-consumer-constraints-38: the tsc clause is a real type-check, never a regex existence-detector', () => {
   const cxFences = fences.filter((f) => /\bcx(\.raw)?\(/.test(f.content))
 
+  // Each planted probe below spins up a real `ts.createProgram` against the published
+  // `cx.d.ts` — noticeably slower than the rest of this file's assertions and, under load,
+  // close enough to vitest's 5s default to be worth running once rather than once per `it()`.
+  let notAnAtomDiagnostics: readonly ts.Diagnostic[]
+  let realAtomsDiagnostics: readonly ts.Diagnostic[]
+
+  beforeAll(() => {
+    notAnAtomDiagnostics = typeCheckAgainstPublishedCx("cx('not-an-atom')")
+    realAtomsDiagnostics = typeCheckAgainstPublishedCx("cx('interactive', 'focusRing')")
+  }, 120_000)
+
   it('every fence containing cx( or cx.raw( type-checks with zero diagnostics against the published cx.d.ts', () => {
     // Vacuous today (no such fence exists), same as the detector-level check above — the
     // mechanism below is what a FUTURE fence calling cx( would actually be run through.
@@ -153,12 +164,10 @@ describe('AC-consumer-constraints-38: the tsc clause is a real type-check, never
   })
 
   it('the SAME harness fails a planted fence calling cx with a name that is not an atom (the positive control)', () => {
-    const diagnostics = typeCheckAgainstPublishedCx("cx('not-an-atom')")
-    expect(diagnostics.length).toBeGreaterThan(0)
+    expect(notAnAtomDiagnostics.length).toBeGreaterThan(0)
   })
 
   it('the SAME harness passes a planted fence calling cx with real built-in atom names', () => {
-    const diagnostics = typeCheckAgainstPublishedCx("cx('interactive', 'focusRing')")
-    expect(diagnostics).toEqual([])
+    expect(realAtomsDiagnostics).toEqual([])
   })
 })

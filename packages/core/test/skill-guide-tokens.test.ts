@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
   derivePaletteDescriptions,
@@ -161,23 +161,32 @@ describe('AC-consumer-constraints-33: description fidelity', () => {
     expect(dropped.size).not.toBe(descriptions.size)
   })
 
-  it('every colour slot carries text byte-identical to its description in palette-record.json', async () => {
-    const { build } = await import('@navecss/tokens/build')
-    const { mkdtempSync, rmSync } = await import('node:fs')
-    const { tmpdir } = await import('node:os')
-    const outDir = mkdtempSync(path.join(tmpdir(), 'nave-skill-test-'))
-    try {
+  describe('the real tokens build (heavy: run once for every it() below, not per test)', () => {
+    let descriptions: Map<string, string>
+    let outDir: string
+
+    beforeAll(async () => {
+      const { build } = await import('@navecss/tokens/build')
+      const { mkdtempSync } = await import('node:fs')
+      const { tmpdir } = await import('node:os')
+      outDir = mkdtempSync(path.join(tmpdir(), 'nave-skill-test-'))
       await build({ seed: 'oklch(0.7859 0.1316 186.17)', outDir })
       const record = JSON.parse(
         readFileSync(path.join(outDir, 'palette-record.json'), 'utf8'),
       ) as Record<string, unknown>
-      const descriptions = derivePaletteDescriptions(record)
+      descriptions = derivePaletteDescriptions(record)
+    }, 120_000)
+
+    afterAll(async () => {
+      const { rmSync } = await import('node:fs')
+      rmSync(outDir, { recursive: true, force: true })
+    })
+
+    it('every colour slot carries text byte-identical to its description in palette-record.json', () => {
       expect(descriptions.get('--nave-color-content-link')).toBe(
         "Do not distinguish a link by colour alone. Nave's own examples keep a non-colour distinction wherever this token is shown.",
       )
-    } finally {
-      rmSync(outDir, { recursive: true, force: true })
-    }
+    })
   })
 
   it('derivePaletteDescriptions throws, naming the slot, when light and dark descriptions disagree', () => {

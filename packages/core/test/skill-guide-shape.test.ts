@@ -186,8 +186,16 @@ describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference'
 })
 
 describe('AC-consumer-constraints-01 (scoped to this slice): immune to a package-version change', () => {
-  it('the generator embeds neither package.json version string', async () => {
-    const output = await generate()
+  // The real generator run (a full @navecss/tokens build under the hood) is the slow part of
+  // this describe, not the string comparisons that follow — run it once in `beforeAll` with an
+  // explicit timeout, same shape as `skill-guide-drift.test.ts`'s own drift check.
+  let output: string
+
+  beforeAll(async () => {
+    output = await generate()
+  }, 120_000)
+
+  it('the generator embeds neither package.json version string', () => {
     const corePkg = JSON.parse(readFileSync(path.resolve(HERE, '../package.json'), 'utf8')) as {
       version: string
     }
