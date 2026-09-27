@@ -50,6 +50,7 @@ import { detectCollidingNames, refuseOnCollision } from './collision.ts'
 import { detectVersionSkew } from './core-version.ts'
 import { composeDtcgOutputs } from './dtcg-outputs.ts'
 import { MissingContractTokensError, UsageError } from './errors.ts'
+import { isOutPathConflict } from './out-path-conflict.ts'
 import { readOverrides } from './overrides.ts'
 import { findPackageRoot } from './package-root.ts'
 import { readManifest } from './read-manifest.ts'
@@ -94,11 +95,6 @@ export { SeedIngestRefusal } from './theming/seed-ingest.ts'
 export { formatVersionSkewFact } from './validate-report.ts'
 
 const PACKAGE_ROOT = findPackageRoot(import.meta.url)
-
-// The write-error codes that mean `--out` (or a path inside it) already exists as something
-// other than the directory `writeOutputs` expects — see the `try`/`catch` around its call,
-// below, for why only these three are treated as a usage error.
-const OUT_PATH_CONFLICT_CODES = new Set(['EEXIST', 'EISDIR', 'ENOTDIR'])
 
 // ---------------------------------------------------------------------------
 // build
@@ -214,20 +210,12 @@ export async function build(options: TokensBuildOptions): Promise<TokensBuildRes
   )
   const allFiles = [...merged, ...theming.files]
 
-  // `EEXIST`/`ENOTDIR`/`EISDIR` here mean `--out` (or a path inside it) already exists as
-  // something other than the directory this write expects — a usage error about the caller's
-  // own argument (R4), not a pipeline failure on the input's merits. Narrowed to exactly those
-  // three codes, so a write failure with a different cause (`ENOSPC`, `EIO`, `EACCES`, and so
-  // on) still surfaces as itself rather than being misreported as a bad `--out`.
+  // A usage error about the caller's own argument (R4), not a pipeline failure on the
+  // input's merits — see `OUT_PATH_CONFLICT_CODES` above.
   try {
     await writeOutputs(allFiles)
   } catch (error) {
-    if (
-      error instanceof Error &&
-      'code' in error &&
-      typeof error.code === 'string' &&
-      OUT_PATH_CONFLICT_CODES.has(error.code)
-    ) {
+    if (isOutPathConflict(error)) {
       throw new UsageError(`could not write to --out="${options.outDir}": ${error.message}`)
     }
     throw error

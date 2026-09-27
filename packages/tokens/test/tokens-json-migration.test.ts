@@ -99,7 +99,7 @@ const LAYER_PROPERTY_SYNTAX = /(@property --nave-layer-[\w-]+\s*\{\s*syntax: )'<
 
 function withoutZIndexSyntaxNarrowing(text: string): string {
   expect(text).toContain("syntax: '<integer>';")
-  const reverted = text.replace(LAYER_PROPERTY_SYNTAX, "$1'<number>'")
+  const reverted = text.replaceAll(LAYER_PROPERTY_SYNTAX, "$1'<number>'")
   expect(reverted, 'the --nave-layer-* syntax narrowing was not found to revert').not.toBe(text)
   return reverted
 }
