@@ -322,10 +322,11 @@ export default defineConfig([
       // line for a script package.json's test:browser runs before every browser test suite.
       '**/scripts/generate-consumer-theming-fixtures.ts',
       // Same shape again: a one-line "Wrote <path>" progress line for the doc/data generators
-      // (ATOMS.md, TOKENS.md, nave.css-data.json) run by hand or from a maintainer's own
-      // terminal, never imported for their output.
+      // (ATOMS.md, TOKENS.md, nave.css-data.json, SKILL.md) run by hand or from a maintainer's
+      // own terminal, never imported for their output.
       '**/scripts/generate-atoms-doc.ts',
       '**/scripts/generate-css-data.ts',
+      '**/scripts/generate-skill.ts',
       'packages/tokens/generate-tokens-doc.ts',
     ],
     rules: {

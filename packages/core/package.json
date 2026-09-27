@@ -40,7 +40,8 @@
     "dist",
     "CONSUMER-ATOMS.md",
     "ATOMS.md",
-    "nave.css-data.json"
+    "nave.css-data.json",
+    "skills"
   ],
   "scripts": {
     "build": "node scripts/build-css.ts && tsup",

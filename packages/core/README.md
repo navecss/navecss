@@ -57,7 +57,10 @@ repeats the same statement, which changes nothing
 
 Your component CSS goes in `@layer components.consumer`, and a deliberate
 exception goes in `@layer overrides`, which beats every other layer. Left outside
-any layer, your CSS would beat all of them, `overrides` included. Do not write
+any layer, your CSS would beat all of them, `overrides` included.
+That is the order for normal declarations. `!important` reverses it: an `!important` in
+`overrides` loses to one in any earlier layer, Nave's reset included, and one outside any
+layer loses to every layered one. Do not write
 into a bare `@layer components` or `@layer tokens`: a rule written directly into a
 layer outranks everything in that layer's sublayers.
 
