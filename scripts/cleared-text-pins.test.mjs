@@ -2,11 +2,14 @@
  * A BACKSTOP, NOT A GATE, ON PROSE THAT WAS REVIEWED BEFORE IT SHIPPED.
  *
  * Some of the plain-English text in this repository's contributor and consumer-facing surfaces
- * states a term of the project rather than describing what the code does: the contributor
- * licence terms and the Developer Certificate of Origin in `.github/CONTRIBUTING.md`, the licence
- * checklist and affirmation in the pull request template, the whole of `TRADEMARKS.md`, and the
- * `README.md` sections stating what this project promises and does not promise about
- * accessibility. Each of those passages was reviewed and agreed before it shipped. THIS TEST
+ * states a term of the project rather than describing what the code does: in
+ * `.github/CONTRIBUTING.md`, the "Adding a dependency" change-control item, the paragraphs on text
+ * the build prints or ships, and the contributor licence terms with the Developer Certificate of
+ * Origin; the licence checklist and affirmation in the pull request template; the whole of
+ * `TRADEMARKS.md`; the `README.md` sections stating what this project promises and does not
+ * promise about accessibility, and its brand and name section; and the whole of
+ * `.github/assets/LICENSE.md`, the note saying the logo files beside it are not covered by the MIT
+ * licence. Each of those passages was reviewed and agreed before it shipped. THIS TEST
  * PINS EACH ONE AGAINST A DIGEST TAKEN AT THAT MOMENT AND FAILS IF THE SHIPPED BYTES MOVE.
  *
  * THIS TEXT WAS REVIEWED AND AGREED BEFORE IT SHIPPED. If this test fails because you changed,
