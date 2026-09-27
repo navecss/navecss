@@ -1,7 +1,7 @@
 <h1>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-horizontal-noorbit.dark.svg">
-    <img src=".github/assets/logo-horizontal-noorbit.light.svg" alt="NaveCSS" height="64">
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-horizontal.dark.svg">
+    <img src=".github/assets/logo-horizontal.light.svg" alt="NaveCSS" height="64">
   </picture>
 </h1>
 

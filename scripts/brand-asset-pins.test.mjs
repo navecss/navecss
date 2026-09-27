@@ -1,7 +1,7 @@
 /**
  * PINS THE TWO LOGO FILES IN `.github/assets/` ON THEIR EXACT BYTES.
  *
- * `logo-horizontal-noorbit.light.svg` and `logo-horizontal-noorbit.dark.svg` are the project's
+ * `logo-horizontal.light.svg` and `logo-horizontal.dark.svg` are the project's
  * logo, the Nave compass mark with the NaveCSS name, shown at the top of the root README. They are
  * reproduced as exact bytes. How they may be used is set out in `TRADEMARKS.md` and in the note
  * beside them, `.github/assets/LICENSE.md`.
@@ -83,19 +83,19 @@ function assertExactBytes(label, absolutePath, expectedSha256) {
   )
 }
 
-test('.github/assets/logo-horizontal-noorbit.light.svg: exact bytes', () => {
+test('.github/assets/logo-horizontal.light.svg: exact bytes', () => {
   assertExactBytes(
-    '.github/assets/logo-horizontal-noorbit.light.svg',
-    path.join(ROOT, '.github/assets/logo-horizontal-noorbit.light.svg'),
-    'd18e83b2a547cf6e135983d9d36f363e778102b06eafca3c74ddc7f3cfb2ab89',
+    '.github/assets/logo-horizontal.light.svg',
+    path.join(ROOT, '.github/assets/logo-horizontal.light.svg'),
+    'cd44a658b7438ecfc22e58c8eb03e731a3142503c810613dfee9a36ad5b247c3',
   )
 })
 
-test('.github/assets/logo-horizontal-noorbit.dark.svg: exact bytes', () => {
+test('.github/assets/logo-horizontal.dark.svg: exact bytes', () => {
   assertExactBytes(
-    '.github/assets/logo-horizontal-noorbit.dark.svg',
-    path.join(ROOT, '.github/assets/logo-horizontal-noorbit.dark.svg'),
-    'efe6af135fbcca751a0196f130a1d38e8d0603efb5360944f711166cb70a7584',
+    '.github/assets/logo-horizontal.dark.svg',
+    path.join(ROOT, '.github/assets/logo-horizontal.dark.svg'),
+    'd2f1f69bb907835ad541c24371096ff7c8e56c8795560288cb8d4b97b5da6b0c',
   )
 })
 
