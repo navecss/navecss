@@ -91,6 +91,11 @@ What the standard adds that atoms lack (typed parameters with defaults,
 `@contents`, `@private` locals) is adopted in the standard's own shape if and
 when atoms gain parameters.
 
+- **Correction (2026-09-26):** the nearest-match suggestion landed with the
+  host-free core (decision 4): an unknown name close to an atom's name is
+  answered with `Did you mean "<atom>"?`, and the valid names are listed only
+  when no name is close.
+
 **4. The directive gets a core that does not depend on any one build host.**
 Two levels: a resolver that turns atom names into the expansion as data, and a
 text expander that rewrites a stylesheet on the CSS Syntax Level 3 token stream,
@@ -107,12 +112,11 @@ this is built yet: it follows the launch (decision 6, step 1), and until then
 the PostCSS plugin is the only host.
 
 - **Correction (2026-09-26):** the core landed: `resolve()`, `plan()` and
-  `expandText()` in `packages/core/src/directive/`, host-free and tested
-  against the CSS Syntax Level 3 token stream. `@navecss/core/postcss` is now
-  a thin adapter over it, and `navecss-core check` (the survival check named
-  above) ships alongside it. The bundler plugin, Lightning CSS visitor and
-  no-bundler command line are still ahead; PostCSS is the only host until
-  they land.
+  `expandText()` in `packages/core/src/directive/`, host-free, reading a
+  stylesheet as a CSS Syntax Level 3 token stream. `@navecss/core/postcss` is
+  now a thin adapter over it, and `navecss-core check` (the survival check
+  named above) ships alongside it. The other adapters and the no-bundler
+  command line are still ahead; PostCSS is the only host until they land.
 
 **5. `@nave` stays the stable authoring syntax through 0.x.** A consumer's
 stylesheet should not track an Editor's Draft that is still changing its model.

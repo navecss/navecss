@@ -6,8 +6,8 @@
  * file only wires the PostCSS plugin lifecycle to `handleAtRule()`
  * (`postcss-at-rule.ts`), which walks the AST to answer `plan()`'s three
  * facts and splices its result back in as PostCSS nodes. Setup, options and
- * observable behaviour are unchanged except where the slice-1 changeset
- * says so (R5).
+ * observable behaviour are unchanged except where this package's CHANGELOG
+ * says so.
  *
  * Setup:
  *   import { navePlugin } from '@navecss/core/postcss'
@@ -62,20 +62,23 @@ export interface NavePluginOptions {
    * Consumer atoms win on name collision — your system owns its vocabulary.
    * These atoms resolve via @nave only. No global class. Not available in cx().
    *
-   * A string is a path instead: resolved against `process.cwd()`
-   * at construction (an unresolvable specifier throws right there, naming
-   * the specifier and the directory), then loaded for its default export on
-   * every run and re-read whenever the file's own bytes change. Pass a
-   * specifier when your host's build cache needs to see it as a dependency
-   * (R15) — an inline object is invisible to a cached host's own cache key.
-   * The specifier form makes the plugin async: use `process(css).then(cb)`,
-   * not the sync `.css` getter.
+   * A string is a path to a module instead, resolved against `process.cwd()`
+   * at construction (a path that names no file throws right there, naming
+   * the path and the directory; a package name is not looked up), then
+   * loaded for its default export on every run and re-read whenever the
+   * file's own bytes change (the modules it imports are not). Pass a
+   * path when your host's build cache needs to see it as a dependency: an
+   * inline object is invisible to a cached host's own cache key. A path
+   * makes the plugin async: use `process(css).then(cb)`, not the sync `.css`
+   * getter.
    */
   extend?: Record<string, AtomDefinition> | string
 
   /**
-   * Behaviour on an unknown atom name, or a @nave directive that names no
-   * atom at all.
+   * Behaviour on a problem in a @nave directive: an unknown atom name, no
+   * atom named at all, anything but a name between the names (a comma, a
+   * string), a {} block, or a place the directive cannot expand. Under
+   * 'error', every such problem in one stylesheet is reported in one error.
    * 'warn'  — log and skip
    * 'error' — throw, failing the build (default)
    * 'ignore' — silently skip
@@ -106,8 +109,8 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
     // Per-run state lives here, not in the factory closure above: PostCSS
     // calls `prepare(result)` once per `Result`, so two stylesheets sharing
     // one `navePlugin()` instance never share a `fold` or a resolved
-    // `extend`, however their async hooks interleave (R6 concurrency defect,
-    // found while implementing this R15 seam).
+    // `extend`, however their async hooks interleave (otherwise one
+    // stylesheet's problems, or its loaded `extend`, could leak into another's).
     prepare(result) {
       const fold: FoldEntry[] = []
       let extend: ExtendMap = staticExtend

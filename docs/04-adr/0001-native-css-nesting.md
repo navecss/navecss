@@ -77,11 +77,13 @@ ordered by document position inside the rule, not by insertion anchors.
   declarations in `& { … }` instead, same as an at-rule inner block. See
   `packages/core/src/postcss.ts` (`followsNestedNode`) and the regression tests in
   `packages/core/test/postcss-plugin.test.ts`.
-- **Correction (2026-09-26):** `followsNestedNode` was renamed
-  `isFollowingNestedNode` and moved to
-  `packages/core/src/postcss-nested-builders.ts` when the directive gained a
-  host-free core (`packages/core/src/directive/`); `packages/core/src/postcss.ts`
-  calls it but no longer defines it.
+- **Correction (2026-09-26):** the function is `isFollowingNestedNode`,
+  defined in `packages/core/src/postcss-nested-builders.ts` and called from
+  `packages/core/src/postcss-at-rule.ts`; `packages/core/src/postcss.ts`
+  neither defines nor calls it. Since the directive gained a host-free core
+  (`packages/core/src/directive/`), whether a nested node precedes the
+  directive is one of the three facts each host answers for
+  `packages/core/src/directive/plan.ts`, which decides the `& { … }` wrap.
 - **Correction (2026-08-22):** rule 1 says pseudo blocks
   are appended to the parent rule under `&`, but a `pseudos` key can itself be
   a comma-separated selector list (`':disabled, [aria-disabled="true"]'`),
@@ -95,12 +97,12 @@ ordered by document position inside the rule, not by insertion anchors.
   A branch already containing `&` (an author-embedded anchor, or an
   author-written relative branch like `.foo &`) is left as authored, since it
   is already relative to the parent by construction.
-- **Correction (2026-09-26):** `buildPseudoRules` was retired along with the
-  rest of `postcss.ts`'s own nesting/placement logic when the directive
-  gained a host-free core; anchoring now runs once, in
-  `packages/core/src/directive/plan.ts`, via the same shared
-  `anchorSelectorList`. `packages/core/scripts/build-css.ts`'s
-  `renderNested`/`renderAtBlock` emitters are unchanged.
+- **Correction (2026-09-26):** `buildPseudoRules` is retired. When the
+  directive gained a host-free core, its pseudo blocks came to be anchored in
+  `packages/core/src/directive/plan.ts`, still through the shared
+  `anchorSelectorList`. The two emitters are now that file and
+  `packages/core/scripts/build-css.ts`'s `renderNested`/`renderAtBlock`, which
+  render the same resolved atom data and anchor each branch the same way.
 - **Correction (2026-09-21):** the decision assumed `@nave`'s immediate
   parent is always the rule its nesting resolves against, and the plugin
   warned-and-removed anything else unconditionally. Two shapes parse without
@@ -121,7 +123,7 @@ ordered by document position inside the rule, not by insertion anchors.
   `packages/core/test/postcss-plugin.test.ts`.
 - **Correction (2026-09-26):** the placement checks (`bad-parent`,
   `in-keyframes`) now live in `packages/core/src/directive/plan.ts`, the
-  host-free core; `packages/core/src/postcss.ts` only supplies the three
+  host-free core; `packages/core/src/postcss-at-rule.ts` supplies the three
   facts `plan()` needs from the PostCSS AST. `isInsideKeyframes` still lives
   in `packages/core/src/postcss-node-utils.ts`, now widened to check the
   at-rule's own container directly rather than only its parent chain.
