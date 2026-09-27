@@ -50,7 +50,7 @@ describe('AC-08: declared entries, nave- output', () => {
           code: `const el = <div className="nave-flex" />`,
           languageOptions,
           settings,
-          errors: [{ message: /flex/ }],
+          errors: [{ message: /Write the atom instead: @nave flex or cx\('flex'\)\.$/ }],
         },
       ],
     })
@@ -127,28 +127,26 @@ describe('AC-12 (R6): allow entry compilation', () => {
   it('truncated template pieces are admitted by a prefix only', () => {
     runAllowCase(['card--'], 'const el = <div className={`card--${size}`} />', 0)
     runAllowCase(['/^[a-z]+(--[a-z]+)?$/u'], 'const el = <div className={`card--${size}`} />', 1)
+    // A pattern that does match the cut text itself still does not admit it: only a prefix can.
+    runAllowCase(['/^card--/u'], 'const el = <div className={`card--${size}`} />', 1)
   })
 
-  it.each([['/^app-/g'], ['/^app-/y'], ['/[/'], ['//'], ['/^app-/q'], ['/^[a-z-]+$/v'], ['']])(
-    'entry %j fails the run as a configuration error',
-    (allow) => {
-      let isThrew = false
-      try {
+  it.each(['/^app-/g', '/^app-/y', '/[/', '//', '/^app-/q', '/^[a-z-]+$/v', ''])(
+    'entry %j, inside the allow array, fails the run as a configuration error naming it',
+    (entry) => {
+      const run = (): void => {
         ruleTester.run('class-channel', classChannelRule, {
           valid: [
             {
               code: 'const el = <div className="app-shell" />',
               languageOptions,
-              settings: { '@navecss': { allow } },
+              settings: { '@navecss': { allow: [entry] } },
             },
           ],
           invalid: [],
         })
-      } catch {
-        isThrew = true
       }
-      if (!isThrew)
-        throw new Error(`expected a configuration error for allow entry ${JSON.stringify(allow)}`)
+      expect(run).toThrow(`"allow" entry ${JSON.stringify(entry)}`)
     },
   )
 })
