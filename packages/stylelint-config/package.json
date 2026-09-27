@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
+    "@vitest/coverage-v8": "5.0.1",
     "typescript": "6.0.3",
     "vitest": "5.0.1"
   },
@@ -40,6 +41,7 @@
     "lint": "eslint index.js test --max-warnings 0",
     "lint:fix": "eslint index.js test --fix",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
