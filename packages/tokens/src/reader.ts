@@ -89,6 +89,35 @@ function isPlainObject(value: unknown): value is TokenTree {
 }
 
 /**
+ * Throws when `key` (found at `at`, `key` included) is a `$`-prefixed key this reader does not
+ * recognise: named as "not supported yet" when `refuseUnsupportedReservedKey` recognises it
+ * (`$root`, `$extends`), the generic "not a valid token or group name" message otherwise. A
+ * no-op for a key in `RESERVED_METADATA_KEYS`. Shared between the group-traversal loop and
+ * `readTokenNode`, below, so a `$`-prefixed key gets the same message whichever side of a
+ * token/group node it is found on, rather than a second, independently drifting wording.
+ */
+function assertRecognisedDollarKey(key: string, at: string): void {
+  if (RESERVED_METADATA_KEYS.has(key)) return
+  refuseUnsupportedReservedKey(key, at)
+  throw new TypeError(
+    `DTCG 2025.10 reader: "${at}" starts with "$", which DTCG 2025.10 ` +
+      'reserves for metadata — it is not a valid token or group name',
+  )
+}
+
+/**
+ * Checks every "$" key on a token `node` (found at `path`) is a recognised metadata key.
+ * Split out of `readTokenNode` purely to keep that function's own complexity within this
+ * repo's lint budget; it used to be read past with no check at all, silently dropping an
+ * unsupported or misspelt one ($root, $extends, a typo of $type) rather than naming it.
+ */
+function assertTokenDollarKeys(node: TokenTree, path: string[]): void {
+  for (const key of Object.keys(node)) {
+    if (key.startsWith('$')) assertRecognisedDollarKey(key, [...path, key].join('.'))
+  }
+}
+
+/**
  * The token `node` declares, or `undefined` when it is a group. A `$ref` node is a token even
  * though it carries no `$value`: reading it as a group is what used to make it vanish.
  */
@@ -103,6 +132,7 @@ function readTokenNode(
 
   const at = path.join('.')
   if (hasValue && hasRef) refuseBothReferenceForms(at)
+  assertTokenDollarKeys(node, path)
 
   // A token node's own $value/$ref settles its value; a sibling non-metadata key beside it is
   // a CHILD that this return is about to skip traversing entirely. It used to be dropped with
@@ -162,12 +192,8 @@ function collectRawTokens(
       // A recognised metadata key is legitimately skipped here; anything else starting with
       // "$" is reserved by the format and was previously dropped, subtree and all, with no
       // message — indistinguishable from a token that was simply never written.
-      if (RESERVED_METADATA_KEYS.has(key)) continue
-      refuseUnsupportedReservedKey(key, [...path, key].join('.'))
-      throw new TypeError(
-        `DTCG 2025.10 reader: "${[...path, key].join('.')}" starts with "$", which DTCG 2025.10 ` +
-          'reserves for metadata — it is not a valid token or group name',
-      )
+      assertRecognisedDollarKey(key, [...path, key].join('.'))
+      continue
     }
     if (key.includes('.')) {
       throw new TypeError(

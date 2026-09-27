@@ -336,6 +336,58 @@ describe('readTokens — refuses shapes that would otherwise vanish silently', (
     expect((caught as Error).message).not.toMatch(/not a valid/)
   })
 
+  it("names $root as unsupported when it sits beside a token's own $value, rather than being silently dropped", () => {
+    let caught: unknown
+    try {
+      readTokens({
+        a: { $type: 'dimension', $value: dim(1), $root: { $value: dim(2) } },
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).toMatch(/\$root/)
+    expect((caught as Error).message).toMatch(/not support/i)
+    expect((caught as Error).message).not.toMatch(/not a valid/)
+  })
+
+  it("names $extends as unsupported when it sits beside a token's own $value, rather than being silently dropped", () => {
+    let caught: unknown
+    try {
+      readTokens({
+        a: { $type: 'dimension', $value: dim(1), $extends: '#/b' },
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).toMatch(/\$extends/)
+    expect((caught as Error).message).toMatch(/not support/i)
+    expect((caught as Error).message).not.toMatch(/not a valid/)
+  })
+
+  it('hard-errors on an unrecognised "$" key beside a token\'s own $value, rather than dropping it', () => {
+    expect(() =>
+      readTokens({
+        a: { $type: 'dimension', $value: dim(1), $bogus: dim(2) },
+      }),
+    ).toThrow(/"a\.\$bogus".*(?:reserved|metadata)/i)
+  })
+
+  it('still builds a token carrying $description, $extensions and $deprecated beside its own $value', () => {
+    const tokens = readTokens({
+      a: {
+        $type: 'dimension',
+        $value: dim(4),
+        $description: 'a description',
+        $extensions: { 'dev.navecss.example': true },
+        $deprecated: true,
+      },
+    })
+    expect(tokens).toHaveLength(1)
+    expect(tokens[0]!.value).toBe('4px')
+  })
+
   it('hard-errors on a group carrying both its own $value and child tokens, rather than dropping the children', () => {
     expect(() =>
       readTokens({

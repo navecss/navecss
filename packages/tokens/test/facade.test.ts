@@ -490,6 +490,68 @@ describe('build() narrows the writeOutputs catch to a genuine --out path conflic
       vi.resetModules()
     }
   })
+
+  it('a write failure that IS an --out path conflict (EISDIR) rejects with a UsageError naming --out', async () => {
+    const scratch = scratchDir()
+    const outDir = path.join(scratch, 'out')
+    const pathConflict = Object.assign(new Error('illegal operation on a directory'), {
+      code: 'EISDIR',
+    })
+
+    vi.resetModules()
+    try {
+      vi.doMock('../src/builder.ts', async () => {
+        const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
+        return {
+          ...actual,
+          writeOutputs: () => Promise.reject(pathConflict),
+        }
+      })
+      const facade = await import('../src/facade.ts')
+
+      let caught: unknown
+      try {
+        await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBeInstanceOf(facade.UsageError)
+      expect((caught as Error).message).toMatch(/--out/)
+    } finally {
+      vi.doUnmock('../src/builder.ts')
+      vi.resetModules()
+    }
+  })
+
+  it('a write failure that IS an --out path conflict (ENOTDIR) rejects with a UsageError naming --out', async () => {
+    const scratch = scratchDir()
+    const outDir = path.join(scratch, 'out')
+    const pathConflict = Object.assign(new Error('not a directory'), { code: 'ENOTDIR' })
+
+    vi.resetModules()
+    try {
+      vi.doMock('../src/builder.ts', async () => {
+        const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
+        return {
+          ...actual,
+          writeOutputs: () => Promise.reject(pathConflict),
+        }
+      })
+      const facade = await import('../src/facade.ts')
+
+      let caught: unknown
+      try {
+        await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBeInstanceOf(facade.UsageError)
+      expect((caught as Error).message).toMatch(/--out/)
+    } finally {
+      vi.doUnmock('../src/builder.ts')
+      vi.resetModules()
+    }
+  })
 })
 
 /**
