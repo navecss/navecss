@@ -21,10 +21,22 @@ export interface ExpandTextOptions {
   readonly inputSourceMap?: SourceMap | undefined
 }
 
+/**
+ * R6: one of `expandText()`'s returned diagnostics, positioned in the
+ * authored file's own line/column space rather than only the plain
+ * `offset`/`endOffset` `plan()` itself deals in.
+ */
+export interface ExpandedDiagnostic extends Diagnostic {
+  readonly severity: 'error' | 'warning'
+  readonly file?: string
+  readonly line: number
+  readonly column: number
+}
+
 export interface ExpandTextResult {
   readonly css: string
   readonly map: string
-  readonly diagnostics: readonly Diagnostic[]
+  readonly diagnostics: readonly ExpandedDiagnostic[]
 }
 
 interface WalkContext {
@@ -33,18 +45,35 @@ interface WalkContext {
 }
 
 /**
-1-based line, 0-based column (source-map convention) for `offset` in `text`.
+ * 1-based line, 0-based column (source-map convention) for `offset` in
+ * `text`. A line break is LF, CR, FF or a CRLF pair — CSS Syntax Level 3's
+ * own set (§4.2 "newline"), not only LF: this tokenizer never rewrites line
+ * endings up front (§4.3's preprocessing step, skipped so every position
+ * stays a plain index into the caller's own bytes), so every line-break form
+ * the spec recognises has to be counted here by hand, a CRLF pair as one.
+ * `offset` is a plain string index throughout, so it is already in UTF-16
+ * code units — no separate handling for a surrogate pair.
  */
 function inputPositionAt(text: string, offset: number): Position {
   let line = 1
   let lineStart = 0
-  for (let i = 0; i < offset; i++) {
-    if (text[i] !== '\n') {
+  let i = 0
+  while (i < offset) {
+    const c = text[i]
+    if (c === '\r') {
+      i++
+      if (text[i] === '\n') i++
+      line++
+      lineStart = i
       continue
     }
-
-    line++
-    lineStart = i + 1
+    if (c === '\n' || c === '\f') {
+      i++
+      line++
+      lineStart = i
+      continue
+    }
+    i++
   }
   return { line, column: offset - lineStart }
 }
@@ -273,6 +302,34 @@ function walkBlock(w: Walker, bounds: BlockBounds): void {
 }
 
 /**
+ * Every code in R6's closed set is routed through `onUnknown`: under
+ * `'ignore'` none is returned at all; otherwise each gets the mode's own
+ * severity and, mapped through `css`'s own line/column space, a 1-based
+ * `line` and `column` beside the `offset`/`endOffset` `plan()` already gave
+ * it. `file` is `options.from`, when the host gave one — omitted, not
+ * `undefined`, when it did not.
+ */
+function reportDiagnostics(
+  diagnostics: readonly Diagnostic[],
+  css: string,
+  options: ExpandTextOptions,
+): ExpandedDiagnostic[] {
+  const onUnknown = options.onUnknown ?? 'error'
+  if (onUnknown === 'ignore') return []
+  const severity = onUnknown === 'warn' ? 'warning' : 'error'
+  return diagnostics.map((diagnostic) => {
+    const position = inputPositionAt(css, diagnostic.offset)
+    return {
+      ...diagnostic,
+      severity,
+      ...(options.from !== undefined && { file: options.from }),
+      line: position.line,
+      column: position.column + 1,
+    }
+  })
+}
+
+/**
  * `expandText(css, options)`. Reads `css` as CSS Syntax Level 3 tokens and
  * blocks (R3, R4), finds every `@nave` at-rule that is an item of the
  * stylesheet or of a block, answers `plan()`'s three facts itself, and
@@ -295,5 +352,5 @@ export function expandText(css: string, options: ExpandTextOptions = {}): Expand
     inputSourceMap: options.inputSourceMap,
     positionAt: (offset) => w.positionAt(offset),
   })
-  return { css: outputCss, map, diagnostics: w.diagnostics }
+  return { css: outputCss, map, diagnostics: reportDiagnostics(w.diagnostics, css, options) }
 }

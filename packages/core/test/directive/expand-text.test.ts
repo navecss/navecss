@@ -60,7 +60,9 @@ describe('AC-directive-core-04 — the shipped placement semantics, through expa
       onUnknown: 'warn',
     })
 
-    expect(diagnostics).toEqual([{ code: 'in-keyframes', offset: 20, endOffset: 31 }])
+    expect(diagnostics).toEqual([
+      { code: 'in-keyframes', severity: 'warning', line: 1, column: 21, offset: 20, endOffset: 31 },
+    ])
     expect(css).not.toContain('display: flex')
     expect(norm(css)).toBe('@keyframes k { to { } }')
   })
@@ -68,7 +70,9 @@ describe('AC-directive-core-04 — the shipped placement semantics, through expa
   it('refuses a bare @nave with no atom name, through onUnknown', () => {
     const { css, diagnostics } = expandText('.a { @nave; }', { onUnknown: 'warn' })
 
-    expect(diagnostics).toEqual([{ code: 'no-atom', offset: 5, endOffset: 11 }])
+    expect(diagnostics).toEqual([
+      { code: 'no-atom', severity: 'warning', line: 1, column: 6, offset: 5, endOffset: 11 },
+    ])
     expect(norm(css)).toBe('.a { }')
   })
 
@@ -76,7 +80,15 @@ describe('AC-directive-core-04 — the shipped placement semantics, through expa
     const { css, diagnostics } = expandText('.a { @nave toString; }', { onUnknown: 'warn' })
 
     expect(diagnostics).toEqual([
-      { code: 'unknown-atom', name: 'toString', offset: 11, endOffset: 19 },
+      {
+        code: 'unknown-atom',
+        name: 'toString',
+        severity: 'warning',
+        line: 1,
+        column: 12,
+        offset: 11,
+        endOffset: 19,
+      },
     ])
     expect(norm(css)).toBe('.a { }')
   })
@@ -121,7 +133,9 @@ describe('AC-directive-core-06 — expandText() changes only directive spans', (
   it('gives one bad-parent for a top-level directive', () => {
     const { diagnostics } = expandText('@nave flex;', { onUnknown: 'warn' })
 
-    expect(diagnostics).toEqual([{ code: 'bad-parent', offset: 0, endOffset: 11 }])
+    expect(diagnostics).toEqual([
+      { code: 'bad-parent', severity: 'warning', line: 1, column: 1, offset: 0, endOffset: 11 },
+    ])
   })
 })
 
