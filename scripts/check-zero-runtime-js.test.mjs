@@ -41,49 +41,122 @@ test('consumerFacingSpecifier resolves a subpath to the full specifier', () => {
 // jsExportEntries
 // ---------------------------------------------------------------------------
 
-test('jsExportEntries includes "." when it resolves to a runtime .js file', () => {
-  const manifest = { name: '@navecss/x', exports: { '.': './index.js' } }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './index.js' },
-  ])
-})
+// Every case here is a manifest paired with the exact jsExportEntries(manifest) result; a case
+// exercising anything beyond that (a derived comparison, more than one assertion) is an ordinary
+// test below instead.
+const EXPORT_ENTRY_CASES = [
+  [
+    'jsExportEntries includes "." when it resolves to a runtime .js file',
+    { name: '@navecss/x', exports: { '.': './index.js' } },
+    [{ specifier: '@navecss/x', relativePath: './index.js' }],
+  ],
+  [
+    'jsExportEntries resolves a conditions-object subpath via its "import" condition',
+    {
+      name: '@navecss/core',
+      exports: { './cx': { types: './dist/cx.d.ts', import: './dist/cx.js' } },
+    },
+    [{ specifier: '@navecss/core/cx', relativePath: './dist/cx.js' }],
+  ],
+  [
+    'jsExportEntries excludes a non-.js target',
+    { name: '@navecss/core', exports: { '.': './dist/index.css' } },
+    [],
+  ],
+  [
+    'jsExportEntries excludes "./package.json"',
+    { name: '@navecss/x', exports: { '.': './index.js', './package.json': './package.json' } },
+    [{ specifier: '@navecss/x', relativePath: './index.js' }],
+  ],
+  [
+    'jsExportEntries excludes a subpath pattern',
+    { name: '@navecss/x', exports: { './styles/*': './dist/styles/*.js' } },
+    [],
+  ],
+  [
+    'jsExportEntries excludes a subpath deliberately blocked with null',
+    { name: '@navecss/x', exports: { '.': './index.js', './internal': null } },
+    [{ specifier: '@navecss/x', relativePath: './index.js' }],
+  ],
+  [
+    'jsExportEntries recurses into a nested condition object',
+    { name: '@navecss/x', exports: { '.': { import: { types: './i.d.ts', default: './i.js' } } } },
+    [{ specifier: '@navecss/x', relativePath: './i.js' }],
+  ],
+  [
+    'jsExportEntries accepts a bare ".mjs" target',
+    { name: '@navecss/x', exports: { '.': './index.mjs' } },
+    [{ specifier: '@navecss/x', relativePath: './index.mjs' }],
+  ],
+  [
+    'jsExportEntries accepts a "require" condition target ending in ".cjs"',
+    { name: '@navecss/x', exports: { '.': { require: './index.cjs' } } },
+    [{ specifier: '@navecss/x', relativePath: './index.cjs' }],
+  ],
+  [
+    'jsExportEntries accepts a custom condition name such as "node"',
+    { name: '@navecss/x', exports: { '.': { node: './n.js' } } },
+    [{ specifier: '@navecss/x', relativePath: './n.js' }],
+  ],
+  [
+    'jsExportEntries excludes a types-only conditions block',
+    { name: '@navecss/x', exports: { '.': { types: './x.d.ts' } } },
+    [],
+  ],
+  [
+    'jsExportEntries collapses two conditions naming the same runtime path into one entry',
+    {
+      name: '@navecss/x',
+      exports: { '.': { import: './dist/tokens.js', default: './dist/tokens.js' } },
+    },
+    [{ specifier: '@navecss/x', relativePath: './dist/tokens.js' }],
+  ],
+  ['jsExportEntries returns [] when "exports" is null', { name: '@navecss/x', exports: null }, []],
+  [
+    'jsExportEntries treats a top-level "exports" string as "." shorthand',
+    { name: '@navecss/x', exports: './index.js' },
+    [{ specifier: '@navecss/x', relativePath: './index.js' }],
+  ],
+  [
+    'jsExportEntries treats a top-level "exports" array as a "." fallback array',
+    { name: '@navecss/x', exports: ['./index.js'] },
+    [{ specifier: '@navecss/x', relativePath: './index.js' }],
+  ],
+  [
+    'jsExportEntries treats a top-level conditions object (no key starting with ".") as "." shorthand',
+    { name: '@navecss/x', exports: { import: './i.js', types: './i.d.ts' } },
+    [{ specifier: '@navecss/x', relativePath: './i.js' }],
+  ],
+  [
+    'jsExportEntries walks a fallback array nested under "."',
+    { name: '@navecss/x', exports: { '.': ['./a.js'] } },
+    [{ specifier: '@navecss/x', relativePath: './a.js' }],
+  ],
+  [
+    'jsExportEntries returns [] when "exports" is absent and no legacy field names a runtime file',
+    { name: '@navecss/x' },
+    [],
+  ],
+  [
+    'jsExportEntries falls back to "main" when "exports" is absent',
+    { name: '@navecss/x', main: './index.js' },
+    [{ specifier: '@navecss/x', relativePath: './index.js' }],
+  ],
+  [
+    'jsExportEntries ignores a "browser" field that maps specifiers instead of naming one file',
+    { name: '@navecss/x', browser: { './a.js': './b.js' } },
+    [],
+  ],
+  [
+    'jsExportEntries ignores "main"/"module"/"browser" once "exports" is present',
+    { name: '@navecss/x', exports: { '.': './index.js' }, main: './other.js' },
+    [{ specifier: '@navecss/x', relativePath: './index.js' }],
+  ],
+]
 
-test('jsExportEntries resolves a conditions-object subpath via its "import" condition', () => {
-  const manifest = {
-    name: '@navecss/core',
-    exports: { './cx': { types: './dist/cx.d.ts', import: './dist/cx.js' } },
-  }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/core/cx', relativePath: './dist/cx.js' },
-  ])
-})
-
-test('jsExportEntries excludes a non-.js target', () => {
-  const manifest = { name: '@navecss/core', exports: { '.': './dist/index.css' } }
-  assert.deepEqual(jsExportEntries(manifest), [])
-})
-
-test('jsExportEntries excludes "./package.json"', () => {
-  const manifest = {
-    name: '@navecss/x',
-    exports: { '.': './index.js', './package.json': './package.json' },
-  }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './index.js' },
-  ])
-})
-
-test('jsExportEntries excludes a subpath pattern', () => {
-  const manifest = { name: '@navecss/x', exports: { './styles/*': './dist/styles/*.js' } }
-  assert.deepEqual(jsExportEntries(manifest), [])
-})
-
-test('jsExportEntries excludes a subpath deliberately blocked with null', () => {
-  const manifest = { name: '@navecss/x', exports: { '.': './index.js', './internal': null } }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './index.js' },
-  ])
-})
+for (const [title, manifest, expected] of EXPORT_ENTRY_CASES) {
+  test(title, () => assert.deepEqual(jsExportEntries(manifest), expected))
+}
 
 test('jsExportEntries audits every condition target, not just the first', () => {
   const manifest = {
@@ -95,92 +168,11 @@ test('jsExportEntries audits every condition target, not just the first', () => 
   assert.ok(entries.every((entry) => entry.specifier === '@navecss/x'))
 })
 
-test('jsExportEntries recurses into a nested condition object', () => {
-  const manifest = {
-    name: '@navecss/x',
-    exports: { '.': { import: { types: './i.d.ts', default: './i.js' } } },
-  }
-  assert.deepEqual(jsExportEntries(manifest), [{ specifier: '@navecss/x', relativePath: './i.js' }])
-})
-
-test('jsExportEntries accepts a bare ".mjs" target', () => {
-  const manifest = { name: '@navecss/x', exports: { '.': './index.mjs' } }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './index.mjs' },
-  ])
-})
-
-test('jsExportEntries accepts a "require" condition target ending in ".cjs"', () => {
-  const manifest = { name: '@navecss/x', exports: { '.': { require: './index.cjs' } } }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './index.cjs' },
-  ])
-})
-
-test('jsExportEntries accepts a custom condition name such as "node"', () => {
-  const manifest = { name: '@navecss/x', exports: { '.': { node: './n.js' } } }
-  assert.deepEqual(jsExportEntries(manifest), [{ specifier: '@navecss/x', relativePath: './n.js' }])
-})
-
-test('jsExportEntries excludes a types-only conditions block', () => {
-  const manifest = { name: '@navecss/x', exports: { '.': { types: './x.d.ts' } } }
-  assert.deepEqual(jsExportEntries(manifest), [])
-})
-
-test('jsExportEntries collapses two conditions naming the same runtime path into one entry', () => {
-  const manifest = {
-    name: '@navecss/x',
-    exports: { '.': { import: './dist/tokens.js', default: './dist/tokens.js' } },
-  }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './dist/tokens.js' },
-  ])
-})
-
-test('jsExportEntries returns [] when "exports" is null', () => {
-  assert.deepEqual(jsExportEntries({ name: '@navecss/x', exports: null }), [])
-})
-
-test('jsExportEntries treats a top-level "exports" string as "." shorthand', () => {
-  const manifest = { name: '@navecss/x', exports: './index.js' }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './index.js' },
-  ])
-})
-
-test('jsExportEntries treats a top-level "exports" array as a "." fallback array', () => {
-  const manifest = { name: '@navecss/x', exports: ['./index.js'] }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './index.js' },
-  ])
-})
-
-test('jsExportEntries treats a top-level conditions object (no key starting with ".") as "." shorthand', () => {
-  const manifest = { name: '@navecss/x', exports: { import: './i.js', types: './i.d.ts' } }
-  assert.deepEqual(jsExportEntries(manifest), [{ specifier: '@navecss/x', relativePath: './i.js' }])
-})
-
-test('jsExportEntries walks a fallback array nested under "."', () => {
-  const manifest = { name: '@navecss/x', exports: { '.': ['./a.js'] } }
-  assert.deepEqual(jsExportEntries(manifest), [{ specifier: '@navecss/x', relativePath: './a.js' }])
-})
-
 test('jsExportEntries walks a fallback array nested under a condition', () => {
   const manifest = { name: '@navecss/x', exports: { '.': { import: ['./a.js', './b.js'] } } }
   const entries = jsExportEntries(manifest)
   assert.deepEqual(entries.map((entry) => entry.relativePath).sort(), ['./a.js', './b.js'])
   assert.ok(entries.every((entry) => entry.specifier === '@navecss/x'))
-})
-
-test('jsExportEntries returns [] when "exports" is absent and no legacy field names a runtime file', () => {
-  assert.deepEqual(jsExportEntries({ name: '@navecss/x' }), [])
-})
-
-test('jsExportEntries falls back to "main" when "exports" is absent', () => {
-  const manifest = { name: '@navecss/x', main: './index.js' }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './index.js' },
-  ])
 })
 
 test('jsExportEntries falls back to "module" and "browser" too, deduplicated by path', () => {
@@ -194,22 +186,6 @@ test('jsExportEntries falls back to "module" and "browser" too, deduplicated by 
   assert.deepEqual(entries.map((entry) => entry.relativePath).sort(), [
     './browser.js',
     './index.js',
-  ])
-})
-
-test('jsExportEntries ignores a "browser" field that maps specifiers instead of naming one file', () => {
-  const manifest = { name: '@navecss/x', browser: { './a.js': './b.js' } }
-  assert.deepEqual(jsExportEntries(manifest), [])
-})
-
-test('jsExportEntries ignores "main"/"module"/"browser" once "exports" is present', () => {
-  const manifest = {
-    name: '@navecss/x',
-    exports: { '.': './index.js' },
-    main: './other.js',
-  }
-  assert.deepEqual(jsExportEntries(manifest), [
-    { specifier: '@navecss/x', relativePath: './index.js' },
   ])
 })
 
@@ -254,100 +230,146 @@ test('every DENYLIST entry has a name and fires on at least one crafted snippet'
   }
 })
 
-test('findDenylistHits does not fire on the bare English word "document"', () => {
-  assert.deepEqual(findDenylistHits('a pointer starts at the document root, as in "#/a/b"'), [])
-})
+// Every case here is one code snippet paired with the exact findDenylistHits(code) result; a
+// case exercising anything beyond that (several snippets checked in one test, a different
+// assertion shape) is an ordinary test below instead.
+const DENYLIST_HIT_CASES = [
+  [
+    'findDenylistHits does not fire on the bare English word "document"',
+    'a pointer starts at the document root, as in "#/a/b"',
+    [],
+  ],
+  [
+    'findDenylistHits does not fire on a sentence ending in the word "document."',
+    'read the spec document. It explains the format.',
+    [],
+  ],
+  [
+    'findDenylistHits fires on bracket access to document',
+    'const t = document["title"];',
+    ['document'],
+  ],
+  [
+    'findDenylistHits fires on optional-chained property access to document',
+    'document?.head.append(s);',
+    ['document'],
+  ],
+  [
+    'findDenylistHits fires on optional-chained bracket access to document',
+    'document?.["title"];',
+    ['document'],
+  ],
+  [
+    'findDenylistHits does not fire on a .style comparison',
+    'if (el.style === other.style) return;',
+    [],
+  ],
+  ['findDenylistHits does not fire on a .style read', 'const c = el.style.color;', []],
+  [
+    'findDenylistHits does not fire on a loose-equality .style comparison',
+    'if (el.style.color == x) return;',
+    [],
+  ],
+  [
+    'findDenylistHits fires on a bracketed .style assignment',
+    'el.style["color"] = "red";',
+    ['.style assignment'],
+  ],
+  [
+    'findDenylistHits fires on a .style property assignment',
+    'el.style.color = "red";',
+    ['.style assignment'],
+  ],
+  [
+    'findDenylistHits fires on a minified .style property assignment',
+    'e.style.color=t',
+    ['.style assignment'],
+  ],
+  [
+    'findDenylistHits fires on a .style.cssText assignment',
+    'el.style.cssText = "color:red";',
+    ['.style assignment'],
+  ],
+  [
+    'findDenylistHits fires on a compound .style.cssText assignment',
+    'el.style.cssText += "x";',
+    ['.style assignment'],
+  ],
+  [
+    'findDenylistHits fires on el.style.setProperty(...)',
+    'el.style.setProperty("--nave-x", v);',
+    ['.style method call'],
+  ],
+  [
+    'findDenylistHits fires on el.style.removeProperty(...)',
+    'el.style.removeProperty("color");',
+    ['.style method call'],
+  ],
+  [
+    'findDenylistHits fires on an optional-chained el.style?.setProperty(...)',
+    'el.style?.setProperty(t, n);',
+    ['.style method call'],
+  ],
+  [
+    'findDenylistHits fires on an optional-chained el.style?.removeProperty(...)',
+    'el.style?.removeProperty(t);',
+    ['.style method call'],
+  ],
+  [
+    'findDenylistHits fires on el.setAttribute("style", ...)',
+    'el.setAttribute("style", "color:red");',
+    ['setAttribute("style", ...)'],
+  ],
+  [
+    'findDenylistHits fires on a bracket-string .style bracket-index assignment',
+    "e['style'][t]=n",
+    ['.style assignment'],
+  ],
+  [
+    'findDenylistHits fires on a double-quoted bracket-string .style property assignment',
+    'e["style"].color=t',
+    ['.style assignment'],
+  ],
+  [
+    'findDenylistHits fires on a template-literal bracket-string .style method call',
+    'e[`style`].setProperty(t,n)',
+    ['.style method call'],
+  ],
+  [
+    'findDenylistHits fires on an optional-chained bracket-string .style method call',
+    "e['style']?.removeProperty(t)",
+    ['.style method call'],
+  ],
+  [
+    'findDenylistHits does not fire on a <= comparison against a .style read',
+    'if (el.style.width <= 3) return;',
+    [],
+  ],
+  [
+    'findDenylistHits does not fire on a >= comparison against a .style read',
+    'if (el.style.width >= 3) return;',
+    [],
+  ],
+  [
+    'findDenylistHits does not fire on a .style read used as an arrow function default parameter',
+    'const f = (s = el.style) => s;',
+    [],
+  ],
+  [
+    'findDenylistHits fires on an unrelated "style" property, a documented false positive',
+    'config.style.indent = 2;',
+    ['.style assignment'],
+  ],
+  [
+    'findDenylistHits returns [] for code touching none of the denylist',
+    'export const cx = (...args) => args.filter(Boolean).join(" ");',
+    [],
+  ],
+]
 
-test('findDenylistHits does not fire on a sentence ending in the word "document."', () => {
-  assert.deepEqual(findDenylistHits('read the spec document. It explains the format.'), [])
-})
-
-test('findDenylistHits fires on bracket access to document', () => {
-  assert.deepEqual(findDenylistHits('const t = document["title"];'), ['document'])
-})
-
-test('findDenylistHits fires on optional-chained property access to document', () => {
-  assert.deepEqual(findDenylistHits('document?.head.append(s);'), ['document'])
-})
-
-test('findDenylistHits fires on optional-chained bracket access to document', () => {
-  assert.deepEqual(findDenylistHits('document?.["title"];'), ['document'])
-})
-
-test('findDenylistHits does not fire on a .style comparison', () => {
-  assert.deepEqual(findDenylistHits('if (el.style === other.style) return;'), [])
-})
-
-test('findDenylistHits does not fire on a .style read', () => {
-  assert.deepEqual(findDenylistHits('const c = el.style.color;'), [])
-})
-
-test('findDenylistHits does not fire on a loose-equality .style comparison', () => {
-  assert.deepEqual(findDenylistHits('if (el.style.color == x) return;'), [])
-})
-
-test('findDenylistHits fires on a bracketed .style assignment', () => {
-  assert.deepEqual(findDenylistHits('el.style["color"] = "red";'), ['.style assignment'])
-})
-
-test('findDenylistHits fires on a .style property assignment', () => {
-  assert.deepEqual(findDenylistHits('el.style.color = "red";'), ['.style assignment'])
-})
-
-test('findDenylistHits fires on a minified .style property assignment', () => {
-  assert.deepEqual(findDenylistHits('e.style.color=t'), ['.style assignment'])
-})
-
-test('findDenylistHits fires on a .style.cssText assignment', () => {
-  assert.deepEqual(findDenylistHits('el.style.cssText = "color:red";'), ['.style assignment'])
-})
-
-test('findDenylistHits fires on a compound .style.cssText assignment', () => {
-  assert.deepEqual(findDenylistHits('el.style.cssText += "x";'), ['.style assignment'])
-})
-
-test('findDenylistHits fires on el.style.setProperty(...)', () => {
-  assert.deepEqual(findDenylistHits('el.style.setProperty("--nave-x", v);'), ['.style method call'])
-})
-
-test('findDenylistHits fires on el.style.removeProperty(...)', () => {
-  assert.deepEqual(findDenylistHits('el.style.removeProperty("color");'), ['.style method call'])
-})
-
-test('findDenylistHits fires on an optional-chained el.style?.setProperty(...)', () => {
-  assert.deepEqual(findDenylistHits('el.style?.setProperty(t, n);'), ['.style method call'])
-})
-
-test('findDenylistHits fires on an optional-chained el.style?.removeProperty(...)', () => {
-  assert.deepEqual(findDenylistHits('el.style?.removeProperty(t);'), ['.style method call'])
-})
-
-test('findDenylistHits fires on el.setAttribute("style", ...)', () => {
-  assert.deepEqual(findDenylistHits('el.setAttribute("style", "color:red");'), [
-    'setAttribute("style", ...)',
-  ])
-})
-
-// ---------------------------------------------------------------------------
-// bracket-string access to the "style" key: a minifier or a computed property can reach the
-// same DOM write through e['style'] instead of e.style
-// ---------------------------------------------------------------------------
-
-test('findDenylistHits fires on a bracket-string .style bracket-index assignment', () => {
-  assert.deepEqual(findDenylistHits("e['style'][t]=n"), ['.style assignment'])
-})
-
-test('findDenylistHits fires on a double-quoted bracket-string .style property assignment', () => {
-  assert.deepEqual(findDenylistHits('e["style"].color=t'), ['.style assignment'])
-})
-
-test('findDenylistHits fires on a template-literal bracket-string .style method call', () => {
-  assert.deepEqual(findDenylistHits('e[`style`].setProperty(t,n)'), ['.style method call'])
-})
-
-test('findDenylistHits fires on an optional-chained bracket-string .style method call', () => {
-  assert.deepEqual(findDenylistHits("e['style']?.removeProperty(t)"), ['.style method call'])
-})
+for (const [title, code, expected] of DENYLIST_HIT_CASES) {
+  test(title, () => assert.deepEqual(findDenylistHits(code), expected))
+}
 
 // ---------------------------------------------------------------------------
 // every JS assignment operator through .style, and the comparison/arrow shapes that must not
@@ -379,18 +401,6 @@ test('findDenylistHits fires on every compound assignment operator through .styl
   }
 })
 
-test('findDenylistHits does not fire on a <= comparison against a .style read', () => {
-  assert.deepEqual(findDenylistHits('if (el.style.width <= 3) return;'), [])
-})
-
-test('findDenylistHits does not fire on a >= comparison against a .style read', () => {
-  assert.deepEqual(findDenylistHits('if (el.style.width >= 3) return;'), [])
-})
-
-test('findDenylistHits does not fire on a .style read used as an arrow function default parameter', () => {
-  assert.deepEqual(findDenylistHits('const f = (s = el.style) => s;'), [])
-})
-
 test('findDenylistHits does not see a write made through an aliased style object (a documented limit of a textual scan)', () => {
   for (const code of [
     'const s = el.style; s.color = t;',
@@ -399,15 +409,6 @@ test('findDenylistHits does not see a write made through an aliased style object
   ]) {
     assert.deepEqual(findDenylistHits(code), [], code)
   }
-})
-
-test('findDenylistHits fires on an unrelated "style" property, a documented false positive', () => {
-  assert.deepEqual(findDenylistHits('config.style.indent = 2;'), ['.style assignment'])
-})
-
-test('findDenylistHits returns [] for code touching none of the denylist', () => {
-  const clean = 'export const cx = (...args) => args.filter(Boolean).join(" ");'
-  assert.deepEqual(findDenylistHits(clean), [])
 })
 
 test('findDenylistHits reports every hit once each, in DENYLIST table order', () => {
