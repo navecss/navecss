@@ -132,6 +132,44 @@ test('packageDirsFromReportPaths: throws naming the key when sonar.javascript.lc
   )
 })
 
+test('packageDirsFromReportPaths: whitespace around the = separator parses (Java .properties syntax)', () => {
+  const propertiesText = 'sonar.javascript.lcov.reportPaths = packages/a/coverage/lcov.info\n'
+  assert.deepEqual(packageDirsFromReportPaths(propertiesText), ['packages/a'])
+})
+
+test('packageDirsFromReportPaths: a : separator parses (Java .properties syntax)', () => {
+  const propertiesText = 'sonar.javascript.lcov.reportPaths:packages/a/coverage/lcov.info\n'
+  assert.deepEqual(packageDirsFromReportPaths(propertiesText), ['packages/a'])
+})
+
+test('packageDirsFromReportPaths: a repeated key uses the LAST occurrence (Java properties semantics)', () => {
+  const propertiesText = [
+    'sonar.javascript.lcov.reportPaths=packages/a/coverage/lcov.info',
+    'sonar.javascript.lcov.reportPaths=packages/b/coverage/lcov.info',
+    '',
+  ].join('\n')
+  assert.deepEqual(packageDirsFromReportPaths(propertiesText), ['packages/b'])
+})
+
+function readPropertyValue(propertiesText, key) {
+  const line = propertiesText.split('\n').find((l) => l.startsWith(`${key}=`))
+  if (line === undefined) {
+    throw new Error(`sonar-project.properties has no ${key} line.`)
+  }
+  return line
+    .slice(`${key}=`.length)
+    .split(',')
+    .map((entry) => entry.trim())
+}
+
+test('sync with the real repo: sonar.cpd.exclusions carries the same globs as sonar.test.inclusions', () => {
+  const propertiesText = readFileSync(path.join(ROOT, 'sonar-project.properties'), 'utf8')
+  assert.deepEqual(
+    readPropertyValue(propertiesText, 'sonar.cpd.exclusions'),
+    readPropertyValue(propertiesText, 'sonar.test.inclusions'),
+  )
+})
+
 test('sync with the real repo: packages with a test:coverage script match sonar.javascript.lcov.reportPaths', () => {
   const packagesDir = path.join(ROOT, 'packages')
   const packagesWithCoverageScript = readdirSync(packagesDir, { withFileTypes: true })

@@ -27,17 +27,27 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const REPORT_PATHS_KEY = 'sonar.javascript.lcov.reportPaths'
 
+const REPORT_PATHS_LINE = new RegExp(
+  String.raw`^\s*${REPORT_PATHS_KEY.replaceAll('.', String.raw`\.`)}\s*[=:]\s*(.*)$`,
+)
+
 /**
  * Derives the measured package directories from the `sonar.javascript.lcov.reportPaths` line in
  * `propertiesText` (the contents of `sonar-project.properties`), so this script's package list and
  * Sonar's own list of reports are read from the same one place rather than hand-kept in sync.
+ * Accepts `=` or `:` as the key/value separator with surrounding whitespace, and — when the key
+ * appears more than once — takes the LAST occurrence, both as Java `.properties` parsing does,
+ * since that is the format the Sonar scanner itself reads this file as.
  */
 export function packageDirsFromReportPaths(propertiesText) {
-  const line = propertiesText.split('\n').find((l) => l.startsWith(`${REPORT_PATHS_KEY}=`))
-  if (line === undefined) {
+  const lastMatch = propertiesText
+    .split('\n')
+    .map((l) => REPORT_PATHS_LINE.exec(l))
+    .findLast(Boolean)
+  if (!lastMatch) {
     throw new Error(`sonar-project.properties has no ${REPORT_PATHS_KEY} line.`)
   }
-  const value = line.slice(`${REPORT_PATHS_KEY}=`.length)
+  const value = lastMatch[1]
   return value.split(',').map((entry) => {
     const trimmed = entry.trim()
     const match = /^(.+)\/coverage\/lcov\.info$/.exec(trimmed)
