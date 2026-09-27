@@ -1,6 +1,6 @@
 /**
- * R5b: shares R11b's property list and allowlist (`@navecss/stylelint-config`) without
- * depending on that package — this reads the drift-checked, committed generated copy instead
+ * Shares `@navecss/stylelint-config`'s property list and allowlist without depending on that
+ * package: this reads the drift-checked, committed generated copy instead
  * (`scripts/check-eslint-plugin-style-properties-drift.mjs`).
  */
 import recorded from './generated/style-properties.recorded.json' with { type: 'json' }
@@ -35,16 +35,19 @@ Properties whose numeric CSS value renders with no implied unit.
 const UNITLESS_PROPERTIES = new Set(['font-weight', 'line-height', 'opacity', 'z-index'])
 
 /**
-Converts a JSX style key (`paddingTop`, `WebkitTransform`) to its CSS property name.
+Converts a JSX style key (`paddingTop`, `WebkitTransform`, `msTransform`) to its CSS property
+name. React's `ms` prefix is written lowercase, unlike every other vendor prefix, so it is
+recognised the same way those are: mapped to a leading `-ms-`.
  */
 export function cssPropertyName(key: string): string {
-  const isVendorPrefixed = /^[A-Z]/.test(key)
+  const isVendorPrefixed = /^[A-Z]/.test(key) || /^ms[A-Z]/.test(key)
   const kebab = key.replaceAll(/([A-Z])/g, '-$1').toLowerCase()
   return isVendorPrefixed ? `-${kebab}` : kebab
 }
 
 /**
-Finds the R11b entry governing `property`, if any (R5b only checks properties on that list).
+Finds the entry governing `property`, if any (the style rule only checks properties on that
+list).
  */
 export function findEntry(property: string): CompiledEntry | undefined {
   return entries.find((entry) => entry.test(property))

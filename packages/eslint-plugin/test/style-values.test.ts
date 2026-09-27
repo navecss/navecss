@@ -2,9 +2,10 @@
  * AC-eslint-plugin-26 covers: R5b, R4.
  */
 import { RuleTester } from 'eslint'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { styleValuesRule } from '../src/rules/style-values.ts'
+import { cssPropertyName } from '../src/style-rule-data.ts'
 
 const languageOptions = {
   ecmaVersion: 2024 as const,
@@ -35,6 +36,47 @@ describe('AC-26: the style rule', () => {
     })
   })
 
+  it('reports a number literal written with a unary - or +, comparing the signed value', () => {
+    ruleTester.run('style-values', styleValuesRule, {
+      valid: [],
+      invalid: [
+        { code: jsxStyle('{ margin: -8 }'), languageOptions, errors: 1 },
+        { code: jsxStyle('{ zIndex: -1 }'), languageOptions, errors: 1 },
+        { code: jsxStyle('{ padding: +13 }'), languageOptions, errors: 1 },
+      ],
+    })
+  })
+
+  it('passes a negative number the property already admits', () => {
+    ruleTester.run('style-values', styleValuesRule, {
+      valid: [{ code: jsxStyle('{ margin: -1 }'), languageOptions }],
+      invalid: [],
+    })
+  })
+
+  it('quotes the declaration as written in the source, not the rendered comparison value', () => {
+    ruleTester.run('style-values', styleValuesRule, {
+      valid: [],
+      invalid: [
+        {
+          code: jsxStyle('{ padding: 13 }'),
+          languageOptions,
+          errors: [
+            {
+              message:
+                '"padding: 13" is a literal value on a property this design system tokenizes. Move the declaration to the component\'s CSS with a var(--nave-*) value, or set a custom property inline and read it in CSS.',
+            },
+          ],
+        },
+        {
+          code: jsxStyle("{ color: 'red' }"),
+          languageOptions,
+          errors: [{ message: /^"color: 'red'" is a literal value/ }],
+        },
+      ],
+    })
+  })
+
   it('passes lawful values, computed values and out-of-scope properties', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [
@@ -51,6 +93,21 @@ describe('AC-26: the style rule', () => {
         { code: jsxStyle('{ padding: size }'), languageOptions },
         { code: 'const el = <div style={styleObject} />', languageOptions },
         { code: jsxStyle('{ ...base, margin: 0 }'), languageOptions },
+        { code: jsxStyle("{ '--brand-color': 'red' }"), languageOptions },
+      ],
+      invalid: [],
+    })
+  })
+
+  it('passes a shorthand that is not itself on the checked list, even though stylelint reports it', () => {
+    ruleTester.run('style-values', styleValuesRule, {
+      valid: [
+        { code: jsxStyle("{ background: 'red' }"), languageOptions },
+        { code: jsxStyle("{ border: '1px solid red' }"), languageOptions },
+        { code: jsxStyle("{ borderTop: '1px solid red' }"), languageOptions },
+        { code: jsxStyle("{ font: '13px Arial' }"), languageOptions },
+        { code: jsxStyle("{ transition: 'opacity 300ms' }"), languageOptions },
+        { code: jsxStyle("{ animation: 'spin 2s linear' }"), languageOptions },
       ],
       invalid: [],
     })
@@ -63,15 +120,26 @@ describe('AC-26: the style rule', () => {
     })
   })
 
-  it('never reports outline/outlineStyle/outlineWidth', () => {
+  it('never reports outline/outlineStyle/outlineWidth/outlineOffset, but checks outlineColor', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [
         { code: jsxStyle("{ outline: 'none' }"), languageOptions },
         { code: jsxStyle('{ outline: 0 }'), languageOptions },
         { code: jsxStyle("{ outlineStyle: 'none' }"), languageOptions },
         { code: jsxStyle('{ outlineWidth: 0 }'), languageOptions },
+        { code: jsxStyle('{ outlineOffset: 0 }'), languageOptions },
       ],
-      invalid: [],
+      invalid: [{ code: jsxStyle("{ outlineColor: 'red' }"), languageOptions, errors: 1 }],
     })
+  })
+})
+
+describe('cssPropertyName', () => {
+  it('maps an ms-prefixed vendor key to a leading -ms-, like the other vendor prefixes', () => {
+    expect(cssPropertyName('msTransitionDuration')).toBe('-ms-transition-duration')
+  })
+
+  it('leaves an ordinary camelCase key alone, kebab-cased with no leading dash', () => {
+    expect(cssPropertyName('paddingTop')).toBe('padding-top')
   })
 })

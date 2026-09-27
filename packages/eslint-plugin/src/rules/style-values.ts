@@ -1,10 +1,16 @@
 /**
- * R5b, the style rule: a literal value in a JSX `style` object, on a property `@navecss/
- * stylelint-config`'s R11b already tokenizes, is reported unless R11b's own semantics admit it
- * (a `var()`, a function consuming one, an admitted keyword, a CSS-wide keyword, or — for
- * numbers — an implied `px` matching the property's admitted keyword set). A value computed at
- * run time (an identifier, a call, a template literal with an expression) always passes: this
- * rule reads literal JSX syntax only, the same floor rule 1 holds for `className`.
+ * The style rule: a literal value in a JSX `style` object, on a property `@navecss/
+ * stylelint-config`'s own property list already tokenizes, is reported unless that list's
+ * allowlist semantics admit it (a `var()`, a function consuming one, an admitted keyword, a
+ * CSS-wide keyword, or, for numbers, an implied `px` matching the property's admitted keyword
+ * set). A number literal includes one written with a unary `-` or `+`: a signed constant is
+ * written in the source, not computed at run time, so `margin: -8` compares as `-8px` the same
+ * way stylelint compares it. A value computed at run time otherwise (an identifier, a call, a
+ * template literal with an expression) always passes: this rule reads literal JSX syntax only,
+ * the same floor rule 1 holds for `className`. A key whose own CSS name is not itself on that
+ * property list, including every shorthand not expanded into its longhands (`background`,
+ * `border` and its sides, `font`, `transition`, `animation`, and any other), passes unchecked:
+ * that expansion lives inside stylelint's own config, which this package does not depend on.
  */
 import type { TSESTree } from '@typescript-eslint/types'
 import type { JSSyntaxElement, Rule } from 'eslint'
@@ -19,11 +25,12 @@ import {
 } from '../style-rule-data.ts'
 
 /**
- * Whether-admits, matching stylelint's own shorthand handling for this property list (R11b's
- * README: "each space-separated part of a value is checked on its own", and a comma list —
- * `font-family`'s — the same way): every top-level word/function part must be admitted on its
- * own for the whole value to pass, so `margin: '0 auto'` passes (both parts admitted) while a
- * single bad part anywhere reports the whole literal.
+ * Whether-admits, matching stylelint's own handling of a multi-part value on a listed property
+ * (that config's README: "each space-separated part of a value is checked on its own", and a
+ * comma list, `font-family`'s, treated the same way): every top-level word/function part must be
+ * admitted on its own for the whole value to pass, so `margin: '0 auto'` passes (both parts
+ * admitted) while a single bad part anywhere reports the whole literal. This governs a listed
+ * property's own value only; it never expands a shorthand property into the longhands it sets.
  */
 function isValueAdmitted(entry: CompiledStyleEntry, text: string): boolean {
   const parsed = valueParser(text)
@@ -43,12 +50,27 @@ function propertyKeyName(property: TSESTree.Property): string | undefined {
 }
 
 /**
+A number literal, including one written with a leading unary `-` or `+`: a signed constant is
+written in the source, not computed at run time, so it is compared the same way stylelint
+compares it (`margin: -8` as `-8px`, `zIndex: -1` as `-1`).
+ */
+function numericLiteralValue(value: TSESTree.Node): number | undefined {
+  if (value.type === 'Literal' && typeof value.value === 'number') return value.value
+  if (
+    value.type === 'UnaryExpression' &&
+    (value.operator === '-' || value.operator === '+') &&
+    value.argument.type === 'Literal' &&
+    typeof value.argument.value === 'number'
+  ) {
+    return value.operator === '-' ? -value.argument.value : value.argument.value
+  }
+  return undefined
+}
+
+/**
  *
  */
 function literalValueText(value: TSESTree.Node): string | undefined {
-  if (value.type === 'Literal' && typeof value.value === 'number') {
-    return undefined // numeric handled separately (needs the property name for unit rendering)
-  }
   if (value.type === 'Literal' && typeof value.value === 'string') return value.value
   if (value.type === 'TemplateLiteral' && value.expressions.length === 0) {
     return value.quasis[0]!.value.cooked ?? value.quasis[0]!.value.raw
@@ -72,24 +94,27 @@ function checkProperty(
 
   const value = property.value as TSESTree.Node
 
-  if (value.type === 'Literal' && typeof value.value === 'number') {
-    const rendered = renderNumericValue(cssName, value.value)
-    if (!isValueAdmitted(entry, rendered)) reportLiteral(context, property, rendered)
+  const numeric = numericLiteralValue(value)
+  if (numeric !== undefined) {
+    const rendered = renderNumericValue(cssName, numeric)
+    if (!isValueAdmitted(entry, rendered)) reportLiteral(context, property)
     return
   }
 
   const text = literalValueText(value)
   if (text === undefined) return // computed at run time: pass
-  if (!isValueAdmitted(entry, text)) reportLiteral(context, property, text)
+  if (!isValueAdmitted(entry, text)) reportLiteral(context, property)
 }
 
 /**
- *
+Reports `property`, quoting its declaration exactly as written in the source (the key and the
+value as authored), never a rendered comparison value.
  */
-function reportLiteral(context: Rule.RuleContext, property: TSESTree.Property, text: string): void {
+function reportLiteral(context: Rule.RuleContext, property: TSESTree.Property): void {
+  const declaration = context.sourceCode.getText(property as never)
   context.report({
     node: property as unknown as JSSyntaxElement,
-    message: `"${text}" is a literal value on a property this design system tokenizes. Move the declaration to the component's CSS with a var(--nave-*) value, or set a custom property inline and read it in CSS.`,
+    message: `"${declaration}" is a literal value on a property this design system tokenizes. Move the declaration to the component's CSS with a var(--nave-*) value, or set a custom property inline and read it in CSS.`,
   })
 }
 
