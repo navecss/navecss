@@ -7,7 +7,7 @@
 import type { TSESTree } from '@typescript-eslint/types'
 import type { Rule } from 'eslint'
 
-import { collectCxBindings, resolveCxCallee } from '../cx-binding.ts'
+import { collectCxBindings, NO_CX_BINDINGS, resolveCxCallee } from '../cx-binding.ts'
 import { requiresReasonForCall } from '../raw-admission.ts'
 import { compileAllow, getNaveSettings } from '../settings.ts'
 
@@ -62,12 +62,13 @@ export const countEscapesRule: Rule.RuleModule = {
   create(context) {
     const settings = getNaveSettings(context)
     const allowEntries = compileAllow(settings.allow)
-    let bindings = { cxNames: new Set<string>(), rawNames: new Set<string>() }
+    let bindings = NO_CX_BINDINGS
     const prefix = context.id.split('/', 1)[0]!
 
     return {
       Program(node) {
         bindings = collectCxBindings(
+          context.sourceCode,
           node as unknown as TSESTree.Program,
           settings.cxModules,
           context.filename,

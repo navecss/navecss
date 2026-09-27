@@ -32,7 +32,16 @@ export interface LiteralPiece {
 
 type Node = TSESTree.Node
 
-const TS_WRAPPER_TYPES = new Set(['TSAsExpression', 'TSNonNullExpression', 'TSSatisfiesExpression'])
+/**
+ * Single-child wrappers read straight through: TypeScript's `as`, `satisfies` and non-null `!`,
+ * and an optional chain (`cx?.('flex')` is a call wrapped in one).
+ */
+export const TRANSPARENT_WRAPPER_TYPES = new Set([
+  'ChainExpression',
+  'TSAsExpression',
+  'TSNonNullExpression',
+  'TSSatisfiesExpression',
+])
 
 const isStringLiteral = (node: Node): node is TSESTree.StringLiteral =>
   node.type === 'Literal' && typeof node.value === 'string'
@@ -161,7 +170,7 @@ export function collectLiteralPieces(
       ]
     }
 
-    if (TS_WRAPPER_TYPES.has(current.type)) {
+    if (TRANSPARENT_WRAPPER_TYPES.has(current.type)) {
       current = (current as TSESTree.TSAsExpression).expression
       continue
     }

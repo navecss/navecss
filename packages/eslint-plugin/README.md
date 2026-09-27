@@ -137,6 +137,8 @@ Stated as rules, not as gaps to be filled later:
   (`classNames={{ root: '...' }}`) are outside every rule here.
 - A class reached through a function's return value, an imported constant, a variable beyond one
   `const` hop, or a call to a helper not in `settings['@navecss'].helpers` is not seen.
+- A `cxModules` wrapper is recognised through its `cx` export only: one that re-exports Nave's
+  `cx` under another name, or as its default export, is not seen as Nave's `cx`.
 - A camelCase string passed to `cx()` passes only if it names a real atom of the **installed**
   `@navecss/core` — a name registered through `navePlugin({ extend })` is not in `cx()`'s map and
   is reported.

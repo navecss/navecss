@@ -9,7 +9,7 @@
 import type { TSESTree } from '@typescript-eslint/types'
 import type { JSSyntaxElement, Rule } from 'eslint'
 
-import { collectCxBindings, type CxBindings } from '../cx-binding.ts'
+import { collectCxBindings, type CxBindings, NO_CX_BINDINGS } from '../cx-binding.ts'
 import { compileAllow, getNaveSettings } from '../settings.ts'
 import { type CheckState, walkTopLevelPosition } from './class-channel-walk.ts'
 
@@ -35,11 +35,12 @@ export const classChannelRule: Rule.RuleModule = {
   create(context) {
     const settings = getNaveSettings(context)
     const allowEntries = compileAllow(settings.allow)
-    let bindings: CxBindings = { cxNames: new Set(), rawNames: new Set() }
+    let bindings: CxBindings = NO_CX_BINDINGS
 
     return {
       Program(node) {
         bindings = collectCxBindings(
+          context.sourceCode,
           node as unknown as TSESTree.Program,
           settings.cxModules,
           context.filename,

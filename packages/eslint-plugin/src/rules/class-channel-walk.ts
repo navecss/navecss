@@ -9,7 +9,12 @@ import type { JSSyntaxElement, Rule, Scope } from 'eslint'
 
 import { atomNameForClass, isAtomName } from '../atoms.ts'
 import { type CxBindings, resolveCxCallee } from '../cx-binding.ts'
-import { collectLiteralPieces, type LiteralPiece, resolveConstHop } from '../literal-pieces.ts'
+import {
+  collectLiteralPieces,
+  type LiteralPiece,
+  resolveConstHop,
+  TRANSPARENT_WRAPPER_TYPES,
+} from '../literal-pieces.ts'
 import {
   cxAtomMessage,
   isNaveOutputLike,
@@ -22,19 +27,13 @@ import { type CompiledAllowEntry, isDeclared, type NaveSettings } from '../setti
 type Mode = 'class' | 'atom'
 type AnyNode = TSESTree.Node
 
-const TS_WRAPPER_TYPES = new Set(['TSAsExpression', 'TSNonNullExpression', 'TSSatisfiesExpression'])
-
 /**
- *
+ * True for a call to a name in the helper list, or to any `cx` that did not resolve to Nave's
+ * (the caller has already ruled that out through scope analysis before asking).
  */
-function isHelperCall(
-  callee: AnyNode,
-  helpers: string[],
-  bindings: CxBindings,
-): callee is TSESTree.Identifier {
+function isHelperCall(callee: AnyNode, helpers: string[]): callee is TSESTree.Identifier {
   if (callee.type !== 'Identifier') return false
-  if (helpers.includes(callee.name)) return true
-  return callee.name === 'cx' && !bindings.cxNames.has(callee.name)
+  return helpers.includes(callee.name) || callee.name === 'cx'
 }
 
 export interface CheckState {
@@ -130,10 +129,7 @@ function dispatchCall(state: CheckState, node: TSESTree.CallExpression, scope: S
   const resolved = resolveCxCallee(node.callee, state.bindings, scope)
   if (resolved === 'cx') {
     checkCxCallArguments(state, node.arguments, scope)
-  } else if (
-    resolved !== 'raw' &&
-    isHelperCall(node.callee, state.settings.helpers, state.bindings)
-  ) {
+  } else if (resolved !== 'raw' && isHelperCall(node.callee, state.settings.helpers)) {
     checkHelperCallArguments(state, node.arguments, scope)
   }
 }
@@ -233,7 +229,7 @@ function findNestedCalls(
       ]
     }
 
-    if (TS_WRAPPER_TYPES.has(current.type)) {
+    if (TRANSPARENT_WRAPPER_TYPES.has(current.type)) {
       current = (current as TSESTree.TSAsExpression).expression
       continue
     }
