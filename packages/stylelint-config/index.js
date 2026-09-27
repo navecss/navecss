@@ -20,13 +20,15 @@ const CSS_WIDE_KEYWORDS_SOURCE = 'inherit|initial|unset|revert|revert-layer'
  * anywhere admits the whole value, literal siblings included (`light-dark(#fff, var(--x))`
  * passes; documented as a stated limitation in this package's README). Matches a call to
  * `var()` itself whose first argument is a custom property name (the two-dash prefix), with
- * any whitespace after the opening parenthesis (`var( --x )`) and any comment there too. A
- * comment is skipped only up to 64 characters and with no `*` inside it, which keeps the match
- * linear in the length of the value; a longer one is reported. The lookbehind keeps a function
- * whose name merely ends in `var` (`somevar(--x)`) from counting as one, and it refuses every
- * character a CSS name can hold before `var`, a non-ASCII letter included.
+ * any whitespace after the opening parenthesis (`var( --x )`) and up to sixteen comments there
+ * too. A comment is skipped only up to 64 characters and with no `*` inside it; a longer one,
+ * or a seventeenth, is reported. Those two bounds keep the match linear in the length of the
+ * value and keep it from exhausting the regular-expression stack on a very long one. The
+ * lookbehind keeps a function whose name merely ends in `var` (`somevar(--x)`) from counting as
+ * one, and it refuses every character a CSS name can hold before `var`, a non-ASCII letter and
+ * the backslash of an escape included.
  */
-const CONSUMES_VAR_SOURCE = String.raw`(?<![\w\u0080-\uffff-])var\((?:\s|\/\*[^*]{0,64}\*\/)*--`
+const CONSUMES_VAR_SOURCE = String.raw`(?<![\w\u0080-\uffff\\-])var\(\s*(?:\/\*[^*]{0,64}\*\/\s*){0,16}--`
 
 // Each keyword below is admitted as a whole value, case-insensitive, on every colour entry
 // (the colour entry, the border-color entry and the accent-color/caret-color/scrollbar-color

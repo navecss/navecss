@@ -314,6 +314,15 @@ describe('AC-consumer-constraints-16 covers: R11b', () => {
   })
 })
 
+// The plugin compiles each `/source/flags` allowlist string itself; this is its own parse.
+function compiledAllowlist(): RegExp {
+  const options = (config.rules!['scale-unlimited/declaration-strict-value'] as unknown[])[1] as {
+    ignoreValues: Record<string, string>
+  }
+  const [, source, flags] = /^\/(.*)\/([a-zA-Z]*)$/.exec(options.ignoreValues.opacity!)!
+  return new RegExp(source!, flags)
+}
+
 describe('a var() reference is admitted with whitespace inside it, and only as a var() call', () => {
   it.each(['padding: calc( var( --x ) * 2)', 'color: var( --x )'])(
     '%s is not reported',
@@ -333,6 +342,7 @@ describe('a var() reference is admitted with whitespace inside it, and only as a
     'color: var( /* c */ --x )',
     'padding: calc(var(/* a *//* b */ --x) * 2)',
     `color: var(/*${'c'.repeat(64)}*/--x)`,
+    `color: var(${'/**/'.repeat(16)}--x)`,
   ])('%s is not reported (a comment may sit before the name)', async (declaration) => {
     const [warnings] = await warningsFor([declaration])
     expect(warnings).toEqual([])
@@ -347,8 +357,25 @@ describe('a var() reference is admitted with whitespace inside it, and only as a
     // The stated bound: a comment longer than 64 characters, or holding a `*`, is not skipped.
     `color: var(/*${'c'.repeat(65)}*/--x)`,
     'color: var(/* a*b */--x)',
+    // The stated bound on the number of comments.
+    `color: var(${'/**/'.repeat(17)}--x)`,
+    // A backslash before it makes `\var` a different function name, not var().
+    String.raw`color: \var(--x)`,
   ])('%s is reported', async (declaration) => {
     const [warnings] = await warningsFor([declaration])
     expect(warnings).toContain('scale-unlimited/declaration-strict-value')
   })
+
+  it.each([
+    ['whitespace', (n: number) => `var(${' '.repeat(n)}--x)`],
+    ['comments', (n: number) => `var(${'/**/'.repeat(n / 4)}--x)`],
+    ['comments and whitespace', (n: number) => `var(${'/**/ '.repeat(n / 5)}--x)`],
+  ] as const)(
+    'the allowlist regex tests a 14M-character value of %s inside var() without throwing',
+    (_, make) => {
+      const allowlist = compiledAllowlist()
+      const value = make(14_000_000)
+      expect(() => allowlist.test(value)).not.toThrow()
+    },
+  )
 })
