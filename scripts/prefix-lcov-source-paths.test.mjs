@@ -151,6 +151,12 @@ test('packageDirsFromReportPaths: a repeated key uses the LAST occurrence (Java 
   assert.deepEqual(packageDirsFromReportPaths(propertiesText), ['packages/b'])
 })
 
+test('packageDirsFromReportPaths: a properties file with CRLF line endings parses', () => {
+  const propertiesText =
+    'x=1\r\nsonar.javascript.lcov.reportPaths=packages/a/coverage/lcov.info\r\ny=2\r\n'
+  assert.deepEqual(packageDirsFromReportPaths(propertiesText), ['packages/a'])
+})
+
 function readPropertyValue(propertiesText, key) {
   const line = propertiesText.split('\n').find((l) => l.startsWith(`${key}=`))
   if (line === undefined) {

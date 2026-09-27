@@ -41,7 +41,7 @@ const REPORT_PATHS_LINE = new RegExp(
  */
 export function packageDirsFromReportPaths(propertiesText) {
   const lastMatch = propertiesText
-    .split('\n')
+    .split(/\r?\n/)
     .map((l) => REPORT_PATHS_LINE.exec(l))
     .findLast(Boolean)
   if (!lastMatch) {
