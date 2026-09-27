@@ -87,6 +87,14 @@ describe('AC-directive-core-25 — an extend specifier is a PostCSS dependency, 
     expect(caught?.message).toContain(process.cwd())
   })
 
+  it('fails at construction when the specifier resolves to a directory', () => {
+    expect(() => navePlugin({ extend: './' })).toThrow(/extend/)
+  })
+
+  it('fails at construction when the specifier is empty and resolves to the current directory', () => {
+    expect(() => navePlugin({ extend: '' })).toThrow(/extend/)
+  })
+
   it('requires the async API once extend is a specifier (the object form stays synchronous)', () => {
     // A permanent fixture, not a temp file: the sync `.css` getter throws
     // before the background `import()` its own `Once()` kicked off ever

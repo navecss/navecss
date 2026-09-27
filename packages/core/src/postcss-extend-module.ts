@@ -27,7 +27,12 @@ import type { ExtendMap } from './directive/resolve.ts'
 export function resolveExtendSpecifier(specifier: string): string {
   const dir = process.cwd()
   const file = path.resolve(dir, specifier)
-  if (!fs.existsSync(file)) {
+  // A directory resolves (an empty specifier, or one ending "/", both land
+  // on one) but is never a loadable module: caught here, at construction,
+  // rather than left to surface later as a directory-import error from the
+  // dynamic `import()` this specifier eventually feeds.
+  const stats = fs.existsSync(file) ? fs.statSync(file) : undefined
+  if (!stats?.isFile()) {
     throw new Error(`@nave: cannot find extend module "${specifier}" from "${dir}"`)
   }
   return file
