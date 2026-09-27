@@ -1,10 +1,26 @@
 /**
  * AC-directive-core-16: every problem in one stylesheet, in one report.
  */
+import type { Plugin } from 'postcss'
+
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/postcss.ts'
+
+/**
+ * Forces `postcss` into its async execution path (`Once` returning a
+ * promise) without touching `navePlugin` itself, so a test can put a real
+ * microtask gap between two concurrent runs sharing one plugin instance.
+ */
+function asyncGap(): Plugin {
+  return {
+    postcssPlugin: 'async-gap',
+    async Once() {
+      await Promise.resolve()
+    },
+  }
+}
 
 const CSS = '.root {\n  @nave flx interactve;\n}\n.icon {\n  @nave srOnlyy;\n}\n'
 
@@ -54,5 +70,23 @@ describe('AC-directive-core-16 — every problem in one stylesheet, in one repor
 
     await expect(first).rejects.toMatchObject({ line: 1, column: 12 })
     await expect(second).rejects.toMatchObject({ line: 1, column: 12 })
+  })
+
+  it('folds per RUN, not per shared plugin instance, once postcss runs async (found while implementing R15/AC-directive-core-25)', async () => {
+    const shared = navePlugin()
+
+    const bad = postcss([shared, asyncGap()]).process('.bad { @nave nope; }', { from: undefined })
+    const good = postcss([shared, asyncGap()]).process('.good { @nave flex; }', {
+      from: undefined,
+    })
+
+    const [badResult, goodResult] = await Promise.allSettled([bad, good])
+
+    expect(badResult.status).toBe('rejected')
+    if (badResult.status === 'rejected') {
+      expect((badResult.reason as { message: string }).message).toContain('unknown atom "nope"')
+    }
+
+    expect(goodResult.status).toBe('fulfilled')
   })
 })

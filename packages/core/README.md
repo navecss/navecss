@@ -209,7 +209,9 @@ navePlugin({
 ```
 
 To add atoms of your own to `@nave`, pass them as `extend`: see
-[CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md).
+[CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md). An `extend` object written inline in
+a cached host's config does not invalidate that host's cache; pass a module
+specifier instead when that matters (same doc).
 
 `postcss` is an optional peer dependency.
 If you are using only `cx()` or tokens, you do not need to install it.
