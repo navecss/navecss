@@ -964,6 +964,64 @@ for (const { label, description, pattern, digest } of TEMPLATE_CHECKLIST_LINES) 
   })
 }
 
+/**
+ * A minimal stand-in for GitHub's own heading-to-anchor conversion: lowercases the heading text,
+ * drops every ASCII punctuation character except a hyphen or an underscore, and turns each run of
+ * whitespace into one hyphen. It throws instead of guessing when the heading holds a character
+ * outside ASCII, because GitHub's real conversion keeps letters like accented ones rather than
+ * dropping them, and this stand-in has no rule for that case; approximating it silently would let
+ * a test pass against an anchor GitHub would not actually generate.
+ */
+function headingAnchor(headingText) {
+  for (const char of headingText) {
+    if (char.codePointAt(0) > 0x7f) {
+      throw new Error(
+        `cannot work out the anchor for the heading "${headingText}": it contains a character ` +
+          `outside ASCII (${char}), and this check only knows the plain-ASCII case`,
+      )
+    }
+  }
+  return headingText
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9\s_-]/g, '')
+    .trim()
+    .replaceAll(/\s+/g, '-')
+}
+
+// The disclosure checklist line links to a CONTRIBUTING.md heading by that heading's generated
+// anchor, but the two are pinned by separate digests above: one for the checklist line's own
+// text, one for the CONTRIBUTING.md section it points at. Neither pin reads the other, so a
+// reviewed rewording of the heading, re-pinned on its own new digest exactly as this file's
+// docblock instructs, would not be caught here even though it can change the anchor the link
+// depends on. This test ties the two together directly: it reads the heading currently named by
+// `disclosureRange()`, works out the anchor GitHub would give it, and checks the checklist line's
+// link fragment still matches. If this fails, the heading and the link were updated one at a
+// time; bring the link's fragment (or the heading, whichever is right) back into agreement with
+// the other.
+test('PULL_REQUEST_TEMPLATE.md: the disclosure checklist line links to the heading it names', () => {
+  const { line } = locateLine(
+    TEMPLATE_DOC,
+    TEMPLATE_FULL_RANGE,
+    TEMPLATE_CHECKLIST_LINES[0].pattern,
+    TEMPLATE_CHECKLIST_LINES[0].description,
+  )
+  const linkMatch = line.match(/CONTRIBUTING\.md#([a-z0-9-]+)\)/)
+  assert.ok(
+    linkMatch,
+    'expected the disclosure checklist line to hold a link fragment shaped like ' +
+      '"CONTRIBUTING.md#..."; found none',
+  )
+
+  const headingLine = CONTRIBUTING_DOC.lines[disclosureRange().start]
+  const expectedFragment = headingAnchor(headingLine.replace(/^#{1,6}\s+/, ''))
+  assert.equal(
+    linkMatch[1],
+    expectedFragment,
+    `the disclosure checklist line's link fragment ("${linkMatch[1]}") no longer matches the ` +
+      `anchor for its current heading ("${headingLine}", anchor "${expectedFragment}")`,
+  )
+})
+
 test('PULL_REQUEST_TEMPLATE.md: the licence affirmation run, complete', () => {
   const { index: ruleIndex } = locateLine(
     TEMPLATE_DOC,
