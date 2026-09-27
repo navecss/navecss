@@ -8,6 +8,8 @@ You need publish rights on both packages on npmjs.com, with two-factor authentic
 
 Nobody publishes from their own machine and no npm token exists anywhere. A GitHub Actions workflow builds the packages and **stages** them on npm: the new versions are uploaded but cannot be installed. They go live only when a maintainer **approves** each one with two-factor authentication. The workflow authenticates to npm through each package's trusted publisher, which allows staging only, so the pipeline that builds a release can never make it live on its own. npm attaches a provenance statement to every version released this way.
 
+The staging job can only run from `main`. That is enforced twice: the workflow can be dispatched from any branch, but the job's own `if:` condition skips it unless the ref is `main`, and the job additionally runs in a `release` GitHub environment. A branch that edits the workflow can drop both of those lines, so the second guard rests on two settings kept outside this repo. The repository's `release` environment restricts its deployment branches to `main`, so GitHub refuses to run the job from any other branch while the job names the environment. Each package's npm trusted publisher names that same environment, so npm refuses a token from a run that dropped it. With both settings in place, a run from any other branch cannot stage a release at all; with only the first, a branch that edits the workflow still can. Create the environment, with its branch restriction, before the workflow first runs against it: GitHub creates a missing environment on first use with no restriction at all.
+
 The workflow's own header comment ([`.github/workflows/release.yml`](../../.github/workflows/release.yml)) explains why each part of it is the way it is.
 
 ## 1. Version the packages
@@ -87,7 +89,7 @@ A new publishable package's first version goes live by hand, the same way the fi
    npm publish <tarball> --access public
    ```
    `pnpm pack` writes the tarball to the directory it is run from, here the repository root, and prints its path. `--access public` is needed because npm publishes a scoped package as restricted unless told otherwise. This first version carries no provenance statement, the same accepted cost `0.1.0` carried.
-4. On npmjs.com, give the package the settings the other packages carry: a trusted publisher (`navecss/navecss`, workflow `release.yml`, staging only, with the same environment if theirs names one), and the same publishing access (two-factor authentication required, tokens not allowed to bypass it).
+4. On npmjs.com, give the package the settings the other packages carry: a trusted publisher (`navecss/navecss`, workflow `release.yml`, environment `release`, staging only), and the same publishing access (two-factor authentication required, tokens not allowed to bypass it).
 5. Run the **release** workflow. It finds the version you just published already live, skips it, and stages everything else that is pending.
 
 After that, the package releases through the flow above like every other package.

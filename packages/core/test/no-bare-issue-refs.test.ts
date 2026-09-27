@@ -57,9 +57,23 @@ import { describe, expect, it } from 'vitest'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const PACKAGE_DIR = 'packages/core/'
 
-/** A bare `#<digits>`, excluded when the character right before `#` is a word character,
- * `/` or `-` — the shape a fully qualified `owner/repo#N` reference (e.g.
- * `owner/repo#N`) always has right there, since `repo` ends in a word character.
+/** A bare `#<digits>`, excluded when the character right before `#` is a word character — the
+ * shape a fully qualified `owner/repo#N` reference (e.g. `owner/repo#N`) always has right there,
+ * since `repo` ends in a word character. Nothing else is excused by this lookbehind. A URL or SVG
+ * fragment written directly after `url(` or `href=` and a quote is excused separately, by
+ * `isLawfulNonReference`'s own clause below; a fragment after a path segment (`url(dir/#N)`) is
+ * not, and is reported, a residual pinned as a reported row rather than fenced out (see the
+ * canonical copy's docblock).
+ *
+ * THE CLASS USED TO ALSO CARRY `-` AND `/` MEMBERS, BOTH REMOVED because they excluded the wrong
+ * population: a qualified reference's repo segment ends in a word character, never a bare hyphen
+ * or slash, so neither excluded a single qualified spelling. What `-` silently excluded instead
+ * was this repository's own hyphenated-prefix prose for "before/after issue N" (a hyphen directly
+ * followed by a bare reference, e.g. `pre-` or `post-` immediately before the `#`), and what `/`
+ * silently excluded was prose ending a path-like segment directly before a bare reference (e.g.
+ * `R27/` immediately before the `#`). Both are the bare form this guard exists to catch. Mirrors
+ * the canonical copy's removal in `scripts/check-no-bare-issue-refs.test.mjs`; see that file's
+ * docblock for the full rationale.
  *
  * The digit run is capped at four, and `.css` files are skipped entirely (below), for one
  * reason: a CSS hex colour is also a `#` followed by digits, and an all-decimal one
@@ -70,7 +84,7 @@ const PACKAGE_DIR = 'packages/core/'
  * number this repository can reach for the life of this pin (it is in the low hundreds),
  * while excluding the 6- and 8-digit hex forms outright. The 3- and 4-digit hex shorthands
  * are what the `.css` skip covers, since that is the only place this package writes them. */
-const BARE_ISSUE_REF = /(?<![\w/-])#(\d{1,4})(?!\d)/g
+const BARE_ISSUE_REF = /(?<!\w)#(\d{1,4})(?!\d)/g
 
 /**
  * A `#` followed by digits that is lawfully NOT an issue reference. Ported from
@@ -383,6 +397,13 @@ describe('isLawfulNonReference: the excluded shapes (ported, both directions)', 
       [123, 456],
       'an unrecognised function name must not borrow the light-dark exclusion',
     ],
+    // The class used to also carry `-` and `/` members, which excluded these shapes by mistake
+    // (see the docblock above `BARE_ISSUE_REF` for the full history). Pinned here so the class
+    // cannot quietly regain either one.
+    [`the pre-${HASH}219 shape`, [219], 'a hyphenated "before" prefix'],
+    [`the post-${HASH}204 shape`, [204], 'a hyphenated "after" prefix'],
+    [`see a/${HASH}123 here`, [123], 'a slash immediately before the hash, bare prose'],
+    [`the R27/${HASH}409 measurement`, [409], 'the same shape citing a requirement number'],
   ]
 
   for (const [sample, expected, shape] of reported) {
@@ -395,6 +416,74 @@ describe('isLawfulNonReference: the excluded shapes (ported, both directions)', 
     const qualified = `see owner/repo${HASH}343, some-owner/some-repo${HASH}102 and repo${HASH}74`
     expect(qualified.matchAll(BARE_ISSUE_REF).toArray()).toEqual([])
     expect(sitesInLine(`see ${HASH}343 for the ruling`)).toEqual([343])
+  })
+
+  // The lookbehind's whole contract, pinned as a property rather than as the two characters it
+  // has already had to lose: no character other than a word character directly before the hash
+  // excludes a reference. A new punctuation member added to the class reds here even before any
+  // site in the tree uses that spelling.
+  it('only a word character directly before the hash excludes a reference', () => {
+    const nonWord = [
+      '/',
+      '-',
+      '.',
+      ',',
+      ';',
+      ':',
+      '!',
+      '?',
+      '@',
+      '#',
+      '$',
+      '%',
+      '^',
+      '&',
+      '*',
+      '+',
+      '=',
+      '~',
+      '`',
+      '|',
+      '<',
+      '>',
+      '(',
+      ')',
+      '[',
+      ']',
+      '{',
+      '}',
+      '"',
+      "'",
+      '\\',
+      ' ',
+    ]
+    for (const c of nonWord) {
+      expect(
+        `x${c}${HASH}12 y`
+          .matchAll(BARE_ISSUE_REF)
+          .map((m) => m[1])
+          .toArray(),
+        `${JSON.stringify(c)} directly before the hash must not excuse a reference`,
+      ).toEqual(['12'])
+    }
+    for (const c of ['a', 'Z', '0', '_']) {
+      expect(
+        `x${c}${HASH}12 y`.matchAll(BARE_ISSUE_REF).toArray(),
+        `${JSON.stringify(c)} is a word character and still excludes the reference`,
+      ).toEqual([])
+    }
+  })
+
+  // A fragment after a path segment is outside the `url(`/`href=` clause and is reported (see
+  // the docblock above `BARE_ISSUE_REF`). Pinned so that residual is a stated trade, not a
+  // surprise.
+  it('a URL fragment after a path segment is reported, not excused', () => {
+    expect(sitesInLine(`see url(dir/${HASH}123) here`)).toEqual([123])
+    expect(sitesInLine(`<a href="page/${HASH}456">`)).toEqual([456])
+    expect(
+      sitesInLine(`<use href="${HASH}456" />`),
+      'control: the direct form stays excused',
+    ).toEqual([])
   })
 })
 

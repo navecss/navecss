@@ -23,6 +23,11 @@ import {
   runMergeAncestryCheck,
 } from './check-pr-merge-ancestry.mjs'
 
+// Spelled apart from a literal `#<digits>` so the repository's bare-issue-reference guard does
+// not mistake this report-format fixture (asserting on the `#<number>` text this script prints)
+// for a citation of an actual issue or pull request.
+const HASH = '#'
+
 /**
  * Every `--limit` form that must be rejected, shared by the parser and orchestration tests.
  */
@@ -110,7 +115,9 @@ test('checkAncestryAndReport: a PR whose merge commit is not an ancestor is name
   assert.match(result.report, /2 merged pull request\(s\) checked, 1 not an ancestor/)
   assert.match(
     result.report,
-    /#78 \(base eng\/425-license-parity-scope-comment\): merge commit 9299792/,
+    new RegExp(
+      String.raw`${HASH}78 \(base eng\/425-license-parity-scope-comment\): merge commit 9299792`,
+    ),
   )
 })
 
@@ -124,8 +131,8 @@ test('checkAncestryAndReport: names every failing PR, not just the first', () =>
     result.failed.map((f) => f.number),
     [1, 2],
   )
-  assert.match(result.report, /#1 /)
-  assert.match(result.report, /#2 /)
+  assert.match(result.report, new RegExp(`${HASH}1 `))
+  assert.match(result.report, new RegExp(`${HASH}2 `))
 })
 
 test('checkAncestryAndReport: a PR with no reported merge commit fails rather than passing by omission', () => {

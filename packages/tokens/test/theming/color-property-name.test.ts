@@ -14,8 +14,7 @@
  */
 import type { CompilerOptions } from 'typescript'
 
-import { mkdtempSync, readFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   createCompilerHost,
@@ -30,6 +29,9 @@ import {
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { build } from '../../src/facade.ts'
+import { scratchDir as makeScratchDir, registerScratchCleanup } from '../helpers/scratch-dir.ts'
+
+registerScratchCleanup()
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '../..')
 const NAVE_DIST = path.join(PACKAGE_ROOT, 'dist')
@@ -41,7 +43,7 @@ const NAVE_DIST = path.join(PACKAGE_ROOT, 'dist')
 const CONSUMER_SEED = 'oklch(0.55 0.18 250)'
 
 function scratchDir(): string {
-  return mkdtempSync(path.join(tmpdir(), 'navecss-tokens-color-property-name-'))
+  return makeScratchDir('navecss-tokens-color-property-name-')
 }
 
 /**
@@ -225,10 +227,18 @@ describe('AC-theming-56 covers: R26a (shipped artifact, both builds)', () => {
  * declaration text merely says.
  */
 describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => {
+  /**
+   * `lib` is ES2022 only. This target's default lib adds the DOM lib, which `dist/tokens.d.ts`
+   * never references and which is most of each probe's compile time: enough, under
+   * `test:coverage` on a loaded CI runner, to push a probe past vitest's 5 s default. A narrower
+   * lib can only add diagnostics, so it cannot hide the "not assignable" errors the negative
+   * probes assert; the DOM probe below pins that the DOM lib stays out.
+   */
   const COMPILER_OPTIONS: CompilerOptions = {
     target: ScriptTarget.ES2022,
     module: ModuleKind.NodeNext,
     moduleResolution: ModuleResolutionKind.NodeNext,
+    lib: ['lib.es2022.d.ts'],
     strict: true,
     skipLibCheck: true,
     noEmit: true,
@@ -281,5 +291,13 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
     expect(
       diagnostics.some((m) => m.includes("is not assignable to type 'ColorPropertyName'")),
     ).toBe(true)
+  })
+
+  it('compiles against ES2022 only: a DOM type is not in scope, with dist/tokens.d.ts loaded, so the DOM lib stays out of every probe', () => {
+    const diagnostics = compileProbe(
+      `import type { ColorPropertyName } from './tokens.js'\n` +
+        `export const el: HTMLElement | ColorPropertyName | undefined = undefined\n`,
+    )
+    expect(diagnostics.some((m) => m.includes("Cannot find name 'HTMLElement'"))).toBe(true)
   })
 })

@@ -1065,7 +1065,7 @@ test('the script run as a real process produces the same verdict as main() on th
 // `realpathSync` on either side) is green against every other row in this file, because they all
 // invoke the script through a path with no symlink in it. Here the same fixture is reached
 // through a SYMLINK to its own root, so `process.argv[1]` carries the link while Node hands
-// `import.meta.url` back symlink-resolved: under the pre-#426 form the two sides disagree,
+// `import.meta.url` back symlink-resolved: under that pre-fix form the two sides disagree,
 // `main()` never fires, and the process exits 0 having printed nothing on a tree that carries an
 // orphan -- with `release` publishing it. The symlink is created explicitly rather than relying
 // on macOS's `/var` -> `/private/var`, so the discrepancy exists on every platform instead of

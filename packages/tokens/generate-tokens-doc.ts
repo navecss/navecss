@@ -39,6 +39,12 @@ const CSS_CONFIG: BuildConfig = {
 // and a value never contains an unescaped `;` of its own, so scanning up to the next `;`
 // (non-greedy, so a following declaration's `;` is never swallowed) is safe regardless of how
 // many lines the value spans.
+//
+// Neither this nor the comment stripper below is linear in the worst case: a lazy scan to a
+// required literal restarts at every candidate start, so text with many `--nave-x:` openers and
+// no `;` after them takes quadratic time (measured: 10,000 openers ~0.19 s, 20,000 ~0.76 s).
+// Accepted because this script ships in no package and its only input is the CSS it composes
+// itself from `tokens.json`, which closes every declaration and every comment.
 const PROPERTY_DECL = /(--nave-[\w-]+):\s*([\s\S]*?);/g
 
 // Strips CSS comments before `PROPERTY_DECL` scans: a comment mentioning a `--nave-*` name (as

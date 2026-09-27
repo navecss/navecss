@@ -13,10 +13,15 @@ name: release
 #
 # Properties the arrangement depends on, pinned by scripts/release-workflow.test.mjs:
 # - The file name. npm matches the trusted publisher on it, case-sensitively.
-# - Manual trigger, main only. The trusted publisher does not restrict the branch, so the `if:`
-#   below is what skips a run started from any other ref. A run uses the copy of this file on the
-#   ref it was started from, so a branch that edits this file can drop that check; what stops such
-#   a run from shipping is the approval, and a maintainer approves only what a run on main staged.
+# - Manual trigger, main only, enforced twice. The `if:` below skips a run started from any other
+#   ref, but a run uses the copy of this file on the ref it was started from, so a branch that
+#   edits this file can drop that check. The `environment: release` below is the second guard,
+#   and it rests on two settings kept outside this repo and not pinned here: the repository's
+#   `release` environment restricts its deployment branches to `main`, so GitHub refuses to run
+#   the job from another branch while it names the environment; and each package's npm trusted
+#   publisher names the same environment, so npm refuses a token from a run that dropped the
+#   `environment:` line along with the `if:`. With both settings in place, a branch run cannot
+#   stage at all; with only the first, a branch that edits this file still can.
 # - Authentication by OIDC (`id-token: write`, granted to this job alone) and no stored token.
 #   npm attaches provenance on its own for a public repository and a public package, so no
 #   `--provenance` flag is passed.
@@ -47,6 +52,7 @@ jobs:
   stage:
     name: stage the release on npm
     if: github.ref == 'refs/heads/main'
+    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

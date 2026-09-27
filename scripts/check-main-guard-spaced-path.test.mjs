@@ -91,12 +91,12 @@ import assert from 'node:assert/strict'
  *      would catch that; a new script shipped without a sibling test would not be caught by
  *      anything but this. It is still NOT real-file evidence for the symlink half (item 4's
  *      caveat stands): it evaluates the expression, it does not invoke through a symlink.
- *   7. The ONE shape where the realpath mechanism is louder than the pre-#426 form, pinned so
+ *   7. The ONE shape where the realpath mechanism is louder than the pre-fix form, pinned so
  *      it is a known cost and not a surprise: `node -e "<code>" <positional>` puts the
  *      positional in `process.argv[1]`, and a swept file imported by that code then calls
  *      `realpathSync(<positional>)`, which throws `ENOENT` when the positional is not a path
  *      that exists. No runner in this repo produces that shape — `scripts:check` runs each
- *      gate as its own `argv[1]`, and `scripts:test` is `node --test` — and the pre-#426
+ *      gate as its own `argv[1]`, and `scripts:test` is `node --test` — and the pre-fix
  *      `pathToFileURL` form was silent under it, which is not better. The throw belongs to
  *      the mechanism, not to any one file; a tracked follow-up item covers re-deriving the
  *      mechanism (`import.meta.main`), which would remove it.
@@ -353,7 +353,7 @@ test('at one identical path that is BOTH symlinked and contains a SPACE, the sam
   assert.equal(
     runFixtureNamed(spaced, 'pathtofileurl-guard.mjs', PATHTOFILEURL_GUARD_FIXTURE),
     'BEFORE_GUARD\n',
-    'the pre-#426 guard must still be defeated when both hazards are present at once',
+    'the pre-fix guard must still be defeated when both hazards are present at once',
   )
   assert.equal(
     runFixtureNamed(spaced, 'realpath-guard.mjs', REALPATH_GUARD_FIXTURE),
@@ -435,7 +435,7 @@ test('under `node -e "<code>" <nonexistent positional>` the realpath guard THROW
   assert.deepEqual(
     pathToFileURLForm,
     { stdout: 'BEFORE_GUARD\n', stderr: '' },
-    'the pre-#426 form skips main() silently under the same shape: the cost pinned above is ' +
+    'the pre-fix form skips main() silently under the same shape: the cost pinned above is ' +
       'loudness, not a behaviour the older mechanism got right',
   )
 })
@@ -574,7 +574,7 @@ test('GUARD_PATTERN tolerates a !== undefined variant and a reformatted guard, a
 // spelling, so a future narrowing back to the one form the fourteen current entry points use
 // fails a named test rather than silently reopening the hole. The prior predicate was
 // `/^(async )?function main\(/m`: an `export function main()` entry point carrying the exact
-// pre-#426 guard passed the whole suite while silently no-opping through a symlinked path.
+// pre-fix guard passed the whole suite while silently no-opping through a symlinked path.
 test('hasMainEntryPoint recognises every module-scope spelling of a main() entry point, and nothing else', () => {
   const covered = [
     ['function main() {}', 'a plain function declaration'],
