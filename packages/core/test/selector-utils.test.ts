@@ -112,3 +112,19 @@ describe('anchorSelectorList — an empty branch is a fail-loud author error, no
     expect(() => anchorSelectorList(':hover, ,:focus')).toThrow(/:hover, ,:focus/)
   })
 })
+
+describe('anchorSelectorList — a CSS comment is opaque, like a quoted string', () => {
+  it('anchors a branch whose only & sits inside a comment, instead of leaving it a descendant match', () => {
+    expect(anchorSelectorList('/* note & */:hover')).toBe('&/* note & */:hover')
+  })
+
+  it('does not split on a comma inside a comment', () => {
+    expect(anchorSelectorList(':hover /* a, b */')).toBe('&:hover /* a, b */')
+  })
+
+  it('still splits and anchors every branch around a comment that holds no comma', () => {
+    expect(anchorSelectorList(':disabled /* x */, [aria-disabled="true"]')).toBe(
+      '&:disabled /* x */, &[aria-disabled="true"]',
+    )
+  })
+})

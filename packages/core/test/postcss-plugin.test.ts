@@ -649,6 +649,17 @@ describe('an extend atom accepts CSS-lawful strings a character blocklist used t
     expect(await run('.x { @nave good; }', { extend })).toContain('&:focus-visible')
   })
 
+  it('anchors a pseudo key whose only & sits inside a comment, rather than emitting a descendant match', async () => {
+    const extend: Record<string, AtomDefinition> = {
+      noted: {
+        declarations: { color: 'red' },
+        pseudos: { '/* note & */:hover': { color: 'blue' } },
+      },
+    }
+
+    expect(await run('.x { @nave noted; }', { extend })).toContain('&/* note & */:hover {')
+  })
+
   it('accepts a media condition that is a plain width query', async () => {
     const extend: Record<string, AtomDefinition> = {
       good: {
