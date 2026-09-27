@@ -3,6 +3,8 @@
  * AC-eslint-plugin-02 covers: R1.
  * AC-eslint-plugin-04 covers: R1 (the ESLint trademark notice, cleared and signed off).
  */
+import { Linter } from 'eslint'
+import { defineConfig } from 'eslint/config'
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   cpSync,
@@ -12,6 +14,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -205,6 +208,37 @@ describe('AC-02: the plugin object', () => {
     expect(keys).toEqual(['plugins', 'rules'])
   })
 
+  it('recommended registers this very plugin object under the key @navecss, and no other', async () => {
+    const plugin = await loadPlugin()
+    const { plugins } = plugin.configs.recommended as { plugins: Record<string, unknown> }
+    expect(Object.keys(plugins)).toEqual(['@navecss'])
+    expect(plugins['@navecss']).toBe(plugin)
+  })
+
+  it.each([
+    ['defineConfig([recommended])', (recommended: Linter.Config) => [recommended]],
+    [
+      'defineConfig([{ extends: [recommended] }])',
+      (recommended: Linter.Config) => [{ extends: [recommended] }],
+    ],
+    [
+      "extends: ['@navecss/recommended'] with the plugin registered",
+      (recommended: Linter.Config) => [
+        { plugins: recommended.plugins, extends: ['@navecss/recommended'] },
+      ],
+    ],
+  ])('%s reports a literal class under @navecss/class-channel', async (_form, configsFor) => {
+    const plugin = (await loadPlugin()) as unknown as { configs: { recommended: Linter.Config } }
+    const config = defineConfig([
+      ...(configsFor(plugin.configs.recommended) as Parameters<typeof defineConfig>),
+      { languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } } },
+    ])
+    const messages = new Linter().verify('const el = <div className="legacy-card" />', config, {
+      filename: 'app.js',
+    })
+    expect(messages.map((message) => message.ruleId)).toEqual(['@navecss/class-channel'])
+  })
+
   it('recommended sets the four rules to error, except count-escapes which is off', async () => {
     const plugin = await loadPlugin()
     const { rules } = plugin.configs.recommended
@@ -285,6 +319,7 @@ function runNode(cwd: string, args: string[]): { output: string; status: number 
 }
 
 const PRINT_RULES = 'console.log(Object.keys(plugin.rules).sort().join(","))'
+const PRINT_VERSION = 'console.log(`version=${plugin.meta.version}`)'
 const RULE_LIST = 'class-channel,count-escapes,raw-reason,style-values'
 
 describe('loading the installed package by name', () => {
@@ -312,6 +347,27 @@ describe('loading the installed package by name', () => {
       ])
       expect(run.output).toContain(RULE_LIST)
       expect(run.status).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('AC-02: meta.version is read from the manifest, never typed by hand', () => {
+  it('the installed package reports its packed manifest version, and a copy whose manifest version alone changed reports the changed one', () => {
+    const dir = scratchConsumer()
+    try {
+      const manifestPath = path.join(dir, 'node_modules/@navecss/eslint-plugin/package.json')
+      const packed = JSON.parse(readFileSync(manifestPath, 'utf8')) as { version: string }
+      const load = [
+        '--input-type=module',
+        '-e',
+        `const { default: plugin } = await import('@navecss/eslint-plugin'); ${PRINT_VERSION}`,
+      ]
+      expect(runNode(dir, load).output).toContain(`version=${packed.version}`)
+
+      writeFileSync(manifestPath, JSON.stringify({ ...packed, version: '9.8.7-changed' }))
+      expect(runNode(dir, load).output).toContain('version=9.8.7-changed')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

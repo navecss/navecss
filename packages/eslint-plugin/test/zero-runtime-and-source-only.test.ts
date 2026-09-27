@@ -1,4 +1,3 @@
-import { RuleTester } from 'eslint'
 /**
  * AC-eslint-plugin-05 covers: R2.
  * AC-eslint-plugin-06 covers: R3.
@@ -13,19 +12,23 @@ import { RuleTester } from 'eslint'
  * place. Combined with the no-inlined-dependency guard (`tsc` never bundles), there is nothing
  * a browser build could pull in.
  */
-import { execSync } from 'node:child_process'
-import {
+import { Linter } from 'eslint'
+import { execFileSync } from 'node:child_process'
+import fs, {
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
+import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { classChannelRule } from '../src/rules/class-channel.ts'
@@ -98,42 +101,149 @@ describe('AC-05: zero-runtime (R2)', () => {
   })
 })
 
-describe('AC-06: rules key on source, never on build output (R3)', () => {
-  const ruleTester = new RuleTester()
-  const languageOptions = {
-    ecmaVersion: 2024 as const,
-    sourceType: 'module' as const,
-    parserOptions: { ecmaFeatures: { jsx: true } },
-  }
-  const code = `import { cx } from '@navecss/core/cx'\nconst el = <div className={cx('flex')} />\nconst bad = <div className={cx('legacy-card')} />`
+const FIXTURE = `import { cx } from '@navecss/core/cx'\nconst ok = <div className={cx('flex')} />\nconst bad = <div className={cx('legacy-card')} />`
 
-  function runFixture(): void {
-    ruleTester.run('class-channel', classChannelRule, {
-      valid: [],
-      invalid: [{ code, languageOptions, errors: 1 }],
+/**
+ * Records every path a synchronous `node:fs` call is handed while `run` executes, by swapping
+ * the functions on the module object and re-syncing the ES-module bindings the rules imported.
+ */
+function recordFileAccess(run: () => void): string[] {
+  const touched: string[] = []
+  const names = ['existsSync', 'readFileSync', 'realpathSync', 'statSync', 'lstatSync'] as const
+  const originals = names.map((name) => [name, fs[name]] as const)
+  for (const [name, original] of originals) {
+    Object.assign(fs, {
+      [name]: (target: unknown, ...rest: unknown[]) => {
+        touched.push(String(target))
+        return (original as (...args: unknown[]) => unknown)(target, ...rest)
+      },
     })
   }
+  syncBuiltinESMExports()
+  try {
+    run()
+  } finally {
+    for (const [name, original] of originals) Object.assign(fs, { [name]: original })
+    syncBuiltinESMExports()
+  }
+  return touched
+}
 
-  it('the same verdict holds with no dist/ present, after one is created, and after it is deleted again', () => {
-    // Never actually read by any rule in this package (nothing here resolves a "dist" path of
-    // the consumer's own project); this loop proves that directly rather than assuming it.
-    const scratchDist = mkdtempSync(path.join(tmpdir(), 'nave-consumer-dist-'))
+function lintIn(
+  project: string,
+  plugin: unknown,
+  code: string,
+  settings: Record<string, unknown> = {},
+): string[] {
+  const cwdBefore = process.cwd()
+  process.chdir(project)
+  try {
+    return new Linter({ cwd: project })
+      .verify(
+        code,
+        {
+          files: ['**/*.jsx'],
+          languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
+          plugins: { '@navecss': plugin as never },
+          rules: { '@navecss/class-channel': 'error' },
+          settings,
+        },
+        { filename: path.join(project, 'src/app.jsx') },
+      )
+      .map((message) => `${message.line}:${message.ruleId}:${message.message}`)
+  } finally {
+    process.chdir(cwdBefore)
+  }
+}
+
+function scratchProject(): string {
+  const scratch = mkdtempSync(path.join(tmpdir(), 'nave-consumer-'))
+  const project = realpathSync(scratch)
+  mkdirSync(path.join(project, 'src/ui'), { recursive: true })
+  writeFileSync(path.join(project, 'src/ui/cx.js'), "export { cx } from '@navecss/core/cx'\n")
+  return project
+}
+
+const sourcePlugin = { rules: { 'class-channel': classChannelRule } }
+
+describe('AC-06: rules key on source, never on build output (R3)', () => {
+  it('the recorder sees a read the rules really make: a cxModules wrapper resolved in the project (a control)', () => {
+    const project = scratchProject()
     try {
-      expect(() => runFixture()).not.toThrow()
-      mkdirSync(path.join(scratchDist, 'dist'))
-      writeFileSync(path.join(scratchDist, 'dist', 'bundle.js'), 'export const x = 1\n')
-      expect(() => runFixture()).not.toThrow()
-      rmSync(path.join(scratchDist, 'dist'), { recursive: true, force: true })
-      expect(() => runFixture()).not.toThrow()
+      const touched = recordFileAccess(() =>
+        lintIn(
+          project,
+          sourcePlugin,
+          "import { cx } from './ui/cx.js'\nconst a = <div className={cx('flex')} />",
+          {
+            '@navecss': { cxModules: ['./src/ui/cx.js'] },
+          },
+        ),
+      )
+      expect(touched.some((target) => target.startsWith(path.join(project, 'src/ui/cx')))).toBe(
+        true,
+      )
     } finally {
-      rmSync(scratchDist, { recursive: true, force: true })
+      rmSync(project, { recursive: true, force: true })
     }
   })
 
-  it("a real tsc build of this package itself does not change class-channel's own verdicts", () => {
-    // Rebuilds THIS package (never the fixture's own — there is no bundler in this repo that
-    // would "inline" a call, only R3's own build, exercised here as the real one available).
-    execSync('pnpm run build', { cwd: PACKAGE_DIR, stdio: 'ignore' })
-    expect(() => runFixture()).not.toThrow()
+  it('verdicts are identical with no build output, with one, and after it is deleted, and no rule reads a file in the project', () => {
+    const project = scratchProject()
+    try {
+      const touched: string[] = []
+      const verdicts: string[][] = []
+      const lintFixture = (): void => {
+        verdicts.push(lintIn(project, sourcePlugin, FIXTURE))
+      }
+      const lintOnce = (): void => {
+        touched.push(...recordFileAccess(lintFixture))
+      }
+
+      lintOnce()
+      mkdirSync(path.join(project, 'dist'))
+      writeFileSync(
+        path.join(project, 'dist/app.js'),
+        'const ok = jsx("div", { className: "nave-flex" })\nconst bad = jsx("div", { className: "legacy-card" })\n',
+      )
+      lintOnce()
+      rmSync(path.join(project, 'dist'), { recursive: true, force: true })
+      lintOnce()
+
+      expect(verdicts[0]).toHaveLength(1)
+      expect(verdicts[0]![0]).toMatch(/^3:@navecss\/class-channel:cx\("legacy-card"\)/)
+      expect(verdicts[1]).toEqual(verdicts[0])
+      expect(verdicts[2]).toEqual(verdicts[0])
+      expect(touched.filter((target) => target.startsWith(project))).toEqual([])
+    } finally {
+      rmSync(project, { recursive: true, force: true })
+    }
+  })
+
+  it("the compiled plugin, built into a scratch copy (never this package's own dist/), gives the same verdicts as the source", async () => {
+    const scratch = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-build-'))
+    const copy = realpathSync(scratch)
+    const project = scratchProject()
+    try {
+      writeFileSync(
+        path.join(copy, 'package.json'),
+        readFileSync(path.join(PACKAGE_DIR, 'package.json')),
+      )
+      symlinkSync(path.join(PACKAGE_DIR, 'node_modules'), path.join(copy, 'node_modules'), 'dir')
+      execFileSync(
+        path.join(PACKAGE_DIR, 'node_modules/.bin/tsc'),
+        ['-p', path.join(PACKAGE_DIR, 'tsconfig.build.json'), '--outDir', path.join(copy, 'dist')],
+        { cwd: PACKAGE_DIR, stdio: 'pipe' },
+      )
+      const built = (await import(pathToFileURL(path.join(copy, 'dist/index.js')).href)) as {
+        default: unknown
+      }
+      expect(lintIn(project, built.default, FIXTURE)).toEqual(
+        lintIn(project, sourcePlugin, FIXTURE),
+      )
+    } finally {
+      rmSync(copy, { recursive: true, force: true })
+      rmSync(project, { recursive: true, force: true })
+    }
   })
 })
