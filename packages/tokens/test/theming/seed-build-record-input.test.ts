@@ -13,7 +13,7 @@
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { build } from '../../src/facade.ts'
 import { SHIPPED_SEEDS } from '../../src/theming/shipped-seeds.ts'
@@ -86,12 +86,20 @@ describe('AC-token-build-20 covers: R20', () => {
     },
   )
 
-  it('across the eleven inputs the recorded forms are the seven R5 names, never one shape standing in for everything', async () => {
-    const forms = new Set<string>()
+  // Eleven real builds run back to back — comfortably under a second quiet, but close enough
+  // to vitest's 5s default under load to run once here, in `beforeAll` with an explicit
+  // timeout, rather than inside the assertion's own `it()`.
+  let forms: Set<string>
+
+  beforeAll(async () => {
+    forms = new Set<string>()
     for (const { input } of ACCEPTED_FORMS) {
       const { primary } = await buildRecordFor(input)
       forms.add(primary.input.form)
     }
+  }, 20_000)
+
+  it('across the eleven inputs the recorded forms are the seven R5 names, never one shape standing in for everything', () => {
     expect([...forms].toSorted((a, b) => a.localeCompare(b))).toEqual([
       'color',
       'hex',

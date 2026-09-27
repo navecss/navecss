@@ -3,19 +3,19 @@
  * Tripwire for keeping CONTRIBUTING.md's documented CI chain in sync with package.json.
  *
  * `.github/CONTRIBUTING.md`'s "`ci:check` runs, in order:" section is a hand transcription of
- * `package.json`'s own `ci:check` script chain: eleven numbered items, each opening with a
+ * `package.json`'s own `ci:check` script chain: one numbered item per step, each opening with a
  * bold code span naming one `pnpm run <script>` step. It has decayed twice already, on two
  * different axes, both caught only by a person reading it against the manifest during a
  * review that happened to run a merged-with-`main` certification (commit
- * `a6555fd`): once on MEMBERSHIP (item 11's own inner enumeration missed
+ * `a6555fd`): once on MEMBERSHIP (the `scripts:check` item's own inner enumeration missed
  * a ninth gate for one pull request) and once on ORDER (items 5 and 6 transposed against the
  * chain, false for days). Nothing re-checked either until a person happened to look.
  *
- * This gate is possible for the OUTER eleven and was correctly declined for item 11's own
- * inner enumeration: the outer labels ARE the
+ * This gate is possible for the OUTER items and was correctly declined for the `scripts:check`
+ * item's own inner enumeration: the outer labels ARE the
  * script names, verbatim and in order (`typecheck`, `lint`, `test`, ...), so comparing them to
- * `package.json`'s chain needs no mapping table. Item 11's inner members are prose names for
- * scripts ("the licence allow-list gate") that are NOT their filenames
+ * `package.json`'s chain needs no mapping table. The `scripts:check` item's inner members are
+ * prose names for scripts ("the licence allow-list gate") that are NOT their filenames
  * (`check-license-allowlist.mjs`), so a gate for that would need a mapping that is itself a
  * hand transcription and the same defect class one level down — declined for exactly that
  * reason and not reached here.
@@ -33,8 +33,8 @@
  * reports green about a list it never read.
  *
  * NO MAPPING TABLE, EVER. The moment this needs one it has become the thing correctly declined
- * for item 11's inner list, and the fix is to leave the outer eleven alone, not to grow a table
- * here.
+ * for the `scripts:check` item's inner list, and the fix is to leave the outer items alone, not
+ * to grow a table here.
  */
 import { readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'

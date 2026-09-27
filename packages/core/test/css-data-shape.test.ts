@@ -14,6 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { PackedCoreTarball } from './helpers/pack-core.ts'
 
+import { HASH, scanForBrainReferences, syntheticDatedId } from './helpers/brain-reference-scan.ts'
 import { packCoreTarball } from './helpers/pack-core.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -187,58 +188,21 @@ describe('AC-consumer-constraints-02 (scoped to this slice): no prose count', ()
 })
 
 describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference', () => {
-  // Every fixture below is COMPOSED at runtime from short fragments rather than written as a
-  // literal recognisable id, mirroring no-bare-issue-refs.test.ts's own HASH convention: this
-  // file lives under packages/core/, which this repository's own brain-reference and
-  // bare-issue-reference guards scan by bytes, so a literal roster id, dated id or bare
-  // `#`+digits sitting in this fixture would itself be exactly the shape those guards exist to
-  // keep out of the public repository, rather than a test asserting the catch happens on the
-  // real shipped artifacts (which carry no such fragment at all).
-  const join = (...parts: string[]) => parts.join('')
-  const PERSONA_IDS = [
-    'PM',
-    join('PR', 'IN'),
-    'ENG',
-    'QA',
-    join('DS', 'GN'),
-    join('DEV', 'REL'),
-    join('STEW', 'ARD'),
-    join('OR', 'CH'),
-    join('LI', 'B'),
-    join('AS', 'ST'),
-  ]
-  const DATED_ID = /\b(?:F|D|E|LE|L|Lc)-\d{8}(?:-[a-z0-9]+)*\b/
-  const HASH = String.fromCharCode(35)
-
-  function scan(text: string, label: string): void {
-    for (const id of PERSONA_IDS) {
-      expect(new RegExp(`\\b${id}\\b`).test(text), `${label} contains persona id ${id}`).toBe(false)
-    }
-    expect(DATED_ID.test(text), `${label} contains a dated id`).toBe(false)
-    expect(text, `${label} contains a bare tracker reference`).not.toMatch(
-      /(?<![\w/-])#(\d{1,4})(?!\d)/,
-    )
-    expect(text, `${label} contains a private-tracker repo reference`).not.toContain(
-      join('navecss', '-', 'cowork'),
-    )
-    expect(text, `${label} contains a brain/cowork path`).not.toMatch(/\bbrain\/|\bcowork\//)
-  }
-
   it('nave.css-data.json carries no tracker, persona, dated-id or brain-path reference', () => {
-    scan(JSON.stringify(readCommittedCssData()), 'nave.css-data.json')
+    scanForBrainReferences(JSON.stringify(readCommittedCssData()), 'nave.css-data.json')
   })
 
   it('this slice’s changeset carries none either', () => {
-    scan(
+    scanForBrainReferences(
       readFileSync(path.resolve(HERE, '../../../.changeset/ship-editor-custom-data.md'), 'utf8'),
       'the changeset',
     )
   })
 
   it('the scan reports a planted copy carrying a tracker ref, a persona id and a dated id', () => {
-    const syntheticDatedId = join('D', '-', '20200101', '-', '01')
-    const planted = `See ${HASH}1, cleared by ${join('OR', 'CH')} per ${syntheticDatedId}.`
-    expect(() => scan(planted, 'planted')).toThrow()
+    const plantedPersonaId = ['O', 'R', 'C', 'H'].join('')
+    const planted = `See ${HASH}1, cleared by ${plantedPersonaId} per ${syntheticDatedId()}.`
+    expect(() => scanForBrainReferences(planted, 'planted')).toThrow()
   })
 })
 

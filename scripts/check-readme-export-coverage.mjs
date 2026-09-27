@@ -242,18 +242,18 @@ function main() {
     return
   }
 
-  // The green line states its own scope, per an earlier review's item: what was examined,
-  // what was skipped and why, and the presence-only caveat. A pass is the only moment anyone
-  // stops looking, so the caveat belongs on THIS branch and not only on the failure text.
+  // The green line states its own scope: what was examined, what was skipped and why, and the
+  // presence-only caveat. A pass is the only moment anyone stops looking, so the caveat belongs
+  // on THIS branch and not only on the failure text.
   //
   // Two lines, not one sentence carrying all four clauses. As one line it ran 332 characters
   // against a median of 118 — measured when this gate landed, over the EIGHT sibling gates in
-  // `scripts:check` at that moment (eleven today). That median is a frozen computation over
-  // those eight, not a standing claim about today's siblings: re-point it only by recomputing,
-  // never by editing the count to match. Worse than the length, the one-line form put the
-  // caveat in the middle and closed on the skip census, so the sentence ended on its least
-  // load-bearing clause. Splitting costs no clause: the census is line 1, the verdict is
-  // line 2, and the caveat now ENDS the output, which is the position a reader keeps.
+  // `scripts:check` at that moment. That median is a frozen computation over those eight, not a
+  // standing claim about today's siblings: re-point it only by recomputing, never by editing
+  // the count to match. Worse than the length, the one-line form put the caveat in the middle
+  // and closed on the skip census, so the sentence ended on its least load-bearing clause.
+  // Splitting costs no clause: the census is line 1, the verdict is line 2, and the caveat now
+  // ENDS the output, which is the position a reader keeps.
   const skipped =
     `${counts.skippedPackages} private package(s) carrying ` +
     `${counts.skippedSubpaths} in-scope subpath(s)`
