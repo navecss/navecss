@@ -114,3 +114,35 @@ describe('AC-directive-core-29 — every documented config fence names a real su
     ])
   })
 })
+
+describe('extractFences and extractCoreImports cover every fence and import shape a doc can carry', () => {
+  it('reads a fence whose info string carries more than the bare language', () => {
+    const text = '```ts title="a"\nimport { navePlugn } from "@navecss/core/postcss"\n```\n'
+
+    const fences = extractFences('x', text)
+
+    expect(fences.flatMap((f) => extractCoreImports(f.body))).toHaveLength(1)
+  })
+
+  it('reads a ~~~ fence the same as a ``` one', () => {
+    const text = '~~~ts\nimport { navePlugn } from "@navecss/core/postcss"\n~~~\n'
+
+    const fences = extractFences('x', text)
+
+    expect(fences.flatMap((f) => extractCoreImports(f.body))).toHaveLength(1)
+  })
+
+  it('extracts a dynamic import() of a core subpath', () => {
+    const imports = extractCoreImports("await import('@navecss/core/postcss')")
+
+    expect(imports).toEqual([{ names: [], specifier: '@navecss/core/postcss' }])
+  })
+
+  it('extracts a string-keyed plugin entry in a postcss config object', () => {
+    const imports = extractCoreImports(
+      "module.exports = { plugins: { '@navecss/core/postcsss': {} } }",
+    )
+
+    expect(imports).toEqual([{ names: [], specifier: '@navecss/core/postcsss' }])
+  })
+})

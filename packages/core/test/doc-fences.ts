@@ -13,12 +13,16 @@ export interface Fence {
 }
 
 /**
-Every ```lang ... ``` fenced block in `text`, tagged with which doc it came from.
+ * Every fenced block in `text`, tagged with which doc it came from: a run
+ * of 3+ backticks or 3+ tildes (CommonMark allows either), a language tag,
+ * then anything else up to the newline (an info string carries more than
+ * the bare language, e.g. `` ```ts title="a" ``), closed by a line holding
+ * only the same fence character, 3 or more of them.
  */
 export function extractFences(doc: string, text: string): Fence[] {
   return text
-    .matchAll(/```([\w-]*)\n([\s\S]*?)```/g)
-    .map((m) => ({ body: m[2] ?? '', doc, lang: m[1] ?? '' }))
+    .matchAll(/^(`{3,}|~{3,})([\w-]*)[^\n]*\n([\s\S]*?)^\1[ \t]*$/gm)
+    .map((m) => ({ body: m[3] ?? '', doc, lang: m[2] ?? '' }))
     .toArray()
 }
 
@@ -87,7 +91,24 @@ export function extractCoreImports(body: string): CoreImport[] {
     .map((m): CoreImport => ({ names: [], specifier: m[1]! }))
     .toArray()
 
-  return [...jsImports, ...cssImports]
+  // `await import('@navecss/core/postcss')`: no destructured names to check
+  // (checkCoreImport skips name-checking when there are none, the same as
+  // the CSS `@import` case above), but the specifier itself still needs to
+  // be a real exports-map key.
+  const dynamicImports = normalizedBody
+    .matchAll(/\bimport\(\s*['"](@navecss\/core[^'"]*)['"]\s*\)/g)
+    .map((m): CoreImport => ({ names: [], specifier: m[1]! }))
+    .toArray()
+
+  // A string-keyed plugin entry in a postcss config object, Next's
+  // documented string form (`{ plugins: { '@navecss/core/postcss': {} } }`):
+  // the specifier is an object key, never imported by name at all.
+  const objectKeyImports = normalizedBody
+    .matchAll(/['"](@navecss\/core[^'"]*)['"]\s*:/g)
+    .map((m): CoreImport => ({ names: [], specifier: m[1]! }))
+    .toArray()
+
+  return [...jsImports, ...cssImports, ...dynamicImports, ...objectKeyImports]
 }
 
 export interface BinInvocation {
