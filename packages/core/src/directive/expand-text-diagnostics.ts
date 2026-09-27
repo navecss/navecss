@@ -91,16 +91,6 @@ export function createPositionFinder(text: string): (offset: number) => Position
 }
 
 /**
- * 1-based line, 0-based column (source-map convention) for `offset` in
- * `text`, for a caller with a single position to look up. `expandText()`'s
- * own hot path — one query per output token — uses `createPositionFinder`
- * instead, to build the line-start table once rather than per query.
- */
-export function inputPositionAt(text: string, offset: number): Position {
-  return createPositionFinder(text)(offset)
-}
-
-/**
  * Every code in R6's closed set is routed through `onUnknown`: under
  * `'ignore'` none is returned at all; otherwise each gets the mode's own
  * severity and, mapped through `css`'s own line/column space, a 1-based
@@ -116,8 +106,9 @@ export function reportDiagnostics(
   const onUnknown = options.onUnknown ?? 'error'
   if (onUnknown === 'ignore') return []
   const severity = onUnknown === 'warn' ? 'warning' : 'error'
+  const positionAt = createPositionFinder(css)
   return diagnostics.map((diagnostic) => {
-    const position = inputPositionAt(css, diagnostic.offset)
+    const position = positionAt(diagnostic.offset)
     return {
       ...diagnostic,
       severity,
