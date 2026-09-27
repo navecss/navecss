@@ -3,9 +3,11 @@
  * `navecss-core` — a bin whose logic lives entirely behind `check()` (R10).
  * Flags follow `navecss-tokens`' own vocabulary and equals form.
  */
+import { access, constants } from 'node:fs/promises'
 import { parseArgs } from 'node:util'
 
 import { check, type CheckResult } from './directive/check.ts'
+import { listCssFiles } from './directive/list-css-files.ts'
 
 const USAGE = `Usage:
   navecss-core check --source=<file-or-dir> [--source=<file-or-dir> ...]`
@@ -46,16 +48,52 @@ function printFindings(result: CheckResult): void {
 /**
 The pass line: what was read, stated plainly, no cause list.
  */
-function printCleanSummary(result: CheckResult): void {
+function printCleanSummary(result: CheckResult, source: readonly string[]): void {
   if (result.status !== 0) return
   const plural = result.stylesheetsRead === 1 ? 'stylesheet' : 'stylesheets'
   console.log(
-    `Checked ${result.stylesheetsRead} ${plural} under the given --source; found no @nave directive.`,
+    `Checked ${result.stylesheetsRead} ${plural} under ${source.join(', ')}; found no @nave directive.`,
   )
 }
 
 /**
-The `check` subcommand: parses `--source=`, runs `check()`, prints its result.
+ * Every path under `source` that could not be read: `source` itself, when
+ * it does not resolve at all (missing, or a --source value with a typo);
+ * a subdirectory `listCssFiles` found unreadable while recursing; a
+ * resolved file this process cannot open. `check()`'s own returned shape
+ * stays `{ status, findings, stylesheetsRead }` and carries none of this,
+ * so the bin derives it itself, independently of whatever `check()`
+ * decided for the exit status.
+ */
+async function unreadablePathsUnder(source: string): Promise<string[]> {
+  let listing
+  try {
+    listing = await listCssFiles(source)
+  } catch {
+    return [source]
+  }
+  const unreadable = [...listing.unreadablePaths]
+  for (const file of listing.files) {
+    try {
+      await access(file, constants.R_OK)
+    } catch {
+      unreadable.push(file)
+    }
+  }
+  return unreadable
+}
+
+/**
+Every unreadable path across every `--source` value, in the order given.
+ */
+async function findUnreadableSourcePaths(source: readonly string[]): Promise<string[]> {
+  const perSource = await Promise.all(source.map((one) => unreadablePathsUnder(one)))
+  return perSource.flat()
+}
+
+/**
+ * The `check` subcommand: parses `--source=`, runs `check()`, prints its
+ * result plus whatever the bin's own pass over `--source` found unreadable.
  */
 async function runCheck(args: readonly string[]): Promise<number> {
   if (isHelpRequest(args)) {
@@ -69,13 +107,17 @@ async function runCheck(args: readonly string[]): Promise<number> {
     return 2
   }
 
-  const result = await check({ source })
+  const [result, unreadable] = await Promise.all([
+    check({ source }),
+    findUnreadableSourcePaths(source),
+  ])
   printFindings(result)
-  printCleanSummary(result)
-  if (result.status === 2) {
-    console.error(
-      'No stylesheet could be checked: a --source path is unreadable, or none names a stylesheet.',
-    )
+  printCleanSummary(result, source)
+  for (const badPath of unreadable) {
+    console.error(`Could not read ${badPath}, so it was not checked.`)
+  }
+  if (result.status === 2 && unreadable.length === 0) {
+    console.error(`No stylesheet found under ${source.join(', ')}; nothing was checked.`)
   }
   return result.status
 }
