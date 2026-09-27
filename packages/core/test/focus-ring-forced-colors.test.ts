@@ -68,8 +68,10 @@ function collectDeclarations(
 
 /** Every `--nave-border-width-focus` declaration in a tokens stylesheet, in px (NaN when the
  * value is not a px length). Walks every rule, not only the first match, so a later `:root`
- * block (e.g. under `@media (prefers-contrast: more)`) is not missed; `@property` descriptors
- * are not declarations and are not walked. */
+ * block (e.g. under `@media (prefers-contrast: more)`) is not missed. `@property` descriptors
+ * (`syntax`, `inherits`, `initial-value`) are declarations too, and `walkDecls` visits them;
+ * they are excluded here only because their names never match `--nave-border-width-focus`, the
+ * property name this walk filters on. */
 function focusWidthsPx(css: string): number[] {
   const widths: number[] = []
   postcss.parse(css).walkDecls('--nave-border-width-focus', (decl) => {
