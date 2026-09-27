@@ -7,12 +7,14 @@
  *
  * The grammar: a string literal; a template literal's static text, and each `${}` slot read as a
  * class position of its own (wherever the template sits); both branches of a conditional; the
- * right side of `&&` and both sides of `||`/`??`; both sides of a string `+`; an identifier bound
+ * right side of `&&` and both sides of `||`/`??`; both sides of a string `+` (adjacent string
+ * literals read as the one string they join into); an identifier bound
  * by a `const`, followed exactly one hop; single-child wrappers (TypeScript's `as`, `satisfies`,
  * `!`, an optional chain); and calls. A call to Nave's `cx()` has each argument read as one atom
- * name, whole (the way `cx()` maps it at run time); a call to a class-composition helper, or to a
- * `cx` that is not Nave's, has each argument read as class text, arrays and object keys included;
- * `cx.raw()` and any other call contribute nothing.
+ * name, whole (the way `cx()` maps it at run time), and an array or object literal there is never
+ * one, whatever it holds, since `cx()` turns it into one string; a call to a class-composition
+ * helper, or to a `cx` that is not Nave's, has each argument read as class text, arrays and object
+ * keys included; `cx.raw()` and any other call contribute nothing.
  */
 import type { TSESTree } from '@typescript-eslint/types'
 import type { Scope, SourceCode } from 'eslint'
@@ -20,12 +22,20 @@ import type { Scope, SourceCode } from 'eslint'
 import { type CxBindings, resolveCxCallee } from '../cx-binding.ts'
 import {
   collectTemplatePieces,
+  concatOperands,
   isStringLiteral,
-  type LiteralPiece,
+  joinedLiteralPieces,
   resolveConstHop,
   splitWhitespace,
   TRANSPARENT_WRAPPER_TYPES,
 } from '../literal-pieces.ts'
+import {
+  type ClassHit,
+  classHits,
+  containerAtomPiece,
+  partAtomPiece,
+  wholeAtomPiece,
+} from './class-hits.ts'
 
 type AnyNode = TSESTree.Node
 
@@ -36,54 +46,12 @@ export interface WalkContext {
 }
 
 /**
-A literal piece read as class text, admitted only by the consumer's declarations.
- */
-export interface ClassPieceHit extends LiteralPiece {
-  kind: 'class'
-}
-
-/**
- * One argument of Nave's `cx()`, which must be an atom name as a whole. `rendered` is the
- * argument as the message quotes it; `isWhole` is false for static text beside a `${}` slot,
- * which can never be exactly one atom name.
- */
-export interface AtomPieceHit extends LiteralPiece {
-  callee: AnyNode
-  isWhole: boolean
-  kind: 'atom'
-  rendered: string
-}
-
-/**
-An `&&` directly in a class position: the whole value, or a template slot.
- */
-interface SlotAndHit {
-  isWhole: boolean
-  kind: 'slot-and'
-  node: TSESTree.LogicalExpression
-}
-
-export type ClassHit = AtomPieceHit | ClassPieceHit | SlotAndHit
-
-/**
  * True for a call to a name in the helper list, or to any `cx` that did not resolve to Nave's
  * (the caller has already ruled that out through scope analysis before asking).
  */
 function isHelperCall(callee: AnyNode, helpers: string[]): boolean {
   if (callee.type !== 'Identifier') return false
   return helpers.includes(callee.name) || callee.name === 'cx'
-}
-
-/**
-A string literal or expression-free template as one whole `cx()` argument.
- */
-function wholeAtomPiece(
-  node: AnyNode,
-  text: string,
-  rendered: string,
-  callee: AnyNode,
-): AtomPieceHit {
-  return { kind: 'atom', node, text, rendered, callee, isWhole: true, truncated: false }
 }
 
 /**
@@ -106,9 +74,7 @@ function atomTemplateHits(
   if (!hasStaticText) {
     return node.expressions.flatMap((slot) => positionHits(ctx, slot, scope, callee))
   }
-  return [
-    { kind: 'atom', node, text: rendered, rendered, callee, isWhole: false, truncated: false },
-  ]
+  return [partAtomPiece(node, rendered, callee)]
 }
 
 /**
@@ -122,10 +88,7 @@ function stringHits(
   if (callee) {
     return [wholeAtomPiece(node, node.value, JSON.stringify(node.value), callee)]
   }
-  return splitWhitespace(node.value, node, false, false).map((piece) => ({
-    ...piece,
-    kind: 'class',
-  }))
+  return classHits(splitWhitespace(node.value, node, false, false))
 }
 
 /**
@@ -138,11 +101,31 @@ function templateHits(
   callee: AnyNode | undefined,
 ): ClassHit[] {
   if (callee) return atomTemplateHits(ctx, node, scope, callee)
-  const pieces: ClassHit[] = collectTemplatePieces(node).map((piece) => ({
-    ...piece,
-    kind: 'class',
-  }))
-  return [...pieces, ...node.expressions.flatMap((slot) => slotHits(ctx, slot, scope))]
+  return [
+    ...classHits(collectTemplatePieces(node)),
+    ...node.expressions.flatMap((slot) => slotHits(ctx, slot, scope)),
+  ]
+}
+
+/**
+ * A string `+` chain in a class position: adjacent string literals join into the text they
+ * form, and every other operand is a class position of its own.
+ */
+function concatHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassHit[] {
+  const hits: ClassHit[] = []
+  let run: TSESTree.StringLiteral[] = []
+  for (const operand of concatOperands(node)) {
+    if (isStringLiteral(operand)) {
+      run.push(operand)
+      continue
+    }
+    hits.push(
+      ...classHits(joinedLiteralPieces(run)),
+      ...positionHits(ctx, operand, scope, undefined),
+    )
+    run = []
+  }
+  return [...hits, ...classHits(joinedLiteralPieces(run))]
 }
 
 /**
@@ -214,6 +197,9 @@ function positionHits(
       return templateHits(ctx, current, currentScope, callee)
     }
     if (current.type === 'CallExpression') return callHits(ctx, current, currentScope)
+    if (callee && (current.type === 'ArrayExpression' || current.type === 'ObjectExpression')) {
+      return [containerAtomPiece(current, ctx.sourceCode.getText(current as never), callee)]
+    }
 
     if (current.type === 'ConditionalExpression') {
       return [
@@ -225,6 +211,10 @@ function positionHits(
     if (current.type === 'LogicalExpression' && current.operator === '&&') {
       current = current.right
       continue
+    }
+
+    if (!callee && current.type === 'BinaryExpression' && current.operator === '+') {
+      return concatHits(ctx, current, currentScope)
     }
 
     if (

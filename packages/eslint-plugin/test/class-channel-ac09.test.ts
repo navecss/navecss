@@ -117,6 +117,26 @@ describe('AC-09: literal-piece reading rows', () => {
     })
   })
 
+  it('adjacent string literals joined by + with no whitespace between them form one class, reported once', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [{ code: jsx("{'app-' + 'card'}"), languageOptions, settings }],
+      invalid: [
+        {
+          code: jsx("{'legacy' + '-card'}"),
+          languageOptions,
+          settings,
+          errors: [{ message: /^"legacy-card" is not a CSS Module class/ }],
+        },
+        {
+          code: jsx("{'a ' + 'legacy' + '-card'}"),
+          languageOptions,
+          settings,
+          errors: [{ message: /^"a" is not/ }, { message: /^"legacy-card" is not/ }],
+        },
+      ],
+    })
+  })
+
   it('cx.raw literal passes rule 1 (rule 2 applies separately)', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [

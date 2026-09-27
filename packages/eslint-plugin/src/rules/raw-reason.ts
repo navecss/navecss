@@ -161,7 +161,17 @@ export const rawReasonRule: Rule.RuleModule = {
           node,
           messageId: 'missing',
           data: {
-            problem: rawProblemText(piece.text, callee, atomNameForClass(piece.text)),
+            problem: rawProblemText(
+              piece.text,
+              callee,
+              atomNameForClass(piece.text),
+              piece.kind === 'atom'
+                ? {
+                    callee: context.sourceCode.getText(piece.callee as never),
+                    rendered: piece.rendered,
+                  }
+                : undefined,
+            ),
             remedies: rawRemedyText(declared, piece.text, reasonForm),
           },
         })

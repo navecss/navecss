@@ -6,14 +6,11 @@
 import type { TSESTree } from '@typescript-eslint/types'
 import type { Scope } from 'eslint'
 
+import type { AtomPieceHit, ClassPieceHit } from './rules/class-hits.ts'
+
 import { isAtomName } from './atoms.ts'
 import { isNaveOutputLike } from './messages.ts'
-import {
-  type AtomPieceHit,
-  type ClassPieceHit,
-  collectArgumentHits,
-  type WalkContext,
-} from './rules/class-channel-walk.ts'
+import { collectArgumentHits, type WalkContext } from './rules/class-channel-walk.ts'
 import { type CompiledAllowEntry, isDeclared } from './settings.ts'
 
 /**

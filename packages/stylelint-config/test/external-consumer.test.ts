@@ -13,7 +13,9 @@
  * registry: pnpm auto-installs a missing peer from the registry by default, and a registry with
  * a minimum release age configured can refuse every matching version of a package this young,
  * which would test pnpm's own resolution rather than this package's rule against real,
- * workspace-built tokens.
+ * workspace-built tokens. The consumer installs with `strict-peer-dependencies=true`, so a peer
+ * range the workspace-built tokens do not satisfy fails the install instead of printing a
+ * warning pnpm would otherwise let pass.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -112,7 +114,10 @@ function installConsumer(consumerDir: string, packDestination: string): void {
       2,
     ),
   )
-  writeFileSync(path.join(consumerDir, '.npmrc'), 'node-linker=isolated\n')
+  writeFileSync(
+    path.join(consumerDir, '.npmrc'),
+    'node-linker=isolated\nstrict-peer-dependencies=true\n',
+  )
   writeFileSync(
     path.join(consumerDir, '.stylelintrc.json'),
     JSON.stringify({ extends: ['@navecss/stylelint-config'] }, undefined, 2),

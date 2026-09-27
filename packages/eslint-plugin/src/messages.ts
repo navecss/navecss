@@ -45,6 +45,14 @@ export function cxAtomMessage(callee: string, rendered: string, declared: string
   return `${callee}(${rendered}) is not a Nave atom: a string passed to ${callee}() must name one. ${preferredRemedies(declared)} cx.raw() with a reason.`
 }
 
+/**
+ * An array or object literal passed to Nave's `cx()`, with the callee as the file names it:
+ * `cx()` turns it into one string, so the remedy is one atom name per argument.
+ */
+export function cxContainerMessage(callee: string, rendered: string, declared: string): string {
+  return `${callee}(${rendered}) is not a Nave atom: ${callee}() turns an array or object into one string, never into atom classes. Pass atom names as separate arguments, each with its own condition if it needs one: ${callee}('flex', on && 'block'). ${preferredRemedies(declared)} cx.raw() with a reason.`
+}
+
 const NAVE_PREFIX = 'nave-'
 
 /**
@@ -67,10 +75,19 @@ export const isNaveOutputLike = (text: string): boolean => text.startsWith(NAVE_
 
 /**
  * The problem half of a `cx.raw()` missing-reason message: what the offending literal is, the
- * `nave-` explanation when it is one of Nave's output classes, with the callee as written.
+ * `nave-` explanation when it is one of Nave's output classes, the inner call when it is an
+ * argument of Nave's `cx()` that names no atom, with each callee as written.
  */
-export function rawProblemText(text: string, callee: string, atomName: string | undefined): string {
+export function rawProblemText(
+  text: string,
+  callee: string,
+  atomName: string | undefined,
+  atomCall?: { callee: string; rendered: string },
+): string {
   if (isNaveOutputLike(text)) return naveOutputMessage(text, atomName)
+  if (atomCall) {
+    return `${atomCall.callee}(${atomCall.rendered}) in ${callee}() is not a Nave atom: a string passed to ${atomCall.callee}() must name one.`
+  }
   return `"${text}" in ${callee}() is class text this project does not declare as its own.`
 }
 

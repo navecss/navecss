@@ -18,6 +18,9 @@ const ruleTester = new RuleTester()
 const settings = { '@navecss': { allow: ['app-'] } }
 const PRELUDE = `import { cx } from '@navecss/core/cx'\nimport { cx as ncx } from '@navecss/core/cx'\n`
 
+const escapeMessage = (callee: string): string =>
+  `This ${callee}() call carries class text that needs a reason: counted as an escape.`
+
 describe('AC-17: the counting rule', () => {
   it('reports every cx.raw() escape, with or without a reason', () => {
     ruleTester.run('count-escapes', countEscapesRule, {
@@ -64,6 +67,32 @@ describe('AC-17: the counting rule', () => {
           languageOptions,
           settings,
           errors: [{ messageId: 'escape' }],
+        },
+      ],
+    })
+  })
+
+  it('the escape message prints the callee as the file names it and never calls a declared class undeclared', () => {
+    ruleTester.run('count-escapes', countEscapesRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `${PRELUDE}const el = <div className={ncx.raw(/* nave-escape: vendor */ 'legacy-card')} />`,
+          languageOptions,
+          settings,
+          errors: [{ message: escapeMessage('ncx.raw') }],
+        },
+        {
+          code: `import * as c from '@navecss/core/cx'\nconst el = <div className={c.cx.raw('legacy-card')} />`,
+          languageOptions,
+          settings,
+          errors: [{ message: escapeMessage('c.cx.raw') }],
+        },
+        {
+          code: `${PRELUDE}const el = <div className={cx.raw(cx('app-card'))} />`,
+          languageOptions,
+          settings,
+          errors: [{ message: escapeMessage('cx.raw') }],
         },
       ],
     })
@@ -157,8 +186,8 @@ describe('AC-17: the counting rule', () => {
     '// eslint-disable-line @navecss/class-channel',
     '// eslint-disable-next-line',
     '// eslint-disable-next-line no-console, @navecss/class-channel',
+    '// eslint-disable-next-line "@navecss/class-channel"',
     '// eslint-disable-next-line -- vendor markup',
-    '/* eslint-disable -- vendor markup */',
     '// eslint-disable-next-line @navecss/class-channel --- vendor markup',
     '/* eslint-disable\n   @navecss/class-channel */',
     '/* eslint-disable @navecss/class-channel\n   -- vendor markup */',
@@ -166,6 +195,12 @@ describe('AC-17: the counting rule', () => {
     expect(rawCommentReports(`const before = 1\n${comment}\nconst x = 1`)).toEqual([
       { line: 2, column: 1 },
     ])
+  })
+
+  it('/* eslint-disable -- vendor markup */ is emitted at the comment with inline configuration off, and with it on gives no count report: a description adds no rule list, so the block silences every rule after it, this one included', () => {
+    const code = 'const before = 1\n/* eslint-disable -- vendor markup */\nconst x = 1'
+    expect(rawCommentReports(code)).toEqual([{ line: 2, column: 1 }])
+    expect(countReports(code)).toBe(0)
   })
 
   it('a description never takes a next-line directive out of the count, with inline config active', () => {

@@ -246,6 +246,16 @@ describe('AC-consumer-constraints-29 covers: R18', () => {
     expect(rootReadme).toMatch(/\[`@navecss\/stylelint-config`\]\(packages\/stylelint-config/)
   })
 
+  it("the root README's Packages row names all four checks", () => {
+    const rootReadme = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
+    const row = rootReadme
+      .split('\n')
+      .find((line) => line.includes('[`@navecss/stylelint-config`]'))
+    expect(row).toContain(
+      '`@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check, declared `--nave-*` names',
+    )
+  })
+
   it('no site describing the check says it is scoped to Nave tokens: any var() passes', () => {
     const scoped = /tokens-only|against `?--nave-|use a token/i
     const manifest = JSON.parse(tarball.read('package/package.json')) as { description: string }

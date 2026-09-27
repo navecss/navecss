@@ -325,18 +325,43 @@ const CASES = [
 ]
 
 /**
- * A shorthand that is not itself on the checked property list passes the eslint rule while
- * stylelint's own config reports it (the expansion lives inside that plugin, which this package
- * does not depend on). This is a stated limit, not a bug the loop above should catch, so it runs
- * as its own assertion rather than through `CASES`.
+ * The stated limits where the two tools deliberately disagree, each naming the one tool that
+ * reports it. A shorthand that is not itself on the checked property list passes the eslint rule
+ * while stylelint's own config reports it (the expansion lives inside that plugin, which this
+ * package does not depend on). A string that is not a valid value for its property (a number with
+ * no unit, an empty string) is reported by the eslint rule while stylelint passes the same text:
+ * the browser drops such a declaration, and the rule reports it rather than parse each property's
+ * grammar. Neither is a bug the loop above should catch, so each runs as its own assertion rather
+ * than through `CASES`.
  */
 const DOCUMENTED_DIVERGENCES = [
-  { cssProperty: 'background', cssValue: 'red', jsxKey: 'background', jsxValueLiteral: "'red'" },
+  {
+    cssProperty: 'background',
+    cssValue: 'red',
+    jsxKey: 'background',
+    jsxValueLiteral: "'red'",
+    reportedBy: 'stylelint',
+  },
   {
     cssProperty: 'border',
     cssValue: '1px solid red',
     jsxKey: 'border',
     jsxValueLiteral: "'1px solid red'",
+    reportedBy: 'stylelint',
+  },
+  {
+    cssProperty: 'padding',
+    cssValue: '13',
+    jsxKey: 'padding',
+    jsxValueLiteral: "'13'",
+    reportedBy: 'eslint-plugin',
+  },
+  {
+    cssProperty: 'padding',
+    cssValue: '',
+    jsxKey: 'padding',
+    jsxValueLiteral: "''",
+    reportedBy: 'eslint-plugin',
   },
 ]
 
@@ -352,13 +377,13 @@ describe('AC-27: eslint-plugin and stylelint agree on identical property/value p
   }
 })
 
-describe('AC-27: a documented divergence (a shorthand not itself on the checked list)', () => {
+describe('AC-27: a documented divergence, reported by one tool only', () => {
   for (const testCase of DOCUMENTED_DIVERGENCES) {
-    test(`${testCase.cssProperty}: ${testCase.cssValue}`, async () => {
+    test(`${testCase.jsxKey}: ${testCase.jsxValueLiteral} (reported by ${testCase.reportedBy} only)`, async () => {
       const fromStylelint = await stylelintReports(testCase.cssProperty, testCase.cssValue)
       const fromEslint = eslintReports(testCase.jsxKey, testCase.jsxValueLiteral)
-      assert.equal(fromStylelint, true, 'stylelint reports the shorthand')
-      assert.equal(fromEslint, false, 'the eslint rule does not check a key off its own list')
+      assert.equal(fromStylelint, testCase.reportedBy === 'stylelint', 'stylelint verdict')
+      assert.equal(fromEslint, testCase.reportedBy === 'eslint-plugin', 'eslint-plugin verdict')
     })
   }
 })
@@ -422,19 +447,18 @@ function mutatedEslintRule(propertyPattern, keywordToRemove) {
 test('AC-27: the positive control, removing an admitted keyword from the eslint copy reds the corpus', async () => {
   const mutant = mutatedEslintRule(COLOR_PROPERTY_PATTERN, 'Canvas')
   try {
-    const fromStylelint = await stylelintReports('color', 'Canvas')
-    const fromMutatedEslint = await mutant.reports('color', "'Canvas'")
-    assert.equal(fromStylelint, false, 'sanity: the real stylelint config still admits Canvas')
-    assert.equal(fromMutatedEslint, true, 'sanity: the mutated copy no longer admits Canvas')
-    assert.throws(
-      () =>
-        assert.equal(
-          fromMutatedEslint,
-          fromStylelint,
-          'the two tools disagree on an identical value',
-        ),
-      assert.AssertionError,
-      'the same comparison the loop above runs must fail on a genuine divergence',
+    const disagreements = []
+    for (const testCase of CASES) {
+      const fromStylelint = await stylelintReports(testCase.cssProperty, testCase.cssValue)
+      const fromMutatedEslint = await mutant.reports(testCase.jsxKey, testCase.jsxValueLiteral)
+      if (fromMutatedEslint !== fromStylelint) {
+        disagreements.push(`${testCase.cssProperty}: ${testCase.cssValue}`)
+      }
+    }
+    assert.deepEqual(
+      disagreements,
+      ['color: Canvas'],
+      'the corpus, run against the mutated copy, sees the planted divergence and only it',
     )
   } finally {
     mutant.cleanup()

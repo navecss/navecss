@@ -54,7 +54,8 @@ export const countEscapesRule: Rule.RuleModule = {
       url: 'https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#the-count',
     },
     messages: {
-      escape: 'This cx.raw() call carries an undeclared class: counted as an escape.',
+      escape:
+        'This {{callee}}() call carries class text that needs a reason: counted as an escape.',
       disableComment: 'This disable comment can hide an escape from the count.',
     },
     schema: [],
@@ -94,7 +95,11 @@ export const countEscapesRule: Rule.RuleModule = {
         if (resolveCxCallee(call.callee, bindings, scope) !== 'raw') return
         const ctx = { bindings, helpers: settings.helpers, sourceCode: context.sourceCode }
         if (reportablePiecesInCall(ctx, call, scope, allowEntries).length > 0) {
-          context.report({ node, messageId: 'escape' })
+          context.report({
+            node,
+            messageId: 'escape',
+            data: { callee: context.sourceCode.getText(call.callee as never) },
+          })
         }
       },
     }

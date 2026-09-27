@@ -297,19 +297,28 @@ describe('the packed tarball itself', () => {
 })
 
 /**
- * Installs the packed tarball into a scratch consumer's `node_modules` by name, next to the
- * workspace's own `@navecss/core` and the one runtime dependency, so `require()` and `import()`
- * resolve the package through its export map exactly as a consumer's `eslint.config.cjs` or
- * `eslint.config.js` would.
+ * Installs the packed tarball into a scratch consumer's `node_modules` by name, next to the one
+ * runtime dependency but with no `@navecss/core`, the state a package manager that does not
+ * install peers leaves behind.
  */
-function scratchConsumer(): string {
+function scratchConsumerWithoutCore(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-consumer-'))
   const scope = path.join(dir, 'node_modules/@navecss')
   mkdirSync(scope, { recursive: true })
   cpSync(packTarball().root, path.join(scope, 'eslint-plugin'), { recursive: true })
-  symlinkSync(path.join(ROOT, 'packages/core'), path.join(scope, 'core'), 'dir')
   const valueParser = realpathSync(path.join(PACKAGE_DIR, 'node_modules/postcss-value-parser'))
   symlinkSync(valueParser, path.join(dir, 'node_modules/postcss-value-parser'), 'dir')
+  return dir
+}
+
+/**
+ * The scratch consumer above with the workspace's own `@navecss/core` beside the plugin, so
+ * `require()` and `import()` resolve the package through its export map exactly as a consumer's
+ * `eslint.config.cjs` or `eslint.config.js` would.
+ */
+function scratchConsumer(): string {
+  const dir = scratchConsumerWithoutCore()
+  symlinkSync(path.join(ROOT, 'packages/core'), path.join(dir, 'node_modules/@navecss/core'), 'dir')
   return dir
 }
 
@@ -337,6 +346,31 @@ describe('loading the installed package by name', () => {
     }
   })
 
+  it("the README's own eslint.config.cjs line, run as written by the ESLint CLI, loads the plugin and reports", () => {
+    const readme = readFileSync(path.join(PACKAGE_DIR, 'README.md'), 'utf8')
+    const statement = /`(const nave = require\('@navecss\/eslint-plugin'\)[^`]*)`/u.exec(
+      readme.replaceAll(/\s+/gu, ' '),
+    )?.[1]
+    expect(statement, 'the README shows the require() line').toBeDefined()
+    const dir = scratchConsumer()
+    try {
+      writeFileSync(
+        path.join(dir, 'eslint.config.cjs'),
+        `${statement}\nmodule.exports = [nave.configs.recommended]\n`,
+      )
+      writeFileSync(
+        path.join(dir, 'a.js'),
+        "import { cx } from '@navecss/core/cx'\nexport const k = cx.raw('legacy-card')\n",
+      )
+      const eslintBin = path.join(ROOT, 'node_modules/eslint/bin/eslint.js')
+      const run = runNode(dir, [eslintBin, 'a.js'])
+      expect(run.output).toContain('@navecss/raw-reason')
+      expect(run.status).toBe(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('import() loads it', () => {
     const dir = scratchConsumer()
     try {
@@ -351,6 +385,40 @@ describe('loading the installed package by name', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+})
+
+describe('loading the installed package with its @navecss/core peer missing', () => {
+  const PRINT_MESSAGE = 'console.log(`message=${error.message}`)'
+
+  it.each([
+    [
+      'import()',
+      [
+        '--input-type=module',
+        '-e',
+        `try { await import('@navecss/eslint-plugin') } catch (error) { ${PRINT_MESSAGE} }`,
+      ],
+    ],
+    [
+      'require()',
+      ['-e', `try { require('@navecss/eslint-plugin') } catch (error) { ${PRINT_MESSAGE} }`],
+    ],
+  ])(
+    '%s fails with an error naming the missing peer and its range, and no path inside the plugin',
+    (_form, args) => {
+      const { peerDependencies } = manifest() as { peerDependencies: Record<string, string> }
+      const dir = scratchConsumerWithoutCore()
+      try {
+        const run = runNode(dir, args)
+        const message = run.output.split('\n').find((line) => line.startsWith('message='))
+        expect(message).toBe(
+          `message=@navecss/eslint-plugin needs its peer dependency @navecss/core (${peerDependencies['@navecss/core']}) installed.`,
+        )
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    },
+  )
 })
 
 describe('AC-02: meta.version is read from the manifest, never typed by hand', () => {

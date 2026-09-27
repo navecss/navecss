@@ -42,8 +42,9 @@ describe('AC-eslint-plugin-24: the guide names @navecss/eslint-plugin in one sen
     expect(countOccurrences(committed, '@navecss/eslint-plugin')).toBe(1)
   })
 
-  it("lists no key of the plugin's own rules, read from the built package at test time", async () => {
-    const pluginPath = path.resolve(ROOT, 'packages/eslint-plugin/dist/index.js')
+  it("lists no key of the plugin's own rules, read from the plugin's source at test time", async () => {
+    // The source, not the built package: nothing orders this suite after the plugin's build.
+    const pluginPath = path.resolve(ROOT, 'packages/eslint-plugin/src/index.ts')
     const { default: plugin } = (await import(pathToFileURL(pluginPath).href)) as {
       default: { meta: { namespace: string }; rules: Record<string, unknown> }
     }
@@ -55,14 +56,10 @@ describe('AC-eslint-plugin-24: the guide names @navecss/eslint-plugin in one sen
     }
   })
 
-  it('removing the sentence from the generator’s OWN template array fails, a real regeneration, never string-surgery on the already-rendered committed file', () => {
+  it("the sentence comes from the generator's own template section, and a fresh guide renders that section, so removing it from the template fails", async () => {
     const lines = renderEslintPluginSection()
-    const targetIndex = lines.findIndex((line) => line.includes(SENTENCE))
-    expect(targetIndex).toBeGreaterThan(-1)
-    const withoutSentence = lines.filter((_, i) => i !== targetIndex).join('\n')
-    expect(withoutSentence).not.toContain(SENTENCE)
-    // The unmodified array still carries it: this is genuinely testing the splice, not a
-    // sentence that was never there.
-    expect(lines.join('\n')).toContain(SENTENCE)
+    expect(lines.filter((line) => line.includes(SENTENCE))).toHaveLength(1)
+    const fresh = await generate(baseSkillGuideSources())
+    expect(fresh).toContain(lines.join('\n'))
   })
 })

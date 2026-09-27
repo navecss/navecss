@@ -19,7 +19,8 @@ pnpm add -D @navecss/eslint-plugin
 - Node `>=22.18`.
 
 ES modules only, with no CommonJS build: load it with `import`, or with `require()` (an
-`eslint.config.cjs`) on Node 22.18 or later.
+`eslint.config.cjs`) on Node 22.18 or later, where the plugin is the module's `default` export:
+`const nave = require('@navecss/eslint-plugin').default`.
 
 The rules need a JSX-capable parser (`espree` with `ecmaFeatures.jsx`, or
 `@typescript-eslint/parser`) — whichever your project already uses.
@@ -139,6 +140,9 @@ Stated as rules, not as gaps to be filled later:
   `const` hop, or a call to a helper not in `settings['@navecss'].helpers` is not seen.
 - A `cxModules` wrapper is recognised through its `cx` export only: one that re-exports Nave's
   `cx` under another name, or as its default export, is not seen as Nave's `cx`.
+- `cx.raw` is recognised as `cx.raw`, `cx['raw']`, ``cx[`raw`]``, a namespace import's
+  `c.cx.raw`, or one `const` alias: a call reached any other way, such as `(0, cx.raw)(...)` or
+  `cx.raw.call(...)`, is not seen by either rule.
 - A camelCase string passed to `cx()` passes only if it names a real atom of the **installed**
   `@navecss/core` — a name registered through `navePlugin({ extend })` is not in `cx()`'s map and
   is reported.
@@ -181,6 +185,10 @@ would report anywhere else, unless the first thing inside its parentheses is a r
 `@navecss/style-values` checks the literal values in a JSX `style` object: its row in the table
 above says what it reports, and [What it does not check](#what-it-does-not-check) what it leaves
 out.
+One divergence from `@navecss/stylelint-config` is deliberate: a string that is not a valid value
+for its property, such as `padding: '13'` (a number with no unit) or `padding: ''`, is reported
+here, while stylelint passes the same text in a stylesheet. The browser drops such a
+declaration, and this rule reports it rather than parse each property's grammar.
 
 ## Trademark
 

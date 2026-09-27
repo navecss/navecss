@@ -12,8 +12,29 @@
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
-const atomsPath = fileURLToPath(import.meta.resolve('@navecss/core/atoms'))
-const { atomClassMap } = createRequire(import.meta.url)(atomsPath) as {
+const require = createRequire(import.meta.url)
+
+/**
+ * The path of core's `./atoms` export. With `@navecss/core` not installed (a package manager
+ * that does not install peers), Node's own error names a file inside this package rather than
+ * the fix, so that one case is rethrown as an error naming the missing peer and its range.
+ */
+function resolveCoreAtoms(): string {
+  try {
+    return fileURLToPath(import.meta.resolve('@navecss/core/atoms'))
+  } catch (error) {
+    if ((error as { code?: unknown }).code !== 'ERR_MODULE_NOT_FOUND') throw error
+    const { peerDependencies } = require('../package.json') as {
+      peerDependencies: Record<string, string>
+    }
+    throw new Error(
+      `@navecss/eslint-plugin needs its peer dependency @navecss/core (${peerDependencies['@navecss/core']}) installed.`,
+      { cause: error },
+    )
+  }
+}
+
+const { atomClassMap } = require(resolveCoreAtoms()) as {
   atomClassMap: Record<string, string>
 }
 

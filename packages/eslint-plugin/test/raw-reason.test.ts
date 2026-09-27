@@ -319,6 +319,36 @@ describe('AC-16 (R4): the messages rule 2 prints', () => {
     })
   })
 
+  it('a cx() argument inside cx.raw() that is not an atom is named as such, quoting the inner call, even when the project declares the class', () => {
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `${PRELUDE}const k = cx.raw(cx('app-card'))`,
+          languageOptions,
+          settings,
+          errors: [
+            {
+              message:
+                'cx("app-card") in cx.raw() is not a Nave atom: a string passed to cx() must name one. Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: prefix app-), and only then a reason, first inside the parentheses: cx.raw(/* nave-escape: ... */ cx(\'app-card\')).',
+            },
+          ],
+        },
+        {
+          code: `${PRELUDE}const k = cx.raw(ncx('legacy-card'))`,
+          languageOptions,
+          settings,
+          errors: [
+            {
+              message:
+                /^ncx\("legacy-card"\) in cx\.raw\(\) is not a Nave atom: a string passed to ncx\(\) must name one\./,
+            },
+          ],
+        },
+      ],
+    })
+  })
+
   it('a nave- literal names its atom (R4(e)) before the reason', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],

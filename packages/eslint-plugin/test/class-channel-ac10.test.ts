@@ -17,6 +17,10 @@ const languageOptions = {
   parserOptions: { ecmaFeatures: { jsx: true } },
 }
 
+const { parser: tsParser } = await import('typescript-eslint')
+
+const tsLanguageOptions = { ...languageOptions, parser: tsParser }
+
 const ruleTester = new RuleTester()
 
 describe('AC-10: cxModules and cx.raw recognition', () => {
@@ -129,6 +133,61 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
         invalid: [],
       })
     }
+  })
+
+  it('a TypeScript type-only declaration named like a value (type alias, interface, type parameter) shadows nothing: types and values live in separate spaces', () => {
+    const prelude = `import { cx } from '@navecss/core/cx'\n`
+    const settings = { '@navecss': { allow: ['app-'] } }
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [
+        {
+          code: `${prelude}function F() { interface cx { a: 1 } return <div className={cx('flex')} /> }`,
+          languageOptions: tsLanguageOptions,
+          settings,
+        },
+        {
+          code: `${prelude}function F<cx>() { return <div className={cx('flex')} /> }`,
+          languageOptions: tsLanguageOptions,
+          settings,
+        },
+        {
+          code: `${prelude}function F() { type cx = string; return <div className={cx('flex')} /> }`,
+          languageOptions: tsLanguageOptions,
+          settings,
+        },
+      ],
+      invalid: [
+        {
+          code: `const L = 'legacy-card'\nfunction F() { type L = string; return <div className={L} /> }`,
+          languageOptions: tsLanguageOptions,
+          settings,
+          errors: [{ message: /^"legacy-card" is not a CSS Module class/ }],
+        },
+      ],
+    })
+    const raw = `${prelude}function F() { interface cx { a: 1 } return <div className={cx.raw('legacy-card')} /> }`
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [],
+      invalid: [
+        {
+          code: raw,
+          languageOptions: tsLanguageOptions,
+          settings,
+          errors: [{ messageId: 'missing' }],
+        },
+      ],
+    })
+    ruleTester.run('count-escapes', countEscapesRule, {
+      valid: [],
+      invalid: [
+        {
+          code: raw,
+          languageOptions: tsLanguageOptions,
+          settings,
+          errors: [{ messageId: 'escape' }],
+        },
+      ],
+    })
   })
 
   it('a namespace import reaches cx and cx.raw; an optional call and a template-literal key are recognised', () => {

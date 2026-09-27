@@ -107,6 +107,34 @@ describe('AC-11 (R5a): logical-AND directly as a slot or whole value', () => {
       ],
     })
   })
+
+  it('the remedy names cx.raw the way the file binds it', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `import { cx as ncx } from '@navecss/core/cx'\nconst el = <div className={cond && styles.x} />`,
+          languageOptions,
+          errors: [{ message: /Use ncx\.raw\(cond && styles\.x\) or a ternary/ }],
+        },
+        {
+          code: `import * as c from '@navecss/core/cx'\nconst el = <div className={\`\${cond && styles.x}\`} />`,
+          languageOptions,
+          errors: [{ message: /Use c\.cx\.raw\(cond && styles\.x\) or a ternary/ }],
+        },
+        {
+          code: `${PRELUDE}\nconst el = <div className={cond && styles.x} />`,
+          languageOptions,
+          errors: [{ message: /Use cx\.raw\(cond && styles\.x\) or a ternary/ }],
+        },
+        {
+          code: 'const el = <div className={cond && styles.x} />',
+          languageOptions,
+          errors: [{ message: /Use cx\.raw\(cond && styles\.x\) or a ternary/ }],
+        },
+      ],
+    })
+  })
 })
 
 describe('AC-12 (R6): allow entry compilation', () => {
@@ -332,6 +360,50 @@ describe('AC-14 (R5): a cx() argument is one class name, read whole', () => {
                 "\"nave-flex\" is a class Nave's own build outputs, not one you write: it is not seen as input. Write the atom instead: @nave flex or cx('flex').",
             },
           ],
+        },
+      ],
+    })
+  })
+})
+
+describe('AC-14 (R5): an array or object literal passed to Nave cx() is reported, whatever it holds', () => {
+  const PRELUDE = `import { cx } from '@navecss/core/cx'\nimport { cx as ncx } from '@navecss/core/cx'`
+
+  it('cx() turns an array or object into one string, never into atom classes', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx('flex', on && 'block')} />`,
+          languageOptions,
+        },
+      ],
+      invalid: [
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx(['legacy-card'])} />`,
+          languageOptions,
+          errors: 1,
+        },
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx(['flex'])} />`,
+          languageOptions,
+          errors: [
+            {
+              message:
+                "cx(['flex']) is not a Nave atom: cx() turns an array or object into one string, never into atom classes. Pass atom names as separate arguments, each with its own condition if it needs one: cx('flex', on && 'block'). Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: none), and only then cx.raw() with a reason.",
+            },
+          ],
+        },
+        {
+          code: `${PRELUDE}\nconst el = <div className={ncx({ flex: true })} />`,
+          languageOptions,
+          errors: [
+            { message: /^ncx\(\{ flex: true \}\) is not a Nave atom: ncx\(\) turns an array/ },
+          ],
+        },
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx('flex', on ? ['block'] : 'grid')} />`,
+          languageOptions,
+          errors: 1,
         },
       ],
     })

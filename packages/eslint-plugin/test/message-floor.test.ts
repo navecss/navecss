@@ -70,6 +70,11 @@ const FIXTURES: { code: string; settings?: Record<string, unknown> }[] = [
   },
   { code: 'const el = <div style={{ padding: 13, color: "red" }} />' },
   { code: `${PRELUDE}const el = <div className={cx('flex block')} />` },
+  { code: `${PRELUDE}const el = <div className={cx(['flex'])} />` },
+  {
+    code: `${PRELUDE}const k = cx.raw(cx('app-card'))`,
+    settings: { '@navecss': { allow: ['app-'] } },
+  },
   { code: `${PRELUDE}const el = <div className={cx('nave-flex')} />` },
   { code: `${PRELUDE}const k = cx.raw('nave-flex')` },
   { code: `${PRELUDE}const k = /* nave-escape: x */ cx.raw('legacy-card')` },

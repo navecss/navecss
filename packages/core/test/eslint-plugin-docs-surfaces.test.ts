@@ -22,6 +22,11 @@ const claudeMd = readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8')
 const foldWhitespace = (text: string): string => text.replaceAll(/\s+/gu, ' ')
 
 /**
+A docblock paragraph with each line's ` * ` gutter removed and its whitespace collapsed.
+ */
+const foldDocblock = (text: string): string => foldWhitespace(text.replaceAll(/\n\s*\*\s?/gu, ' '))
+
+/**
  * The block from `**ESLint®.**` through the closing fence of the code sample right after it
  * (the SECOND ``` from that point: the first opens the fence, the second closes it).
  */
@@ -38,7 +43,30 @@ const RETIRED_STRINGS = [
   'A lint that closes the attribute itself is not part of this release.',
   'Nothing checks the rest of the `className` attribute',
   'is seen by nothing',
+  'with every deliberate step outside the system left as a reasoned, countable `cx.raw()` call',
 ]
+
+/**
+ * Claims the "What is NOT checked" paragraph once made and must not make again: the plugin
+ * reports an undeclared literal class, never every bare string (a declared class passes).
+ */
+const RETIRED_PARAGRAPH_STRINGS = [
+  'is not seen by anything',
+  'with every bare string outside cx()/cx.raw() reported',
+]
+
+const PARAGRAPH_CLAIM = 'reporting an undeclared literal class written in className'
+
+/**
+The "What is NOT checked" paragraph of `text`, gutter removed and whitespace collapsed.
+ */
+function notCheckedParagraph(text: string): string {
+  const start = text.indexOf('What is NOT checked:')
+  expect(start).toBeGreaterThan(-1)
+  const end = text.indexOf('Note on consumer atoms:', start)
+  expect(end).toBeGreaterThan(start)
+  return foldDocblock(text.slice(start, end))
+}
 
 describe('AC-eslint-plugin-23: core’s cx() docs, the root README, CLAUDE.md and the release (23a-c)', () => {
   it('core’s README no longer contains any retired claim (whitespace collapsed)', () => {
@@ -46,31 +74,27 @@ describe('AC-eslint-plugin-23: core’s cx() docs, the root README, CLAUDE.md an
     for (const retired of RETIRED_STRINGS) expect(folded).not.toContain(retired)
   })
 
-  it('the bullet that replaces them names @navecss/eslint-plugin', () => {
+  it('the bullet that replaces them names @navecss/eslint-plugin and says what it reports', () => {
     expect(coreReadme).toContain(
       '[`@navecss/eslint-plugin`](https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#readme)',
     )
+    expect(foldWhitespace(coreReadme)).toContain(
+      'it reports an undeclared literal class written in `className`',
+    )
   })
 
-  it('the "What is NOT checked" paragraph in cx.ts names @navecss/eslint-plugin and drops the old bare-string claim', () => {
-    const start = cxSource.indexOf('What is NOT checked:')
-    expect(start).toBeGreaterThan(-1)
-    const end = cxSource.indexOf('Note on consumer atoms:', start)
-    expect(end).toBeGreaterThan(start)
-    const paragraph = cxSource.slice(start, end)
+  it('the "What is NOT checked" paragraph in cx.ts names @navecss/eslint-plugin, says what it reports, and drops the old claims', () => {
+    const paragraph = notCheckedParagraph(cxSource)
     expect(paragraph).toContain('@navecss/eslint-plugin')
-    expect(paragraph).not.toContain('is not seen by anything')
+    expect(paragraph).toContain(PARAGRAPH_CLAIM)
+    for (const retired of RETIRED_PARAGRAPH_STRINGS) expect(paragraph).not.toContain(retired)
   })
 
-  it('the packed dist/cx.d.ts carries the same paragraph, naming @navecss/eslint-plugin, with the built package’s current bytes', () => {
-    const dts = packCoreTarball().read('package/dist/cx.d.ts')
-    const start = dts.indexOf('What is NOT checked:')
-    expect(start).toBeGreaterThan(-1)
-    const end = dts.indexOf('Note on consumer atoms:', start)
-    expect(end).toBeGreaterThan(start)
-    const paragraph = dts.slice(start, end)
+  it('the packed dist/cx.d.ts carries the same paragraph, with the built package’s current bytes', () => {
+    const paragraph = notCheckedParagraph(packCoreTarball().read('package/dist/cx.d.ts'))
     expect(paragraph).toContain('@navecss/eslint-plugin')
-    expect(paragraph).not.toContain('is not seen by anything')
+    expect(paragraph).toContain(PARAGRAPH_CLAIM)
+    for (const retired of RETIRED_PARAGRAPH_STRINGS) expect(paragraph).not.toContain(retired)
   })
 })
 

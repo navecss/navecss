@@ -163,13 +163,17 @@ export function collectCxBindings(
 }
 
 /**
-Finds the variable `name` resolves to from `scope`, walking scopes outward, or `undefined`.
+ * Finds the value `name` resolves to from `scope`, walking scopes outward, or `undefined`. A
+ * TypeScript type-only declaration (a type alias, an interface, a type parameter) sits in the
+ * same scope set but names a type, never a value, so the walk goes on past it.
  */
 function findVariable(name: string, scope: Scope.Scope): Scope.Variable | undefined {
   let current: Scope.Scope | null = scope
   while (current) {
     const variable = current.set.get(name)
-    if (variable) return variable
+    if (variable && (variable as { isValueVariable?: boolean }).isValueVariable !== false) {
+      return variable
+    }
     current = current.upper
   }
   return undefined
@@ -250,6 +254,19 @@ function isOneHopRawAccess(
       property.value.type === 'Identifier' &&
       property.value.name === node.name,
   )
+}
+
+/**
+ * How the file names Nave's `cx.raw`, for a message that suggests a call to it: through its first
+ * named `cx` import (`ncx.raw` when aliased), else its first namespace import (`c.cx.raw`), else
+ * `cx.raw` when the file imports neither.
+ */
+export function rawCalleeText(bindings: CxBindings): string {
+  const [cxVariable] = bindings.cxVariables
+  if (cxVariable) return `${cxVariable.name}.raw`
+  const [namespaceVariable] = bindings.namespaceVariables
+  if (namespaceVariable) return `${namespaceVariable.name}.cx.raw`
+  return 'cx.raw'
 }
 
 /**

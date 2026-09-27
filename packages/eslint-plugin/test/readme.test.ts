@@ -185,6 +185,30 @@ describe('AC-25: "what it does not check" statements hold as fixtures', () => {
   it('a literal routed through a custom property is not seen by the style rule', () => {
     expect(lint("const el = <div style={{ '--w': 'legacy-card' }} />")).toEqual([])
   })
+
+  it('states that a cx.raw call reached other than the recognised ways is not seen, and it is not', () => {
+    const collapsed = README.replaceAll(/\s+/g, ' ')
+    expect(collapsed).toContain(
+      "- `cx.raw` is recognised as `cx.raw`, `cx['raw']`, ``cx[`raw`]``, a namespace import's `c.cx.raw`, or one `const` alias: a call reached any other way, such as `(0, cx.raw)(...)` or `cx.raw.call(...)`, is not seen by either rule.",
+    )
+    const PRELUDE = "import { cx } from '@navecss/core/cx'\n"
+    expect(lint(`${PRELUDE}const k = (0, cx.raw)('legacy-card')`)).toEqual([])
+    expect(lint(`${PRELUDE}const k = cx.raw.call(null, 'legacy-card')`)).toEqual([])
+    expect(lint(`${PRELUDE}const k = cx.raw('legacy-card')`)).toEqual([
+      '@navecss/raw-reason',
+      '@navecss/count-escapes',
+    ])
+  })
+})
+
+describe('AC-27: the style rule states its one deliberate divergence from stylelint', () => {
+  it("states that a string that is not a valid value for its property is reported here while stylelint passes it, and the rule reports padding: '13' and padding: ''", () => {
+    expect(sectionUnder('### Rule: style').replaceAll(/\s+/g, ' ')).toContain(
+      "One divergence from `@navecss/stylelint-config` is deliberate: a string that is not a valid value for its property, such as `padding: '13'` (a number with no unit) or `padding: ''`, is reported here, while stylelint passes the same text in a stylesheet. The browser drops such a declaration, and this rule reports it rather than parse each property's grammar.",
+    )
+    expect(lint("const el = <div style={{ padding: '13' }} />")).toEqual(['@navecss/style-values'])
+    expect(lint("const el = <div style={{ padding: '' }} />")).toEqual(['@navecss/style-values'])
+  })
 })
 
 describe('AC-19: the counting rule denominator, stated and fixtured', () => {

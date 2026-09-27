@@ -9,10 +9,13 @@
 import type { TSESTree } from '@typescript-eslint/types'
 import type { JSSyntaxElement, Rule } from 'eslint'
 
+import type { ClassHit } from './class-hits.ts'
+
 import { atomNameForClass } from '../atoms.ts'
-import { collectCxBindings, type CxBindings, NO_CX_BINDINGS } from '../cx-binding.ts'
+import { collectCxBindings, type CxBindings, NO_CX_BINDINGS, rawCalleeText } from '../cx-binding.ts'
 import {
   cxAtomMessage,
+  cxContainerMessage,
   isNaveOutputLike,
   literalClassMessage,
   naveOutputMessage,
@@ -20,7 +23,7 @@ import {
 } from '../messages.ts'
 import { isReportedPiece } from '../raw-admission.ts'
 import { compileAllow, type CompiledAllowEntry, getNaveSettings } from '../settings.ts'
-import { type ClassHit, collectValueHits } from './class-channel-walk.ts'
+import { collectValueHits } from './class-channel-walk.ts'
 
 /**
 True for a `className`/`class` JSX attribute (rule 1 reads neither `classNames` nor a slot prop).
@@ -33,14 +36,24 @@ function isClassAttribute(node: TSESTree.JSXAttribute): boolean {
 }
 
 /**
- * The message for an `&&` directly in a class position, quoting its operands as written: as the
- * whole value a falsy condition becomes the attribute itself, in a template slot it is
- * interpolated into the class list.
+ * The message for an `&&` directly in a class position, quoting its operands as written and
+ * naming `cx.raw` as the file binds it (`rawCallee`): as the whole value a falsy condition
+ * becomes the attribute itself, in a template slot it is interpolated into the class list.
  */
-function slotAndMessage(rendered: string, isWhole: boolean): string {
+function slotAndMessage(rendered: string, isWhole: boolean, rawCallee: string): string {
   return isWhole
-    ? `A falsy condition becomes the whole className: false/null/undefined drop the attribute and 0 renders as the class "0". Use cx.raw(${rendered}) or a ternary ending ": undefined".`
-    : `A falsy condition's own value is interpolated into the class list here (false/undefined/null/0). Use cx.raw(${rendered}) or a ternary ending ": ''".`
+    ? `A falsy condition becomes the whole className: false/null/undefined drop the attribute and 0 renders as the class "0". Use ${rawCallee}(${rendered}) or a ternary ending ": undefined".`
+    : `A falsy condition's own value is interpolated into the class list here (false/undefined/null/0). Use ${rawCallee}(${rendered}) or a ternary ending ": ''".`
+}
+
+/**
+ * What a message needs beyond the hit itself: the declared entries (compiled, and as printed) and
+ * `cx.raw` as the file binds it.
+ */
+interface Wording {
+  allowEntries: CompiledAllowEntry[]
+  declared: string
+  rawCallee: string
 }
 
 /**
@@ -49,19 +62,21 @@ The message rule 1 reports for `hit`, or `undefined` when nothing is reported.
 function hitMessage(
   hit: ClassHit,
   context: Rule.RuleContext,
-  declared: string,
-  allowEntries: CompiledAllowEntry[],
+  { allowEntries, declared, rawCallee }: Wording,
 ): string | undefined {
   const { sourceCode } = context
   if (hit.kind === 'slot-and') {
-    return slotAndMessage(sourceCode.getText(hit.node as never), hit.isWhole)
+    return slotAndMessage(sourceCode.getText(hit.node as never), hit.isWhole, rawCallee)
   }
   if (!isReportedPiece(hit, allowEntries)) return undefined
   if (isNaveOutputLike(hit.text)) {
     return naveOutputMessage(hit.text, atomNameForClass(hit.text))
   }
   if (hit.kind === 'atom') {
-    return cxAtomMessage(sourceCode.getText(hit.callee as never), hit.rendered, declared)
+    const callee = sourceCode.getText(hit.callee as never)
+    return hit.isContainer
+      ? cxContainerMessage(callee, hit.rendered, declared)
+      : cxAtomMessage(callee, hit.rendered, declared)
   }
   return literalClassMessage(hit.text, declared)
 }
@@ -102,8 +117,9 @@ export const classChannelRule: Rule.RuleModule = {
         // One report per offending construct: the same literal reached twice (one `const`
         // named in both branches of a conditional) is still one class written once.
         const reported = new Set<string>()
+        const wording = { allowEntries, declared, rawCallee: rawCalleeText(bindings) }
         for (const hit of collectValueHits(ctx, expression, scope)) {
-          const message = hitMessage(hit, context, declared, allowEntries)
+          const message = hitMessage(hit, context, wording)
           const key = `${hit.node.range.join(':')}|${message}`
           if (message === undefined || reported.has(key)) continue
           reported.add(key)

@@ -51,12 +51,12 @@ without claiming conformance, certification or endorsement.
 
 ## Packages
 
-| Package                                                         | Description                                                                                                         |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                              |
-| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, PostCSS plugin                                                         |
-| [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check |
-| [`@navecss/eslint-plugin`](packages/eslint-plugin#readme)       | A literal class in `className` or a literal value on a tokenized `style` property, reported unless declared         |
+| Package                                                         | Description                                                                                                                                    |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                                                         |
+| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, PostCSS plugin                                                                                    |
+| [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check, declared `--nave-*` names |
+| [`@navecss/eslint-plugin`](packages/eslint-plugin#readme)       | A literal class in `className` or a literal value on a tokenized `style` property, reported unless declared                                    |
 
 ## Who this is for
 

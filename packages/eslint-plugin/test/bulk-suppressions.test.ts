@@ -1,4 +1,5 @@
 /**
+ * AC-eslint-plugin-17 covers: R9 (its `--cache` and `--concurrency` clause).
  * AC-eslint-plugin-18 covers: R9, R10.
  *
  * End to end against the real ESLint CLI, not `Linter.verify`: ESLint's bulk-suppressions
@@ -7,7 +8,14 @@
  * cannot exercise at all.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -166,6 +174,116 @@ describe('AC-18: ESLint bulk suppressions hold the escape count', () => {
       expect(suppressions['src/a.jsx']?.['@navecss/count-escapes']).toBeUndefined()
     } finally {
       rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+/**
+ * Six files, each holding one counted `cx.raw()` call with a reason, so every file carries a
+ * report and a run that reads one file's result through another's state would show it.
+ */
+function sixFileProject(): string {
+  const dir = scratchProject('error')
+  rmSync(path.join(dir, 'src/a.jsx'))
+  for (const index of [1, 2, 3, 4, 5, 6]) {
+    writeFileSync(
+      path.join(dir, `src/f${index}.jsx`),
+      "import { cx } from '@navecss/core/cx'\nexport const A = () => <div className={cx.raw(/* nave-escape: vendor widget */ 'legacy-card')} />\n",
+    )
+  }
+  return dir
+}
+
+const EDIT = "export const B = () => <div className={cx.raw('other-legacy')} />\n"
+
+/**
+Each file's reports from a `-f json` run, as `[file, ['rule@line', ...]]` in file order.
+ */
+function reportsByFile(run: RunResult): [string, string[]][] {
+  const results = JSON.parse(run.stdout) as {
+    filePath: string
+    messages: { line: number; ruleId: string }[]
+  }[]
+  return results
+    .map((result): [string, string[]] => [
+      path.basename(result.filePath),
+      result.messages.map((message) => `${message.ruleId}@${message.line}`),
+    ])
+    .toSorted(([a], [b]) => a.localeCompare(b))
+}
+
+function readSuppressions(dir: string): string {
+  return readFileSync(path.join(dir, 'eslint-suppressions.json'), 'utf8')
+}
+
+describe('AC-17: the count keeps no state across files, under --cache and --concurrency', () => {
+  it('a warm --cache run after one file changed gives the same reports as a cold run', () => {
+    const cold = sixFileProject()
+    const warm = sixFileProject()
+    try {
+      appendFileSync(path.join(cold, 'src/f2.jsx'), EDIT)
+      const reference = runEslint(cold, ['-f', 'json', 'src'])
+
+      expect(runEslint(warm, ['--cache', 'src']).status).toBe(1)
+      appendFileSync(path.join(warm, 'src/f2.jsx'), EDIT)
+      const cached = runEslint(warm, ['--cache', '-f', 'json', 'src'])
+
+      expect(reportsByFile(reference)).toHaveLength(6)
+      expect(reportsByFile(cached)).toEqual(reportsByFile(reference))
+      expect(cached.status).toBe(reference.status)
+    } finally {
+      rmSync(cold, { recursive: true, force: true })
+      rmSync(warm, { recursive: true, force: true })
+    }
+  })
+
+  it('--suppress-rule writes the same suppressions file with and without --cache', () => {
+    const plain = sixFileProject()
+    const cached = sixFileProject()
+    try {
+      runEslint(plain, ['--suppress-rule', '@navecss/count-escapes', 'src'])
+      runEslint(cached, ['--cache', 'src'])
+      runEslint(cached, ['--cache', '--suppress-rule', '@navecss/count-escapes', 'src'])
+      expect(readSuppressions(cached)).toBe(readSuppressions(plain))
+    } finally {
+      rmSync(plain, { recursive: true, force: true })
+      rmSync(cached, { recursive: true, force: true })
+    }
+  })
+
+  it('a warm cache holds no count: with the suppressions file deleted, the next cached run fails', () => {
+    const dir = sixFileProject()
+    try {
+      runEslint(dir, ['--suppress-rule', '@navecss/count-escapes', 'src'])
+      expect(runEslint(dir, ['--cache', 'src']).status).toBe(0)
+      rmSync(path.join(dir, 'eslint-suppressions.json'))
+      expect(runEslint(dir, ['--cache', 'src']).status).toBe(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('--concurrency 2 gives the same reports and the same suppressions file as a single thread', () => {
+    const single = sixFileProject()
+    const parallel = sixFileProject()
+    try {
+      const singleRun = runEslint(single, ['-f', 'json', 'src'])
+      const parallelRun = runEslint(parallel, ['--concurrency', '2', '-f', 'json', 'src'])
+      expect(reportsByFile(singleRun)).toHaveLength(6)
+      expect(reportsByFile(parallelRun)).toEqual(reportsByFile(singleRun))
+
+      runEslint(single, ['--suppress-rule', '@navecss/count-escapes', 'src'])
+      runEslint(parallel, [
+        '--concurrency',
+        '2',
+        '--suppress-rule',
+        '@navecss/count-escapes',
+        'src',
+      ])
+      expect(readSuppressions(parallel)).toBe(readSuppressions(single))
+    } finally {
+      rmSync(single, { recursive: true, force: true })
+      rmSync(parallel, { recursive: true, force: true })
     }
   })
 })

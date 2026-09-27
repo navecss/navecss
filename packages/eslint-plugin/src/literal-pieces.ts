@@ -1,7 +1,8 @@
 /**
  * How class text an author wrote is cut into pieces, shared by every rule that has to decide
  * "is this class text a literal an author wrote": a string literal is split on whitespace, and a
- * template literal's static text is split the same way, a piece cut off by an adjacent `${}` slot
+ * template literal's static text is split the same way (and so is a run of string literals joined
+ * by `+`, read as the one string it forms), a piece cut off by an adjacent `${}` slot
  * being marked `truncated`, since only a prefix entry (never a pattern) can admit a rendered
  * token that is cut off mid-word. The grammar that reaches these literals (conditionals, logical
  * operators, calls) lives in `rules/class-channel-walk.ts`.
@@ -88,6 +89,38 @@ export function collectTemplatePieces(node: TSESTree.TemplateLiteral): LiteralPi
   return pieces
 }
 
+/**
+The operands of a chain of string `+`, in source order (`a + b + c` is `(a + b) + c`).
+ */
+export function concatOperands(node: Node): Node[] {
+  if (node.type === 'BinaryExpression' && node.operator === '+') {
+    return [...concatOperands(node.left), ...concatOperands(node.right)]
+  }
+  return [node]
+}
+
+/**
+ * The pieces of a run of adjacent string literals in a `+` chain, read as the one string they
+ * join into (`'legacy' + '-card'` is the one piece `legacy-card`), each piece at the literal it
+ * starts in.
+ */
+export function joinedLiteralPieces(literals: TSESTree.StringLiteral[]): LiteralPiece[] {
+  const starts: number[] = []
+  let offset = 0
+  for (const literal of literals) {
+    starts.push(offset)
+    offset += literal.value.length
+  }
+  const text = literals.map((literal) => literal.value).join('')
+  return text
+    .matchAll(/\S+/gu)
+    .map((match) => {
+      const owner = starts.findLastIndex((start) => start <= match.index)
+      return { text: match[0], node: literals[owner]!, truncated: false }
+    })
+    .toArray()
+}
+
 export interface ConstHop {
   init: Node
   /**
@@ -99,14 +132,15 @@ export interface ConstHop {
 /**
  * Resolves an identifier to its single `const` initializer, one hop, or returns `undefined`. A
  * `let` or `var` is never followed: it can be reassigned, so its declaration does not say what
- * it holds.
+ * it holds. A TypeScript type-only declaration of the same name is skipped: it names a type,
+ * never the value the identifier reads.
  */
 export function resolveConstHop(node: Node, scope: Scope.Scope): ConstHop | undefined {
   if (node.type !== 'Identifier') return undefined
   let current: Scope.Scope | null = scope
   while (current) {
     const variable = current.set.get(node.name)
-    if (variable) {
+    if (variable && (variable as { isValueVariable?: boolean }).isValueVariable !== false) {
       if (variable.defs.length !== 1) return undefined
       const def = variable.defs[0]!
       if (def.type !== 'Variable' || def.parent.kind !== 'const') return undefined
