@@ -65,7 +65,7 @@ export interface NavePluginOptions {
    * A string is a path instead: resolved against `process.cwd()`
    * at construction (an unresolvable specifier throws right there, naming
    * the specifier and the directory), then loaded for its default export on
-   * every run and re-read whenever the file's mtime or size changes. Pass a
+   * every run and re-read whenever the file's own bytes change. Pass a
    * specifier when your host's build cache needs to see it as a dependency
    * (R15) — an inline object is invisible to a cached host's own cache key.
    * The specifier form makes the plugin async: use `process(css).then(cb)`,

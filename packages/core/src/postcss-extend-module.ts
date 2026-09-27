@@ -2,6 +2,7 @@
  * R15: resolving and loading a PostCSS `extend` module specifier, split out
  * of `postcss.ts` to keep that file under the project's file-length lint.
  */
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import url from 'node:url'
@@ -48,17 +49,19 @@ async function importExtendMap(moduleUrl: string, file: string): Promise<ExtendM
 
 /**
  * Loads `file`'s default export as one run's extend map. Cache-busts on the
- * module's own `mtime`/`size` so a dev server sees an edit without a process
+ * file's own content hash so a dev server sees an edit without a process
  * restart (round-3 decision 11 — Node's `import()` cache cannot otherwise be
- * invalidated). `cache` is the plugin instance's own map, so concurrent runs
- * against an unchanged file share one `import()` instead of racing two.
+ * invalidated) — a `mtime`/size key would miss a size-preserving edit, or one
+ * whose mtime a build step restores to its old value. `cache` is the plugin
+ * instance's own map, so concurrent runs against an unchanged file share one
+ * `import()` instead of racing two.
  */
 function loadExtendModule(
   file: string,
   cache: Map<string, Promise<ExtendMap>>,
 ): Promise<ExtendMap> {
-  const stats = fs.statSync(file)
-  const moduleUrl = `${url.pathToFileURL(file).href}?v=${stats.mtimeMs}-${stats.size}`
+  const digest = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+  const moduleUrl = `${url.pathToFileURL(file).href}?v=${digest}`
   const cached = cache.get(moduleUrl)
   if (cached) return cached
 
