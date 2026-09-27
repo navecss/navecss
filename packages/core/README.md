@@ -282,7 +282,7 @@ on a list of properties (colour, spacing and others) use a `var()` or an admitte
 [`@navecss/stylelint-config`](https://github.com/navecss/navecss/tree/main/packages/stylelint-config#readme)
 beside this line; it never replaces it.
 
-**ESLint.** For the JSX side of the same idea — a literal class in `className`, or a literal
+**ESLint®.** For the JSX side of the same idea — a literal class in `className`, or a literal
 value on a tokenized `style` property — install
 [`@navecss/eslint-plugin`](https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#readme):
 

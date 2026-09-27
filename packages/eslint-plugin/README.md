@@ -1,6 +1,6 @@
 # @navecss/eslint-plugin
 
-Nave's own ESLint rules, published for a consumer's project: every deliberate escape from the
+NaveCSS plugin for ESLint®: every deliberate escape from the
 design system left as a declared, reasoned, countable act, instead of an unmarked literal
 sitting beside `cx()`/`cx.raw()` that nothing checks.
 
@@ -128,3 +128,7 @@ Stated as rules, not as gaps to be filled later:
 | `@navecss/raw-reason`    | A `cx.raw()` call carrying undeclared class text needs a `nave-escape` reason comment    |
 | `@navecss/count-escapes` | Off by default; reports every escape and disable comment, for ESLint's bulk suppressions |
 | `@navecss/style-values`  | A literal value in a JSX `style` object, on a property the design system tokenizes       |
+
+## Trademark
+
+ESLint® is a registered trademark of the OpenJS Foundation. This package is not affiliated with or endorsed by the OpenJS Foundation or the ESLint project.

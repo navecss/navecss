@@ -102,7 +102,7 @@ And, if you run stylelint, in your stylelint config:
 { "languageOptions": { "syntax": { "atRules": { "nave": { "prelude": "<custom-ident>+" } } } } }
 ```
 
-**ESLint.** For the JSX side of the same idea — a literal class in `className`, or a literal
+**ESLint®.** For the JSX side of the same idea — a literal class in `className`, or a literal
 value on a tokenized `style` property — install
 [`@navecss/eslint-plugin`](https://github.com/navecss/navecss/tree/main/packages/eslint-plugin#readme):
 
