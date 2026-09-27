@@ -7,13 +7,17 @@
  * holds until someone changes it without knowing what it costs.
  *
  * WHAT THIS CHECKS. For every published entry a non-private workspace package's own `exports`
- * map resolves to a `.js` file, bundle that entry the way a consumer's own bundler would (the
- * built `dist/` output plus whatever it still imports, e.g. a sibling chunk or another
- * `@navecss/*` package) and scan the bundled text for a small denylist of browser styling
- * globals: `document`, `CSSStyleSheet`, `getComputedStyle`, `insertRule`, `adoptedStyleSheets`,
- * and an assignment through `.style`. None of those has any legitimate reason to appear in
- * bytes Nave ships; their presence is exactly what "computes or mutates a style in the browser"
- * means in practice.
+ * map (or, lacking one, its `main`/`module`/`browser` fields) reaches a `.js`, `.mjs`, or `.cjs`
+ * file, bundle that entry the way a consumer's own bundler would (the built `dist/` output plus
+ * whatever it still imports, e.g. a sibling chunk or another `@navecss/*` package) and scan the
+ * bundled text for a small denylist of browser styling globals: `document`, `CSSStyleSheet`,
+ * `getComputedStyle`, `insertRule`, `adoptedStyleSheets`, a write to `.style` (an assignment or
+ * a `setProperty`/`removeProperty` call), and `setAttribute("style", ...)`. None of those has
+ * any legitimate reason to appear in bytes Nave ships; their presence is exactly what "computes
+ * or mutates a style in the browser" means in practice. This is a textual scan of bundled text,
+ * not a parse of it, so it has limits in both directions (see `DENYLIST`'s docblock): it can
+ * flag a `style` property that has nothing to do with the DOM, and it does not see a write made
+ * through an alias of an element's `style` object.
  *
  * WHY BUNDLE RATHER THAN GREP `dist/` DIRECTLY. A source file can import a browser-styling
  * global through a re-export, a barrel, or a sibling chunk without the offending identifier
@@ -54,20 +58,27 @@ map condition.
 const RUNTIME_EXTENSIONS = ['.js', '.mjs', '.cjs']
 
 /**
- * Walks an `exports` map VALUE and adds every runtime file path it reaches to `into` (a `Set`,
- * so a path named by more than one condition collapses to a single membership). A string value
- * is added when it ends in a `RUNTIME_EXTENSIONS` suffix. An object value is walked condition
- * by condition, skipping `types` (a type-declaration path is never runtime code) and recursing
- * into a nested conditions object (`{ import: { types: '...', default: './i.js' } }`), so every
- * runtime target reachable through any other condition key, at any depth, is collected, not
- * just the first one found. `null`, a non-object, and an array contribute nothing.
+ * Walks an `exports` map VALUE (or a legacy `main`/`module`/`browser` field's value) and adds
+ * every runtime file path it reaches to `into` (a `Set`, so a path named more than once
+ * collapses to a single membership). A string value is added when it ends in a
+ * `RUNTIME_EXTENSIONS` suffix. An ARRAY is Node's own "fallback array" shape: every item is
+ * walked in turn, at whatever depth it is nested (`{ import: ['./a.js', './b.js'] }` yields
+ * both). An object value is walked condition by condition, skipping `types` (a type-declaration
+ * path is never runtime code) and recursing into a nested conditions object (`{ import: {
+ * types: '...', default: './i.js' } }`), so every runtime target reachable through any other
+ * condition key, at any depth, is collected, not just the first one found. `null` and anything
+ * else contribute nothing.
  */
 function collectRuntimeTargets(value, into) {
   if (typeof value === 'string') {
     if (RUNTIME_EXTENSIONS.some((extension) => value.endsWith(extension))) into.add(value)
     return
   }
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return
+  if (Array.isArray(value)) {
+    for (const item of value) collectRuntimeTargets(item, into)
+    return
+  }
+  if (value === null || typeof value !== 'object') return
   for (const [condition, nested] of Object.entries(value)) {
     if (condition === 'types') continue
     collectRuntimeTargets(nested, into)
@@ -84,35 +95,112 @@ export function consumerFacingSpecifier(packageName, exportKey) {
 }
 
 /**
+ * `collectRuntimeTargets(value)` turned into `jsExportEntries` result shape for one `exportKey`:
+ * one entry per distinct runtime path reached, all sharing `exportKey`'s specifier.
+ */
+function runtimeEntriesForKey(packageName, exportKey, value) {
+  const targets = new Set()
+  collectRuntimeTargets(value, targets)
+  return Array.from(targets, (relativePath) => ({
+    specifier: consumerFacingSpecifier(packageName, exportKey),
+    relativePath,
+  }))
+}
+
+/**
+ * `main`, `module`, and `browser`, in that order, each attributed to the package's own root
+ * specifier and deduplicated by path: the legacy entry points a consumer's resolver or bundler
+ * still reads when `manifest` carries no `exports` field at all. Only a STRING value counts as
+ * naming one file; `browser`'s other legal shape, an object mapping individual specifiers to
+ * browser replacements, names no single entry point and is skipped.
+ */
+function legacyEntryFields(manifest) {
+  const entries = []
+  const seenPaths = new Set()
+  for (const field of ['main', 'module', 'browser']) {
+    const value = manifest[field]
+    if (typeof value !== 'string') continue
+    if (RUNTIME_EXTENSIONS.every((extension) => !value.endsWith(extension))) continue
+    if (seenPaths.has(value)) continue
+    seenPaths.add(value)
+    entries.push({ specifier: manifest.name, relativePath: value })
+  }
+  return entries
+}
+
+/**
  * Every `exports` key of `manifest` that reaches at least one runtime `.js`/`.mjs`/`.cjs` file,
- * one entry per (key, path) pair: the package's own root (`.`) plus every non-pattern subpath,
- * excluding `./package.json` (resolver metadata, never runtime code) and any subpath PATTERN
- * (`./styles/*` names a family, not one file this script could bundle as a single entry).
- * Deliberately keeps `.` in scope, unlike a documentation-coverage reading of the same map: a
- * package whose only export is `.` (a plain JS entry with no subpath alias) would otherwise
- * never be checked at all. A key naming more than one distinct runtime path (a conditions
- * object naming both `browser` and `import`, say) is audited on every one of them, not just the
- * first condition matched; two conditions naming the SAME path (`import` and `default` both
- * pointing at one file, the shape `@navecss/tokens` ships) collapse to a single entry for that
- * key, because `collectRuntimeTargets` gathers targets into a `Set`.
+ * one entry per (key, path) pair. Covers every shape Node's own resolver accepts for `exports`:
+ * a SUBPATH MAP (the package's own root `.` plus every non-pattern subpath, excluding
+ * `./package.json`, resolver metadata that is never runtime code, and any subpath PATTERN such
+ * as `./styles/*`, which names a family rather than one file this script could bundle);
+ * top-level SHORTHAND for "just the root", spelled as a bare string (`"exports":
+ * "./index.js"`), a fallback ARRAY (`"exports": ["./index.js"]`), or a top-level CONDITIONS
+ * object whose keys are condition names rather than subpaths (`{ "exports": { "import":
+ * "./i.js" } }`) — distinguished from a subpath map by having no key equal to `.` or starting
+ * with `./`; Node treats mixing the two shapes in one map as invalid, and a mixed map met here
+ * is read as a subpath map, keeping today's behaviour for its `.`-rooted keys rather than
+ * guessing at the author's intent. Deliberately keeps `.` in scope, unlike a
+ * documentation-coverage reading of the same map: a package whose only export is `.` (a plain
+ * JS entry with no subpath alias) would otherwise never be checked at all. A key naming more
+ * than one distinct runtime path, whether through more than one condition (`browser` and
+ * `import` together) or a fallback array, is audited on every one of them, not just the first
+ * found; two conditions naming the SAME path (`import` and `default` both pointing at one file,
+ * the shape `@navecss/tokens` ships) collapse to a single entry for that key.
+ *
+ * When `manifest` has NO `exports` field at all, falls back to `legacyEntryFields`. Once
+ * `exports` is present, even as `null` or an empty object, it is authoritative and `main` /
+ * `module` / `browser` are never consulted, matching how a resolver treats them.
  */
 export function jsExportEntries(manifest) {
   const exportsField = manifest.exports
-  if (exportsField === null || typeof exportsField !== 'object' || Array.isArray(exportsField)) {
-    return []
+
+  if (exportsField === undefined) return legacyEntryFields(manifest)
+  if (exportsField === null) return []
+  if (typeof exportsField === 'string' || Array.isArray(exportsField)) {
+    return runtimeEntriesForKey(manifest.name, '.', exportsField)
   }
+  if (typeof exportsField !== 'object') return []
+
+  const isSubpathMap = Object.keys(exportsField).some((key) => key === '.' || key.startsWith('./'))
+  if (!isSubpathMap) {
+    return runtimeEntriesForKey(manifest.name, '.', exportsField)
+  }
+
   const entries = []
   for (const [key, value] of Object.entries(exportsField)) {
     if (key !== '.' && !key.startsWith('./')) continue // a top-level conditions object's key
     if (key === './package.json' || key.includes('*')) continue
-    const targets = new Set()
-    collectRuntimeTargets(value, targets)
-    for (const target of targets) {
-      entries.push({ specifier: consumerFacingSpecifier(manifest.name, key), relativePath: target })
-    }
+    entries.push(...runtimeEntriesForKey(manifest.name, key, value))
   }
   return entries
 }
+
+/**
+ * A textual match for reaching the `style` DOM property under either spelling a bundler or a
+ * minifier might emit: the dot form `.style`, or a bracket access keyed by a string naming
+ * `style` (single-quoted, double-quoted, or a template literal — `['style']`, `["style"]`, or
+ * `` [`style`] ``). Shared by the `.style assignment` and `.style method call` entries below so
+ * both recognize the same set of spellings for "this is the style property", not just the dot
+ * one.
+ */
+const STYLE_ACCESS_SOURCE = String.raw`(?:\.style|\[\s*['"\x60]style['"\x60]\s*\])`
+
+/**
+ * Every JavaScript assignment operator (`=`, and the fifteen compound forms: `+=` `-=` `*=` `/=`
+ * `%=` `**=` `<<=` `>>=` `>>>=` `&=` `|=` `^=` `&&=` `||=` `??=`), so `.style assignment` fires
+ * on any of them, not only `=`. Each alternative is a fixed literal, so a shorter one simply
+ * fails to match where the text is a longer one that starts the same way: `*=` cannot match
+ * against `**=`'s text because that text's second character is `*`, not `=`, so the `**=`
+ * alternative is what matches there instead; no ordering between alternatives is needed for
+ * correctness. Comparison operators are excluded by omission, not by exclusion: `<=`, `>=`,
+ * `!=`, and `!==` never appear as alternatives, and none of the listed assignment operators
+ * matches where one of those starts, since `<<=`/`>>=`/`>>>=` all require a repeated `<` or `>`
+ * that `<=`/`>=` do not have. `==`, `===`, and `=>` are the one case that does share a leading
+ * character with a listed operator (bare `=`), so the trailing `(?!=|>)` on that alternative
+ * rules out a second `=` or a following `>` specifically.
+ */
+const ASSIGNMENT_OPERATOR_SOURCE = String.raw`(?:\*\*=|<<=|>>>=|>>=|&&=|\|\|=|\?\?=|\+=|-=|\*=|/=|%=|&=|\|=|\^=|=(?!=|>))`
 
 /**
  * The browser styling globals ADR 0004 forbids a shipped entry from touching, as
@@ -123,15 +211,27 @@ export function jsExportEntries(manifest) {
  * (`document.foo`, `document[...]`, and the optional-chained `document?.foo` /
  * `document?.[...]`) rather than the bare word, which is what let "a pointer starts at the
  * document root" (an error message about a JSON document, not the DOM) false-positive while
- * this check was being built. Writing through `.style` is covered by three entries rather than
- * one, because a write reaches the DOM through more than one shape: `.style assignment` fires
- * on an ASSIGNMENT (`=`, `+=`, `-=`, never `==`/`===`) to `.style` itself, a `.style` property
- * (`.style.color = ...`, minification-safe: no space required around the operator), or a
- * bracketed `.style` index, matching the ADR's own wording that a bare read (`el.style.color`)
- * is not what the invariant forbids on its own, writing one is; `.style method call` fires on
- * `el.style.setProperty(...)` and `el.style.removeProperty(...)`, which write without an `=`
- * anywhere in sight; `setAttribute("style", ...)` fires on setting the whole attribute the same
- * way, through `Element.setAttribute`.
+ * this check was being built. Writing through `.style` (or its bracket-string spelling, see
+ * `STYLE_ACCESS_SOURCE`) is covered by three entries rather than one, because a write reaches
+ * the DOM through more than one shape: `.style assignment` fires on any assignment operator
+ * (see `ASSIGNMENT_OPERATOR_SOURCE`) to `.style` itself, a `.style` property (`.style.color =
+ * ...`, minification-safe: no space required around the operator), or a bracketed `.style`
+ * index, matching the ADR's own wording that a bare read (`el.style.color`) is not what the
+ * invariant forbids on its own, writing one is; `.style method call` fires on
+ * `el.style.setProperty(...)` and `el.style.removeProperty(...)`, plain or optional-chained
+ * (`el.style?.setProperty(...)`), which write without an assignment operator anywhere in sight;
+ * `setAttribute("style", ...)` fires on setting the whole attribute the same way, through
+ * `Element.setAttribute`, and is not affected by the bracket-string spelling above since an
+ * attribute name is always a string argument, never a property access.
+ *
+ * ALL OF THIS IS A TEXTUAL MATCH, NOT A PARSE, and it has limits in both directions. It cannot
+ * tell a DOM element's `.style` apart from an unrelated `style` property on a plain object, so
+ * `config.style.indent = 2` is flagged; a false positive like that is dismissed by a human. And
+ * it only sees a write spelled directly through `.style` (or its bracket-string form): once the
+ * style object is aliased or passed through a value, as in `const s = el.style; s.color = t`,
+ * `(0, e.style).color = t` or `Object.assign(el.style, { color: t })`, the write is not seen.
+ * Following those needs a parse of the bundle rather than a scan of its text, so they are left
+ * to code review.
  */
 export const DENYLIST = [
   {
@@ -144,9 +244,16 @@ export const DENYLIST = [
   { name: 'adoptedStyleSheets', pattern: /\badoptedStyleSheets\b/ },
   {
     name: '.style assignment',
-    pattern: /\.style(?:\.[A-Za-z_$][\w$]*)?(?:\s*\[[^\]\n]*\])?\s*(?:\+=|-=|=)(?!=)/,
+    pattern: new RegExp(
+      STYLE_ACCESS_SOURCE +
+        String.raw`(?:\.[A-Za-z_$][\w$]*)?(?:\s*\[[^\]\n]*\])?\s*` +
+        ASSIGNMENT_OPERATOR_SOURCE,
+    ),
   },
-  { name: '.style method call', pattern: /\.style\.(?:setProperty|removeProperty)\s*\(/ },
+  {
+    name: '.style method call',
+    pattern: new RegExp(STYLE_ACCESS_SOURCE + String.raw`\??\.(?:setProperty|removeProperty)\s*\(`),
+  },
   { name: 'setAttribute("style", ...)', pattern: /\.setAttribute\s*\(\s*["'`]style["'`]/ },
 ]
 

@@ -137,11 +137,80 @@ test('jsExportEntries collapses two conditions naming the same runtime path into
   ])
 })
 
-test('jsExportEntries returns [] when "exports" is absent, null, a string, or an array', () => {
-  assert.deepEqual(jsExportEntries({ name: '@navecss/x' }), [])
+test('jsExportEntries returns [] when "exports" is null', () => {
   assert.deepEqual(jsExportEntries({ name: '@navecss/x', exports: null }), [])
-  assert.deepEqual(jsExportEntries({ name: '@navecss/x', exports: './index.js' }), [])
-  assert.deepEqual(jsExportEntries({ name: '@navecss/x', exports: ['./index.js'] }), [])
+})
+
+test('jsExportEntries treats a top-level "exports" string as "." shorthand', () => {
+  const manifest = { name: '@navecss/x', exports: './index.js' }
+  assert.deepEqual(jsExportEntries(manifest), [
+    { specifier: '@navecss/x', relativePath: './index.js' },
+  ])
+})
+
+test('jsExportEntries treats a top-level "exports" array as a "." fallback array', () => {
+  const manifest = { name: '@navecss/x', exports: ['./index.js'] }
+  assert.deepEqual(jsExportEntries(manifest), [
+    { specifier: '@navecss/x', relativePath: './index.js' },
+  ])
+})
+
+test('jsExportEntries treats a top-level conditions object (no key starting with ".") as "." shorthand', () => {
+  const manifest = { name: '@navecss/x', exports: { import: './i.js', types: './i.d.ts' } }
+  assert.deepEqual(jsExportEntries(manifest), [{ specifier: '@navecss/x', relativePath: './i.js' }])
+})
+
+test('jsExportEntries walks a fallback array nested under "."', () => {
+  const manifest = { name: '@navecss/x', exports: { '.': ['./a.js'] } }
+  assert.deepEqual(jsExportEntries(manifest), [{ specifier: '@navecss/x', relativePath: './a.js' }])
+})
+
+test('jsExportEntries walks a fallback array nested under a condition', () => {
+  const manifest = { name: '@navecss/x', exports: { '.': { import: ['./a.js', './b.js'] } } }
+  const entries = jsExportEntries(manifest)
+  assert.deepEqual(entries.map((entry) => entry.relativePath).sort(), ['./a.js', './b.js'])
+  assert.ok(entries.every((entry) => entry.specifier === '@navecss/x'))
+})
+
+test('jsExportEntries returns [] when "exports" is absent and no legacy field names a runtime file', () => {
+  assert.deepEqual(jsExportEntries({ name: '@navecss/x' }), [])
+})
+
+test('jsExportEntries falls back to "main" when "exports" is absent', () => {
+  const manifest = { name: '@navecss/x', main: './index.js' }
+  assert.deepEqual(jsExportEntries(manifest), [
+    { specifier: '@navecss/x', relativePath: './index.js' },
+  ])
+})
+
+test('jsExportEntries falls back to "module" and "browser" too, deduplicated by path', () => {
+  const manifest = {
+    name: '@navecss/x',
+    main: './index.js',
+    module: './index.js',
+    browser: './browser.js',
+  }
+  const entries = jsExportEntries(manifest)
+  assert.deepEqual(entries.map((entry) => entry.relativePath).sort(), [
+    './browser.js',
+    './index.js',
+  ])
+})
+
+test('jsExportEntries ignores a "browser" field that maps specifiers instead of naming one file', () => {
+  const manifest = { name: '@navecss/x', browser: { './a.js': './b.js' } }
+  assert.deepEqual(jsExportEntries(manifest), [])
+})
+
+test('jsExportEntries ignores "main"/"module"/"browser" once "exports" is present', () => {
+  const manifest = {
+    name: '@navecss/x',
+    exports: { '.': './index.js' },
+    main: './other.js',
+  }
+  assert.deepEqual(jsExportEntries(manifest), [
+    { specifier: '@navecss/x', relativePath: './index.js' },
+  ])
 })
 
 test('the real @navecss/core manifest reports exactly its three JS export entries', () => {
@@ -245,10 +314,95 @@ test('findDenylistHits fires on el.style.removeProperty(...)', () => {
   assert.deepEqual(findDenylistHits('el.style.removeProperty("color");'), ['.style method call'])
 })
 
+test('findDenylistHits fires on an optional-chained el.style?.setProperty(...)', () => {
+  assert.deepEqual(findDenylistHits('el.style?.setProperty(t, n);'), ['.style method call'])
+})
+
+test('findDenylistHits fires on an optional-chained el.style?.removeProperty(...)', () => {
+  assert.deepEqual(findDenylistHits('el.style?.removeProperty(t);'), ['.style method call'])
+})
+
 test('findDenylistHits fires on el.setAttribute("style", ...)', () => {
   assert.deepEqual(findDenylistHits('el.setAttribute("style", "color:red");'), [
     'setAttribute("style", ...)',
   ])
+})
+
+// ---------------------------------------------------------------------------
+// bracket-string access to the "style" key: a minifier or a computed property can reach the
+// same DOM write through e['style'] instead of e.style
+// ---------------------------------------------------------------------------
+
+test('findDenylistHits fires on a bracket-string .style bracket-index assignment', () => {
+  assert.deepEqual(findDenylistHits("e['style'][t]=n"), ['.style assignment'])
+})
+
+test('findDenylistHits fires on a double-quoted bracket-string .style property assignment', () => {
+  assert.deepEqual(findDenylistHits('e["style"].color=t'), ['.style assignment'])
+})
+
+test('findDenylistHits fires on a template-literal bracket-string .style method call', () => {
+  assert.deepEqual(findDenylistHits('e[`style`].setProperty(t,n)'), ['.style method call'])
+})
+
+test('findDenylistHits fires on an optional-chained bracket-string .style method call', () => {
+  assert.deepEqual(findDenylistHits("e['style']?.removeProperty(t)"), ['.style method call'])
+})
+
+// ---------------------------------------------------------------------------
+// every JS assignment operator through .style, and the comparison/arrow shapes that must not
+// be mistaken for one
+// ---------------------------------------------------------------------------
+
+test('findDenylistHits fires on every compound assignment operator through .style', () => {
+  const rows = [
+    ['el.style.opacity *= 0.5;', '*='],
+    ['el.style.opacity /= 2;', '/='],
+    ['el.style.opacity %= 2;', '%='],
+    ['el.style.opacity **= 2;', '**='],
+    ['el.style.zIndex <<= 1;', '<<='],
+    ['el.style.zIndex >>= 1;', '>>='],
+    ['el.style.zIndex >>>= 1;', '>>>='],
+    ['el.style.zIndex &= 1;', '&='],
+    ['el.style.zIndex |= 1;', '|='],
+    ['el.style.zIndex ^= 1;', '^='],
+    ['el.style.color &&= "red";', '&&='],
+    ['el.style ||= {};', '||='],
+    ['el.style.color ??= "red";', '??='],
+  ]
+  for (const [snippet, operator] of rows) {
+    assert.deepEqual(
+      findDenylistHits(snippet),
+      ['.style assignment'],
+      `expected "${operator}" to fire on: ${snippet}`,
+    )
+  }
+})
+
+test('findDenylistHits does not fire on a <= comparison against a .style read', () => {
+  assert.deepEqual(findDenylistHits('if (el.style.width <= 3) return;'), [])
+})
+
+test('findDenylistHits does not fire on a >= comparison against a .style read', () => {
+  assert.deepEqual(findDenylistHits('if (el.style.width >= 3) return;'), [])
+})
+
+test('findDenylistHits does not fire on a .style read used as an arrow function default parameter', () => {
+  assert.deepEqual(findDenylistHits('const f = (s = el.style) => s;'), [])
+})
+
+test('findDenylistHits does not see a write made through an aliased style object (a documented limit of a textual scan)', () => {
+  for (const code of [
+    'const s = el.style; s.color = t;',
+    '(0,e.style).color=t',
+    'Object.assign(el.style, { color: t });',
+  ]) {
+    assert.deepEqual(findDenylistHits(code), [], code)
+  }
+})
+
+test('findDenylistHits fires on an unrelated "style" property, a documented false positive', () => {
+  assert.deepEqual(findDenylistHits('config.style.indent = 2;'), ['.style assignment'])
 })
 
 test('findDenylistHits returns [] for code touching none of the denylist', () => {
@@ -409,4 +563,30 @@ test('bundling the real @navecss/core postcss entry inlines @navecss/tokens but 
 test('the real repository has no zero-runtime violation today', async () => {
   const { code, out } = await runGateMain(main, ROOT)
   assert.equal(code, 0, out)
+})
+
+// ---------------------------------------------------------------------------
+// regex performance: every DENYLIST pattern stays linear against an adversarial input built to
+// trip a catastrophic-backtracking pattern (a long run of characters that almost, but never
+// fully, matches)
+// ---------------------------------------------------------------------------
+
+test('every DENYLIST pattern finishes in well under a second against a 100k-character adversarial input', () => {
+  const adversarialInputs = [
+    `.style${' '.repeat(1e5)}`,
+    `e['style'${'a'.repeat(1e5)}`,
+    `.style.${'a'.repeat(1e5)}=`,
+    `.style${'?'.repeat(1e5)}`,
+  ]
+  for (const { name, pattern } of DENYLIST) {
+    for (const input of adversarialInputs) {
+      const start = performance.now()
+      pattern.test(input)
+      const elapsedMs = performance.now() - start
+      assert.ok(
+        elapsedMs < 1000,
+        `"${name}" took ${elapsedMs}ms against a 100k-character adversarial input`,
+      )
+    }
+  }
 })
