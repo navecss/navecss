@@ -43,6 +43,20 @@ describe('AC-directive-core-18 — a version-3 source map, one segment per token
     consumer.destroy()
   })
 
+  it('counts a supplementary-plane character as two UTF-16 code units, not one code point', async () => {
+    const { map } = expandText('.😀 { a:b; }', { from: 'a.css' })
+    const consumer = await new SourceMapConsumer(map)
+
+    // '.' (1) + '😀' (a surrogate pair, 2 UTF-16 units) + ' ' (1) = column 4,
+    // where '{' sits; a code-point count would place it at column 3.
+    expect(consumer.originalPositionFor({ line: 1, column: 4 })).toMatchObject({
+      line: 1,
+      column: 4,
+    })
+
+    consumer.destroy()
+  })
+
   it('chains through an incoming map', async () => {
     const incoming = {
       version: 3 as const,
@@ -63,6 +77,31 @@ describe('AC-directive-core-18 — a version-3 source map, one segment per token
 
     expect(original.source).toBe('src.scss')
     expect(original.line).toBe(14)
+
+    consumer.destroy()
+  })
+
+  it('resolves the right source out of a two-source incoming map, not always the first', async () => {
+    const incoming = {
+      version: 3 as const,
+      sources: ['a.css', 'b.css'],
+      names: [],
+      // Line 1 (index 0) is source 0 at line 10; line 2 (index 1) is
+      // source 1 at line 20 — one segment per line, column 0.
+      mappings: buildTwoSourceMappings(css),
+    }
+
+    const { css: output, map } = expandText(css, { from: 'out.css', inputSourceMap: incoming })
+    const consumer = await new SourceMapConsumer(map)
+
+    const marginAt = output.indexOf('margin: 0')
+    const marginPos = positionOf(output, marginAt)
+    const original = consumer.originalPositionFor({
+      line: marginPos.line,
+      column: marginPos.column,
+    })
+
+    expect(original.source).toBe('b.css')
 
     consumer.destroy()
   })
@@ -124,6 +163,41 @@ function buildIdentityMappingsShiftedBy10(text: string): string {
     // One segment at column 0 per line: genColDelta=0, sourceIndexDelta=0, sourceLineDelta, sourceColumnDelta=0
     rows.push(encodeVLQ(0) + encodeVLQ(0) + encodeVLQ(sourceLineDelta) + encodeVLQ(0))
     prevSourceLine = 10 + lineIndex
+  }
+  return rows.join(';')
+}
+
+/**
+An identity `mappings` string, one segment at column 0 per line, where original line index 0 is source 0 ('a.css') at line 10, and every other original line is source 1 ('b.css') at line 20 plus its own line index.
+ */
+function buildTwoSourceMappings(text: string): string {
+  const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  function encodeVLQ(n: number): string {
+    let value = n < 0 ? (-n << 1) + 1 : n << 1
+    let result = ''
+    do {
+      let digit = value & 0b1_1111
+      value >>>= 5
+      if (value > 0) digit |= 0b10_0000
+      result += BASE64[digit]
+    } while (value > 0)
+    return result
+  }
+
+  const lines = text.split('\n')
+  const rows: string[] = []
+  let prevSourceIndex = 0
+  let prevSourceLine = 0
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const sourceIndex = lineIndex === 0 ? 0 : 1
+    const sourceLine = lineIndex === 0 ? 10 : 20 + lineIndex
+    const sourceIndexDelta = sourceIndex - prevSourceIndex
+    const sourceLineDelta = sourceLine - prevSourceLine
+    rows.push(
+      encodeVLQ(0) + encodeVLQ(sourceIndexDelta) + encodeVLQ(sourceLineDelta) + encodeVLQ(0),
+    )
+    prevSourceIndex = sourceIndex
+    prevSourceLine = sourceLine
   }
   return rows.join(';')
 }

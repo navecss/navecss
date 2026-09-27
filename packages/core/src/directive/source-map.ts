@@ -46,6 +46,10 @@ function decodeVLQSegment(mappings: string, start: number): { next: number; valu
 export interface Position {
   readonly line: number // 1-based
   readonly column: number // 0-based
+  /**
+  Index into the map's own `sources` array; `0` (the caller's one source) when omitted, so a construction site with no incoming map to chain through never has to say so.
+   */
+  readonly sourceIndex?: number
 }
 
 export interface SourceMap {
@@ -59,7 +63,8 @@ export interface SourceMap {
  * Builds a v3 `mappings` string as output text is appended: `advance(text)`
  * moves the output cursor through literal text (tracking line/column);
  * `mark(position)` records one segment at the cursor's CURRENT position,
- * mapping it to `position` in source index 0.
+ * mapping it to `position`, in `position.sourceIndex` when it names one
+ * (source index 0 otherwise — the caller's own one source).
  */
 export class MappingsBuilder {
   private hasSegmentOnLine = false
@@ -68,11 +73,18 @@ export class MappingsBuilder {
   private outputLine = 0
   private prevGeneratedColumn = 0
   private prevSourceColumn = 0
+  private prevSourceIndex = 0
   private prevSourceLine = 0
 
   advance(text: string): void {
-    for (const char of text) {
-      if (char === '\n') {
+    // A plain indexed loop, not `for...of`: that iterates by Unicode code
+    // point, so a supplementary-plane character (a surrogate pair, two
+    // UTF-16 code units) would advance the column by one instead of two —
+    // wrong, since every other position in this map (the tokenizer's own
+    // offsets included) is in UTF-16 code units.
+    // eslint-disable-next-line unicorn/no-for-loop, @typescript-eslint/prefer-for-of -- for-of walks code points, not UTF-16 code units; see above
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '\n') {
         this.outputLine++
         this.outputColumn = 0
         this.lines.push([])
@@ -85,19 +97,22 @@ export class MappingsBuilder {
   }
 
   mark(position: Position): void {
+    const sourceIndex = position.sourceIndex ?? 0
     const sourceLine = position.line - 1 // mappings are 0-based
     const generatedColumnDelta = this.hasSegmentOnLine
       ? this.outputColumn - this.prevGeneratedColumn
       : this.outputColumn
+    const sourceIndexDelta = sourceIndex - this.prevSourceIndex
     const sourceLineDelta = sourceLine - this.prevSourceLine
     const sourceColumnDelta = position.column - this.prevSourceColumn
     this.lines[this.outputLine]!.push(
       encodeVLQ(generatedColumnDelta) +
-        encodeVLQ(0) +
+        encodeVLQ(sourceIndexDelta) +
         encodeVLQ(sourceLineDelta) +
         encodeVLQ(sourceColumnDelta),
     )
     this.prevGeneratedColumn = this.outputColumn
+    this.prevSourceIndex = sourceIndex
     this.prevSourceLine = sourceLine
     this.prevSourceColumn = position.column
     this.hasSegmentOnLine = true
@@ -120,7 +135,7 @@ export interface IncomingMap {
   readonly sources: readonly string[]
   originalPositionFor(
     position: Position,
-  ): { column: number; line: number; source: string } | undefined
+  ): { column: number; line: number; source: string; sourceIndex: number } | undefined
 }
 
 /**
@@ -157,6 +172,7 @@ export function decodeIncomingMap(map: SourceMap): IncomingMap {
       if (!candidate) return
       return {
         source: sources[candidate.sourceIndex]!,
+        sourceIndex: candidate.sourceIndex,
         line: candidate.sourceLine + 1,
         column: candidate.sourceColumn,
       }

@@ -32,7 +32,9 @@ Chains `position` through the incoming map, if one was given; otherwise `positio
 function toOriginal(position: Position, incoming: IncomingMap | undefined): Position {
   if (!incoming) return position
   const original = incoming.originalPositionFor(position)
-  return original ? { line: original.line, column: original.column } : position
+  return original
+    ? { line: original.line, column: original.column, sourceIndex: original.sourceIndex }
+    : position
 }
 
 interface MappedRange {
