@@ -136,4 +136,37 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
         'not an indicator',
     ).toEqual([])
   })
+
+  // WCAG 2.2 SC 2.4.13 Focus Appearance (Level AAA) requires the focus indicator's area to be at
+  // least as large as a 2 CSS-pixel-thick perimeter of the unfocused component, at a contrast of
+  // 3:1 between the focused and unfocused pixels. For an outline painted outside the border box,
+  // both halves of that requirement rest on two facts about the shipped rule that were previously
+  // guarded only by NAME (the tests above pin the declaration's identifier), never by VALUE:
+  // the ring must render at least 2px thick, since a thinner ring shrinks the size margin below
+  // zero as components grow; and the offset must stay strictly positive, since an offset of zero
+  // or less lets the ring overlap the component's own paint, which invalidates the reduction that
+  // lets the colour half be computed at all. This file already parses focusRing's declarations
+  // over the shipped artifact, so it is the fit place for the offset half; the thickness half
+  // additionally resolves the token's built value, since the shipped rule carries a var()
+  // reference rather than a literal.
+  it("focusRing's outline-offset is strictly positive: at zero or negative the ring's pixels stop sitting wholly outside the border box", () => {
+    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const offsetDecls = decls.filter((d) => /^outline-offset$/i.test(d.prop))
+
+    expect(offsetDecls, `${FOCUS_RING_CLASS} must declare outline-offset`).toHaveLength(1)
+    expect(Number.parseFloat(offsetDecls[0]!.value)).toBeGreaterThan(0)
+  })
+
+  it('the rendered focus-ring outline thickness is at least 2px: below that the size margin required by SC 2.4.13 shrinks below zero as components grow', () => {
+    const tokensCss = readFileSync(
+      fileURLToPath(import.meta.resolve('@navecss/tokens/css')),
+      'utf8',
+    )
+    const match = tokensCss.match(/^\s*--nave-border-width-focus:\s*([\d.]+)px;/m)
+
+    expect(match, '--nave-border-width-focus must be declared in the tokens build output').not.toBe(
+      null,
+    )
+    expect(Number.parseFloat(match![1]!)).toBeGreaterThanOrEqual(2)
+  })
 })
