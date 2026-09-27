@@ -28,7 +28,7 @@ const ruleTester = new RuleTester()
 describe('AC-08: declared entries, nave- output', () => {
   const settings = { '@navecss': { allow: ['app-', '/^u-/u'] } }
 
-  it('legacy-card and other are each reported once, app-card passes', () => {
+  describe('legacy-card and other are each reported once, app-card passes', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [
@@ -42,7 +42,7 @@ describe('AC-08: declared entries, nave- output', () => {
     })
   })
 
-  it('nave-flex is reported naming the atom flex', () => {
+  describe('nave-flex is reported naming the atom flex', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [
@@ -56,7 +56,7 @@ describe('AC-08: declared entries, nave- output', () => {
     })
   })
 
-  it('nave-banana-split is reported saying no atom emits it', () => {
+  describe('nave-banana-split is reported saying no atom emits it', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [
@@ -74,7 +74,7 @@ describe('AC-08: declared entries, nave- output', () => {
 describe('AC-11 (R5a): logical-AND directly as a slot or whole value', () => {
   const PRELUDE = `import { cx } from '@navecss/core/cx'`
 
-  it('reports the whole-value shape and the slot shape, distinctly', () => {
+  describe('reports the whole-value shape and the slot shape, distinctly', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         { code: "const el = <div className={`${cond ? styles.x : ''}`} />", languageOptions },
@@ -108,7 +108,7 @@ describe('AC-11 (R5a): logical-AND directly as a slot or whole value', () => {
     })
   })
 
-  it("the remedy never names a local that shadows the import as Nave's cx.raw", () => {
+  describe("the remedy never names a local that shadows the import as Nave's cx.raw", () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [
@@ -121,7 +121,7 @@ describe('AC-11 (R5a): logical-AND directly as a slot or whole value', () => {
     })
   })
 
-  it('the remedy names cx.raw the way the file binds it', () => {
+  describe('the remedy names cx.raw the way the file binds it', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [
@@ -151,21 +151,21 @@ describe('AC-11 (R5a): logical-AND directly as a slot or whole value', () => {
 })
 
 describe('AC-12 (R6): allow entry compilation', () => {
-  it('unset/[] reports; prefix admits by startsWith, case-sensitive', () => {
+  describe('unset/[] reports; prefix admits by startsWith, case-sensitive', () => {
     runAllowCase(undefined, `const el = <div className="app-shell" />`, 1)
     runAllowCase(['app-'], `const el = <div className="app-shell" />`, 0)
     runAllowCase(['app-'], `const el = <div className="myapp-shell" />`, 1)
     runAllowCase(['app-'], `const el = <div className="App-shell" />`, 1)
   })
 
-  it('pattern entries use search semantics, never anchored automatically', () => {
+  describe('pattern entries use search semantics, never anchored automatically', () => {
     runAllowCase(['/^[a-z]+__[a-z-]+$/u'], `const el = <div className="card__title" />`, 0)
     runAllowCase(['/^[a-z]+__[a-z-]+$/u'], `const el = <div className="card" />`, 1)
     runAllowCase(['/card/'], `const el = <div className="legacy-card" />`, 0)
     runAllowCase(['/^APP-/i'], `const el = <div className="app-shell" />`, 0)
   })
 
-  it('truncated template pieces are admitted by a prefix only', () => {
+  describe('truncated template pieces are admitted by a prefix only', () => {
     runAllowCase(['card--'], 'const el = <div className={`card--${size}`} />', 0)
     runAllowCase(['/^[a-z]+(--[a-z]+)?$/u'], 'const el = <div className={`card--${size}`} />', 1)
     // A pattern that does match the cut text itself still does not admit it: only a prefix can.
@@ -175,16 +175,16 @@ describe('AC-12 (R6): allow entry compilation', () => {
   it.each(['/^app-/g', '/^app-/y', '/[/', '//', '/^app-/q', '/^[a-z-]+$/v', ''])(
     'entry %j, inside the allow array, fails the run as a configuration error naming it',
     (entry) => {
+      // Linted directly, not through `ruleTester.run(...)`: RuleTester registers a real vitest
+      // suite as soon as it is called, and vitest does not allow registering one from inside a
+      // running test, which is what asserting on the throw from within this `it()` would do.
+      const linter = new Linter()
       const run = (): void => {
-        ruleTester.run('class-channel', classChannelRule, {
-          valid: [
-            {
-              code: 'const el = <div className="app-shell" />',
-              languageOptions,
-              settings: { '@navecss': { allow: [entry] } },
-            },
-          ],
-          invalid: [],
+        linter.verify('const el = <div className="app-shell" />', {
+          languageOptions,
+          plugins: { '@navecss': { rules: { 'class-channel': classChannelRule } } },
+          rules: { '@navecss/class-channel': 'error' },
+          settings: { '@navecss': { allow: [entry] } },
         })
       }
       expect(run).toThrow(`"allow" entry ${JSON.stringify(entry)}`)
@@ -200,7 +200,7 @@ describe('AC-13 (R7): helper calls checked through their arguments', () => {
     import cx from 'classnames'
   `
 
-  it('composition through a helper passes; a literal inside one is reported', () => {
+  describe('composition through a helper passes; a literal inside one is reported', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         {
@@ -255,7 +255,7 @@ describe('AC-13 (R7): helper calls checked through their arguments', () => {
     })
   })
 
-  it('a call not in the helpers list passes until configured', () => {
+  describe('a call not in the helpers list passes until configured', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         {
@@ -278,7 +278,7 @@ describe('AC-13 (R7): helper calls checked through their arguments', () => {
 describe('AC-14 (R5): cx() atom check', () => {
   const PRELUDE = `import { cx } from '@navecss/core/cx'`
 
-  it('an atom passes; an unknown string is reported', () => {
+  describe('an atom passes; an unknown string is reported', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         { code: `${PRELUDE}\nconst el = <div className={cx('flex')} />`, languageOptions },
@@ -329,7 +329,7 @@ describe('AC-14 (R5): cx() atom check', () => {
 describe('AC-14 (R5): a cx() argument is one class name, read whole', () => {
   const PRELUDE = `import { cx } from '@navecss/core/cx'\nimport { cx as ncx } from '@navecss/core/cx'`
 
-  it('two atom names in one string, or static text beside a slot, is not an atom', () => {
+  describe('two atom names in one string, or static text beside a slot, is not an atom', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         { code: `${PRELUDE}\nconst el = <div className={cx(\`flex\`)} />`, languageOptions },
@@ -350,7 +350,7 @@ describe('AC-14 (R5): a cx() argument is one class name, read whole', () => {
     })
   })
 
-  it('prints the callee as the file names it, and a nave- string names its atom', () => {
+  describe('prints the callee as the file names it, and a nave- string names its atom', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [
@@ -380,7 +380,7 @@ describe('AC-14 (R5): a cx() argument is one class name, read whole', () => {
 })
 
 describe('AC-14 (R4): messages quote the construct as written and name cx.raw as the file binds it', () => {
-  it('a cx() argument is quoted exactly as written, in its own quotes', () => {
+  describe('a cx() argument is quoted exactly as written, in its own quotes', () => {
     const prelude = `import { cx } from '@navecss/core/cx'`
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
@@ -399,7 +399,7 @@ describe('AC-14 (R4): messages quote the construct as written and name cx.raw as
     })
   })
 
-  it('the literal, atom and container messages end with cx.raw as the file binds it', () => {
+  describe('the literal, atom and container messages end with cx.raw as the file binds it', () => {
     const prelude = `import { cx as ncx } from '@navecss/core/cx'`
     const tail = /and only then ncx\.raw\(\) with a reason\.$/
     ruleTester.run('class-channel', classChannelRule, {
@@ -420,7 +420,7 @@ describe('AC-14 (R4): messages quote the construct as written and name cx.raw as
 describe('AC-14 (R5): an array or object literal passed to Nave cx() is reported, whatever it holds', () => {
   const PRELUDE = `import { cx } from '@navecss/core/cx'\nimport { cx as ncx } from '@navecss/core/cx'`
 
-  it('cx() turns an array or object into one string, never into atom classes', () => {
+  describe('cx() turns an array or object into one string, never into atom classes', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         {
@@ -467,7 +467,7 @@ describe('AC-14 (R5): an array or object literal passed to Nave cx() is reported
 describe('AC-13 (R7): a helper call inside Nave cx() is read through its arguments', () => {
   const PRELUDE = `import clsx from 'clsx'\nimport { cx } from '@navecss/core/cx'`
 
-  it('cx(clsx(literal)) reports the literal as a class, never under the atom check', () => {
+  describe('cx(clsx(literal)) reports the literal as a class, never under the atom check', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         {
@@ -494,7 +494,7 @@ describe('AC-13 (R7): a helper call inside Nave cx() is read through its argumen
 describe('AC-09 (R5, R5a): a template anywhere in the value has its slots read', () => {
   const PRELUDE = `import clsx from 'clsx'\nimport { cx } from '@navecss/core/cx'`
 
-  it('a template in a conditional branch, in a slot, or in a helper argument', () => {
+  describe('a template in a conditional branch, in a slot, or in a helper argument', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [
@@ -519,7 +519,7 @@ describe('AC-09 (R5, R5a): a template anywhere in the value has its slots read',
 })
 
 describe('one report per offending class', () => {
-  it('the same const reached through both branches is reported once', () => {
+  describe('the same const reached through both branches is reported once', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [

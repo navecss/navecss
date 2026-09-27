@@ -5,7 +5,7 @@ import { RuleTester } from 'eslint'
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterAll, beforeAll, describe, it } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe } from 'vitest'
 
 import { classChannelRule } from '../src/rules/class-channel.ts'
 import { countEscapesRule } from '../src/rules/count-escapes.ts'
@@ -24,7 +24,7 @@ const tsLanguageOptions = { ...languageOptions, parser: tsParser }
 const ruleTester = new RuleTester()
 
 describe('AC-10: cxModules and cx.raw recognition', () => {
-  it('non-Nave cx bindings never pass as an atom call', () => {
+  describe('non-Nave cx bindings never pass as an atom call', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [
@@ -42,7 +42,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
     })
   })
 
-  it('an aliased Nave import is still recognised', () => {
+  describe('an aliased Nave import is still recognised', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         {
@@ -60,7 +60,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
     })
   })
 
-  it('cx.raw is recognised however it is reached, one hop, and passes rule 1', () => {
+  describe('cx.raw is recognised however it is reached, one hop, and passes rule 1', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         {
@@ -91,7 +91,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
     })
   })
 
-  it("a local binding that shadows the Nave import is not Nave's cx: a parameter, a destructured parameter, an inner declaration", () => {
+  describe("a local binding that shadows the Nave import is not Nave's cx: a parameter, a destructured parameter, an inner declaration", () => {
     const prelude = `import { cx } from '@navecss/core/cx'\nimport { cn } from './cn'\n`
     const settings = { '@navecss': { allow: ['app-'] } }
     ruleTester.run('class-channel', classChannelRule, {
@@ -135,7 +135,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
     }
   })
 
-  it('a TypeScript type-only declaration named like a value (type alias, interface, type parameter) shadows nothing: types and values live in separate spaces', () => {
+  describe('a TypeScript type-only declaration named like a value (type alias, interface, type parameter) shadows nothing: types and values live in separate spaces', () => {
     const prelude = `import { cx } from '@navecss/core/cx'\n`
     const settings = { '@navecss': { allow: ['app-'] } }
     ruleTester.run('class-channel', classChannelRule, {
@@ -190,7 +190,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
     })
   })
 
-  it('a TypeScript namespace holding only types, in an inner scope, shadows nothing', () => {
+  describe('a TypeScript namespace holding only types, in an inner scope, shadows nothing', () => {
     const prelude = `import { cx } from '@navecss/core/cx'\n`
     const settings = { '@navecss': { allow: ['app-'] } }
     ruleTester.run('class-channel', classChannelRule, {
@@ -214,7 +214,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
     })
   })
 
-  it('a namespace import reaches cx and cx.raw; an optional call and a template-literal key are recognised', () => {
+  describe('a namespace import reaches cx and cx.raw; an optional call and a template-literal key are recognised', () => {
     const ns = `import * as c from '@navecss/core/cx'\n`
     const named = `import { cx } from '@navecss/core/cx'\n`
     ruleTester.run('class-channel', classChannelRule, {
@@ -251,7 +251,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
     }
   })
 
-  it("only a const is followed one hop to cx.raw, and a default import is not Nave's cx", () => {
+  describe("only a const is followed one hop to cx.raw, and a default import is not Nave's cx", () => {
     const named = `import { cx } from '@navecss/core/cx'\n`
     for (const rule of [rawReasonRule, countEscapesRule]) {
       ruleTester.run('raw', rule, {
@@ -286,92 +286,97 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
   })
 
   describe('cxModules resolution (relative wrapper files)', () => {
-    let root: string
+    // Built synchronously, directly in the describe body: `ruleTester.run(...)` below reads
+    // `root` while building its case data, which happens as this describe body is collected,
+    // before a `beforeAll` for the same describe block would run.
+    const scratch = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-'))
+    const root = realpathSync(scratch)
+    mkdirSync(path.join(root, 'src/ui'), { recursive: true })
+    mkdirSync(path.join(root, 'src/a'), { recursive: true })
+    mkdirSync(path.join(root, 'src/b/c'), { recursive: true })
+    mkdirSync(path.join(root, 'src/ts'), { recursive: true })
+    writeFileSync(path.join(root, 'src/ui/cx.js'), "export { cx } from '@navecss/core/cx'\n")
+    writeFileSync(path.join(root, 'src/a/cx.js'), "export const cx = () => ''\n")
+    writeFileSync(path.join(root, 'src/ts/cx.ts'), "export { cx } from '@navecss/core/cx'\n")
+
     const cxModulesSettings = {
       '@navecss': { cxModules: ['./src/ui/cx.js'], allow: ['app-'] },
     }
-
-    beforeAll(() => {
-      const scratch = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-'))
-      root = realpathSync(scratch)
-      mkdirSync(path.join(root, 'src/ui'), { recursive: true })
-      mkdirSync(path.join(root, 'src/a'), { recursive: true })
-      mkdirSync(path.join(root, 'src/b/c'), { recursive: true })
-      mkdirSync(path.join(root, 'src/ts'), { recursive: true })
-      writeFileSync(path.join(root, 'src/ui/cx.js'), "export { cx } from '@navecss/core/cx'\n")
-      writeFileSync(path.join(root, 'src/a/cx.js'), "export const cx = () => ''\n")
-      writeFileSync(path.join(root, 'src/ts/cx.ts'), "export { cx } from '@navecss/core/cx'\n")
-    })
 
     afterAll(() => {
       process.chdir(path.resolve(import.meta.dirname, '..'))
     })
 
-    function inRoot(run: () => void): void {
-      const cwdBefore = process.cwd()
-      process.chdir(root)
-      try {
-        run()
-      } finally {
+    /**
+     * Sets the process working directory to the scratch root for every case in the enclosing
+     * describe, restoring it after each: cxModules resolution reads `process.cwd()` at lint time,
+     * which is when the vitest integration actually executes each case, not when a describe body
+     * runs (that only registers the describe/it tree).
+     */
+    function useRootCwd(): void {
+      let cwdBefore: string
+      beforeEach(() => {
+        cwdBefore = process.cwd()
+        process.chdir(root)
+      })
+      afterEach(() => {
         process.chdir(cwdBefore)
-      }
+      })
     }
 
-    it("a relative wrapper import resolving to the entry is Nave's cx: an atom passes, a declared class does not (from two depths)", () => {
-      inRoot(() => {
-        ruleTester.run('class-channel', classChannelRule, {
-          valid: [
-            {
-              code: `import { cx } from '../ui/cx.js'\nconst x = <div className={cx('flex')} />`,
-              languageOptions,
-              settings: cxModulesSettings,
-              filename: path.join(root, 'src/a/x.jsx'),
-            },
-            {
-              code: `import { cx } from '../../ui/cx.js'\nconst x = <div className={cx('flex')} />`,
-              languageOptions,
-              settings: cxModulesSettings,
-              filename: path.join(root, 'src/b/c/y.jsx'),
-            },
-          ],
-          invalid: [
-            {
-              code: `import { cx } from '../ui/cx.js'\nconst x = <div className={cx('app-card')} />`,
-              languageOptions,
-              settings: cxModulesSettings,
-              filename: path.join(root, 'src/a/x.jsx'),
-              errors: [{ message: /^cx\('app-card'\) is not a Nave atom/ }],
-            },
-          ],
-        })
+    describe("a relative wrapper import resolving to the entry is Nave's cx: an atom passes, a declared class does not (from two depths)", () => {
+      useRootCwd()
+      ruleTester.run('class-channel', classChannelRule, {
+        valid: [
+          {
+            code: `import { cx } from '../ui/cx.js'\nconst x = <div className={cx('flex')} />`,
+            languageOptions,
+            settings: cxModulesSettings,
+            filename: path.join(root, 'src/a/x.jsx'),
+          },
+          {
+            code: `import { cx } from '../../ui/cx.js'\nconst x = <div className={cx('flex')} />`,
+            languageOptions,
+            settings: cxModulesSettings,
+            filename: path.join(root, 'src/b/c/y.jsx'),
+          },
+        ],
+        invalid: [
+          {
+            code: `import { cx } from '../ui/cx.js'\nconst x = <div className={cx('app-card')} />`,
+            languageOptions,
+            settings: cxModulesSettings,
+            filename: path.join(root, 'src/a/x.jsx'),
+            errors: [{ message: /^cx\('app-card'\) is not a Nave atom/ }],
+          },
+        ],
       })
     })
 
-    it("a local ./cx.js that is not the entry is not Nave's: its cx is a helper", () => {
-      inRoot(() => {
-        ruleTester.run('class-channel', classChannelRule, {
-          valid: [
-            {
-              code: `import { cx } from './cx.js'\nconst x = <div className={cx('app-card')} />`,
-              languageOptions,
-              settings: cxModulesSettings,
-              filename: path.join(root, 'src/a/x.jsx'),
-            },
-          ],
-          invalid: [
-            {
-              code: `import { cx } from './cx.js'\nconst x = <div className={cx('flex')} />`,
-              languageOptions,
-              settings: cxModulesSettings,
-              filename: path.join(root, 'src/a/x.jsx'),
-              errors: [{ message: /^"flex" is not a CSS Module class/ }],
-            },
-          ],
-        })
+    describe("a local ./cx.js that is not the entry is not Nave's: its cx is a helper", () => {
+      useRootCwd()
+      ruleTester.run('class-channel', classChannelRule, {
+        valid: [
+          {
+            code: `import { cx } from './cx.js'\nconst x = <div className={cx('app-card')} />`,
+            languageOptions,
+            settings: cxModulesSettings,
+            filename: path.join(root, 'src/a/x.jsx'),
+          },
+        ],
+        invalid: [
+          {
+            code: `import { cx } from './cx.js'\nconst x = <div className={cx('flex')} />`,
+            languageOptions,
+            settings: cxModulesSettings,
+            filename: path.join(root, 'src/a/x.jsx'),
+            errors: [{ message: /^"flex" is not a CSS Module class/ }],
+          },
+        ],
       })
     })
 
-    it('the entry is resolved from the working directory: from elsewhere the wrapper is not recognised', () => {
+    describe('the entry is resolved from the working directory: from elsewhere the wrapper is not recognised', () => {
       ruleTester.run('class-channel', classChannelRule, {
         valid: [],
         invalid: [
@@ -386,19 +391,18 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
       })
     })
 
-    it('a TypeScript wrapper imported with a NodeNext ".js" specifier matches its ".ts" entry', () => {
-      inRoot(() => {
-        ruleTester.run('class-channel', classChannelRule, {
-          valid: [
-            {
-              code: `import { cx } from '../ts/cx.js'\nconst x = <div className={cx('flex')} />`,
-              languageOptions,
-              settings: { '@navecss': { cxModules: ['./src/ts/cx.ts'] } },
-              filename: path.join(root, 'src/a/x.jsx'),
-            },
-          ],
-          invalid: [],
-        })
+    describe('a TypeScript wrapper imported with a NodeNext ".js" specifier matches its ".ts" entry', () => {
+      useRootCwd()
+      ruleTester.run('class-channel', classChannelRule, {
+        valid: [
+          {
+            code: `import { cx } from '../ts/cx.js'\nconst x = <div className={cx('flex')} />`,
+            languageOptions,
+            settings: { '@navecss': { cxModules: ['./src/ts/cx.ts'] } },
+            filename: path.join(root, 'src/a/x.jsx'),
+          },
+        ],
+        invalid: [],
       })
     })
   })

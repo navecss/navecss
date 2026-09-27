@@ -2,7 +2,7 @@
  * AC-eslint-plugin-16 covers: R8, R4.
  */
 import { RuleTester } from 'eslint'
-import { describe, it } from 'vitest'
+import { describe } from 'vitest'
 
 import { rawReasonRule } from '../src/rules/raw-reason.ts'
 
@@ -60,7 +60,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
   ]
 
   for (const { note, code } of valid) {
-    it(`passes: ${note}`, () => {
+    describe(`passes: ${note}`, () => {
       ruleTester.run('raw-reason', rawReasonRule, {
         valid: [{ code, languageOptions, settings }],
         invalid: [],
@@ -68,7 +68,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   }
 
-  it('missing: a bare cx.raw literal with no comment at all', () => {
+  describe('missing: a bare cx.raw literal with no comment at all', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -82,7 +82,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   })
 
-  it('misplaced: reason before the call', () => {
+  describe('misplaced: reason before the call', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -96,7 +96,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   })
 
-  it('misplaced: reason nested in an argument', () => {
+  describe('misplaced: reason nested in an argument', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -110,7 +110,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   })
 
-  it('missing (not misplaced): reason above the statement', () => {
+  describe('missing (not misplaced): reason above the statement', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -124,7 +124,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   })
 
-  it('missing: a comment lacking the marker, the colon, letters/digits, or matching a filler', () => {
+  describe('missing: a comment lacking the marker, the colon, letters/digits, or matching a filler', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -192,7 +192,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   })
 
-  it('passes: a reason that merely starts with a filler word, by equality not substring', () => {
+  describe('passes: a reason that merely starts with a filler word, by equality not substring', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [
         {
@@ -210,7 +210,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   })
 
-  it('one comment, one call: the inner cx.raw() call is reported, not the outer', () => {
+  describe('one comment, one call: the inner cx.raw() call is reported, not the outer', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -224,7 +224,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   })
 
-  it('recognises cx.raw however reached, one hop', () => {
+  describe('recognises cx.raw however reached, one hop', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -240,7 +240,7 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   })
 
-  it('is not scoped to className: a .ts file with no JSX is checked', () => {
+  describe('is not scoped to className: a .ts file with no JSX is checked', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -259,7 +259,7 @@ describe('AC-16 (R8): a helper or Nave cx() call inside cx.raw() is read through
   const HELPERS = `${PRELUDE}import clsx from 'clsx'\n`
   const withHelpers = (expr: string): string => `${HELPERS}const el = <div className={${expr}} />`
 
-  it('passes composition through a helper or cx(), and a reason before the helper call', () => {
+  describe('passes composition through a helper or cx(), and a reason before the helper call', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [
         'cx.raw(clsx(styles.a, on && styles.b))',
@@ -272,7 +272,7 @@ describe('AC-16 (R8): a helper or Nave cx() call inside cx.raw() is read through
     })
   })
 
-  it('needs a reason for a literal inside a helper or cx(); one inside the inner call is misplaced', () => {
+  describe('needs a reason for a literal inside a helper or cx(); one inside the inner call is misplaced', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -300,7 +300,7 @@ describe('AC-16 (R8): a helper or Nave cx() call inside cx.raw() is read through
 })
 
 describe('AC-16 (R4): the messages rule 2 prints', () => {
-  it('the missing message quotes the class, names the remedies in order with the reason last, and prints the callee as written', () => {
+  describe('the missing message quotes the class, names the remedies in order with the reason last, and prints the callee as written', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -319,7 +319,7 @@ describe('AC-16 (R4): the messages rule 2 prints', () => {
     })
   })
 
-  it('a cx() argument inside cx.raw() that is not an atom is named as such, quoting the inner call, even when the project declares the class', () => {
+  describe('a cx() argument inside cx.raw() that is not an atom is named as such, quoting the inner call, even when the project declares the class', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -349,7 +349,7 @@ describe('AC-16 (R4): the messages rule 2 prints', () => {
     })
   })
 
-  it('an array passed to cx() inside cx.raw() gets the array explanation, not the string one', () => {
+  describe('an array passed to cx() inside cx.raw() gets the array explanation, not the string one', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -368,7 +368,7 @@ describe('AC-16 (R4): the messages rule 2 prints', () => {
     })
   })
 
-  it('a nave- literal names its atom (R4(e)) before the reason', () => {
+  describe('a nave- literal names its atom (R4(e)) before the reason', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -387,7 +387,7 @@ describe('AC-16 (R4): the messages rule 2 prints', () => {
     })
   })
 
-  it('the misplaced message says where the reason goes, printing the call as written', () => {
+  describe('the misplaced message says where the reason goes, printing the call as written', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
@@ -408,7 +408,7 @@ describe('AC-16 (R4): the messages rule 2 prints', () => {
 })
 
 describe("AC-16 (R8): the reason comment's accepted forms and misplaced markers", () => {
-  it('accepts a /** */ reason, a multi-line block reason with leading asterisks, and a Unicode letter', () => {
+  describe('accepts a /** */ reason, a multi-line block reason with leading asterisks, and a Unicode letter', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [
         "cx.raw(/** nave-escape: vendor date picker */ 'legacy-card')",
@@ -421,7 +421,7 @@ describe("AC-16 (R8): the reason comment's accepted forms and misplaced markers"
     })
   })
 
-  it('a marker inside the parentheses but not first, or after the call, gets the misplaced message', () => {
+  describe('a marker inside the parentheses but not first, or after the call, gets the misplaced message', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [

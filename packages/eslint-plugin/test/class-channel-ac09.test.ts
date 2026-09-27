@@ -2,7 +2,7 @@
  * AC-eslint-plugin-09 covers: R5, R7.
  */
 import { RuleTester } from 'eslint'
-import { describe, it } from 'vitest'
+import { describe } from 'vitest'
 
 import { classChannelRule } from '../src/rules/class-channel.ts'
 
@@ -74,7 +74,7 @@ describe('AC-09: literal-piece reading rows', () => {
   ]
 
   for (const testCase of valid) {
-    it(`passes: ${testCase.code.split('\n').at(-1)}`, () => {
+    describe(`passes: ${testCase.code.split('\n').at(-1)}`, () => {
       ruleTester.run('class-channel', classChannelRule, {
         valid: [{ ...testCase, languageOptions, settings }],
         invalid: [],
@@ -83,7 +83,7 @@ describe('AC-09: literal-piece reading rows', () => {
   }
 
   for (const testCase of invalid) {
-    it(`reports: ${testCase.code.split('\n').at(-1)}`, () => {
+    describe(`reports: ${testCase.code.split('\n').at(-1)}`, () => {
       ruleTester.run('class-channel', classChannelRule, {
         valid: [],
         invalid: [{ ...testCase, languageOptions, settings, errors: 1 }],
@@ -91,7 +91,7 @@ describe('AC-09: literal-piece reading rows', () => {
     })
   }
 
-  it('TypeScript-only rows: as/satisfies/! wrappers report', () => {
+  describe('TypeScript-only rows: as/satisfies/! wrappers report', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [],
       invalid: [
@@ -117,7 +117,7 @@ describe('AC-09: literal-piece reading rows', () => {
     })
   })
 
-  it('adjacent string literals joined by + with no whitespace between them form one class, reported once', () => {
+  describe('adjacent string literals joined by + with no whitespace between them form one class, reported once', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [{ code: jsx("{'app-' + 'card'}"), languageOptions, settings }],
       invalid: [
@@ -141,7 +141,7 @@ describe('AC-09: literal-piece reading rows', () => {
     })
   })
 
-  it('a string + chain reads like a template: other operands are slots, a piece running into one is a truncation', () => {
+  describe('a string + chain reads like a template: other operands are slots, a piece running into one is a truncation', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         { code: jsx("{styles.root + '--wide'}"), languageOptions, settings },
@@ -168,7 +168,7 @@ describe('AC-09: literal-piece reading rows', () => {
     })
   })
 
-  it('inside Nave cx(), a chain of string literals is one whole name; one with any other operand is not', () => {
+  describe('inside Nave cx(), a chain of string literals is one whole name; one with any other operand is not', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [{ code: jsx("{cx('fl' + 'ex')}"), languageOptions, settings }],
       invalid: [
@@ -182,7 +182,7 @@ describe('AC-09: literal-piece reading rows', () => {
     })
   })
 
-  it('cx.raw literal passes rule 1 (rule 2 applies separately)', () => {
+  describe('cx.raw literal passes rule 1 (rule 2 applies separately)', () => {
     ruleTester.run('class-channel', classChannelRule, {
       valid: [
         { code: jsx("{cx.raw('legacy-card')}"), languageOptions, settings },

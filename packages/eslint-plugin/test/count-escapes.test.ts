@@ -22,7 +22,7 @@ const escapeMessage = (callee: string): string =>
   `This ${callee}() call carries class text that needs a reason: counted as an escape.`
 
 describe('AC-17: the counting rule', () => {
-  it('reports every cx.raw() escape, with or without a reason', () => {
+  describe('reports every cx.raw() escape, with or without a reason', () => {
     ruleTester.run('count-escapes', countEscapesRule, {
       valid: [],
       invalid: [
@@ -72,7 +72,7 @@ describe('AC-17: the counting rule', () => {
     })
   })
 
-  it('the escape message prints the callee as the file names it and never calls a declared class undeclared', () => {
+  describe('the escape message prints the callee as the file names it and never calls a declared class undeclared', () => {
     ruleTester.run('count-escapes', countEscapesRule, {
       valid: [],
       invalid: [
@@ -98,7 +98,7 @@ describe('AC-17: the counting rule', () => {
     })
   })
 
-  it('does not report composition or a declared class', () => {
+  describe('does not report composition or a declared class', () => {
     ruleTester.run('count-escapes', countEscapesRule, {
       valid: [
         {

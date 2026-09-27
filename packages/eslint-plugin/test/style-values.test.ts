@@ -20,7 +20,7 @@ function jsxStyle(expr: string): string {
 }
 
 describe('AC-26: the style rule', () => {
-  it('reports literal values on a tokenized property', () => {
+  describe('reports literal values on a tokenized property', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [],
       invalid: [
@@ -36,7 +36,7 @@ describe('AC-26: the style rule', () => {
     })
   })
 
-  it('reports a number literal written with a unary - or +, comparing the signed value', () => {
+  describe('reports a number literal written with a unary - or +, comparing the signed value', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [],
       invalid: [
@@ -47,14 +47,14 @@ describe('AC-26: the style rule', () => {
     })
   })
 
-  it('passes a negative number the property already admits', () => {
+  describe('passes a negative number the property already admits', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [{ code: jsxStyle('{ margin: -1 }'), languageOptions }],
       invalid: [],
     })
   })
 
-  it('quotes the declaration as written in the source, not the rendered comparison value', () => {
+  describe('quotes the declaration as written in the source, not the rendered comparison value', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [],
       invalid: [
@@ -77,7 +77,7 @@ describe('AC-26: the style rule', () => {
     })
   })
 
-  it('passes lawful values, computed values and out-of-scope properties', () => {
+  describe('passes lawful values, computed values and out-of-scope properties', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [
         { code: jsxStyle('{ padding: 0 }'), languageOptions },
@@ -99,7 +99,7 @@ describe('AC-26: the style rule', () => {
     })
   })
 
-  it('passes a shorthand that is not itself on the checked list, even though stylelint reports it', () => {
+  describe('passes a shorthand that is not itself on the checked list, even though stylelint reports it', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [
         { code: jsxStyle("{ background: 'red' }"), languageOptions },
@@ -113,14 +113,14 @@ describe('AC-26: the style rule', () => {
     })
   })
 
-  it('reports only the offending key in a spread object', () => {
+  describe('reports only the offending key in a spread object', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [],
       invalid: [{ code: jsxStyle('{ ...base, padding: 13 }'), languageOptions, errors: 1 }],
     })
   })
 
-  it('never reports outline/outlineStyle/outlineWidth/outlineOffset, but checks outlineColor', () => {
+  describe('never reports outline/outlineStyle/outlineWidth/outlineOffset, but checks outlineColor', () => {
     ruleTester.run('style-values', styleValuesRule, {
       valid: [
         { code: jsxStyle("{ outline: 'none' }"), languageOptions },
