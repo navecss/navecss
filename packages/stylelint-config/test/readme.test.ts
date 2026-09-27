@@ -60,6 +60,7 @@ const STATED_LIMITATIONS: readonly (readonly [string, string, boolean])[] = [
   ['`color: $red`', '.a { color: $red; }', false],
   ['`color: @red`', '.a { color: @red; }', false],
   ['`padding: $space`', '.a { padding: $space; }', false],
+  ["`margin: var(/* it's */--x) 13px`", ".a { margin: var(/* it's */--x) 13px; }", false],
 ]
 
 describe('AC-consumer-constraints-29 covers: R18', () => {
@@ -127,6 +128,15 @@ describe('AC-consumer-constraints-29 covers: R18', () => {
       },
     }
     expect(await isReported(overridden, '.a { padding: 13px; }')).toBe(false)
+  })
+
+  it("with a space beside the comment, margin: var( /* it's */ --x) 13px reports 13px (the control for the unpaired-quote statement)", async () => {
+    const imported = await import('../index.js')
+    const result = await stylelint.lint({
+      code: ".a { margin: var( /* it's */ --x) 13px; }",
+      config: imported.default,
+    })
+    expect(result.results[0]!.warnings.map((w) => w.text).join('\n')).toContain('"13px"')
   })
 
   it('the font-family report names the failing part, sans-serif', async () => {

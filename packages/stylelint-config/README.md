@@ -49,6 +49,10 @@ These are stated as rules, not as gaps to be filled later:
 - The `font` shorthand is, in effect, not checked.
 - Each space-separated part of a value is checked on its own: `font-family: var(--x), sans-serif`
   is reported, and the report names `sans-serif`.
+- An unpaired `'` or `"` inside a comment with no space on either side of it, as in
+  `margin: var(/* it's */--x) 13px`, joins the rest of the value into one part. On a shorthand
+  nothing in that part is reported; on any other property it passes whenever it holds a `var()`,
+  and is otherwise reported whole.
 
 ## Adopting it on an existing codebase
 
