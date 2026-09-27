@@ -3,9 +3,18 @@
  * AC-eslint-plugin-02 covers: R1.
  * AC-eslint-plugin-04 covers: R1 (the ESLint trademark notice, cleared and signed off).
  */
-import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -249,6 +258,62 @@ describe('the packed tarball itself', () => {
       'package/dist/index.d.ts',
     ]) {
       expect(tarball.files).toContain(file)
+    }
+  })
+})
+
+/**
+ * Installs the packed tarball into a scratch consumer's `node_modules` by name, next to the
+ * workspace's own `@navecss/core` and the one runtime dependency, so `require()` and `import()`
+ * resolve the package through its export map exactly as a consumer's `eslint.config.cjs` or
+ * `eslint.config.js` would.
+ */
+function scratchConsumer(): string {
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-consumer-'))
+  const scope = path.join(dir, 'node_modules/@navecss')
+  mkdirSync(scope, { recursive: true })
+  cpSync(packTarball().root, path.join(scope, 'eslint-plugin'), { recursive: true })
+  symlinkSync(path.join(ROOT, 'packages/core'), path.join(scope, 'core'), 'dir')
+  const valueParser = realpathSync(path.join(PACKAGE_DIR, 'node_modules/postcss-value-parser'))
+  symlinkSync(valueParser, path.join(dir, 'node_modules/postcss-value-parser'), 'dir')
+  return dir
+}
+
+function runNode(cwd: string, args: string[]): { output: string; status: number | null } {
+  const result = spawnSync(process.execPath, args, { cwd, encoding: 'utf8' })
+  return { status: result.status, output: `${result.stdout}${result.stderr}` }
+}
+
+const PRINT_RULES = 'console.log(Object.keys(plugin.rules).sort().join(","))'
+const RULE_LIST = 'class-channel,count-escapes,raw-reason,style-values'
+
+describe('loading the installed package by name', () => {
+  it('require() loads it: an export-map default condition, and no top-level await in its module graph', () => {
+    const dir = scratchConsumer()
+    try {
+      const run = runNode(dir, [
+        '-e',
+        `const plugin = require('@navecss/eslint-plugin').default; ${PRINT_RULES}`,
+      ])
+      expect(run.output).toContain(RULE_LIST)
+      expect(run.status).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('import() loads it', () => {
+    const dir = scratchConsumer()
+    try {
+      const run = runNode(dir, [
+        '--input-type=module',
+        '-e',
+        `const { default: plugin } = await import('@navecss/eslint-plugin'); ${PRINT_RULES}`,
+      ])
+      expect(run.output).toContain(RULE_LIST)
+      expect(run.status).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 })

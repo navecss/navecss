@@ -16,6 +16,10 @@ const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 
 export interface PackedTarball {
   /**
+  The extracted `package/` directory itself, laid out as a consumer's `node_modules` would hold it.
+   */
+  readonly root: string
+  /**
   Every path `tar` reports inside the tarball, `package/`-prefixed, as npm packs it.
    */
   readonly files: readonly string[]
@@ -93,6 +97,7 @@ export function packTarball(): PackedTarball {
   }
 
   cache.value = {
+    root: path.join(extractDir, 'package'),
     files: fileList,
     read: (relPath: string) => readFileSync(path.join(extractDir, relPath), 'utf8'),
   }

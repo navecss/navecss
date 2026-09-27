@@ -18,6 +18,9 @@ pnpm add -D @navecss/eslint-plugin
   names through `@navecss/core/atoms`).
 - Node `>=22.18`.
 
+ES modules only, with no CommonJS build: load it with `import`, or with `require()` (an
+`eslint.config.cjs`) on Node 22.18 or later.
+
 The rules need a JSX-capable parser (`espree` with `ecmaFeatures.jsx`, or
 `@typescript-eslint/parser`) — whichever your project already uses.
 
