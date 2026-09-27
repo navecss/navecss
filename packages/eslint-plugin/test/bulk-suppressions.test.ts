@@ -1,0 +1,168 @@
+/**
+ * AC-eslint-plugin-18 covers: R9, R10.
+ *
+ * End to end against the real ESLint CLI, not `Linter.verify`: ESLint's bulk-suppressions
+ * feature (`--suppress-rule`, `--prune-suppressions`) is CLI-level state (`eslint-suppressions.json`
+ * on disk), so this is the one behaviour in this package that a programmatic `Linter` call
+ * cannot exercise at all.
+ */
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const PACKAGE_DIR = path.resolve(HERE, '..')
+const WORKSPACE_ROOT = path.resolve(PACKAGE_DIR, '../..')
+const ESLINT_BIN = path.join(WORKSPACE_ROOT, 'node_modules/.bin/eslint')
+
+interface RunResult {
+  status: number
+  stderr: string
+  stdout: string
+}
+
+function runEslint(cwd: string, args: string[]): RunResult {
+  try {
+    const stdout = execFileSync(ESLINT_BIN, args, { cwd, encoding: 'utf8', stdio: 'pipe' })
+    return { status: 0, stdout, stderr: '' }
+  } catch (error) {
+    const execError = error as { status?: number; stderr?: string; stdout?: string }
+    return {
+      status: execError.status ?? 1,
+      stdout: execError.stdout ?? '',
+      stderr: execError.stderr ?? '',
+    }
+  }
+}
+
+/**
+Two counted `cx.raw()` calls (undeclared, no reason) in one file, plus one declared, passing call.
+ */
+const FIXTURE_SOURCE = [
+  "import { cx } from '@navecss/core/cx'",
+  "const a = <div className={cx.raw('legacy-card')} />",
+  "const b = <div className={cx.raw('another-legacy')} />",
+  "const c = <div className={cx.raw('app-shell')} />",
+].join('\n')
+
+function scratchProject(ruleSeverity: 'error' | 'warn'): string {
+  const dir = mkdtempSync(path.join(tmpdir(), 'nave-bulk-suppressions-'))
+  mkdirSync(path.join(dir, 'src'))
+  writeFileSync(path.join(dir, 'src/a.jsx'), FIXTURE_SOURCE)
+  const distIndex = pathToImportSpecifier(path.join(PACKAGE_DIR, 'dist/index.js'))
+  writeFileSync(
+    path.join(dir, 'eslint.config.js'),
+    [
+      `import nave from ${JSON.stringify(distIndex)}`,
+      'export default [',
+      '  { files: ["**/*.jsx"], languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },',
+      `    plugins: { '@navecss': nave },`,
+      `    settings: { '@navecss': { allow: ['app-'] } },`,
+      `    rules: { '@navecss/count-escapes': ${JSON.stringify(ruleSeverity)} } },`,
+      ']',
+    ].join('\n'),
+  )
+  writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 'fixture', type: 'module' }))
+  return dir
+}
+
+function pathToImportSpecifier(absolutePath: string): string {
+  return absolutePath.replaceAll('\\', '/')
+}
+
+function suppressionsFile(dir: string): Record<string, Record<string, { count: number }>> {
+  return JSON.parse(readFileSync(path.join(dir, 'eslint-suppressions.json'), 'utf8')) as Record<
+    string,
+    Record<string, { count: number }>
+  >
+}
+
+describe('AC-18: ESLint bulk suppressions hold the escape count', () => {
+  it('at error: --suppress-rule writes the real count, and a plain run then exits 0', () => {
+    const dir = scratchProject('error')
+    try {
+      const suppress = runEslint(dir, ['--suppress-rule', '@navecss/count-escapes'])
+      expect(suppress.status).toBe(0)
+      const suppressions = suppressionsFile(dir)
+      expect(suppressions['src/a.jsx']!['@navecss/count-escapes']!.count).toBe(2)
+
+      const plain = runEslint(dir, [])
+      expect(plain.status).toBe(0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('adding one counted cx.raw() makes the run exit 1', () => {
+    const dir = scratchProject('error')
+    try {
+      runEslint(dir, ['--suppress-rule', '@navecss/count-escapes'])
+      writeFileSync(
+        path.join(dir, 'src/a.jsx'),
+        `${FIXTURE_SOURCE}\nconst d = <div className={cx.raw('yet-another')} />`,
+      )
+      const result = runEslint(dir, [])
+      expect(result.status).toBe(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('removing one counted call exits 2, naming --prune-suppressions; pruning restores exit 0 with the count one lower', () => {
+    const dir = scratchProject('error')
+    try {
+      runEslint(dir, ['--suppress-rule', '@navecss/count-escapes'])
+      writeFileSync(
+        path.join(dir, 'src/a.jsx'),
+        FIXTURE_SOURCE.split('\n')
+          .filter((line) => !line.includes('another-legacy'))
+          .join('\n'),
+      )
+      const result = runEslint(dir, [])
+      expect(result.status).toBe(2)
+      expect(result.stderr).toContain('--prune-suppressions')
+
+      const pruned = runEslint(dir, ['--prune-suppressions'])
+      expect(pruned.status).toBe(0)
+      const suppressions = suppressionsFile(dir)
+      expect(suppressions['src/a.jsx']!['@navecss/count-escapes']!.count).toBe(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('adding a nave-escape reason to a counted call leaves the run at exit 0 with the count unchanged', () => {
+    const dir = scratchProject('error')
+    try {
+      runEslint(dir, ['--suppress-rule', '@navecss/count-escapes'])
+      writeFileSync(
+        path.join(dir, 'src/a.jsx'),
+        FIXTURE_SOURCE.replace(
+          "cx.raw('legacy-card')",
+          "cx.raw(/* nave-escape: vendor widget */ 'legacy-card')",
+        ),
+      )
+      const result = runEslint(dir, [])
+      expect(result.status).toBe(0)
+      const suppressions = suppressionsFile(dir)
+      expect(suppressions['src/a.jsx']!['@navecss/count-escapes']!.count).toBe(2)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('at warn: --suppress-rule records no entry for the rule', () => {
+    const dir = scratchProject('warn')
+    try {
+      const suppress = runEslint(dir, ['--suppress-rule', '@navecss/count-escapes'])
+      expect(suppress.status).toBe(0)
+      const suppressions = suppressionsFile(dir)
+      expect(suppressions['src/a.jsx']?.['@navecss/count-escapes']).toBeUndefined()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
