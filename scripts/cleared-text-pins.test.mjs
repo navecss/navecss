@@ -947,7 +947,7 @@ const TEMPLATE_CHECKLIST_LINES = [
     description: 'disclosure checklist line',
     pattern:
       /^- \[ \] Anything in this change that was copied or adapted from outside this repository/,
-    digest: '464381c42595679977a879e4964cbfdc1440a507ba91c53dd9a84b5423cba3b1',
+    digest: '7998ef799c02b4d575e9c1ca3198e5df3f8df1094db0d5b2036816b890f7b39c',
   },
   {
     label: 'PULL_REQUEST_TEMPLATE.md printed-text checklist line',
