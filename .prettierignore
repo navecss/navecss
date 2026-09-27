@@ -4,3 +4,5 @@ pnpm-lock.yaml
 *.generated.*
 .claude/worktrees/
 **/test/fixtures/generated/
+# Java .properties format: no meaningful notion of Prettier's own style, and no parser for it.
+*.properties
