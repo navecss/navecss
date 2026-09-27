@@ -38,7 +38,7 @@ export interface WalkContext {
 /**
 A literal piece read as class text, admitted only by the consumer's declarations.
  */
-export interface ClassPieceFinding extends LiteralPiece {
+export interface ClassPieceHit extends LiteralPiece {
   kind: 'class'
 }
 
@@ -47,7 +47,7 @@ export interface ClassPieceFinding extends LiteralPiece {
  * argument as the message quotes it; `isWhole` is false for static text beside a `${}` slot,
  * which can never be exactly one atom name.
  */
-export interface AtomPieceFinding extends LiteralPiece {
+export interface AtomPieceHit extends LiteralPiece {
   callee: AnyNode
   isWhole: boolean
   kind: 'atom'
@@ -57,13 +57,13 @@ export interface AtomPieceFinding extends LiteralPiece {
 /**
 An `&&` directly in a class position: the whole value, or a template slot.
  */
-interface SlotAndFinding {
+interface SlotAndHit {
   isWhole: boolean
   kind: 'slot-and'
   node: TSESTree.LogicalExpression
 }
 
-export type ClassFinding = AtomPieceFinding | ClassPieceFinding | SlotAndFinding
+export type ClassHit = AtomPieceHit | ClassPieceHit | SlotAndHit
 
 /**
  * True for a call to a name in the helper list, or to any `cx` that did not resolve to Nave's
@@ -82,7 +82,7 @@ function wholeAtomPiece(
   text: string,
   rendered: string,
   callee: AnyNode,
-): AtomPieceFinding {
+): AtomPieceHit {
   return { kind: 'atom', node, text, rendered, callee, isWhole: true, truncated: false }
 }
 
@@ -91,12 +91,12 @@ function wholeAtomPiece(
  * is a pass-through of what the slots hold; with static text beside a slot it is one runtime
  * string that is never exactly an atom name as written.
  */
-function atomTemplateFindings(
+function atomTemplateHits(
   ctx: WalkContext,
   node: TSESTree.TemplateLiteral,
   scope: Scope.Scope,
   callee: AnyNode,
-): ClassFinding[] {
+): ClassHit[] {
   const rendered = ctx.sourceCode.getText(node as never)
   if (node.expressions.length === 0) {
     const text = node.quasis[0]!.value.cooked ?? node.quasis[0]!.value.raw
@@ -104,7 +104,7 @@ function atomTemplateFindings(
   }
   const hasStaticText = node.quasis.some((quasi) => quasi.value.raw.length > 0)
   if (!hasStaticText) {
-    return node.expressions.flatMap((slot) => positionFindings(ctx, slot, scope, callee))
+    return node.expressions.flatMap((slot) => positionHits(ctx, slot, scope, callee))
   }
   return [
     { kind: 'atom', node, text: rendered, rendered, callee, isWhole: false, truncated: false },
@@ -114,11 +114,11 @@ function atomTemplateFindings(
 /**
 A string literal in a class position: its pieces, or (inside `cx()`) one whole name.
  */
-function stringFindings(
+function stringHits(
   ctx: WalkContext,
   node: TSESTree.StringLiteral,
   callee: AnyNode | undefined,
-): ClassFinding[] {
+): ClassHit[] {
   if (callee) {
     return [wholeAtomPiece(node, node.value, JSON.stringify(node.value), callee)]
   }
@@ -131,24 +131,24 @@ function stringFindings(
 /**
 A template literal in a class position: its static pieces, then each slot as a class position.
  */
-function templateFindings(
+function templateHits(
   ctx: WalkContext,
   node: TSESTree.TemplateLiteral,
   scope: Scope.Scope,
   callee: AnyNode | undefined,
-): ClassFinding[] {
-  if (callee) return atomTemplateFindings(ctx, node, scope, callee)
-  const pieces: ClassFinding[] = collectTemplatePieces(node).map((piece) => ({
+): ClassHit[] {
+  if (callee) return atomTemplateHits(ctx, node, scope, callee)
+  const pieces: ClassHit[] = collectTemplatePieces(node).map((piece) => ({
     ...piece,
     kind: 'class',
   }))
-  return [...pieces, ...node.expressions.flatMap((slot) => slotFindings(ctx, slot, scope))]
+  return [...pieces, ...node.expressions.flatMap((slot) => slotHits(ctx, slot, scope))]
 }
 
 /**
 The key of a helper's object-map argument (`{ 'is-open': open }`) is itself a literal class.
  */
-function objectKeyFinding(property: TSESTree.ObjectLiteralElement): ClassFinding[] {
+function objectKeyHit(property: TSESTree.ObjectLiteralElement): ClassHit[] {
   if (property.type !== 'Property' || property.computed) return []
   if (property.key.type === 'Identifier') {
     return [{ kind: 'class', node: property.key, text: property.key.name, truncated: false }]
@@ -162,44 +162,34 @@ function objectKeyFinding(property: TSESTree.ObjectLiteralElement): ClassFinding
 /**
 A helper-call argument: the class-position grammar, widened with arrays and object keys.
  */
-function helperArgumentFindings(
-  ctx: WalkContext,
-  node: AnyNode,
-  scope: Scope.Scope,
-): ClassFinding[] {
+function helperArgumentHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassHit[] {
   if (node.type === 'ArrayExpression') {
     return node.elements.flatMap((element) =>
-      element && element.type !== 'SpreadElement'
-        ? helperArgumentFindings(ctx, element, scope)
-        : [],
+      element && element.type !== 'SpreadElement' ? helperArgumentHits(ctx, element, scope) : [],
     )
   }
   if (node.type === 'ObjectExpression') {
-    return node.properties.flatMap((property) => objectKeyFinding(property))
+    return node.properties.flatMap((property) => objectKeyHit(property))
   }
-  return positionFindings(ctx, node, scope, undefined)
+  return positionHits(ctx, node, scope, undefined)
 }
 
 /**
  * A call in a class position: Nave's `cx()` (each argument one atom name), `cx.raw()` (rule 2's
  * territory, nothing here), a helper (each argument class text), or any other call (opaque).
  */
-function callFindings(
-  ctx: WalkContext,
-  node: TSESTree.CallExpression,
-  scope: Scope.Scope,
-): ClassFinding[] {
+function callHits(ctx: WalkContext, node: TSESTree.CallExpression, scope: Scope.Scope): ClassHit[] {
   const args = node.arguments.filter((argument) => argument.type !== 'SpreadElement')
   const resolved = resolveCxCallee(node.callee, ctx.bindings, scope)
   if (resolved === 'cx') {
-    return args.flatMap((argument) => positionFindings(ctx, argument, scope, node.callee))
+    return args.flatMap((argument) => positionHits(ctx, argument, scope, node.callee))
   }
   if (resolved === 'raw' || !isHelperCall(node.callee, ctx.helpers)) return []
-  return args.flatMap((argument) => helperArgumentFindings(ctx, argument, scope))
+  return args.flatMap((argument) => helperArgumentHits(ctx, argument, scope))
 }
 
 /**
- * Every finding reachable from `node` through the grammar in this file's docblock. `callee` is
+ * Every hit reachable from `node` through the grammar in this file's docblock. `callee` is
  * set while reading an argument of Nave's `cx()` (so a literal there is one atom name) and unset
  * in a plain class position. Unwraps the single-child productions in a loop, so only the
  * genuinely branching productions recurse.
@@ -208,27 +198,27 @@ function callFindings(
  * three calling rules must agree on.
  */
 // eslint-disable-next-line complexity
-function positionFindings(
+function positionHits(
   ctx: WalkContext,
   node: AnyNode,
   scope: Scope.Scope,
   callee: AnyNode | undefined,
-): ClassFinding[] {
+): ClassHit[] {
   let current = node
   let currentScope = scope
   let canHop = true
 
   while (true) {
-    if (isStringLiteral(current)) return stringFindings(ctx, current, callee)
+    if (isStringLiteral(current)) return stringHits(ctx, current, callee)
     if (current.type === 'TemplateLiteral') {
-      return templateFindings(ctx, current, currentScope, callee)
+      return templateHits(ctx, current, currentScope, callee)
     }
-    if (current.type === 'CallExpression') return callFindings(ctx, current, currentScope)
+    if (current.type === 'CallExpression') return callHits(ctx, current, currentScope)
 
     if (current.type === 'ConditionalExpression') {
       return [
-        ...positionFindings(ctx, current.consequent, currentScope, callee),
-        ...positionFindings(ctx, current.alternate, currentScope, callee),
+        ...positionHits(ctx, current.consequent, currentScope, callee),
+        ...positionHits(ctx, current.alternate, currentScope, callee),
       ]
     }
 
@@ -243,8 +233,8 @@ function positionFindings(
     ) {
       // '||' and '??': both sides are candidates for the value used; '+': both sides are text.
       return [
-        ...positionFindings(ctx, current.left, currentScope, callee),
-        ...positionFindings(ctx, current.right, currentScope, callee),
+        ...positionHits(ctx, current.left, currentScope, callee),
+        ...positionHits(ctx, current.right, currentScope, callee),
       ]
     }
 
@@ -262,37 +252,33 @@ function positionFindings(
 }
 
 /**
-A template slot (or the whole value): an `&&` directly here is its own finding.
+A template slot (or the whole value): an `&&` directly here is its own hit.
  */
-function slotFindings(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassFinding[] {
+function slotHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassHit[] {
   if (node.type === 'LogicalExpression' && node.operator === '&&') {
     return [{ kind: 'slot-and', node, isWhole: false }]
   }
-  return positionFindings(ctx, node, scope, undefined)
+  return positionHits(ctx, node, scope, undefined)
 }
 
 /**
-Every finding in a whole `className`/`class` attribute value.
+Every hit in a whole `className`/`class` attribute value.
  */
-export function collectValueFindings(
-  ctx: WalkContext,
-  node: AnyNode,
-  scope: Scope.Scope,
-): ClassFinding[] {
+export function collectValueHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassHit[] {
   if (node.type === 'LogicalExpression' && node.operator === '&&') {
     return [{ kind: 'slot-and', node, isWhole: true }]
   }
-  return positionFindings(ctx, node, scope, undefined)
+  return positionHits(ctx, node, scope, undefined)
 }
 
 /**
- * Every finding in one argument of a `cx.raw()` call, read exactly as rule 1 reads a class
+ * Every hit in one argument of a `cx.raw()` call, read exactly as rule 1 reads a class
  * position (an `&&` here is an argument, not a slot, so it is composition).
  */
-export function collectArgumentFindings(
+export function collectArgumentHits(
   ctx: WalkContext,
   node: AnyNode,
   scope: Scope.Scope,
-): ClassFinding[] {
-  return positionFindings(ctx, node, scope, undefined)
+): ClassHit[] {
+  return positionHits(ctx, node, scope, undefined)
 }

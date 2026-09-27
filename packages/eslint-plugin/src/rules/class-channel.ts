@@ -20,7 +20,7 @@ import {
 } from '../messages.ts'
 import { isReportedPiece } from '../raw-admission.ts'
 import { compileAllow, type CompiledAllowEntry, getNaveSettings } from '../settings.ts'
-import { type ClassFinding, collectValueFindings } from './class-channel-walk.ts'
+import { type ClassHit, collectValueHits } from './class-channel-walk.ts'
 
 /**
 True for a `className`/`class` JSX attribute (rule 1 reads neither `classNames` nor a slot prop).
@@ -44,26 +44,26 @@ function slotAndMessage(rendered: string, isWhole: boolean): string {
 }
 
 /**
-The message rule 1 reports for `finding`, or `undefined` when nothing is reported.
+The message rule 1 reports for `hit`, or `undefined` when nothing is reported.
  */
-function findingMessage(
-  finding: ClassFinding,
+function hitMessage(
+  hit: ClassHit,
   context: Rule.RuleContext,
   declared: string,
   allowEntries: CompiledAllowEntry[],
 ): string | undefined {
   const { sourceCode } = context
-  if (finding.kind === 'slot-and') {
-    return slotAndMessage(sourceCode.getText(finding.node as never), finding.isWhole)
+  if (hit.kind === 'slot-and') {
+    return slotAndMessage(sourceCode.getText(hit.node as never), hit.isWhole)
   }
-  if (!isReportedPiece(finding, allowEntries)) return undefined
-  if (isNaveOutputLike(finding.text)) {
-    return naveOutputMessage(finding.text, atomNameForClass(finding.text))
+  if (!isReportedPiece(hit, allowEntries)) return undefined
+  if (isNaveOutputLike(hit.text)) {
+    return naveOutputMessage(hit.text, atomNameForClass(hit.text))
   }
-  if (finding.kind === 'atom') {
-    return cxAtomMessage(sourceCode.getText(finding.callee as never), finding.rendered, declared)
+  if (hit.kind === 'atom') {
+    return cxAtomMessage(sourceCode.getText(hit.callee as never), hit.rendered, declared)
   }
-  return literalClassMessage(finding.text, declared)
+  return literalClassMessage(hit.text, declared)
 }
 
 export const classChannelRule: Rule.RuleModule = {
@@ -102,12 +102,12 @@ export const classChannelRule: Rule.RuleModule = {
         // One report per offending construct: the same literal reached twice (one `const`
         // named in both branches of a conditional) is still one class written once.
         const reported = new Set<string>()
-        for (const finding of collectValueFindings(ctx, expression, scope)) {
-          const message = findingMessage(finding, context, declared, allowEntries)
-          const key = `${finding.node.range.join(':')}|${message}`
+        for (const hit of collectValueHits(ctx, expression, scope)) {
+          const message = hitMessage(hit, context, declared, allowEntries)
+          const key = `${hit.node.range.join(':')}|${message}`
           if (message === undefined || reported.has(key)) continue
           reported.add(key)
-          context.report({ node: finding.node as unknown as JSSyntaxElement, message })
+          context.report({ node: hit.node as unknown as JSSyntaxElement, message })
         }
       },
     }

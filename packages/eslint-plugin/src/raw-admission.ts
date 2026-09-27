@@ -9,9 +9,9 @@ import type { Scope } from 'eslint'
 import { isAtomName } from './atoms.ts'
 import { isNaveOutputLike } from './messages.ts'
 import {
-  type AtomPieceFinding,
-  type ClassPieceFinding,
-  collectArgumentFindings,
+  type AtomPieceHit,
+  type ClassPieceHit,
+  collectArgumentHits,
   type WalkContext,
 } from './rules/class-channel-walk.ts'
 import { type CompiledAllowEntry, isDeclared } from './settings.ts'
@@ -21,7 +21,7 @@ import { type CompiledAllowEntry, isDeclared } from './settings.ts'
  * input); a `cx()` argument unless it is one atom name, whole; any other piece unless declared.
  */
 export function isReportedPiece(
-  piece: AtomPieceFinding | ClassPieceFinding,
+  piece: AtomPieceHit | ClassPieceHit,
   allowEntries: CompiledAllowEntry[],
 ): boolean {
   if (isNaveOutputLike(piece.text)) return true
@@ -39,12 +39,12 @@ export function reportablePiecesInCall(
   call: TSESTree.CallExpression,
   scope: Scope.Scope,
   allowEntries: CompiledAllowEntry[],
-): (AtomPieceFinding | ClassPieceFinding)[] {
+): (AtomPieceHit | ClassPieceHit)[] {
   return call.arguments
     .filter((argument) => argument.type !== 'SpreadElement')
-    .flatMap((argument) => collectArgumentFindings(ctx, argument, scope))
+    .flatMap((argument) => collectArgumentHits(ctx, argument, scope))
     .filter(
-      (finding): finding is AtomPieceFinding | ClassPieceFinding =>
-        finding.kind !== 'slot-and' && isReportedPiece(finding, allowEntries),
+      (hit): hit is AtomPieceHit | ClassPieceHit =>
+        hit.kind !== 'slot-and' && isReportedPiece(hit, allowEntries),
     )
 }
