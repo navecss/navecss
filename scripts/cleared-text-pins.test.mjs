@@ -1101,3 +1101,18 @@ test('README.md: the "## Brand and name" section', () => {
     '3568193eea6a12eb64760e2c386991f01377cc07e8ea262f6ac53886725dd041',
   )
 })
+
+// ---------------------------------------------------------------------------------------------
+// .github/assets/LICENSE.md — the whole file. States that the two brand SVGs beside it are not
+// covered by the root MIT licence and are governed by TRADEMARKS.md instead; it has no
+// package-local home (`.github/` belongs to no package), so it is pinned here as one unit, the
+// same way TRADEMARKS.md is pinned above.
+// ---------------------------------------------------------------------------------------------
+
+test('.github/assets/LICENSE.md: the whole file', () => {
+  assertClearedText(
+    '.github/assets/LICENSE.md',
+    read('.github/assets/LICENSE.md'),
+    'd0c3fd1ab5aee471bc098504473a938987845af050e537104626dcbc033ecad6',
+  )
+})
