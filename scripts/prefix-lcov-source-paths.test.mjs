@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -174,6 +175,10 @@ test('sync with the real repo: sonar.cpd.exclusions carries the same globs as so
     readPropertyValue(propertiesText, 'sonar.cpd.exclusions'),
     readPropertyValue(propertiesText, 'sonar.test.inclusions'),
   )
+})
+
+test('the real repo has no .sonarcloud.properties: a CI-driven scan reads sonar-project.properties only', () => {
+  assert.equal(existsSync(path.join(ROOT, '.sonarcloud.properties')), false)
 })
 
 test('sync with the real repo: packages with a test:coverage script match sonar.javascript.lcov.reportPaths', () => {
