@@ -48,7 +48,10 @@ const FIXTURE_SOURCE = [
   "const c = <div className={cx.raw('app-shell')} />",
 ].join('\n')
 
-function scratchProject(ruleSeverity: 'error' | 'warn'): string {
+function scratchProject(
+  ruleSeverity: 'error' | 'warn',
+  otherRules: Record<string, string> = {},
+): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'nave-bulk-suppressions-'))
   mkdirSync(path.join(dir, 'src'))
   writeFileSync(path.join(dir, 'src/a.jsx'), FIXTURE_SOURCE)
@@ -61,7 +64,7 @@ function scratchProject(ruleSeverity: 'error' | 'warn'): string {
       '  { files: ["**/*.jsx"], languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },',
       `    plugins: { '@navecss': nave },`,
       `    settings: { '@navecss': { allow: ['app-'] } },`,
-      `    rules: { '@navecss/count-escapes': ${JSON.stringify(ruleSeverity)} } },`,
+      `    rules: ${JSON.stringify({ ...otherRules, '@navecss/count-escapes': ruleSeverity })} },`,
       ']',
     ].join('\n'),
   )
@@ -161,6 +164,45 @@ describe('AC-18: ESLint bulk suppressions hold the escape count', () => {
       expect(suppress.status).toBe(0)
       const suppressions = suppressionsFile(dir)
       expect(suppressions['src/a.jsx']?.['@navecss/count-escapes']).toBeUndefined()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('AC-19: the count limits the README states hold under the real CLI', () => {
+  it('swapping a counted escape for a counted disable comment in the same file nets zero', () => {
+    const dir = scratchProject('error', { '@navecss/class-channel': 'error' })
+    try {
+      writeFileSync(
+        path.join(dir, 'src/a.jsx'),
+        "import { cx } from '@navecss/core/cx'\nconst a = <div className={cx.raw('legacy-card')} />\n",
+      )
+      runEslint(dir, ['--suppress-rule', '@navecss/count-escapes'])
+      const before = readFileSync(path.join(dir, 'eslint-suppressions.json'), 'utf8')
+      writeFileSync(
+        path.join(dir, 'src/a.jsx'),
+        'import { cx } from \'@navecss/core/cx\'\n// eslint-disable-next-line @navecss/class-channel\nconst a = <div className="legacy-card other-legacy" />\n',
+      )
+      expect(runEslint(dir, []).status).toBe(0)
+      expect(readFileSync(path.join(dir, 'eslint-suppressions.json'), 'utf8')).toBe(before)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('an inline comment turning the counting rule off fails a baselined file on unused suppressions, and shows nothing in a file with no entry', () => {
+    const dir = scratchProject('error')
+    try {
+      runEslint(dir, ['--suppress-rule', '@navecss/count-escapes'])
+      const off = '/* eslint @navecss/count-escapes: "off" */\n'
+      writeFileSync(path.join(dir, 'src/b.jsx'), `${off}${FIXTURE_SOURCE}`)
+      expect(runEslint(dir, []).status).toBe(0)
+
+      writeFileSync(path.join(dir, 'src/a.jsx'), `${off}${FIXTURE_SOURCE}`)
+      const result = runEslint(dir, [])
+      expect(result.status).toBe(2)
+      expect(result.stderr).toContain('--prune-suppressions')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

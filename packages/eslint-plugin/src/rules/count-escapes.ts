@@ -11,22 +11,35 @@ import { collectCxBindings, resolveCxCallee } from '../cx-binding.ts'
 import { requiresReasonForCall } from '../raw-admission.ts'
 import { compileAllow, getNaveSettings } from '../settings.ts'
 
-const DIRECTIVE_RE = /^\s*(eslint-disable(?:-next-line|-line)?|eslint-enable)(?:\s+([^\n]*))?$/s
+/**
+ * The directive list ESLint's JavaScript `SourceCode` builds for itself (present since before
+ * this package's ESLint floor, and part of ESLint's language interface), which its own `SourceCode`
+ * type does not declare.
+ */
+interface DirectiveSource {
+  getDisableDirectives(): {
+    directives: {
+      node: unknown
+      type: 'disable' | 'disable-line' | 'disable-next-line' | 'enable'
+      value: string
+    }[]
+  }
+}
 
 /**
- *
+ * The rule ids a disable directive's value names, split the way ESLint splits it: on commas,
+ * each trimmed and stripped of one pair of matching quotes. An empty list means the directive
+ * names no rule, which covers every rule.
  */
-function directiveRuleNames(rest: string | undefined): string[] {
-  if (!rest) return []
-  const withoutDescription = rest.split(/\s+--\s/, 1)[0]!
-  return withoutDescription
+function directiveRuleNames(value: string): string[] {
+  return value
     .split(',')
-    .map((name) => name.trim())
+    .map((name) => name.trim().replace(/^(['"]?)(.*)\1$/su, '$2'))
     .filter((name) => name.length > 0)
 }
 
 /**
- *
+True when a directive's rule list is empty (every rule) or names an id under this plugin's prefix.
  */
 function isMatchingThisPlugin(ruleNames: string[], prefix: string): boolean {
   if (ruleNames.length === 0) return true
@@ -60,12 +73,16 @@ export const countEscapesRule: Rule.RuleModule = {
           context.filename,
         )
 
-        for (const comment of context.sourceCode.getAllComments() as unknown as TSESTree.Comment[]) {
-          const match = DIRECTIVE_RE.exec(comment.value)
-          if (!match) continue
-          const [, keyword, rest] = match
-          if (keyword === 'eslint-enable') continue
-          if (isMatchingThisPlugin(directiveRuleNames(rest), prefix)) {
+        // ESLint's own parse of every disable directive in the file (its grammar, its handling
+        // of a `-- description` and of a block comment running over several lines), so a
+        // comment ESLint honours is never one this rule reads differently.
+        const { directives } = (
+          context.sourceCode as unknown as DirectiveSource
+        ).getDisableDirectives()
+        for (const directive of directives) {
+          if (directive.type === 'enable') continue
+          if (isMatchingThisPlugin(directiveRuleNames(directive.value), prefix)) {
+            const comment = directive.node as TSESTree.Comment
             context.report({ loc: comment.loc, messageId: 'disableComment' })
           }
         }

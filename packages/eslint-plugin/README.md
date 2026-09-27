@@ -104,6 +104,22 @@ rule's. A file-wide or block `eslint-disable` comment with no rule list silences
 after it in that file, this one included, so a file that opens with a bare `/* eslint-disable */`
 is never in the count at all.
 
+Three more limits come from how ESLint itself applies directives and records suppressions, which
+no rule can see past:
+
+- A same-line `// eslint-disable-line` that names no rule, or names `@navecss/count-escapes`,
+  with or without a `-- description`, silences every report on its line, this rule's report
+  about the comment included, so neither the comment nor an escape on that line is counted. One
+  naming only other rules of this plugin is counted, at the comment.
+- The count is one per escape, a disable comment and a `cx.raw()` call alike, and the
+  suppressions file records a count per file per rule, so replacing a counted escape with a
+  counted disable comment in the same file leaves `eslint-suppressions.json` unchanged: the swap
+  shows in the source diff only.
+- An inline configuration comment turning the counting rule off
+  (`/* eslint @navecss/count-escapes: "off" */`) is not counted and hides its file's escapes. In
+  a file `eslint-suppressions.json` already records, the next run fails on unused suppressions
+  until pruned, so the drop reaches a reviewed diff; in a file it does not record, nothing shows.
+
 ## Adopting on an existing codebase
 
 The same bulk-suppressions mechanism is the adoption story for every rule here, not only the

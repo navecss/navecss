@@ -113,28 +113,67 @@ describe('AC-17: the counting rule', () => {
     return messages.filter((message) => message.ruleId === `${pluginKey}/count-escapes`).length
   }
 
-  it("reports a matching disable comment naming one of this plugin's rules, or naming none", () => {
-    const cases = [
-      '// eslint-disable-next-line @navecss/class-channel',
-      '/* eslint-disable @navecss/raw-reason */',
-      '// eslint-disable-next-line @navecss/style-values',
-      '// eslint-disable-next-line',
-      '// eslint-disable-next-line no-console, @navecss/class-channel',
-    ]
-    for (const comment of cases) {
-      expect(countReports(`${comment}\nconst x = 1`)).toBeGreaterThanOrEqual(1)
-    }
-  })
-
-  it("reports a bare same-line disable comment too — verified with inline config off, since ESLint's own suppression (a bare eslint-disable-line silences every rule on its own line, this one included) would otherwise hide this rule's report about the very comment that causes it", () => {
-    const withInlineConfigActive = countReports('// eslint-disable-line\nconst x = 1')
-    expect(withInlineConfigActive, 'suppressed by design — the documented limit, not a bug').toBe(0)
-
-    const withoutSuppression = countReports('// eslint-disable-line\nconst x = 1', '@navecss', {
+  /**
+   * The counting rule's own reports about disable comments, read with inline configuration
+   * off: a directive naming no rule (or naming the counting rule) would otherwise suppress the
+   * very report it causes, and the question here is what the rule emits, not what ESLint then
+   * keeps.
+   */
+  function rawCommentReports(code: string): { column: number; line: number }[] {
+    const messages = linter.verify(code, {
+      languageOptions,
+      settings,
+      plugins: { '@navecss': fullPlugin },
+      rules: { '@navecss/count-escapes': 'error' },
       linterOptions: { noInlineConfig: true },
     })
-    expect(withoutSuppression).toBeGreaterThanOrEqual(1)
+    return messages
+      .filter((message) => message.ruleId === '@navecss/count-escapes')
+      .map(({ line, column }) => ({ line, column }))
+  }
+
+  it.each([
+    '// eslint-disable-next-line @navecss/class-channel',
+    '/* eslint-disable @navecss/raw-reason */',
+    '// eslint-disable-next-line @navecss/style-values',
+    '// eslint-disable-line @navecss/class-channel',
+    '// eslint-disable-next-line',
+    '// eslint-disable-next-line no-console, @navecss/class-channel',
+    '// eslint-disable-next-line -- vendor markup',
+    '/* eslint-disable -- vendor markup */',
+    '// eslint-disable-next-line @navecss/class-channel --- vendor markup',
+    '/* eslint-disable\n   @navecss/class-channel */',
+    '/* eslint-disable @navecss/class-channel\n   -- vendor markup */',
+  ])('reports %j once, at the comment itself', (comment) => {
+    expect(rawCommentReports(`const before = 1\n${comment}\nconst x = 1`)).toEqual([
+      { line: 2, column: 1 },
+    ])
   })
+
+  it('a description never takes a next-line directive out of the count, with inline config active', () => {
+    expect(countReports('// eslint-disable-next-line -- vendor markup\nconst x = 1')).toBe(1)
+    expect(
+      countReports('// eslint-disable-next-line @navecss/class-channel -- vendor\nconst x = 1'),
+    ).toBe(1)
+  })
+
+  it.each([
+    '// eslint-disable-line',
+    '// eslint-disable-line -- vendor markup',
+    '// eslint-disable-line @navecss/count-escapes',
+  ])(
+    'the stated limit: %j on a line holding a counted cx.raw() leaves no count report on that line',
+    (comment) => {
+      const code = `${PRELUDE}const el = <div className={cx.raw('legacy-card')} /> ${comment}`
+      const messages = linter.verify(code, {
+        languageOptions,
+        settings,
+        plugins: { '@navecss': fullPlugin },
+        rules: { '@navecss/count-escapes': 'error' },
+      })
+      expect(messages.filter((message) => message.ruleId === '@navecss/count-escapes')).toEqual([])
+    },
+  )
 
   it('matches the plugin\'s own registered prefix, not a literal "@navecss/"', () => {
     expect(

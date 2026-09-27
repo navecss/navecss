@@ -73,19 +73,21 @@ describe('AC-25: the README has every required section', () => {
     expect(README).toMatch(new RegExp(String.raw`^#+\s+${heading}\s*$`, 'm'))
   })
 
-  it("requirements state the real eslint range, @navecss/core range and Node floor", () => {
+  it('requirements state the real eslint range, @navecss/core range and Node floor', () => {
     const { peerDependencies, engines } = manifest()
     expect(README).toContain(peerDependencies.eslint)
     expect(README).toContain(peerDependencies['@navecss/core'])
     expect(README).toContain(engines.node)
   })
 
-  it("the enable fence, used verbatim, reports a bare literal and passes a declared class", () => {
+  it('the enable fence, used verbatim, reports a bare literal and passes a declared class', () => {
     const PRELUDE = "const el = <div className='legacy-card' />"
     expect(lint(PRELUDE)).toContain('@navecss/class-channel')
-    expect(lint('const el = <div className="app-shell" />', { settings: { '@navecss': { allow: ['app-'] } } })).toEqual(
-      [],
-    )
+    expect(
+      lint('const el = <div className="app-shell" />', {
+        settings: { '@navecss': { allow: ['app-'] } },
+      }),
+    ).toEqual([])
   })
 
   it('the rules table names every exported rule exactly once, and every named row is a real export', () => {
@@ -93,7 +95,9 @@ describe('AC-25: the README has every required section', () => {
       .map((m) => m[1]!)
       .toArray()
     const exportedIds = Object.keys(plugin.rules).map((name) => `@navecss/${name}`)
-    expect(tableRows.toSorted((a, b) => a.localeCompare(b))).toEqual(exportedIds.toSorted((a, b) => a.localeCompare(b)))
+    expect(tableRows.toSorted((a, b) => a.localeCompare(b))).toEqual(
+      exportedIds.toSorted((a, b) => a.localeCompare(b)),
+    )
   })
 
   it("states that a later config entry setting only a rule's severity keeps its default options, and one setting options replaces them", () => {
@@ -115,7 +119,8 @@ describe('AC-25: "what it does not check" statements hold as fixtures', () => {
   it('a camelCase string in cx() passes only if it names a real atom of the installed core', () => {
     const code = "import { cx } from '@navecss/core/cx'\nconst el = <div className={cx('flex')} />"
     expect(lint(code)).toEqual([])
-    const bad = "import { cx } from '@navecss/core/cx'\nconst el = <div className={cx('notAnAtom')} />"
+    const bad =
+      "import { cx } from '@navecss/core/cx'\nconst el = <div className={cx('notAnAtom')} />"
     expect(lint(bad)).toContain('@navecss/class-channel')
   })
 
@@ -140,14 +145,26 @@ describe('AC-19: the counting rule denominator, stated and fixtured', () => {
   })
 
   const exclusions: { code: string; note: string }[] = [
-    { code: "function f() { return 'legacy-card' }\nconst el = <div className={f()} />", note: 'a function return value' },
-    { code: "import { IMPORTED } from './constants'\nconst el = <div className={IMPORTED} />", note: 'an imported constant' },
+    {
+      code: "function f() { return 'legacy-card' }\nconst el = <div className={f()} />",
+      note: 'a function return value',
+    },
+    {
+      code: "import { IMPORTED } from './constants'\nconst el = <div className={IMPORTED} />",
+      note: 'an imported constant',
+    },
     {
       code: "const A = 'legacy-card'\nconst B = A\nconst el = <div className={B} />",
       note: 'a variable beyond one const hop',
     },
-    { code: "const el = <div className={myJoin('legacy-card')} />", note: 'a call outside the helper list' },
-    { code: "const el = <div style={{ '--w': 'legacy-card' }} />", note: 'a literal routed through a custom property' },
+    {
+      code: "const el = <div className={myJoin('legacy-card')} />",
+      note: 'a call outside the helper list',
+    },
+    {
+      code: "const el = <div style={{ '--w': 'legacy-card' }} />",
+      note: 'a literal routed through a custom property',
+    },
   ]
 
   it.each(exclusions)('excludes: $note', ({ code }) => {
@@ -155,8 +172,27 @@ describe('AC-19: the counting rule denominator, stated and fixtured', () => {
   })
 
   it('a file opening with a bare eslint-disable gets no report and no suppressions entry', () => {
-    const code = "/* eslint-disable */\nimport { cx } from '@navecss/core/cx'\nconst el = <div className={cx.raw('legacy-card')} />"
+    const code =
+      "/* eslint-disable */\nimport { cx } from '@navecss/core/cx'\nconst el = <div className={cx.raw('legacy-card')} />"
     expect(lint(code)).toEqual([])
+  })
+
+  it("states the three limits ESLint's own directive and suppressions handling sets", () => {
+    const collapsed = README.replaceAll(/\s+/g, ' ')
+    for (const statement of [
+      'A same-line `// eslint-disable-line` that names no rule, or names `@navecss/count-escapes`, with or without a `-- description`, silences every report on its line',
+      'One naming only other rules of this plugin is counted, at the comment.',
+      'replacing a counted escape with a counted disable comment in the same file leaves `eslint-suppressions.json` unchanged',
+      'An inline configuration comment turning the counting rule off (`/* eslint @navecss/count-escapes: "off" */`) is not counted and hides its file\'s escapes.',
+      'the next run fails on unused suppressions until pruned',
+      'in a file it does not record, nothing shows',
+    ]) {
+      expect(collapsed).toContain(statement)
+    }
+  })
+
+  it('the same-line limit holds: a bare eslint-disable-line leaves its line with no report from any rule', () => {
+    expect(lint('const el = <div className="legacy-card" /> // eslint-disable-line')).toEqual([])
   })
 
   it('offers warn plus --max-warnings as a fallback, and states its condition', () => {
