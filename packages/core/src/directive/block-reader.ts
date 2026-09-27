@@ -65,16 +65,28 @@ interface ScanResult {
 }
 
 /**
-`undefined` when this closer belongs to the ENCLOSING block (depth was already 0); otherwise the new depth and, for a `}` that returned depth to 0, the block it closed.
+Whether `closerType` is the mirror of `openerType` — the only pairing CSS Syntax 3 lets close a simple block: `)` for `(` or a function's own `(`, `]` for `[`, `}` for `{`.
+ */
+function isMirrorCloser(openerType: string, closerType: string): boolean {
+  if (closerType === ')-token') return openerType === '(-token' || openerType === 'function-token'
+  if (closerType === ']-token') return openerType === '[-token'
+  return openerType === '{-token' // closerType === '}-token'
+}
+
+/**
+`undefined` when this closer belongs to the ENCLOSING block (depth was already 0); otherwise the new depth and, for a `}` that returned depth to 0, the block it closed. A closer that does not mirror the innermost open bracket closes nothing — CSS Syntax 3's "consume a component value" returns a token it does not recognise as its own rather than treating it as a terminator — so it passes through at the same depth, still searching for its OWN opener's real mirror.
  */
 function closeOne(
+  tokens: readonly Token[],
   opens: number[],
   depth: number,
   i: number,
   type: string,
 ): { closedBlock?: TrailingBlock; depth: number } | undefined {
   if (depth === 0) return undefined
-  const openIndex = opens.pop()!
+  const openIndex = opens[opens.length - 1]!
+  if (!isMirrorCloser(tokens[openIndex]!.type, type)) return { depth }
+  opens.pop()
   const nextDepth = depth - 1
   if (nextDepth === 0 && type === '}-token') {
     return { depth: nextDepth, closedBlock: { openIndex, closeIndex: i } }
@@ -102,8 +114,18 @@ function scanItem(tokens: readonly Token[], start: number, limit: number): ScanR
       continue
     }
     if (CLOSERS.has(type)) {
-      const closed = closeOne(opens, depth, i, type)
-      if (!closed) return { end: i, consumedSemicolon: false } // belongs to the enclosing block
+      const closed = closeOne(tokens, opens, depth, i, type)
+      if (!closed) {
+        // A depth-0 closer with nothing consumed yet for this item is a
+        // stray closer with no opener to match anywhere in `[start, limit)`
+        // — the caller already excludes the enclosing block's own
+        // terminator from that range. Consume it as its own one-token
+        // invalid item so the walk advances; ceding an EMPTY span back to a
+        // caller that immediately re-reads the same token is what used to
+        // loop forever.
+        if (i === start) return { end: i + 1, consumedSemicolon: false }
+        return { end: i, consumedSemicolon: false } // belongs to the enclosing block
+      }
       depth = closed.depth
       i++
       if (closed.closedBlock)
