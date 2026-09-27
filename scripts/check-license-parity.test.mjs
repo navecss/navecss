@@ -120,7 +120,7 @@ Wide Web Consortium. That specification, and the repository carrying it, are
 published under the W3C Software and Document License
 (https://www.w3.org/copyright/software-license-2023/).
 
-What is copied is used by src/directive/tokenizer.ts, the files in
+What is copied is implemented in src/directive/tokenizer.ts, the files in
 src/directive/tokenizer/ and src/directive/block-reader.ts, all built into the
 JavaScript under dist/: the names of the token types and of their type flags,
 the definitions of the code point classes (among them the ranges of non-ASCII
@@ -1407,5 +1407,5 @@ test('packages/core/LICENSE is the root LICENSE text verbatim followed by the cl
     'packages/core/LICENSE must begin with the root LICENSE text, byte for byte',
   )
   assert.equal(coreLicense.subarray(rootLicense.length).toString('utf8'), CORE_THIRD_PARTY_SECTION)
-  assert.equal(coreLicense.length, rootLicense.length + 1138)
+  assert.equal(coreLicense.length, rootLicense.length + 1145)
 })
