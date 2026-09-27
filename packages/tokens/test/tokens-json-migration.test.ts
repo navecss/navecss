@@ -90,10 +90,18 @@ function withoutAlphaPinningSuffix(text: string): string {
  * build-time hardening fix refusing the fractional consumer override `<number>` admitted and
  * `z-index` (the only property these tokens are meant for) does not. Reverted before the
  * exhaustive delta check below, the same reasoning applied to the alpha-pinning suffix above.
+ *
+ * Scoped to `--nave-layer-*` registrations only, not every `<integer>` syntax in the file: a
+ * non-layer token narrowed to `<integer>` for its own, unrelated reason must stay `<integer>`
+ * here, or this fold-back would mask a change the exhaustive delta check below exists to catch.
  */
+const LAYER_PROPERTY_SYNTAX = /(@property --nave-layer-[\w-]+\s*\{\s*syntax: )'<integer>'/g
+
 function withoutZIndexSyntaxNarrowing(text: string): string {
   expect(text).toContain("syntax: '<integer>';")
-  return text.replaceAll("syntax: '<integer>';", "syntax: '<number>';")
+  const reverted = text.replace(LAYER_PROPERTY_SYNTAX, "$1'<number>'")
+  expect(reverted, 'the --nave-layer-* syntax narrowing was not found to revert').not.toBe(text)
+  return reverted
 }
 
 /**
@@ -188,6 +196,19 @@ function lineDeltas(before: string, after: string): { after: string; before: str
   }
   return deltas
 }
+
+describe('withoutZIndexSyntaxNarrowing reverts only the --nave-layer-* registrations', () => {
+  it('reverts a --nave-layer-* registration and preserves a non-layer <integer> registration', () => {
+    const synthetic =
+      "@property --nave-layer-x {\n    syntax: '<integer>';\n    inherits: true;\n    initial-value: 0;\n  }\n\n" +
+      "  @property --nave-other-thing {\n    syntax: '<integer>';\n    inherits: true;\n    initial-value: 0;\n  }\n"
+
+    const reverted = withoutZIndexSyntaxNarrowing(synthetic)
+
+    expect(reverted).toContain("@property --nave-layer-x {\n    syntax: '<number>';")
+    expect(reverted).toContain("@property --nave-other-thing {\n    syntax: '<integer>';")
+  })
+})
 
 describe('AC-token-build-41 covers: R41 (the migration changes no rendered value)', () => {
   it('keeps the three letterSpacing tokens in em, at their pre-migration rendered values', () => {
