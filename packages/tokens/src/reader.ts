@@ -32,6 +32,7 @@ import { classifyMalformed, formatUnreadableNodesRefusal } from './dtcg-malforme
 import { classifyDraftShape, refuseTypeReason } from './dtcg-shape.ts'
 import { DtcgShapeRefusal } from './errors.ts'
 import { refuseBothReferenceForms } from './json-pointer.ts'
+import { refuseUnsupportedReservedKey } from './reserved-keys.ts'
 import { type ResolveContext, resolveValue } from './resolve-value.ts'
 import { nameFromPath } from './token-name.ts'
 
@@ -162,6 +163,7 @@ function collectRawTokens(
       // "$" is reserved by the format and was previously dropped, subtree and all, with no
       // message — indistinguishable from a token that was simply never written.
       if (RESERVED_METADATA_KEYS.has(key)) continue
+      refuseUnsupportedReservedKey(key, [...path, key].join('.'))
       throw new TypeError(
         `DTCG 2025.10 reader: "${[...path, key].join('.')}" starts with "$", which DTCG 2025.10 ` +
           'reserves for metadata — it is not a valid token or group name',

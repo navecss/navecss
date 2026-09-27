@@ -301,6 +301,41 @@ describe('readTokens — refuses shapes that would otherwise vanish silently', (
     ).toThrow(/"a\.\$evil".*(?:reserved|metadata)/i)
   })
 
+  it('names $root as unsupported rather than as an unrecognised metadata key', () => {
+    let caught: unknown
+    try {
+      readTokens({
+        a: { $type: 'dimension', $root: { $value: dim(4) } },
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).toMatch(/\$root/)
+    expect((caught as Error).message).toMatch(/not support/i)
+    expect((caught as Error).message).not.toMatch(/not a valid/)
+  })
+
+  it('names $extends as unsupported rather than as an unrecognised metadata key', () => {
+    let caught: unknown
+    try {
+      readTokens({
+        a: { $type: 'dimension', b: { $value: dim(4) } },
+        c: {
+          $type: 'dimension',
+          $extends: '#/a',
+          d: { $value: dim(4) },
+        },
+      })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).toMatch(/\$extends/)
+    expect((caught as Error).message).toMatch(/not support/i)
+    expect((caught as Error).message).not.toMatch(/not a valid/)
+  })
+
   it('hard-errors on a group carrying both its own $value and child tokens, rather than dropping the children', () => {
     expect(() =>
       readTokens({
