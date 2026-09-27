@@ -1,5 +1,5 @@
 /**
- * R6: the consumer's own classes, declared once in ESLint's shared `settings` under this
+ * The consumer's own classes, declared once in ESLint's shared `settings` under this
  * plugin's namespace (`settings['@navecss']`), read by every rule this package ships. Settings
  * are JSON data, never a `RegExp` object, because ESLint's cache does not see a changed `RegExp`
  * and does see a changed string.
@@ -28,7 +28,7 @@ export interface CompiledAllowEntry {
 const PATTERN_FLAG_CHARS = new Set(['d', 'i', 'm', 's', 'u', 'v'])
 
 /**
-Configuration-error text a `settings['@navecss'].allow` entry that cannot compile carries.
+The configuration error a malformed `settings['@navecss']` value or entry fails the run with.
  */
 class NaveSettingsError extends Error {}
 

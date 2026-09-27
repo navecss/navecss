@@ -1,5 +1,5 @@
 /**
- * The counting rule (R9): `off` in `recommended`. Reports, at `error`, every `cx.raw()` call
+ * The counting rule, `off` in `recommended`. Reports, at `error`, every `cx.raw()` call
  * rule 2 counts (with or without a reason — a reason does not leave the count) and every disable
  * comment that names one of this plugin's rules, or names no rule at all. ESLint's own bulk
  * suppressions (`eslint --suppress-rule`) turn that report into a project's held escape count.

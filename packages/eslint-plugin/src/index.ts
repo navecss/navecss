@@ -1,11 +1,12 @@
+/**
+ * The default export is the plugin object: `meta` (with `namespace: '@navecss'`, the documented
+ * `@<scope>/eslint-plugin` form, which is the prefix of every rule id and the `settings` key),
+ * `rules`, and `configs.recommended`. `meta.version` is read from this package's own manifest at
+ * load time, never typed by hand, because ESLint's cache keys on the plugin's name and version
+ * and never sees rule code.
+ */
 import type { ESLint, Linter } from 'eslint'
 
-/**
- * The default export is the plugin object (R1): `meta` (with `namespace: '@navecss'`, the
- * documented `@<scope>/eslint-plugin` form — the prefix of every rule id and the `settings`
- * key), `rules`, and `configs.recommended`. `meta.version` is read from this package's own
- * manifest at load time, never typed by hand.
- */
 import { createRequire } from 'node:module'
 
 import { classChannelRule } from './rules/class-channel.ts'
