@@ -72,6 +72,40 @@ function withoutColorLayerDocExpansion(text: string): string {
 }
 
 /**
+ * `tokens.css`'s neutral ramp RCS formula gained an explicit "/ 1" alpha component AFTER this
+ * migration too, for reasons that have nothing to do with it: a build-time hardening fix
+ * pinning the derived colour's own alpha rather than inheriting `--nave-color-tint`'s. Every
+ * occurrence follows the identical `… h)` -> `… h / 1)` shape, so stripping the suffix restores
+ * the pre-addition rendering before the exhaustive delta check below, the same reasoning
+ * `withoutPostMigrationLines` applies to `tokens.js`'s own later addition.
+ */
+function withoutAlphaPinningSuffix(text: string): string {
+  expect(text).toContain(' h / 1)')
+  return text.replaceAll(' h / 1)', ' h)')
+}
+
+/**
+ * The stacking-order (`layer`) domain's `@property` registrations narrowed from `<number>` to
+ * `<integer>` AFTER this migration too, for reasons that have nothing to do with it: a
+ * build-time hardening fix refusing the fractional consumer override `<number>` admitted and
+ * `z-index` (the only property these tokens are meant for) does not. Reverted before the
+ * exhaustive delta check below, the same reasoning applied to the alpha-pinning suffix above.
+ */
+function withoutZIndexSyntaxNarrowing(text: string): string {
+  expect(text).toContain("syntax: '<integer>';")
+  return text.replaceAll("syntax: '<integer>';", "syntax: '<number>';")
+}
+
+/**
+ * `built('tokens.css')`, with every later addition above folded back to its pre-addition
+ * rendering, so the exhaustive delta check below stays about the migration alone.
+ */
+function builtTokensCssBeforeLaterAdditions(): string {
+  const withAdditions = built('tokens.css')
+  return withoutZIndexSyntaxNarrowing(withoutAlphaPinningSuffix(withAdditions))
+}
+
+/**
  * `tokens.d.ts` gained a whole new block AFTER this migration too, for reasons that have
  * nothing to do with it: a type-only `ColorPropertyName` union naming the semantic colour
  * layer's emitted custom-property names (values stay CSS-only). It is appended as a pure
@@ -184,7 +218,7 @@ describe('AC-token-build-41 covers: R41 (the migration changes no rendered value
   it('renders every other token byte-identically to its pre-migration value', () => {
     // The three shadow declarations are this migration's own stated deltas, asserted
     // exhaustively in the scenario below; everything else must be byte-identical.
-    const changed = lineDeltas(fixture('tokens.css'), built('tokens.css'))
+    const changed = lineDeltas(fixture('tokens.css'), builtTokensCssBeforeLaterAdditions())
     expect(changed.every((delta) => delta.before.includes('--nave-shadow-'))).toBe(true)
   })
 })
@@ -223,7 +257,7 @@ describe('AC-token-build-44 covers: R44 (the five specifics, and the EXHAUSTIVE 
   })
 
   it('changes tokens.css at EXACTLY the three shadow declarations and nowhere else', () => {
-    const deltas = lineDeltas(fixture('tokens.css'), built('tokens.css'))
+    const deltas = lineDeltas(fixture('tokens.css'), builtTokensCssBeforeLaterAdditions())
     expect(deltas).toEqual([
       {
         after:

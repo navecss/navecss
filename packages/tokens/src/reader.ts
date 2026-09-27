@@ -28,11 +28,11 @@
 import type { MalformedNode } from './dtcg-malformed.ts'
 import type { DraftShapedNode } from './dtcg-shape.ts'
 
-import { renderTokenValue } from './composite-value.ts'
 import { classifyMalformed, formatUnreadableNodesRefusal } from './dtcg-malformed.ts'
 import { classifyDraftShape, refuseTypeReason } from './dtcg-shape.ts'
 import { DtcgShapeRefusal } from './errors.ts'
-import { refuseBothReferenceForms, resolveTokenPointer } from './json-pointer.ts'
+import { refuseBothReferenceForms } from './json-pointer.ts'
+import { type ResolveContext, resolveValue } from './resolve-value.ts'
 import { nameFromPath } from './token-name.ts'
 
 // `kebabName` moved to `token-name.ts` with the rest of the name computation; re-exported
@@ -49,14 +49,31 @@ export interface FlatToken {
 
 type TokenTree = Record<string, unknown>
 
-interface RawToken {
+/**
+ * Exported for `resolve-value.ts` alone: `resolveValue` walks a `RawToken` it did not itself
+ * parse, so the shape has to be shared rather than duplicated.
+ */
+export interface RawToken {
   path: string[]
   ref?: string
   type: string
   rawValue: unknown
 }
 
-const REF_RE = /^\{([^{}]+)\}$/
+/**
+ * DTCG 2025.10's own reserved, `$`-prefixed metadata keys. A group or token key starting with
+ * `$` that is NOT one of these is either a typo of one, or an attempt to name a token or group
+ * "$something" — the format reserves the whole `$`-prefixed namespace for metadata, so neither
+ * reading is a group to descend into, and both used to vanish silently rather than being named.
+ */
+const RESERVED_METADATA_KEYS = new Set([
+  '$deprecated',
+  '$description',
+  '$extensions',
+  '$ref',
+  '$type',
+  '$value',
+])
 
 // ---------------------------------------------------------------------------
 // Parse — walk the tree, collect raw tokens with their unresolved value.
@@ -85,6 +102,19 @@ function readTokenNode(
 
   const at = path.join('.')
   if (hasValue && hasRef) refuseBothReferenceForms(at)
+
+  // A token node's own $value/$ref settles its value; a sibling non-metadata key beside it is
+  // a CHILD that this return is about to skip traversing entirely. It used to be dropped with
+  // no message at all — silently, since a token node with children is never an error the shape
+  // pass looks for and this function returns before ever reaching the group-traversal loop.
+  const childKeys = Object.keys(node).filter((key) => !key.startsWith('$'))
+  if (childKeys.length > 0) {
+    throw new TypeError(
+      `DTCG 2025.10 reader: "${at}" carries both a $value and child token(s) (${childKeys.join(', ')}) ` +
+        '— a node is either a token (a $value/$ref leaf) or a group (children only), never both; ' +
+        'give the children their own group, separate from this token',
+    )
+  }
 
   const type = typeof node.$type === 'string' ? node.$type : inheritedType
   if (type === undefined) {
@@ -127,7 +157,24 @@ function collectRawTokens(
   // A group. Its own $type, if any, becomes the inherited type for its children.
   const groupType = typeof node.$type === 'string' ? node.$type : inheritedType
   for (const [key, child] of Object.entries(node)) {
-    if (key.startsWith('$')) continue // metadata, never traversed as a group
+    if (key.startsWith('$')) {
+      // A recognised metadata key is legitimately skipped here; anything else starting with
+      // "$" is reserved by the format and was previously dropped, subtree and all, with no
+      // message — indistinguishable from a token that was simply never written.
+      if (RESERVED_METADATA_KEYS.has(key)) continue
+      throw new TypeError(
+        `DTCG 2025.10 reader: "${[...path, key].join('.')}" starts with "$", which DTCG 2025.10 ` +
+          'reserves for metadata — it is not a valid token or group name',
+      )
+    }
+    if (key.includes('.')) {
+      throw new TypeError(
+        `DTCG 2025.10 reader: "${[...path, key].join('.')}" contains a literal "." in "${key}" ` +
+          "— dotted keys are ambiguous against this reader's own dotted alias paths " +
+          '(a group "a" -> "b" -> "c" and a group "a" with a key "b.c" both name the path ' +
+          '"a.b.c"), and the format has no other separator to disambiguate them',
+      )
+    }
     collectRawTokens(child, [...path, key], groupType, out)
   }
 }
@@ -193,75 +240,6 @@ function refuseUnreadableNodes(raw: readonly RawToken[], sourceName: string | un
 }
 
 // ---------------------------------------------------------------------------
-// Resolve — the format's two reference forms, transitive, cycle-checked.
-// ---------------------------------------------------------------------------
-
-interface ResolveContext {
-  byPath: ReadonlyMap<string, RawToken>
-  resolved: Map<string, string | number>
-  visiting: Set<string>
-}
-
-/**
- * Follows one reference (either form) to its target and resolves that, guarding the cycle at
- * the referring key rather than the referenced one, so the message names the node the author
- * wrote.
- */
-function resolveReference(
-  key: string,
-  targetPath: string,
-  context: ResolveContext,
-): string | number {
-  if (context.visiting.has(key)) {
-    throw new TypeError(
-      `DTCG 2025.10 reader: reference cycle detected at "${key}" -> "${targetPath}"`,
-    )
-  }
-  const target = context.byPath.get(targetPath)
-  if (!target) {
-    throw new TypeError(
-      `DTCG 2025.10 reader: "${key}" references unresolved target "${targetPath}"`,
-    )
-  }
-  context.visiting.add(key)
-  const value = resolveValue(target, context)
-  context.visiting.delete(key)
-  return value
-}
-
-/**
- * Resolves one token's value: a `$ref` pointer or a whole-value `{a.b.c}` alias resolves
- * transitively (memoized in `resolved`, cycle-checked via `visiting`); anything else renders
- * straight to its CSS value.
- */
-function resolveValue(token: RawToken, context: ResolveContext): string | number {
-  const key = token.path.join('.')
-  const cached = context.resolved.get(key)
-  if (cached !== undefined) return cached
-
-  let value: string | number
-  if (token.ref !== undefined) {
-    const targetPath = resolveTokenPointer(token.ref, key, (path) => context.byPath.has(path))
-    value = resolveReference(key, targetPath, context)
-  } else if (typeof token.rawValue === 'string' && REF_RE.test(token.rawValue)) {
-    value = resolveReference(key, REF_RE.exec(token.rawValue)![1]!, context)
-  } else if (
-    typeof token.rawValue === 'string' &&
-    (token.rawValue.includes('{') || token.rawValue.includes('}'))
-  ) {
-    throw new TypeError(
-      `DTCG 2025.10 reader: "${key}" embeds a reference inside a larger string ("${token.rawValue}") — ` +
-        'only a whole-value alias (curly braces around one dotted path, nothing else) is supported',
-    )
-  } else {
-    value = renderTokenValue(token.type, token.rawValue, key)
-  }
-
-  context.resolved.set(key, value)
-  return value
-}
-
-// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -282,6 +260,7 @@ export function readTokens(source: unknown, sourceName?: string): FlatToken[] {
     byPath: new Map(raw.map((t) => [t.path.join('.'), t])),
     resolved: new Map<string, string | number>(),
     visiting: new Set<string>(),
+    depth: 0,
   }
 
   return raw.map((token) => ({

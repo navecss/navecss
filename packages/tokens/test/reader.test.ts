@@ -247,6 +247,80 @@ describe('readTokens — reference resolution', () => {
     })
     expect(tokens[0]!.value).toBe(1200)
   })
+
+  it('hard-errors on a $value carrying a semicolon, the same way it already refuses braces', () => {
+    // A raw string $value is spliced straight into `:root { … }` and `@property { … }` blocks
+    // (`formats.ts`). A semicolon lets one declaration become two; refused at the same point the
+    // existing brace guard runs, since both are the identical splice-and-break-out hazard.
+    expect(() =>
+      readTokens({
+        base: { $type: 'color', tinted: { $value: 'red; --nave-injected: 1' } },
+      }),
+    ).toThrow(/carries a ";" or a comment opener/)
+  })
+
+  it('hard-errors on a $value carrying a CSS comment opener, with no brace in sight', () => {
+    expect(() =>
+      readTokens({
+        base: { $type: 'color', tinted: { $value: 'red /* sneaky trailing comment' } },
+      }),
+    ).toThrow(/carries a ";" or a comment opener/)
+  })
+
+  it('refuses a very long, reverse-ordered alias chain with a named error rather than a raw stack overflow', () => {
+    // Reverse-ordered: `a0` (visited, and therefore resolved, FIRST) depends on `a1`, which
+    // depends on `a2`, and so on down to the base case — so nothing is memoized until the WHOLE
+    // chain has been walked once, and every link costs one recursive frame. A chain built the
+    // other way round (each step depending on the one just resolved) never reaches any real
+    // depth, because each step is already cached by the time the next one asks for it.
+    const CHAIN_LENGTH = 5000
+    const root: Record<string, unknown> = {}
+    for (let i = 0; i < CHAIN_LENGTH - 1; i++) {
+      root[`a${i}`] = { $type: 'dimension', $value: `{root.a${i + 1}}` }
+    }
+    root[`a${CHAIN_LENGTH - 1}`] = { $type: 'dimension', $value: dim(4) }
+
+    let caught: unknown
+    try {
+      readTokens({ root })
+    } catch (error) {
+      caught = error
+    }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).not.toMatch(/Maximum call stack size exceeded/)
+    expect((caught as Error).message).toMatch(/alias chain/i)
+  })
+})
+
+describe('readTokens — refuses shapes that would otherwise vanish silently', () => {
+  it('hard-errors on a name starting with "$" that is not a recognised metadata key, rather than dropping its whole subtree', () => {
+    expect(() =>
+      readTokens({
+        a: { $type: 'dimension', $evil: { $value: dim(4) } },
+      }),
+    ).toThrow(/"a\.\$evil".*(?:reserved|metadata)/i)
+  })
+
+  it('hard-errors on a group carrying both its own $value and child tokens, rather than dropping the children', () => {
+    expect(() =>
+      readTokens({
+        a: {
+          $type: 'dimension',
+          b: { $value: dim(4), child: { $value: dim(8) } },
+        },
+      }),
+    ).toThrow(/both a \$value and child/)
+  })
+
+  it('hard-errors on a name containing a literal ".", which would collide with a dotted alias path built from nested groups', () => {
+    expect(() =>
+      readTokens({
+        a: {
+          'b.c': { $type: 'dimension', $value: dim(4) },
+        },
+      }),
+    ).toThrow(/"b\.c".*\./)
+  })
 })
 
 describe('readTokens — composite values', () => {
