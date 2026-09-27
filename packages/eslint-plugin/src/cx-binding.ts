@@ -11,7 +11,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
-export const CORE_CX_SPECIFIER = '@navecss/core/cx'
+const CORE_CX_SPECIFIER = '@navecss/core/cx'
 
 export interface CxBindings {
   /**

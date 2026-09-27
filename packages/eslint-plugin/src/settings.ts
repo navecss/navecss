@@ -6,9 +6,9 @@
  */
 import type { Rule } from 'eslint'
 
-export const NAMESPACE = '@navecss'
+const NAMESPACE = '@navecss'
 
-export const DEFAULT_HELPERS = ['clsx', 'classnames', 'classNames', 'cn']
+const DEFAULT_HELPERS = ['clsx', 'classnames', 'classNames', 'cn']
 
 export interface NaveSettings {
   allow: string[]
@@ -30,7 +30,7 @@ const PATTERN_FLAG_CHARS = new Set(['d', 'i', 'm', 's', 'u', 'v'])
 /**
 Configuration-error text a `settings['@navecss'].allow` entry that cannot compile carries.
  */
-export class NaveSettingsError extends Error {}
+class NaveSettingsError extends Error {}
 
 /**
  * Compiles one `allow` entry. A string beginning with `/` is a pattern, written

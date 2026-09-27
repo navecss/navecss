@@ -57,7 +57,7 @@ export interface AtomPieceFinding extends LiteralPiece {
 /**
 An `&&` directly in a class position: the whole value, or a template slot.
  */
-export interface SlotAndFinding {
+interface SlotAndFinding {
   isWhole: boolean
   kind: 'slot-and'
   node: TSESTree.LogicalExpression
