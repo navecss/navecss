@@ -46,7 +46,7 @@ describe('AC-directive-core-14 — the texts, owned by the core', () => {
     )
   })
 
-  it('appends the & workaround sentence when nested in a group rule', () => {
+  it('appends the & workaround sentence when nested in a group rule, as its own sentence', () => {
     const text = formatDiagnostic({
       code: 'bad-parent',
       offset: 0,
@@ -54,8 +54,9 @@ describe('AC-directive-core-14 — the texts, owned by the core', () => {
       detail: 'nested-group',
     })
 
-    expect(text).toContain('@nave must be the direct child of a CSS rule selector block')
-    expect(text).toContain('& { @nave')
+    expect(text).toBe(
+      '@nave must be the direct child of a CSS rule selector block. A directive here can be written `& { @nave ...; }` inside the group rule instead.',
+    )
   })
 
   it('gives the @keyframes text exactly', () => {

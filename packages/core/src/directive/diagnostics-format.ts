@@ -138,7 +138,7 @@ function formatUnknownAtom(name: string, extend: ExtendMap): string {
 }
 
 const BAD_PARENT_WORKAROUND =
-  ' A directive here can be written `& { @nave ...; }` inside the group rule instead.'
+  '. A directive here can be written `& { @nave ...; }` inside the group rule instead.'
 
 /**
  *
