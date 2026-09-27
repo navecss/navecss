@@ -286,3 +286,125 @@ describe('AC-14 (R5): cx() atom check', () => {
     })
   })
 })
+
+describe('AC-14 (R5): a cx() argument is one class name, read whole', () => {
+  const PRELUDE = `import { cx } from '@navecss/core/cx'\nimport { cx as ncx } from '@navecss/core/cx'`
+
+  it('two atom names in one string, or static text beside a slot, is not an atom', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [
+        { code: `${PRELUDE}\nconst el = <div className={cx(\`flex\`)} />`, languageOptions },
+        { code: `${PRELUDE}\nconst el = <div className={cx(\`\${name}\`)} />`, languageOptions },
+      ],
+      invalid: [
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx('flex block')} />`,
+          languageOptions,
+          errors: [{ message: /^cx\("flex block"\) is not a Nave atom/ }],
+        },
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx(\`flex \${n}\`)} />`,
+          languageOptions,
+          errors: [{ message: /^cx\(`flex \$\{n\}`\) is not a Nave atom/ }],
+        },
+      ],
+    })
+  })
+
+  it('prints the callee as the file names it, and a nave- string names its atom', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `${PRELUDE}\nconst el = <div className={ncx('legacy-card')} />`,
+          languageOptions,
+          errors: [
+            {
+              message:
+                'ncx("legacy-card") is not a Nave atom: a string passed to ncx() must name one. Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: none), and only then cx.raw() with a reason.',
+            },
+          ],
+        },
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx('nave-flex')} />`,
+          languageOptions,
+          errors: [
+            {
+              message:
+                "\"nave-flex\" is a class Nave's own build outputs, not one you write: it is not seen as input. Write the atom instead: @nave flex or cx('flex').",
+            },
+          ],
+        },
+      ],
+    })
+  })
+})
+
+describe('AC-13 (R7): a helper call inside Nave cx() is read through its arguments', () => {
+  const PRELUDE = `import clsx from 'clsx'\nimport { cx } from '@navecss/core/cx'`
+
+  it('cx(clsx(literal)) reports the literal as a class, never under the atom check', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx(clsx(styles.a, on && styles.b))} />`,
+          languageOptions,
+        },
+      ],
+      invalid: [
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx(clsx('legacy-card'))} />`,
+          languageOptions,
+          errors: [{ message: /^"legacy-card" is not a CSS Module class/ }],
+        },
+        {
+          code: `${PRELUDE}\nconst el = <div className={cx(clsx('flex'))} />`,
+          languageOptions,
+          errors: [{ message: /^"flex" is not a CSS Module class.*cx\('flex'\)/ }],
+        },
+      ],
+    })
+  })
+})
+
+describe('AC-09 (R5, R5a): a template anywhere in the value has its slots read', () => {
+  const PRELUDE = `import clsx from 'clsx'\nimport { cx } from '@navecss/core/cx'`
+
+  it('a template in a conditional branch, in a slot, or in a helper argument', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `${PRELUDE}\nconst el = <div className={on ? \`\${cx('legacy-card')}\` : ''} />`,
+          languageOptions,
+          errors: [{ message: /^cx\("legacy-card"\) is not a Nave atom/ }],
+        },
+        {
+          code: `${PRELUDE}\nconst el = <div className={on ? \`\${a && s.x}\` : ''} />`,
+          languageOptions,
+          errors: [{ message: /interpolated into the class list/ }],
+        },
+        {
+          code: `${PRELUDE}\nconst el = <div className={clsx(\`a \${'legacy-card'}\`)} />`,
+          languageOptions,
+          errors: [{ message: /^"a" is not/ }, { message: /^"legacy-card" is not/ }],
+        },
+      ],
+    })
+  })
+})
+
+describe('one report per offending class', () => {
+  it('the same const reached through both branches is reported once', () => {
+    ruleTester.run('class-channel', classChannelRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `const L = 'legacy-card'\nconst el = <div className={on ? L : L} />`,
+          languageOptions,
+          errors: 1,
+        },
+      ],
+    })
+  })
+})

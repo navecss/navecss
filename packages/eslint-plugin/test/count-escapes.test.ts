@@ -53,6 +53,18 @@ describe('AC-17: the counting rule', () => {
           settings,
           errors: [{ messageId: 'escape' }],
         },
+        {
+          code: `${PRELUDE}import clsx from 'clsx'\nconst k = cx.raw(clsx('legacy-card'))`,
+          languageOptions,
+          settings,
+          errors: [{ messageId: 'escape' }],
+        },
+        {
+          code: `${PRELUDE}const k = cx.raw(cx('legacy-card'))`,
+          languageOptions,
+          settings,
+          errors: [{ messageId: 'escape' }],
+        },
       ],
     })
   })
@@ -81,6 +93,12 @@ describe('AC-17: the counting rule', () => {
           settings,
         },
         { code: `${PRELUDE}const el = <div className={cx.raw()} />`, languageOptions, settings },
+        {
+          code: `${PRELUDE}import clsx from 'clsx'\nconst k = cx.raw(clsx(styles.a))`,
+          languageOptions,
+          settings,
+        },
+        { code: `${PRELUDE}const k = cx.raw(cx('flex'))`, languageOptions, settings },
       ],
       invalid: [],
     })

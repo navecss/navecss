@@ -110,25 +110,13 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     })
   })
 
-  it('missing (not misplaced): reason after the call, or above the statement', () => {
+  it('missing (not misplaced): reason above the statement', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
         {
-          code: `${jsxWith("cx.raw('legacy-card')")} /* nave-escape: x */`,
-          languageOptions,
-          settings,
-          errors: [{ messageId: 'missing' }],
-        },
-        {
           code: `${PRELUDE}// nave-escape: x\nconst k = cx.raw('legacy-card')`,
           languageOptions: tsLanguageOptions,
-          settings,
-          errors: [{ messageId: 'missing' }],
-        },
-        {
-          code: jsxWith("cx.raw('legacy-card', // nave-escape: x\n  undefined)"),
-          languageOptions,
           settings,
           errors: [{ messageId: 'missing' }],
         },
@@ -140,12 +128,6 @@ describe('AC-16: cx.raw() reason placement and content', () => {
     ruleTester.run('raw-reason', rawReasonRule, {
       valid: [],
       invalid: [
-        {
-          code: jsxWith("cx.raw(/* x */ /* nave-escape: vendor */ 'legacy-card')"),
-          languageOptions,
-          settings,
-          errors: [{ messageId: 'missing' }],
-        },
         {
           code: jsxWith("cx.raw(/* nave-escape:    */ 'legacy-card')"),
           languageOptions,
@@ -269,6 +251,142 @@ describe('AC-16: cx.raw() reason placement and content', () => {
           errors: [{ messageId: 'missing' }],
         },
       ],
+    })
+  })
+})
+
+describe('AC-16 (R8): a helper or Nave cx() call inside cx.raw() is read through its arguments', () => {
+  const HELPERS = `${PRELUDE}import clsx from 'clsx'\n`
+  const withHelpers = (expr: string): string => `${HELPERS}const el = <div className={${expr}} />`
+
+  it('passes composition through a helper or cx(), and a reason before the helper call', () => {
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [
+        'cx.raw(clsx(styles.a, on && styles.b))',
+        "cx.raw(clsx('app-shell'))",
+        "cx.raw(cx('flex'))",
+        "cx.raw(/* nave-escape: vendor */ clsx('legacy-card'))",
+        'cx.raw(getClass())',
+      ].map((expr) => ({ code: withHelpers(expr), languageOptions, settings })),
+      invalid: [],
+    })
+  })
+
+  it('needs a reason for a literal inside a helper or cx(); one inside the inner call is misplaced', () => {
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [],
+      invalid: [
+        {
+          code: withHelpers("cx.raw(clsx('legacy-card'))"),
+          languageOptions,
+          settings,
+          errors: [{ messageId: 'missing' }],
+        },
+        {
+          code: withHelpers("cx.raw(cx('legacy-card'))"),
+          languageOptions,
+          settings,
+          errors: [{ messageId: 'missing' }],
+        },
+        {
+          code: withHelpers("cx.raw(clsx(/* nave-escape: vendor */ 'legacy-card'))"),
+          languageOptions,
+          settings,
+          errors: [{ messageId: 'misplaced' }],
+        },
+      ],
+    })
+  })
+})
+
+describe('AC-16 (R4): the messages rule 2 prints', () => {
+  it('the missing message quotes the class, names the remedies in order with the reason last, and prints the callee as written', () => {
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `${PRELUDE}const k = ncx.raw('legacy-card')`,
+          languageOptions,
+          settings,
+          errors: [
+            {
+              message:
+                '"legacy-card" in ncx.raw() is class text this project does not declare as its own. Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the project declares as its own (declared: prefix app-), and only then a reason, first inside the parentheses: ncx.raw(/* nave-escape: ... */ \'legacy-card\').',
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('a nave- literal names its atom (R4(e)) before the reason', () => {
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `${PRELUDE}const k = cx.raw('nave-flex')`,
+          languageOptions,
+          settings,
+          errors: [
+            {
+              message:
+                /^"nave-flex" is a class Nave's own build outputs, not one you write: it is not seen as input\. Write the atom instead: @nave flex or cx\('flex'\)\..* only then a reason/,
+            },
+          ],
+        },
+      ],
+    })
+  })
+
+  it('the misplaced message says where the reason goes, printing the call as written', () => {
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [],
+      invalid: [
+        {
+          code: `${PRELUDE}const k = /* nave-escape: x */ ncx.raw('legacy-card')`,
+          languageOptions,
+          settings,
+          errors: [
+            {
+              message:
+                "A nave-escape reason counts only as the first thing inside ncx.raw()'s parentheses, before any argument: ncx.raw(/* nave-escape: ... */ 'legacy-card').",
+            },
+          ],
+        },
+      ],
+    })
+  })
+})
+
+describe("AC-16 (R8): the reason comment's accepted forms and misplaced markers", () => {
+  it('accepts a /** */ reason, a multi-line block reason with leading asterisks, and a Unicode letter', () => {
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [
+        "cx.raw(/** nave-escape: vendor date picker */ 'legacy-card')",
+        "cx.raw(/*\n * nave-escape: vendor date picker\n */ 'legacy-card')",
+        "cx.raw(/**\n * nave-escape: vendor\n * date picker\n */ 'legacy-card')",
+        "cx.raw(/* nave-escape: é */ 'legacy-card')",
+        "cx.raw(/* nave-escape: 日付 */ 'legacy-card')",
+      ].map((expr) => ({ code: jsxWith(expr), languageOptions, settings })),
+      invalid: [],
+    })
+  })
+
+  it('a marker inside the parentheses but not first, or after the call, gets the misplaced message', () => {
+    ruleTester.run('raw-reason', rawReasonRule, {
+      valid: [],
+      invalid: [
+        "cx.raw('legacy-card' /* nave-escape: vendor */)",
+        "cx.raw(styles.a, /* nave-escape: vendor */ 'legacy-card')",
+        "cx.raw(/* x */ /* nave-escape: vendor */ 'legacy-card')",
+        "cx.raw('legacy-card', // nave-escape: x\n)",
+        "cx.raw('legacy-card') /* nave-escape: vendor */",
+      ].map((expr) => ({
+        code: jsxWith(expr),
+        languageOptions,
+        settings,
+        errors: [{ messageId: 'misplaced' }],
+      })),
     })
   })
 })

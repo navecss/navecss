@@ -1,273 +1,298 @@
 /**
- * The walk-and-report half of rule 1 (R5, R5a, R6, R7): given the whole `className`/`class`
- * value (or a template slot within it), finds every literal piece and every nested `cx()`/
- * `cx.raw()`/helper call, and reports what R6/the atom map does not admit. Split from
- * `class-channel.ts`, which owns only the rule's registration and JSX-attribute selection.
+ * The class-channel grammar: given a class-bearing expression (a whole `className` value, a
+ * template slot, a helper argument, or an argument of `cx.raw()`), finds every literal piece an
+ * author wrote and every `&&` placed directly in a class position. Rule 1 reports what this
+ * finds; rule 2 and the counting rule ask whether it finds anything rule 1 would report, so the
+ * three rules can never disagree about the same source.
+ *
+ * The grammar: a string literal; a template literal's static text, and each `${}` slot read as a
+ * class position of its own (wherever the template sits); both branches of a conditional; the
+ * right side of `&&` and both sides of `||`/`??`; both sides of a string `+`; an identifier bound
+ * by a `const`, followed exactly one hop; single-child wrappers (TypeScript's `as`, `satisfies`,
+ * `!`, an optional chain); and calls. A call to Nave's `cx()` has each argument read as one atom
+ * name, whole (the way `cx()` maps it at run time); a call to a class-composition helper, or to a
+ * `cx` that is not Nave's, has each argument read as class text, arrays and object keys included;
+ * `cx.raw()` and any other call contribute nothing.
  */
 import type { TSESTree } from '@typescript-eslint/types'
-import type { JSSyntaxElement, Rule, Scope } from 'eslint'
+import type { Scope, SourceCode } from 'eslint'
 
-import { atomNameForClass, isAtomName } from '../atoms.ts'
 import { type CxBindings, resolveCxCallee } from '../cx-binding.ts'
 import {
-  collectLiteralPieces,
+  collectTemplatePieces,
+  isStringLiteral,
   type LiteralPiece,
   resolveConstHop,
+  splitWhitespace,
   TRANSPARENT_WRAPPER_TYPES,
 } from '../literal-pieces.ts'
-import {
-  cxAtomMessage,
-  isNaveOutputLike,
-  literalClassMessage,
-  naveOutputMessage,
-  renderDeclared,
-} from '../messages.ts'
-import { type CompiledAllowEntry, isDeclared, type NaveSettings } from '../settings.ts'
 
-type Mode = 'class' | 'atom'
 type AnyNode = TSESTree.Node
+
+export interface WalkContext {
+  bindings: CxBindings
+  helpers: string[]
+  sourceCode: SourceCode
+}
+
+/**
+A literal piece read as class text, admitted only by the consumer's declarations.
+ */
+export interface ClassPieceFinding extends LiteralPiece {
+  kind: 'class'
+}
+
+/**
+ * One argument of Nave's `cx()`, which must be an atom name as a whole. `rendered` is the
+ * argument as the message quotes it; `isWhole` is false for static text beside a `${}` slot,
+ * which can never be exactly one atom name.
+ */
+export interface AtomPieceFinding extends LiteralPiece {
+  callee: AnyNode
+  isWhole: boolean
+  kind: 'atom'
+  rendered: string
+}
+
+/**
+An `&&` directly in a class position: the whole value, or a template slot.
+ */
+export interface SlotAndFinding {
+  isWhole: boolean
+  kind: 'slot-and'
+  node: TSESTree.LogicalExpression
+}
+
+export type ClassFinding = AtomPieceFinding | ClassPieceFinding | SlotAndFinding
 
 /**
  * True for a call to a name in the helper list, or to any `cx` that did not resolve to Nave's
  * (the caller has already ruled that out through scope analysis before asking).
  */
-function isHelperCall(callee: AnyNode, helpers: string[]): callee is TSESTree.Identifier {
+function isHelperCall(callee: AnyNode, helpers: string[]): boolean {
   if (callee.type !== 'Identifier') return false
   return helpers.includes(callee.name) || callee.name === 'cx'
 }
 
-export interface CheckState {
-  context: Rule.RuleContext
-  bindings: CxBindings
-  settings: NaveSettings
-  allowEntries: CompiledAllowEntry[]
+/**
+A string literal or expression-free template as one whole `cx()` argument.
+ */
+function wholeAtomPiece(
+  node: AnyNode,
+  text: string,
+  rendered: string,
+  callee: AnyNode,
+): AtomPieceFinding {
+  return { kind: 'atom', node, text, rendered, callee, isWhole: true, truncated: false }
 }
 
 /**
-Reports `message` at `node`, casting through ESLint's own node type.
+ * A template passed to `cx()`: expression-free it is one name; with slots and no static text it
+ * is a pass-through of what the slots hold; with static text beside a slot it is one runtime
+ * string that is never exactly an atom name as written.
  */
-function report(state: CheckState, node: AnyNode, message: string): void {
-  state.context.report({ node: node as unknown as JSSyntaxElement, message })
-}
-
-/**
-Reports one literal piece, in `mode`'s admission rules (R6's declarations, or the atom map).
- */
-function reportPiece(state: CheckState, piece: LiteralPiece, mode: Mode): void {
-  const { node, text, truncated } = piece
-
-  if (mode === 'atom') {
-    if (!isAtomName(text))
-      report(state, node, cxAtomMessage(text, renderDeclared(state.allowEntries)))
-    return
-  }
-
-  if (isNaveOutputLike(text)) {
-    report(state, node, naveOutputMessage(text, atomNameForClass(text)))
-    return
-  }
-
-  if (!isDeclared(text, state.allowEntries, truncated)) {
-    report(state, node, literalClassMessage(text, renderDeclared(state.allowEntries)))
-  }
-}
-
-/**
-Reports every piece in `pieces`.
- */
-function reportPieces(state: CheckState, pieces: LiteralPiece[], mode: Mode): void {
-  for (const piece of pieces) reportPiece(state, piece, mode)
-}
-
-/**
-R5a: a bare `&&` directly as the whole value or a template slot.
- */
-function reportSlotAnd(
-  state: CheckState,
-  node: TSESTree.LogicalExpression,
-  isWhole: boolean,
-): void {
-  const rendered = state.context.sourceCode.getText(node as never)
-  const message = isWhole
-    ? `A falsy condition becomes the whole className: false/null/undefined drop the attribute and 0 renders as the class "0". Use cx.raw(${rendered}) or a ternary ending ": undefined".`
-    : `A falsy condition's own value is interpolated into the class list here (false/undefined/null/0). Use cx.raw(${rendered}) or a ternary ending ": ''".`
-  report(state, node, message)
-}
-
-/**
-Checks each of a Nave `cx()` call's arguments against the atom map, not R6's declarations.
- */
-function checkCxCallArguments(
-  state: CheckState,
-  args: TSESTree.CallExpressionArgument[],
+function atomTemplateFindings(
+  ctx: WalkContext,
+  node: TSESTree.TemplateLiteral,
   scope: Scope.Scope,
-): void {
-  for (const argument of args) {
-    if (argument.type !== 'SpreadElement')
-      reportPieces(state, collectLiteralPieces(argument, scope), 'atom')
+  callee: AnyNode,
+): ClassFinding[] {
+  const rendered = ctx.sourceCode.getText(node as never)
+  if (node.expressions.length === 0) {
+    const text = node.quasis[0]!.value.cooked ?? node.quasis[0]!.value.raw
+    return [wholeAtomPiece(node, text, rendered, callee)]
   }
+  const hasStaticText = node.quasis.some((quasi) => quasi.value.raw.length > 0)
+  if (!hasStaticText) {
+    return node.expressions.flatMap((slot) => positionFindings(ctx, slot, scope, callee))
+  }
+  return [
+    { kind: 'atom', node, text: rendered, rendered, callee, isWhole: false, truncated: false },
+  ]
 }
 
 /**
-Checks each of a helper call's arguments under the widened (array/object-key) grammar.
+A string literal in a class position: its pieces, or (inside `cx()`) one whole name.
  */
-function checkHelperCallArguments(
-  state: CheckState,
-  args: TSESTree.CallExpressionArgument[],
+function stringFindings(
+  ctx: WalkContext,
+  node: TSESTree.StringLiteral,
+  callee: AnyNode | undefined,
+): ClassFinding[] {
+  if (callee) {
+    return [wholeAtomPiece(node, node.value, JSON.stringify(node.value), callee)]
+  }
+  return splitWhitespace(node.value, node, false, false).map((piece) => ({
+    ...piece,
+    kind: 'class',
+  }))
+}
+
+/**
+A template literal in a class position: its static pieces, then each slot as a class position.
+ */
+function templateFindings(
+  ctx: WalkContext,
+  node: TSESTree.TemplateLiteral,
   scope: Scope.Scope,
-): void {
-  for (const argument of args) {
-    if (argument.type !== 'SpreadElement') walkHelperArgument(state, argument, scope)
-  }
-}
-
-/**
- * Dispatches a call encountered in a class-bearing position: a Nave `cx()`, `cx.raw()` (rule
- * 2's territory, passed here), a helper, or an opaque call (passed).
- */
-function dispatchCall(state: CheckState, node: TSESTree.CallExpression, scope: Scope.Scope): void {
-  const resolved = resolveCxCallee(node.callee, state.bindings, scope)
-  if (resolved === 'cx') {
-    checkCxCallArguments(state, node.arguments, scope)
-  } else if (resolved !== 'raw' && isHelperCall(node.callee, state.settings.helpers)) {
-    checkHelperCallArguments(state, node.arguments, scope)
-  }
+  callee: AnyNode | undefined,
+): ClassFinding[] {
+  if (callee) return atomTemplateFindings(ctx, node, scope, callee)
+  const pieces: ClassFinding[] = collectTemplatePieces(node).map((piece) => ({
+    ...piece,
+    kind: 'class',
+  }))
+  return [...pieces, ...node.expressions.flatMap((slot) => slotFindings(ctx, slot, scope))]
 }
 
 /**
 The key of a helper's object-map argument (`{ 'is-open': open }`) is itself a literal class.
  */
-function checkObjectMapKey(state: CheckState, property: TSESTree.ObjectLiteralElement): void {
-  if (property.type !== 'Property' || property.computed) return
+function objectKeyFinding(property: TSESTree.ObjectLiteralElement): ClassFinding[] {
+  if (property.type !== 'Property' || property.computed) return []
   if (property.key.type === 'Identifier') {
-    reportPiece(state, { node: property.key, text: property.key.name, truncated: false }, 'class')
-  } else if (property.key.type === 'Literal' && typeof property.key.value === 'string') {
-    reportPiece(state, { node: property.key, text: property.key.value, truncated: false }, 'class')
+    return [{ kind: 'class', node: property.key, text: property.key.name, truncated: false }]
   }
+  if (isStringLiteral(property.key)) {
+    return [{ kind: 'class', node: property.key, text: property.key.value, truncated: false }]
+  }
+  return []
 }
 
 /**
-Walks a helper-call argument: the class-channel grammar, widened with arrays and object keys.
+A helper-call argument: the class-position grammar, widened with arrays and object keys.
  */
-function walkHelperArgument(state: CheckState, node: AnyNode, scope: Scope.Scope): void {
-  if (node.type === 'ArrayExpression') {
-    for (const element of node.elements) {
-      if (element && element.type !== 'SpreadElement') walkHelperArgument(state, element, scope)
-    }
-    return
-  }
-
-  if (node.type === 'ObjectExpression') {
-    for (const property of node.properties) checkObjectMapKey(state, property)
-    return
-  }
-
-  walkPosition(state, node, scope, 'class')
-}
-
-/**
-Walks any class-bearing expression position: literal pieces, member/identifier pass-throughs, and nested calls.
- */
-function walkPosition(state: CheckState, node: AnyNode, scope: Scope.Scope, mode: Mode): void {
-  if (node.type === 'CallExpression') {
-    dispatchCall(state, node, scope)
-    return
-  }
-
-  reportPieces(state, collectLiteralPieces(node, scope), mode)
-
-  // collectLiteralPieces stops at a nested call (it contributes no piece to the OUTER text), so
-  // separately find any such call and dispatch it — without re-extracting the pieces above.
-  for (const call of findNestedCalls(node, scope)) {
-    dispatchCall(state, call, scope)
-  }
-}
-
-/**
- * Finds every `CallExpression` reachable through the same composition grammar
- * {@link collectLiteralPieces} reads (conditionals, `&&`'s right side, `||`/`??`, string `+`, one
- * const hop, TS wrappers), without extracting any literal text — that half is already done by
- * {@link collectLiteralPieces} itself. Unwraps the single-child productions in a loop, the same
- * shape {@link collectLiteralPieces} uses, so only the genuinely branching productions recurse.
- *
- * One dispatch per grammar production, mirroring {@link collectLiteralPieces}'s own shape.
- */
-// eslint-disable-next-line complexity
-function findNestedCalls(
+function helperArgumentFindings(
+  ctx: WalkContext,
   node: AnyNode,
   scope: Scope.Scope,
-  canHopIdentifier = true,
-): TSESTree.CallExpression[] {
+): ClassFinding[] {
+  if (node.type === 'ArrayExpression') {
+    return node.elements.flatMap((element) =>
+      element && element.type !== 'SpreadElement'
+        ? helperArgumentFindings(ctx, element, scope)
+        : [],
+    )
+  }
+  if (node.type === 'ObjectExpression') {
+    return node.properties.flatMap((property) => objectKeyFinding(property))
+  }
+  return positionFindings(ctx, node, scope, undefined)
+}
+
+/**
+ * A call in a class position: Nave's `cx()` (each argument one atom name), `cx.raw()` (rule 2's
+ * territory, nothing here), a helper (each argument class text), or any other call (opaque).
+ */
+function callFindings(
+  ctx: WalkContext,
+  node: TSESTree.CallExpression,
+  scope: Scope.Scope,
+): ClassFinding[] {
+  const args = node.arguments.filter((argument) => argument.type !== 'SpreadElement')
+  const resolved = resolveCxCallee(node.callee, ctx.bindings, scope)
+  if (resolved === 'cx') {
+    return args.flatMap((argument) => positionFindings(ctx, argument, scope, node.callee))
+  }
+  if (resolved === 'raw' || !isHelperCall(node.callee, ctx.helpers)) return []
+  return args.flatMap((argument) => helperArgumentFindings(ctx, argument, scope))
+}
+
+/**
+ * Every finding reachable from `node` through the grammar in this file's docblock. `callee` is
+ * set while reading an argument of Nave's `cx()` (so a literal there is one atom name) and unset
+ * in a plain class position. Unwraps the single-child productions in a loop, so only the
+ * genuinely branching productions recurse.
+ *
+ * One dispatch per grammar production; splitting it across files would scatter one grammar the
+ * three calling rules must agree on.
+ */
+// eslint-disable-next-line complexity
+function positionFindings(
+  ctx: WalkContext,
+  node: AnyNode,
+  scope: Scope.Scope,
+  callee: AnyNode | undefined,
+): ClassFinding[] {
   let current = node
-  let canHop = canHopIdentifier
+  let currentScope = scope
+  let canHop = true
 
   while (true) {
-    if (current.type === 'CallExpression') return [current]
+    if (isStringLiteral(current)) return stringFindings(ctx, current, callee)
+    if (current.type === 'TemplateLiteral') {
+      return templateFindings(ctx, current, currentScope, callee)
+    }
+    if (current.type === 'CallExpression') return callFindings(ctx, current, currentScope)
 
     if (current.type === 'ConditionalExpression') {
       return [
-        ...findNestedCalls(current.consequent, scope, canHop),
-        ...findNestedCalls(current.alternate, scope, canHop),
+        ...positionFindings(ctx, current.consequent, currentScope, callee),
+        ...positionFindings(ctx, current.alternate, currentScope, callee),
       ]
     }
 
-    if (current.type === 'LogicalExpression') {
-      if (current.operator === '&&') {
-        current = current.right
-        continue
-      }
-      return [
-        ...findNestedCalls(current.left, scope, canHop),
-        ...findNestedCalls(current.right, scope, canHop),
-      ]
+    if (current.type === 'LogicalExpression' && current.operator === '&&') {
+      current = current.right
+      continue
     }
 
-    if (current.type === 'BinaryExpression' && current.operator === '+') {
+    if (
+      current.type === 'LogicalExpression' ||
+      (current.type === 'BinaryExpression' && current.operator === '+')
+    ) {
+      // '||' and '??': both sides are candidates for the value used; '+': both sides are text.
       return [
-        ...findNestedCalls(current.left, scope, canHop),
-        ...findNestedCalls(current.right, scope, canHop),
+        ...positionFindings(ctx, current.left, currentScope, callee),
+        ...positionFindings(ctx, current.right, currentScope, callee),
       ]
     }
 
     if (TRANSPARENT_WRAPPER_TYPES.has(current.type)) {
-      current = (current as TSESTree.TSAsExpression).expression
+      current = (current as TSESTree.ChainExpression).expression
       continue
     }
 
-    if (canHop) {
-      const hop = resolveConstHop(current, scope)
-      if (hop) {
-        current = hop
-        canHop = false
-        continue
-      }
-    }
-
-    return []
+    const hop = canHop ? resolveConstHop(current, currentScope) : undefined
+    if (!hop) return []
+    current = hop.init
+    currentScope = hop.scope
+    canHop = false
   }
 }
 
 /**
-The whole attribute value, or a template slot's expression: R5a fires here, ahead of the walk.
+A template slot (or the whole value): an `&&` directly here is its own finding.
  */
-export function walkTopLevelPosition(
-  state: CheckState,
+function slotFindings(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassFinding[] {
+  if (node.type === 'LogicalExpression' && node.operator === '&&') {
+    return [{ kind: 'slot-and', node, isWhole: false }]
+  }
+  return positionFindings(ctx, node, scope, undefined)
+}
+
+/**
+Every finding in a whole `className`/`class` attribute value.
+ */
+export function collectValueFindings(
+  ctx: WalkContext,
   node: AnyNode,
   scope: Scope.Scope,
-  isWhole: boolean,
-): void {
+): ClassFinding[] {
   if (node.type === 'LogicalExpression' && node.operator === '&&') {
-    reportSlotAnd(state, node, isWhole)
-    return
+    return [{ kind: 'slot-and', node, isWhole: true }]
   }
+  return positionFindings(ctx, node, scope, undefined)
+}
 
-  if (node.type === 'TemplateLiteral') {
-    reportPieces(state, collectLiteralPieces(node, scope), 'class')
-    for (const slot of node.expressions) {
-      walkTopLevelPosition(state, slot, scope, false)
-    }
-    return
-  }
-
-  walkPosition(state, node, scope, 'class')
+/**
+ * Every finding in one argument of a `cx.raw()` call, read exactly as rule 1 reads a class
+ * position (an `&&` here is an argument, not a slot, so it is composition).
+ */
+export function collectArgumentFindings(
+  ctx: WalkContext,
+  node: AnyNode,
+  scope: Scope.Scope,
+): ClassFinding[] {
+  return positionFindings(ctx, node, scope, undefined)
 }

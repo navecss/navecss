@@ -1,10 +1,12 @@
 /**
- * R4: every message quotes the offending construct, lists remedies in the design system's
- * preferred order (a CSS Module class, a Nave atom through `cx()`, a declared class, and last
- * `cx.raw()` with a reason), and never offers a disable comment, a suppression command or a
- * settings key as a remedy.
+ * Every message quotes the offending construct as written, lists remedies in the design
+ * system's preferred order (a CSS Module class, a Nave atom through `cx()`, a declared class, and
+ * last the escape with a reason), and never offers a disable comment, a suppression command or a
+ * settings key as a remedy: its reader, often a coding agent, takes the first remedy that fits.
  */
 import type { CompiledAllowEntry } from './settings.ts'
+
+import { isAtomName } from './atoms.ts'
 
 /**
 Renders the declared `allow` entries for a message, or says none are declared.
@@ -18,33 +20,35 @@ export function renderDeclared(entries: CompiledAllowEntry[]): string {
 }
 
 /**
-The four remedies, in the design system's preferred order, for a plain literal-class report.
+ * The design-system remedies, in order, ahead of the escape the caller names last. When the
+ * class text is itself an atom name, the atom remedy is spelled out (`cx('flex')`).
  */
-export function classRemedies(declared: string): string {
+function preferredRemedies(declared: string, text?: string): string {
+  const atom = text !== undefined && isAtomName(text) ? ` (here cx('${text}'))` : ''
   return (
-    'Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx(), a class the ' +
-    `project declares as its own (${declared}), and only then cx.raw() with a reason.`
+    `Prefer, in order: a CSS Module class (styles.x), a Nave atom through cx()${atom}, a class ` +
+    `the project declares as its own (${declared}), and only then`
   )
 }
 
 /**
- *
+A literal class in a class position that the project does not declare.
  */
 export function literalClassMessage(text: string, declared: string): string {
-  return `"${text}" is not a CSS Module class, a Nave atom, or a class this project declares as its own. ${classRemedies(declared)}`
+  return `"${text}" is not a CSS Module class, a Nave atom, or a class this project declares as its own. ${preferredRemedies(declared, text)} cx.raw() with a reason.`
 }
 
 /**
- *
+An argument of Nave's `cx()` that is not one atom name, with the callee as the file names it.
  */
-export function cxAtomMessage(text: string, declared: string): string {
-  return `cx("${text}") is not a Nave atom: a string passed to cx() must name one. ${classRemedies(declared)}`
+export function cxAtomMessage(callee: string, rendered: string, declared: string): string {
+  return `${callee}(${rendered}) is not a Nave atom: a string passed to ${callee}() must name one. ${preferredRemedies(declared)} cx.raw() with a reason.`
 }
 
 const NAVE_PREFIX = 'nave-'
 
 /**
-R4(e): a literal beginning `nave-`, resolved against core's own atom-to-class map.
+A literal beginning `nave-`, resolved against core's own atom-to-class map.
  */
 export function naveOutputMessage(text: string, atomName: string | undefined): string {
   if (atomName) {
@@ -60,3 +64,19 @@ export function naveOutputMessage(text: string, atomName: string | undefined): s
 }
 
 export const isNaveOutputLike = (text: string): boolean => text.startsWith(NAVE_PREFIX)
+
+/**
+ * The problem half of a `cx.raw()` missing-reason message: what the offending literal is, the
+ * `nave-` explanation when it is one of Nave's output classes, with the callee as written.
+ */
+export function rawProblemText(text: string, callee: string, atomName: string | undefined): string {
+  if (isNaveOutputLike(text)) return naveOutputMessage(text, atomName)
+  return `"${text}" in ${callee}() is class text this project does not declare as its own.`
+}
+
+/**
+The remedy half of a `cx.raw()` missing-reason message: the design system first, the reason last.
+ */
+export function rawRemedyText(declared: string, text: string, reasonForm: string): string {
+  return `${preferredRemedies(declared, text)} a reason, first inside the parentheses: ${reasonForm}.`
+}

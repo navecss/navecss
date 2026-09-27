@@ -8,7 +8,7 @@ import type { TSESTree } from '@typescript-eslint/types'
 import type { Rule } from 'eslint'
 
 import { collectCxBindings, NO_CX_BINDINGS, resolveCxCallee } from '../cx-binding.ts'
-import { requiresReasonForCall } from '../raw-admission.ts'
+import { reportablePiecesInCall } from '../raw-admission.ts'
 import { compileAllow, getNaveSettings } from '../settings.ts'
 
 /**
@@ -92,7 +92,8 @@ export const countEscapesRule: Rule.RuleModule = {
         const call = node as unknown as TSESTree.CallExpression
         const scope = context.sourceCode.getScope(node)
         if (resolveCxCallee(call.callee, bindings, scope) !== 'raw') return
-        if (requiresReasonForCall(call, scope, allowEntries)) {
+        const ctx = { bindings, helpers: settings.helpers, sourceCode: context.sourceCode }
+        if (reportablePiecesInCall(ctx, call, scope, allowEntries).length > 0) {
           context.report({ node, messageId: 'escape' })
         }
       },

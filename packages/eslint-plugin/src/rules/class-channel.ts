@@ -1,17 +1,26 @@
 /**
- * Rule 1, the class channel (R5, R5a, R6, R7): inside a JSX `className`/`class` value, no class
- * text is written as a literal outside `cx.raw()` unless the consumer declared it as theirs, and
- * a string passed to Nave's `cx()` must name a real atom. Helper calls (`clsx`, `classnames`,
- * `cn`, and any `cx` not bound to Nave's) are checked through their arguments, never passed or
- * flagged outright. The walk-and-report logic lives in `class-channel-walk.ts`; this file owns
- * only the JSX-attribute selection and the rule's registration.
+ * Rule 1, the class channel: inside a JSX `className`/`class` value, no class text is written as
+ * a literal outside `cx.raw()` unless the consumer declared it as theirs, and an argument of
+ * Nave's `cx()` must name a real atom. Helper calls (`clsx`, `classnames`, `cn`, and any `cx` not
+ * bound to Nave's) are checked through their arguments, never passed or flagged outright. What
+ * counts as a literal lives in `class-channel-walk.ts`; this file selects the attribute and
+ * words the reports.
  */
 import type { TSESTree } from '@typescript-eslint/types'
 import type { JSSyntaxElement, Rule } from 'eslint'
 
+import { atomNameForClass } from '../atoms.ts'
 import { collectCxBindings, type CxBindings, NO_CX_BINDINGS } from '../cx-binding.ts'
-import { compileAllow, getNaveSettings } from '../settings.ts'
-import { type CheckState, walkTopLevelPosition } from './class-channel-walk.ts'
+import {
+  cxAtomMessage,
+  isNaveOutputLike,
+  literalClassMessage,
+  naveOutputMessage,
+  renderDeclared,
+} from '../messages.ts'
+import { isReportedPiece } from '../raw-admission.ts'
+import { compileAllow, type CompiledAllowEntry, getNaveSettings } from '../settings.ts'
+import { type ClassFinding, collectValueFindings } from './class-channel-walk.ts'
 
 /**
 True for a `className`/`class` JSX attribute (rule 1 reads neither `classNames` nor a slot prop).
@@ -21,6 +30,40 @@ function isClassAttribute(node: TSESTree.JSXAttribute): boolean {
     node.name.type === 'JSXIdentifier' &&
     (node.name.name === 'className' || node.name.name === 'class')
   )
+}
+
+/**
+ * The message for an `&&` directly in a class position, quoting its operands as written: as the
+ * whole value a falsy condition becomes the attribute itself, in a template slot it is
+ * interpolated into the class list.
+ */
+function slotAndMessage(rendered: string, isWhole: boolean): string {
+  return isWhole
+    ? `A falsy condition becomes the whole className: false/null/undefined drop the attribute and 0 renders as the class "0". Use cx.raw(${rendered}) or a ternary ending ": undefined".`
+    : `A falsy condition's own value is interpolated into the class list here (false/undefined/null/0). Use cx.raw(${rendered}) or a ternary ending ": ''".`
+}
+
+/**
+The message rule 1 reports for `finding`, or `undefined` when nothing is reported.
+ */
+function findingMessage(
+  finding: ClassFinding,
+  context: Rule.RuleContext,
+  declared: string,
+  allowEntries: CompiledAllowEntry[],
+): string | undefined {
+  const { sourceCode } = context
+  if (finding.kind === 'slot-and') {
+    return slotAndMessage(sourceCode.getText(finding.node as never), finding.isWhole)
+  }
+  if (!isReportedPiece(finding, allowEntries)) return undefined
+  if (isNaveOutputLike(finding.text)) {
+    return naveOutputMessage(finding.text, atomNameForClass(finding.text))
+  }
+  if (finding.kind === 'atom') {
+    return cxAtomMessage(sourceCode.getText(finding.callee as never), finding.rendered, declared)
+  }
+  return literalClassMessage(finding.text, declared)
 }
 
 export const classChannelRule: Rule.RuleModule = {
@@ -35,6 +78,7 @@ export const classChannelRule: Rule.RuleModule = {
   create(context) {
     const settings = getNaveSettings(context)
     const allowEntries = compileAllow(settings.allow)
+    const declared = renderDeclared(allowEntries)
     let bindings: CxBindings = NO_CX_BINDINGS
 
     return {
@@ -53,9 +97,18 @@ export const classChannelRule: Rule.RuleModule = {
         const expression = value.type === 'JSXExpressionContainer' ? value.expression : value
         if (expression.type === 'JSXEmptyExpression') return
 
-        const state: CheckState = { context, bindings, settings, allowEntries }
+        const ctx = { bindings, helpers: settings.helpers, sourceCode: context.sourceCode }
         const scope = context.sourceCode.getScope(node as never)
-        walkTopLevelPosition(state, expression, scope, true)
+        // One report per offending construct: the same literal reached twice (one `const`
+        // named in both branches of a conditional) is still one class written once.
+        const reported = new Set<string>()
+        for (const finding of collectValueFindings(ctx, expression, scope)) {
+          const message = findingMessage(finding, context, declared, allowEntries)
+          const key = `${finding.node.range.join(':')}|${message}`
+          if (message === undefined || reported.has(key)) continue
+          reported.add(key)
+          context.report({ node: finding.node as unknown as JSSyntaxElement, message })
+        }
       },
     }
   },

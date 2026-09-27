@@ -148,7 +148,7 @@ describe('AC-10: cxModules and cx.raw recognition', () => {
         {
           code: `${ns}const el = <div className={c.cx('legacy-card')} />`,
           languageOptions,
-          errors: [{ message: /is not a Nave atom/ }],
+          errors: [{ message: /^c\.cx\("legacy-card"\) is not a Nave atom/ }],
         },
         {
           code: `${named}const el = <div className={cx?.('legacy-card')} />`,
