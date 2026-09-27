@@ -228,16 +228,37 @@ describe('AC-directive-core-10 — the directive name matches ASCII case-insensi
     },
   )
 
-  // AC-10 also lists `@n\61ve`, `@n\61 ve` and `@\6e ave` (a hex escape inside
-  // the directive name). Not exercised through THIS leg: PostCSS's own
-  // parser splits `name`/`params` on the first non-word character, so
-  // `@n\61ve flex;` parses to `name: "n"`, `params: "\61ve flex"` (silently
-  // wrong) and `@\6e ave flex;` fails PostCSS's own parse outright
-  // ("At-rule without name") before any plugin runs — proven below. Both
-  // forms are exercised, and pass, through expandText()'s first-party
-  // tokenizer (test/directive/expand-text.test.ts), which does not depend on
-  // PostCSS's split. Raised for a feasibility ruling: whether this is a
-  // stated PostCSS-adapter limitation or needs a raw-source reparse.
+  // AC-10 also lists `@n\61ve`, `@n\61 ve` and `@\6e ave` (a hex escape
+  // inside the directive name). `@\6e ave flex;` fails PostCSS's own parse
+  // outright ("At-rule without name") before any plugin runs — proven below,
+  // an expander-only row with no adapter fix possible. The other two DO
+  // reach the plugin: PostCSS's own parser splits `name`/`params` on the
+  // first non-word character, so `@n\61ve flex;` parses to `name: "n"`,
+  // `params: "\61ve flex"` — the escape falls on the far side of a boundary
+  // that only exists in PostCSS's own naive split, not in CSS's. Re-reading
+  // `'@' + name + (raws.afterName ?? '') + params` with the core tokenizer
+  // finds the real directive name across that boundary.
+  it.each([String.raw`.a { @n\61ve flex; }`, String.raw`.a { @n\61 ve flex; }`])(
+    '%s expands to display: flex, even though PostCSS itself splits the escape out of the name',
+    async (css) => {
+      const result = await run(css)
+
+      expect(result).toBe('.a { display: flex; }')
+    },
+  )
+
+  it.each(['.a { @n\\61vex flex; }', '.a { @navex flex; }'])(
+    '%s passes through unchanged, no diagnostic, even with an escape before the boundary',
+    async (css) => {
+      const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(css, {
+        from: undefined,
+      })
+
+      expect(result.warnings()).toHaveLength(0)
+      expect(result.css).toBe(css)
+    },
+  )
+
   it('documents that PostCSS itself, not this plugin, cannot parse a leading-escape directive name', async () => {
     await expect(run(String.raw`.a { @\6e ave flex; }`)).rejects.toThrow(/At-rule without name/)
   })

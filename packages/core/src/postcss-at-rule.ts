@@ -29,12 +29,42 @@ export interface DirectiveContext {
   fold: FoldEntry[]
 }
 
+interface NaveMatch {
+  /**
+  Whether `atRule` is a `@nave` directive — R5(a): case-insensitive on the unescaped value (`@NAVE`, `@n\61ve`). PostCSS's own `.name` keeps escapes literal, and worse: its name/params split is a naive, escape-unaware character scan, so an escape spanning what PostCSS thinks is that boundary (`@n\61ve flex;` splits `"n"` / `"\61ve flex"`) makes it miss a directive whose real, unescaped name is "nave".
+   */
+  readonly isNave: boolean
+  /**
+  The prelude text, as authored, starting right after the directive's real name — identical to `atRule.raws.params?.raw ?? atRule.params` when PostCSS's own split already lands on that boundary (the common case), and only different when an escape crosses it.
+   */
+  readonly prelude: string
+  /**
+  Where `prelude` starts within `'@' + atRule.name + (raws.afterName ?? ' ') + params` — for repositioning a diagnostic's own prelude-relative offset back onto `atRule` (`atRuleErrorIndex`).
+   */
+  readonly preludeStartIndex: number
+}
+
 /**
-The at-keyword's decoded, ASCII-lowercased name — R5(a): case-insensitive on the unescaped value (`@NAVE`, `@n\61ve`). PostCSS's own `.name` keeps escapes literal.
+ * Re-tokenizes `'@' + atRule.name + afterName + params` with the core
+ * tokenizer to find the directive's real name across a boundary PostCSS's
+ * own parser draws in the wrong place whenever an escape spans it.
  */
-function decodedAtRuleName(atRule: PostCSSAtRule): string {
-  const token = tokenize(`@${atRule.name}`)[0]
-  return token?.type === 'at-keyword-token' ? (token.structured?.value as string).toLowerCase() : ''
+function matchNaveAtRule(atRule: PostCSSAtRule): NaveMatch {
+  const afterName = atRule.raws.afterName ?? ' '
+  const paramsRaw = atRule.raws.params?.raw ?? atRule.params
+  const nameBoundary = 1 + atRule.name.length
+  const full = `@${atRule.name}${afterName}${paramsRaw}`
+  const token = tokenize(full)[0]
+  const commonPrelude = { prelude: paramsRaw, preludeStartIndex: nameBoundary + afterName.length }
+  if (token?.type !== 'at-keyword-token') return { isNave: false, ...commonPrelude }
+  const isNave = (token.structured?.value as string).toLowerCase() === 'nave'
+  // The common case: PostCSS's own name already ends exactly where the real
+  // token does, so the prelude PostCSS itself hands out (params, comments
+  // preserved via raws.params.raw) is used unchanged. Only when an escape
+  // pushed the real name past that boundary is the prelude recomputed from
+  // the re-tokenized text instead.
+  if (token.endIndex === nameBoundary) return { isNave, ...commonPrelude }
+  return { isNave, prelude: full.slice(token.endIndex), preludeStartIndex: token.endIndex }
 }
 
 /**
@@ -42,13 +72,11 @@ function decodedAtRuleName(atRule: PostCSSAtRule): string {
  * OWN source text (`@` at index 0): `unknown-atom` and `bad-token` position
  * at their own token inside the prelude (R6 "unknown-atom at the name"), so
  * this adds back everything PostCSS's `index` counts from the `@` that a
- * prelude-relative `diagnostic.offset` does not — the name, and the exact
- * (possibly comment-carrying) text between the name and the prelude.
+ * prelude-relative `diagnostic.offset` does not.
  */
-function atRuleErrorIndex(atRule: PostCSSAtRule, diagnostic: Diagnostic): number | undefined {
+function atRuleErrorIndex(preludeStartIndex: number, diagnostic: Diagnostic): number | undefined {
   if (diagnostic.code !== 'unknown-atom' && diagnostic.code !== 'bad-token') return undefined
-  const afterName = atRule.raws.afterName ?? ' '
-  return 1 + atRule.name.length + afterName.length + diagnostic.offset
+  return preludeStartIndex + diagnostic.offset
 }
 
 /**
@@ -58,7 +86,7 @@ function atRuleErrorIndex(atRule: PostCSSAtRule, diagnostic: Diagnostic): number
  * `ctx.fold` first, so R6's fold covers every directive, not just the one
  * that happened to be walked first (AC-directive-core-16).
  */
-function reportDiagnostic(diagnostic: Diagnostic, ctx: DirectiveContext): void {
+function reportDiagnostic(diagnostic: Diagnostic, ctx: DirectiveContext, preludeStartIndex: number): void {
   const isNestedGroup = diagnostic.code === 'bad-parent' && ctx.atRule.parent?.type !== 'root'
   const text = formatDiagnostic(
     isNestedGroup ? { ...diagnostic, detail: 'nested-group' } : diagnostic,
@@ -66,7 +94,7 @@ function reportDiagnostic(diagnostic: Diagnostic, ctx: DirectiveContext): void {
       extend: ctx.extend,
     },
   )
-  const index = atRuleErrorIndex(ctx.atRule, diagnostic)
+  const index = atRuleErrorIndex(preludeStartIndex, diagnostic)
   if (ctx.onUnknown === 'warn') {
     ctx.atRule.warn(ctx.result, text, index === undefined ? {} : { index })
     return
@@ -147,7 +175,7 @@ interface PlanAtRuleResult {
 /**
 `plan()`'s three facts, answered from the PostCSS AST, plus the call itself (a malformed atom's throw is repositioned onto the at-rule).
  */
-function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap): PlanAtRuleResult {
+function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap, prelude: string): PlanAtRuleResult {
   const parent = atRule.parent
   const isStyleRuleParent = parent?.type === 'rule'
   const isFollowingNestedNodeHere = isStyleRuleParent
@@ -159,7 +187,7 @@ function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap): PlanAtRuleResult 
       isStyleRuleParent,
       parent,
       result: plan(
-        atRule.raws.params?.raw ?? atRule.params,
+        prelude,
         {
           isStyleRuleParent,
           isInsideKeyframes: parent !== undefined && isInsideKeyframes(parent),
@@ -189,14 +217,25 @@ function hasBlock(atRule: PostCSSAtRule): boolean {
  * its diagnostics.
  */
 export function handleAtRule(atRule: PostCSSAtRule, ctx: Omit<DirectiveContext, 'atRule'>): void {
-  if (decodedAtRuleName(atRule) !== 'nave') return
+  const match = matchNaveAtRule(atRule)
+  if (!match.isNave) return
 
   const fullCtx: DirectiveContext = { ...ctx, atRule }
-  const { isStyleRuleParent, parent, result: planResult } = planAtRule(atRule, ctx.extend)
+  const { isStyleRuleParent, parent, result: planResult } = planAtRule(
+    atRule,
+    ctx.extend,
+    match.prelude,
+  )
 
-  for (const diagnostic of planResult.diagnostics) reportDiagnostic(diagnostic, fullCtx)
+  for (const diagnostic of planResult.diagnostics) {
+    reportDiagnostic(diagnostic, fullCtx, match.preludeStartIndex)
+  }
   if (hasBlock(atRule)) {
-    reportDiagnostic({ code: 'has-block', offset: 0, endOffset: atRule.toString().length }, fullCtx)
+    reportDiagnostic(
+      { code: 'has-block', offset: 0, endOffset: atRule.toString().length },
+      fullCtx,
+      match.preludeStartIndex,
+    )
   }
 
   insertDeclarations(atRule, planResult.declarations, planResult.wrapInAmpersand)
