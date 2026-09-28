@@ -20,7 +20,7 @@ import { renderBlock, renderInline } from './expand-text-render.ts'
 import { plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
 
-export interface WalkContext {
+interface WalkContext {
   readonly isStyleRuleParent: boolean
   readonly isInsideKeyframes: boolean
 }
