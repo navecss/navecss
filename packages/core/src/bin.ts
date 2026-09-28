@@ -3,11 +3,9 @@
  * `navecss-core` — a bin whose logic lives entirely behind `check()`.
  * Flags follow `navecss-tokens`' own vocabulary and equals form.
  */
-import { access, constants } from 'node:fs/promises'
 import { parseArgs } from 'node:util'
 
-import { check, type CheckResult } from './directive/check.ts'
-import { listCssFiles } from './directive/list-css-files.ts'
+import { type CheckResult, runCheck as runSourcesCheck } from './directive/check-run.ts'
 
 const USAGE = `Usage:
   navecss-core check --source=<file-or-dir> [--source=<file-or-dir> ...]`
@@ -57,43 +55,13 @@ function printCleanSummary(result: CheckResult, source: readonly string[]): void
 }
 
 /**
- * Every path under `source` that could not be read: `source` itself, when
- * it does not resolve at all (missing, or a --source value with a typo);
- * a subdirectory `listCssFiles` found unreadable while recursing; a
- * resolved file this process cannot open. `check()`'s own returned shape
- * stays `{ status, findings, stylesheetsRead }` and carries none of this,
- * so the bin derives it itself, independently of whatever `check()`
- * decided for the exit status.
- */
-async function unreadablePathsUnder(source: string): Promise<string[]> {
-  let listing
-  try {
-    listing = await listCssFiles(source)
-  } catch {
-    return [source]
-  }
-  const unreadable = [...listing.unreadablePaths]
-  for (const file of listing.files) {
-    try {
-      await access(file, constants.R_OK)
-    } catch {
-      unreadable.push(file)
-    }
-  }
-  return unreadable
-}
-
-/**
-Every unreadable path across every `--source` value, in the order given.
- */
-async function findUnreadableSourcePaths(source: readonly string[]): Promise<string[]> {
-  const perSource = await Promise.all(source.map((one) => unreadablePathsUnder(one)))
-  return perSource.flat()
-}
-
-/**
- * The `check` subcommand: parses `--source=`, runs `check()`, prints its
- * result plus whatever the bin's own pass over `--source` found unreadable.
+ * The `check` subcommand: parses `--source=`, then walks it once — via
+ * `runCheck` (`check-run.ts`), the shared pass this bin and `check()`
+ * both derive their own shape from — printing its result plus every path
+ * that walk could not read at all. `check()`'s own returned shape stays
+ * `{ status, findings, stylesheetsRead }` and carries none of that, so the
+ * bin reads it off `runCheck`'s richer return instead of re-walking
+ * `source` a second time to find it.
  */
 async function runCheck(args: readonly string[]): Promise<number> {
   if (isHelpRequest(args)) {
@@ -111,16 +79,13 @@ async function runCheck(args: readonly string[]): Promise<number> {
     return 2
   }
 
-  const [result, unreadable] = await Promise.all([
-    check({ source }),
-    findUnreadableSourcePaths(source),
-  ])
+  const { result, unreadablePaths } = await runSourcesCheck(source)
   printFindings(result)
   printCleanSummary(result, source)
-  for (const badPath of unreadable) {
+  for (const badPath of unreadablePaths) {
     console.error(`Could not read ${badPath}, so it was not checked.`)
   }
-  if (result.status === 2 && unreadable.length === 0) {
+  if (result.status === 2 && unreadablePaths.length === 0) {
     console.error(`No stylesheet found under ${source.join(', ')}; nothing was checked.`)
   }
   return result.status

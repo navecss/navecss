@@ -24,6 +24,10 @@ interface WalkState {
    */
   readonly reportedRealFiles: Set<string>
   readonly unreadablePaths: string[]
+  /**
+  Every directory's own canonical path already walked, across the WHOLE walk, not only the current branch's ancestors: a mesh of sibling directories each symlinked to every other one reaches the same real directory through many different paths, and without this it is walked again, in full, from each — the branch-local "is this an ancestor of mine" check a loop-safety-only set answers is a different, narrower question than "have I already walked this real directory at all".
+   */
+  readonly visitedDirs: Set<string>
 }
 
 type EntryKind = 'css-file' | 'directory' | 'skip'
@@ -63,13 +67,14 @@ async function entryKind(entry: Dirent, entryPath: string, state: WalkState): Pr
 }
 
 /**
-Recurses into `entryPath` unless its canonical path is already in `seenDirs` (an ancestor, directly or through another symlink — what keeps a loop, `ln -s .. up`, from recursing forever instead of terminating).
+ * Recurses into `entryPath` unless its canonical path has already been
+ * walked anywhere in this run, whether that earlier visit was an ancestor
+ * of this one (an `ln -s .. up` loop) or an unrelated sibling reached
+ * through a different symlink entirely: either way, walking the same real
+ * directory again can only repeat work `reportedRealFiles`/this same check
+ * already made safe to skip.
  */
-async function listSubdirectory(
-  entryPath: string,
-  seenDirs: ReadonlySet<string>,
-  state: WalkState,
-): Promise<string[]> {
+async function listSubdirectory(entryPath: string, state: WalkState): Promise<string[]> {
   let canonicalPath
   try {
     canonicalPath = await realpath(entryPath)
@@ -77,8 +82,9 @@ async function listSubdirectory(
     state.unreadablePaths.push(entryPath)
     return []
   }
-  if (seenDirs.has(canonicalPath)) return []
-  return listDirectory(entryPath, new Set([...seenDirs, canonicalPath]), state)
+  if (state.visitedDirs.has(canonicalPath)) return []
+  state.visitedDirs.add(canonicalPath)
+  return listDirectory(entryPath, state)
 }
 
 /**
@@ -100,11 +106,7 @@ async function cssFileIfNew(entryPath: string, state: WalkState): Promise<string
 /**
 Every `.css` file under `dir`, recursively, following symlinks.
  */
-async function listDirectory(
-  dir: string,
-  seenDirs: ReadonlySet<string>,
-  state: WalkState,
-): Promise<string[]> {
+async function listDirectory(dir: string, state: WalkState): Promise<string[]> {
   let entries
   try {
     entries = await readdir(dir, { withFileTypes: true })
@@ -118,7 +120,7 @@ async function listDirectory(
     const entryPath = path.join(dir, entry.name)
     const kind = await entryKind(entry, entryPath, state)
     if (kind === 'directory') {
-      files.push(...(await listSubdirectory(entryPath, seenDirs, state)))
+      files.push(...(await listSubdirectory(entryPath, state)))
     } else if (kind === 'css-file') {
       const file = await cssFileIfNew(entryPath, state)
       if (file) files.push(file)
@@ -133,8 +135,12 @@ async function listDirectory(
 export async function listCssFiles(source: string): Promise<PathListing> {
   const stats = await stat(source)
   if (!stats.isDirectory()) return { files: [source], unreadablePaths: [] }
-  const state: WalkState = { reportedRealFiles: new Set(), unreadablePaths: [] }
   const canonicalRoot = await realpath(source)
-  const files = await listDirectory(source, new Set([canonicalRoot]), state)
+  const state: WalkState = {
+    reportedRealFiles: new Set(),
+    unreadablePaths: [],
+    visitedDirs: new Set([canonicalRoot]),
+  }
+  const files = await listDirectory(source, state)
   return { files, unreadablePaths: state.unreadablePaths }
 }

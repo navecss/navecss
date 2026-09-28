@@ -254,6 +254,27 @@ describe('a directory --source follows symlinks, loop-safe', () => {
     expect(result.status).toBe(1)
     expect(result.findings).toHaveLength(1)
   })
+
+  it('walks a mesh of sibling directories, each linked to every other, in well under 2 seconds', async () => {
+    const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    for (const name of names) {
+      await mkdir(path.join(ctx.dir, name))
+      await writeFile(path.join(ctx.dir, name, `${name}.css`), '.x{}')
+    }
+    for (const name of names) {
+      const others = names.filter((other) => other !== name)
+      for (const other of others) {
+        await symlink(path.join(ctx.dir, other), path.join(ctx.dir, name, other))
+      }
+    }
+
+    const start = performance.now()
+    const result = await check({ source: [ctx.dir] })
+    expect(performance.now() - start).toBeLessThan(2000)
+
+    expect(result.status).toBe(0)
+    expect(result.stylesheetsRead).toBe(names.length)
+  })
 })
 
 describe('a directory --source reads .css in any ASCII case', () => {

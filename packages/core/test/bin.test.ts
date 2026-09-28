@@ -48,6 +48,18 @@ describe('the bin is a real, spawnable node script', () => {
   })
 })
 
+describe('the bin walks --source once, not once for check and again for its own unreadable-path pass', () => {
+  it('reads its check result and unreadable paths off one shared walk, never listing files a second time', () => {
+    const source = readFileSync(path.resolve(HERE, '..', 'src', 'bin.ts'), 'utf8')
+
+    // `runCheck` (`check-run.ts`) is the one walk; a second, separate call
+    // into the listing layer here would mean the bin is walking --source
+    // twice for one invocation, the exact regression this pins against.
+    expect(source).toContain('check-run.ts')
+    expect(source).not.toContain('list-css-files.ts')
+  })
+})
+
 describe('an unreadable or missing --source path exits 2, naming the path', () => {
   it('names a nonexistent --source path', () => {
     writeFileSync(path.join(ctx.dir, 'c.css'), '.a{}')
