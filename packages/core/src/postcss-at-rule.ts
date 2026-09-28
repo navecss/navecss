@@ -45,13 +45,28 @@ interface NaveMatch {
 }
 
 /**
+ * `atRule.params` as PostCSS's own stringifier would print it: `raws.params`
+ * only when its recorded `value` still matches the live `params` — the same
+ * staleness check PostCSS's own `stringifier` applies before trusting a
+ * `raws` entry. An earlier plugin in the pipeline can reassign `.params`
+ * without touching `.raws.params`, leaving that raw text (comments and all)
+ * stale; reading it unconditionally would resolve a directive against a
+ * prelude no longer authored anywhere in the AST.
+ */
+function currentParams(atRule: PostCSSAtRule): string {
+  const raw = atRule.raws.params
+  if (raw && raw.value === atRule.params) return raw.raw
+  return atRule.params
+}
+
+/**
  * Re-tokenizes `'@' + atRule.name + afterName + params` with the core
  * tokenizer to find the directive's real name across a boundary PostCSS's
  * own parser draws in the wrong place whenever an escape spans it.
  */
 function matchNaveAtRule(atRule: PostCSSAtRule): NaveMatch {
   const afterName = atRule.raws.afterName ?? ' '
-  const paramsRaw = atRule.raws.params?.raw ?? atRule.params
+  const paramsRaw = currentParams(atRule)
   const nameBoundary = 1 + atRule.name.length
   const full = `@${atRule.name}${afterName}${paramsRaw}`
   const token = tokenize(full)[0]

@@ -81,9 +81,10 @@ navePlugin({ extend: './src/design-system/atoms.mjs' })
 
 The path is resolved from the directory the build runs in (`process.cwd()`),
 not from the config file, and it names a file, extension included: a package
-name is not looked up. Node's own `import()` loads the module, with no bundler
-in between, so it has to be a file Node can import, and its default export is
-the atoms object: for the module above, `export default myAtoms`.
+name is not looked up. Node's own `import()` loads it, with no bundler in
+between, so it has to be a JavaScript module or a JSON file, and its default
+export (or, for JSON, its parsed top-level value) is the atoms object: for the
+module above, `export default myAtoms`.
 
 With a path the plugin is async: call `process(css).then(cb)`, not the sync
 `.css` getter. It re-reads the file whenever the file changes, so a dev server

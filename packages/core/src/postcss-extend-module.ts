@@ -39,10 +39,34 @@ export function resolveExtendSpecifier(specifier: string): string {
 }
 
 /**
- * Reads `moduleUrl`'s default export as one run's extend map.
+ * Whether `file`'s extension is `.json`, ASCII case-insensitively: the one
+ * other file type Node's own `import()` loads without a bundler in between,
+ * alongside a JavaScript module.
+ */
+function isJsonPath(file: string): boolean {
+  return path.extname(file).toLowerCase() === '.json'
+}
+
+/**
+ * A variable, not an inline object literal at the `import()` call site, so
+ * a bundler's own downlevel transform for import attributes (which some
+ * versions rewrite from `with` to the older, now Node-incompatible `assert`
+ * keyword) never recognises this as that syntax to rewrite: `import()`'s
+ * second argument is ordinary data to it, opaque past this point.
+ */
+const JSON_MODULE_IMPORT_OPTIONS: ImportCallOptions = { with: { type: 'json' } }
+
+/**
+ * Reads `moduleUrl`'s default export as one run's extend map. A `.json`
+ * path loads as a JSON module (an import attribute Node requires for that
+ * type), whose default export is the parsed top-level value — the web
+ * standard for loading JSON this way, rather than a bespoke `readFile` +
+ * `JSON.parse` path with its own cache-busting and error shape to maintain.
  */
 async function importExtendMap(moduleUrl: string, file: string): Promise<ExtendMap> {
-  const loaded = (await import(moduleUrl)) as { default?: unknown }
+  const loaded = (
+    isJsonPath(file) ? await import(moduleUrl, JSON_MODULE_IMPORT_OPTIONS) : await import(moduleUrl)
+  ) as { default?: unknown }
   const value = loaded.default
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(

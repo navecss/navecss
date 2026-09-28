@@ -5,15 +5,23 @@
  * of scope here — they land once a separate, not-yet-merged change to how
  * Next.js and CommonJS load this package's PostCSS entry point ships.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import postcss from 'postcss'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { navePlugin as NavePlugin } from '../src/postcss.ts'
+
 import { navePlugin } from '../src/postcss.ts'
+
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const SRC = path.resolve(HERE, '..', 'src')
+const PACKAGE_ROOT = path.resolve(HERE, '..')
+const POSTCSS_DIST = path.resolve(PACKAGE_ROOT, 'dist', 'postcss.js')
 
 const PLAIN_ATOMS_FIXTURE = fileURLToPath(
   new URL('./fixtures/extend-specifier/plain-atoms.mjs', import.meta.url),
@@ -93,6 +101,102 @@ describe('AC-directive-core-25 — an extend specifier is a PostCSS dependency, 
 
   it('fails at construction when the specifier is empty and resolves to the current directory', () => {
     expect(() => navePlugin({ extend: '' })).toThrow(/extend/)
+  })
+
+  it('validates a path-form extend module on every load, before any output', async () => {
+    tmp = mkdtempSync(path.join(os.tmpdir(), 'nave-val-'))
+    const f = path.join(tmp, 'atoms.mjs')
+    writeFileSync(
+      f,
+      `export default { evil: { declarations: { color: "red; } body { display: none" } } }\n`,
+    )
+    const plugin = navePlugin({ extend: f })
+    for (let i = 0; i < 2; i++) {
+      await expect(
+        postcss([plugin]).process('.x { @nave evil; }', { from: undefined }),
+      ).rejects.toThrow(/declaration value for "color"/)
+    }
+
+    writeFileSync(f, `export default { ok: { declarations: { color: 'red' } } }\n`)
+    const okResult = await postcss([plugin]).process('.x { @nave ok; }', { from: undefined })
+    expect(okResult.css).toBe('.x { color: red; }')
+
+    writeFileSync(f, `export default { ok: { declarations: { color: 'red;' } } }\n`)
+    await expect(
+      postcss([plugin]).process('.x { @nave ok; }', { from: undefined }),
+    ).rejects.toThrow(/declaration value for "color"/)
+  })
+
+  it('reds under a mutant that skips validation on a path-form load', async () => {
+    const scratch = mkdtempSync(path.join(path.resolve(SRC, '..'), '.nave-extend-load-scratch-'))
+    try {
+      cpSync(SRC, path.join(scratch, 'src'), { recursive: true })
+
+      const postcssPath = path.join(scratch, 'src', 'postcss.ts')
+      const source = readFileSync(postcssPath, 'utf8')
+      const broken = source.replace(
+        'const snapshot = snapshotExtendMap(value)\n            validateExtendAtoms(snapshot)\n            extend = snapshot',
+        'extend = snapshotExtendMap(value)',
+      )
+      expect(broken).not.toBe(source)
+      writeFileSync(postcssPath, broken)
+
+      const { navePlugin: mutantNavePlugin } = (await import(
+        `${pathToFileURL(postcssPath).href}?scratch=${Date.now()}`
+      )) as { navePlugin: typeof NavePlugin }
+
+      tmp = mkdtempSync(path.join(os.tmpdir(), 'nave-val-mutant-'))
+      const f = path.join(tmp, 'atoms.mjs')
+      writeFileSync(
+        f,
+        `export default { evil: { declarations: { color: "red; } body { display: none" } } }\n`,
+      )
+      const plugin = mutantNavePlugin({ extend: f })
+
+      // The mutant skips validation on every load, so an atom that would
+      // otherwise be refused now reaches the generated CSS unrefused.
+      const result = await postcss([plugin]).process('.x { @nave evil; }', { from: undefined })
+      expect(result.css).toContain('display: none')
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('loads a .json path as a JSON module, validated the same as any other map', async () => {
+    tmp = mkdtempSync(path.join(os.tmpdir(), 'nave-json-'))
+    const f = path.join(tmp, 'atoms.json')
+    writeFileSync(f, '{"b":{"declarations":{"color":"red"}}}')
+
+    const result = await postcss([navePlugin({ extend: f })]).process('.x { @nave b; }', {
+      from: undefined,
+    })
+
+    expect(result.css).toBe('.x { color: red; }')
+  })
+
+  it('loads a .json path in a real Node process, not only under the test runner’s own module loader', () => {
+    // Vitest's own module runner auto-parses a `.json` import regardless of
+    // Node's import-attribute rule, so the in-process test above cannot
+    // prove this works outside it — a plain `node --input-type=module`
+    // child process, importing the built dist entry, can.
+    tmp = mkdtempSync(path.join(os.tmpdir(), 'nave-json-child-'))
+    const f = path.join(tmp, 'atoms.json')
+    writeFileSync(f, '{"b":{"declarations":{"color":"red"}}}')
+    const script = [
+      `import { navePlugin } from ${JSON.stringify(pathToFileURL(POSTCSS_DIST).href)}`,
+      `import postcss from 'postcss'`,
+      `const result = await postcss([navePlugin({ extend: ${JSON.stringify(f)} })]).process('.x { @nave b; }', { from: undefined })`,
+      `process.stdout.write(result.css)`,
+    ].join('\n')
+
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: PACKAGE_ROOT,
+      encoding: 'utf8',
+      timeout: 5000,
+    })
+
+    expect(result.stderr).toBe('')
+    expect(result.stdout).toBe('.x { color: red; }')
   })
 
   it('requires the async API once extend is a specifier (the object form stays synchronous)', () => {

@@ -10,6 +10,8 @@ import { describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/postcss.ts'
 
+import type { AtRule } from 'postcss'
+
 import type { AtomDefinition } from '../src/atoms.ts'
 
 const run = async (css: string, options?: Parameters<typeof navePlugin>[0]): Promise<string> => {
@@ -341,6 +343,24 @@ describe('isInsideKeyframes matches "at any depth", not just a direct step', () 
     const css = await run('@supports (display: grid) { .card { @nave flex; } }')
 
     expect(css).toContain('display: flex')
+  })
+})
+
+describe('the prelude reflects an earlier plugin’s rewrite, not a stale raw', () => {
+  it('reads the prelude an earlier plugin rewrote, not the stale raw text', async () => {
+    const rewrite = {
+      postcssPlugin: 'rewrite',
+      AtRule(a: AtRule) {
+        if (a.params.startsWith('nope')) a.params = 'block'
+      },
+    }
+
+    const result = await postcss([rewrite, navePlugin()]).process(
+      '.a { @nave nope /* c */ flex; }',
+      { from: undefined },
+    )
+
+    expect(result.css).toBe('.a { display: block; }')
   })
 })
 
