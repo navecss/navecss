@@ -50,7 +50,7 @@ describe('AC-directive-core-24 — the README-taught check command actually runs
       mkdirSync(path.join(dir, 'dist'))
       writeFileSync(path.join(dir, 'dist', 'a.css'), '.a{color:red}')
 
-      const result = run(dir, flag.replace('dist', 'dist'))
+      const result = run(dir, flag)
 
       expect(result.status).toBe(0)
     } finally {
