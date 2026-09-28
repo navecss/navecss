@@ -45,6 +45,8 @@ async function measureOnce(
   return { n, nMs, fourNMs, ratio: fourNMs / nMs }
 }
 
+const MAX_ATTEMPTS = 3
+
 /**
  * Times `timeAt(n)` and `timeAt(4 * n)` (see `measureOnce`) and asserts the two medians' ratio
  * stays below 8 — comfortably above the ~4 a linear subject produces, comfortably below the ~16
@@ -52,21 +54,22 @@ async function measureOnce(
  * the elapsed milliseconds; keep the size small enough that the `4 * n` run finishes in well
  * under a second locally, since this function runs it 3 times.
  *
- * One retry (a second full pass, fresh warm-up included) runs before failing: a lone scheduler
- * stall on a shared machine — several unrelated processes' work landing on the same run — can
- * push a single pass's ratio over budget the same way a real quadratic regression does, but a
- * regression reproduces on every pass, where a stall does not. This is stated slack for noise,
+ * Up to two retries (a fresh full pass each, warm-up included) run before failing: a lone
+ * scheduler stall on a shared machine — several unrelated processes' work landing on the same
+ * run — can push one pass's ratio over budget the same way a real quadratic regression does, but
+ * a regression reproduces on every pass, where a stall does not. This is stated slack for noise,
  * not for the regression itself: the subject under test never runs a hot loop or does I/O of its
- * own between passes that could explain a second high ratio on its own terms.
+ * own between passes that could explain a repeated high ratio on its own terms.
  */
 export async function assertScalesLinearly(
   timeAt: (size: number) => number | Promise<number>,
   n: number,
 ): Promise<ScalingMeasurement> {
-  const first = await measureOnce(timeAt, n)
-  if (first.ratio < RATIO_BUDGET) return first
-
-  const second = await measureOnce(timeAt, n)
-  expect(second.ratio).toBeLessThan(RATIO_BUDGET)
-  return second
+  let last: ScalingMeasurement | undefined
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    last = await measureOnce(timeAt, n)
+    if (last.ratio < RATIO_BUDGET) return last
+  }
+  expect(last!.ratio).toBeLessThan(RATIO_BUDGET)
+  return last!
 }

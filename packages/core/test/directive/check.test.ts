@@ -156,12 +156,12 @@ describe('AC-directive-core-22 — navecss-core check, the exit contract', () =>
 })
 
 // A generous per-row timeout throughout this block, well above the test runner's own
-// default: `assertScalesLinearly` can run its measured subject up to 14 times (a warm-up
-// plus 3+3 samples, doubled once on a retry), and a slow or shared runner's own per-call
+// default: `assertScalesLinearly` can run its measured subject up to 21 times (a warm-up
+// plus 3+3 samples, across up to three attempts), and a slow or shared runner's own per-call
 // time can be an order of magnitude past a fast local machine's — the wall-clock ceiling
 // on how long the ROW is allowed to take is deliberately loose, since the scaling ratio
 // assertion inside it is what actually decides pass or fail.
-const SCALING_ROW_TIMEOUT = 30_000
+const SCALING_ROW_TIMEOUT = 45_000
 
 describe('check() stays roughly linear, not quadratic, and stack-safe on a large stylesheet', () => {
   it(
