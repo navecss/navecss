@@ -337,7 +337,7 @@ export default defineConfig([
     },
   },
 
-  // ── navecss-core bin (R10, navecss-core check) ──────────────────────────────
+  // ── navecss-core bin (navecss-core check) ───────────────────────────────────
   // Same shape as navecss-tokens' own bin.ts override above: stdout/stderr IS this
   // entry point's whole output channel.
   {
