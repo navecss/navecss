@@ -368,75 +368,107 @@ describe('an unterminated declaration at EOF is given its own semicolon before t
   })
 })
 
+// A generous per-row timeout throughout this block, well above the test runner's own
+// default: `assertScalesLinearly` can run its measured subject up to 14 times (a warm-up
+// plus 3+3 samples, doubled once on a retry), and a slow or shared runner's own per-call
+// time can be an order of magnitude past a fast local machine's — the wall-clock ceiling
+// on how long the ROW is allowed to take is deliberately loose, since the scaling ratio
+// assertion inside it is what actually decides pass or fail.
+const SCALING_ROW_TIMEOUT = 30_000
+
 describe('expandText() stays roughly linear, not quadratic, on a large stylesheet', () => {
-  it('stays roughly linear on a stylesheet with no directive', async () => {
-    await assertScalesLinearly((n) => {
-      const css = '.a { color: red; }\n'.repeat(n)
-      const start = performance.now()
-      expandText(css)
-      return performance.now() - start
-    }, 5000)
-  })
+  it(
+    'stays roughly linear on a stylesheet with no directive',
+    async () => {
+      await assertScalesLinearly((n) => {
+        const css = '.a { color: red; }\n'.repeat(n)
+        const start = performance.now()
+        expandText(css)
+        return performance.now() - start
+      }, 5000)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
 
-  it('stays roughly linear across many directives, each on its own line', async () => {
-    await assertScalesLinearly((n) => {
-      const css = '.a { @nave flex; }\n'.repeat(n)
-      const start = performance.now()
-      expandText(css)
-      return performance.now() - start
-    }, 5000)
-  })
+  it(
+    'stays roughly linear across many directives, each on its own line',
+    async () => {
+      await assertScalesLinearly((n) => {
+        const css = '.a { @nave flex; }\n'.repeat(n)
+        const start = performance.now()
+        expandText(css)
+        return performance.now() - start
+      }, 5000)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
 
-  it('does not overflow the call stack on 20000 levels of nesting', () => {
-    const css = '.a{'.repeat(20_000) + '}'.repeat(20_000)
+  it(
+    'does not overflow the call stack on 20000 levels of nesting',
+    () => {
+      const css = '.a{'.repeat(20_000) + '}'.repeat(20_000)
 
-    expect(() => expandText(css)).not.toThrow()
-  })
-
-  it('stays roughly linear closing levels left open at EOF (none of them closed for real)', async () => {
-    await assertScalesLinearly((n) => {
-      const css = '.a{'.repeat(n)
-      const start = performance.now()
-      expandText(css)
-      return performance.now() - start
-    }, 20_000)
-  })
-
-  it('stays roughly linear closing levels left open at EOF, each one appending its own block, with no RangeError', async () => {
-    // This combines deep nesting, a directive walk and an EOF-closer
-    // computation at every level, so it costs more per level than any one
-    // of those alone (the neighbouring rows above measure each in
-    // isolation) — smaller n than its siblings, and a longer test timeout,
-    // so the 4n run still finishes comfortably under coverage
-    // instrumentation. The scaling assertion, not a wall-clock budget, is
-    // what rules out a quadratic blowup here.
-    await assertScalesLinearly((n) => {
-      const css = '.a{@nave focusRing;'.repeat(n)
-      const start = performance.now()
       expect(() => expandText(css)).not.toThrow()
-      return performance.now() - start
-    }, 1250)
-  }, 20_000)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
 
-  it('stays roughly linear chaining through an incoming source map across many directives', async () => {
-    await assertScalesLinearly((n) => {
-      const css = '.a { @nave flex; }\n'.repeat(n)
-      const lineCount = css.split('\n').length
+  it(
+    'stays roughly linear closing levels left open at EOF (none of them closed for real)',
+    async () => {
+      await assertScalesLinearly((n) => {
+        const css = '.a{'.repeat(n)
+        const start = performance.now()
+        expandText(css)
+        return performance.now() - start
+      }, 20_000)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
 
-      // An identity mapping, one segment per line at column 0: every line
-      // maps to itself in a single source, 'a.css'.
-      const mappings = Array.from({ length: lineCount }, (_, i) =>
-        i === 0
-          ? `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}`
-          : `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(1)}${encodeVLQ(0)}`,
-      ).join(';')
-      const inputSourceMap = { version: 3 as const, sources: ['a.css'], names: [], mappings }
+  it(
+    'stays roughly linear closing levels left open at EOF, each one appending its own block, with no RangeError',
+    async () => {
+      // This combines deep nesting, a directive walk and an EOF-closer
+      // computation at every level, so it costs more per level than any one
+      // of those alone (the neighbouring rows above measure each in
+      // isolation) — a smaller n than its siblings, so the 4n run still
+      // finishes in reasonable time on a slow runner. The scaling
+      // assertion, not a wall-clock budget, is what rules out a quadratic
+      // blowup here.
+      await assertScalesLinearly((n) => {
+        const css = '.a{@nave focusRing;'.repeat(n)
+        const start = performance.now()
+        expect(() => expandText(css)).not.toThrow()
+        return performance.now() - start
+      }, 1250)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
 
-      const start = performance.now()
-      expandText(css, { inputSourceMap })
-      return performance.now() - start
-    }, 5000)
-  })
+  it(
+    'stays roughly linear chaining through an incoming source map across many directives',
+    async () => {
+      await assertScalesLinearly((n) => {
+        const css = '.a { @nave flex; }\n'.repeat(n)
+        const lineCount = css.split('\n').length
+
+        // An identity mapping, one segment per line at column 0: every line
+        // maps to itself in a single source, 'a.css'.
+        const mappings = Array.from({ length: lineCount }, (_, i) =>
+          i === 0
+            ? `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}`
+            : `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(1)}${encodeVLQ(0)}`,
+        ).join(';')
+        const inputSourceMap = { version: 3 as const, sources: ['a.css'], names: [], mappings }
+
+        const start = performance.now()
+        expandText(css, { inputSourceMap })
+        return performance.now() - start
+      }, 5000)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
 })
 
 describe('a closer only closes its own mirror opener inside a custom property value too', () => {

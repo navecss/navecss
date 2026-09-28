@@ -155,43 +155,63 @@ describe('AC-directive-core-22 — navecss-core check, the exit contract', () =>
   })
 })
 
+// A generous per-row timeout throughout this block, well above the test runner's own
+// default: `assertScalesLinearly` can run its measured subject up to 14 times (a warm-up
+// plus 3+3 samples, doubled once on a retry), and a slow or shared runner's own per-call
+// time can be an order of magnitude past a fast local machine's — the wall-clock ceiling
+// on how long the ROW is allowed to take is deliberately loose, since the scaling ratio
+// assertion inside it is what actually decides pass or fail.
+const SCALING_ROW_TIMEOUT = 30_000
+
 describe('check() stays roughly linear, not quadratic, and stack-safe on a large stylesheet', () => {
-  it('stays roughly linear reporting survivors in a single file', async () => {
-    await assertScalesLinearly(async (size) => {
-      const filePath = await writeCss(`a-${size}.css`, '.b{@nave flex}'.repeat(size))
+  it(
+    'stays roughly linear reporting survivors in a single file',
+    async () => {
+      await assertScalesLinearly(async (size) => {
+        const filePath = await writeCss(`a-${size}.css`, '.b{@nave flex}'.repeat(size))
 
-      const start = performance.now()
+        const start = performance.now()
+        const result = await check({ source: [filePath] })
+        const elapsed = performance.now() - start
+
+        expect(result.status).toBe(1)
+        expect(result.findings).toHaveLength(size)
+
+        return elapsed
+      }, 20_000)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
+
+  it(
+    'does not overflow the call stack on 5000 levels of nesting',
+    async () => {
+      const filePath = await writeCss('d.css', '.a{'.repeat(5000) + '}'.repeat(5000))
+
       const result = await check({ source: [filePath] })
-      const elapsed = performance.now() - start
-
-      expect(result.status).toBe(1)
-      expect(result.findings).toHaveLength(size)
-
-      return elapsed
-    }, 20_000)
-  })
-
-  it('does not overflow the call stack on 5000 levels of nesting', async () => {
-    const filePath = await writeCss('d.css', '.a{'.repeat(5000) + '}'.repeat(5000))
-
-    const result = await check({ source: [filePath] })
-
-    expect(result.status).toBe(0)
-  })
-
-  it('stays roughly linear, not quadratic, in nesting depth', async () => {
-    await assertScalesLinearly(async (size) => {
-      const filePath = await writeCss(`e-${size}.css`, '.a{'.repeat(size) + '}'.repeat(size))
-
-      const start = performance.now()
-      const result = await check({ source: [filePath] })
-      const elapsed = performance.now() - start
 
       expect(result.status).toBe(0)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
 
-      return elapsed
-    }, 40_000)
-  })
+  it(
+    'stays roughly linear, not quadratic, in nesting depth',
+    async () => {
+      await assertScalesLinearly(async (size) => {
+        const filePath = await writeCss(`e-${size}.css`, '.a{'.repeat(size) + '}'.repeat(size))
+
+        const start = performance.now()
+        const result = await check({ source: [filePath] })
+        const elapsed = performance.now() - start
+
+        expect(result.status).toBe(0)
+
+        return elapsed
+      }, 40_000)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
 
   it('counts a lone CR and a lone form feed as line breaks, not only LF', async () => {
     const filePath = await writeCss('a.css', '.a{\r}\r.b{@nave flex}')
@@ -274,38 +294,42 @@ describe('a directory --source follows symlinks, loop-safe', () => {
     expect(result.findings).toHaveLength(1)
   })
 
-  it('stays roughly linear walking a mesh of sibling directories, each linked to every other', async () => {
-    // The mesh's own edge count is quadratic in its width (every directory links to every
-    // other), so the scaling assertion is driven off the total directory-entry count rather
-    // than the mesh width directly: doubling the width quadruples the entries, matching the
-    // n-vs-4n comparison `assertScalesLinearly` makes.
-    await assertScalesLinearly(async (totalEntries) => {
-      const width = Math.max(2, Math.round(Math.sqrt(totalEntries)))
-      const dir = await mkdtemp(path.join(tmpdir(), 'nave-check-mesh-'))
-      const names = Array.from({ length: width }, (_, i) => `d${i}`)
-      for (const name of names) {
-        await mkdir(path.join(dir, name))
-        await writeFile(path.join(dir, name, `${name}.css`), '.x{}')
-      }
-      for (const name of names) {
-        const others = names.filter((other) => other !== name)
-        for (const other of others) {
-          await symlink(path.join(dir, other), path.join(dir, name, other))
+  it(
+    'stays roughly linear walking a mesh of sibling directories, each linked to every other',
+    async () => {
+      // The mesh's own edge count is quadratic in its width (every directory links to every
+      // other), so the scaling assertion is driven off the total directory-entry count rather
+      // than the mesh width directly: doubling the width quadruples the entries, matching the
+      // n-vs-4n comparison `assertScalesLinearly` makes.
+      await assertScalesLinearly(async (totalEntries) => {
+        const width = Math.max(2, Math.round(Math.sqrt(totalEntries)))
+        const dir = await mkdtemp(path.join(tmpdir(), 'nave-check-mesh-'))
+        const names = Array.from({ length: width }, (_, i) => `d${i}`)
+        for (const name of names) {
+          await mkdir(path.join(dir, name))
+          await writeFile(path.join(dir, name, `${name}.css`), '.x{}')
         }
-      }
+        for (const name of names) {
+          const others = names.filter((other) => other !== name)
+          for (const other of others) {
+            await symlink(path.join(dir, other), path.join(dir, name, other))
+          }
+        }
 
-      const start = performance.now()
-      const result = await check({ source: [dir] })
-      const elapsed = performance.now() - start
+        const start = performance.now()
+        const result = await check({ source: [dir] })
+        const elapsed = performance.now() - start
 
-      expect(result.status).toBe(0)
-      expect(result.stylesheetsRead).toBe(width)
+        expect(result.status).toBe(0)
+        expect(result.stylesheetsRead).toBe(width)
 
-      await rm(dir, { recursive: true, force: true })
+        await rm(dir, { recursive: true, force: true })
 
-      return elapsed
-    }, 196)
-  })
+        return elapsed
+      }, 196)
+    },
+    SCALING_ROW_TIMEOUT,
+  )
 })
 
 describe('a directory --source reads .css in any ASCII case', () => {
