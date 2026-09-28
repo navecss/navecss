@@ -2,6 +2,7 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 import { expandText } from '../../src/directive/expand-text.ts'
+import { findSurvivors } from '../../src/directive/find-survivors.ts'
 import { tokenize } from '../../src/directive/tokenizer.ts'
 
 /**
@@ -226,5 +227,32 @@ describe('AC-directive-core-25 — expandText() stays fast on a large stylesheet
     const start = performance.now()
     expandText(css)
     expect(performance.now() - start).toBeLessThan(2000)
+  })
+})
+
+describe('a closer only closes its own mirror opener inside a custom property value too', () => {
+  it.each([
+    '.a { --x: (}; @nave flex; }',
+    '.a { --x: [}; @nave flex; }',
+    '.a { --x: (]; @nave flex; }',
+    '.a { --x: f(]; @nave flex; }',
+  ])('%s: left unchanged, the directive buried in the unclosed value', (css) => {
+    expect(expandText(css).css).toBe(css)
+  })
+})
+
+describe('a stray closer that is not an item’s first token is a preserved token, not a terminator', () => {
+  it('keeps a name after a stray "]" in the same directive’s prelude', () => {
+    const { css, diagnostics } = expandText('.a { @nave flex ] grid; }', { onUnknown: 'warn' })
+
+    expect(diagnostics.map((d) => d.code)).toContain('bad-token')
+    expect(norm(css)).toBe(norm('.a { display: flex; display: grid; }'))
+  })
+
+  it('never gives a survivor an empty-string selector when its prelude starts with a stray ")"', () => {
+    const survivors = findSurvivors('.a { @media ) { @nave flex; } }')
+
+    expect(survivors).toHaveLength(1)
+    expect(survivors[0]!.selector).not.toBe('')
   })
 })

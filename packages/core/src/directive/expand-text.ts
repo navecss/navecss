@@ -9,7 +9,13 @@ import type { Position, SourceMap } from './source-map.ts'
  * splices. Every byte outside a directive's span and the inserted text is
  * unchanged.
  */
-import { atKeywordName, isNaveAtKeyword, type Item, readItem } from './block-reader.ts'
+import {
+  atKeywordName,
+  isNaveAtKeyword,
+  type Item,
+  matchBrackets,
+  readItem,
+} from './block-reader.ts'
 import {
   createPositionFinder,
   type ExpandedDiagnostic,
@@ -42,6 +48,7 @@ interface WalkContext {
 The shared, mutable state one `expandText()` call threads through every recursive block walk.
  */
 class Walker {
+  readonly closerFor: Int32Array
   readonly css: string
   readonly diagnostics: Diagnostic[] = []
   readonly edits: Edit[] = []
@@ -58,6 +65,7 @@ class Walker {
   constructor(css: string, options: ExpandTextOptions) {
     this.css = css
     this.tokens = tokenize(css)
+    this.closerFor = matchBrackets(this.tokens)
     this.options = options
     this.findPosition = createPositionFinder(css)
   }
@@ -230,7 +238,7 @@ function walkBlock(w: Walker, bounds: BlockBounds): void {
   let i = skipInert(w.tokens, bounds.start, limit)
 
   while (i < limit) {
-    const item = readItem(w.tokens, i, limit)
+    const item = readItem(w.tokens, i, limit, w.closerFor)
 
     if (item.kind === 'at-rule' && isNaveAtKeyword(w.tokens[item.start]!)) {
       processDirective(w, { item, context, hasNestedNode, frame })

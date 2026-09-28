@@ -17,6 +17,10 @@
  */
 import type { Token } from './tokenizer.ts'
 
+import { CLOSERS, matchedCloseWithin, OPENERS } from './bracket-match.ts'
+
+export { matchBrackets } from './bracket-match.ts'
+
 /**
  * Part of `Item.kind`'s vocabulary; kept exported for a consumer narrowing
  * on it directly, not yet named by any in-tree caller.
@@ -47,9 +51,6 @@ export interface Item {
   readonly preludeEndOffset?: number
 }
 
-const OPENERS = new Set(['(-token', '[-token', 'function-token', '{-token'])
-const CLOSERS = new Set([')-token', ']-token', '}-token'])
-
 interface TrailingBlock {
   readonly openIndex: number
   /**
@@ -65,126 +66,75 @@ interface ScanResult {
 }
 
 /**
-Whether `closerType` is the mirror of `openerType` — the only pairing CSS Syntax 3 lets close a simple block: `)` for `(` or a function's own `(`, `]` for `[`, `}` for `{`.
- */
-function isMirrorCloser(openerType: string, closerType: string): boolean {
-  if (closerType === ')-token') return openerType === '(-token' || openerType === 'function-token'
-  if (closerType === ']-token') return openerType === '[-token'
-  return openerType === '{-token' // closerType === '}-token'
-}
-
-/**
-Mutable state one `scanItem()` call threads through every closer it sees: the open-bracket stack and the current depth.
- */
-interface ScanState {
-  opens: number[]
-  depth: number
-  readonly start: number
-}
-
-/**
-One step of `scanItem()`'s loop over a closer token: the index to resume scanning from, and a `result` when the item ends right here.
- */
-interface CloserStep {
-  readonly nextIndex: number
-  readonly result?: ScanResult
-}
-
-/**
- * Steps `state` over the closer token at `i`. A closer with nothing open at
- * all (depth 0) belongs to the enclosing block UNLESS this is the item's own
- * first token, in which case it is a stray closer with no opener anywhere in
- * `[start, limit)` — consumed as its own one-token invalid item so the walk
- * advances (ceding an EMPTY span back to a caller that re-reads the same
- * token is what used to loop forever). A closer that does not mirror the
- * innermost open bracket closes nothing — CSS Syntax 3's "consume a
- * component value" returns such a token as itself, not a terminator — so
- * it passes through at the same depth, still seeking its own mirror.
- */
-function stepOverCloser(
-  tokens: readonly Token[],
-  state: ScanState,
-  i: number,
-  type: string,
-): CloserStep {
-  if (state.depth === 0) {
-    if (i === state.start) {
-      return { nextIndex: i + 1, result: { end: i + 1, consumedSemicolon: false } }
-    }
-    return { nextIndex: i, result: { end: i, consumedSemicolon: false } }
-  }
-  const openIndex = state.opens.at(-1)!
-  if (!isMirrorCloser(tokens[openIndex]!.type, type)) return { nextIndex: i + 1 }
-  state.opens.pop()
-  state.depth--
-  if (type === '}-token' && state.depth === 0) {
-    return {
-      nextIndex: i + 1,
-      result: {
-        end: i + 1,
-        consumedSemicolon: false,
-        trailingBlock: { openIndex, closeIndex: i },
-      },
-    }
-  }
-  return { nextIndex: i + 1 }
-}
-
-/**
  * Scans one item to its natural end: a top-level `;` (consumed), a
  * top-level `{}` block that closes back to depth 0 (the item ends right
  * there), EOF while still inside a top-level `{}` (the block is unclosed,
- * the item still ends there), or EOF/the enclosing block's own
- * `}` with no block ever opened (neither consumed).
+ * the item still ends there), or EOF/the enclosing block's own `}` with no
+ * block ever opened (neither consumed). Every bracket opened along the way
+ * — however deeply anything nests inside it — is skipped in one jump to
+ * its own precomputed match (`matchBrackets`), rather than stepped through
+ * token by token: what closes it was already found, once, for the whole
+ * document. A closer reached with nothing open — CSS Syntax 3's "consume a
+ * component value" returns such a token as itself, not a terminator — is
+ * preserved as an ordinary item token and scanning continues, UNLESS it is
+ * this scan's own first token, in which case it is consumed as its own
+ * one-token invalid item so the walk always advances (ceding an EMPTY span
+ * back to a caller that re-reads the same token is what used to loop
+ * forever).
  */
-function scanItem(tokens: readonly Token[], start: number, limit: number): ScanResult {
-  const state: ScanState = { opens: [], depth: 0, start }
+function scanItem(
+  tokens: readonly Token[],
+  start: number,
+  limit: number,
+  closerFor: Int32Array,
+): ScanResult {
   let i = start
   while (i < limit) {
     const type = tokens[i]!.type
     if (OPENERS.has(type)) {
-      state.opens.push(i)
-      state.depth++
-      i++
+      const closeIndex = matchedCloseWithin(closerFor, i, limit)
+      if (type === '{-token') {
+        return {
+          end: closeIndex === undefined ? limit : closeIndex + 1,
+          consumedSemicolon: false,
+          trailingBlock: { openIndex: i, closeIndex },
+        }
+      }
+      i = closeIndex === undefined ? limit : closeIndex + 1
       continue
     }
     if (CLOSERS.has(type)) {
-      const step = stepOverCloser(tokens, state, i, type)
-      if (step.result) return step.result
-      i = step.nextIndex
+      if (i === start) return { end: i + 1, consumedSemicolon: false }
+      i++
       continue
     }
-    if (type === 'semicolon-token' && state.depth === 0) {
-      return { end: i + 1, consumedSemicolon: true }
-    }
+    if (type === 'semicolon-token') return { end: i + 1, consumedSemicolon: true }
     i++
-  }
-  if (state.opens.length > 0 && tokens[state.opens[0]!]!.type === '{-token') {
-    return {
-      end: i,
-      consumedSemicolon: false,
-      trailingBlock: { openIndex: state.opens[0]!, closeIndex: undefined },
-    }
   }
   return { end: i, consumedSemicolon: false }
 }
 
 /**
-Like `scanItem`, but never treats a `{}` as a trailing block: a custom property's value is opaque token soup.
+ * Like `scanItem`, but never treats a `{}` as a trailing block (a custom
+ * property's value is opaque token soup) and never treats a stray closer
+ * as anything but preserved content: the only way out is a top-level `;`
+ * or `limit` itself.
  */
-function scanCustomPropertyValue(tokens: readonly Token[], start: number, limit: number): number {
-  let depth = 0
+function scanCustomPropertyValue(
+  tokens: readonly Token[],
+  start: number,
+  limit: number,
+  closerFor: Int32Array,
+): number {
   let i = start
   while (i < limit) {
     const type = tokens[i]!.type
     if (OPENERS.has(type)) {
-      depth++
-    } else if (CLOSERS.has(type)) {
-      if (depth === 0) return i
-      depth--
-    } else if (depth === 0 && type === 'semicolon-token') {
-      return i + 1
+      const closeIndex = matchedCloseWithin(closerFor, i, limit)
+      i = closeIndex === undefined ? limit : closeIndex + 1
+      continue
     }
+    if (type === 'semicolon-token') return i + 1
     i++
   }
   return i
@@ -271,25 +221,33 @@ function toRuleOrInvalidItem(start: number, scan: ScanResult): Item {
 
 /**
  * The next item starting at `start` (skip whitespace/comments before
- * calling), within `[start, limit)`.
+ * calling), within `[start, limit)`. `closerFor` is `matchBrackets(tokens)`
+ * — computed once for the whole token stream by the caller, not once per
+ * item, so a deeply nested document does not have each item re-discover
+ * where the brackets it opens close.
  */
-export function readItem(tokens: readonly Token[], start: number, limit: number): Item {
+export function readItem(
+  tokens: readonly Token[],
+  start: number,
+  limit: number,
+  closerFor: Int32Array,
+): Item {
   const first = tokens[start]!
 
   if (first.type === 'at-keyword-token') {
-    return toAtRuleItem(tokens, start, scanItem(tokens, start + 1, limit))
+    return toAtRuleItem(tokens, start, scanItem(tokens, start + 1, limit, closerFor))
   }
 
   if (first.type === 'ident-token' && isColonSoonAfter(tokens, start + 1, limit)) {
     if (isCustomPropertyName(first)) {
-      return toDeclarationItem(start, scanCustomPropertyValue(tokens, start + 1, limit))
+      return toDeclarationItem(start, scanCustomPropertyValue(tokens, start + 1, limit, closerFor))
     }
-    const scan = scanItem(tokens, start + 1, limit)
+    const scan = scanItem(tokens, start + 1, limit, closerFor)
     if (!scan.trailingBlock) return toDeclarationItem(start, scan.end)
     return toRuleOrInvalidItem(start, scan)
   }
 
-  return toRuleOrInvalidItem(start, scanItem(tokens, start, limit))
+  return toRuleOrInvalidItem(start, scanItem(tokens, start, limit, closerFor))
 }
 
 /**

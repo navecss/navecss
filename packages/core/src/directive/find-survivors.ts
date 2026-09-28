@@ -6,7 +6,7 @@
  * inside a value is not a directive there, but IS a bug if it reaches
  * built CSS unexpanded.
  */
-import { isNaveAtKeyword, type Item, readItem } from './block-reader.ts'
+import { isNaveAtKeyword, type Item, matchBrackets, readItem } from './block-reader.ts'
 import { type Token, tokenize } from './tokenizer.ts'
 
 export interface Survivor {
@@ -53,6 +53,7 @@ function skipInert(tokens: readonly Token[], i: number, limit: number): number {
 The shared, read-only state one `findSurvivors()` call threads through every block frame its walk visits.
  */
 class Scan {
+  readonly closerFor: Int32Array
   readonly css: string
   readonly survivors: Survivor[] = []
   readonly tokens: readonly Token[]
@@ -60,6 +61,7 @@ class Scan {
   constructor(css: string) {
     this.css = css
     this.tokens = tokenize(css)
+    this.closerFor = matchBrackets(this.tokens)
   }
 }
 
@@ -167,7 +169,7 @@ function walkBlock(scan: Scan, start: number, limit: number, selector: string | 
       stack.pop()
       continue
     }
-    const item = readItem(scan.tokens, frame.i, frame.limit)
+    const item = readItem(scan.tokens, frame.i, frame.limit, scan.closerFor)
     frame.i = skipInert(scan.tokens, item.end, frame.limit)
     const child = visitItem(scan, item, frame.selector)
     if (child) stack.push(child)

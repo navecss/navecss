@@ -174,6 +174,16 @@ describe('AC-directive-core-25 — check() stays fast and robust on a large styl
     expect(result.status).toBe(0)
   })
 
+  it('stays linear, not quadratic, in nesting depth: 20000 levels in under 2 seconds', async () => {
+    const filePath = await writeCss('e.css', '.a{'.repeat(20_000) + '}'.repeat(20_000))
+
+    const start = performance.now()
+    const result = await check({ source: [filePath] })
+    expect(performance.now() - start).toBeLessThan(2000)
+
+    expect(result.status).toBe(0)
+  })
+
   it('counts a lone CR and a lone form feed as line breaks, not only LF', async () => {
     const filePath = await writeCss('a.css', '.a{\r}\r.b{@nave flex}')
 
