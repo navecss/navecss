@@ -684,6 +684,40 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
     expect(() => navePlugin({ extend })).toThrow(/declaration value/)
   })
 
+  it('refuses an extend atom the construction-time validation never saw', async () => {
+    const bad = 'red; } body { display: none'
+    const hidden = {} as Record<string, AtomDefinition>
+    Object.defineProperty(hidden, 'evil', {
+      value: { declarations: { color: bad } },
+      enumerable: false,
+    })
+    await expect(run('.x { @nave evil; }', { extend: hidden })).rejects.toThrow(
+      /unknown atom "evil"/,
+    )
+
+    const late: Record<string, AtomDefinition> = {}
+    const plugin = navePlugin({ extend: late })
+    late.evil = { declarations: { color: bad } }
+    await expect(
+      postcss([plugin]).process('.x { @nave evil; }', { from: undefined }),
+    ).rejects.toThrow(/unknown atom "evil"/)
+  })
+
+  it('refuses an extend atom reachable only through a Proxy whose ownKeys hides it', async () => {
+    const bad = 'red; } body { display: none'
+    const proxy = new Proxy(
+      {},
+      {
+        ownKeys: () => [],
+        get: (_target, prop) => (prop === 'evil' ? { declarations: { color: bad } } : undefined),
+      },
+    ) as Record<string, AtomDefinition>
+
+    await expect(run('.x { @nave evil; }', { extend: proxy })).rejects.toThrow(
+      /unknown atom "evil"/,
+    )
+  })
+
   it('never validates the built-in atom map, only consumer-supplied extend entries', async () => {
     // A built-in atom's own declarations never carry these characters, so this
     // is just confirming the check is scoped to `extend` and does not walk `atoms`

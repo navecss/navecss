@@ -121,6 +121,18 @@ describe('an unreadable or missing --source path exits 2, naming the path', () =
   )
 })
 
+describe('an empty --source value is a usage error, not an unreadable path', () => {
+  it('exits 2 with the usage text, never "Could not read , so..."', () => {
+    writeFileSync(path.join(ctx.dir, 'c.css'), '.a{}')
+
+    const result = run(ctx.dir, '--source=')
+
+    expect(result.status).toBe(2)
+    expect(result.out).toContain('Usage:')
+    expect(result.out).not.toContain('Could not read ,')
+  })
+})
+
 describe('the pass line names the source it read, not a placeholder', () => {
   it('states the count and the given --source path together', () => {
     mkdirSync(path.join(ctx.dir, 'dist'))

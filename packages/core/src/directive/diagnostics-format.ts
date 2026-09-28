@@ -84,16 +84,23 @@ function groupByDistance(
  * that normalises to exactly one candidate, and that candidate is a
  * built-in atom (the only ones with a class at all — an extend atom's
  * sentence would either be wrong, a shadowed built-in's stale class, or
- * print "undefined").
+ * print "undefined"). An extend atom that shadows a built-in name owns the
+ * candidate here (`vocabulary` lists the extend definition, not the
+ * built-in one, once shadowed), so the sentence is about a class that
+ * atom no longer has, even though the name is still in `atomClassMap`.
  */
 function hasCamelCaseNote(
   typed: string,
   candidates: readonly string[],
   minDistance: number,
+  extend: ExtendMap,
 ): boolean {
   if (minDistance !== 0 || candidates.length !== 1) return false
   if (!typed.includes('-')) return false
-  return Object.hasOwn(atomClassMap, candidates[0]!)
+  const candidate = candidates[0]!
+  const shadow = extend[candidate]
+  if (shadow) return false
+  return Object.hasOwn(atomClassMap, candidate)
 }
 
 /**
@@ -107,7 +114,7 @@ function findHint(typed: string, extend: ExtendMap): Hint | undefined {
   const candidates = byDistance.get(minDistance) ?? []
   if (candidates.length === 0) return undefined
 
-  return { candidates, camelCaseNote: hasCamelCaseNote(typed, candidates, minDistance) }
+  return { candidates, camelCaseNote: hasCamelCaseNote(typed, candidates, minDistance, extend) }
 }
 
 /**

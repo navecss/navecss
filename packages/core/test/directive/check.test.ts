@@ -255,3 +255,50 @@ describe('a directory --source follows symlinks, loop-safe', () => {
     expect(result.findings).toHaveLength(1)
   })
 })
+
+describe('a directory --source reads .css in any ASCII case', () => {
+  it('finds a directive in a file whose extension is uppercase', async () => {
+    const distDir = path.join(ctx.dir, 'dist')
+    await mkdir(distDir)
+    await writeFile(path.join(distDir, 'a.css'), '.a{}')
+    await writeFile(path.join(distDir, 'b.CSS'), '.a{@nave flex}')
+
+    const result = await check({ source: [distDir] })
+
+    expect(result.status).toBe(1)
+    expect(result.findings).toHaveLength(1)
+  })
+
+  it('exits 0, not 2, for a directory holding only a mixed-case extension', async () => {
+    const distDir = path.join(ctx.dir, 'dist')
+    await mkdir(distDir)
+    await writeFile(path.join(distDir, 'b.Css'), '.a{}')
+
+    const result = await check({ source: [distDir] })
+
+    expect(result.status).toBe(0)
+  })
+})
+
+describe('a dangling symlink is unreadable only when its name would have been read', () => {
+  it('ignores a dangling symlink whose name does not end in .css', async () => {
+    const distDir = path.join(ctx.dir, 'dist')
+    await mkdir(distDir)
+    await symlink(path.join(distDir, 'nowhere'), path.join(distDir, 'x.map'))
+    await writeFile(path.join(distDir, 'a.css'), '.a{}')
+
+    const result = await check({ source: [distDir] })
+
+    expect(result.status).toBe(0)
+  })
+
+  it('reports a dangling .css symlink as unreadable, naming it', async () => {
+    const distDir = path.join(ctx.dir, 'dist')
+    await mkdir(distDir)
+    await symlink(path.join(distDir, 'nowhere'), path.join(distDir, 'y.css'))
+
+    const result = await check({ source: [distDir] })
+
+    expect(result.status).toBe(2)
+  })
+})

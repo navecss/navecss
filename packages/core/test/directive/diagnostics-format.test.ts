@@ -141,6 +141,16 @@ describe('AC-directive-core-15 — the hint rule, boundaries', () => {
     expect(text).not.toContain('undefined')
   })
 
+  it('omits the camelCase sentence when the hinted atom is an extend atom shadowing a built-in', () => {
+    const text = formatDiagnostic(
+      { code: 'unknown-atom', name: 'sr-only', offset: 0, endOffset: 0 },
+      { extend: { srOnly: { declarations: { color: 'red' } } } },
+    )
+
+    expect(text).toContain('Did you mean "srOnly"?')
+    expect(text).not.toContain('camelCase')
+  })
+
   it('does not add the camelCase sentence for a non-hyphenated input', () => {
     const text = formatDiagnostic({
       code: 'unknown-atom',

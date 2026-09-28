@@ -29,25 +29,36 @@ interface WalkState {
 type EntryKind = 'css-file' | 'directory' | 'skip'
 
 /**
+ * ASCII case-insensitively `.css`: `entry.name`'s extension read the same
+ * way a stylesheet named `.CSS` or `.Css` is read as one.
+ */
+function hasCssExtension(name: string): boolean {
+  return path.extname(name).toLowerCase() === '.css'
+}
+
+/**
  * What `entryPath` names, following a symlink to find out. A symlink's own
  * Dirent never reports `isDirectory()`/`isFile()` true (it reflects the
- * link itself, not what it points at); an unreadable symlink target is
- * reported into `state.unreadablePaths` and treated as `'skip'`.
+ * link itself, not what it points at). A dangling symlink is reported into
+ * `state.unreadablePaths` only when its own name would have been read as a
+ * stylesheet (ASCII case-insensitively `.css`) — any other dangling link is
+ * exactly as irrelevant to this walk as a dangling link to a `.txt` file
+ * would be, and is skipped without a finding.
  */
 async function entryKind(entry: Dirent, entryPath: string, state: WalkState): Promise<EntryKind> {
   if (entry.isDirectory()) return 'directory'
-  if (entry.isFile()) return path.extname(entry.name) === '.css' ? 'css-file' : 'skip'
+  if (entry.isFile()) return hasCssExtension(entry.name) ? 'css-file' : 'skip'
   if (!entry.isSymbolicLink()) return 'skip'
 
   let targetStats
   try {
     targetStats = await stat(entryPath)
   } catch {
-    state.unreadablePaths.push(entryPath)
+    if (hasCssExtension(entry.name)) state.unreadablePaths.push(entryPath)
     return 'skip'
   }
   if (targetStats.isDirectory()) return 'directory'
-  if (targetStats.isFile()) return path.extname(entry.name) === '.css' ? 'css-file' : 'skip'
+  if (targetStats.isFile()) return hasCssExtension(entry.name) ? 'css-file' : 'skip'
   return 'skip'
 }
 

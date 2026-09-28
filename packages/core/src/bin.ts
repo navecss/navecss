@@ -102,7 +102,11 @@ async function runCheck(args: readonly string[]): Promise<number> {
   }
 
   const source = parseSourceArgs(args)
-  if (!source || source.length === 0) {
+  // An empty --source value (`--source=`) is a usage error, the same as
+  // giving no --source at all: it never names a path, so treating it as one
+  // only produces a nonsensical "Could not read , so..." message instead of
+  // pointing at the actual mistake.
+  if (!source || source.length === 0 || source.includes('')) {
     console.error(`check requires at least one --source=<path>.\n${USAGE}`)
     return 2
   }

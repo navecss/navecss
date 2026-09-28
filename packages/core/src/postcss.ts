@@ -86,6 +86,18 @@ export interface NavePluginOptions {
   onUnknown?: 'warn' | 'error' | 'ignore'
 }
 
+/**
+ * A frozen-in-time copy of `map`'s own enumerable string-keyed entries:
+ * validation and lookup both read only this, never the caller's own object,
+ * so a key added, hidden (non-enumerable) or answered only through a Proxy
+ * trap after this snapshot is taken can never reach a directive's output —
+ * `Object.entries` is what a live `Object.hasOwn`/`[name]` lookup on the
+ * original object would not have refused the same way.
+ */
+function snapshotExtendMap(map: ExtendMap): ExtendMap {
+  return Object.fromEntries(Object.entries(map))
+}
+
 export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
   const { onUnknown = 'error', extend: extendOption } = options
   // A string `extend` resolves to an absolute path at construction, so
@@ -93,7 +105,8 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
   // on the first stylesheet.
   const extendFile =
     typeof extendOption === 'string' ? resolveExtendSpecifier(extendOption) : undefined
-  const staticExtend: ExtendMap = typeof extendOption === 'object' ? extendOption : {}
+  const staticExtend: ExtendMap =
+    typeof extendOption === 'object' ? snapshotExtendMap(extendOption) : {}
   // The object form is trusted, consumer-authored code that can splice raw
   // strings into generated CSS: validate it once, at construction, same as
   // before this option grew a second (module-specifier) shape. The
@@ -128,14 +141,16 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
             parent: result.opts.from,
           })
           return applyExtendModule(extendFile, loadCache, (value) => {
-            // Validated after every load, not once at construction: a
-            // specifier's default export can change on every rebuild,
-            // and each one is trusted, consumer-authored code the same way
-            // the object form is. Runs before `extend` is assigned, so a
-            // bad edit fails this run rather than splicing into generated
-            // CSS first.
-            validateExtendAtoms(value)
-            extend = value
+            // Snapshotted and validated after every load, not once at
+            // construction: a specifier's default export can change on
+            // every rebuild, and each one is trusted, consumer-authored
+            // code the same way the object form is. Runs before `extend`
+            // is assigned, so a bad edit fails this run rather than
+            // splicing into generated CSS first, and only the snapshot —
+            // never the loaded module's own object — is kept for lookups.
+            const snapshot = snapshotExtendMap(value)
+            validateExtendAtoms(snapshot)
+            extend = snapshot
           })
         },
 
