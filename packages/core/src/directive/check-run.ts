@@ -11,7 +11,7 @@ import { readFile } from 'node:fs/promises'
 
 import { createPositionFinder } from './expand-text-diagnostics.ts'
 import { findSurvivors } from './find-survivors.ts'
-import { listCssFiles, type PathListing } from './list-css-files.ts'
+import { listCssFiles, NotAStylesheetPathError, type PathListing } from './list-css-files.ts'
 
 export interface CheckOptions {
   readonly source: readonly string[]
@@ -37,6 +37,10 @@ export interface CheckRun {
   Every path this run could not read at all: a `--source` value itself, a subdirectory found unreadable while recursing, or a listed file that failed to read — in that order, per source, in the order `options.source` gave them.
    */
   readonly unreadablePaths: readonly string[]
+  /**
+  Every `--source` value naming something that is neither a directory nor a regular file (a FIFO, socket or device), refused before any read was attempted.
+   */
+  readonly notStylesheetPaths: readonly string[]
 }
 
 /**
@@ -75,14 +79,20 @@ async function wasFileRead(file: string, findings: Finding[]): Promise<boolean> 
   return true
 }
 
+type SourceOutcome =
+  | { readonly kind: 'listing'; readonly listing: PathListing }
+  | { readonly kind: 'unreadable' }
+  | { readonly kind: 'not-a-stylesheet' }
+
 /**
-A single `--source` entry's files, or `undefined` when the path could not be read at all.
+A single `--source` entry's files, or why it produced none: unreadable (could not be statted or listed at all) or not a stylesheet file (a FIFO, socket or device, refused before any read was attempted).
  */
-async function sourceFiles(source: string): Promise<PathListing | undefined> {
+async function sourceOutcome(source: string): Promise<SourceOutcome> {
   try {
-    return await listCssFiles(source)
-  } catch {
-    return undefined
+    return { kind: 'listing', listing: await listCssFiles(source) }
+  } catch (error) {
+    if (error instanceof NotAStylesheetPathError) return { kind: 'not-a-stylesheet' }
+    return { kind: 'unreadable' }
   }
 }
 
@@ -108,16 +118,23 @@ function statusFor(
 export async function runCheck(source: readonly string[]): Promise<CheckRun> {
   const findings: Finding[] = []
   const unreadablePaths: string[] = []
+  const notStylesheetPaths: string[] = []
   let stylesheetsRead = 0
   let hasUnreadableSource = false
 
   for (const one of source) {
-    const listing = await sourceFiles(one)
-    if (!listing) {
+    const outcome = await sourceOutcome(one)
+    if (outcome.kind === 'unreadable') {
       hasUnreadableSource = true
       unreadablePaths.push(one)
       continue
     }
+    if (outcome.kind === 'not-a-stylesheet') {
+      hasUnreadableSource = true
+      notStylesheetPaths.push(one)
+      continue
+    }
+    const listing = outcome.listing
     if (listing.unreadablePaths.length > 0) {
       hasUnreadableSource = true
       unreadablePaths.push(...listing.unreadablePaths)
@@ -134,5 +151,5 @@ export async function runCheck(source: readonly string[]): Promise<CheckRun> {
   }
 
   const status = statusFor(hasUnreadableSource, stylesheetsRead, findings.length)
-  return { result: { status, findings, stylesheetsRead }, unreadablePaths }
+  return { result: { status, findings, stylesheetsRead }, unreadablePaths, notStylesheetPaths }
 }

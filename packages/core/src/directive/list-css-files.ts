@@ -18,6 +18,23 @@ export interface PathListing {
   readonly unreadablePaths: readonly string[]
 }
 
+/**
+ * Thrown by `listCssFiles` when a `--source` entry names something that is
+ * neither a directory nor a regular file — a FIFO, socket or device node.
+ * Reading one directly (as though it were a stylesheet) can block
+ * indefinitely waiting on the other end of the pipe, so it is refused
+ * before any read is attempted rather than handed to `readFile`.
+ */
+export class NotAStylesheetPathError extends Error {
+  readonly path: string
+
+  constructor(path: string) {
+    super(`${path} is not a stylesheet file`)
+    this.path = path
+    this.name = 'NotAStylesheetPathError'
+  }
+}
+
 interface WalkState {
   /**
   Every `.css` file's own canonical path already reported, across the whole walk: two different paths (a symlink and a walk back to its real location) can name the same real file, and it is counted once.
@@ -134,7 +151,10 @@ async function listDirectory(dir: string, state: WalkState): Promise<string[]> {
  */
 export async function listCssFiles(source: string): Promise<PathListing> {
   const stats = await stat(source)
-  if (!stats.isDirectory()) return { files: [source], unreadablePaths: [] }
+  if (!stats.isDirectory()) {
+    if (!stats.isFile()) throw new NotAStylesheetPathError(source)
+    return { files: [source], unreadablePaths: [] }
+  }
   const canonicalRoot = await realpath(source)
   const state: WalkState = {
     reportedRealFiles: new Set(),

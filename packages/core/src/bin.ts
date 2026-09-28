@@ -17,19 +17,28 @@ function isHelpRequest(args: readonly string[]): boolean {
   return args.includes('--help') || args.includes('-h')
 }
 
+type ParsedArgs =
+  | { readonly kind: 'source'; readonly source: string[] | undefined }
+  | { readonly argument: string; readonly kind: 'unexpectedArgument' }
+  | { readonly kind: 'usageError' }
+
 /**
-The repeatable `--source=` values, or `undefined` on a usage error.
+The repeatable `--source=` values, or the reason parsing failed: a stray positional (`check --source=x stray`) is named rather than folded into the same "requires --source" message an actually-missing `--source` gets.
  */
-function parseSourceArgs(args: readonly string[]): string[] | undefined {
+function parseSourceArgs(args: readonly string[]): ParsedArgs {
   try {
-    const { values } = parseArgs({
+    const { values, positionals } = parseArgs({
       args,
       options: { source: { type: 'string', multiple: true } },
       strict: true,
+      allowPositionals: true,
     })
-    return values.source
+    if (positionals.length > 0) {
+      return { kind: 'unexpectedArgument', argument: positionals[0]! }
+    }
+    return { kind: 'source', source: values.source }
   } catch {
-    return undefined
+    return { kind: 'usageError' }
   }
 }
 
@@ -55,6 +64,26 @@ function printCleanSummary(result: CheckResult, source: readonly string[]): void
 }
 
 /**
+Every path problem `runCheck` (`check-run.ts`) found: each unreadable path, each path refused as not a stylesheet file, and — only when neither said anything at all — the generic "no stylesheet found" line.
+ */
+function reportPathProblems(
+  result: CheckResult,
+  source: readonly string[],
+  unreadablePaths: readonly string[],
+  notStylesheetPaths: readonly string[],
+): void {
+  for (const badPath of unreadablePaths) {
+    console.error(`Could not read ${badPath}, so it was not checked.`)
+  }
+  for (const badPath of notStylesheetPaths) {
+    console.error(`${badPath} is not a stylesheet file, so it was not checked.`)
+  }
+  if (result.status === 2 && unreadablePaths.length === 0 && notStylesheetPaths.length === 0) {
+    console.error(`No stylesheet found under ${source.join(', ')}; nothing was checked.`)
+  }
+}
+
+/**
  * The `check` subcommand: parses `--source=`, then walks it once — via
  * `runCheck` (`check-run.ts`), the shared pass this bin and `check()`
  * both derive their own shape from — printing its result plus every path
@@ -69,7 +98,12 @@ async function runCheck(args: readonly string[]): Promise<number> {
     return 0
   }
 
-  const source = parseSourceArgs(args)
+  const parsed = parseSourceArgs(args)
+  if (parsed.kind === 'unexpectedArgument') {
+    console.error(`check does not take a positional argument: ${parsed.argument}\n${USAGE}`)
+    return 2
+  }
+  const source = parsed.kind === 'source' ? parsed.source : undefined
   // An empty --source value (`--source=`) is a usage error, the same as
   // giving no --source at all: it never names a path, so treating it as one
   // only produces a nonsensical "Could not read , so..." message instead of
@@ -79,15 +113,10 @@ async function runCheck(args: readonly string[]): Promise<number> {
     return 2
   }
 
-  const { result, unreadablePaths } = await runSourcesCheck(source)
+  const { result, unreadablePaths, notStylesheetPaths } = await runSourcesCheck(source)
   printFindings(result)
   printCleanSummary(result, source)
-  for (const badPath of unreadablePaths) {
-    console.error(`Could not read ${badPath}, so it was not checked.`)
-  }
-  if (result.status === 2 && unreadablePaths.length === 0) {
-    console.error(`No stylesheet found under ${source.join(', ')}; nothing was checked.`)
-  }
+  reportPathProblems(result, source, unreadablePaths, notStylesheetPaths)
   return result.status
 }
 

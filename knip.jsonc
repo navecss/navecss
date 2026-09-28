@@ -16,6 +16,10 @@
   // NAME at the start of a script) no longer sees either as used. Both are real, live
   // dependencies — every `check:pack` still runs them, one layer indirect through the wrapper.
   "ignoreDependencies": ["@arethetypeswrong/cli", "publint"],
+  // `packages/core/test/bin.test.ts` spawns the real `mkfifo` coreutil to create a FIFO for a
+  // --source row, a POSIX system binary rather than a package dependency knip could ever find
+  // declared in a manifest.
+  "ignoreBinaries": ["mkfifo"],
   // `packages/core/src/postcss.ts` exports `navePlugin` as both the
   // documented named export and the default export a bundler-loaded host
   // expects (`import nave from '@navecss/core/postcss'`) — the same function

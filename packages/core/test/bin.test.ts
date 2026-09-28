@@ -5,7 +5,7 @@
  * derives this itself; `check()`'s own returned shape carries no such
  * field).
  */
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import {
   chmodSync,
   mkdirSync,
@@ -23,13 +23,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const BIN = path.resolve(HERE, '..', 'dist', 'bin.js')
 
-function run(cwd: string, ...args: string[]): { out: string; status: number | null } {
+function run(
+  cwd: string,
+  ...args: string[]
+): { out: string; status: number | null; signal: NodeJS.Signals | null } {
   const result = spawnSync(process.execPath, [BIN, 'check', ...args], {
     cwd,
     encoding: 'utf8',
     timeout: 10_000,
   })
-  return { out: result.stdout + result.stderr, status: result.status }
+  return { out: result.stdout + result.stderr, status: result.status, signal: result.signal }
 }
 
 const ctx = { dir: '' }
@@ -173,4 +176,47 @@ describe('a --source directory follows symlinks, loop-safe, never hanging', () =
 
     expect(result.status).toBe(0)
   })
+})
+
+describe('a stray positional argument is named, not folded into the missing --source message', () => {
+  it('exits 2 naming the unexpected argument, with the usage text', () => {
+    writeFileSync(path.join(ctx.dir, 'x.css'), '.a{}')
+
+    const result = run(ctx.dir, '--source=x.css', 'stray')
+
+    expect(result.status).toBe(2)
+    expect(result.out).toContain('stray')
+    expect(result.out).toContain('Usage:')
+  })
+})
+
+describe('a --source that is neither a regular file nor a directory', () => {
+  it.skipIf(process.platform === 'win32')(
+    'exits 2 naming a FIFO as not a stylesheet file, without blocking on it',
+    () => {
+      const fifoPath = path.join(ctx.dir, 'a.fifo')
+      execFileSync('mkfifo', [fifoPath])
+
+      const result = run(ctx.dir, `--source=${fifoPath}`)
+
+      expect(result.status).toBe(2)
+      expect(result.out).toContain(fifoPath)
+      expect(result.signal).toBeNull()
+    },
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'skips a FIFO found inside a --source directory, keeping a sibling hit',
+    () => {
+      const dir = path.join(ctx.dir, 'dist')
+      mkdirSync(dir)
+      execFileSync('mkfifo', [path.join(dir, 'a.fifo')])
+      writeFileSync(path.join(dir, 'hit.css'), '.a{@nave flex}')
+
+      const result = run(ctx.dir, `--source=${dir}`)
+
+      expect(result.status).toBe(1)
+      expect(result.out).toContain('hit.css:1:4: @nave flex (in .a)')
+    },
+  )
 })
