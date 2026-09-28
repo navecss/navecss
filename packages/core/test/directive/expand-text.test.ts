@@ -244,6 +244,30 @@ describe('AC-directive-core-07 — expander-only rows, Syntax 3 recovery', () =>
     expect(diagnostics).toEqual([])
     expect(css).toBe(input)
   })
+
+  it.each([
+    [' content: "abc', 'an unterminated double-quoted string'],
+    [" content: 'abc", 'an unterminated single-quoted string'],
+    [' x: url(abc', 'an unterminated unquoted url'],
+    [' x: "a\\', 'a string ending in a trailing backslash'],
+    [' /*/', 'an unclosed comment whose own two bytes fake a close'],
+    [' x: f(', 'an unterminated function call'],
+    [' x: [', 'an unterminated ['],
+    [' --x: {', 'an unterminated custom-property {} value'],
+  ])('writes the closer(s) EOF implied before an appended block, inside %s (%s)', (tail) => {
+    const { css } = expandText(`.a { @nave focusRing;${tail}`, { onUnknown: 'warn' })
+
+    const tokens = tokenize(css)
+    expect(tokens.some((t) => t.type === 'ident-token' && t.raw === 'focus-visible')).toBe(true)
+  })
+
+  it('closes a later, still-open sibling rule first, so the appended block is its sibling, not nested inside it', () => {
+    const { css } = expandText('.a { @nave focusRing; .b {', { onUnknown: 'warn' })
+
+    // `.b {` is closed (empty) before `&:focus-visible` is appended, so the
+    // two are siblings under `.a`, not `&:focus-visible` nested inside `.b`.
+    expect(norm(css)).toContain('.b {} &:focus-visible')
+  })
 })
 
 describe('AC-directive-core-25 — expandText() stays fast on a large stylesheet', () => {

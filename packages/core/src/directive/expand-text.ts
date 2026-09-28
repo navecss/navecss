@@ -37,7 +37,6 @@ export function expandText(css: string, options: ExpandTextOptions = {}): Expand
   walkBlock(w, {
     start: 0,
     limit: w.tokens.length,
-    closeAt: css.length,
     context: { isStyleRuleParent: false, isInsideKeyframes: false },
   })
   const { css: outputCss, map } = buildOutput({

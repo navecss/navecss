@@ -15,6 +15,7 @@ import {
   readItem,
 } from './block-reader.ts'
 import { createPositionFinder } from './expand-text-diagnostics.ts'
+import { closeInfoFor, type EofClose } from './expand-text-eof-close.ts'
 import { renderBlock, renderInline } from './expand-text-render.ts'
 import { plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
@@ -151,28 +152,15 @@ function isKeyframesName(name: string): boolean {
 }
 
 /**
- * The character position a block's own close sits at: the `}` token's
- * start, or the end of input when it never closes (R5d) — except when the
- * very last token is an unclosed comment, which (having nowhere to end)
- * consumes every byte to EOF: appending there would insert real CSS text
- * INSIDE that comment, where a re-tokenization of the output could never
- * see it as anything but more comment bytes. Placed at the comment's own
- * start instead, so the appended block lands before it, as real syntax.
- */
-function closePositionOf(w: Walker, blockEndIndex: number): number {
-  const closer = w.tokens[blockEndIndex]
-  if (closer) return closer.startIndex
-  const last = w.tokens.at(-1)
-  if (last?.type === 'comment' && !last.raw.endsWith('*/')) return last.startIndex
-  return w.css.length
-}
-
-/**
  *
  */
-function flushFrame(w: Walker, closeAt: number, frame: Frame): void {
+function flushFrame(w: Walker, close: EofClose, frame: Frame): void {
   if (frame.parts.length === 0) return
-  w.edits.push({ start: closeAt, end: closeAt, parts: frame.parts })
+  const parts =
+    close.prefix === ''
+      ? frame.parts
+      : [{ text: close.prefix, source: w.positionAt(close.position) }, ...frame.parts]
+  w.edits.push({ start: close.position, end: close.position, parts })
 }
 
 /**
@@ -188,7 +176,6 @@ function childContext(w: Walker, item: Item, context: WalkContext): WalkContext 
 export interface BlockBounds {
   readonly start: number
   readonly limit: number
-  readonly closeAt: number
   readonly context: WalkContext
 }
 
@@ -199,7 +186,7 @@ interface WalkFrame {
   i: number
   hasNestedNode: boolean
   readonly limit: number
-  readonly closeAt: number
+  readonly close: EofClose
   readonly context: WalkContext
   readonly frame: Frame
 }
@@ -212,7 +199,7 @@ function toWalkFrame(w: Walker, bounds: BlockBounds): WalkFrame {
     i: skipInert(w.tokens, bounds.start, bounds.limit),
     hasNestedNode: false,
     limit: bounds.limit,
-    closeAt: bounds.closeAt,
+    close: closeInfoFor(w, bounds.start, bounds.limit),
     context: bounds.context,
     frame: { parts: [] },
   }
@@ -226,7 +213,6 @@ function childFrameFor(w: Walker, item: Item, context: WalkContext): WalkFrame |
   return toWalkFrame(w, {
     start: item.blockStart,
     limit: item.blockEnd,
-    closeAt: closePositionOf(w, item.blockEnd),
     context: childContext(w, item, context),
   })
 }
@@ -239,9 +225,7 @@ function childFrameFor(w: Walker, item: Item, context: WalkContext): WalkFrame |
  * before this frame's own next item is reached, exactly as a recursive
  * call would order it — but the stack lives on the heap, not the VM's own
  * call stack, so nesting depth never risks overflowing it. `limit` is the
- * index of the enclosing `}` (or `tokens.length` at EOF); `closeAt` is the
- * character offset appended blocks are inserted at (the same `}`'s start,
- * or the end of input).
+ * index of the enclosing `}` (or `tokens.length` at EOF).
  */
 export function walkBlock(w: Walker, bounds: BlockBounds): void {
   const stack: WalkFrame[] = [toWalkFrame(w, bounds)]
@@ -249,7 +233,7 @@ export function walkBlock(w: Walker, bounds: BlockBounds): void {
   while (stack.length > 0) {
     const top = stack.at(-1)!
     if (top.i >= top.limit) {
-      flushFrame(w, top.closeAt, top.frame)
+      flushFrame(w, top.close, top.frame)
       stack.pop()
       continue
     }
