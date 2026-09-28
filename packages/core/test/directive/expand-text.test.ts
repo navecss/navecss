@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { expandText } from '../../src/directive/expand-text.ts'
 import { findSurvivors } from '../../src/directive/find-survivors.ts'
 import { tokenize } from '../../src/directive/tokenizer.ts'
+import { assertScalesLinearly } from '../helpers/perf-scaling.ts'
 
 /**
 Collapses whitespace runs so assertions don't pin the exact spacing expandText happens to choose.
@@ -367,21 +368,23 @@ describe('an unterminated declaration at EOF is given its own semicolon before t
   })
 })
 
-describe('AC-directive-core-25 — expandText() stays fast on a large stylesheet', () => {
-  it('runs a 20000-line stylesheet with no directive in under 2 seconds', () => {
-    const css = '.a { color: red; }\n'.repeat(20_000)
-
-    const start = performance.now()
-    expandText(css)
-    expect(performance.now() - start).toBeLessThan(2000)
+describe('expandText() stays roughly linear, not quadratic, on a large stylesheet', () => {
+  it('stays roughly linear on a stylesheet with no directive', async () => {
+    await assertScalesLinearly((n) => {
+      const css = '.a { color: red; }\n'.repeat(n)
+      const start = performance.now()
+      expandText(css)
+      return performance.now() - start
+    }, 5000)
   })
 
-  it('runs 20000 directives, each on its own line, in under 2 seconds', () => {
-    const css = '.a { @nave flex; }\n'.repeat(20_000)
-
-    const start = performance.now()
-    expandText(css)
-    expect(performance.now() - start).toBeLessThan(2000)
+  it('stays roughly linear across many directives, each on its own line', async () => {
+    await assertScalesLinearly((n) => {
+      const css = '.a { @nave flex; }\n'.repeat(n)
+      const start = performance.now()
+      expandText(css)
+      return performance.now() - start
+    }, 5000)
   })
 
   it('does not overflow the call stack on 20000 levels of nesting', () => {
@@ -390,44 +393,49 @@ describe('AC-directive-core-25 — expandText() stays fast on a large stylesheet
     expect(() => expandText(css)).not.toThrow()
   })
 
-  it('closes 20000 levels left open at EOF (none of them closed for real) in under 2 seconds', () => {
-    const css = '.a{'.repeat(20_000)
-
-    const start = performance.now()
-    expandText(css)
-    expect(performance.now() - start).toBeLessThan(2000)
+  it('stays roughly linear closing levels left open at EOF (none of them closed for real)', async () => {
+    await assertScalesLinearly((n) => {
+      const css = '.a{'.repeat(n)
+      const start = performance.now()
+      expandText(css)
+      return performance.now() - start
+    }, 20_000)
   })
 
-  it('closes 20000 levels left open at EOF, each one appending its own block, well under a quadratic blowup and with no RangeError', () => {
-    const css = '.a{@nave focusRing;'.repeat(20_000)
+  it('stays roughly linear closing levels left open at EOF, each one appending its own block, with no RangeError', async () => {
+    // This combines deep nesting, a directive walk and an EOF-closer
+    // computation at every level, so it costs more per level than any one
+    // of those alone (the neighbouring rows above measure each in
+    // isolation) — smaller n than its siblings, and a longer test timeout,
+    // so the 4n run still finishes comfortably under coverage
+    // instrumentation. The scaling assertion, not a wall-clock budget, is
+    // what rules out a quadratic blowup here.
+    await assertScalesLinearly((n) => {
+      const css = '.a{@nave focusRing;'.repeat(n)
+      const start = performance.now()
+      expect(() => expandText(css)).not.toThrow()
+      return performance.now() - start
+    }, 1250)
+  }, 20_000)
 
-    // A generous budget, not a tight SLA: this combines deep nesting, a
-    // directive walk and an EOF-closer computation at every level, so it
-    // costs more than any one of those alone (the neighbouring rows above
-    // measure each in isolation), and coverage instrumentation adds its own
-    // overhead on top. The point is ruling out quadratic behaviour — an
-    // O(n²) version of this would take tens of seconds, not low seconds.
-    const start = performance.now()
-    expect(() => expandText(css)).not.toThrow()
-    expect(performance.now() - start).toBeLessThan(10_000)
-  })
+  it('stays roughly linear chaining through an incoming source map across many directives', async () => {
+    await assertScalesLinearly((n) => {
+      const css = '.a { @nave flex; }\n'.repeat(n)
+      const lineCount = css.split('\n').length
 
-  it('stays fast chaining through an incoming source map across 20000 directives', () => {
-    const css = '.a { @nave flex; }\n'.repeat(20_000)
-    const lineCount = css.split('\n').length
+      // An identity mapping, one segment per line at column 0: every line
+      // maps to itself in a single source, 'a.css'.
+      const mappings = Array.from({ length: lineCount }, (_, i) =>
+        i === 0
+          ? `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}`
+          : `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(1)}${encodeVLQ(0)}`,
+      ).join(';')
+      const inputSourceMap = { version: 3 as const, sources: ['a.css'], names: [], mappings }
 
-    // An identity mapping, one segment per line at column 0: every line
-    // maps to itself in a single source, 'a.css'.
-    const mappings = Array.from({ length: lineCount }, (_, i) =>
-      i === 0
-        ? `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}`
-        : `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(1)}${encodeVLQ(0)}`,
-    ).join(';')
-    const inputSourceMap = { version: 3 as const, sources: ['a.css'], names: [], mappings }
-
-    const start = performance.now()
-    expandText(css, { inputSourceMap })
-    expect(performance.now() - start).toBeLessThan(2000)
+      const start = performance.now()
+      expandText(css, { inputSourceMap })
+      return performance.now() - start
+    }, 5000)
   })
 })
 

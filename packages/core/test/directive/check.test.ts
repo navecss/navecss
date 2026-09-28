@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { check } from '../../src/directive/check.ts'
+import { assertScalesLinearly } from '../helpers/perf-scaling.ts'
 
 const ctx = { dir: '' }
 
@@ -154,16 +155,20 @@ describe('AC-directive-core-22 — navecss-core check, the exit contract', () =>
   })
 })
 
-describe('AC-directive-core-25 — check() stays fast and robust on a large stylesheet', () => {
-  it('reports 20000 survivors in a single file in under 2 seconds', async () => {
-    const filePath = await writeCss('a.css', '.b{@nave flex}'.repeat(20_000))
+describe('check() stays roughly linear, not quadratic, and stack-safe on a large stylesheet', () => {
+  it('stays roughly linear reporting survivors in a single file', async () => {
+    await assertScalesLinearly(async (size) => {
+      const filePath = await writeCss(`a-${size}.css`, '.b{@nave flex}'.repeat(size))
 
-    const start = performance.now()
-    const result = await check({ source: [filePath] })
-    expect(performance.now() - start).toBeLessThan(2000)
+      const start = performance.now()
+      const result = await check({ source: [filePath] })
+      const elapsed = performance.now() - start
 
-    expect(result.status).toBe(1)
-    expect(result.findings).toHaveLength(20_000)
+      expect(result.status).toBe(1)
+      expect(result.findings).toHaveLength(size)
+
+      return elapsed
+    }, 20_000)
   })
 
   it('does not overflow the call stack on 5000 levels of nesting', async () => {
@@ -174,14 +179,18 @@ describe('AC-directive-core-25 — check() stays fast and robust on a large styl
     expect(result.status).toBe(0)
   })
 
-  it('stays linear, not quadratic, in nesting depth: 20000 levels in under 2 seconds', async () => {
-    const filePath = await writeCss('e.css', '.a{'.repeat(20_000) + '}'.repeat(20_000))
+  it('stays roughly linear, not quadratic, in nesting depth', async () => {
+    await assertScalesLinearly(async (size) => {
+      const filePath = await writeCss(`e-${size}.css`, '.a{'.repeat(size) + '}'.repeat(size))
 
-    const start = performance.now()
-    const result = await check({ source: [filePath] })
-    expect(performance.now() - start).toBeLessThan(2000)
+      const start = performance.now()
+      const result = await check({ source: [filePath] })
+      const elapsed = performance.now() - start
 
-    expect(result.status).toBe(0)
+      expect(result.status).toBe(0)
+
+      return elapsed
+    }, 40_000)
   })
 
   it('counts a lone CR and a lone form feed as line breaks, not only LF', async () => {
@@ -265,25 +274,37 @@ describe('a directory --source follows symlinks, loop-safe', () => {
     expect(result.findings).toHaveLength(1)
   })
 
-  it('walks a mesh of sibling directories, each linked to every other, in well under 2 seconds', async () => {
-    const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
-    for (const name of names) {
-      await mkdir(path.join(ctx.dir, name))
-      await writeFile(path.join(ctx.dir, name, `${name}.css`), '.x{}')
-    }
-    for (const name of names) {
-      const others = names.filter((other) => other !== name)
-      for (const other of others) {
-        await symlink(path.join(ctx.dir, other), path.join(ctx.dir, name, other))
+  it('stays roughly linear walking a mesh of sibling directories, each linked to every other', async () => {
+    // The mesh's own edge count is quadratic in its width (every directory links to every
+    // other), so the scaling assertion is driven off the total directory-entry count rather
+    // than the mesh width directly: doubling the width quadruples the entries, matching the
+    // n-vs-4n comparison `assertScalesLinearly` makes.
+    await assertScalesLinearly(async (totalEntries) => {
+      const width = Math.max(2, Math.round(Math.sqrt(totalEntries)))
+      const dir = await mkdtemp(path.join(tmpdir(), 'nave-check-mesh-'))
+      const names = Array.from({ length: width }, (_, i) => `d${i}`)
+      for (const name of names) {
+        await mkdir(path.join(dir, name))
+        await writeFile(path.join(dir, name, `${name}.css`), '.x{}')
       }
-    }
+      for (const name of names) {
+        const others = names.filter((other) => other !== name)
+        for (const other of others) {
+          await symlink(path.join(dir, other), path.join(dir, name, other))
+        }
+      }
 
-    const start = performance.now()
-    const result = await check({ source: [ctx.dir] })
-    expect(performance.now() - start).toBeLessThan(2000)
+      const start = performance.now()
+      const result = await check({ source: [dir] })
+      const elapsed = performance.now() - start
 
-    expect(result.status).toBe(0)
-    expect(result.stylesheetsRead).toBe(names.length)
+      expect(result.status).toBe(0)
+      expect(result.stylesheetsRead).toBe(width)
+
+      await rm(dir, { recursive: true, force: true })
+
+      return elapsed
+    }, 196)
   })
 })
 

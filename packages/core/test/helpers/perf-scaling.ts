@@ -1,0 +1,72 @@
+/**
+ * Shared scaling assertion for a test that wants to rule out quadratic (or worse) behaviour
+ * without pinning a wall-clock budget. A fixed millisecond budget passes on a fast, idle laptop
+ * and reds on a shared, coverage-instrumented CI runner purely from being slower, not from any
+ * regression in the code under test — the ratio between two sizes of the same subject is stable
+ * across machines in a way an absolute number never is.
+ */
+import { expect } from 'vitest'
+
+export interface ScalingMeasurement {
+  /** The smaller of the two sizes measured. */
+  n: number
+  /** Median elapsed time, in milliseconds, across 3 runs at `n`. */
+  nMs: number
+  /** Median elapsed time, in milliseconds, across 3 runs at `4 * n`. */
+  fourNMs: number
+  /** `fourNMs / nMs`: ~4 for a linear subject, ~16 for a quadratic one. */
+  ratio: number
+}
+
+function median(samples: readonly number[]): number {
+  const sorted = [...samples].sort((a, b) => a - b)
+  return sorted[1]!
+}
+
+const RATIO_BUDGET = 8
+
+/**
+One pass: one throwaway warm-up run at `n`, then 3 measured runs at each of `n` and `4 * n` (median taken of each trio).
+ */
+async function measureOnce(
+  timeAt: (size: number) => number | Promise<number>,
+  n: number,
+): Promise<ScalingMeasurement> {
+  await timeAt(n)
+
+  const nSamples: number[] = []
+  for (let i = 0; i < 3; i++) nSamples.push(await timeAt(n))
+
+  const fourNSamples: number[] = []
+  for (let i = 0; i < 3; i++) fourNSamples.push(await timeAt(4 * n))
+
+  const nMs = median(nSamples)
+  const fourNMs = median(fourNSamples)
+  return { n, nMs, fourNMs, ratio: fourNMs / nMs }
+}
+
+/**
+ * Times `timeAt(n)` and `timeAt(4 * n)` (see `measureOnce`) and asserts the two medians' ratio
+ * stays below 8 — comfortably above the ~4 a linear subject produces, comfortably below the ~16
+ * a quadratic one does. `timeAt` builds and measures its own input at the given size and returns
+ * the elapsed milliseconds; keep the size small enough that the `4 * n` run finishes in well
+ * under a second locally, since this function runs it 3 times.
+ *
+ * One retry (a second full pass, fresh warm-up included) runs before failing: a lone scheduler
+ * stall on a shared machine — several unrelated processes' work landing on the same run — can
+ * push a single pass's ratio over budget the same way a real quadratic regression does, but a
+ * regression reproduces on every pass, where a stall does not. This is stated slack for noise,
+ * not for the regression itself: the subject under test never runs a hot loop or does I/O of its
+ * own between passes that could explain a second high ratio on its own terms.
+ */
+export async function assertScalesLinearly(
+  timeAt: (size: number) => number | Promise<number>,
+  n: number,
+): Promise<ScalingMeasurement> {
+  const first = await measureOnce(timeAt, n)
+  if (first.ratio < RATIO_BUDGET) return first
+
+  const second = await measureOnce(timeAt, n)
+  expect(second.ratio).toBeLessThan(RATIO_BUDGET)
+  return second
+}
