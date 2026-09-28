@@ -10,13 +10,18 @@ differently:
 
 - The directive name now matches case-insensitively on its unescaped value (`@NAVE`, `@n\61ve`
   are directives, and now expand where they used to reach your CSS unchanged; a spelling like
-  `@navex` still passes through unchanged).
+  `@navex` or `@nave-flex` still passes through unchanged).
 - The directive's argument list is now read as CSS component values instead of split on
   whitespace. A name glued to punctuation used to be reported as one unknown atom (`flex, block`
   as `unknown atom "flex,"`), and under `onUnknown: 'warn'` or `'ignore'` only `block` expanded.
   Now the comma itself is reported (`separate atom names with spaces`), and under those two
   modes both names expand. A comment between two names now separates them (`flex/**/block`
   expands both), where it used to make one unknown name.
+- The directive name now ends where CSS tokenization ends it, so `@nave` followed directly by
+  `,`, `.` or `:` (`@nave,flex;`, `@nave.flex;`, `@nave:flex;`) is now a directive, where it used
+  to reach your CSS unchanged. That character is reported (for the first, `unexpected ","`), so
+  under the default `'error'` a stylesheet holding one now fails the build; under `'warn'` or
+  `'ignore'` the names after it expand. Put a space after `@nave`.
 - A directive with a `{}` block (`@nave flex { color: red }`) is now reported through
   `onUnknown` instead of its block being dropped with no message, so under the default
   `'error'` a stylesheet holding one now fails the build. Write the block's declarations in the
@@ -41,7 +46,8 @@ differently:
   cache can see it and invalidate when the file changes; an object has no such visibility. The
   path is resolved from the directory the build runs in, the module's default export is the
   atoms object, and with a path the plugin is async: call `process(css).then(cb)`, not the sync
-  `.css` getter. See CONSUMER-ATOMS.md.
+  `.css` getter. The file's atoms are validated the same way as an inline object's, but when a
+  stylesheet is processed rather than when the plugin is created. See CONSUMER-ATOMS.md.
 - `@navecss/core/postcss` now also has a default export, for tools that load it that way.
 - New: `navecss-core check` (also `@navecss/core/check`), a command that scans built CSS for a
   `@nave` directive that never got resolved (for example because a build tool's PostCSS step

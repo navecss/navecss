@@ -264,6 +264,23 @@ describe('AC-directive-core-10 — the directive name matches ASCII case-insensi
   it('documents that PostCSS itself, not this plugin, cannot parse a leading-escape directive name', async () => {
     await expect(run(String.raw`.a { @\6e ave flex; }`)).rejects.toThrow(/At-rule without name/)
   })
+
+  it.each([
+    ['.a { @nave,flex; }', 'unexpected ","'],
+    ['.a { @nave.flex; }', 'unexpected "."'],
+    ['.a { @nave:flex; }', 'unexpected ":"'],
+  ])(
+    '%s: the directive name ends where tokenization ends it, reporting the character',
+    async (css, message) => {
+      let caught: Error | undefined
+      try {
+        await run(css)
+      } catch (error) {
+        caught = error as Error
+      }
+      expect(caught?.message).toContain(message)
+    },
+  )
 })
 
 describe('AC-directive-core-12 — a directive directly in any nested group rule, not just @media', () => {
