@@ -271,4 +271,35 @@ describe('the generated side counts lines by the same rule as the source side', 
 
     consumer.destroy()
   })
+
+  it('counts a CR immediately followed by an LF as one line break even when a removed directive sat between them', () => {
+    const out = expandText('.a{\r@nave nope;\n.b{c:d}}', { onUnknown: 'ignore' })
+
+    expect(out.css).toBe('.a{\r\n.b{c:d}}')
+    expect((JSON.parse(out.map) as SourceMap).mappings.split(';')).toHaveLength(2)
+  })
+})
+
+describe('chaining through an incoming map never invents a position it never made', () => {
+  it('gives no source at all for a generated position the incoming map never covered, rather than the intermediate position', async () => {
+    // Line 1 (index 0): one segment at column 0, mapping to line 11 (index
+    // 10). Line 2 (index 1): one segment, but only from column 4 — nothing
+    // maps columns 0-3 on that line, the same incoming shape as the
+    // "chaining never borrows" describe above.
+    const line1 = `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(10)}${encodeVLQ(0)}`
+    const line2 = `${encodeVLQ(4)}${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}`
+    const inputSourceMap: SourceMap = {
+      version: 3,
+      sources: ['a.css'],
+      names: [],
+      mappings: `${line1};${line2}`,
+    }
+
+    const { map } = expandText('.a{}\nx .b{c:d}', { inputSourceMap })
+    const consumer = await new SourceMapConsumer(JSON.parse(map))
+
+    expect(consumer.originalPositionFor({ line: 2, column: 0 }).source).toBeNull()
+
+    consumer.destroy()
+  })
 })

@@ -48,26 +48,21 @@ function isJsonPath(file: string): boolean {
 }
 
 /**
- * A variable, not an inline object literal at the `import()` call site, so
- * a bundler's own downlevel transform for import attributes (which some
- * versions rewrite from `with` to the older, now Node-incompatible `assert`
- * keyword) never recognises this as that syntax to rewrite: `import()`'s
- * second argument is ordinary data to it, opaque past this point.
- */
-const JSON_MODULE_IMPORT_OPTIONS: ImportCallOptions = { with: { type: 'json' } }
-
-/**
- * Reads `moduleUrl`'s default export as one run's extend map. A `.json`
- * path loads as a JSON module (an import attribute Node requires for that
- * type), whose default export is the parsed top-level value — the web
- * standard for loading JSON this way, rather than a bespoke `readFile` +
- * `JSON.parse` path with its own cache-busting and error shape to maintain.
+ * Reads `moduleUrl`'s (or, for a `.json` path, `file`'s) default export as
+ * one run's extend map. A `.json` path is read as text and parsed directly,
+ * rather than loaded through `import()` with a JSON import attribute: Node
+ * itself resolves the module loader for that attribute by the specifier's
+ * extension, ASCII case-SENSITIVELY, so a real-cased path such as
+ * `atoms.JSON` — already accepted here, and everywhere else in this
+ * package, without regard to case — reaches Node's loader as an unknown
+ * extension and is refused. Reading the bytes and parsing them ourselves
+ * sidesteps that entirely, and is the one Node-version-independent way to
+ * load JSON, case notwithstanding.
  */
 async function importExtendMap(moduleUrl: string, file: string): Promise<ExtendMap> {
-  const loaded = (
-    isJsonPath(file) ? await import(moduleUrl, JSON_MODULE_IMPORT_OPTIONS) : await import(moduleUrl)
-  ) as { default?: unknown }
-  const value = loaded.default
+  const value: unknown = isJsonPath(file)
+    ? JSON.parse(fs.readFileSync(file, 'utf8'))
+    : ((await import(moduleUrl)) as { default?: unknown }).default
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(
       `@nave: extend module "${file}" must have a default export that is a plain object`,

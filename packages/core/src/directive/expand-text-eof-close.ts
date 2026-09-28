@@ -52,7 +52,11 @@ function lexicalEofCloser(token: Token): string | undefined {
     return hasDanglingEscape ? `\\${quote}` : quote
   }
   if (token.type === 'url-token' || token.type === 'bad-url-token') {
-    return token.raw.endsWith(')') ? undefined : ')'
+    if (token.raw.endsWith(')')) return undefined
+    // The same reasoning as a string's dangling escape above: an unpaired
+    // trailing backslash would otherwise escape the `)` meant to close the
+    // url, rather than end it, so it is paired first.
+    return trailingBackslashCount(token.raw) % 2 === 1 ? String.raw`\)` : ')'
   }
   return undefined
 }
@@ -66,21 +70,51 @@ function bracketEofCloser(type: string): string {
   return ')' // '(-token' or 'function-token'
 }
 
+interface FrameTailScan {
+  // Innermost first: a matcher never leaves an unmatched opener nested
+  // inside a matched one (the outer one could not have closed otherwise),
+  // so the highest token index found is always the most recently opened,
+  // and the one to close first.
+  readonly unmatchedOpeners: readonly number[]
+  readonly hasDanglingText: boolean
+  readonly hasOpenColon: boolean
+}
+
 /**
- * Every opener in `[start, limit)` still unmatched at `limit` (its own
- * `matchBrackets` closer is missing, or falls beyond `limit`), innermost
- * first: unmatched openers are never interleaved with matched ones in a
- * way that breaks their own nesting order, so the highest token index is
- * always the most recently opened, and the one to close first.
+ * `[start, limit)` in one pass: every opener still unmatched at `limit`;
+ * whether it holds any token besides whitespace or a comment; and whether
+ * it holds a property name's `:` with nothing terminating it yet, read at
+ * its own top level — a matched bracket's own content is skipped whole
+ * (jumped to its closer), since nothing inside it, however it punctuates
+ * its own value, changes whether THIS level is mid-declaration, and a
+ * matcher never leaves an unmatched opener nested inside a matched one.
+ * One pass over what would otherwise be three, since this runs once per
+ * still-open frame at EOF and a stylesheet can nest arbitrarily many.
  */
-function unmatchedOpenersDescending(w: Walker, start: number, limit: number): number[] {
-  const result: number[] = []
-  for (let i = start; i < limit; i++) {
-    if (!OPENERS.has(w.tokens[i]!.type)) continue
-    const closeIndex = w.closerFor[i]!
-    if (closeIndex === -1 || closeIndex >= limit) result.push(i)
+function scanFrameTail(w: Walker, start: number, limit: number): FrameTailScan {
+  const unmatchedOpeners: number[] = []
+  let hasDanglingText = false
+  let hasOpenColon = false
+  let i = start
+  while (i < limit) {
+    const token = w.tokens[i]!
+    const type = token.type
+    if (type !== 'whitespace-token' && type !== 'comment') hasDanglingText = true
+    if (type === 'semicolon-token') {
+      hasOpenColon = false
+    } else if (type === 'colon-token') {
+      hasOpenColon = true
+    } else if (OPENERS.has(type)) {
+      const closeIndex = w.closerFor[i]!
+      if (closeIndex === -1 || closeIndex >= limit) {
+        unmatchedOpeners.push(i)
+      } else {
+        i = closeIndex
+      }
+    }
+    i++
   }
-  return result.toReversed()
+  return { unmatchedOpeners: unmatchedOpeners.toReversed(), hasDanglingText, hasOpenColon }
 }
 
 export interface EofClose {
@@ -89,35 +123,73 @@ export interface EofClose {
 }
 
 /**
- * Where a block's own close sits, and what (if anything) EOF closed for it
- * implicitly: the `}` token's start with no prefix, the normal case; or,
- * when it never closes, the end of input — except when the very
- * last token is an unclosed comment, which (having nowhere to end)
- * consumes every byte to EOF: placed at the comment's own start instead,
- * so the appended block lands before it, as real syntax, with no prefix
- * needed. Any OTHER unterminated construct reaching EOF (a string, a url,
- * or an unclosed bracket) still ends exactly at EOF, but the missing
- * closer(s) it needed are written first, innermost to outermost, so the
- * appended block that follows tokenizes as real syntax rather than more
- * of that construct's own content.
+ * Every closer `[start, limit)` needs, in writing order: whatever `last`
+ * (the token right before `limit`) needed lexically, then one per still
+ * unmatched bracket, then `;` for a declaration still open at this level —
+ * or, when none of those apply yet real tokens remain, one `{}` for a bare
+ * selector/at-rule prelude that never reached its own `{`. Per CSS Syntax 3
+ * that prelude is only dropped because nothing follows it: appending the
+ * block right after it un-drops it, and lets the block's own tokens read as
+ * more of the same prelude instead of its own sibling, unless given its own
+ * (empty, harmless) block first.
  */
-export function closeInfoFor(w: Walker, frameStart: number, blockEndIndex: number): EofClose {
-  const closer = w.tokens[blockEndIndex]
-  if (closer) return { position: closer.startIndex, prefix: '' }
-
-  const last = w.tokens.at(-1)
-  if (last?.type === 'comment') {
-    const isClosed = last.raw.length >= 4 && last.raw.endsWith('*/')
-    return { position: isClosed ? w.css.length : last.startIndex, prefix: '' }
-  }
-
+function eofClosers(w: Walker, start: number, limit: number, last: Token | undefined): string {
   const closers: string[] = []
   if (last) {
     const lexical = lexicalEofCloser(last)
     if (lexical) closers.push(lexical)
   }
-  for (const openIndex of unmatchedOpenersDescending(w, frameStart, blockEndIndex)) {
+  const scan = scanFrameTail(w, start, limit)
+  for (const openIndex of scan.unmatchedOpeners) {
     closers.push(bracketEofCloser(w.tokens[openIndex]!.type))
   }
-  return { position: w.css.length, prefix: closers.join('') }
+
+  if (scan.hasOpenColon) {
+    closers.push(';')
+  } else if (closers.length === 0 && scan.hasDanglingText) {
+    closers.push('{}')
+  }
+  return closers.join('')
+}
+
+/**
+ * Where a block's own close sits, and what (if anything) EOF closed for it
+ * implicitly: the `}` token's start with no prefix, the normal case; or,
+ * when it never closes, the end of input — except when the very
+ * last token in `[frameStart, scanLimit)` is an unclosed comment, which
+ * (having nowhere to end) consumes every byte to that limit: placed at the
+ * comment's own start instead, so the appended block lands before it, as
+ * real syntax, with no prefix needed. Any OTHER unterminated construct
+ * reaching that limit (a string, a url, an unclosed bracket, a bare
+ * declaration, or a bare selector/at-rule prelude with no block of its
+ * own) still ends exactly at EOF, but whatever it needed to read as valid
+ * syntax is written first (`eofClosers`), so the appended block that
+ * follows tokenizes as a sibling rather than more of that construct's own
+ * content.
+ *
+ * `scanLimit` is `blockEndIndex` bounded to `w.eofScanLimit`: the frame
+ * this call is for writes only the closers between its own opener and
+ * whichever inner frame most recently wrote its own (an inner frame with
+ * nothing to append never updates this bound, so a still-further-out
+ * frame closes everything down to it in one go, exactly as before) —
+ * otherwise two open, appending frames one inside the other would each
+ * independently rediscover the SAME unmatched inner bracket and both
+ * close it, doubling it in the output.
+ */
+export function closeInfoFor(
+  w: Walker,
+  frameStart: number,
+  blockEndIndex: number,
+  scanLimit: number,
+): EofClose {
+  const closer = w.tokens[blockEndIndex]
+  if (closer) return { position: closer.startIndex, prefix: '' }
+
+  const last = scanLimit > frameStart ? w.tokens[scanLimit - 1] : undefined
+  if (last?.type === 'comment') {
+    const isClosed = last.raw.length >= 4 && last.raw.endsWith('*/')
+    return { position: isClosed ? w.css.length : last.startIndex, prefix: '' }
+  }
+
+  return { position: w.css.length, prefix: eofClosers(w, frameStart, scanLimit, last) }
 }

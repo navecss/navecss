@@ -270,6 +270,103 @@ describe('AC-directive-core-07 — expander-only rows, Syntax 3 recovery', () =>
   })
 })
 
+describe('nested frames left open at EOF each close only their own level, never a deeper one twice', () => {
+  it('closes the innermost level first, then each ancestor closes only the one level directly below it', () => {
+    const { css } = expandText('.a { @nave focusRing; .b { @nave focusRing; .c {')
+
+    expect(css).toBe(
+      '.a { outline: none; .b { outline: none; .c {} &:focus-visible { outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus); outline-offset: 2px }} &:focus-visible { outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus); outline-offset: 2px }',
+    )
+  })
+
+  it('closes a dangling string once, not once per still-open ancestor frame, and still terminates its declaration', () => {
+    const { css } = expandText('.a { @nave focusRing; .b { @nave focusRing; content: "abc')
+
+    expect(css).toMatch(/content: "abc";\s*&:focus-visible/)
+    expect(css.match(/"abc"/g)).toHaveLength(1)
+  })
+})
+
+describe('an unterminated declaration at EOF is given its own semicolon before the appended block', () => {
+  it('ends a bare declaration with no dangling string, url or bracket', () => {
+    const { css } = expandText('.a { @nave focusRing; color: red')
+
+    expect(css).toMatch(/color: red;\s*&:focus-visible/)
+  })
+
+  /**
+   * `.a` itself is never closed by any of these inputs (there is no real
+   * `}` for it anywhere in the source), so parsing the raw output always
+   * hits postcss's own "Unclosed block" error regardless of how the INNER
+   * content came out — a fact about `.a`, not about what this test checks.
+   * A trailing `}`, added only for the parse, closes exactly that one
+   * outer level so the inner structure can be inspected the normal way (the
+   * one tail that leaves a trailing comment still open, unrelated to this
+   * fix, gets its own closing bytes first, for the same reason).
+   */
+  function parseWithOuterClosed(css: string): ReturnType<typeof postcss.parse> {
+    // A bare substring search for "*/" cannot tell a real close from the
+    // "/*/" shape itself, whose own two closing bytes overlap its opener —
+    // the same reason `closeInfoFor` uses the tokenizer's own read of the
+    // last token rather than a substring check.
+    const last = tokenize(css).at(-1)
+    const hasOpenComment =
+      last?.type === 'comment' && !(last.raw.length >= 4 && last.raw.endsWith('*/'))
+    const closedComment = hasOpenComment ? css + '*/' : css
+    return postcss.parse(closedComment + '}')
+  }
+
+  function hasFocusVisibleChildOf(
+    root: ReturnType<typeof postcss.parse>,
+    selector: string,
+  ): boolean {
+    let found = false
+    root.walkRules((rule) => {
+      const parent = rule.parent
+      if (
+        rule.selector === '&:focus-visible' &&
+        parent &&
+        'selector' in parent &&
+        (parent as { selector: string }).selector === selector
+      ) {
+        found = true
+      }
+    })
+    return found
+  }
+
+  it.each([
+    [' content: "abc', 'an unterminated double-quoted string'],
+    [" content: 'abc", 'an unterminated single-quoted string'],
+    [' x: url(abc', 'an unterminated unquoted url'],
+    [' x: "a\\', 'a string ending in a trailing backslash'],
+    [' /*/', 'an unclosed comment whose own two bytes fake a close'],
+    [' x: f(', 'an unterminated function call'],
+    [' x: [', 'an unterminated ['],
+    [' --x: {', 'an unterminated custom-property {} value'],
+  ])('appends the block as a real rule child of .a, not swallowed into %s (%s)', (tail) => {
+    const { css } = expandText(`.a { @nave focusRing;${tail}`, { onUnknown: 'warn' })
+
+    expect(hasFocusVisibleChildOf(parseWithOuterClosed(css), '.a')).toBe(true)
+  })
+
+  it('closes a dangling url ending in a trailing backslash by pairing it, not by escaping the closing paren', () => {
+    const { css } = expandText('.a { @nave focusRing; x: url(abc\\')
+
+    expect(tokenize(css).some((t) => t.type === 'ident-token' && t.raw === 'focus-visible')).toBe(
+      true,
+    )
+    expect(hasFocusVisibleChildOf(parseWithOuterClosed(css), '.a')).toBe(true)
+  })
+
+  it('drops an unterminated qualified-rule prelude with no block of its own, appending the block as its sibling, not nested inside it', () => {
+    const { css } = expandText('.a { @nave focusRing; .b')
+
+    expect(hasFocusVisibleChildOf(parseWithOuterClosed(css), '.a')).toBe(true)
+    expect(css).not.toContain('.b &:focus-visible')
+  })
+})
+
 describe('AC-directive-core-25 — expandText() stays fast on a large stylesheet', () => {
   it('runs a 20000-line stylesheet with no directive in under 2 seconds', () => {
     const css = '.a { color: red; }\n'.repeat(20_000)
@@ -291,6 +388,28 @@ describe('AC-directive-core-25 — expandText() stays fast on a large stylesheet
     const css = '.a{'.repeat(20_000) + '}'.repeat(20_000)
 
     expect(() => expandText(css)).not.toThrow()
+  })
+
+  it('closes 20000 levels left open at EOF (none of them closed for real) in under 2 seconds', () => {
+    const css = '.a{'.repeat(20_000)
+
+    const start = performance.now()
+    expandText(css)
+    expect(performance.now() - start).toBeLessThan(2000)
+  })
+
+  it('closes 20000 levels left open at EOF, each one appending its own block, well under a quadratic blowup and with no RangeError', () => {
+    const css = '.a{@nave focusRing;'.repeat(20_000)
+
+    // A generous budget, not a tight SLA: this combines deep nesting, a
+    // directive walk and an EOF-closer computation at every level, so it
+    // costs more than any one of those alone (the neighbouring rows above
+    // measure each in isolation), and coverage instrumentation adds its own
+    // overhead on top. The point is ruling out quadratic behaviour — an
+    // O(n²) version of this would take tens of seconds, not low seconds.
+    const start = performance.now()
+    expect(() => expandText(css)).not.toThrow()
+    expect(performance.now() - start).toBeLessThan(10_000)
   })
 
   it('stays fast chaining through an incoming source map across 20000 directives', () => {

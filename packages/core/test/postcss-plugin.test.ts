@@ -310,8 +310,20 @@ describe('the refused-parent text names the & workaround only for a group rule n
     '@layer l { @nave flex; }',
     '@keyframes k { @nave flex; }',
     '.a { @keyframes k { @nave flex; } }',
+    '@keyframes k { from { @media (x) { @nave flex; } } }',
+    '.a { @keyframes k { from { @media (x) { @nave flex; } } } }',
   ])('%s keeps the plain text, with no workaround sentence', async (css) => {
     await expect(run(css)).rejects.toThrow(/must be the direct child of a CSS rule selector block$/)
+  })
+
+  it('never appends the workaround sentence for a group rule nested inside a keyframe step, even with a style-rule ancestor further out', async () => {
+    const e = await run('@keyframes k { from { @media (x) { @nave flex; } } }').catch((x) => x)
+    expect((e as { reason: string }).reason).not.toContain('& { @nave')
+
+    const e2 = await run('.a { @keyframes k { from { @media (x) { @nave flex; } } } }').catch(
+      (x) => x,
+    )
+    expect((e2 as { reason: string }).reason).not.toContain('& { @nave')
   })
 
   it('a group rule nested in a style rule appends the workaround sentence', async () => {
@@ -765,6 +777,15 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
     await expect(run('.x { @nave evil; }', { extend: proxy })).rejects.toThrow(
       /unknown atom "evil"/,
     )
+  })
+
+  it('resolves an extend atom named __proto__, the same as any other name', async () => {
+    const extend = JSON.parse('{"__proto__":{"declarations":{"color":"red"}}}') as Record<
+      string,
+      AtomDefinition
+    >
+
+    await expect(run('.x { @nave __proto__; }', { extend })).resolves.toBe('.x { color: red; }')
   })
 
   it('never validates the built-in atom map, only consumer-supplied extend entries', async () => {

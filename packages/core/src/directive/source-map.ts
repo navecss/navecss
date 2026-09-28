@@ -74,38 +74,64 @@ export class MappingsBuilder {
   private readonly lines: string[][] = [[]]
   private outputColumn = 0
   private outputLine = 0
+  // A lone trailing `\r`, possibly half of a CRLF pair split across two
+  // `advance()` calls by a removed directive: consumed by the next call's
+  // leading `\n`, if any, instead of double-counted.
+  private pendingCR = false
   private prevGeneratedColumn = 0
   private prevSourceColumn = 0
   private prevSourceIndex = 0
   private prevSourceLine = 0
 
+  /**
+   * A plain indexed loop, not `for...of` (which iterates by code point, so
+   * a surrogate pair would advance the column by one instead of two — every
+   * position here is in UTF-16 code units). A line break is CR, FF, LF or a
+   * CRLF pair, CSS Syntax 3's own "newline" (§4.2).
+   */
   advance(text: string): void {
-    // A plain indexed loop, not `for...of`: that iterates by Unicode code
-    // point, so a supplementary-plane character (a surrogate pair, two
-    // UTF-16 code units) would advance the column by one instead of two —
-    // wrong, since every other position in this map (the tokenizer's own
-    // offsets included) is in UTF-16 code units.
-    // A line break is CR, FF, LF or a CRLF pair — CSS Syntax Level 3's own
-    // "newline" (§4.2), the same rule the SOURCE side already counts lines
-    // by (`expand-text-diagnostics.ts`'s `lineStartOffsets`): a generated
-    // side that counted LF only would under-count a `\r`- or `\f`-broken
-    // stylesheet's lines relative to the positions it is meant to map.
-    let i = 0
+    let i = this.consumePendingCR(text)
     while (i < text.length) {
       const c = text[i]
       if (c !== undefined && NEWLINE_CHARS.has(c)) {
-        i++
-        if (c === '\r' && text[i] === '\n') i++
-        this.outputLine++
-        this.outputColumn = 0
-        this.lines.push([])
-        this.prevGeneratedColumn = 0
-        this.hasSegmentOnLine = false
+        i = this.advancePastNewline(text, i, c)
         continue
       }
       this.outputColumn++
       i++
     }
+  }
+
+  /**
+   * `i` past the line break `c` (at `i`): past the whole pair for a `\r`
+   * immediately followed by `\n`, and `pendingCR` set instead when `\r` is
+   * the last character `text` has to offer.
+   */
+  advancePastNewline(text: string, i: number, c: string): number {
+    let next = i + 1
+    if (c === '\r' && text[next] === '\n') {
+      next++
+    } else if (c === '\r' && next === text.length) {
+      this.pendingCR = true
+    }
+    this.outputLine++
+    this.outputColumn = 0
+    this.lines.push([])
+    this.prevGeneratedColumn = 0
+    this.hasSegmentOnLine = false
+    return next
+  }
+
+  /**
+   * How far into `text` `advance` should start: `1` for a lone `\n` that is
+   * really the other half of a CRLF pair split across two calls; `0`
+   * otherwise.
+   */
+  consumePendingCR(text: string): number {
+    if (text.length === 0) return 0
+    const skip = this.pendingCR && text.startsWith('\n') ? 1 : 0
+    this.pendingCR = false
+    return skip
   }
 
   mark(position: Position): void {

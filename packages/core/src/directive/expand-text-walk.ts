@@ -15,7 +15,7 @@ import {
   readItem,
 } from './block-reader.ts'
 import { createPositionFinder } from './expand-text-diagnostics.ts'
-import { closeInfoFor, type EofClose } from './expand-text-eof-close.ts'
+import { closeInfoFor } from './expand-text-eof-close.ts'
 import { renderBlock, renderInline } from './expand-text-render.ts'
 import { plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
@@ -39,6 +39,12 @@ export class Walker {
   // project's class-member-order and class-sort lint rules disagree with
   // each other on where a private field goes relative to the surrounding
   // public ones, which a field with no access modifier sidesteps.
+  // How far back an EOF-closing frame may look for its own unmatched
+  // brackets/declaration: shrinks to a frame's own start every time that
+  // frame writes its own EOF closers, so an ancestor frame further out
+  // never rediscovers — and re-closes — the same inner construct. Starts
+  // at `tokens.length`, unbounded, since nothing has closed anything yet.
+  eofScanLimit: number
   readonly findPosition: (offset: number) => Position
   readonly options: ExpandTextOptions
   readonly tokens: readonly Token[]
@@ -49,6 +55,7 @@ export class Walker {
     this.closerFor = matchBrackets(this.tokens)
     this.options = options
     this.findPosition = createPositionFinder(css)
+    this.eofScanLimit = this.tokens.length
   }
 
   positionAt(offset: number): Position {
@@ -152,10 +159,17 @@ function isKeyframesName(name: string): boolean {
 }
 
 /**
- *
+ * Computed here, at pop time, rather than when the frame was opened: only
+ * a frame with something to append needs its own EOF closers at all, and
+ * only at this point does `w.eofScanLimit` reflect what every frame nested
+ * inside this one already closed for itself.
  */
-function flushFrame(w: Walker, close: EofClose, frame: Frame): void {
+function flushFrame(w: Walker, frameStart: number, blockEndIndex: number, frame: Frame): void {
   if (frame.parts.length === 0) return
+  const close = closeInfoFor(w, frameStart, blockEndIndex, w.eofScanLimit)
+  // A real closer (not the EOF fallback) needs no bound update: this frame
+  // closed cleanly, so it never entered the still-open chain at all.
+  if (w.tokens[blockEndIndex] === undefined) w.eofScanLimit = frameStart
   const parts =
     close.prefix === ''
       ? frame.parts
@@ -186,7 +200,7 @@ interface WalkFrame {
   i: number
   hasNestedNode: boolean
   readonly limit: number
-  readonly close: EofClose
+  readonly start: number
   readonly context: WalkContext
   readonly frame: Frame
 }
@@ -199,7 +213,7 @@ function toWalkFrame(w: Walker, bounds: BlockBounds): WalkFrame {
     i: skipInert(w.tokens, bounds.start, bounds.limit),
     hasNestedNode: false,
     limit: bounds.limit,
-    close: closeInfoFor(w, bounds.start, bounds.limit),
+    start: bounds.start,
     context: bounds.context,
     frame: { parts: [] },
   }
@@ -233,7 +247,7 @@ export function walkBlock(w: Walker, bounds: BlockBounds): void {
   while (stack.length > 0) {
     const top = stack.at(-1)!
     if (top.i >= top.limit) {
-      flushFrame(w, top.close, top.frame)
+      flushFrame(w, top.start, top.limit, top.frame)
       stack.pop()
       continue
     }

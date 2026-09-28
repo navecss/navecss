@@ -49,13 +49,17 @@ const WORKAROUND_GROUP_AT_RULE_NAMES = new Set([
  * is one the `& { }` workaround sentence applies to: one of the group
  * at-rules above, with a style rule ancestor at any depth, not only as its
  * own direct parent, however many further group rules sit between it and
- * that style rule.
+ * that style rule. Never inside `@keyframes`: a keyframe step (`from`,
+ * `to`, a percentage) parses as a Rule, so the ancestor walk below would
+ * otherwise read it as the style rule the sentence is about — but `&` has
+ * no meaning inside `@keyframes`, so the advice would be wrong there.
  */
 export function hasWorkaroundSentence(refusedParent: PostCSSContainer | PostCSSDocument): boolean {
   if (refusedParent.type !== 'atrule') return false
   if (!WORKAROUND_GROUP_AT_RULE_NAMES.has((refusedParent as PostCSSAtRule).name.toLowerCase())) {
     return false
   }
+  if (isInsideKeyframes(refusedParent)) return false
   let current = refusedParent.parent
   while (current) {
     if (current.type === 'rule') return true

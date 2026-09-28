@@ -13,9 +13,16 @@ export interface FoldEntry {
 }
 
 /**
-`entry`'s own position, the same way `OnceExit` positions the throw itself.
+ * `entry`'s own position, the same way `OnceExit` positions the throw
+ * itself — except when `entry.atRule` has no `source` at all (an at-rule
+ * an earlier plugin appended programmatically, never parsed), where
+ * `positionBy` itself throws (it reads `this.source.input`). There is no
+ * real position to report then, so `fallbackLine` — the entry's own index,
+ * passed in by the caller — stands in: enough to sort without crashing,
+ * and to keep a sourceless entry's relative order stable against the rest.
  */
-function positionOf(entry: FoldEntry): { column: number; line: number } {
+function positionOf(entry: FoldEntry, fallbackLine: number): { column: number; line: number } {
+  if (!entry.atRule.source) return { column: 0, line: fallbackLine }
   return entry.atRule.positionBy(entry.index === undefined ? {} : { index: entry.index })
 }
 
@@ -28,11 +35,14 @@ function positionOf(entry: FoldEntry): { column: number; line: number } {
  * happened to be visited).
  */
 export function sortFoldBySourceOrder(entries: readonly FoldEntry[]): FoldEntry[] {
-  return entries.toSorted((a, b) => {
-    const pa = positionOf(a)
-    const pb = positionOf(b)
-    return pa.line - pb.line || pa.column - pb.column
-  })
+  return entries
+    .map((entry, originalIndex) => ({ entry, originalIndex }))
+    .toSorted((a, b) => {
+      const pa = positionOf(a.entry, a.originalIndex)
+      const pb = positionOf(b.entry, b.originalIndex)
+      return pa.line - pb.line || pa.column - pb.column
+    })
+    .map(({ entry }) => entry)
 }
 
 /**
@@ -71,10 +81,8 @@ export function foldMessage(entries: readonly FoldEntry[]): string {
   const lines = [firstLine(first.text)]
   if (rest.length > 0) {
     lines.push(`${rest.length} more in this stylesheet:`)
-    for (const entry of rest) {
-      const position = entry.atRule.positionBy(
-        entry.index === undefined ? {} : { index: entry.index },
-      )
+    for (const [i, entry] of rest.entries()) {
+      const position = positionOf(entry, i + 1)
       lines.push(`${position.line}:${position.column}: ${withoutNavePrefix(firstLine(entry.text))}`)
     }
   }

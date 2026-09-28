@@ -107,6 +107,31 @@ describe('AC-directive-core-16 — every problem in one stylesheet, in one repor
     expect(caught?.message).toContain('1:15:')
   })
 
+  it('does not crash the fold when one of its entries has no source (an at-rule an earlier plugin appended, never parsed)', async () => {
+    const inj: Plugin = {
+      postcssPlugin: 'inj',
+      Rule(r) {
+        const stamped = r as unknown as { __d?: boolean }
+        if (r.selector === '.a' && !stamped.__d) {
+          stamped.__d = true
+          r.append(postcss.atRule({ name: 'nave', params: 'nope' }))
+        }
+      },
+    }
+
+    await expect(
+      postcss([inj, navePlugin()]).process('.a { color: red; } .b { @nave flx; }', {
+        from: undefined,
+      }),
+    ).rejects.toThrow(/unknown atom "nope"/)
+  })
+
+  it('sorts the fold by source position, not by push order — reds under a mutant that skips the sort', async () => {
+    await expect(
+      postcss([navePlugin()]).process('.a { @nave flx { } }', { from: undefined }),
+    ).rejects.toMatchObject({ line: 1, column: 6 })
+  })
+
   it('folds per RUN, not per shared plugin instance, once postcss runs async (found while implementing AC-directive-core-25)', async () => {
     const shared = navePlugin()
 

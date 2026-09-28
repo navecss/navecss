@@ -199,6 +199,27 @@ describe('AC-directive-core-25 — an extend specifier is a PostCSS dependency, 
     expect(result.stdout).toBe('.x { color: red; }')
   })
 
+  it('loads an uppercase .JSON path too, in a real Node process — Node itself refuses that extension for an import-attributes load, so this must not go through one', () => {
+    tmp = mkdtempSync(path.join(os.tmpdir(), 'nave-json-upper-'))
+    const f = path.join(tmp, 'atoms.JSON')
+    writeFileSync(f, '{"b":{"declarations":{"color":"red"}}}')
+    const script = [
+      `import { navePlugin } from ${JSON.stringify(pathToFileURL(POSTCSS_DIST).href)}`,
+      `import postcss from 'postcss'`,
+      `const result = await postcss([navePlugin({ extend: ${JSON.stringify(f)} })]).process('.x { @nave b; }', { from: undefined })`,
+      `process.stdout.write(result.css)`,
+    ].join('\n')
+
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      cwd: PACKAGE_ROOT,
+      encoding: 'utf8',
+      timeout: 5000,
+    })
+
+    expect(result.stderr).toBe('')
+    expect(result.stdout).toBe('.x { color: red; }')
+  })
+
   it('requires the async API once extend is a specifier (the object form stays synchronous)', () => {
     // A permanent fixture, not a temp file: the sync `.css` getter throws
     // before the background `import()` its own `Once()` kicked off ever

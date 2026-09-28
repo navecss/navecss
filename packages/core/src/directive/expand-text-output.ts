@@ -27,14 +27,21 @@ export interface Edit {
 }
 
 /**
-Chains `position` through the incoming map, if one was given; otherwise `position` is already in terms of the one source `expandText()` reports.
+ * Chains `position` through the incoming map, if one was given; otherwise
+ * `position` is already in terms of the one source `expandText()` reports.
+ * `undefined` when the incoming map has no mapping for `position` at all —
+ * propagated, not papered over with `position` itself: `position` is a
+ * generated position in the INTERMEDIATE stylesheet (the one `expandText()`
+ * read), meaningless as a position in whatever the incoming map's own
+ * sources are, so marking it as source `0` there would be inventing a
+ * mapping the incoming map never made.
  */
-function toOriginal(position: Position, incoming: IncomingMap | undefined): Position {
+function toOriginal(position: Position, incoming: IncomingMap | undefined): Position | undefined {
   if (!incoming) return position
   const original = incoming.originalPositionFor(position)
   return original
     ? { line: original.line, column: original.column, sourceIndex: original.sourceIndex }
-    : position
+    : undefined
 }
 
 interface MappedRange {
@@ -69,7 +76,11 @@ function appendMappedRange(
     const before = text.slice(cursor, token.startIndex)
     output.push(before)
     builder.advance(before)
-    builder.mark(toOriginal(sourceForToken(token), incoming))
+    const source = toOriginal(sourceForToken(token), incoming)
+    // No mapping at all for this token (an incoming map that never covered
+    // it): leave it a generated-only gap rather than mark it, so a reader
+    // of the map gets no source for it instead of an invented one.
+    if (source) builder.mark(source)
     const body = text.slice(token.startIndex, token.endIndex)
     output.push(body)
     builder.advance(body)

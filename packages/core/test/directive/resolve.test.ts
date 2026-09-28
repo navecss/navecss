@@ -118,4 +118,17 @@ describe('AC-directive-core-05 — an atom with no declarations object stays a t
     expect(resolved.ghost).toBeUndefined()
     expect(unresolved).toEqual(['ghost'])
   })
+
+  it('resolves an extend atom named __proto__ as its own key, not as the resolved map’s prototype', () => {
+    const extendWithProto = JSON.parse('{"__proto__":{"declarations":{"color":"red"}}}') as Record<
+      string,
+      AtomDefinition
+    >
+
+    const { resolved, unresolved } = resolve(['__proto__'], { extend: extendWithProto })
+
+    expect(Object.hasOwn(resolved, '__proto__')).toBe(true)
+    expect(resolved.__proto__?.declarations).toEqual([{ prop: 'color', value: 'red' }])
+    expect(unresolved).toEqual([])
+  })
 })

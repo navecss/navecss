@@ -135,7 +135,12 @@ Names in, plain per-name expansion data out, plus the names that resolved to not
  */
 export function resolve(names: readonly string[], options: ResolveOptions = {}): ResolveResult {
   const extend = options.extend ?? {}
-  const resolved: Record<string, ResolvedAtom> = {}
+  // `Object.create(null)`, not a `{}` literal: a `{}` literal's inherited
+  // `Object.prototype.__proto__` accessor turns `resolved['__proto__'] = …`
+  // below into resetting the object's OWN prototype instead of adding an
+  // own property, so an atom genuinely named `__proto__` would resolve yet
+  // read back as absent everywhere this map is read via `Object.hasOwn`.
+  const resolved: Record<string, ResolvedAtom> = Object.create(null) as Record<string, ResolvedAtom>
   const unresolved: string[] = []
 
   for (const name of names) {
