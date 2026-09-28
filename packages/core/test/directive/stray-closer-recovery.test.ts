@@ -9,13 +9,14 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { findSurvivors } from '../../src/directive/find-survivors.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const BIN = path.resolve(HERE, '..', '..', 'dist', 'bin.js')
+const FIND_SURVIVORS_SRC = path.resolve(HERE, '..', '..', 'src', 'directive', 'find-survivors.ts')
 
 function runCheck(
   cwd: string,
@@ -30,9 +31,26 @@ function runCheck(
 }
 
 describe('a stray closer with no opener anywhere in range terminates the item it starts', () => {
-  it('is not counted itself, and the rest of the stylesheet is still read', () => {
-    const survivors = findSurvivors('a { } }\n.b { color: @nave flex; }')
-    expect(survivors).toHaveLength(1)
+  it('is not counted itself, and the rest of the stylesheet is still read, in a real process under a timeout', () => {
+    // In a spawned child, not in-process: the historical bug here was an
+    // EMPTY span ceded back to the caller, which re-read the same token
+    // forever — a genuine infinite loop, not merely a slow one. Run
+    // in-process, a reverted fix would hang this whole worker rather than
+    // fail this one test; a spawned child with a timeout fails instead.
+    const script = [
+      `import { findSurvivors } from ${JSON.stringify(pathToFileURL(FIND_SURVIVORS_SRC).href)}`,
+      String.raw`const survivors = findSurvivors('a { } }\n.b { color: @nave flex; }')`,
+      `process.stdout.write(String(survivors.length))`,
+    ].join('\n')
+
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', '--input-type=module', '-e', script],
+      { timeout: 3000, encoding: 'utf8' },
+    )
+
+    expect(result.signal).toBeNull()
+    expect(result.stdout).toBe('1')
   })
 
   it('is one at-rule too, when the whole thing is a bare stray closer', () => {
