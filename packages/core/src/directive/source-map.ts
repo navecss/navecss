@@ -6,6 +6,7 @@
  */
 
 const BASE64_DIGITS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+const NEWLINE_CHARS = new Set(['\n', '\r', '\f'])
 
 /**
 One field's VLQ base64 encoding: zigzag-signed, 5 bits per digit, a continuation bit on all but the last.
@@ -84,9 +85,17 @@ export class MappingsBuilder {
     // UTF-16 code units) would advance the column by one instead of two —
     // wrong, since every other position in this map (the tokenizer's own
     // offsets included) is in UTF-16 code units.
-    // eslint-disable-next-line unicorn/no-for-loop, @typescript-eslint/prefer-for-of -- for-of walks code points, not UTF-16 code units; see above
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === '\n') {
+    // A line break is CR, FF, LF or a CRLF pair — CSS Syntax Level 3's own
+    // "newline" (§4.2), the same rule the SOURCE side already counts lines
+    // by (`expand-text-diagnostics.ts`'s `lineStartOffsets`): a generated
+    // side that counted LF only would under-count a `\r`- or `\f`-broken
+    // stylesheet's lines relative to the positions it is meant to map.
+    let i = 0
+    while (i < text.length) {
+      const c = text[i]
+      if (c !== undefined && NEWLINE_CHARS.has(c)) {
+        i++
+        if (c === '\r' && text[i] === '\n') i++
         this.outputLine++
         this.outputColumn = 0
         this.lines.push([])
@@ -95,6 +104,7 @@ export class MappingsBuilder {
         continue
       }
       this.outputColumn++
+      i++
     }
   }
 
@@ -148,6 +158,12 @@ export interface IncomingMap {
  * start: `segments` is already in ascending generated-position order (built
  * that way, one output token at a time), and a linear scan per query made
  * chaining through an incoming map quadratic in the number of directives.
+ * Never a segment from an EARLIER generated line than the query's own: a
+ * generated line whose own first segment starts past the queried column
+ * (nothing on it maps that far left) has no mapping for this position at
+ * all, the same way any other reader of this map would read it — not the
+ * previous line's own last segment, however close its generated position
+ * sorts.
  */
 function findCandidate(
   segments: readonly DecodedSegment[],
@@ -170,7 +186,7 @@ function findCandidate(
       high = mid - 1
     }
   }
-  return candidate
+  return candidate?.generatedLine === generatedLine ? candidate : undefined
 }
 
 /**

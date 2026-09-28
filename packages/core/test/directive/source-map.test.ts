@@ -2,6 +2,23 @@ import { SourceMapConsumer } from 'source-map'
 import { describe, expect, it } from 'vitest'
 
 import { expandText } from '../../src/directive/expand-text.ts'
+import { decodeIncomingMap, type SourceMap } from '../../src/directive/source-map.ts'
+
+/**
+One field's VLQ base64 encoding, for building a scratch mappings string by hand.
+ */
+function encodeVLQ(n: number): string {
+  const base64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let value = n < 0 ? (-n << 1) + 1 : n << 1
+  let result = ''
+  do {
+    let digit = value & 0b1_1111
+    value >>>= 5
+    if (value > 0) digit |= 0b10_0000
+    result += base64[digit]
+  } while (value > 0)
+  return result
+}
 
 describe('AC-directive-core-18 — a version-3 source map, one segment per token', () => {
   const css = '.a {\n  color: red;\n  @nave focusRing;\n  margin: 0;\n}'
@@ -218,3 +235,40 @@ function buildTwoSourceMappings(text: string): string {
   }
   return rows.join(';')
 }
+
+describe('chaining never borrows a previous line’s segment for a query with none of its own', () => {
+  it('gives no original position when the queried line’s own first segment starts past the queried column', () => {
+    // Line 1 (index 0): one segment at column 0, mapping to a.css:10.
+    // Line 2 (index 1): one segment, but only from column 4 — nothing maps
+    // columns 0-3 on that line.
+    const line1 = `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(10)}${encodeVLQ(0)}`
+    const line2 = `${encodeVLQ(4)}${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}`
+    const map: SourceMap = {
+      version: 3,
+      sources: ['a.css'],
+      names: [],
+      mappings: `${line1};${line2}`,
+    }
+
+    const incoming = decodeIncomingMap(map)
+
+    expect(incoming.originalPositionFor({ line: 2, column: 0 })).toBeUndefined()
+  })
+})
+
+describe('the generated side counts lines by the same rule as the source side', () => {
+  it('agrees with the untouched source on every mapping across a lone CR line break', async () => {
+    const css = '.a{}\r.b{c:d}'
+    const { map } = expandText(css)
+    const consumer = await new SourceMapConsumer(map)
+
+    let mappingCount = 0
+    consumer.eachMapping((m) => {
+      mappingCount++
+      expect([m.originalLine, m.originalColumn]).toEqual([m.generatedLine, m.generatedColumn])
+    })
+    expect(mappingCount).toBeGreaterThan(0)
+
+    consumer.destroy()
+  })
+})
