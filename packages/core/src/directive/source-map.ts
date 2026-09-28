@@ -143,18 +143,32 @@ export interface IncomingMap {
 }
 
 /**
-The last decoded segment whose generated position is at or before `position`.
+ * The last decoded segment whose generated position is at or before
+ * `position`, found by binary search rather than a linear scan from the
+ * start: `segments` is already in ascending generated-position order (built
+ * that way, one output token at a time), and a linear scan per query made
+ * chaining through an incoming map quadratic in the number of directives.
  */
 function findCandidate(
   segments: readonly DecodedSegment[],
   position: Position,
 ): DecodedSegment | undefined {
   const generatedLine = position.line - 1
+  let low = 0
+  let high = segments.length - 1
   let candidate: DecodedSegment | undefined
-  for (const segment of segments) {
-    if (segment.generatedLine > generatedLine) break
-    if (segment.generatedLine === generatedLine && segment.generatedColumn > position.column) break
-    candidate = segment
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    const segment = segments[mid]!
+    const isAtOrBefore =
+      segment.generatedLine < generatedLine ||
+      (segment.generatedLine === generatedLine && segment.generatedColumn <= position.column)
+    if (isAtOrBefore) {
+      candidate = segment
+      low = mid + 1
+    } else {
+      high = mid - 1
+    }
   }
   return candidate
 }

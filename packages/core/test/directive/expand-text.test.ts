@@ -12,6 +12,22 @@ function norm(css: string): string {
   return css.replaceAll(/\s+/g, ' ').trim()
 }
 
+/**
+One field's VLQ base64 encoding, for building a scratch source map by hand.
+ */
+function encodeVLQ(n: number): string {
+  const base64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let value = n < 0 ? (-n << 1) + 1 : n << 1
+  let result = ''
+  do {
+    let digit = value & 0b1_1111
+    value >>>= 5
+    if (value > 0) digit |= 0b10_0000
+    result += base64[digit]
+  } while (value > 0)
+  return result
+}
+
 describe('AC-directive-core-04 — the shipped placement semantics, through expandText()', () => {
   const rows: readonly [input: string, expected: string][] = [
     ['.a { color: red; @nave flex; }', '.a { color: red; display: flex; }'],
@@ -226,6 +242,38 @@ describe('AC-directive-core-25 — expandText() stays fast on a large stylesheet
 
     const start = performance.now()
     expandText(css)
+    expect(performance.now() - start).toBeLessThan(2000)
+  })
+
+  it('runs 20000 directives, each on its own line, in under 2 seconds', () => {
+    const css = '.a { @nave flex; }\n'.repeat(20_000)
+
+    const start = performance.now()
+    expandText(css)
+    expect(performance.now() - start).toBeLessThan(2000)
+  })
+
+  it('does not overflow the call stack on 20000 levels of nesting', () => {
+    const css = '.a{'.repeat(20_000) + '}'.repeat(20_000)
+
+    expect(() => expandText(css)).not.toThrow()
+  })
+
+  it('stays fast chaining through an incoming source map across 20000 directives', () => {
+    const css = '.a { @nave flex; }\n'.repeat(20_000)
+    const lineCount = css.split('\n').length
+
+    // An identity mapping, one segment per line at column 0: every line
+    // maps to itself in a single source, 'a.css'.
+    const mappings = Array.from({ length: lineCount }, (_, i) =>
+      i === 0
+        ? `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}`
+        : `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(1)}${encodeVLQ(0)}`,
+    ).join(';')
+    const inputSourceMap = { version: 3 as const, sources: ['a.css'], names: [], mappings }
+
+    const start = performance.now()
+    expandText(css, { inputSourceMap })
     expect(performance.now() - start).toBeLessThan(2000)
   })
 })

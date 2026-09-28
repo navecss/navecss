@@ -48,6 +48,10 @@ interface MappedRangeContext {
   readonly builder: MappingsBuilder
   readonly output: string[]
   readonly incoming: IncomingMap | undefined
+  /**
+  How far into `w.tokens` the gaps walked so far have already consumed: gaps are visited in increasing document order, so a fresh linear filter per gap (correct on its own) made the whole pass quadratic in the number of directives — one filter over every token, per gap.
+   */
+  readonly gapTokenCursor: { index: number }
 }
 
 /**
@@ -77,10 +81,27 @@ function appendMappedRange(
 }
 
 /**
-Every token whose start falls inside `[start, end)`.
+ * Every token whose start falls inside `[start, end)`, resuming from
+ * `cursor` rather than filtering the whole array: gaps are visited in
+ * increasing document order and never overlap, so a token consumed by an
+ * earlier gap can never belong to a later one, and the cursor only ever
+ * moves forward.
  */
-function tokensBetween(tokens: readonly Token[], start: number, end: number): Token[] {
-  return tokens.filter((t) => t.startIndex >= start && t.startIndex < end)
+function tokensBetween(
+  tokens: readonly Token[],
+  cursor: { index: number },
+  start: number,
+  end: number,
+): Token[] {
+  let i = cursor.index
+  while (i < tokens.length && tokens[i]!.startIndex < start) i++
+  const result: Token[] = []
+  while (i < tokens.length && tokens[i]!.startIndex < end) {
+    result.push(tokens[i]!)
+    i++
+  }
+  cursor.index = i
+  return result
 }
 
 interface GapInput {
@@ -101,7 +122,7 @@ function appendGap(ctx: MappedRangeContext, gap: GapInput): void {
       text: gap.css,
       rangeStart: gap.start,
       rangeEnd: gap.end,
-      tokensInRange: tokensBetween(gap.tokens, gap.start, gap.end),
+      tokensInRange: tokensBetween(gap.tokens, ctx.gapTokenCursor, gap.start, gap.end),
     },
     (t) => gap.positionAt(t.startIndex),
   )
@@ -136,7 +157,12 @@ Builds the final CSS and its source map together: gaps map each of their own tok
 export function buildOutput(input: BuildOutputInput): { css: string; map: string } {
   const incoming = input.inputSourceMap ? decodeIncomingMap(input.inputSourceMap) : undefined
   const sorted = [...input.edits].toSorted((a, b) => a.start - b.start || a.end - b.end)
-  const ctx: MappedRangeContext = { builder: new MappingsBuilder(), output: [], incoming }
+  const ctx: MappedRangeContext = {
+    builder: new MappingsBuilder(),
+    output: [],
+    incoming,
+    gapTokenCursor: { index: 0 },
+  }
   let cursor = 0
 
   for (const edit of sorted) {
