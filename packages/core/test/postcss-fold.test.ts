@@ -72,6 +72,41 @@ describe('AC-directive-core-16 — every problem in one stylesheet, in one repor
     await expect(second).rejects.toMatchObject({ line: 1, column: 12 })
   })
 
+  it('emits warnings in source order, even when a later diagnostic kind is read first', async () => {
+    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(
+      '.a { @nave flx, flx; }',
+      { from: undefined },
+    )
+
+    // The comma is read into a diagnostic before the second "flx" is, so
+    // without a source-order sort the first warning would be the comma's,
+    // not the first "flx" at column 12.
+    expect(result.warnings()).toMatchObject([
+      { column: 12, line: 1 },
+      { column: 15, line: 1 },
+      { column: 17, line: 1 },
+    ])
+  })
+
+  it('throws at the first problem in source order, even when a later diagnostic kind is read first', async () => {
+    let caught: { column: number; line: number; message: string } | undefined
+    try {
+      await postcss([navePlugin()]).process('.a { @nave flx, flx; }', { from: undefined })
+    } catch (error) {
+      caught = error as { column: number; line: number; message: string }
+    }
+
+    expect(caught).toBeDefined()
+    // The comma is read into a diagnostic before the second "flx" is, but
+    // the FIRST "flx" (column 12) precedes the comma (column 15) in the
+    // stylesheet, so it must be the one the throw is positioned at, and the
+    // comma the first line of the "more" list.
+    expect(caught?.line).toBe(1)
+    expect(caught?.column).toBe(12)
+    expect(caught?.message).toContain('unknown atom "flx"')
+    expect(caught?.message).toContain('1:15:')
+  })
+
   it('folds per RUN, not per shared plugin instance, once postcss runs async (found while implementing AC-directive-core-25)', async () => {
     const shared = navePlugin()
 

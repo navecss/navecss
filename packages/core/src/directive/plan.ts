@@ -146,6 +146,12 @@ function planNames(prelude: string, options: PlanOptions): PlanResult {
   const { names, diagnostics } = readNames(components)
   const { resolved } = resolve(names, { extend: options.extend })
   diagnostics.push(...readUnknownAtomDiagnostics(components, resolved))
+  // `bad-token` diagnostics were read in one pass and `unknown-atom` ones in
+  // a second, so the array above is not yet in source order — sorted here
+  // so the first entry is genuinely the first problem in the prelude, not
+  // whichever pass happened to add it first (AC-16 covers every directive's
+  // problems, not in visitation order).
+  diagnostics.sort((a, b) => a.offset - b.offset)
 
   const declarations: Declaration[] = []
   const blocks: AnchoredBlock[] = []

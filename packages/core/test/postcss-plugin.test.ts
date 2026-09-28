@@ -5,12 +5,12 @@
  * architecture review. G0 is a correctness batch,
  * not a spec, so the C- finding ID plays the role the AC- ID plays in a spec.
  */
+import type { AtRule } from 'postcss'
+
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/postcss.ts'
-
-import type { AtRule } from 'postcss'
 
 import type { AtomDefinition } from '../src/atoms.ts'
 
@@ -299,6 +299,18 @@ describe('the refused-parent text names the & workaround only for a group rule n
 
   it('a group rule nested in a style rule appends the workaround sentence', async () => {
     await expect(run('.a { @media (x) { @nave flex; } }')).rejects.toThrow(/& \{ @nave \.\.\.; \}/)
+  })
+
+  it('a group rule nested in another group rule inside a style rule appends the workaround sentence too', async () => {
+    await expect(run('.a { @media (x) { @media (y) { @nave flex; } } }')).rejects.toThrow(
+      /& \{ @nave \.\.\.; \}/,
+    )
+  })
+
+  it('never appends the workaround sentence for a non-group at-rule such as @font-face', async () => {
+    await expect(run('.a { @font-face { @nave flex; } }')).rejects.toThrow(
+      /must be the direct child of a CSS rule selector block$/,
+    )
   })
 })
 

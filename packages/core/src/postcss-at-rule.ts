@@ -16,7 +16,7 @@ import { formatDiagnostic } from './directive/diagnostics-format.ts'
 import { type AnchoredBlock, type Declaration, plan, type PlanResult } from './directive/plan.ts'
 import { tokenize } from './directive/tokenizer.ts'
 import { isFollowingNestedNode } from './postcss-nested-builders.ts'
-import { isInsideKeyframes, stampSource } from './postcss-node-utils.ts'
+import { hasWorkaroundSentence, isInsideKeyframes, stampSource } from './postcss-node-utils.ts'
 
 export interface DirectiveContext {
   atRule: PostCSSAtRule
@@ -55,7 +55,7 @@ interface NaveMatch {
  */
 function currentParams(atRule: PostCSSAtRule): string {
   const raw = atRule.raws.params
-  if (raw && raw.value === atRule.params) return raw.raw
+  if (raw?.value === atRule.params) return raw.raw
   return atRule.params
 }
 
@@ -107,15 +107,17 @@ function reportDiagnostic(
   preludeStartIndex: number,
 ): void {
   // The workaround sentence names a group rule the directive can be moved
-  // into via `& { }` — only meaningful when that group rule itself sits
-  // inside a style rule (`.a { @media (x) { @nave flex; } }`), never for a
-  // top-level one, and never for @keyframes, where `&` has no such use.
+  // into via `& { }` — only meaningful when the refused parent is one of
+  // those group rules (never @keyframes, where `&` has no such use, nor any
+  // other at-rule such as @font-face, which cannot itself nest inside a
+  // style rule the way these can) AND a style rule sits somewhere above it,
+  // however many further group rules come between
+  // (`.a { @media (x) { @media (y) { @nave flex; } } }` still gets it).
   const refusedParent = ctx.atRule.parent
   const isNestedGroup =
     diagnostic.code === 'bad-parent' &&
     refusedParent !== undefined &&
-    !isInsideKeyframes(refusedParent) &&
-    refusedParent.parent?.type === 'rule'
+    hasWorkaroundSentence(refusedParent)
   const text = formatDiagnostic(
     isNestedGroup ? { ...diagnostic, detail: 'nested-group' } : diagnostic,
     {

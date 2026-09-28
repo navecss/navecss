@@ -29,6 +29,42 @@ export function isInsideKeyframes(container: PostCSSContainer | PostCSSDocument)
 }
 
 /**
+ * The group at-rules the `& { @nave ...; }` workaround sentence names: the
+ * ones a directive can be moved out of and into a nested rule for, per
+ * CSS's own nesting rules. Never `@keyframes` (no `&` use there) nor any
+ * other at-rule such as `@font-face`, which cannot itself nest inside a
+ * style rule the way these can.
+ */
+const WORKAROUND_GROUP_AT_RULE_NAMES = new Set([
+  'container',
+  'layer',
+  'media',
+  'scope',
+  'starting-style',
+  'supports',
+])
+
+/**
+ * Whether `refusedParent` — a group at-rule refused as `@nave`'s parent —
+ * is one the `& { }` workaround sentence applies to: one of the group
+ * at-rules above, with a style rule ancestor at any depth, not only as its
+ * own direct parent, however many further group rules sit between it and
+ * that style rule.
+ */
+export function hasWorkaroundSentence(refusedParent: PostCSSContainer | PostCSSDocument): boolean {
+  if (refusedParent.type !== 'atrule') return false
+  if (!WORKAROUND_GROUP_AT_RULE_NAMES.has((refusedParent as PostCSSAtRule).name.toLowerCase())) {
+    return false
+  }
+  let current = refusedParent.parent
+  while (current) {
+    if (current.type === 'rule') return true
+    current = current.parent
+  }
+  return false
+}
+
+/**
  * Stamps `source` onto `node` and everything it contains, so source maps and
  * devtools can trace generated CSS back to the directive that produced it
  * (also what silences a bundler's "plugin did not pass `from`" warning on a

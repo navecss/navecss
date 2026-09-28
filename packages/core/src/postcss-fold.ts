@@ -13,6 +13,29 @@ export interface FoldEntry {
 }
 
 /**
+`entry`'s own position, the same way `OnceExit` positions the throw itself.
+ */
+function positionOf(entry: FoldEntry): { column: number; line: number } {
+  return entry.atRule.positionBy(entry.index === undefined ? {} : { index: entry.index })
+}
+
+/**
+ * `entries`, in source order (line, then column): `fold.push()` happens in
+ * whatever order the diagnostics were produced in, which is not always
+ * source order — a directive with more than one problem in its own prelude
+ * can otherwise report a LATER one as "the first problem" (AC-16 says the
+ * fold covers every directive, not that it covers them in the order they
+ * happened to be visited).
+ */
+export function sortFoldBySourceOrder(entries: readonly FoldEntry[]): FoldEntry[] {
+  return entries.toSorted((a, b) => {
+    const pa = positionOf(a)
+    const pb = positionOf(b)
+    return pa.line - pb.line || pa.column - pb.column
+  })
+}
+
+/**
 The first line of `text`.
  */
 function firstLine(text: string): string {

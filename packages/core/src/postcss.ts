@@ -53,7 +53,7 @@ import type { FoldEntry } from './postcss-fold.ts'
 
 import { handleAtRule } from './postcss-at-rule.ts'
 import { applyExtendModule, resolveExtendSpecifier } from './postcss-extend-module.ts'
-import { foldMessage } from './postcss-fold.ts'
+import { foldMessage, sortFoldBySourceOrder } from './postcss-fold.ts'
 import { validateExtendAtoms } from './validate-extend-atoms.ts'
 
 export interface NavePluginOptions {
@@ -160,9 +160,10 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
 
         OnceExit() {
           if (fold.length === 0) return
-          const first = fold[0]!
+          const ordered = sortFoldBySourceOrder(fold)
+          const first = ordered[0]!
           throw first.atRule.error(
-            foldMessage(fold),
+            foldMessage(ordered),
             first.index === undefined ? {} : { index: first.index },
           )
         },
