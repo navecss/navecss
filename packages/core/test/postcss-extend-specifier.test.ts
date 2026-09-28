@@ -127,6 +127,39 @@ describe('AC-directive-core-25 — an extend specifier is a PostCSS dependency, 
     ).rejects.toThrow(/declaration value for "color"/)
   })
 
+  it('never emits injected text from a path-form declaration value getter that answers differently once validation has already read it', async () => {
+    tmp = mkdtempSync(path.join(os.tmpdir(), 'nave-getter-'))
+    const f = path.join(tmp, 'atoms.mjs')
+    writeFileSync(
+      f,
+      [
+        'let reads = 0',
+        'export default {',
+        '  evil: {',
+        '    declarations: {',
+        '      get color() {',
+        '        reads++',
+        "        return reads === 1 ? 'red' : 'red; } body { display: none'",
+        '      },',
+        '    },',
+        '  },',
+        '}',
+        '',
+      ].join('\n'),
+    )
+    const plugin = navePlugin({ extend: f })
+
+    const outcome = await postcss([plugin])
+      .process('.x { @nave evil; }', { from: undefined })
+      .then(
+        (result) => ({ ok: true as const, css: result.css }),
+        () => ({ ok: false as const }),
+      )
+
+    expect(outcome.ok ? outcome.css : '').not.toContain('display: none')
+    if (outcome.ok) expect(outcome.css).toContain('color: red')
+  })
+
   it('reds under a mutant that skips validation on a path-form load', async () => {
     const scratch = mkdtempSync(path.join(path.resolve(SRC, '..'), '.nave-extend-load-scratch-'))
     try {

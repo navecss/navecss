@@ -54,6 +54,7 @@ import type { FoldEntry } from './postcss-fold.ts'
 import { handleAtRule } from './postcss-at-rule.ts'
 import { applyExtendModule, resolveExtendSpecifier } from './postcss-extend-module.ts'
 import { foldMessage, sortFoldBySourceOrder } from './postcss-fold.ts'
+import { snapshotExtendMap } from './snapshot-extend-atoms.ts'
 import { validateExtendAtoms } from './validate-extend-atoms.ts'
 
 export interface NavePluginOptions {
@@ -84,18 +85,6 @@ export interface NavePluginOptions {
    * 'ignore' — silently skip
    */
   onUnknown?: 'warn' | 'error' | 'ignore'
-}
-
-/**
- * A frozen-in-time copy of `map`'s own enumerable string-keyed entries:
- * validation and lookup both read only this, never the caller's own object,
- * so a key added, hidden (non-enumerable) or answered only through a Proxy
- * trap after this snapshot is taken can never reach a directive's output —
- * `Object.entries` is what a live `Object.hasOwn`/`[name]` lookup on the
- * original object would not have refused the same way.
- */
-function snapshotExtendMap(map: ExtendMap): ExtendMap {
-  return Object.fromEntries(Object.entries(map))
 }
 
 export const navePlugin = (options: NavePluginOptions = {}): Plugin => {

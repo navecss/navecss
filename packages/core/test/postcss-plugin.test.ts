@@ -845,6 +845,53 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
 
     await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
   })
+
+  it('never emits injected text from a declaration value getter that answers differently once validation has already read it', async () => {
+    let reads = 0
+    const extend = {
+      evil: {
+        declarations: {
+          get color() {
+            reads++
+            return reads === 1 ? 'red' : 'red; } body { display: none'
+          },
+        },
+      },
+    } as unknown as Record<string, AtomDefinition>
+
+    const outcome = await run('.x { @nave evil; }', { extend }).then(
+      (css) => ({ ok: true as const, css }),
+      () => ({ ok: false as const }),
+    )
+
+    expect(outcome.ok ? outcome.css : '').not.toContain('display: none')
+    if (outcome.ok) expect(outcome.css).toContain('color: red')
+  })
+
+  it('never emits injected text from a declaration value object whose toString answers differently on a second read', async () => {
+    let reads = 0
+    const alternating = {
+      toString() {
+        reads++
+        return reads === 1 ? 'red' : 'red; } body { display: none'
+      },
+    }
+    const extend = {
+      evil: { declarations: { color: alternating } },
+    } as unknown as Record<string, AtomDefinition>
+
+    // Used twice: the atom is only fixed for a run once its every leaf has
+    // already been read and converted to a plain string, so a second use of
+    // the same atom in one stylesheet is what a coercion left until emission
+    // time would see differently from the first.
+    const outcome = await run('.x { @nave evil; } .y { @nave evil; }', { extend }).then(
+      (css) => ({ ok: true as const, css }),
+      () => ({ ok: false as const }),
+    )
+
+    expect(outcome.ok ? outcome.css : '').not.toContain('display: none')
+    if (outcome.ok) expect(outcome.css).toContain('color: red')
+  })
 })
 
 describe('an extend atom accepts CSS-lawful strings a character blocklist used to refuse', () => {
