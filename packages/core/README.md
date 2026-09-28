@@ -301,7 +301,8 @@ recursively for `.css`. Exit codes:
   line each (file, line, column, the directive as written, and its enclosing
   selector when known).
 - `2` — a usage error, an unreadable `--source` path, or no stylesheet found
-  at all.
+  at all. An unreadable path gives `2` even when a stylesheet that was read
+  held `@nave`; those findings are still printed.
 
 Run it from a `package.json` script, chained with `&&` after the build that
 should have resolved every directive, so it reads that build's output. The

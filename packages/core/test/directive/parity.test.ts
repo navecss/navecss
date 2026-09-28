@@ -1,5 +1,5 @@
 /**
- * AC-directive-core-19: one corpus, every leg present at the slice (the
+ * AC-directive-core-19: one corpus, every host that exists so far (the
  * PostCSS adapter and expandText()), one equivalence.
  */
 import postcss, { type ChildNode, type Container } from 'postcss'

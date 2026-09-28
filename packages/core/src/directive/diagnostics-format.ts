@@ -161,7 +161,8 @@ Every diagnostic whose text needs nothing beyond the diagnostic itself — no vo
 const FIXED_TEXTS: Readonly<
   Record<Exclude<Diagnostic['code'], 'unknown-atom' | 'bad-parent'>, (d: Diagnostic) => string>
 > = {
-  'bad-token': (d) => `@nave: unexpected "${d.text ?? ''}"; separate atom names with spaces`,
+  'bad-token': (d) =>
+    `@nave: unexpected "${d.text ?? ''}"; a directive takes only atom names (separate atom names with spaces)`,
   'bare-import': () => '@import specifies a bare module: a browser cannot load it',
   'has-block': () => '@nave: a directive with a {} block is not supported',
   'in-keyframes': () => '@nave cannot be used inside @keyframes',

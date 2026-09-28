@@ -15,12 +15,12 @@
  *   navePlugin({ extend: myAtoms })      // Nave + consumer atoms
  *   navePlugin({ onUnknown: 'warn' })    // Log and skip instead of failing the build
  *
- * `extend` is trusted, consumer-authored code, run at build time in the same file that could
- * already run arbitrary JavaScript — it is not sanitised input. `validateExtendAtoms` still
- * parses every declaration, pseudo selector key, and media/container condition an atom carries,
- * and rejects any that does not parse as exactly that one construct, since a typo there is
- * otherwise silent CSS injection into the generated output rather than a build error at the
- * point of the mistake.
+ * `extend` is trusted, consumer-authored code (your build config, or the module a path names),
+ * which can already run arbitrary JavaScript at build time: it is not sanitised input. Every
+ * declaration, pseudo selector key, and media/container condition an atom carries is still
+ * parsed, and one that does not parse as exactly that one construct is refused, since a typo
+ * there is otherwise silent CSS injection into the generated output rather than a build error
+ * at the point of the mistake.
  *
  * Consumer atoms:
  *   import type { AtomDefinition } from '@navecss/core/postcss'

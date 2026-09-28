@@ -91,7 +91,7 @@ export interface EofClose {
 /**
  * Where a block's own close sits, and what (if anything) EOF closed for it
  * implicitly: the `}` token's start with no prefix, the normal case; or,
- * when it never closes (R5d), the end of input — except when the very
+ * when it never closes, the end of input — except when the very
  * last token is an unclosed comment, which (having nowhere to end)
  * consumes every byte to EOF: placed at the comment's own start instead,
  * so the appended block lands before it, as real syntax, with no prefix

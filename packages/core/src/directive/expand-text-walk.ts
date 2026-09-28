@@ -35,7 +35,7 @@ export class Walker {
   readonly edits: Edit[] = []
   // Built once per call, not once per query: `positionAt` runs once per
   // output token, and a fresh linear scan on every call made the whole
-  // pass quadratic in the stylesheet's size (AC-25). Not private: this
+  // pass quadratic in the stylesheet's size. Not private: this
   // project's class-member-order and class-sort lint rules disagree with
   // each other on where a private field goes relative to the surrounding
   // public ones, which a field with no access modifier sidesteps.

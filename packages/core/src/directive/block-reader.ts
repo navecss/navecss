@@ -251,7 +251,7 @@ export function readItem(
 }
 
 /**
-True for a `@nave` at-keyword: ASCII case-insensitive on its unescaped value (R5a).
+True for a `@nave` at-keyword: ASCII case-insensitive on its unescaped value.
  */
 export function isNaveAtKeyword(token: Token): boolean {
   return token.type === 'at-keyword-token' && atKeywordName(token) === 'nave'

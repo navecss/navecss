@@ -78,7 +78,7 @@ function lastAtOrBefore(starts: readonly number[], offset: number): number {
  * search over it (`O(log lines)`) rather than a fresh linear scan from the
  * start of the string. Built for `expandText()`'s own hot path — one
  * query per output token — where a linear-scan-per-query, correct on its
- * own, made the whole pass quadratic in the stylesheet's size (AC-25).
+ * own, made the whole pass quadratic in the stylesheet's size.
  * `offset` is a plain string index throughout, so it is already in UTF-16
  * code units — no separate handling for a surrogate pair.
  */

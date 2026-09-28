@@ -107,7 +107,7 @@ interface BlockFrame {
 }
 
 /**
-`item`'s own `{}` content as a new frame to walk, if it has one — pushed onto the work stack rather than recursed into, so nesting depth never grows the JS call stack (deeply nested CSS is otherwise a stack overflow, not a parse error, AC-25).
+`item`'s own `{}` content as a new frame to walk, if it has one — pushed onto the work stack rather than recursed into, so nesting depth never grows the JS call stack (deeply nested CSS is otherwise a stack overflow, not a parse error).
  */
 function childFrameFor(
   scan: Scan,

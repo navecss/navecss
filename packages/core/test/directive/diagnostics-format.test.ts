@@ -75,7 +75,9 @@ describe('AC-directive-core-11 — the bad-token message', () => {
       endOffset: 0,
     })
 
-    expect(text).toBe('@nave: unexpected "!important"; separate atom names with spaces')
+    expect(text).toBe(
+      '@nave: unexpected "!important"; a directive takes only atom names (separate atom names with spaces)',
+    )
   })
 
   it('quotes a comma the same way', () => {
