@@ -16,10 +16,17 @@ import type { PackedCoreTarball } from './helpers/pack-core.ts'
 import { generate, OUTPUT_PATH } from '../scripts/generate-skill.ts'
 import { HASH, scanForBrainReferences, syntheticDatedId } from './helpers/brain-reference-scan.ts'
 import { packCoreTarball } from './helpers/pack-core.ts'
+import { shippedChangesetProse } from './helpers/released-changeset.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.resolve(HERE, '../dist')
-const CHANGESET_PATH = path.resolve(HERE, '../../../.changeset/ship-agent-skill-guide.md')
+/** This slice's changeset while pending, the CHANGELOG entry that carries its text once released. */
+const shippedChangeset = (): string =>
+  shippedChangesetProse(
+    path.resolve(HERE, '../../../.changeset/ship-agent-skill-guide.md'),
+    path.resolve(HERE, '../CHANGELOG.md'),
+    'Ships `skills/navecss/SKILL.md`',
+  )
 const GENERATOR_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-skill.ts'), 'utf8')
 
 /**
@@ -144,7 +151,7 @@ describe('AC-consumer-constraints-02 (scoped to this slice): no prose count', ()
 
   it('the guide and this slice’s changeset carry no numeral or number word near the vocabulary', () => {
     expect(readFileSync(OUTPUT_PATH, 'utf8')).not.toMatch(COUNT_NEAR_VOCAB)
-    expect(readFileSync(CHANGESET_PATH, 'utf8')).not.toMatch(COUNT_NEAR_VOCAB)
+    expect(shippedChangeset()).not.toMatch(COUNT_NEAR_VOCAB)
   })
 
   it('the scan reports a planted count', () => {
@@ -159,7 +166,7 @@ describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference'
   })
 
   it('this slice’s changeset carries none either', () => {
-    scanForBrainReferences(readFileSync(CHANGESET_PATH, 'utf8'), 'the changeset')
+    scanForBrainReferences(shippedChangeset(), 'the changeset')
   })
 
   it('the scan reports a planted copy carrying a tracker ref, a persona id and a dated id', () => {

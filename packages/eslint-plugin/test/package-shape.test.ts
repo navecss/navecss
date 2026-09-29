@@ -50,6 +50,17 @@ async function readPendingChangesets(rootDir: string): Promise<Changeset[]> {
   return reader.readChangesets(rootDir)
 }
 
+/**
+ * Once a release has consumed the changeset, its text sits under `### Minor Changes` in the
+ * `0.1.0` entry of the package's `CHANGELOG.md`: the same property, read where the text went.
+ */
+function expectMinorInFirstReleaseEntry(): void {
+  const changelog = readFileSync(path.join(PACKAGE_DIR, 'CHANGELOG.md'), 'utf8')
+  const start = changelog.indexOf('\n## 0.1.0\n')
+  expect(start).toBeGreaterThan(-1)
+  expect(changelog.slice(start)).toMatch(/^### Minor Changes$/mu)
+}
+
 describe('AC-01: the package manifest', () => {
   it('type: module, license: MIT, no bin, build runs only tsc', () => {
     const m = manifest() as {
@@ -161,10 +172,13 @@ describe('AC-01: the package manifest', () => {
     expect(config.ignore).not.toContain('@navecss/eslint-plugin')
   })
 
-  it('a minor changeset naming only this package is pending, and the next version is 0.1.0', async () => {
+  it('the first release is a minor: a lone pending changeset while at 0.0.0, the 0.1.0 CHANGELOG entry after', async () => {
     const { version } = manifest() as { version: string }
-    expect(version).toBe('0.0.0')
     const pending = await readPendingChangesets(ROOT)
+    if (version !== '0.0.0') {
+      expectMinorInFirstReleaseEntry()
+      return
+    }
     const naming = pending.filter((changeset) =>
       changeset.releases.some((release) => release.name === '@navecss/eslint-plugin'),
     )

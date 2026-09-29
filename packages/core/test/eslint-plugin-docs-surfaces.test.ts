@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { packCoreTarball, type PackedCoreTarball } from './helpers/pack-core.ts'
+import { changelogEntries } from './helpers/released-changeset.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../../..')
@@ -107,17 +108,23 @@ describe('AC-eslint-plugin-23: core’s cx() docs, the root README, CLAUDE.md an
   })
 })
 
-describe('AC-eslint-plugin-23: a pending changeset releases @navecss/core at patch (23d)', () => {
-  it('at least one .changeset/*.md frontmatter entry bumps @navecss/core at patch', () => {
+describe('AC-eslint-plugin-23: a changeset releases @navecss/core at patch (23d)', () => {
+  it('a pending .changeset/*.md bumps @navecss/core at patch, or core’s CHANGELOG.md has that patch entry once released', () => {
     const changesetDir = path.join(ROOT, '.changeset')
     const files = readdirSync(changesetDir).filter(
       (name) => name.endsWith('.md') && name !== 'README.md',
     )
-    const isBumpsCorePatch = files.some((name) => {
+    const isPending = files.some((name) => {
       const body = readFileSync(path.join(changesetDir, name), 'utf8')
       return /^---\n[\s\S]*?'@navecss\/core':\s*patch[\s\S]*?\n---/mu.test(body)
     })
-    expect(isBumpsCorePatch).toBe(true)
+    // A release consumes the changeset and writes its text under `### Patch Changes`.
+    const isReleased = changelogEntries(
+      readFileSync(path.resolve(HERE, '../CHANGELOG.md'), 'utf8'),
+    ).some(
+      (entry) => entry.kind === 'Patch Changes' && entry.text.includes('@navecss/eslint-plugin'),
+    )
+    expect(isPending || isReleased).toBe(true)
   })
 })
 

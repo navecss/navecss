@@ -1,6 +1,6 @@
 {
   "name": "@navecss/eslint-plugin",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Nave's ESLint plugin: closes the JSX className/style escape hatches a consumer's own lint does not see, with every deliberate escape declared, reasoned and countable.",
   "keywords": [
     "eslint",
