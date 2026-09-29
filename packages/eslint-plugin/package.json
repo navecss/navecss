@@ -39,7 +39,7 @@
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
   "peerDependencies": {
-    "@navecss/core": ">=0.2.0 <1.0.0",
+    "@navecss/core": ">=0.1.0 <1.0.0",
     "eslint": "^9.24.0 || ^10.0.0"
   },
   "dependencies": {

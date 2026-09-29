@@ -16,8 +16,16 @@ import type { PackedCoreTarball } from './helpers/pack-core.ts'
 
 import { HASH, scanForBrainReferences, syntheticDatedId } from './helpers/brain-reference-scan.ts'
 import { packCoreTarball } from './helpers/pack-core.ts'
+import { shippedChangesetProse } from './helpers/released-changeset.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
+/** This slice's changeset while pending, the CHANGELOG entry that carries its text once released. */
+const shippedChangeset = (): string =>
+  shippedChangesetProse(
+    path.resolve(HERE, '../../../.changeset/ship-editor-custom-data.md'),
+    path.resolve(HERE, '../CHANGELOG.md'),
+    'Ships `nave.css-data.json`',
+  )
 const GENERATOR_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-css-data.ts'), 'utf8')
 const ATOMS_DOC_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-atoms-doc.ts'), 'utf8')
 
@@ -131,8 +139,6 @@ describe('AC-consumer-constraints-08: the @nave entry claims only what it delive
 })
 
 describe('AC-consumer-constraints-09: no README/changeset sentence overclaims completion', () => {
-  const changesetFiles = [path.resolve(HERE, '../../../.changeset/ship-editor-custom-data.md')]
-
   function sentencesNaming(text: string): string[] {
     return text
       .split(/(?<=[.!?])\s+/)
@@ -140,11 +146,9 @@ describe('AC-consumer-constraints-09: no README/changeset sentence overclaims co
   }
 
   it('no sentence naming the file or css.customData claims completion or IntelliSense', () => {
-    for (const file of changesetFiles) {
-      for (const sentence of sentencesNaming(readFileSync(file, 'utf8'))) {
-        expect(sentence, `${file}: "${sentence}"`).not.toMatch(/complet/i)
-        expect(sentence, `${file}: "${sentence}"`).not.toMatch(/IntelliSense/i)
-      }
+    for (const sentence of sentencesNaming(shippedChangeset())) {
+      expect(sentence, `changeset: "${sentence}"`).not.toMatch(/complet/i)
+      expect(sentence, `changeset: "${sentence}"`).not.toMatch(/IntelliSense/i)
     }
   })
 
@@ -161,9 +165,7 @@ describe('AC-consumer-constraints-02 (scoped to this slice): no prose count', ()
   it('the description and this slice’s changeset carry no numeral or number word near the vocabulary', () => {
     const description = readCommittedCssData().atDirectives![0]!.description!.value
     expect(description).not.toMatch(COUNT_NEAR_VOCAB)
-    expect(
-      readFileSync(path.resolve(HERE, '../../../.changeset/ship-editor-custom-data.md'), 'utf8'),
-    ).not.toMatch(COUNT_NEAR_VOCAB)
+    expect(shippedChangeset()).not.toMatch(COUNT_NEAR_VOCAB)
   })
 
   it('the scan reports a planted count', () => {
@@ -193,10 +195,7 @@ describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference'
   })
 
   it('this slice’s changeset carries none either', () => {
-    scanForBrainReferences(
-      readFileSync(path.resolve(HERE, '../../../.changeset/ship-editor-custom-data.md'), 'utf8'),
-      'the changeset',
-    )
+    scanForBrainReferences(shippedChangeset(), 'the changeset')
   })
 
   it('the scan reports a planted copy carrying a tracker ref, a persona id and a dated id', () => {
