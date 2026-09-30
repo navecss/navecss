@@ -21,6 +21,7 @@ import {
   extractFences,
   loadEntryMap,
 } from './doc-fences.ts'
+import { assertScalesLinearly } from './helpers/perf-scaling.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const CORE_ROOT = path.resolve(HERE, '..')
@@ -131,6 +132,18 @@ describe('extractFences and extractCoreImports cover every fence and import shap
 
     expect(fences.flatMap((f) => extractCoreImports(f.body))).toHaveLength(1)
   })
+
+  // A generous per-row timeout, well above the runner's own default: `assertScalesLinearly`
+  // can run its subject up to 21 times, and a slow shared runner's per-call time can be an
+  // order of magnitude past a fast local machine's. The ratio assertion inside decides pass or fail.
+  it('stays roughly linear on an opener followed by a long unterminated run of word characters', async () => {
+    await assertScalesLinearly((n) => {
+      const text = '```' + 'a'.repeat(n)
+      const start = performance.now()
+      extractFences('x', text)
+      return performance.now() - start
+    }, 2500)
+  }, 45_000)
 
   it('extracts a dynamic import() of a core subpath', () => {
     const imports = extractCoreImports("await import('@navecss/core/postcss')")

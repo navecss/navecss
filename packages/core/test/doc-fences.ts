@@ -17,11 +17,14 @@ export interface Fence {
  * of 3+ backticks or 3+ tildes (CommonMark allows either), a language tag,
  * then anything else up to the newline (an info string carries more than
  * the bare language, e.g. `` ```ts title="a" ``), closed by a line holding
- * only the same fence character, 3 or more of them.
+ * only the same fence character, 3 or more of them. The rest of the info
+ * string must start with a character the language tag cannot hold, so the
+ * tag and the rest never compete for the same characters: a long run of
+ * word characters after an opener then costs linear time, not quadratic.
  */
 export function extractFences(doc: string, text: string): Fence[] {
   return text
-    .matchAll(/^(`{3,}|~{3,})([\w-]*)[^\n]*\n([\s\S]*?)^\1[ \t]*$/gm)
+    .matchAll(/^(`{3,}|~{3,})([\w-]*)(?:[^\w\n-][^\n]*)?\n([\s\S]*?)^\1[ \t]*$/gm)
     .map((m) => ({ body: m[3] ?? '', doc, lang: m[2] ?? '' }))
     .toArray()
 }
