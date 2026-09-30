@@ -3,6 +3,8 @@ import { defineConfig } from 'tsup'
 export default defineConfig({
   entry: {
     atoms: 'src/atoms.ts',
+    bin: 'src/bin.ts',
+    check: 'src/directive/check.ts',
     cx: 'src/cx.ts',
     postcss: 'src/postcss.ts',
   },

@@ -5,6 +5,8 @@
  * architecture review. G0 is a correctness batch,
  * not a spec, so the C- finding ID plays the role the AC- ID plays in a spec.
  */
+import type { AtRule } from 'postcss'
+
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
@@ -190,6 +192,174 @@ describe('@nave outside a direct rule child is reported through onUnknown, not s
   })
 })
 
+describe('AC-directive-core-21 — an unrecognised onUnknown value fails closed, like "error"', () => {
+  it('throws on an unknown atom, the same as the default', async () => {
+    // @ts-expect-error — exercising a value outside the closed set on purpose
+    await expect(run('.a { @nave nope; }', { onUnknown: 'bogus' })).rejects.toThrow(
+      /unknown atom "nope"/,
+    )
+  })
+
+  it('does not select the most permissive mode (ignore) for a valid name', async () => {
+    // @ts-expect-error — exercising a value outside the closed set on purpose
+    const result = await run('.a { @nave flex; }', { onUnknown: 'bogus' })
+
+    expect(result).toContain('display: flex')
+  })
+})
+
+describe('AC-directive-core-10 — the directive name matches ASCII case-insensitively', () => {
+  it.each(['.a { @NAVE flex; }', '.a { @Nave flex; }'])(
+    '%s expands to display: flex',
+    async (css) => {
+      const result = await run(css)
+
+      expect(result).toContain('display: flex')
+    },
+  )
+
+  it.each(['.a { @navex flex; }', '.a { @nave-x flex; }', '.a { @ｎave flex; }'])(
+    '%s passes through unchanged, no diagnostic',
+    async (css) => {
+      const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(css, {
+        from: undefined,
+      })
+
+      expect(result.warnings()).toHaveLength(0)
+      expect(result.css).toBe(css)
+    },
+  )
+
+  // AC-10 also lists `@n\61ve`, `@n\61 ve` and `@\6e ave` (a hex escape
+  // inside the directive name). `@\6e ave flex;` fails PostCSS's own parse
+  // outright ("At-rule without name") before any plugin runs — proven below,
+  // an expander-only row with no adapter fix possible. The other two DO
+  // reach the plugin: PostCSS's own parser splits `name`/`params` on the
+  // first non-word character, so `@n\61ve flex;` parses to `name: "n"`,
+  // `params: "\61ve flex"` — the escape falls on the far side of a boundary
+  // that only exists in PostCSS's own naive split, not in CSS's. Re-reading
+  // `'@' + name + (raws.afterName ?? '') + params` with the core tokenizer
+  // finds the real directive name across that boundary.
+  it.each([String.raw`.a { @n\61ve flex; }`, String.raw`.a { @n\61 ve flex; }`])(
+    '%s expands to display: flex, even though PostCSS itself splits the escape out of the name',
+    async (css) => {
+      const result = await run(css)
+
+      expect(result).toBe('.a { display: flex; }')
+    },
+  )
+
+  it.each(['.a { @n\\61vex flex; }', '.a { @navex flex; }'])(
+    '%s passes through unchanged, no diagnostic, even with an escape before the boundary',
+    async (css) => {
+      const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(css, {
+        from: undefined,
+      })
+
+      expect(result.warnings()).toHaveLength(0)
+      expect(result.css).toBe(css)
+    },
+  )
+
+  it('documents that PostCSS itself, not this plugin, cannot parse a leading-escape directive name', async () => {
+    await expect(run(String.raw`.a { @\6e ave flex; }`)).rejects.toThrow(/At-rule without name/)
+  })
+
+  it.each([
+    ['.a { @nave,flex; }', 'unexpected ","'],
+    ['.a { @nave.flex; }', 'unexpected "."'],
+    ['.a { @nave:flex; }', 'unexpected ":"'],
+  ])(
+    '%s: the directive name ends where tokenization ends it, reporting the character',
+    async (css, message) => {
+      let caught: Error | undefined
+      try {
+        await run(css)
+      } catch (error) {
+        caught = error as Error
+      }
+      expect(caught?.message).toContain(message)
+    },
+  )
+})
+
+describe('AC-directive-core-12 — a directive directly in any nested group rule, not just @media', () => {
+  it.each([
+    ['@supports', '@supports (display: grid)'],
+    ['@container', '@container (width > 1px)'],
+    ['@layer', '@layer x'],
+    ['@scope', '@scope (.b)'],
+    ['@starting-style', '@starting-style'],
+  ])('%s: rejected by default, naming the & workaround', async (_label, prelude) => {
+    await expect(run(`.card { ${prelude} { @nave flex; } }`)).rejects.toThrow(
+      /must be the direct child of a CSS rule/,
+    )
+
+    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(
+      `.card { ${prelude} { @nave flex; } }`,
+      { from: undefined },
+    )
+    expect(result.warnings()[0]?.text).toContain('& { @nave')
+    expect(result.css).not.toContain('display: flex')
+  })
+})
+
+describe('the refused-parent text names the & workaround only for a group rule nested in a style rule', () => {
+  it.each([
+    '@media (x) { @nave flex; }',
+    '@layer l { @nave flex; }',
+    '@keyframes k { @nave flex; }',
+    '.a { @keyframes k { @nave flex; } }',
+    '@keyframes k { from { @media (x) { @nave flex; } } }',
+    '.a { @keyframes k { from { @media (x) { @nave flex; } } } }',
+  ])('%s keeps the plain text, with no workaround sentence', async (css) => {
+    await expect(run(css)).rejects.toThrow(/must be the direct child of a CSS rule selector block$/)
+  })
+
+  it('never appends the workaround sentence for a group rule nested inside a keyframe step, even with a style-rule ancestor further out', async () => {
+    const e = await run('@keyframes k { from { @media (x) { @nave flex; } } }').catch((x) => x)
+    expect((e as { reason: string }).reason).not.toContain('& { @nave')
+
+    const e2 = await run('.a { @keyframes k { from { @media (x) { @nave flex; } } } }').catch(
+      (x) => x,
+    )
+    expect((e2 as { reason: string }).reason).not.toContain('& { @nave')
+  })
+
+  it('a group rule nested in a style rule appends the workaround sentence', async () => {
+    await expect(run('.a { @media (x) { @nave flex; } }')).rejects.toThrow(/& \{ @nave \.\.\.; \}/)
+  })
+
+  it('a group rule nested in another group rule inside a style rule appends the workaround sentence too', async () => {
+    await expect(run('.a { @media (x) { @media (y) { @nave flex; } } }')).rejects.toThrow(
+      /& \{ @nave \.\.\.; \}/,
+    )
+  })
+
+  it('never appends the workaround sentence for a non-group at-rule such as @font-face', async () => {
+    await expect(run('.a { @font-face { @nave flex; } }')).rejects.toThrow(
+      /must be the direct child of a CSS rule selector block$/,
+    )
+  })
+})
+
+describe('AC-directive-core-12 — a directive with a {} block', () => {
+  it('rejects, by default, rather than silently dropping the block', async () => {
+    await expect(run('.a { @nave flex { color: red } }')).rejects.toThrow(
+      /a directive with a \{\} block is not supported/,
+    )
+  })
+
+  it('under warn, the block is not silently dropped with no diagnostic', async () => {
+    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(
+      '.a { @nave flex { color: red } }',
+      { from: undefined },
+    )
+
+    expect(result.warnings()[0]?.text).toContain('a directive with a {} block is not supported')
+  })
+})
+
 describe('isInsideKeyframes matches "at any depth", not just a direct step', () => {
   it('rejects inside a vendor-prefixed @-webkit-keyframes block', async () => {
     await expect(run('@-webkit-keyframes k { to { @nave focusRing; } }')).rejects.toThrow(
@@ -214,6 +384,24 @@ describe('isInsideKeyframes matches "at any depth", not just a direct step', () 
     const css = await run('@supports (display: grid) { .card { @nave flex; } }')
 
     expect(css).toContain('display: flex')
+  })
+})
+
+describe('the prelude reflects an earlier plugin’s rewrite, not a stale raw', () => {
+  it('reads the prelude an earlier plugin rewrote, not the stale raw text', async () => {
+    const rewrite = {
+      postcssPlugin: 'rewrite',
+      AtRule(a: AtRule) {
+        if (a.params.startsWith('nope')) a.params = 'block'
+      },
+    }
+
+    const result = await postcss([rewrite, navePlugin()]).process(
+      '.a { @nave nope /* c */ flex; }',
+      { from: undefined },
+    )
+
+    expect(result.css).toBe('.a { display: block; }')
   })
 })
 
@@ -394,25 +582,45 @@ describe('onUnknown default is error', () => {
   // a build that fails must say WHERE. `rejects.toThrow(/unknown atom/)` alone
   // stays green when `atRule.error(msg)` is replaced by a bare `new Error(msg)`,
   // which strips the file, the line and the column.
+  //
+  // Column 9, not 3 (this file's earlier pin expected column 3): the diagnostic
+  // positions `unknown-atom` at the name token, not at the directive's `@`
+  // (AC-directive-core-13).
   it('fails by default with a PostCSS CssSyntaxError carrying the directive line and column', async () => {
     const source = '.x {\n  color: blue;\n  @nave nope;\n}'
 
     await expect(
       postcss([navePlugin()]).process(source, { from: 'src/app.css' }),
-    ).rejects.toMatchObject({ name: 'CssSyntaxError', line: 3, column: 3 })
+    ).rejects.toMatchObject({ name: 'CssSyntaxError', line: 3, column: 9 })
+  })
+
+  it('columns in UTF-16 code units, not code points (a supplementary-plane emoji counts as two)', async () => {
+    // '.a' (2) + '😀' (a surrogate pair, 2 UTF-16 units) + '{@nave ' (7) = 11,
+    // so the name starts at 1-based column 12 — code points would give 11.
+    await expect(run('.a😀{@nave nope;}')).rejects.toMatchObject({ line: 1, column: 12 })
+  })
+
+  it('gives each occurrence of a name repeated in one prelude its own column, under warn', async () => {
+    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(
+      '.a { @nave flex flx grid flx; }',
+      { from: undefined },
+    )
+
+    expect(result.warnings().map((w) => w.column)).toEqual([17, 26])
   })
 
   // The other half of the same ground: the error names the vocabulary the typo
-  // missed, INCLUDING the consumer's own extend atoms. Deleting the whole
-  // `Available: …` clause from the message leaves every other test in this file
-  // green.
-  it('names the consumer extend atoms in the Available list when the typo is on an extension', async () => {
+  // missed, INCLUDING the consumer's own extend atoms — now via the hint rule
+  // rather than the `Available:` list (this file's earlier pin asserted the old
+  // `Available: .*brandBox` text; "brandBoxx" is now a distance-1 typo of the
+  // extend atom "brandBox" itself).
+  it('hints at a consumer extend atom directly, by name, when the typo is close to one', async () => {
     const extend: Record<string, AtomDefinition> = {
       brandBox: { declarations: { color: 'red' } },
     }
 
     await expect(run('.x { @nave brandBoxx; }', { extend })).rejects.toThrow(
-      /unknown atom "brandBoxx"\. Available: .*\bbrandBox\b/,
+      /unknown atom "brandBoxx"\. Did you mean "brandBox"\?/,
     )
   })
 
@@ -537,6 +745,49 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
     expect(() => navePlugin({ extend })).toThrow(/declaration value/)
   })
 
+  it('refuses an extend atom the construction-time validation never saw', async () => {
+    const bad = 'red; } body { display: none'
+    const hidden = {} as Record<string, AtomDefinition>
+    Object.defineProperty(hidden, 'evil', {
+      value: { declarations: { color: bad } },
+      enumerable: false,
+    })
+    await expect(run('.x { @nave evil; }', { extend: hidden })).rejects.toThrow(
+      /unknown atom "evil"/,
+    )
+
+    const late: Record<string, AtomDefinition> = {}
+    const plugin = navePlugin({ extend: late })
+    late.evil = { declarations: { color: bad } }
+    await expect(
+      postcss([plugin]).process('.x { @nave evil; }', { from: undefined }),
+    ).rejects.toThrow(/unknown atom "evil"/)
+  })
+
+  it('refuses an extend atom reachable only through a Proxy whose ownKeys hides it', async () => {
+    const bad = 'red; } body { display: none'
+    const proxy = new Proxy(
+      {},
+      {
+        ownKeys: () => [],
+        get: (_target, prop) => (prop === 'evil' ? { declarations: { color: bad } } : undefined),
+      },
+    ) as Record<string, AtomDefinition>
+
+    await expect(run('.x { @nave evil; }', { extend: proxy })).rejects.toThrow(
+      /unknown atom "evil"/,
+    )
+  })
+
+  it('resolves an extend atom named __proto__, the same as any other name', async () => {
+    const extend = JSON.parse('{"__proto__":{"declarations":{"color":"red"}}}') as Record<
+      string,
+      AtomDefinition
+    >
+
+    await expect(run('.x { @nave __proto__; }', { extend })).resolves.toBe('.x { color: red; }')
+  })
+
   it('never validates the built-in atom map, only consumer-supplied extend entries', async () => {
     // A built-in atom's own declarations never carry these characters, so this
     // is just confirming the check is scoped to `extend` and does not walk `atoms`
@@ -593,6 +844,53 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
     }
 
     await expect(run('.x { @nave evil; }', { extend })).rejects.toThrow(/declaration value/)
+  })
+
+  it('never emits injected text from a declaration value getter that answers differently once validation has already read it', async () => {
+    let reads = 0
+    const extend = {
+      evil: {
+        declarations: {
+          get color() {
+            reads++
+            return reads === 1 ? 'red' : 'red; } body { display: none'
+          },
+        },
+      },
+    } as unknown as Record<string, AtomDefinition>
+
+    const outcome = await run('.x { @nave evil; }', { extend }).then(
+      (css) => ({ ok: true as const, css }),
+      () => ({ ok: false as const }),
+    )
+
+    expect(outcome.ok ? outcome.css : '').not.toContain('display: none')
+    if (outcome.ok) expect(outcome.css).toContain('color: red')
+  })
+
+  it('never emits injected text from a declaration value object whose toString answers differently on a second read', async () => {
+    let reads = 0
+    const alternating = {
+      toString() {
+        reads++
+        return reads === 1 ? 'red' : 'red; } body { display: none'
+      },
+    }
+    const extend = {
+      evil: { declarations: { color: alternating } },
+    } as unknown as Record<string, AtomDefinition>
+
+    // Used twice: the atom is only fixed for a run once its every leaf has
+    // already been read and converted to a plain string, so a second use of
+    // the same atom in one stylesheet is what a coercion left until emission
+    // time would see differently from the first.
+    const outcome = await run('.x { @nave evil; } .y { @nave evil; }', { extend }).then(
+      (css) => ({ ok: true as const, css }),
+      () => ({ ok: false as const }),
+    )
+
+    expect(outcome.ok ? outcome.css : '').not.toContain('display: none')
+    if (outcome.ok) expect(outcome.css).toContain('color: red')
   })
 })
 

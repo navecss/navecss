@@ -61,8 +61,8 @@ Rules for the code in this repository (not statements about how consumers use Na
 - CSS: `@layer` for cascade control. Nave's own source ships no CSS Modules and
   no CSS-in-JS, and depends on no other CSS framework.
 
-Nave itself ships a PostCSS plugin: `@navecss/core/postcss` implements the
-`@nave` directive, which is the primary recommended way to compose atoms, and
+Nave's core implements the `@nave` directive, which is the primary recommended
+way to compose atoms; `@navecss/core/postcss` is one adapter for it, and
 `postcss` is an optional peer dependency of core. How consumers style their own
 components (tokens only, `cx()`, or `@nave` directives, with CSS Modules in the
 worked examples) is documented in `packages/core/README.md` and

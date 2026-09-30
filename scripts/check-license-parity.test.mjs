@@ -104,6 +104,33 @@ diagnostics and everything around them are this package's own, and everything in
 this package is offered under the MIT licence above.
 `
 
+// The third-party attribution section, cleared by the project's licensing steward,
+// packages/core/LICENSE carries after the root text, read here from the shipped file's own
+// bytes (never retyped) so the pinning test below compares against a literal that cannot drift
+// from what this repository actually ships. Changing this literal is a review change landing
+// a re-cleared block, never a test fixup for a row that started failing.
+const CORE_THIRD_PARTY_SECTION = `
+THIRD-PARTY MATERIAL
+
+This package includes material copied from or derived from the CSS Syntax
+Module Level 3 specification (css-syntax-3/Overview.bs in the w3c/csswg-drafts
+repository, at commit f971255463f01fb740e2a3a7ecfe83e319cddab9, and
+https://drafts.csswg.org/css-syntax-3/#tokenization). Copyright (c) 2026 World
+Wide Web Consortium. That specification, and the repository carrying it, are
+published under the W3C Software and Document License
+(https://www.w3.org/copyright/software-license-2023/).
+
+What is copied is implemented in src/directive/tokenizer.ts, the files in
+src/directive/tokenizer/ and src/directive/block-reader.ts, all built into the
+JavaScript under dist/: the names of the token types and of their type flags,
+the definitions of the code point classes (among them the ranges of non-ASCII
+ident code points and of non-printable code points, and the maximum allowed
+code point), the order of the steps of the tokenization algorithms, and the
+rule that tells a declaration from a qualified rule. The code implementing them
+is this package's own, and everything in this package is offered under the MIT
+licence above.
+`
+
 /**
  * A throwaway workspace the SHIPPED script can be run against. The temp root is realpath'd
  * deliberately, and the reason is now DEFENSIVE rather than a live hazard.
@@ -666,12 +693,13 @@ test('findLicenseMismatches: a missing LICENSE file is a violation (RED)', () =>
 })
 
 test('findLicenseMismatches: a one-byte drift (e.g. a stale copyright year) is a violation (RED)', () => {
-  // Not `dir: 'tokens'`: that package is THIRD_PARTY_SECTION_ALLOWLISTed
-  // and checked by prefix rather than exact equality, which is a different reason string and
-  // its own dedicated test below. `core` exercises the ordinary exact-equality path.
+  // Not `dir: 'tokens'` or `dir: 'core'`: both packages are
+  // THIRD_PARTY_SECTION_ALLOWLISTed and checked by prefix rather than exact equality, which is
+  // a different reason string and its own dedicated test below. `bridge` exercises the
+  // ordinary exact-equality path.
   const drifted = Buffer.from('MIT License\n\nCopyright (c) 2024 Nave Contributors\n')
   const violations = findLicenseMismatches(ROOT_LICENSE, [
-    { name: '@navecss/core', dir: 'core', exists: true, content: drifted },
+    { name: '@navecss/bridge', dir: 'bridge', exists: true, content: drifted },
   ])
   assert.equal(violations.length, 1)
   assert.match(violations[0].reason, /differs from the root LICENSE/)
@@ -681,22 +709,22 @@ test('findLicenseMismatches: names every offending package, not just the first (
   const drifted = Buffer.from('MIT License\n\nCopyright (c) 2024 Nave Contributors\n')
   const violations = findLicenseMismatches(ROOT_LICENSE, [
     { name: '@navecss/tokens', dir: 'tokens', exists: true, content: Buffer.from(ROOT_LICENSE) },
-    { name: '@navecss/core', dir: 'core', exists: true, content: drifted },
-    { name: '@navecss/bridge', dir: 'bridge', exists: false, content: null },
+    { name: '@navecss/bridge', dir: 'bridge', exists: true, content: drifted },
+    { name: '@navecss/cli', dir: 'cli', exists: false, content: null },
   ])
   assert.equal(violations.length, 2)
   assert.deepEqual(
     violations.map((v) => v.name),
-    ['@navecss/core', '@navecss/bridge'],
+    ['@navecss/bridge', '@navecss/cli'],
   )
 })
 
-// A THIRD_PARTY_SECTION_ALLOWLIST package (only `tokens` today) is held
+// A THIRD_PARTY_SECTION_ALLOWLIST package (`core` and `tokens` today) is held
 // to a PREFIX match, not exact equality — Condition 2 is not weakened (the root text must
 // still be a verbatim prefix), only what may follow it changes.
-test('mayCarryThirdPartySection: only "tokens" is allowlisted today', () => {
+test('mayCarryThirdPartySection: "core" and "tokens" are allowlisted today', () => {
+  assert.equal(mayCarryThirdPartySection('core'), true)
   assert.equal(mayCarryThirdPartySection('tokens'), true)
-  assert.equal(mayCarryThirdPartySection('core'), false)
   assert.equal(mayCarryThirdPartySection('bridge'), false)
   assert.equal(mayCarryThirdPartySection('cli'), false)
 })
@@ -705,8 +733,8 @@ test('mayCarryThirdPartySection: only "tokens" is allowlisted today', () => {
 // four directories, so the test above never notices a fifth entry landing in
 // THIRD_PARTY_SECTION_ALLOWLIST itself — this pins the SET's own membership, the docblock's own
 // "adding a package here is a review change" rider, mechanically.
-test('THIRD_PARTY_SECTION_ALLOWLIST is exactly {tokens} today', () => {
-  assert.deepEqual([...THIRD_PARTY_SECTION_ALLOWLIST], ['tokens'])
+test('THIRD_PARTY_SECTION_ALLOWLIST is exactly {core, tokens} today', () => {
+  assert.deepEqual([...THIRD_PARTY_SECTION_ALLOWLIST].toSorted(), ['core', 'tokens'])
 })
 
 test('findLicenseMismatches: an allowlisted package carrying the root text plus a third-party section passes (GREEN)', () => {
@@ -726,7 +754,7 @@ test('findLicenseMismatches: a non-allowlisted package carrying the same appende
     Buffer.from('\nTHIRD-PARTY MATERIAL\n\nSome cleared attribution text.\n'),
   ])
   const violations = findLicenseMismatches(ROOT_LICENSE, [
-    { name: '@navecss/core', dir: 'core', exists: true, content: withNotice },
+    { name: '@navecss/bridge', dir: 'bridge', exists: true, content: withNotice },
   ])
   assert.equal(violations.length, 1)
   assert.match(violations[0].reason, /differs from the root LICENSE/)
@@ -881,15 +909,17 @@ test('main() prints the composed cleared message and exits non-zero on a real re
     writeFileSync(path.join(scratch, 'LICENSE'), 'MIT License\n\nCopyright (c) 2026\n')
     writeFileSync(path.join(scratch, 'pnpm-workspace.yaml'), VALID_WORKSPACE_YAML)
 
-    // Sorted directory order is cli, core, private-thing, which is the violation order below.
+    // Sorted directory order is bridge, cli, private-thing, which is the violation order
+    // below. Not `core`: that package is THIRD_PARTY_SECTION_ALLOWLISTed, so a drifted
+    // copyright year there fails the PREFIX check with a different reason string.
     const writePackage = (dir, manifest, licenseText) => {
       const packageDir = path.join(scratch, 'packages', dir)
       mkdirSync(packageDir, { recursive: true })
       writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(manifest))
       if (licenseText !== undefined) writeFileSync(path.join(packageDir, 'LICENSE'), licenseText)
     }
+    writePackage('bridge', { name: '@navecss/bridge' }, 'MIT License\n\nCopyright (c) 2025\n')
     writePackage('cli', { name: '@navecss/cli' }, undefined)
-    writePackage('core', { name: '@navecss/core' }, 'MIT License\n\nCopyright (c) 2025\n')
     // Private packages ship no tarball, so they are skipped even with no LICENSE at all; if
     // this one ever appears in the output below, the non-private filter has been lost.
     writePackage('private-thing', { name: '@navecss/private-thing', private: true }, undefined)
@@ -912,11 +942,11 @@ test('main() prints the composed cleared message and exits non-zero on a real re
     assert.equal(exitCode, 1)
     assert.equal(calls.length, 4)
     assert.equal(calls[0], PARITY_FAILURE_HEADER)
-    assert.equal(calls[1], '  - @navecss/cli (packages/cli/LICENSE): no LICENSE file')
     assert.equal(
-      calls[2],
-      '  - @navecss/core (packages/core/LICENSE): LICENSE differs from the root LICENSE',
+      calls[1],
+      '  - @navecss/bridge (packages/bridge/LICENSE): LICENSE differs from the root LICENSE',
     )
+    assert.equal(calls[2], '  - @navecss/cli (packages/cli/LICENSE): no LICENSE file')
     assert.equal(calls[3], PARITY_FAILURE_GUIDANCE)
   } finally {
     rmSync(scratch, { recursive: true, force: true })
@@ -1365,4 +1395,17 @@ test('packages/tokens/LICENSE is the root LICENSE text verbatim followed by the 
     TOKENS_THIRD_PARTY_SECTION,
   )
   assert.equal(tokensLicense.length, rootLicense.length + 1945)
+})
+
+// Same rationale as the tokens row above, for packages/core/LICENSE's own cleared block
+// (the CSS Syntax Level 3 credit for the directive tokenizer).
+test('packages/core/LICENSE is the root LICENSE text verbatim followed by the cleared third-party section, byte for byte', () => {
+  const rootLicense = readFileSync(path.join(ROOT, 'LICENSE'))
+  const coreLicense = readFileSync(path.join(ROOT, 'packages', 'core', 'LICENSE'))
+  assert.ok(
+    coreLicense.subarray(0, rootLicense.length).equals(rootLicense),
+    'packages/core/LICENSE must begin with the root LICENSE text, byte for byte',
+  )
+  assert.equal(coreLicense.subarray(rootLicense.length).toString('utf8'), CORE_THIRD_PARTY_SECTION)
+  assert.equal(coreLicense.length, rootLicense.length + 1145)
 })

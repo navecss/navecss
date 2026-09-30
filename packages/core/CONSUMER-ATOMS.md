@@ -67,6 +67,31 @@ export default defineConfig({
 [PostCSS plugin setup](./README.md#postcss-plugin-setup) says what goes wrong
 without it.
 
+**An `extend` object, written inline in a cached host's config or imported
+into it as above, does not invalidate that host's cache.** A host with a
+persistent build cache (webpack's, for instance) does not know your atoms
+module is an input to the CSS it cached, so a warm rebuild after you edit an
+atom can still ship the old value. Pass `extend` as a path to the module
+instead, and the plugin declares that file to PostCSS as a dependency of every
+stylesheet, which lets the host's own cache key see it:
+
+```ts
+navePlugin({ extend: './src/design-system/atoms.mjs' })
+```
+
+The path is resolved from the directory the build runs in (`process.cwd()`),
+not from the config file, and it names a file, extension included: a package
+name is not looked up. Node's own `import()` loads it, with no bundler in
+between, so it has to be a JavaScript module or a JSON file, and its default
+export (or, for JSON, its parsed top-level value) is the atoms object: for the
+module above, `export default myAtoms`.
+
+With a path the plugin is async: call `process(css).then(cb)`, not the sync
+`.css` getter. It re-reads the file whenever the file changes, so a dev server
+sees an edit to it without a restart. Only that file: an edit to a module it
+imports is neither re-read nor visible to the host's cache, so keep the atoms
+themselves in the file you name.
+
 ## Using consumer atoms
 
 Like the rest of your component CSS, the rule goes in `@layer components.consumer`,

@@ -212,8 +212,19 @@ navePlugin({
 })
 ```
 
+Under `'error'`, every problem this option covers in one stylesheet is reported
+in one error, positioned at the first: its message, then
+`N more in this stylesheet:` and one `line:column:` line for each of the
+others. The report covers one stylesheet, so a bundler that stops at the first
+failing file reports one file per build. Under `'warn'`, each problem is a
+warning of its own.
+
 To add atoms of your own to `@nave`, pass them as `extend`: see
-[CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md).
+[CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md). An `extend` object written inline in
+a cached host's config, or imported into it, does not invalidate that host's
+cache; pass `extend` as a path to the module instead when that matters. Only
+the named file is re-read and declared to the host as a dependency; a module
+it imports is neither (same doc).
 
 `postcss` is an optional peer dependency.
 If you are using only `cx()` or tokens, you do not need to install it.
@@ -223,7 +234,9 @@ runs.** That option replaces Vite's CSS pipeline with Lightning CSS, which does
 not run PostCSS plugins at all: the build stays green, `@nave` reaches the
 browser as an unknown at-rule, and the browser drops it, so the rule renders
 with none of the declarations its atoms were going to give it. Leave the
-default transformer in place on a project using `@nave`.
+default transformer in place on a project using `@nave`. Add
+[`navecss-core check`](#navecss-core-check) to your build script as well, and a
+build that skips the plugin this way fails instead of shipping.
 
 ### Plugin order
 
@@ -251,6 +264,49 @@ failure, not a silently incomplete build):
 - **Inside `@keyframes`** — a keyframe step (`to`, `from`, `50%`) parses as a
   rule, but `&` has no meaning there and a browser drops the nesting with no
   other symptom, so it is rejected the same way.
+
+---
+
+## `navecss-core check`
+
+A survival check: it reads built CSS and reports every `@nave` directive that
+reached it, so a missing PostCSS pipeline or a bypassed one (Vite's
+`css.transformer: 'lightningcss'`, for one) fails the build instead of
+shipping a page with none of the declarations its atoms were going to give
+it.
+
+```json
+{
+  "scripts": {
+    "build": "vite build && navecss-core check --source=dist"
+  }
+}
+```
+
+For Next.js, point it at the build's static output:
+
+```json
+{
+  "scripts": {
+    "build": "next build && navecss-core check --source=.next/static"
+  }
+}
+```
+
+`--source=` is repeatable, and each value is a file or a directory read
+recursively for `.css`. Exit codes:
+
+- `0` — at least one stylesheet was read, and none held `@nave`.
+- `1` — at least one stylesheet held `@nave`; the findings are printed, one
+  line each (file, line, column, the directive as written, and its enclosing
+  selector when known).
+- `2` — a usage error, an unreadable `--source` path, or no stylesheet found
+  at all. An unreadable path gives `2` even when a stylesheet that was read
+  held `@nave`; those findings are still printed.
+
+Run it from a `package.json` script, chained with `&&` after the build that
+should have resolved every directive, so it reads that build's output. The
+command comes with `@navecss/core`; it is not a package of its own.
 
 ---
 
@@ -331,3 +387,4 @@ Consumers of `@navecss/tokens` alone get no guide: it ships only in this package
 | `@navecss/core/cx`        | `cx()` / `cx.raw()` utilities + `AtomName` type                                                       |
 | `@navecss/core/atoms`     | Atom definitions + `atomClassMap`                                                                     |
 | `@navecss/core/postcss`   | PostCSS plugin — `navePlugin()`                                                                       |
+| `@navecss/core/check`     | The survival check as a function — `check({ source })`                                                |

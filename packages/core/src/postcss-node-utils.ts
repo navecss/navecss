@@ -10,16 +10,60 @@ import type {
 } from 'postcss'
 
 /**
- * True when `rule` sits inside a @keyframes block, at any depth. A keyframe
- * step (`to`, `from`, `50%`) parses as a Rule, so a plain parent-is-a-rule
- * check does not catch this; `&` has no meaning inside @keyframes, and the
- * browser drops nesting generated there with no other symptom.
+ * True when `container` itself, or any of its ancestors, is a @keyframes
+ * at-rule. A keyframe step (`to`, `from`, `50%`) parses as a Rule, so a
+ * plain parent-is-a-rule check does not catch this; `&` has no meaning
+ * inside @keyframes, and the browser drops nesting generated there with
+ * no other symptom. Checking `container` itself (never true for a Rule,
+ * which is the only type the original caller ever passed) is what lets a
+ * directive whose immediate parent IS the @keyframes at-rule — no step
+ * wrapper between them — be caught too.
  */
-export function isInsideKeyframes(rule: Rule): boolean {
-  let node: PostCSSContainer | PostCSSDocument | undefined = rule.parent
+export function isInsideKeyframes(container: PostCSSContainer | PostCSSDocument): boolean {
+  let node: PostCSSContainer | PostCSSDocument | undefined = container
   while (node) {
     if (node.type === 'atrule' && /keyframes$/i.test((node as PostCSSAtRule).name)) return true
     node = node.parent
+  }
+  return false
+}
+
+/**
+ * The group at-rules the `& { @nave ...; }` workaround sentence names: the
+ * ones a directive can be moved out of and into a nested rule for, per
+ * CSS's own nesting rules. Never `@keyframes` (no `&` use there) nor any
+ * other at-rule such as `@font-face`, which cannot itself nest inside a
+ * style rule the way these can.
+ */
+const WORKAROUND_GROUP_AT_RULE_NAMES = new Set([
+  'container',
+  'layer',
+  'media',
+  'scope',
+  'starting-style',
+  'supports',
+])
+
+/**
+ * Whether `refusedParent` — a group at-rule refused as `@nave`'s parent —
+ * is one the `& { }` workaround sentence applies to: one of the group
+ * at-rules above, with a style rule ancestor at any depth, not only as its
+ * own direct parent, however many further group rules sit between it and
+ * that style rule. Never inside `@keyframes`: a keyframe step (`from`,
+ * `to`, a percentage) parses as a Rule, so the ancestor walk below would
+ * otherwise read it as the style rule the sentence is about — but `&` has
+ * no meaning inside `@keyframes`, so the advice would be wrong there.
+ */
+export function hasWorkaroundSentence(refusedParent: PostCSSContainer | PostCSSDocument): boolean {
+  if (refusedParent.type !== 'atrule') return false
+  if (!WORKAROUND_GROUP_AT_RULE_NAMES.has((refusedParent as PostCSSAtRule).name.toLowerCase())) {
+    return false
+  }
+  if (isInsideKeyframes(refusedParent)) return false
+  let current = refusedParent.parent
+  while (current) {
+    if (current.type === 'rule') return true
+    current = current.parent
   }
   return false
 }

@@ -4,8 +4,10 @@
  * defence in depth rather than a trust boundary: a declaration, pseudo selector, or media/
  * container condition that does not parse as exactly the one construct it is meant to be can
  * break out of the declaration or rule it is spliced into and add sibling CSS the author never
- * wrote. Runs once, at plugin creation, so a bad atom fails the build immediately rather than
- * only when a `@nave` directive happens to use it.
+ * wrote. Runs at plugin creation for an atom map passed directly, and again after every load of
+ * an atom map passed as a module specifier (a dev server can hand it a different module on every
+ * rebuild), before either is assigned for use, so a bad atom fails the build immediately rather
+ * than only when a `@nave` directive happens to use it.
  *
  * Validation is parse-based, not a character blocklist: each string is fed to `postcss.parse`
  * (or `anchorSelectorList`, for a pseudo key) wrapped in the minimal construct it is meant to
@@ -18,7 +20,7 @@ import type { AtRule, Declaration, Rule } from 'postcss'
 
 import postcss from 'postcss'
 
-import type { AtomDefinition } from './atoms.ts'
+import type { ExtendMap } from './directive/resolve.ts'
 
 import { anchorSelectorList } from './selector-utils.ts'
 
@@ -171,7 +173,7 @@ function assertAtBlocksSafe(blocks: unknown, atName: 'container' | 'media', wher
  * for. Any field that is not the shape `AtomDefinition` declares is left to the existing
  * per-use shape checks in `postcss.ts` rather than re-diagnosed here.
  */
-export function validateExtendAtoms(extend: Record<string, AtomDefinition>): void {
+export function validateExtendAtoms(extend: ExtendMap): void {
   for (const [name, atom] of Object.entries(extend)) {
     if (!atom) continue
     const where = `atom "${name}"`

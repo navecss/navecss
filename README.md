@@ -85,7 +85,9 @@ is for: `@nave` is resolved at build time and nothing of it is left at run time.
 Without a PostCSS pipeline `@nave` is an unknown at-rule, nothing errors, and
 the rule renders with none of the declarations its atoms were going to give it.
 The other tier needs no PostCSS at all: `cx()` composes the same built-in atoms
-from JavaScript.
+from JavaScript. Add [`navecss-core check`](packages/core/README.md#navecss-core-check)
+to your build script, and a build whose `@nave` directives were never resolved
+fails instead of shipping.
 
 **Vite's `css.transformer: 'lightningcss'` option produces this same symptom
 with your PostCSS config still in place.** Setting it replaces Vite's CSS

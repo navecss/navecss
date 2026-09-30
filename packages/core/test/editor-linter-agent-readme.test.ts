@@ -1,5 +1,5 @@
 /**
- * AC-consumer-constraints-35, -36, -37 cover: R21.
+ * AC-consumer-constraints-35, -36, -37.
  *
  * The README's "Editor, linter and coding agent" section needs the name of the published
  * stylelint config it offers beside the one-line fence, so it lands with that package rather
@@ -47,7 +47,7 @@ function mdFencesIn(text: string): string[] {
     .toArray()
 }
 
-describe('AC-consumer-constraints-35 covers: R21', () => {
+describe('AC-consumer-constraints-35', () => {
   const section = coreSection()
 
   it('the section exists under that heading, and the root README links to its anchor, which resolves', () => {
@@ -61,7 +61,7 @@ describe('AC-consumer-constraints-35 covers: R21', () => {
   })
 
   it('that path, taken from a consumer project root, names a file the packed tarball carries', () => {
-    // AC-05's own check (slice 1) already asserts nave.css-data.json is present and listed in
+    // AC-05's own check already asserts nave.css-data.json is present and listed in
     // `files`; this just confirms the exact relative path the fence states resolves under the
     // package's own root, which is where a real install places it.
     expect(existsSync(path.join(CORE_DIR, 'nave.css-data.json'))).toBe(true)
@@ -107,7 +107,7 @@ function stylelintJsonReport(cwd: string): { warnings: { rule: string }[] }[] {
   }
 }
 
-describe('AC-consumer-constraints-36 covers: R21, R11a', () => {
+describe('AC-consumer-constraints-36', () => {
   const section = coreSection()
   const lintFence = jsonFencesIn(section).find((f) => f.includes('languageOptions'))!
 
@@ -204,7 +204,7 @@ describe('AC-consumer-constraints-36 covers: R21, R11a', () => {
   })
 })
 
-describe('AC-consumer-constraints-37 covers: R21', () => {
+describe('AC-consumer-constraints-37', () => {
   const section = coreSection()
   const pointerBlock = mdFencesIn(section)[0]!
 
@@ -213,13 +213,14 @@ describe('AC-consumer-constraints-37 covers: R21', () => {
   })
 
   const skillPath = path.join(CORE_DIR, 'skills/navecss/SKILL.md')
-  // Slice 3 (the generator that writes this file) is a separate, still-open pull request at
+  // The generator that writes this file ships in a separate, still-open pull request at
   // the time this head was built; this section's own text is correct for the state both
-  // slices land in together, but the file itself is not on THIS branch until slice 3 merges
-  // and this branch is rebased onto it. `skipIf`, not a silent return: vitest reports this
-  // test as skipped rather than passed, and every other assertion in this file still runs.
+  // changes land in together, but the file itself is not on THIS branch until that pull
+  // request merges and this branch is rebased onto it. `skipIf`, not a silent return:
+  // vitest reports this test as skipped rather than passed, and every other assertion in
+  // this file still runs.
   it.skipIf(!existsSync(skillPath))(
-    'that path exists in the tarball once slice 3 has landed',
+    'that path exists in the tarball once the generator pull request has landed',
     () => {
       expect(existsSync(skillPath)).toBe(true)
     },
@@ -285,9 +286,12 @@ describe('AC-consumer-constraints-37 covers: R21', () => {
     }
   })
 
-  it("the only bin any published package declares is @navecss/tokens' navecss-tokens", () => {
-    // The token build CLI predates this section and writes build output only; a new bin on any
-    // published package is a tool that could write the block, and reds this row.
+  it('every published bin is read-only against a consumer project (no tool could write the block)', () => {
+    // The token build CLI writes build output only. `@navecss/core`'s own `navecss-core` bin
+    // (the @nave survival check) only reads the paths it is given and reports on them — its own
+    // contract asserts every file under `--source` is byte- and mtime-identical after it runs —
+    // so a new bin on either package is not, by itself, a tool that could write the block. A
+    // FUTURE bin still reds this row until the same review is done for it.
     const bins = publishedManifests().flatMap((manifest) => {
       if (manifest.bin === undefined) return []
       // A string `bin` installs one command named after the package.
@@ -296,6 +300,9 @@ describe('AC-consumer-constraints-37 covers: R21', () => {
         (bin) => `${manifest.name}:${bin}`,
       )
     })
-    expect(bins).toEqual(['@navecss/tokens:navecss-tokens'])
+    expect(bins.toSorted((a, b) => a.localeCompare(b))).toEqual([
+      '@navecss/core:navecss-core',
+      '@navecss/tokens:navecss-tokens',
+    ])
   })
 })

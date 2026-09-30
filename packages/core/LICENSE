@@ -19,3 +19,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+THIRD-PARTY MATERIAL
+
+This package includes material copied from or derived from the CSS Syntax
+Module Level 3 specification (css-syntax-3/Overview.bs in the w3c/csswg-drafts
+repository, at commit f971255463f01fb740e2a3a7ecfe83e319cddab9, and
+https://drafts.csswg.org/css-syntax-3/#tokenization). Copyright (c) 2026 World
+Wide Web Consortium. That specification, and the repository carrying it, are
+published under the W3C Software and Document License
+(https://www.w3.org/copyright/software-license-2023/).
+
+What is copied is implemented in src/directive/tokenizer.ts, the files in
+src/directive/tokenizer/ and src/directive/block-reader.ts, all built into the
+JavaScript under dist/: the names of the token types and of their type flags,
+the definitions of the code point classes (among them the ranges of non-ASCII
+ident code points and of non-printable code points, and the maximum allowed
+code point), the order of the steps of the tokenization algorithms, and the
+rule that tells a declaration from a qualified rule. The code implementing them
+is this package's own, and everything in this package is offered under the MIT
+licence above.
