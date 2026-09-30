@@ -145,6 +145,24 @@ describe('extractFences and extractCoreImports cover every fence and import shap
     }, 2500)
   }, 45_000)
 
+  it('stays roughly linear on many openers that are never closed', async () => {
+    await assertScalesLinearly((n) => {
+      const text = '```a\n'.repeat(n)
+      const start = performance.now()
+      extractFences('x', text)
+      return performance.now() - start
+    }, 5000)
+  }, 45_000)
+
+  it('stays roughly linear on one long run of backticks that is never closed', async () => {
+    await assertScalesLinearly((n) => {
+      const text = '`'.repeat(n)
+      const start = performance.now()
+      extractFences('x', text)
+      return performance.now() - start
+    }, 5000)
+  }, 45_000)
+
   it('extracts a dynamic import() of a core subpath', () => {
     const imports = extractCoreImports("await import('@navecss/core/postcss')")
 

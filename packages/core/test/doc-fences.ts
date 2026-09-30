@@ -12,21 +12,103 @@ export interface Fence {
   readonly lang: string
 }
 
+interface FenceRun {
+  /** The fence character and the run's length, so `3` backticks and `4` backticks differ. */
+  readonly signature: string
+  /** Everything on the line after the run. */
+  readonly rest: string
+}
+
 /**
- * Every fenced block in `text`, tagged with which doc it came from: a run
- * of 3+ backticks or 3+ tildes (CommonMark allows either), a language tag,
- * then anything else up to the newline (an info string carries more than
- * the bare language, e.g. `` ```ts title="a" ``), closed by a line holding
- * only the same fence character, 3 or more of them. The rest of the info
- * string must start with a character the language tag cannot hold, so the
- * tag and the rest never compete for the same characters: a long run of
- * word characters after an opener then costs linear time, not quadratic.
+The run of 3+ backticks or 3+ tildes a line starts with, or `undefined` when it does not start with one.
+ */
+function leadingFenceRun(line: string): FenceRun | undefined {
+  const char = line[0]
+  if (char !== '`' && char !== '~') return undefined
+  let length = 1
+  while (line[length] === char) length++
+  if (length < 3) return undefined
+  return { rest: line.slice(length), signature: `${char}${length}` }
+}
+
+/**
+Whether the text after a fence run leaves a closing line: only spaces or tabs, and a `\r` when the doc has CRLF line endings.
+ */
+function isClosingRest(rest: string): boolean {
+  return /^[ \t]*$/.test(rest.endsWith('\r') ? rest.slice(0, -1) : rest)
+}
+
+interface CloserQueue {
+  /** Ascending line indexes of the lines that can close a fence of one signature. */
+  readonly lines: number[]
+  /** First entry of `lines` not yet passed by the walk. */
+  next: number
+}
+
+/**
+Every line that can close a fence, grouped by signature: a bare run of the fence character and nothing else.
+ */
+function collectClosers(runs: readonly (FenceRun | undefined)[]): Map<string, CloserQueue> {
+  const closers = new Map<string, CloserQueue>()
+  for (const [index, run] of runs.entries()) {
+    if (!run || !isClosingRest(run.rest)) continue
+    const queue = closers.get(run.signature) ?? { lines: [], next: 0 }
+    queue.lines.push(index)
+    closers.set(run.signature, queue)
+  }
+  return closers
+}
+
+/**
+The first closing line after `openerIndex` in `queue`, or `undefined` when none is left. The walk only moves forward, so `next` never steps back over an entry.
+ */
+function nextCloser(queue: CloserQueue | undefined, openerIndex: number): number | undefined {
+  if (!queue) return undefined
+  while (queue.next < queue.lines.length && queue.lines[queue.next]! <= openerIndex) queue.next++
+  return queue.lines[queue.next]
+}
+
+/**
+ * Every fenced block in `text`, tagged with which doc it came from: a line
+ * starting with a run of 3+ backticks or 3+ tildes (CommonMark allows
+ * either), a language tag, then anything else on that line (an info string
+ * carries more than the bare language, e.g. `` ```ts title="a" ``), closed
+ * by the next line holding only the same fence character, the same number
+ * of times, and nothing else but spaces or tabs.
+ *
+ * A line scan, linear in the size of `text` by construction: the text is
+ * split into lines once, each line is classified once, and every closing
+ * line is filed under its signature (character and run length) in that same
+ * pass. Finding the closer for an opener is then a step along a list that
+ * only moves forward, so no line is looked at twice however many openers
+ * never close. An opener with no closer left yields no fence and the walk
+ * goes on with the next line; a fence's lines are never opener candidates.
  */
 export function extractFences(doc: string, text: string): Fence[] {
-  return text
-    .matchAll(/^(`{3,}|~{3,})([\w-]*)(?:[^\w\n-][^\n]*)?\n([\s\S]*?)^\1[ \t]*$/gm)
-    .map((m) => ({ body: m[3] ?? '', doc, lang: m[2] ?? '' }))
-    .toArray()
+  const lines = text.split('\n')
+  const runs = lines.map(leadingFenceRun)
+  const closers = collectClosers(runs)
+
+  const fences: Fence[] = []
+  let index = 0
+  while (index < lines.length) {
+    const run = runs[index]
+    const closerIndex = run && nextCloser(closers.get(run.signature), index)
+    if (!run || closerIndex === undefined) {
+      index++
+      continue
+    }
+    fences.push({
+      body: lines
+        .slice(index + 1, closerIndex)
+        .map((line) => `${line}\n`)
+        .join(''),
+      doc,
+      lang: /^[\w-]*/.exec(run.rest)![0],
+    })
+    index = closerIndex + 1
+  }
+  return fences
 }
 
 export interface ImportedName {
