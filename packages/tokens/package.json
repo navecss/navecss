@@ -63,11 +63,11 @@
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
-    "@vitest/coverage-v8": "5.0.1",
+    "@types/node": "^26.6.3",
+    "@vitest/coverage-v8": "5.0.2",
     "prettier": "3.9.9",
     "typescript": "6.0.3",
-    "vitest": "5.0.1"
+    "vitest": "5.0.2"
   },
   "engines": {
     "node": ">=22.18"
