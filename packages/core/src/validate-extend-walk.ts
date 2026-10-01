@@ -51,6 +51,18 @@ function fail(describedAs: string, value: string): never {
 }
 
 /**
+ * `value` as text for an error, for a value JSON can fail to print (a BigInt, a circular array):
+ * the refusal must stay this validator's own, never a serialisation error.
+ */
+function printable(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? typeof value
+  } catch {
+    return `a ${typeof value} value that cannot be printed`
+  }
+}
+
+/**
  * Refuses a nested map that is present but not a plain object. `directive/resolve.ts` reads such a
  * value with `Object.entries`, so an array or a string would be rendered as declarations without
  * the per-string checks ever seeing it. (The atom's own top-level `declarations` is left to
@@ -58,7 +70,7 @@ function fail(describedAs: string, value: string): never {
  */
 function assertShape(value: unknown, describedAs: string): void {
   if (value === undefined || value === null || isPlainObject(value)) return
-  fail(describedAs, JSON.stringify(value) ?? typeof value)
+  fail(describedAs, printable(value))
 }
 
 /**

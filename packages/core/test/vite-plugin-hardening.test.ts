@@ -78,6 +78,22 @@ describe('a nested extend shape that is not a plain object is refused, not rende
   })
 })
 
+describe('a malformed nested value that JSON cannot print is still refused with the validator’s own error', () => {
+  const circular: unknown[] = []
+  circular.push(circular)
+
+  it.each([
+    ['a BigInt inside an array', [1n]],
+    ['a circular array', circular],
+  ])('%s', (_name, bad) => {
+    const extend = { x: { declarations: {}, pseudos: { ':hover': bad } } }
+
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      expect(() => validate(extend as never)).toThrow(/does not parse as a single/)
+    }
+  })
+})
+
 describe('the fold keeps a multi-line text whole', () => {
   it('keeps the lines of a quoted token and takes only a real Available line as the suffix', () => {
     const report = foldLocated([

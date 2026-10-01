@@ -151,7 +151,7 @@ describe('AC-directive-core-02 — the core imports no host', () => {
     expect(() => assertNoForbiddenHost(tamperedSpecifiers)).toThrow()
   })
 
-  it('dist/: no entry other than the two host adapters, and no shared chunk, mentions a host build tool', () => {
+  it('dist/: no entry but postcss.js, and no shared chunk, mentions a host build tool (vite.js only the one it reacts to)', () => {
     if (!existsSync(DIST)) throw new Error('dist/ is missing — run the package build first')
 
     // `postcss.js` imports PostCSS and is exempt. `vite.js` imports no host but names
