@@ -3,13 +3,14 @@
   "version": "0.2.0",
   "license": "MIT",
   "type": "module",
-  "description": "Nave design system — layer architecture, reset, atomic utilities, PostCSS plugin",
+  "description": "Nave design system — layer architecture, reset, atomic utilities, and the Vite and PostCSS plugins for the @nave directive",
   "keywords": [
     "css",
     "design-system",
     "css-layers",
     "atomic-css",
     "postcss-plugin",
+    "vite-plugin",
     "zero-runtime"
   ],
   "homepage": "https://github.com/navecss/navecss/tree/main/packages/core#readme",
@@ -34,6 +35,10 @@
       "types": "./dist/postcss.d.ts",
       "import": "./dist/postcss.js"
     },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js"
+    },
     "./check": {
       "types": "./dist/check.d.ts",
       "import": "./dist/check.js"
@@ -57,9 +62,9 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p test/browser/tsconfig.json",
     "lint": "eslint src scripts --max-warnings 0 && stylelint \"src/**/*.css\" --max-warnings 0",
     "lint:fix": "eslint src scripts --fix && stylelint \"src/**/*.css\" --fix",
-    "test": "node scripts/generate-consumer-theming-fixtures.ts && vitest run",
-    "test:coverage": "node scripts/generate-consumer-theming-fixtures.ts && vitest run --coverage",
-    "test:browser": "node scripts/generate-consumer-theming-fixtures.ts && vitest run --config vitest.browser.config.ts",
+    "test": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && vitest run",
+    "test:coverage": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && vitest run --coverage",
+    "test:browser": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && vitest run --config vitest.browser.config.ts",
     "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints . layers no-tokens reset atomic",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
@@ -76,19 +81,25 @@
   },
   "devDependencies": {
     "@rmenke/css-tokenizer-tests": "1.4.0",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@types/node": "^26.6.2",
+    "@vitejs/plugin-vue": "6.0.9",
     "@vitest/browser": "5.0.1",
     "@vitest/browser-playwright": "5.0.1",
     "@vitest/coverage-v8": "5.0.1",
     "playwright": "1.63.0",
     "postcss": "^8.5.28",
     "prettier": "3.9.9",
+    "sass": "1.105.0",
     "source-map": "^0.7.6",
+    "svelte": "5.57.1",
     "tsup": "^8.5.1",
     "typescript": "6.0.3",
-    "vite": "7.3.6",
+    "vite": "8.2.1",
+    "vite-newest": "npm:vite@8.3.1",
     "vitest": "5.0.1",
-    "vscode-css-languageservice": "6.3.10"
+    "vscode-css-languageservice": "6.3.10",
+    "vue": "3.5.43"
   },
   "engines": {
     "node": ">=22.18"

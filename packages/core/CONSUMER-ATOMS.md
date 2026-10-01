@@ -17,7 +17,7 @@ not.
 
 ```ts
 // src/design-system/atoms.ts
-import type { AtomDefinition } from '@navecss/core/postcss'
+import type { AtomDefinition } from '@navecss/core/atoms'
 import { media } from '@navecss/tokens/breakpoints'
 
 export const myAtoms: Record<string, AtomDefinition> = {
@@ -50,47 +50,53 @@ export const myAtoms: Record<string, AtomDefinition> = {
 
 ## Registering with the plugin
 
+On Vite, pass `extend` to the Vite plugin:
+
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { navePlugin } from '@navecss/core/postcss'
+import { navePlugin } from '@navecss/core/vite'
 import { myAtoms } from './src/design-system/atoms'
 
 export default defineConfig({
   // your existing options, plugins included, stay as they are
-  css: { postcss: { plugins: [navePlugin({ extend: myAtoms })] } },
+  plugins: [navePlugin({ extend: myAtoms })],
   build: { cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'] },
 })
 ```
 
 `build.cssTarget` is the browser floor, in Vite's terms:
-[PostCSS plugin setup](./README.md#postcss-plugin-setup) says what goes wrong
-without it.
+[Vite plugin setup](./README.md#vite-plugin-setup) says what goes wrong
+without it. On Next.js, webpack or another pipeline that runs PostCSS plugins, pass
+the same `extend` to `navePlugin` from `@navecss/core/postcss`, in your PostCSS
+config ([PostCSS plugin setup](./README.md#postcss-plugin-setup)).
 
 **An `extend` object, written inline in a cached host's config or imported
 into it as above, does not invalidate that host's cache.** A host with a
 persistent build cache (webpack's, for instance) does not know your atoms
 module is an input to the CSS it cached, so a warm rebuild after you edit an
 atom can still ship the old value. Pass `extend` as a path to the module
-instead, and the plugin declares that file to PostCSS as a dependency of every
-stylesheet, which lets the host's own cache key see it:
+instead, and the plugin declares that file to the host as a dependency, which
+lets the host's own cache key see it (the PostCSS plugin on every stylesheet it
+processes, the Vite plugin on every stylesheet that holds a directive):
 
 ```ts
 navePlugin({ extend: './src/design-system/atoms.mjs' })
 ```
 
-The path is resolved from the directory the build runs in (`process.cwd()`),
-not from the config file, and it names a file, extension included: a package
-name is not looked up. Node's own `import()` loads it, with no bundler in
-between, so it has to be a JavaScript module or a JSON file, and its default
-export (or, for JSON, its parsed top-level value) is the atoms object: for the
-module above, `export default myAtoms`.
+The path is resolved from the directory the build runs in (`process.cwd()`) for
+the PostCSS plugin, and from Vite's project root for the Vite plugin, not from
+the config file, and it names a file, extension included: a package name is not
+looked up. Node's own `import()` loads it, with no bundler in between, so it has
+to be a JavaScript module or a JSON file, and its default export (or, for JSON,
+its parsed top-level value) is the atoms object: for the module above,
+`export default myAtoms`.
 
-With a path the plugin is async: call `process(css).then(cb)`, not the sync
-`.css` getter. It re-reads the file whenever the file changes, so a dev server
-sees an edit to it without a restart. Only that file: an edit to a module it
-imports is neither re-read nor visible to the host's cache, so keep the atoms
-themselves in the file you name.
+With a path the PostCSS plugin is async: call `process(css).then(cb)`, not the
+sync `.css` getter. Either plugin re-reads the file whenever the file changes,
+so a dev server sees an edit to it without a restart. Only that file: an edit to
+a module it imports is neither re-read nor visible to the host's cache, so keep
+the atoms themselves in the file you name.
 
 ## Using consumer atoms
 
@@ -220,7 +226,7 @@ Container thresholds are component-specific — there is no universal
 
 ```ts
 // src/design-system/atoms.ts
-import type { AtomDefinition } from '@navecss/core/postcss'
+import type { AtomDefinition } from '@navecss/core/atoms'
 
 export const myAtoms: Record<string, AtomDefinition> = {
   adaptiveCard: {

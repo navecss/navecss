@@ -80,10 +80,10 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
     assertPublishedExportsPresent(exports)
   })
 
-  it('adds exactly ./check beyond the 0.1.0 keys', () => {
+  it('adds exactly ./check and ./vite beyond the 0.1.0 keys', () => {
     const exports = manifest().exports as Record<string, unknown>
     const added = Object.keys(exports).filter((k) => !Object.hasOwn(PUBLISHED_0_1_0_EXPORTS, k))
-    expect(added).toEqual(['./check'])
+    expect(added.toSorted()).toEqual(['./check', './vite'])
   })
 
   it('keeps dependencies exactly @navecss/tokens, and postcss the sole optional peer', () => {

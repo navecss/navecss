@@ -6,6 +6,7 @@
 import { parseArgs } from 'node:util'
 
 import { type CheckResult, runCheck as runSourcesCheck } from './directive/check-run.ts'
+import { formatFinding } from './directive/findings.ts'
 
 const USAGE = `Usage:
   navecss-core check --source=<file-or-dir> [--source=<file-or-dir> ...]`
@@ -46,10 +47,7 @@ function parseSourceArgs(args: readonly string[]): ParsedArgs {
 One line per surviving directive: file, position, the directive as written, and its enclosing selector.
  */
 function printFindings(result: CheckResult): void {
-  for (const finding of result.findings) {
-    const where = finding.selector === undefined ? '' : ` (in ${finding.selector})`
-    console.log(`${finding.file}:${finding.line}:${finding.column}: ${finding.text}${where}`)
-  }
+  for (const finding of result.findings) console.log(formatFinding(finding))
 }
 
 /**

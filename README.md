@@ -54,7 +54,7 @@ without claiming conformance, certification or endorsement.
 | Package                                                         | Description                                                                                                                                    |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                                                         |
-| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, PostCSS plugin                                                                                    |
+| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, Vite plugin, PostCSS plugin                                                                       |
 | [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check, declared `--nave-*` names |
 | [`@navecss/eslint-plugin`](packages/eslint-plugin#readme)       | A literal class in `className` unless declared, or a literal value on a tokenized `style` property, reported                                   |
 
@@ -80,22 +80,28 @@ text lose their colours. [Why this floor](docs/04-adr/0005-browser-floor.md).
 no legacy fallback field, so a resolver that reads only the older fields cannot
 find it at all. The Vite setup below is one that does.
 
-**A PostCSS pipeline, for the `@nave` directive.** That is what the plugin below
-is for: `@nave` is resolved at build time and nothing of it is left at run time.
-Without a PostCSS pipeline `@nave` is an unknown at-rule, nothing errors, and
+**A build step that resolves `@nave`.** On Vite that is the plugin below, and it
+is the one route this page teaches; on a pipeline that runs PostCSS plugins and
+is not Vite, [the PostCSS plugin](packages/core/README.md#postcss-plugin-setup)
+does the same. Either way `@nave` is resolved at build time and nothing of it is
+left at run time. Without one, `@nave` is an unknown at-rule, nothing errors, and
 the rule renders with none of the declarations its atoms were going to give it.
-The other tier needs no PostCSS at all: `cx()` composes the same built-in atoms
-from JavaScript. Add [`navecss-core check`](packages/core/README.md#navecss-core-check)
-to your build script, and a build whose `@nave` directives were never resolved
-fails instead of shipping.
+The other tier needs no build step at all: `cx()` composes the same built-in
+atoms from JavaScript. The Vite plugin fails the build on any `@nave` that
+reaches the CSS it writes; for any other pipeline, add
+[`navecss-core check`](packages/core/README.md#navecss-core-check) to your build
+script, and a build whose `@nave` directives were never resolved fails instead
+of shipping.
 
-**Vite's `css.transformer: 'lightningcss'` option produces this same symptom
-with your PostCSS config still in place.** Setting it replaces Vite's CSS
-pipeline with Lightning CSS, which does not run PostCSS plugins at all: the
-build stays green, `@nave` reaches the browser as an unknown at-rule, and the
-browser drops it, so the rule renders with none of the declarations its atoms
-were going to give it. Same failure as the paragraph above, different cause.
-Do not set that option on a project using `@nave`.
+**Vite's `css.transformer: 'lightningcss'` option is the one place the PostCSS
+route fails with no error, with your PostCSS config still in place.** Setting it
+replaces Vite's CSS pipeline with Lightning CSS, which does not run PostCSS
+plugins at all: the build stays green, `@nave` reaches the browser as an unknown
+at-rule, and the browser drops it, so the rule renders with none of the
+declarations its atoms were going to give it. Same failure as the paragraph
+above, different cause. The Vite plugin below runs under that option too; the
+PostCSS plugin does not, so do not set that option on a project using `@nave`
+through PostCSS.
 
 **One line for your editor and one for your linter**, because `@nave` is an
 unknown at-rule to those too. In `.vscode/settings.json`:
@@ -148,11 +154,11 @@ it repeats the same statement, which changes nothing.
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { navePlugin } from '@navecss/core/postcss'
+import { navePlugin } from '@navecss/core/vite'
 
 export default defineConfig({
   // your existing options, plugins included, stay as they are
-  css: { postcss: { plugins: [navePlugin()] } },
+  plugins: [navePlugin()],
   build: { cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'] },
 })
 ```
@@ -161,9 +167,13 @@ export default defineConfig({
 older browsers, and building for them gains you nothing, because the output
 still needs the floor. It does cost you something: Vite rewrites `light-dark()`
 in Nave's colours into an emulation that a `color-scheme` set from script, or on
-part of the page, does not switch. If your project already has a
-`postcss.config.js`, put `navePlugin()` there instead: Vite reads no PostCSS
-config file once `css.postcss` is set inline.
+part of the page, does not switch. The plugin sets no floor of its own: that
+floor is a requirement of Nave's stylesheets, whether or not you write `@nave`.
+Already on the PostCSS plugin? Move `navePlugin()` from `css.postcss` (or
+`postcss.config.js`) to `plugins`, importing it from `@navecss/core/vite`;
+leaving both is harmless. The
+[setup section](packages/core/README.md#setting-up-nave) has the rest, including
+Lightning CSS and what the build checks at the end.
 
 ```css
 /* button.module.css */
