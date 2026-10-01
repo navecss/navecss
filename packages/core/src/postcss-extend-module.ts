@@ -88,6 +88,11 @@ function loadExtendModule(
   const cached = cache.get(moduleUrl)
   if (cached) return cached
 
+  // An edit loads a new URL; the superseded ones for this file are dropped so a long-lived dev
+  // server does not keep one entry per save. (Node's own module cache cannot be emptied, so each
+  // edit still leaves one loaded module behind until the process ends.)
+  const filePrefix = `${url.pathToFileURL(file).href}?v=`
+  for (const key of cache.keys()) if (key.startsWith(filePrefix)) cache.delete(key)
   const pending = importExtendMap(moduleUrl, file)
   cache.set(moduleUrl, pending)
   return pending

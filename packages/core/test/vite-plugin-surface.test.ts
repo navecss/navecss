@@ -147,17 +147,17 @@ describe('AC-directive-core-31 — the Vite plugin’s surface', { timeout: 120_
   })
 
   it.each([
-    ['an unknown option key', 'navePlugin({ scan: false })'],
-    ['an enforce key', "navePlugin({ enforce: 'pre' })"],
-    ['an onUnknown outside the closed set', "navePlugin({ onUnknown: 'bogus' })"],
-  ])('a type test passing %s fails tsc', (_name, call) => {
+    ['an unknown option key', 'navePlugin({ scan: false })', 'scan'],
+    ['an enforce key', "navePlugin({ enforce: 'pre' })", 'enforce'],
+    ['an onUnknown outside the closed set', "navePlugin({ onUnknown: 'bogus' })", 'bogus'],
+  ])('a type test passing %s fails tsc', (_name, call, token) => {
     const diagnostics = diagnosticsFor(`
       import { navePlugin } from '@navecss/core/vite'
       navePlugin()
       ${call}
     `)
 
-    expect(diagnostics.length).toBeGreaterThan(0)
+    expect(diagnostics.some((message) => message.includes(token))).toBe(true)
   })
 
   it('a later overload that returns an array does not break a caller of the plain call', () => {

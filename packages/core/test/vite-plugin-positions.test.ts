@@ -22,7 +22,7 @@ let app: ScratchApp
 beforeAll(() => {
   app = makeApp(FILES)
 })
-afterAll(() => app.dispose())
+afterAll(() => app?.dispose())
 
 async function messageOf(run: Promise<unknown>): Promise<string> {
   try {

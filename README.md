@@ -157,7 +157,7 @@ import { defineConfig } from 'vite'
 import { navePlugin } from '@navecss/core/vite'
 
 export default defineConfig({
-  // your existing options, plugins included, stay as they are
+  // your existing options stay as they are; add navePlugin() to your existing plugins
   plugins: [navePlugin()],
   build: { cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'] },
 })

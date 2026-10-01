@@ -24,8 +24,8 @@ beforeAll(() => {
   valueSurvivor = makeApp({ ...entry, 'src/plain.css': '.a { color: @nave flex; }' })
 })
 afterAll(() => {
-  clean.dispose()
-  valueSurvivor.dispose()
+  clean?.dispose()
+  valueSurvivor?.dispose()
 })
 
 /**
@@ -127,7 +127,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
       expect(warnings).toEqual([])
     }, 30_000)
 
-    it('no option turns the scan off: the type has no such key, and ignore still fails', () => {
+    it('no option turns the scan off: the options type has no such key', () => {
       // @ts-expect-error — there is no scan switch at first publish
       const off: NaveViteOptions = { scan: false }
 

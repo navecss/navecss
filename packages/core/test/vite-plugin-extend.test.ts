@@ -24,7 +24,8 @@ const FILES = {
 
 const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
-  for (const cleanup of cleanups.splice(0)) await cleanup()
+  // Last registered, first run: a server or watcher closes before the app it watches is removed.
+  for (const cleanup of cleanups.splice(0).toReversed()) await cleanup()
 })
 
 async function until(check: () => Promise<boolean>, what: string): Promise<void> {

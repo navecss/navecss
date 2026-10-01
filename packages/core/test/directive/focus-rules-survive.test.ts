@@ -105,8 +105,10 @@ describe('AC-directive-core-20 — the focus rules survive every leg', () => {
   it.each(ROWS)('$atom: $css', async ({ css, pseudo, revealed, base }) => {
     const postcssOutput = (await postcss([navePlugin()]).process(css, { from: undefined })).css
     const expandTextOutput = expandText(css, {}).css
-    const viteOutput = (await runHook({ code: css })).code
+    const viteRun = await runHook({ code: css })
+    const viteOutput = viteRun.code
 
+    expect(viteRun.error, 'the Vite leg failed on a directive row').toBeUndefined()
     expect(viteOutput, 'the Vite leg left a directive row untouched').toBeDefined()
     for (const output of [postcssOutput, expandTextOutput, viteOutput!]) {
       assertPseudoRuleSurvives(output, pseudo, revealed)

@@ -154,15 +154,17 @@ describe('AC-directive-core-02 — the core imports no host', () => {
   it('dist/: no entry other than the two host adapters, and no shared chunk, mentions a host build tool', () => {
     if (!existsSync(DIST)) throw new Error('dist/ is missing — run the package build first')
 
-    // `postcss.js` imports PostCSS; `vite.js` imports no host (vite-plugin-surface.test.ts checks
-    // its specifiers) but names `lightningcss` as the `css.transformer` value it reacts to.
-    const adapters = new Set(['postcss.js', 'vite.js'])
-    const files = readdirSync(DIST).filter((f) => f.endsWith('.js') && !adapters.has(f))
+    // `postcss.js` imports PostCSS and is exempt. `vite.js` imports no host but names
+    // `lightningcss` as the `css.transformer` value it reacts to, so it is scanned for every host
+    // except that one.
+    const files = readdirSync(DIST).filter((f) => f.endsWith('.js') && f !== 'postcss.js')
     expect(files.length).toBeGreaterThan(0)
 
     for (const file of files) {
       const source = readFileSync(path.join(DIST, file), 'utf8')
-      for (const host of FORBIDDEN_HOSTS) {
+      for (const host of FORBIDDEN_HOSTS.filter(
+        (h) => file !== 'vite.js' || h !== 'lightningcss',
+      )) {
         expect(
           source.includes(`'${host}`) || source.includes(`"${host}`),
           `${file} mentions ${host}`,

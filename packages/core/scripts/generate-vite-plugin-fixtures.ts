@@ -45,6 +45,8 @@ try {
     .filter((o) => o.fileName.endsWith('.css'))
     .map((o) => o.source)
     .join('\n')
+  if (css.trim() === '')
+    throw new Error('the Vite build wrote no CSS, so there is no fixture to write')
   mkdirSync(FIXTURES_DIR, { recursive: true })
   writeFileSync(path.join(FIXTURES_DIR, 'vite-plugin-default-targets.css'), css, 'utf8')
   console.log('✓ Generated the Vite plugin fixture in test/browser/fixtures/')

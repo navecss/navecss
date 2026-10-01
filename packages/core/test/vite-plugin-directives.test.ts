@@ -334,7 +334,11 @@ describe('AC-directive-core-17 — whose line and column (Vite)', () => {
   })
 
   it('a stylesheet Vite supplies an empty map for is read as having none', async () => {
-    const run = await runHook({ code: CSS, id: '/proj/compiled.css' })
+    const run = await runHook({
+      code: CSS,
+      id: '/proj/compiled.css',
+      incomingMap: { sources: [], mappings: '' },
+    })
 
     expect(run.error!.message).toContain('no source map')
   })

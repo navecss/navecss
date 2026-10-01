@@ -80,16 +80,19 @@ async function throughVite(css: string): Promise<string> {
   return run.code ?? css
 }
 
-const LEGS = ['postcss', 'expandText', 'vite'] as const
+const LEGS = {
+  postcss: throughPostcss,
+  expandText: (css: string) => Promise.resolve(throughExpandText(css)),
+  vite: throughVite,
+}
 
 describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () => {
   it.each(CORPUS)('%s', async (css) => {
-    const postcssOutput = await throughPostcss(css)
-    const expandTextOutput = throughExpandText(css)
-    const viteOutput = await throughVite(css)
+    const reference = await LEGS.postcss(css)
 
-    expect(isEquivalent(postcssOutput, expandTextOutput)).toBe(true)
-    expect(isEquivalent(postcssOutput, viteOutput)).toBe(true)
+    for (const [name, leg] of Object.entries(LEGS)) {
+      expect(isEquivalent(reference, await leg(css)), `the ${name} leg`).toBe(true)
+    }
   })
 
   it.each(CORPUS)('diagnostics agree between expandText() and the Vite leg: %s', async (css) => {
@@ -106,7 +109,7 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
   })
 
   it('runs exactly the legs there are, each over a non-empty corpus', () => {
-    expect(LEGS).toEqual(['postcss', 'expandText', 'vite'])
+    expect(Object.keys(LEGS)).toEqual(['postcss', 'expandText', 'vite'])
     expect(CORPUS.length).toBeGreaterThan(0)
   })
 

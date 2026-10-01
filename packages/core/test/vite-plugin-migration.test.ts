@@ -22,7 +22,7 @@ let app: ScratchApp
 beforeAll(() => {
   app = makeApp(FILES)
 })
-afterAll(() => app.dispose())
+afterAll(() => app?.dispose())
 
 describe('AC-directive-core-38 — migrating from css.postcss to plugins', () => {
   it('builds green with both, to CSS equivalent to the Vite plugin alone', async () => {

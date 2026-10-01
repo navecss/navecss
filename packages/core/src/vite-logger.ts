@@ -15,7 +15,7 @@ const ANSI_ESCAPE = new RegExp(String.raw`\u001B\[[\d;]*m`, 'g')
  * Lightning CSS's own wording, matched ASCII case-insensitively and not as a prefix of another
  * at-rule's name (`@nave-x`, `@navex`). An escaped spelling may still warn.
  */
-const UNKNOWN_NAVE_RULE = /Unknown at rule: @nave(?![\w-])/i
+const UNKNOWN_NAVE_RULE = /Unknown at rule: @nave(?![\w-]|[^\p{ASCII}])/iu
 
 /**
  * Whether `message` is Lightning CSS's warning about an unknown `@nave` at-rule.

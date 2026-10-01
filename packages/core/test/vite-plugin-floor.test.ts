@@ -42,8 +42,8 @@ beforeAll(() => {
   })
 })
 afterAll(() => {
-  app.dispose()
-  raw.dispose()
+  app?.dispose()
+  raw?.dispose()
 })
 
 /**

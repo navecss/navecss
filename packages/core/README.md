@@ -187,7 +187,7 @@ import { defineConfig } from 'vite'
 import { navePlugin } from '@navecss/core/vite'
 
 export default defineConfig({
-  // your existing options, plugins included, stay as they are
+  // your existing options stay as they are; add navePlugin() to your existing plugins
   plugins: [navePlugin()],
   build: { cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'] },
 })
@@ -212,7 +212,7 @@ needs the same key.
 
 **Migrating from the PostCSS plugin.** Move `navePlugin()` from `css.postcss` or
 `postcss.config.js` to `plugins`, importing it from `@navecss/core/vite`. Leaving both is
-harmless, because the PostCSS pass finds no directive left.
+harmless, because whichever pass runs second finds no directive left.
 
 **Under `css.transformer: 'lightningcss'`** the plugin expands exactly as it does under the default
 transformer, and drops one message and only that one: Lightning CSS's

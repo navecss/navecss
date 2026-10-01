@@ -83,7 +83,7 @@ describe('AC-directive-core-29 — every documented config fence names a real su
     expect(checkBinInvocation(inv)).toEqual([])
   })
 
-  it('the fence set includes the Vite plugin's fence', () => {
+  it('the fence set includes the Vite plugin’s fence', () => {
     const viteImports = coreImports.filter(({ imp }) => imp.specifier === '@navecss/core/vite')
 
     expect(viteImports.length).toBeGreaterThan(0)

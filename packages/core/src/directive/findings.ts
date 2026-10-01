@@ -42,6 +42,8 @@ export function findingsInText(file: string, raw: string): Finding[] {
  * One line per finding: file, position, the directive as written, and its enclosing selector.
  */
 export function formatFinding(finding: Finding): string {
-  const where = finding.selector === undefined ? '' : ` (in ${finding.selector})`
+  // A selector can span lines (and carry runs of whitespace); one finding stays one line.
+  const where =
+    finding.selector === undefined ? '' : ` (in ${finding.selector.replaceAll(/\s+/g, ' ')})`
   return `${finding.file}:${finding.line}:${finding.column}: ${finding.text}${where}`
 }

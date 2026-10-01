@@ -240,9 +240,9 @@ describe(
           const file = path.join(dir, `atoms-${i}.ts`)
           writeFileSync(
             file,
-            fence.body
-              .replaceAll("'@navecss/core/atoms'", "'../dist/atoms.js'")
-              .replaceAll("'@navecss/tokens/breakpoints'", "'@navecss/tokens/breakpoints'"),
+            // The breakpoints import stays bare, so the check resolves it against the installed
+            // `@navecss/tokens` the way a consumer's does.
+            fence.body.replaceAll("'@navecss/core/atoms'", "'../dist/atoms.js'"),
           )
           return file
         })

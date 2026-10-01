@@ -15,10 +15,16 @@ export interface LocatedText {
 }
 
 /**
-The first line of `text`.
+ * `text` split into its body (every line before a closing `Available: ...` line) and that line, when
+ * it ends with one. A text's own lines past the first (a multi-line token it quotes) stay in the body.
  */
-function firstLine(text: string): string {
-  return text.split('\n', 1)[0]!
+function splitAvailable(text: string): { available: string | undefined; body: string } {
+  const lines = text.split('\n')
+  const last = lines.at(-1)
+  if (lines.length > 1 && last?.startsWith('Available: ')) {
+    return { body: lines.slice(0, -1).join('\n'), available: last }
+  }
+  return { body: text, available: undefined }
 }
 
 /**
@@ -29,32 +35,22 @@ function withoutNavePrefix(text: string): string {
 }
 
 /**
-The "Available: ..." line from whichever entry's text carries one — every entry that has one carries the identical vocabulary.
- */
-function sharedAvailableLine(entries: readonly LocatedText[]): string | undefined {
-  for (const entry of entries) {
-    const lines = entry.text.split('\n')
-    if (lines.length > 1) return lines[1]
-  }
-  return undefined
-}
-
-/**
- * The first problem's own single line, then (when there is more than one problem) `N more in
- * this stylesheet:` and one `L:C: <text>` line per further problem (its own text, `@nave: `
- * dropped), then `Available:` once, last, if any folded problem lacked a hint. `entries` must
- * already be in source order and hold at least one problem.
+ * The first problem's own text, then (when there is more than one problem) `N more in this
+ * stylesheet:` and one `L:C: <text>` entry per further problem (its own text, `@nave: ` dropped),
+ * then `Available:` once, last, if any folded problem lacked a hint. `entries` must already be in
+ * source order and hold at least one problem.
  */
 export function foldLocated(entries: readonly LocatedText[]): string {
-  const [first, ...rest] = entries as [LocatedText, ...LocatedText[]]
-  const lines = [firstLine(first.text)]
+  const parts = entries.map((entry) => ({ ...splitAvailable(entry.text), entry }))
+  const [first, ...rest] = parts as [(typeof parts)[number], ...typeof parts]
+  const lines = [first.body]
   if (rest.length > 0) {
     lines.push(`${rest.length} more in this stylesheet:`)
-    for (const entry of rest) {
-      lines.push(`${entry.line}:${entry.column}: ${withoutNavePrefix(firstLine(entry.text))}`)
+    for (const { body, entry } of rest) {
+      lines.push(`${entry.line}:${entry.column}: ${withoutNavePrefix(body)}`)
     }
   }
-  const available = sharedAvailableLine(entries)
+  const available = parts.find((part) => part.available !== undefined)?.available
   if (available) lines.push(available)
   return lines.join('\n')
 }

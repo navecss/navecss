@@ -25,6 +25,11 @@ packages/core/test/browser/fixtures/
 # abnormal test-process kill leaving it behind untracked.
 packages/core/test/.atoms-mutation-*/
 
+# Scratch apps and projects the Vite plugin's fixtures build under packages/core, so that `vue`, `sass`
+# and `@navecss/tokens` resolve through its node_modules. Each test removes its own; this only guards
+# against a killed test process leaving one behind untracked.
+packages/core/.nave-*/
+
 # OS
 .DS_Store
 Thumbs.db

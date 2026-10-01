@@ -51,9 +51,26 @@ function fail(describedAs: string, value: string): never {
 }
 
 /**
+ * Refuses a nested map that is present but not a plain object. `directive/resolve.ts` reads such a
+ * value with `Object.entries`, so an array or a string would be rendered as declarations without
+ * the per-string checks ever seeing it. (The atom's own top-level `declarations` is left to
+ * `resolve()`, which throws on it by name.)
+ */
+function assertShape(value: unknown, describedAs: string): void {
+  if (value === undefined || value === null || isPlainObject(value)) return
+  fail(describedAs, JSON.stringify(value) ?? typeof value)
+}
+
+/**
  * Validates every property/value pair of a `declarations` map, if it is one.
  */
-function assertDeclarationsSafe(declarations: unknown, where: string, p: Predicates): void {
+function assertDeclarationsSafe(
+  declarations: unknown,
+  where: string,
+  p: Predicates,
+  isNested = false,
+): void {
+  if (isNested) assertShape(declarations, `${where}'s declarations`)
   if (!isPlainObject(declarations)) return
   for (const [prop, value] of Object.entries(declarations)) {
     if (typeof prop === 'string' && !p.isPropValid(prop)) {
@@ -70,10 +87,11 @@ function assertDeclarationsSafe(declarations: unknown, where: string, p: Predica
  * is one.
  */
 function assertPseudosSafe(pseudos: unknown, where: string, p: Predicates): void {
+  assertShape(pseudos, `${where}'s pseudos`)
   if (!isPlainObject(pseudos)) return
   for (const [pseudo, declarations] of Object.entries(pseudos)) {
     if (!p.isSelectorValid(pseudo)) fail(`${where}'s pseudo "${pseudo}"`, pseudo)
-    assertDeclarationsSafe(declarations, `${where}'s pseudo "${pseudo}"`, p)
+    assertDeclarationsSafe(declarations, `${where}'s pseudo "${pseudo}"`, p, true)
   }
 }
 
@@ -86,13 +104,15 @@ function assertAtBlocksSafe(
   where: string,
   p: Predicates,
 ): void {
+  assertShape(blocks, `${where}'s ${atName} map`)
   if (!isPlainObject(blocks)) return
   for (const [condition, block] of Object.entries(blocks)) {
     if (!p.isConditionValid(atName, condition))
       fail(`${where}'s ${atName} condition "${condition}"`, condition)
-    if (!isPlainObject(block)) continue
     const blockWhere = `${where}'s ${atName} "${condition}"`
-    assertDeclarationsSafe(block.declarations, blockWhere, p)
+    assertShape(block, `${blockWhere} block`)
+    if (!isPlainObject(block)) continue
+    assertDeclarationsSafe(block.declarations, blockWhere, p, true)
     assertPseudosSafe(block.pseudos, blockWhere, p)
   }
 }

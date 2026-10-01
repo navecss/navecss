@@ -36,6 +36,19 @@ export interface ReportInput {
 
 interface Located extends LocatedText {
   readonly file: string
+  /**
+  Whether the position is the processed text's own: no incoming map, or one that does not cover this line.
+   */
+  readonly isProcessed: boolean
+}
+
+/**
+ * `source` resolved against the map's `sourceRoot`, when it has one and `source` is a relative
+ * path (a URL or an absolute path is already complete).
+ */
+function withSourceRoot(source: string, sourceRoot: string | undefined): string {
+  if (!sourceRoot || /^(?:[a-z][a-z\d+.-]*:|\/)/i.test(source)) return source
+  return `${sourceRoot.replace(/\/$/, '')}/${source}`
 }
 
 /**
@@ -48,18 +61,27 @@ function locate(diagnostic: ExpandedDiagnostic, input: ReportInput): Located {
     column: diagnostic.column - 1,
   })
   if (origin === undefined) {
-    return { text, file: input.file, line: diagnostic.line, column: diagnostic.column }
+    const position = { line: diagnostic.line, column: diagnostic.column }
+    return { text, file: input.file, isProcessed: true, ...position }
   }
-  return { text, file: origin.source, line: origin.line, column: origin.column + 1 }
+  return {
+    text,
+    file: withSourceRoot(origin.source, input.incoming?.sourceRoot),
+    isProcessed: false,
+    line: origin.line,
+    column: origin.column + 1,
+  }
 }
 
 /**
- * `body` with, when Vite supplied no source map, a line saying the position is the processed
- * file's own, kept ahead of a closing `Available:` line so that line stays last.
+ * `body` with, when the position is the processed file's own, a line saying so, kept ahead of a
+ * closing `Available:` line so that line stays last. The line says why: Vite supplied no map, or
+ * its map does not reach this line.
  */
-function withNoMapNote(body: string, input: ReportInput): string {
-  if (input.incoming !== undefined) return body
-  const note = `(position in ${input.file} as processed; no source map)`
+function withNoMapNote(body: string, input: ReportInput, at: Located): string {
+  if (!at.isProcessed) return body
+  const reason = input.incoming === undefined ? 'no source map' : 'the source map does not cover it'
+  const note = `(position in ${input.file} as processed; ${reason})`
   const lines = body.split('\n')
   const hasAvailable = lines.at(-1)?.startsWith('Available: ') === true
   lines.splice(hasAvailable ? -1 : lines.length, 0, note)
@@ -93,12 +115,12 @@ export function reportDiagnostics(input: ReportInput): void {
   const located = inSourceOrder.map((diagnostic) => locate(diagnostic, input))
   if (input.onUnknown === 'warn') {
     for (const at of located) {
-      const message = withNoMapNote(`${frame(at)}${at.text}`, input)
+      const message = withNoMapNote(`${frame(at)}${at.text}`, input, at)
       input.ctx.warn(logFor(message, input, at))
     }
     return
   }
   const first = located[0]!
-  const message = withNoMapNote(`${frame(first)}${foldLocated(located)}`, input)
+  const message = withNoMapNote(`${frame(first)}${foldLocated(located)}`, input, first)
   input.ctx.error(logFor(message, input, first))
 }

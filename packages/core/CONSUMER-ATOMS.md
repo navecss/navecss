@@ -59,7 +59,7 @@ import { navePlugin } from '@navecss/core/vite'
 import { myAtoms } from './src/design-system/atoms'
 
 export default defineConfig({
-  // your existing options, plugins included, stay as they are
+  // your existing options stay as they are; add navePlugin() to your existing plugins
   plugins: [navePlugin({ extend: myAtoms })],
   build: { cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'] },
 })

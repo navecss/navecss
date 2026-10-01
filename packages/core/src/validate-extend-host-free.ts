@@ -9,129 +9,24 @@
  * the text open a second declaration, rule or at-rule leaves something over and is refused.
  */
 import type { ExtendMap } from './directive/resolve.ts'
-import type { Token } from './directive/tokenizer.ts'
+import type { Wrapped } from './validate-extend-scan.ts'
 
 import { type Item, matchBrackets, readItem } from './directive/block-reader.ts'
 import { tokenize } from './directive/tokenizer.ts'
 import { anchorSelectorList } from './selector-utils.ts'
+import {
+  hasBrokenString,
+  hasEscapedCommentOpener,
+  hasPaddedComment,
+  hasStrayCurlyCloser,
+  hasTopLevelColon,
+  hasTopLevelComment,
+  hasUrl,
+  isInert,
+  isOnlyInert,
+  lastNonWhitespace,
+} from './validate-extend-scan.ts'
 import { walkExtendAtoms } from './validate-extend-walk.ts'
-
-interface Wrapped {
-  readonly tokens: readonly Token[]
-  readonly closerFor: Int32Array
-}
-
-/**
- * Whether `token` is whitespace or a comment: never the start of an item.
- */
-function isInert(token: Token): boolean {
-  return token.type === 'whitespace-token' || token.type === 'comment'
-}
-
-/**
- * Whether `tokens[from, to)` holds only whitespace and comments.
- */
-function isOnlyInert(tokens: readonly Token[], from: number, to: number): boolean {
-  for (let i = from; i < to; i++) if (!isInert(tokens[i]!)) return false
-  return true
-}
-
-/**
- * Whether `tokens[from, to)` holds a `}` that closes nothing: PostCSS raises on one ("Unexpected
- * }"), while a stray `)` or `]` it lets through as text, and so does this.
- */
-function hasStrayCurlyCloser(wrapped: Wrapped, from: number, to: number): boolean {
-  const matchedClosers = new Set(wrapped.closerFor)
-  for (let i = from; i < to; i++) {
-    if (wrapped.tokens[i]!.type === '}-token' && !matchedClosers.has(i)) return true
-  }
-  return false
-}
-
-/**
- * Whether `tokens[from, to)` holds a comment with whitespace directly before or after it. PostCSS
- * rewrites the text around such a comment when it reads a selector or an at-rule prelude, so the
- * string no longer comes back unchanged and PostCSS refuses it; a comment tight against its
- * neighbours on both sides it leaves alone.
- */
-function hasPaddedComment(tokens: readonly Token[], from: number, to: number): boolean {
-  for (let i = from; i < to; i++) {
-    if (tokens[i]!.type !== 'comment') continue
-    if (tokens[i - 1]?.type === 'whitespace-token' || tokens[i + 1]?.type === 'whitespace-token')
-      return true
-  }
-  return false
-}
-
-/**
- * Whether `tokens[from, to)` holds a comment outside every parenthesis pair, which PostCSS lifts
- * out of an at-rule's `params` (one inside a pair stays in the text).
- */
-function hasTopLevelComment(wrapped: Wrapped, from: number, to: number): boolean {
-  let i = from
-  while (i < to) {
-    const closer = wrapped.closerFor[i]!
-    const type = wrapped.tokens[i]!.type
-    if (closer !== -1 && (type === '(-token' || type === 'function-token')) {
-      i = closer + 1
-      continue
-    }
-    if (type === 'comment') return true
-    i++
-  }
-  return false
-}
-
-/**
- * Whether `tokens[from, to)` holds a string cut off by a line break, or a url the CSS tokenizer
- * cannot close: invalid CSS either way, and one PostCSS reads past while the CSS tokenizer stops,
- * so the two disagree on where it ends. Refused rather than reconciled.
- */
-function hasBrokenString(tokens: readonly Token[], from: number, to: number): boolean {
-  for (let i = from; i < to; i++) {
-    if (tokens[i]!.type === 'bad-string-token' || tokens[i]!.type === 'bad-url-token') return true
-  }
-  return false
-}
-
-/**
- * Whether `tokens[from, to)` holds an unquoted `url(...)`, which no selector or condition ever
- * carries and which PostCSS reads past a comment opener the CSS tokenizer takes as its content.
- */
-function hasUrl(tokens: readonly Token[], from: number, to: number): boolean {
-  for (let i = from; i < to; i++) if (tokens[i]!.type === 'url-token') return true
-  return false
-}
-
-/**
- * The index of the last token in `tokens[from, to)` that is not whitespace, or `from - 1` when
- * there is none.
- */
-function lastNonWhitespace(tokens: readonly Token[], from: number, to: number): number {
-  let i = to - 1
-  while (i >= from && tokens[i]!.type === 'whitespace-token') i--
-  return i
-}
-
-/**
- * Whether `tokens[from, to)` holds a `:` outside every parenthesis pair: PostCSS reads a second
- * `word:` inside a value as a declaration whose semicolon went missing and refuses it (a pair of
- * square brackets or braces it does not skip, and neither does this).
- */
-function hasTopLevelColon(wrapped: Wrapped, from: number, to: number): boolean {
-  let i = from
-  while (i < to) {
-    const closer = wrapped.closerFor[i]!
-    const type = wrapped.tokens[i]!.type
-    if (closer !== -1 && (type === '(-token' || type === 'function-token')) {
-      i = closer + 1
-      continue
-    }
-    if (wrapped.tokens[i]!.type === 'colon-token') return true
-    i++
-  }
-  return false
-}
 
 /**
  * The single top-level item of `text` when it is exactly one item with a `{}` block that closes
@@ -181,14 +76,6 @@ function isSoleDeclaration(wrapped: Wrapped, start: number, end: number, prop: s
   if (tokens[declaration.end - 1]!.type === 'semicolon-token') return false
   if (!isOnlyInert(tokens, declaration.end, end)) return false
   return isValueRoundTrip(wrapped, start + 2, end, prop.startsWith('--'))
-}
-
-/**
- * Whether `text` holds a backslash-slash-star, which PostCSS and the CSS tokenizer read
- * differently (an escaped slash, or the start of a comment); refused rather than reconciled.
- */
-function hasEscapedCommentOpener(text: string): boolean {
-  return text.includes(String.raw`\/*`)
 }
 
 /**

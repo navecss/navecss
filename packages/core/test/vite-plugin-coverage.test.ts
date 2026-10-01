@@ -28,7 +28,7 @@ let app: ScratchApp
 beforeAll(() => {
   app = makeApp(APP_FILES)
 })
-afterAll(() => app.dispose())
+afterAll(() => app?.dispose())
 
 /**
  * The last value `prop` is declared with in `body`: the one that wins the cascade.
