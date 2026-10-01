@@ -7,23 +7,13 @@ import type { AppendPart, Edit } from './expand-text-output.ts'
 import type { ExpandTextOptions } from './expand-text.ts'
 import type { Position } from './source-map.ts'
 
-import {
-  atKeywordName,
-  isNaveAtKeyword,
-  type Item,
-  matchBrackets,
-  readItem,
-} from './block-reader.ts'
+import { isNaveAtKeyword, type Item, matchBrackets, readItem } from './block-reader.ts'
+import { childContext, type WalkContext } from './expand-text-context.ts'
 import { createPositionFinder } from './expand-text-diagnostics.ts'
 import { closeInfoFor } from './expand-text-eof-close.ts'
 import { renderBlock, renderInline } from './expand-text-render.ts'
 import { plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
-
-interface WalkContext {
-  readonly isStyleRuleParent: boolean
-  readonly isInsideKeyframes: boolean
-}
 
 /**
 The shared, mutable state one `expandText()` call threads through every block frame its walk visits.
@@ -97,6 +87,16 @@ function repositionDiagnostics(
   })
 }
 
+/**
+ * Marks a refused-parent diagnostic as sitting in a group rule nested in a style rule, which is
+ * what makes its text name the `& { @nave ...; }` workaround.
+ */
+function markNestedGroup(diagnostics: Diagnostic[]): void {
+  for (const [i, d] of diagnostics.entries()) {
+    if (d.code === 'bad-parent') diagnostics[i] = { ...d, detail: 'nested-group' }
+  }
+}
+
 interface Frame {
   parts: AppendPart[]
 }
@@ -129,6 +129,7 @@ function processDirective(w: Walker, site: DirectiveSite): void {
   )
 
   const positioned = repositionDiagnostics(result.diagnostics, item, directiveStart, directiveEnd)
+  if (context.isWorkaroundGroup) markNestedGroup(positioned)
   if (item.blockStart !== undefined)
     positioned.push({ code: 'has-block', offset: directiveStart, endOffset: directiveEnd })
   w.diagnostics.push(...positioned)
@@ -152,13 +153,6 @@ function isNestedNode(tokens: readonly Token[], item: Item): boolean {
 }
 
 /**
- *
- */
-function isKeyframesName(name: string): boolean {
-  return /keyframes$/i.test(name)
-}
-
-/**
  * Computed here, at pop time, rather than when the frame was opened: only
  * a frame with something to append needs its own EOF closers at all, and
  * only at this point does `w.eofScanLimit` reflect what every frame nested
@@ -175,16 +169,6 @@ function flushFrame(w: Walker, frameStart: number, blockEndIndex: number, frame:
       ? frame.parts
       : [{ text: close.prefix, source: w.positionAt(close.position) }, ...frame.parts]
   w.edits.push({ start: close.position, end: close.position, parts })
-}
-
-/**
-The child context a `rule`/`at-rule` item's own block is walked under.
- */
-function childContext(w: Walker, item: Item, context: WalkContext): WalkContext {
-  const { isInsideKeyframes } = context
-  if (item.kind === 'rule') return { isStyleRuleParent: true, isInsideKeyframes }
-  const name = atKeywordName(w.tokens[item.start]!)
-  return { isStyleRuleParent: false, isInsideKeyframes: isInsideKeyframes || isKeyframesName(name) }
 }
 
 export interface BlockBounds {
@@ -227,7 +211,7 @@ function childFrameFor(w: Walker, item: Item, context: WalkContext): WalkFrame |
   return toWalkFrame(w, {
     start: item.blockStart,
     limit: item.blockEnd,
-    context: childContext(w, item, context),
+    context: childContext(w.tokens, item, context),
   })
 }
 
