@@ -12,9 +12,33 @@ export interface LoggerLike {
 export interface ResolvedConfigLike {
   readonly root: string
   readonly command: string
+  readonly cacheDir?: string
+  /**
+   * Set when the config asks for a builder, so one process builds every environment.
+   */
+  readonly builder?: unknown
   readonly css?: { readonly devSourcemap?: boolean; readonly transformer?: string }
   readonly build?: { readonly sourcemap?: unknown }
   readonly logger: LoggerLike
+}
+
+/**
+ * A plugin as another plugin finds it in an environment's list: by name, with a `transform` that
+ * is a function or Rolldown's `{ handler }` object.
+ */
+export interface PluginLike {
+  readonly name: string
+  readonly transform?: unknown
+}
+
+/**
+ * The environment a hook runs for: a name, whether it renders for a browser or a server, and the
+ * plugins it runs.
+ */
+export interface EnvironmentLike {
+  readonly name: string
+  readonly config: { readonly consumer: string }
+  readonly plugins: readonly PluginLike[]
 }
 
 /**
@@ -46,9 +70,21 @@ export interface TransformContext {
   addWatchFile(id: string): void
   getCombinedSourcemap(): IncomingSourceMap
   /**
-  The environment the stylesheet is being transformed for; `client` when a host gives none.
+  The environment the module is being transformed for; `client` when a host gives none.
    */
-  readonly environment?: { readonly name: string }
+  readonly environment?: EnvironmentLike
+  /**
+   * The host's parse of `code`, an ESTree (read as an `AstNode`).
+   */
+  parse(code: string): unknown
+  /**
+   * Resolves `source` as imported from `importer`.
+   */
+  resolve?(source: string, importer: string): Promise<{ readonly id: string } | null>
+  /**
+   * Loads, and so transforms, the module `options.id`.
+   */
+  load?(options: { readonly id: string }): Promise<unknown>
 }
 
 /**
@@ -74,6 +110,25 @@ export interface HotUpdateContext {
 
 export interface BundleContext {
   error(error: PluginLog): never
+  warn(warning: PluginLog | string): void
+  readonly environment?: EnvironmentLike
+}
+
+/**
+ * What `renderChunk` and `buildEnd` are given: the environment, and the ways to fail or warn.
+ */
+export interface RenderContext {
+  error(error: PluginLog | string): never
+  warn(warning: PluginLog | string): void
+  readonly environment: EnvironmentLike
+  /**
+   * The ids of every module the environment's build loaded, externals included.
+   */
+  getModuleIds?(): IterableIterator<string>
+}
+
+export interface RenderedChunk {
+  readonly modules: Readonly<Record<string, unknown>>
 }
 
 export interface BundleEntry {

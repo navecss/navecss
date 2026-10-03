@@ -155,13 +155,17 @@ describe('AC-directive-core-02 — the core imports no host', () => {
     if (!existsSync(DIST)) throw new Error('dist/ is missing — run the package build first')
 
     // `postcss.js` imports PostCSS and is exempt. `vite.js` imports no host but names
-    // `lightningcss` as the `css.transformer` value it reacts to, so it is scanned for every host
-    // except that one.
+    // `lightningcss` as the `css.transformer` value it reacts to, and `vite:css-post` as the name
+    // of the Vite plugin whose CSS step it hands the pruned atom layer back to, so it is scanned
+    // for every host except the first, with the second name taken out of the text.
     const files = readdirSync(DIST).filter((f) => f.endsWith('.js') && f !== 'postcss.js')
     expect(files.length).toBeGreaterThan(0)
 
     for (const file of files) {
-      const source = readFileSync(path.join(DIST, file), 'utf8')
+      const source = readFileSync(path.join(DIST, file), 'utf8').replaceAll(
+        /\.name === (['"])vite:css-post\1/g,
+        '',
+      )
       for (const host of FORBIDDEN_HOSTS.filter(
         (h) => file !== 'vite.js' || h !== 'lightningcss',
       )) {

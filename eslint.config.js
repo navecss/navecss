@@ -255,6 +255,12 @@ export default defineConfig([
       'unicorn/no-this-outside-of-class': 'off',
     },
   },
+  // The post-order half is the second plugin object `navePlugin()` returns: the same host
+  // convention, hooks whose `this` is the host's plugin context.
+  {
+    files: ['**/src/vite-collect-plugin.ts'],
+    rules: { 'unicorn/no-this-outside-of-class': 'off' },
+  },
 
   // ── eslint-plugin's src/index.ts — an ESLint plugin's default export is the plugin object,
   // the convention every consumer's `import nave from '@navecss/eslint-plugin'` relies on ─────
