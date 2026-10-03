@@ -211,10 +211,11 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
   it('fails every server build against a client CSS that lacks its atoms, not only the first', async () => {
     const app = ssrApp("cx('grid')")
     try {
-      await client(app)
+      const baseline = await client(app)
       const first = await server(app)
       const second = await server(app)
 
+      expect(baseline.error).toBeUndefined()
       expect(first.error).toContain('grid')
       expect(second.error).toContain('grid')
     } finally {
