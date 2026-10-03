@@ -1,3 +1,4 @@
+import { copyFileSync } from 'node:fs'
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
@@ -21,4 +22,13 @@ export default defineConfig({
   // cx.js — which needs nothing but a name map — carried all of it (C12).
   splitting: true,
   treeshake: true,
+  // The two files that let `require('@navecss/core/postcss')` work are written by hand and
+  // copied, not built: a second tsup format would bundle a second plugin and a second atom
+  // table next to the ES module, so the shim just requires it (the dual-package hazard).
+  onSuccess: () => {
+    for (const file of ['postcss.cjs', 'postcss.d.cts']) {
+      copyFileSync(`src/${file}`, `dist/${file}`)
+    }
+    return Promise.resolve()
+  },
 })

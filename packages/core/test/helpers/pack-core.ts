@@ -53,6 +53,21 @@ export function tarballFilename(raw: string): string {
 }
 
 /**
+ * Every file path an `exports` map names, at whatever depth: a condition's value may itself be a
+ * conditions object (`./postcss` nests `types`/`default` under each of `import` and `require`),
+ * so a one-level read of the values would hand an object to a string method.
+ */
+export function exportTargets(exportsMap: Record<string, unknown>): string[] {
+  const collect = (value: unknown): string[] =>
+    typeof value === 'string'
+      ? [value]
+      : value !== null && typeof value === 'object'
+        ? Object.values(value).flatMap(collect)
+        : []
+  return collect(exportsMap)
+}
+
+/**
  * Runs `command` (always `npm` or `tar`, never taken from input) resolved from PATH.
  *
  * NOSONAR on the one spawn line below (rule S4036, PATH-resolved executable): resolving the tool

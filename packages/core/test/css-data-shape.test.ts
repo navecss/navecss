@@ -15,7 +15,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import type { PackedCoreTarball } from './helpers/pack-core.ts'
 
 import { HASH, scanForBrainReferences, syntheticDatedId } from './helpers/brain-reference-scan.ts'
-import { packCoreTarball } from './helpers/pack-core.ts'
+import { exportTargets, packCoreTarball } from './helpers/pack-core.ts'
 import { shippedChangesetProse } from './helpers/released-changeset.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -79,11 +79,9 @@ describe('AC-consumer-constraints-06: the packed tarball ships the file at the p
 
   it('is not named by any key of the packed exports map', () => {
     const pkg = JSON.parse(tarball.read('package/package.json')) as {
-      exports: Record<string, string | Record<string, string>>
+      exports: Record<string, unknown>
     }
-    const targets = Object.values(pkg.exports).flatMap((value) =>
-      typeof value === 'string' ? [value] : Object.values(value),
-    )
+    const targets = exportTargets(pkg.exports)
     expect(targets.some((t) => t.includes('nave.css-data.json'))).toBe(false)
     expect(targets.some((t) => t.includes('skills/'))).toBe(false)
   })
