@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest'
 
 import { atoms } from '../src/atoms.ts'
 
-import { inspectAtomicLayer, pruneAtomicLayer } from '../src/vite-prune.ts'
+import { inspectAtomicLayer, pruneAtomicLayer, unprunedAtoms } from '../src/vite-prune.ts'
+import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
 
 const NESTED = `
 @layer tokens, reset, atomic, overrides;
@@ -155,5 +156,88 @@ describe('inspecting a layer (AC-used-atoms-28)', () => {
     )
     expect(seen.hasLayer).toBe(true)
     expect([...seen.atoms]).toEqual(['flex'])
+  })
+})
+
+describe('AC-used-atoms-27 - a selector is removed only when it needs an element of an unemitted atom', () => {
+  const layer = (rule: string): string => `@layer atomic { ${rule} }`
+
+  it('keeps a member that an emitted atom’s element can match, inside :is() or :where()', () => {
+    const is = layer(':is(.nave-flex, .nave-grid):hover { color: red }')
+    const where = layer(':where(.nave-grid, .nave-flex) > .child { color: red }')
+    const compound = layer(':is(.nave-grid, .card):hover { color: red }')
+
+    expect(pruneAtomicLayer(is, new Set(['flex']))).toBe(is)
+    expect(pruneAtomicLayer(where, new Set(['flex']))).toBe(where)
+    expect(pruneAtomicLayer(compound, new Set())).toBe(compound)
+  })
+
+  it('removes a member whose every :is() or :where() alternative needs an unemitted atom', () => {
+    const is = layer(':is(.nave-grid, .nave-block) { color: red }')
+    const where = layer(':where(.nave-grid .x, .nave-block.y) > .child { color: red }')
+    const mixed = layer(':is(.nave-grid.nave-flex, .nave-block):hover { color: red }')
+
+    expect(pruneAtomicLayer(is, new Set(['flex']))).toBe('@layer atomic { }')
+    expect(pruneAtomicLayer(where, new Set(['flex']))).toBe('@layer atomic { }')
+    expect(pruneAtomicLayer(mixed, new Set(['flex']))).toBe('@layer atomic { }')
+    expect(pruneAtomicLayer(mixed, new Set(['flex', 'grid']))).toBe(
+      layer(':is(.nave-grid.nave-flex, .nave-block):hover { color: red }'),
+    )
+  })
+
+  it('never removes a member for a class inside :not(), :has() or any other argument', () => {
+    const rules = [
+      '.card:not(.nave-grid) { color: blue }',
+      ':not(:is(.nave-grid)) { color: blue }',
+      '.card:has(.nave-grid) { color: blue }',
+      '.card:nth-child(2 of .nave-grid) { color: blue }',
+      '.card:host(.nave-grid) { color: blue }',
+    ]
+    for (const rule of rules) {
+      expect(pruneAtomicLayer(layer(rule), new Set(['flex'])), rule).toBe(layer(rule))
+    }
+  })
+
+  it('removes a member that holds an unemitted class in a compound of its own, whatever surrounds it', () => {
+    const rules = [
+      '.nave-grid > .child { color: red }',
+      '.card .nave-grid.x:hover { color: red }',
+      '.nave-grid:not(.nave-flex) { color: red }',
+      '.card:not(.nave-flex):is(.nave-grid) { color: red }',
+    ]
+    for (const rule of rules) {
+      expect(pruneAtomicLayer(layer(rule), new Set(['flex'])), rule).toBe('@layer atomic { }')
+    }
+  })
+
+  it('prunes a list member by member under the same rule', () => {
+    const list = layer(
+      ':is(.nave-flex, .nave-grid):hover, .nave-grid, .card:not(.nave-grid) { x: y }',
+    )
+
+    expect(pruneAtomicLayer(list, new Set(['flex']))).toBe(
+      layer(':is(.nave-flex, .nave-grid):hover, .card:not(.nave-grid) { x: y }'),
+    )
+  })
+
+  it('names, in a layer, the unemitted atoms a remaining rule still needs, and no others', () => {
+    const css = layer(
+      '.nave-grid { x: y } :is(.nave-flex, .nave-grid):hover { x: y } .card:not(.nave-block) { x: y }',
+    )
+
+    expect(unprunedAtoms(css, new Set(['flex']))).toEqual(['grid'])
+    expect(unprunedAtoms(css, new Set(['flex', 'grid']))).toEqual([])
+    expect(unprunedAtoms(pruneAtomicLayer(css, new Set(['flex'])), new Set(['flex']))).toEqual([])
+  })
+
+  it('has a reader in the tests that removes the same members', () => {
+    const rule = (prelude: string) => [{ prelude, body: 'x:y' }]
+    const kept = classesOf('flex')
+
+    expect(keepOnly(rule(':is(.nave-flex,.nave-grid):hover'), kept)).toHaveLength(1)
+    expect(keepOnly(rule('.card:not(.nave-grid)'), kept)).toHaveLength(1)
+    expect(keepOnly(rule(':is(.nave-grid,.nave-block)'), kept)).toHaveLength(0)
+    expect(keepOnly(rule('.nave-grid>.child'), kept)).toHaveLength(0)
+    expect(parseAtomicLayer('@layer atomic{.a{x:y}}')).toHaveLength(1)
   })
 })

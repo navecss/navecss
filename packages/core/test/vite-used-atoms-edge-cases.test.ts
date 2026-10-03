@@ -239,21 +239,24 @@ describe('a failed cache file write', () => {
 describe('a stylesheet edited in watch mode', () => {
   it('forgets its layer once the layer is gone', async () => {
     const [nave] = navePlugin()
+    // Vite's CSS step, which the plugin wraps to read each stylesheet as that step receives it.
+    const cssStep = { name: 'vite:css-post', transform: { handler: (): undefined => undefined } }
     const config = {
       root: '/watch-root',
       command: 'build',
       logger: { warn() {} },
+      plugins: [cssStep],
     }
     nave.configResolved(config)
     const ctx = {
       environment: { name: 'client', config: { consumer: 'client' }, plugins: [] },
     } as never
-    const transform = nave.transform as (this: never, code: string, id: string) => Promise<unknown>
+    const receive = cssStep.transform.handler as (this: never, css: string, id: string) => unknown
 
-    await transform.call(ctx, '@layer atomic { .nave-flex { display: flex } }', '/watch-root/a.css')
+    receive.call(ctx, '@layer atomic { .nave-flex { display: flex } }', '/watch-root/a.css')
     const state = stateFor('/watch-root', config)
     expect(state.sheets.size).toBe(1)
-    await transform.call(ctx, '.card { color: red }', '/watch-root/a.css')
+    receive.call(ctx, '.card { color: red }', '/watch-root/a.css')
 
     expect(state.sheets.size).toBe(0)
   })

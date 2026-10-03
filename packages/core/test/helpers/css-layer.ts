@@ -1,9 +1,11 @@
 /**
  * A CSS reader of the tests' own, independent of the plugin's: the rules of a stylesheet's
  * `@layer atomic` blocks as a normalised tree, and the same tree pruned by the tests' own rule
- * (a selector-list member stays when every built-in atom class in it is kept). Comparing a
- * `'used'` build's layer with an `'all'` build's layer pruned this way shows that an emitted atom
- * keeps every rule the full layer gives it.
+ * (a selector-list member goes only when it needs an element carrying a built-in atom class that
+ * is not kept: the class sits in a compound of the member itself, or in every alternative of an
+ * `:is()` or `:where()` among them, and never inside `:not()`, `:has()` or any other argument).
+ * Comparing a `'used'` build's layer with an `'all'` build's layer pruned this way shows that an
+ * emitted atom keeps every rule the full layer gives it.
  */
 import { atomClassMap } from '../../src/atoms.ts'
 
@@ -107,8 +109,49 @@ function membersOf(selector: string): string[] {
 }
 
 /**
- * The tree with every selector-list member naming a built-in atom class outside `kept` removed,
- * and every rule or at-rule left with nothing removed with it.
+ * The index of the `)` closing the `(` at `open`.
+ */
+function closingParen(text: string, open: number): number {
+  let depth = 0
+  for (let index = open; index < text.length; index += 1) {
+    if (text[index] === '(') depth += 1
+    else if (text[index] === ')') depth -= 1
+    if (depth === 0) return index
+  }
+  return text.length
+}
+
+/**
+ * Whether the selector `text` can only match when some element carries a built-in atom class that
+ * is not in `kept`.
+ */
+function needsUnkept(text: string, kept: ReadonlySet<string>): boolean {
+  let own = ''
+  let index = 0
+  while (index < text.length) {
+    const group = /^:(is|where)\(/i.exec(text.slice(index))
+    if (text[index] === '(' || text[index] === '[' || group) {
+      // Skip a bracket or an argument whole; an :is() or :where() is judged by its alternatives.
+      const open = group ? index + group[0].length - 1 : index
+      const close = text[open] === '[' ? text.indexOf(']', open) : closingParen(text, open)
+      if (group) {
+        const alternatives = membersOf(text.slice(open + 1, close))
+        if (alternatives.every((alternative) => needsUnkept(alternative, kept))) return true
+      }
+      index = close + 1
+    } else {
+      own += text[index]
+      index += 1
+    }
+  }
+  return [...own.matchAll(/\.(nave-[\w-]+)/g)].some(
+    (match) => ATOM_CLASSES.has(match[1]!) && !kept.has(match[1]!),
+  )
+}
+
+/**
+ * The tree with every selector-list member that needs an unkept built-in atom class removed, and
+ * every rule or at-rule left with nothing removed with it.
  */
 export function keepOnly(nodes: readonly Node[], kept: ReadonlySet<string>): Node[] {
   const result: Node[] = []
@@ -118,11 +161,7 @@ export function keepOnly(nodes: readonly Node[], kept: ReadonlySet<string>): Nod
       if (children.length > 0) result.push({ prelude: node.prelude, children })
       continue
     }
-    const members = membersOf(node.prelude).filter((member) =>
-      [...member.matchAll(/\.(nave-[\w-]+)/g)].every(
-        (match) => !ATOM_CLASSES.has(match[1]!) || kept.has(match[1]!),
-      ),
-    )
+    const members = membersOf(node.prelude).filter((member) => !needsUnkept(member, kept))
     if (members.length > 0) result.push({ prelude: members.join(','), body: node.body! })
   }
   return result

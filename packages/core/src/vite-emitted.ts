@@ -92,7 +92,8 @@ function missingFromClient(
 /**
  * The atoms a server environment named that the client set lacks, checked against the file a
  * client invocation left: a build of the server run after the client. When the file is not
- * waiting for this build, the check cannot be made and the build says so.
+ * waiting for this build, the check cannot be made, the build says so, and its atoms are left in
+ * the file for the client build that may follow.
  */
 export function checkServerInvocation(ctx: RenderContext, context: UsedContext): void {
   if (context.cacheDir === '' || context.inProcess || context.state.emitted) return
@@ -108,8 +109,15 @@ export function checkServerInvocation(ctx: RenderContext, context: UsedContext):
     return
   }
   if (file.consumed) {
+    // A client build that has taken a server set, or been checked against one, is no set to check
+    // against. The atoms of this server build are left for a client build that follows it.
+    writeHandshake(
+      context.cacheDir,
+      { emitted: [...atoms], writer: ctx.environment.name, consumed: false },
+      (message) => ctx.warn(message),
+    )
     ctx.warn(
-      `${handshakePath(context.cacheDir)} was written by a client build that a server build has already checked, so this server build could not be checked against the CSS. Build the client first (vite build), then the server (vite build --ssr).`,
+      `${handshakePath(context.cacheDir)} was written by a client build that was already used, so this server build could not be checked against the CSS. Its atoms are recorded in that file for a client build that runs next; to have them in the CSS, build the server first, then the client (vite build --ssr, then vite build).`,
     )
     return
   }

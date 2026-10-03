@@ -255,10 +255,11 @@ export default defineConfig([
       'unicorn/no-this-outside-of-class': 'off',
     },
   },
-  // The post-order half is the second plugin object `navePlugin()` returns: the same host
-  // convention, hooks whose `this` is the host's plugin context.
+  // The post-order half is the second plugin object `navePlugin()` returns, and the plugin a
+  // worker's build runs is its sibling: the same host convention, hooks whose `this` is the
+  // host's plugin context.
   {
-    files: ['**/src/vite-collect-plugin.ts'],
+    files: ['**/src/vite-collect-plugin.ts', '**/src/vite-worker-collect.ts'],
     rules: { 'unicorn/no-this-outside-of-class': 'off' },
   },
 

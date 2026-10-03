@@ -20,6 +20,10 @@ export interface ResolvedConfigLike {
   readonly css?: { readonly devSourcemap?: boolean; readonly transformer?: string }
   readonly build?: { readonly sourcemap?: unknown }
   readonly logger: LoggerLike
+  /**
+   * The plugins of the build, Vite's own among them.
+   */
+  readonly plugins?: readonly PluginLike[]
 }
 
 /**

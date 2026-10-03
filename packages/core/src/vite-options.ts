@@ -45,16 +45,18 @@ function unknownAtomText(name: string): string {
 }
 
 /**
- * The problem with one listed name, or `undefined` when it is a built-in atom. `where` is how
+ * The problem with one listed name, or `undefined` when it is a built-in atom (or, while `own` is
+ * not known yet, a string a module of the consumer's own atoms may still define). `where` is how
  * the message names the list (`keep`, `keepFor["@acme/ui"]`).
  */
 function problemWithName(
   where: string,
   name: unknown,
-  own: ReadonlySet<string>,
+  own: ReadonlySet<string> | undefined,
 ): string | undefined {
   if (typeof name === 'string' && isBuiltInAtom(name)) return undefined
-  if (typeof name === 'string' && own.has(name)) {
+  if (typeof name === 'string' && own === undefined) return undefined
+  if (typeof name === 'string' && own?.has(name)) {
     return `navePlugin(): ${where} names "${name}", an atom of your own; those have no class, so there is nothing to keep.`
   }
   const spelled = typeof name === 'string' ? name : String(name)
@@ -64,7 +66,11 @@ function problemWithName(
 /**
  * Every problem in the atoms listed under `where`.
  */
-function problemsInList(where: string, list: unknown, own: ReadonlySet<string>): string[] {
+function problemsInList(
+  where: string,
+  list: unknown,
+  own: ReadonlySet<string> | undefined,
+): string[] {
   if (!Array.isArray(list)) return [`navePlugin(): ${where} must be an array of atom names.`]
   // `Array.from` reads a hole as `undefined`, so a sparse list is refused like any other bad name.
   return Array.from(list as unknown[], (name) => problemWithName(where, name, own) ?? []).flat()
@@ -73,7 +79,7 @@ function problemsInList(where: string, list: unknown, own: ReadonlySet<string>):
 /**
  * Every problem in `keepFor`'s entries.
  */
-function problemsInKeepFor(keepFor: unknown, own: ReadonlySet<string>): string[] {
+function problemsInKeepFor(keepFor: unknown, own: ReadonlySet<string> | undefined): string[] {
   if (typeof keepFor !== 'object' || keepFor === null || Array.isArray(keepFor)) {
     return ['navePlugin(): keepFor must be an object from package names to arrays of atom names.']
   }
@@ -92,12 +98,13 @@ function problemsInKeepFor(keepFor: unknown, own: ReadonlySet<string>): string[]
 }
 
 /**
- * The problems in the options, with `own` the names of the consumer's own atoms (known once an
- * `extend` module has been read; empty before).
+ * The problems in the options, with `own` the names of the consumer's own atoms (`undefined`
+ * while an `extend` module has not been read: a name that is no built-in atom is then judged
+ * later, and every other problem now).
  */
 function problemsInOptions(
   options: UsedAtomOptions | ResolvedUsedOptions,
-  own: ReadonlySet<string>,
+  own: ReadonlySet<string> | undefined,
 ): string[] {
   const problems: string[] = []
   const { atomic, keep, keepFor } = options as Record<string, unknown>
@@ -114,7 +121,7 @@ function problemsInOptions(
  */
 export function assertOptions(
   options: UsedAtomOptions | ResolvedUsedOptions,
-  own: ReadonlySet<string>,
+  own: ReadonlySet<string> | undefined,
 ): void {
   const [first] = problemsInOptions(options, own)
   if (first !== undefined) throw new Error(first)

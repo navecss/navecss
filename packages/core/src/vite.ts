@@ -20,6 +20,7 @@
  */
 import type { AtomDefinition } from './atoms.ts'
 import type { NaveCollectPlugin } from './vite-collect-plugin.ts'
+import type { UsedConfig } from './vite-config-hooks.ts'
 import type { UsedAtomOptions } from './vite-options.ts'
 import type {
   BundleContext,
@@ -35,7 +36,8 @@ import type {
 
 import { createCollectPlugin } from './vite-collect-plugin.ts'
 import { usedConfig, usedEnvironmentConfig } from './vite-config-hooks.ts'
-import { checkAtomicLayers, refeedChunkStylesheets } from './vite-emit.ts'
+import { captureStylesheets } from './vite-css-capture.ts'
+import { checkAtomicLayers, refeedChunkStylesheets, warnInlineImports } from './vite-emit.ts'
 import { emittedSet } from './vite-emitted.ts'
 import { createExtendSource } from './vite-extend.ts'
 import { dropLightningNaveWarning } from './vite-logger.ts'
@@ -74,7 +76,7 @@ export interface NaveViteOptions extends UsedAtomOptions {
  */
 export interface NaveVitePlugin {
   readonly name: 'nave'
-  config(): { define: Record<string, string> } | undefined
+  config(): UsedConfig | undefined
   configEnvironment(
     name: string,
     options: { readonly consumer?: string },
@@ -104,25 +106,27 @@ export type NavePlugins = [NaveVitePlugin, NaveCollectPlugin]
 export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
   const extend = createExtendSource(options.extend)
   const ownAtoms = typeof options.extend === 'object' ? options.extend : undefined
-  // The names of atoms in a module are known once it has loaded; the other half judges then.
-  if (typeof options.extend !== 'string')
-    assertOptions(options, new Set(Object.keys(ownAtoms ?? {})))
+  // The names of atoms in a module are known once it has loaded; the other half judges those then.
+  const own = typeof options.extend === 'string' ? undefined : new Set(Object.keys(ownAtoms ?? {}))
+  assertOptions(options, own)
 
   const context = createUsedContext(resolveUsedOptions(options), extend)
-  const stylesheets = createStylesheets(context, extend, options.onUnknown ?? 'error')
+  const stylesheets = createStylesheets(extend, options.onUnknown ?? 'error')
 
   const nave: NaveVitePlugin = {
     name: 'nave',
 
     config: () => usedConfig(context),
 
-    configEnvironment: (_name, environmentOptions) =>
-      usedEnvironmentConfig(context, environmentOptions),
+    configEnvironment: (name, environmentOptions) =>
+      usedEnvironmentConfig(context, name, environmentOptions),
 
     configResolved(config) {
       extend.configure?.(config.root)
       configureUsed(context, config)
       stylesheets.configure(config)
+      if (context.command === 'build' && isUsed(context))
+        captureStylesheets(context, config.plugins)
       if (config.css?.transformer === 'lightningcss') dropLightningNaveWarning(config.logger)
     },
 
@@ -144,6 +148,7 @@ export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
           this.warn(message)
         }),
       )
+      warnInlineImports(this, chunk, context)
     },
 
     generateBundle: {

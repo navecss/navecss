@@ -79,6 +79,14 @@ function failModule(ctx: TransformContext, id: string, problems: readonly Locate
 }
 
 /**
+ * Whether the post-order half reads the module `id`: any module that is not a stylesheet and not
+ * Nave's own, whether a file of the project, of a dependency, or a module a plugin generates.
+ */
+export function isReadable(context: UsedContext, id: string): boolean {
+  return isUsed(context) && !isStylesheetId(id) && !isNaveOwn(id)
+}
+
+/**
  * The post-order half. `context` is what it shares with the other half.
  */
 export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
@@ -96,7 +104,7 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
     },
 
     async transform(code, id) {
-      if (!isUsed(context) || isStylesheetId(id) || isNaveOwn(id)) return
+      if (!isReadable(context, id)) return
       const record = await recordModule(context, this, code, id)
       if (!record || context.command !== 'serve' || record.pkg !== undefined) return
       const problems = problemsOf(record, context)

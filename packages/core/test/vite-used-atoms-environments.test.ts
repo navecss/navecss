@@ -107,6 +107,49 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
   }, 60_000)
 })
 
+describe('AC-used-atoms-12 - an instance of the plugin for each environment', () => {
+  /**
+   * One pair of plugin objects for each environment, applied to that environment alone.
+   */
+  const perEnvironment = (): never[] =>
+    ['client', 'ssr'].flatMap((name) =>
+      navePlugin().map((plugin) => ({
+        ...plugin,
+        applyToEnvironment: (environment: { name: string }) => environment.name === name,
+      })),
+    ) as never[]
+
+  it('unions the sets of the two instances when the server builds first', async () => {
+    const app = ssrApp("cx('grid')")
+    try {
+      const built = await buildEnvironments(app, {
+        order: ['ssr', 'client'],
+        nave: perEnvironment(),
+      })
+
+      expect(built.error).toBeUndefined()
+      expect(atomLayerAtoms(built.client.css)).toEqual(atoms('flex', 'gap', 'grid'))
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('fails naming the atom when the client builds first, as with one instance', async () => {
+    const app = ssrApp("cx('grid')")
+    try {
+      const built = await buildEnvironments(app, {
+        order: ['client', 'ssr'],
+        nave: perEnvironment(),
+      })
+
+      expect(built.error).toContain('grid')
+      expect(built.error).toContain('src/entry-server.ts')
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+})
+
 describe('AC-used-atoms-13 — an atom collected after the CSS was written fails the build', () => {
   it('fails naming the atom, the module and both remedies, client first', async () => {
     const app = ssrApp("cx('grid')")
@@ -202,7 +245,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
       expect(alone.error).toBeUndefined()
       const warning = alone.warnings!.find((message) => message.includes('nave-used-atoms.json'))
       expect(warning).toBeDefined()
-      expect(warning).toContain('Build the client first')
+      expect(warning).toContain('build the server first')
     } finally {
       app.dispose()
     }
@@ -222,6 +265,94 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
       app.dispose()
     }
   }, 60_000)
+
+  it.each([
+    ['grid', "cx('grid')"],
+    ['srOnlyFocusable', '\'<a class="nave-sr-only-focusable" href="#main">Skip</a>\''],
+  ] as const)(
+    'ships the server’s %s in the client CSS on every run of a server-first pipeline',
+    async (atom, expression) => {
+      const app = ssrApp(expression)
+      try {
+        for (let run = 1; run <= 3; run += 1) {
+          const first = await server(app)
+          const second = await client(app)
+
+          expect(first.error, `run ${run} server`).toBeUndefined()
+          expect(second.error, `run ${run} client`).toBeUndefined()
+          expect(atomLayerAtoms(second.css), `run ${run}`).toEqual(atoms('flex', 'gap', atom))
+        }
+      } finally {
+        app.dispose()
+      }
+    },
+    120_000,
+  )
+
+  it('is green on every run of a client-first pipeline whose server needs nothing the client lacks', async () => {
+    const app = ssrApp("cx('flex')")
+    try {
+      for (let run = 1; run <= 3; run += 1) {
+        const first = await client(app)
+        const second = await server(app)
+
+        expect(first.error, `run ${run} client`).toBeUndefined()
+        expect(second.error, `run ${run} server`).toBeUndefined()
+        expect(atomLayerAtoms(first.css), `run ${run}`).toEqual(atoms('flex', 'gap'))
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('fails the server on every run of a client-first pipeline whose server needs an atom the client lacks', async () => {
+    const app = ssrApp("cx('grid')")
+    try {
+      for (let run = 1; run <= 3; run += 1) {
+        await client(app)
+        const second = await server(app)
+
+        expect(second.error, `run ${run}`).toContain('grid')
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('ships a kept atom on every run of a client-first pipeline', async () => {
+    const app = ssrApp("cx('flex')")
+    try {
+      for (let run = 1; run <= 3; run += 1) {
+        const first = await client(app, { options: { keep: ['grid'] } })
+        const second = await server(app)
+
+        expect(atomLayerAtoms(first.css), `run ${run}`).toEqual(atoms('flex', 'gap', 'grid'))
+        expect(second.error, `run ${run}`).toBeUndefined()
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('names the same order in the failure a server build meets and in the stale-file warning', async () => {
+    const missApp = ssrApp("cx('grid')")
+    const staleApp = ssrApp("cx('grid')")
+    try {
+      await client(missApp)
+      const miss = await server(missApp)
+      await server(staleApp)
+      await client(staleApp)
+      const stale = await server(staleApp)
+      const warning = stale.warnings!.find((message) => message.includes('nave-used-atoms.json'))
+
+      expect(miss.error).toContain('build the server first')
+      expect(warning).toContain('build the server first')
+      expect(warning).not.toMatch(/build the client first/i)
+    } finally {
+      missApp.dispose()
+      staleApp.dispose()
+    }
+  }, 120_000)
 
   it('unions a leftover server set into a lone client build, then replaces the file with its own', async () => {
     const app = ssrApp("cx('grid')")

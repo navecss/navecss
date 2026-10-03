@@ -4,7 +4,7 @@
  * as they do for a consumer), built under either CSS transformer, with the atoms the built
  * stylesheet's atomic layer names read back by a parser of the test's own.
  */
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createLogger, type PluginOption } from 'vite'
@@ -24,6 +24,7 @@ import {
 } from './vite-app.ts'
 
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const TOKENS_ROOT = path.resolve(CORE_ROOT, '..', 'tokens')
 
 /**
  * The Quick start's stylesheet: the two imports every Vite reader writes.
@@ -52,15 +53,40 @@ export function appFiles(
 }
 
 /**
- * Makes the app and links `node_modules/@navecss/core` to the package under test.
+ * Puts the package under test into the app's `node_modules/@navecss`. By default `core` is a
+ * link, which Vite bundles into a server build whatever the config says. `'copy'` installs it the
+ * way a registry install does, a real directory holding the package's manifest and `dist` (and
+ * the tokens package it depends on), so a server build bundles it only when the plugin asks.
  */
-export function makeUsedApp(files: Readonly<Record<string, string>>): ScratchApp {
+function installCore(root: string, install: 'copy' | 'link'): void {
+  const modules = path.join(root, 'node_modules', '@navecss')
+  mkdirSync(modules, { recursive: true })
+  if (install === 'link') {
+    symlinkSync(CORE_ROOT, path.join(modules, 'core'), 'dir')
+    return
+  }
+  for (const [name, source] of [
+    ['core', CORE_ROOT],
+    ['tokens', TOKENS_ROOT],
+  ] as const) {
+    const target = path.join(modules, name)
+    mkdirSync(target, { recursive: true })
+    cpSync(path.join(source, 'package.json'), path.join(target, 'package.json'))
+    cpSync(path.join(source, 'dist'), path.join(target, 'dist'), { recursive: true })
+  }
+}
+
+/**
+ * Makes the app and installs `node_modules/@navecss/core` as the package under test.
+ */
+export function makeUsedApp(
+  files: Readonly<Record<string, string>>,
+  install: 'copy' | 'link' = 'link',
+): ScratchApp {
   // A manifest of its own, so the package's `sideEffects` list (CSS only) does not govern the
   // fixture's modules and let the bundler drop an import that is there for its effect.
   const app = makeApp({ 'package.json': '{"private":true,"type":"module"}', ...files })
-  const modules = path.join(app.root, 'node_modules', '@navecss')
-  mkdirSync(modules, { recursive: true })
-  symlinkSync(CORE_ROOT, path.join(modules, 'core'), 'dir')
+  installCore(app.root, install)
   return app
 }
 

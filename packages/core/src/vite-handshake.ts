@@ -4,7 +4,8 @@
  * processes, and the server's atoms must be in the client's CSS. Whichever runs first writes its
  * set. A client build that runs second unions a server set it finds. A server build that runs
  * second verifies against a client set only when that set is waiting for it (the client build
- * found nothing to union, and no server build has consumed it); otherwise it says it could not.
+ * found nothing to union, and no server build has consumed it); otherwise it says it could not,
+ * and leaves its own set in the file for a client build that runs next.
  */
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

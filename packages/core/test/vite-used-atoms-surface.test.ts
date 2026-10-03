@@ -3,7 +3,7 @@
  * plugin objects for every options value, one signature, `keep` validated and typed, `cx.dynamic()`
  * with and without the plugin, and a post-order half that never changes a module.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
@@ -13,6 +13,7 @@ import { atomClassMap } from '../src/atoms.ts'
 import { cx } from '../src/cx.ts'
 import { navePlugin } from '../src/vite.ts'
 import {
+  APP_CSS,
   appFiles,
   atomLayerAtoms,
   atoms,
@@ -25,23 +26,115 @@ const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
 
+const EQUAL = `
+    type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+    declare function assertTrue<T extends true>(): T
+  `
+
 /**
- * Type-checks `source` as a consumer's file against the built `dist/vite.d.ts` and Vite's types,
- * returning the messages of every diagnostic.
+ * The consumer files the type rows check, by name. They are checked together, in one TypeScript
+ * program: a program of its own for each re-reads and re-checks the standard library, Node's types
+ * and Vite's declarations every time, which is nearly all of what these rows cost.
  */
-function diagnosticsFor(source: string, files: Record<string, string> = {}): string[] {
+const SNIPPETS = {
+  configTime: `
+      import { defineConfig, type Plugin } from 'vite'
+      import type { AtomName } from '@navecss/core/cx'
+      import { navePlugin } from '@navecss/core/vite'
+      ${EQUAL}
+      const a = navePlugin()
+      const b = navePlugin({ extend: { brandBox: { declarations: { color: 'red' } } } })
+      const c = navePlugin({ atomic: 'all' })
+      const d = navePlugin({ atomic: 'used' })
+      declare const isBuild: boolean
+      const e = navePlugin({ atomic: isBuild ? 'used' : 'all' })
+      const k = ['flex'] as const satisfies readonly AtomName[]
+      const f = navePlugin({ keep: k, keepFor: { '@acme/ui': k } })
+      const ps: Plugin[] = navePlugin()
+      defineConfig({ plugins: [a, d, e] })
+      assertTrue<Equal<typeof a, typeof c>>()
+      assertTrue<Equal<typeof a, typeof b>>()
+      assertTrue<Equal<typeof a, typeof d>>()
+      assertTrue<Equal<typeof a, typeof e>>()
+      assertTrue<Equal<typeof a, typeof f>>()
+      assertTrue<Equal<typeof a['length'], 2>>()
+      void ps
+    `,
+  unknownAtomic: `
+      import { navePlugin } from '@navecss/core/vite'
+      navePlugin({ atomic: 'some' })
+    `,
+  overloaded: `
+      import { navePlugin } from '@navecss/core/vite'
+      ${EQUAL}
+      declare function overloaded(options: { atomic: 'all' }): ReturnType<typeof navePlugin>[0]
+      declare function overloaded(options?: Parameters<typeof navePlugin>[0]): ReturnType<typeof navePlugin>
+      const a = overloaded()
+      const c = overloaded({ atomic: 'all' })
+      assertTrue<Equal<typeof a, typeof c>>()
+    `,
+  readonlyTuple: `
+      import type { Plugin } from 'vite'
+      import { navePlugin } from '@navecss/core/vite'
+      declare function readonlyTuple(): readonly [ReturnType<typeof navePlugin>[0], ReturnType<typeof navePlugin>[1]]
+      const ps: Plugin[] = readonlyTuple()
+      void navePlugin
+      void ps
+    `,
+  keepOk: `
+      import type { AtomName } from '@navecss/core/cx'
+      import { navePlugin } from '@navecss/core/vite'
+      navePlugin({ keep: ['flex', 'srOnly'] })
+      const k = ['flex', 'grid'] as const
+      navePlugin({ keep: k })
+      const naveAtoms = ['flex', 'inlineFlex'] as const satisfies readonly AtomName[]
+      navePlugin({ keepFor: { '@acme/ui': naveAtoms } })
+      navePlugin({ keep: naveAtoms })
+    `,
+  keepBad: `
+      import { navePlugin } from '@navecss/core/vite'
+      navePlugin({ keep: ['nope'] })
+      navePlugin({ keepFor: { '@acme/ui': ['nope'] } })
+    `,
+  keepMutable: `
+      import type { AtomName } from '@navecss/core/cx'
+      declare function scratch(options: { keep?: AtomName[] }): void
+      const k = ['flex'] as const
+      scratch({ keep: k })
+    `,
+  dynamicTyped: `
+      import { cx, type AtomName } from '@navecss/core/cx'
+      const s: string = cx.dynamic('flex')
+      declare const x: AtomName | undefined
+      cx.dynamic(x)
+      cx.dynamic('nope')
+      cx.dynamic('flex', 'grid')
+      void s
+    `,
+} as const
+
+type SnippetName = keyof typeof SNIPPETS
+
+/**
+ * Type-checks every snippet as a consumer's file against the built `dist/vite.d.ts` and Vite's
+ * types, in one program, returning the messages of the diagnostics of each: its own, and any that
+ * belong to no snippet (a problem in a declaration file every snippet loads).
+ */
+function checkSnippets(): Map<SnippetName, string[]> {
   const dir = mkdtempSync(path.join(CORE_ROOT, '.nave-vite-types-'))
   try {
-    mkdirSync(dir, { recursive: true })
-    for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text)
-    const file = path.join(dir, 'consumer.ts')
-    writeFileSync(
-      file,
-      source
-        .replaceAll('@navecss/core/vite', '../dist/vite.js')
-        .replaceAll('@navecss/core/cx', '../dist/cx.js'),
-    )
-    const program = ts.createProgram([file], {
+    const files = new Map<string, SnippetName>()
+    for (const [name, source] of Object.entries(SNIPPETS)) {
+      const file = path.join(dir, `${name}.ts`)
+      writeFileSync(
+        file,
+        source
+          .replaceAll('@navecss/core/vite', '../dist/vite.js')
+          .replaceAll('@navecss/core/cx', '../dist/cx.js'),
+      )
+      files.set(file, name as SnippetName)
+    }
+    const program = ts.createProgram([...files.keys()], {
       module: ts.ModuleKind.ESNext,
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       target: ts.ScriptTarget.ESNext,
@@ -51,12 +144,28 @@ function diagnosticsFor(source: string, files: Record<string, string> = {}): str
       types: ['node'],
       ignoreDeprecations: '6.0',
     })
-    return ts
-      .getPreEmitDiagnostics(program)
-      .map((d) => `TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, '\n')}`)
+    const own = new Map<SnippetName, string[]>([...files.values()].map((name) => [name, []]))
+    const shared: string[] = []
+    for (const diagnostic of ts.getPreEmitDiagnostics(program)) {
+      const message = `TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`
+      const name = diagnostic.file && files.get(path.normalize(diagnostic.file.fileName))
+      if (name) own.get(name)!.push(message)
+      else shared.push(message)
+    }
+    return new Map([...own].map(([name, messages]) => [name, [...messages, ...shared]]))
   } finally {
     rmSync(dir, { force: true, recursive: true })
   }
+}
+
+let checked: Map<SnippetName, string[]> | undefined
+
+/**
+ * The diagnostics of the snippet `name`; the first call checks them all.
+ */
+function diagnosticsFor(name: SnippetName): string[] {
+  checked ??= checkSnippets()
+  return checked.get(name)!
 }
 
 describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every options value', () => {
@@ -130,6 +239,29 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
       }
     }, 60_000)
 
+    it('builds `all` to the build of the directive half alone, for a stylesheet that uses @nave', async () => {
+      const app = makeUsedApp(
+        appFiles({
+          'src/App.ts': `${IMPORT}console.log(cx('flex'))\n`,
+          'src/app.css': `${APP_CSS}.card { color: red; @nave flex; }\n`,
+        }),
+      )
+      try {
+        const textOf = (built: Awaited<ReturnType<typeof buildUsed>>): string =>
+          JSON.stringify([built.assets, built.js])
+        const [directiveHalf] = navePlugin({ atomic: 'all' })
+        const alone = await buildUsed(app, { transformer, nave: directiveHalf as never })
+        const all = await buildUsed(app, { transformer, options: { atomic: 'all' } })
+
+        expect(alone.error).toBeUndefined()
+        expect(alone.css).not.toContain('@nave')
+        expect(alone.css).toMatch(/\.card\s*\{[^}]*display:\s*flex/)
+        expect(textOf(all)).toBe(textOf(alone))
+      } finally {
+        app.dispose()
+      }
+    }, 60_000)
+
     it('builds green in a plugins list beside another plugin (Vite flattens the array)', async () => {
       const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
       try {
@@ -149,71 +281,26 @@ describe(
   'AC-used-atoms-02 — one signature: every call has the same tuple type',
   { timeout: 120_000 },
   () => {
-    const EQUAL = `
-    type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
-    declare function assertTrue<T extends true>(): T
-  `
-
     it('compiles a config-time choice, assigns to Plugin[] and keeps one type for every call', () => {
-      const diagnostics = diagnosticsFor(`
-      import { defineConfig, type Plugin } from 'vite'
-      import type { AtomName } from '@navecss/core/cx'
-      import { navePlugin } from '@navecss/core/vite'
-      ${EQUAL}
-      const a = navePlugin()
-      const b = navePlugin({ extend: { brandBox: { declarations: { color: 'red' } } } })
-      const c = navePlugin({ atomic: 'all' })
-      const d = navePlugin({ atomic: 'used' })
-      declare const isBuild: boolean
-      const e = navePlugin({ atomic: isBuild ? 'used' : 'all' })
-      const k = ['flex'] as const satisfies readonly AtomName[]
-      const f = navePlugin({ keep: k, keepFor: { '@acme/ui': k } })
-      const ps: Plugin[] = navePlugin()
-      defineConfig({ plugins: [a, d, e] })
-      assertTrue<Equal<typeof a, typeof c>>()
-      assertTrue<Equal<typeof a, typeof b>>()
-      assertTrue<Equal<typeof a, typeof d>>()
-      assertTrue<Equal<typeof a, typeof e>>()
-      assertTrue<Equal<typeof a, typeof f>>()
-      assertTrue<Equal<typeof a['length'], 2>>()
-      void ps
-    `)
+      const diagnostics = diagnosticsFor('configTime')
 
       expect(diagnostics.join('\n')).toBe('')
     })
 
     it('fails an unknown atomic value', () => {
-      const diagnostics = diagnosticsFor(`
-      import { navePlugin } from '@navecss/core/vite'
-      navePlugin({ atomic: 'some' })
-    `)
+      const diagnostics = diagnosticsFor('unknownAtomic')
 
       expect(diagnostics.some((message) => message.includes('some'))).toBe(true)
     })
 
     it('control: a return type that depends on the option makes the equality fail', () => {
-      const diagnostics = diagnosticsFor(`
-      import { navePlugin } from '@navecss/core/vite'
-      ${EQUAL}
-      declare function overloaded(options: { atomic: 'all' }): ReturnType<typeof navePlugin>[0]
-      declare function overloaded(options?: Parameters<typeof navePlugin>[0]): ReturnType<typeof navePlugin>
-      const a = overloaded()
-      const c = overloaded({ atomic: 'all' })
-      assertTrue<Equal<typeof a, typeof c>>()
-    `)
+      const diagnostics = diagnosticsFor('overloaded')
 
       expect(diagnostics.length).toBeGreaterThan(0)
     })
 
     it('control: a readonly tuple does not assign to Vite’s Plugin[] (TS4104)', () => {
-      const diagnostics = diagnosticsFor(`
-      import type { Plugin } from 'vite'
-      import { navePlugin } from '@navecss/core/vite'
-      declare function readonlyTuple(): readonly [ReturnType<typeof navePlugin>[0], ReturnType<typeof navePlugin>[1]]
-      const ps: Plugin[] = readonlyTuple()
-      void navePlugin
-      void ps
-    `)
+      const diagnostics = diagnosticsFor('readonlyTuple')
 
       expect(diagnostics.some((message) => message.startsWith('TS4104'))).toBe(true)
     })
@@ -256,6 +343,36 @@ describe(
       }
     }, 60_000)
 
+    it.each([
+      ['keep: a string', { keep: 'flex' }],
+      ['keep: a number', { keep: 42 }],
+      ['keep: a Set', { keep: new Set(['flex']) }],
+      ['keepFor: a string', { keepFor: 'x-lib' }],
+      ['keepFor: null', { keepFor: null }],
+      ['keepFor: an entry that is a string', { keepFor: { a: 'flex' } }],
+    ])(
+      'refuses %s with the same text whether extend is an object or a module path, at the call',
+      (_name, options) => {
+        const message = (extendOption: unknown): string | undefined => {
+          try {
+            navePlugin({ extend: extendOption, ...options } as never)
+          } catch (error) {
+            return (error as Error).message
+          }
+          return undefined
+        }
+        const withObject = message({})
+
+        expect(withObject).toMatch(/^navePlugin\(\): (keep|keepFor)/)
+        expect(message('./atoms.mjs')).toBe(withObject)
+      },
+    )
+
+    it('leaves the names a module may define to the module: a path accepts any string at the call', () => {
+      expect(() => navePlugin({ extend: './atoms.mjs', keep: ['brandBox' as never] })).not.toThrow()
+      expect(() => navePlugin({ extend: {}, keep: ['brandBox' as never] })).toThrow('unknown atom')
+    })
+
     it.each(['used', 'all'] as const)(
       'refuses an unknown name and an atom of the consumer’s own under %s',
       (atomic) => {
@@ -283,27 +400,9 @@ describe(
     }, 60_000)
 
     it('types keep as a readonly list of atom names', () => {
-      const ok = diagnosticsFor(`
-      import type { AtomName } from '@navecss/core/cx'
-      import { navePlugin } from '@navecss/core/vite'
-      navePlugin({ keep: ['flex', 'srOnly'] })
-      const k = ['flex', 'grid'] as const
-      navePlugin({ keep: k })
-      const naveAtoms = ['flex', 'inlineFlex'] as const satisfies readonly AtomName[]
-      navePlugin({ keepFor: { '@acme/ui': naveAtoms } })
-      navePlugin({ keep: naveAtoms })
-    `)
-      const bad = diagnosticsFor(`
-      import { navePlugin } from '@navecss/core/vite'
-      navePlugin({ keep: ['nope'] })
-      navePlugin({ keepFor: { '@acme/ui': ['nope'] } })
-    `)
-      const mutable = diagnosticsFor(`
-      import type { AtomName } from '@navecss/core/cx'
-      declare function scratch(options: { keep?: AtomName[] }): void
-      const k = ['flex'] as const
-      scratch({ keep: k })
-    `)
+      const ok = diagnosticsFor('keepOk')
+      const bad = diagnosticsFor('keepBad')
+      const mutable = diagnosticsFor('keepMutable')
 
       expect(ok).toEqual([])
       expect(bad.filter((message) => message.includes('nope'))).toHaveLength(2)
@@ -319,6 +418,16 @@ describe('AC-used-atoms-18 — cx.dynamic() without the plugin', { timeout: 120_
     for (const value of ['legacy-card', 'toString', null, undefined, false] as const) {
       expect(cx.dynamic(value as never)).toBe('')
     }
+  })
+
+  it('does the same from the built dist/cx.js a consumer installs, which keeps the read of the constant', async () => {
+    const file = path.join(CORE_ROOT, 'dist/cx.js')
+    const built = (await import(pathToFileURL(file).href)) as { cx: typeof cx }
+
+    expect(built.cx.dynamic('grid')).toBe('nave-grid')
+    expect(built.cx.dynamic('toString' as never)).toBe('')
+    expect(built.cx.dynamic(false)).toBe('')
+    expect(readFileSync(file, 'utf8')).toContain('typeof __NAVE_KEEP_CLASSES__')
   })
 
   it('gives nave-grid from a build under all that is run', async () => {
@@ -344,15 +453,7 @@ describe('AC-used-atoms-18 — cx.dynamic() without the plugin', { timeout: 120_
   }, 60_000)
 
   it('is typed as one argument of AtomName or falsy, returning string', () => {
-    const diagnostics = diagnosticsFor(`
-      import { cx, type AtomName } from '@navecss/core/cx'
-      const s: string = cx.dynamic('flex')
-      declare const x: AtomName | undefined
-      cx.dynamic(x)
-      cx.dynamic('nope')
-      cx.dynamic('flex', 'grid')
-      void s
-    `)
+    const diagnostics = diagnosticsFor('dynamicTyped')
 
     expect(diagnostics).toHaveLength(2)
     expect(diagnostics.some((message) => message.includes('nope'))).toBe(true)

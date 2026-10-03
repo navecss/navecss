@@ -10,9 +10,10 @@
  *   cx.dynamic(name) — one atom chosen at run time, for a name the Vite plugin's build
  *                  cannot read (listed in the plugin's `keep` option).
  *
- * Both accept falsy arguments (undefined, null, false) and filter them out, so
- * conditional classes work the same on either side. Both return a
- * space-separated class string for className={}.
+ * cx() and cx.raw() accept falsy arguments (undefined, null, false) and filter
+ * them out, so conditional classes work the same on either side. Both return a
+ * space-separated class string for className={}. cx.dynamic() takes one atom
+ * name, or a falsy value, and returns that atom's class, or an empty string.
  *
  * Validation, not just autocomplete:
  *   cx() takes AtomName, so a typo'd name ('interactve'), a name typed from

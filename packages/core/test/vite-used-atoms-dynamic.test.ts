@@ -6,6 +6,7 @@
  */
 import { pathToFileURL } from 'node:url'
 import path from 'node:path'
+import { resolveConfig } from 'vite'
 import { describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/vite.ts'
@@ -18,6 +19,7 @@ import {
   buildUsed,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
+import { appConfig } from './helpers/vite-app.ts'
 
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 const MAIN = `${IMPORT}import { tone } from 'dyn-lib'
@@ -91,14 +93,17 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
   it('adds exactly one define key under the default, and no built asset names it', async () => {
     const app = dynamicApp()
     try {
-      const keys = (plugins: ReturnType<typeof navePlugin>) => {
-        const [nave] = plugins
-        return Object.keys(nave.config()?.define ?? {})
+      const definedBy = async (settings: Parameters<typeof navePlugin>[0]) => {
+        const resolved = await resolveConfig(
+          appConfig(app.root, 'postcss', [navePlugin(settings)]),
+          'build',
+        )
+        return Object.keys(resolved.define ?? {})
       }
       const built = await buildUsed(app, { options })
 
-      expect(keys(navePlugin(options))).toHaveLength(1)
-      expect(keys(navePlugin({ ...options, atomic: 'all' }))).toHaveLength(0)
+      expect(await definedBy(options)).toEqual([KEEP_CONSTANT])
+      expect(await definedBy({ ...options, atomic: 'all' })).toEqual([])
       expect(KEEP_CONSTANT).toBe('__NAVE_KEEP_CLASSES__')
       expect(built.js).not.toContain(KEEP_CONSTANT)
     } finally {
@@ -107,6 +112,8 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
   }, 60_000)
 
   it('bundles core into a server build, so keep applies there to the application’s own calls', async () => {
+    // Core is a real directory under node_modules, as a registry install makes it: a linked
+    // package is bundled by Vite whatever the config says, which would hide a missing addition.
     const app = makeUsedApp(
       appFiles(
         {
@@ -115,22 +122,29 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
         },
         ['src/App.ts'],
       ),
+      'copy',
     )
     addPackage(app, 'dyn-lib', {
       'index.js': `${IMPORT}export const tone = (t) => cx.dynamic(t)\n`,
     })
     try {
+      const build = { ssr: 'src/ssr.ts', outDir: 'dist-ssr', write: true }
       const built = await buildUsed(app, {
         options: { keep: ['flex'], keepFor: { 'dyn-lib': ['block'] } },
-        build: { ssr: 'src/ssr.ts', outDir: 'dist-ssr', write: true },
+        build,
         config: {},
       })
       expect(built.error).toBeUndefined()
+      const resolved = await resolveConfig(
+        appConfig(app.root, 'postcss', [navePlugin({ keep: ['flex'] })], { build }),
+        'build',
+      )
       const module = (await import(pathToFileURL(path.join(app.root, 'dist-ssr/ssr.js')).href)) as {
         own: string
         lib: string
       }
 
+      expect(resolved.environments.ssr?.resolve.noExternal).toContain('@navecss/core')
       expect(module.own).toBe('')
       // The residual R14 names: an externalized dependency loads core unbundled, so its call maps through the full map.
       expect(module.lib).toBe('nave-grid')
@@ -138,4 +152,16 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
       app.dispose()
     }
   }, 60_000)
+
+  it('decides a server environment the way Vite does: by consumer, else by name', () => {
+    const [nave] = navePlugin({ keep: ['flex'] })
+    const added = { resolve: { noExternal: ['@navecss/core'] } }
+
+    expect(nave.configEnvironment('ssr', {})).toEqual(added)
+    expect(nave.configEnvironment('rsc', {})).toEqual(added)
+    expect(nave.configEnvironment('worker', { consumer: 'server' })).toEqual(added)
+    expect(nave.configEnvironment('client', {})).toBeUndefined()
+    expect(nave.configEnvironment('ssr', { consumer: 'client' })).toBeUndefined()
+    expect(navePlugin({ atomic: 'all' })[0].configEnvironment('ssr', {})).toBeUndefined()
+  })
 })

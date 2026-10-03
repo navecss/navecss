@@ -6,27 +6,14 @@
  * (the substitution did not take on this Vite) fails the build.
  */
 import type { RootState } from './vite-state.ts'
-import type {
-  BundleContext,
-  BundleEntry,
-  PluginLike,
-  RenderContext,
-  RenderedChunk,
-} from './vite-types.ts'
+import type { BundleContext, BundleEntry, RenderContext, RenderedChunk } from './vite-types.ts'
+import type { UsedContext } from './vite-used.ts'
 
-import { inspectAtomicLayer, pruneAtomicLayer } from './vite-prune.ts'
+import { transformHandler, unwrapped } from './vite-css-capture.ts'
+import { moduleLabel } from './vite-module-kind.ts'
+import { inspectAtomicLayer, pruneAtomicLayer, unprunedAtoms } from './vite-prune.ts'
 
 const decoder = new TextDecoder()
-
-/**
- * The handler of a plugin's `transform`, whether it is a function or an object with a `handler`.
- */
-function transformHandler(plugin: PluginLike): ((...args: unknown[]) => unknown) | undefined {
-  const { transform } = plugin
-  if (typeof transform === 'function') return transform as (...args: unknown[]) => unknown
-  const handler = (transform as { handler?: unknown } | undefined)?.handler
-  return typeof handler === 'function' ? (handler as (...args: unknown[]) => unknown) : undefined
-}
 
 /**
  * Hands the pruned `css` of the stylesheet `id` back to Vite's own CSS step for this environment,
@@ -40,12 +27,52 @@ async function refeed(ctx: RenderContext, css: string, id: string): Promise<void
       "nave: this version of Vite has no CSS step the plugin knows how to hand a stylesheet back to, so it cannot remove the unused atoms. Ship every atom with atomic: 'all' in navePlugin() until the plugin supports this version of Vite.",
     )
   }
-  await handler.call(ctx, css, id)
+  await unwrapped(handler).call(ctx, css, id)
+}
+
+// The stylesheets of an HTML page (a `<style>` element or attribute) already handed back, by build.
+const fedPages = new WeakMap<RootState, Set<string>>()
+
+/**
+ * Whether the module `id` is the stylesheet of a `<style>` element or attribute of an HTML page.
+ */
+function isPageStylesheet(id: string): boolean {
+  return /[?&]html-proxy\b/.test(id)
 }
 
 /**
- * Prunes every stylesheet of `chunk` that holds the atomic layer, and hands each back to Vite.
- * `emitted` is the set to keep.
+ * The inline stylesheets of HTML pages the environment compiled. No chunk holds them: Vite keeps
+ * their text for the page itself, so they are handed back whichever chunk is rendered first.
+ */
+function pageStylesheets(ctx: RenderContext, state: RootState): string[] {
+  const prefix = `${ctx.environment.name}\0`
+  const fed = fedPages.get(state) ?? new Set<string>()
+  fedPages.set(state, fed)
+  const ids = state.sheets
+    .keys()
+    .filter((key) => key.startsWith(prefix) && isPageStylesheet(key))
+    .map((key) => key.slice(prefix.length))
+    .filter((id) => !fed.has(id))
+    .toArray()
+  for (const id of ids) fed.add(id)
+  return ids
+}
+
+/**
+ * Whether the module `id` is a stylesheet imported with `?inline`, whose text Vite makes part of
+ * the JavaScript.
+ */
+function isInlineImport(id: string): boolean {
+  return /[?&]inline\b/.test(id) && !isPageStylesheet(id)
+}
+
+// The inline imports already warned about, by build.
+const warnedInline = new WeakMap<RootState, Set<string>>()
+
+/**
+ * Prunes every stylesheet of `chunk` that holds the atomic layer, and hands each back to Vite,
+ * together with the inline stylesheets of the pages. `emitted` is the set to keep. A stylesheet
+ * imported with `?inline` is left as it is (see `warnInlineImports`).
  */
 export async function refeedChunkStylesheets(
   ctx: RenderContext,
@@ -54,10 +81,33 @@ export async function refeedChunkStylesheets(
   emitted: ReadonlySet<string>,
 ): Promise<void> {
   const prefix = `${ctx.environment.name}\0`
-  for (const id of Object.keys(chunk.modules)) {
+  for (const id of [...Object.keys(chunk.modules), ...pageStylesheets(ctx, state)]) {
     const css = state.sheets.get(`${prefix}${id}`)
-    if (css === undefined) continue
+    if (css === undefined || isInlineImport(id)) continue
     await refeed(ctx, pruneAtomicLayer(css, emitted), id)
+  }
+}
+
+/**
+ * Says, once for each, which stylesheets of `chunk` are imported with `?inline` and hold the
+ * atomic layer: their text is part of the JavaScript chunk, where the plugin does not edit it, so
+ * every atom in the layer ships.
+ */
+export function warnInlineImports(
+  ctx: RenderContext,
+  chunk: RenderedChunk,
+  context: UsedContext,
+): void {
+  const prefix = `${ctx.environment.name}\0`
+  const warned = warnedInline.get(context.state) ?? new Set<string>()
+  warnedInline.set(context.state, warned)
+  for (const id of Object.keys(chunk.modules)) {
+    if (!isInlineImport(id) || !context.state.sheets.has(`${prefix}${id}`) || warned.has(id))
+      continue
+    warned.add(id)
+    ctx.warn(
+      `nave: ${moduleLabel(context.root, id)} is imported with ?inline, so its stylesheet is text in the JavaScript and the plugin cannot remove the unused atoms from its atomic layer: every atom in it ships. Import it without ?inline to have the layer filtered.`,
+    )
   }
 }
 
@@ -87,7 +137,7 @@ function mismatchLines(
     if (!seen.hasLayer) continue
     hasLayer = true
     for (const atom of seen.atoms) seenAnywhere.add(atom)
-    const extra = [...seen.atoms.difference(emitted)]
+    const extra = unprunedAtoms(css, emitted)
     if (extra.length > 0) {
       lines.push(
         `${fileName}: the atomic layer holds a rule for ${extra.join(', ')}, which the build did not emit.`,

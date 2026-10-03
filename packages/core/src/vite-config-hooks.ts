@@ -5,8 +5,10 @@
  * environment, so that constant folds into a server build's `cx.dynamic()` too.
  */
 import type { UsedContext } from './vite-used.ts'
+import type { NaveWorkerPlugin } from './vite-worker-collect.ts'
 
 import { atomClassMap } from './atoms.ts'
+import { workerCollectPlugins } from './vite-worker-collect.ts'
 
 /**
  * The name of the `define` constant `cx.dynamic()` reads.
@@ -25,12 +27,33 @@ function keepMapExpression(kept: readonly string[]): string {
   return JSON.stringify(map)
 }
 
+export interface UsedConfig {
+  readonly define: Record<string, string>
+  /**
+   * A module worker is bundled by a build of its own: this adds the plugin that reads its code.
+   */
+  readonly worker: { readonly plugins: () => NaveWorkerPlugin[] }
+}
+
 /**
- * The `config` hook: the one `define` key, under the default only.
+ * The `config` hook: the one `define` key, and the plugin a worker's build runs, under the
+ * default only.
  */
-export function usedConfig(context: UsedContext): { define: Record<string, string> } | undefined {
+export function usedConfig(context: UsedContext): UsedConfig | undefined {
   if (context.options.atomic !== 'used') return undefined
-  return { define: { [KEEP_CONSTANT]: keepMapExpression(context.kept) } }
+  return {
+    define: { [KEEP_CONSTANT]: keepMapExpression(context.kept) },
+    worker: { plugins: workerCollectPlugins(context) },
+  }
+}
+
+/**
+ * Whether environment `name` is a server environment the way Vite decides it: its `consumer` when
+ * the config sets one, otherwise `client` for the environment of that name and `server` for every
+ * other. Vite fills the default in only after it has called `configEnvironment`.
+ */
+function isServerEnvironment(name: string, options: { readonly consumer?: string }): boolean {
+  return (options.consumer ?? (name === 'client' ? 'client' : 'server')) === 'server'
 }
 
 /**
@@ -38,8 +61,9 @@ export function usedConfig(context: UsedContext): { define: Record<string, strin
  */
 export function usedEnvironmentConfig(
   context: UsedContext,
+  name: string,
   options: { readonly consumer?: string },
 ): { resolve: { noExternal: string[] } } | undefined {
-  if (context.options.atomic !== 'used' || options.consumer !== 'server') return undefined
+  if (context.options.atomic !== 'used' || !isServerEnvironment(name, options)) return undefined
   return { resolve: { noExternal: ['@navecss/core'] } }
 }

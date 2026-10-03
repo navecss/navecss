@@ -1,14 +1,17 @@
 /**
- * The atom is the unit of emission. Inside `@layer atomic`, every rule whose selector names a
- * built-in atom class outside the emitted set goes, selector lists pruned member by member and
- * at-rules left empty dropped; every other byte of the stylesheet is kept as it was. What stays is
- * the layer as Vite's own CSS step produced it (nested or lowered, per `css.transformer`), so an
+ * The atom is the unit of emission. Inside `@layer atomic`, every rule whose selector needs an
+ * element carrying a built-in atom class outside the emitted set goes, selector lists pruned
+ * member by member and at-rules left empty dropped; every other byte of the stylesheet is kept as
+ * it was. A selector needs such an element when the class sits in one of its own compounds, or in
+ * every alternative of an `:is()` or `:where()` among them; a class inside `:not()`, `:has()` or
+ * any other argument is not a need, because the rule can match without it. What stays is the
+ * layer as Vite's own CSS step produced it (nested or lowered, per `css.transformer`), so an
  * emitted atom keeps every rule the full layer yields for it.
  */
 import type { Sheet, Statement } from './vite-css-blocks.ts'
 
 import { firstSignificant, readSheet } from './vite-css-blocks.ts'
-import { atomOfClass } from './vite-literal-classes.ts'
+import { atomsNamedBy, blockersOf, membersOf } from './vite-selector-atoms.ts'
 
 export interface LayerReading {
   /**
@@ -63,38 +66,29 @@ function isAtomicLayer(sheet: Sheet, statement: Statement): boolean {
 }
 
 /**
- * The selector list of the rule `statement`, as token ranges `[from, to)`, one per member.
+ * At-rules that only make the rules inside them conditional: an `@layer atomic` inside one of
+ * them is still the layer of that name (`@import url('@navecss/core') screen;` makes one).
  */
-function membersOf(sheet: Sheet, from: number, open: number): [number, number][] {
-  const members: [number, number][] = []
-  let start = from
-  let depth = 0
-  for (let index = from; index < open; index += 1) {
-    const type = sheet.tokens[index]!.type
-    if (['(-token', '[-token', 'function-token'].includes(type)) depth += 1
-    else if ([')-token', ']-token'].includes(type)) depth -= 1
-    else if (type === 'comma-token' && depth === 0) {
-      members.push([start, index])
-      start = index + 1
-    }
-  }
-  members.push([start, open])
-  return members
-}
+const CONDITIONALS = new Set(['container', 'document', 'media', 'scope', 'supports'])
 
 /**
- * The built-in atoms whose class the tokens `[from, to)` select, anywhere in a selector.
+ * The `@layer atomic` blocks of the region `[from, to)`, found at the top level and inside
+ * conditional at-rules, in document order. One inside another `@layer` is that layer's own.
  */
-function atomsSelectedBy(sheet: Sheet, from: number, to: number): string[] {
-  const atoms: string[] = []
-  for (let index = from; index < to - 1; index += 1) {
-    const dot = sheet.tokens[index]!
-    const name = sheet.tokens[index + 1]!
-    if (dot.type !== 'delim-token' || dot.raw !== '.' || name.type !== 'ident-token') continue
-    const atom = atomOfClass((name.structured as { value: string }).value)
-    if (atom) atoms.push(atom)
+function layerBlocks(sheet: Sheet, from: number, to: number): Statement[] {
+  const found: Statement[] = []
+  for (const statement of sheet.statements(from, to)) {
+    const { open, close } = statement
+    if (open === undefined || close === undefined) continue
+    if (isAtomicLayer(sheet, statement)) found.push(statement)
+    else {
+      const keyword = atKeywordAt(sheet, firstSignificant(sheet.tokens, statement.from, open))
+      if (keyword !== undefined && CONDITIONALS.has(keyword)) {
+        found.push(...layerBlocks(sheet, open + 1, close))
+      }
+    }
   }
-  return atoms
+  return found
 }
 
 /**
@@ -111,9 +105,7 @@ function pruneRule(sheet: Sheet, statement: Statement, emitted: ReadonlySet<stri
   const { from, open, close } = statement as Required<Statement>
   const first = firstSignificant(sheet.tokens, from, open)
   const members = membersOf(sheet, first, open)
-  const kept = members.filter(([start, end]) =>
-    atomsSelectedBy(sheet, start, end).every((atom) => emitted.has(atom)),
-  )
+  const kept = members.filter(([start, end]) => blockersOf(sheet, start, end, emitted).length === 0)
   if (kept.length === members.length) return sheet.slice(from, close + 1)
   if (kept.length === 0) return ''
   let trailing = open
@@ -154,15 +146,14 @@ function pruneStatement(sheet: Sheet, statement: Statement, emitted: ReadonlySet
 }
 
 /**
- * `css` with every rule in an `@layer atomic` block that names an atom outside `emitted` removed.
+ * `css` with every rule in an `@layer atomic` block that needs an atom outside `emitted` removed.
  */
 export function pruneAtomicLayer(css: string, emitted: ReadonlySet<string>): string {
   if (!css.includes('@')) return css
   const sheet = readSheet(css)
   let out = ''
   let cursor = 0
-  for (const statement of sheet.statements(0, sheet.tokens.length)) {
-    if (!isAtomicLayer(sheet, statement)) continue
+  for (const statement of layerBlocks(sheet, 0, sheet.tokens.length)) {
     const { open, close } = statement as Required<Statement>
     out += sheet.slice(cursor, open + 1) + pruneRegion(sheet, open + 1, close, emitted)
     cursor = close
@@ -171,18 +162,24 @@ export function pruneAtomicLayer(css: string, emitted: ReadonlySet<string>): str
 }
 
 /**
- * Collects the atoms the rules in the region `[from, to)` select, descending into group at-rules.
+ * Calls `visit` with the token range of every selector-list member of every rule in the region
+ * `[from, to)`, descending into group at-rules.
  */
-function collectAtoms(sheet: Sheet, from: number, to: number, atoms: Set<string>): void {
+function visitMembers(
+  sheet: Sheet,
+  from: number,
+  to: number,
+  visit: (start: number, end: number) => void,
+): void {
   for (const statement of sheet.statements(from, to)) {
     const { open, close } = statement
     if (open === undefined || close === undefined) continue
     const first = firstSignificant(sheet.tokens, statement.from, open)
     const keyword = atKeywordAt(sheet, first)
     if (keyword === undefined) {
-      for (const atom of atomsSelectedBy(sheet, first, open)) atoms.add(atom)
+      for (const [start, end] of membersOf(sheet, first, open)) visit(start, end)
     } else if (GROUPS.has(keyword)) {
-      collectAtoms(sheet, open + 1, close, atoms)
+      visitMembers(sheet, open + 1, close, visit)
     }
   }
 }
@@ -194,11 +191,27 @@ export function inspectAtomicLayer(css: string): LayerReading {
   const atoms = new Set<string>()
   if (!css.includes('@')) return { hasLayer: false, atoms }
   const sheet = readSheet(css)
-  let hasLayer = false
-  for (const statement of sheet.statements(0, sheet.tokens.length)) {
-    if (!isAtomicLayer(sheet, statement)) continue
-    hasLayer = true
-    collectAtoms(sheet, statement.open! + 1, statement.close!, atoms)
+  const blocks = layerBlocks(sheet, 0, sheet.tokens.length)
+  for (const { open, close } of blocks) {
+    visitMembers(sheet, open! + 1, close!, (start, end) => {
+      for (const atom of atomsNamedBy(sheet, start, end)) atoms.add(atom)
+    })
   }
-  return { hasLayer, atoms }
+  return { hasLayer: blocks.length > 0, atoms }
+}
+
+/**
+ * The atoms outside `emitted` that a rule left in the `@layer atomic` blocks of `css` still needs
+ * an element of: what a pruning to `emitted` would still remove, sorted.
+ */
+export function unprunedAtoms(css: string, emitted: ReadonlySet<string>): string[] {
+  if (!css.includes('@')) return []
+  const atoms = new Set<string>()
+  const sheet = readSheet(css)
+  for (const { open, close } of layerBlocks(sheet, 0, sheet.tokens.length)) {
+    visitMembers(sheet, open! + 1, close!, (start, end) => {
+      for (const atom of blockersOf(sheet, start, end, emitted)) atoms.add(atom)
+    })
+  }
+  return [...atoms].toSorted((a, b) => a.localeCompare(b))
 }

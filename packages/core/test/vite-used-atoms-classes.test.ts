@@ -4,6 +4,7 @@
  * boundaries, a Nave class built from pieces is a build error, and every route to the atomic layer
  * is filtered by content.
  */
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -294,6 +295,21 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
           if (extra['src/app.css']) {
             expect(all.css).toContain('.nave-grid > .child')
             expect(used.css).not.toContain('.nave-grid > .child')
+            // The fixture reaches the Quick start shape: the atom rules sit inside app.css itself.
+            let appCss = ''
+            await buildUsed(app, {
+              ...options,
+              options: { atomic: 'all' },
+              after: [
+                {
+                  name: 'record-app-css',
+                  transform(code: string, id: string) {
+                    if (id.endsWith('/src/app.css')) appCss = code
+                  },
+                },
+              ],
+            })
+            expect(atomLayerAtoms(appCss).length).toBe(Object.keys(atomClassMap).length)
           }
         } finally {
           app.dispose()
@@ -328,6 +344,27 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       expect(index).toMatch(/@import url\(['"]\.\/atomic\.css['"]\)/)
       const atomic = readFileSync(path.join(CORE_ROOT, 'dist/atomic.css'), 'utf8')
       for (const className of Object.values(atomClassMap)) expect(atomic).toContain(`.${className}`)
+    })
+
+    it('ships the published stylesheets byte for byte as they were before the plugin read atoms', () => {
+      // SHA-256 of each file, taken from the build of the commit before the plugin read atoms;
+      // dist/atomic.css has its own checked-in snapshot.
+      const published: Record<string, string> = {
+        'index.css': '6eae13ef505be86381276dfb5d1a214bc372f1343e59d093bf76488bd88e5fdc',
+        'layers.css': '14eb8556452bed3c38ec650ea2aeaea802615b2ddd71c625dbd72b886eaa840c',
+        'no-tokens.css': 'a614e4b438c6f0f0f944504e56e22fc3d02adf7eaa67a0f64e192fd3ae98fc21',
+        'reset.css': '0c043840061f8763c0042fed1468fcbaf9667a33cb95542a0105f0ea71718805',
+      }
+      const hashes = Object.fromEntries(
+        Object.keys(published).map((name) => [
+          name,
+          createHash('sha256')
+            .update(readFileSync(path.join(CORE_ROOT, 'dist', name)))
+            .digest('hex'),
+        ]),
+      )
+
+      expect(hashes).toEqual(published)
     })
   })
 })

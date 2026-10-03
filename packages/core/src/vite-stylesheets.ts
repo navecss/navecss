@@ -1,8 +1,7 @@
 /**
- * The first half's stylesheet work: expand the directives of every stylesheet Vite compiles,
+ * The first half's stylesheet work: expand the directives of every stylesheet Vite compiles, and
  * remember the ones that failed because the `extend` module would not load (so fixing the module
- * reloads them), and keep the text of each stylesheet that holds the atomic layer for the step
- * that prunes it before Vite names the CSS file.
+ * reloads them).
  */
 import type { ExtendSource } from './vite-extend.ts'
 import type {
@@ -12,13 +11,9 @@ import type {
   TransformContext,
   TransformResultLike,
 } from './vite-types.ts'
-import type { UsedContext } from './vite-used.ts'
 
 import { canHoldDirective, isStylesheetId } from './vite-css-id.ts'
-import { inspectAtomicLayer } from './vite-prune.ts'
-import { moduleKey } from './vite-state.ts'
 import { transformStylesheet } from './vite-transform.ts'
-import { isUsed } from './vite-used.ts'
 
 export interface Stylesheets {
   configure(config: ResolvedConfigLike): void
@@ -47,21 +42,9 @@ function withForwardSlashes(file: string): string {
 }
 
 /**
- * Keeps the text of a stylesheet that holds the atomic layer, in a build under the default, and
- * forgets what an earlier edit of it kept once it holds none.
- */
-function rememberLayer(context: UsedContext, key: string, text: string): void {
-  if (context.command !== 'build' || !isUsed(context)) return
-  const isPossible = text.includes('\\') || /layer/i.test(text)
-  if (isPossible && inspectAtomicLayer(text).hasLayer) context.state.sheets.set(key, text)
-  else context.state.sheets.delete(key)
-}
-
-/**
  * The stylesheet half of the first plugin.
  */
 export function createStylesheets(
-  context: UsedContext,
   extend: ExtendSource,
   onUnknown: 'error' | 'ignore' | 'warn',
 ): Stylesheets {
@@ -106,7 +89,6 @@ export function createStylesheets(
       // A stylesheet edited to hold no directive no longer waits on the module.
       if (!hasDirective) failed.get(environment)?.delete(id)
       const result = hasDirective ? await expand(ctx, code, id) : undefined
-      rememberLayer(context, moduleKey(environment, id), result?.code ?? code)
       return result
     },
 
