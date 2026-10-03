@@ -170,6 +170,12 @@ exports[`dist/tokens.css contract > matches the checked-in snapshot 1`] = `
     initial-value: 2px;
   }
 
+  @property --nave-border-width-mark {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 2px;
+  }
+
   @property --nave-border-width-lg {
     syntax: '<length>';
     inherits: true;
@@ -342,6 +348,7 @@ exports[`dist/tokens.css contract > matches the checked-in snapshot 1`] = `
     --nave-border-width-none: 0px;
     --nave-border-width-sm: 1px;
     --nave-border-width-focus: 2px;
+    --nave-border-width-mark: 2px;
     --nave-border-width-lg: 4px;
     --nave-radius-none: 0px;
     --nave-radius-sm: 4px;

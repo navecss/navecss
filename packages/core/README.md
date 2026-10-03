@@ -21,12 +21,20 @@ pnpm add @navecss/core
   included, is reachable only through the package's `exports` map: there is no
   `main` field to fall back on.
 - **ES modules.** `@navecss/core/cx`, `@navecss/core/atoms`,
-  `@navecss/core/postcss` and `@navecss/core/vite` load through `import` only. A `require()` of any of
+  `@navecss/core/vite` and `@navecss/core/check` load through `import` only. A `require()` of any of
   them fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`, which reads as though the
   entry point did not exist. In TypeScript, set `moduleResolution` to `bundler`,
   `node16` or `nodenext`; under `node10` their types are not found. A CommonJS
   file type-checks against them and then fails when it runs, so import them from
-  an ES module.
+  an ES module. `@navecss/core/postcss` also loads through `require()` (Node
+  loads the ES module for you, which the Node version below includes), so a
+  CommonJS `postcss.config.js` can use it.
+  For TypeScript to check a `require()` of it, use `module` `nodenext`
+  (TypeScript 5.8 or later) or `node20` (5.9 or later) with `moduleResolution`
+  unset or `nodenext`, or `module` `preserve` with `moduleResolution` `bundler`,
+  or turn on `skipLibCheck`. Under `module` `node16`, or `nodenext` before 5.8,
+  TypeScript describes a Node that cannot `require()` an ES module and reports
+  an error in the package's types.
 - **Node 22.18 or later.**
 - **A build step that resolves `@nave`: the Vite plugin, or PostCSS 8.** On
   Vite, `@navecss/core/vite` needs nothing installed beside Vite, and
@@ -294,8 +302,46 @@ export default {
 }
 ```
 
+A CommonJS config works too. Name it `postcss.config.cjs`, or keep `.js` in a project
+without `"type": "module"`:
+
+```js
+// postcss.config.cjs
+module.exports = {
+  plugins: [require('@navecss/core/postcss')()],
+}
+```
+
 `postcss` is an optional peer dependency.
 If you are using only `cx()` or tokens, you do not need to install it.
+
+#### Next.js
+
+Next.js reads a PostCSS plugin by its package name, so give it the name as a key and do not
+call `navePlugin()`:
+
+```js
+// postcss.config.mjs
+export default {
+  plugins: { '@navecss/core/postcss': {} },
+}
+```
+
+The `navePlugin()` form above fails on Next.js's webpack pipeline with
+`An unknown PostCSS plugin was provided`: that is Next 15's default and `next build --webpack`
+on Next 16. Next 16's default, Turbopack, accepts either form.
+
+Next.js also needs your browser floor, in `package.json`:
+
+```json
+{
+  "browserslist": ["chrome 125", "edge 125", "firefox 128", "safari 18", "ios_saf 18"]
+}
+```
+
+Without it, Turbopack compiles for older browsers and rewrites every `light-dark()` in your CSS,
+Nave's colours included, into `--lightningcss-light` and `--lightningcss-dark` variables. Spell
+the floor out as above: Next 15 rejects the shorter `baseline 2024` with `Unknown browser baseline`.
 
 **If your Vite config sets `css.transformer: 'lightningcss'`, this plugin never
 runs.** That option replaces Vite's CSS pipeline with Lightning CSS, which does

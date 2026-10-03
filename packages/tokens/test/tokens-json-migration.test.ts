@@ -105,12 +105,39 @@ function withoutZIndexSyntaxNarrowing(text: string): string {
 }
 
 /**
+ * `--nave-border-width-mark` was added AFTER this migration too, for reasons that have nothing
+ * to do with it: a new glyph-stroke width the Base UI package's check mark and indeterminate
+ * bar draw with. It adds one `@property` registration and one declaration to `tokens.css`, and
+ * one line each to `tokens.js` and `tokens.d.ts`. Each fragment is lifted out of the built
+ * text after asserting it occurs EXACTLY ONCE, so the exhaustive delta checks below stay about
+ * the migration alone and the frozen oracle never carries the token.
+ */
+const MARK_CSS_PROPERTY =
+  "  @property --nave-border-width-mark {\n    syntax: '<length>';\n    inherits: true;\n    initial-value: 2px;\n  }\n\n"
+const MARK_CSS_DECLARATION = '    --nave-border-width-mark: 2px;\n'
+const MARK_JS_LINE = `  '--nave-border-width-mark': "2px",\n`
+const MARK_DTS_LINE = "  '--nave-border-width-mark': string\n"
+
+function withoutOnce(text: string, fragment: string): string {
+  expect(text.split(fragment).length - 1, `${fragment.trim()} occurs exactly once`).toBe(1)
+  return text.replace(fragment, () => '')
+}
+
+function withoutBorderWidthMark(text: string, ...fragments: string[]): string {
+  return fragments.reduce((remaining, fragment) => withoutOnce(remaining, fragment), text)
+}
+
+/**
  * `built('tokens.css')`, with every later addition above folded back to its pre-addition
  * rendering, so the exhaustive delta check below stays about the migration alone.
  */
 function builtTokensCssBeforeLaterAdditions(): string {
   const withAdditions = built('tokens.css')
-  return withoutZIndexSyntaxNarrowing(withoutAlphaPinningSuffix(withAdditions))
+  return withoutBorderWidthMark(
+    withoutZIndexSyntaxNarrowing(withoutAlphaPinningSuffix(withAdditions)),
+    MARK_CSS_PROPERTY,
+    MARK_CSS_DECLARATION,
+  )
 }
 
 /**
@@ -181,6 +208,37 @@ function adjacencyTriples(block: Record<string, AdjacencyPair[] | string>): stri
     for (const pair of pairs) out.push(`${subject}|${pair.against}|${pair.class}`)
   }
   return out.toSorted((a, b) => a.localeCompare(b))
+}
+
+/**
+ * The pairs the Base UI package's parts paint, declared AFTER this migration: the surfaces a
+ * popup, a raised panel and a form control sit on were not part of the set the migration moved.
+ * Lifted out of the migrated set before it is compared with the frozen one, after asserting
+ * each is present, so the comparison stays about the migration alone.
+ */
+const POST_MIGRATION_ADJACENCY_TRIPLES = new Set([
+  'action.primary|surface.overlay|non-text',
+  'action.primary|surface.raised|non-text',
+  'content.link|surface.overlay|text',
+  'content.link|surface.raised|text',
+  'content.primary|surface.overlay|text',
+  'content.secondary|surface.overlay|text',
+  'content.secondary|surface.raised|text',
+  'content.tertiary|surface.overlay|text',
+  'content.tertiary|surface.raised|text',
+  'feedback.danger.foreground|surface.base|text',
+  'feedback.danger.foreground|surface.overlay|text',
+  'feedback.danger.foreground|surface.raised|text',
+  'feedback.danger|surface.overlay|non-text',
+  'feedback.danger|surface.raised|non-text',
+])
+
+function adjacencyTriplesBeforeLaterAdditions(
+  block: Record<string, AdjacencyPair[] | string>,
+): string[] {
+  const all = adjacencyTriples(block)
+  for (const triple of POST_MIGRATION_ADJACENCY_TRIPLES) expect(all).toContain(triple)
+  return all.filter((triple) => !POST_MIGRATION_ADJACENCY_TRIPLES.has(triple))
 }
 
 /**
@@ -316,7 +374,10 @@ describe('AC-token-build-44 covers: R44 (the five specifics, and the EXHAUSTIVE 
    * nineteenth row moving for a reason nobody named fails this scenario.
    */
   it('accounts for EVERY tokens.js and tokens.d.ts delta, with nothing left over', () => {
-    const builtJs = withoutPostMigrationLines(built('tokens.js'))
+    const builtJs = withoutBorderWidthMark(
+      withoutPostMigrationLines(built('tokens.js')),
+      MARK_JS_LINE,
+    )
     const jsDeltas = lineDeltas(fixture('tokens.js'), withoutColorLayerDocExpansion(builtJs))
     const jsHeader = jsDeltas.filter((d) => d.before.includes('The DTCG token set'))
     const jsNumeric = jsDeltas.filter((d) => d.after === d.before.replaceAll('"', ''))
@@ -328,7 +389,10 @@ describe('AC-token-build-44 covers: R44 (the five specifics, and the EXHAUSTIVE 
     expect(jsHeader.length + jsNumeric.length + jsShadow.length).toBe(jsDeltas.length)
     for (const delta of jsHeader) expect(delta.after).toContain('DTCG 2025.10 token set')
 
-    const builtDts = withoutColorPropertyNameBlock(built('tokens.d.ts'))
+    const builtDts = withoutBorderWidthMark(
+      withoutColorPropertyNameBlock(built('tokens.d.ts')),
+      MARK_DTS_LINE,
+    )
     const dtsDeltas = lineDeltas(fixture('tokens.d.ts'), withoutColorLayerDocExpansion(builtDts))
     const dtsHeader = dtsDeltas.filter((d) => d.before.includes('The DTCG token set'))
     const dtsTypes = dtsDeltas.filter((d) => d.after === d.before.replace(/: string$/, ': number'))
@@ -347,7 +411,9 @@ describe('AC-token-build-44 covers: R44 (the five specifics, and the EXHAUSTIVE 
 describe('AC-token-build-45 covers: R45 (the adjacency declaration SET, compared as triples)', () => {
   const frozen = JSON.parse(fixture('adjacency-triples.json')) as string[]
 
-  const migrated = adjacencyTriples(source.$extensions['dev.navecss.theming'].adjacency)
+  const migrated = adjacencyTriplesBeforeLaterAdditions(
+    source.$extensions['dev.navecss.theming'].adjacency,
+  )
 
   it('preserves the triple set element for element, not merely its size', () => {
     expect(migrated).toEqual(frozen)
@@ -356,19 +422,30 @@ describe('AC-token-build-45 covers: R45 (the adjacency declaration SET, compared
     expect([...migrated].every((triple) => frozen.includes(triple))).toBe(true)
   })
 
+  it('declares no triple twice, the post-migration ones the lift removes included', () => {
+    const all = adjacencyTriples(source.$extensions['dev.navecss.theming'].adjacency)
+
+    expect(new Set(all).size).toBe(all.length)
+  })
+
   it('is written so a count-preserving, membership-changing migration FAILS', () => {
     const block = source.$extensions['dev.navecss.theming'].adjacency
     const tampered = structuredClone(block)
-    const entry = Object.entries(tampered).find(
-      (candidate): candidate is [string, AdjacencyPair[]] =>
-        Array.isArray(candidate[1]) && candidate[1].length > 0,
+    // A pair the migration owned: tampering with a post-migration one would trip the
+    // lift's own presence check instead of the verdict this row is about.
+    const [target] = Object.entries(tampered).flatMap(([subject, pairs]) =>
+      Array.isArray(pairs)
+        ? pairs.filter(
+            (pair) =>
+              !POST_MIGRATION_ADJACENCY_TRIPLES.has(`${subject}|${pair.against}|${pair.class}`),
+          )
+        : [],
     )
-    if (!entry) throw new Error('no subject with a non-empty adjacency array to tamper with')
-    const [, pairs] = entry
+    if (!target) throw new Error('no pre-migration pair to tamper with')
     // Same subject, same class, same pair count: only WHO the pair points at changes.
-    pairs[0]!.against = `${pairs[0]!.against}--tampered-for-test`
+    target.against = `${target.against}--tampered-for-test`
 
-    const tamperedTriples = adjacencyTriples(tampered)
+    const tamperedTriples = adjacencyTriplesBeforeLaterAdditions(tampered)
 
     expect(tamperedTriples).toHaveLength(frozen.length)
     expect(tamperedTriples).not.toEqual(frozen)

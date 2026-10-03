@@ -1,0 +1,5 @@
+---
+'@navecss/core': patch
+---
+
+The `focusRing` atom now draws a ring on keyboard focus even when its focus tokens are missing. It used to restore its outline with a single `outline` shorthand that read `--nave-border-width-focus` and `--nave-color-border-focus` without fallbacks, so when the token stylesheet did not load, or when your own token layer (`@navecss/core/no-tokens`) left those properties out, the shorthand was invalid as a whole and computed to `none`: the default outline was removed and nothing replaced it. A value of the wrong type in one of them could do the same. The ring is now `outline-style: solid` with separate `outline-width` and `outline-color` declarations, which fall back to `2px` and the element's own text colour (`currentColor`) when the properties are not defined. A value of the wrong type now affects only the declaration that reads it, so the ring still draws. With valid tokens, the ring is the same as before. The `@navecss/core/no-tokens` header comment no longer cites the focus outline as its example of a lost property.

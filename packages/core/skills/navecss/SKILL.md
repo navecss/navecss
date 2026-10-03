@@ -139,7 +139,7 @@ a name that is in neither is not used, so do not invent one.
 | Atom            | Declarations                                                                                                              | Variants                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `interactive`   | `cursor: pointer;`<br>`-webkit-user-select: none;`<br>`user-select: none;`<br>`-webkit-tap-highlight-color: transparent;` | —                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `focusRing`     | `outline: none;`                                                                                                          | `:focus-visible` — `outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus);`<br>`outline-offset: 2px;`                                                                                                                                                                                                                                                                                                                                   |
+| `focusRing`     | `outline: none;`                                                                                                          | `:focus-visible` — `outline-style: solid;`<br>`outline-width: var(--nave-border-width-focus, 2px);`<br>`outline-color: var(--nave-color-border-focus, currentColor);`<br>`outline-offset: 2px;`                                                                                                                                                                                                                                                                |
 | `disabledState` | —                                                                                                                         | `:disabled, [aria-disabled="true"]` — `color: var(--nave-color-content-disabled);`<br>`border-color: var(--nave-color-border-disabled);`<br>`pointer-events: none;`<br>On the aria-disabled branch the element stays focusable by design: this atom only blocks pointer activation (pointer-events: none), so the component's own activation handler must also check the attribute and no-op on Enter and Space, since CSS cannot prevent keyboard activation. |
 
 ### Visual
@@ -184,6 +184,7 @@ renders nothing.
 
 - `--nave-border-width-focus`: Focus ring indicator outline width
 - `--nave-border-width-lg`
+- `--nave-border-width-mark`: Strokes of glyphs drawn in CSS: check marks, indeterminate bars
 - `--nave-border-width-none`
 - `--nave-border-width-sm`: Default border / divider
 - `--nave-color-action-primary`
@@ -260,7 +261,7 @@ renders nothing.
 - `--nave-motion-easing-standard`: General-purpose — enters and exits
 - `--nave-opacity-disabled`: Opacity multiplier for muting content that is inert and contains nothing focusable (e.g. a disabled icon or illustration). Nave's own interactive-disabled state is expressed through content.disabled and border.disabled instead, not this token: opacity composites everything an element paints, including a focus indicator inside it.
 - `--nave-radius-card`: Cards, panels, dialogs
-- `--nave-radius-control`: Inputs, buttons, tags
+- `--nave-radius-control`: Inputs, buttons, tags, and the popovers, menus and select lists anchored to a control
 - `--nave-radius-full`: Pill / badge shape
 - `--nave-radius-none`
 - `--nave-radius-overlay`: Modals, drawers, sheets
