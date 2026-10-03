@@ -7,6 +7,8 @@
  *                  unknown name is a compile error.
  *   cx.raw(...)  — any class string, returned untouched. The declared way to
  *                  step outside the system.
+ *   cx.dynamic(name) — one atom chosen at run time, for a name the Vite plugin's build
+ *                  cannot read (listed in the plugin's `keep` option).
  *
  * Both accept falsy arguments (undefined, null, false) and filter them out, so
  * conditional classes work the same on either side. Both return a
@@ -71,7 +73,22 @@ type Falsy = false | null | undefined
 interface Cx {
   (...args: (AtomName | Falsy)[]): string
   raw: (...args: (Falsy | string)[]) => string
+  /**
+   * One atom chosen at run time, for a name the build cannot read. Under the Vite plugin the
+   * name must be one the plugin ships: list every atom it can take in `keep` (or, for a package,
+   * in `keepFor`). Without the plugin it maps through every atom, like `cx()`, except that a
+   * name that is no atom returns `''` instead of passing through, so it never carries a class
+   * from outside Nave.
+   */
+  dynamic: (name: AtomName | Falsy) => string
 }
+
+/**
+ * The atoms the Vite plugin ships for `cx.dynamic()`: the plugin hands the map of the atoms in
+ * `keep` and in every `keepFor` list to the bundler as a constant, static data folded into the
+ * bundle. Undefined without the plugin, and under `atomic: 'all'`.
+ */
+declare const __NAVE_KEEP_CLASSES__: Readonly<Record<string, string>> | undefined
 
 export const cx: Cx = (...args: (AtomName | Falsy)[]): string =>
   args
@@ -86,3 +103,12 @@ export const cx: Cx = (...args: (AtomName | Falsy)[]): string =>
     .join(' ')
 
 cx.raw = (...args: (Falsy | string)[]): string => args.filter(Boolean).join(' ')
+
+cx.dynamic = (name: AtomName | Falsy): string => {
+  if (!name) return ''
+  // `typeof`, not a comparison: without the plugin the constant is not declared at all, and
+  // reading an undeclared name throws where `typeof` does not.
+  // eslint-disable-next-line unicorn/no-typeof-undefined
+  const map = typeof __NAVE_KEEP_CLASSES__ === 'undefined' ? atomClassMap : __NAVE_KEEP_CLASSES__
+  return Object.hasOwn(map, name) ? map[name] : ''
+}

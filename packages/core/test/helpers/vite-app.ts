@@ -10,9 +10,10 @@ import { fileURLToPath } from 'node:url'
 import * as viteNewest from 'vite-newest'
 import {
   build as buildWith821,
+  createBuilder as createBuilderWith821,
   createServer as createServerWith821,
   type InlineConfig,
-  type Plugin,
+  type PluginOption,
   type ViteDevServer,
 } from 'vite'
 
@@ -27,11 +28,16 @@ export type Transformer = 'lightningcss' | 'postcss'
  */
 export interface ViteApi {
   readonly build: typeof buildWith821
+  readonly createBuilder: typeof createBuilderWith821
   readonly createServer: typeof createServerWith821
 }
 
 export const VITE_APIS: Readonly<Record<string, ViteApi>> = {
-  '8.2.1': { build: buildWith821, createServer: createServerWith821 },
+  '8.2.1': {
+    build: buildWith821,
+    createBuilder: createBuilderWith821,
+    createServer: createServerWith821,
+  },
   'newest 8.x': viteNewest as unknown as ViteApi,
 }
 
@@ -71,7 +77,7 @@ export function makeApp(files: Readonly<Record<string, string>>): ScratchApp {
 export function appConfig(
   root: string,
   transformer: Transformer,
-  plugins: Plugin[],
+  plugins: PluginOption[],
   extra: InlineConfig = {},
 ): InlineConfig {
   return {
@@ -197,4 +203,11 @@ export async function startDev(
 export function ruleBodyFor(css: string, name: string): string | undefined {
   const match = new RegExp(`${name}[^{}]*\\{([^}]*)\\}`).exec(css)
   return match?.[1]?.replaceAll(/\s+/g, ' ').trim()
+}
+
+/**
+ * Closes a dev server, giving up after `ms` on one whose dependency optimizer is still crawling.
+ */
+export async function stopDev(server: ViteDevServer, ms = 5000): Promise<void> {
+  await Promise.race([server.close(), new Promise((resolve) => setTimeout(resolve, ms))])
 }
