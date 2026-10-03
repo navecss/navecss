@@ -74,36 +74,128 @@ function isEndingInNavePrefix(text: string): boolean {
   return text.slice(start).startsWith('nave-')
 }
 
+/**
+ * The string at the end of an expression, as far as a `nave-` prefix is concerned: only the
+ * identifier the text ends in matters, and only its first five characters.
+ */
 interface Piece {
+  /**
+   * Where a problem is reported: the first literal of the run of adjacent literals the piece ends.
+   */
   readonly node: AstNode
-  readonly text: string
+  /**
+   * The first five characters of the identifier the text ends in (`nave-` is exactly five).
+   */
+  readonly head: string
+  /**
+   * Whether that identifier starts at the very beginning of the text, so text joined before it
+   * continues the identifier.
+   */
+  readonly isOpen: boolean
 }
 
 /**
- * The string at the right edge of `node`, when `node` ends in one: what is concatenated next.
+ * What an expression's right edge and its pieces were already found to be, so a long chain of
+ * concatenations is read once however many operators it holds.
  */
-function edgePiece(start: AstNode | undefined): Piece | undefined {
-  let node = start
-  while (node?.type === 'BinaryExpression' && node.operator === '+') node = nodeAt(node, 'right')
-  if (!node) return undefined
+interface PieceMemo {
+  readonly edges: Map<AstNode, Piece | undefined>
+  readonly rightmost: Map<AstNode, Piece | undefined>
+}
+
+/**
+ * The piece a string of `text` ends in.
+ */
+function pieceOfText(node: AstNode, text: string): Piece {
+  let start = text.length
+  while (start > 0 && isIdentChar(text[start - 1])) start -= 1
+  return { node, head: text.slice(start, start + 5), isOpen: start === 0 }
+}
+
+/**
+ * The piece a string literal, or the last piece of a template literal, is; `undefined` for any
+ * other node.
+ */
+function leafPiece(node: AstNode): Piece | undefined {
   const whole = staticStringOf(node)
-  if (whole !== undefined) return { node, text: whole }
+  if (whole !== undefined) return pieceOfText(node, whole)
   if (node.type !== 'TemplateLiteral') return undefined
   const cooked = (nodesAt(node, 'quasis').at(-1)?.value as { cooked?: string } | undefined)?.cooked
-  return cooked === undefined ? undefined : { node, text: cooked }
+  return cooked === undefined ? undefined : pieceOfText(node, cooked)
 }
 
 /**
- * The string `node` ends in, joined with the adjacent string literals before it in a `+` chain,
- * so a prefix split across literals (`'na' + 've-'`) reads as one. The piece's node is the first
- * literal of the run, where the problem is reported.
+ * Whether `node` is a binary `+`.
  */
-function rightmostPiece(node: AstNode | undefined): Piece | undefined {
-  const last = edgePiece(node)
-  if (!last || node?.type !== 'BinaryExpression' || node.operator !== '+') return last
-  const before = rightmostPiece(nodeAt(node, 'left'))
-  const isAdjacent = before !== undefined && nodeAt(node, 'right') === last.node
-  return isAdjacent ? { node: before.node, text: before.text + last.text } : last
+function isPlus(node: AstNode | undefined): node is AstNode {
+  return node?.type === 'BinaryExpression' && node.operator === '+'
+}
+
+/**
+ * The string at the right edge of `start`, when it ends in one: what is concatenated next.
+ */
+function edgePiece(start: AstNode | undefined, memo: PieceMemo): Piece | undefined {
+  const path: AstNode[] = []
+  let node = start
+  while (isPlus(node) && !memo.edges.has(node)) {
+    path.push(node)
+    node = nodeAt(node, 'right')
+  }
+  let found: Piece | undefined
+  if (node !== undefined) found = memo.edges.has(node) ? memo.edges.get(node) : leafPiece(node)
+  for (const visited of path) memo.edges.set(visited, found)
+  return found
+}
+
+/**
+ * The piece `last` makes with the `before` it directly follows: the identifier they end in runs
+ * back through `before` when `last` is nothing but identifier characters.
+ */
+function joinPieces(before: Piece, last: Piece): Piece {
+  if (!last.isOpen) return { node: before.node, head: last.head, isOpen: false }
+  return {
+    node: before.node,
+    head: (before.head + last.head).slice(0, 5),
+    isOpen: before.isOpen,
+  }
+}
+
+/**
+ * The piece the `+` `link` ends in, given the piece its left operand ends in (`before`) and the
+ * one at its right edge (`last`): the two joined when `last` is the right operand itself.
+ */
+function pieceOfPlus(
+  link: AstNode,
+  before: Piece | undefined,
+  last: Piece | undefined,
+): Piece | undefined {
+  if (last === undefined) return undefined
+  const isAdjacent = before !== undefined && nodeAt(link, 'right') === last.node
+  return isAdjacent ? joinPieces(before, last) : last
+}
+
+/**
+ * The string `start` ends in, joined with the adjacent string literals before it in a `+` chain,
+ * so a prefix split across literals (`'na' + 've-'`) reads as one. The piece's node is the first
+ * literal of the run, where the problem is reported. A left-leaning chain is followed along its
+ * spine, innermost first, never by recursion.
+ */
+function rightmostPiece(start: AstNode | undefined, memo: PieceMemo): Piece | undefined {
+  const spine: AstNode[] = []
+  let node = start
+  while (isPlus(node) && !memo.rightmost.has(node)) {
+    spine.push(node)
+    node = nodeAt(node, 'left')
+  }
+  let before: Piece | undefined
+  if (node !== undefined) {
+    before = memo.rightmost.has(node) ? memo.rightmost.get(node) : edgePiece(node, memo)
+  }
+  for (const link of spine.toReversed()) {
+    before = pieceOfPlus(link, before, edgePiece(link, memo))
+    memo.rightmost.set(link, before)
+  }
+  return before
 }
 
 /**
@@ -121,10 +213,10 @@ function isBreakingOut(node: AstNode): boolean {
 /**
  * The piece that ends in `nave-` at the left of a `+`, when `node` is such a concatenation.
  */
-function concatenatedPiece(node: AstNode): Piece | undefined {
-  if (node.type !== 'BinaryExpression' || node.operator !== '+') return undefined
-  const piece = rightmostPiece(nodeAt(node, 'left'))
-  return piece && isEndingInNavePrefix(piece.text) ? piece : undefined
+function concatenatedPiece(node: AstNode, memo: PieceMemo): Piece | undefined {
+  if (!isPlus(node)) return undefined
+  const piece = rightmostPiece(nodeAt(node, 'left'), memo)
+  return piece?.head === 'nave-' ? piece : undefined
 }
 
 /**
@@ -167,10 +259,12 @@ const SENTENCE =
  */
 export function concatenationProblems(program: AstNode, code: string): Problem[] {
   const problems: Problem[] = []
+  const memo: PieceMemo = { edges: new Map(), rightmost: new Map() }
   const stack: AstNode[] = [program]
   while (stack.length > 0) {
     const node = stack.pop()!
-    const offset = concatenatedPiece(node)?.node.start ?? (isBreakingOut(node) ? node.start : -1)
+    const offset =
+      concatenatedPiece(node, memo)?.node.start ?? (isBreakingOut(node) ? node.start : -1)
     if (offset !== -1) {
       problems.push({
         kind: 'concatenation',

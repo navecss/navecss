@@ -11,9 +11,10 @@ import type { UsedContext } from './vite-used.ts'
 
 import { isMentioningAtoms, recordModule } from './vite-collect-module.ts'
 import { isStylesheetId } from './vite-css-id.ts'
+import { checkCxImporters } from './vite-cx-importers.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
-import { isFileId, isNaveOwn } from './vite-module-kind.ts'
+import { isNaveOwn } from './vite-module-kind.ts'
 import { assertOptions } from './vite-options.ts'
 import { checkEnvironmentOrder } from './vite-order.ts'
 import { recordsOf } from './vite-state.ts'
@@ -32,7 +33,7 @@ export interface NaveCollectPlugin {
   transform(this: TransformContext, code: string, id: string): Promise<undefined>
   readonly transformIndexHtml: HtmlHook
   buildStart(this: RenderContext): Promise<void>
-  buildEnd(this: RenderContext, error?: unknown): void
+  buildEnd(this: RenderContext, error?: unknown): Promise<void>
 }
 
 /**
@@ -95,7 +96,7 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
     },
 
     async transform(code, id) {
-      if (!isUsed(context) || !isFileId(id) || isStylesheetId(id) || isNaveOwn(id)) return
+      if (!isUsed(context) || isStylesheetId(id) || isNaveOwn(id)) return
       const record = await recordModule(context, this, code, id)
       if (!record || context.command !== 'serve' || record.pkg !== undefined) return
       const problems = problemsOf(record, context)
@@ -110,12 +111,13 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
       },
     },
 
-    buildEnd(error) {
+    async buildEnd(error) {
       if (error || !isUsed(context) || context.command !== 'build') return
       const problems = recordsOf(context.state, this.environment.name).flatMap((record) =>
         problemsOf(record, context),
       )
       if (problems.length > 0) this.error(buildReport(problems))
+      await checkCxImporters(this, context)
       checkEnvironmentOrder(this, context)
       if (this.environment.config.consumer === 'server') {
         checkServerInvocation(this, context)

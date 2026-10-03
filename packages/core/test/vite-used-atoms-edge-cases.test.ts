@@ -23,7 +23,7 @@ import { createUsedContext } from '../src/vite-used.ts'
 import { writeHandshake } from '../src/vite-handshake.ts'
 import { cut } from '../src/vite-problems.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from '../src/vite-prune.ts'
-import { authoredPlace } from '../src/vite-source-map.ts'
+import { placerFor } from '../src/vite-source-map.ts'
 import { stateFor } from '../src/vite-state.ts'
 import { isDeclaringCore } from '../src/vite-untransformed.ts'
 import { buildReport, type LocatedProblem } from '../src/vite-used-report.ts'
@@ -114,7 +114,7 @@ describe('an escaped class literal', () => {
 })
 
 describe('the setup-return exposure belongs to a compiled Vue script', () => {
-  const code = `${IMPORT}const __returned__ = { get cx() { return cx } }\nexport default __returned__\n`
+  const code = `${IMPORT}export default { setup() { const __returned__ = { get cx() { return cx } }; return __returned__ } }\n`
 
   it('is refused in an ordinary module and read in a component script', () => {
     expect(read(code).problems.map((problem) => problem.kind)).toEqual(['reference'])
@@ -211,7 +211,7 @@ describe('a place in the module', () => {
     ['paragraph separator', 'a\u2029b'],
     ['line feed', 'a\nb'],
   ])('counts a %s as a line break', (_name, code) => {
-    expect(authoredPlace(code, code.indexOf('b'), undefined)).toEqual({ line: 2, column: 1 })
+    expect(placerFor(code, undefined)(code.indexOf('b'))).toEqual({ line: 2, column: 1 })
   })
 })
 
@@ -398,7 +398,7 @@ describe('what a Vue script exposed before it was edited', () => {
       addWatchFile() {},
     } as never
     const id = '/exposure-root/Card.vue'
-    const exposing = `${IMPORT}const __returned__ = { get cx() { return cx } }\nexport default __returned__\n`
+    const exposing = `${IMPORT}export default { setup() { const __returned__ = { get cx() { return cx } }; return __returned__ } }\n`
 
     await recordModule(context, ctx, exposing, id)
     expect(context.state.exposures.size).toBe(1)

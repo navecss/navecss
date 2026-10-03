@@ -9,6 +9,7 @@ import type { PluginOption } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/vite.ts'
+import { collectedAtoms, stateFor } from '../src/vite-state.ts'
 import {
   appFiles,
   atomLayerAtoms,
@@ -109,13 +110,26 @@ describe('AC-used-atoms-06 — Vue templates as plugin-vue compiles them, and Sv
     }
   }, 120_000)
 
-  it('(c) serves every component in dev with no error, and still collects their atoms', async () => {
+  it('(c) serves every component in dev with no error, and collects the atoms their calls name', async () => {
     process.env.NODE_ENV = 'development'
     const app = makeUsedApp(appFiles(FILES, ['src/vue-main.ts', 'src/Tag.svelte']))
     const seen = new Map<string, string>()
+    let resolved: object | undefined
+    const capture: PluginOption = {
+      name: 'capture-config',
+      configResolved(config) {
+        resolved = config
+      },
+    }
     try {
       const server = await startDev(
-        appConfig(app.root, 'postcss', [vuePlugin(), svelte(), navePlugin(), recorder(seen)]),
+        appConfig(app.root, 'postcss', [
+          vuePlugin(),
+          svelte(),
+          navePlugin(),
+          capture,
+          recorder(seen),
+        ]),
       )
       try {
         for (const file of ['Card.vue', 'CardSrc.vue', 'Opts.vue', 'unref.ts', 'Tag.svelte']) {
@@ -125,6 +139,12 @@ describe('AC-used-atoms-06 — Vue templates as plugin-vue compiles them, and Sv
         await server.close()
       }
       expect(seen.get('src/Card.vue')).toContain('$setup.cx(')
+      // Card.vue's calls are in its template, which dev compiles into the module that returns the
+      // setup, so reading them is what puts `flex`, `itemsCenter` and `grid` in the set.
+      const collected = collectedAtoms(stateFor(app.root, resolved!), [])
+      for (const atom of ['flex', 'itemsCenter', 'grid', 'gap', 'block', 'truncate']) {
+        expect(collected.has(atom), atom).toBe(true)
+      }
     } finally {
       app.dispose()
     }

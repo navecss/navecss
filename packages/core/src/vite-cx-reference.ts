@@ -7,8 +7,9 @@
 import type { AstNode } from './vite-ast.ts'
 import type { Binding, Reference } from './vite-scope.ts'
 
-import { nodeAt, nodesAt, propertyNameOf, stringAt } from './vite-ast.ts'
+import { nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
 import { isReexportOf, phraseFor, type Reading } from './vite-cx-refuse.ts'
+import { isSetupReturn } from './vite-setup-member.ts'
 
 type UseKind = 'call' | 'dynamic' | 'exposure' | 'raw' | 'refused'
 
@@ -140,14 +141,6 @@ function ancestor(reading: Reading, node: AstNode, levels: number): AstNode | un
 }
 
 /**
- * Whether `declarator` declares the object a compiled `<script setup>` returns to its template.
- */
-function isReturnedObject(declarator: AstNode | undefined): boolean {
-  if (declarator?.type !== 'VariableDeclarator') return false
-  return stringAt(nodeAt(declarator, 'id') ?? declarator, 'name') === '__returned__'
-}
-
-/**
  * The name a compiled Vue component's setup return gives the binding, when `expression` is the
  * `return cx` of a getter in the `__returned__` object (`get cx() { return cx; }`): the binding
  * is exposed to the template, and its calls are read where the template is compiled.
@@ -157,7 +150,11 @@ function exposureName(reading: Reading, expression: AstNode): string | undefined
   const getter = ancestor(reading, expression, 4)
   const isGetter = getter?.type === 'Property' && getter.kind === 'get'
   const isReturn = ancestor(reading, expression, 1)?.type === 'ReturnStatement'
-  if (!isGetter || !isReturn || !isReturnedObject(ancestor(reading, expression, 6)))
+  if (
+    !isGetter ||
+    !isReturn ||
+    !isSetupReturn(ancestor(reading, expression, 6), reading.analysis.parentOf)
+  )
     return undefined
   return propertyNameOf(nodeAt(getter, 'key'), getter.computed === true)
 }

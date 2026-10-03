@@ -42,6 +42,7 @@ const REMEDIES: Readonly<Record<ProblemKind, readonly string[]>> = {
   dynamic: ['List the atoms those calls can take in keep in navePlugin().'],
   unknown: [],
   own: [],
+  unreadable: [],
 }
 
 /**

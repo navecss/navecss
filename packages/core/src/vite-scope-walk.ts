@@ -63,7 +63,7 @@ function visitLoop(node: AstNode, scope: Scope, walker: Walker): void {
   if (left?.type === 'VariableDeclaration') {
     const kind = left.kind === 'var' ? 'var' : 'loop'
     for (const declarator of nodesAt(left, 'declarations')) {
-      declarePattern(nodeAt(declarator, 'id'), { kind }, inner, walker)
+      declarePattern(nodeAt(declarator, 'id'), { kind, isAssigned: true }, inner, walker)
     }
   } else {
     writeTargets(left, inner, walker)
@@ -86,7 +86,7 @@ function visitFunction(node: AstNode, scope: Scope, walker: Walker): void {
   }
   const parameters = newScope(outer, true)
   for (const param of nodesAt(node, 'params')) {
-    declarePattern(param, { kind: 'param' }, parameters, walker)
+    declarePattern(param, { kind: 'param', owner: node }, parameters, walker)
   }
   const body = nodeAt(node, 'body')
   if (body?.type === 'BlockStatement') {
@@ -141,7 +141,8 @@ function visitDeclaration(node: AstNode, scope: Scope, walker: Walker): void {
     const id = nodeAt(declarator, 'id')
     const init = nodeAt(declarator, 'init')
     const hasPlainInit = id?.type === 'Identifier' && init !== undefined
-    declarePattern(id, hasPlainInit ? { kind, init } : { kind }, scope, walker)
+    const spec = hasPlainInit ? { kind, init } : { kind, isAssigned: init !== undefined }
+    declarePattern(id, spec, scope, walker)
     if (id) walker.parentOf.set(id, declarator)
     visit(init, scope, walker)
     if (init) walker.parentOf.set(init, declarator)
@@ -170,6 +171,35 @@ function leaf(): void {
   // A label, a meta property, or a re-export from another module names no binding here.
 }
 
+/**
+ * Whether `node` calls `eval` by name, which runs its text in the calling scope. A parenthesised
+ * `eval` is still direct; `(0, eval)` and a member are not.
+ */
+function isDirectEval(node: AstNode): boolean {
+  let callee = nodeAt(node, 'callee')
+  while (callee?.type === 'ParenthesizedExpression') callee = nodeAt(callee, 'expression')
+  return callee?.type === 'Identifier' && stringAt(callee, 'name') === 'eval'
+}
+
+/**
+ * A chain of binary or logical operators written left to right (`a + b + c`) is as deep as it is
+ * long, so it is walked along its left spine instead of by recursion, in source order.
+ */
+function visitChain(node: AstNode, scope: Scope, walker: Walker): void {
+  const spine: AstNode[] = []
+  let current: AstNode | undefined = node
+  while (current?.type === 'BinaryExpression' || current?.type === 'LogicalExpression') {
+    spine.push(current)
+    current = nodeAt(current, 'left')
+  }
+  const links = [...spine, ...(current ? [current] : [])]
+  for (let index = 1; index < links.length; index += 1) {
+    walker.parentOf.set(links[index]!, links[index - 1]!)
+  }
+  visit(current, scope, walker)
+  for (const link of spine.toReversed()) visitKeys(link, ['right'], scope, walker)
+}
+
 const MEMBER_LIKE: Handler = (node, scope, walker) => {
   visitKeys(node, expressionKeys(node, ['value']), scope, walker)
 }
@@ -191,6 +221,12 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   ContinueStatement: leaf,
   MetaProperty: leaf,
   ExportAllDeclaration: leaf,
+  CallExpression: (node, scope, walker) => {
+    if (isDirectEval(node)) walker.evalScopes.push(scope)
+    visitChildren(node, scope, walker)
+  },
+  BinaryExpression: visitChain,
+  LogicalExpression: visitChain,
   AssignmentExpression: (node, scope, walker) => {
     writeTargets(nodeAt(node, 'left'), scope, walker)
     visitKeys(node, ['right'], scope, walker)

@@ -36,12 +36,27 @@ function resolve(reference: Reference): void {
 }
 
 /**
+ * Counts a write to every binding a direct `eval` can see: its text may assign any of them.
+ */
+function markEvalWrites(scopes: readonly Scope[]): void {
+  const marked = new Set<Scope>()
+  for (const start of scopes) {
+    // Every scope above a marked one is marked already.
+    for (let scope: Scope | undefined = start; scope && !marked.has(scope); scope = scope.parent) {
+      marked.add(scope)
+      for (const binding of scope.bindings.values()) binding.writes += 1
+    }
+  }
+}
+
+/**
  * Resolves every reference in `program` to its binding.
  */
 export function analyze(program: AstNode): ScopeAnalysis {
   const walker: Walker = {
     references: [],
     parentOf: new Map(),
+    evalScopes: [],
     visit: (node, scope) => {
       visit(node, scope, walker)
     },
@@ -56,6 +71,8 @@ export function analyze(program: AstNode): ScopeAnalysis {
     resolve(reference)
     byNode.set(reference.node, reference)
   }
+  // A local named `eval` is no direct eval.
+  markEvalWrites(walker.evalScopes.filter((scope) => !lookup(scope, 'eval')))
   return {
     references: walker.references,
     parentOf: walker.parentOf,

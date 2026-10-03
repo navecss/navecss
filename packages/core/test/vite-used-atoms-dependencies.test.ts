@@ -70,6 +70,34 @@ describe('AC-used-atoms-08 — well-formed minified dependencies build', () => {
     }
   }, 60_000)
 
+  it.each(['esb-falsy-lib', 'vite-falsy-lib'])(
+    'builds green and collects flex, grid, block and gap from %s, which prints false as !1 and undefined as void 0',
+    async (name) => {
+      const text = readFileSync(path.join(FIXTURES, `${name}.js.txt`), 'utf8')
+      // A guard that the checked-in text holds the two spellings.
+      expect(text).toContain('!1')
+      expect(text).toContain('void 0')
+      const app = makeUsedApp(
+        appFiles(
+          {
+            'src/App.ts': `import { a, b, c } from '${name}'\nconsole.log(a(true), b(true), c())\n`,
+          },
+          ['src/App.ts'],
+        ),
+      )
+      addPackage(app, name, { 'index.js': text })
+      try {
+        const built = await buildUsed(app)
+
+        expect(built.error).toBeUndefined()
+        expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'grid', 'block', 'gap'))
+      } finally {
+        app.dispose()
+      }
+    },
+    60_000,
+  )
+
   it('control: assigning the let that holds an atom fails with one problem naming min-lib', async () => {
     const app = appUsing(['min-lib'])
     addPackage(app, 'min-lib', {

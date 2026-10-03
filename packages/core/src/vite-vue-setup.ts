@@ -12,17 +12,16 @@ import type { AstNode } from './vite-ast.ts'
 import type { ScopeAnalysis } from './vite-scope.ts'
 import type { SetupExposure, SetupExposures } from './vite-setup-member.ts'
 
-import { nodeAt, nodesAt, propertyNameOf, stringAt } from './vite-ast.ts'
+import { nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
 import { resolveArgument } from './vite-cx-args.ts'
-import { setupMemberName } from './vite-setup-member.ts'
+import { isSetupParameter, isSetupReturn, setupMemberName } from './vite-setup-member.ts'
 
 /**
  * The object a compiled `<script setup>` returns to its template, if the module has one.
  */
 function returnedObject(analysis: ScopeAnalysis): AstNode | undefined {
   for (const [node] of analysis.parentOf) {
-    if (node.type !== 'VariableDeclarator') continue
-    if (stringAt(nodeAt(node, 'id') ?? node, 'name') !== '__returned__') continue
+    if (!isSetupReturn(node, analysis.parentOf)) continue
     const init = nodeAt(node, 'init')
     if (init?.type === 'ObjectExpression') return init
   }
@@ -49,12 +48,12 @@ export function stringExposures(analysis: ScopeAnalysis): Map<string, SetupExpos
 
 /**
  * Every `$setup.<name>` read in a template module whose name the component's script exposes as
- * Nave's `cx`.
+ * Nave's `cx`, where `$setup` is the render function's own parameter.
  */
 export function cxReadsOnSetup(analysis: ScopeAnalysis, exposures: SetupExposures): AstNode[] {
   const reads: AstNode[] = []
   for (const reference of analysis.references) {
-    if (stringAt(reference.node, 'name') !== '$setup') continue
+    if (!isSetupParameter(analysis, reference.node)) continue
     const member = analysis.parentOf.get(reference.node)
     const name = member && setupMemberName(member)
     if (member && name !== undefined && exposures.get(name)?.kind === 'cx') reads.push(member)

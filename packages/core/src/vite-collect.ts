@@ -19,7 +19,7 @@ import {
   concatenationProblems,
 } from './vite-literal-classes.ts'
 import { analyze } from './vite-scope.ts'
-import { setupMemberName } from './vite-setup-member.ts'
+import { mergedExposures, setupMemberName } from './vite-setup-member.ts'
 import { cxReadsOnSetup, stringExposures } from './vite-vue-setup.ts'
 
 export const CX_SOURCE = '@navecss/core/cx'
@@ -90,6 +90,11 @@ function report(reading: Reading, problem: Problem): void {
 }
 
 /**
+ * What a compiler writes before an author's name: Vue's `$setup.` and Svelte's `$$props.`.
+ */
+const COMPILER_PREFIX = /\$setup\.|\$\$props\./g
+
+/**
  * The call quoted as the plugin reads it: the local name and the arguments' own text.
  */
 function quoteCall(
@@ -101,7 +106,7 @@ function quoteCall(
   const first = args[0]
   const last = args.at(-1)
   const inner = first && last ? reading.code.slice(first.start, last.end) : ''
-  return `${callee}(${inner.replaceAll('$setup.', '')})`
+  return `${callee}(${inner.replaceAll(COMPILER_PREFIX, '')})`
 }
 
 /**
@@ -259,9 +264,11 @@ function readUses(reading: Reading, program: AstNode): void {
     if (use) readUse(reading, use, analysis)
   }
   for (const [name, exposure] of stringExposures(analysis)) result.exposes.set(name, exposure)
-  const members = options.setup ? cxReadsOnSetup(analysis, options.setup) : []
+  const setup = mergedExposures(options.setup, result.exposes)
+  const members = setup ? cxReadsOnSetup(analysis, setup) : []
+  const withSetup: Reading = { ...reading, options: { ...options, setup } }
   for (const member of members) {
-    readUse(reading, useOfExpression(frame, member, setupMemberName(member) ?? 'cx'), analysis)
+    readUse(withSetup, useOfExpression(frame, member, setupMemberName(member) ?? 'cx'), analysis)
   }
 }
 

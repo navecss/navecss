@@ -43,13 +43,6 @@ export function isDependencyId(id: string): boolean {
 }
 
 /**
- * Whether `id` names a module of a real file, not a virtual one a plugin made up.
- */
-export function isFileId(id: string): boolean {
-  return !id.startsWith('\0') && path.isAbsolute(filePathOf(id))
-}
-
-/**
  * The `name` in the nearest `package.json` above `file` that has one, or `undefined`. A nested
  * `package.json` without a name, as some `dist/` folders carry, is skipped.
  */
@@ -93,8 +86,13 @@ async function readName(directory: string): Promise<string | undefined> {
 }
 
 /**
- * The path a message names `id` by: relative to `root`, forward slashes, no query.
+ * The path a message names `id` by: relative to `root`, forward slashes, no query. A virtual
+ * module has no file to be relative to, so it is named by the id the host gave it, a leading NUL
+ * written `\0`.
  */
-export function relativeToRoot(root: string, id: string): string {
-  return path.relative(root, filePathOf(id)).replaceAll('\\', '/')
+export function moduleLabel(root: string, id: string): string {
+  const file = filePathOf(id)
+  if (file.startsWith('\0')) return String.raw`\0${file.slice(1)}`
+  if (!path.isAbsolute(file)) return file
+  return path.relative(root, file).replaceAll('\\', '/')
 }

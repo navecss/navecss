@@ -4,7 +4,7 @@
  * walked in the scope they are evaluated in.
  */
 import type { AstNode } from './vite-ast.ts'
-import type { BindingKind, Scope, Walker } from './vite-scope-types.ts'
+import type { Binding, BindingKind, Scope, Walker } from './vite-scope-types.ts'
 
 import { nodeAt, nodesAt, stringAt } from './vite-ast.ts'
 import { declare, functionScopeOf, reference } from './vite-scope-types.ts'
@@ -12,6 +12,15 @@ import { declare, functionScopeOf, reference } from './vite-scope-types.ts'
 export interface BindingSpec {
   readonly kind: BindingKind
   readonly init?: AstNode
+  /**
+   * Whether the declaration assigns what it declares, with no initialiser of the plain form: a
+   * destructuring declarator, or the head of a loop, which assigns on every pass.
+   */
+  readonly isAssigned?: boolean
+  /**
+   * For a parameter: the function that declares it.
+   */
+  readonly owner?: AstNode
 }
 
 type PatternReader<Result> = (
@@ -55,15 +64,14 @@ export function declarePattern(
   const name = stringAt(pattern, 'name')
   if (name !== undefined && pattern.type === 'Identifier') {
     const into = functionScopeOrHere(spec, scope)
-    const declared = declare(
-      into,
-      { name, kind: spec.kind, writes: 0 },
-      spec.kind !== 'var' || spec.init !== undefined,
-    )
+    const isAssigning = spec.kind !== 'var' || spec.init !== undefined || spec.isAssigned === true
+    const binding: Binding = { name, kind: spec.kind, writes: 0 }
+    if (spec.owner) binding.owner = spec.owner
+    const declared = declare(into, binding, isAssigning)
     if (spec.init) declared.init = spec.init
     return
   }
-  DECLARE[pattern.type]?.(pattern, { kind: spec.kind }, scope, walker)
+  DECLARE[pattern.type]?.(pattern, spec, scope, walker)
 }
 
 const DECLARE: Readonly<Record<string, PatternReader<BindingSpec>>> = {

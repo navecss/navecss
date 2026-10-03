@@ -41,26 +41,40 @@ export interface Place {
 const LINE_TERMINATOR = /\r\n|[\n\r\u{2028}\u{2029}]/gu
 
 /**
- * The 1-based line and column of `offset` in `code`.
+ * The offset each line of `code` starts at.
  */
-function placeIn(code: string, offset: number): Place {
-  let line = 1
-  let lineStart = 0
-  for (const match of code.matchAll(LINE_TERMINATOR)) {
-    const end = match.index + match[0].length
-    if (end > offset) break
-    line += 1
-    lineStart = end
-  }
-  return { line, column: offset - lineStart + 1 }
+function lineStartsOf(code: string): number[] {
+  const starts = [0]
+  for (const match of code.matchAll(LINE_TERMINATOR)) starts.push(match.index + match[0].length)
+  return starts
 }
 
 /**
- * Where `offset` in `code` sits in the authored file: mapped through `map` when it reaches that
- * place, and otherwise as the transformed text has it.
+ * The index of the last entry of `starts` that is at or before `offset`.
  */
-export function authoredPlace(code: string, offset: number, map: IncomingMap | undefined): Place {
-  const generated = placeIn(code, offset)
-  const origin = map?.originalPositionFor({ line: generated.line, column: generated.column - 1 })
-  return origin ? { line: origin.line, column: origin.column + 1 } : generated
+function lineIndexOf(starts: readonly number[], offset: number): number {
+  let low = 0
+  let high = starts.length - 1
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+    if (starts[middle]! <= offset) low = middle
+    else high = middle - 1
+  }
+  return low
+}
+
+/**
+ * Where an offset in `code` sits in the authored file: mapped through `map` when it reaches that
+ * place, and otherwise as the transformed text has it. The line table is built once, when the
+ * first offset is asked for, so placing every problem of a module costs one pass over its text.
+ */
+export function placerFor(code: string, map: IncomingMap | undefined): (offset: number) => Place {
+  let starts: number[] | undefined
+  return (offset) => {
+    starts ??= lineStartsOf(code)
+    const index = lineIndexOf(starts, offset)
+    const generated = { line: index + 1, column: offset - starts[index]! + 1 }
+    const origin = map?.originalPositionFor({ line: generated.line, column: generated.column - 1 })
+    return origin ? { line: origin.line, column: origin.column + 1 } : generated
+  }
 }

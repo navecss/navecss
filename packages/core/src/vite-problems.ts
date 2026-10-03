@@ -15,6 +15,7 @@ export const PROBLEM_KINDS = [
   'dynamic',
   'unknown',
   'own',
+  'unreadable',
 ] as const
 
 export type ProblemKind = (typeof PROBLEM_KINDS)[number]

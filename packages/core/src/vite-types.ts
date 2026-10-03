@@ -115,6 +115,15 @@ export interface BundleContext {
 }
 
 /**
+ * What the module graph holds about one module: its transformed text, and who imports it.
+ */
+interface ModuleInfoLike {
+  readonly code: string | null
+  readonly importers: readonly string[]
+  readonly dynamicImporters: readonly string[]
+}
+
+/**
  * What `renderChunk` and `buildEnd` are given: the environment, and the ways to fail or warn.
  */
 export interface RenderContext {
@@ -125,6 +134,18 @@ export interface RenderContext {
    * The ids of every module the environment's build loaded, externals included.
    */
   getModuleIds?(): IterableIterator<string>
+  /**
+   * What the module graph holds about the module `id`, or `null` when it holds none.
+   */
+  getModuleInfo?(id: string): ModuleInfoLike | null
+  /**
+   * Resolves `source` as imported from `importer`.
+   */
+  resolve?(source: string, importer?: string): Promise<{ readonly id: string } | null>
+  /**
+   * The host's parse of `code`, an ESTree (read as an `AstNode`).
+   */
+  parse?(code: string): unknown
 }
 
 export interface RenderedChunk {

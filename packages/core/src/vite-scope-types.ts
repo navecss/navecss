@@ -16,6 +16,10 @@ export interface Binding {
   init?: AstNode
   writes: number
   /**
+   * For a parameter: the function that declares it.
+   */
+  owner?: AstNode
+  /**
    * For an import: the module it names and the name it takes from it (`*` for a namespace).
    */
   readonly source?: string
@@ -47,6 +51,10 @@ export interface ScopeAnalysis {
 export interface Walker {
   readonly references: Reference[]
   readonly parentOf: Map<AstNode, AstNode>
+  /**
+   * The scopes a direct `eval` call sits in: it can write any binding they can see.
+   */
+  readonly evalScopes: Scope[]
   /**
    * Walks `node` as an expression or statement in `scope`.
    */
