@@ -53,18 +53,30 @@ function runCommonJs(script: string): Ran {
   }
 }
 
-/** Type-checks one `.cts` source as a CommonJS consumer under `nodenext`. */
-function typecheckCts(name: string, source: string): Ran {
+interface TypeCheckSettings {
+  readonly module: 'nodenext' | 'node16' | 'node20'
+  readonly moduleResolution: 'nodenext' | 'node16'
+  readonly skipLibCheck: boolean
+}
+
+const NODENEXT: TypeCheckSettings = {
+  module: 'nodenext',
+  moduleResolution: 'nodenext',
+  skipLibCheck: false,
+}
+
+/** Type-checks one `.cts` source as a CommonJS consumer under the given compiler settings. */
+function typecheckCts(name: string, source: string, settings: TypeCheckSettings): Ran {
   writeFileSync(path.join(consumer, name), source)
   writeFileSync(
     path.join(consumer, 'tsconfig.json'),
     JSON.stringify({
       compilerOptions: {
-        module: 'nodenext',
-        moduleResolution: 'nodenext',
+        module: settings.module,
+        moduleResolution: settings.moduleResolution,
         strict: true,
         noEmit: true,
-        skipLibCheck: false,
+        skipLibCheck: settings.skipLibCheck,
         lib: ['ES2022'],
         types: [],
       },
@@ -140,30 +152,65 @@ describe('require(@navecss/core/postcss) from a CommonJS file', () => {
   })
 })
 
+const GOOD_CTS = [
+  `import nave = require('@navecss/core/postcss')`,
+  `const plugin = nave({ onUnknown: 'warn' })`,
+  `const name: string = plugin.postcssPlugin`,
+  `export = { plugins: [plugin], name }`,
+].join('\n')
+
+const BAD_OPTION_CTS = [
+  `import nave = require('@navecss/core/postcss')`,
+  `const plugin = nave({ onUnknown: 'nope' })`,
+  `export = { plugins: [plugin] }`,
+].join('\n')
+
 describe('the CommonJS declarations of @navecss/core/postcss', () => {
   it('type-check a CommonJS consumer that calls the plugin with valid options', () => {
-    const { status, output } = typecheckCts(
-      'good.cts',
-      [
-        `import nave = require('@navecss/core/postcss')`,
-        `const plugin = nave({ onUnknown: 'warn' })`,
-        `const name: string = plugin.postcssPlugin`,
-        `export = { plugins: [plugin], name }`,
-      ].join('\n'),
-    )
+    const { status, output } = typecheckCts('good.cts', GOOD_CTS, NODENEXT)
 
     expect(status, output).toBe(0)
   })
 
+  it('type-check under module node20, which the README names as a working setting', () => {
+    const { status, output } = typecheckCts('good.cts', GOOD_CTS, {
+      module: 'node20',
+      moduleResolution: 'node16',
+      skipLibCheck: false,
+    })
+
+    expect(status, output).toBe(0)
+  })
+
+  it('type-check under node16 with skipLibCheck on, and still check the types for real', () => {
+    const settings: TypeCheckSettings = {
+      module: 'node16',
+      moduleResolution: 'node16',
+      skipLibCheck: true,
+    }
+    const good = typecheckCts('good.cts', GOOD_CTS, settings)
+    const bad = typecheckCts('bad.cts', BAD_OPTION_CTS, settings)
+
+    expect(good.status, good.output).toBe(0)
+    expect(bad.status).not.toBe(0)
+    expect(bad.output).toMatch(/TS2345|TS2322/)
+  })
+
+  // This pins the boundary the README states. If it ever goes clean, the README sentence about
+  // `node16` and `nodenext` before TypeScript 5.8 is out of date and needs rewriting.
+  it('still fail under node16 without skipLibCheck, as the README says', () => {
+    const { status, output } = typecheckCts('good.cts', GOOD_CTS, {
+      module: 'node16',
+      moduleResolution: 'node16',
+      skipLibCheck: false,
+    })
+
+    expect(status).not.toBe(0)
+    expect(output).toContain('TS1479')
+  })
+
   it('reject a bad option (control: the check can fail)', () => {
-    const { status, output } = typecheckCts(
-      'bad.cts',
-      [
-        `import nave = require('@navecss/core/postcss')`,
-        `const plugin = nave({ onUnknown: 'nope' })`,
-        `export = { plugins: [plugin] }`,
-      ].join('\n'),
-    )
+    const { status, output } = typecheckCts('bad.cts', BAD_OPTION_CTS, NODENEXT)
 
     expect(status).not.toBe(0)
     expect(output).toContain('bad.cts')
@@ -174,6 +221,7 @@ describe('the CommonJS declarations of @navecss/core/postcss', () => {
     const { status, output } = typecheckCts(
       'wrong-name.cts',
       [`import nave = require('@navecss/core/postcss')`, `export = nave.notAThing`].join('\n'),
+      NODENEXT,
     )
 
     expect(status).not.toBe(0)

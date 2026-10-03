@@ -29,6 +29,11 @@ pnpm add @navecss/core
   an ES module. `@navecss/core/postcss` also loads through `require()` (Node
   loads the ES module for you, which the Node version below includes), so a
   CommonJS `postcss.config.js` can use it.
+  To type-check that `require()` in TypeScript, set `module` to `nodenext`
+  (TypeScript 5.8 or later) or `node20` (TypeScript 5.9 or later), or turn on
+  `skipLibCheck`: under `node16`, or `nodenext` before 5.8, TypeScript describes
+  a Node that cannot `require()` an ES module and reports an error in the
+  package's types.
 - **Node 22.18 or later.**
 - **A build step that resolves `@nave`: the Vite plugin, or PostCSS 8.** On
   Vite, `@navecss/core/vite` needs nothing installed beside Vite, and
