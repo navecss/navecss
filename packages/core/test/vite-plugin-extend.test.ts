@@ -86,6 +86,8 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     await until(() => Promise.resolve(/margin:1px/.test(outputs())), 'the first build to write 1px')
     writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
     await until(() => Promise.resolve(/margin:2px/.test(outputs())), 'the rebuild to write 2px')
+
+    expect(outputs()).toMatch(/margin:2px/)
   }, 60_000)
 
   it('registers the module with addWatchFile for a stylesheet that uses a directive', async () => {

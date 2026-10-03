@@ -18,7 +18,7 @@ export interface TransformInput {
   readonly extend: ExtendMap
   readonly onUnknown: 'warn' | 'error' | 'ignore'
   /**
-  Whether Vite supplies a real source map for stylesheets in this run: in dev only with `css.devSourcemap`, in a build only with `build.sourcemap`. Otherwise the map it hands a plugin is an identity map of the processed text, which would pass for the authored file.
+  Whether the stylesheet source map Vite hands a plugin is worth chaining. In dev it is real only with `css.devSourcemap`; without it, it is an identity map of the processed text, which would pass for the authored file. In a build it is read when `build.sourcemap` is set, but Vite 8.2.1 and 8.3.1 supply an empty one there either way, so a build reports positions as processed; the check stays so that a Vite which does supply one is chained.
    */
   readonly hasStylesheetMaps: boolean
 }

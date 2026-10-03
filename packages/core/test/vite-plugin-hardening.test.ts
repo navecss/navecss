@@ -182,6 +182,20 @@ describe('the Lightning CSS warning filter’s boundary', () => {
       '[vite:css][lightningcss] Unknown at rule: @foo',
     ])
   })
+
+  it('wrapping one logger twice leaves the first wrapper in place and still filters correctly', () => {
+    const received: string[] = []
+    const logger = { warn: (message: string) => void received.push(message) }
+
+    dropLightningNaveWarning(logger)
+    const wrapped = logger.warn
+    dropLightningNaveWarning(logger)
+    logger.warn('[vite:css][lightningcss] Unknown at rule: @nave')
+    logger.warn('[vite:css][lightningcss] Unknown at rule: @foo')
+
+    expect(logger.warn).toBe(wrapped)
+    expect(received).toEqual(['[vite:css][lightningcss] Unknown at rule: @foo'])
+  })
 })
 
 describe('an escaped comment opener inside a string is plain text to both validators', () => {

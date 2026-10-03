@@ -139,3 +139,47 @@ export function hasEscapedCommentOpener(text: string): boolean {
     .join('')
   return outsideStrings.includes(String.raw`\/*`)
 }
+
+/**
+ * Whether `text` holds a sequence PostCSS writes back differently so it cannot end a `<style>`
+ * element or open an HTML comment: a `<` before `style` or `/style` (any case, at a word
+ * boundary), or before `!--`. PostCSS escapes the `<`, so the string no longer comes back unchanged
+ * and PostCSS refuses it; the CSS tokenizer reads the same text as ordinary characters.
+ */
+export function hasHtmlBreakout(text: string): boolean {
+  return /<\/?style\b/i.test(text) || text.includes('<!--')
+}
+
+/**
+ * Whether the last token of `text` that is not CSS whitespace ends in a character `trimEnd()`
+ * removes: a space an escape consumed (`\a `, `a\ `), or a character CSS does not count as
+ * whitespace at all (a no-break space). PostCSS keeps that character as part of the text, so what
+ * it hands back differs from the text trimmed, and it refuses the string.
+ */
+export function hasUnstrippedTrailingSpace(text: string): boolean {
+  const tokens = tokenize(text)
+  const last = lastNonWhitespace(tokens, 0, tokens.length)
+  const raw = tokens[last]?.raw
+  return raw !== undefined && raw !== raw.trimEnd()
+}
+
+/**
+ * Whether the first token of `text` that is not CSS whitespace starts with a character
+ * `trimStart()` removes (a no-break space, say): PostCSS keeps it in an at-rule's prelude, so the
+ * prelude differs from the text trimmed, and it refuses the string.
+ */
+export function hasUnstrippedLeadingSpace(text: string): boolean {
+  const tokens = tokenize(text)
+  const first = tokens.findIndex((token) => token.type !== 'whitespace-token')
+  const raw = tokens[first]?.raw
+  return raw !== undefined && raw !== raw.trimStart()
+}
+
+/**
+ * Whether `text` holds a backslash escape that takes a following whitespace character into
+ * itself (`\a `, `a\ b`). The CSS tokenizer reads that as one name, PostCSS ends the name at the
+ * space, so a property written this way reads two ways; refused rather than reconciled.
+ */
+export function hasEscapedWhitespace(text: string): boolean {
+  return /\\[\da-f]{0,6}[\t\n\f\r ]/i.test(text)
+}

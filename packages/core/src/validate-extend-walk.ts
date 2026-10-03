@@ -28,10 +28,7 @@ export interface Predicates {
 }
 
 /**
- * Whether `value` is a non-array object node. Malformed shapes (`null`, an array, a primitive
- * where an object was expected) are deliberately left alone here: the per-use checks in
- * `directive/resolve.ts` already name and refuse those, with their own message, at the point a
- * directive uses the atom. Reproducing that check here would only race it to a worse error.
+ * Whether `value` is a non-array object node.
  */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -63,7 +60,9 @@ function printable(value: unknown): string {
 }
 
 /**
- * Refuses a nested map that is present but not a plain object. `directive/resolve.ts` reads such a
+ * Refuses an atom, or a nested map inside one, that is present but not a plain object. A function
+ * is refused as well: it can answer a property read differently the second time, so what is
+ * checked is not what is spliced. `directive/resolve.ts` reads such a
  * value with `Object.entries`, so an array or a string would be rendered as declarations without
  * the per-string checks ever seeing it. (The atom's own top-level `declarations` is left to
  * `resolve()`, which throws on it by name.)
@@ -132,13 +131,17 @@ function assertAtBlocksSafe(
 /**
  * Validates every consumer-supplied atom in `extend` against `predicates`. Nave's own built-in
  * atoms are never checked: they are this package's own trusted source, not the hardening
- * boundary this exists for. Any field that is not the shape `AtomDefinition` declares is left to
- * the per-use shape checks in `directive/resolve.ts` rather than re-diagnosed here.
+ * boundary this exists for. An atom, or a nested map inside one, that is not a plain object is
+ * refused here by name; an atom's own `declarations` that is not a map is left to the per-use shape
+ * check in `directive/resolve.ts` rather than re-diagnosed here.
  */
 export function walkExtendAtoms(extend: ExtendMap, predicates: Predicates): void {
   for (const [name, atom] of Object.entries(extend)) {
-    if (!atom) continue
+    // `null` and `undefined` are a registered-but-empty key, read as an unknown atom where a
+    // directive uses it. Anything else that is not a plain object is refused here, used or not.
+    if (atom === null || atom === undefined) continue
     const where = `atom "${name}"`
+    assertShape(atom, where)
     assertDeclarationsSafe(atom.declarations, where, predicates)
     assertPseudosSafe(atom.pseudos, where, predicates)
     assertAtBlocksSafe(atom.media, 'media', where, predicates)

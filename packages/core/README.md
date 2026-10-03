@@ -215,7 +215,14 @@ needs the same key.
 harmless, because whichever pass runs second finds no directive left.
 
 **Under `css.transformer: 'lightningcss'`** the plugin expands exactly as it does under the default
-transformer, and drops one message and only that one: Lightning CSS's
+transformer once both floor keys below are set. At Vite's default targets, which sit below the
+floor, Lightning CSS lowers CSS nesting before any plugin runs, and two things change.
+A directive written after a declaration that follows a nested rule can be moved ahead of that
+declaration: in `.a { &:hover { color: red; } display: grid; @nave block; }`, `grid` wins with no
+message, where the default transformer makes `block` win. A directive in a group rule nested in a
+style rule (`.a { @media (...) { @nave flex; } }`) still fails the build, but the message no longer
+names the `& { @nave ...; }` workaround, and its position is in the CSS as Lightning CSS rewrote
+it, not in your file. The plugin also drops one message and only that one: Lightning CSS's
 `Unknown at rule: @nave` warning, which Vite prints for every directive before any plugin runs.
 It does so by wrapping the logger Vite resolved. Stated cost: that is a logger Vite owns, which is
 your own object when you pass a `customLogger`. The filter matches case-insensitively, and an
@@ -250,14 +257,18 @@ export default defineConfig({
 `build.cssTarget` alone still rewrites `light-dark()` under that transformer, so the two keys go
 together.
 
-**The end of every build is checked.** The plugin reads every CSS file the build wrote and fails the
+**The end of every build is checked.** The plugin reads the CSS files the build wrote and fails the
 build if a `@nave` directive is left in one, with the same lines
 [`navecss-core check`](#navecss-core-check) prints, under the plugin name `nave`. There is no
 option to turn it off: a directive in shipped CSS is never wanted, and `onUnknown: 'ignore'`
-does not change it. Three places are not covered. The dev server serves no bundle, so there is no
+does not change it. Four places are not covered. The dev server serves no bundle, so there is no
 scan in dev. CSS that ends inside a JavaScript string (`?inline`) is not a CSS file the build wrote,
 so it is not scanned. Files under Vite's `public/` directory are copied as they are and are not
-scanned.
+scanned. A CSS file another plugin adds after the scan has run is not scanned either: the scan runs
+in a post-ordered `generateBundle`, so it misses a file emitted from a post-ordered
+`generateBundle` in a plugin listed after `navePlugin()`, and anything a plugin writes in
+`writeBundle`. List `navePlugin()` after plugins that emit CSS files; a file written in
+`writeBundle` stays outside the scan wherever the plugin is listed.
 
 **A change to your atoms re-runs the stylesheets that use them.** Pass `extend` as a path to a
 module (resolved from Vite's project root, whose default export is the atoms object), and the

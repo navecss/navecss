@@ -41,6 +41,20 @@ function emitSurvivor(): Plugin {
   }
 }
 
+/**
+ * A plugin that emits a stylesheet holding a directive from a post-ordered `generateBundle`, the
+ * same phase the scan runs in.
+ */
+const emitterAt = (name: string): Plugin => ({
+  name,
+  generateBundle: {
+    order: 'post',
+    handler() {
+      this.emitFile({ type: 'asset', fileName: 'late.css', source: '.b{@nave flex}' })
+    },
+  },
+})
+
 async function failureOf(run: Promise<unknown>): Promise<Error> {
   try {
     await run
@@ -96,6 +110,19 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
 
       expect(error.message).toContain('x.css:1:4: @nave flex (in .b)')
     }, 30_000)
+
+    it('a CSS file a plugin listed before the Nave one emits from a post-ordered generateBundle fails the build', async () => {
+      const error = await failureOf(
+        buildOutputs(
+          appConfig(clean.root, 'postcss', [emitterAt('early'), navePlugin()], {
+            build: { write: true },
+          }),
+          api,
+        ),
+      )
+
+      expect(error.message).toContain('late.css:1:4: @nave flex (in .b)')
+    }, 60_000)
 
     it('the count line states how many CSS assets the build wrote', async () => {
       const config = appConfig(clean.root, 'postcss', [emitSurvivor(), navePlugin()])

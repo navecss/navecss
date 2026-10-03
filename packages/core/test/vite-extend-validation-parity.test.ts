@@ -92,7 +92,7 @@ describe('the host-free extend validator agrees with the PostCSS-backed one', ()
     expect(verdicts).toContain(false)
   })
 
-  it('refuses every string the PostCSS-backed validator refuses, over every short injection', () => {
+  it('refuses at least every string the PostCSS-backed validator refuses, over every short injection', () => {
     const fragments = [
       'red',
       ';',
@@ -108,6 +108,9 @@ describe('the host-free extend validator agrees with the PostCSS-backed one', ()
       '\n',
       ' ',
       '/*',
+      '<!--',
+      '</style',
+      '\\',
       'url(',
       ':',
       '--x',
@@ -133,6 +136,50 @@ describe('the host-free extend validator agrees with the PostCSS-backed one', ()
 
     expect(unsafe).toEqual([])
   }, 60_000)
+})
+
+describe('the host-free extend validator refuses strings only a browser or an HTML host can misread', () => {
+  it.each([
+    ['a value carrying a style end tag', decl('"</style><script>x</script>"', 'content')],
+    ['a value carrying an HTML comment opener', decl('red<!--')],
+    ['a custom property carrying an HTML comment opener', decl('a<!--', '--x')],
+    ['a value ending in an escape and a space', decl(String.raw`\a `)],
+    ['a property ending in an escaped space', decl('red', String.raw`a\ `)],
+    ['a media condition ending in an escape and a space', media(String.raw`\a `)],
+  ])('%s: the host-free validator refuses what the PostCSS-backed one refuses', (_name, extend) => {
+    expect(verdict(validateExtendAtoms, extend).refused).toBe(true)
+    expect(verdict(validateExtendAtomsHostFree, extend).refused).toBe(true)
+  })
+})
+
+describe('an atom that is not a plain object is refused by both validators, used or not', () => {
+  it.each([
+    ['a function', () => {}],
+    ['an array', [{ color: 'red' }]],
+    ['a string', 'color: red'],
+    ['a number', 42],
+    ['zero', 0],
+    ['an empty string', ''],
+  ])('%s', (_name, atom) => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      const { refused, message } = verdict(validate, { sneaky: atom as never })
+
+      expect(refused).toBe(true)
+      expect(message).toContain('atom "sneaky"')
+    }
+  })
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+  ])(
+    '%s is still read as an unknown atom where a directive uses it, not refused up front',
+    (_name, atom) => {
+      for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+        expect(verdict(validate, { sneaky: atom as never }).refused).toBe(false)
+      }
+    },
+  )
 })
 
 describe('the Vite plugin validates extend before it reaches expandText()', () => {
@@ -166,5 +213,40 @@ describe('the Vite plugin validates extend before it reaches expandText()', () =
 
     expect(run.code).toContain('color: red;')
     expect(run.code).not.toContain('body')
+  })
+
+  const flippingFunctionAtom = () => {
+    let reads = 0
+    return Object.defineProperty(function atom() {}, 'declarations', {
+      enumerable: true,
+      get: () => (++reads === 1 ? { color: 'red' } : { color: 'red; } body { display: none' }),
+    })
+  }
+
+  it('a function-valued atom whose declarations getter turns evil on its second read changes nothing (Vite)', async () => {
+    const run = await runHook({
+      code: '.a { @nave sneaky; }',
+      options: { extend: { sneaky: flippingFunctionAtom() as never } },
+    }).catch(() => undefined)
+
+    expect(run?.code ?? '').not.toContain('body')
+  })
+
+  it('the same atom changes nothing through the PostCSS adapter', async () => {
+    const { default: postcss } = await import('postcss')
+    const { navePlugin: postcssNave } = await import('../src/postcss.ts')
+    const css = await Promise.resolve()
+      .then(() =>
+        postcss([postcssNave({ extend: { sneaky: flippingFunctionAtom() as never } })]).process(
+          '.a { @nave sneaky; }',
+          { from: undefined },
+        ),
+      )
+      .then(
+        (result) => result.css,
+        () => '',
+      )
+
+    expect(css).not.toContain('body')
   })
 })

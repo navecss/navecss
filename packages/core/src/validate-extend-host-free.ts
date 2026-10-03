@@ -1,10 +1,11 @@
 /**
  * `validateExtendAtomsHostFree`: the dependency-free twin of `validateExtendAtoms`
- * (`validate-extend-atoms.ts`), for a host that may import no PostCSS. Same walk, same refusals,
- * same error text (`validate-extend-walk.ts`); only "does this string parse as exactly the one
- * construct it is meant to be" is answered here, on the core's own CSS Syntax Level 3 tokenizer
- * and block reader rather than on PostCSS's parser. Each string is wrapped in the minimal
- * construct it is meant to be, read, and accepted only when the result is exactly that one
+ * (`validate-extend-atoms.ts`), for a host that may import no PostCSS. Same walk and same error
+ * text (`validate-extend-walk.ts`). It refuses at least everything the PostCSS-backed validator
+ * refuses, and may refuse a few strings that one accepts. Only "does this string parse as exactly
+ * the one construct it is meant to be" is answered here, on the core's own CSS Syntax Level 3
+ * tokenizer and block reader rather than on PostCSS's parser. Each string is wrapped in the
+ * minimal construct it is meant to be, read, and accepted only when the result is exactly that one
  * construct with nothing left over: a `;`, an unbalanced bracket or a stray `}` that would let
  * the text open a second declaration, rule or at-rule leaves something over and is refused.
  */
@@ -17,10 +18,14 @@ import { anchorSelectorList } from './selector-utils.ts'
 import {
   hasBrokenString,
   hasEscapedCommentOpener,
+  hasEscapedWhitespace,
+  hasHtmlBreakout,
   hasPaddedComment,
   hasStrayCurlyCloser,
   hasTopLevelColon,
   hasTopLevelComment,
+  hasUnstrippedLeadingSpace,
+  hasUnstrippedTrailingSpace,
   hasUrl,
   isInert,
   isOnlyInert,
@@ -80,11 +85,16 @@ function isSoleDeclaration(wrapped: Wrapped, start: number, end: number, prop: s
 
 /**
  * Whether PostCSS would hand `prop: value` back changed for a reason only the text shows: a
- * custom property's value keeps a trailing whitespace run out of its round trip, and an escaped
- * comment opener reads two ways.
+ * custom property's value keeps a trailing whitespace run out of what it writes back, an escaped
+ * comment opener reads two ways, a `<` that could end a `<style>` element or open an HTML comment
+ * is written back escaped, a space an escape consumed at the end (or a no-break space) stays part
+ * of the text, and an escaped space inside a property name is read as one name or two.
  */
 function isReshapedByPostcss(prop: string, value: string): boolean {
   if (hasEscapedCommentOpener(prop) || hasEscapedCommentOpener(value)) return true
+  if (hasHtmlBreakout(prop) || hasHtmlBreakout(value)) return true
+  if (hasEscapedWhitespace(prop)) return true
+  if (hasUnstrippedTrailingSpace(prop) || hasUnstrippedTrailingSpace(value)) return true
   return prop.startsWith('--') && value !== value.trimEnd()
 }
 
@@ -165,6 +175,7 @@ function isSelectorValid(key: string): boolean {
  */
 function isConditionValid(atName: 'container' | 'media', condition: string): boolean {
   if (hasEscapedCommentOpener(condition)) return false
+  if (hasUnstrippedTrailingSpace(condition) || hasUnstrippedLeadingSpace(condition)) return false
   const sole = readSoleBlockItem(`@${atName} ${condition}{}`)
   if (sole?.item.kind !== 'at-rule' || sole.item.atKeyword !== atName) return false
   const { blockStart, blockEnd } = sole.item
@@ -178,7 +189,8 @@ function isConditionValid(atName: 'container' | 'media', condition: string): boo
 
 /**
  * Validates every consumer-supplied atom in `extend` with the core's own tokenizer: the
- * dependency-free counterpart of `validateExtendAtoms`, with the same verdicts.
+ * dependency-free counterpart of `validateExtendAtoms`: it refuses everything that one refuses,
+ * and may refuse a few strings that one accepts.
  */
 export function validateExtendAtomsHostFree(extend: ExtendMap): void {
   walkExtendAtoms(extend, { isDeclarationValid, isPropValid, isSelectorValid, isConditionValid })

@@ -80,6 +80,56 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
     )
   })
 
+  describe('a nested rule before a directive, under Lightning CSS at the documented floor', () => {
+    const oneSheet = (css: string): ScratchApp =>
+      makeApp({
+        'index.html': '<script type="module" src="/main.js"></script>',
+        'main.js': "import './q.css'",
+        'q.css': `${css}\n`,
+      })
+
+    it('the last display declaration that applies to the rule is the directive’s', async () => {
+      const sheet = oneSheet('.q { &:hover { color: red; } display: grid; @nave flex; }')
+      try {
+        const { css } = await buildOutputs(
+          {
+            root: sheet.root,
+            configFile: false,
+            logLevel: 'silent',
+            plugins: [navePlugin()],
+            css: {
+              transformer: 'lightningcss',
+              lightningcss: {
+                targets: {
+                  chrome: 125 << 16,
+                  edge: 125 << 16,
+                  firefox: 128 << 16,
+                  safari: 18 << 16,
+                  ios_saf: 18 << 16,
+                },
+              },
+            },
+            build: {
+              write: false,
+              cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'],
+            },
+          },
+          api,
+        )
+        // At the floor Lightning CSS keeps nesting: drop the nested rules that carry a selector
+        // (they do not apply to `.q` unconditionally) and read a bare `&{...}` as `.q`'s own.
+        const flat = css.replaceAll(/&[^{};]+\{[^{}]*\}/g, '').replaceAll(/&\{([^{}]*)\}/g, '$1')
+        const displays = [...flat.matchAll(/(?:^|\})\.q\{([^}]*)\}/g)].flatMap((rule) =>
+          [...rule[1]!.matchAll(/display:([^;}]+)/g)].map((d) => d[1]!.trim()),
+        )
+
+        expect(displays.at(-1)).toBe('flex')
+      } finally {
+        sheet.dispose()
+      }
+    }, 60_000)
+  })
+
   describe('AC-directive-core-35 — Lightning CSS’s @nave warning is suppressed, and nothing else', () => {
     const FOO = {
       'src/main.js': "import './plain.css'\nimport './foo.css'",

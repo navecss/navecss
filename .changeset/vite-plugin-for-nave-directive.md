@@ -12,11 +12,12 @@ server, under either `css.transformer`. Under `css.transformer: 'lightningcss'` 
 Lightning CSS's `Unknown at rule: @nave` warning, and only that warning, by wrapping the logger
 Vite resolved.
 
-The build is checked at its end. The plugin reads every CSS file the build wrote and fails the build
+The build is checked at its end. The plugin reads the CSS files the build wrote and fails the build
 if a `@nave` directive is left in one, printing the lines `navecss-core check` prints for the same
 content. There is no option to turn that off. The dev server serves no bundle, so dev has no scan;
-CSS that ends inside a JavaScript string (`?inline`) and files copied from `public/` are not
-scanned.
+CSS that ends inside a JavaScript string (`?inline`), files copied from `public/`, and a CSS file
+another plugin adds after the scan (from a post-ordered `generateBundle` in a plugin listed after
+`navePlugin()`, or from `writeBundle`) are not scanned.
 
 Passing `extend` as a path to a module now works with Vite's own watching: edit the module and the
 dev server serves the new value with no restart, and `vite build --watch` rebuilds.

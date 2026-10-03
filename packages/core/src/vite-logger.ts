@@ -25,11 +25,19 @@ function isUnknownNaveRuleWarning(message: unknown): boolean {
 }
 
 /**
+ * The loggers already wrapped, so a second plugin instance or a second call on the same logger
+ * does not stack another wrapper over the first.
+ */
+const wrapped = new WeakSet<LoggerLike>()
+
+/**
  * Replaces `logger.warn` with a function that drops the Lightning CSS `@nave` warning. It edits
  * the logger Vite owns in place, which is the consumer's own object when they pass a
- * `customLogger`.
+ * `customLogger`. A logger that was already wrapped is left as it is.
  */
 export function dropLightningNaveWarning(logger: LoggerLike): void {
+  if (wrapped.has(logger)) return
+  wrapped.add(logger)
   const original = logger.warn.bind(logger)
   logger.warn = function warn(message, options) {
     if (isUnknownNaveRuleWarning(message)) return
