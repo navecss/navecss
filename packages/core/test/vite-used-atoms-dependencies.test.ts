@@ -23,7 +23,7 @@ import {
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 const FIXTURES = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
-  'fixtures/generated/used-atoms',
+  'fixtures/generated/minified-dependencies',
 )
 
 /**

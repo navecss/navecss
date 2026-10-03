@@ -27,7 +27,8 @@ const ATOM_CLASSES = new Set(Object.values(atomClassMap))
 function normalise(text: string, isSelector = false): string {
   // In a selector the space before a pseudo-class is a descendant combinator (`.a :hover` is not
   // `.a:hover`), so `:` keeps its spaces there.
-  const punctuation = isSelector ? /\s*([{};,>+~()])\s*/g : /\s*([{}:;,>+~()])\s*/g
+  // Runs of whitespace are single spaces by the time this applies, so one optional space is enough.
+  const punctuation = isSelector ? / ?([{};,>+~()]) ?/g : / ?([{}:;,>+~()]) ?/g
   return text
     .replaceAll(/\/\*.*?\*\//gs, '')
     .replaceAll(/\s+/g, ' ')
