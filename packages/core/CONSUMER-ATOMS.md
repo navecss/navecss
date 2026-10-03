@@ -131,7 +131,9 @@ Compiles to:
     border-radius: var(--nave-radius-control);
     font-weight: var(--nave-font-weight-medium);
     &:focus-visible {
-      outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus);
+      outline-style: solid;
+      outline-width: var(--nave-border-width-focus, 2px);
+      outline-color: var(--nave-color-border-focus, currentColor);
       outline-offset: 2px;
     }
     &:hover {

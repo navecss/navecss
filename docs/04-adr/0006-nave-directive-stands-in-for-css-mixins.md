@@ -75,6 +75,17 @@ Concretely, the built-in `focusRing` atom corresponds to:
 (in the draft's syntax as of the date above; the draft may change it, and the
 mapping will follow).
 
+- **Correction (2026-10-03):** the built-in `focusRing` atom no longer
+  restores its ring with the `outline` shorthand shown above. Its
+  `:focus-visible` block now declares `outline-style: solid`,
+  `outline-width: var(--nave-border-width-focus, 2px)` and
+  `outline-color: var(--nave-color-border-focus, currentColor)` in place of
+  that shorthand, so the mixin it corresponds to carries those three
+  declarations. A shorthand that reads an undefined custom property is
+  invalid as a whole and computes to `outline: none`, while the longhands
+  with fallbacks still draw a ring when the token layer is missing. See
+  `packages/core/src/atoms.ts`.
+
 **3. What Nave keeps on top of the standard, permanently.** The standard gives
 none of these, and they are why the directive is more than syntax:
 

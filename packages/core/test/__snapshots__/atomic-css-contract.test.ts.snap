@@ -194,7 +194,9 @@ exports[`dist/atomic.css contract > matches the checked-in snapshot 1`] = `
     outline: none;
 
     &:focus-visible {
-      outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus);
+      outline-style: solid;
+      outline-width: var(--nave-border-width-focus, 2px);
+      outline-color: var(--nave-color-border-focus, currentColor);
       outline-offset: 2px;
     }
   }
