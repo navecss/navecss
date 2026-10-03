@@ -126,6 +126,12 @@ describe('rule 1: a function className is read through its returned values', () 
           errors: 1,
         },
         {
+          // a nested arrow's return is its own, not this function's
+          code: `const x = <div className={(s) => { const f = () => { return 'inner-arrow' }; return 'is-outer' }} />`,
+          languageOptions,
+          errors: [{ message: /^"is-outer" is not a CSS Module class/u }],
+        },
+        {
           code: `const x = <div className={(s) => { switch (s.state) { case 'a': return 'is-a'; default: return 'is-b' } }} />`,
           languageOptions,
           errors: 2,

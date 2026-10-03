@@ -260,10 +260,7 @@ describe('AC-19: the counting rule denominator, stated and fixtured', () => {
   it('states that a function is read only when it is the whole value', () => {
     const collapsed = README.replaceAll(/\s+/g, ' ')
     expect(collapsed).toContain(
-      "A function's return value is read only when an inline function is the whole `className` or `class` value.",
-    )
-    expect(collapsed).toContain(
-      'or placed anywhere else in the value (a conditional branch, a `||` or `??` fallback) is not read.',
+      "- A function's return value is read only when an inline function is the whole `className` or `class` value. A function held in a variable (`className={pick}`), reached through a call (`className={f()}`), or placed anywhere else in the value (a conditional branch, a `||` or `??` fallback) is not read.",
     )
   })
 
