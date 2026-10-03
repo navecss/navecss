@@ -26,7 +26,7 @@ const ATOM_CLASSES = new Set(Object.values(atomClassMap))
  */
 function normalise(text: string): string {
   return text
-    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+    .replaceAll(/\/\*.*?\*\//gs, '')
     .replaceAll(/\s+/g, ' ')
     .replaceAll(/\s*([{}:;,>+~()])\s*/g, '$1')
     .replaceAll(';}', '}')

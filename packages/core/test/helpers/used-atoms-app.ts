@@ -161,7 +161,7 @@ function reportOf(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
   const marker = message.indexOf('RolldownError: ')
   const body = marker === -1 ? message : message.slice(marker + 'RolldownError: '.length)
-  const stack = body.search(/\n\s+at /)
+  const stack = body.search(/\n[ \t]+at /)
   return (stack === -1 ? body : body.slice(0, stack)).trimEnd()
 }
 
@@ -198,14 +198,14 @@ export function atomLayerAtoms(css: string): string[] {
       if (atom) names.add(atom)
     }
   }
-  return [...names].toSorted()
+  return [...names].toSorted((a, b) => a.localeCompare(b))
 }
 
 /**
  * Sorted, for an `expect(...).toEqual([...])` over a list of atoms.
  */
 export function atoms(...names: string[]): string[] {
-  return names.toSorted()
+  return names.toSorted((a, b) => a.localeCompare(b))
 }
 
 export interface BuiltEnvironments {
