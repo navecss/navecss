@@ -69,8 +69,10 @@ function manifest(): Record<string, unknown> {
 function importView(entry: unknown): unknown {
   const importEntry = (entry as { import?: unknown } | null)?.import
   if (typeof importEntry !== 'object' || importEntry === null) return entry
-  const { types, default: target } = importEntry as Record<string, unknown>
-  return { types, import: target }
+  const { types, default: target, ...extra } = importEntry as Record<string, unknown>
+  // Any further nested condition (a `node` target ahead of `default`, say) could send a Node ES
+  // loader somewhere else, so it is left in the view and fails the comparison.
+  return { types, import: target, ...extra }
 }
 
 /**

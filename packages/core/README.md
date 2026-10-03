@@ -20,8 +20,8 @@ pnpm add @navecss/core
 - **A resolver that reads `exports` maps.** Every entry point, the stylesheet
   included, is reachable only through the package's `exports` map: there is no
   `main` field to fall back on.
-- **ES modules.** `@navecss/core/cx`, `@navecss/core/atoms` and
-  `@navecss/core/vite` load through `import` only. A `require()` of any of
+- **ES modules.** `@navecss/core/cx`, `@navecss/core/atoms`,
+  `@navecss/core/vite` and `@navecss/core/check` load through `import` only. A `require()` of any of
   them fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`, which reads as though the
   entry point did not exist. In TypeScript, set `moduleResolution` to `bundler`,
   `node16` or `nodenext`; under `node10` their types are not found. A CommonJS
@@ -296,10 +296,11 @@ export default {
 }
 ```
 
-A CommonJS config works too:
+A CommonJS config works too. Name it `postcss.config.cjs`, or keep `.js` in a project
+without `"type": "module"`:
 
 ```js
-// postcss.config.js
+// postcss.config.cjs
 module.exports = {
   plugins: [require('@navecss/core/postcss')()],
 }
