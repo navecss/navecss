@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import stylelint from 'stylelint'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { PUBLISHABLE_SET } from '../../../scripts/check-publishable-set.mjs'
 
@@ -124,6 +124,14 @@ describe('AC-consumer-constraints-36', () => {
     const result = await stylelint.lint({ code, config })
     return result.results[0]!.warnings
   }
+
+  // The first stylelint.lint() call in this file costs far more than any later one: about a
+  // quarter of a second alone against 3 to 4 ms, and over 9 seconds under heavy load, past
+  // vitest's 5 second default. Pay it once here, under this hook's own budget, so the timed tests
+  // below do not carry it.
+  beforeAll(async () => {
+    await reportsFor('')
+  }, 60_000)
 
   it('used verbatim merged over stylelint-config-standard, @nave passes and @nvae is reported', async () => {
     const clean = await reportsFor('.a { @nave interactive; }', { 'at-rule-no-unknown': true })
