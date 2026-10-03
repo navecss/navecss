@@ -52,12 +52,10 @@ export interface TransformContext {
 }
 
 /**
- * What the dev server hands `hotUpdate`: the file that changed and the modules the module graph
- * links to it, which is none for a file no earlier transform recorded with `addWatchFile`.
+ * What the dev server hands `hotUpdate`: the file that changed.
  */
 export interface HotUpdateOptions {
   readonly file: string
-  readonly modules: readonly unknown[]
 }
 
 /**

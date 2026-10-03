@@ -95,6 +95,35 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     expect(next?.code).toContain('margin: 2px')
   }, 60_000)
 
+  it('a stylesheet whose first load failed while another stylesheet already used the module is reloaded once the module is fixed', async () => {
+    const app: ScratchApp = makeApp({ ...FILES, 'src/late.css': '.late { @nave brand; }\n' })
+    cleanups.push(() => app.dispose())
+    const server = await startDev(
+      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], {
+        server: { middlewareMode: true, watch: {} },
+      }),
+    )
+    cleanups.push(() => server.close())
+    const sent = spyOnClient(server)
+    await server.transformRequest('/src/app.css')
+
+    writeFileSync(path.join(app.root, 'atoms.mjs'), "throw new Error('not ready')\n")
+    await expect(server.transformRequest('/src/late.css')).rejects.toThrow()
+    // Let the dev server finish with the throwing write before the fix lands: its file watcher
+    // drops a second change to one file that follows the first too closely.
+    await until(() => Promise.resolve(sent.length > 0), 'the dev server to see the throwing module')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    // The client that was told to reload asks for the stylesheet again, and it fails again.
+    await expect(server.transformRequest('/src/late.css')).rejects.toThrow()
+    sent.length = 0
+    writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
+
+    await until(
+      () => Promise.resolve(sent.some((payload) => payload.type === 'full-reload')),
+      'a full-reload payload for the client',
+    )
+  }, 60_000)
+
   it('an edit to a module that loaded fine sends no full reload: Vite’s own update serves it', async () => {
     const app: ScratchApp = makeApp(FILES)
     cleanups.push(() => app.dispose())

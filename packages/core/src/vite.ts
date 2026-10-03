@@ -99,8 +99,9 @@ export function navePlugin(options: NaveViteOptions = {}): NaveVitePlugin {
   const extend = createExtendSource(options.extend)
   let hasStylesheetMaps = false
   // The stylesheets whose transform failed because the `extend` module would not load, by
-  // environment. Vite links a stylesheet to a file only from a transform that finished, so an
-  // edit that fixes a module which failed on its first load finds nothing to update.
+  // environment. Vite links a stylesheet to a file only from a transform that finished, so a
+  // stylesheet that failed never hears the module change, whether or not another stylesheet
+  // already uses it.
   const failed = new Map<string, Set<string>>()
 
   return {
@@ -140,7 +141,7 @@ export function navePlugin(options: NaveViteOptions = {}): NaveVitePlugin {
       const ids = failed.get(this.environment.name)
       const file = extend.file?.()
       if (!ids || file === undefined || ids.size === 0) return
-      if (hot.modules.length > 0 || hot.file !== withForwardSlashes(file)) return
+      if (hot.file !== withForwardSlashes(file)) return
       const { moduleGraph } = this.environment
       for (const id of ids) {
         const module = moduleGraph.getModuleById(id)

@@ -9,8 +9,9 @@
  * would not be written back exactly as given.
  */
 import type { ExtendMap } from './directive/resolve.ts'
+import type { Splice } from './validate-extend-breakout.ts'
 
-import { anchorSelectorList } from './selector-utils.ts'
+import { boxedPrimitiveKind, isPlainObject, unboxedPrimitive } from './directive/plain-object.ts'
 import { isInsideRule } from './validate-extend-breakout.ts'
 
 /**
@@ -43,30 +44,6 @@ export interface Predicates {
 }
 
 /**
- * The name of the boxed primitive `value` is (`String`, `Number`, `Boolean`, `BigInt` or
- * `Symbol`), read from its built-in tag so that it holds across realms, or `undefined` for
- * anything else. A boxed primitive is an object that stands for a primitive, never a map of
- * declarations.
- */
-function boxedPrimitiveName(value: unknown): string | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const tag = Object.prototype.toString.call(value).slice('[object '.length, -1)
-  return ['BigInt', 'Boolean', 'Number', 'String', 'Symbol'].includes(tag) ? tag : undefined
-}
-
-/**
- * Whether `value` is a non-array object node that is not a boxed primitive.
- */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    boxedPrimitiveName(value) === undefined
-  )
-}
-
-/**
  * Throws `describedAs` followed by `clause`, then the sentence every refusal ends with.
  */
 function refuse(describedAs: string, clause: string): never {
@@ -82,11 +59,11 @@ function refuse(describedAs: string, clause: string): never {
 const ESCAPED_LESS_THAN = String.raw`\3c`
 
 /**
- * Throws for a string a validator refused, with the clause for its reason. `probe` is the string
- * spliced where the expander puts it, which tells a string that breaks out of its rule from one
- * that is not exactly one construct but stays inside it.
+ * Throws for a string a validator refused, with the clause for its reason. `splice` says where the
+ * string sits, so the expander's own output for it tells a string that breaks out of its rule from
+ * one that is not exactly one construct but stays inside it.
  */
-function fail(describedAs: string, reason: Refusal, value: string, probe: string): never {
+function fail(describedAs: string, reason: Refusal, value: string, splice: Splice): never {
   if (reason === 'rewritten') {
     refuse(
       describedAs,
@@ -97,7 +74,7 @@ function fail(describedAs: string, reason: Refusal, value: string, probe: string
     )
   }
   const clause = 'does not parse as a single CSS declaration, selector or condition, '
-  if (isInsideRule(probe)) {
+  if (isInsideRule(splice)) {
     refuse(
       describedAs,
       `${clause}though it would stay inside the rule it is spliced into: ${JSON.stringify(value)}. ` +
@@ -112,36 +89,13 @@ function fail(describedAs: string, reason: Refusal, value: string, probe: string
 }
 
 /**
- * A pseudo key as the expander writes it into a rule, anchored the way the nested-rule builders
- * anchor it; a key that cannot be anchored (an empty branch) is written after a bare `&`.
- */
-function anchoredOrBare(key: string): string {
-  try {
-    return anchorSelectorList(key)
-  } catch {
-    return `&${key}`
-  }
-}
-
-/**
  * `value` with the article its kind is named with in an error: `a function`, `an array`,
  * `a string`, `a number`, `a boolean`, or for a boxed primitive `a String object`.
  */
 function kindOf(value: unknown): string {
   if (Array.isArray(value)) return 'an array'
-  const boxed = boxedPrimitiveName(value)
+  const boxed = boxedPrimitiveKind(value)
   return boxed === undefined ? `a ${typeof value}` : `a ${boxed} object`
-}
-
-/**
- * The primitive a boxed primitive stands for, or `undefined` when it cannot be read.
- */
-function unboxed(value: object): unknown {
-  try {
-    return value.valueOf()
-  } catch {
-    return undefined
-  }
 }
 
 /**
@@ -164,8 +118,8 @@ function quoted(value: unknown): string | undefined {
  * `value` as it is quoted in an error. A boxed primitive is quoted as the primitive it stands for.
  */
 function printable(value: unknown): string | undefined {
-  const isBoxed = boxedPrimitiveName(value) !== undefined
-  return quoted(isBoxed ? unboxed(value as object) : value)
+  const isBoxed = boxedPrimitiveKind(value) !== undefined
+  return quoted(isBoxed ? unboxedPrimitive(value as object) : value)
 }
 
 /**
@@ -185,8 +139,7 @@ function failShape(describedAs: string, value: unknown, isAtom: boolean): never 
  * Refuses a nested map or block that is truthy but not a plain object. A falsy one (`null`,
  * `undefined`, `false`, `0`, `''`) is skipped, as it always was, so `pseudos: hasHover && { ... }`
  * keeps building. `directive/resolve.ts` reads a map with `Object.entries`, so an array or a
- * string would be rendered as declarations without the per-string checks ever seeing it. (The
- * atom's own top-level `declarations` is left to `resolve()`, which throws on it by name.)
+ * string would be rendered as declarations without the per-string checks ever seeing it.
  */
 function assertShape(value: unknown, describedAs: string): void {
   if (!value || isPlainObject(value)) return
@@ -196,28 +149,24 @@ function assertShape(value: unknown, describedAs: string): void {
 /**
  * Validates every property/value pair of a `declarations` map, if it is one.
  */
-function assertDeclarationsSafe(
-  declarations: unknown,
-  where: string,
-  p: Predicates,
-  isNested = false,
-): void {
-  if (isNested) assertShape(declarations, `${where}'s declarations`)
+function assertDeclarationsSafe(declarations: unknown, where: string, p: Predicates): void {
+  assertShape(declarations, `${where}'s declarations`)
   if (!isPlainObject(declarations)) return
   for (const [prop, value] of Object.entries(declarations)) {
     const propRefusal = p.propRefusal(prop)
     if (propRefusal) {
-      fail(`${where}'s declaration property "${prop}"`, propRefusal, prop, `.p{${prop}:0;}`)
+      fail(`${where}'s declaration property "${prop}"`, propRefusal, prop, {
+        declarations: { [prop]: '0' },
+        kind: 'declarations',
+      })
     }
     if (typeof value !== 'string') continue
     const valueRefusal = p.declarationRefusal(prop, value)
     if (valueRefusal) {
-      fail(
-        `${where}'s declaration value for "${prop}"`,
-        valueRefusal,
-        value,
-        `.p{${prop}:${value};}`,
-      )
+      fail(`${where}'s declaration value for "${prop}"`, valueRefusal, value, {
+        declarations: { [prop]: value },
+        kind: 'declarations',
+      })
     }
   }
 }
@@ -232,9 +181,9 @@ function assertPseudosSafe(pseudos: unknown, where: string, p: Predicates): void
   for (const [pseudo, declarations] of Object.entries(pseudos)) {
     const refusal = p.selectorRefusal(pseudo)
     if (refusal) {
-      fail(`${where}'s pseudo "${pseudo}"`, refusal, pseudo, `${anchoredOrBare(pseudo)}{}`)
+      fail(`${where}'s pseudo "${pseudo}"`, refusal, pseudo, { key: pseudo, kind: 'pseudo' })
     }
-    assertDeclarationsSafe(declarations, `${where}'s pseudo "${pseudo}"`, p, true)
+    assertDeclarationsSafe(declarations, `${where}'s pseudo "${pseudo}"`, p)
   }
 }
 
@@ -252,17 +201,16 @@ function assertAtBlocksSafe(
   for (const [condition, block] of Object.entries(blocks)) {
     const refusal = p.conditionRefusal(atName, condition)
     if (refusal) {
-      fail(
-        `${where}'s ${atName} condition "${condition}"`,
-        refusal,
+      fail(`${where}'s ${atName} condition "${condition}"`, refusal, condition, {
+        atName,
         condition,
-        `@${atName} ${condition}{}`,
-      )
+        kind: 'condition',
+      })
     }
     const blockWhere = `${where}'s ${atName} "${condition}"`
     assertShape(block, `${blockWhere} block`)
     if (!isPlainObject(block)) continue
-    assertDeclarationsSafe(block.declarations, blockWhere, p, true)
+    assertDeclarationsSafe(block.declarations, blockWhere, p)
     assertPseudosSafe(block.pseudos, blockWhere, p)
   }
 }
@@ -272,9 +220,8 @@ function assertAtBlocksSafe(
  * atoms are never checked: they are this package's own trusted source, not the hardening
  * boundary this exists for. A falsy atom (`null`, `undefined`, `false`, `0`, `''`) is a
  * registered-but-empty key: it is skipped here and read as an unknown atom where a directive uses
- * it. Any other atom, or nested map inside one, that is not a plain object is refused here by
- * name, used or not; an atom's own `declarations` that is not a map is left to the per-use shape
- * check in `directive/resolve.ts` rather than re-diagnosed here.
+ * it. Any other atom, or map inside one (its own `declarations` included), that is not a plain
+ * object is refused here by name, used or not.
  */
 export function walkExtendAtoms(extend: ExtendMap, predicates: Predicates): void {
   for (const [name, atom] of Object.entries(extend)) {

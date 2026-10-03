@@ -14,15 +14,7 @@
 import type { AtomDefinition } from './atoms.ts'
 import type { ExtendMap } from './directive/resolve.ts'
 
-/**
-Whether `value` is a non-array object that is not a boxed primitive (`new String('x')` and its kind, read by their built-in tag): the only shape a nested `declarations`/`pseudos`/media-or-container block map may legally take. Anything else is left exactly as read (a single property access already spent), for the validator and the existing per-use shape checks downstream to diagnose in their own words.
- */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-  return !/^\[object (?:BigInt|Boolean|Number|String|Symbol)\]$/.test(
-    Object.prototype.toString.call(value),
-  )
-}
+import { isPlainObject } from './directive/plain-object.ts'
 
 /**
 A declaration map's own entries, each value converted to a string exactly once — whether it started out as one or not, so a getter or a `toString`-overriding object never gets a second, later chance to answer differently.

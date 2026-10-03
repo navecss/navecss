@@ -6,6 +6,7 @@
  * fragments an injection is made of; and the check is applied to a snapshot of the map, never to
  * live lookups.
  */
+import vm from 'node:vm'
 import { describe, expect, it } from 'vitest'
 
 import type { AtomDefinition } from '../src/atoms.ts'
@@ -480,6 +481,112 @@ describe('a boxed primitive is not a plain object, so it is refused and never re
 
     expect(run.code).toContain('color: red;')
   })
+})
+
+describe('a String object as an atom’s own declarations is refused like every nested position', () => {
+  it("a String object as an atom's own declarations never reaches the CSS, through either adapter", async () => {
+    const extend = { a: { declarations: new String('} body { display: none; }') as never } }
+    const viaVite = await runHook({ code: '.x { @nave a; }', options: { extend } }).then(
+      (run) => run.code ?? '',
+      () => '',
+    )
+    const { default: postcss } = await import('postcss')
+    const { navePlugin: postcssNave } = await import('../src/postcss.ts')
+    const viaPostcss = await Promise.resolve()
+      .then(() =>
+        postcss([postcssNave({ extend })]).process('.x { @nave a; }', { from: undefined }),
+      )
+      .then(
+        (result) => result.css,
+        () => '',
+      )
+
+    expect(viaVite).not.toMatch(/\b0: \}/)
+    expect(viaPostcss).not.toMatch(/\b0: \}/)
+  })
+})
+
+describe('a boxed primitive is recognised by its brand, never by its Symbol.toStringTag', () => {
+  const retagged = Object.assign(new String('x'), { [Symbol.toStringTag]: 'Object' })
+  const tagged = { declarations: { color: 'red' }, [Symbol.toStringTag]: 'String' }
+  const nested = (declarations: unknown) => ({
+    a: { declarations: { color: 'red' }, pseudos: { ':hover': declarations } },
+  })
+
+  async function viaBoth(extend: Record<string, unknown>): Promise<(string | undefined)[]> {
+    const { default: postcss } = await import('postcss')
+    const { navePlugin: postcssNave } = await import('../src/postcss.ts')
+    const viaVite = await runHook({
+      code: '.x { @nave a; }',
+      options: { extend: extend as never },
+    }).then(
+      (run) => run.code,
+      () => undefined,
+    )
+    const viaPostcss = await Promise.resolve()
+      .then(() =>
+        postcss([postcssNave({ extend: extend as never })]).process('.x { @nave a; }', {
+          from: undefined,
+        }),
+      )
+      .then(
+        (result) => result.css,
+        () => undefined,
+      )
+    return [viaVite, viaPostcss]
+  }
+
+  it.each([
+    ['a String object retagged as an Object, as a pseudo’s declarations', nested(retagged)],
+    [
+      'a Proxy over a String object, as a pseudo’s declarations',
+      nested(new Proxy(new String('ab'), {})),
+    ],
+    [
+      'a String object from another realm, as a pseudo’s declarations',
+      nested(vm.runInNewContext("new String('x')")),
+    ],
+  ])('%s is refused, so no numbered declaration is emitted', async (_name, extend) => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      expect(verdict(validate, extend as never).refused).toBe(true)
+    }
+    for (const output of await viaBoth(extend)) expect(output).toBeUndefined()
+  })
+
+  it.each([
+    ['a plain object tagged String', { a: tagged }],
+    [
+      'a plain object from another realm',
+      { a: vm.runInNewContext("({ declarations: { color: 'red' } })") },
+    ],
+  ])('%s still expands', async (_name, extend) => {
+    for (const output of await viaBoth(extend)) expect(output).toContain('color: red')
+  })
+})
+
+describe('a refusal says whether the string, as the expander splices it, leaves the rule', () => {
+  it.each([
+    ['a pseudo with a stray closing brace', pseudo(':hover}')],
+    ['a media condition with a stray closing brace', media('(min-width: 1px)}')],
+    ['a container condition with a stray closing brace', container('(width > 1px) }')],
+    ['a value whose string a line break cuts', decl('a"\n')],
+  ])('%s says it would break out of the rule: spliced, it ends the rule early', (_name, extend) => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      expect(verdict(validate, extend).message).toContain('would break out of the rule')
+    }
+  })
+
+  it.each([
+    ['a pseudo ending in a backslash', pseudo(':hover\\')],
+    ['a media condition ending in a backslash', media('(min-width: 1px)\\')],
+  ])(
+    '%s says it would stay inside the rule: spliced, the backslash escapes the space before the block',
+    (_name, extend) => {
+      for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+        expect(verdict(validate, extend).message).toContain('would stay inside the rule')
+      }
+    },
+  )
 })
 
 describe('the Vite plugin validates extend before it reaches expandText()', () => {

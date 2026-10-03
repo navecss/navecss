@@ -6,6 +6,7 @@
  * (AC-directive-core-02).
  */
 import { type AtomDefinition, atoms } from '../atoms.ts'
+import { isPlainObject } from './plain-object.ts'
 
 export interface Declaration {
   readonly prop: string
@@ -56,10 +57,10 @@ function toDeclarations(decls: Record<string, string>): Declaration[] {
 }
 
 /**
-A plain object (not `null`, not an array): the only shape `declarations` may legally take.
+A plain object (not `null`, not an array, not a boxed primitive): the only shape `declarations` may legally take.
  */
 function isDeclarationsObject(value: unknown): value is Record<string, string> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return isPlainObject(value)
 }
 
 /**
