@@ -59,6 +59,64 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     }, 'the dev server to serve margin: 2px')
   }, 60_000)
 
+  /**
+   * Records every payload the dev server sends its client, passing each on as before.
+   */
+  function spyOnClient(server: Awaited<ReturnType<typeof startDev>>): { type: string }[] {
+    const sent: { type: string }[] = []
+    const hot = server.environments.client.hot
+    const send = hot.send.bind(hot) as (payload: { type: string }) => void
+    hot.send = ((payload: { type: string }) => {
+      sent.push(payload)
+      send(payload)
+    }) as never
+    return sent
+  }
+
+  it('a module that failed on its first load tells the client to reload once it is fixed', async () => {
+    const app: ScratchApp = makeApp({ ...FILES, 'atoms.mjs': "throw new Error('not ready')\n" })
+    cleanups.push(() => app.dispose())
+    const server = await startDev(
+      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], {
+        server: { middlewareMode: true, watch: {} },
+      }),
+    )
+    cleanups.push(() => server.close())
+    const sent = spyOnClient(server)
+
+    await expect(server.transformRequest('/src/app.css')).rejects.toThrow()
+    writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
+
+    await until(
+      () => Promise.resolve(sent.some((payload) => payload.type === 'full-reload')),
+      'a full-reload payload for the client',
+    )
+    const next = await server.transformRequest('/src/app.css')
+    expect(next?.code).toContain('margin: 2px')
+  }, 60_000)
+
+  it('an edit to a module that loaded fine sends no full reload: Vite’s own update serves it', async () => {
+    const app: ScratchApp = makeApp(FILES)
+    cleanups.push(() => app.dispose())
+    const server = await startDev(
+      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], {
+        server: { middlewareMode: true, watch: {} },
+      }),
+    )
+    cleanups.push(() => server.close())
+    const sent = spyOnClient(server)
+    await server.transformRequest('/src/app.css')
+
+    writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
+    await until(async () => {
+      const next = await server.transformRequest('/src/app.css')
+      return next?.code.includes('margin: 2px') === true
+    }, 'the dev server to serve margin: 2px')
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    expect(sent.filter((payload) => payload.type === 'full-reload')).toEqual([])
+  }, 60_000)
+
   it('vite build --watch rebuilds with the new value', async () => {
     const app = makeApp(FILES)
     cleanups.push(() => app.dispose())

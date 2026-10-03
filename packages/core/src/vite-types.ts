@@ -45,6 +45,33 @@ export interface TransformContext {
   warn(warning: PluginLog): void
   addWatchFile(id: string): void
   getCombinedSourcemap(): IncomingSourceMap
+  /**
+  The environment the stylesheet is being transformed for; `client` when a host gives none.
+   */
+  readonly environment?: { readonly name: string }
+}
+
+/**
+ * What the dev server hands `hotUpdate`: the file that changed and the modules the module graph
+ * links to it, which is none for a file no earlier transform recorded with `addWatchFile`.
+ */
+export interface HotUpdateOptions {
+  readonly file: string
+  readonly modules: readonly unknown[]
+}
+
+/**
+ * The environment `hotUpdate` runs in: its module graph, and the channel to its client.
+ */
+export interface HotUpdateContext {
+  readonly environment: {
+    readonly hot: { send(payload: { type: 'full-reload' }): void }
+    readonly moduleGraph: {
+      getModuleById(id: string): unknown
+      invalidateModule(module: never): void
+    }
+    readonly name: string
+  }
 }
 
 export interface BundleContext {

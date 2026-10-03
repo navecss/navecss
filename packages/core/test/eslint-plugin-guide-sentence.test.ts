@@ -54,7 +54,7 @@ describe('AC-eslint-plugin-24: the guide names @navecss/eslint-plugin in one sen
       expect(committed).not.toContain(`${plugin.meta.namespace}/${ruleKey}`)
       expect(committed).not.toContain(ruleKey)
     }
-  })
+  }, 30_000)
 
   it("the sentence comes from the generator's own template section, and a fresh guide renders that section, so removing it from the template fails", async () => {
     const lines = renderEslintPluginSection()

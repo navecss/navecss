@@ -22,6 +22,10 @@ export interface ExtendSource {
   The atoms to expand with right now; for a module specifier, registers the module with `addWatchFile` first.
    */
   current(watch: (file: string) => void): Promise<ExtendMap>
+  /**
+  The path of the module the atoms come from, once it is known; `undefined` for an atom map written inline.
+   */
+  file?(): string | undefined
 }
 
 /**
@@ -55,6 +59,7 @@ function moduleSource(specifier: string): ExtendSource {
       root = directory
       file = resolveExtendSpecifier(specifier, root)
     },
+    file: () => file,
     async current(watch) {
       file ??= resolveExtendSpecifier(specifier, root)
       watch(file)

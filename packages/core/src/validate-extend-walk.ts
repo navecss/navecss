@@ -10,6 +10,9 @@
  */
 import type { ExtendMap } from './directive/resolve.ts'
 
+import { anchorSelectorList } from './selector-utils.ts'
+import { isInsideRule } from './validate-extend-breakout.ts'
+
 /**
  * Why a validator refused a string: it does not parse as the one construct it is meant to be
  * (`'break-out'`), or it parses as that one construct but would not be written back exactly as
@@ -40,10 +43,27 @@ export interface Predicates {
 }
 
 /**
- * Whether `value` is a non-array object node.
+ * The name of the boxed primitive `value` is (`String`, `Number`, `Boolean`, `BigInt` or
+ * `Symbol`), read from its built-in tag so that it holds across realms, or `undefined` for
+ * anything else. A boxed primitive is an object that stands for a primitive, never a map of
+ * declarations.
+ */
+function boxedPrimitiveName(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const tag = Object.prototype.toString.call(value).slice('[object '.length, -1)
+  return ['BigInt', 'Boolean', 'Number', 'String', 'Symbol'].includes(tag) ? tag : undefined
+}
+
+/**
+ * Whether `value` is a non-array object node that is not a boxed primitive.
  */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    boxedPrimitiveName(value) === undefined
+  )
 }
 
 /**
@@ -62,9 +82,11 @@ function refuse(describedAs: string, clause: string): never {
 const ESCAPED_LESS_THAN = String.raw`\3c`
 
 /**
- * Throws for a string a validator refused, with the clause for its reason.
+ * Throws for a string a validator refused, with the clause for its reason. `probe` is the string
+ * spliced where the expander puts it, which tells a string that breaks out of its rule from one
+ * that is not exactly one construct but stays inside it.
  */
-function fail(describedAs: string, reason: Refusal, value: string): never {
+function fail(describedAs: string, reason: Refusal, value: string, probe: string): never {
   if (reason === 'rewritten') {
     refuse(
       describedAs,
@@ -74,20 +96,52 @@ function fail(describedAs: string, reason: Refusal, value: string): never {
         'Whitespace at either end of it is not written back as given: remove it.',
     )
   }
+  const clause = 'does not parse as a single CSS declaration, selector or condition, '
+  if (isInsideRule(probe)) {
+    refuse(
+      describedAs,
+      `${clause}though it would stay inside the rule it is spliced into: ${JSON.stringify(value)}. ` +
+        'Write exactly one, with nothing else in it: no ";" or second declaration, no comment, ' +
+        'and no trailing backslash.',
+    )
+  }
   refuse(
     describedAs,
-    'does not parse as a single CSS declaration, selector or condition, and would break out ' +
-      `of the rule it is spliced into: ${JSON.stringify(value)}.`,
+    `${clause}and would break out of the rule it is spliced into: ${JSON.stringify(value)}.`,
   )
 }
 
 /**
+ * A pseudo key as the expander writes it into a rule, anchored the way the nested-rule builders
+ * anchor it; a key that cannot be anchored (an empty branch) is written after a bare `&`.
+ */
+function anchoredOrBare(key: string): string {
+  try {
+    return anchorSelectorList(key)
+  } catch {
+    return `&${key}`
+  }
+}
+
+/**
  * `value` with the article its kind is named with in an error: `a function`, `an array`,
- * `a string`, `a number`, `a boolean`.
+ * `a string`, `a number`, `a boolean`, or for a boxed primitive `a String object`.
  */
 function kindOf(value: unknown): string {
   if (Array.isArray(value)) return 'an array'
-  return `a ${typeof value}`
+  const boxed = boxedPrimitiveName(value)
+  return boxed === undefined ? `a ${typeof value}` : `a ${boxed} object`
+}
+
+/**
+ * The primitive a boxed primitive stands for, or `undefined` when it cannot be read.
+ */
+function unboxed(value: object): unknown {
+  try {
+    return value.valueOf()
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -95,7 +149,7 @@ function kindOf(value: unknown): string {
  * or a value JSON cannot print (a BigInt, a circular array). A refusal prints the value once, and
  * never fails on printing it.
  */
-function printable(value: unknown): string | undefined {
+function quoted(value: unknown): string | undefined {
   if (typeof value === 'function' || typeof value === 'symbol') return undefined
   if (typeof value === 'bigint') return `${value}n`
   if (typeof value === 'number') return String(value)
@@ -104,6 +158,14 @@ function printable(value: unknown): string | undefined {
   } catch {
     return undefined
   }
+}
+
+/**
+ * `value` as it is quoted in an error. A boxed primitive is quoted as the primitive it stands for.
+ */
+function printable(value: unknown): string | undefined {
+  const isBoxed = boxedPrimitiveName(value) !== undefined
+  return quoted(isBoxed ? unboxed(value as object) : value)
 }
 
 /**
@@ -144,10 +206,19 @@ function assertDeclarationsSafe(
   if (!isPlainObject(declarations)) return
   for (const [prop, value] of Object.entries(declarations)) {
     const propRefusal = p.propRefusal(prop)
-    if (propRefusal) fail(`${where}'s declaration property "${prop}"`, propRefusal, prop)
+    if (propRefusal) {
+      fail(`${where}'s declaration property "${prop}"`, propRefusal, prop, `.p{${prop}:0;}`)
+    }
     if (typeof value !== 'string') continue
     const valueRefusal = p.declarationRefusal(prop, value)
-    if (valueRefusal) fail(`${where}'s declaration value for "${prop}"`, valueRefusal, value)
+    if (valueRefusal) {
+      fail(
+        `${where}'s declaration value for "${prop}"`,
+        valueRefusal,
+        value,
+        `.p{${prop}:${value};}`,
+      )
+    }
   }
 }
 
@@ -160,7 +231,9 @@ function assertPseudosSafe(pseudos: unknown, where: string, p: Predicates): void
   if (!isPlainObject(pseudos)) return
   for (const [pseudo, declarations] of Object.entries(pseudos)) {
     const refusal = p.selectorRefusal(pseudo)
-    if (refusal) fail(`${where}'s pseudo "${pseudo}"`, refusal, pseudo)
+    if (refusal) {
+      fail(`${where}'s pseudo "${pseudo}"`, refusal, pseudo, `${anchoredOrBare(pseudo)}{}`)
+    }
     assertDeclarationsSafe(declarations, `${where}'s pseudo "${pseudo}"`, p, true)
   }
 }
@@ -178,7 +251,14 @@ function assertAtBlocksSafe(
   if (!isPlainObject(blocks)) return
   for (const [condition, block] of Object.entries(blocks)) {
     const refusal = p.conditionRefusal(atName, condition)
-    if (refusal) fail(`${where}'s ${atName} condition "${condition}"`, refusal, condition)
+    if (refusal) {
+      fail(
+        `${where}'s ${atName} condition "${condition}"`,
+        refusal,
+        condition,
+        `@${atName} ${condition}{}`,
+      )
+    }
     const blockWhere = `${where}'s ${atName} "${condition}"`
     assertShape(block, `${blockWhere} block`)
     if (!isPlainObject(block)) continue

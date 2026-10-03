@@ -19,6 +19,8 @@ import type { AtomDefinition } from './atoms.ts'
 import type {
   BundleContext,
   BundleEntry,
+  HotUpdateContext,
+  HotUpdateOptions,
   ResolvedConfigLike,
   TransformContext,
   TransformResultLike,
@@ -66,6 +68,7 @@ export interface NaveVitePlugin {
     code: string,
     id: string,
   ): Promise<TransformResultLike | undefined>
+  hotUpdate(this: HotUpdateContext, options: HotUpdateOptions): never[] | undefined
   readonly generateBundle: {
     handler(this: BundleContext, options: unknown, bundle: Record<string, BundleEntry>): void
     readonly order: 'post'
@@ -82,12 +85,23 @@ function hasStylesheetMapsFor(config: ResolvedConfigLike): boolean {
 }
 
 /**
+ * `file` with Vite's forward slashes, which is how it names every path it reports.
+ */
+function withForwardSlashes(file: string): string {
+  return file.replaceAll('\\', '/')
+}
+
+/**
  * The Nave Vite plugin: one entry in `plugins`.
  */
 export function navePlugin(options: NaveViteOptions = {}): NaveVitePlugin {
   const { onUnknown = 'error' } = options
   const extend = createExtendSource(options.extend)
   let hasStylesheetMaps = false
+  // The stylesheets whose transform failed because the `extend` module would not load, by
+  // environment. Vite links a stylesheet to a file only from a transform that finished, so an
+  // edit that fixes a module which failed on its first load finds nothing to update.
+  const failed = new Map<string, Set<string>>()
 
   return {
     name: 'nave',
@@ -100,16 +114,41 @@ export function navePlugin(options: NaveViteOptions = {}): NaveVitePlugin {
 
     async transform(code, id) {
       if (!isStylesheetId(id) || !canHoldDirective(code)) return
+      const environment = this.environment?.name ?? 'client'
+      let atoms
+      try {
+        atoms = await extend.current((file) => {
+          this.addWatchFile(file)
+        })
+      } catch (error) {
+        const ids = failed.get(environment) ?? new Set<string>()
+        failed.set(environment, ids.add(id))
+        throw error
+      }
+      failed.get(environment)?.delete(id)
       return transformStylesheet({
         ctx: this,
         code,
         id,
-        extend: await extend.current((file) => {
-          this.addWatchFile(file)
-        }),
+        extend: atoms,
         onUnknown,
         hasStylesheetMaps,
       })
+    },
+
+    hotUpdate(hot) {
+      const ids = failed.get(this.environment.name)
+      const file = extend.file?.()
+      if (!ids || file === undefined || ids.size === 0) return
+      if (hot.modules.length > 0 || hot.file !== withForwardSlashes(file)) return
+      const { moduleGraph } = this.environment
+      for (const id of ids) {
+        const module = moduleGraph.getModuleById(id)
+        if (module) moduleGraph.invalidateModule(module as never)
+      }
+      ids.clear()
+      this.environment.hot.send({ type: 'full-reload' })
+      return []
     },
 
     generateBundle: {

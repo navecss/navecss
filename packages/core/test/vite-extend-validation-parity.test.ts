@@ -370,6 +370,118 @@ describe('a refusal says why it refuses', () => {
   })
 })
 
+describe('a refusal that stays inside its rule does not claim to break out of it', () => {
+  const STAYS = 'though it would stay inside the rule it is spliced into'
+  const BREAKS = 'would break out of the rule it is spliced into'
+
+  it.each([
+    ['a value ending in a semicolon', decl('aa;')],
+    ['a value ending in a backslash', decl('aa\\')],
+    ['a value with a comment in it', decl('red /* note */')],
+    ['a value that adds a declaration', decl('red; background: blue')],
+    ['a property with a space in it', decl('red', 'a b')],
+  ])('%s is refused as staying inside the rule', (_name, extend) => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      const { refused, message } = verdict(validate, extend)
+
+      expect(refused).toBe(true)
+      expect(message).toContain(STAYS)
+      expect(message).toContain('Write exactly one, with nothing else in it')
+      expect(message).not.toContain('would break out')
+    }
+  })
+
+  it.each([
+    ['a value that closes the rule', decl('red; } body { x: y')],
+    ['a pseudo that opens a second rule', pseudo(':hover{} body')],
+    ['a media condition that opens a second rule', media('(x) { } body { color: red } @media (y)')],
+  ])('%s is refused as breaking out of the rule', (_name, extend) => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      const { refused, message } = verdict(validate, extend)
+
+      expect(refused).toBe(true)
+      expect(message).toContain(BREAKS)
+      expect(message).not.toContain(STAYS)
+    }
+  })
+
+  it.each([
+    ['a value ending in a semicolon', decl('aa;')],
+    ['a value ending in a backslash', decl('aa\\')],
+    ['a value with a comment in it', decl('red /* note */')],
+    ['a value that adds a declaration', decl('red; background: blue')],
+    ['a property with a space in it', decl('red', 'a b')],
+    ['a value that closes the rule', decl('red; } body { x: y')],
+    ['a pseudo that opens a second rule', pseudo(':hover{} body')],
+    ['a media condition that opens a second rule', media('(x) { } body { color: red } @media (y)')],
+  ])('%s: both validators print the identical message', (_name, extend) => {
+    expect(verdict(validateExtendAtomsHostFree, extend).message).toBe(
+      verdict(validateExtendAtoms, extend).message,
+    )
+  })
+})
+
+describe('a boxed primitive is not a plain object, so it is refused and never read as a map', () => {
+  const nested = (declarations: unknown) => ({
+    a: { declarations: { color: 'red' }, pseudos: { ':hover': declarations } },
+  })
+
+  it.each([
+    [
+      "new String('x') as a pseudo's declarations",
+      nested(new String('x')),
+      'a String object',
+      '"x"',
+    ],
+    ["new String('x') as an atom", { a: new String('x') }, 'a String object', '"x"'],
+    [
+      'new Number(1) as a media block',
+      { a: { declarations: {}, media: { '(min-width: 1px)': new Number(1) } } },
+      'a Number object',
+      '1',
+    ],
+    [
+      'new Boolean(true) as a container map',
+      { a: { declarations: {}, container: new Boolean(true) } },
+      'a Boolean object',
+      'true',
+    ],
+  ])('%s is refused by both validators, naming its kind', (_name, extend, kind, printed) => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      const { refused, message } = verdict(validate, extend as never)
+
+      expect(refused).toBe(true)
+      expect(message).toContain(`is ${kind}, not a plain object: ${printed}.`)
+    }
+  })
+
+  it('a boxed string as a pseudo’s declarations emits no numbered declaration through the PostCSS adapter', async () => {
+    const { default: postcss } = await import('postcss')
+    const { navePlugin: postcssNave } = await import('../src/postcss.ts')
+
+    expect(() => postcssNave({ extend: nested(new String('ab')) as never })).toThrow(
+      /is a String object, not a plain object/,
+    )
+    const css = await postcss([postcssNave({ extend: nested(undefined) as never })]).process(
+      '.x { @nave a; }',
+      { from: undefined },
+    )
+    expect(css.css).not.toMatch(/0:\s*a/)
+  })
+
+  it('an instance of a class with a declarations property still expands', async () => {
+    class Atom {
+      declarations = { color: 'red' }
+    }
+    const run = await runHook({
+      code: '.x { @nave a; }',
+      options: { extend: { a: new Atom() as never } },
+    })
+
+    expect(run.code).toContain('color: red;')
+  })
+})
+
 describe('the Vite plugin validates extend before it reaches expandText()', () => {
   it('a value that closes the rule is refused, where expandText() alone would splice it', () => {
     const evil = { evil: { declarations: { color: 'red; } body { display: none' } } }
