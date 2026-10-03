@@ -47,7 +47,6 @@
     "lint": "eslint index.js declared-custom-properties.js test --max-warnings 0",
     "lint:fix": "eslint index.js declared-custom-properties.js test --fix",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
     "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },

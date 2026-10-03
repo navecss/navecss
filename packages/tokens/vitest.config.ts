@@ -10,6 +10,9 @@ export default defineConfig({
       // output would have coverage percentages that measure the wrong
       // thing, and a number that has to be gamed to stay green teaches the
       // opposite habit of what coverage is for.
+
+      // On for every `test` run, so the suites run once and that run is the measurement.
+      enabled: true,
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       reportsDirectory: './coverage',

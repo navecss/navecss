@@ -181,15 +181,16 @@ test('the real repo has no .sonarcloud.properties: a CI-driven scan reads sonar-
   assert.equal(existsSync(path.join(ROOT, '.sonarcloud.properties')), false)
 })
 
-test('sync with the real repo: packages with a test:coverage script match sonar.javascript.lcov.reportPaths', () => {
+test('sync with the real repo: packages whose test run writes coverage match sonar.javascript.lcov.reportPaths', () => {
+  // A package's `test` writes a coverage report when its vitest config turns coverage on, so
+  // that switch is what decides which lcov files exist for the scan to read.
   const packagesDir = path.join(ROOT, 'packages')
-  const packagesWithCoverageScript = readdirSync(packagesDir, { withFileTypes: true })
+  const packagesWritingCoverage = readdirSync(packagesDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .filter((entry) => {
-      const packageJsonPath = path.join(packagesDir, entry.name, 'package.json')
       try {
-        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
-        return Boolean(packageJson.scripts && packageJson.scripts['test:coverage'])
+        const config = readFileSync(path.join(packagesDir, entry.name, 'vitest.config.ts'), 'utf8')
+        return /coverage:\s*\{[^}]*\benabled:\s*true\b/.test(config)
       } catch {
         return false
       }
@@ -199,7 +200,7 @@ test('sync with the real repo: packages with a test:coverage script match sonar.
   const propertiesText = readFileSync(path.join(ROOT, 'sonar-project.properties'), 'utf8')
   const reportedPackageDirs = packageDirsFromReportPaths(propertiesText)
 
-  assert.deepEqual(new Set(packagesWithCoverageScript), new Set(reportedPackageDirs))
+  assert.deepEqual(new Set(packagesWritingCoverage), new Set(reportedPackageDirs))
 })
 
 // ── End to end: the SHIPPED script, driven as a child process (the way the workflow runs it) ──

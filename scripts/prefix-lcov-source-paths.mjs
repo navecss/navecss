@@ -88,7 +88,7 @@ export function main(rootDir, packageDirs) {
     const lcovPath = path.join(rootDir, packageDir, 'coverage', 'lcov.info')
     if (!existsSync(lcovPath)) {
       throw new Error(
-        `${packageDir}/coverage/lcov.info does not exist. Run its test:coverage script first, ` +
+        `${packageDir}/coverage/lcov.info does not exist. Run its test script first, ` +
           'or remove it from the package list if it no longer reports coverage.',
       )
     }
