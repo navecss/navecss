@@ -18,9 +18,14 @@ import {
   buildUsed,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
+import {
+  ARGUMENT_ROWS,
+  IMPORT,
+  PIECED_CLASS_ROWS,
+  pieceModule,
+  REFERENCE_ROWS,
+} from './helpers/used-atoms-rows.ts'
 import { appConfig, startDev, stopDev } from './helpers/vite-app.ts'
-
-const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 
 /**
  * Builds an app of `modules` (each imported by `src/main.ts`) with the default plugin.
@@ -92,35 +97,7 @@ describe('AC-used-atoms-04 — cx.raw in every form is never collected and never
 })
 
 describe('AC-used-atoms-05 — every other reference to the binding is a build error', () => {
-  const rows: [string, string, string][] = [
-    ['assigned', 'src/f.js', `${IMPORT}export const f = cx\n`],
-    ['passed as a value', 'src/g.js', `${IMPORT}export const g = ['flex'].map(cx)\n`],
-    ['spread', 'src/h.js', `${IMPORT}export const h = { ...cx }\n`],
-    ['.call', 'src/i.js', `${IMPORT}export const i = cx.call(null, 'flex')\n`],
-    ['.apply', 'src/j.js', `${IMPORT}export const j = cx.apply(null, ['flex'])\n`],
-    [
-      'computed, identifier',
-      'src/k.js',
-      `${IMPORT}const key = 'raw'; export const k = cx[key]('x')\n`,
-    ],
-    ['computed, other literal', 'src/l.js', `${IMPORT}export const l = cx['dynamic']('flex')\n`],
-    ['dynamic aliased', 'src/m.js', `${IMPORT}export const m = cx.dynamic\n`],
-    ['dynamic passed', 'src/n.js', `${IMPORT}export const n = ['flex'].map(cx.dynamic)\n`],
-    [
-      'dynamic import, then',
-      'src/o.js',
-      "export const o = import('@navecss/core/cx').then((m) => m.cx('flex'))\n",
-    ],
-    [
-      'dynamic import, await',
-      'src/p.js',
-      "const { cx: c2 } = await import('@navecss/core/cx')\nexport const p = c2('flex')\n",
-    ],
-    ['re-export from', 'src/utils.js', "export { cx } from '@navecss/core/cx'\n"],
-    ['re-export of the binding', 'src/utils2.js', `${IMPORT}export { cx }\n`],
-    ['star re-export', 'src/utils3.js', "export * from '@navecss/core/cx'\n"],
-    ['namespace re-export', 'src/utils4.js', "export * as n from '@navecss/core/cx'\n"],
-  ]
+  const rows = REFERENCE_ROWS
 
   it.each(rows)(
     '%s alone fails the build with one problem in its own file',
@@ -129,6 +106,7 @@ describe('AC-used-atoms-05 — every other reference to the binding is a build e
 
       expect(built.error).toMatch(/^1 problem in 1 file/)
       expect(built.error).toContain(`${file}:`)
+      expect(built.warnings).toEqual([])
     },
   )
 
@@ -138,6 +116,7 @@ describe('AC-used-atoms-05 — every other reference to the binding is a build e
 
     expect(built.error).toMatch(/^15 problems in 15 files/)
     for (const [, file] of rows) expect(built.error).toContain(`${file}:`)
+    expect(built.warnings).toEqual([])
   })
 })
 
@@ -177,6 +156,25 @@ describe('AC-used-atoms-07 — references are attributed by lexical scope', () =
     const built = await build({ 'src/scope.js': renamed.join('\n') })
 
     expect(built.error).toMatch(/^9 problems in 1 file/)
+    // One problem at each formerly shadowed reference: its line, and the column of the name (or,
+    // for the call on line 7, of its argument).
+    const places = built
+      .error!.split('\n')
+      .filter((line) => line.startsWith('src/scope.js:'))
+      .map((line) => line.split(': ')[0]!)
+    const at = (line: number, snippet: string, offset: number): string =>
+      `src/scope.js:${line}:${renamed[line - 1]!.indexOf(snippet) + offset + 1}`
+    expect(places).toEqual([
+      at(3, 'e.map(String)', 0),
+      at(4, 'e + t', 0),
+      at(5, 'e.map(String)', 0),
+      at(6, '.map(e)', 5),
+      at(7, 'e(1)', 2),
+      at(7, 'return e', 7),
+      at(8, '.map(e)', 5),
+      at(9, '[e]', 1),
+      at(10, '[e]', 1),
+    ])
   })
 })
 
@@ -227,34 +225,14 @@ describe('AC-used-atoms-09 — every shape that resolves statically, and the set
 })
 
 describe('AC-used-atoms-10 — anything else is a build error, never a warning', () => {
-  const rows: [string, string][] = [
-    ['assigned again', "let v = 'flex'; v = 'grid'; cx(v)"],
-    ['updated', "let u = 'flex'; u += ''; cx(u)"],
-    ['no initialiser', "let w; w = 'flex'; cx(w)"],
-    ['parameter', 'export function C(p) { return cx(p) }'],
-    ['member (a prop)', 'export const C = (props) => cx(props.variant)'],
-    ['call', 'cx(pick())'],
-    ['array element', "const arr = ['flex']; cx(arr[0])"],
-    ['spread', 'export const C = (props) => cx(...props.list)'],
-    ['substitution', "cx(`fl${'ex'}`)"],
-    [
-      'one branch unresolvable',
-      "export const C = (props) => cx(props.on ? 'flex' : props.variant)",
-    ],
-    [
-      'not in an enclosing scope',
-      "function a() { const s = 'flex'; return s } export function b() { return cx(s) }",
-    ],
-    ['whitespace', "cx('flex gap')"],
-    ['trailing space', "cx('flex ')"],
-    ['leading space', "cx(' flex')"],
-  ]
+  const rows = ARGUMENT_ROWS
 
   it.each(rows)('%s fails with exactly one problem under every onUnknown', async (_name, body) => {
     for (const onUnknown of ['error', 'warn', 'ignore'] as const) {
       const built = await build({ 'src/row.js': `${IMPORT}${body}\n` }, { options: { onUnknown } })
 
       expect(built.error, onUnknown).toMatch(/^1 problem in 1 file/)
+      expect(built.warnings, onUnknown).toEqual([])
     }
   })
 
@@ -453,21 +431,23 @@ describe('AC-used-atoms-35 — in dev, a per-module error with the same line tex
   }, 60_000)
 
   it('gives an application error for every row of AC-05, AC-10 and AC-31 that is application code, and none under all', async () => {
-    const app = makeUsedApp(
-      appFiles({
-        'src/Bad.js': `${IMPORT}export const f = cx\n`,
-        'src/Unk.js': `${IMPORT}export const u = cx('interactve')\n`,
-        'src/Cat.js': "export const c = (tone) => 'nave-' + tone\n",
-        'src/Dyn.js': `${IMPORT}export const d = (t) => cx.dynamic(t)\n`,
-      }),
-    )
+    const files: Record<string, string> = {}
+    for (const [, file, text] of REFERENCE_ROWS) files[file] = text
+    ARGUMENT_ROWS.forEach(([, body], index) => {
+      files[`src/arg${index}.js`] = `${IMPORT}${body}\n`
+    })
+    PIECED_CLASS_ROWS.forEach(([expression], index) => {
+      files[`src/piece${index}.js`] = pieceModule(expression).text
+    })
+    files['src/Dyn.js'] = `${IMPORT}export const d = (t) => cx.dynamic(t)\n`
+    const app = makeUsedApp(appFiles(files))
     try {
       const used = await startDev(appConfig(app.root, 'postcss', [navePlugin()]))
       const all = await startDev(appConfig(app.root, 'postcss', [navePlugin({ atomic: 'all' })]))
       try {
-        for (const file of ['Bad.js', 'Unk.js', 'Cat.js', 'Dyn.js']) {
-          await expect(used.transformRequest(`/src/${file}`), file).rejects.toThrow(`src/${file}:`)
-          await expect(all.transformRequest(`/src/${file}`), file).resolves.toBeTruthy()
+        for (const file of Object.keys(files)) {
+          await expect(used.transformRequest(`/${file}`), file).rejects.toThrow(`${file}:`)
+          await expect(all.transformRequest(`/${file}`), file).resolves.toBeTruthy()
         }
       } finally {
         await used.close()
@@ -476,7 +456,7 @@ describe('AC-used-atoms-35 — in dev, a per-module error with the same line tex
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  }, 120_000)
 
   it('reports no error in dev for a dependency’s problem', async () => {
     const app = makeUsedApp(

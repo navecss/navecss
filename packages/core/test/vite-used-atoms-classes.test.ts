@@ -23,12 +23,12 @@ import {
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
 import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
+import { IMPORT, PIECED_CLASS_ROWS, pieceModule } from './helpers/used-atoms-rows.ts'
 import { startDev, appConfig } from './helpers/vite-app.ts'
 import type { Transformer } from './helpers/vite-app.ts'
 
 const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 
 describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
   describe('AC-used-atoms-29 — a skip link in index.html after a newline is emitted whole', () => {
@@ -173,17 +173,6 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
 
 describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
   describe('AC-used-atoms-31 — a Nave class built from pieces is a build error; a token reference is not', () => {
-    const errors = [
-      "'nave-' + tone",
-      '`nave-${tone}`',
-      'cx.raw(`nave-${tone}`)',
-      'css`nave-${tone}`',
-      "'btn nave-' + tone",
-      "'nave-flex-' + tone",
-      "'nave-' + 'flex'",
-      '`nave-flex` + tone',
-      "'Release nave-' + tone",
-    ]
     const greens = [
       '`color: var(--nave-color-${tone})`',
       "'--nave-' + tone",
@@ -192,19 +181,17 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       "tone + 'nave-'",
       "'nave-flex ' + tone",
     ]
-    const module = (expression: string): Record<string, string> => ({
-      'src/row.js': `${IMPORT}const css = (s, ...v) => s.join('')\nexport const row = (tone) => ${expression}\nconsole.log(row, cx('flex'), css)\n`,
-    })
 
-    it.each(errors)(
+    it.each(PIECED_CLASS_ROWS)(
       'refuses %s with one problem at the piece',
-      async (expression) => {
-        const app = makeUsedApp(appFiles(module(expression)))
+      async (expression, offset) => {
+        const { text, column } = pieceModule(expression)
+        const app = makeUsedApp(appFiles({ 'src/row.js': text }))
         try {
           const built = await buildUsed(app, { transformer })
 
           expect(built.error).toMatch(/^1 problem in 1 file/)
-          expect(built.error).toContain('src/row.js:3:')
+          expect(built.error).toContain(`src/row.js:3:${column + offset}: `)
           expect(built.error).toContain('a Nave class built from pieces is invisible to the build')
         } finally {
           app.dispose()
@@ -216,11 +203,12 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
     it.each(greens)(
       'allows %s with no warning',
       async (expression) => {
-        const app = makeUsedApp(appFiles(module(expression)))
+        const app = makeUsedApp(appFiles({ 'src/row.js': pieceModule(expression).text }))
         try {
           const built = await buildUsed(app, { transformer })
 
           expect(built.error).toBeUndefined()
+          expect(built.warnings).toEqual([])
         } finally {
           app.dispose()
         }
