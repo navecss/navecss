@@ -29,11 +29,12 @@ function mount(...layers: string[]): void {
   document.head.append(style)
 }
 
-async function focusedRing(): Promise<CSSStyleDeclaration> {
+async function focusedRing(textColor?: string): Promise<CSSStyleDeclaration> {
   const button = document.createElement('button')
   button.type = 'button'
   button.className = 'nave-focus-ring'
   button.textContent = 'focus me'
+  if (textColor) button.style.color = textColor
   document.body.append(button)
 
   await userEvent.tab()
@@ -42,32 +43,40 @@ async function focusedRing(): Promise<CSSStyleDeclaration> {
   return getComputedStyle(button)
 }
 
+// An unlayered custom-property rule wins over the token layer's @layer declarations, whatever the
+// order the two are mounted in.
+const FOCUS_TOKEN_OVERRIDE =
+  ':root { --nave-border-width-focus: 5px; --nave-color-border-focus: rgb(1, 2, 3); }'
+
 describe('focusRing still draws a ring without a complete token layer', () => {
-  it('with the shipped tokens, the ring reads the focus tokens (control: the fixture is real)', async () => {
+  it('with the shipped tokens, draws a solid ring offset by 2px', async () => {
     mount(TOKENS_CSS)
-    const probe = document.createElement('span')
-    probe.style.borderWidth = 'var(--nave-border-width-focus)'
-    probe.style.borderStyle = 'solid'
-    document.body.append(probe)
-    const tokenWidth = getComputedStyle(probe).borderTopWidth
-    probe.remove()
-    expect(tokenWidth).not.toBe('0px')
 
     const ring = await focusedRing()
 
     expect(ring.outlineStyle).toBe('solid')
-    expect(ring.outlineWidth).toBe(tokenWidth)
+    expect(ring.outlineOffset).toBe('2px')
+  })
+
+  it('with the shipped tokens and an override of both focus properties, the ring reads the override', async () => {
+    mount(TOKENS_CSS, FOCUS_TOKEN_OVERRIDE)
+
+    const ring = await focusedRing()
+
+    expect(ring.outlineStyle).toBe('solid')
+    expect(ring.outlineWidth).toBe('5px')
+    expect(ring.outlineColor).toBe('rgb(1, 2, 3)')
     expect(ring.outlineOffset).toBe('2px')
   })
 
   it('with no token layer at all, draws a 2px ring in the element’s own text colour', async () => {
     mount()
 
-    const ring = await focusedRing()
+    const ring = await focusedRing('rgb(10, 120, 200)')
 
     expect(ring.outlineStyle).toBe('solid')
     expect(ring.outlineWidth).toBe('2px')
-    expect(ring.outlineColor).toBe(ring.color)
+    expect(ring.outlineColor).toBe('rgb(10, 120, 200)')
     expect(ring.outlineOffset).toBe('2px')
   })
 
@@ -80,12 +89,25 @@ describe('focusRing still draws a ring without a complete token layer', () => {
     expect(ring.outlineWidth).toBe('2px')
   })
 
-  it('with a defined but wrong-typed width, still draws a ring rather than none', async () => {
-    mount(':root { --nave-border-width-focus: banana; --nave-color-border-focus: 3px; }')
+  it('with a wrong-typed colour, still draws a 2px ring in the element’s own text colour', async () => {
+    mount(':root { --nave-color-border-focus: 3px; }')
 
     const ring = await focusedRing()
 
     expect(ring.outlineStyle).toBe('solid')
-    expect(ring.outlineWidth).not.toBe('0px')
+    expect(ring.outlineWidth).toBe('2px')
+    expect(ring.outlineColor).toBe(ring.color)
+  })
+
+  // The shipped tokens register --nave-border-width-focus, and a registered property resets to its
+  // registered initial value on a wrong-typed value. This fixture deliberately leaves it
+  // unregistered, so the wrong-typed value reaches the outline-width declaration itself.
+  it('with a wrong-typed width, still draws a ring, at the default width', async () => {
+    mount(':root { --nave-border-width-focus: banana; }')
+
+    const ring = await focusedRing()
+
+    expect(ring.outlineStyle).toBe('solid')
+    expect(ring.outlineWidth).toBe('3px')
   })
 })

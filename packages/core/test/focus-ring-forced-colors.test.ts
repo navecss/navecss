@@ -145,11 +145,12 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
   })
 
   // The ring must survive a missing, partial or wrong-typed token layer. A `var()` fallback covers
-  // the first two; the longhand split covers the third, because an invalid longhand falls back to
-  // its own initial value where an invalid `outline` shorthand falls back to `none` as a whole.
-  // The fallbacks themselves are pinned so that the degraded ring cannot quietly become an
-  // author-picked colour (it is the element's own text colour, which is never invisible against
-  // the element's own background) or a hairline.
+  // the first two. The longhand split covers the third: an invalid longhand takes only its own
+  // initial value, while an invalid `outline` shorthand resets every longhand, and the initial
+  // `outline-style` is `none`. (A wrong-typed value in a registered property never gets that far:
+  // the property resets to its registered initial value first.) The fallbacks themselves are
+  // pinned so that the degraded ring cannot quietly become an author-picked colour or a hairline:
+  // the colour falls back to `currentColor`, the element's own text colour, and the width to 2px.
   it('draws a ring when the tokens are missing: longhands, never the outline shorthand', () => {
     const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
     const shorthandRings = decls.filter(

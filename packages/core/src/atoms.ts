@@ -245,9 +245,9 @@ export const atoms = {
    * focusRing — keyboard focus indicator.
    * :focus-visible — keyboard users see it, mouse users do not.
    *
-   * Longhands with fallbacks, not an `outline` shorthand: a shorthand holding an unresolved
-   * `var()` (no token layer, a layer missing the property, a wrong-typed value) is invalid as
-   * a whole and computes to `none`. The fallbacks are 2px and `currentColor`, never a colour.
+   * Longhands with fallbacks, not an `outline` shorthand, which computes to `none` as a whole when
+   * a `var()` in it has no usable value: no token layer, a missing property, or a wrong-typed value
+   * in an unregistered property. The fallbacks are 2px and `currentColor`, never a literal colour.
    */
   focusRing: {
     declarations: {
