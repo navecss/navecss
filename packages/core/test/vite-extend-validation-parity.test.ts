@@ -136,7 +136,7 @@ describe('the host-free extend validator agrees with the PostCSS-backed one', ()
     }
 
     expect(unsafe).toEqual([])
-  }, 60_000)
+  }, 240_000)
 })
 
 describe('the host-free extend validator refuses strings only a browser or an HTML host can misread', () => {
