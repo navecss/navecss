@@ -1,0 +1,49 @@
+name: Set up the toolchain and dependencies
+description: >-
+  Installs the mise-pinned Node and pnpm from mise.toml (or another Node, for the engines-floor
+  legs) and the workspace dependencies from the frozen lockfile. Every code-quality job starts
+  here, so the toolchain is installed one way, in one place.
+
+inputs:
+  node-version:
+    description: >-
+      A Node version to use instead of mise.toml's pin. Empty (the default) keeps the pin; the
+      Node-floor legs pass the package.json "engines" floor.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # mise reads MISE_NODE_VERSION in place of the node pin in mise.toml, so the floor legs get
+    # their Node from the same installer, alongside the same pinned pnpm.
+    - name: Use Node ${{ inputs.node-version }} instead of the mise.toml pin
+      if: inputs.node-version != ''
+      shell: bash
+      env:
+        NODE_VERSION: ${{ inputs.node-version }}
+      run: echo "MISE_NODE_VERSION=$NODE_VERSION" >> "$GITHUB_ENV"
+
+    - name: Install mise-pinned toolchain (node + pnpm)
+      uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5 # v5.0.0
+      with:
+        version: 2026.8.3
+        # One cache per Node: the floor legs install a different Node from the same mise.toml.
+        cache_key: '{{default}}-node{{env.MISE_NODE_VERSION}}'
+
+    - name: Resolve pnpm store path
+      id: pnpm-cache
+      shell: bash
+      run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache pnpm store
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+
+    - name: Install dependencies (frozen lockfile)
+      shell: bash
+      run: pnpm install --frozen-lockfile

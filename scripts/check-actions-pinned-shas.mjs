@@ -38,6 +38,12 @@
  * `uses:` key needs to know it sits inside a scalar block, which needs a YAML parser this file
  * deliberately does not carry (see below).
  *
+ * Composite actions under `.github/actions/<name>/action.yml` (or `action.yaml`) are read the
+ * same way: a workflow step that runs `./.github/actions/setup` is exempt above because it runs
+ * from this tree, but the `uses:` lines INSIDE that action reach third parties exactly as a
+ * workflow's own do, so a pin missing there is the same gap one file further away. Their
+ * directory is optional, since a repository need not have any.
+ *
  * This check fails closed when `.github/workflows/` is missing or empty (no `.yml`/`.yaml`
  * file in it): the alternative, printing "0 `uses:` line(s) across 0 workflow file(s) checked,
  * 0 pinned to a tag", would read as a clean run indistinguishable from one that genuinely had
@@ -55,12 +61,13 @@
  * Unlike its sibling `check-pr-merge-ancestry.mjs`, this check is entirely offline
  * against the working tree — no network, no `gh` CLI — so it IS wired into `scripts:check`.
  */
-import { readdirSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WORKFLOWS_DIR = path.join(ROOT, '.github', 'workflows')
+const ACTIONS_DIR = path.join(ROOT, '.github', 'actions')
 
 /**
 A full, lower- or upper-case, 40-character commit SHA and nothing else.
@@ -143,15 +150,41 @@ function listWorkflowFiles() {
 }
 
 /**
-Walk every workflow file, returning the violations plus the census the printed line reports.
+ * Composite action metadata files under `.github/actions/`, as paths relative to the
+ * repository root, sorted. An absent directory is zero actions, not a failure.
+ */
+function listCompositeActionFiles() {
+  let entries
+  try {
+    entries = readdirSync(ACTIONS_DIR, { withFileTypes: true })
+  } catch (error) {
+    if (error.code === 'ENOENT') return []
+    throw error
+  }
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) =>
+      ['action.yml', 'action.yaml']
+        .filter((name) => existsSync(path.join(ACTIONS_DIR, entry.name, name)))
+        .map((name) => path.posix.join('.github', 'actions', entry.name, name)),
+    )
+    .sort()
+}
+
+/**
+ * Walk every workflow file and composite action, returning the violations plus the census the
+ * printed line reports.
  */
 function survey() {
   const violations = []
   let totalUsesLines = 0
-  const files = listWorkflowFiles()
+  const workflowFiles = listWorkflowFiles().map((file) =>
+    path.posix.join('.github', 'workflows', file),
+  )
+  const actionFiles = listCompositeActionFiles()
 
-  for (const file of files) {
-    const content = readFileSync(path.join(WORKFLOWS_DIR, file), 'utf8')
+  for (const file of [...workflowFiles, ...actionFiles]) {
+    const content = readFileSync(path.join(ROOT, file), 'utf8')
     const specifiers = extractUsesSpecifiers(content)
     totalUsesLines += specifiers.length
     for (const { line, specifier } of specifiers) {
@@ -161,7 +194,12 @@ function survey() {
     }
   }
 
-  return { fileCount: files.length, totalUsesLines, violations }
+  return {
+    actionCount: actionFiles.length,
+    fileCount: workflowFiles.length,
+    totalUsesLines,
+    violations,
+  }
 }
 
 /**
@@ -169,11 +207,12 @@ function survey() {
  * exiting non-zero if the survey itself fails or any violation is found.
  */
 function main() {
+  let actionCount
   let fileCount
   let totalUsesLines
   let violations
   try {
-    ;({ fileCount, totalUsesLines, violations } = survey())
+    ;({ actionCount, fileCount, totalUsesLines, violations } = survey())
   } catch (error) {
     console.error(`GitHub Actions SHA pin gate: ${error.message}`)
     process.exitCode = 1
@@ -185,7 +224,7 @@ function main() {
       'GitHub Actions SHA pin gate: a `uses:` reference is not pinned to a full commit SHA:\n',
     )
     for (const { file, line, specifier } of violations) {
-      console.error(`  - .github/workflows/${file}:${line}: uses: ${specifier}`)
+      console.error(`  - ${file}:${line}: uses: ${specifier}`)
     }
     console.error(
       '\nPin `uses:` to the full 40-character commit SHA it should resolve to, keeping the ' +
@@ -197,7 +236,8 @@ function main() {
 
   console.log(
     `GitHub Actions SHA pin gate: ${totalUsesLines} \`uses:\` line(s) across ${fileCount} ` +
-      `workflow file(s) checked, 0 pinned to a tag rather than a commit SHA.`,
+      `workflow file(s) and ${actionCount} composite action file(s) checked, 0 pinned to a tag ` +
+      'rather than a commit SHA.',
   )
 }
 
