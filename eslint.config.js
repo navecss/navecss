@@ -259,7 +259,11 @@ export default defineConfig([
   // worker's build runs is its sibling: the same host convention, hooks whose `this` is the
   // host's plugin context.
   {
-    files: ['**/src/vite-collect-plugin.ts', '**/src/vite-worker-collect.ts'],
+    files: [
+      '**/src/vite-builds.ts',
+      '**/src/vite-collect-plugin.ts',
+      '**/src/vite-worker-collect.ts',
+    ],
     rules: { 'unicorn/no-this-outside-of-class': 'off' },
   },
 

@@ -1,10 +1,11 @@
 /**
- * The build-end check that every module importing Nave's own `cx` file was recognised as doing so.
- * The collector recognises an import by the specifier `@navecss/core/cx` as written, but a Vite
- * alias is resolved after the text is read, so an import through one (`#cx`) would be unfollowed
- * and every call made through it would ship with no rule. The module graph does not lie: it lists
- * the importers of the resolved file, so any importer whose text lacks the specifier reached it
- * another way, and the build fails naming the importer and the specifier it used.
+ * The build-end check that every import of Nave's own `cx` file was recognised as one. The
+ * collector recognises an import by the specifier `@navecss/core/cx` as written, but a Vite alias
+ * is resolved after the text is read, so an import through one (`#cx`) would be unfollowed and
+ * every call made through it would ship with no rule. The module graph does not lie: it lists the
+ * importers of the resolved file, and the specifiers each one writes are read from its parse, so
+ * an importer that reaches the file through any specifier but the package's, whatever else its
+ * text says and whatever else it imports, fails the build naming the importer and the specifier.
  */
 import path from 'node:path'
 
@@ -41,8 +42,7 @@ async function isStoodInFor(context: UsedContext, id: string): Promise<boolean> 
 }
 
 /**
- * The importer `id` with its text, unless it is Nave's own, in a package `keepFor` stands in for,
- * or holds the specifier in its text, where the collector read it.
+ * The importer `id` with its text, unless it is Nave's own or in a package `keepFor` stands in for.
  */
 async function candidateOf(
   ctx: RenderContext,
@@ -50,8 +50,7 @@ async function candidateOf(
   id: string,
 ): Promise<Importer | undefined> {
   const code = ctx.getModuleInfo?.(id)?.code
-  if (code === null || code === undefined) return undefined
-  if (code.includes(CX_SOURCE) || isNaveOwn(id)) return undefined
+  if (code === null || code === undefined || isNaveOwn(id)) return undefined
   return (await isStoodInFor(context, id)) ? undefined : { id, code }
 }
 
@@ -71,31 +70,34 @@ function specifiersIn(program: AstNode): string[] {
 }
 
 /**
- * Every specifier `importer` writes, or none when its text cannot be read.
+ * Every specifier `importer` writes, or `undefined` when its text cannot be read.
  */
-function specifiersOf(ctx: RenderContext, importer: Importer): string[] {
+function specifiersOf(ctx: RenderContext, importer: Importer): string[] | undefined {
   try {
     return specifiersIn(ctx.parse?.(importer.code) as AstNode)
   } catch {
-    return []
+    return undefined
   }
 }
 
 /**
- * Which of `specifiers`, as written in `importer`, resolve to `cxId`.
+ * Whether `specifier` resolves to `cxId`, asked once per specifier: an alias is the same from
+ * every importer. A relative specifier is not asked; it names a file beside the importer, never
+ * the installed package's.
  */
-async function specifiersOfCx(
+async function isResolvingToCx(
   ctx: RenderContext,
+  specifier: string,
   importer: Importer,
-  specifiers: readonly string[],
-  cxId: string,
-): Promise<string[]> {
-  const found: string[] = []
-  for (const specifier of specifiers) {
-    const resolved = await ctx.resolve?.(specifier, importer.id)
-    if (resolved?.id === cxId) found.push(specifier)
-  }
-  return found
+  known: { readonly answers: Map<string, boolean>; readonly cxId: string },
+): Promise<boolean> {
+  if (specifier === CX_SOURCE || specifier.startsWith('.')) return false
+  const answered = known.answers.get(specifier)
+  if (answered !== undefined) return answered
+  const resolved = await ctx.resolve?.(specifier, importer.id)
+  const isCx = resolved?.id === known.cxId
+  known.answers.set(specifier, isCx)
+  return isCx
 }
 
 /**
@@ -109,19 +111,27 @@ function lineFor(label: string, specifiers: readonly string[]): string {
 }
 
 /**
- * The line for `importer` when the collector did not read it as importing `cx`, or `undefined`
- * when it did: an escape in the specifier hides it from a search of the text, not from the reading.
+ * The line for `importer` when the collector did not read all of its imports of `cx`, or
+ * `undefined` when it did: the specifiers it writes that reach the file other than as the
+ * package's own, or, when there are none, the lack of the package's specifier in what it writes.
  */
 async function lineOf(
   ctx: RenderContext,
   context: UsedContext,
   importer: Importer,
-  cxId: string,
+  known: { readonly answers: Map<string, boolean>; readonly cxId: string },
 ): Promise<string | undefined> {
   const written = specifiersOf(ctx, importer)
-  if (written.includes(CX_SOURCE)) return undefined
-  const specifiers = await specifiersOfCx(ctx, importer, written, cxId)
-  return lineFor(moduleLabel(context.root, importer.id), specifiers)
+  const unread: string[] = []
+  const specifiers = written ?? []
+  for (const specifier of specifiers) {
+    if (await isResolvingToCx(ctx, specifier, importer, known)) unread.push(specifier)
+  }
+  const label = moduleLabel(context.root, importer.id)
+  if (unread.length > 0) return lineFor(label, unread)
+  // An escape in the specifier hides it from a search of the text, not from the parse.
+  const isRead = written?.includes(CX_SOURCE) ?? importer.code.includes(CX_SOURCE)
+  return isRead ? undefined : lineFor(label, [])
 }
 
 /**
@@ -131,10 +141,11 @@ async function lineOf(
 export async function checkCxImporters(ctx: RenderContext, context: UsedContext): Promise<void> {
   const resolved = await ctx.resolve?.(CX_SOURCE, path.join(context.root, 'index.html'))
   if (!resolved) return
+  const known = { cxId: resolved.id, answers: new Map<string, boolean>() }
   const lines: string[] = []
   for (const id of importerIdsOf(ctx, resolved.id)) {
     const importer = await candidateOf(ctx, context, id)
-    const line = importer && (await lineOf(ctx, context, importer, resolved.id))
+    const line = importer && (await lineOf(ctx, context, importer, known))
     if (line) lines.push(line)
   }
   if (lines.length === 0) return

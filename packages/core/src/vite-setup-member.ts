@@ -39,17 +39,27 @@ function isOutsideFunctions(node: AstNode, parentOf: ReadonlyMap<AstNode, AstNod
 }
 
 /**
- * Whether `identifier` reads the `$setup` parameter of a compiled template's render function: its
- * fourth parameter, in a function at the top of the module. A name the template declares itself
- * (a `v-for` alias is a parameter of a function inside the render function) is not it.
+ * Where a compiled render function takes `$setup`: fourth for the client's `render`, sixth for the
+ * server's `ssrRender(_ctx, _push, _parent, _attrs, $props, $setup, ...)`.
+ */
+const SETUP_PARAMETER_POSITIONS: readonly number[] = [3, 5]
+
+/**
+ * Whether `identifier` reads the `$setup` parameter of a compiled template's render function: the
+ * parameter of that name in the position the client or the server signature gives it, of a
+ * function at the top of the module. A name the template declares itself (a `v-for` alias is a
+ * parameter of a function inside the render function) is not it.
  */
 export function isSetupParameter(analysis: ScopeAnalysis, identifier: AstNode): boolean {
   const binding = analysis.referenceOf(identifier)?.binding
   const owner = binding?.owner
-  if (!owner || binding.kind !== 'param') return false
+  if (!owner || binding.kind !== 'param' || binding.name !== '$setup') return false
   if (!isOutsideFunctions(owner, analysis.parentOf)) return false
-  const fourth = nodesAt(owner, 'params')[3]
-  return fourth?.type === 'Identifier' && stringAt(fourth, 'name') === binding.name
+  const params = nodesAt(owner, 'params')
+  return SETUP_PARAMETER_POSITIONS.some((position) => {
+    const parameter = params[position]
+    return parameter?.type === 'Identifier' && stringAt(parameter, 'name') === binding.name
+  })
 }
 
 /**

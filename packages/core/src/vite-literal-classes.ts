@@ -5,9 +5,18 @@
  */
 import type { AstNode } from './vite-ast.ts'
 import type { Problem } from './vite-problems.ts'
+import type { ScopeAnalysis } from './vite-scope.ts'
 
 import { atomClassMap } from './atoms.ts'
-import { childrenOf, nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'
+import { childrenOf, nodeAt, nodesAt } from './vite-ast.ts'
+import {
+  isIdentChar,
+  isPlus,
+  type Piece,
+  type PieceMemo,
+  rightmostPiece,
+} from './vite-class-pieces.ts'
+import { stringValues } from './vite-string-values.ts'
 
 const ATOM_OF_CLASS: ReadonlyMap<string, string> = new Map(
   Object.entries(atomClassMap).map(([atom, className]) => [className, atom]),
@@ -18,14 +27,6 @@ const ATOM_OF_CLASS: ReadonlyMap<string, string> = new Map(
  */
 export function atomOfClass(className: string): string | undefined {
   return ATOM_OF_CLASS.get(className)
-}
-
-/**
- * Whether `char` can occur in a CSS identifier.
- */
-function isIdentChar(char: string | undefined): boolean {
-  if (char === undefined) return false
-  return /[\w-]/.test(char) || char.codePointAt(0)! >= 0x80
 }
 
 /**
@@ -75,148 +76,47 @@ function isEndingInNavePrefix(text: string): boolean {
 }
 
 /**
- * The string at the end of an expression, as far as a `nave-` prefix is concerned: only the
- * identifier the text ends in matters, and only its first five characters.
+ * Whether what `operand` can be only ends an identifier: every value is a string that is empty or
+ * starts with a character that cannot continue a CSS identifier (a backslash can, as an escape).
+ * The class on its left is then whole in what the build reads. An operand that can be anything
+ * else, or that does not resolve, may continue the identifier.
  */
-interface Piece {
-  /**
-   * Where a problem is reported: the first literal of the run of adjacent literals the piece ends.
-   */
-  readonly node: AstNode
-  /**
-   * The first five characters of the identifier the text ends in (`nave-` is exactly five).
-   */
-  readonly head: string
-  /**
-   * Whether that identifier starts at the very beginning of the text, so text joined before it
-   * continues the identifier.
-   */
-  readonly isOpen: boolean
+function isEndingTheClass(operand: AstNode | undefined, analysis: ScopeAnalysis): boolean {
+  const values = stringValues(operand, analysis)
+  if (!values) return false
+  return values.every((value) => value === '' || !(isIdentChar(value[0]) || value.startsWith('\\')))
 }
 
 /**
- * What an expression's right edge and its pieces were already found to be, so a long chain of
- * concatenations is read once however many operators it holds.
+ * Whether `node` is a template literal with a piece that ends in `nave-` followed by a
+ * substitution that can continue the identifier.
  */
-interface PieceMemo {
-  readonly edges: Map<AstNode, Piece | undefined>
-  readonly rightmost: Map<AstNode, Piece | undefined>
-}
-
-/**
- * The piece a string of `text` ends in.
- */
-function pieceOfText(node: AstNode, text: string): Piece {
-  let start = text.length
-  while (start > 0 && isIdentChar(text[start - 1])) start -= 1
-  return { node, head: text.slice(start, start + 5), isOpen: start === 0 }
-}
-
-/**
- * The piece a string literal, or the last piece of a template literal, is; `undefined` for any
- * other node.
- */
-function leafPiece(node: AstNode): Piece | undefined {
-  const whole = staticStringOf(node)
-  if (whole !== undefined) return pieceOfText(node, whole)
-  if (node.type !== 'TemplateLiteral') return undefined
-  const cooked = (nodesAt(node, 'quasis').at(-1)?.value as { cooked?: string } | undefined)?.cooked
-  return cooked === undefined ? undefined : pieceOfText(node, cooked)
-}
-
-/**
- * Whether `node` is a binary `+`.
- */
-function isPlus(node: AstNode | undefined): node is AstNode {
-  return node?.type === 'BinaryExpression' && node.operator === '+'
-}
-
-/**
- * The string at the right edge of `start`, when it ends in one: what is concatenated next.
- */
-function edgePiece(start: AstNode | undefined, memo: PieceMemo): Piece | undefined {
-  const path: AstNode[] = []
-  let node = start
-  while (isPlus(node) && !memo.edges.has(node)) {
-    path.push(node)
-    node = nodeAt(node, 'right')
-  }
-  let found: Piece | undefined
-  if (node !== undefined) found = memo.edges.has(node) ? memo.edges.get(node) : leafPiece(node)
-  for (const visited of path) memo.edges.set(visited, found)
-  return found
-}
-
-/**
- * The piece `last` makes with the `before` it directly follows: the identifier they end in runs
- * back through `before` when `last` is nothing but identifier characters.
- */
-function joinPieces(before: Piece, last: Piece): Piece {
-  if (!last.isOpen) return { node: before.node, head: last.head, isOpen: false }
-  return {
-    node: before.node,
-    head: (before.head + last.head).slice(0, 5),
-    isOpen: before.isOpen,
-  }
-}
-
-/**
- * The piece the `+` `link` ends in, given the piece its left operand ends in (`before`) and the
- * one at its right edge (`last`): the two joined when `last` is the right operand itself.
- */
-function pieceOfPlus(
-  link: AstNode,
-  before: Piece | undefined,
-  last: Piece | undefined,
-): Piece | undefined {
-  if (last === undefined) return undefined
-  const isAdjacent = before !== undefined && nodeAt(link, 'right') === last.node
-  return isAdjacent ? joinPieces(before, last) : last
-}
-
-/**
- * The string `start` ends in, joined with the adjacent string literals before it in a `+` chain,
- * so a prefix split across literals (`'na' + 've-'`) reads as one. The piece's node is the first
- * literal of the run, where the problem is reported. A left-leaning chain is followed along its
- * spine, innermost first, never by recursion.
- */
-function rightmostPiece(start: AstNode | undefined, memo: PieceMemo): Piece | undefined {
-  const spine: AstNode[] = []
-  let node = start
-  while (isPlus(node) && !memo.rightmost.has(node)) {
-    spine.push(node)
-    node = nodeAt(node, 'left')
-  }
-  let before: Piece | undefined
-  if (node !== undefined) {
-    before = memo.rightmost.has(node) ? memo.rightmost.get(node) : edgePiece(node, memo)
-  }
-  for (const link of spine.toReversed()) {
-    before = pieceOfPlus(link, before, edgePiece(link, memo))
-    memo.rightmost.set(link, before)
-  }
-  return before
-}
-
-/**
- * Whether `node` is a template literal piece followed by a substitution that ends in `nave-`.
- */
-function isBreakingOut(node: AstNode): boolean {
+function isBreakingOut(node: AstNode, analysis: ScopeAnalysis): boolean {
   if (node.type !== 'TemplateLiteral') return false
   const quasis = nodesAt(node, 'quasis')
-  return quasis.slice(0, -1).some((quasi) => {
+  const substitutions = nodesAt(node, 'expressions')
+  return quasis.slice(0, -1).some((quasi, index) => {
     const cooked = (quasi.value as { cooked?: string } | undefined)?.cooked
-    return cooked !== undefined && isEndingInNavePrefix(cooked)
+    return (
+      cooked !== undefined &&
+      isEndingInNavePrefix(cooked) &&
+      !isEndingTheClass(substitutions[index], analysis)
+    )
   })
 }
 
 /**
  * The piece that ends in `nave-` at the left of a `+`, when `node` is such a concatenation.
  */
-function concatenatedPiece(node: AstNode, memo: PieceMemo): Piece | undefined {
+function concatenatedPiece(
+  node: AstNode,
+  memo: PieceMemo,
+  analysis: ScopeAnalysis,
+): Piece | undefined {
   if (!isPlus(node)) return undefined
   const piece = rightmostPiece(nodeAt(node, 'left'), memo)
-  return piece?.head === 'nave-' ? piece : undefined
+  if (piece?.head !== 'nave-') return undefined
+  return isEndingTheClass(nodeAt(node, 'right'), analysis) ? undefined : piece
 }
 
 /**
@@ -257,14 +157,19 @@ const SENTENCE =
 /**
  * Every Nave class built from pieces in `program`, one problem per expression.
  */
-export function concatenationProblems(program: AstNode, code: string): Problem[] {
+export function concatenationProblems(
+  program: AstNode,
+  code: string,
+  analysis: ScopeAnalysis,
+): Problem[] {
   const problems: Problem[] = []
   const memo: PieceMemo = { edges: new Map(), rightmost: new Map() }
   const stack: AstNode[] = [program]
   while (stack.length > 0) {
     const node = stack.pop()!
     const offset =
-      concatenatedPiece(node, memo)?.node.start ?? (isBreakingOut(node) ? node.start : -1)
+      concatenatedPiece(node, memo, analysis)?.node.start ??
+      (isBreakingOut(node, analysis) ? node.start : -1)
     if (offset !== -1) {
       problems.push({
         kind: 'concatenation',

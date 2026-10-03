@@ -23,7 +23,7 @@ import { createUsedContext } from '../src/vite-used.ts'
 import { writeHandshake } from '../src/vite-handshake.ts'
 import { cut } from '../src/vite-problems.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from '../src/vite-prune.ts'
-import { placerFor } from '../src/vite-source-map.ts'
+import { positionIn } from '../src/vite-source-map.ts'
 import { stateFor } from '../src/vite-state.ts'
 import { isDeclaringCore } from '../src/vite-untransformed.ts'
 import { buildReport, type LocatedProblem } from '../src/vite-used-report.ts'
@@ -211,7 +211,7 @@ describe('a place in the module', () => {
     ['paragraph separator', 'a\u2029b'],
     ['line feed', 'a\nb'],
   ])('counts a %s as a line break', (_name, code) => {
-    expect(placerFor(code, undefined)(code.indexOf('b'))).toEqual({ line: 2, column: 1 })
+    expect(positionIn(code)(code.indexOf('b'))).toEqual({ line: 2, column: 1 })
   })
 })
 
@@ -403,9 +403,9 @@ describe('what a Vue script exposed before it was edited', () => {
     const id = '/exposure-root/Card.vue'
     const exposing = `${IMPORT}export default { setup() { const __returned__ = { get cx() { return cx } }; return __returned__ } }\n`
 
-    await recordModule(context, ctx, exposing, id)
+    await recordModule(context, ctx, { code: exposing, id })
     expect(context.state.exposures.size).toBe(1)
-    await recordModule(context, ctx, `${IMPORT}export const a = cx('flex')\n`, id)
+    await recordModule(context, ctx, { code: `${IMPORT}export const a = cx('flex')\n`, id })
 
     expect(context.state.exposures.size).toBe(0)
   })

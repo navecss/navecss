@@ -4,8 +4,16 @@
  * boundaries, a Nave class built from pieces is a build error, and every route to the atomic layer
  * is filtered by content.
  */
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
@@ -24,7 +32,12 @@ import {
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
 import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
-import { IMPORT, PIECED_CLASS_ROWS, pieceModule } from './helpers/used-atoms-rows.ts'
+import {
+  EXEMPT_PIECE_ROWS,
+  IMPORT,
+  PIECED_CLASS_ROWS,
+  pieceModule,
+} from './helpers/used-atoms-rows.ts'
 import { startDev, appConfig } from './helpers/vite-app.ts'
 import type { Transformer } from './helpers/vite-app.ts'
 
@@ -217,6 +230,23 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       60_000,
     )
 
+    it.each(EXEMPT_PIECE_ROWS)(
+      'allows %s, with no warning, and the layer holds exactly its atoms',
+      async (expression, expected) => {
+        const app = makeUsedApp(appFiles({ 'src/row.js': pieceModule(expression).text }))
+        try {
+          const built = await buildUsed(app, { transformer })
+
+          expect(built.error).toBeUndefined()
+          expect(built.warnings).toEqual([])
+          expect(atomLayerAtoms(built.css)).toEqual(atoms(...expected))
+        } finally {
+          app.dispose()
+        }
+      },
+      60_000,
+    )
+
     it('refuses it in a Svelte component, and in a dependency that imports cx but not in one that does not', async () => {
       const svelteApp = makeUsedApp(
         appFiles({
@@ -346,25 +376,53 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       for (const className of Object.values(atomClassMap)) expect(atomic).toContain(`.${className}`)
     })
 
-    it('ships the published stylesheets byte for byte as they were before the plugin read atoms', () => {
-      // SHA-256 of each file, taken from the build of the commit before the plugin read atoms;
-      // dist/atomic.css has its own checked-in snapshot.
-      const published: Record<string, string> = {
-        'index.css': '6eae13ef505be86381276dfb5d1a214bc372f1343e59d093bf76488bd88e5fdc',
-        'layers.css': '14eb8556452bed3c38ec650ea2aeaea802615b2ddd71c625dbd72b886eaa840c',
-        'no-tokens.css': 'a614e4b438c6f0f0f944504e56e22fc3d02adf7eaa67a0f64e192fd3ae98fc21',
-        'reset.css': '0c043840061f8763c0042fed1468fcbaf9667a33cb95542a0105f0ea71718805',
-      }
-      const hashes = Object.fromEntries(
-        Object.keys(published).map((name) => [
-          name,
-          createHash('sha256')
-            .update(readFileSync(path.join(CORE_ROOT, 'dist', name)))
-            .digest('hex'),
-        ]),
-      )
+    it('builds the published stylesheets from files no module of the Vite plugin can reach', () => {
+      // The build step runs from a copy of the package into a scratch directory, with every file it
+      // reads and every module it loads recorded. A lawful change to a stylesheet leaves this
+      // green; a module of the plugin getting into the build of a published file does not.
+      const work = mkdtempSync(path.join(CORE_ROOT, '.nave-css-build-'))
+      try {
+        mkdirSync(path.join(work, 'scripts'))
+        cpSync(path.join(CORE_ROOT, 'src'), path.join(work, 'src'), { recursive: true })
+        cpSync(
+          path.join(CORE_ROOT, 'scripts/build-css.ts'),
+          path.join(work, 'scripts/build-css.ts'),
+        )
+        const log = path.join(work, 'record.log')
+        writeFileSync(
+          path.join(work, 'hooks.mjs'),
+          "import { appendFileSync } from 'node:fs'\nexport async function load(url, context, next) {\n  if (url.startsWith('file:')) appendFileSync(process.env.NAVE_RECORD, `module ${url}\\n`)\n  return next(url, context)\n}\n",
+        )
+        writeFileSync(
+          path.join(work, 'record.mjs'),
+          "import fs from 'node:fs'\nimport { register, syncBuiltinESMExports } from 'node:module'\nimport { pathToFileURL } from 'node:url'\nregister(pathToFileURL(process.env.NAVE_HOOKS).href)\nconst read = fs.readFileSync\nfs.readFileSync = function (file, ...rest) {\n  fs.appendFileSync(process.env.NAVE_RECORD, `read ${file}\\n`)\n  return read.call(this, file, ...rest)\n}\nsyncBuiltinESMExports()\n",
+        )
+        const run = spawnSync(
+          process.execPath,
+          ['--import', path.join(work, 'record.mjs'), path.join(work, 'scripts/build-css.ts')],
+          {
+            cwd: work,
+            encoding: 'utf8',
+            env: { ...process.env, NAVE_RECORD: log, NAVE_HOOKS: path.join(work, 'hooks.mjs') },
+          },
+        )
+        const touched = readFileSync(log, 'utf8')
+          .split('\n')
+          .filter((line) => /^(?:read|module) /.test(line))
+          .map((line) => line.replace(/^(?:read|module) (?:file:\/\/)?/, ''))
+          .filter((file) => file.startsWith(work))
+        const names = touched.map((file) => path.relative(work, file).replaceAll('\\', '/'))
 
-      expect(hashes).toEqual(published)
+        expect(run.status, run.stderr).toBe(0)
+        // The recording sees the build: its inputs and the modules it imports.
+        expect(names).toContain('src/reset.css')
+        expect(names).toContain('src/atoms.ts')
+        expect(names).toContain('src/directive/resolve.ts')
+        expect(names.filter((name) => /^src\/vite[^/]*\.ts$/.test(name))).toEqual([])
+        expect(existsSync(path.join(work, 'dist/atomic.css'))).toBe(true)
+      } finally {
+        rmSync(work, { force: true, recursive: true })
+      }
     })
   })
 })

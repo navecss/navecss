@@ -2,11 +2,12 @@
  * The atom is the unit of emission. Inside `@layer atomic`, every rule whose selector needs an
  * element carrying a built-in atom class outside the emitted set goes, selector lists pruned
  * member by member and at-rules left empty dropped; every other byte of the stylesheet is kept as
- * it was. A selector needs such an element when the class sits in one of its own compounds, or in
- * every alternative of an `:is()` or `:where()` among them; a class inside `:not()`, `:has()` or
- * any other argument is not a need, because the rule can match without it. What stays is the
- * layer as Vite's own CSS step produced it (nested or lowered, per `css.transformer`), so an
- * emitted atom keeps every rule the full layer yields for it.
+ * it was. A member needs such an element when the class sits in one of its own compounds, or in
+ * every alternative of an `:is()` or `:where()` among them (see `vite-selector-atoms.ts`). A class
+ * inside `:not()`, `:has()` or any other functional argument never makes a member removable: the
+ * rule is kept, the safe direction. What stays is the layer as Vite's own CSS step produced it
+ * (nested or lowered, per `css.transformer`), so an emitted atom keeps every rule the full layer
+ * yields for it.
  */
 import type { Sheet, Statement } from './vite-css-blocks.ts'
 

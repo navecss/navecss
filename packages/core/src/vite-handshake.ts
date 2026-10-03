@@ -45,6 +45,11 @@ export interface Handshake {
    * build itself found a server set to union and so needs no later check.
    */
   readonly consumed: boolean
+  /**
+   * The atoms a server build already failed on against this client set. A server build that meets
+   * the same miss again, with no client build in between, leaves its own set instead of failing.
+   */
+  readonly serverFailed?: readonly string[]
   readonly keepFor?: Readonly<Record<string, PackageRecord>>
   /**
    * `keepFor` keys that name no package any environment of the writing invocation transformed.

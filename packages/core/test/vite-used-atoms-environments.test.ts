@@ -85,6 +85,26 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
     }
   }, 60_000)
 
+  it('keeps the atoms of two projects apart when one plugin instance builds both at once', async () => {
+    const a = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
+    const b = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('grid'))\n` }))
+    try {
+      const shared = navePlugin()
+      const [builtA, builtB] = await Promise.all([
+        buildUsed(a, { nave: shared }),
+        buildUsed(b, { nave: shared }),
+      ])
+
+      expect(builtA.error).toBeUndefined()
+      expect(builtB.error).toBeUndefined()
+      expect(atomLayerAtoms(builtA.css)).toEqual(['flex'])
+      expect(atomLayerAtoms(builtB.css)).toEqual(['grid'])
+    } finally {
+      a.dispose()
+      b.dispose()
+    }
+  }, 60_000)
+
   it('gives each environment its own plugin instance for one root the same CSS as a shared one', async () => {
     const app = ssrApp("cx('grid')")
     try {
@@ -235,7 +255,42 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     }
   }, 60_000)
 
-  it('does not pass silently when a server build runs alone after a finished pair', async () => {
+  /**
+   * The words of the warning a server build prints when it names an atom the last client build's
+   * set lacks.
+   */
+  const staleWarning = (app: ReturnType<typeof ssrApp>, lines: readonly string[]): string =>
+    [
+      `${path.join(app.root, '.vite', HANDSHAKE_FILE)} was written by a client build that was already used, so this server build could not be checked against the CSS. These atoms it names are not in that client build's set:`,
+      ...lines,
+      'They are recorded in that file for a client build that runs next; to have them in the CSS, build the server first, then the client (vite build --ssr, then vite build).',
+    ].join('\n')
+  const pluginWarnings = (built: { warnings?: readonly string[] }): string[] =>
+    (built.warnings ?? []).filter((message) => message.includes('[plugin nave'))
+  const editServer = (app: ReturnType<typeof ssrApp>, expression: string): void =>
+    writeFileSync(
+      path.join(app.root, 'src/entry-server.ts'),
+      `${IMPORT}export const s = ${expression}\n`,
+    )
+
+  it('does not pass silently when a server build run alone names an atom the last client build lacks', async () => {
+    const app = ssrApp("cx('grid')")
+    try {
+      await server(app)
+      await client(app)
+      editServer(app, "cx('block')")
+      const alone = await server(app)
+      const warnings = pluginWarnings(alone)
+
+      expect(alone.error).toBeUndefined()
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]).toContain(staleWarning(app, ['src/entry-server.ts: names block.']))
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('prints nothing when a server build run alone names only atoms the last client build holds', async () => {
     const app = ssrApp("cx('grid')")
     try {
       await server(app)
@@ -243,24 +298,76 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
       const alone = await server(app)
 
       expect(alone.error).toBeUndefined()
-      const warning = alone.warnings!.find((message) => message.includes('nave-used-atoms.json'))
-      expect(warning).toBeDefined()
-      expect(warning).toContain('build the server first')
+      expect(pluginWarnings(alone)).toEqual([])
     } finally {
       app.dispose()
     }
   }, 60_000)
 
-  it('fails every server build against a client CSS that lacks its atoms, not only the first', async () => {
+  it('runs a server-first pipeline three times with no edit: grid every time, no plugin warning', async () => {
     const app = ssrApp("cx('grid')")
     try {
-      const baseline = await client(app)
+      for (let run = 1; run <= 3; run += 1) {
+        const first = await server(app)
+        const second = await client(app)
+
+        expect(first.error, `run ${run} server`).toBeUndefined()
+        expect(second.error, `run ${run} client`).toBeUndefined()
+        expect(atomLayerAtoms(second.css), `run ${run}`).toContain('grid')
+        expect(pluginWarnings(first), `run ${run} server`).toEqual([])
+        expect(pluginWarnings(second), `run ${run} client`).toEqual([])
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('warns once, on the run that adds block, then is silent, and the CSS holds block from that run', async () => {
+    const app = ssrApp("cx('grid')")
+    try {
+      const warned: string[][] = []
+      for (let run = 1; run <= 3; run += 1) {
+        if (run > 1) editServer(app, "[cx('grid'), cx('block')]")
+        const first = await server(app)
+        const second = await client(app)
+
+        expect(first.error, `run ${run} server`).toBeUndefined()
+        expect(second.error, `run ${run} client`).toBeUndefined()
+        warned.push([...pluginWarnings(first), ...pluginWarnings(second)])
+        if (run > 1)
+          expect(atomLayerAtoms(second.css), `run ${run}`).toEqual(
+            atoms('flex', 'gap', 'grid', 'block'),
+          )
+      }
+
+      expect(warned[0]).toEqual([])
+      expect(warned[1]).toHaveLength(1)
+      expect(warned[1]![0]).toContain(staleWarning(app, ['src/entry-server.ts: names block.']))
+      expect(warned[2]).toEqual([])
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('leaves no deadlock after a client-only build: the server records its atoms, and the next client build holds them', async () => {
+    const app = ssrApp("cx('grid')")
+    try {
+      const alone = await client(app)
       const first = await server(app)
       const second = await server(app)
+      const last = await client(app)
 
-      expect(baseline.error).toBeUndefined()
+      expect(atomLayerAtoms(alone.css)).toEqual(atoms('flex', 'gap'))
+      // The client build of a client-first pipeline is the same file on disk, so the first server
+      // build still fails on a miss; a server build run again is what the failure asks for.
       expect(first.error).toContain('grid')
-      expect(second.error).toContain('grid')
+      expect(second.error).toBeUndefined()
+      expect(pluginWarnings(second)).toHaveLength(1)
+      expect(pluginWarnings(second)[0]).toContain(
+        staleWarning(app, ['src/entry-server.ts: names grid.']),
+      )
+      expect(last.error).toBeUndefined()
+      expect(atomLayerAtoms(last.css)).toEqual(atoms('flex', 'gap', 'grid'))
     } finally {
       app.dispose()
     }
@@ -342,8 +449,9 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
       const miss = await server(missApp)
       await server(staleApp)
       await client(staleApp)
+      editServer(staleApp, "cx('block')")
       const stale = await server(staleApp)
-      const warning = stale.warnings!.find((message) => message.includes('nave-used-atoms.json'))
+      const [warning] = pluginWarnings(stale)
 
       expect(miss.error).toContain('build the server first')
       expect(warning).toContain('build the server first')
@@ -351,6 +459,21 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       missApp.dispose()
       staleApp.dispose()
+    }
+  }, 120_000)
+
+  it('fails the client-first pair again on the second run, naming grid', async () => {
+    const app = ssrApp("cx('grid')")
+    try {
+      for (let run = 1; run <= 2; run += 1) {
+        await client(app)
+        const second = await server(app)
+
+        expect(second.error, `run ${run}`).toContain('grid')
+        expect(second.error, `run ${run}`).toContain('src/entry-server.ts')
+      }
+    } finally {
+      app.dispose()
     }
   }, 120_000)
 

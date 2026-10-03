@@ -167,6 +167,7 @@ describe('AC-used-atoms-06 — Vue templates as plugin-vue compiles them, and Sv
 
         expect(built.error).toMatch(/^1 problem in 1 file/)
         expect(built.error).toContain('src/Bad.vue:7:')
+        expect(built.error).not.toContain('line unknown')
         expect(built.error).toContain('cx(props.variant): the argument is not a literal atom name.')
       } finally {
         app.dispose()

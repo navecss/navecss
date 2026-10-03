@@ -18,10 +18,20 @@ export interface LocatedProblem extends Problem {
   readonly line: number
   readonly column: number
   /**
+   * Set when the source map does not lead to the authored position: `line` and `column` are then
+   * zero and mean nothing, and this is the sentence that ends the problem's line.
+   */
+  readonly unknownLine?: string | undefined
+  /**
    * The package name when the module lies under `node_modules`.
    */
   readonly pkg?: string | undefined
 }
+
+export const LINE_UNKNOWN_WITHOUT_MAP =
+  " (line unknown: this file's compiled code has no source map in this build; set build.sourcemap in the Vite config to report the line)"
+export const LINE_UNKNOWN_UNMAPPED =
+  ' (line unknown: no source map leads from the compiled code to this file)'
 
 export const REPORT_CAUSE =
   'the build cannot tell which atoms these apply, and it ships only the atoms it can read.'
@@ -49,10 +59,16 @@ const REMEDIES: Readonly<Record<ProblemKind, readonly string[]>> = {
  * The line a problem prints: its position, then the construct and the sentence.
  */
 function problemLine(problem: LocatedProblem): string {
-  const where = `${problem.file}:${problem.line}:${problem.column}: `
-  if (problem.construct === '') return `${where}${problem.text}`
+  const where =
+    problem.unknownLine === undefined
+      ? `${problem.file}:${problem.line}:${problem.column}: `
+      : `${problem.file}: `
+  const ending = problem.unknownLine ?? ''
+  if (problem.construct === '') return `${where}${problem.text}${ending}`
   const construct = cut(problem.construct)
-  return problem.text === '' ? `${where}${construct}` : `${where}${construct}: ${problem.text}`
+  return problem.text === ''
+    ? `${where}${construct}${ending}`
+    : `${where}${construct}: ${problem.text}${ending}`
 }
 
 /**
@@ -106,7 +122,11 @@ function inReportOrder(problems: readonly LocatedProblem[]): LocatedProblem[] {
   const rank = (problem: LocatedProblem): number => (problem.pkg === undefined ? 0 : 1)
   return problems.toSorted(
     (a, b) =>
-      rank(a) - rank(b) || compareText(a.file, b.file) || a.line - b.line || a.column - b.column,
+      rank(a) - rank(b) ||
+      compareText(a.file, b.file) ||
+      Number(a.unknownLine !== undefined) - Number(b.unknownLine !== undefined) ||
+      a.line - b.line ||
+      a.column - b.column,
   )
 }
 

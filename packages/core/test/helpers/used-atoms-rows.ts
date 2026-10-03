@@ -77,6 +77,19 @@ export const PIECED_CLASS_ROWS: readonly (readonly [string, number])[] = [
   ["'nave-' + 'flex'", 0],
   ['`nave-flex` + tone', 0],
   ["'Release nave-' + tone", 0],
+  ["'nave-flex' + (on ? 'nave-grid' : '')", 0],
+  ["'nave-flex' + (on && ' nave-grid')", 0],
+]
+
+/**
+ * The same criterion's green rows that name atoms: an expression over the parameter `on` whose
+ * right side can only end the identifier, and the atoms the layer must hold for it, since a row
+ * that built green and emitted nothing would ship the class with no rule.
+ */
+export const EXEMPT_PIECE_ROWS: readonly (readonly [string, readonly string[]])[] = [
+  ["'nave-flex' + (on ? ' nave-grid' : '')", ['flex', 'grid']],
+  ["`nave-flex${on ? ' nave-grid' : ''}`", ['flex', 'grid']],
+  ["'<i class=\"nave-flex' + '\">'", ['flex']],
 ]
 
 /**
@@ -87,7 +100,7 @@ export function pieceModule(expression: string): {
   readonly text: string
   readonly column: number
 } {
-  const prefix = 'export const row = (tone) => '
+  const prefix = 'export const row = (tone, on) => '
   const head = expression.includes('cx.') ? IMPORT : '\n'
   return {
     text: `${head}const css = (s, ...v) => s.join('')\n${prefix}${expression}\nconsole.log(row, css)\n`,

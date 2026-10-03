@@ -3,18 +3,27 @@
  * and none of the build's. The code it ships is code the build reads, so the plugin adds this one:
  * it reads each module of that build as a module of the client environment, into the state the
  * build's own plugins share, and reports nothing itself (its problems are reported once, with
- * the rest, when the build ends).
+ * the rest, when the build ends), except that a worker's import of `cx` through an alias fails
+ * its own build, since no later step sees the worker's module graph.
  */
-import type { TransformContext } from './vite-types.ts'
+import type { RenderContext, TransformContext, TransformMeta } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
 import { recordModule } from './vite-collect-module.ts'
 import { isReadable } from './vite-collect-plugin.ts'
+import { checkCxImporters } from './vite-cx-importers.ts'
+import { isUsed } from './vite-used.ts'
 
 export interface NaveWorkerPlugin {
   readonly name: 'nave:collect-worker'
   readonly enforce: 'post'
-  transform(this: TransformContext, code: string, id: string): Promise<undefined>
+  transform(
+    this: TransformContext,
+    code: string,
+    id: string,
+    meta?: TransformMeta,
+  ): Promise<undefined>
+  buildEnd(this: RenderContext, error?: unknown): Promise<void>
 }
 
 /**
@@ -26,9 +35,14 @@ export function workerCollectPlugins(context: UsedContext): () => NaveWorkerPlug
     name: 'nave:collect-worker',
     enforce: 'post',
 
-    async transform(code, id) {
+    async transform(code, id, meta) {
       if (!isReadable(context, id)) return
-      await recordModule(context, this, code, id)
+      await recordModule(context, this, { code, id, moduleType: meta?.moduleType })
+    },
+
+    async buildEnd(error) {
+      if (error || !isUsed(context) || context.command !== 'build') return
+      await checkCxImporters(this, context)
     },
   }
   return () => (context.command === 'build' ? [plugin] : [])

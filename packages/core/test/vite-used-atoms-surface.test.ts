@@ -197,7 +197,7 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
   })
 
   describe.each(TRANSFORMERS)('built under css.transformer %s', (transformer) => {
-    it('builds the default three ways to one tree, and `all` to the tree of a build with no Nave plugin', async () => {
+    it('builds the default three ways to one tree, and `all` to the tree of the directive half alone', async () => {
       const app = makeUsedApp(
         appFiles({
           'index.html':
@@ -220,9 +220,11 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
           keep: ['grid'],
           keepFor: { 'x-lib': ['block'] },
         })
-        const withoutNave = JSON.stringify(
+        // The directive half alone is the plugin as it was before the atoms were chosen.
+        const directiveHalf = JSON.stringify(
           await (async () => {
-            const built = await buildUsed(app, { transformer, nave: [] })
+            const [first] = navePlugin({ atomic: 'all' })
+            const built = await buildUsed(app, { transformer, nave: first as never })
             return [built.assets, built.js]
           })(),
         )
@@ -230,7 +232,7 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
         expect(used).toBe(none)
         expect(empty).toBe(none)
         expect(all).toBe(allWithOptions)
-        expect(all).toBe(withoutNave)
+        expect(all).toBe(directiveHalf)
         expect(all).not.toBe(none)
         const built = await buildUsed(app, { transformer })
         expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'hidden'))

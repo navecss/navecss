@@ -25,6 +25,10 @@ export interface UsedContext {
   command: string
   cacheDir: string
   /**
+   * Whether the build asks for source maps (`build.sourcemap` set to anything but `false`).
+   */
+  buildSourcemap: boolean
+  /**
    * Whether one process builds every environment (the config asks for a builder), so a server
    * build has no other invocation to hand its atoms to or take them from.
    */
@@ -44,6 +48,7 @@ export function createUsedContext(options: ResolvedUsedOptions, extend: ExtendSo
     root: process.cwd(),
     command: 'build',
     cacheDir: '',
+    buildSourcemap: false,
     inProcess: false,
     state: stateFor('', {}),
   }
@@ -56,6 +61,7 @@ export function configureUsed(context: UsedContext, config: ResolvedConfigLike):
   context.root = config.root
   context.command = config.command
   context.cacheDir = config.cacheDir ?? ''
+  context.buildSourcemap = Boolean(config.build?.sourcemap)
   context.inProcess = config.builder !== undefined
   context.state = stateFor(config.root, config)
 }

@@ -3,7 +3,8 @@
  * `@layer atomic` blocks as a normalised tree, and the same tree pruned by the tests' own rule
  * (a selector-list member goes only when it needs an element carrying a built-in atom class that
  * is not kept: the class sits in a compound of the member itself, or in every alternative of an
- * `:is()` or `:where()` among them, and never inside `:not()`, `:has()` or any other argument).
+ * `:is()` or `:where()` among them). A class inside `:not()`, `:has()` or any other functional
+ * argument never makes a member removable: that rule stays, the safe direction.
  * Comparing a `'used'` build's layer with an `'all'` build's layer pruned this way shows that an
  * emitted atom keeps every rule the full layer gives it.
  */

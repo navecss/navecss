@@ -36,7 +36,32 @@ function resolve(reference: Reference): void {
 }
 
 /**
- * Counts a write to every binding a direct `eval` can see: its text may assign any of them.
+ * The kinds of binding an assignment can change: a `const` and an import are read-only, so an
+ * `eval` that assigns one only throws.
+ */
+const ASSIGNABLE: ReadonlySet<string> = new Set([
+  'catch',
+  'class',
+  'function',
+  'let',
+  'loop',
+  'param',
+  'var',
+])
+
+/**
+ * The bindings of `scope` that an assignment can change.
+ */
+function assignable(scope: Scope): Binding[] {
+  return scope.bindings
+    .values()
+    .filter((binding) => ASSIGNABLE.has(binding.kind))
+    .toArray()
+}
+
+/**
+ * Counts a write to every binding a direct `eval` can see and assign: its text may assign any of
+ * them.
  */
 function markEvalWrites(scopes: readonly Scope[]): void {
   const marked = new Set<Scope>()
@@ -44,7 +69,7 @@ function markEvalWrites(scopes: readonly Scope[]): void {
     // Every scope above a marked one is marked already.
     for (let scope: Scope | undefined = start; scope && !marked.has(scope); scope = scope.parent) {
       marked.add(scope)
-      for (const binding of scope.bindings.values()) binding.writes += 1
+      for (const binding of assignable(scope)) binding.writes += 1
     }
   }
 }

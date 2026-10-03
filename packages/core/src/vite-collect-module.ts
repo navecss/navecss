@@ -2,6 +2,8 @@
  * One module through the post-order half: parse it, read it, place what it found in the authored
  * file, and record it for the environment that transformed it.
  */
+import { readFile } from 'node:fs/promises'
+
 import type { AstNode } from './vite-ast.ts'
 import type { ModuleReading, ReadOptions } from './vite-collect.ts'
 import type { Problem } from './vite-problems.ts'
@@ -16,6 +18,15 @@ import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.t
 import { setupExposuresFor } from './vite-setup-link.ts'
 import { combinedMapOf, placerFor } from './vite-source-map.ts'
 import { moduleKey } from './vite-state.ts'
+import {
+  isListed,
+  NOT_PARSED,
+  SOURCE_TYPES,
+  textRecord,
+  TOO_DEEP,
+  unreadableRecord,
+} from './vite-unread-record.ts'
+import { LINE_UNKNOWN_UNMAPPED, LINE_UNKNOWN_WITHOUT_MAP } from './vite-used-report.ts'
 import { ownAtomNames } from './vite-used.ts'
 
 /**
@@ -40,30 +51,40 @@ export function isMentioningAtoms(code: string): boolean {
   )
 }
 
-/**
- * Whether the package is listed in `keepFor`, which stands in for reading its calls.
- */
-function isListed(context: UsedContext, pkg: string | undefined): boolean {
-  return pkg !== undefined && Object.hasOwn(context.options.keepFor, pkg)
-}
-
 interface Placing {
   readonly code: string
   readonly file: string
   readonly pkg: string | undefined
-  readonly place: (offset: number) => { column: number; line: number }
+  readonly place: (offset: number) => { column: number; line: number } | undefined
+  /**
+   * The sentence that ends a problem line the source map does not lead to.
+   */
+  readonly unknownLine: string
+}
+
+/**
+ * The line and column of a problem that has no position: nothing the report prints.
+ */
+const NO_PLACE = { line: 0, column: 0 }
+
+/**
+ * The sentence that ends a problem line with no position: a build that asks for no source map is
+ * told to ask for one, and any other module whose map does not reach the position is told so.
+ */
+export function lineUnknownNote(context: UsedContext): string {
+  const isBuildWithoutMaps = context.command === 'build' && !context.buildSourcemap
+  return isBuildWithoutMaps ? LINE_UNKNOWN_WITHOUT_MAP : LINE_UNKNOWN_UNMAPPED
 }
 
 /**
  * The problems of a reading, placed in the authored file.
  */
 function locate(problems: readonly Problem[], placing: Placing): LocatedProblem[] {
-  return problems.map((problem) => ({
-    ...problem,
-    file: placing.file,
-    pkg: placing.pkg,
-    ...placing.place(problem.offset),
-  }))
+  return problems.map((problem) => {
+    const place = placing.place(problem.offset)
+    const where = place ?? { ...NO_PLACE, unknownLine: placing.unknownLine }
+    return { ...problem, file: placing.file, pkg: placing.pkg, ...where }
+  })
 }
 
 /**
@@ -73,7 +94,7 @@ function locateDynamic(reading: ModuleReading, placing: Placing): Position[] {
   return reading.dynamicCalls.map(({ offset, construct }) => ({
     file: placing.file,
     construct,
-    ...placing.place(offset),
+    ...(placing.place(offset) ?? NO_PLACE),
   }))
 }
 
@@ -89,22 +110,35 @@ function parseOrUndefined(ctx: TransformContext, code: string): AstNode | undefi
 }
 
 /**
+ * The text of the file `id` names as it is on disk, or `undefined` for a module with no file.
+ */
+async function authoredTextOf(id: string): Promise<string | undefined> {
+  try {
+    return await readFile(filePathOf(id), 'utf8')
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * What a module found, placed in the authored file and ready to keep.
  */
-function recordOf(
+async function recordOf(
   context: UsedContext,
   ctx: TransformContext,
   input: { readonly code: string; readonly id: string; readonly pkg: string | undefined },
   reading: ModuleReading,
-): ModuleRecord {
+): Promise<ModuleRecord> {
   const { code, id, pkg } = input
   const hasPlaces = reading.problems.length + reading.dynamicCalls.length > 0
   const map = hasPlaces ? combinedMapOf(ctx) : undefined
+  const authored = map ? await authoredTextOf(id) : undefined
   const placing: Placing = {
     code,
     file: moduleLabel(context.root, id),
     pkg,
-    place: placerFor(code, map),
+    place: placerFor(code, map, authored),
+    unknownLine: lineUnknownNote(context),
   }
   const isStandingIn = isListed(context, pkg)
   return {
@@ -114,42 +148,6 @@ function recordOf(
     dynamicCalls: locateDynamic(reading, placing),
     pkg,
     file: placing.file,
-  }
-}
-
-const NOT_PARSED =
-  "the module could not be read, so the atoms it names would not ship: it did not parse as JavaScript. TypeScript and JSX must be compiled by Vite's own transform first, so leave oxc on for this file."
-const TOO_DEEP =
-  'the module could not be read, so the atoms it names would not ship: it is nested too deeply.'
-
-/**
- * The record of a module the build could not read: one problem, at its first character.
- */
-function unreadableRecord(
-  context: UsedContext,
-  input: { readonly id: string; readonly pkg: string | undefined },
-  text: string,
-): ModuleRecord {
-  const { id, pkg } = input
-  const file = moduleLabel(context.root, id)
-  const problem: LocatedProblem = {
-    kind: 'unreadable',
-    offset: 0,
-    construct: '',
-    text,
-    file,
-    pkg,
-    line: 1,
-    column: 1,
-  }
-  const isStandingIn = isListed(context, pkg)
-  return {
-    atoms: new Set(),
-    problems: isStandingIn ? [] : [problem],
-    suppressed: isStandingIn ? [problem] : [],
-    dynamicCalls: [],
-    pkg,
-    file,
   }
 }
 
@@ -204,21 +202,22 @@ async function recordParsed(
   if (reading.exposes.size > 0) context.state.exposures.set(key, reading.exposes)
   else context.state.exposures.delete(key)
   if (pkg !== undefined && reading.usesCx) context.state.packages.add(pkg)
-  return recordOf(context, ctx, { code, id, pkg }, reading)
+  return await recordOf(context, ctx, { code, id, pkg }, reading)
 }
 
 /**
- * Reads the module `code` (id `id`) as the environment `environment` transformed it, and records
- * what it found. Returns the record, or `undefined` when the module names no atom at all. A module
- * that does name one and cannot be parsed is recorded as a problem, never skipped: its calls would
- * ship with no rule and nothing would say so.
+ * Reads the `module` (its text, its id, and its module type when the host says) as the
+ * environment `environment` transformed it, and records what it found. Returns the record, or
+ * `undefined` when the module names no atom at all. A module that does name one and cannot be
+ * parsed is recorded as a problem, never skipped: its calls would ship with no rule and nothing
+ * would say so.
  */
 export async function recordModule(
   context: UsedContext,
   ctx: TransformContext,
-  code: string,
-  id: string,
+  module: { readonly code: string; readonly id: string; readonly moduleType?: string | undefined },
 ): Promise<ModuleRecord | undefined> {
+  const { code, id, moduleType } = module
   const key = moduleKey(ctx.environment?.name ?? 'client', id)
   if (!isMentioningAtoms(code)) {
     // A module that no longer mentions atoms leaves nothing of its last read.
@@ -227,6 +226,12 @@ export async function recordModule(
   }
   const isDependency = isDependencyId(id)
   const pkg = isDependency ? await packageNameOf(filePathOf(id), context.packageNames) : undefined
+  if (moduleType !== undefined && !SOURCE_TYPES.has(moduleType)) {
+    context.state.exposures.delete(key)
+    const record = textRecord(context, { code, id, pkg })
+    context.state.modules.set(key, record)
+    return record
+  }
   const program = parseOrUndefined(ctx, code)
   const record = program
     ? await recordParsed(context, ctx, { code, id, pkg, program }, key)

@@ -1,9 +1,10 @@
 /**
  * The emitted set: the atoms the build ships, fixed when the first client stylesheet holding the
  * atomic layer is handed back to Vite. It is the atoms every environment has read, `keep`, every
- * `keepFor` list, and, when a server invocation ran first, the set it left in the cache directory.
+ * `keepFor` list, and, when a server invocation ran first, the set it left in the cache directory,
+ * closed under the one pair of atoms where one restores what the other removes.
  */
-import type { PackageRecord } from './vite-handshake.ts'
+import type { Handshake, PackageRecord } from './vite-handshake.ts'
 import type { EnvironmentLike, RenderContext } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
@@ -39,6 +40,16 @@ function unmatchedKeys(context: UsedContext): string[] {
 }
 
 /**
+ * `atoms` with the atoms added that restore what an atom in it removes: `srOnlyFocusable` shows
+ * again on focus what `srOnly` hides, so a set that holds `srOnly` holds it too. This adds to the
+ * emitted set only, not to `keep` or to what `cx.dynamic()` accepts.
+ */
+function withRestorers(atoms: Set<string>): Set<string> {
+  if (atoms.has('srOnly')) atoms.add('srOnlyFocusable')
+  return atoms
+}
+
+/**
  * The emitted set. A client environment fixes it (and writes the cache file); any other
  * environment reads what is known so far and fixes nothing.
  */
@@ -54,6 +65,7 @@ export function emittedSet(
   const waiting = context.inProcess ? undefined : readHandshake(context.cacheDir)
   const hasServerSet = waiting !== undefined && waiting.writer !== 'client'
   if (hasServerSet) for (const atom of waiting.emitted) atoms.add(atom)
+  withRestorers(atoms)
   state.emitted = atoms
   writeHandshake(
     context.cacheDir,
@@ -70,6 +82,16 @@ export function emittedSet(
 }
 
 /**
+ * One line for each of `atoms` and each module of this server environment that names it, in the
+ * form `<module>: names <atom>.`.
+ */
+function namingLines(ctx: RenderContext, context: UsedContext, atoms: readonly string[]): string[] {
+  return recordsOf(context.state, ctx.environment.name).flatMap((record) =>
+    atoms.filter((atom) => record.atoms.has(atom)).map((atom) => `${record.file}: names ${atom}.`),
+  )
+}
+
+/**
  * The words of the failure a server invocation meets when the client's CSS lacks its atoms.
  */
 function missingFromClient(
@@ -77,53 +99,98 @@ function missingFromClient(
   context: UsedContext,
   missing: readonly string[],
 ): string {
-  const lines = recordsOf(context.state, ctx.environment.name).flatMap((record) =>
-    missing
-      .filter((atom) => record.atoms.has(atom))
-      .map((atom) => `${record.file}: names ${atom}.`),
-  )
   return [
     'The client build already wrote its CSS without atoms this server build names, so their rules are missing from it:',
-    ...lines,
+    ...namingLines(ctx, context, missing),
     'List the atoms in keep in navePlugin(), or build the server first (vite build --ssr, then vite build).',
   ].join('\n')
 }
 
 /**
+ * The words of the warning a server invocation prints when it records its set for the client
+ * build that follows and some of its atoms are not in the set the file held.
+ */
+function notInLastClient(
+  ctx: RenderContext,
+  context: UsedContext,
+  missing: readonly string[],
+): string {
+  return [
+    `${handshakePath(context.cacheDir)} was written by a client build that was already used, so this server build could not be checked against the CSS. These atoms it names are not in that client build's set:`,
+    ...namingLines(ctx, context, missing),
+    'They are recorded in that file for a client build that runs next; to have them in the CSS, build the server first, then the client (vite build --ssr, then vite build).',
+  ].join('\n')
+}
+
+/**
+ * Leaves this server invocation's set in the file for the client build that runs next, and says
+ * so when an atom of it is not in the set the file held: the last client CSS built here.
+ */
+function recordForNextClient(
+  ctx: RenderContext,
+  context: UsedContext,
+  atoms: ReadonlySet<string>,
+  held: readonly string[],
+): void {
+  writeHandshake(
+    context.cacheDir,
+    { emitted: [...withRestorers(new Set(atoms))], writer: ctx.environment.name, consumed: false },
+    (message) => ctx.warn(message),
+  )
+  const missing = [...atoms].filter((atom) => !held.includes(atom)).toSorted(compareText)
+  if (missing.length > 0) ctx.warn(notInLastClient(ctx, context, missing))
+}
+
+/**
+ * Checks the atoms of a server invocation against a client set that is waiting for it: a miss
+ * fails the build, once; the same miss again, with no client build in between, leaves the set of
+ * this build for the client build that follows, because failing again would leave the build the
+ * failure recommends failing for good.
+ */
+function checkWaitingClient(
+  ctx: RenderContext,
+  context: UsedContext,
+  atoms: ReadonlySet<string>,
+  file: Handshake,
+): void {
+  const missing = [...atoms].filter((atom) => !file.emitted.includes(atom)).toSorted(compareText)
+  const failed = file.serverFailed ?? []
+  if (missing.length === 0) {
+    writeHandshake(context.cacheDir, { ...file, consumed: true }, (message) => ctx.warn(message))
+  } else if (missing.every((atom) => failed.includes(atom))) {
+    recordForNextClient(ctx, context, atoms, file.emitted)
+  } else {
+    // The file is not marked checked, so a server build against this CSS fails until its atoms
+    // are in it or it has failed once on them; the file keeps what it failed on.
+    writeHandshake(
+      context.cacheDir,
+      { ...file, serverFailed: [...new Set([...failed, ...missing])] },
+      (message) => ctx.warn(message),
+    )
+    ctx.error(missingFromClient(ctx, context, missing))
+  }
+}
+
+/**
  * The atoms a server environment named that the client set lacks, checked against the file a
- * client invocation left: a build of the server run after the client. When the file is not
- * waiting for this build, the check cannot be made, the build says so, and its atoms are left in
- * the file for the client build that may follow.
+ * client invocation left: a build of the server run after the client. A client set that is no
+ * longer waiting for this build (a server build checked it, or it took a server set) is no set
+ * to check against: this build leaves its own set for the client build that may follow.
  */
 export function checkServerInvocation(ctx: RenderContext, context: UsedContext): void {
   if (context.cacheDir === '' || context.inProcess || context.state.emitted) return
   const atoms = new Set(recordsOf(context.state, ctx.environment.name).flatMap((r) => [...r.atoms]))
   const file = readHandshake(context.cacheDir)
   if (file?.writer !== 'client') {
-    const emitted = [...new Set([...atoms, ...(file?.emitted ?? [])])]
+    const emitted = [...withRestorers(new Set([...atoms, ...(file?.emitted ?? [])]))]
     writeHandshake(
       context.cacheDir,
       { emitted, writer: ctx.environment.name, consumed: false },
       (message) => ctx.warn(message),
     )
-    return
+  } else if (file.consumed) {
+    recordForNextClient(ctx, context, atoms, file.emitted)
+  } else {
+    checkWaitingClient(ctx, context, atoms, file)
   }
-  if (file.consumed) {
-    // A client build that has taken a server set, or been checked against one, is no set to check
-    // against. The atoms of this server build are left for a client build that follows it.
-    writeHandshake(
-      context.cacheDir,
-      { emitted: [...atoms], writer: ctx.environment.name, consumed: false },
-      (message) => ctx.warn(message),
-    )
-    ctx.warn(
-      `${handshakePath(context.cacheDir)} was written by a client build that was already used, so this server build could not be checked against the CSS. Its atoms are recorded in that file for a client build that runs next; to have them in the CSS, build the server first, then the client (vite build --ssr, then vite build).`,
-    )
-    return
-  }
-  const missing = [...atoms].filter((atom) => !file.emitted.includes(atom)).toSorted(compareText)
-  // A miss fails before the file is marked checked, so every server build against this CSS fails
-  // until its atoms are in it, not only the first.
-  if (missing.length > 0) ctx.error(missingFromClient(ctx, context, missing))
-  writeHandshake(context.cacheDir, { ...file, consumed: true }, (message) => ctx.warn(message))
 }

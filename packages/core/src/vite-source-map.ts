@@ -64,17 +64,52 @@ function lineIndexOf(starts: readonly number[], offset: number): number {
 }
 
 /**
- * Where an offset in `code` sits in the authored file: mapped through `map` when it reaches that
- * place, and otherwise as the transformed text has it. The line table is built once, when the
- * first offset is asked for, so placing every problem of a module costs one pass over its text.
+ * Where an offset in `code` sits in the text as the host gave it. The line table is built once,
+ * when the first offset is asked for, so placing every problem of a module costs one pass over
+ * its text.
  */
-export function placerFor(code: string, map: IncomingMap | undefined): (offset: number) => Place {
+export function positionIn(code: string): (offset: number) => Place {
   let starts: number[] | undefined
   return (offset) => {
     starts ??= lineStartsOf(code)
     const index = lineIndexOf(starts, offset)
-    const generated = { line: index + 1, column: offset - starts[index]! + 1 }
+    return { line: index + 1, column: offset - starts[index]! + 1 }
+  }
+}
+
+/**
+ * Text as a map's `sourcesContent` and a file on disk can differ in it without differing in
+ * lines: a byte order mark and the form of the line breaks.
+ */
+function normalized(text: string): string {
+  return text.replace(/^\u{FEFF}/u, '').replaceAll('\r\n', '\n')
+}
+
+/**
+ * Where an offset in `code` sits in the authored file, or `undefined` when the combined source
+ * map does not lead there: a position in the transformed text would be printed as if it were the
+ * author's, and a terminal or an editor opens it as a link to the wrong line. A map leads to the
+ * authored file when it reaches the offset and its source holds the text `authored` (the file as
+ * written); a plugin that rewrote the module and returned no map leaves a map to its own output,
+ * whose source differs. With no `authored` text to compare, the map is taken at its word.
+ */
+export function placerFor(
+  code: string,
+  map: IncomingMap | undefined,
+  authored: string | undefined,
+): (offset: number) => Place | undefined {
+  const position = positionIn(code)
+  const isAuthored = (index: number): boolean => {
+    const source = map?.sourcesContent?.[index]
+    return authored === undefined || typeof source !== 'string'
+      ? true
+      : normalized(source) === normalized(authored)
+  }
+  return (offset) => {
+    const generated = position(offset)
     const origin = map?.originalPositionFor({ line: generated.line, column: generated.column - 1 })
-    return origin ? { line: origin.line, column: origin.column + 1 } : generated
+    return origin && isAuthored(origin.sourceIndex)
+      ? { line: origin.line, column: origin.column + 1 }
+      : undefined
   }
 }

@@ -10,6 +10,13 @@ const STYLESHEET = /\.(?:css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?
 const SPECIAL_QUERY = /[?&](?:worker|sharedworker|raw|url)\b/
 
 /**
+ * Whether the module `id` names a stylesheet by its extension, whatever it is imported as.
+ */
+export function isStylesheetPath(id: string): boolean {
+  return STYLESHEET.test(id)
+}
+
+/**
  * Whether the module `id` is a stylesheet whose text the plugin should read.
  */
 export function isStylesheetId(id: string): boolean {

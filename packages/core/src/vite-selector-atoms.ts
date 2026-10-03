@@ -1,9 +1,10 @@
 /**
- * Which built-in atoms a selector needs. A rule can match only if some element carries a class
- * the selector asks for in one of its own compounds, so a class in a compound of the selector
- * itself is a need. An `:is()` or `:where()` among those compounds is a need only when every one
- * of its alternatives is one. A class inside `:not()`, `:has()` or any other argument is no need:
- * the rule can match without such an element.
+ * Which built-in atoms a selector needs. A class selector in one of the selector's own compounds
+ * is a need: no element lacking the class can match it. An `:is()` or `:where()` among those
+ * compounds is a need only when every one of its alternatives is one. A class inside `:not()`,
+ * `:has()` or any other functional argument never makes the selector removable, whatever that
+ * function means: the rule is kept, which is the safe direction (it may ship a rule that matches
+ * nothing, and never drops one that matches).
  */
 import type { Sheet } from './vite-css-blocks.ts'
 

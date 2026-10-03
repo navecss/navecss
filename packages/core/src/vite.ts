@@ -1,6 +1,6 @@
 /**
  * Nave Vite plugin: expands `@nave` directives in every stylesheet Vite compiles, fails the build
- * when one survives into its CSS output, and ships only the atoms the build can read a use for.
+ * when one survives into its CSS output, and by default filters the atomic layer of every stylesheet it can reach down to the atoms the build reads a use for.
  *
  * Setup:
  *   import { navePlugin } from '@navecss/core/vite'
@@ -34,12 +34,13 @@ import type {
   TransformResultLike,
 } from './vite-types.ts'
 
+import { type Assembled, shareAcrossBuilds } from './vite-builds.ts'
 import { createCollectPlugin } from './vite-collect-plugin.ts'
 import { usedConfig, usedEnvironmentConfig } from './vite-config-hooks.ts'
 import { captureStylesheets } from './vite-css-capture.ts'
-import { checkAtomicLayers, refeedChunkStylesheets, warnInlineImports } from './vite-emit.ts'
+import { checkAtomicLayers, refeedChunkStylesheets, warnTextImports } from './vite-emit.ts'
 import { emittedSet } from './vite-emitted.ts'
-import { createExtendSource } from './vite-extend.ts'
+import { createExtendSource, type ExtendSource } from './vite-extend.ts'
 import { dropLightningNaveWarning } from './vite-logger.ts'
 import { assertOptions, resolveUsedOptions } from './vite-options.ts'
 import { scanBundle } from './vite-scan.ts'
@@ -101,15 +102,10 @@ export interface NaveVitePlugin {
 export type NavePlugins = [NaveVitePlugin, NaveCollectPlugin]
 
 /**
- * The Nave Vite plugin: one entry in `plugins`.
+ * The pair of plugin halves for one build, which share a context of their own. `extend` is the
+ * source of the atom map when it is one object for every build.
  */
-export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
-  const extend = createExtendSource(options.extend)
-  const ownAtoms = typeof options.extend === 'object' ? options.extend : undefined
-  // The names of atoms in a module are known once it has loaded; the other half judges those then.
-  const own = typeof options.extend === 'string' ? undefined : new Set(Object.keys(ownAtoms ?? {}))
-  assertOptions(options, own)
-
+function assemble(options: NaveViteOptions, extend: ExtendSource): Assembled {
   const context = createUsedContext(resolveUsedOptions(options), extend)
   const stylesheets = createStylesheets(extend, options.onUnknown ?? 'error')
 
@@ -140,15 +136,11 @@ export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
 
     async renderChunk(_code, chunk) {
       if (!isUsed(context) || this.environment.config.consumer !== 'client') return
-      await refeedChunkStylesheets(
-        this,
-        chunk,
-        context.state,
-        emittedSet(context, this.environment, (message) => {
-          this.warn(message)
-        }),
-      )
-      warnInlineImports(this, chunk, context)
+      const emitted = emittedSet(context, this.environment, (message) => {
+        this.warn(message)
+      })
+      await refeedChunkStylesheets(this, chunk, context.state, emitted)
+      warnTextImports(this, chunk, context, emitted)
     },
 
     generateBundle: {
@@ -167,7 +159,21 @@ export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
       },
     },
   }
-  return [nave, createCollectPlugin(context)]
+  return { nave, collect: createCollectPlugin(context) }
+}
+
+/**
+ * The Nave Vite plugin: one entry in `plugins`.
+ */
+export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
+  const ownAtoms = typeof options.extend === 'object' ? options.extend : undefined
+  // The names of atoms in a module are known once it has loaded; the other half judges those then.
+  const own = typeof options.extend === 'string' ? undefined : new Set(Object.keys(ownAtoms ?? {}))
+  assertOptions(options, own)
+  // An atom map written inline is snapshotted and checked once; a module is loaded for each build,
+  // from the root of that build.
+  const inline = typeof options.extend === 'string' ? undefined : createExtendSource(options.extend)
+  return shareAcrossBuilds(() => assemble(options, inline ?? createExtendSource(options.extend)))
 }
 
 /**

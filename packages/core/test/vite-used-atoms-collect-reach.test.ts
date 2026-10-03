@@ -18,6 +18,7 @@ import { recordModule } from '../src/vite-collect-module.ts'
 import { resolveUsedOptions } from '../src/vite-options.ts'
 import { createExtendSource } from '../src/vite-extend.ts'
 import { createUsedContext } from '../src/vite-used.ts'
+import { buildReport } from '../src/vite-used-report.ts'
 import {
   type Built,
   appFiles,
@@ -156,6 +157,34 @@ describe('AC-used-atoms-06: a template compiled into the module that returns the
       } finally {
         app.dispose()
       }
+    },
+    60_000,
+  )
+
+  const SSR_MODES: [string, string, Record<string, string>][] = [
+    ['plain JavaScript', '', {}],
+    ['JavaScript with production devtools', '', DEVTOOLS],
+    ['TypeScript', ' lang="ts"', {}],
+    ['TypeScript with production devtools', ' lang="ts"', DEVTOOLS],
+  ]
+
+  it.each(SSR_MODES)(
+    'refuses a template call compiled apart from setup() in a server build: %s',
+    async (_name, lang, define) => {
+      process.env.NODE_ENV = 'production'
+      const built = await build(
+        {
+          'src/Bad.vue': `<script setup${lang}>\nimport { cx } from '@navecss/core/cx'\nconst props = defineProps({ variant: String })\n</script>\n<template src="./bad.html"></template>\n`,
+          'src/bad.html': '<div :class="cx(props.variant)" />',
+          'src/entry.ts': "import Bad from './Bad.vue'\nexport default Bad\n",
+        },
+        { plugins: [vuePlugin()], build: { ssr: 'src/entry.ts' }, config: { define } },
+        [],
+      )
+
+      expect(built.error).toMatch(/^1 problem in 1 file/)
+      expect(built.error).toContain('src/bad.html:')
+      expect(built.error).toContain('cx(props.variant): the argument is not a literal atom name.')
     },
     60_000,
   )
@@ -306,6 +335,45 @@ describe('an import of cx through an alias', () => {
     expect(built.error).toContain("src/a.js: imports cx from '#cx'")
   }, 60_000)
 
+  const aliasConfig = { resolve: { alias: { '#cx': '@navecss/core/cx' } } }
+
+  it('fails when a comment in the importer holds the package specifier', async () => {
+    const built = await build(
+      {
+        'src/a.js': `// cx is @navecss/core/cx, under another name\nimport { cx } from '#cx'\nexport const a = cx('grid')\nconsole.log(a)\n`,
+      },
+      { config: aliasConfig },
+    )
+
+    expect(built.error).toContain("src/a.js: imports cx from '#cx'")
+  }, 60_000)
+
+  it('fails when the importer also imports cx by the package specifier', async () => {
+    const built = await build(
+      {
+        'src/a.js': `${IMPORT}import { cx as c2 } from '#cx'\nexport const a = [cx('flex'), c2('grid')]\nconsole.log(a)\n`,
+      },
+      { config: aliasConfig },
+    )
+
+    expect(built.error).toContain("src/a.js: imports cx from '#cx'")
+    expect(built.error).not.toContain("from '@navecss/core/cx'.")
+  }, 60_000)
+
+  it('fails when a module worker imports cx through the alias', async () => {
+    const built = await build(
+      {
+        'src/a.js':
+          "const w = new Worker(new URL('./w.js', import.meta.url), { type: 'module' })\nconsole.log(w)\n",
+        'src/w.js': "import { cx } from '#cx'\npostMessage(cx('grid'))\n",
+      },
+      { config: aliasConfig },
+      ['src/a.js'],
+    )
+
+    expect(built.error).toContain("src/w.js: imports cx from '#cx'")
+  }, 60_000)
+
   it('control: an import by the package specifier is read and builds', async () => {
     const built = await build({
       'src/a.js': `${IMPORT}export const a = cx('grid')\nconsole.log(a)\n`,
@@ -357,6 +425,34 @@ describe('a var is written by every loop head that redeclares it', () => {
 describe('a direct eval may write any binding it can see', () => {
   it('refuses a call whose argument a let holds when the module calls eval', () => {
     const reading = read(`${IMPORT}let m = 'flex'\neval("m = 'grid'")\nexport const a = cx(m)\n`)
+
+    expect(reading.problems.map((problem) => problem.kind)).toEqual(['argument'])
+  })
+
+  it.each([
+    ['a const', "const n = 'flex'\neval('1')\nexport const a = cx(n)"],
+    [
+      'a const, with the eval in a nested function',
+      "const n = 'flex'\nexport function g(s) { return eval(s) }\nexport const a = cx(n)",
+    ],
+  ])('reads %s the eval cannot assign', (_name, body) => {
+    const reading = read(`${IMPORT}${body}\n`)
+
+    expect(reading.problems).toEqual([])
+    expect([...reading.atoms]).toEqual(['flex'])
+  })
+
+  it.each([
+    [
+      'a let above a nested function that calls eval',
+      "let m = 'flex'\nexport function g(s) { return eval(s) }\nexport const a = cx(m)",
+    ],
+    [
+      'a var of the function that calls eval',
+      "export function f(s) { var m = 'flex'; eval(s); return cx(m) }",
+    ],
+  ])('control: still refuses %s', (_name, body) => {
+    const reading = read(`${IMPORT}${body}\n`)
 
     expect(reading.problems.map((problem) => problem.kind)).toEqual(['argument'])
   })
@@ -470,12 +566,10 @@ describe('a module nested deeper than the reader can follow', () => {
   it('is recorded as a problem naming the module, never a crash and never a skip', async () => {
     const { context, ctx } = recordingFixture(() => nestedProgram(200_000))
 
-    const record = await recordModule(
-      context,
-      ctx,
-      `${IMPORT}export const x = 1\n`,
-      '/scale-root/src/deep.js',
-    )
+    const record = await recordModule(context, ctx, {
+      code: `${IMPORT}export const x = 1\n`,
+      id: '/scale-root/src/deep.js',
+    })
 
     expect(record!.problems.map((problem) => problem.kind)).toEqual(['unreadable'])
     expect(record!.problems[0]!.file).toBe('src/deep.js')
@@ -527,7 +621,7 @@ describe('reading a long module costs time in proportion to its length', () => {
       )
       const code = `${IMPORT}${lines.join('\n')}\n`
       const start = performance.now()
-      const record = await recordModule(context, ctx, code, '/scale-root/src/many.js')
+      const record = await recordModule(context, ctx, { code, id: '/scale-root/src/many.js' })
       const took = performance.now() - start
       expect(record!.problems).toHaveLength(size)
       return took
@@ -543,4 +637,143 @@ describe('reading a long module costs time in proportion to its length', () => {
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
   }, 120_000)
+})
+
+describe('a module that is not JavaScript when the build reads it', () => {
+  const dataPlugin = (moduleType: string): PluginOption => ({
+    name: 'data-module',
+    resolveId(source) {
+      return source === 'virtual:data' ? '\0virtual:data' : undefined
+    },
+    load(id) {
+      if (id !== '\0virtual:data') return undefined
+      return { code: '{ "cls": "nave-grid" }', moduleType } as never
+    },
+  })
+  const entry = { 'src/a.js': "import d from 'virtual:data'\nconsole.log(d)\n" }
+
+  it.each(['json', 'text'])(
+    'a %s module is read for the Nave classes it writes, not reported as unreadable',
+    async (moduleType) => {
+      const built = await build(entry, { plugins: [dataPlugin(moduleType)] })
+
+      expect(built.error).toBeUndefined()
+      expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
+    },
+    60_000,
+  )
+
+  it('control: a .json import is read the same way', async () => {
+    const built = await build({
+      'src/data.json': '{ "cls": "nave-grid" }\n',
+      'src/a.js': "import d from './data.json'\nconsole.log(d)\n",
+    })
+
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
+  }, 60_000)
+})
+
+describe('a long chain of constants resolves', () => {
+  it('reads an 8000-link chain from 8000 calls without a problem', () => {
+    const size = 8000
+    const chain = Array.from({ length: size }, (_, index) => `const c${index + 1} = c${index}`)
+    const calls = Array.from(
+      { length: size },
+      (_, index) => `export const u${index} = cx(c${size})`,
+    )
+    const reading = read(`${IMPORT}const c0 = 'flex'\n${chain.join('\n')}\n${calls.join('\n')}\n`)
+
+    expect(reading.problems).toEqual([])
+    expect([...reading.atoms]).toEqual(['flex'])
+  })
+
+  it('still refuses a chain that ends in something unreadable, and a cycle', () => {
+    const open = read(
+      `${IMPORT}export const f = (p) => { const a = p; const b = a; return cx(b) }\n`,
+    )
+    const cycle = read(`${IMPORT}export function f() { const a = b; const b = a; return cx(a) }\n`)
+
+    expect(open.problems.map((problem) => problem.kind)).toEqual(['argument'])
+    expect(cycle.problems.map((problem) => problem.kind)).toEqual(['argument'])
+  })
+})
+
+const UNKNOWN_WITHOUT_MAP =
+  " (line unknown: this file's compiled code has no source map in this build; set build.sourcemap in the Vite config to report the line)"
+const UNKNOWN_UNMAPPED = ' (line unknown: no source map leads from the compiled code to this file)'
+
+describe('AC-used-atoms-34: a position is printed only where the source map leads to it', () => {
+  let previous: string | undefined
+  beforeAll(() => {
+    previous = process.env.NODE_ENV
+  })
+  afterAll(() => {
+    if (previous === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = previous
+  })
+
+  const bad = `<script setup lang="ts">\nimport { cx } from '@navecss/core/cx'\nconst props = defineProps<{ variant: string }>()\n</script>\n\n<template><div :class="cx(props.variant)" /></template>\n`
+
+  it('a Vue component built with no source map is reported by path alone, with the first sentence', async () => {
+    process.env.NODE_ENV = 'production'
+    const built = await build({ 'src/Bad.vue': bad }, { plugins: [vuePlugin()] })
+
+    expect(built.error).toContain(
+      `src/Bad.vue: cx(props.variant): the argument is not a literal atom name.${UNKNOWN_WITHOUT_MAP}`,
+    )
+    expect(built.error).not.toMatch(/src\/Bad\.vue:\d/)
+  }, 60_000)
+
+  it('the same component built with source maps on is reported at its authored line', async () => {
+    process.env.NODE_ENV = 'production'
+    const built = await build(
+      { 'src/Bad.vue': bad },
+      { plugins: [vuePlugin()], build: { sourcemap: true } },
+    )
+
+    expect(built.error).toContain('src/Bad.vue:6:')
+    expect(built.error).not.toContain('line unknown')
+  }, 60_000)
+
+  const prepend: PluginOption = {
+    name: 'prepend-lines',
+    enforce: 'pre',
+    transform(code, id) {
+      return id.endsWith('src/a.js') ? { code: `\n\n\n${code}`, map: null } : undefined
+    },
+  }
+  const a = { 'src/a.js': `${IMPORT}export const f = (v) => cx(v)\n` }
+
+  it('a module rewritten by a plugin that returns no map is reported with the second sentence', async () => {
+    const built = await build(a, { plugins: [prepend], build: { sourcemap: true } })
+
+    expect(built.error).toContain(
+      `src/a.js: cx(v): the argument is not a literal atom name.${UNKNOWN_UNMAPPED}`,
+    )
+  }, 60_000)
+
+  it.each([false, true])(
+    'control: an untransformed module is reported at its line and column with sourcemap %s',
+    async (sourcemap) => {
+      const built = await build(a, { build: { sourcemap } })
+
+      expect(built.error).toContain(
+        'src/a.js:2:28: cx(v): the argument is not a literal atom name.',
+      )
+      expect(built.error).not.toContain('line unknown')
+    },
+    60_000,
+  )
+
+  it('sorts a problem with no position after the problems that have one', () => {
+    const base = { kind: 'argument', offset: 0, construct: 'cx(v)', text: 'x.', file: 'src/m.js' }
+    const report = buildReport([
+      { ...base, line: 0, column: 0, unknownLine: UNKNOWN_UNMAPPED },
+      { ...base, line: 9, column: 3 },
+    ] as never)
+    const lines = report.split('\n').filter((line) => line.startsWith('src/m.js'))
+
+    expect(lines).toEqual([`src/m.js:9:3: cx(v): x.`, `src/m.js: cx(v): x.${UNKNOWN_UNMAPPED}`])
+  })
 })

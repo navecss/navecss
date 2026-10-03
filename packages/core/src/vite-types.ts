@@ -41,7 +41,7 @@ export interface PluginLike {
  */
 export interface EnvironmentLike {
   readonly name: string
-  readonly config: { readonly consumer: string }
+  readonly config: { readonly consumer: string; readonly root?: string }
   readonly plugins: readonly PluginLike[]
 }
 
@@ -66,6 +66,13 @@ export interface IncomingSourceMap {
   readonly sourcesContent?: readonly (string | null)[] | undefined
   readonly names?: readonly string[] | undefined
   readonly mappings: string
+}
+
+/**
+ * What the host tells a `transform` hook about the module besides its text.
+ */
+export interface TransformMeta {
+  readonly moduleType?: string
 }
 
 export interface TransformContext {
@@ -103,6 +110,7 @@ export interface HotUpdateOptions {
  */
 export interface HotUpdateContext {
   readonly environment: {
+    readonly config?: { readonly root?: string }
     readonly hot: { send(payload: { type: 'full-reload' }): void }
     readonly moduleGraph: {
       getModuleById(id: string): unknown

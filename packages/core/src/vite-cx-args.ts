@@ -84,25 +84,63 @@ function unaryValue(node: AstNode): Possible[] | undefined {
 }
 
 /**
- * A name: `undefined` when nothing declares it, else what its sole declaration holds.
+ * The binding that a name stands for the sole initialiser of: a `const`, or a `let` or `var`
+ * nothing else writes. `undefined` for any other binding.
+ */
+export function soleInitialiserBinding(binding: Binding | undefined): Binding | undefined {
+  const isPlain = binding && ['const', 'let', 'var'].includes(binding.kind)
+  return isPlain && binding.init && binding.writes === 0 ? binding : undefined
+}
+
+/**
+ * The binding the identifier `init` names, when a declaration's initialiser is just another name.
+ */
+function aliasedBinding(init: AstNode, context: Context): Binding | undefined {
+  return soleInitialiserBinding(context.analysis.referenceOf(init)?.binding)
+}
+
+/**
+ * Where a declaration's initialiser leads: to another name (`alias`), or to a result.
+ */
+function stepOf(
+  init: AstNode,
+  context: Context,
+): { readonly alias: Binding | undefined; readonly result: Resolved } {
+  if (init.type !== 'Identifier') return { alias: undefined, result: possibles(init, context) }
+  if (context.analysis.referenceOf(init)?.binding) {
+    return { alias: aliasedBinding(init, context), result: undefined }
+  }
+  return { alias: undefined, result: stringAt(init, 'name') === 'undefined' ? [] : undefined }
+}
+
+/**
+ * A name: `undefined` when nothing declares it, else what its sole declaration holds. A name
+ * bound to another name (`const b = a`) is followed in a loop, not by recursion, so a chain of any
+ * length resolves, once however many calls read its end.
  */
 function identifierValue(node: AstNode, context: Context): Possible[] | undefined {
   const reference = context.analysis.referenceOf(node)
-  const binding = reference?.binding
-  if (!binding) return stringAt(node, 'name') === 'undefined' ? [] : undefined
-  const isPlain = ['const', 'let', 'var'].includes(binding.kind)
-  if (!isPlain || !binding.init || binding.writes > 0 || context.resolving.has(binding)) {
-    return undefined
+  if (!reference?.binding) return stringAt(node, 'name') === 'undefined' ? [] : undefined
+  const chain: Binding[] = []
+  let result: Resolved
+  let binding = soleInitialiserBinding(reference.binding)
+  while (binding) {
+    if (context.resolved.has(binding)) {
+      result = context.resolved.get(binding)
+      break
+    }
+    if (context.resolving.has(binding)) break
+    chain.push(binding)
+    context.resolving.add(binding)
+    const step = stepOf(binding.init!, context)
+    result = step.result
+    binding = step.alias
   }
-  if (context.resolved.has(binding)) return context.resolved.get(binding)
-  context.resolving.add(binding)
-  try {
-    const found = possibles(binding.init, context)
-    context.resolved.set(binding, found)
-    return found
-  } finally {
-    context.resolving.delete(binding)
+  for (const link of chain) {
+    context.resolving.delete(link)
+    context.resolved.set(link, result)
   }
+  return result
 }
 
 /**

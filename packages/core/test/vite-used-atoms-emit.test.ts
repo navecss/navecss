@@ -3,8 +3,9 @@
  * emission. A real `vite build` of a scratch app, under both CSS transformers, compared against
  * an `'all'` build of the same app through the same pipeline.
  */
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import vuePlugin from '@vitejs/plugin-vue'
 import { describe, expect, it } from 'vitest'
@@ -37,6 +38,7 @@ const LEGS = Object.entries(VITE_APIS).flatMap(([version, api]) =>
   TRANSFORMERS.map((transformer) => ({ version, api, transformer })),
 )
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
+const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
  * The name of the (only) CSS file a build wrote.
@@ -151,28 +153,21 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
   })
 
   describe('AC-used-atoms-26 — srOnlyFocusable alone prunes a merged selector list', () => {
-    it.each([
-      ['srOnlyFocusable', 'srOnly'],
-      ['srOnly', 'srOnlyFocusable'],
-    ])(
-      '%s alone keeps its rules and none of %s',
-      async (used, other) => {
-        const app = makeUsedApp(
-          appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('${used}')\n` }),
-        )
-        try {
-          const usedLayer = await layerOf(app, transformer, 'used', api)
-          const allLayer = await layerOf(app, transformer, 'all', api)
+    it('S1: srOnlyFocusable alone keeps its rules and none of srOnly', async () => {
+      const app = makeUsedApp(
+        appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('srOnlyFocusable')\n` }),
+      )
+      try {
+        const usedLayer = await layerOf(app, transformer, 'used', api)
+        const allLayer = await layerOf(app, transformer, 'all', api)
 
-          expect(usedLayer.tree).toEqual(keepOnly(allLayer.tree, classesOf(used)))
-          expect(atomLayerAtoms(usedLayer.built.css)).toEqual([used])
-          expect(atomLayerAtoms(usedLayer.built.css)).not.toContain(other)
-        } finally {
-          app.dispose()
-        }
-      },
-      60_000,
-    )
+        expect(usedLayer.tree).toEqual(keepOnly(allLayer.tree, classesOf('srOnlyFocusable')))
+        expect(atomLayerAtoms(usedLayer.built.css)).toEqual(['srOnlyFocusable'])
+        expect(JSON.stringify(usedLayer.tree)).not.toMatch(/\.nave-sr-only(?![\w-])/)
+      } finally {
+        app.dispose()
+      }
+    }, 60_000)
   })
 
   describe('AC-used-atoms-27 — the emitted set, and nothing outside the layer changes', () => {
@@ -391,42 +386,107 @@ ${IMPORT}const c = cx('flex')
       }
     }, 60_000)
 
-    it('says it could not filter a stylesheet imported with ?inline, naming it', async () => {
-      const app = makeUsedApp({
+    const pluginWarnings = (built: { warnings?: readonly string[] }): string[] =>
+      (built.warnings ?? []).filter((message) => message.includes('[plugin nave'))
+    const textWarning = (file: string, query: '?inline' | '?raw'): string =>
+      `${file} is imported with ${query}, so its stylesheet is text in the JavaScript, which the plugin does not filter: every atom in its atomic layer ships, not only the atoms this build emits. Import it without ${query} to have the layer filtered.`
+    /**
+     * The CSS strings in the JavaScript a build wrote, unescaped.
+     */
+    const stringsIn = (js: string): string => js.replaceAll('\\n', '\n')
+    const inlineApp = (inline: string) =>
+      makeUsedApp({
         'index.html': page(),
         'src/app.css': APP_CSS,
-        'src/main.ts': `import css from './app.css?inline'\n${IMPORT}console.log(cx('flex'), css)\n`,
+        'src/inline.css': inline,
+        'src/a.ts': "import css from './inline.css?inline'\nexport const a = css\n",
+        'src/b.ts': "import css from './inline.css?inline'\nexport const b = css\n",
+        'src/main.ts': `import './app.css'\nimport { a } from './a.ts'\nimport { b } from './b.ts'\n${IMPORT}console.log(cx('flex'), a, b)\n`,
       })
-      try {
-        const built = await buildUsed(app, { api, transformer })
-        const said = (built.warnings ?? []).filter((message) => message.includes('app.css'))
 
-        expect(built.error).toBeUndefined()
-        expect(said).toHaveLength(1)
-        expect(said[0]).toContain('src/app.css')
-        expect(said[0]).toContain('?inline')
-        // What the warning states is true: the layer is text in the chunk, whole.
-        expect(atomLayerAtoms(built.js.replaceAll('\\n', '\n')).length).toBeGreaterThan(40)
+    it('AC-used-atoms-60: warns once, in the words the build prints, for a layer imported with ?inline, and ships it whole', async () => {
+      const app = inlineApp(APP_CSS)
+      try {
+        const used = await buildUsed(app, { api, transformer })
+        const all = await buildUsed(app, { api, transformer, options: { atomic: 'all' } })
+        const warnings = pluginWarnings(used)
+
+        expect(used.error).toBeUndefined()
+        expect(warnings).toHaveLength(1)
+        expect(warnings[0]).toContain(textWarning('src/inline.css', '?inline'))
+        expect(warnings[0]).not.toContain('nave: ')
+        expect(parseAtomicLayer(stringsIn(used.js))).toEqual(parseAtomicLayer(stringsIn(all.js)))
+        expect(atomLayerAtoms(stringsIn(used.js)).length).toBe(Object.keys(atomClassMap).length)
+        expect(atomLayerAtoms(used.css)).toEqual(['flex'])
+        expect(warnings.join('\n')).not.toContain('src/app.css')
+        expect(pluginWarnings(all)).toEqual([])
       } finally {
         app.dispose()
       }
     }, 60_000)
 
-    it('prints no such warning for a stylesheet imported without ?inline, or under all', async () => {
-      const app = makeUsedApp({
-        'index.html': page(),
-        'src/app.css': APP_CSS,
-        'src/main.ts': `import css from './app.css?inline'\n${IMPORT}console.log(cx('flex'), css)\n`,
-      })
-      const plain = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
+    it('AC-used-atoms-60: prints no warning for an ?inline stylesheet that carries no atomic layer', async () => {
+      const app = inlineApp('.x { color: red }\n')
       try {
-        const all = await buildUsed(app, { api, transformer, options: { atomic: 'all' } })
-        const used = await buildUsed(plain, { api, transformer })
+        const built = await buildUsed(app, { api, transformer })
 
-        expect(all.warnings).toEqual([])
-        expect(used.warnings).toEqual([])
+        expect(built.error).toBeUndefined()
+        expect(pluginWarnings(built)).toEqual([])
       } finally {
         app.dispose()
+      }
+    }, 60_000)
+
+    it('says the same for a stylesheet imported with ?raw, naming it, and not for one with no layer or under all', async () => {
+      const layer = readFileSync(path.join(CORE_ROOT, 'dist/atomic.css'), 'utf8')
+      const make = (css: string) =>
+        makeUsedApp({
+          'index.html': page(),
+          'src/raw.css': css,
+          'src/main.ts': `import css from './raw.css?raw'\n${IMPORT}console.log(cx('flex'), css)\n`,
+        })
+      const withLayer = make(layer)
+      const without = make(APP_CSS)
+      try {
+        const used = await buildUsed(withLayer, { api, transformer })
+        const all = await buildUsed(withLayer, { api, transformer, options: { atomic: 'all' } })
+        const plain = await buildUsed(without, { api, transformer })
+
+        expect(used.error).toBeUndefined()
+        expect(pluginWarnings(used)).toHaveLength(1)
+        expect(pluginWarnings(used)[0]).toContain(textWarning('src/raw.css', '?raw'))
+        expect(pluginWarnings(all)).toEqual([])
+        expect(pluginWarnings(plain)).toEqual([])
+      } finally {
+        withLayer.dispose()
+        without.dispose()
+      }
+    }, 60_000)
+
+    it('names a package stylesheet imported with ?raw by its path from the project root', async () => {
+      const app = makeUsedApp({
+        'index.html': page(),
+        'src/main.ts': `import css from '@navecss/core/atomic?raw'\n${IMPORT}console.log(cx('flex'), css)\n`,
+      })
+      try {
+        const built = await buildUsed(app, { api, transformer })
+        const file = path.relative(app.root, path.join(CORE_ROOT, 'dist/atomic.css'))
+
+        expect(pluginWarnings(built)).toHaveLength(1)
+        expect(pluginWarnings(built)[0]).toContain(textWarning(file.replaceAll('\\', '/'), '?raw'))
+      } finally {
+        app.dispose()
+      }
+    }, 60_000)
+
+    it('prints no warning for a layer imported without ?inline or ?raw', async () => {
+      const plain = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
+      try {
+        const used = await buildUsed(plain, { api, transformer })
+
+        expect(pluginWarnings(used)).toEqual([])
+        expect(used.warnings).toEqual([])
+      } finally {
         plain.dispose()
       }
     }, 60_000)
@@ -512,43 +572,95 @@ describe.each(Object.entries(VITE_APIS))(
       }, 60_000)
     })
 
-    describe('AC-used-atoms-26 - srOnlyFocusable and srOnly alone prune the merged selector list', () => {
+    describe('AC-used-atoms-26 - the prune is handed a merged selector list', () => {
+      // Lightning CSS merges the two rules when it minifies, which Vite does after the prune. A
+      // scratch plugin after Nave's does the merge before Vite's CSS step, so that step receives
+      // the list the prune has to cut member by member; a second one records what it received.
+      const merger = {
+        name: 'merge-sr-only',
+        transform(code: string, id: string) {
+          if (!id.endsWith('app.css')) return
+          const rules =
+            /(\.nave-sr-only)\s*\{([^{}]*)\}\s*(\.nave-sr-only-focusable)\s*\{([^{}]*)\}/.exec(code)
+          if (rules?.[2]?.trim() !== rules?.[4]?.trim()) return
+          return { code: code.replace(rules![0], `${rules![1]},${rules![3]}{${rules![2]}}`) }
+        },
+      }
+
       it.each([
-        ['srOnlyFocusable', 'srOnly'],
-        ['srOnly', 'srOnlyFocusable'],
+        ['srOnlyFocusable', ['srOnlyFocusable']],
+        ['srOnly', ['srOnly', 'srOnlyFocusable']],
       ])(
-        '%s alone keeps its member of the list and its own rules, and none of %s',
-        async (used, other) => {
+        '%s alone leaves the merged list of what the CSS step receives cut to %j',
+        async (used, shipped) => {
+          const received: string[] = []
+          const spy = {
+            name: 'record-css-step-input',
+            transform(code: string, id: string) {
+              if (id.endsWith('app.css')) received.push(code)
+            },
+          }
           const app = makeUsedApp(
             appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('${used}')\n` }),
           )
           try {
-            const usedLayer = await layerOf(app, 'lightningcss', 'used', api, VITE_DEFAULTS)
-            const allLayer = await layerOf(app, 'lightningcss', 'all', api, VITE_DEFAULTS)
-            // A class name is a whole name: `.nave-sr-only` is no part of `.nave-sr-only-focusable`.
-            const named = (name: string): RegExp =>
-              new RegExp(`${name.replace('.', String.raw`\.`)}(?![\\w-])`)
-            const preludes = (nodes: typeof allLayer.tree): string[] =>
-              nodes.map((node) => node.prelude)
-            const [kept, dropped] = [used, other].map(
-              (name) => `.${classesOf(name).values().next().value}`,
-            )
+            const defaults = { api, transformer: 'lightningcss', ...VITE_DEFAULTS } as const
+            const options = { ...defaults, build: { ...VITE_DEFAULTS.build, cssMinify: false } }
+            const usedBuilt = await buildUsed(app, { ...options, after: [merger, spy] })
+            const allBuilt = await buildUsed(app, {
+              ...options,
+              options: { atomic: 'all' },
+              after: [merger, spy],
+            })
+            const merged = /\.nave-sr-only\s*,\s*\.nave-sr-only-focusable/
 
-            // The case is reached: the full layer holds the two atoms in one merged list.
-            expect(preludes(allLayer.tree)).toContain('.nave-sr-only,.nave-sr-only-focusable')
-            expect(usedLayer.tree).toEqual(keepOnly(allLayer.tree, classesOf(used)))
-            expect(preludes(usedLayer.tree)).toContain(kept)
-            expect(JSON.stringify(usedLayer.tree)).not.toMatch(named(dropped!))
-            expect(atomLayerAtoms(usedLayer.built.css)).toEqual([used])
-            // Control: dropping the whole list for naming an unemitted atom loses what the emitted one needs.
-            const wholeRules = allLayer.tree.filter((node) => !named(dropped!).test(node.prelude))
-            expect(wholeRules).not.toEqual(usedLayer.tree)
+            // The case is reached: what the CSS step was handed holds one merged list.
+            expect(received.length).toBeGreaterThan(0)
+            expect(received.every((css) => merged.test(css))).toBe(true)
+            expect(usedBuilt.error).toBeUndefined()
+            const expected = keepOnly(parseAtomicLayer(allBuilt.css), classesOf(...shipped))
+            expect(parseAtomicLayer(usedBuilt.css)).toEqual(expected)
+            // Cut member by member: srOnlyFocusable alone is its own rule, the pair keeps the list.
+            expect(parseAtomicLayer(usedBuilt.css).map((node) => node.prelude)).toContain(
+              shipped.length === 1
+                ? '.nave-sr-only-focusable'
+                : '.nave-sr-only,.nave-sr-only-focusable',
+            )
+            expect(atomLayerAtoms(usedBuilt.css)).toEqual(shipped.toSorted())
           } finally {
             app.dispose()
           }
         },
         60_000,
       )
+    })
+
+    describe('AC-used-atoms-26 - S1: srOnlyFocusable alone prunes the merged selector list', () => {
+      it('keeps its member of the list and its own rules, and none of srOnly', async () => {
+        const app = makeUsedApp(
+          appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('srOnlyFocusable')\n` }),
+        )
+        try {
+          const usedLayer = await layerOf(app, 'lightningcss', 'used', api, VITE_DEFAULTS)
+          const allLayer = await layerOf(app, 'lightningcss', 'all', api, VITE_DEFAULTS)
+          // A class name is a whole name: `.nave-sr-only` is no part of `.nave-sr-only-focusable`.
+          const named = /\.nave-sr-only(?![\w-])/
+          const preludes = (nodes: typeof allLayer.tree): string[] =>
+            nodes.map((node) => node.prelude)
+
+          // The case is reached: the full layer holds the two atoms in one merged list.
+          expect(preludes(allLayer.tree)).toContain('.nave-sr-only,.nave-sr-only-focusable')
+          expect(usedLayer.tree).toEqual(keepOnly(allLayer.tree, classesOf('srOnlyFocusable')))
+          expect(preludes(usedLayer.tree)).toContain('.nave-sr-only-focusable')
+          expect(JSON.stringify(usedLayer.tree)).not.toMatch(named)
+          expect(atomLayerAtoms(usedLayer.built.css)).toEqual(['srOnlyFocusable'])
+          // Control: a filter keyed on the first class of a merged list drops the base rule.
+          const wholeRules = allLayer.tree.filter((node) => !named.test(node.prelude))
+          expect(wholeRules).not.toEqual(usedLayer.tree)
+        } finally {
+          app.dispose()
+        }
+      }, 60_000)
     })
   },
 )
@@ -580,7 +692,11 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
             )
             try {
               const built = await buildUsed(app, { transformer, ...settings })
-              const expected = keepOnly(allTree, classesOf(name))
+              // An atom that restores what another removes ships with it.
+              const expected = keepOnly(
+                allTree,
+                classesOf(name, ...(name === 'srOnly' ? ['srOnlyFocusable'] : [])),
+              )
               if (
                 built.error !== undefined ||
                 !isDeepStrictEqual(parseAtomicLayer(built.css), expected)

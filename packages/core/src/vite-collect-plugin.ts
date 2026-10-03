@@ -5,11 +5,11 @@
  * a module: it returns nothing from `transform`.
  */
 import type { ModuleRecord } from './vite-state.ts'
-import type { PluginLog, RenderContext, TransformContext } from './vite-types.ts'
+import type { PluginLog, RenderContext, TransformContext, TransformMeta } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
 import type { UsedContext } from './vite-used.ts'
 
-import { isMentioningAtoms, recordModule } from './vite-collect-module.ts'
+import { isMentioningAtoms, lineUnknownNote, recordModule } from './vite-collect-module.ts'
 import { isStylesheetId } from './vite-css-id.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
@@ -30,7 +30,12 @@ interface HtmlHook {
 export interface NaveCollectPlugin {
   readonly name: 'nave:collect'
   readonly enforce: 'post'
-  transform(this: TransformContext, code: string, id: string): Promise<undefined>
+  transform(
+    this: TransformContext,
+    code: string,
+    id: string,
+    meta?: TransformMeta,
+  ): Promise<undefined>
   readonly transformIndexHtml: HtmlHook
   buildStart(this: RenderContext): Promise<void>
   buildEnd(this: RenderContext, error?: unknown): Promise<void>
@@ -55,6 +60,7 @@ function dynamicProblems(record: ModuleRecord, context: UsedContext): LocatedPro
     line: call.line,
     column: call.column,
     pkg: record.pkg,
+    ...(call.line === 0 && { unknownLine: lineUnknownNote(context) }),
   }))
 }
 
@@ -74,7 +80,7 @@ function failModule(ctx: TransformContext, id: string, problems: readonly Locate
   return ctx.error({
     message,
     id,
-    loc: { file: id, line: first.line, column: first.column - 1 },
+    loc: { file: id, line: Math.max(first.line, 1), column: Math.max(first.column - 1, 0) },
   } satisfies PluginLog)
 }
 
@@ -103,9 +109,9 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
       context.state.clientEnded = false
     },
 
-    async transform(code, id) {
+    async transform(code, id, meta) {
       if (!isReadable(context, id)) return
-      const record = await recordModule(context, this, code, id)
+      const record = await recordModule(context, this, { code, id, moduleType: meta?.moduleType })
       if (!record || context.command !== 'serve' || record.pkg !== undefined) return
       const problems = problemsOf(record, context)
       if (problems.length > 0) failModule(this, id, problems)

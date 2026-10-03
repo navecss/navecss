@@ -10,8 +10,10 @@ import { hintFor, isBuiltInAtom } from './vite-atom-check.ts'
 export interface UsedAtomOptions {
   /**
    * Which atoms the build ships. `'used'` (the default): the atoms your `cx()` calls and your
-   * written Nave classes name, plus those in `keep` and `keepFor`, and no others, in the build; a
-   * `cx()` call whose atoms the build cannot read fails the build.
+   * written Nave classes name, plus those in `keep` and `keepFor`. Under the default the build
+   * filters the atomic layer of every stylesheet it can reach, and a stylesheet imported with
+   * `?inline` or `?raw` ships every atom with a warning; a `cx()` call whose atoms the build
+   * cannot read fails the build.
    * `'all'`: every atom, and no `cx()` call is read, as with the PostCSS plugin.
    */
   atomic?: 'all' | 'used'

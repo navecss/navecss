@@ -18,7 +18,7 @@ import {
   atomsWrittenIn,
   concatenationProblems,
 } from './vite-literal-classes.ts'
-import { analyze } from './vite-scope.ts'
+import { analyze, type ScopeAnalysis } from './vite-scope.ts'
 import { mergedExposures, setupMemberName } from './vite-setup-member.ts'
 import { cxReadsOnSetup, stringExposures } from './vite-vue-setup.ts'
 
@@ -253,7 +253,7 @@ function readSourceForms(reading: Reading, program: AstNode): void {
  * Reads every use of a `cx` binding in the module, and, in a compiled Vue template, every read of
  * one off `$setup`.
  */
-function readUses(reading: Reading, program: AstNode): void {
+function readUses(reading: Reading, program: AstNode): ScopeAnalysis {
   const { code, options, result } = reading
   const analysis = analyze(program)
   const bindings = cxBindingsOf(analysis, options.cxSources)
@@ -270,6 +270,7 @@ function readUses(reading: Reading, program: AstNode): void {
   for (const member of members) {
     readUse(withSetup, useOfExpression(frame, member, setupMemberName(member) ?? 'cx'), analysis)
   }
+  return analysis
 }
 
 /**
@@ -285,12 +286,12 @@ export function readModule(code: string, program: AstNode, options: ReadOptions)
     usesCx: isImportingCx(program, options.cxSources),
   }
   const reading: Reading = { code, options, result, seen: new Set() }
-  readUses(reading, program)
+  const analysis = readUses(reading, program)
   readSourceForms(reading, program)
   for (const atom of atomsWrittenIn(code)) result.classes.add(atom)
   for (const atom of atomsInEscapedStrings(program)) result.classes.add(atom)
   if (result.usesCx || !options.isDependency) {
-    for (const problem of concatenationProblems(program, code)) report(reading, problem)
+    for (const problem of concatenationProblems(program, code, analysis)) report(reading, problem)
   }
   return result
 }
