@@ -54,8 +54,8 @@ function runCommonJs(script: string): Ran {
 }
 
 interface TypeCheckSettings {
-  readonly module: 'nodenext' | 'node16' | 'node20'
-  readonly moduleResolution: 'nodenext' | 'node16'
+  readonly module: 'nodenext' | 'node16' | 'node20' | 'preserve'
+  readonly moduleResolution: 'nodenext' | 'node16' | 'bundler'
   readonly skipLibCheck: boolean
 }
 
@@ -180,6 +180,20 @@ describe('the CommonJS declarations of @navecss/core/postcss', () => {
     })
 
     expect(status, output).toBe(0)
+  })
+
+  it('type-check under module preserve with bundler resolution, which the README names, and still check the types for real', () => {
+    const settings: TypeCheckSettings = {
+      module: 'preserve',
+      moduleResolution: 'bundler',
+      skipLibCheck: false,
+    }
+    const good = typecheckCts('good.cts', GOOD_CTS, settings)
+    const bad = typecheckCts('bad.cts', BAD_OPTION_CTS, settings)
+
+    expect(good.status, good.output).toBe(0)
+    expect(bad.status).not.toBe(0)
+    expect(bad.output).toMatch(/TS2345|TS2322/)
   })
 
   it('type-check under node16 with skipLibCheck on, and still check the types for real', () => {
