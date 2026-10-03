@@ -49,6 +49,11 @@ describe('AC-base-ui-bridge-43 covers: R14 (the tokens bytes)', () => {
       'Inputs, buttons, tags, and the popovers, menus and select lists anchored to a control',
     )
   })
+
+  it('emits --nave-border-width-mark: 2px exactly once in the built tokens.css', () => {
+    const css = readFileSync(path.resolve(import.meta.dirname, '../../dist/tokens.css'), 'utf8')
+    expect(css.match(/--nave-border-width-mark:\s*2px;/g)).toHaveLength(1)
+  })
 })
 
 describe('AC-base-ui-bridge-33 covers: R9, R14 (the painted pairs are declared before ship)', () => {

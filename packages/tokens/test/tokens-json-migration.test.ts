@@ -422,17 +422,28 @@ describe('AC-token-build-45 covers: R45 (the adjacency declaration SET, compared
     expect([...migrated].every((triple) => frozen.includes(triple))).toBe(true)
   })
 
+  it('declares no triple twice, the post-migration ones the lift removes included', () => {
+    const all = adjacencyTriples(source.$extensions['dev.navecss.theming'].adjacency)
+
+    expect(new Set(all).size).toBe(all.length)
+  })
+
   it('is written so a count-preserving, membership-changing migration FAILS', () => {
     const block = source.$extensions['dev.navecss.theming'].adjacency
     const tampered = structuredClone(block)
-    const entry = Object.entries(tampered).find(
-      (candidate): candidate is [string, AdjacencyPair[]] =>
-        Array.isArray(candidate[1]) && candidate[1].length > 0,
+    // A pair the migration owned: tampering with a post-migration one would trip the
+    // lift's own presence check instead of the verdict this row is about.
+    const [target] = Object.entries(tampered).flatMap(([subject, pairs]) =>
+      Array.isArray(pairs)
+        ? pairs.filter(
+            (pair) =>
+              !POST_MIGRATION_ADJACENCY_TRIPLES.has(`${subject}|${pair.against}|${pair.class}`),
+          )
+        : [],
     )
-    if (!entry) throw new Error('no subject with a non-empty adjacency array to tamper with')
-    const [, pairs] = entry
+    if (!target) throw new Error('no pre-migration pair to tamper with')
     // Same subject, same class, same pair count: only WHO the pair points at changes.
-    pairs[0]!.against = `${pairs[0]!.against}--tampered-for-test`
+    target.against = `${target.against}--tampered-for-test`
 
     const tamperedTriples = adjacencyTriplesBeforeLaterAdditions(tampered)
 
