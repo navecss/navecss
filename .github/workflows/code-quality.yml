@@ -6,8 +6,8 @@ name: code-quality
 #
 # - `build` hands its output to every job that reads `dist/` as an artifact: `dist/` itself plus
 #   turbo's cache, so a job's turbo task finds `build` already done instead of running it again.
-# - `test` runs the suites once, with coverage, and the `sonar` job scans those reports rather
-#   than running the suites a second time to produce its own.
+# - `test` runs the suites once, with coverage, and the `sonar` job scans the pinned leg's
+#   reports rather than running the suites a second time to produce its own.
 # - `build` and `test` each have a second leg on Node 22.18, the package.json "engines" floor.
 #   That is the one deliberate repeat: the same check on a different Node, to prove the floor
 #   the packages claim.
@@ -108,13 +108,9 @@ jobs:
           - leg: pinned
             label: node from mise.toml
             node-version: ''
-            test-args: ''
-          # The floor leg proves the suites pass on Node 22.18; the pinned leg's run is the one
-          # whose coverage is measured and scanned.
           - leg: floor
             label: node 22.18, the engines floor
             node-version: '22.18.0'
-            test-args: '-- --coverage.enabled=false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -127,9 +123,13 @@ jobs:
         with:
           name: build-output-${{ matrix.leg }}
 
+      # Both legs measure coverage, as every test run does. Turning it off on the floor leg would
+      # take an argument, and turbo hashes arguments into every task, build included, so that leg
+      # would rebuild instead of using the build output it was given.
       - name: Run the suites
-        run: pnpm run test ${{ matrix.test-args }}
+        run: pnpm run test
 
+      # The floor leg proves the suites pass on Node 22.18; the pinned leg's reports are scanned.
       - name: Hand the coverage reports to the sonar job
         if: matrix.leg == 'pinned'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

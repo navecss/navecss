@@ -49,7 +49,7 @@ jobs:
         node: ['22.18.0', '']
     steps:
       - name: Run the suites
-        run: pnpm run test \${{ matrix.test-args }}
+        run: pnpm run test
 `
 
 test('extractJobs reads each job id and the text of its run: values only', () => {
@@ -131,6 +131,25 @@ test('RED: a job running the whole local gate, which is not one of its steps', (
   assert.deepEqual(compareJobsToSteps(extractJobs(text), STEP_NAMES), [
     'job full-gate runs `pnpm run ci:check`, which is not a ci:check step.',
   ])
+})
+
+test('RED: arguments passed to a step, which turbo hashes into every task it runs, build included', () => {
+  const text = COMPLIANT.replace(
+    'run: pnpm run test',
+    'run: pnpm run test -- --coverage.enabled=false',
+  )
+  assert.deepEqual(compareJobsToSteps(extractJobs(text), STEP_NAMES), [
+    'job test passes arguments to `test` (-- --coverage.enabled=false); run the step as ci:check does, ' +
+      'with none, or turbo will not find the build output it was given and builds again.',
+  ])
+})
+
+test('a step chained with && or followed by a shell comment carries no arguments', () => {
+  const text = COMPLIANT.replace(
+    'run: pnpm run test',
+    'run: pnpm run test && echo done # the suites',
+  )
+  assert.deepEqual(compareJobsToSteps(extractJobs(text), STEP_NAMES), [])
 })
 
 test('RED: a step named by a GitHub expression cannot be read, so it is refused', () => {

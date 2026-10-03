@@ -137,7 +137,8 @@ export function runSteps(steps, runStep, { limit = Infinity, onStepDone }) {
         if (running >= limit || step.after.some((name) => !results.has(name))) continue
         started.add(step.name)
         running += 1
-        execute(step.name)
+        // Never rejects: a step's failure is a result, settled inside `execute`.
+        void execute(step.name)
       }
     }
     if (results.size === steps.length) finish(results)
@@ -187,11 +188,15 @@ export function stepEnvironment(env, makeCacheDir) {
 
 /**
  * Runs `pnpm run <name>` in `env` with its stdout and stderr captured, in arrival order, into
- * one string.
+ * one string. `pnpm` is the very pnpm that started this gate (`pnpmEntry`, from
+ * `npm_execpath`), run by this Node, so no step depends on what `PATH` resolves `pnpm` to.
  */
-function runPnpmScript(name, env) {
+function runPnpmScript(name, env, pnpmEntry) {
   return new Promise((resolve) => {
-    const child = spawn('pnpm', ['run', name], { env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(process.execPath, [pnpmEntry, 'run', name], {
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
     const chunks = []
     child.stdout.on('data', (chunk) => chunks.push(chunk))
     child.stderr.on('data', (chunk) => chunks.push(chunk))
@@ -215,22 +220,31 @@ function printStep(name, result) {
 }
 
 /**
-Runs every step, prints each as it finishes and then the summary, and exits 1 unless all passed.
+ * Runs every step, prints each as it finishes and then the summary, and exits 1 unless all
+ * passed. `env` is this process's environment, where `pnpm run` puts its own entry point.
  */
-async function main() {
+async function main(env = process.env) {
+  const pnpmEntry = env.npm_execpath
+  if (!pnpmEntry) {
+    console.error('ci:check: run this as `pnpm run ci:check`, so the steps use the same pnpm.')
+    process.exitCode = 1
+    return
+  }
   validateSteps(STEPS)
   const names = STEPS.map((step) => step.name)
   let freshCacheDir
-  const env = stepEnvironment(process.env, () => {
-    freshCacheDir = mkdtempSync(path.join(tmpdir(), 'ci-check-turbo-cache-'))
-    return freshCacheDir
-  })
+  const stepEnv = {
+    ...stepEnvironment(env, () => {
+      freshCacheDir = mkdtempSync(path.join(tmpdir(), 'ci-check-turbo-cache-'))
+      return freshCacheDir
+    }),
+  }
   // The steps write to a pipe, not a terminal, so keep their colour when this process has one.
-  if (process.stdout.isTTY) env.FORCE_COLOR = '1'
+  if (process.stdout.isTTY) stepEnv.FORCE_COLOR = '1'
   console.log(`ci:check: running ${names.length} steps: ${names.join(', ')}`)
   if (freshCacheDir) console.log(`ci:check: TURBO_FORCE is set, so every step uses an empty cache`)
   try {
-    const results = await runSteps(STEPS, (name) => runPnpmScript(name, env), {
+    const results = await runSteps(STEPS, (name) => runPnpmScript(name, stepEnv, pnpmEntry), {
       limit: CONCURRENT_STEPS,
       onStepDone: printStep,
     })

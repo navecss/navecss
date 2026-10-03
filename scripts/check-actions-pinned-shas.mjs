@@ -168,7 +168,7 @@ function listCompositeActionFiles() {
         .filter((name) => existsSync(path.join(ACTIONS_DIR, entry.name, name)))
         .map((name) => path.posix.join('.github', 'actions', entry.name, name)),
     )
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
 }
 
 /**

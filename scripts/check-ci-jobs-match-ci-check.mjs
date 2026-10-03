@@ -14,7 +14,9 @@
  * 1. every `ci:check` step is run by exactly one job;
  * 2. no job runs the same step twice;
  * 3. every `pnpm run <script>` in that workflow names a `ci:check` step, so the whole gate
- *    (`pnpm run ci:check`) or a script the local gate never runs cannot creep back in.
+ *    (`pnpm run ci:check`) or a script the local gate never runs cannot creep back in;
+ * 4. no job passes arguments to a step: turbo hashes them into every task it runs, `build`
+ *    included, so the job would miss the build output it downloaded and build again.
  *
  * A matrix job counts once: its legs run the same step on purpose (the Node-floor legs of
  * `build` and `test` are the one deliberate repeat, on a different Node).
@@ -76,13 +78,14 @@ export function extractJobs(workflowText) {
   if (start === -1) return null
 
   const jobs = []
-  for (let index = start + 1; index < lines.length; index += 1) {
+  let index = start
+  while (++index < lines.length) {
     const line = lines[index]
     if (/^\S/.test(line) && !line.startsWith('#')) break
     const jobKey = /^ {2}([\w-]+):\s*$/.exec(line)
     if (jobKey) jobs.push({ id: jobKey[1], runs: [] })
 
-    const runKey = /^\s*(?:-\s+)?run:\s*(.*)$/.exec(line)
+    const runKey = /^(?:- +)?run:(.*)$/.exec(line.trimStart())
     if (!runKey || jobs.length === 0) continue
     const value = runKey[1].trim()
     if (/^[|>]/.test(value)) {
@@ -97,20 +100,32 @@ export function extractJobs(workflowText) {
 }
 
 /**
- * The scripts one `run:` value runs through pnpm, as `{ target }`: every `pnpm run <x>`, and
- * every `pnpm <step>` shorthand naming one of `stepNames`. Shell comment lines are ignored, and
- * so is any other pnpm command (`pnpm install`, `pnpm --filter ... exec`).
+ * The scripts one `run:` value runs through pnpm, as `{ target, args }`: every `pnpm run <x>`,
+ * and every `pnpm <step>` shorthand naming one of `stepNames`, with whatever follows the name up
+ * to the end of that command (`&&`, `||`, `;`, a pipe or a `#` comment). Shell comment lines are
+ * ignored, and so is any other pnpm command (`pnpm install`, `pnpm --filter ... exec`).
  */
 export function findStepRuns(runText, stepNames) {
   const found = []
   for (const line of runText.split('\n')) {
     if (line.trimStart().startsWith('#')) continue
-    for (const match of line.matchAll(/\bpnpm\s+(run\s+)?(\$\{\{[^}]*\}\}|[\w:-]+)/g)) {
-      const [, run, target] = match
-      if (run || stepNames.includes(target)) found.push({ target })
+    for (const match of line.matchAll(/\bpnpm\s+(run\s+)?(\$\{\{[^}]*\}\}|[\w:-]+)([^&|;#]*)/g)) {
+      const [, run, target, args] = match
+      if (run || stepNames.includes(target)) found.push({ args: args.trim(), target })
     }
   }
   return found
+}
+
+/**
+ * Turbo hashes pass-through arguments into every task a run executes, so a job that passes any
+ * to a step misses the cache entries the build artifact carries and builds again.
+ */
+function argumentsViolation(jobId, step, args) {
+  return (
+    `job ${jobId} passes arguments to \`${step}\` (${args}); run the step as ci:check does, ` +
+    'with none, or turbo will not find the build output it was given and builds again.'
+  )
 }
 
 /**
@@ -122,19 +137,17 @@ export function compareJobsToSteps(jobs, stepNames) {
 
   for (const job of jobs) {
     const counts = new Map()
-    for (const run of job.runs) {
-      for (const { target } of findStepRuns(run.text, stepNames)) {
-        if (target.startsWith('${{')) {
-          violations.push(
-            `job ${job.id} runs \`pnpm run ${target}\`; name the step literally so this check can read it.`,
-          )
-        } else if (stepNames.includes(target)) {
-          counts.set(target, (counts.get(target) ?? 0) + 1)
-        } else {
-          violations.push(
-            `job ${job.id} runs \`pnpm run ${target}\`, which is not a ci:check step.`,
-          )
-        }
+    const stepRuns = job.runs.flatMap((run) => findStepRuns(run.text, stepNames))
+    for (const { args, target } of stepRuns) {
+      if (target.startsWith('${{')) {
+        violations.push(
+          `job ${job.id} runs \`pnpm run ${target}\`; name the step literally so this check can read it.`,
+        )
+      } else if (stepNames.includes(target)) {
+        counts.set(target, (counts.get(target) ?? 0) + 1)
+        if (args !== '') violations.push(argumentsViolation(job.id, target, args))
+      } else {
+        violations.push(`job ${job.id} runs \`pnpm run ${target}\`, which is not a ci:check step.`)
       }
     }
     for (const [step, count] of counts) {
