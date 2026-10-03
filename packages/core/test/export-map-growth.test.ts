@@ -68,14 +68,19 @@ function manifest(): Record<string, unknown> {
  *
  * Every other condition is kept in the view and fails the comparison: a further condition nested
  * inside `import`, and a top-level sibling of `import` and `require` (a `node` target listed
- * ahead of `import`, say), either of which could send a loader to a different file.
+ * ahead of `import`, say), either of which could send a loader to a different file. A top-level
+ * sibling is kept under its own label, so one that shares a name with a nested condition (a
+ * `types` ahead of `import`, which TypeScript reads first) is not overwritten by it.
  */
 function importView(entry: unknown): unknown {
   const importEntry = (entry as { import?: unknown } | null)?.import
   if (typeof importEntry !== 'object' || importEntry === null) return entry
   const { import: _import, require: _require, ...siblings } = entry as Record<string, unknown>
   const { types, default: target, ...extra } = importEntry as Record<string, unknown>
-  return { ...siblings, types, import: target, ...extra }
+  const labelledSiblings = Object.fromEntries(
+    Object.entries(siblings).map(([condition, value]) => [`top-level ${condition}`, value]),
+  )
+  return { types, import: target, ...extra, ...labelledSiblings }
 }
 
 /**
@@ -143,6 +148,18 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
       ...PUBLISHED_0_1_0_EXPORTS,
       './postcss': {
         node: './dist/elsewhere.js',
+        import: { types: './dist/postcss.d.ts', default: './dist/postcss.js' },
+        require: { types: './dist/postcss.d.cts', default: './dist/postcss.cjs' },
+      },
+    }
+    expect(() => assertPublishedExportsPresent(tampered)).toThrow()
+  })
+
+  it('reds the real guard against a top-level types ahead of import (control)', () => {
+    const tampered: Record<string, unknown> = {
+      ...PUBLISHED_0_1_0_EXPORTS,
+      './postcss': {
+        types: './dist/elsewhere.d.ts',
         import: { types: './dist/postcss.d.ts', default: './dist/postcss.js' },
         require: { types: './dist/postcss.d.cts', default: './dist/postcss.cjs' },
       },
