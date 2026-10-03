@@ -15,7 +15,11 @@ import type { AstNode } from '../src/vite-ast.ts'
 
 import { hintFor, judgeAtom } from '../src/vite-atom-check.ts'
 import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
+import { recordModule } from '../src/vite-collect-module.ts'
 import { checkAtomicLayers, refeedChunkStylesheets } from '../src/vite-emit.ts'
+import { createExtendSource } from '../src/vite-extend.ts'
+import { resolveUsedOptions } from '../src/vite-options.ts'
+import { createUsedContext } from '../src/vite-used.ts'
 import { writeHandshake } from '../src/vite-handshake.ts'
 import { cut } from '../src/vite-problems.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from '../src/vite-prune.ts'
@@ -380,5 +384,26 @@ describe('state per build in watch mode', () => {
 
     expect(state.emitted).toBeUndefined()
     expect(state.clientEnded).toBe(false)
+  })
+})
+
+describe('what a Vue script exposed before it was edited', () => {
+  it('is forgotten once the edited script exposes nothing', async () => {
+    const context = createUsedContext(resolveUsedOptions({}), createExtendSource(undefined))
+    context.root = '/exposure-root'
+    const ctx = {
+      environment: { name: 'client', config: { consumer: 'client' }, plugins: [] },
+      parse: (code: string) => parseAst(code),
+      getCombinedSourcemap: () => ({ sources: [], mappings: '' }),
+      addWatchFile() {},
+    } as never
+    const id = '/exposure-root/Card.vue'
+    const exposing = `${IMPORT}const __returned__ = { get cx() { return cx } }\nexport default __returned__\n`
+
+    await recordModule(context, ctx, exposing, id)
+    expect(context.state.exposures.size).toBe(1)
+    await recordModule(context, ctx, `${IMPORT}export const a = cx('flex')\n`, id)
+
+    expect(context.state.exposures.size).toBe(0)
   })
 })

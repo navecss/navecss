@@ -136,7 +136,9 @@ export async function recordModule(
     isVueScript: /\.vue(?:$|\?)/.test(id),
     setup: await setupExposuresFor(context, ctx, { program, code, id }),
   })
+  // What a script exposed before an edit is not what it exposes now.
   if (reading.exposes.size > 0) context.state.exposures.set(key, reading.exposes)
+  else context.state.exposures.delete(key)
   const record = recordOf(context, ctx, { code, id, pkg }, reading)
   if (pkg !== undefined && reading.usesCx) context.state.packages.add(pkg)
   context.state.modules.set(key, record)
