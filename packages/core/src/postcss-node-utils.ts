@@ -9,6 +9,8 @@ import type {
   Rule,
 } from 'postcss'
 
+import { WORKAROUND_GROUP_AT_RULE_NAMES } from './directive/group-at-rules.ts'
+
 /**
  * True when `container` itself, or any of its ancestors, is a @keyframes
  * at-rule. A keyframe step (`to`, `from`, `50%`) parses as a Rule, so a
@@ -27,22 +29,6 @@ export function isInsideKeyframes(container: PostCSSContainer | PostCSSDocument)
   }
   return false
 }
-
-/**
- * The group at-rules the `& { @nave ...; }` workaround sentence names: the
- * ones a directive can be moved out of and into a nested rule for, per
- * CSS's own nesting rules. Never `@keyframes` (no `&` use there) nor any
- * other at-rule such as `@font-face`, which cannot itself nest inside a
- * style rule the way these can.
- */
-const WORKAROUND_GROUP_AT_RULE_NAMES = new Set([
-  'container',
-  'layer',
-  'media',
-  'scope',
-  'starting-style',
-  'supports',
-])
 
 /**
  * Whether `refusedParent` — a group at-rule refused as `@nave`'s parent —

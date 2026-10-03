@@ -1,7 +1,7 @@
 /**
  * AC-directive-core-26: building a real Vite app with
- * `navePlugin()` wired into `css.postcss` adds nothing to the emitted
- * JavaScript — every JS file is byte-identical to the same app built with
+ * `navePlugin()` wired into `css.postcss` (the PostCSS plugin) or into `plugins` (the Vite plugin) adds nothing to
+ * the emitted JavaScript — every JS file is byte-identical to the same app built with
  * no adapter at all, once hash-bearing filenames are normalized to a
  * placeholder. And the resolved build leaves no `@nave` for
  * `navecss-core check` to find.
@@ -10,11 +10,12 @@ import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync 
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { build } from 'vite'
+import { build, createServer } from 'vite'
 import { describe, expect, it } from 'vitest'
 
 import { check } from '../src/directive/check.ts'
 import { navePlugin } from '../src/postcss.ts'
+import { navePlugin as naveVitePlugin } from '../src/vite.ts'
 
 const FIXTURE_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -44,69 +45,118 @@ function normalizeHashes(text: string): string {
   return text.replaceAll(/-[\w-]{8,}(?=\.\w+(?:[?#]|$))/g, '-HASH')
 }
 
+type Adapter = 'none' | 'postcss' | 'vite'
+
 /**
-Runs a production build of the fixture into `outDir`. `hasAdapter` selects whether `navePlugin()` is wired into `css.postcss`; the rest of the config is identical between the two calls, which is the whole point of the comparison.
+Runs a production build of the fixture into `outDir`. `adapter` selects whether `navePlugin()` is wired into `css.postcss`, into Vite's `plugins` or not at all; the rest of the config is identical between the calls, which is the whole point of the comparison.
  */
-async function buildFixture(outDir: string, hasAdapter: boolean): Promise<void> {
+async function buildFixture(outDir: string, adapter: Adapter): Promise<void> {
   await build({
     build: { emptyOutDir: true, outDir, write: true },
     configFile: false,
-    css: hasAdapter ? { postcss: { plugins: [navePlugin()] } } : {},
+    css: adapter === 'postcss' ? { postcss: { plugins: [navePlugin()] } } : {},
     logLevel: 'silent',
+    plugins: adapter === 'vite' ? [naveVitePlugin()] : [],
     root: FIXTURE_ROOT,
   })
 }
 
 const byLocaleOrder = (a: string, b: string): number => a.localeCompare(b)
 
-describe('AC-directive-core-26 — a real Vite build adds nothing to emitted JS', () => {
-  it('builds byte-identical JS with and without navePlugin() wired into css.postcss, and leaves no @nave behind', async () => {
-    const tmp = realpathSync(os.tmpdir())
-    const outWith = mkdtempSync(path.join(tmp, 'nave-zero-runtime-with-'))
-    const outWithout = mkdtempSync(path.join(tmp, 'nave-zero-runtime-without-'))
+describe.each(['postcss', 'vite'] as const)(
+  'AC-directive-core-26 — a real Vite build adds nothing to emitted JS (the %s adapter)',
+  (adapter) => {
+    it('builds byte-identical JS with and without navePlugin(), and leaves no @nave behind', async () => {
+      const tmp = realpathSync(os.tmpdir())
+      const outWith = mkdtempSync(path.join(tmp, 'nave-zero-runtime-with-'))
+      const outWithout = mkdtempSync(path.join(tmp, 'nave-zero-runtime-without-'))
 
-    try {
-      await buildFixture(outWith, true)
-      await buildFixture(outWithout, false)
+      try {
+        await buildFixture(outWith, adapter)
+        await buildFixture(outWithout, 'none')
 
-      const jsFilesWith = listFilesRecursively(outWith)
-        .filter((f) => f.endsWith('.js'))
-        .map((f) => normalizeHashes(f))
-        .toSorted(byLocaleOrder)
-      const jsFilesWithout = listFilesRecursively(outWithout)
-        .filter((f) => f.endsWith('.js'))
-        .map((f) => normalizeHashes(f))
-        .toSorted(byLocaleOrder)
+        const jsFilesWith = listFilesRecursively(outWith)
+          .filter((f) => f.endsWith('.js'))
+          .map((f) => normalizeHashes(f))
+          .toSorted(byLocaleOrder)
+        const jsFilesWithout = listFilesRecursively(outWithout)
+          .filter((f) => f.endsWith('.js'))
+          .map((f) => normalizeHashes(f))
+          .toSorted(byLocaleOrder)
 
-      expect(jsFilesWith.length).toBeGreaterThan(0)
-      expect(jsFilesWith).toEqual(jsFilesWithout)
+        expect(jsFilesWith.length).toBeGreaterThan(0)
+        expect(jsFilesWith).toEqual(jsFilesWithout)
 
-      const rawWith = listFilesRecursively(outWith).filter((f) => f.endsWith('.js'))
-      const rawWithout = listFilesRecursively(outWithout).filter((f) => f.endsWith('.js'))
-      const byNormalizedName = new Map(rawWithout.map((f) => [normalizeHashes(f), f]))
+        const rawWith = listFilesRecursively(outWith).filter((f) => f.endsWith('.js'))
+        const rawWithout = listFilesRecursively(outWithout).filter((f) => f.endsWith('.js'))
+        const byNormalizedName = new Map(rawWithout.map((f) => [normalizeHashes(f), f]))
 
-      for (const fileWith of rawWith) {
-        const fileWithout = byNormalizedName.get(normalizeHashes(fileWith))
-        expect(
-          fileWithout,
-          `no matching file for ${fileWith} in the without-adapter build`,
-        ).toBeDefined()
+        for (const fileWith of rawWith) {
+          const fileWithout = byNormalizedName.get(normalizeHashes(fileWith))
+          expect(
+            fileWithout,
+            `no matching file for ${fileWith} in the without-adapter build`,
+          ).toBeDefined()
 
-        const contentWith = normalizeHashes(readFileSync(path.join(outWith, fileWith), 'utf8'))
-        const contentWithout = normalizeHashes(
-          readFileSync(path.join(outWithout, fileWithout!), 'utf8'),
-        )
-        expect(contentWith).toBe(contentWithout)
-        expect(contentWith).not.toContain('postcss-nave')
-        expect(contentWith).not.toContain('unknown atom')
+          const contentWith = normalizeHashes(readFileSync(path.join(outWith, fileWith), 'utf8'))
+          const contentWithout = normalizeHashes(
+            readFileSync(path.join(outWithout, fileWithout!), 'utf8'),
+          )
+          expect(contentWith).toBe(contentWithout)
+          expect(contentWith).not.toContain('postcss-nave')
+          expect(contentWith).not.toContain('unknown atom')
+        }
+
+        const result = await check({ source: [outWith] })
+        expect(result.findings).toEqual([])
+        expect(result.status).toBe(0)
+      } finally {
+        rmSync(outWith, { force: true, recursive: true })
+        rmSync(outWithout, { force: true, recursive: true })
       }
+    }, 20_000)
+  },
+)
 
-      const result = await check({ source: [outWith] })
-      expect(result.findings).toEqual([])
-      expect(result.status).toBe(0)
-    } finally {
-      rmSync(outWith, { force: true, recursive: true })
-      rmSync(outWithout, { force: true, recursive: true })
+/**
+ * Every URL the dev server is asked for on a page load of the fixture: the entry, then each module
+ * a transformed module imports, which is the set a browser requests.
+ */
+async function requestedUrls(adapter: Adapter): Promise<string[]> {
+  const server = await createServer({
+    appType: 'custom',
+    cacheDir: path.join(FIXTURE_ROOT, '.vite'),
+    configFile: false,
+    css: adapter === 'postcss' ? { postcss: { plugins: [navePlugin()] } } : {},
+    logLevel: 'silent',
+    plugins: adapter === 'vite' ? [naveVitePlugin()] : [],
+    root: FIXTURE_ROOT,
+    server: { middlewareMode: true },
+  })
+  try {
+    const seen = new Set<string>()
+    const queue = ['/main.js']
+    while (queue.length > 0) {
+      const url = queue.pop()!
+      if (seen.has(url)) continue
+      seen.add(url)
+      const result = await server.transformRequest(url)
+      for (const match of result?.code.matchAll(/(?:import|from)\s*["'](\/[^"']+)["']/g) ?? []) {
+        queue.push(match[1]!)
+      }
     }
+    return [...seen].toSorted(byLocaleOrder)
+  } finally {
+    await server.close()
+  }
+}
+
+describe('AC-directive-core-26 — the dev server requests the same URLs with the Vite plugin', () => {
+  it('on page load, the set of URLs is identical with and without navePlugin()', async () => {
+    const without = await requestedUrls('none')
+    const withPlugin = await requestedUrls('vite')
+
+    expect(without.length).toBeGreaterThan(1)
+    expect(withPlugin).toEqual(without)
   }, 20_000)
 })

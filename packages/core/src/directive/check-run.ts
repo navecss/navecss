@@ -9,20 +9,13 @@
  */
 import { readFile } from 'node:fs/promises'
 
-import { createPositionFinder } from './expand-text-diagnostics.ts'
-import { findSurvivors } from './find-survivors.ts'
+import { type Finding, findingsInText } from './findings.ts'
 import { listCssFiles, NotAStylesheetPathError, type PathListing } from './list-css-files.ts'
+
+export type { Finding } from './findings.ts'
 
 export interface CheckOptions {
   readonly source: readonly string[]
-}
-
-export interface Finding {
-  readonly file: string
-  readonly line: number
-  readonly column: number
-  readonly text: string
-  readonly selector?: string
 }
 
 export interface CheckResult {
@@ -57,25 +50,7 @@ async function wasFileRead(file: string, findings: Finding[]): Promise<boolean> 
   } catch {
     return false
   }
-  // A leading BOM (Node's utf8 decoding keeps it as a literal U+FEFF, unlike
-  // a `TextDecoder` set to strip one) is not part of the stylesheet's own
-  // content: left in, it shifts every reported column by one relative to
-  // what the file actually looks like once opened in an editor that hides it.
-  const css = raw.startsWith('\u{FEFF}') ? raw.slice(1) : raw
-  // Built once per file, not once per query: a fresh linear scan per
-  // query made a large stylesheet with many directives quadratic in its
-  // own size.
-  const positionAt = createPositionFinder(css)
-  for (const survivor of findSurvivors(css)) {
-    const position = positionAt(survivor.offset)
-    findings.push({
-      file,
-      line: position.line,
-      column: position.column + 1,
-      text: survivor.text,
-      ...(survivor.selector !== undefined && { selector: survivor.selector }),
-    })
-  }
+  for (const finding of findingsInText(file, raw)) findings.push(finding)
   return true
 }
 

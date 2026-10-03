@@ -1,9 +1,14 @@
+/**
+ * AC-directive-core-39: the root README's Quick start fence runs through the expander (the core
+ * every host is an adapter over), not through one host's plugin, and a fence holding an unknown
+ * atom reds it.
+ */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
-import { navePlugin } from '../src/postcss.ts'
+
+import { expandText } from '../src/directive/expand-text.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const readme = readFileSync(path.resolve(HERE, '../../../README.md'), 'utf8')
@@ -20,15 +25,21 @@ function extractQuickStartButtonFence(): string {
   return fence!
 }
 
-describe('README.md Quick start compiles through the real navePlugin()', () => {
-  it('inlines @nave and preserves the @layer components.consumer wrapper', async () => {
-    const result = await postcss([navePlugin()]).process(extractQuickStartButtonFence(), {
-      from: undefined,
-    })
-    expect(result.warnings()).toHaveLength(0)
+describe('README.md Quick start compiles through the real expander', () => {
+  it('inlines @nave and preserves the @layer components.consumer wrapper', () => {
+    const result = expandText(extractQuickStartButtonFence(), { onUnknown: 'warn' })
+
+    expect(result.diagnostics).toEqual([])
     expect(result.css).not.toContain('@nave ')
     expect(result.css).toMatch(/^@layer components\.consumer\s*\{/m)
     expect(result.css).toContain('cursor: pointer')
     expect(result.css).toContain('&:focus-visible')
+  })
+
+  it('a fence holding an unknown atom reds it (control)', () => {
+    const typo = extractQuickStartButtonFence().replace('interactive', 'interactve')
+    const result = expandText(typo, { onUnknown: 'warn' })
+
+    expect(result.diagnostics.map((d) => d.code)).toEqual(['unknown-atom'])
   })
 })

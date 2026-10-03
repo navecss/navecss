@@ -21,165 +21,115 @@ import type { AtRule, Declaration, Rule } from 'postcss'
 import postcss from 'postcss'
 
 import type { ExtendMap } from './directive/resolve.ts'
+import type { Refusal } from './validate-extend-walk.ts'
 
 import { anchorSelectorList } from './selector-utils.ts'
+import { walkExtendAtoms } from './validate-extend-walk.ts'
 
 /**
- * Whether `value` is a non-array object node. Malformed shapes (`null`, an array, a primitive
- * where an object was expected) are deliberately left alone here: `postcss.ts`'s own per-use
- * checks already name and refuse those, with their own message, at the point a directive uses
- * the atom. Reproducing that check here would only race it to a worse error.
+ * `text` as PostCSS wrote it with the `<` it escapes (before `style`, `/style` or `!--`) put back.
  */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+function unescapeHtml(text: string): string {
+  return text.replaceAll(/\\3c (?=\/?style\b|!--)/gi, '<')
 }
 
 /**
- * Whether `prop: value` parses as exactly one declaration inside exactly one rule, with `prop`
- * unchanged and the declaration's own serialisation (value plus `!important`, if present)
- * identical to `${prop}:${value}`. That last equality is what catches a value postcss accepts
- * but silently reshapes — a comment split off into a sibling node, for instance — without
- * having to special-case comments itself: reshaped or not, only a value that comes back
- * unchanged round-trips.
+ * `text` without any whitespace, for telling a string PostCSS wrote back with only its whitespace
+ * at an end changed from one it read as something else.
  */
-function isDeclarationValid(prop: string, value: string): boolean {
+function compact(text: string): string {
+  return text.replaceAll(/\s+/g, '')
+}
+
+/**
+ * Why `prop: value` is not exactly one declaration inside exactly one rule with `prop` unchanged,
+ * or `undefined` when it is. A text PostCSS does not read as that one declaration would break out
+ * of the rule. One it reads as exactly that, and writes back changed only by escaping a `<` or by
+ * keeping a space at the end that the text's own trim would drop, is `'rewritten'`: PostCSS
+ * accepts it, but not as given. (The comparison is against what PostCSS wrote, so a `;` of the
+ * value's own or a comment it split off is still a break-out.)
+ */
+function declarationRefusal(prop: string, value: string): Refusal | undefined {
   let root
   try {
     root = postcss.parse(`a{${prop}:${value}}`)
   } catch {
-    return false
+    return 'break-out'
   }
-  if (root.nodes.length !== 1) return false
+  if (root.nodes.length !== 1) return 'break-out'
   const rule = root.nodes[0] as Rule
-  if (rule.type !== 'rule' || rule.nodes.length !== 1) return false
+  if (rule.type !== 'rule' || rule.nodes.length !== 1) return 'break-out'
   const decl = rule.nodes[0] as Declaration
-  if (decl.type !== 'decl') return false
-  return decl.prop === prop && decl.toString() === `${prop}:${value}`.trimEnd()
+  if (decl.type !== 'decl' || decl.prop !== prop) return 'break-out'
+  const given = `${prop}:${value}`
+  const written = decl.toString()
+  if (written === given.trimEnd()) return undefined
+  return compact(unescapeHtml(written)) === compact(given) ? 'rewritten' : 'break-out'
 }
 
 /**
- * Whether `prop` alone parses as a declaration property, independent of whatever value it is
- * paired with. Used to isolate a property-name break-out from a value break-out so the two
- * cases can be told apart in the error message; the value placeholder (`0`) is a syntactically
- * neutral token, never itself the reason a check here fails.
+ * Why `prop` alone does not parse as a declaration property, independent of whatever value it is
+ * paired with, or `undefined`. Used to isolate a property-name break-out from a value break-out so
+ * the two cases can be told apart in the error message; the value placeholder (`0`) is a
+ * syntactically neutral token, never itself the reason a check here fails.
  */
-function isPropValid(prop: string): boolean {
-  return isDeclarationValid(prop, '0')
+function propRefusal(prop: string): Refusal | undefined {
+  return declarationRefusal(prop, '0')
 }
 
 /**
- * Whether `key` parses as exactly one pseudo/attribute selector rule with no declarations,
- * once anchored the same way the nested-rule builders anchor it (`anchorSelectorList`). A key
- * that opens a second rule, or that `anchorSelectorList` itself refuses (an empty branch), is
- * invalid.
+ * Why `key` does not parse as exactly one pseudo/attribute selector rule with no declarations,
+ * once anchored the same way the nested-rule builders anchor it (`anchorSelectorList`), or
+ * `undefined`. A key that opens a second rule, or that `anchorSelectorList` itself refuses (an
+ * empty branch), would break out.
  */
-function isSelectorValid(key: string): boolean {
+function selectorRefusal(key: string): Refusal | undefined {
   let selector: string
   try {
     selector = anchorSelectorList(key)
   } catch {
-    return false
+    return 'break-out'
   }
   let root
   try {
     root = postcss.parse(`${selector}{}`)
   } catch {
-    return false
+    return 'break-out'
   }
-  if (root.nodes.length !== 1) return false
+  if (root.nodes.length !== 1) return 'break-out'
   const rule = root.nodes[0] as Rule
-  return rule.type === 'rule' && rule.selector === selector && rule.nodes.length === 0
+  const isOneEmptyRule = rule.type === 'rule' && rule.selector === selector
+  return isOneEmptyRule && rule.nodes.length === 0 ? undefined : 'break-out'
 }
 
 /**
- * Whether `condition` parses as exactly one `@media`/`@container` at-rule of that name, with no
- * body, whose `params` is the condition's own trimmed text.
+ * Why `condition` does not parse as exactly one `@media`/`@container` at-rule of that name, with
+ * no body, or `undefined`. One that parses as that at-rule but whose `params` is not the
+ * condition's own trimmed text only because PostCSS kept a character at an end that the trim
+ * removes and CSS does not count as whitespace is `'rewritten'`; a comment PostCSS lifted out of
+ * `params` is not, it reads the text two ways.
  */
-function isConditionValid(atName: 'container' | 'media', condition: string): boolean {
+function conditionRefusal(atName: 'container' | 'media', condition: string): Refusal | undefined {
   let root
   try {
     root = postcss.parse(`@${atName} ${condition}{}`)
   } catch {
-    return false
+    return 'break-out'
   }
-  if (root.nodes.length !== 1) return false
+  if (root.nodes.length !== 1) return 'break-out'
   const node = root.nodes[0] as AtRule
-  return (
-    node.type === 'atrule' &&
-    node.name === atName &&
-    node.params === condition.trim() &&
-    (node.nodes?.length ?? 0) === 0
-  )
-}
-
-/**
- * Throws describing `describedAs` as not parsing as a single CSS declaration, selector or
- * condition, naming the offending string.
- */
-function fail(describedAs: string, value: string): never {
-  throw new Error(
-    `navePlugin({ extend }): ${describedAs} does not parse as a single CSS declaration, ` +
-      'selector or condition, and would break out of the rule it is spliced into: ' +
-      `${JSON.stringify(value)}. extend is trusted, consumer-authored code, not sanitised ` +
-      'input — fix the atom definition.',
-  )
-}
-
-/**
- * Validates every property/value pair of a `declarations` map, if it is one.
- */
-function assertDeclarationsSafe(declarations: unknown, where: string): void {
-  if (!isPlainObject(declarations)) return
-  for (const [prop, value] of Object.entries(declarations)) {
-    if (typeof prop === 'string' && !isPropValid(prop)) {
-      fail(`${where}'s declaration property "${prop}"`, prop)
-    }
-    if (typeof value === 'string' && !isDeclarationValid(prop, value)) {
-      fail(`${where}'s declaration value for "${prop}"`, value)
-    }
+  if (node.type !== 'atrule' || node.name !== atName || (node.nodes?.length ?? 0) !== 0) {
+    return 'break-out'
   }
+  if (node.params === condition.trim()) return undefined
+  return compact(node.params) === compact(condition) ? 'rewritten' : 'break-out'
 }
 
 /**
- * Validates every pseudo selector key, and its own declaration map, in a `pseudos` map, if it
- * is one.
- */
-function assertPseudosSafe(pseudos: unknown, where: string): void {
-  if (!isPlainObject(pseudos)) return
-  for (const [pseudo, declarations] of Object.entries(pseudos)) {
-    if (!isSelectorValid(pseudo)) fail(`${where}'s pseudo "${pseudo}"`, pseudo)
-    assertDeclarationsSafe(declarations, `${where}'s pseudo "${pseudo}"`)
-  }
-}
-
-/**
- * Validates every `media`/`container` condition string and its nested declarations/pseudos.
- */
-function assertAtBlocksSafe(blocks: unknown, atName: 'container' | 'media', where: string): void {
-  if (!isPlainObject(blocks)) return
-  for (const [condition, block] of Object.entries(blocks)) {
-    if (!isConditionValid(atName, condition))
-      fail(`${where}'s ${atName} condition "${condition}"`, condition)
-    if (!isPlainObject(block)) continue
-    const blockWhere = `${where}'s ${atName} "${condition}"`
-    assertDeclarationsSafe(block.declarations, blockWhere)
-    assertPseudosSafe(block.pseudos, blockWhere)
-  }
-}
-
-/**
- * Validates every consumer-supplied atom in `extend`. Nave's own built-in atoms are never
- * checked: they are this package's own trusted source, not the hardening boundary this exists
- * for. Any field that is not the shape `AtomDefinition` declares is left to the existing
- * per-use shape checks in `postcss.ts` rather than re-diagnosed here.
+ * Validates every consumer-supplied atom in `extend` by parsing each string with PostCSS. The
+ * walk itself, and what a refusal says, is `validate-extend-walk.ts`'s, shared with the
+ * dependency-free validator the Vite plugin uses.
  */
 export function validateExtendAtoms(extend: ExtendMap): void {
-  for (const [name, atom] of Object.entries(extend)) {
-    if (!atom) continue
-    const where = `atom "${name}"`
-    assertDeclarationsSafe(atom.declarations, where)
-    assertPseudosSafe(atom.pseudos, where)
-    assertAtBlocksSafe(atom.media, 'media', where)
-    assertAtBlocksSafe(atom.container, 'container', where)
-  }
+  walkExtendAtoms(extend, { declarationRefusal, propRefusal, selectorRefusal, conditionRefusal })
 }

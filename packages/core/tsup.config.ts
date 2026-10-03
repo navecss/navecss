@@ -7,6 +7,7 @@ export default defineConfig({
     check: 'src/directive/check.ts',
     cx: 'src/cx.ts',
     postcss: 'src/postcss.ts',
+    vite: 'src/vite.ts',
   },
   format: ['esm'],
   dts: true,

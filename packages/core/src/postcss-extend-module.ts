@@ -10,10 +10,10 @@ import url from 'node:url'
 import type { ExtendMap } from './directive/resolve.ts'
 
 /**
- * Resolves an `extend` module specifier against `process.cwd()` at plugin
- * construction: an unresolvable specifier fails right
- * there, naming the specifier and the directory, so the error surfaces when
- * the host's config loads rather than on the first stylesheet.
+ * Resolves an `extend` module specifier against `dir` (`process.cwd()` for PostCSS, the project
+ * root for Vite) when the plugin is built or configured: an unresolvable specifier fails right
+ * there, naming the specifier and the directory, so the error surfaces when the host's config
+ * loads rather than on the first stylesheet.
  *
  * `fs`/`url` are namespace imports, not named ones: a named import
  * (`import { existsSync } from 'node:fs'`) fails to even LOAD this module
@@ -24,8 +24,7 @@ import type { ExtendMap } from './directive/resolve.ts'
  * only fails on the property ACCESS these two functions never reach unless
  * `extend` is genuinely a specifier.
  */
-export function resolveExtendSpecifier(specifier: string): string {
-  const dir = process.cwd()
+export function resolveExtendSpecifier(specifier: string, dir: string = process.cwd()): string {
   const file = path.resolve(dir, specifier)
   // A directory resolves (an empty specifier, or one ending "/", both land
   // on one) but is never a loadable module: caught here, at construction,
@@ -89,6 +88,11 @@ function loadExtendModule(
   const cached = cache.get(moduleUrl)
   if (cached) return cached
 
+  // An edit loads a new URL; the superseded ones for this file are dropped so a long-lived dev
+  // server does not keep one entry per save. (Node's own module cache cannot be emptied, so each
+  // edit still leaves one loaded module behind until the process ends.)
+  const filePrefix = `${url.pathToFileURL(file).href}?v=`
+  for (const key of cache.keys()) if (key.startsWith(filePrefix)) cache.delete(key)
   const pending = importExtendMap(moduleUrl, file)
   cache.set(moduleUrl, pending)
   return pending

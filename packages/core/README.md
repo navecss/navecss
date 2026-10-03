@@ -1,6 +1,6 @@
 # @navecss/core
 
-> Layer architecture, reset, atomic utilities, and PostCSS plugin for Nave.
+> Layer architecture, reset, atomic utilities, and the Vite and PostCSS plugins for Nave.
 
 ## Installation
 
@@ -15,23 +15,27 @@ pnpm add @navecss/core
   most of them are also derived with relative colour syntax. An older browser
   drops whichever of them it does not support, without an error: surfaces and
   text lose their colours. Your CSS build has to target the same floor, and
-  [PostCSS plugin setup](#postcss-plugin-setup) has the line for Vite.
+  [Vite plugin setup](#vite-plugin-setup) has the line for Vite.
   [Why this floor](https://github.com/navecss/navecss/blob/main/docs/04-adr/0005-browser-floor.md).
 - **A resolver that reads `exports` maps.** Every entry point, the stylesheet
   included, is reachable only through the package's `exports` map: there is no
   `main` field to fall back on.
-- **ES modules.** `@navecss/core/cx`, `@navecss/core/atoms` and
-  `@navecss/core/postcss` load through `import` only. A `require()` of any of
+- **ES modules.** `@navecss/core/cx`, `@navecss/core/atoms`,
+  `@navecss/core/postcss` and `@navecss/core/vite` load through `import` only. A `require()` of any of
   them fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`, which reads as though the
   entry point did not exist. In TypeScript, set `moduleResolution` to `bundler`,
   `node16` or `nodenext`; under `node10` their types are not found. A CommonJS
   file type-checks against them and then fails when it runs, so import them from
   an ES module.
 - **Node 22.18 or later.**
-- **PostCSS 8, for `@nave` only.** `postcss` is an optional peer dependency, so
-  nothing installs it for you: add it yourself if you use `@nave`. Without it,
-  importing `@navecss/core/postcss` fails with `Cannot find package 'postcss'`.
-  The stylesheets and `cx()` need no PostCSS.
+- **A build step that resolves `@nave`: the Vite plugin, or PostCSS 8.** On
+  Vite, `@navecss/core/vite` needs nothing installed beside Vite, and
+  [Vite plugin setup](#vite-plugin-setup) is its whole setup. On any other
+  pipeline that runs PostCSS plugins, use the PostCSS plugin: `postcss` is an
+  optional peer dependency, so nothing installs it for you. Add it yourself if
+  you use that route; without it, importing `@navecss/core/postcss` fails with
+  `Cannot find package 'postcss'`. [PostCSS plugin setup](#postcss-plugin-setup)
+  has it. The stylesheets and `cx()` need neither.
 
 ## Setup
 
@@ -74,7 +78,7 @@ Every built-in atom, with the declarations it applies, is listed in
 
 ### Primary — @nave directives
 
-Requires the PostCSS plugin. Everything stays in CSS files.
+Requires the Vite plugin or the PostCSS plugin. Everything stays in CSS files.
 
 ```css
 /* button.module.css */
@@ -97,7 +101,7 @@ floor under [Requirements](#requirements).
 
 ### Escape hatch — cx() utility
 
-No PostCSS required. Atom names move to JSX — autocompleted, and type-checked.
+No build plugin required. Atom names move to JSX — autocompleted, and type-checked.
 
 ```tsx
 import { cx } from '@navecss/core/cx'
@@ -106,7 +110,7 @@ import styles from './button.module.css'
 ;<button className={`${cx('interactive', 'focusRing', 'transition')} ${styles.root}`} />
 ```
 
-Use this if you cannot or do not want to add a PostCSS plugin to your build.
+Use this if you cannot or do not want to add a Vite or PostCSS plugin to your build.
 
 A `cx()` class is a default, not an override: it sits in the `atomic` layer,
 below your component CSS, so your own rule wins wherever the two set the same
@@ -170,27 +174,116 @@ Every custom property Nave declares is in the stylesheet you already installed, 
 
 ---
 
-## PostCSS plugin setup
+## Setting up `@nave`
+
+On Vite, use the Vite plugin: it is the one route this package teaches for Vite. On
+Next.js, webpack, or any other pipeline that runs PostCSS plugins, use the PostCSS plugin.
+
+### Vite plugin setup
 
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite'
-import { navePlugin } from '@navecss/core/postcss'
+import { navePlugin } from '@navecss/core/vite'
 
 export default defineConfig({
-  // your existing options, plugins included, stay as they are
-  css: { postcss: { plugins: [navePlugin()] } },
+  // your existing options stay as they are; add navePlugin() to your existing plugins
+  plugins: [navePlugin()],
   build: { cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'] },
 })
 ```
+
+`navePlugin()` is one entry in `plugins`, with the same `extend` and `onUnknown` options as the
+PostCSS plugin ([Options](#options)). It is a plain Vite plugin object with no dependency and
+no peer. It expands `@nave` after Vite's own CSS step has run, so a stylesheet reached only
+through `@import`, a Sass file (including a `@mixin` that holds a directive), a CSS Module, an
+`?inline` or `?url` import, a Vue or Svelte style block and a `.css` inside `node_modules` are all
+read as the CSS they compile to, in `vite build` and in the dev server, under either
+`css.transformer`. A `?raw` import returns the file's text as it is. Astro is not covered: it was
+not measured at this release, and no fixture of it runs.
 
 `build.cssTarget` is the browser floor, in Vite's terms. Vite's default targets
 older browsers, and building for them gains you nothing, because the output
 still needs the floor. It does cost you something: Vite rewrites `light-dark()`
 in Nave's colours into an emulation that a `color-scheme` set from script, or on
-part of the page, does not switch. If your project already has a
-`postcss.config.js`, put `navePlugin()` there instead: Vite reads no PostCSS
-config file once `css.postcss` is set inline.
+part of the page, does not switch. The plugin sets no floor of its own, because the floor is a
+requirement of Nave's stylesheets, not of the directive: a project that never writes `@nave`
+needs the same key.
+
+**Migrating from the PostCSS plugin.** Move `navePlugin()` from `css.postcss` or
+`postcss.config.js` to `plugins`, importing it from `@navecss/core/vite`. Leaving both is
+harmless, because whichever pass runs second finds no directive left.
+
+**Under `css.transformer: 'lightningcss'`** the plugin expands exactly as it does under the default
+transformer once both floor keys below are set. At Vite's default targets, which sit below the
+floor, Lightning CSS lowers CSS nesting before any plugin runs, and two things change.
+A directive written after a declaration that follows a nested rule can be moved ahead of that
+declaration: in `.a { &:hover { color: red; } display: grid; @nave block; }`, `grid` wins with no
+message, where the default transformer makes `block` win. A directive in a group rule nested in a
+style rule (`.a { @media (...) { @nave flex; } }`) still fails the build, but the message no longer
+names the `& { @nave ...; }` workaround, and its position is in the CSS as Lightning CSS rewrote
+it, not in your file. The plugin also drops one message and only that one: Lightning CSS's
+`Unknown at rule: @nave` warning, which Vite prints for every directive before any plugin runs.
+It does so by wrapping the logger Vite resolved. Stated cost: that is a logger Vite owns, which is
+your own object when you pass a `customLogger`. The filter matches case-insensitively, and an
+escaped spelling (`@n\61ve`) may still warn. It fails open: if Vite changes its prefix or its
+logging path the warnings come back and nothing is lost, and the end-of-build scan below catches
+any directive that did survive. A warning about any other unknown at-rule is still printed. Set both
+floor keys:
+
+```ts
+// vite.config.ts, with css.transformer: 'lightningcss'
+import { defineConfig } from 'vite'
+import { navePlugin } from '@navecss/core/vite'
+
+export default defineConfig({
+  plugins: [navePlugin()],
+  build: { cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'] },
+  css: {
+    transformer: 'lightningcss',
+    lightningcss: {
+      targets: {
+        chrome: 125 << 16,
+        edge: 125 << 16,
+        firefox: 128 << 16,
+        safari: 18 << 16,
+        ios_saf: 18 << 16,
+      },
+    },
+  },
+})
+```
+
+`build.cssTarget` alone still rewrites `light-dark()` under that transformer, so the two keys go
+together.
+
+**The end of every build is checked.** The plugin reads the CSS files the build wrote and fails the
+build if a `@nave` directive is left in one, with the same lines
+[`navecss-core check`](#navecss-core-check) prints, under the plugin name `nave`. There is no
+option to turn it off: a directive in shipped CSS is never wanted, and `onUnknown: 'ignore'`
+does not change it. Four places are not covered. The dev server serves no bundle, so there is no
+scan in dev. CSS that ends inside a JavaScript string (`?inline`) is not a CSS file the build wrote,
+so it is not scanned. Files under Vite's `public/` directory are copied as they are and are not
+scanned. A CSS file another plugin adds after the scan has run is not scanned either: the scan runs
+in a post-ordered `generateBundle`, so it misses a file emitted from a post-ordered
+`generateBundle` in a plugin listed after `navePlugin()`, and anything a plugin writes in
+`writeBundle`. List `navePlugin()` after plugins that emit CSS files; a file written in
+`writeBundle` stays outside the scan wherever the plugin is listed.
+
+**A change to your atoms re-runs the stylesheets that use them.** Pass `extend` as a path to a
+module (resolved from Vite's project root, whose default export is the atoms object), and the
+plugin declares the file to Vite: edit it, and the dev server serves the new value with no restart,
+and `vite build --watch` rebuilds. An object written inline in your config is not a file Vite can
+watch.
+
+The supported Vite range is measured, not declared: the fixtures run on Vite 8.2.1 and on the
+newest 8.x at the time of each release.
+
+### PostCSS plugin setup
+
+For Next.js, webpack under `postcss-loader`, and any other pipeline that runs PostCSS plugins.
+
+Add it to your PostCSS config:
 
 ```js
 // postcss.config.js
@@ -200,6 +293,29 @@ export default {
   plugins: [navePlugin()],
 }
 ```
+
+`postcss` is an optional peer dependency.
+If you are using only `cx()` or tokens, you do not need to install it.
+
+**If your Vite config sets `css.transformer: 'lightningcss'`, this plugin never
+runs.** That option replaces Vite's CSS pipeline with Lightning CSS, which does
+not run PostCSS plugins at all: the build stays green, `@nave` reaches the
+browser as an unknown at-rule, and the browser drops it, so the rule renders
+with none of the declarations its atoms were going to give it. On Vite, use
+[the Vite plugin](#vite-plugin-setup), which runs under that option; to stay on this plugin,
+leave the default transformer in place. Add
+[`navecss-core check`](#navecss-core-check) to your build script as well, and a
+build that skips the plugin this way fails instead of shipping.
+
+#### Plugin order
+
+Put `navePlugin()` before any autoprefixing or syntax-down-levelling plugin (`autoprefixer`,
+`postcss-preset-env`, and the like) in your `plugins` array. `navePlugin()` resolves `@nave`
+directives into literal declarations; a prefixer ordered before it only ever sees the
+unexpanded directive, so it has nothing of Nave's to add a prefix to. Nave's own atoms already
+ship the vendor-prefixed properties their declarations need (`interactive`'s
+`-webkit-user-select` alongside `user-select`, for one), so this is only a concern for your own
+CSS sharing the same pipeline.
 
 ### Options
 
@@ -225,28 +341,6 @@ a cached host's config, or imported into it, does not invalidate that host's
 cache; pass `extend` as a path to the module instead when that matters. Only
 the named file is re-read and declared to the host as a dependency; a module
 it imports is neither (same doc).
-
-`postcss` is an optional peer dependency.
-If you are using only `cx()` or tokens, you do not need to install it.
-
-**If your Vite config sets `css.transformer: 'lightningcss'`, this plugin never
-runs.** That option replaces Vite's CSS pipeline with Lightning CSS, which does
-not run PostCSS plugins at all: the build stays green, `@nave` reaches the
-browser as an unknown at-rule, and the browser drops it, so the rule renders
-with none of the declarations its atoms were going to give it. Leave the
-default transformer in place on a project using `@nave`. Add
-[`navecss-core check`](#navecss-core-check) to your build script as well, and a
-build that skips the plugin this way fails instead of shipping.
-
-### Plugin order
-
-Put `navePlugin()` before any autoprefixing or syntax-down-levelling plugin (`autoprefixer`,
-`postcss-preset-env`, and the like) in your `plugins` array. `navePlugin()` resolves `@nave`
-directives into literal declarations; a prefixer ordered before it only ever sees the
-unexpanded directive, so it has nothing of Nave's to add a prefix to. Nave's own atoms already
-ship the vendor-prefixed properties their declarations need (`interactive`'s
-`-webkit-user-select` alongside `user-select`, for one), so this is only a concern for your own
-CSS sharing the same pipeline.
 
 ### Where `@nave` is valid
 
@@ -386,5 +480,6 @@ Consumers of `@navecss/tokens` alone get no guide: it ships only in this package
 | `@navecss/core/atomic`    | Generated atomic CSS (global `nave-` classes)                                                         |
 | `@navecss/core/cx`        | `cx()` / `cx.raw()` utilities + `AtomName` type                                                       |
 | `@navecss/core/atoms`     | Atom definitions + `atomClassMap`                                                                     |
+| `@navecss/core/vite`      | Vite plugin — `navePlugin()`                                                                          |
 | `@navecss/core/postcss`   | PostCSS plugin — `navePlugin()`                                                                       |
 | `@navecss/core/check`     | The survival check as a function — `check({ source })`                                                |

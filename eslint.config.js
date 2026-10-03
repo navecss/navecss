@@ -244,6 +244,18 @@ export default defineConfig([
     },
   },
 
+  // ── vite.ts — a host-loaded entry point, like postcss.ts, so it also carries the default
+  // export hosts load it by. A Vite plugin hook is a method whose `this` IS the host's plugin
+  // context (`this.error`, `this.warn`, `this.addWatchFile`): the host's own convention, which
+  // the module declares in `vite-types.ts` rather than reaching for a class. ──────────────────
+  {
+    files: ['**/src/vite.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
+      'unicorn/no-this-outside-of-class': 'off',
+    },
+  },
+
   // ── eslint-plugin's src/index.ts — an ESLint plugin's default export is the plugin object,
   // the convention every consumer's `import nave from '@navecss/eslint-plugin'` relies on ─────
   {
@@ -354,6 +366,8 @@ export default defineConfig([
       // Same shape, a one-line "regenerated N fixture(s)" progress
       // line for a script package.json's test:browser runs before every browser test suite.
       '**/scripts/generate-consumer-theming-fixtures.ts',
+      // And the one-line progress line of the Vite plugin's real-browser fixture, run beside it.
+      '**/scripts/generate-vite-plugin-fixtures.ts',
       // Same shape again: a one-line "Wrote <path>" progress line for the doc/data generators
       // (ATOMS.md, TOKENS.md, nave.css-data.json, SKILL.md) run by hand or from a maintainer's
       // own terminal, never imported for their output.

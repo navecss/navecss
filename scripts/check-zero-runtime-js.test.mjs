@@ -189,11 +189,17 @@ test('jsExportEntries falls back to "module" and "browser" too, deduplicated by 
   ])
 })
 
-test('the real @navecss/core manifest reports exactly its four JS export entries', () => {
+test('the real @navecss/core manifest reports exactly its five JS export entries', () => {
   const manifest = JSON.parse(readFileSync(path.join(ROOT, 'packages/core/package.json'), 'utf8'))
   assert.deepEqual(
     jsExportEntries(manifest).map((entry) => entry.specifier),
-    ['@navecss/core/cx', '@navecss/core/atoms', '@navecss/core/postcss', '@navecss/core/check'],
+    [
+      '@navecss/core/cx',
+      '@navecss/core/atoms',
+      '@navecss/core/postcss',
+      '@navecss/core/vite',
+      '@navecss/core/check',
+    ],
   )
 })
 

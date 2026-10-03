@@ -557,10 +557,20 @@ describe('onUnknown default is error', () => {
       primitive: { declarations: 'color: red' },
     } as unknown as Record<string, AtomDefinition>
 
+    // A missing or null `declarations` is read where a directive uses the atom; a truthy value
+    // that is not a map (an array, a string) is refused as soon as the plugin is built, by name.
+    const refusedAtUse = new Set(['missing', 'nulled'])
     for (const [name, atom] of Object.entries(shapes)) {
-      await expect(run(`.x { @nave ${name}; }`, { extend: { [name]: atom } })).rejects.toThrow(
-        new RegExp(`atom "${name}" is registered without a declarations object`),
-      )
+      const extend = { [name]: atom }
+      if (refusedAtUse.has(name)) {
+        await expect(run(`.x { @nave ${name}; }`, { extend })).rejects.toThrow(
+          new RegExp(`atom "${name}" is registered without a declarations object`),
+        )
+      } else {
+        expect(() => navePlugin({ extend })).toThrow(
+          new RegExp(`atom "${name}"'s declarations is .*, not a plain object`),
+        )
+      }
     }
   })
 

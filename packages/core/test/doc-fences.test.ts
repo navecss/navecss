@@ -83,6 +83,22 @@ describe('AC-directive-core-29 — every documented config fence names a real su
     expect(checkBinInvocation(inv)).toEqual([])
   })
 
+  it('the fence set includes the Vite plugin’s fence', () => {
+    const viteImports = coreImports.filter(({ imp }) => imp.specifier === '@navecss/core/vite')
+
+    expect(viteImports.length).toBeGreaterThan(0)
+  })
+
+  it('reds on a fence importing a misspelled name from the Vite subpath (control)', () => {
+    const imp: CoreImport = {
+      names: [{ isDefault: false, isType: false, name: 'navePlugn' }],
+      specifier: '@navecss/core/vite',
+    }
+    expect(checkCoreImport(imp, realExportsMap(), realEntryMap(), readRealSource)).toEqual([
+      '@navecss/core/vite exports no "navePlugn"',
+    ])
+  })
+
   it("reds on a fence importing a subpath that is not a key of core's exports (control)", () => {
     const imp: CoreImport = {
       names: [{ isDefault: false, isType: false, name: 'navePlugin' }],

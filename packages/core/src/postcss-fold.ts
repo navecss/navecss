@@ -6,6 +6,8 @@
  */
 import type { AtRule as PostCSSAtRule } from 'postcss'
 
+import { foldLocated } from './directive/fold.ts'
+
 export interface FoldEntry {
   readonly atRule: PostCSSAtRule
   readonly text: string
@@ -46,47 +48,14 @@ export function sortFoldBySourceOrder(entries: readonly FoldEntry[]): FoldEntry[
 }
 
 /**
-The first line of `text`.
- */
-function firstLine(text: string): string {
-  return text.split('\n', 1)[0]!
-}
-
-/**
- *
- */
-function withoutNavePrefix(text: string): string {
-  return text.startsWith('@nave: ') ? text.slice(7) : text
-}
-
-/**
-The "Available: ..." line from whichever entry's text carries one — every entry that has one carries the identical vocabulary.
- */
-function sharedAvailableLine(entries: readonly FoldEntry[]): string | undefined {
-  for (const entry of entries) {
-    const lines = entry.text.split('\n')
-    if (lines.length > 1) return lines[1]
-  }
-  return undefined
-}
-
-/**
- * The first problem's own single line, then (when there is more than one
- * problem) `N more in this stylesheet:` and one `L:C: <text>` line per
- * further problem (its own text, `@nave: ` dropped), then `Available:`
- * once, last, if any folded problem lacked a hint.
+ * The fold's report for `entries` (already in source order): the shared layout, each entry placed
+ * at its own PostCSS position.
  */
 export function foldMessage(entries: readonly FoldEntry[]): string {
-  const [first, ...rest] = entries as [FoldEntry, ...FoldEntry[]]
-  const lines = [firstLine(first.text)]
-  if (rest.length > 0) {
-    lines.push(`${rest.length} more in this stylesheet:`)
-    for (const [i, entry] of rest.entries()) {
-      const position = positionOf(entry, i + 1)
-      lines.push(`${position.line}:${position.column}: ${withoutNavePrefix(firstLine(entry.text))}`)
-    }
-  }
-  const available = sharedAvailableLine(entries)
-  if (available) lines.push(available)
-  return lines.join('\n')
+  return foldLocated(
+    entries.map((entry, i) => {
+      const position = positionOf(entry, i)
+      return { text: entry.text, line: position.line, column: position.column }
+    }),
+  )
 }

@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 import { atoms } from '../../src/atoms.ts'
 import { expandText } from '../../src/directive/expand-text.ts'
 import { navePlugin } from '../../src/postcss.ts'
+import { runHook } from '../helpers/vite-hook.ts'
 
 const FOCUS_VISIBLE = atoms.focusRing.pseudos![':focus-visible']!
 const SR_ONLY_HIDDEN = atoms.srOnlyFocusable.declarations
@@ -104,8 +105,12 @@ describe('AC-directive-core-20 — the focus rules survive every leg', () => {
   it.each(ROWS)('$atom: $css', async ({ css, pseudo, revealed, base }) => {
     const postcssOutput = (await postcss([navePlugin()]).process(css, { from: undefined })).css
     const expandTextOutput = expandText(css, {}).css
+    const viteRun = await runHook({ code: css })
+    const viteOutput = viteRun.code
 
-    for (const output of [postcssOutput, expandTextOutput]) {
+    expect(viteRun.error, 'the Vite leg failed on a directive row').toBeUndefined()
+    expect(viteOutput, 'the Vite leg left a directive row untouched').toBeDefined()
+    for (const output of [postcssOutput, expandTextOutput, viteOutput!]) {
       assertPseudoRuleSurvives(output, pseudo, revealed)
       assertBaseDeclarationsSurvive(output, base)
     }

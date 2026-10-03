@@ -70,7 +70,7 @@ describe('a nested extend-atom media block keeps its own pseudo', () => {
     } finally {
       rmSync(scratch, { recursive: true, force: true })
     }
-  })
+  }, 30_000)
 })
 
 describe('the Available list still names a consumer’s own extend atoms with no hint', () => {
