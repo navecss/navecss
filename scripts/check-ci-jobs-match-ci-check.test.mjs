@@ -90,6 +90,11 @@ test('findStepRuns counts pnpm only where a command starts, never as text inside
   )
 })
 
+test('findStepRuns does not count a step named inside a quoted string', () => {
+  assert.deepEqual(findStepRuns("echo 'notice; pnpm run test # text'", STEP_NAMES), [])
+  assert.deepEqual(findStepRuns('echo "a && pnpm run lint"', STEP_NAMES), [])
+})
+
 test('findStepRuns joins a line continuation and does not read a redirect as an argument', () => {
   assert.deepEqual(findStepRuns('pnpm run test \\\n  -- --coverage.enabled=false', STEP_NAMES), [
     { args: '-- --coverage.enabled=false', target: 'test' },

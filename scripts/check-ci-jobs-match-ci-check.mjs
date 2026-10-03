@@ -104,12 +104,21 @@ export function extractJobs(workflowText) {
  * STARTS with `pnpm run <x>`, or with the `pnpm <step>` shorthand naming one of `stepNames`, and
  * the arguments that follow the name in that command. A command starts a line or follows `&&`,
  * `||`, `;` or a pipe, so `echo pnpm run knip` runs no step. Line continuations are joined first,
- * a redirect (`> log`, `2>&1`) is not an argument, and comments are ignored, as is any other pnpm
+ * quoted strings are dropped (a step named inside `'...'` or `"..."` is text, not a command), a
+ * redirect (`> log`, `2>&1`) is not an argument, and comments are ignored, as is any other pnpm
  * command (`pnpm install`, `pnpm --filter ... exec`).
+ *
+ * This reads shell TEXT, not a shell parse: a heredoc, a subshell or a command built in a
+ * variable is not recognised. The workflow it guards writes each step as one plain command, and
+ * a construct this cannot read shows up as a step "that no job runs", which fails, rather than
+ * passing unseen.
  */
 export function findStepRuns(runText, stepNames) {
   const found = []
-  const lines = runText.replaceAll(/\\\n\s*/g, ' ').split('\n')
+  const lines = runText
+    .replaceAll(/\\\n\s*/g, ' ')
+    .replaceAll(/'[^'\n]*'|"[^"\n]*"/g, '""')
+    .split('\n')
   for (const line of lines) {
     const code = line.replace(/(^|\s)#.*$/, '')
     for (const command of code.split(/&&|\|\||;|\|/)) {
