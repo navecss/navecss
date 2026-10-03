@@ -2,8 +2,9 @@
 '@navecss/tokens': minor
 ---
 
-Adds `--nave-border-width-mark` (2px), the stroke width for glyphs drawn in CSS such as check
-marks and indeterminate bars, so they no longer borrow the focus-ring width. The documented
+Adds `--nave-border-width-mark` (2px), a stroke width for glyphs drawn in CSS such as check
+marks and indeterminate bars, so they can use their own width rather than the focus ring's. Nothing
+in Nave draws such a glyph yet, so no existing output changes. The documented
 colour pairs also grow to cover text and controls on the raised and overlay surfaces:
 `content.primary`, `content.secondary`, `content.tertiary` and `content.link` as text, the
 `feedback.danger.foreground` text pair on the base, raised and overlay surfaces, and
