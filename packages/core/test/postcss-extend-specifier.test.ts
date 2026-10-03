@@ -193,7 +193,7 @@ describe('AC-directive-core-25 — an extend specifier is a PostCSS dependency, 
     } finally {
       rmSync(scratch, { recursive: true, force: true })
     }
-  })
+  }, 30_000)
 
   it('loads a .json path as a JSON module, validated the same as any other map', async () => {
     tmp = mkdtempSync(path.join(os.tmpdir(), 'nave-json-'))

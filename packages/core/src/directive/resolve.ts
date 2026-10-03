@@ -75,19 +75,21 @@ function resolveDeclarations(name: string, atom: AtomDefinition): Declaration[] 
 }
 
 /**
-One `PseudoBlock` per pseudo key, unanchored (anchoring is `plan()`'s job).
+One `PseudoBlock` per pseudo key, unanchored (anchoring is `plan()`'s job). A pseudo whose declarations are falsy (`null`, `false`, the empty arm of `cond && { ... }`) is skipped, not emitted as an empty rule.
  */
 function resolvePseudoBlocks(pseudos: AtomDefinition['pseudos']): PseudoBlock[] {
   if (!pseudos) return []
-  return Object.entries(pseudos).map(([selector, decls]) => ({
-    kind: 'pseudo',
-    selector,
-    declarations: toDeclarations(decls),
-  }))
+  return Object.entries(pseudos)
+    .filter(([, decls]) => decls)
+    .map(([selector, decls]) => ({
+      kind: 'pseudo',
+      selector,
+      declarations: toDeclarations(decls),
+    }))
 }
 
 /**
-One block per `@media`/`@container` condition, skipping any with nothing to emit.
+One block per `@media`/`@container` condition, skipping any with nothing to emit, including a falsy block (`null`, `false`).
  */
 function resolveConditionalBlocks(
   kind: 'media' | 'container',
@@ -96,6 +98,7 @@ function resolveConditionalBlocks(
   if (!blocks) return []
   const result: ConditionalBlock[] = []
   for (const [condition, block] of Object.entries(blocks)) {
+    if (!block) continue
     const declarations = block.declarations ? toDeclarations(block.declarations) : []
     const pseudos = resolvePseudoBlocks(block.pseudos)
     if (declarations.length === 0 && pseudos.length === 0) continue // an empty block is never emitted

@@ -21,86 +21,108 @@ import type { AtRule, Declaration, Rule } from 'postcss'
 import postcss from 'postcss'
 
 import type { ExtendMap } from './directive/resolve.ts'
+import type { Refusal } from './validate-extend-walk.ts'
 
 import { anchorSelectorList } from './selector-utils.ts'
 import { walkExtendAtoms } from './validate-extend-walk.ts'
 
 /**
- * Whether `prop: value` parses as exactly one declaration inside exactly one rule, with `prop`
- * unchanged and the declaration's own serialisation (value plus `!important`, if present)
- * identical to `${prop}:${value}`. That last equality is what catches a value postcss accepts
- * but silently reshapes — a comment split off into a sibling node, for instance — without
- * having to special-case comments itself: reshaped or not, only a value that comes back
- * unchanged round-trips.
+ * `text` as PostCSS wrote it with the `<` it escapes (before `style`, `/style` or `!--`) put back.
  */
-function isDeclarationValid(prop: string, value: string): boolean {
+function unescapeHtml(text: string): string {
+  return text.replaceAll(/\\3c (?=\/?style\b|!--)/gi, '<')
+}
+
+/**
+ * `text` without any whitespace, for telling a string PostCSS wrote back with only its whitespace
+ * at an end changed from one it read as something else.
+ */
+function compact(text: string): string {
+  return text.replaceAll(/\s+/g, '')
+}
+
+/**
+ * Why `prop: value` is not exactly one declaration inside exactly one rule with `prop` unchanged,
+ * or `undefined` when it is. A text PostCSS does not read as that one declaration would break out
+ * of the rule. One it reads as exactly that, and writes back changed only by escaping a `<` or by
+ * keeping a space at the end that the text's own trim would drop, is `'rewritten'`: PostCSS
+ * accepts it, but not as given. (The comparison is against what PostCSS wrote, so a `;` of the
+ * value's own or a comment it split off is still a break-out.)
+ */
+function declarationRefusal(prop: string, value: string): Refusal | undefined {
   let root
   try {
     root = postcss.parse(`a{${prop}:${value}}`)
   } catch {
-    return false
+    return 'break-out'
   }
-  if (root.nodes.length !== 1) return false
+  if (root.nodes.length !== 1) return 'break-out'
   const rule = root.nodes[0] as Rule
-  if (rule.type !== 'rule' || rule.nodes.length !== 1) return false
+  if (rule.type !== 'rule' || rule.nodes.length !== 1) return 'break-out'
   const decl = rule.nodes[0] as Declaration
-  if (decl.type !== 'decl') return false
-  return decl.prop === prop && decl.toString() === `${prop}:${value}`.trimEnd()
+  if (decl.type !== 'decl' || decl.prop !== prop) return 'break-out'
+  const given = `${prop}:${value}`
+  const written = decl.toString()
+  if (written === given.trimEnd()) return undefined
+  return compact(unescapeHtml(written)) === compact(given) ? 'rewritten' : 'break-out'
 }
 
 /**
- * Whether `prop` alone parses as a declaration property, independent of whatever value it is
- * paired with. Used to isolate a property-name break-out from a value break-out so the two
- * cases can be told apart in the error message; the value placeholder (`0`) is a syntactically
- * neutral token, never itself the reason a check here fails.
+ * Why `prop` alone does not parse as a declaration property, independent of whatever value it is
+ * paired with, or `undefined`. Used to isolate a property-name break-out from a value break-out so
+ * the two cases can be told apart in the error message; the value placeholder (`0`) is a
+ * syntactically neutral token, never itself the reason a check here fails.
  */
-function isPropValid(prop: string): boolean {
-  return isDeclarationValid(prop, '0')
+function propRefusal(prop: string): Refusal | undefined {
+  return declarationRefusal(prop, '0')
 }
 
 /**
- * Whether `key` parses as exactly one pseudo/attribute selector rule with no declarations,
- * once anchored the same way the nested-rule builders anchor it (`anchorSelectorList`). A key
- * that opens a second rule, or that `anchorSelectorList` itself refuses (an empty branch), is
- * invalid.
+ * Why `key` does not parse as exactly one pseudo/attribute selector rule with no declarations,
+ * once anchored the same way the nested-rule builders anchor it (`anchorSelectorList`), or
+ * `undefined`. A key that opens a second rule, or that `anchorSelectorList` itself refuses (an
+ * empty branch), would break out.
  */
-function isSelectorValid(key: string): boolean {
+function selectorRefusal(key: string): Refusal | undefined {
   let selector: string
   try {
     selector = anchorSelectorList(key)
   } catch {
-    return false
+    return 'break-out'
   }
   let root
   try {
     root = postcss.parse(`${selector}{}`)
   } catch {
-    return false
+    return 'break-out'
   }
-  if (root.nodes.length !== 1) return false
+  if (root.nodes.length !== 1) return 'break-out'
   const rule = root.nodes[0] as Rule
-  return rule.type === 'rule' && rule.selector === selector && rule.nodes.length === 0
+  const isOneEmptyRule = rule.type === 'rule' && rule.selector === selector
+  return isOneEmptyRule && rule.nodes.length === 0 ? undefined : 'break-out'
 }
 
 /**
- * Whether `condition` parses as exactly one `@media`/`@container` at-rule of that name, with no
- * body, whose `params` is the condition's own trimmed text.
+ * Why `condition` does not parse as exactly one `@media`/`@container` at-rule of that name, with
+ * no body, or `undefined`. One that parses as that at-rule but whose `params` is not the
+ * condition's own trimmed text only because PostCSS kept a character at an end that the trim
+ * removes and CSS does not count as whitespace is `'rewritten'`; a comment PostCSS lifted out of
+ * `params` is not, it reads the text two ways.
  */
-function isConditionValid(atName: 'container' | 'media', condition: string): boolean {
+function conditionRefusal(atName: 'container' | 'media', condition: string): Refusal | undefined {
   let root
   try {
     root = postcss.parse(`@${atName} ${condition}{}`)
   } catch {
-    return false
+    return 'break-out'
   }
-  if (root.nodes.length !== 1) return false
+  if (root.nodes.length !== 1) return 'break-out'
   const node = root.nodes[0] as AtRule
-  return (
-    node.type === 'atrule' &&
-    node.name === atName &&
-    node.params === condition.trim() &&
-    (node.nodes?.length ?? 0) === 0
-  )
+  if (node.type !== 'atrule' || node.name !== atName || (node.nodes?.length ?? 0) !== 0) {
+    return 'break-out'
+  }
+  if (node.params === condition.trim()) return undefined
+  return compact(node.params) === compact(condition) ? 'rewritten' : 'break-out'
 }
 
 /**
@@ -109,5 +131,5 @@ function isConditionValid(atName: 'container' | 'media', condition: string): boo
  * dependency-free validator the Vite plugin uses.
  */
 export function validateExtendAtoms(extend: ExtendMap): void {
-  walkExtendAtoms(extend, { isDeclarationValid, isPropValid, isSelectorValid, isConditionValid })
+  walkExtendAtoms(extend, { declarationRefusal, propRefusal, selectorRefusal, conditionRefusal })
 }

@@ -158,14 +158,14 @@ describe('an atom that is not a plain object is refused by both validators, used
     ['an array', [{ color: 'red' }]],
     ['a string', 'color: red'],
     ['a number', 42],
-    ['zero', 0],
-    ['an empty string', ''],
+    ['true', true],
   ])('%s', (_name, atom) => {
     for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
       const { refused, message } = verdict(validate, { sneaky: atom as never })
 
       expect(refused).toBe(true)
       expect(message).toContain('atom "sneaky"')
+      expect(message).toContain('not a plain object')
     }
   })
 
@@ -180,6 +180,181 @@ describe('an atom that is not a plain object is refused by both validators, used
       }
     },
   )
+
+  it('false (what `cond && { ... }` gives) is read as an unknown atom where a directive uses it, not refused up front', () => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      expect(verdict(validate, { sneaky: false as never }).refused).toBe(false)
+    }
+  })
+
+  it.each([
+    ['0', 0],
+    ['an empty string', ''],
+    ['NaN', Number.NaN],
+    ['-0', -0],
+  ])(
+    '%s is read as an unknown atom where a directive uses it, not refused up front',
+    (_name, atom) => {
+      for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+        expect(verdict(validate, { sneaky: atom as never }).refused).toBe(false)
+      }
+    },
+  )
+
+  it('a false atom that a directive uses reports an unknown atom through onUnknown', async () => {
+    const run = await runHook({
+      code: '.a { @nave x; }',
+      options: { extend: { x: false as never }, onUnknown: 'error' },
+    })
+
+    expect(run.error?.message).toMatch(/unknown atom "x"/)
+  })
+})
+
+describe('a falsy value at a nested position is skipped, so `cond && { ... }` keeps building', () => {
+  const when = '(min-width: 1px)'
+  const positions: readonly (readonly [string, (value: unknown) => Record<string, unknown>])[] = [
+    ['a pseudos map', (value) => ({ pseudos: value })],
+    ['a media map', (value) => ({ media: value })],
+    ['a container map', (value) => ({ container: value })],
+    ['a pseudo’s declarations', (value) => ({ pseudos: { ':hover': value } })],
+    ['a media block', (value) => ({ media: { [when]: value } })],
+    ['a container block', (value) => ({ container: { [when]: value } })],
+    ['a media block’s declarations', (value) => ({ media: { [when]: { declarations: value } } })],
+    [
+      'a media block’s pseudos map',
+      (value) => ({ media: { [when]: { declarations: { margin: '1px' }, pseudos: value } } }),
+    ],
+    [
+      'a media block’s pseudo declarations',
+      (value) => ({
+        media: { [when]: { declarations: { margin: '1px' }, pseudos: { ':focus': value } } },
+      }),
+    ],
+  ]
+  const cases = positions.flatMap(([name, at]) =>
+    [false, null].map((value) => [`${name} is ${String(value)}`, at(value)] as const),
+  )
+
+  it.each(cases)('%s: it builds and nothing comes from that position', async (_name, nested) => {
+    const run = await runHook({
+      code: '.a { @nave nested; }',
+      options: { extend: { nested: { declarations: { color: 'red' }, ...nested } as never } },
+    })
+
+    expect(run.error).toBeUndefined()
+    expect(run.code).toContain('color: red;')
+    expect(run.code).not.toMatch(/&:hover|&:focus|@container/)
+    expect(run.code).not.toMatch(/\{\s*\}/)
+    if (!JSON.stringify(nested).includes('margin')) expect(run.code).not.toContain('@media')
+  })
+
+  it('a pseudo whose declarations are null expands without throwing', async () => {
+    const run = await runHook({
+      code: '.a { @nave nested; }',
+      options: {
+        extend: {
+          nested: { declarations: { color: 'red' }, pseudos: { ':hover': null } } as never,
+        },
+      },
+    })
+
+    expect(run.code).toContain('color: red;')
+  })
+
+  it('a media block that is null expands without throwing', async () => {
+    const run = await runHook({
+      code: '.a { @nave nested; }',
+      options: {
+        extend: { nested: { declarations: { color: 'red' }, media: { md: null } } as never },
+      },
+    })
+
+    expect(run.code).toContain('color: red;')
+  })
+})
+
+describe('a refusal says why it refuses', () => {
+  const svg = decl(
+    `url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><style>circle{fill:red}</style></svg>")`,
+    'background-image',
+  )
+
+  it.each([
+    ['a function atom', { sneaky: (() => {}) as never }],
+    ['an inline SVG data URI holding a <style> element', svg],
+  ])('%s is refused without claiming it would break out of the rule', (_name, extend) => {
+    const { refused, message } = verdict(validateExtendAtomsHostFree, extend)
+
+    expect(refused).toBe(true)
+    expect(message).not.toContain('would break out of the rule')
+  })
+
+  it('a real break-out still says it would break out of the rule', () => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      const { refused, message } = verdict(validate, decl('red; } body { x: y'))
+
+      expect(refused).toBe(true)
+      expect(message).toContain('would break out of the rule it is spliced into')
+    }
+  })
+
+  it('a value that is not a plain object names its kind, and prints the value only when it can', () => {
+    const cases: readonly (readonly [Record<string, unknown>, string])[] = [
+      [
+        { sneaky: () => {} },
+        'atom "sneaky" is a function, not a plain object. Write an atom as { declarations: { ... } }. ',
+      ],
+      [
+        { brandBox: 'abc' },
+        'atom "brandBox" is a string, not a plain object: "abc". Write an atom as { declarations: { ... } }. ',
+      ],
+      [
+        { brandBox: true },
+        'atom "brandBox" is a boolean, not a plain object: true. Write an atom as { declarations: { ... } }. ',
+      ],
+      [
+        { card: { declarations: {}, pseudos: { ':hover': ['a; } body { display: none'] } } },
+        `atom "card"'s pseudo ":hover"'s declarations is an array, not a plain object: ["a; } body { display: none"]. Write it as a plain object ({ ... }). `,
+      ],
+    ]
+    for (const [extend, expected] of cases) {
+      for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+        expect(verdict(validate, extend as never).message).toContain(expected)
+      }
+    }
+  })
+
+  it('a value written back changed says so, and how to write it', () => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      const { message } = verdict(validate, svg)
+
+      expect(message).toContain('parses, but would not be written back exactly as given: ')
+      expect(message).toContain(String.raw`write the "<" as \3c with a space after it (\3c /style)`)
+    }
+  })
+
+  it.each([
+    ['a break-out', decl('red; } body { x: y')],
+    ['a value of the wrong kind', { sneaky: 'abc' as never }],
+    [
+      'an array where a declarations map belongs',
+      { x: { declarations: {}, pseudos: { ':hover': ['a; } b'] } } } as never,
+    ],
+    ['an HTML sequence', svg],
+    ['a custom property’s trailing space', decl('red ', '--x')],
+    ['a trailing escaped space', decl(String.raw`\a `)],
+    ['a media condition ending in an escaped space', media(String.raw`\a `)],
+    ['an escaped comment opener', decl(String.raw`red\/*x*/`)],
+    ['an escaped space inside a property name', decl('red', String.raw`a\ b`)],
+    ['a media condition ending in a comment', media('(x) /* c */')],
+  ])('%s: both validators print the same reason', (_name, extend) => {
+    const viaPostcss = verdict(validateExtendAtoms, extend)
+    const hostFree = verdict(validateExtendAtomsHostFree, extend)
+
+    expect(viaPostcss.refused).toBe(true)
+    expect(hostFree.message).toBe(viaPostcss.message)
+  })
 })
 
 describe('the Vite plugin validates extend before it reaches expandText()', () => {
@@ -223,30 +398,20 @@ describe('the Vite plugin validates extend before it reaches expandText()', () =
     })
   }
 
-  it('a function-valued atom whose declarations getter turns evil on its second read changes nothing (Vite)', async () => {
-    const run = await runHook({
-      code: '.a { @nave sneaky; }',
-      options: { extend: { sneaky: flippingFunctionAtom() as never } },
-    }).catch(() => undefined)
-
-    expect(run?.code ?? '').not.toContain('body')
+  it('a function-valued atom whose declarations getter turns evil on its second read is refused (Vite)', async () => {
+    await expect(
+      runHook({
+        code: '.a { @nave sneaky; }',
+        options: { extend: { sneaky: flippingFunctionAtom() as never } },
+      }),
+    ).rejects.toThrow(/atom "sneaky" is a function, not a plain object/)
   })
 
-  it('the same atom changes nothing through the PostCSS adapter', async () => {
-    const { default: postcss } = await import('postcss')
+  it('the same atom is refused through the PostCSS adapter', async () => {
     const { navePlugin: postcssNave } = await import('../src/postcss.ts')
-    const css = await Promise.resolve()
-      .then(() =>
-        postcss([postcssNave({ extend: { sneaky: flippingFunctionAtom() as never } })]).process(
-          '.a { @nave sneaky; }',
-          { from: undefined },
-        ),
-      )
-      .then(
-        (result) => result.css,
-        () => '',
-      )
 
-    expect(css).not.toContain('body')
+    expect(() => postcssNave({ extend: { sneaky: flippingFunctionAtom() as never } })).toThrow(
+      /atom "sneaky" is a function, not a plain object/,
+    )
   })
 })

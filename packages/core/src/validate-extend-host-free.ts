@@ -11,6 +11,7 @@
  */
 import type { ExtendMap } from './directive/resolve.ts'
 import type { Wrapped } from './validate-extend-scan.ts'
+import type { Refusal } from './validate-extend-walk.ts'
 
 import { type Item, matchBrackets, readItem } from './directive/block-reader.ts'
 import { tokenize } from './directive/tokenizer.ts'
@@ -84,38 +85,48 @@ function isSoleDeclaration(wrapped: Wrapped, start: number, end: number, prop: s
 }
 
 /**
- * Whether PostCSS would hand `prop: value` back changed for a reason only the text shows: a
- * custom property's value keeps a trailing whitespace run out of what it writes back, an escaped
- * comment opener reads two ways, a `<` that could end a `<style>` element or open an HTML comment
- * is written back escaped, a space an escape consumed at the end (or a no-break space) stays part
- * of the text, and an escaped space inside a property name is read as one name or two.
+ * Whether PostCSS would read `prop: value` two ways for a reason only the text shows: an escaped
+ * comment opener, or an escaped space inside a property name. It fails these structurally (it
+ * splits off a comment, or stops at an unknown word), so they are break-outs.
  */
-function isReshapedByPostcss(prop: string, value: string): boolean {
-  if (hasEscapedCommentOpener(prop) || hasEscapedCommentOpener(value)) return true
+function isReadTwoWays(prop: string, value: string): boolean {
+  return (
+    hasEscapedCommentOpener(prop) || hasEscapedCommentOpener(value) || hasEscapedWhitespace(prop)
+  )
+}
+
+/**
+ * Whether PostCSS would hand `prop: value` back changed although it reads it as one declaration: a
+ * custom property's value keeps a trailing whitespace run out of what it writes back, a `<` that
+ * could end a `<style>` element or open an HTML comment is written back escaped, and a space an
+ * escape consumed at the end (or a no-break space) stays part of the text.
+ */
+function isRewrittenByPostcss(prop: string, value: string): boolean {
   if (hasHtmlBreakout(prop) || hasHtmlBreakout(value)) return true
-  if (hasEscapedWhitespace(prop)) return true
   if (hasUnstrippedTrailingSpace(prop) || hasUnstrippedTrailingSpace(value)) return true
   return prop.startsWith('--') && value !== value.trimEnd()
 }
 
 /**
- * Whether `prop: value` is exactly one declaration inside exactly one rule, with `prop`
- * unchanged.
+ * Why `prop: value` is not exactly one declaration inside exactly one rule with `prop`
+ * unchanged, or `undefined` when it is.
  */
-function isDeclarationValid(prop: string, value: string): boolean {
-  if (isReshapedByPostcss(prop, value)) return false
+function declarationRefusal(prop: string, value: string): Refusal | undefined {
+  if (isReadTwoWays(prop, value)) return 'break-out'
   const sole = readSoleBlockItem(`a{${prop}:${value}}`)
-  if (sole?.item.kind !== 'rule') return false
+  if (sole?.item.kind !== 'rule') return 'break-out'
   const { blockStart, blockEnd } = sole.item
-  return isSoleDeclaration(sole.wrapped, blockStart!, blockEnd!, prop)
+  if (!isSoleDeclaration(sole.wrapped, blockStart!, blockEnd!, prop)) return 'break-out'
+  return isRewrittenByPostcss(prop, value) ? 'rewritten' : undefined
 }
 
 /**
- * Whether `prop` alone is a declaration property, whatever value it is paired with; the
- * placeholder value (`0`) is a neutral token, never itself the reason this fails.
+ * Why `prop` alone is not a declaration property, whatever value it is paired with, or
+ * `undefined`; the placeholder value (`0`) is a neutral token, never itself the reason this
+ * fails.
  */
-function isPropValid(prop: string): boolean {
-  return isDeclarationValid(prop, '0')
+function propRefusal(prop: string): Refusal | undefined {
+  return declarationRefusal(prop, '0')
 }
 
 /**
@@ -151,40 +162,43 @@ function anchoredSelector(key: string): string | undefined {
 }
 
 /**
- * Whether `key` is exactly one rule with no declarations once anchored, with no trailing comment
- * (PostCSS lifts that out of the selector).
+ * Why `key` is not exactly one rule with no declarations once anchored, with no trailing comment
+ * (PostCSS lifts that out of the selector), or `undefined`. Every refusal here is a break-out.
  */
-function isSelectorValid(key: string): boolean {
+function selectorRefusal(key: string): Refusal | undefined {
   const selector = anchoredSelector(key)
-  if (selector === undefined) return false
+  if (selector === undefined) return 'break-out'
   const sole = readSoleBlockItem(`${selector}{}`)
-  if (sole?.item.kind !== 'rule') return false
+  if (sole?.item.kind !== 'rule') return 'break-out'
   const { tokens } = sole.wrapped
   const { blockStart, blockEnd } = sole.item
   const prelude = blockStart! - 1
-  return (
+  const isOneEmptyRule =
     isOnlyInert(tokens, blockStart!, blockEnd!) &&
     tokens[lastNonWhitespace(tokens, 0, prelude)]?.type !== 'comment' &&
     isPreludeUnambiguous(sole.wrapped, 0, prelude)
-  )
+  return isOneEmptyRule ? undefined : 'break-out'
 }
 
 /**
- * Whether `condition` is exactly one `@media`/`@container` at-rule of that name with no body,
- * whose prelude carries no comment PostCSS would lift out of `params`.
+ * Why `condition` is not exactly one `@media`/`@container` at-rule of that name with no body,
+ * whose prelude carries no comment PostCSS would lift out of `params`, or `undefined`. A
+ * condition that is one such at-rule but starts or ends in a character PostCSS keeps and the
+ * trim removes would be written back changed.
  */
-function isConditionValid(atName: 'container' | 'media', condition: string): boolean {
-  if (hasEscapedCommentOpener(condition)) return false
-  if (hasUnstrippedTrailingSpace(condition) || hasUnstrippedLeadingSpace(condition)) return false
+function conditionRefusal(atName: 'container' | 'media', condition: string): Refusal | undefined {
+  if (hasEscapedCommentOpener(condition)) return 'break-out'
   const sole = readSoleBlockItem(`@${atName} ${condition}{}`)
-  if (sole?.item.kind !== 'at-rule' || sole.item.atKeyword !== atName) return false
+  if (sole?.item.kind !== 'at-rule' || sole.item.atKeyword !== atName) return 'break-out'
   const { blockStart, blockEnd } = sole.item
   const prelude = blockStart! - 1
-  return (
+  const isOneBodilessRule =
     isOnlyInert(sole.wrapped.tokens, blockStart!, blockEnd!) &&
     !hasTopLevelComment(sole.wrapped, 1, prelude) &&
     isPreludeUnambiguous(sole.wrapped, 1, prelude)
-  )
+  if (!isOneBodilessRule) return 'break-out'
+  const isUntrimmed = hasUnstrippedTrailingSpace(condition) || hasUnstrippedLeadingSpace(condition)
+  return isUntrimmed ? 'rewritten' : undefined
 }
 
 /**
@@ -193,5 +207,5 @@ function isConditionValid(atName: 'container' | 'media', condition: string): boo
  * and may refuse a few strings that one accepts.
  */
 export function validateExtendAtomsHostFree(extend: ExtendMap): void {
-  walkExtendAtoms(extend, { isDeclarationValid, isPropValid, isSelectorValid, isConditionValid })
+  walkExtendAtoms(extend, { declarationRefusal, propRefusal, selectorRefusal, conditionRefusal })
 }

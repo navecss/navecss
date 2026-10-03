@@ -74,7 +74,7 @@ describe('a nested extend shape that is not a plain object is refused, not rende
           } as never,
         },
       }),
-    ).rejects.toThrow(/does not parse as a single/)
+    ).rejects.toThrow(/is an array, not a plain object/)
   })
 })
 
@@ -89,7 +89,9 @@ describe('a malformed nested value that JSON cannot print is still refused with 
     const extend = { x: { declarations: {}, pseudos: { ':hover': bad } } }
 
     for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
-      expect(() => validate(extend as never)).toThrow(/does not parse as a single/)
+      expect(() => validate(extend as never)).toThrow(
+        /is an array, not a plain object\. Write it as/,
+      )
     }
   })
 })
@@ -195,6 +197,19 @@ describe('the Lightning CSS warning filter’s boundary', () => {
 
     expect(logger.warn).toBe(wrapped)
     expect(received).toEqual(['[vite:css][lightningcss] Unknown at rule: @foo'])
+  })
+
+  it('a logger whose warn was replaced after wrapping is wrapped again', () => {
+    const replacement: string[] = []
+    const logger = { warn: (_message: string) => {} }
+
+    dropLightningNaveWarning(logger)
+    logger.warn = (message: string) => void replacement.push(message)
+    dropLightningNaveWarning(logger)
+    logger.warn('[vite:css][lightningcss] Unknown at rule: @nave')
+    logger.warn('[vite:css][lightningcss] Unknown at rule: @foo')
+
+    expect(replacement).toEqual(['[vite:css][lightningcss] Unknown at rule: @foo'])
   })
 })
 
