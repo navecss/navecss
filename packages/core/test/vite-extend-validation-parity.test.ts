@@ -325,6 +325,19 @@ describe('a refusal says why it refuses', () => {
     }
   })
 
+  it.each([
+    ['Infinity', Number.POSITIVE_INFINITY, 'Infinity'],
+    ['-Infinity', Number.NEGATIVE_INFINITY, '-Infinity'],
+  ])('a non-finite number atom (%s) is printed as itself, not as null', (_name, atom, printed) => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      const { refused, message } = verdict(validate, { sneaky: atom as never })
+
+      expect(refused).toBe(true)
+      expect(message).toContain(`is a number, not a plain object: ${printed}.`)
+      expect(message).not.toContain(': null')
+    }
+  })
+
   it('a value written back changed says so, and how to write it', () => {
     for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
       const { message } = verdict(validate, svg)

@@ -98,6 +98,7 @@ function kindOf(value: unknown): string {
 function printable(value: unknown): string | undefined {
   if (typeof value === 'function' || typeof value === 'symbol') return undefined
   if (typeof value === 'bigint') return `${value}n`
+  if (typeof value === 'number') return String(value)
   try {
     return JSON.stringify(value)
   } catch {

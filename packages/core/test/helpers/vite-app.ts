@@ -76,6 +76,9 @@ export function appConfig(
 ): InlineConfig {
   return {
     root,
+    // Each app keeps its own dependency cache: dev servers started side by side would otherwise
+    // share one directory and race to rewrite it.
+    cacheDir: path.join(root, '.vite'),
     configFile: false,
     logLevel: 'silent',
     plugins,

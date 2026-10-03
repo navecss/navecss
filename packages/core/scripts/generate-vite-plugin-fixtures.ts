@@ -32,6 +32,7 @@ try {
   )
   const result = await build({
     root,
+    cacheDir: path.join(root, '.vite'),
     configFile: false,
     logLevel: 'silent',
     plugins: [navePlugin()],

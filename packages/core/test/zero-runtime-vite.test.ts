@@ -125,6 +125,7 @@ describe.each(['postcss', 'vite'] as const)(
 async function requestedUrls(adapter: Adapter): Promise<string[]> {
   const server = await createServer({
     appType: 'custom',
+    cacheDir: path.join(FIXTURE_ROOT, '.vite'),
     configFile: false,
     css: adapter === 'postcss' ? { postcss: { plugins: [navePlugin()] } } : {},
     logLevel: 'silent',

@@ -4,6 +4,7 @@
  * `css.transformer` values; and, under Lightning CSS, drops its `Unknown at rule: @nave` warning
  * and no other.
  */
+import path from 'node:path'
 import { createLogger, type Logger, type Plugin } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -48,6 +49,12 @@ function expectCovered(css: string): void {
   expect(winning(ruleBodyFor(css, 'dispfirst'), 'display')).toBe('flex')
   expect(winning(ruleBodyFor(css, 'displast'), 'display')).toBe('grid')
 }
+
+it('each scratch app keeps its own Vite dependency cache, so concurrent dev servers do not race on one', () => {
+  const root = path.join(path.sep, 'scratch-app')
+
+  expect(appConfig(root, 'postcss', []).cacheDir).toBe(path.join(root, '.vite'))
+})
 
 describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
   describe('AC-directive-core-32 — coverage, every style source, build and dev, both transformers', () => {
