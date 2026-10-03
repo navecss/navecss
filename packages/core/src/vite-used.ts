@@ -78,9 +78,12 @@ function ignoreWatch(): void {
  * The names of the consumer's own atoms, which have no class. A module that will not load is the
  * other plugin's error to report, so it answers with none.
  */
-export async function ownAtomNames(context: UsedContext): Promise<ReadonlySet<string>> {
+export async function ownAtomNames(
+  context: UsedContext,
+  watch: (file: string) => void = ignoreWatch,
+): Promise<ReadonlySet<string>> {
   try {
-    const atoms = await context.extend.current(ignoreWatch)
+    const atoms = await context.extend.current(watch)
     return new Set(Object.keys(atoms).filter((name) => atoms[name]))
   } catch {
     return new Set()

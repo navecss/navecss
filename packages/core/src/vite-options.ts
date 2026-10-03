@@ -95,7 +95,10 @@ function problemsInKeepFor(keepFor: unknown, own: ReadonlySet<string>): string[]
  * The problems in the options, with `own` the names of the consumer's own atoms (known once an
  * `extend` module has been read; empty before).
  */
-function problemsInOptions(options: UsedAtomOptions, own: ReadonlySet<string>): string[] {
+function problemsInOptions(
+  options: UsedAtomOptions | ResolvedUsedOptions,
+  own: ReadonlySet<string>,
+): string[] {
   const problems: string[] = []
   const { atomic, keep, keepFor } = options as Record<string, unknown>
   if (atomic !== undefined && atomic !== 'all' && atomic !== 'used') {
@@ -109,7 +112,10 @@ function problemsInOptions(options: UsedAtomOptions, own: ReadonlySet<string>): 
 /**
  * Throws the first problem in the options, if there is one.
  */
-export function assertOptions(options: UsedAtomOptions, own: ReadonlySet<string>): void {
+export function assertOptions(
+  options: UsedAtomOptions | ResolvedUsedOptions,
+  own: ReadonlySet<string>,
+): void {
   const [first] = problemsInOptions(options, own)
   if (first !== undefined) throw new Error(first)
 }

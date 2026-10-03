@@ -253,7 +253,7 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
         expect(a.error).toContain('block')
         expect(a.error).toContain('did not emit')
         expect(b.error).toContain('flex')
-        expect(b.error).toContain('holds no rule')
+        expect(b.error).toContain('hold no rule')
         expect(d.error).toBeUndefined()
       } finally {
         app.dispose()

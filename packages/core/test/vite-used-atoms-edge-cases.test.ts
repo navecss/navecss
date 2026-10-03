@@ -5,7 +5,7 @@
  * text, option validation of holes, line terminators in a source map position, and a stylesheet
  * edited in watch mode.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { parseAst } from 'vite'
@@ -13,13 +13,15 @@ import { describe, expect, it } from 'vitest'
 
 import type { AstNode } from '../src/vite-ast.ts'
 
-import { hintFor } from '../src/vite-atom-check.ts'
+import { hintFor, judgeAtom } from '../src/vite-atom-check.ts'
 import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
+import { checkAtomicLayers, refeedChunkStylesheets } from '../src/vite-emit.ts'
 import { writeHandshake } from '../src/vite-handshake.ts'
 import { cut } from '../src/vite-problems.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from '../src/vite-prune.ts'
 import { authoredPlace } from '../src/vite-source-map.ts'
 import { stateFor } from '../src/vite-state.ts'
+import { isDeclaringCore } from '../src/vite-untransformed.ts'
 import { buildReport, type LocatedProblem } from '../src/vite-used-report.ts'
 import { navePlugin } from '../src/vite.ts'
 
@@ -250,5 +252,133 @@ describe('a stylesheet edited in watch mode', () => {
     await transform.call(ctx, '.card { color: red }', '/watch-root/a.css')
 
     expect(state.sheets.size).toBe(0)
+  })
+})
+
+describe('the checks on the emitted CSS', () => {
+  const asset = (fileName: string, source: string) => ({ type: 'asset', fileName, source })
+  const fail = (): never => {
+    throw new Error('failed')
+  }
+
+  it('compares the union of the atomic layers of all assets, so a layer of the consumer’s own elsewhere is no mismatch', () => {
+    const bundle = {
+      'core.css': asset('core.css', '@layer atomic{.nave-flex{display:flex}}'),
+      'app.css': asset('app.css', '@layer atomic{.brand{color:red}}'),
+    }
+
+    expect(() =>
+      checkAtomicLayers({ error: fail, warn: () => {} }, bundle, new Set(['flex'])),
+    ).not.toThrow()
+    expect(() =>
+      checkAtomicLayers({ error: fail, warn: () => {} }, bundle, new Set(['flex', 'grid'])),
+    ).toThrow()
+  })
+})
+
+describe('the pruning step reads a brace inside a prelude', () => {
+  it('does not take a `{}` value inside parentheses for the body of the at-rule', () => {
+    const css =
+      '@layer atomic { @supports (--x: {foo}) { .nave-flex{display:flex} .nave-grid{display:grid} } }'
+
+    expect(pruneAtomicLayer(css, new Set(['flex']))).not.toContain('nave-grid')
+  })
+})
+
+describe('what the report and the messages say', () => {
+  it('quotes an atom name as a JavaScript string in the example it suggests', () => {
+    const verdict = judgeAtom("foo'bar", new Set())
+
+    expect(verdict.kind === 'unknown' && verdict.text).toContain(String.raw`cx.raw('foo\'bar')`)
+  })
+
+  it('names the called member, and the whole callee when the member is computed', () => {
+    const named = read(`${IMPORT}handlers.run(cx)\n`).problems[0]!.text
+    const computed = read(`${IMPORT}handlers[method](cx)\n`).problems[0]!.text
+
+    expect(named).toContain('run()')
+    expect(computed).toContain('handlers[method]()')
+  })
+
+  it('says a static member of cx is not one the build reads, and a computed one is a computed read', () => {
+    const named = read(`${IMPORT}export const f = cx.foo\n`).problems[0]!.text
+    const computed = read(`${IMPORT}export const f = cx[key]\n`).problems[0]!.text
+
+    expect(named).toContain('cx.foo')
+    expect(named).not.toContain('computed')
+    expect(computed).toContain('computed')
+  })
+
+  it('does not offer a keepFor entry for an atom of the consumer’s own in a dependency', () => {
+    const report = buildReport([
+      {
+        kind: 'own',
+        offset: 0,
+        construct: 'cx()',
+        text: '"brandBox" is an atom of your own, which has no class.',
+        file: 'node_modules/dep/index.js',
+        line: 1,
+        column: 1,
+        pkg: 'dep',
+      },
+    ])
+
+    expect(report).not.toContain("keepFor: { 'dep'")
+  })
+})
+
+describe('the declared dependency manifests', () => {
+  it('reads optionalDependencies as well', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nave-optional-'))
+    try {
+      mkdirSync(path.join(root, 'node_modules/opt-lib'), { recursive: true })
+      writeFileSync(
+        path.join(root, 'node_modules/opt-lib/package.json'),
+        JSON.stringify({ name: 'opt-lib', optionalDependencies: { '@navecss/core': '*' } }),
+      )
+
+      expect(isDeclaringCore(root, 'opt-lib')).toBe(true)
+    } finally {
+      rmSync(root, { force: true, recursive: true })
+    }
+  })
+})
+
+describe('the CSS step of Vite is missing', () => {
+  it('fails fast, naming the way out, instead of leaving the stylesheet whole', async () => {
+    const state = stateFor('/css-step-root', {})
+    state.sheets.set(
+      'client\0/css-step-root/a.css',
+      '@layer atomic { .nave-flex { display: flex } }',
+    )
+    const ctx = {
+      environment: { name: 'client', config: { consumer: 'client' }, plugins: [] },
+      error(message: string): never {
+        throw new Error(message)
+      },
+    } as never
+
+    await expect(
+      refeedChunkStylesheets(ctx, { modules: { '/css-step-root/a.css': {} } }, state, new Set()),
+    ).rejects.toThrow(/atomic: 'all'/)
+  })
+})
+
+describe('state per build in watch mode', () => {
+  it('forgets the emitted set when the client environment starts a build again', async () => {
+    const [nave, collect] = navePlugin()
+    const config = { root: '/watch-build', command: 'build', logger: { warn() {} } }
+    nave.configResolved(config)
+    const state = stateFor('/watch-build', config)
+    state.emitted = new Set(['flex'])
+    state.clientEnded = true
+    const start = collect.buildStart as (this: never) => Promise<void>
+
+    await start.call({
+      environment: { name: 'client', config: { consumer: 'client' }, plugins: [] },
+    } as never)
+
+    expect(state.emitted).toBeUndefined()
+    expect(state.clientEnded).toBe(false)
   })
 })

@@ -96,7 +96,8 @@ function memberUse(reading: Reading, member: AstNode, local: string): CxUse {
   if (name === 'call' || name === 'apply') {
     return refused(member, local, `${local} is called through .${name}()`)
   }
-  return refused(member, local, `${local} is read with a computed member`)
+  if (isComputed) return refused(member, local, `${local} is read with a computed member`)
+  return refused(member, local, `${local}.${name ?? '?'} is not a member the build reads`)
 }
 
 /**

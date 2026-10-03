@@ -32,7 +32,8 @@ function calleeName(reading: Reading, call: AstNode): string {
   const callee = nodeAt(call, 'callee')
   if (!callee) return 'a function'
   if (callee.type === 'Identifier') return stringAt(callee, 'name') ?? 'a function'
-  const property = callee.type === 'MemberExpression' ? nodeAt(callee, 'property') : undefined
+  const isPlainMember = callee.type === 'MemberExpression' && callee.computed !== true
+  const property = isPlainMember ? nodeAt(callee, 'property') : undefined
   return stringAt(property ?? callee, 'name') ?? textOf(reading, callee)
 }
 

@@ -238,6 +238,24 @@ describe(
       }
     }, 60_000)
 
+    it('names an atom of the consumer’s own in keep when extend is a module, once it has loaded', async () => {
+      const app = makeUsedApp(
+        appFiles({
+          'atoms.mjs': 'export default { brandBox: { declarations: { color: "red" } } }\n',
+          'src/App.ts': `${IMPORT}console.log(cx('flex'))\n`,
+        }),
+      )
+      try {
+        const built = await buildUsed(app, {
+          options: { extend: './atoms.mjs', keep: ['brandBox' as never] },
+        })
+
+        expect(built.error).toContain('keep names "brandBox", an atom of your own')
+      } finally {
+        app.dispose()
+      }
+    }, 60_000)
+
     it.each(['used', 'all'] as const)(
       'refuses an unknown name and an atom of the consumer’s own under %s',
       (atomic) => {

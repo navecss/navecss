@@ -57,6 +57,9 @@ function isBlank(tokens: readonly Token[], from: number, to: number): boolean {
   return true
 }
 
+const OPENERS = new Set(['(-token', '[-token', 'function-token'])
+const CLOSERS = new Set([')-token', ']-token'])
+
 /**
  * Reads `css` into a `Sheet`.
  */
@@ -71,9 +74,13 @@ export function readSheet(css: string): Sheet {
       const found: Statement[] = []
       let start = from
       let index = from
+      let depth = 0
       while (index < to) {
         const type = tokens[index]!.type
-        const close = type === '{-token' ? matches.get(index) : undefined
+        if (OPENERS.has(type)) depth += 1
+        else if (CLOSERS.has(type)) depth = Math.max(0, depth - 1)
+        // A `{}` inside parentheses or brackets is a value in a prelude, not the block of the rule.
+        const close = type === '{-token' && depth === 0 ? matches.get(index) : undefined
         if (close !== undefined && close < to) {
           found.push({ from: start, to: close + 1, open: index, close })
           index = close + 1

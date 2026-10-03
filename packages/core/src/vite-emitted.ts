@@ -114,6 +114,8 @@ export function checkServerInvocation(ctx: RenderContext, context: UsedContext):
     return
   }
   const missing = [...atoms].filter((atom) => !file.emitted.includes(atom)).toSorted(compareText)
-  writeHandshake(context.cacheDir, { ...file, consumed: true }, (message) => ctx.warn(message))
+  // A miss fails before the file is marked checked, so every server build against this CSS fails
+  // until its atoms are in it, not only the first.
   if (missing.length > 0) ctx.error(missingFromClient(ctx, context, missing))
+  writeHandshake(context.cacheDir, { ...file, consumed: true }, (message) => ctx.warn(message))
 }

@@ -15,6 +15,7 @@ import { navePlugin } from '../../src/vite.ts'
 import {
   appConfig,
   buildOutputs,
+  outputsOf,
   makeApp,
   type ScratchApp,
   type Transformer,
@@ -229,7 +230,6 @@ export async function buildEnvironments(
   app: ScratchApp,
   settings: BuildOptions & {
     readonly order?: readonly ('client' | 'ssr')[]
-    readonly builder?: boolean
   } = {},
 ): Promise<BuiltEnvironments> {
   const {
@@ -277,7 +277,7 @@ export async function buildEnvironments(
   }
   const results: Partial<Record<'client' | 'ssr', Built>> = {}
   const collected = async (name: 'client' | 'ssr', result: unknown): Promise<void> => {
-    results[name] = outputsOf(result)
+    results[name] = { ...outputsOf(result), error: undefined }
   }
   const empty: Built = { css: '', js: '', assets: {}, error: undefined }
   try {
@@ -299,32 +299,6 @@ export async function buildEnvironments(
       warnings,
     }
   }
-}
-
-/**
- * The CSS, JavaScript and assets of one environment's build result.
- */
-function outputsOf(result: unknown): Built {
-  const outputs = (Array.isArray(result) ? result : [result]) as {
-    output: { type: string; fileName: string; source?: string | Uint8Array; code?: string }[]
-  }[]
-  const decoder = new TextDecoder()
-  const assets: Record<string, string> = {}
-  let js = ''
-  for (const { output } of outputs) {
-    for (const entry of output) {
-      if (entry.type === 'chunk') js += `${entry.code}\n`
-      else if (entry.source !== undefined) {
-        assets[entry.fileName] =
-          typeof entry.source === 'string' ? entry.source : decoder.decode(entry.source)
-      }
-    }
-  }
-  const css = Object.entries(assets)
-    .filter(([name]) => name.endsWith('.css'))
-    .map(([, text]) => text)
-    .join('\n')
-  return { css, js, assets, error: undefined }
 }
 
 /**

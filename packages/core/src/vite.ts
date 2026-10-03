@@ -16,7 +16,7 @@
  * step, so a stylesheet reached through `@import`, a Sass or Less file, a CSS Module, and a Vue
  * or Svelte style block are all read as the CSS they compile to. It never runs before Vite's CSS
  * step: that order misses `@import`-reached files and breaks Sass `@mixin`. The second runs in
- * post order and reads the JavaScript. Neither adds code to the browser bundle.
+ * post order and reads the JavaScript. Neither adds runtime machinery to the browser bundle.
  */
 import type { AtomDefinition } from './atoms.ts'
 import type { NaveCollectPlugin } from './vite-collect-plugin.ts'
@@ -104,7 +104,9 @@ export type NavePlugins = [NaveVitePlugin, NaveCollectPlugin]
 export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
   const extend = createExtendSource(options.extend)
   const ownAtoms = typeof options.extend === 'object' ? options.extend : undefined
-  assertOptions(options, new Set(Object.keys(ownAtoms ?? {})))
+  // The names of atoms in a module are known once it has loaded; the other half judges then.
+  if (typeof options.extend !== 'string')
+    assertOptions(options, new Set(Object.keys(ownAtoms ?? {})))
 
   const context = createUsedContext(resolveUsedOptions(options), extend)
   const stylesheets = createStylesheets(context, extend, options.onUnknown ?? 'error')

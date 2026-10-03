@@ -31,15 +31,22 @@ export function hintFor(name: string): string | undefined {
 }
 
 /**
+ * `text` as a single-quoted JavaScript string literal, for an example the reader can paste.
+ */
+function literal(text: string): string {
+  return `'${text.replaceAll('\\', '\\\\').replaceAll("'", String.raw`\'`)}'`
+}
+
+/**
  * The sentence for a string holding whitespace.
  */
 function whitespaceText(value: string): string {
   const names = value.split(/\s+/).filter(Boolean)
   if (names.length < 2) {
-    return `"${value}" has whitespace around the atom name. Write it without: cx('${names[0] ?? ''}').`
+    return `"${value}" has whitespace around the atom name. Write it without: cx(${literal(names[0] ?? '')}).`
   }
   const count = names.length === 2 ? 'two' : String(names.length)
-  const call = names.map((name) => `'${name}'`).join(', ')
+  const call = names.map((name) => literal(name)).join(', ')
   return `"${value}" is ${count} atom names in one string. Pass one per argument: cx(${call}).`
 }
 
@@ -47,7 +54,7 @@ function whitespaceText(value: string): string {
  * The sentence for a name that is no atom and has no near candidate.
  */
 function unknownText(name: string): string {
-  return `unknown atom "${name}". cx() takes Nave atoms only; for a class of your own, use a CSS Module class or cx.raw('${name}').`
+  return `unknown atom "${name}". cx() takes Nave atoms only; for a class of your own, use a CSS Module class or cx.raw(${literal(name)}).`
 }
 
 /**

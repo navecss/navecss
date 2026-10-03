@@ -129,7 +129,9 @@ export async function recordModule(
   const pkg = isDependency ? await packageNameOf(file, context.packageNames) : undefined
   const reading = readModule(code, program, {
     cxSources: new Set([CX_SOURCE]),
-    ownAtoms: await ownAtomNames(context),
+    ownAtoms: await ownAtomNames(context, (file) => {
+      ctx.addWatchFile(file)
+    }),
     isDependency,
     isVueScript: /\.vue(?:$|\?)/.test(id),
     setup: await setupExposuresFor(context, ctx, { program, code, id }),

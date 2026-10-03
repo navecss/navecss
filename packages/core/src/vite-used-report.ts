@@ -59,6 +59,9 @@ function problemLine(problem: LocatedProblem): string {
  */
 function packageLine(pkg: string, problems: readonly LocatedProblem[]): string {
   const keepFor = `keepFor: { '${pkg}': ['<atom>'] }`
+  if (problems.every((problem) => problem.kind === 'own')) {
+    return `${pkg} names atoms of your own, which have no class, so a keepFor entry cannot make its calls produce a Nave class. The fix is the package's: it must name atoms Nave ships.`
+  }
   const isOnlyDynamic = problems.every((problem) => problem.kind === 'dynamic')
   if (isOnlyDynamic) {
     const count = problems.length

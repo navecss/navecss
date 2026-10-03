@@ -14,11 +14,12 @@ import { isStylesheetId } from './vite-css-id.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
 import { isFileId, isNaveOwn } from './vite-module-kind.ts'
+import { assertOptions } from './vite-options.ts'
 import { checkEnvironmentOrder } from './vite-order.ts'
 import { recordsOf } from './vite-state.ts'
 import { noteClientEnded, noteServerExternals } from './vite-untransformed.ts'
 import { buildReport, moduleReport } from './vite-used-report.ts'
-import { isUsed } from './vite-used.ts'
+import { isUsed, ownAtomNames } from './vite-used.ts'
 
 interface HtmlHook {
   readonly order: 'pre'
@@ -30,6 +31,7 @@ export interface NaveCollectPlugin {
   readonly enforce: 'post'
   transform(this: TransformContext, code: string, id: string): Promise<undefined>
   readonly transformIndexHtml: HtmlHook
+  buildStart(this: RenderContext): Promise<void>
   buildEnd(this: RenderContext, error?: unknown): void
 }
 
@@ -82,6 +84,15 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
   const plugin: NaveCollectPlugin = {
     name: 'nave:collect',
     enforce: 'post',
+
+    async buildStart() {
+      // The names of the consumer's own atoms are known once the `extend` module has loaded, so a
+      // list that names one is judged now. A rebuild in watch mode fixes its emitted set again.
+      assertOptions(context.options, await ownAtomNames(context))
+      if (this.environment.config.consumer !== 'client') return
+      context.state.emitted = undefined
+      context.state.clientEnded = false
+    },
 
     async transform(code, id) {
       if (!isUsed(context) || !isFileId(id) || isStylesheetId(id) || isNaveOwn(id)) return

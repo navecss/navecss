@@ -35,7 +35,12 @@ function transformHandler(plugin: PluginLike): ((...args: unknown[]) => unknown)
 async function refeed(ctx: RenderContext, css: string, id: string): Promise<void> {
   const plugin = ctx.environment.plugins.find((candidate) => candidate.name === 'vite:css-post')
   const handler = plugin && transformHandler(plugin)
-  await handler?.call(ctx, css, id)
+  if (!handler) {
+    ctx.error(
+      "nave: this version of Vite has no CSS step the plugin knows how to hand a stylesheet back to, so it cannot remove the unused atoms. Ship every atom with atomic: 'all' in navePlugin() until the plugin supports this version of Vite.",
+    )
+  }
+  await handler.call(ctx, css, id)
 }
 
 /**
@@ -66,23 +71,32 @@ function textOf(entry: BundleEntry): string {
 }
 
 /**
- * What is wrong with the atomic layer of the CSS asset `fileName`, in words.
+ * What is wrong with the atomic layers of the CSS assets, in words: a rule for an atom that was
+ * not emitted, in any asset, and an emitted atom that no asset carrying a layer has a rule for
+ * (a layer may be split across assets, and a layer of the consumer's own holds no atom at all).
  */
-function mismatchLines(fileName: string, css: string, emitted: ReadonlySet<string>): string[] {
-  const seen = inspectAtomicLayer(css)
-  if (!seen.hasLayer) return []
-  const extra = [...seen.atoms.difference(emitted)]
-  const missing = [...emitted.difference(seen.atoms)]
+function mismatchLines(
+  assets: readonly { css: string; fileName: string }[],
+  emitted: ReadonlySet<string>,
+): string[] {
   const lines: string[] = []
-  if (extra.length > 0) {
-    lines.push(
-      `${fileName}: the atomic layer holds a rule for ${extra.join(', ')}, which the build did not emit.`,
-    )
+  const seenAnywhere = new Set<string>()
+  let hasLayer = false
+  for (const { fileName, css } of assets) {
+    const seen = inspectAtomicLayer(css)
+    if (!seen.hasLayer) continue
+    hasLayer = true
+    for (const atom of seen.atoms) seenAnywhere.add(atom)
+    const extra = [...seen.atoms.difference(emitted)]
+    if (extra.length > 0) {
+      lines.push(
+        `${fileName}: the atomic layer holds a rule for ${extra.join(', ')}, which the build did not emit.`,
+      )
+    }
   }
-  if (missing.length > 0) {
-    lines.push(
-      `${fileName}: the atomic layer holds no rule for ${missing.join(', ')}, which the build emitted.`,
-    )
+  const missing = [...emitted.difference(seenAnywhere)]
+  if (hasLayer && missing.length > 0) {
+    lines.push(`the atomic layers hold no rule for ${missing.join(', ')}, which the build emitted.`)
   }
   return lines
 }
@@ -97,9 +111,10 @@ export function checkAtomicLayers(
   bundle: Readonly<Record<string, BundleEntry>>,
   emitted: ReadonlySet<string>,
 ): void {
-  const lines = Object.values(bundle)
+  const assets = Object.values(bundle)
     .filter((entry) => entry.type === 'asset' && entry.fileName.toLowerCase().endsWith('.css'))
-    .flatMap((entry) => mismatchLines(entry.fileName, textOf(entry), emitted))
+    .map((entry) => ({ fileName: entry.fileName, css: textOf(entry) }))
+  const lines = mismatchLines(assets, emitted)
   if (lines.length === 0) return
   ctx.error({
     message: [

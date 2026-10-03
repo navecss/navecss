@@ -163,7 +163,7 @@ describe('AC-directive-core-02 — the core imports no host', () => {
 
     for (const file of files) {
       const source = readFileSync(path.join(DIST, file), 'utf8').replaceAll(
-        /(['"])vite:css-post\1/g,
+        /\.name === (['"])vite:css-post\1/g,
         '',
       )
       for (const host of FORBIDDEN_HOSTS.filter(

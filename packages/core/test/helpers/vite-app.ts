@@ -117,7 +117,17 @@ export async function buildOutputs(
   js: string
   assets: Record<string, string>
 }> {
-  const result = await api.build(config)
+  return outputsOf(await api.build(config))
+}
+
+/**
+ * The CSS, the JavaScript and the assets of a build result (one output or several).
+ */
+export function outputsOf(result: unknown): {
+  css: string
+  js: string
+  assets: Record<string, string>
+} {
   const outputs = (Array.isArray(result) ? result : [result]) as unknown as {
     output: OutputLike[]
   }[]

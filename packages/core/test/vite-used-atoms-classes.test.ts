@@ -322,9 +322,14 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
         }),
       )
       try {
-        const built = await buildUsed(app, { transformer, build: { cssMinify: false } })
+        const options = { transformer, build: { cssMinify: false } }
+        const built = await buildUsed(app, options)
+        const all = await buildUsed(app, { ...options, options: { atomic: 'all' } })
+        const rule = (css: string): string | undefined =>
+          /\.nave-grid > \.child\s*\{[^}]*\}/.exec(css)?.[0]
 
-        expect(built.css).toContain('.nave-grid > .child')
+        expect(rule(built.css)).toBeDefined()
+        expect(rule(built.css)).toBe(rule(all.css))
       } finally {
         app.dispose()
       }

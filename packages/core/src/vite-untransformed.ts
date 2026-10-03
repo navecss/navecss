@@ -22,16 +22,16 @@ function packageOfSpecifier(specifier: string): string | undefined {
 
 /**
  * Whether the package `name`, found from `root` upward, declares `@navecss/core` as a dependency
- * or a peer dependency.
+ * or a peer or optional dependency.
  */
-function isDeclaringCore(root: string, name: string): boolean {
+export function isDeclaringCore(root: string, name: string): boolean {
   for (let directory = root; ; directory = path.dirname(directory)) {
     try {
       const manifest = JSON.parse(
         readFileSync(path.join(directory, 'node_modules', name, 'package.json'), 'utf8'),
       ) as Record<string, Record<string, string> | undefined>
-      return Boolean(
-        manifest.dependencies?.['@navecss/core'] ?? manifest.peerDependencies?.['@navecss/core'],
+      return ['dependencies', 'peerDependencies', 'optionalDependencies'].some(
+        (field) => manifest[field]?.['@navecss/core'] !== undefined,
       )
     } catch {
       if (path.dirname(directory) === directory) return false
