@@ -49,12 +49,13 @@ const FOCUS_TOKEN_OVERRIDE =
   ':root { --nave-border-width-focus: 5px; --nave-color-border-focus: rgb(1, 2, 3); }'
 
 describe('focusRing still draws a ring without a complete token layer', () => {
-  it('with the shipped tokens, draws a solid ring offset by 2px', async () => {
+  it('with the shipped tokens, draws a solid 2px ring offset by 2px', async () => {
     mount(TOKENS_CSS)
 
     const ring = await focusedRing()
 
     expect(ring.outlineStyle).toBe('solid')
+    expect(ring.outlineWidth).toBe('2px')
     expect(ring.outlineOffset).toBe('2px')
   })
 
@@ -102,7 +103,7 @@ describe('focusRing still draws a ring without a complete token layer', () => {
   // The shipped tokens register --nave-border-width-focus, and a registered property resets to its
   // registered initial value on a wrong-typed value. This fixture deliberately leaves it
   // unregistered, so the wrong-typed value reaches the outline-width declaration itself.
-  it('with a wrong-typed width, still draws a ring, at the default width', async () => {
+  it('with a wrong-typed width, still draws a ring, at the outline’s initial width (3px)', async () => {
     mount(':root { --nave-border-width-focus: banana; }')
 
     const ring = await focusedRing()
