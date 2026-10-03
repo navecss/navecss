@@ -65,14 +65,17 @@ function manifest(): Record<string, unknown> {
  * condition) so each loader gets its own declarations. Resolved through `import`, that is still
  * the 0.1.0 pair of files, so the guard compares what the `import` condition reaches, not the
  * literal shape of the entry. The `require` condition is held by `postcss-require.test.ts`.
+ *
+ * Every other condition is kept in the view and fails the comparison: a further condition nested
+ * inside `import`, and a top-level sibling of `import` and `require` (a `node` target listed
+ * ahead of `import`, say), either of which could send a loader to a different file.
  */
 function importView(entry: unknown): unknown {
   const importEntry = (entry as { import?: unknown } | null)?.import
   if (typeof importEntry !== 'object' || importEntry === null) return entry
+  const { import: _import, require: _require, ...siblings } = entry as Record<string, unknown>
   const { types, default: target, ...extra } = importEntry as Record<string, unknown>
-  // Any further nested condition (a `node` target ahead of `default`, say) could send a Node ES
-  // loader somewhere else, so it is left in the view and fails the comparison.
-  return { types, import: target, ...extra }
+  return { ...siblings, types, import: target, ...extra }
 }
 
 /**
@@ -132,6 +135,33 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
   it('reds the real guard against a manifest with one 0.1.0 key removed (control)', () => {
     const tampered: Record<string, unknown> = { ...PUBLISHED_0_1_0_EXPORTS }
     delete tampered['./atoms']
+    expect(() => assertPublishedExportsPresent(tampered)).toThrow()
+  })
+
+  it('reds the real guard against a top-level condition ahead of import (control)', () => {
+    const tampered: Record<string, unknown> = {
+      ...PUBLISHED_0_1_0_EXPORTS,
+      './postcss': {
+        node: './dist/elsewhere.js',
+        import: { types: './dist/postcss.d.ts', default: './dist/postcss.js' },
+        require: { types: './dist/postcss.d.cts', default: './dist/postcss.cjs' },
+      },
+    }
+    expect(() => assertPublishedExportsPresent(tampered)).toThrow()
+  })
+
+  it('reds the real guard against a condition nested inside import (control)', () => {
+    const tampered: Record<string, unknown> = {
+      ...PUBLISHED_0_1_0_EXPORTS,
+      './postcss': {
+        import: {
+          types: './dist/postcss.d.ts',
+          node: './dist/elsewhere.js',
+          default: './dist/postcss.js',
+        },
+        require: { types: './dist/postcss.d.cts', default: './dist/postcss.cjs' },
+      },
+    }
     expect(() => assertPublishedExportsPresent(tampered)).toThrow()
   })
 })
