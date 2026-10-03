@@ -184,6 +184,7 @@ renders nothing.
 
 - `--nave-border-width-focus`: Focus ring indicator outline width
 - `--nave-border-width-lg`
+- `--nave-border-width-mark`: Strokes of glyphs drawn in CSS: check marks, indeterminate bars
 - `--nave-border-width-none`
 - `--nave-border-width-sm`: Default border / divider
 - `--nave-color-action-primary`
@@ -260,7 +261,7 @@ renders nothing.
 - `--nave-motion-easing-standard`: General-purpose — enters and exits
 - `--nave-opacity-disabled`: Opacity multiplier for muting content that is inert and contains nothing focusable (e.g. a disabled icon or illustration). Nave's own interactive-disabled state is expressed through content.disabled and border.disabled instead, not this token: opacity composites everything an element paints, including a focus indicator inside it.
 - `--nave-radius-card`: Cards, panels, dialogs
-- `--nave-radius-control`: Inputs, buttons, tags
+- `--nave-radius-control`: Inputs, buttons, tags, and the popovers, menus and select lists anchored to a control
 - `--nave-radius-full`: Pill / badge shape
 - `--nave-radius-none`
 - `--nave-radius-overlay`: Modals, drawers, sheets

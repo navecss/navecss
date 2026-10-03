@@ -147,7 +147,9 @@ describe('AC-consumer-constraints-33: description fidelity', () => {
     // Three of the real entries, still pinned by name (not just by value-set membership), so a
     // wrong NAME for a right value would still be visible somewhere in this file's other tests
     // (drift, cell-identity) even though this particular assertion is value-only.
-    expect(descriptions.get('--nave-radius-control')).toBe('Inputs, buttons, tags')
+    expect(descriptions.get('--nave-radius-control')).toBe(
+      'Inputs, buttons, tags, and the popovers, menus and select lists anchored to a control',
+    )
     expect(descriptions.get('--nave-spacing-content-md')).toBe('Default component gap and padding')
     expect(descriptions.get('--nave-motion-duration-instant')).toBe(
       'No animation — kept at 0ms even under prefers-reduced-motion',
