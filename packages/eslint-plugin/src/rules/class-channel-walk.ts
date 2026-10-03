@@ -5,7 +5,8 @@
  * finds; rule 2 and the counting rule ask whether it finds anything rule 1 would report, so the
  * three rules can never disagree about the same source.
  *
- * The grammar: a string literal; a template literal's static text, and each `${}` slot read as a
+ * The grammar: a whole `className` value that is an inline function, read through the values it
+ * returns (an expression body, or each `return` of a block body, nested functions excluded); a string literal; a template literal's static text, and each `${}` slot read as a
  * class position of its own (wherever the template sits); both branches of a conditional; the
  * right side of `&&` and both sides of `||`/`??`; a string `+` chain, read like a template
  * literal (its string literals the static text, every other operand a slot); an identifier bound
@@ -19,6 +20,7 @@ import type { TSESTree } from '@typescript-eslint/types'
 import type { Scope, SourceCode } from 'eslint'
 
 import { type CxBindings, resolveCxCallee } from '../cx-binding.ts'
+import { inlineFunction, returnedValues } from '../function-returns.ts'
 import {
   collectConcatPieces,
   collectTemplatePieces,
@@ -267,9 +269,16 @@ function slotHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassHit
 }
 
 /**
-Every hit in a whole `className`/`class` attribute value.
+ * Every hit in a whole `className`/`class` attribute value. A value that is an inline function
+ * (`(state) => ...`) is read through the values it returns, each as a class position of its own.
  */
 export function collectValueHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassHit[] {
+  const fn = inlineFunction(node)
+  if (fn) {
+    return returnedValues(fn, ctx.sourceCode.visitorKeys).flatMap((value) =>
+      positionHits(ctx, value, ctx.sourceCode.getScope(value as never), undefined),
+    )
+  }
   if (node.type === 'LogicalExpression' && node.operator === '&&') {
     return [{ kind: 'slot-and', node, isWhole: true }]
   }
