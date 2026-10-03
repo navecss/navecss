@@ -100,6 +100,26 @@ export function extractJobs(workflowText) {
 }
 
 /**
+ * One shell command read word by word: null unless it starts with `pnpm`, else whether it used
+ * `run`, the script it names (a `${{ ... }}` expression kept whole) and its arguments, which end
+ * at the first redirect (`>`, `<`, `2>&1`).
+ */
+function parsePnpmCommand(command) {
+  const words = command.trim().split(/\s+/)
+  if (words[0] !== 'pnpm' || words.length < 2) return null
+  const run = words[1] === 'run'
+  const rest = words.slice(run ? 2 : 1)
+  const end = rest[0]?.startsWith('${{')
+    ? rest.findIndex((word) => word.endsWith('}}')) + 1 || rest.length
+    : 1
+  const target = rest.slice(0, end).join(' ')
+  const argWords = rest.slice(end)
+  const redirect = argWords.findIndex((word) => /^\d*[<>]/.test(word))
+  const args = (redirect === -1 ? argWords : argWords.slice(0, redirect)).join(' ')
+  return { args, run, target }
+}
+
+/**
  * The scripts one `run:` value runs through pnpm, as `{ target, args }`: every command that
  * STARTS with `pnpm run <x>`, or with the `pnpm <step>` shorthand naming one of `stepNames`, and
  * the arguments that follow the name in that command. A command starts a line or follows `&&`,
@@ -122,11 +142,10 @@ export function findStepRuns(runText, stepNames) {
   for (const line of lines) {
     const code = line.replace(/(^|\s)#.*$/, '')
     for (const command of code.split(/&&|\|\||;|\|/)) {
-      const match = /^pnpm\s+(run\s+)?(\$\{\{[^}]*\}\}|[\w:-]+)(.*)$/.exec(command.trim())
-      if (!match) continue
-      const [, run, target, rest] = match
-      const args = rest.split(/\s*\d*[<>]/, 1)[0].trim()
-      if (run || stepNames.includes(target)) found.push({ args, target })
+      const parsed = parsePnpmCommand(command)
+      if (parsed && (parsed.run || stepNames.includes(parsed.target))) {
+        found.push({ args: parsed.args, target: parsed.target })
+      }
     }
   }
   return found
