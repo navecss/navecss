@@ -32,6 +32,12 @@
   // unresolved-import issue elsewhere.
   "exclude": ["duplicates"],
   "workspaces": {
+    "packages/core": {
+      // `src/postcss.cjs` is copied into `dist/` by `tsup.config.ts`'s `onSuccess`, and
+      // `exports["./postcss"].require` points at that COPY. Nothing imports the source file, so
+      // knip's static analysis reads it as dead; it is the CommonJS entry of a public export.
+      "entry": ["src/postcss.cjs"],
+    },
     "packages/stylelint-config": {
       // `declared-custom-properties.js` resolves its default stylesheet with
       // `import.meta.resolve('@navecss/tokens/css')`, a runtime string knip's static import

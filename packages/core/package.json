@@ -32,8 +32,14 @@
       "import": "./dist/atoms.js"
     },
     "./postcss": {
-      "types": "./dist/postcss.d.ts",
-      "import": "./dist/postcss.js"
+      "import": {
+        "types": "./dist/postcss.d.ts",
+        "default": "./dist/postcss.js"
+      },
+      "require": {
+        "types": "./dist/postcss.d.cts",
+        "default": "./dist/postcss.cjs"
+      }
     },
     "./vite": {
       "types": "./dist/vite.d.ts",

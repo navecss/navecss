@@ -61,6 +61,19 @@ function manifest(): Record<string, unknown> {
 }
 
 /**
+ * `./postcss` later nested its conditions (`import: { types, default }` beside a `require`
+ * condition) so each loader gets its own declarations. Resolved through `import`, that is still
+ * the 0.1.0 pair of files, so the guard compares what the `import` condition reaches, not the
+ * literal shape of the entry. The `require` condition is held by `postcss-require.test.ts`.
+ */
+function importView(entry: unknown): unknown {
+  const importEntry = (entry as { import?: unknown } | null)?.import
+  if (typeof importEntry !== 'object' || importEntry === null) return entry
+  const { types, default: target } = importEntry as Record<string, unknown>
+  return { types, import: target }
+}
+
+/**
  * The real guard: every 0.1.0 key is still present, each with every 0.1.0
  * condition, exactly as published. A function, not inlined into the test
  * body below, so the "removed key" control can run this SAME check against
@@ -70,7 +83,7 @@ function manifest(): Record<string, unknown> {
 function assertPublishedExportsPresent(exports: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(PUBLISHED_0_1_0_EXPORTS)) {
     expect(exports).toHaveProperty(key)
-    expect(exports[key]).toEqual(value)
+    expect(importView(exports[key])).toEqual(value)
   }
 }
 
