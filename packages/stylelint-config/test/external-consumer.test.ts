@@ -45,6 +45,15 @@ beforeAll(() => {
   } finally {
     rmSync(packDestination, { recursive: true, force: true })
   }
+
+  // The consumer's first stylelint run takes more than ten seconds even on a quiet machine, and
+  // every later run well under one. Pay it once here, under this hook's own budget, so the first
+  // timed test below does not carry it.
+  writeFileSync(path.join(consumerDir, 'warm-up.css'), '')
+  spawnSync(path.join(consumerDir, 'node_modules/.bin/stylelint'), ['warm-up.css'], {
+    cwd: consumerDir,
+    encoding: 'utf8',
+  })
 }, 120_000)
 
 /**
