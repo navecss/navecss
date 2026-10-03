@@ -24,11 +24,14 @@ const ATOM_CLASSES = new Set(Object.values(atomClassMap))
 /**
  * `text` with runs of whitespace collapsed and the space around punctuation removed.
  */
-function normalise(text: string): string {
+function normalise(text: string, isSelector = false): string {
+  // In a selector the space before a pseudo-class is a descendant combinator (`.a :hover` is not
+  // `.a:hover`), so `:` keeps its spaces there.
+  const punctuation = isSelector ? /\s*([{};,>+~()])\s*/g : /\s*([{}:;,>+~()])\s*/g
   return text
     .replaceAll(/\/\*.*?\*\//gs, '')
     .replaceAll(/\s+/g, ' ')
-    .replaceAll(/\s*([{}:;,>+~()])\s*/g, '$1')
+    .replaceAll(punctuation, '$1')
     .replaceAll(';}', '}')
     .trim()
 }
@@ -56,7 +59,7 @@ function nodesOf(text: string): Node[] {
     const open = text.indexOf('{', index)
     if (open === -1) break
     const close = closeOf(text, open + 1)
-    const prelude = normalise(text.slice(index, open))
+    const prelude = normalise(text.slice(index, open), true)
     const inner = text.slice(open + 1, close)
     nodes.push(
       prelude.startsWith('@')

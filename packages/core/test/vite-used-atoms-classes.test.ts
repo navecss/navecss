@@ -6,6 +6,7 @@
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { describe, expect, it } from 'vitest'
 
@@ -26,7 +27,7 @@ import { startDev, appConfig } from './helpers/vite-app.ts'
 import type { Transformer } from './helpers/vite-app.ts'
 
 const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
-const CORE_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
+const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 
 describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {

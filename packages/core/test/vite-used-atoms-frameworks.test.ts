@@ -27,7 +27,7 @@ const v = 'grid'
 const TEMPLATE = `<div :class="cx('flex', props.on && 'itemsCenter', v)"><span :class="cx.raw('legacy')" /></div>`
 const FILES = {
   'src/Card.vue': `${SCRIPT}<template>${TEMPLATE}</template>\n`,
-  'src/card.html': TEMPLATE,
+  'src/card.html': `<div :class="cx('flex', props.on && 'itemsCenter', v, 'justifyEnd')" />`,
   'src/CardSrc.vue': `${SCRIPT}<template src="./card.html"></template>\n`,
   'src/Opts.vue': `<script>
 import { cx } from '@navecss/core/cx'
@@ -46,7 +46,7 @@ export default { setup() { return { cls: cx('gap') } } }
   'src/vue-main.ts':
     "import Card from './Card.vue'\nimport CardSrc from './CardSrc.vue'\nimport Opts from './Opts.vue'\nimport './unref.ts'\nconsole.log(Card, CardSrc, Opts)\n",
 }
-const ALL = atoms('flex', 'itemsCenter', 'grid', 'gap', 'block', 'truncate')
+const ALL = atoms('flex', 'itemsCenter', 'grid', 'gap', 'block', 'truncate', 'justifyEnd')
 
 /**
  * Records the module text the post-order half is given, by module id.

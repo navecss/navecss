@@ -247,7 +247,11 @@ export async function buildEnvironments(
     ...appConfig(
       app.root,
       transformer,
-      [...(settings.plugins ?? []), settings.nave ?? navePlugin(options)],
+      [
+        ...(settings.plugins ?? []),
+        settings.nave ?? navePlugin(options),
+        ...(settings.after ?? []),
+      ],
       settings.build ? ({ build: settings.build } as never) : {},
     ),
     customLogger: logger,

@@ -55,7 +55,11 @@ export function declarePattern(
   const name = stringAt(pattern, 'name')
   if (name !== undefined && pattern.type === 'Identifier') {
     const into = functionScopeOrHere(spec, scope)
-    const declared = declare(into, { name, kind: spec.kind, writes: 0 })
+    const declared = declare(
+      into,
+      { name, kind: spec.kind, writes: 0 },
+      spec.kind !== 'var' || spec.init !== undefined,
+    )
     if (spec.init) declared.init = spec.init
     return
   }

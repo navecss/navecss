@@ -215,8 +215,8 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
         const text = JSON.stringify(tree)
 
         expect(atomLayerAtoms(built.css)).toEqual(['disabledState'])
-        expect(text).toMatch(/disabled/)
-        expect(text).toMatch(/aria-disabled/)
+        expect(text).toMatch(/:disabled/)
+        expect(text).toMatch(/\[aria-disabled/)
       } finally {
         app.dispose()
       }

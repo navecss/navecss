@@ -15,6 +15,7 @@ import type {
 import type { UsedContext } from './vite-used.ts'
 
 import { canHoldDirective, isStylesheetId } from './vite-css-id.ts'
+import { inspectAtomicLayer } from './vite-prune.ts'
 import { moduleKey } from './vite-state.ts'
 import { transformStylesheet } from './vite-transform.ts'
 import { isUsed } from './vite-used.ts'
@@ -46,18 +47,14 @@ function withForwardSlashes(file: string): string {
 }
 
 /**
- * Whether `code` is a stylesheet holding an `@layer atomic` block.
- */
-function isHoldingAtomicLayer(code: string): boolean {
-  return /@layer\s+atomic\s*\{/.test(code)
-}
-
-/**
- * Keeps the text of a stylesheet that holds the atomic layer, in a build under the default.
+ * Keeps the text of a stylesheet that holds the atomic layer, in a build under the default, and
+ * forgets what an earlier edit of it kept once it holds none.
  */
 function rememberLayer(context: UsedContext, key: string, text: string): void {
-  if (context.command !== 'build' || !isUsed(context) || !isHoldingAtomicLayer(text)) return
-  context.state.sheets.set(key, text)
+  if (context.command !== 'build' || !isUsed(context)) return
+  const isPossible = text.includes('\\') || /layer/i.test(text)
+  if (isPossible && inspectAtomicLayer(text).hasLayer) context.state.sheets.set(key, text)
+  else context.state.sheets.delete(key)
 }
 
 /**

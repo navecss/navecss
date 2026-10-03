@@ -45,6 +45,7 @@ function unmatchedKeys(context: UsedContext): string[] {
 export function emittedSet(
   context: UsedContext,
   environment: EnvironmentLike,
+  warn?: (message: string) => void,
 ): ReadonlySet<string> {
   const { state } = context
   if (state.emitted) return state.emitted
@@ -54,13 +55,17 @@ export function emittedSet(
   const hasServerSet = waiting !== undefined && waiting.writer !== 'client'
   if (hasServerSet) for (const atom of waiting.emitted) atoms.add(atom)
   state.emitted = atoms
-  writeHandshake(context.cacheDir, {
-    emitted: [...atoms],
-    writer: 'client',
-    consumed: hasServerSet,
-    keepFor: packageRecords(context),
-    unmatchedKeepFor: unmatchedKeys(context),
-  })
+  writeHandshake(
+    context.cacheDir,
+    {
+      emitted: [...atoms],
+      writer: 'client',
+      consumed: hasServerSet,
+      keepFor: packageRecords(context),
+      unmatchedKeepFor: unmatchedKeys(context),
+    },
+    warn,
+  )
   return atoms
 }
 
@@ -94,11 +99,12 @@ export function checkServerInvocation(ctx: RenderContext, context: UsedContext):
   const atoms = new Set(recordsOf(context.state, ctx.environment.name).flatMap((r) => [...r.atoms]))
   const file = readHandshake(context.cacheDir)
   if (file?.writer !== 'client') {
-    writeHandshake(context.cacheDir, {
-      emitted: [...new Set([...atoms, ...(file?.emitted ?? [])])],
-      writer: ctx.environment.name,
-      consumed: false,
-    })
+    const emitted = [...new Set([...atoms, ...(file?.emitted ?? [])])]
+    writeHandshake(
+      context.cacheDir,
+      { emitted, writer: ctx.environment.name, consumed: false },
+      (message) => ctx.warn(message),
+    )
     return
   }
   if (file.consumed) {
@@ -108,6 +114,6 @@ export function checkServerInvocation(ctx: RenderContext, context: UsedContext):
     return
   }
   const missing = [...atoms].filter((atom) => !file.emitted.includes(atom)).toSorted(compareText)
-  writeHandshake(context.cacheDir, { ...file, consumed: true })
+  writeHandshake(context.cacheDir, { ...file, consumed: true }, (message) => ctx.warn(message))
   if (missing.length > 0) ctx.error(missingFromClient(ctx, context, missing))
 }

@@ -11,7 +11,7 @@ line and column and how to fix it. A Nave class built from pieces (`'nave-' + to
 build the same way. Next.js, webpack and the PostCSS plugin ship every atom, as before.
 
 New: `cx.dynamic(name)` on `@navecss/core/cx`, for a name known only at run time. Under the Vite
-plugin it applies a class only for an atom listed in `keep`; anywhere else it maps like `cx()`,
+plugin it applies a class only for an atom listed in `keep` or in a `keepFor` list; anywhere else it maps like `cx()`,
 except that a name that is no atom returns `''` where `cx()` returns it unchanged.
 
 New Vite plugin options: `keep`, the atoms always shipped; `keepFor`, by package name, the atoms a

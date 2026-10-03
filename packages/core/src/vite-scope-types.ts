@@ -70,12 +70,13 @@ export function functionScopeOf(scope: Scope): Scope {
 }
 
 /**
- * Declares a binding in `scope`; a second declaration of the same name is a write to the first.
+ * Declares a binding in `scope`. A second declaration of the same name is a write to the first,
+ * unless it assigns nothing (`var name` after `var name = 'flex'`).
  */
-export function declare(scope: Scope, binding: Binding): Binding {
+export function declare(scope: Scope, binding: Binding, isAssigning = true): Binding {
   const existing = scope.bindings.get(binding.name)
   if (existing) {
-    existing.writes += 1
+    if (isAssigning) existing.writes += 1
     return existing
   }
   scope.bindings.set(binding.name, binding)

@@ -60,12 +60,19 @@ describe('AC-used-atoms-27 — the emitted set, and nothing outside the layer ch
   })
 
   it('keeps a consumer rule in the layer byte for byte, and everything outside the layer', () => {
-    expect(kept).toContain('.brand-x { color: red; }')
-    expect(kept).toContain('.outside .nave-hidden { color: red; }')
-    expect(kept).toContain('@layer overrides { .menu .nave-hidden { color: red; } }')
-    expect(kept.slice(0, kept.indexOf('@layer atomic {'))).toBe(
-      NESTED.slice(0, NESTED.indexOf('@layer atomic {')),
-    )
+    const expected = `
+@layer tokens, reset, atomic, overrides;
+.outside .nave-hidden { color: red; }
+@layer atomic {
+  .nave-flex { display: flex; }
+  .nave-grid { display: grid; }
+  .brand-x { color: red; }
+  .nave-grid > .child { color: red; }
+}
+@layer overrides { .menu .nave-hidden { color: red; } }
+`
+
+    expect(kept).toBe(expected)
   })
 
   it('removes a rule whose selector holds an unemitted atom class whatever else it holds', () => {

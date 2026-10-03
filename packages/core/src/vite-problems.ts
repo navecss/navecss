@@ -48,5 +48,6 @@ export function compareText(a: string, b: string): number {
  * The first `limit` characters of `text`, then `...` when it was longer.
  */
 export function cut(text: string, limit = 40): string {
-  return text.length > limit ? `${text.slice(0, limit)}...` : text
+  const oneLine = text.replaceAll(/\s+/g, ' ')
+  return oneLine.length > limit ? `${oneLine.slice(0, limit)}...` : oneLine
 }

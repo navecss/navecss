@@ -86,14 +86,16 @@ export interface RootState {
   readonly warned: Set<string>
 }
 
-const registry = new Map<string, RootState>()
+// Weakly held: a state lives as long as a plugin instance of its build does, so a long-lived
+// process that builds many projects does not keep every project's state.
+const registry = new Map<string, WeakRef<RootState>>()
 
 /**
  * The state for `root` under the resolved config `config`: the existing one when this config made
  * it, a new one otherwise.
  */
 export function stateFor(root: string, config: object): RootState {
-  const existing = registry.get(root)
+  const existing = registry.get(root)?.deref()
   if (existing?.config === config) return existing
   const fresh: RootState = {
     config,
@@ -108,7 +110,7 @@ export function stateFor(root: string, config: object): RootState {
     clientEnded: false,
     warned: new Set(),
   }
-  registry.set(root, fresh)
+  registry.set(root, new WeakRef(fresh))
   return fresh
 }
 

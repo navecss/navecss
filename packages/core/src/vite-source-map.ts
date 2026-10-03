@@ -36,18 +36,21 @@ export interface Place {
 }
 
 /**
+ * A line terminator as ECMAScript and source maps count one: `\r\n` is a single break.
+ */
+const LINE_TERMINATOR = /\r\n|[\n\r\u{2028}\u{2029}]/gu
+
+/**
  * The 1-based line and column of `offset` in `code`.
  */
 function placeIn(code: string, offset: number): Place {
   let line = 1
   let lineStart = 0
-  for (
-    let index = code.indexOf('\n');
-    index !== -1 && index < offset;
-    index = code.indexOf('\n', index + 1)
-  ) {
+  for (const match of code.matchAll(LINE_TERMINATOR)) {
+    const end = match.index + match[0].length
+    if (end > offset) break
     line += 1
-    lineStart = index + 1
+    lineStart = end
   }
   return { line, column: offset - lineStart + 1 }
 }

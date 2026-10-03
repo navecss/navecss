@@ -6,6 +6,7 @@
  */
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { atomClassMap } from '../src/atoms.ts'
@@ -21,7 +22,7 @@ import {
 
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 const FIXTURES = path.join(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   'fixtures/generated/used-atoms',
 )
 

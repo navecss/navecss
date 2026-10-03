@@ -107,16 +107,19 @@ function inReportOrder(problems: readonly LocatedProblem[]): LocatedProblem[] {
 }
 
 /**
- * The lines of the problems, with the calls of `cx.dynamic()` that apply no class gathered under
- * their own count.
+ * The lines of the problems: the application's, then the calls of `cx.dynamic()` that apply no
+ * class in the application under their own count, then the dependencies'.
  */
 function problemLines(problems: readonly LocatedProblem[]): string[] {
   const ordered = inReportOrder(problems)
-  const dynamic = ordered.filter(
-    (problem) => problem.kind === 'dynamic' && problem.pkg === undefined,
+  const isApplicationDynamic = (problem: LocatedProblem): boolean =>
+    problem.kind === 'dynamic' && problem.pkg === undefined
+  const application = ordered.filter(
+    (problem) => problem.pkg === undefined && !isApplicationDynamic(problem),
   )
-  const rest = ordered.filter((problem) => !dynamic.includes(problem))
-  const lines = rest.map((problem) => problemLine(problem))
+  const dynamic = ordered.filter((problem) => isApplicationDynamic(problem))
+  const dependencies = ordered.filter((problem) => problem.pkg !== undefined)
+  const lines = application.map((problem) => problemLine(problem))
   if (dynamic.length > 0) {
     const places = dynamic.length === 1 ? '1 place' : `${dynamic.length} places`
     lines.push(
@@ -124,7 +127,7 @@ function problemLines(problems: readonly LocatedProblem[]): string[] {
       ...dynamic.map((problem) => problemLine(problem)),
     )
   }
-  return lines
+  return [...lines, ...dependencies.map((problem) => problemLine(problem))]
 }
 
 /**

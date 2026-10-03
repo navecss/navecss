@@ -22,7 +22,12 @@ import { ownAtomNames } from './vite-used.ts'
  * Vue template reading its component's bindings off `$setup`.
  */
 export function isMentioningAtoms(code: string): boolean {
-  return code.includes(CX_SOURCE) || code.includes('nave-') || code.includes('$setup')
+  return (
+    code.includes(CX_SOURCE) ||
+    code.includes('nave-') ||
+    code.includes('$setup') ||
+    code.includes('vue&type=')
+  )
 }
 
 /**
@@ -115,7 +120,8 @@ export async function recordModule(
   const key = moduleKey(ctx.environment?.name ?? 'client', id)
   const program = isMentioningAtoms(code) ? parseOrUndefined(ctx, code) : undefined
   if (!program) {
-    if (!isMentioningAtoms(code)) context.state.modules.delete(key)
+    // A module that no longer mentions atoms, or no longer parses, leaves nothing of its last read.
+    context.state.modules.delete(key)
     return undefined
   }
   const isDependency = isDependencyId(id)
@@ -125,6 +131,7 @@ export async function recordModule(
     cxSources: new Set([CX_SOURCE]),
     ownAtoms: await ownAtomNames(context),
     isDependency,
+    isVueScript: /\.vue(?:$|\?)/.test(id),
     setup: await setupExposuresFor(context, ctx, { program, code, id }),
   })
   if (reading.exposes.size > 0) context.state.exposures.set(key, reading.exposes)

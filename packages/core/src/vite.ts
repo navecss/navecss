@@ -103,10 +103,9 @@ export type NavePlugins = [NaveVitePlugin, NaveCollectPlugin]
  */
 export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
   const extend = createExtendSource(options.extend)
-  assertOptions(
-    options,
-    new Set(Object.keys(typeof options.extend === 'object' ? options.extend : {})),
-  )
+  const ownAtoms = typeof options.extend === 'object' ? options.extend : undefined
+  assertOptions(options, new Set(Object.keys(ownAtoms ?? {})))
+
   const context = createUsedContext(resolveUsedOptions(options), extend)
   const stylesheets = createStylesheets(context, extend, options.onUnknown ?? 'error')
 
@@ -139,7 +138,9 @@ export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
         this,
         chunk,
         context.state,
-        emittedSet(context, this.environment),
+        emittedSet(context, this.environment, (message) => {
+          this.warn(message)
+        }),
       )
     },
 
@@ -147,7 +148,13 @@ export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
       order: 'post',
       handler(_options, bundle) {
         if (isUsed(context) && this.environment?.config.consumer === 'client') {
-          checkAtomicLayers(this, bundle, emittedSet(context, this.environment))
+          checkAtomicLayers(
+            this,
+            bundle,
+            emittedSet(context, this.environment, (message) => {
+              this.warn(message)
+            }),
+          )
         }
         scanBundle(this, bundle)
       },

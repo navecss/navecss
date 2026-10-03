@@ -209,5 +209,13 @@ export function ruleBodyFor(css: string, name: string): string | undefined {
  * Closes a dev server, giving up after `ms` on one whose dependency optimizer is still crawling.
  */
 export async function stopDev(server: ViteDevServer, ms = 5000): Promise<void> {
-  await Promise.race([server.close(), new Promise((resolve) => setTimeout(resolve, ms))])
+  let timer: NodeJS.Timeout | undefined
+  const giveUp = new Promise((resolve) => {
+    timer = setTimeout(resolve, ms)
+  })
+  try {
+    await Promise.race([server.close(), giveUp])
+  } finally {
+    clearTimeout(timer)
+  }
 }

@@ -9,6 +9,11 @@ import { nodeAt, stringAt } from './vite-ast.ts'
 export interface Reading {
   readonly analysis: ScopeAnalysis
   readonly code: string
+  /**
+   * Whether the module is a compiled Vue component's script, the one place a getter that returns
+   * the binding exposes it to the template instead of using it.
+   */
+  readonly allowsExposure?: boolean
 }
 
 type Phrase = (reading: Reading, parent: AstNode, local: string) => string

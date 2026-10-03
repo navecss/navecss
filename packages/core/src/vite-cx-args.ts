@@ -83,12 +83,28 @@ function identifierValue(node: AstNode, context: Context): Possible[] | undefine
 }
 
 /**
- * `a && X` is `X` or something `cx()` filters out; `a || X` and `a ?? X` are either side.
+ * What a literal operand decides about `&&`, `||` and `??`: whether it is falsy, and whether it is
+ * nullish. `undefined` for anything that is not a literal.
+ */
+function operandOf(
+  node: AstNode | undefined,
+): { isFalsy: boolean; isNullish: boolean } | undefined {
+  if (node?.type !== 'Literal') return undefined
+  const { value } = node
+  return { isFalsy: !value, isNullish: value === null }
+}
+
+/**
+ * `a && X` is `X` or something `cx()` filters out; `a || X` and `a ?? X` are either side. A literal
+ * left operand can decide the call alone, and then the other side is never read.
  */
 function logicalValue(node: AstNode, context: Context): Possible[] | undefined {
+  const left = nodeAt(node, 'left')
   const right = nodeAt(node, 'right')
-  if (node.operator === '&&') return possibles(right, context)
-  return unionOf([nodeAt(node, 'left'), right], context)
+  const operand = operandOf(left)
+  if (node.operator === '&&') return operand?.isFalsy ? [] : possibles(right, context)
+  const isDecided = node.operator === '||' ? operand?.isFalsy : operand?.isNullish
+  return isDecided === false ? possibles(left, context) : unionOf([left, right], context)
 }
 
 /**

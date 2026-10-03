@@ -25,8 +25,9 @@ export function isBuiltInAtom(name: string): boolean {
  */
 export function hintFor(name: string): string | undefined {
   const text = formatDiagnostic({ code: 'unknown-atom', name, offset: 0, endOffset: 0 })
-  const marker = text.indexOf('Did you mean')
-  return marker === -1 ? undefined : text.slice(marker)
+  // Only what follows the sentence naming the atom, so text inside the name is never a hint.
+  const hint = text.slice(`@nave: unknown atom "${name}". `.length)
+  return hint.startsWith('Did you mean') ? hint : undefined
 }
 
 /**

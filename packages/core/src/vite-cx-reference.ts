@@ -152,6 +152,7 @@ function isReturnedObject(declarator: AstNode | undefined): boolean {
  * is exposed to the template, and its calls are read where the template is compiled.
  */
 function exposureName(reading: Reading, expression: AstNode): string | undefined {
+  if (reading.allowsExposure !== true) return undefined
   const getter = ancestor(reading, expression, 4)
   const isGetter = getter?.type === 'Property' && getter.kind === 'get'
   const isReturn = ancestor(reading, expression, 1)?.type === 'ReturnStatement'
@@ -212,5 +213,5 @@ export function useOf(reading: Reading, reference: Reference, cx: CxBinding): Cx
     nodeAt(member, 'object') === expression &&
     propertyNameOf(nodeAt(member, 'property'), member.computed === true) === 'cx'
   if (!isCx) return refused(expression, local, `${local} is used other than as ${local}.cx`)
-  return useOfExpression(reading, member, local)
+  return useOfExpression(reading, member, `${local}.cx`)
 }

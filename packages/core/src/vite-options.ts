@@ -10,8 +10,8 @@ import { hintFor, isBuiltInAtom } from './vite-atom-check.ts'
 export interface UsedAtomOptions {
   /**
    * Which atoms the build ships. `'used'` (the default): the atoms your `cx()` calls and your
-   * written Nave classes name, plus those in `keep` and `keepFor`, and no others, in the dev
-   * server as in the build; a `cx()` call whose atoms the build cannot read fails the build.
+   * written Nave classes name, plus those in `keep` and `keepFor`, and no others, in the build; a
+   * `cx()` call whose atoms the build cannot read fails the build.
    * `'all'`: every atom, and no `cx()` call is read, as with the PostCSS plugin.
    */
   atomic?: 'all' | 'used'
@@ -66,7 +66,8 @@ function problemWithName(
  */
 function problemsInList(where: string, list: unknown, own: ReadonlySet<string>): string[] {
   if (!Array.isArray(list)) return [`navePlugin(): ${where} must be an array of atom names.`]
-  return list.flatMap((name: unknown) => problemWithName(where, name, own) ?? [])
+  // `Array.from` reads a hole as `undefined`, so a sparse list is refused like any other bad name.
+  return Array.from(list as unknown[], (name) => problemWithName(where, name, own) ?? []).flat()
 }
 
 /**

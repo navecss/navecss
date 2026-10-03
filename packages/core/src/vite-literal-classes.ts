@@ -82,7 +82,7 @@ interface Piece {
 /**
  * The string at the right edge of `node`, when `node` ends in one: what is concatenated next.
  */
-function rightmostPiece(start: AstNode | undefined): Piece | undefined {
+function edgePiece(start: AstNode | undefined): Piece | undefined {
   let node = start
   while (node?.type === 'BinaryExpression' && node.operator === '+') node = nodeAt(node, 'right')
   if (!node) return undefined
@@ -91,6 +91,19 @@ function rightmostPiece(start: AstNode | undefined): Piece | undefined {
   if (node.type !== 'TemplateLiteral') return undefined
   const cooked = (nodesAt(node, 'quasis').at(-1)?.value as { cooked?: string } | undefined)?.cooked
   return cooked === undefined ? undefined : { node, text: cooked }
+}
+
+/**
+ * The string `node` ends in, joined with the adjacent string literals before it in a `+` chain,
+ * so a prefix split across literals (`'na' + 've-'`) reads as one. The piece's node is the first
+ * literal of the run, where the problem is reported.
+ */
+function rightmostPiece(node: AstNode | undefined): Piece | undefined {
+  const last = edgePiece(node)
+  if (!last || node?.type !== 'BinaryExpression' || node.operator !== '+') return last
+  const before = rightmostPiece(nodeAt(node, 'left'))
+  const isAdjacent = before !== undefined && nodeAt(node, 'right') === last.node
+  return isAdjacent ? { node: before.node, text: before.text + last.text } : last
 }
 
 /**
@@ -112,6 +125,38 @@ function concatenatedPiece(node: AstNode): Piece | undefined {
   if (node.type !== 'BinaryExpression' || node.operator !== '+') return undefined
   const piece = rightmostPiece(nodeAt(node, 'left'))
   return piece && isEndingInNavePrefix(piece.text) ? piece : undefined
+}
+
+/**
+ * The raw and the decoded text of a string literal or a template piece written with an escape, or
+ * `undefined` for any other node.
+ */
+function escapedText(node: AstNode): { decoded: string; raw: string } | undefined {
+  if (node.type === 'Literal' && typeof node.value === 'string') {
+    return { raw: String(node.raw), decoded: node.value }
+  }
+  if (node.type !== 'TemplateElement') return undefined
+  const { raw, cooked } = node.value as { cooked?: string; raw?: string }
+  if (!cooked || !raw?.includes('\\')) return undefined
+  return { raw, decoded: cooked }
+}
+
+/**
+ * The atoms whose class a string written with escapes spells once decoded (`'nave-\x66lex'`):
+ * the text scan reads the source as written, so it cannot see these.
+ */
+export function atomsInEscapedStrings(program: AstNode): Set<string> {
+  const found = new Set<string>()
+  const stack: AstNode[] = [program]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    const text = escapedText(node)
+    if (text?.raw.includes('\\')) {
+      for (const atom of atomsWrittenIn(text.decoded)) found.add(atom)
+    }
+    stack.push(...childrenOf(node))
+  }
+  return found
 }
 
 const SENTENCE =

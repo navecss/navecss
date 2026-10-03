@@ -74,11 +74,13 @@ export function readHandshake(cacheDir: string): Handshake | undefined {
 }
 
 /**
- * Writes the file; a cache directory that cannot be written is not an error.
+ * Writes the file. A cache directory that cannot be written does not fail the build, but the other
+ * invocation then cannot share its atoms, so `warn` says so.
  */
 export function writeHandshake(
   cacheDir: string,
   fields: Omit<Handshake, 'build' | 'writtenAt'> & Partial<Pick<Handshake, 'build' | 'writtenAt'>>,
+  warn?: (message: string) => void,
 ): void {
   if (cacheDir === '') return
   const handshake: Handshake = {
@@ -90,7 +92,10 @@ export function writeHandshake(
   try {
     mkdirSync(cacheDir, { recursive: true })
     writeFileSync(handshakePath(cacheDir), `${JSON.stringify(handshake, undefined, 2)}\n`)
-  } catch {
-    // The check it enables is then skipped, which is the safe direction.
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    warn?.(
+      `navePlugin(): could not write ${handshakePath(cacheDir)} (${reason}), so a build of the client and a build of the server run as two processes cannot share their atoms.`,
+    )
   }
 }

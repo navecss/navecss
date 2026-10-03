@@ -13,7 +13,11 @@ import { judgeAtom } from './vite-atom-check.ts'
 import { resolveArgument } from './vite-cx-args.ts'
 import { cxBindingsOf, isImportingCx } from './vite-cx-bindings.ts'
 import { useOf, useOfExpression } from './vite-cx-reference.ts'
-import { atomsWrittenIn, concatenationProblems } from './vite-literal-classes.ts'
+import {
+  atomsInEscapedStrings,
+  atomsWrittenIn,
+  concatenationProblems,
+} from './vite-literal-classes.ts'
 import { analyze } from './vite-scope.ts'
 import { setupMemberName } from './vite-setup-member.ts'
 import { cxReadsOnSetup, stringExposures } from './vite-vue-setup.ts'
@@ -38,6 +42,10 @@ export interface ReadOptions {
    * For a compiled Vue template: what its component's script exposes to it.
    */
   readonly setup?: SetupExposures | undefined
+  /**
+   * Whether the module is a compiled Vue component's `<script setup>`.
+   */
+  readonly isVueScript?: boolean
 }
 
 export interface ModuleReading {
@@ -244,7 +252,7 @@ function readUses(reading: Reading, program: AstNode): void {
   const { code, options, result } = reading
   const analysis = analyze(program)
   const bindings = cxBindingsOf(analysis, options.cxSources)
-  const frame = { analysis, code }
+  const frame = { analysis, code, allowsExposure: options.isVueScript === true }
   for (const reference of analysis.references) {
     const cx = reference.binding && bindings.get(reference.binding)
     const use = cx && useOf(frame, reference, cx)
@@ -273,6 +281,7 @@ export function readModule(code: string, program: AstNode, options: ReadOptions)
   readUses(reading, program)
   readSourceForms(reading, program)
   for (const atom of atomsWrittenIn(code)) result.classes.add(atom)
+  for (const atom of atomsInEscapedStrings(program)) result.classes.add(atom)
   if (result.usesCx || !options.isDependency) {
     for (const problem of concatenationProblems(program, code)) report(reading, problem)
   }

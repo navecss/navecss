@@ -54,7 +54,8 @@ function expressionKeys(node: AstNode, others: readonly string[]): string[] {
 }
 
 /**
- * A `for (x in y)` / `for (x of y)` loop: the head binds in a scope of its own.
+ * A `for (x in y)` / `for (x of y)` loop: the head binds in a scope of its own, and the iterable
+ * is read in the scope around the loop, before the loop's binding exists.
  */
 function visitLoop(node: AstNode, scope: Scope, walker: Walker): void {
   const inner = newScope(scope, false)
@@ -67,12 +68,14 @@ function visitLoop(node: AstNode, scope: Scope, walker: Walker): void {
   } else {
     writeTargets(left, inner, walker)
   }
-  visitKeys(node, ['right', 'body'], inner, walker)
+  visitKeys(node, ['right'], scope, walker)
+  visitKeys(node, ['body'], inner, walker)
 }
 
 /**
- * A function: parameters and body share one scope, entered after the function's own name (for an
- * expression) is bound in a scope around it.
+ * A function: the parameters (and their default values) live in one scope, entered after the
+ * function's own name (for an expression) is bound in a scope around it, and a block body in a
+ * scope of its own inside it, since a default value cannot see what the body declares.
  */
 function visitFunction(node: AstNode, scope: Scope, walker: Walker): void {
   let outer = scope
@@ -81,16 +84,16 @@ function visitFunction(node: AstNode, scope: Scope, walker: Walker): void {
     outer = newScope(scope, false)
     declare(outer, { name: stringAt(id, 'name') ?? '', kind: 'function', writes: 0 })
   }
-  const inner = newScope(outer, true)
+  const parameters = newScope(outer, true)
   for (const param of nodesAt(node, 'params')) {
-    declarePattern(param, { kind: 'param' }, inner, walker)
+    declarePattern(param, { kind: 'param' }, parameters, walker)
   }
   const body = nodeAt(node, 'body')
   if (body?.type === 'BlockStatement') {
     walker.parentOf.set(body, node)
-    visitChildren(body, inner, walker)
+    visitChildren(body, newScope(parameters, true), walker)
   } else {
-    visitKeys(node, ['body'], inner, walker)
+    visitKeys(node, ['body'], parameters, walker)
   }
 }
 

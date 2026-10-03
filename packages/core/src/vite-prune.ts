@@ -134,7 +134,7 @@ function pruneRegion(sheet: Sheet, from: number, to: number, emitted: ReadonlySe
   let out = ''
   for (const statement of statements) out += pruneStatement(sheet, statement, emitted)
   const last = statements.at(-1)
-  return last ? out + sheet.slice(last.to, to) : out
+  return last ? out + sheet.slice(last.to, to) : sheet.slice(from, to)
 }
 
 /**
@@ -157,7 +157,7 @@ function pruneStatement(sheet: Sheet, statement: Statement, emitted: ReadonlySet
  * `css` with every rule in an `@layer atomic` block that names an atom outside `emitted` removed.
  */
 export function pruneAtomicLayer(css: string, emitted: ReadonlySet<string>): string {
-  if (!css.includes('atomic')) return css
+  if (!css.includes('@')) return css
   const sheet = readSheet(css)
   let out = ''
   let cursor = 0
@@ -192,7 +192,7 @@ function collectAtoms(sheet: Sheet, from: number, to: number, atoms: Set<string>
  */
 export function inspectAtomicLayer(css: string): LayerReading {
   const atoms = new Set<string>()
-  if (!css.includes('atomic')) return { hasLayer: false, atoms }
+  if (!css.includes('@')) return { hasLayer: false, atoms }
   const sheet = readSheet(css)
   let hasLayer = false
   for (const statement of sheet.statements(0, sheet.tokens.length)) {
