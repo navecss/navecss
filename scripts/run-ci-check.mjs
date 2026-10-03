@@ -62,6 +62,7 @@ const CONCURRENT_STEPS = 2
  * cycle, which would leave its members waiting forever.
  */
 export function validateSteps(steps) {
+  if (steps.length === 0) throw new Error('The step list is empty.')
   const names = new Set()
   for (const step of steps) {
     if (names.has(step.name)) throw new Error(`${step.name} is declared twice.`)
@@ -183,20 +184,24 @@ export function stepEnvironment(env, makeCacheDir) {
   const forced = env.TURBO_FORCE !== undefined && !['', '0', 'false'].includes(env.TURBO_FORCE)
   if (!forced) return env
   const rest = Object.fromEntries(Object.entries(env).filter(([key]) => key !== 'TURBO_FORCE'))
-  return { ...rest, TURBO_CACHE_DIR: makeCacheDir() }
+  // Local only: a configured remote cache would otherwise still answer with hits.
+  return { ...rest, TURBO_CACHE: 'local:rw', TURBO_CACHE_DIR: makeCacheDir() }
 }
 
 /**
  * Runs `pnpm run <name>` in `env` with its stdout and stderr captured, in arrival order, into
  * one string. `pnpm` is the very pnpm that started this gate (`pnpmEntry`, from
- * `npm_execpath`), run by this Node, so no step depends on what `PATH` resolves `pnpm` to.
+ * `npm_execpath`), run by this Node, so no step depends on what `PATH` resolves `pnpm` to. The
+ * child is in `running` while it runs, so an interrupted gate can stop it.
  */
-function runPnpmScript(name, env, pnpmEntry) {
+function runPnpmScript(name, env, pnpmEntry, running) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [pnpmEntry, 'run', name], {
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
+    running.add(child)
+    child.on('exit', () => running.delete(child))
     const chunks = []
     child.stdout.on('data', (chunk) => chunks.push(chunk))
     child.stderr.on('data', (chunk) => chunks.push(chunk))
@@ -243,13 +248,33 @@ async function main(env = process.env) {
   if (process.stdout.isTTY) stepEnv.FORCE_COLOR = '1'
   console.log(`ci:check: running ${names.length} steps: ${names.join(', ')}`)
   if (freshCacheDir) console.log(`ci:check: TURBO_FORCE is set, so every step uses an empty cache`)
+
+  // An interrupted gate stops the steps it started and starts no more, then unwinds normally (a
+  // summary, and the cache directory removed) instead of leaving steps rebuilding dist/ after
+  // the gate has exited.
+  const running = new Set()
+  let interrupted
+  const stop = (signal) => {
+    interrupted = signal
+    process.exitCode = signal === 'SIGINT' ? 130 : 143
+    for (const child of running) child.kill(signal)
+  }
+  process.once('SIGINT', stop)
+  process.once('SIGTERM', stop)
+
   try {
-    const results = await runSteps(STEPS, (name) => runPnpmScript(name, stepEnv, pnpmEntry), {
+    const runStep = (name) =>
+      interrupted
+        ? Promise.resolve({ code: 1, output: `not started: ci:check received ${interrupted}\n` })
+        : runPnpmScript(name, stepEnv, pnpmEntry, running)
+    const results = await runSteps(STEPS, runStep, {
       limit: CONCURRENT_STEPS,
       onStepDone: printStep,
     })
     console.log(`\n${formatSummary(names, results)}`)
-    if (names.some((name) => results.get(name).status !== 'passed')) process.exitCode = 1
+    if (!interrupted && names.some((name) => results.get(name).status !== 'passed')) {
+      process.exitCode = 1
+    }
   } finally {
     if (freshCacheDir) rmSync(freshCacheDir, { force: true, recursive: true })
   }

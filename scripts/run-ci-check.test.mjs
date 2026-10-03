@@ -8,7 +8,10 @@
  * same files.
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { test } from 'node:test'
+import { fileURLToPath } from 'node:url'
 
 import { formatSummary, runSteps, stepEnvironment, STEPS, validateSteps } from './run-ci-check.mjs'
 
@@ -163,6 +166,10 @@ test('validateSteps refuses an `after` that names no step', () => {
   )
 })
 
+test('validateSteps refuses an empty step list, which would otherwise pass with nothing run', () => {
+  assert.throws(() => validateSteps([]), /The step list is empty/)
+})
+
 test('validateSteps refuses a step declared twice', () => {
   assert.throws(
     () =>
@@ -193,6 +200,8 @@ test('a forced run (TURBO_FORCE) becomes one fresh, empty turbo cache shared by 
   assert.equal(env.TURBO_FORCE, undefined)
   assert.equal(env.TURBO_CACHE_DIR, '/tmp/fresh-cache')
   assert.equal(env.PATH, '/bin')
+  // A remote cache would still answer with hits, so a forced run reads and writes local only.
+  assert.equal(env.TURBO_CACHE, 'local:rw')
 })
 
 test('TURBO_FORCE=false is not a forced run', () => {
@@ -237,6 +246,13 @@ test('test:browser waits for test: both regenerate core’s test/browser/fixture
 
 test('scripts:test waits for check:pack: it runs core’s check:pack itself, in the same directory', () => {
   assert.ok(after('scripts:test').includes('check:pack'))
+})
+
+test('package.json runs this runner as ci:check, and ci:check:fix runs ci:check', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const { scripts } = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+  assert.equal(scripts['ci:check'], 'node scripts/run-ci-check.mjs')
+  assert.match(scripts['ci:check:fix'], /&& pnpm run ci:check$/)
 })
 
 test('test:coverage is not a step: the test step already measures coverage', () => {

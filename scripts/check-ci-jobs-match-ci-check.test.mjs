@@ -82,6 +82,23 @@ test('findStepRuns reads `pnpm run <x>` and the `pnpm <step>` shorthand, and ign
   )
 })
 
+test('findStepRuns counts pnpm only where a command starts, never as text inside another one', () => {
+  assert.deepEqual(findStepRuns('echo pnpm run knip', STEP_NAMES), [])
+  assert.deepEqual(
+    findStepRuns('true && pnpm run lint; pnpm test | tee log', STEP_NAMES).map((run) => run.target),
+    ['lint', 'test'],
+  )
+})
+
+test('findStepRuns joins a line continuation and does not read a redirect as an argument', () => {
+  assert.deepEqual(findStepRuns('pnpm run test \\\n  -- --coverage.enabled=false', STEP_NAMES), [
+    { args: '-- --coverage.enabled=false', target: 'test' },
+  ])
+  assert.deepEqual(findStepRuns('pnpm run test > log 2>&1', STEP_NAMES), [
+    { args: '', target: 'test' },
+  ])
+})
+
 test('findStepRuns ignores a commented-out shell line', () => {
   assert.deepEqual(findStepRuns('# pnpm run build\necho ok', STEP_NAMES), [])
 })

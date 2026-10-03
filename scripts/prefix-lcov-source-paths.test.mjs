@@ -181,6 +181,22 @@ test('the real repo has no .sonarcloud.properties: a CI-driven scan reads sonar-
   assert.equal(existsSync(path.join(ROOT, '.sonarcloud.properties')), false)
 })
 
+/**
+True when a vitest config's `coverage` block sets `enabled: true` on a line that is not a comment.
+ */
+function coverageTurnedOn(configText) {
+  const code = configText
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n')
+  return /coverage:\s*\{[^}]*\benabled:\s*true\b/.test(code)
+}
+
+test('coverageTurnedOn ignores a commented-out enabled: true', () => {
+  assert.equal(coverageTurnedOn("coverage: {\n  // enabled: true,\n  provider: 'v8',\n}"), false)
+  assert.equal(coverageTurnedOn("coverage: {\n  enabled: true,\n  provider: 'v8',\n}"), true)
+})
+
 test('sync with the real repo: packages whose test run writes coverage match sonar.javascript.lcov.reportPaths', () => {
   // A package's `test` writes a coverage report when its vitest config turns coverage on, so
   // that switch is what decides which lcov files exist for the scan to read.
@@ -190,7 +206,7 @@ test('sync with the real repo: packages whose test run writes coverage match son
     .filter((entry) => {
       try {
         const config = readFileSync(path.join(packagesDir, entry.name, 'vitest.config.ts'), 'utf8')
-        return /coverage:\s*\{[^}]*\benabled:\s*true\b/.test(config)
+        return coverageTurnedOn(config)
       } catch {
         return false
       }

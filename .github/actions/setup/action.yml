@@ -31,6 +31,19 @@ runs:
         # One cache per Node: the floor legs install a different Node from the same mise.toml.
         cache_key: '{{default}}-node{{env.MISE_NODE_VERSION}}'
 
+    # The floor legs exist to prove that Node, so check it is the one that will run.
+    - name: Confirm Node ${{ inputs.node-version }} is the one on the path
+      if: inputs.node-version != ''
+      shell: bash
+      env:
+        NODE_VERSION: ${{ inputs.node-version }}
+      run: |
+        actual="$(node --version)"
+        if [ "$actual" != "v$NODE_VERSION" ]; then
+          echo "Expected Node v$NODE_VERSION, got $actual." >&2
+          exit 1
+        fi
+
     - name: Resolve pnpm store path
       id: pnpm-cache
       shell: bash

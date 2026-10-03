@@ -150,24 +150,16 @@ function listWorkflowFiles() {
 }
 
 /**
- * Composite action metadata files under `.github/actions/`, as paths relative to the
- * repository root, sorted. An absent directory is zero actions, not a failure.
+ * Composite action metadata files anywhere under `.github/actions/` (an action may sit in a
+ * nested directory, `./.github/actions/<group>/<name>`), as paths relative to the repository
+ * root, sorted. An absent directory is zero actions, not a failure.
  */
 function listCompositeActionFiles() {
-  let entries
-  try {
-    entries = readdirSync(ACTIONS_DIR, { withFileTypes: true })
-  } catch (error) {
-    if (error.code === 'ENOENT') return []
-    throw error
-  }
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .flatMap((entry) =>
-      ['action.yml', 'action.yaml']
-        .filter((name) => existsSync(path.join(ACTIONS_DIR, entry.name, name)))
-        .map((name) => path.posix.join('.github', 'actions', entry.name, name)),
-    )
+  if (!existsSync(ACTIONS_DIR)) return []
+  return readdirSync(ACTIONS_DIR, { recursive: true })
+    .map((entry) => entry.split(path.sep).join('/'))
+    .filter((entry) => /(?:^|\/)action\.ya?ml$/.test(entry))
+    .map((entry) => path.posix.join('.github', 'actions', entry))
     .sort((a, b) => a.localeCompare(b))
 }
 

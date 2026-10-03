@@ -398,6 +398,20 @@ test('end to end: a tag-pinned reference inside a composite action exits 1 and n
   }
 })
 
+test('end to end: a composite action nested one directory deeper is read too', () => {
+  const dir = buildFixture(
+    { 'ci.yml': 'jobs:\n  build:\n    steps:\n      - uses: ./.github/actions/group/setup\n' },
+    { actions: { 'group/setup/action.yml': `${COMPOSITE_HEAD}    - uses: actions/cache@v6\n` } },
+  )
+  try {
+    const { status, stderr } = runScript(dir)
+    assert.equal(status, 1)
+    assert.match(stderr, /\.github\/actions\/group\/setup\/action\.yml:5: uses: actions\/cache@v6/)
+  } finally {
+    rmSync(dir, { force: true, recursive: true })
+  }
+})
+
 test('end to end: a pinned composite action is counted in the census', () => {
   const dir = buildFixture(
     { 'ci.yml': 'jobs:\n  build:\n    steps:\n      - uses: ./.github/actions/setup\n' },

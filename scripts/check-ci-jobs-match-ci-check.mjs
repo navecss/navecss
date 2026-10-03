@@ -100,18 +100,24 @@ export function extractJobs(workflowText) {
 }
 
 /**
- * The scripts one `run:` value runs through pnpm, as `{ target, args }`: every `pnpm run <x>`,
- * and every `pnpm <step>` shorthand naming one of `stepNames`, with whatever follows the name up
- * to the end of that command (`&&`, `||`, `;`, a pipe or a `#` comment). Shell comment lines are
- * ignored, and so is any other pnpm command (`pnpm install`, `pnpm --filter ... exec`).
+ * The scripts one `run:` value runs through pnpm, as `{ target, args }`: every command that
+ * STARTS with `pnpm run <x>`, or with the `pnpm <step>` shorthand naming one of `stepNames`, and
+ * the arguments that follow the name in that command. A command starts a line or follows `&&`,
+ * `||`, `;` or a pipe, so `echo pnpm run knip` runs no step. Line continuations are joined first,
+ * a redirect (`> log`, `2>&1`) is not an argument, and comments are ignored, as is any other pnpm
+ * command (`pnpm install`, `pnpm --filter ... exec`).
  */
 export function findStepRuns(runText, stepNames) {
   const found = []
-  for (const line of runText.split('\n')) {
-    if (line.trimStart().startsWith('#')) continue
-    for (const match of line.matchAll(/\bpnpm\s+(run\s+)?(\$\{\{[^}]*\}\}|[\w:-]+)([^&|;#]*)/g)) {
-      const [, run, target, args] = match
-      if (run || stepNames.includes(target)) found.push({ args: args.trim(), target })
+  const lines = runText.replaceAll(/\\\n\s*/g, ' ').split('\n')
+  for (const line of lines) {
+    const code = line.replace(/(^|\s)#.*$/, '')
+    for (const command of code.split(/&&|\|\||;|\|/)) {
+      const match = /^pnpm\s+(run\s+)?(\$\{\{[^}]*\}\}|[\w:-]+)(.*)$/.exec(command.trim())
+      if (!match) continue
+      const [, run, target, rest] = match
+      const args = rest.split(/\s*\d*[<>]/, 1)[0].trim()
+      if (run || stepNames.includes(target)) found.push({ args, target })
     }
   }
   return found

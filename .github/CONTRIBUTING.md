@@ -142,7 +142,8 @@ the suites once, with coverage, for the `sonar` job to scan. `build` and
 is the one deliberate repeat. `scripts/check-ci-jobs-match-ci-check.mjs`
 fails if a step is run by no job, by two jobs, or twice in one. Every job
 installs its toolchain through `.github/actions/setup`: mise-pinned
-(`mise.toml`, node and pnpm both exact-versioned there for CI), while
+(`mise.toml` pins node and pnpm exactly; the floor legs of `build` and
+`test` swap in Node 22.18 and check that it is the one running), while
 `package.json`'s `packageManager` field pins the same pnpm version for a
 local machine via corepack, so CI and a local machine run the identical
 toolchain from the same two numbers.
