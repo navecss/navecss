@@ -30,9 +30,11 @@ const ATOMIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../di
 /** The class name `toClassName('focusRing')` produces (src/atoms.ts). */
 const FOCUS_RING_CLASS = '.nave-focus-ring'
 
-/** Matches a genuine `outline` declaration whose value is not `none`/`0` — i.e. one
- * that actually renders in forced-colors mode. */
-const RENDERS_OUTLINE = /^outline$/i
+/** Matches a genuine outline declaration whose value is not `none`/`0` — i.e. one
+ * that actually renders in forced-colors mode. The ring is written as longhands
+ * (`outline-style: solid`) rather than the `outline` shorthand: a shorthand with an
+ * unresolvable `var()` is invalid as a whole and collapses to `outline: none`. */
+const RENDERS_OUTLINE = /^outline(-style)?$/i
 const OUTLINE_IS_NONE = /^\s*(none|0)\b/i
 
 /**
@@ -117,21 +119,62 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
     }
   })
 
-  // Pinning row: this file's whole purpose is guarding the
-  // shipped focus indicator, so it is the purpose-fit place to pin that the outline
-  // reads the focus-ring-specific width token, not a general-purpose one.
-  // The toHaveLength(1) guard is what keeps first-match ambiguity from ever masking
-  // a cascade winner, per the quality reviewer's terminal read on this case.
+  // Pinning rows: this file's whole purpose is guarding the shipped focus indicator, so it is the
+  // purpose-fit place to pin that the outline reads the focus-ring-specific tokens, not
+  // general-purpose ones, and that each read carries a fallback so a missing token layer still
+  // leaves a ring. The toHaveLength(1) guards keep first-match ambiguity from ever masking a
+  // cascade winner.
   it('reads the focus-ring-specific width token, not a general-purpose one', () => {
     const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
-    const renderingDecls = decls.filter(
-      (d) => RENDERS_OUTLINE.test(d.prop) && !OUTLINE_IS_NONE.test(d.value),
-    )
+    const widthDecls = decls.filter((d) => /^outline-width$/i.test(d.prop))
     expect(
-      renderingDecls,
-      'expected exactly one rendering outline declaration so the cascade winner is unambiguous',
+      widthDecls,
+      'expected exactly one outline-width declaration so the cascade winner is unambiguous',
     ).toHaveLength(1)
-    expect(renderingDecls[0]?.value).toMatch(/var\(--nave-border-width-focus\)/)
+    expect(widthDecls[0]?.value).toMatch(/^var\(--nave-border-width-focus,/)
+  })
+
+  it('reads the focus-ring-specific colour token, not a general-purpose one', () => {
+    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const colorDecls = decls.filter((d) => /^outline-color$/i.test(d.prop))
+    expect(
+      colorDecls,
+      'expected exactly one outline-color declaration so the cascade winner is unambiguous',
+    ).toHaveLength(1)
+    expect(colorDecls[0]?.value).toMatch(/^var\(--nave-color-border-focus,/)
+  })
+
+  // The ring must survive a missing, partial or wrong-typed token layer. A `var()` fallback covers
+  // the first two; the longhand split covers the third, because an invalid longhand falls back to
+  // its own initial value where an invalid `outline` shorthand falls back to `none` as a whole.
+  // The fallbacks themselves are pinned so that the degraded ring cannot quietly become an
+  // author-picked colour (it is the element's own text colour, which is never invisible against
+  // the element's own background) or a hairline.
+  it('draws a ring when the tokens are missing: longhands, never the outline shorthand', () => {
+    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const shorthandRings = decls.filter(
+      (d) => /^outline$/i.test(d.prop) && !OUTLINE_IS_NONE.test(d.value),
+    )
+
+    expect(
+      shorthandRings.map((d) => `${d.prop}: ${d.value}`),
+      `${FOCUS_RING_CLASS} must restore its ring through outline-style/-width/-color: a ` +
+        'shorthand holding an unresolvable var() is invalid as a whole and computes to none',
+    ).toEqual([])
+    expect(decls.filter((d) => /^outline-style$/i.test(d.prop)).map((d) => d.value)).toEqual([
+      'solid',
+    ])
+  })
+
+  it('falls back to the element’s own text colour and a ring of at least 2px', () => {
+    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const width = decls.find((d) => /^outline-width$/i.test(d.prop))?.value ?? ''
+    const color = decls.find((d) => /^outline-color$/i.test(d.prop))?.value ?? ''
+
+    expect(color).toMatch(/^var\(--nave-color-border-focus,\s*currentColor\)$/i)
+    const fallbackPx = /^var\(--nave-border-width-focus,\s*([\d.]+)px\)$/.exec(width)
+    expect(fallbackPx, 'the width fallback must be a px length').not.toBeNull()
+    expect(Number.parseFloat(fallbackPx![1]!)).toBeGreaterThanOrEqual(2)
   })
 
   // Absence assertion, the class the instance test in test/browser/ cannot

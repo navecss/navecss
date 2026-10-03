@@ -244,6 +244,10 @@ export const atoms = {
   /**
    * focusRing — keyboard focus indicator.
    * :focus-visible — keyboard users see it, mouse users do not.
+   *
+   * Longhands with fallbacks, not an `outline` shorthand: a shorthand holding an unresolved
+   * `var()` (no token layer, a layer missing the property, a wrong-typed value) is invalid as
+   * a whole and computes to `none`. The fallbacks are 2px and `currentColor`, never a colour.
    */
   focusRing: {
     declarations: {
@@ -251,7 +255,9 @@ export const atoms = {
     },
     pseudos: {
       ':focus-visible': {
-        outline: 'var(--nave-border-width-focus) solid var(--nave-color-border-focus)',
+        'outline-style': 'solid',
+        'outline-width': 'var(--nave-border-width-focus, 2px)',
+        'outline-color': 'var(--nave-color-border-focus, currentColor)',
         'outline-offset': '2px',
       },
     },

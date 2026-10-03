@@ -276,7 +276,7 @@ describe('nested frames left open at EOF each close only their own level, never 
     const { css } = expandText('.a { @nave focusRing; .b { @nave focusRing; .c {')
 
     expect(css).toBe(
-      '.a { outline: none; .b { outline: none; .c {} &:focus-visible { outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus); outline-offset: 2px }} &:focus-visible { outline: var(--nave-border-width-focus) solid var(--nave-color-border-focus); outline-offset: 2px }',
+      '.a { outline: none; .b { outline: none; .c {} &:focus-visible { outline-style: solid; outline-width: var(--nave-border-width-focus, 2px); outline-color: var(--nave-color-border-focus, currentColor); outline-offset: 2px }} &:focus-visible { outline-style: solid; outline-width: var(--nave-border-width-focus, 2px); outline-color: var(--nave-color-border-focus, currentColor); outline-offset: 2px }',
     )
   })
 
