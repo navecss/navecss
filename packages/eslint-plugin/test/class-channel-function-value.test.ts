@@ -33,6 +33,11 @@ describe('rule 1: a function className is read through its returned values', () 
           code: `${cxImport}const x = <div className={(s) => (s.open ? cx('flex') : cx('grid'))} />`,
           languageOptions,
         },
+        {
+          // `cx.raw()` is the declared escape, here as everywhere
+          code: `${cxImport}const x = <div className={(s) => cx.raw(/* nave-escape: a vendor widget styles this class */ 'legacy-card')} />`,
+          languageOptions,
+        },
       ],
       invalid: [
         {
@@ -70,6 +75,16 @@ describe('rule 1: a function className is read through its returned values', () 
           languageOptions,
           errors: 1,
         },
+        {
+          code: `const x = <div className={(s) => 'legacy-' + s.variant} />`,
+          languageOptions,
+          errors: 1,
+        },
+        {
+          code: `const x = <div className={(s) => s.extra ?? 'is-fallback'} />`,
+          languageOptions,
+          errors: 1,
+        },
       ],
     })
   })
@@ -85,6 +100,11 @@ describe('rule 1: a function className is read through its returned values', () 
         {
           // a nested function's return is not this function's value
           code: `const x = <div className={(s) => { const names = s.list.map(() => 'inner-class'); return s.join(names) }} />`,
+          languageOptions,
+        },
+        {
+          // a bare `return;` returns nothing to read
+          code: `const x = <div className={(s) => { if (!s.open) return; return s.className }} />`,
           languageOptions,
         },
       ],
@@ -110,6 +130,22 @@ describe('rule 1: a function className is read through its returned values', () 
           languageOptions,
           errors: 2,
         },
+        {
+          // returns of nested functions, methods and getters are theirs, not this function's
+          code: `const x = <div className={(s) => { function inner() { return 'inner-decl' } const fn = function () { return 'inner-expr' }; const o = { get g() { return 'inner-get' }, m() { return 'inner-method' } }; return s.open ? 'is-outer' : inner() + fn() + o.g + o.m() }} />`,
+          languageOptions,
+          errors: [{ message: /^"is-outer" is not a CSS Module class/u }],
+        },
+        {
+          code: `const x = <div className={(s) => { try { return 'is-try' } catch { return 'is-catch' } }} />`,
+          languageOptions,
+          errors: 2,
+        },
+        {
+          code: `const x = <div className={(s) => { for (const k of s.keys) { if (k) return 'is-loop' } return 'is-end' }} />`,
+          languageOptions,
+          errors: 2,
+        },
       ],
     })
   })
@@ -123,8 +159,13 @@ describe('rule 1: a function className is read through its returned values', () 
           languageOptions,
         },
         {
-          // `cx.raw()` is the declared escape, here as everywhere
-          code: `${cxImport}const x = <div className={(s) => cx.raw('legacy-card', 'a reason')} />`,
+          // in a conditional branch: not the whole value, so not read
+          code: `const x = <div className={open ? (s) => 'is-a' : undefined} />`,
+          languageOptions,
+        },
+        {
+          // as a fallback: not the whole value, so not read
+          code: `const x = <div className={props.className ?? ((s) => 'is-x')} />`,
           languageOptions,
         },
       ],

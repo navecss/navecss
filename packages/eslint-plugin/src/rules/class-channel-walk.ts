@@ -6,7 +6,8 @@
  * three rules can never disagree about the same source.
  *
  * The grammar: a whole `className` value that is an inline function, read through the values it
- * returns (an expression body, or each `return` of a block body, nested functions excluded); a string literal; a template literal's static text, and each `${}` slot read as a
+ * returns (an expression body, or each `return` of a block body, nested functions excluded); a
+ * string literal; a template literal's static text, and each `${}` slot read as a
  * class position of its own (wherever the template sits); both branches of a conditional; the
  * right side of `&&` and both sides of `||`/`??`; a string `+` chain, read like a template
  * literal (its string literals the static text, every other operand a slot); an identifier bound
