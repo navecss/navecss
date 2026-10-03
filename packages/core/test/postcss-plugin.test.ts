@@ -561,12 +561,16 @@ describe('onUnknown default is error', () => {
     // that is not a map (an array, a string) is refused as soon as the plugin is built, by name.
     const refusedAtUse = new Set(['missing', 'nulled'])
     for (const [name, atom] of Object.entries(shapes)) {
-      const expected = refusedAtUse.has(name)
-        ? new RegExp(`atom "${name}" is registered without a declarations object`)
-        : new RegExp(`atom "${name}"'s declarations is .*, not a plain object`)
-      await expect(run(`.x { @nave ${name}; }`, { extend: { [name]: atom } })).rejects.toThrow(
-        expected,
-      )
+      const extend = { [name]: atom }
+      if (refusedAtUse.has(name)) {
+        await expect(run(`.x { @nave ${name}; }`, { extend })).rejects.toThrow(
+          new RegExp(`atom "${name}" is registered without a declarations object`),
+        )
+      } else {
+        expect(() => navePlugin({ extend })).toThrow(
+          new RegExp(`atom "${name}"'s declarations is .*, not a plain object`),
+        )
+      }
     }
   })
 

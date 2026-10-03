@@ -483,26 +483,41 @@ describe('a boxed primitive is not a plain object, so it is refused and never re
   })
 })
 
+describe('a refusal is not fooled by a string that spells the sentinel or a nested rule of the wrong kind', () => {
+  it.each([
+    ['a value that spells the sentinel rule and opens a comment', decl('red} .nave-sentinel{} /*')],
+    [
+      'a value that closes the rule, spells the sentinel and opens a comment',
+      decl('red;} .nave-sentinel{}/*'),
+    ],
+    ['a pseudo key that is an at-rule written around the anchor', pseudo('@media x &')],
+    [
+      'a pseudo key that is a different at-rule written around the anchor',
+      pseudo('@supports (x) &'),
+    ],
+  ])('%s says it would break out of the rule', (_name, extend) => {
+    for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
+      const { refused, message } = verdict(validate, extend)
+
+      expect(refused).toBe(true)
+      expect(message).toContain('would break out of the rule')
+    }
+  })
+})
+
 describe('a String object as an atom’s own declarations is refused like every nested position', () => {
   it("a String object as an atom's own declarations never reaches the CSS, through either adapter", async () => {
     const extend = { a: { declarations: new String('} body { display: none; }') as never } }
-    const viaVite = await runHook({ code: '.x { @nave a; }', options: { extend } }).then(
-      (run) => run.code ?? '',
-      () => '',
-    )
+    const reason = /atom "a"'s declarations is a String object, not a plain object/
     const { default: postcss } = await import('postcss')
     const { navePlugin: postcssNave } = await import('../src/postcss.ts')
-    const viaPostcss = await Promise.resolve()
-      .then(() =>
-        postcss([postcssNave({ extend })]).process('.x { @nave a; }', { from: undefined }),
-      )
-      .then(
-        (result) => result.css,
-        () => '',
-      )
 
-    expect(viaVite).not.toMatch(/\b0: \}/)
-    expect(viaPostcss).not.toMatch(/\b0: \}/)
+    await expect(runHook({ code: '.x { @nave a; }', options: { extend } })).rejects.toThrow(reason)
+    await expect(
+      Promise.resolve().then(() =>
+        postcss([postcssNave({ extend })]).process('.x { @nave a; }', { from: undefined }),
+      ),
+    ).rejects.toThrow(reason)
   })
 })
 

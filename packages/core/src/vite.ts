@@ -114,8 +114,12 @@ export function navePlugin(options: NaveViteOptions = {}): NaveVitePlugin {
     },
 
     async transform(code, id) {
-      if (!isStylesheetId(id) || !canHoldDirective(code)) return
       const environment = this.environment?.name ?? 'client'
+      if (!isStylesheetId(id) || !canHoldDirective(code)) {
+        // A stylesheet edited to hold no directive no longer waits on the module.
+        failed.get(environment)?.delete(id)
+        return
+      }
       let atoms
       try {
         atoms = await extend.current((file) => {

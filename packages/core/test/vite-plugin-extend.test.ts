@@ -124,6 +124,33 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     )
   }, 60_000)
 
+  it('a stylesheet that failed and was then edited to hold no directive is not reloaded when the module is fixed', async () => {
+    const app: ScratchApp = makeApp({ ...FILES, 'atoms.mjs': "throw new Error('not ready')\n" })
+    cleanups.push(() => app.dispose())
+    const server = await startDev(
+      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], {
+        server: { middlewareMode: true, watch: {} },
+      }),
+    )
+    cleanups.push(() => server.close())
+    const sent = spyOnClient(server)
+
+    await expect(server.transformRequest('/src/app.css')).rejects.toThrow()
+    writeFileSync(path.join(app.root, 'src/app.css'), '.a { color: red; }\n')
+    const edited = await server.transformRequest('/src/app.css')
+    expect(edited?.code).toContain('color: red')
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    sent.length = 0
+    writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
+    // A reload, if one is coming, comes within a few seconds; stop looking as soon as one does.
+    const deadline = Date.now() + 4000
+    while (Date.now() < deadline && !sent.some((payload) => payload.type === 'full-reload')) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+
+    expect(sent.filter((payload) => payload.type === 'full-reload')).toEqual([])
+  }, 60_000)
+
   it('an edit to a module that loaded fine sends no full reload: Vite’s own update serves it', async () => {
     const app: ScratchApp = makeApp(FILES)
     cleanups.push(() => app.dispose())

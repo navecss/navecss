@@ -17,6 +17,8 @@ import type { Token } from './directive/tokenizer.ts'
 import { matchBrackets, readItem } from './directive/block-reader.ts'
 import { expandText } from './directive/expand-text.ts'
 import { tokenize } from './directive/tokenizer.ts'
+import { anchorSelectorList } from './selector-utils.ts'
+import { isOnlyInert } from './validate-extend-scan.ts'
 
 /**
  * Where a refused string sits in an atom: as the declarations of an atom, as a pseudo key, or as
@@ -76,6 +78,62 @@ function itemsIn(
 }
 
 /**
+ * The text of `tokens[from, to)`.
+ */
+function textOf(tokens: readonly Token[], from: number, to: number): string {
+  return tokens
+    .slice(from, to)
+    .map((token) => token.raw)
+    .join('')
+}
+
+/**
+ * Whether the one rule or at-rule inside `.p` is the one `splice` itself makes: for a pseudo key a
+ * style rule whose prelude is the key as the expander anchors it, for a condition the at-rule of
+ * that name.
+ */
+function isExpectedNested(
+  splice: Exclude<Splice, { kind: 'declarations' }>,
+  tokens: readonly Token[],
+  item: Item,
+): boolean {
+  if (splice.kind === 'condition') {
+    return item.kind === 'at-rule' && item.atKeyword === splice.atName
+  }
+  if (item.kind !== 'rule' || item.blockStart === undefined) return false
+  return textOf(tokens, item.start, item.blockStart - 1).trim() === anchorSelectorList(splice.key)
+}
+
+interface ReadOutput {
+  readonly closerFor: Int32Array
+  readonly rule: Item
+  readonly tokens: readonly Token[]
+}
+
+/**
+ * `css` read as `.p` closed where it should be and then the sentinel as its own top-level rule,
+ * or `undefined` when it is not. The sentinel counts only if it starts exactly where the text
+ * appended after the directive begins, so a string that spells one of its own does not stand in
+ * for it.
+ */
+function readRuleThenSentinel(css: string): ReadOutput | undefined {
+  const tokens = tokenize(css)
+  const closerFor = matchBrackets(tokens)
+  const [rule, sentinel, ...rest] = itemsIn(tokens, closerFor, 0, tokens.length)
+  if (rule === undefined || sentinel === undefined || rest.length > 0) return undefined
+  if (rule.blockStart === undefined || closerFor[rule.blockStart - 1] !== rule.blockEnd) {
+    return undefined
+  }
+  const isSentinelWhereAppended =
+    textOf(tokens, 0, sentinel.start).length === css.length - SENTINEL.length
+  const isSentinelText = textOf(tokens, sentinel.start, sentinel.end) === SENTINEL
+  const isClosedBeforeIt = isOnlyInert(tokens, rule.end, sentinel.start)
+  return isSentinelWhereAppended && isSentinelText && isClosedBeforeIt
+    ? { closerFor, rule, tokens }
+    : undefined
+}
+
+/**
  * Whether the expander's output for `splice` is `.p` closed where it should be, holding only what
  * the shape makes, and then the sentinel as its own top-level rule. A splice the expander cannot
  * write at all (a pseudo key with an empty branch) cannot escape, so it counts as staying inside.
@@ -91,18 +149,11 @@ export function isInsideRule(splice: Splice): boolean {
   } catch {
     return true
   }
-  const tokens = tokenize(css)
-  const closerFor = matchBrackets(tokens)
-  const [rule, sentinel, ...rest] = itemsIn(tokens, closerFor, 0, tokens.length)
-  if (rule === undefined || sentinel === undefined || rest.length > 0) return false
-  if (rule.blockStart === undefined || closerFor[rule.blockStart - 1] !== rule.blockEnd) {
-    return false
-  }
-  const sentinelText = tokens
-    .slice(sentinel.start, sentinel.end)
-    .map((token) => token.raw)
-    .join('')
-  if (sentinelText !== SENTINEL) return false
-  const inner = itemsIn(tokens, closerFor, rule.blockStart, rule.blockEnd!)
-  return inner.filter((item) => item.kind === 'rule' || item.kind === 'at-rule').length === nested
+  const read = readRuleThenSentinel(css)
+  if (read === undefined) return false
+  const { closerFor, rule, tokens } = read
+  const inner = itemsIn(tokens, closerFor, rule.blockStart!, rule.blockEnd!)
+  const nestedItems = inner.filter((item) => item.kind === 'rule' || item.kind === 'at-rule')
+  if (nestedItems.length !== nested) return false
+  return splice.kind === 'declarations' || isExpectedNested(splice, tokens, nestedItems[0]!)
 }

@@ -89,6 +89,16 @@ describe('AC-directive-core-05 — an atom with no declarations object stays a t
     }
   })
 
+  it('does not render a boxed primitive as a declarations map, so no per-character declaration', () => {
+    const extend = {
+      boxed: { declarations: new String('x') },
+    } as unknown as Record<string, AtomDefinition>
+
+    expect(() => resolve(['boxed'], { extend })).toThrow(
+      /atom "boxed" is registered without a declarations object/,
+    )
+  })
+
   it.each(['error', 'warn', 'ignore'] as const)(
     'throws through the PostCSS adapter under onUnknown: %s, never routed through it',
     async (onUnknown) => {
