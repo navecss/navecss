@@ -88,6 +88,7 @@ non-colour value is exactly what its name says.
 | `--nave-border-width-none`  |
 | `--nave-border-width-sm`    |
 | `--nave-border-width-focus` |
+| `--nave-border-width-mark`  |
 | `--nave-border-width-lg`    |
 
 ## Radius
