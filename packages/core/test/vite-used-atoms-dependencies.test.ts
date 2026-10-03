@@ -39,8 +39,8 @@ function appUsing(names: readonly string[], files: Record<string, string> = {}) 
 }
 
 describe('AC-used-atoms-08 — well-formed minified dependencies build', () => {
-  const minLib = readFileSync(path.join(FIXTURES, 'min-lib/index.js'), 'utf8')
-  const esbLib = readFileSync(path.join(FIXTURES, 'esb-lib/index.js'), 'utf8')
+  const minLib = readFileSync(path.join(FIXTURES, 'min-lib.js.txt'), 'utf8')
+  const esbLib = readFileSync(path.join(FIXTURES, 'esb-lib.js.txt'), 'utf8')
 
   it('guards that the checked-in texts hold the forms R2 and R3 name', () => {
     expect(minLib).toContain('`flex`')
