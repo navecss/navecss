@@ -29,6 +29,13 @@
  * caught, and so is a package that should start publishing being left
  * `private: true` by mistake.
  *
+ * The same gate also asserts that no package in the set is on `.changeset/config.json`'s
+ * `ignore` list. `changeset version` skips every package named there, private or not, so a
+ * package promoted to published but left on that list is never bumped and its changesets are
+ * skipped; a changeset naming an ignored and a non-ignored package together fails outright.
+ * Promoting a private package is therefore three edits in one pull request: drop `private`,
+ * join `PUBLISHABLE_SET`, come off `ignore`.
+ *
  * This script decides no product or launch-scope question and never will:
  * PUBLISHABLE_SET is the current scope call, not
  * derived here. Its only job is to make a manifest drifting from that
@@ -127,6 +134,87 @@ export function composePackageListUnreadableMessage(packagesDir, reason) {
       reason
     }). Nothing has been compared against the set this repository intends to publish. Repair the tree and ` +
     `re-run.`
+  )
+}
+
+/**
+ * This gate's own message when `.changeset/config.json` cannot be used to read the `ignore`
+ * list: missing, not valid JSON, or not a config object with an array `ignore`. `reason` names
+ * which. Reading any of those as an empty list would let a set member on the list pass, so
+ * the gate refuses instead, as it does for an unreadable manifest.
+ */
+export function composeChangesetConfigUnusableMessage(configPath, reason) {
+  return (
+    `Publishable-set gate: refusing to run. ${configPath} ${reason}. Nothing has been ` +
+    `compared against the Changesets "ignore" list. Repair the file and re-run.`
+  )
+}
+
+/**
+ * The members of `PUBLISHABLE_SET` named in a Changesets `ignore` list. Plain `.sort()`, so
+ * the report reads the same on every runner.
+ */
+function findIgnoredSetMembers(ignore) {
+  return [...PUBLISHABLE_SET].filter((name) => ignore.includes(name)).sort()
+}
+
+/**
+ * The `ignore` list of a parsed Changesets config, or the reason it cannot be read: the
+ * config must be an object, and `ignore` (absent means empty, Changesets' own default) must be
+ * an array.
+ */
+function readIgnoreList(config) {
+  if (config === null || typeof config !== 'object' || Array.isArray(config)) {
+    return { reason: 'is not a usable Changesets config (it is not an object)' }
+  }
+  if (config.ignore === undefined) return { ignore: [] }
+  if (!Array.isArray(config.ignore)) {
+    return { reason: 'is not a usable Changesets config ("ignore" is not an array)' }
+  }
+  return { ignore: config.ignore }
+}
+
+/**
+ * The Changesets `ignore` list under `rootDir`, or the refusal message to print when
+ * `.changeset/config.json` is missing, not valid JSON, or not a usable config.
+ */
+function loadIgnoreList(rootDir) {
+  const configPath = path.join(rootDir, '.changeset', 'config.json')
+  let rawConfig
+  try {
+    rawConfig = readFileSync(configPath, 'utf8')
+  } catch (error) {
+    const reason = `could not be read (${error.code ?? error.message})`
+    return { refusal: composeChangesetConfigUnusableMessage(configPath, reason) }
+  }
+  let config
+  try {
+    config = JSON.parse(rawConfig)
+  } catch (error) {
+    const reason = `is not valid JSON (${error.message})`
+    return { refusal: composeChangesetConfigUnusableMessage(configPath, reason) }
+  }
+  const { ignore, reason } = readIgnoreList(config)
+  if (reason !== undefined) {
+    return { refusal: composeChangesetConfigUnusableMessage(configPath, reason) }
+  }
+  return { ignore }
+}
+
+/**
+ * Prints the ignore-list fault: the set members found on the list, and how to fix it.
+ */
+function reportIgnoredSetMembers(names) {
+  console.error('The Changesets "ignore" list names packages this repository intends to publish:\n')
+  for (const name of names) {
+    console.error(
+      `  - ${name}: in the publishable set but listed in "ignore" in .changeset/config.json`,
+    )
+  }
+  console.error(
+    '\nChangesets never versions a package on that list, so this one would never get a ' +
+      'version bump. Remove it from "ignore" in .changeset/config.json, in the same pull ' +
+      'request that adds it to PUBLISHABLE_SET.',
   )
 }
 
@@ -241,6 +329,20 @@ export function main(rootDir = ROOT) {
         'publish for the first time is a release decision and not only a manifest edit: do not ' +
         'flip it in a pull request on its own, open an issue proposing it.',
     )
+    process.exitCode = 1
+    return
+  }
+
+  const { ignore, refusal } = loadIgnoreList(rootDir)
+  if (refusal !== undefined) {
+    console.error(refusal)
+    process.exitCode = 1
+    return
+  }
+
+  const ignoredSetMembers = findIgnoredSetMembers(ignore)
+  if (ignoredSetMembers.length > 0) {
+    reportIgnoredSetMembers(ignoredSetMembers)
     process.exitCode = 1
     return
   }
