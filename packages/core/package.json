@@ -100,7 +100,7 @@
     "svelte": "5.57.1",
     "tsup": "^8.5.1",
     "typescript": "6.0.3",
-    "vite": "8.3.1",
+    "vite": "8.3.2",
     "vite-floor": "npm:vite@8.2.1",
     "vitest": "5.0.3",
     "vscode-css-languageservice": "6.3.10",
