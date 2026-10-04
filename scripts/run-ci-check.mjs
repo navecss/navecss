@@ -200,11 +200,13 @@ export function stepEnvironment(env, makeCacheDir) {
  * Runs `pnpm run <name>` in `env` with its stdout and stderr captured, in arrival order, into
  * one string. `pnpm` is the very pnpm that started this gate (`pnpmEntry`, from
  * `npm_execpath`), run by this Node, so no step depends on what `PATH` resolves `pnpm` to. The
- * child is in `running` while it runs, so an interrupted gate can stop it.
+ * child gets a process group of its own (`detached`), so an interrupted gate can stop it and
+ * everything it started with one signal to the group; it is in `running` while it runs.
  */
 function runPnpmScript(name, env, pnpmEntry, running) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [pnpmEntry, 'run', name], {
+      detached: true,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -218,6 +220,18 @@ function runPnpmScript(name, env, pnpmEntry, running) {
       resolve({ code: code ?? 1, output: Buffer.concat(chunks).toString() }),
     )
   })
+}
+
+/**
+ * Sends `signal` to the whole process group of `child`, which `detached` made its own. A group
+ * that has already gone is not an error.
+ */
+function signalGroup(child, signal) {
+  try {
+    process.kill(-child.pid, signal)
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error
+  }
 }
 
 /**
@@ -257,24 +271,32 @@ async function main(env = process.env) {
   console.log(`ci:check: running ${names.length} steps: ${names.join(', ')}`)
   if (freshCacheDir) console.log(`ci:check: TURBO_FORCE is set, so every step uses an empty cache`)
 
-  // An interrupted gate stops the steps it started and starts no more, then unwinds normally (a
-  // summary, and the cache directory removed) instead of leaving steps rebuilding dist/ after
-  // the gate has exited.
+  // An interrupted gate sends SIGTERM to every running step's process group (pnpm honours it, and
+  // ignores a SIGINT it is forwarded) and starts no more, then unwinds normally (a summary, and
+  // the cache directory removed) instead of leaving steps rebuilding dist/ after the gate has
+  // exited. The steps are in groups of their own, so a Ctrl-C in the terminal reaches only this
+  // process: the handlers stay in place for a second one.
   const running = new Set()
   let interrupted
   const stop = (signal) => {
     interrupted = signal
     process.exitCode = signal === 'SIGINT' ? 130 : 143
-    for (const child of running) child.kill(signal)
+    for (const child of running) signalGroup(child, 'SIGTERM')
   }
-  process.once('SIGINT', stop)
-  process.once('SIGTERM', stop)
+  process.on('SIGINT', stop)
+  process.on('SIGTERM', stop)
 
   try {
-    const runStep = (name) =>
-      interrupted
-        ? Promise.resolve({ code: 1, output: `not started: ci:check received ${interrupted}\n` })
-        : runPnpmScript(name, stepEnv, pnpmEntry, running)
+    const runStep = async (name) => {
+      if (interrupted) {
+        return { code: 1, output: `not started: ci:check received ${interrupted}\n` }
+      }
+      const { code, output } = await runPnpmScript(name, stepEnv, pnpmEntry, running)
+      // A step that settles after the signal was stopped by it, whatever code it left with.
+      return interrupted
+        ? { code: 1, output: `${output}stopped: ci:check received ${interrupted}\n` }
+        : { code, output }
+    }
     const results = await runSteps(STEPS, runStep, {
       limit: CONCURRENT_STEPS,
       onStepDone: printStep,

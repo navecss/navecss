@@ -8,7 +8,9 @@
  * same files.
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -297,6 +299,83 @@ test('test runs alone: it saturates the machine and writes scratch files into th
 test('knip does not run while build does: tsup leaves a transient config file in core', async () => {
   const spans = await realSchedule()
   assert.equal(overlaps(spans.get('knip'), spans.get('build')), false)
+})
+
+// ── Interruption, end to end ─────────────────────────────────────────────────────────────
+
+/**
+ * A stand-in for the pnpm entry point the runner starts each step with (`npm_execpath`). Every
+ * step exits at once except the one named in `FAKE_SLOW_STEP`: that one starts a child of its
+ * own, records both process ids in `FAKE_PIDS_FILE`, ignores SIGINT as pnpm does when it is
+ * forwarded one, and then waits far longer than the test does.
+ */
+const FAKE_PNPM = `
+import { spawn } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+const [, , , name] = process.argv
+if (name !== process.env.FAKE_SLOW_STEP) process.exit(0)
+process.on('SIGINT', () => {})
+const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+writeFileSync(process.env.FAKE_PIDS_FILE, JSON.stringify([process.pid, grandchild.pid]))
+setInterval(() => {}, 1000)
+`
+
+const isAlive = (pid) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const until = async (condition, timeoutMs) => {
+  const deadline = Date.now() + timeoutMs
+  while (!condition() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return condition()
+}
+
+test('SIGINT to the runner stops the step that is running, which is never reported as passed', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ci-check-signal-'))
+  const pidsFile = path.join(dir, 'pids.json')
+  const entry = path.join(dir, 'fake-pnpm.mjs')
+  writeFileSync(entry, FAKE_PNPM)
+  const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), 'run-ci-check.mjs')
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key !== 'TURBO_FORCE'),
+  )
+  const child = spawn(process.execPath, [runner], {
+    env: { ...env, FAKE_PIDS_FILE: pidsFile, FAKE_SLOW_STEP: 'build', npm_execpath: entry },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const chunks = []
+  child.stdout.on('data', (chunk) => chunks.push(chunk))
+  child.stderr.on('data', (chunk) => chunks.push(chunk))
+  const exited = new Promise((resolve) => child.on('close', (code) => resolve(code)))
+  let pids = []
+  try {
+    assert.ok(await until(() => existsSync(pidsFile), 10_000), 'the slow step never started')
+    pids = JSON.parse(readFileSync(pidsFile, 'utf8'))
+    const signalledAt = Date.now()
+    child.kill('SIGINT')
+    const code = await Promise.race([
+      exited,
+      new Promise((resolve) => setTimeout(() => resolve('still running'), 5000)),
+    ])
+    const output = Buffer.concat(chunks).toString()
+    assert.equal(code, 130, output)
+    assert.ok(Date.now() - signalledAt < 5000)
+    assert.doesNotMatch(output, /passed\s+build/)
+    assert.match(output, /FAILED\s+build/)
+    assert.match(output, /stopped: ci:check received SIGINT/)
+    assert.ok(await until(() => pids.every((pid) => !isAlive(pid)), 2000), 'a step process is left')
+  } finally {
+    child.kill('SIGKILL')
+    for (const pid of pids) if (isAlive(pid)) process.kill(pid, 'SIGKILL')
+    rmSync(dir, { force: true, recursive: true })
+  }
 })
 
 test('package.json runs this runner as ci:check, and ci:check:fix runs ci:check', () => {
