@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Tripwire for keeping CONTRIBUTING.md's documented CI chain in sync with package.json.
+ * Tripwire for keeping CONTRIBUTING.md's documented `ci:check` steps in sync with the gate.
  *
- * `.github/CONTRIBUTING.md`'s "`ci:check` runs, in order:" section is a hand transcription of
- * `package.json`'s own `ci:check` script chain: one numbered item per step, each opening with a
- * bold code span naming one `pnpm run <script>` step. It has decayed twice already, on two
+ * `.github/CONTRIBUTING.md`'s "`ci:check` runs these steps:" section is a hand transcription of
+ * the step list in `scripts/run-ci-check.mjs` (`STEPS`): one numbered item per step, each
+ * opening with a bold code span naming one `pnpm run <script>` step. It has decayed twice already, on two
  * different axes, both caught only by a person reading it against the manifest during a
  * review that happened to run a merged-with-`main` certification (commit
  * `a6555fd`): once on MEMBERSHIP (the `scripts:check` item's own inner enumeration missed
@@ -14,23 +14,24 @@
  * This gate is possible for the OUTER items and was correctly declined for the `scripts:check`
  * item's own inner enumeration: the outer labels ARE the
  * script names, verbatim and in order (`typecheck`, `lint`, `test`, ...), so comparing them to
- * `package.json`'s chain needs no mapping table. The `scripts:check` item's inner members are
+ * the step list needs no mapping table. The `scripts:check` item's inner members are
  * prose names for scripts ("the licence allow-list gate") that are NOT their filenames
  * (`check-license-allowlist.mjs`), so a gate for that would need a mapping that is itself a
  * hand transcription and the same defect class one level down — declined for exactly that
  * reason and not reached here.
  *
- * PROPERTY ASSERTED: the ordered sequence of bold code-span labels under the "`ci:check` runs,
- * in order:" heading in `.github/CONTRIBUTING.md`, read as an ordered list, equals the ordered
- * sequence of `pnpm run <script>` invocations chained by `package.json`'s own `ci:check`
- * script, by POSITION as well as by membership — a transposition fails this check exactly as
- * a dropped or added member does, because both defect classes have already occurred.
+ * PROPERTY ASSERTED: the ordered sequence of bold code-span labels under the "`ci:check` runs
+ * these steps:" heading in `.github/CONTRIBUTING.md`, read as an ordered list, equals the
+ * ordered sequence of step names in `STEPS`, by POSITION as well as by membership — a
+ * transposition fails this check exactly as a dropped or added member does, because both defect
+ * classes have already occurred. The steps run concurrently now, so the position is the order
+ * the gate's summary prints them in, not the order they finish in; it still has to be ONE
+ * order, or the documentation and the summary read differently.
  *
  * FAILS CLOSED on the unparseable case: if the heading cannot be
- * found, the numbered list under it cannot be parsed, or `package.json`'s `ci:check` script
- * cannot be parsed into a `pnpm run` chain, this gate exits 1 rather than reporting nothing to
- * compare — a gate that silently finds nothing to compare is worse than no gate, because it
- * reports green about a list it never read.
+ * found, the numbered list under it cannot be parsed, or the step list is empty, this gate
+ * exits 1 rather than reporting nothing to compare — a gate that silently finds nothing to
+ * compare is worse than no gate, because it reports green about a list it never read.
  *
  * NO MAPPING TABLE, EVER. The moment this needs one it has become the thing correctly declined
  * for the `scripts:check` item's inner list, and the fix is to leave the outer items alone, not
@@ -40,9 +41,11 @@ import { readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { STEPS } from './run-ci-check.mjs'
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-const HEADING = '`ci:check` runs, in order:'
+const HEADING = '`ci:check` runs these steps:'
 
 /**
  * Extracts the ordered bold code-span labels (`` **`label`** ``) from the numbered list under
@@ -99,19 +102,6 @@ export function extractContributingChain(contributingText) {
 }
 
 /**
- * Extracts the ordered `pnpm run <script>` sequence from `packageJson`'s own `ci:check`
- * script string. Returns `null` if the field is missing, not a string, or contains no `pnpm
- * run` invocation — the fail-closed signal `main()` checks for.
- */
-export function extractCiCheckChain(packageJson) {
-  const script = packageJson?.scripts?.['ci:check']
-  if (typeof script !== 'string' || script.length === 0) return null
-
-  const matches = [...script.matchAll(/pnpm run ([\w:-]+)/g)].map((m) => m[1])
-  return matches.length > 0 ? matches : null
-}
-
-/**
 The ordered-sequence comparison itself: membership AND position both matter.
  */
 export function chainsAgree(contributingChain, ciCheckChain) {
@@ -121,12 +111,11 @@ export function chainsAgree(contributingChain, ciCheckChain) {
 
 /**
  * Runs the property asserted in the header comment above and exits non-zero on any mismatch,
- * or if either source cannot be read or parsed. `rootDir` defaults to this repository's own
- * root but is a parameter so a test can drive it over a scratch tree.
+ * or if either source cannot be read or parsed. `rootDir` and `ciCheckChain` default to this
+ * repository's own root and step list but are parameters so a test can drive a scratch tree.
  */
-export function main(rootDir = ROOT) {
+export function main(rootDir = ROOT, ciCheckChain = STEPS.map((step) => step.name)) {
   const contributingPath = path.join(rootDir, '.github', 'CONTRIBUTING.md')
-  const packageJsonPath = path.join(rootDir, 'package.json')
 
   let contributingText
   try {
@@ -150,22 +139,9 @@ export function main(rootDir = ROOT) {
     return
   }
 
-  let packageJson
-  try {
-    packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
-  } catch (error) {
+  if (ciCheckChain.length === 0) {
     console.error(
-      `ci:check order gate: refusing to run. ${packageJsonPath} is not valid JSON (${error.message}).`,
-    )
-    process.exitCode = 1
-    return
-  }
-
-  const ciCheckChain = extractCiCheckChain(packageJson)
-  if (ciCheckChain === null) {
-    console.error(
-      `ci:check order gate: refusing to run. Could not parse a \`pnpm run\` chain out of ` +
-        `${packageJsonPath}'s "ci:check" script.`,
+      'ci:check order gate: refusing to run. The step list in run-ci-check.mjs is empty.',
     )
     process.exitCode = 1
     return
@@ -173,15 +149,15 @@ export function main(rootDir = ROOT) {
 
   if (!chainsAgree(contributingChain, ciCheckChain)) {
     console.error(
-      '.github/CONTRIBUTING.md\'s "ci:check runs, in order:" list does not match ' +
-        "package.json's own ci:check chain:\n",
+      '.github/CONTRIBUTING.md\'s "ci:check runs these steps:" list does not match ' +
+        'the steps in scripts/run-ci-check.mjs:\n',
     )
-    console.error(`  CONTRIBUTING.md: ${contributingChain.join(', ')}`)
-    console.error(`  package.json:    ${ciCheckChain.join(', ')}`)
+    console.error(`  CONTRIBUTING.md:  ${contributingChain.join(', ')}`)
+    console.error(`  run-ci-check.mjs: ${ciCheckChain.join(', ')}`)
     console.error(
-      '\nEither the list was hand-edited out of step with the chain, or a step was added, ' +
-        'removed or reordered in package.json without updating the list to match. Fix the ' +
-        'list to match the chain.',
+      '\nEither the list was hand-edited out of step with the gate, or a step was added, ' +
+        'removed or reordered in run-ci-check.mjs without updating the list to match. Fix the ' +
+        'list to match the steps.',
     )
     process.exitCode = 1
     return
@@ -189,7 +165,7 @@ export function main(rootDir = ROOT) {
 
   console.log(
     `ci:check order gate: CONTRIBUTING.md's ${contributingChain.length}-step list matches ` +
-      "package.json's ci:check chain, in order.",
+      "run-ci-check.mjs's steps, in order.",
   )
 }
 
