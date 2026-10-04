@@ -103,10 +103,24 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
     assertPublishedExportsPresent(exports)
   })
 
-  it('adds exactly ./check and ./vite beyond the 0.1.0 keys', () => {
+  it('adds exactly ./check, ./vite, ./lightningcss and ./standalone beyond the 0.1.0 keys', () => {
     const exports = manifest().exports as Record<string, unknown>
     const added = Object.keys(exports).filter((k) => !Object.hasOwn(PUBLISHED_0_1_0_EXPORTS, k))
-    expect(added.toSorted()).toEqual(['./check', './vite'])
+    expect(added.toSorted()).toEqual(['./check', './lightningcss', './standalone', './vite'])
+  })
+
+  it('adds exactly ./lightningcss and ./standalone over the keys slice 2 left', () => {
+    const exports = manifest().exports as Record<string, unknown>
+    const slice2 = [...Object.keys(PUBLISHED_0_1_0_EXPORTS), './check', './vite']
+    const added = Object.keys(exports).filter((k) => !slice2.includes(k))
+    expect(added.toSorted()).toEqual(['./lightningcss', './standalone'])
+  })
+
+  it('exports no host subpath without a green fixture: none of rspack, esbuild, rollup, rolldown, webpack, turbopack', () => {
+    const exports = manifest().exports as Record<string, unknown>
+    for (const key of Object.keys(exports)) {
+      expect(key).not.toMatch(/^\.\/(?:rspack|esbuild|rollup|rolldown|webpack|turbopack)\b/)
+    }
   })
 
   it('keeps dependencies exactly @navecss/tokens, and postcss the sole optional peer', () => {

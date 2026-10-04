@@ -1,6 +1,6 @@
 # @navecss/core
 
-> Layer architecture, reset, atomic utilities, and the Vite and PostCSS plugins for Nave.
+> Layer architecture, reset, atomic utilities, the Vite and PostCSS plugins, a Lightning CSS adapter and the `navecss-core` command for Nave.
 
 ## Installation
 
@@ -21,7 +21,7 @@ pnpm add @navecss/core
   included, is reachable only through the package's `exports` map: there is no
   `main` field to fall back on.
 - **ES modules.** `@navecss/core/cx`, `@navecss/core/atoms`,
-  `@navecss/core/vite` and `@navecss/core/check` load through `import` only. A `require()` of any of
+  `@navecss/core/vite`, `@navecss/core/lightningcss` and `@navecss/core/check` load through `import` only. A `require()` of any of
   them fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`, which reads as though the
   entry point did not exist. In TypeScript, set `moduleResolution` to `bundler`,
   `node16` or `nodenext`; under `node10` their types are not found. A CommonJS
@@ -36,14 +36,19 @@ pnpm add @navecss/core
   TypeScript describes a Node that cannot `require()` an ES module and reports
   an error in the package's types.
 - **Node 22.18 or later.**
-- **A build step that resolves `@nave`: the Vite plugin, or PostCSS 8.** On
+- **A build step that resolves `@nave`: the Vite plugin, PostCSS 8, the Lightning
+  CSS adapter or the command.** On
   Vite, `@navecss/core/vite` needs nothing installed beside Vite, and
   [Vite plugin setup](#vite-plugin-setup) is its whole setup. On any other
   pipeline that runs PostCSS plugins, use the PostCSS plugin: `postcss` is an
   optional peer dependency, so nothing installs it for you. Add it yourself if
   you use that route; without it, importing `@navecss/core/postcss` fails with
   `Cannot find package 'postcss'`. [PostCSS plugin setup](#postcss-plugin-setup)
-  has it. The stylesheets and `cx()` need neither.
+  has it. A host that runs Lightning CSS itself uses
+  [the Lightning CSS adapter](#lightning-css-adapter-setup), which needs nothing
+  installed beside Lightning CSS, and a project with no bundler uses
+  [`navecss-core expand`](#navecss-core-expand). The stylesheets and `cx()` need
+  none of them.
 
 ## Setup
 
@@ -185,7 +190,9 @@ Every custom property Nave declares is in the stylesheet you already installed, 
 ## Setting up `@nave`
 
 On Vite, use the Vite plugin: it is the one route this package teaches for Vite. On
-Next.js, webpack, or any other pipeline that runs PostCSS plugins, use the PostCSS plugin.
+Next.js, webpack, or any other pipeline that runs PostCSS plugins, use the PostCSS plugin. A host
+that runs Lightning CSS directly uses [the Lightning CSS adapter](#lightning-css-adapter-setup),
+and a project with no bundler uses [`navecss-core expand`](#navecss-core-expand).
 
 ### Vite plugin setup
 
@@ -349,7 +356,8 @@ not run PostCSS plugins at all: the build stays green, `@nave` reaches the
 browser as an unknown at-rule, and the browser drops it, so the rule renders
 with none of the declarations its atoms were going to give it. On Vite, use
 [the Vite plugin](#vite-plugin-setup), which runs under that option; to stay on this plugin,
-leave the default transformer in place. Add
+leave the default transformer in place. A host that runs Lightning CSS directly, not through
+Vite, uses [the Lightning CSS adapter](#lightning-css-adapter-setup). Add
 [`navecss-core check`](#navecss-core-check) to your build script as well, and a
 build that skips the plugin this way fails instead of shipping.
 
@@ -362,6 +370,43 @@ unexpanded directive, so it has nothing of Nave's to add a prefix to. Nave's own
 ship the vendor-prefixed properties their declarations need (`interactive`'s
 `-webkit-user-select` alongside `user-select`, for one), so this is only a concern for your own
 CSS sharing the same pipeline.
+
+### Lightning CSS adapter setup
+
+For a host that runs Lightning CSS directly: your own script, or a tool that calls its
+`transform()` or `bundleAsync()`. It is not the route for Vite: on Vite, use
+[the Vite plugin](#vite-plugin-setup), which also runs under `css.transformer: 'lightningcss'`.
+
+```js
+import { bundleAsync, transform } from 'lightningcss'
+import { navePlugin } from '@navecss/core/lightningcss'
+
+const nave = navePlugin()
+
+// One file, through transform(): expand it first, then pass the code and the map on.
+const { code, map } = nave.expand(source, 'src/app.css')
+const result = transform({ filename: 'src/app.css', code, inputSourceMap: map })
+
+// An entry file and everything it @imports, through bundleAsync().
+const bundled = await bundleAsync({ filename: 'src/app.css', resolver: nave.resolver })
+```
+
+The adapter expands the text before Lightning CSS reads it, so Lightning CSS never sees a
+directive: no `Unknown at rule` warning, no Lightning CSS parse error on a malformed directive, and
+Nave's own messages, with the real file path and the line and column of the name.
+`expand(code, filename)` takes the text or its bytes and returns `{ code, map }`, the code as bytes
+and the map as a string, ready for `transform()`'s `code` and `inputSourceMap`. `resolver.read` reads each file
+`bundleAsync()` asks for and returns its expanded text, so a file reached through `@import` is
+covered too. It takes `extend` (an object of your own atoms) and `onUnknown` as the other plugins
+do ([Options](#options)); under `'warn'` it prints each problem with `console.warn`.
+
+The adapter imports nothing from `lightningcss`, types included, and declares no peer: you bring
+your own copy. The supported range is documented, not declared: `lightningcss` 1.22 and later,
+which is Lightning CSS's own nesting floor (1.20 cannot parse nested output). The fixtures run on
+1.22.1 and on the newest release at the time of each release of this package. One cost, on the
+`bundleAsync()` path: `read` returns a string and no source map, so Nave's insertions are not in
+the output map there. The inserted text adds no line breaks, so line numbers hold. On the
+`transform()` path the map is chained through `inputSourceMap`.
 
 ### Options
 
@@ -450,6 +495,44 @@ command comes with `@navecss/core`; it is not a package of its own.
 
 ---
 
+## `navecss-core expand`
+
+For a project with no bundler. It reads each stylesheet, expands every `@nave`, and writes the
+result:
+
+```json
+{
+  "scripts": {
+    "build": "navecss-core expand --source=src/app.css --out=app.css",
+    "watch": "navecss-core expand --source=src/app.css --out=app.css --watch"
+  }
+}
+```
+
+`--source=` and `--out=` are repeated as pairs, matched by order, one pair per file; unequal
+counts are a usage error. `--extend=<module>` is the path to a module whose default export is
+your own atoms, read the way the PostCSS plugin reads one. `--watch` rewrites each `--out` when
+its source, or the `--extend` module, changes, and keeps running after a problem. Every problem
+across every file is printed in one run, one report per stylesheet. Exit codes:
+
+- `0` — every file was expanded and written.
+- `1` — at least one stylesheet held a problem; the problems are printed and `--out` is not
+  written.
+- `2` — a usage error (a missing or unmatched `--out`, an unknown flag, an `--out` that is its own
+  `--source`, a module that does not load) or a `--source` that could not be read.
+
+It does not resolve or inline `@import`; that would make it a CSS bundler. An `@import` of a
+relative or absolute URL stays where you wrote it, and the file is not read. An `@import` of a
+package (`@import url('@navecss/core')`, which is how the bundler route's `app.css` starts) is an
+error, because a browser cannot load it: it is reported as a `bare-import` problem. Link
+`@navecss/core/standalone` instead, which has no `@import` in it, by path
+(`node_modules/@navecss/core/dist/standalone.css`) or from a CDN
+(`https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css`), before your expanded
+stylesheet. [Without a bundler](https://github.com/navecss/navecss#without-a-bundler) has the
+whole setup.
+
+---
+
 ## Editor, linter and coding agent
 
 `@nave` is new to these tools, so each one needs a step, and this package ships what each of
@@ -517,15 +600,17 @@ Consumers of `@navecss/tokens` alone get no guide: it ships only in this package
 
 ## Exports
 
-| Export                    | Description                                                                                           |
-| ------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `@navecss/core`           | CSS entry point — `@import url('@navecss/core')`                                                      |
-| `@navecss/core/layers`    | The `@layer` order statement alone. Import it first, before any other stylesheet                      |
-| `@navecss/core/no-tokens` | Entry point for projects that generate their own Nave token layer; see the header comment in the file |
-| `@navecss/core/reset`     | Reset stylesheet only. It reads Nave's custom properties, so it needs a token layer beside it         |
-| `@navecss/core/atomic`    | Generated atomic CSS (global `nave-` classes)                                                         |
-| `@navecss/core/cx`        | `cx()` / `cx.raw()` utilities + `AtomName` type                                                       |
-| `@navecss/core/atoms`     | Atom definitions + `atomClassMap`                                                                     |
-| `@navecss/core/vite`      | Vite plugin — `navePlugin()`                                                                          |
-| `@navecss/core/postcss`   | PostCSS plugin — `navePlugin()`                                                                       |
-| `@navecss/core/check`     | The survival check as a function — `check({ source })`                                                |
+| Export                       | Description                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `@navecss/core`              | CSS entry point — `@import url('@navecss/core')`                                                      |
+| `@navecss/core/layers`       | The `@layer` order statement alone. Import it first, before any other stylesheet                      |
+| `@navecss/core/no-tokens`    | Entry point for projects that generate their own Nave token layer; see the header comment in the file |
+| `@navecss/core/reset`        | Reset stylesheet only. It reads Nave's custom properties, so it needs a token layer beside it         |
+| `@navecss/core/atomic`       | Generated atomic CSS (global `nave-` classes)                                                         |
+| `@navecss/core/cx`           | `cx()` / `cx.raw()` utilities + `AtomName` type                                                       |
+| `@navecss/core/atoms`        | Atom definitions + `atomClassMap`                                                                     |
+| `@navecss/core/vite`         | Vite plugin — `navePlugin()`                                                                          |
+| `@navecss/core/lightningcss` | Lightning CSS adapter — `navePlugin()`, returning `expand` and `resolver`                             |
+| `@navecss/core/standalone`   | The whole stylesheet in one file, with no `@import`, for projects with no bundler                     |
+| `@navecss/core/postcss`      | PostCSS plugin — `navePlugin()`                                                                       |
+| `@navecss/core/check`        | The survival check as a function — `check({ source })`                                                |

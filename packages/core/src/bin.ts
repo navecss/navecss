@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 /**
- * `navecss-core` — a bin whose logic lives entirely behind `check()`.
+ * `navecss-core` — a bin whose logic lives behind `check()` and `expand-command.ts`.
  * Flags follow `navecss-tokens`' own vocabulary and equals form.
  */
 import { parseArgs } from 'node:util'
 
+import { USAGE } from './bin-usage.ts'
 import { type CheckResult, runCheck as runSourcesCheck } from './directive/check-run.ts'
 import { formatFinding } from './directive/findings.ts'
-
-const USAGE = `Usage:
-  navecss-core check --source=<file-or-dir> [--source=<file-or-dir> ...]`
+import { runExpand } from './expand-command.ts'
 
 /**
 True for `--help` or `-h` anywhere in `args`.
@@ -119,7 +118,7 @@ async function runCheck(args: readonly string[]): Promise<number> {
 }
 
 /**
-Dispatches the one subcommand this bin has.
+Dispatches the subcommand: `check` or `expand`.
  */
 async function main(): Promise<number> {
   const args = process.argv.slice(2)
@@ -133,6 +132,7 @@ async function main(): Promise<number> {
   }
 
   const [subcommand, ...rest] = args
+  if (subcommand === 'expand') return runExpand(rest)
   if (subcommand !== 'check') {
     console.error(`Unknown subcommand "${subcommand}".\n${USAGE}`)
     return 2

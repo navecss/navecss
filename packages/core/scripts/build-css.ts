@@ -3,6 +3,8 @@
  *   atoms.ts       → dist/atomic.css     (generated)
  *   index.css      → dist/index.css      (copied)
  *   layers.css     → dist/layers.css     (copied)
+ *   standalone.css → dist/standalone.css (layers.css, then index.css with every @import
+ *                                          replaced by the file it names: no @import left)
  *   no-tokens.css  → dist/no-tokens.css  (copied)
  *   reset.css      → dist/reset.css      (transformed, not copied verbatim — see the
  *                                          comment at this file's reset-handling code below)
@@ -22,6 +24,7 @@
  * side effect.
  */
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -157,6 +160,23 @@ function generateAtomCSS(name: AtomName): string {
 }
 
 /**
+ * `index.css` with every `@import url('<specifier>');` replaced by the text of the file it names
+ * (its trailing whitespace trimmed, so the line break after the `;` stays): a relative specifier
+ * is a file of `dist/`, and a package specifier is resolved through that package's `exports` map.
+ * `dist/standalone.css` is `dist/layers.css` and then this, so a page links one file and no
+ * `@import` is left for a browser to fail on.
+ */
+function inlineImports(indexCss: string): string {
+  const requireFromHere = createRequire(import.meta.url)
+  return indexCss.replaceAll(/@import url\('([^']+)'\);/g, (_import, specifier: string) => {
+    const file = specifier.startsWith('.')
+      ? path.join(DIST, specifier)
+      : requireFromHere.resolve(specifier)
+    return readFileSync(file, 'utf8').trimEnd()
+  })
+}
+
+/**
  * The file-writing driver. Guarded behind `isMain` so importing this module
  * for `renderNested`/`renderAtBlock` (test) never touches the filesystem.
  */
@@ -232,9 +252,23 @@ if (isMain) {
     'utf8',
   )
 
+  /**
+   * standalone.css (R24): the whole stylesheet in one file for a project with no bundler, whose
+   * `@import url('@navecss/core')` a browser cannot load. Written last, from the files above as
+   * they are on disk, so it can never describe a stylesheet the others are not.
+   */
+  const layersCss = readFileSync(path.join(DIST, 'layers.css'), 'utf8')
+  const indexCss = readFileSync(path.join(DIST, 'index.css'), 'utf8')
+  writeFileSync(
+    path.join(DIST, 'standalone.css'),
+    `${layersCss}\n${inlineImports(indexCss)}`,
+    'utf8',
+  )
+
   console.log(`✓ Generated dist/atomic.css (${atomNames.length} atoms)`)
   console.log('✓ Generated dist/reset.css (self-layered)')
   console.log('✓ Copied index.css to dist/')
   console.log('✓ Copied no-tokens.css to dist/')
   console.log('✓ Copied layers.css to dist/')
+  console.log('✓ Generated dist/standalone.css (no @import)')
 }

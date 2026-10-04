@@ -144,6 +144,13 @@ function formatUnknownAtom(name: string, extend: ExtendMap): string {
   return `${first} If it is an atom of your own, pass it in the extend option.\nAvailable: ${available}`
 }
 
+/**
+ * The self-contained stylesheet a bare `@import` is answered with: its path inside an installed
+ * package, and its URL on a CDN that serves npm. Both are public contracts, frozen with the file.
+ */
+const STANDALONE_PATH = 'node_modules/@navecss/core/dist/standalone.css'
+const STANDALONE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css'
+
 const BAD_PARENT_WORKAROUND =
   '. A directive here can be written `& { @nave ...; }` inside the group rule instead.'
 
@@ -163,7 +170,8 @@ const FIXED_TEXTS: Readonly<
 > = {
   'bad-token': (d) =>
     `@nave: unexpected "${d.text ?? ''}"; a directive takes only atom names (separate atom names with spaces)`,
-  'bare-import': () => '@import specifies a bare module: a browser cannot load it',
+  'bare-import': (d) =>
+    `@import ${JSON.stringify(d.text ?? '')} is a bare module specifier, and a browser cannot load it. Link Nave's self-contained stylesheet instead: ${STANDALONE_PATH}, or ${STANDALONE_CDN_URL}`,
   'has-block': () => '@nave: a directive with a {} block is not supported',
   'in-keyframes': () => '@nave cannot be used inside @keyframes',
   'missing-declarations': (d) =>
