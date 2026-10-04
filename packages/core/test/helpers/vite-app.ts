@@ -28,7 +28,8 @@ export type Transformer = 'lightningcss' | 'postcss'
  * and on the newest 8.x at the time of the release (the package's own `vite`, which Dependabot
  * raises). A helper called with no `api` runs on the floor. Types come from the newest Vite and the
  * floor leg is cast to them, so the floor is checked by running the fixtures on it, not by typing
- * them.
+ * them. The Vue and Svelte plugins resolve `vite` by name, so on the floor leg they run linked to
+ * the newest Vite: the floor host is 8.2.1, its framework plugins are not.
  */
 export interface ViteApi {
   readonly build: typeof buildOnNewest
