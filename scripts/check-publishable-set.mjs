@@ -250,8 +250,8 @@ function listPackageDirs(packagesDir) {
 
 /**
  * True if `manifest` would be published by a real release: the
- * `!pkg.packageJson.private` filter `@changesets/cli` uses, which
- * `stage-release.mjs` applies through this function.
+ * `!pkg.packageJson.private` filter `stage-release.mjs` applies through
+ * this function.
  */
 export function isPublishable(manifest) {
   return manifest.private !== true
