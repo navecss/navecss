@@ -100,6 +100,17 @@ export const splitSelectorList = (list: string): string[] => {
 }
 
 /**
+ * A nested selector list resolved against its parents: each alternative on its own, with `&`
+ * replaced by the parent, or joined to it as a descendant when it has no `&`.
+ */
+export const resolveAgainst = (parents: readonly string[], list: string): string[] =>
+  splitSelectorList(list).flatMap((branch) =>
+    parents.map((parent) =>
+      branch.includes('&') ? branch.replaceAll('&', () => parent) : `${parent} ${branch}`,
+    ),
+  )
+
+/**
 The selectors a rule matches by, with every `&` replaced by the rule it nests in.
  */
 export const resolveSelectors = (rule: Rule): string[] => {

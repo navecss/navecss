@@ -5,7 +5,13 @@ import type { FlatDeclaration } from './support/stylesheet.ts'
 import { COLOR_KEYWORDS } from './support/colors.ts'
 import { isFocusRingDeclaration, isThumbBarInset, isThumbRingDeclaration } from './support/focus.ts'
 import { requiresInvalid } from './support/selector.ts'
-import { flatten, flattenRules, readStylesheet, splitSelectorList } from './support/stylesheet.ts'
+import {
+  flatten,
+  flattenRules,
+  readStylesheet,
+  resolveAgainst,
+  splitSelectorList,
+} from './support/stylesheet.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
 import { ADMITTED_FALLBACKS, valueViolations } from './support/value.ts'
 
@@ -73,12 +79,16 @@ const fallbackViolations = (css: string): string[] =>
   )
 
 /**
- * Whether some enclosing rule's selector list keys on the invalid state in every alternative: one
- * sibling alternative without it, or a key only inside `:not()`, would let the paint reach a valid
- * control.
+ * Whether the declaration's whole nesting chain, resolved into full selectors, keys on the invalid
+ * state in every alternative: one alternative without it, a key only inside `:not()`, or a key on
+ * an outer rule whose inner rule styles another element would let the paint reach a valid control.
  */
-const isInvalidKey = (item: FlatDeclaration): boolean =>
-  item.selectors.some((list) => requiresInvalid(list))
+const isInvalidKey = (item: FlatDeclaration): boolean => {
+  const [outermost = '', ...inner] = item.selectors
+  let resolved = splitSelectorList(outermost)
+  for (const list of inner) resolved = resolveAgainst(resolved, list)
+  return resolved.length > 0 && resolved.every((selector) => requiresInvalid(selector))
+}
 
 /**
  * The colours a border value names: token reads, named and system colours, and hex or functional
@@ -204,6 +214,24 @@ describe('AC-base-ui-bridge-24: every declared value is one of the admitted form
     expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([
       `${PREFIX}input border-color: var(--nave-color-feedback-danger)`,
     ])
+  })
+
+  it('reds on a danger border of a different element nested inside an invalid rule (control)', () => {
+    const css = planted(
+      `.${PREFIX}number-field-group { &:has(> [aria-invalid="true"]) { & > [aria-disabled="true"] { border-color: var(--nave-color-feedback-danger) } } }`,
+    )
+
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([
+      `${PREFIX}number-field-group border-color: var(--nave-color-feedback-danger)`,
+    ])
+  })
+
+  it('admits a danger border nested inside an invalid rule on the same element', () => {
+    const css = planted(
+      `.${PREFIX}number-field-group { &:has(> [aria-invalid="true"]) { &:hover { border-color: var(--nave-color-feedback-danger) } } }`,
+    )
+
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([])
   })
 
   it('reds on a focus-ring fallback outside the rules that own it (control)', () => {

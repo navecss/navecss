@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { compare, isMutuallyExclusive, selectorSpecificity } from './support/selector.ts'
-import { flatten, readStylesheet, splitSelectorList } from './support/stylesheet.ts'
+import { flatten, readStylesheet, resolveAgainst } from './support/stylesheet.ts'
 import { tableP } from './support/table-p.ts'
 
 const PREFIX = 'nave-base-ui-'
@@ -11,17 +11,6 @@ interface SettingRule {
   readonly selector: string
   readonly properties: Set<string>
 }
-
-/**
- * A nested selector list resolved against its parents: each alternative on its own, with `&`
- * replaced by the parent, or joined to it as a descendant when it has no `&`.
- */
-const resolveAgainst = (parents: readonly string[], list: string): string[] =>
-  splitSelectorList(list).flatMap((branch) =>
-    parents.map((parent) =>
-      branch.includes('&') ? branch.replaceAll('&', () => parent) : `${parent} ${branch}`,
-    ),
-  )
 
 /**
 Every rule of a stylesheet with the properties it sets, its selector resolved against its class.
