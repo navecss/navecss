@@ -8,8 +8,16 @@
  * same files.
  */
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import {
+  closeSync,
+  constants,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -413,16 +421,20 @@ test('knip does not run while build does: tsup leaves a transient config file in
 
 /**
  * A stand-in for the pnpm entry point the runner starts each step with (`npm_execpath`). Every
- * step exits at once except the one named in `FAKE_SLOW_STEP`: that one starts a child of its
- * own, records both process ids in `FAKE_PIDS_FILE` once the child is up, ignores SIGINT as pnpm
- * does when it is forwarded one, and then waits far longer than the test does. With
- * `FAKE_TRAP_TERM` set, both processes ignore SIGTERM as well.
+ * step exits after `FAKE_OTHER_STEPS_MS` except the one named in `FAKE_SLOW_STEP`. That one
+ * prints a line, starts a child of its own, records both process ids in `FAKE_PIDS_FILE` once
+ * the child is up, ignores SIGINT as pnpm does when it is forwarded one, and then waits far
+ * longer than the test does. With `FAKE_TRAP_TERM` set, both processes ignore SIGTERM as well.
  */
 const FAKE_PNPM = `
 import { spawn } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 const [, , , name] = process.argv
-if (name !== process.env.FAKE_SLOW_STEP) process.exit(0)
+if (name !== process.env.FAKE_SLOW_STEP) {
+  setTimeout(() => process.exit(0), Number(process.env.FAKE_OTHER_STEPS_MS ?? 0))
+  await new Promise(() => {})
+}
+console.log('the slow step is running')
 process.on('SIGINT', () => {})
 if (process.env.FAKE_TRAP_TERM) process.on('SIGTERM', () => {})
 const child = 'if (process.env.FAKE_TRAP_TERM) process.on("SIGTERM", () => {}); console.log("up"); setInterval(() => {}, 1000)'
@@ -470,9 +482,11 @@ async function within(promise, ms, fallback) {
  * Starts the real runner, in a process group of its own, with every step faked and `build` the
  * slow one, and calls `body({ child, exited, output, pids })` once the slow step is up. `exited`
  * resolves to the runner's exit code (null when a signal killed it). Whatever is still running
- * afterwards is killed by process id.
+ * afterwards is killed by process id. With `closableOutput` the runner's stdout and stderr are a
+ * real pipe (a named pipe) instead of the usual socket, and the body gets `closeOutput()`, which
+ * closes the reading end the way a terminal that goes away does.
  */
-async function withRunningSlowStep({ trapTerm = false }, body) {
+async function withRunningSlowStep({ closableOutput = false, trapTerm = false }, body) {
   const dir = mkdtempSync(path.join(tmpdir(), 'ci-check-signal-'))
   const pidsFile = path.join(dir, 'pids.json')
   const entry = path.join(dir, 'fake-pnpm.mjs')
@@ -481,20 +495,31 @@ async function withRunningSlowStep({ trapTerm = false }, body) {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => key !== 'TURBO_FORCE'),
   )
+  let reader
+  let stdio = ['ignore', 'pipe', 'pipe']
+  if (closableOutput) {
+    const fifo = path.join(dir, 'output.fifo')
+    execFileSync('mkfifo', [fifo])
+    reader = openSync(fifo, constants.O_RDONLY | constants.O_NONBLOCK)
+    const writer = openSync(fifo, 'w')
+    stdio = ['ignore', writer, writer]
+  }
   const child = spawn(process.execPath, [runner], {
     detached: true,
     env: {
       ...env,
       FAKE_PIDS_FILE: pidsFile,
+      FAKE_OTHER_STEPS_MS: closableOutput ? '600' : '0',
       FAKE_SLOW_STEP: 'build',
       ...(trapTerm && { FAKE_TRAP_TERM: '1' }),
       npm_execpath: entry,
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio,
   })
+  if (closableOutput) closeSync(stdio[1])
   const chunks = []
-  child.stdout.on('data', (chunk) => chunks.push(chunk))
-  child.stderr.on('data', (chunk) => chunks.push(chunk))
+  child.stdout?.on('data', (chunk) => chunks.push(chunk))
+  child.stderr?.on('data', (chunk) => chunks.push(chunk))
   const exited = new Promise((resolve) => child.on('close', (code) => resolve(code)))
   let pids = []
   try {
@@ -508,8 +533,19 @@ async function withRunningSlowStep({ trapTerm = false }, body) {
       }
     }, 10_000)
     assert.ok(started, 'the slow step never started')
-    await body({ child, exited, output: () => Buffer.concat(chunks).toString(), pids })
+    await body({
+      child,
+      closeOutput: () => closeSync(reader),
+      exited,
+      output: () => Buffer.concat(chunks).toString(),
+      pids,
+    })
   } finally {
+    try {
+      pids = JSON.parse(readFileSync(pidsFile, 'utf8'))
+    } catch {
+      // The step never got as far as recording its processes.
+    }
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
     for (const pid of pids) if (isAlive(pid)) process.kill(pid, 'SIGKILL')
     rmSync(dir, { force: true, recursive: true })
@@ -556,6 +592,21 @@ test('a second signal kills the steps that ignored the first', async () => {
     assert.ok(Date.now() - signalledAt < 2000)
     assert.ok(await allGone(pids, 2000), 'a step process is left')
   })
+})
+
+test('a closed output pipe does not change the exit code of a stopped runner', async () => {
+  await withRunningSlowStep(
+    { closableOutput: true },
+    async ({ child, closeOutput, exited, pids }) => {
+      // A terminal that really closes takes the runner's stdout and stderr with it, so its next
+      // write fails with EPIPE; the hangup's exit code must survive that.
+      closeOutput()
+      process.kill(-child.pid, 'SIGHUP')
+      const code = await within(exited, 5000, 'still running')
+      assert.equal(code, 129)
+      assert.ok(await allGone(pids, 3000), 'a step process is left')
+    },
+  )
 })
 
 test('package.json runs this runner as ci:check, and ci:check:fix runs ci:check', () => {

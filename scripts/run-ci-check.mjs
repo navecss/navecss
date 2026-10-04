@@ -273,6 +273,13 @@ async function main(env = process.env) {
     return
   }
   validateSteps(STEPS)
+  // A terminal that closes takes this process's output pipes with it, and the next write to one
+  // raises EPIPE. That must not replace the exit code of the signal that stopped the gate.
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', (error) => {
+      if (error.code !== 'EPIPE') throw error
+    })
+  }
   const names = STEPS.map((step) => step.name)
   let freshCacheDir
   const stepEnv = {
