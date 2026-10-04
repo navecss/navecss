@@ -174,7 +174,10 @@ function checkWaitingClient(
 ): void {
   const missing = [...atoms].filter((atom) => !file.emitted.includes(atom)).toSorted(compareText)
   if (missing.length === 0) {
-    writeHandshake(context.cacheDir, { ...file, consumed: true }, (message) => ctx.warn(message))
+    // What an earlier server build failed on is not named by this one, so it is not shipped.
+    writeHandshake(context.cacheDir, { ...file, consumed: true, pending: [] }, (message) => {
+      ctx.warn(message)
+    })
     return
   }
   const pending = [...new Set([...(file.pending ?? []), ...withRestorers(new Set(atoms))])]

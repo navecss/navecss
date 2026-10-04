@@ -3,15 +3,18 @@
  * plugin objects for every options value, one signature, `keep` validated and typed, `cx.dynamic()`
  * with and without the plugin, and a post-order half that never changes a module.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
-import { describe, expect, it } from 'vitest'
+import { parseAst } from 'vite'
+import { describe, expect, it, vi } from 'vitest'
 
 import { atomClassMap } from '../src/atoms.ts'
 import { cx } from '../src/cx.ts'
 import { navePlugin } from '../src/vite.ts'
+import { stateFor } from '../src/vite-state.ts'
 import {
   APP_CSS,
   appFiles,
@@ -263,6 +266,66 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
         app.dispose()
       }
     }, 60_000)
+
+    it('is inert under all: no define, no noExternal, no re-feed, no worker plugin, no cache file, no module recorded', async () => {
+      const cacheDir = mkdtempSync(path.join(tmpdir(), 'nave-inert-'))
+      try {
+        const [nave, collect] = navePlugin({ atomic: 'all' })
+        const handler = vi.fn()
+        const cssStep = { name: 'vite:css-post', transform: { handler } }
+        const config = {
+          root: '/inert',
+          command: 'build',
+          cacheDir,
+          logger: { warn() {} },
+          plugins: [cssStep],
+        }
+        nave.configResolved(config)
+        const warn = vi.fn()
+        const environment = (consumer: string) => ({
+          name: consumer === 'client' ? 'client' : 'ssr',
+          config: { consumer },
+          plugins: [cssStep],
+        })
+        const hostOf = (consumer: string) =>
+          ({
+            environment: environment(consumer),
+            parse: parseAst,
+            warn,
+            error: (error: unknown) => {
+              throw new Error(String(error))
+            },
+            addWatchFile() {},
+            getCombinedSourcemap: () => ({ mappings: '', sources: [] }),
+          }) as never
+        const code = `${IMPORT}export const f = (v) => cx(v)\nexport const c = 'nave-flex'\n`
+
+        await nave.renderChunk.call(hostOf('client'), '', { modules: { '/inert/a.css': {} } })
+        nave.generateBundle.handler.call(hostOf('client'), {}, {})
+        await collect.transform.call(hostOf('client'), code, '/inert/src/a.js')
+        collect.transformIndexHtml.handler('<p class="nave-flex">', {
+          filename: '/inert/index.html',
+        })
+        for (const consumer of ['client', 'server']) {
+          await collect.buildStart.call(hostOf(consumer))
+          await collect.buildEnd.call(hostOf(consumer))
+        }
+        const state = stateFor('/inert', config)
+
+        expect(nave.config()?.define).toBeUndefined()
+        expect(nave.config()?.worker).toBeUndefined()
+        expect(nave.configEnvironment('ssr', {})).toBeUndefined()
+        expect(cssStep.transform.handler).toBe(handler)
+        expect(handler).not.toHaveBeenCalled()
+        expect(warn).not.toHaveBeenCalled()
+        expect(state.modules.size).toBe(0)
+        expect(state.pages.size).toBe(0)
+        expect(state.emitted).toBeUndefined()
+        expect(readdirSync(cacheDir)).toEqual([])
+      } finally {
+        rmSync(cacheDir, { force: true, recursive: true })
+      }
+    })
 
     it('builds green in a plugins list beside another plugin (Vite flattens the array)', async () => {
       const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))

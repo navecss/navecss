@@ -4,7 +4,7 @@
  * compiles from TypeScript, expressions nested deeper than a call stack, the specifiers a module
  * imports `cx` through, and the classes a module the build cannot read still writes.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import vuePlugin from '@vitejs/plugin-vue'
 import { type PluginOption, parseAst } from 'vite'
@@ -29,6 +29,8 @@ import { assertScalesLinearly } from './helpers/perf-scaling.ts'
 import { IMPORT } from './helpers/used-atoms-rows.ts'
 
 const UNMAPPED = ' (line unknown: no source map leads from the compiled code to this file)'
+const WITHOUT_MAP =
+  " (line unknown: this file's compiled code has no source map in this build; with build.sourcemap set in the Vite config, the report gives the line if the source maps then lead back to it)"
 
 /**
  * Reads `code` as an application module.
@@ -67,11 +69,10 @@ describe('AC-used-atoms-34: an inline script of an HTML file is never told to as
       try {
         const built = await buildUsed(app, { build: { sourcemap } })
 
-        expect(built.error).toContain(
-          `index.html: cx(v): the argument is not a literal atom name.${UNMAPPED}`,
-        )
-        expect(built.error).not.toContain('set build.sourcemap')
-        expect(built.error).not.toContain('setting build.sourcemap')
+        const line = built.error!.split('\n').find((text) => text.startsWith('index.html: '))!
+
+        expect(line.endsWith(`the argument is not a literal atom name.${UNMAPPED}`)).toBe(true)
+        expect(line).not.toContain(WITHOUT_MAP)
       } finally {
         app.dispose()
       }
@@ -99,6 +100,13 @@ describe('AC-used-atoms-31: an empty value ends a class only when what follows i
     },
     60_000,
   )
+
+  it('fails a template that ends in the prefix and an empty substitution when the chain goes on with a name', async () => {
+    const built = await build(module("`nave-${''}` + tone"))
+
+    expect(built.error).toMatch(/^1 problem in 1 file/)
+    expect(built.error).toContain('src/a.js')
+  }, 60_000)
 
   it('is green when what follows the empty value ends the class, and holds flex', async () => {
     const built = await build(module("'nave-flex' + (on ? '' : ' x') + ' y'"))
@@ -343,4 +351,75 @@ describe('AC-used-atoms-17: a module the build cannot read still writes its clas
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(['flex'])
   }, 60_000)
+})
+
+describe('AC-used-atoms-17: a data module of any size is read', () => {
+  it('reads a JSON module holding 200,000 items and one Nave class', async () => {
+    const items = JSON.stringify([...Array.from({ length: 200_000 }, () => 'x'), 'nave-flex'])
+    const data: PluginOption = {
+      name: 'big-json',
+      resolveId(id) {
+        return id === 'virtual:big' ? '\0virtual:big' : undefined
+      },
+      load(id) {
+        return id === '\0virtual:big' ? { code: items, moduleType: 'json' } : undefined
+      },
+    }
+    const built = await build(
+      { 'src/a.js': "import d from 'virtual:big'\nconsole.log(d.length)\n" },
+      { plugins: [data] },
+    )
+
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(['flex'])
+  }, 120_000)
+})
+
+describe('AC-used-atoms-31: a long chain that goes on after the prefix is read once', () => {
+  it('reads "nave-" + "" + ... + tone in time proportional to its length', async () => {
+    await assertScalesLinearly((size) => {
+      const code = `export const f = (tone) => 'nave-' + ${Array.from({ length: size }, () => "''").join(' + ')} + tone\n`
+      const start = performance.now()
+      const reading = read(code)
+      const spent = performance.now() - start
+      expect(reading.problems.map((problem) => problem.kind)).toContain('concatenation')
+      return spent
+    }, 300)
+  }, 120_000)
+})
+
+describe('AC-used-atoms-34: a map that differs from the file only by a byte order mark or line breaks', () => {
+  const bom = '\uFEFF'
+  const source = (prefix: string, lineBreak: string): string =>
+    `${prefix}${IMPORT.trim()}${lineBreak}export const f = (v) => cx(v)${lineBreak}`
+
+  it.each([
+    ['a byte order mark', bom, '\n'],
+    ['CRLF line breaks', '', '\r\n'],
+    ['both', bom, '\r\n'],
+  ])(
+    'still leads to the file when it differs by %s',
+    async (_name, prefix, lineBreak) => {
+      const normalizing: PluginOption = {
+        name: 'normalizing-load',
+        enforce: 'pre',
+        load(id) {
+          if (!id.endsWith('src/a.js')) return undefined
+          return readFileSync(id, 'utf8')
+            .replace(/^\uFEFF/, '')
+            .replaceAll('\r\n', '\n')
+        },
+      }
+      const app = makeUsedApp(appFiles({ 'src/a.js': source('', '\n') }))
+      writeFileSync(path.join(app.root, 'src/a.js'), source(prefix, lineBreak))
+      try {
+        const built = await buildUsed(app, { plugins: [normalizing], build: { sourcemap: true } })
+
+        expect(built.error).toContain('src/a.js:2:28: cx(v)')
+      } finally {
+        app.dispose()
+      }
+    },
+    60_000,
+  )
 })

@@ -6,6 +6,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import type { PluginOption } from 'vite'
 import { describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/vite.ts'
@@ -139,6 +140,42 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
       expect(b.error).toBeUndefined()
       expect(atomLayerAtoms(a.css)).toEqual(['flex'])
       expect(atomLayerAtoms(b.css)).toEqual(['grid'])
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('keeps the page atoms of each of two concurrent builds of one root that read different markup', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('block'))\n` }))
+    try {
+      const shared = navePlugin()
+      const markup = (name: string, atom: string, delay: number): PluginOption => ({
+        name,
+        enforce: 'pre',
+        async load(id) {
+          if (!id.endsWith('/index.html')) return undefined
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          return `<!doctype html><html><body><p class="nave-${atom}">x</p><script type="module" src="/src/main.ts"></script></body></html>`
+        },
+      })
+      // The second build is still compiling when the first reads its page.
+      const slowEntry: PluginOption = {
+        name: 'slow-entry',
+        enforce: 'pre',
+        async transform(_code, id) {
+          if (id.endsWith('/src/main.ts')) await new Promise((resolve) => setTimeout(resolve, 400))
+          return undefined
+        },
+      }
+      const [a, b] = await Promise.all([
+        buildUsed(app, { nave: shared, plugins: [markup('first', 'flex', 60)] }),
+        buildUsed(app, { nave: shared, plugins: [markup('second', 'grid', 0), slowEntry] }),
+      ])
+
+      expect(a.error).toBeUndefined()
+      expect(b.error).toBeUndefined()
+      expect(atomLayerAtoms(a.css)).toEqual(['block', 'flex'])
+      expect(atomLayerAtoms(b.css)).toEqual(['block', 'grid'])
     } finally {
       app.dispose()
     }
@@ -498,6 +535,41 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
       }
     }, 120_000)
   })
+
+  it('drops what a failed server build left pending once a server build passes without it', async () => {
+    const app = ssrApp("cx('grid')")
+    try {
+      await client(app)
+      const failed = await server(app)
+      editServer(app, "cx('flex')")
+      const passed = await server(app)
+      const next = await client(app)
+
+      expect(failed.error).toContain('grid')
+      expect(passed.error).toBeUndefined()
+      expect(atomLayerAtoms(next.css)).toEqual(atoms('flex', 'gap'))
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('does not ship what the server no longer names after the client shipped it', async () => {
+    const app = ssrApp("cx('grid')")
+    try {
+      await client(app)
+      await server(app)
+      const shipped = await client(app)
+      editServer(app, "cx('flex')")
+      const passed = await server(app)
+      const next = await client(app)
+
+      expect(atomLayerAtoms(shipped.css)).toContain('grid')
+      expect(passed.error).toBeUndefined()
+      expect(atomLayerAtoms(next.css)).toEqual(atoms('flex', 'gap'))
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
 
   it.each([
     ['grid', "cx('grid')"],

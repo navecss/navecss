@@ -4,9 +4,9 @@
  * build's. Each invocation, told apart by the config object the host was handed, gets a pair of
  * plugin halves of its own for each command, made when Vite resolves its config; the two objects
  * the call returns hand every hook to the pair of the invocation it runs for. A hook that names
- * none (a host that gives none) goes to the pair configured last. A page is compiled by a hook
- * that names no environment, so a page goes to the pairs that compiled it, or, when none did, to
- * the pairs whose root holds it.
+ * none (a host that gives none) goes to the pair configured last. A page is read by a hook that
+ * names no environment, so the page goes to the pair that compiled it, found by the text it was
+ * given, or, when none did, to the pairs whose root holds it.
  */
 import type { NaveCollectPlugin } from './vite-collect-plugin.ts'
 import type { RenderContext, ResolvedConfigLike, TransformContext } from './vite-types.ts'
@@ -30,13 +30,15 @@ interface Pickers {
    */
   readonly forHook: (host: Hosted) => Assembled
   /**
-   * Notes that the HTML page `filename` is being compiled by the invocation `host` runs for.
+   * Notes that the invocation `host` runs for is compiling the HTML page `filename`, whose text
+   * is `code`.
    */
-  readonly notePage: (filename: string, host: Hosted) => void
+  readonly notePage: (filename: string, host: Hosted, code: string) => void
   /**
-   * The pairs that read the HTML page `filename`.
+   * The pair that is reading the HTML page `filename`, whose text is now `html`: the invocation
+   * that noted it, or the pairs whose root holds it when none did.
    */
-  readonly forPage: (filename: string | undefined) => Assembled[]
+  readonly forPage: (filename: string | undefined, html: string) => Assembled[]
   /**
    * The pair of the invocation configured last.
    */
@@ -44,11 +46,11 @@ interface Pickers {
 }
 
 /**
- * The page a module id names, when it is an HTML file of a build: the path without its query.
+ * The page a module id names, when it is an HTML file of a build. A module made from a page (its
+ * inline script or style) has a query and is not the page.
  */
 function htmlPageOf(id: string): string | undefined {
-  const file = id.split('?', 1)[0]!
-  return file.toLowerCase().endsWith('.html') ? file : undefined
+  return !id.includes('?') && id.toLowerCase().endsWith('.html') ? id : undefined
 }
 
 /**
@@ -85,7 +87,7 @@ function firstHalf(
     },
     transform(code, id) {
       const page = htmlPageOf(id)
-      if (page !== undefined) pickers.notePage(page, this)
+      if (page !== undefined) pickers.notePage(page, this, code)
       return pickers.forHook(this).nave.transform.call(this, code, id)
     },
     hotUpdate(options) {
@@ -116,7 +118,7 @@ function secondHalf(pickers: Pickers): NaveCollectPlugin {
     transformIndexHtml: {
       order: 'pre',
       handler(html, page) {
-        for (const build of pickers.forPage(page.filename)) {
+        for (const build of pickers.forPage(page.filename, html)) {
           build.collect.transformIndexHtml.handler(html, page)
         }
         return
@@ -149,7 +151,8 @@ function registry(assemble: () => Assembled): {
 } {
   const byInvocation = new WeakMap<object, Map<string, Assembled>>()
   const roots = new Map<Assembled, string>()
-  const pages = new Map<string, Set<Assembled>>()
+  // The pairs compiling each page, oldest first, with the text each was given.
+  const pages = new Map<string, Map<Assembled, string>>()
   let latest = assemble()
   const find = (host: Hosted): Assembled | undefined => {
     const config = host.environment?.config
@@ -159,14 +162,23 @@ function registry(assemble: () => Assembled): {
   const pickers: Pickers = {
     latest: () => latest,
     forHook: (host) => find(host) ?? latest,
-    notePage(filename, host) {
+    notePage(filename, host, code) {
+      const compiling = pages.get(filename) ?? new Map<Assembled, string>()
       const build = find(host) ?? latest
-      pages.set(filename, (pages.get(filename) ?? new Set()).add(build))
+      // A build that compiles the page again starts at the back of the line.
+      compiling.delete(build)
+      pages.set(filename, compiling.set(build, code))
     },
-    forPage(filename) {
+    forPage(filename, html) {
       if (filename === undefined) return [latest]
-      const noted = pages.get(filename)
-      if (noted) return [...noted]
+      const compiling = pages.get(filename)
+      if (compiling && compiling.size > 0) {
+        // Each compile is read once: the one whose text is this page's, else the oldest.
+        const owner =
+          [...compiling].find(([, code]) => code === html)?.[0] ?? compiling.keys().next().value!
+        compiling.delete(owner)
+        return [owner]
+      }
       const holding = [...roots].filter(([, root]) => isInside(root, filename)).map(([b]) => b)
       return holding.length > 0 ? holding : [latest]
     },

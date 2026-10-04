@@ -9,6 +9,7 @@ import type { ScopeAnalysis } from './vite-scope.ts'
 
 import { atomClassMap } from './atoms.ts'
 import { childrenOf, nodeAt, nodesAt } from './vite-ast.ts'
+import { type After, type EndMemo, isEndingTheClass } from './vite-class-endings.ts'
 import {
   isIdentChar,
   isPlus,
@@ -16,7 +17,6 @@ import {
   type PieceMemo,
   rightmostPiece,
 } from './vite-class-pieces.ts'
-import { stringValues } from './vite-string-values.ts'
 
 const ATOM_OF_CLASS: ReadonlyMap<string, string> = new Map(
   Object.entries(atomClassMap).map(([atom, className]) => [className, atom]),
@@ -76,90 +76,15 @@ function isEndingInNavePrefix(text: string): boolean {
 }
 
 /**
- * What comes after a `+` in a chain: the operands to its right that the chain goes on with.
- */
-type After = { readonly next: After; readonly node: AstNode } | undefined
-
-/**
- * Whether a string value leaves the class on its left whole: it begins with a character that
- * cannot continue a CSS identifier (a backslash can, as an escape).
- */
-function isEndingValue(value: string): boolean {
-  return !(isIdentChar(value[0]) || value.startsWith('\\'))
-}
-
-/**
- * The two operands `element` joins, when it is a `+` (parentheses around it or not).
- */
-function operandsOf(element: AstNode | string): [AstNode, AstNode] | undefined {
-  if (typeof element === 'string') return undefined
-  const inner = unwrap(element)
-  if (inner.type !== 'BinaryExpression' || inner.operator !== '+') return undefined
-  const left = nodeAt(inner, 'left')
-  const right = nodeAt(inner, 'right')
-  return left && right ? [left, right] : undefined
-}
-
-/**
- * The elements of the sequence `first`, then `rest`, with each `+` replaced by the operands it
- * joins, left to right, however the parentheses fall.
- * @yields {AstNode | string} each element in order.
- */
-function* sequenceOf(
-  first: readonly (AstNode | string)[],
-  rest: After,
-): Generator<AstNode | string> {
-  const pending = first.toReversed()
-  let later = rest
-  for (;;) {
-    let element = pending.pop()
-    if (element === undefined && later) {
-      element = later.node
-      later = later.next
-    }
-    if (element === undefined) return
-    const operands = operandsOf(element)
-    if (operands) pending.push(operands[1], operands[0])
-    else yield element
-  }
-}
-
-/**
- * Whether the class on the left is whole in what the build reads, given what follows it, read as
- * one sequence from left to right: `first`, then `rest`. Each element must be a string every
- * value of which begins with a character that cannot continue the identifier, or is empty while
- * what comes after it ends the class too (an empty value ends it only if nothing follows, or the
- * next element does). An element that can be anything else, or that does not resolve, may
- * continue the identifier.
- */
-function isEndingTheClass(
-  first: readonly (AstNode | string)[],
-  rest: After,
-  analysis: ScopeAnalysis,
-): boolean {
-  for (const element of sequenceOf(first, rest)) {
-    const values = typeof element === 'string' ? [element] : stringValues(element, analysis)
-    if (!values?.every((value) => value === '' || isEndingValue(value))) return false
-    if (!values.includes('')) return true
-  }
-  return true
-}
-
-/**
- * `node` without the parentheses around it.
- */
-function unwrap(node: AstNode): AstNode {
-  let current = node
-  while (current.type === 'ParenthesizedExpression')
-    current = nodeAt(current, 'expression') ?? current
-  return current
-}
-
-/**
  * Whether `node` is a template literal with a piece that ends in `nave-` followed by what can
- * continue the identifier: the substitutions and pieces after it are read as one sequence.
+ * continue the identifier: the substitutions and pieces after it, and what follows the template
+ * in the `+` chain it belongs to, are read as one sequence.
  */
-function isBreakingOut(node: AstNode, analysis: ScopeAnalysis): boolean {
+function isBreakingOut(
+  node: AstNode,
+  analysis: ScopeAnalysis,
+  ending: { readonly after: After; readonly memo: EndMemo },
+): boolean {
   if (node.type !== 'TemplateLiteral') return false
   const quasis = nodesAt(node, 'quasis')
   const substitutions = nodesAt(node, 'expressions')
@@ -171,7 +96,7 @@ function isBreakingOut(node: AstNode, analysis: ScopeAnalysis): boolean {
       const text = (next?.value as { cooked?: string } | undefined)?.cooked
       return [substitution, ...(next ? [text ?? next] : [])]
     })
-    return !isEndingTheClass(following, undefined, analysis)
+    return !isEndingTheClass(following, ending.after, analysis, ending.memo)
   })
 }
 
@@ -183,13 +108,15 @@ function concatenatedPiece(
   node: AstNode,
   memo: PieceMemo,
   analysis: ScopeAnalysis,
-  after: After,
+  ending: { readonly after: After; readonly memo: EndMemo },
 ): Piece | undefined {
   if (!isPlus(node)) return undefined
   const piece = rightmostPiece(nodeAt(node, 'left'), memo)
   if (piece?.head !== 'nave-') return undefined
   const right = nodeAt(node, 'right')
-  return isEndingTheClass(right ? [right] : [], after, analysis) ? undefined : piece
+  return isEndingTheClass(right ? [right] : [], ending.after, analysis, ending.memo)
+    ? undefined
+    : piece
 }
 
 /**
@@ -237,12 +164,13 @@ export function concatenationProblems(
 ): Problem[] {
   const problems: Problem[] = []
   const memo: PieceMemo = { edges: new Map(), rightmost: new Map() }
+  const ends: EndMemo = new Map()
   const stack: { after: After; node: AstNode }[] = [{ node: program, after: undefined }]
   while (stack.length > 0) {
     const { node, after } = stack.pop()!
     const offset =
-      concatenatedPiece(node, memo, analysis, after)?.node.start ??
-      (isBreakingOut(node, analysis) ? node.start : -1)
+      concatenatedPiece(node, memo, analysis, { after, memo: ends })?.node.start ??
+      (isBreakingOut(node, analysis, { after, memo: ends }) ? node.start : -1)
     if (offset !== -1) {
       problems.push({
         kind: 'concatenation',

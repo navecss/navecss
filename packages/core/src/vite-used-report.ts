@@ -29,7 +29,7 @@ export interface LocatedProblem extends Problem {
 }
 
 export const LINE_UNKNOWN_WITHOUT_MAP =
-  " (line unknown: this file's compiled code has no source map in this build; setting build.sourcemap in the Vite config reports the line when every plugin that compiles this file returns a map)"
+  " (line unknown: this file's compiled code has no source map in this build; with build.sourcemap set in the Vite config, the report gives the line if the source maps then lead back to it)"
 export const LINE_UNKNOWN_UNMAPPED =
   ' (line unknown: no source map leads from the compiled code to this file)'
 

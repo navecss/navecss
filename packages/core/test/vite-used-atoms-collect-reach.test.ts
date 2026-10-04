@@ -699,7 +699,7 @@ describe('a long chain of constants resolves', () => {
 })
 
 const UNKNOWN_WITHOUT_MAP =
-  " (line unknown: this file's compiled code has no source map in this build; setting build.sourcemap in the Vite config reports the line when every plugin that compiles this file returns a map)"
+  " (line unknown: this file's compiled code has no source map in this build; with build.sourcemap set in the Vite config, the report gives the line if the source maps then lead back to it)"
 const UNKNOWN_UNMAPPED = ' (line unknown: no source map leads from the compiled code to this file)'
 
 describe('AC-used-atoms-34: a position is printed only where the source map leads to it', () => {
@@ -743,6 +743,14 @@ describe('AC-used-atoms-34: a position is printed only where the source map lead
     },
   }
   const a = { 'src/a.js': `${IMPORT}export const f = (v) => cx(v)\n` }
+
+  it('a module rewritten by a plugin that returns no map is reported with the first sentence in a build with no source map', async () => {
+    const built = await build(a, { plugins: [prepend] })
+
+    expect(built.error).toContain(
+      `src/a.js: cx(v): the argument is not a literal atom name.${UNKNOWN_WITHOUT_MAP}`,
+    )
+  }, 60_000)
 
   it('a module rewritten by a plugin that returns no map is reported with the second sentence', async () => {
     const built = await build(a, { plugins: [prepend], build: { sourcemap: true } })

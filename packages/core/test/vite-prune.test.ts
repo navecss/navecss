@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { atoms } from '../src/atoms.ts'
+import { assertScalesLinearly } from './helpers/perf-scaling.ts'
 
 import { inspectAtomicLayer, pruneAtomicLayer, unprunedAtoms } from '../src/vite-prune.ts'
 import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
@@ -240,4 +241,21 @@ describe('AC-used-atoms-27 - a selector is removed only when it needs an element
     expect(keepOnly(rule('.nave-grid>.child'), kept)).toHaveLength(0)
     expect(parseAtomicLayer('@layer atomic{.a{x:y}}')).toHaveLength(1)
   })
+})
+
+describe('AC-used-atoms-27 - a selector nested in :is() is read in time proportional to its depth', () => {
+  it('prunes and inspects :is(:is(:is(...))) at any depth', async () => {
+    await assertScalesLinearly((depth) => {
+      const selector = `${':is('.repeat(depth)}.nave-grid${')'.repeat(depth)}`
+      const css = `@layer atomic { ${selector} { color: red } .nave-flex { display: flex } }`
+      const emitted = new Set(['flex'])
+      const start = performance.now()
+      const pruned = pruneAtomicLayer(css, emitted)
+      const left = unprunedAtoms(pruned, emitted)
+      const spent = performance.now() - start
+      expect(pruned).not.toContain('nave-grid')
+      expect(left).toEqual([])
+      return spent
+    }, 400)
+  }, 120_000)
 })

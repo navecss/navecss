@@ -33,19 +33,31 @@ export function membersOf(sheet: Sheet, from: number, to: number): [number, numb
   return members
 }
 
+const closings = new WeakMap<Sheet, Map<number, number>>()
+
 /**
- * The index of the token closing the parenthesis or bracket opened at `open`, or the last token
- * of `[open, to)` when it never closes.
+ * The index of the token that closes each parenthesis, function or bracket of the sheet, found
+ * once for the sheet. An opener that never closes has no entry.
  */
-function closeOfGroup(sheet: Sheet, open: number, to: number): number {
-  let depth = 0
-  for (let index = open; index < to; index += 1) {
-    const type = sheet.tokens[index]!.type
-    if (OPENERS.has(type)) depth += 1
-    else if (CLOSERS.has(type)) depth -= 1
-    if (depth === 0) return index
+function closesOf(sheet: Sheet): Map<number, number> {
+  const known = closings.get(sheet)
+  if (known) return known
+  const closes = new Map<number, number>()
+  const open: number[] = []
+  for (const [index, token] of sheet.tokens.entries()) {
+    if (OPENERS.has(token.type)) open.push(index)
+    else if (CLOSERS.has(token.type) && open.length > 0) closes.set(open.pop()!, index)
   }
-  return to - 1
+  closings.set(sheet, closes)
+  return closes
+}
+
+/**
+ * The index after the group opened at `index`: past its closing token, or `to` when it never
+ * closes inside the range.
+ */
+function afterGroup(sheet: Sheet, index: number, to: number): number {
+  return Math.min((closesOf(sheet).get(index) ?? to - 1) + 1, to)
 }
 
 /**
@@ -75,42 +87,74 @@ function atomAt(sheet: Sheet, index: number, to: number): string | undefined {
 
 /**
  * The built-in atoms the tokens `[from, to)` name in compounds of the selector itself, and in the
- * alternatives of an `:is()` or `:where()` among them, never inside another argument.
+ * alternatives of an `:is()` or `:where()` among them, never inside another argument. One pass:
+ * a group that is not transparent is stepped over whole.
  */
 export function atomsNamedBy(sheet: Sheet, from: number, to: number): string[] {
   const atoms: string[] = []
-  for (let index = from; index < to; index += 1) {
-    if (!OPENERS.has(sheet.tokens[index]!.type)) {
-      const atom = atomAt(sheet, index, to)
-      if (atom) atoms.push(atom)
+  let index = from
+  while (index < to) {
+    const isGroup = OPENERS.has(sheet.tokens[index]!.type)
+    if (isGroup && !isTransparentList(sheet, index)) {
+      index = afterGroup(sheet, index, to)
       continue
     }
-    const close = closeOfGroup(sheet, index, to)
-    if (isTransparentList(sheet, index)) atoms.push(...atomsNamedBy(sheet, index + 1, close))
-    index = close
+    const atom = isGroup ? undefined : atomAt(sheet, index, to)
+    if (atom) atoms.push(atom)
+    index += 1
   }
   return atoms
 }
 
+interface Alternatives {
+  readonly finished: string[][]
+  current: string[]
+}
+
+const newList = (): Alternatives => ({ finished: [], current: [] })
+
 /**
- * The atoms outside `emitted` that a list of alternatives all need: none unless every
- * alternative needs one.
+ * Closes the list of alternatives `done` into `parent`: the atoms every alternative needs, none
+ * unless every alternative needs one.
  */
-function sharedNeeds(
+function closeList(done: Alternatives, parent: Alternatives): void {
+  const all = [...done.finished, done.current]
+  if (all.some((needs) => needs.length === 0)) return
+  for (const needs of all) for (const atom of needs) parent.current.push(atom)
+}
+
+/**
+ * Reads the token at `index` into the open `lists` and returns the index to read next.
+ */
+function readToken(
   sheet: Sheet,
-  from: number,
-  to: number,
-  emitted: ReadonlySet<string>,
-): string[] {
-  const alternatives = membersOf(sheet, from, to).map(([start, end]) =>
-    blockersOf(sheet, start, end, emitted),
-  )
-  return alternatives.every((needs) => needs.length > 0) ? alternatives.flat() : []
+  index: number,
+  limit: { readonly emitted: ReadonlySet<string>; readonly to: number },
+  lists: Alternatives[],
+): number {
+  const type = sheet.tokens[index]!.type
+  const list = lists.at(-1)!
+  const isNested = lists.length > 1
+  if (OPENERS.has(type)) {
+    if (!isTransparentList(sheet, index)) return afterGroup(sheet, index, limit.to)
+    lists.push(newList())
+  } else if (isNested && type === ')-token') {
+    closeList(lists.pop()!, lists.at(-1)!)
+  } else if (isNested && type === 'comma-token') {
+    list.finished.push(list.current)
+    list.current = []
+  } else {
+    const atom = atomAt(sheet, index, limit.to)
+    if (atom && !limit.emitted.has(atom)) list.current.push(atom)
+  }
+  return index + 1
 }
 
 /**
  * The atoms outside `emitted` that make the selector `[from, to)` need an element that carries
- * them: none when it can match without one.
+ * them: none when it can match without one. One pass over the tokens, however deep the `:is()`
+ * and `:where()` lists nest: each list collects what each of its alternatives needs, and passes on
+ * what all of them do.
  */
 export function blockersOf(
   sheet: Sheet,
@@ -118,17 +162,10 @@ export function blockersOf(
   to: number,
   emitted: ReadonlySet<string>,
 ): string[] {
-  const blockers: string[] = []
-  for (let index = from; index < to; index += 1) {
-    if (!OPENERS.has(sheet.tokens[index]!.type)) {
-      const atom = atomAt(sheet, index, to)
-      if (atom && !emitted.has(atom)) blockers.push(atom)
-      continue
-    }
-    const close = closeOfGroup(sheet, index, to)
-    if (isTransparentList(sheet, index))
-      blockers.push(...sharedNeeds(sheet, index + 1, close, emitted))
-    index = close
-  }
-  return blockers
+  const lists = [newList()]
+  let index = from
+  while (index < to) index = readToken(sheet, index, { emitted, to }, lists)
+  // A list left open ends with the range, as the group would.
+  while (lists.length > 1) closeList(lists.pop()!, lists.at(-1)!)
+  return lists[0]!.current
 }

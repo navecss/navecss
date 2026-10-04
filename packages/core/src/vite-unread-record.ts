@@ -78,10 +78,11 @@ function jsonStrings(code: string): string[] {
   while (stack.length > 0) {
     const value = stack.pop()
     if (typeof value === 'string') strings.push(value)
-    else if (Array.isArray(value)) stack.push(...(value as unknown[]))
-    else if (typeof value === 'object' && value !== null) {
-      strings.push(...Object.keys(value))
-      stack.push(...(Object.values(value) as unknown[]))
+    else if (Array.isArray(value)) {
+      for (const item of value as unknown[]) stack.push(item)
+    } else if (typeof value === 'object' && value !== null) {
+      for (const key of Object.keys(value)) strings.push(key)
+      for (const item of Object.values(value) as unknown[]) stack.push(item)
     }
   }
   return strings
