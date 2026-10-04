@@ -83,10 +83,12 @@ describe('parseExpandArgs', () => {
     expect(parsed.kind === 'usageError' && parsed.message).toMatch(/overwrite its own input/)
   })
 
-  it('an --out that is the --extend module is a usage error', () => {
+  it('an --out that is the --extend module is a usage error naming the --extend module, not a --source', () => {
     const parsed = parseExpandArgs(['--source=a.css', '--out=m.mjs', '--extend=m.mjs'])
 
-    expect(parsed.kind === 'usageError' && parsed.message).toMatch(/overwrite its own input/)
+    expect(parsed.kind === 'usageError' && parsed.message).toMatch(
+      /is also the --extend module; it would overwrite its own input/,
+    )
   })
 
   it.each([
@@ -182,6 +184,26 @@ describe('runExpand', () => {
     expect(existsSync(file('out/a.css'))).toBe(true)
     expect(out).toEqual([`Expanded ${a} to ${file('out/a.css')}.`])
     expect(err.join('\n')).toContain(`Could not write ${file('blocker/b.css')}: `)
+  })
+
+  it('stops at the output that cannot be written: no pair after it is written', async () => {
+    const a = write('a.css', '.a { @nave flex; }\n')
+    const b = write('b.css', '.b { @nave block; }\n')
+    const c = write('c.css', '.c { @nave grid; }\n')
+    write('blocker', 'a file')
+
+    const status = await runExpand([
+      `--source=${a}`,
+      `--out=${file('out/a.css')}`,
+      `--source=${b}`,
+      `--out=${file('blocker/b.css')}`,
+      `--source=${c}`,
+      `--out=${file('out/c.css')}`,
+    ])
+
+    expect(status).toBe(2)
+    expect(existsSync(file('out/c.css'))).toBe(false)
+    expect(out).toEqual([`Expanded ${a} to ${file('out/a.css')}.`])
   })
 
   it('keeps a byte order mark at the start of the output and counts positions after it', async () => {
@@ -296,6 +318,9 @@ describe('watchFiles', () => {
     const changed = vi.fn()
     const close = watchFiles([watched], changed)
 
+    // The event stream starts a moment after watchFiles returns; a write made at once can be missed.
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    changed.mockClear()
     writeFileSync(watched, 'two')
     await vi.waitFor(() => expect(changed).toHaveBeenCalled(), { timeout: 15_000 })
     close()

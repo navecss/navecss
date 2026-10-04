@@ -62,7 +62,8 @@ export interface NaveLightningAdapter {
   expand(code: string | Uint8Array, filename: string): { code: Uint8Array; map: string }
   /**
    * For `bundleAsync()`: `read` reads a file and returns its expanded text. It returns no source
-   * map, and the inserted text adds no line breaks, so line numbers hold.
+   * map, and the inserted text adds no line breaks, so line numbers hold. A leading byte order
+   * mark is dropped, since the file is joined into a bundle, where one would sit mid-way.
    */
   resolver: { read(filePath: string): string }
 }
@@ -111,8 +112,8 @@ export function navePlugin(options: NaveLightningOptions = {}): NaveLightningAda
     },
     resolver: {
       read: (filePath) => {
-        const { bom, text } = splitByteOrderMark(readFileSync(filePath, 'utf8'))
-        return bom + expandToText(text, filePath).css
+        const { text } = splitByteOrderMark(readFileSync(filePath, 'utf8'))
+        return expandToText(text, filePath).css
       },
     },
   }

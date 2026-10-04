@@ -265,8 +265,10 @@ written, so its path has to work from where the output is served: written to
 beside `app.css`, not `src/theme.css`. Keep each output beside the files it
 imports, or write the paths for the output's place. A bare import, such as one
 of a package (the bundler route's `@import url('@navecss/core')`), is reported as
-an error, because a browser cannot load it, and nothing is written: link
-`@navecss/core/standalone` instead, as above.
+an error, because a browser cannot load it, and nothing is written. For that
+import, link `@navecss/core/standalone` instead, as above, and for
+`@navecss/core/no-tokens`, link its own file, `dist/no-tokens.css`. For any
+other bare import, the error says what to do.
 
 The route has two costs. Its `app.css` is a second shape
 beside the bundler one, with no Nave import in it. And a link into

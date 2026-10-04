@@ -451,6 +451,32 @@ describe('AC-directive-core-43 — a bare @import is reported, with the styleshe
     expect(run.stderr).toContain('names no file relative to the output')
   })
 
+  it("@import 'theme.css'; gives none when theme.css is another --out of the same run, though nothing sits beside the source", () => {
+    write('styles/theme.css', '.t { @nave flex; }\n')
+    write('src/app.css', "@import 'theme.css';\n")
+
+    const run = expand(
+      '--source=styles/theme.css',
+      '--out=public/theme.css',
+      '--source=src/app.css',
+      '--out=public/app.css',
+    )
+
+    expect(run.status, run.all).toBe(0)
+  })
+
+  it("@import 'theme.css'; gives one bare-import when theme.css sits beside the source only", () => {
+    write('src/theme.css', '.t { color: red; }\n')
+    write('src/app.css', "@import 'theme.css';\n")
+
+    const run = expand('--source=src/app.css', '--out=public/app.css')
+
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain(
+      'src/app.css:1:1: @import "theme.css" names no file relative to the output',
+    )
+  })
+
   it('a directory named like the import is not a stylesheet beside the output: still bare', () => {
     write('public/theme.css/inner.css', '.t { color: red; }\n')
     write('src/app.css', "@import 'theme.css';\n")

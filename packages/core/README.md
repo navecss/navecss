@@ -404,11 +404,10 @@ do ([Options](#options)); under `'warn'` it prints each problem with `console.wa
 The adapter imports nothing from `lightningcss`, types included, and declares no peer: you bring
 your own copy. The supported range is documented, not declared: `lightningcss` 1.22 and later,
 the first release with CSS nesting on by default (1.20 and 1.21 cannot parse the nested rules the
-adapter writes). The fixtures run on
-1.22.1 and on the newest release at the time of each release of this package. One cost, on the
-`bundleAsync()` path: `read` returns a string and no source map, so Nave's insertions are not in
-the output map there. The inserted text adds no line breaks, so line numbers hold. On the
-`transform()` path the map is chained through `inputSourceMap`.
+adapter writes). The fixtures run on 1.22.1 and on the newest release at the time of each release
+of this package. One cost, on the `bundleAsync()` path: `read` returns a string and no source
+map, so Nave's insertions are not in the output map there. The inserted text adds no line breaks,
+so line numbers hold. On the `transform()` path the map is chained through `inputSourceMap`.
 
 ### Options
 

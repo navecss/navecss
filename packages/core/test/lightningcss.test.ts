@@ -329,6 +329,17 @@ describe.each(LIGHTNING_RELEASES)(
       expect(path.resolve(error!.fileName!)).toBe(path.join(scratch.dir, 'card.css'))
     })
 
+    it('bundleAsync(): an imported stylesheet that starts with a byte order mark keeps its first rule in the bundle', async () => {
+      write('x.css', '.x { color: green; }\n')
+      write('b.css', '\u{FEFF}.b { @nave flex; }\n')
+      const entry = write('a.css', '@import "x.css";\n@import "b.css";\n.a { color: red; }\n')
+
+      const { code } = await lib.bundleAsync({ filename: entry, resolver: navePlugin().resolver })
+
+      expect(code.toString()).not.toContain('\u{FEFF}')
+      expect(code.toString()).toMatch(/\.b\s*\{\s*display:\s*flex/)
+    })
+
     it('AC-directive-core-26: neither expand() nor transform() adds an @import or a url() of its own, over every atom', () => {
       const expanded = navePlugin().expand(`.a { @nave ${Object.keys(atoms).join(' ')}; }`, 'a.css')
       const result = lib.transform({ filename: 'a.css', code: expanded.code })
@@ -410,9 +421,9 @@ describe('a byte order mark', () => {
     expect(() => navePlugin().resolver.read(file)).toThrow(/a\.css:1:12: /)
   })
 
-  it('is kept at the start of what the resolver reads', () => {
+  it('is left off what the resolver reads, so a stylesheet joined into a bundle holds none mid-way', () => {
     const file = write('a.css', '\u{FEFF}.a { @nave flex; }')
 
-    expect(navePlugin().resolver.read(file).startsWith('\u{FEFF}.a {')).toBe(true)
+    expect(navePlugin().resolver.read(file).startsWith('.a {')).toBe(true)
   })
 })
