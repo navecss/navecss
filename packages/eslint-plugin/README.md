@@ -136,8 +136,12 @@ Stated as rules, not as gaps to be filled later:
 
 - **JSX only**, at this version: Vue, Svelte, Astro, plain HTML templates and slot props
   (`classNames={{ root: '...' }}`) are outside every rule here.
-- A class reached through a function's return value, an imported constant, a variable beyond one
-  `const` hop, or a call to a helper not in `settings['@navecss'].helpers` is not seen.
+- A class reached through an imported constant, a variable beyond one `const` hop, or a call to a
+  helper not in `settings['@navecss'].helpers` is not seen.
+- A function's return value is read only when an inline function is the whole `className` or
+  `class` value. A function held in a variable (`className={pick}`), reached through a call
+  (`className={f()}`), or placed anywhere else in the value (a conditional branch, a `||` or `??`
+  fallback) is not read.
 - A `cxModules` wrapper is recognised through its `cx` export only: one that re-exports Nave's
   `cx` under another name, or as its default export, is not seen as Nave's `cx`.
 - `cx.raw` is recognised as `cx.raw`, `cx['raw']`, ``cx[`raw`]``, a namespace import's
@@ -168,7 +172,11 @@ Stated as rules, not as gaps to be filled later:
 
 `@navecss/class-channel` reads a JSX `className` or `class` value and reports each literal class
 that is not declared as your own, and each argument of `cx()` that is not one atom name. A helper
-call is read through its arguments; a `cx.raw()` call is left to the next rule.
+call is read through its arguments; a `cx.raw()` call is left to the next rule. A `className` or
+`class` value that is itself an inline function of component state, as Base UI parts accept
+(`className={(state) => (state.open ? 'is-open' : undefined)}`), is read through the values it
+returns: its expression body, or each `return` of its block body, but not the returns of a
+function nested inside it.
 
 ### Rule 2: the `cx.raw()` reason
 
