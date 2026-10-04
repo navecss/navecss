@@ -129,6 +129,22 @@ code point), the order of the steps of the tokenization algorithms, and the
 rule that tells a declaration from a qualified rule. The code implementing them
 is this package's own, and everything in this package is offered under the MIT
 licence above.
+
+This package also includes material copied from or derived from ECMA-426,
+Source map format specification (spec.emu in the tc39/ecma426 repository, at
+commit c724f0f494b44b21b651fdbd6412d3437eef0e72, and
+https://tc39.es/ecma426/#sec-base64-vlq). Copyright (c) Ecma International.
+That specification is published under Ecma's alternative copyright notice
+(https://ecma-international.org/policies/by-ipr/ecma-text-copyright-policy/).
+The base64 digits it uses are those of RFC 4648, The Base16, Base32, and
+Base64 Data Encodings (https://www.rfc-editor.org/rfc/rfc4648). Copyright (C)
+The Internet Society (2006).
+
+What is copied is implemented in src/directive/source-map.ts, built into the
+JavaScript under dist/: the member names of a version 3 source map, the
+layout of its mappings string, the base64 VLQ encoding of each field in it,
+and the base64 alphabet. The code implementing them is this package's own, and
+everything in this package is offered under the MIT licence above.
 `
 
 /**
@@ -1398,7 +1414,8 @@ test('packages/tokens/LICENSE is the root LICENSE text verbatim followed by the 
 })
 
 // Same rationale as the tokens row above, for packages/core/LICENSE's own cleared block
-// (the CSS Syntax Level 3 credit for the directive tokenizer).
+// (the CSS Syntax Level 3 credit for the directive tokenizer, then the ECMA-426 and RFC 4648
+// credit for the source-map encoder).
 test('packages/core/LICENSE is the root LICENSE text verbatim followed by the cleared third-party section, byte for byte', () => {
   const rootLicense = readFileSync(path.join(ROOT, 'LICENSE'))
   const coreLicense = readFileSync(path.join(ROOT, 'packages', 'core', 'LICENSE'))
@@ -1407,5 +1424,5 @@ test('packages/core/LICENSE is the root LICENSE text verbatim followed by the cl
     'packages/core/LICENSE must begin with the root LICENSE text, byte for byte',
   )
   assert.equal(coreLicense.subarray(rootLicense.length).toString('utf8'), CORE_THIRD_PARTY_SECTION)
-  assert.equal(coreLicense.length, rootLicense.length + 1145)
+  assert.equal(coreLicense.length, rootLicense.length + 2130)
 })
