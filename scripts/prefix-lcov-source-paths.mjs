@@ -12,6 +12,10 @@
  * which credits one package's coverage to another that shares a relative path (two `src/index.ts`,
  * say). Repo-root-relative paths resolve the same way under either strategy.
  *
+ * The scripts' own report (`scripts/coverage/lcov.info`, from `node --test`) is in the list too.
+ * Node writes its `SF:` lines relative to the repository root, so they already start with
+ * `scripts/` and pass through unchanged: the rewrite only has to leave them alone.
+ *
  * The missing-report check is what the scan cannot do for itself: a report path that matches no
  * file is logged at INFO and the analysis carries on, so one package's coverage would read as none
  * on a green scan. Failing here turns that into a red job.
@@ -88,7 +92,7 @@ export function main(rootDir, packageDirs) {
     const lcovPath = path.join(rootDir, packageDir, 'coverage', 'lcov.info')
     if (!existsSync(lcovPath)) {
       throw new Error(
-        `${packageDir}/coverage/lcov.info does not exist. Run its test:coverage script first, ` +
+        `${packageDir}/coverage/lcov.info does not exist. Run its test script first, ` +
           'or remove it from the package list if it no longer reports coverage.',
       )
     }

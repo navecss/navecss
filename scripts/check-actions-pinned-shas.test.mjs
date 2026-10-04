@@ -177,9 +177,10 @@ test('the real workspace passes today: every uses: line in .github/workflows/*.y
  * `omitWorkflowsDir` is set) a synthetic `.github/workflows/` directory built from `workflows`
  * ({ filename: content }). `omitWorkflowsDir: true` skips creating `.github/workflows/` at all
  * (R9: no workflows directory whatsoever, as opposed to `buildFixture({})`, which creates the
- * directory empty, R8's shape).
+ * directory empty, R8's shape). `actions` ({ '<name>/action.yml': content }) writes composite
+ * actions under `.github/actions/`.
  */
-function buildFixture(workflows, { omitWorkflowsDir = false } = {}) {
+function buildFixture(workflows, { actions = {}, omitWorkflowsDir = false } = {}) {
   const dir = mkdtempSync(path.join(realpathSync(os.tmpdir()), 'nave-actions-pinned-'))
   mkdirSync(path.join(dir, 'scripts'))
   cpSync(path.join(ROOT, 'scripts', SCRIPT_NAME), path.join(dir, 'scripts', SCRIPT_NAME))
@@ -189,6 +190,11 @@ function buildFixture(workflows, { omitWorkflowsDir = false } = {}) {
     for (const [filename, content] of Object.entries(workflows)) {
       writeFileSync(path.join(workflowsDir, filename), content)
     }
+  }
+  for (const [actionPath, content] of Object.entries(actions)) {
+    const file = path.join(dir, '.github', 'actions', actionPath)
+    mkdirSync(path.dirname(file), { recursive: true })
+    writeFileSync(file, content)
   }
   return dir
 }
@@ -218,8 +224,8 @@ test('end to end: a compliant fixture exits 0 and prints the census', () => {
     assert.equal(status, 0)
     assert.equal(
       stdout.trim(),
-      'GitHub Actions SHA pin gate: 2 `uses:` line(s) across 1 workflow file(s) checked, 0 ' +
-        'pinned to a tag rather than a commit SHA.',
+      'GitHub Actions SHA pin gate: 2 `uses:` line(s) across 1 workflow file(s) and 0 composite action file(s) ' +
+        'checked, 0 pinned to a tag rather than a commit SHA.',
     )
   } finally {
     rmSync(dir, { force: true, recursive: true })
@@ -258,8 +264,8 @@ test('end to end: a compliant ci.yml alongside a non-YAML README in .github/work
     assert.equal(status, 0)
     assert.equal(
       stdout.trim(),
-      'GitHub Actions SHA pin gate: 1 `uses:` line(s) across 1 workflow file(s) checked, 0 ' +
-        'pinned to a tag rather than a commit SHA.',
+      'GitHub Actions SHA pin gate: 1 `uses:` line(s) across 1 workflow file(s) and 0 composite action file(s) ' +
+        'checked, 0 pinned to a tag rather than a commit SHA.',
     )
   } finally {
     rmSync(dir, { force: true, recursive: true })
@@ -275,8 +281,8 @@ test('end to end: a fixture whose only step is a ./ local action exits 0 (D1, R6
     assert.equal(status, 0)
     assert.equal(
       stdout.trim(),
-      'GitHub Actions SHA pin gate: 1 `uses:` line(s) across 1 workflow file(s) checked, 0 ' +
-        'pinned to a tag rather than a commit SHA.',
+      'GitHub Actions SHA pin gate: 1 `uses:` line(s) across 1 workflow file(s) and 0 composite action file(s) ' +
+        'checked, 0 pinned to a tag rather than a commit SHA.',
     )
   } finally {
     rmSync(dir, { force: true, recursive: true })
@@ -365,6 +371,63 @@ test('end to end: the real workspace exits 0 and its green line matches the docu
   assert.equal(result.status, 0)
   assert.match(
     result.stdout.trim(),
-    /^GitHub Actions SHA pin gate: \d+ `uses:` line\(s\) across \d+ workflow file\(s\) checked, 0 pinned to a tag rather than a commit SHA\.$/,
+    /^GitHub Actions SHA pin gate: \d+ `uses:` line\(s\) across \d+ workflow file\(s\) and \d+ composite action file\(s\) checked, 0 pinned to a tag rather than a commit SHA\.$/,
   )
+})
+
+// ── Composite actions: the same rule reaches `uses:` lines outside .github/workflows/ ──────
+
+const COMPOSITE_HEAD = 'name: setup\nruns:\n  using: composite\n  steps:\n'
+
+test('end to end: a tag-pinned reference inside a composite action exits 1 and names the action file', () => {
+  const dir = buildFixture(
+    { 'ci.yml': 'jobs:\n  build:\n    steps:\n      - uses: ./.github/actions/setup\n' },
+    {
+      actions: {
+        'setup/action.yml': `${COMPOSITE_HEAD}    - uses: actions/checkout@${REAL_SHA} # v7\n    - uses: actions/cache@v6\n`,
+      },
+    },
+  )
+  try {
+    const { status, stderr, stdout } = runScript(dir)
+    assert.equal(status, 1)
+    assert.match(stderr, /\.github\/actions\/setup\/action\.yml:6: uses: actions\/cache@v6/)
+    assert.equal(stdout, '')
+  } finally {
+    rmSync(dir, { force: true, recursive: true })
+  }
+})
+
+test('end to end: a composite action nested one directory deeper is read too', () => {
+  const dir = buildFixture(
+    { 'ci.yml': 'jobs:\n  build:\n    steps:\n      - uses: ./.github/actions/group/setup\n' },
+    { actions: { 'group/setup/action.yml': `${COMPOSITE_HEAD}    - uses: actions/cache@v6\n` } },
+  )
+  try {
+    const { status, stderr } = runScript(dir)
+    assert.equal(status, 1)
+    assert.match(stderr, /\.github\/actions\/group\/setup\/action\.yml:5: uses: actions\/cache@v6/)
+  } finally {
+    rmSync(dir, { force: true, recursive: true })
+  }
+})
+
+test('end to end: a pinned composite action is counted in the census', () => {
+  const dir = buildFixture(
+    { 'ci.yml': 'jobs:\n  build:\n    steps:\n      - uses: ./.github/actions/setup\n' },
+    {
+      actions: { 'setup/action.yaml': `${COMPOSITE_HEAD}    - uses: actions/cache@${REAL_SHA}\n` },
+    },
+  )
+  try {
+    const { status, stdout } = runScript(dir)
+    assert.equal(status, 0)
+    assert.equal(
+      stdout.trim(),
+      'GitHub Actions SHA pin gate: 2 `uses:` line(s) across 1 workflow file(s) and 1 composite ' +
+        'action file(s) checked, 0 pinned to a tag rather than a commit SHA.',
+    )
+  } finally {
+    rmSync(dir, { force: true, recursive: true })
+  }
 })
