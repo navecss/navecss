@@ -476,11 +476,10 @@ test('main(): a package in the publishable set that is also on the Changesets ig
     assert.equal(exitCode, 1)
     assert.deepEqual(calls.error, [
       'The Changesets "ignore" list names packages this repository intends to publish:\n',
-      '  - @navecss/eslint-plugin: in the publishable set but listed in "ignore" in .changeset/config.json',
       '  - @navecss/tokens: in the publishable set but listed in "ignore" in .changeset/config.json',
-      '\nChangesets never versions a package on that list, so this one would never get a version ' +
-        'bump. Remove it from "ignore" in .changeset/config.json, in the same pull request that ' +
-        'adds it to PUBLISHABLE_SET.',
+      '  - @navecss/eslint-plugin: in the publishable set but listed in "ignore" in .changeset/config.json',
+      '\nChangesets never versions a package on that list. Remove each one from "ignore" in ' +
+        '.changeset/config.json, in the same pull request that adds it to PUBLISHABLE_SET.',
     ])
     assert.equal(calls.log.length, 0)
   } finally {
@@ -556,7 +555,14 @@ for (const [shape, config] of [
 
 test('nothing the ignore-list check prints names a tracker a reader cannot open', () => {
   const printed = []
-  for (const config of [{ ignore: ['@navecss/core'] }, '{ "ignore": [', null, '[]']) {
+  for (const config of [
+    { ignore: ['@navecss/core'] },
+    { ignore: ['@navecss/t*'] },
+    '{ "ignore": [',
+    null,
+    '[]',
+    '{ "ignore": "x" }',
+  ]) {
     const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, config)
     try {
       const { calls } = runMain(dir)
@@ -571,5 +577,119 @@ test('nothing the ignore-list check prints names a tracker a reader cannot open'
       !TRACKER_REFERENCE_PATTERN.test(message),
       `a message this gate prints names a tracker its reader cannot open: ${message}`,
     )
+  }
+})
+
+// Changesets reads each `ignore` entry as a glob (with `!` negation), while this gate compares
+// exact names, so a pattern that covers a set member would pass here and still make Changesets
+// skip it. The gate refuses any entry that is not a plain package name rather than expanding it.
+for (const [title, config, pattern] of [
+  [
+    'a glob that would cover a package in the publishable set',
+    { ignore: ['@navecss/t*'] },
+    /config\.json is not a usable Changesets config \("ignore" entry "@navecss\/t\*" is not a plain package name/,
+  ],
+  [
+    'a glob with a negation',
+    { ignore: ['@navecss/*', '!@navecss/core'] },
+    /"ignore" entry "@navecss\/\*" is not a plain package name/,
+  ],
+  ['an empty string', '{ "ignore": [""] }', /"ignore" entry "" is not a plain package name/],
+]) {
+  test(`main(): refuses an ignore entry that is ${title}, comparing nothing`, () => {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, config)
+    try {
+      const { calls, exitCode } = runMain(dir)
+      assert.equal(exitCode, 1)
+      assert.equal(calls.error.length, 1)
+      assert.match(calls.error[0], pattern)
+      assert.equal(calls.log.length, 0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+}
+
+test('main(): ignore entries that are plain package names, scoped or not, still pass', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
+    ignore: ['@navecss/cli', '@navecss/bridge', 'left-pad', 'a.b_c~d-e'],
+  })
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, undefined)
+    assert.equal(calls.error.length, 0)
+    assert.equal(calls.log.length, 1)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// The set check runs first: a package set that is wrong is reported on its own, and the Changesets
+// config is only read once the set matches. These two tests hold that order so it stays a choice.
+const PACKAGES_WITH_TOKENS_PRIVATE = {
+  ...EXPECTED_SET_PACKAGES,
+  tokens: { name: '@navecss/tokens', private: true },
+}
+
+for (const [title, config, unwanted] of [
+  ['an ignore list that names a set member', { ignore: ['@navecss/core'] }, 'Changesets "ignore"'],
+  ['a config that is not valid JSON', '{ not json', 'config.json'],
+]) {
+  test(`main(): a wrong package set is reported before ${title} is looked at`, () => {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, PACKAGES_WITH_TOKENS_PRIVATE, config)
+    try {
+      const { calls, exitCode } = runMain(dir)
+      assert.equal(exitCode, 1)
+      assert.match(calls.error[0], /^The publishable package set does not match/)
+      for (const line of calls.error) {
+        assert.ok(!line.includes(unwanted), `the set fault must print alone, but saw: ${line}`)
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+}
+
+// Each way a config can be unusable says which one it is, so a reader is never told the wrong thing.
+for (const [title, config, pattern] of [
+  [
+    'is not an object',
+    '[]',
+    /config\.json is not a usable Changesets config \(it is not an object\)\./,
+  ],
+  [
+    'has an ignore field that is not an array',
+    '{ "ignore": "@navecss/cli" }',
+    /config\.json is not a usable Changesets config \("ignore" is not an array of strings\)\./,
+  ],
+  [
+    'has a null ignore field',
+    '{ "ignore": null }',
+    /config\.json is not a usable Changesets config \("ignore" is not an array of strings\)\./,
+  ],
+]) {
+  test(`main(): a Changesets config that ${title} is refused with the reason that matches`, () => {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, config)
+    try {
+      const { calls, exitCode } = runMain(dir)
+      assert.equal(exitCode, 1)
+      assert.equal(calls.error.length, 1)
+      assert.match(calls.error[0], pattern)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+}
+
+test('main(): a set member listed twice in ignore is reported once', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
+    ignore: ['@navecss/tokens', '@navecss/tokens'],
+  })
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, 1)
+    assert.equal(calls.error.length, 3)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })

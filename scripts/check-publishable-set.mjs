@@ -2,18 +2,12 @@
 /**
  * Tripwire for the current launch-scope call on which packages publish.
  *
- * `changeset publish` does not consult `.changeset/config.json`'s `ignore`
- * list when deciding what to publish (verified against the installed
- * `@changesets/cli` dist): it computes
- * `packages.filter(pkg => !pkg.packageJson.private)` and publishes every
- * package whose local version is not already on the registry. `ignore` is
- * read by the `version` command and the tagging path only. So the ONE thing
- * that actually keeps a workspace package off npm on a real `changeset
- * publish` run is its own manifest's `private: true`, and nothing before
- * this script asserted that the set of non-private packages matched the
- * publishing scope decided for this release. The release now ends in
- * `stage-release.mjs` rather than `changeset publish`, and it applies the
- * same filter by importing `isPublishable` below, so all of this holds for it.
+ * A real release ends in `stage-release.mjs`, which selects the packages to
+ * publish by importing `isPublishable` below: every workspace package whose
+ * manifest is not `private: true`. So the ONE thing that keeps a workspace
+ * package off npm on a real release is its own manifest's `private: true`,
+ * and nothing before this script asserted that the set of non-private
+ * packages matched the publishing scope decided for this release.
  *
  * Exactly `@navecss/tokens`, `@navecss/core`, `@navecss/stylelint-config` and
  * `@navecss/eslint-plugin` are meant to publish (`@navecss/bridge` publishes
@@ -34,7 +28,9 @@
  * package promoted to published but left on that list is never bumped and its changesets are
  * skipped; a changeset naming an ignored and a non-ignored package together fails outright.
  * Promoting a private package is therefore three edits in one pull request: drop `private`,
- * join `PUBLISHABLE_SET`, come off `ignore`.
+ * join `PUBLISHABLE_SET`, come off `ignore`. An "ignore" entry that is not a plain package name
+ * (a glob or a negation, which Changesets expands) is refused rather than expanded: this gate
+ * compares exact names, and the first pull request to need a pattern there extends it.
  *
  * This script decides no product or launch-scope question and never will:
  * PUBLISHABLE_SET is the current scope call, not
@@ -59,6 +55,10 @@ export const PUBLISHABLE_SET = new Set([
   '@navecss/stylelint-config',
   '@navecss/eslint-plugin',
 ])
+
+// A plain npm package name, scoped or not; anything else (a glob, a negation, an empty string) is
+// refused because this gate compares exact names and does not expand patterns.
+const PLAIN_PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/
 
 /**
  * This gate's own refusal, printed when `findWorkspaceGlobViolation` (imported from
@@ -151,17 +151,17 @@ export function composeChangesetConfigUnusableMessage(configPath, reason) {
 }
 
 /**
- * The members of `PUBLISHABLE_SET` named in a Changesets `ignore` list. Plain `.sort()`, so
- * the report reads the same on every runner.
+ * The members of `PUBLISHABLE_SET` named in a Changesets `ignore` list. In the set's own
+ * declaration order, which is the same on every runner.
  */
 function findIgnoredSetMembers(ignore) {
-  return [...PUBLISHABLE_SET].filter((name) => ignore.includes(name)).sort()
+  return [...PUBLISHABLE_SET].filter((name) => ignore.includes(name))
 }
 
 /**
  * The `ignore` list of a parsed Changesets config, or the reason it cannot be read: the
  * config must be an object, and `ignore` (absent means empty, Changesets' own default) must be
- * an array of strings.
+ * an array of strings, each a plain package name.
  */
 function readIgnoreList(config) {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
@@ -170,6 +170,12 @@ function readIgnoreList(config) {
   if (config.ignore === undefined) return { ignore: [] }
   if (!Array.isArray(config.ignore) || config.ignore.some((entry) => typeof entry !== 'string')) {
     return { reason: 'is not a usable Changesets config ("ignore" is not an array of strings)' }
+  }
+  const unusableEntry = config.ignore.find((entry) => !PLAIN_PACKAGE_NAME.test(entry))
+  if (unusableEntry !== undefined) {
+    return {
+      reason: `is not a usable Changesets config ("ignore" entry ${JSON.stringify(unusableEntry)} is not a plain package name, and this gate compares exact names without expanding patterns)`,
+    }
   }
   return { ignore: config.ignore }
 }
@@ -212,9 +218,8 @@ function reportIgnoredSetMembers(names) {
     )
   }
   console.error(
-    '\nChangesets never versions a package on that list, so this one would never get a ' +
-      'version bump. Remove it from "ignore" in .changeset/config.json, in the same pull ' +
-      'request that adds it to PUBLISHABLE_SET.',
+    '\nChangesets never versions a package on that list. Remove each one from "ignore" in ' +
+      '.changeset/config.json, in the same pull request that adds it to PUBLISHABLE_SET.',
   )
 }
 
