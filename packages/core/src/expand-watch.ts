@@ -4,7 +4,7 @@
  * an editor that saves by writing a new file and renaming it over the old one leaves a watcher on
  * the file itself watching nothing.
  */
-import { realpathSync, watch } from 'node:fs'
+import { type FSWatcher, realpathSync, watch } from 'node:fs'
 import path from 'node:path'
 
 const SETTLE_MS = 40
@@ -31,9 +31,18 @@ export function watchFiles(files: readonly string[], onChange: () => void): void
       // Not there yet: the lexical directory below sees it appear.
     }
   }
-  for (const directory of directories) {
-    watch(directory, (_event, name) => {
-      if (name === null || watchedNames.has(path.join(directory, name))) schedule()
-    })
+  const watchers: FSWatcher[] = []
+  try {
+    for (const directory of directories) {
+      watchers.push(
+        watch(directory, (_event, name) => {
+          if (name === null || watchedNames.has(path.join(directory, name))) schedule()
+        }),
+      )
+    }
+  } catch (error) {
+    // Nothing stays half-watched: the caller reports the failure and the process can exit.
+    for (const watcher of watchers) watcher.close()
+    throw error
   }
 }

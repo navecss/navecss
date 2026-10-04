@@ -99,7 +99,7 @@ const build = manifest.scripts?.build
 if (build === undefined) throw new Error('the README package.json fence has no "build" script')
 // The README's script is one `navecss-core expand ...` command: run the shim directly, with no
 // shell, so a script that is anything else fails here instead of running something unreviewed.
-const [command, ...flags] = build.split(' ')
+const [command, ...flags] = build.trim().split(/\s+/)
 if (command !== 'navecss-core')
   throw new Error(`the "build" script must run navecss-core: ${build}`)
 execFileSync(shim, flags, { cwd: FIXTURE, stdio: 'inherit' })
