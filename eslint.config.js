@@ -255,6 +255,16 @@ export default defineConfig([
       'unicorn/no-this-outside-of-class': 'off',
     },
   },
+  // ── lightningcss.ts — a host-loaded entry point, like postcss.ts and vite.ts, so it also
+  // carries the default export hosts load it by. Under `onUnknown: 'warn'` it has no host to hand
+  // a warning to, so `console.warn` is that mode's output channel. ───────────────────────────
+  {
+    files: ['**/src/lightningcss.ts'],
+    rules: {
+      'no-console': 'off',
+      'no-restricted-syntax': 'off',
+    },
+  },
   // The post-order half is the second plugin object `navePlugin()` returns, and the plugin a
   // worker's build runs is its sibling: the same host convention, hooks whose `this` is the
   // host's plugin context.
@@ -360,11 +370,12 @@ export default defineConfig([
     },
   },
 
-  // ── navecss-core bin (navecss-core check) ───────────────────────────────────
+  // ── navecss-core bin (navecss-core check, navecss-core expand) ──────────────
   // Same shape as navecss-tokens' own bin.ts override above: stdout/stderr IS this
-  // entry point's whole output channel.
+  // entry point's whole output channel, and `expand-command.ts` is where the second subcommand
+  // prints it.
   {
-    files: ['packages/core/src/bin.ts'],
+    files: ['packages/core/src/bin.ts', 'packages/core/src/expand-command.ts'],
     rules: {
       'no-console': 'off',
     },
@@ -379,6 +390,10 @@ export default defineConfig([
       '**/scripts/generate-consumer-theming-fixtures.ts',
       // And the one-line progress line of the Vite plugin's real-browser fixture, run beside it.
       '**/scripts/generate-vite-plugin-fixtures.ts',
+      // And the same one-line progress line of the Lightning CSS adapter's and the no-bundler
+      // page's fixtures, which sit beside it.
+      '**/scripts/generate-lightningcss-fixtures.ts',
+      '**/scripts/generate-no-bundler-fixture.ts',
       // Same shape again: a one-line "Wrote <path>" progress line for the doc/data generators
       // (ATOMS.md, TOKENS.md, nave.css-data.json, SKILL.md) run by hand or from a maintainer's
       // own terminal, never imported for their output.

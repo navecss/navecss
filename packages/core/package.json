@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "license": "MIT",
   "type": "module",
-  "description": "Nave design system — layer architecture, reset, atomic utilities, and the Vite and PostCSS plugins for the @nave directive",
+  "description": "Nave design system — layer architecture, reset, atomic utilities, and the Vite, PostCSS and Lightning CSS adapters and a command line for the @nave directive",
   "keywords": [
     "css",
     "design-system",
@@ -11,6 +11,7 @@
     "atomic-css",
     "postcss-plugin",
     "vite-plugin",
+    "lightningcss",
     "zero-runtime"
   ],
   "homepage": "https://github.com/navecss/navecss/tree/main/packages/core#readme",
@@ -45,6 +46,11 @@
       "types": "./dist/vite.d.ts",
       "import": "./dist/vite.js"
     },
+    "./lightningcss": {
+      "types": "./dist/lightningcss.d.ts",
+      "import": "./dist/lightningcss.js"
+    },
+    "./standalone": "./dist/standalone.css",
     "./check": {
       "types": "./dist/check.d.ts",
       "import": "./dist/check.js"
@@ -69,8 +75,8 @@
     "lint": "eslint src scripts --max-warnings 0 && stylelint \"src/**/*.css\" --max-warnings 0",
     "lint:fix": "eslint src scripts --fix && stylelint \"src/**/*.css\" --fix",
     "test": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && vitest run",
-    "test:browser": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && vitest run --config vitest.browser.config.ts && vitest run --config vitest.chromium.config.ts",
-    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints . layers no-tokens reset atomic",
+    "test:browser": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && node scripts/generate-lightningcss-fixtures.ts && node scripts/generate-no-bundler-fixture.ts && vitest run --config vitest.browser.config.ts && vitest run --config vitest.chromium.config.ts",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints . layers no-tokens reset atomic standalone",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
   "peerDependencies": {
@@ -92,6 +98,8 @@
     "@vitest/browser": "5.0.3",
     "@vitest/browser-playwright": "5.0.3",
     "@vitest/coverage-v8": "5.0.3",
+    "lightningcss": "1.33.0",
+    "lightningcss-1-22": "npm:lightningcss@1.22.1",
     "playwright": "1.63.0",
     "postcss": "^8.5.28",
     "prettier": "3.9.9",

@@ -119,10 +119,42 @@ describe('AC-directive-core-29 — every documented config fence names a real su
     ])
   })
 
-  it('reds on a fence running a subcommand the bin does not have (control)', () => {
-    expect(checkBinInvocation({ flags: ['out'], subcommand: 'expand' })).toEqual([
-      'navecss-core has no subcommand "expand"',
+  it('the fence set includes the Lightning CSS adapter’s fence and the no-bundler fences', () => {
+    const lightning = coreImports.filter(
+      ({ imp }) => imp.specifier === '@navecss/core/lightningcss',
+    )
+    const expand = binInvocations.filter(({ inv }) => inv.subcommand === 'expand')
+
+    expect(lightning.length).toBeGreaterThan(0)
+    expect(expand.length).toBeGreaterThan(0)
+  })
+
+  it('reds on a fence importing a misspelled name from the Lightning CSS subpath (control)', () => {
+    const imp: CoreImport = {
+      names: [{ isDefault: false, isType: false, name: 'navePlugn' }],
+      specifier: '@navecss/core/lightningcss',
+    }
+    expect(checkCoreImport(imp, realExportsMap(), realEntryMap(), readRealSource)).toEqual([
+      '@navecss/core/lightningcss exports no "navePlugn"',
     ])
+  })
+
+  it('reds on a fence running a subcommand the bin does not have (control)', () => {
+    expect(checkBinInvocation({ flags: ['out'], subcommand: 'bundle' })).toEqual([
+      'navecss-core has no subcommand "bundle"',
+    ])
+  })
+
+  it('reds on a fence running expand with a flag it does not accept (control)', () => {
+    expect(
+      checkBinInvocation({ flags: ['source', 'out', 'inline'], subcommand: 'expand' }),
+    ).toEqual(['navecss-core expand accepts no --inline'])
+  })
+
+  it('passes a fence running expand with every flag it accepts', () => {
+    expect(
+      checkBinInvocation({ flags: ['source', 'out', 'extend', 'watch'], subcommand: 'expand' }),
+    ).toEqual([])
   })
 
   it('reds on a fence running a real subcommand with a flag it does not accept (control)', () => {
