@@ -112,8 +112,15 @@ const isInvalidChildArgument = (argument: Selector): boolean => {
   return (end === -1 ? rest : rest.slice(0, end)).some((node) => isInvalidAttribute(node))
 }
 
+/**
+ * The nodes after the last combinator: the compound the declaration lands on. A key on an ancestor
+ * compound says nothing about the element itself.
+ */
+const subjectCompound = (nodes: readonly Node[]): readonly Node[] =>
+  nodes.slice(nodes.findLastIndex((node) => node.type === 'combinator') + 1)
+
 const requiresInvalidNodes = (nodes: readonly Node[]): boolean =>
-  nodes.some(
+  subjectCompound(nodes).some(
     (node) =>
       isInvalidAttribute(node) ||
       (node.type === 'pseudo' &&
@@ -123,8 +130,8 @@ const requiresInvalidNodes = (nodes: readonly Node[]): boolean =>
   )
 
 /**
- * Whether every alternative of a selector list requires the control to be invalid: itself
- * `[aria-invalid=true]`, or `:has(> [aria-invalid=true])` with every argument that way. An
+ * Whether every alternative of a selector list requires the control to be invalid: its own
+ * compound has `[aria-invalid=true]`, or `:has(> [aria-invalid=true])` with every argument that way. An
  * attribute inside `:not()` excludes the state, and one alternative without the key is enough to
  * let the paint reach a valid control.
  */

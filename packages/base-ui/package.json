@@ -18,8 +18,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint styles scripts test --max-warnings 0",
     "lint:fix": "eslint styles scripts test --fix",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@navecss/core": "workspace:*",

@@ -196,6 +196,16 @@ describe('AC-base-ui-bridge-24: every declared value is one of the admitted form
     ])
   })
 
+  it('reds on a danger border of a valid control whose parent is invalid (control)', () => {
+    const css = planted(
+      `.${PREFIX}input { [aria-invalid="true"] > & { border-color: var(--nave-color-feedback-danger) } }`,
+    )
+
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([
+      `${PREFIX}input border-color: var(--nave-color-feedback-danger)`,
+    ])
+  })
+
   it('reds on a focus-ring fallback outside the rules that own it (control)', () => {
     const css = planted(`.${PREFIX}button { border-width: var(--nave-border-width-focus, 2px) }`)
 

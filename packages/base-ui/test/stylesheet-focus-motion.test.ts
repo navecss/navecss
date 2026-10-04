@@ -250,8 +250,11 @@ const GROUP_FORMING = new Set([
   'will-change',
 ])
 
+const unprefixed = (property: string): string =>
+  property.toLowerCase().replace(/^-(?:moz|ms|o|webkit)-/, '')
+
 const isGroupForming = (property: string): boolean =>
-  GROUP_FORMING.has(property) || /^mask(?:-|$)/.test(property)
+  GROUP_FORMING.has(unprefixed(property)) || /^mask(?:-|$)/.test(unprefixed(property))
 
 /**
  * The group-forming declarations of a stylesheet, each as `owner|relative selectors|property: value`.
@@ -296,6 +299,17 @@ describe('AC-base-ui-bridge-29: B3, group-forming properties only where they are
 
     expect(groupForming(css)).toContain(`${PREFIX}list-popup||clip-path: inset(0)`)
   })
+
+  it.each(['-webkit-mask-image', '-webkit-mask', '-webkit-clip-path', '-webkit-backdrop-filter'])(
+    'reds on a vendor-prefixed %s, which forms a group like the unprefixed one (control)',
+    (property) => {
+      const css = planted(`.${PREFIX}title { ${property}: linear-gradient(#000, #000) }`)
+
+      expect(groupForming(css)).toContain(
+        `${PREFIX}title||${property}: linear-gradient(#000, #000)`,
+      )
+    },
+  )
 
   it('reds on a planted opacity under a starting-style key (control)', () => {
     const css = planted(`.${PREFIX}accordion-panel { &[data-starting-style] { opacity: 0 } }`)
