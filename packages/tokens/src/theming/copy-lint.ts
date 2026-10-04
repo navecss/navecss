@@ -191,7 +191,7 @@ export const FEEDBACK_SHARED_IDENTITY_NOTICE =
  * shortening, returns to the accessibility steward; re-wrapping the same words does not.
  */
 export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
-  "0.1.0 ships no consumer contrast-threshold input. No flag of this entry point sets one, and the build reads none. This is the absence of an input, not a limit on the consumer: a consumer may hold whatever contrast target they choose and check their palette against it with their own tooling. Where a check Nave ships runs in a consumer's build over the consumer's values, it reports and does not fail. A consumer-settable target is deliberately out of 0.1.0 rather than overlooked."
+  "0.1.0 ships no consumer contrast-threshold input. No flag of this entry point sets one, and the build reads none. This is the absence of an input, not a limit on the consumer: a consumer may hold whatever contrast target they choose and check their palette against it with their own tooling. No contrast check this entry point runs over a consumer's values can fail the build, and none prints or returns a result. A consumer-settable target is deliberately out of 0.1.0 rather than overlooked."
 
 /**
  * The presence guarantee `assertNoticeIsClean` does not provide (flagged during an

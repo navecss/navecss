@@ -123,7 +123,7 @@ function containingSection(markdown: string, needle: string): string {
 }
 
 /**
- * SHA-256 of R27's cleared paragraph, over the paragraph's own 481 bytes: the spec presents it
+ * SHA-256 of R27's cleared paragraph, over the paragraph's own 493 bytes: the spec presents it
  * as a bold-opened blockquote, and the `> ` and `**` markers are how the spec PRESENTS cleared
  * copy rather than part of the cleared bytes (`RETHEMING_NOTICE` is the settled precedent, bold
  * and quoted in its spec, plain in its constant and plain in this README).
@@ -138,9 +138,11 @@ function containingSection(markdown: string, needle: string): string {
  * from R27's source spec on 2026-09-07 (engineering, quality, architecture and
  * accessibility/licensing review), each stripping
  * exactly those two markers and each reading 481 characters, zero non-ASCII, straight
- * apostrophes.
+ * apostrophes. The digest has moved once since, with a re-clearance that replaced the one
+ * sentence about checks run over a consumer's values (481 bytes to 493); that reading describes
+ * the paragraph as first cleared.
  */
-const CLEARED_PARAGRAPH_SHA256 = '23e9780e3fc3bb9912ae9fff460601eee678c9d6afa88b3b0a5c1f057ffa73a7'
+const CLEARED_PARAGRAPH_SHA256 = '1bf60330f686f5558888c574d017200fdcad7bcc14de3dd722ea3a051dc13092'
 
 /**
  * A qualified tracker reference, `<slug>#<digits>`: what a bare number turns into when someone
