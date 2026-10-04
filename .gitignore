@@ -30,6 +30,14 @@ packages/core/test/.atoms-mutation-*/
 # against a killed test process leaving one behind untracked.
 packages/core/.nave-*/
 
+# Scratch that a test or the build creates and removes, ignored so that a killed run cannot leave
+# it untracked and tree walkers (prettier, knip) never list it: the consumer-atoms doc test's
+# fixture directories, the Vite plugin test's dependency cache, and the config file tsup bundles
+# while it builds core.
+packages/core/test/.consumer-atoms-doc-fixture-*/
+packages/core/test/fixtures/zero-runtime-vite/.vite/
+packages/core/tsup.config.bundled_*.mjs
+
 # OS
 .DS_Store
 Thumbs.db
