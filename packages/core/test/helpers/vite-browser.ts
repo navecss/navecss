@@ -7,9 +7,39 @@
  */
 import path from 'node:path'
 import { type Browser, chromium, type Page } from 'playwright'
-import { type InlineConfig, preview, type PreviewServer, type ViteDevServer } from 'vite'
+import {
+  createLogger,
+  type InlineConfig,
+  type Logger,
+  type PluginOption,
+  preview,
+  type PreviewServer,
+  type ViteDevServer,
+} from 'vite'
 
-import { VITE_APIS, type ViteApi } from './vite-app.ts'
+import { appConfig, VITE_APIS, type ViteApi } from './vite-app.ts'
+
+/**
+ * The dev server's config, its dependency cache under `node_modules` where Vite keeps it.
+ */
+export function devConfig(root: string, plugins: PluginOption[]): InlineConfig {
+  return {
+    ...appConfig(root, 'postcss', plugins),
+    cacheDir: path.join(root, 'node_modules', '.vite'),
+  }
+}
+
+/**
+ * A logger that keeps every warning it is given, to hand to a server as its `customLogger`.
+ */
+export function warningLogger(): { readonly logger: Logger; readonly warned: string[] } {
+  const warned: string[] = []
+  const logger = createLogger('silent')
+  logger.warn = (message) => {
+    warned.push(message)
+  }
+  return { logger, warned }
+}
 
 /**
  * Starts the dev server for real, on a free port, resolving to it and its address.
@@ -118,6 +148,30 @@ export async function atFirstStylesheet(page: Page): Promise<Record<string, bool
   return page.evaluate(
     () => (globalThis as unknown as { __atSheet?: Record<string, boolean> }).__atSheet,
   )
+}
+
+/**
+ * Whether a stylesheet of the page holds a rule that selects `.<name>` right now.
+ */
+export function hasRuleNow(page: Page, name: string): Promise<boolean> {
+  return page.evaluate((target) => {
+    const walk = (rules: CSSRuleList): boolean =>
+      [...rules].some((rule) => {
+        const text = (rule as CSSStyleRule).selectorText
+        if (typeof text === 'string' && new RegExp(String.raw`\.${target}(?![\w-])`).test(text)) {
+          return true
+        }
+        const inner = (rule as CSSGroupingRule).cssRules
+        return inner ? walk(inner) : false
+      })
+    return [...document.styleSheets].some((sheet) => {
+      try {
+        return walk(sheet.cssRules)
+      } catch {
+        return false
+      }
+    })
+  }, name)
 }
 
 /**

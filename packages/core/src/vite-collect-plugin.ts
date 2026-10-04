@@ -130,6 +130,7 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
         context.state.htmlRead = true
         if (filename === undefined || !isMentioningAtoms(html)) return
         context.state.pages.set(filename, atomsWrittenIn(html))
+        if (context.command === 'serve') devServing.notePages(context)
       },
     },
 

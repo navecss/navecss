@@ -58,10 +58,13 @@ function backend(extra: Record<string, string> = {}): ReturnType<typeof makeUsed
 const INPUT = { rolldownOptions: { input: 'src/main.ts' } }
 
 /**
- * The markup warnings a build printed.
+ * Every warning the plugin printed, whatever it says: a build prefixes the plugin's name, and the
+ * dev server's logger gets the text as it is, which opens with the call.
  */
-function markupWarnings(warnings: readonly string[] | undefined): string[] {
-  return (warnings ?? []).filter((warning) => warning.includes(WARNING))
+function pluginWarnings(warnings: readonly string[] | undefined): string[] {
+  return (warnings ?? []).filter(
+    (warning) => /^\[plugin nave[^\]]*\]/.test(warning) || warning.startsWith('navePlugin()'),
+  )
 }
 
 describe('AC-used-atoms-53 — the markup warning fires for a build that read no use and no markup', () => {
@@ -71,9 +74,10 @@ describe('AC-used-atoms-53 — the markup warning fires for a build that read no
       const built = await buildUsed(app, { build: INPUT })
 
       expect(built.error).toBeUndefined()
-      const warnings = markupWarnings(built.warnings)
+      const warnings = pluginWarnings(built.warnings)
       expect(warnings).toHaveLength(1)
       const text = warnings[0]!
+      expect(text).toContain(WARNING)
       expect(text).toContain('Which atoms the build ships')
       expect(text.indexOf('keep')).toBeLessThan(text.indexOf("atomic: 'all'"))
       expect(text).not.toMatch(/focus|screen reader|accessib/i)
@@ -133,7 +137,7 @@ describe('AC-used-atoms-53 — the markup warning fires for a build that read no
         const built = await buildUsed(app, { options, build })
 
         expect(built.error).toBeUndefined()
-        expect(markupWarnings(built.warnings)).toEqual([])
+        expect(pluginWarnings(built.warnings)).toEqual([])
       } finally {
         app.dispose()
       }
@@ -147,7 +151,7 @@ describe('AC-used-atoms-53 — the markup warning fires for a build that read no
       const built = await buildEnvironments(app, { build: INPUT })
 
       expect(built.error).toBeUndefined()
-      expect(markupWarnings(built.warnings)).toEqual([])
+      expect(pluginWarnings(built.warnings)).toEqual([])
     } finally {
       app.dispose()
     }
@@ -163,7 +167,7 @@ describe('AC-used-atoms-53 — the markup warning fires for a build that read no
       })
 
       expect(built.error).toBeUndefined()
-      expect(markupWarnings(built.warnings)).toHaveLength(1)
+      expect(pluginWarnings(built.warnings)).toHaveLength(1)
     } finally {
       app.dispose()
     }
@@ -196,7 +200,7 @@ describe('AC-used-atoms-54 — in dev, the markup warning is evaluated when the 
     }
   }
 
-  const count = (logged: readonly string[]): number => markupWarnings(logged).length
+  const count = (logged: readonly string[]): number => pluginWarnings(logged).length
 
   it('logs none at start, one after the first stylesheet response, and none after later requests or an edit', async () => {
     let root = ''

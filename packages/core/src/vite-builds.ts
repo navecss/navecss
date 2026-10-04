@@ -89,7 +89,7 @@ function firstHalf(
       pickers.latest().nave.configureServer(server)
     },
     closeBundle() {
-      pickers.latest().nave.closeBundle()
+      pickers.latest().nave.closeBundle.call(this)
     },
     buildApp: {
       order: 'post',

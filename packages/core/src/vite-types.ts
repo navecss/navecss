@@ -57,7 +57,13 @@ export interface GraphModuleLike {
 export interface DevEnvironmentLike {
   readonly moduleGraph: {
     getModuleById(id: string): GraphModuleLike | undefined
+    readonly idToModuleMap: ReadonlyMap<string, GraphModuleLike>
+    invalidateModule(module: GraphModuleLike): void
   }
+  readonly pluginContainer: {
+    resolveId(url: string): Promise<{ readonly id: string } | null>
+  }
+  readonly config: { readonly dev: { readonly warmup: readonly string[] } }
   transformRequest(url: string): Promise<unknown>
   reloadModule(module: GraphModuleLike): Promise<void>
   /**
@@ -72,6 +78,27 @@ export interface DevEnvironmentLike {
  */
 export interface BuilderLike {
   readonly environments: Readonly<Record<string, { readonly isBuilt: boolean }>>
+}
+
+/**
+ * A request as a dev server's middleware is given it.
+ */
+export interface RequestLike {
+  readonly url?: string
+}
+
+/**
+ * The part of a dev server the plugin touches when it starts: where its middleware goes, its base,
+ * and the client environment.
+ */
+export interface DevServerLike {
+  readonly config: { readonly base: string }
+  readonly environments: { readonly client: DevEnvironmentLike }
+  readonly middlewares: {
+    use(
+      handler: (request: RequestLike, response: unknown, next: () => void) => Promise<void> | void,
+    ): unknown
+  }
 }
 
 /**

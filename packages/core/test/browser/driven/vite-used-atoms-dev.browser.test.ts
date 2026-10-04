@@ -329,6 +329,44 @@ describe('AC-used-atoms-20 (a) and (b) — the same class strings in dev and in 
     }
   }, 120_000)
 
+  it('(a) after keep changes to grid and the dev server restarts, the page follows the new list', async () => {
+    const app = makeFixture()
+    try {
+      const strings = async (options: NaveViteOptions): Promise<string[]> => {
+        const { server, url } = await listenDev(devConfig(app.root, [navePlugin(options)]))
+        try {
+          const page = await browser.newPage()
+          await page.goto(url)
+          await until(page, async () => (await result(page)) !== undefined, 'the result')
+          const seen = await result(page)
+          await page.close()
+          return seen
+        } finally {
+          await stopDev(server)
+        }
+      }
+
+      expect(await strings(OPTIONS)).toEqual([
+        '',
+        'nave-flex',
+        'nave-block',
+        '',
+        'nave-flex',
+        'nave-block',
+      ])
+      expect(await strings({ keep: ['grid'], keepFor: { 'dyn-lib': ['block'] } })).toEqual([
+        'nave-grid',
+        '',
+        'nave-block',
+        'nave-grid',
+        '',
+        'nave-block',
+      ])
+    } finally {
+      app.dispose()
+    }
+  }, 180_000)
+
   it('(b) the build and its preview give the same strings, and carry no dev text', async () => {
     const app = makeFixture()
     try {

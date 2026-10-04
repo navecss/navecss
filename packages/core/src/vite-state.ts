@@ -135,6 +135,12 @@ export interface RootState {
   serverTransformed: boolean
   directiveExpanded: boolean
   markupJudged: boolean
+  /**
+   * Whether the dev server warms files up, so that a stylesheet is transformed with nobody asking
+   * for it, and the stylesheets a request has asked for, by file: the warning waits for one.
+   */
+  warmedUp: boolean
+  readonly requested: Set<string>
 }
 
 /**
@@ -197,6 +203,8 @@ function freshState(): RootState {
     serverTransformed: false,
     directiveExpanded: false,
     markupJudged: false,
+    warmedUp: false,
+    requested: new Set(),
   }
 }
 

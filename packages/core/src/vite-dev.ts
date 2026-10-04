@@ -1,10 +1,12 @@
 /**
  * What the dev server does for a stylesheet that holds the atomic layer, under the default. It
  * serves the layer filtered to the atoms the build would emit, as far as the dev server has read:
- * the first response waits until every module reachable from the roots of the graph that imports
- * the stylesheet has been transformed (so the set is complete for what the page loads), and a set
- * that grows afterwards reloads the stylesheets already served, batched, through Vite's own module
- * reload. `devServing` is an object, so a test can stand a scratch copy of one step in its place.
+ * the first response waits until every module reachable from the roots of the module graph has
+ * been transformed (so the set is complete for what the pages load, whichever script each page
+ * starts from), and a set that grows afterwards reloads the stylesheets already served, batched,
+ * through Vite's own module reload, and, when a page's classes grew it, drops their cached text so
+ * the next request filters again. `devServing` is an object, so a test can stand a scratch copy of
+ * one step in its place.
  */
 import type {
   DevEnvironmentLike,
@@ -16,8 +18,9 @@ import type {
 } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
-import { isStylesheetId } from './vite-css-id.ts'
-import { judgeMarkup } from './vite-markup.ts'
+import { isServedAsStylesheet, judgeWhenServed } from './vite-dev-judge.ts'
+import { graphRoots, transformReachable } from './vite-dev-read.ts'
+import { modulesWithGrownStylesheets } from './vite-dev-update.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from './vite-prune.ts'
 import { collectedAtoms } from './vite-state.ts'
 
@@ -35,8 +38,8 @@ const NO_MAP = JSON.stringify({ mappings: '' })
 
 export interface DevServing {
   /**
-   * Waits until the modules reachable from the roots of the graph that imports the stylesheet
-   * `id` have been transformed.
+   * Waits until the modules reachable from the roots of the module graph have been transformed,
+   * for a stylesheet `id` that a module imports; one that nothing imports is answered at once.
    */
   hold(environment: DevEnvironmentLike, id: string): Promise<void>
   /**
@@ -44,6 +47,12 @@ export interface DevServing {
    * outgrew.
    */
   noteGrowth(context: UsedContext): void
+  /**
+   * Notes that a page was read: the served stylesheets its classes outgrew are dropped from the
+   * module graph's cache, so the request of a page that is loading filters them again, and the
+   * pages already live are told as for any growth.
+   */
+  notePages(context: UsedContext): void
   /**
    * For a file change: the modules it reloads and the served stylesheets its atoms outgrew, for
    * one update; `undefined` when no stylesheet needs to change.
@@ -53,60 +62,6 @@ export interface DevServing {
     ctx: HotUpdateContext,
     hot: HotUpdateOptions,
   ): Promise<never[] | undefined>
-}
-
-/**
- * The modules at the roots of the graph `module` belongs to: those no module imports.
- */
-function rootsOf(module: GraphModuleLike): GraphModuleLike[] {
-  const roots: GraphModuleLike[] = []
-  const seen = new Set<GraphModuleLike>([module])
-  const queue = [module]
-  for (let next = queue.shift(); next; next = queue.shift()) {
-    const fresh = [...next.importers.difference(seen)]
-    for (const importer of fresh) seen.add(importer)
-    queue.push(...fresh)
-    if (next !== module && next.importers.size === 0) roots.push(next)
-  }
-  return roots
-}
-
-/**
- * Transforms the module at `url`. One that fails is left to say so when the page asks for it.
- */
-async function transformQuietly(environment: DevEnvironmentLike, url: string): Promise<void> {
-  try {
-    await environment.transformRequest(url)
-  } catch {
-    // The error belongs to the request that asks for the module.
-  }
-}
-
-/**
- * Transforms every module reachable from `roots`, a level at a time. A stylesheet is never
- * requested (the one being served is mid-transform, and requesting it would wait on itself).
- */
-async function transformReachable(
-  environment: DevEnvironmentLike,
-  roots: readonly GraphModuleLike[],
-): Promise<void> {
-  const seen = new Set<GraphModuleLike>(roots)
-  let level = [...roots]
-  while (level.length > 0) {
-    const next: GraphModuleLike[] = []
-    await Promise.all(
-      level.map(async (module) => {
-        if (module.id !== null && isStylesheetId(module.id)) return
-        await transformQuietly(environment, module.url)
-        for (const imported of module.importedModules) {
-          if (seen.has(imported)) continue
-          seen.add(imported)
-          next.push(imported)
-        }
-      }),
-    )
-    level = next
-  }
 }
 
 /**
@@ -150,99 +105,31 @@ function isReloading(context: UsedContext, id: string): boolean {
   return sent !== undefined && Date.now() - sent < RELOAD_ANSWER_MS
 }
 
-/**
- * Reads the changed `scripts` again, ahead of the update that will reload them, so the set holds
- * what the edit added. A script is invalidated here, which Vite does again when it sends the
- * update.
- */
-async function readAhead(
-  context: UsedContext,
-  environment: HotUpdateContext['environment'],
-  scripts: readonly GraphModuleLike[],
-): Promise<void> {
-  const { state } = context
-  // The reload noteGrowth would send on the next turn waits: this update sends the stylesheets.
-  state.readAhead += 1
-  try {
-    for (const module of scripts) {
-      environment.moduleGraph.invalidateModule(module as never)
-      await transformQuietlyWith(environment, module.url)
-    }
-  } finally {
-    state.readAhead -= 1
-  }
-}
-
-/**
- * `transformRequest` of a hot-update environment, which not every host provides.
- */
-async function transformQuietlyWith(
-  environment: HotUpdateContext['environment'],
-  url: string,
-): Promise<void> {
-  try {
-    await environment.transformRequest?.(url)
-  } catch {
-    // The error belongs to the request that asks for the module.
-  }
-}
-
-/**
- * Takes the stylesheets the set outgrew off the waiting list, marking each as being reloaded, and
- * returns their modules.
- */
-function takeStaleModules(
-  context: UsedContext,
-  environment: HotUpdateContext['environment'],
-): GraphModuleLike[] {
-  const { state } = context
-  const ids = [...state.stale]
-  state.stale.clear()
-  clearTimeout(state.reloadTimer)
-  state.reloadTimer = undefined
-  const sheets: GraphModuleLike[] = []
-  for (const id of ids) {
-    const module = environment.moduleGraph.getModuleById(id) as GraphModuleLike | undefined
-    if (!module) continue
-    state.reloading.set(id, Date.now())
-    sheets.push(module)
-  }
-  return sheets
-}
-
-/**
- * The modules a file change reloads, with the stylesheets its atoms outgrew added, so the page
- * receives them in one update and applies the rules before it runs what uses them. `undefined`
- * when no served stylesheet needs to change.
- */
-async function modulesWithGrownStylesheets(
-  context: UsedContext,
-  ctx: HotUpdateContext,
-  hot: HotUpdateOptions,
-): Promise<never[] | undefined> {
-  const { environment } = ctx
-  if (environment.config?.consumer !== 'client' || context.state.served.size === 0) return
-  const scripts = (hot.modules ?? []).filter((m) => m.id !== null && !isStylesheetId(m.id))
-  if (scripts.length === 0) return
-  await readAhead(context, environment, scripts)
-  const sheets = takeStaleModules(context, environment)
-  // Vite's own module nodes, which `hotUpdate` returns as an array of its own type.
-  return sheets.length === 0 ? undefined : ([...(hot.modules ?? []), ...sheets] as never[])
-}
-
 export const devServing: DevServing = {
   modulesWithGrown: modulesWithGrownStylesheets,
 
   async hold(environment, id) {
     const module = environment.moduleGraph.getModuleById(id)
     if (!module) return
-    const roots = rootsOf(module)
-    if (roots.length === 0) return
+    // A stylesheet no module imports (a `<link>` names it) is answered at once.
+    if (module.importers.size === 0) return
     // The dependency optimizer holds its first result until the first static imports are done,
     // and the stylesheet being served is one of them. Saying it is not waited on lets the
     // optimizer finish, which the transform of a prebundled dependency below waits for.
     await environment.waitForRequestsIdle(id)
-    await transformReachable(environment, roots)
+    await transformReachable(environment, graphRoots(environment))
+  },
+
+  notePages(context) {
+    const { state } = context
+    const atoms = collectedAtoms(state, context.kept)
+    for (const sheet of state.served) {
+      const [id, { atoms: served, environment }] = sheet
+      if (atoms.isSubsetOf(served)) continue
+      const module = environment.moduleGraph.getModuleById(id)
+      if (module) environment.moduleGraph.invalidateModule(module)
+    }
+    devServing.noteGrowth(context)
   },
 
   noteGrowth(context) {
@@ -264,14 +151,6 @@ export const devServing: DevServing = {
 }
 
 /**
- * Whether the stylesheet `id` is one the dev server filters: not a `?inline` import, whose text
- * is part of the JavaScript, as in a build.
- */
-function isServedAsStylesheet(id: string): boolean {
-  return isStylesheetId(id) && !/[?&]inline\b/.test(id)
-}
-
-/**
  * The dev server's filtering of one stylesheet, after its directives were expanded: waits for the
  * graph, judges the markup warning, and returns the text with the atoms outside the dev set
  * removed. A stylesheet that holds no atomic layer, or that is not the client's, is left alone.
@@ -288,7 +167,7 @@ export async function serveStylesheet(
   if (!isPossible || !inspectAtomicLayer(css).hasLayer) return undefined
   const dev = environment as unknown as DevEnvironmentLike
   if (environment.config.consumer === 'client') await devServing.hold(dev, id)
-  judgeMarkup(context, (message) => context.logger?.warn(message))
+  judgeWhenServed(context, id)
   if (environment.config.consumer !== 'client') return undefined
   const atoms = collectedAtoms(context.state, context.kept)
   context.state.served.set(id, { environment: dev, atoms })

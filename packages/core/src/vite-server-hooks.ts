@@ -1,9 +1,10 @@
 /**
  * The hooks of the first plugin object that belong to the dev server and to a builder's process.
  */
-import type { BuilderLike } from './vite-types.ts'
+import type { BuilderLike, DevServerLike } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
+import { noteStylesheetRequests } from './vite-dev-judge.ts'
 import { installServerKeepMap, removeServerKeepMap } from './vite-dev-keep.ts'
 import { expectBuilds } from './vite-markup.ts'
 
@@ -28,15 +29,16 @@ export function serverHooks(context: UsedContext): {
     handler(this: { warn(message: string): void }, builder: BuilderLike): Promise<void>
     readonly order: 'post'
   }
-  closeBundle(): void
-  configureServer(): void
+  closeBundle(this: { readonly environment?: object }): void
+  configureServer(server: unknown): void
 } {
   return {
-    configureServer() {
-      installServerKeepMap(context)
+    configureServer(server) {
+      installServerKeepMap(context, (server as DevServerLike).environments.client)
+      noteStylesheetRequests(context, server as DevServerLike)
     },
-    closeBundle() {
-      removeServerKeepMap(context)
+    closeBundle(this: { readonly environment?: object }) {
+      removeServerKeepMap(this.environment)
     },
     buildApp: {
       order: 'post',

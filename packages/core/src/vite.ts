@@ -87,7 +87,7 @@ export interface NaveVitePlugin {
   ): { resolve: { noExternal: string[] } } | undefined
   configResolved(config: ResolvedConfigLike): void
   configureServer(server: unknown): void
-  closeBundle(): void
+  closeBundle(this: { readonly environment?: object }): void
   readonly buildApp: {
     handler(this: { warn(message: string): void }, builder: BuilderLike): Promise<void>
     readonly order: 'post'

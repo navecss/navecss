@@ -62,29 +62,52 @@ export function devKeepExpression(
   return `(${devKeepMap.toString()})(${JSON.stringify(map)}, ${JSON.stringify(atoms)})`
 }
 
-// The map each dev server put on the global, so closing it takes away its own and no other.
-const installed = new WeakMap<UsedContext, object>()
+interface Installed {
+  /**
+   * The dev server's client environment, which is the same object when its plugins close.
+   */
+  readonly owner: object
+  readonly map: object
+}
+
+// The maps the running dev servers put on the global, oldest first, and what the global held
+// before the first of them: the newest map still running is the one the global holds.
+const installs: Installed[] = []
+const baseline: { held: boolean; value: unknown } = { held: false, value: undefined }
+
+/**
+ * Puts the newest map still running on the global, or gives it back what it held before any.
+ */
+function publish(): void {
+  const newest = installs.at(-1)
+  if (newest !== undefined) Object.assign(globalThis, { [KEEP_CONSTANT]: newest.map })
+  else if (baseline.held) Object.assign(globalThis, { [KEEP_CONSTANT]: baseline.value })
+  else Reflect.deleteProperty(globalThis, KEEP_CONSTANT)
+}
 
 /**
  * Puts the map on the dev server's own global, so a server render in this process (a dependency
  * the server environment leaves external reads the constant from there) gives the same class
- * strings as the page does.
+ * strings as the page does. `owner` is the server's client environment.
  */
-export function installServerKeepMap(context: UsedContext): void {
+export function installServerKeepMap(context: UsedContext, owner: object): void {
   if (context.options.atomic !== 'used') return
   const map = devKeepMap(keepMap(context.kept), Object.keys(atomClassMap))
-  installed.set(context, map)
-  Object.assign(globalThis, { [KEEP_CONSTANT]: map })
+  if (installs.length === 0) {
+    baseline.held = Object.hasOwn(globalThis, KEEP_CONSTANT)
+    baseline.value = (globalThis as Record<string, unknown>)[KEEP_CONSTANT]
+  }
+  installs.push({ owner, map })
+  publish()
 }
 
 /**
- * Takes the map off the global when the server that put it there closes.
+ * Takes the map of the dev server `owner` off the global when it closes: the global then holds
+ * the map of the newest server still running, or what it held before the first.
  */
-export function removeServerKeepMap(context: UsedContext): void {
-  const map = installed.get(context)
-  if (map === undefined) return
-  installed.delete(context)
-  if ((globalThis as Record<string, unknown>)[KEEP_CONSTANT] === map) {
-    Reflect.deleteProperty(globalThis, KEEP_CONSTANT)
-  }
+export function removeServerKeepMap(owner: object | undefined): void {
+  const index = installs.findIndex((install) => install.owner === owner)
+  if (index === -1) return
+  installs.splice(index, 1)
+  publish()
 }

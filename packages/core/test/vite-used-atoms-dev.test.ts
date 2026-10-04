@@ -19,6 +19,7 @@ import {
   addPackage,
   appFiles,
   atomLayerAtoms,
+  APP_CSS,
   atoms,
   buildUsed,
   makeUsedApp,
@@ -359,7 +360,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     }
   }, 60_000)
 
-  it('batches: several modules adding atoms in one burst send one reload of app.css', async () => {
+  it('batches: several modules adding atoms in one burst send one reload of app.css, and none from inside the transform that grew the set', async () => {
     const app = makeUsedApp(
       appFiles({
         'src/App.ts': `${IMPORT}export const a = cx('flex')\n`,
@@ -367,11 +368,34 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
         'src/C.ts': 'export {}\n',
       }),
     )
+    // The reloads asked for by the time the plugin chain of a module ends, after Nave read it.
+    const sentAtEnd: Record<string, number> = {}
+    let reloadsNow: (() => number) | undefined
+    const probe: PluginOption = {
+      name: 'probe-reloads',
+      enforce: 'post',
+      transform(_code: string, id: string) {
+        if (reloadsNow && (id.endsWith('src/B.ts') || id.endsWith('src/C.ts'))) {
+          sentAtEnd[path.basename(id)] = reloadsNow()
+        }
+        return
+      },
+    }
     try {
-      const server = await startDev(devConfig(app.root, [navePlugin()], NO_WATCHER))
+      const server = await startDev(devConfig(app.root, [navePlugin(), probe], NO_WATCHER))
       try {
         await servedLayer(server, app.root)
         const sent = recordUpdates(server)
+        const reloads = (): Update[] =>
+          sent.filter((update) => update.updates?.some((entry) => entry.path === '/src/app.css'))
+        const { client } = server.environments
+        const askedFor: string[] = []
+        const reloadModule = client.reloadModule.bind(client)
+        client.reloadModule = (module) => {
+          askedFor.push(module.id ?? '')
+          return reloadModule(module)
+        }
+        reloadsNow = () => askedFor.length
         const { moduleGraph } = server.environments.client
         writeFileSync(path.join(app.root, 'src/B.ts'), `${IMPORT}export const b = cx('gap')\n`)
         writeFileSync(path.join(app.root, 'src/C.ts'), `${IMPORT}export const c = cx('grid')\n`)
@@ -381,10 +405,8 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
         }
         await new Promise((resolve) => setTimeout(resolve, 300))
 
-        const reloads = sent.filter((update) =>
-          update.updates?.some((entry) => entry.path === '/src/app.css'),
-        )
-        expect(reloads).toHaveLength(1)
+        expect(sentAtEnd['B.ts']).toBe(0)
+        expect(reloads()).toHaveLength(1)
       } finally {
         await stopDev(server)
       }
@@ -470,6 +492,72 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
       expect(await atomsServedAtOnce()).not.toEqual(atoms('flex', 'gap', 'grid'))
     } finally {
       Object.assign(devServing, saved)
+    }
+  }, 60_000)
+})
+
+describe('AC-used-atoms-40 — what the wait reaches', () => {
+  it('reads a lazy module only the root of the importing graph reaches, not just the stylesheet’s direct importer', async () => {
+    const app = makeUsedApp({
+      'src/app.css': APP_CSS,
+      'src/main.ts': "import './Layout.ts'\nexport const lazy = () => import('./Other.ts')\n",
+      'src/Layout.ts': `${IMPORT}import './app.css'\nexport const l = cx('flex')\n`,
+      'src/Other.ts': `${IMPORT}export const o = cx('grid')\n`,
+    })
+    try {
+      const server = await startDev(devConfig(app.root, [slow('src/Other.ts', 300), navePlugin()]))
+      try {
+        await server.transformRequest('/src/main.ts')
+        await server.transformRequest('/src/Layout.ts')
+        const css = await server.transformRequest('/src/app.css')
+        const served: unknown = JSON.parse(
+          /const __vite__css = ("(?:[^"\\]|\\.)*")/.exec(css!.code)![1]!,
+        )
+
+        expect(atomLayerAtoms(served as string)).toEqual(atoms('flex', 'grid'))
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('a stylesheet no module imports is answered at once, with the atoms of the pages read so far', async () => {
+    const app = makeUsedApp({
+      'index.html':
+        '<!doctype html><link rel="stylesheet" href="/src/linked.css"><p class="nave-hidden"></p>',
+      'src/linked.css': APP_CSS,
+      'src/app.css': APP_CSS,
+      'src/main.ts': "import './app.css'\n",
+    })
+    try {
+      const server = await startDev(devConfig(app.root, [navePlugin()]))
+      try {
+        const waits: string[] = []
+        const { client } = server.environments
+        const wait = client.waitForRequestsIdle.bind(client)
+        client.waitForRequestsIdle = (id?: string) => {
+          waits.push(id ?? '')
+          return wait(id)
+        }
+        await server.transformIndexHtml(
+          '/index.html',
+          readFileSync(path.join(app.root, 'index.html'), 'utf8'),
+        )
+        const css = await server.transformRequest('/src/linked.css?direct')
+
+        expect(waits).toEqual([])
+        expect(atomLayerAtoms(css!.code)).toEqual(atoms('hidden'))
+
+        await server.transformRequest('/src/main.ts')
+        await server.transformRequest('/src/app.css')
+        expect(waits).toHaveLength(1)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
     }
   }, 60_000)
 })
@@ -576,6 +664,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     const app = makeUsedApp(
       appFiles({
         'src/ssr.ts': "import { tone } from 'dyn-lib'\nexport default tone('grid')\n",
+        'src/ssr2.ts': "import { tone } from 'dyn-lib'\nexport default tone('grid')\n",
         'src/client.ts': "import { tone } from 'dyn-lib'\nexport const c = tone('flex')\n",
       }),
       'copy',
@@ -610,6 +699,97 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
       try {
         const module = (await server.ssrLoadModule('/src/ssr.ts')) as { default: string }
         expect(module.default).toBe('nave-grid')
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  const render = async (server: DevServer, file: string): Promise<string> =>
+    ((await server.ssrLoadModule(file)) as { default: string }).default
+
+  it('a restart keeps the map: a fresh render gives "" before and after it, and the global stays', async () => {
+    const app = makeFixture()
+    try {
+      const server = await startDev(devConfig(app.root, [navePlugin({ keep: ['flex'] })]))
+      try {
+        const before = await render(server, '/src/ssr.ts')
+        await server.restart()
+        const after = await render(server, '/src/ssr2.ts')
+
+        expect({ before, after }).toEqual({ before: '', after: '' })
+        expect('__NAVE_KEEP_CLASSES__' in globalThis).toBe(true)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('with two dev servers in one process, closing the second leaves the first its own map', async () => {
+    const first = makeFixture()
+    const second = makeFixture()
+    try {
+      const a = await startDev(devConfig(first.root, [navePlugin({ keep: ['flex'] })]))
+      const b = await startDev(devConfig(second.root, [navePlugin({ keep: ['grid'] })]))
+      try {
+        await stopDev(b)
+
+        expect(await render(a, '/src/ssr.ts')).toBe('')
+      } finally {
+        await stopDev(a)
+      }
+      expect('__NAVE_KEEP_CLASSES__' in globalThis).toBe(false)
+    } finally {
+      first.dispose()
+      second.dispose()
+    }
+  }, 120_000)
+
+  it('closing the only dev server gives the global back what it held before it started', async () => {
+    const app = makeFixture()
+    const held = { flex: 'held' }
+    Object.assign(globalThis, { __NAVE_KEEP_CLASSES__: held })
+    try {
+      const server = await startDev(devConfig(app.root, [navePlugin({ keep: ['flex'] })]))
+      const during = (globalThis as Record<string, unknown>).__NAVE_KEEP_CLASSES__
+      await stopDev(server)
+
+      expect(during).not.toBe(held)
+      expect((globalThis as Record<string, unknown>).__NAVE_KEEP_CLASSES__).toBe(held)
+    } finally {
+      Reflect.deleteProperty(globalThis, '__NAVE_KEEP_CLASSES__')
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('dyn-lib’s prebundled chunk keeps core’s import and holds no keep map', async () => {
+    const app = makeFixture()
+    try {
+      const server = await startDev(
+        devConfig(app.root, [navePlugin({ keep: ['flex'], keepFor: { 'dyn-lib': ['block'] } })]),
+      )
+      try {
+        await server.transformRequest('/src/main.ts')
+        await optimized(app.root)
+        const chunk = readFileSync(
+          path.join(app.root, 'node_modules', '.vite', 'deps', 'dyn-lib.js'),
+          'utf8',
+        )
+
+        expect(chunk).toContain('cx.dynamic(')
+        expect(chunk).toMatch(/import \{ cx \} from ["']@navecss\/core\/cx["']/)
+        for (const absent of [
+          '__NAVE_KEEP_CLASSES__',
+          'nave-flex',
+          'nave-block',
+          'applied no class',
+        ]) {
+          expect(chunk).not.toContain(absent)
+        }
       } finally {
         await stopDev(server)
       }
