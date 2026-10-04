@@ -58,15 +58,15 @@ async function hasElement(page: Page, selector: string): Promise<boolean> {
 }
 
 /**
- * Whether the dev server has transformed the stylesheet `src/app.css` of `root` already.
+ * Whether the dev server has transformed the stylesheet `file` (`src/app.css` unless another is
+ * named) of `root` already.
  */
 async function isSheetTransformed(
   server: Awaited<ReturnType<typeof listenDev>>['server'],
   root: string,
+  file = 'src/app.css',
 ): Promise<boolean> {
-  const module = server.environments.client.moduleGraph.getModuleById(
-    path.join(root, 'src/app.css'),
-  )
+  const module = server.environments.client.moduleGraph.getModuleById(path.join(root, file))
   return module?.transformResult != null
 }
 
@@ -76,12 +76,13 @@ async function isSheetTransformed(
 async function untilSheetTransformed(
   server: Awaited<ReturnType<typeof listenDev>>['server'],
   root: string,
+  file = 'src/app.css',
 ): Promise<void> {
   const deadline = Date.now() + 20_000
-  while (Date.now() < deadline && !(await isSheetTransformed(server, root))) {
+  while (Date.now() < deadline && !(await isSheetTransformed(server, root, file))) {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  expect(await isSheetTransformed(server, root)).toBe(true)
+  expect(await isSheetTransformed(server, root, file)).toBe(true)
 }
 
 describe('AC-used-atoms-42 — HTML read after the stylesheet was first transformed', () => {
@@ -226,6 +227,75 @@ describe('AC-used-atoms-42 and -54 — a server that warms the entry up before a
     } finally {
       app.dispose()
     }
+  }, 120_000)
+})
+
+describe('AC-used-atoms-53 — a backend under a warm-up is warned when the stylesheet is requested, however the request spells it', () => {
+  const SPACED = 'src/my app.css'
+
+  /**
+   * How many warnings the plugin had logged at start, and after one request for `request` (a path
+   * from the server's address) sent with `headers`.
+   */
+  async function warningsAround(
+    request: (root: string) => string,
+    options: { readonly base?: string; readonly headers?: Record<string, string> } = {},
+  ): Promise<{ afterRequest: number; atStart: number }> {
+    const app = makeUsedApp({
+      'src/app.css': APP_CSS,
+      [SPACED]: APP_CSS,
+      'src/main.ts': "import './app.css'\nimport './my app.css'\n",
+    })
+    const { logger, warned } = warningLogger()
+    try {
+      const { server, url } = await listenDev({
+        ...devConfig(app.root, [navePlugin()]),
+        customLogger: logger,
+        ...(options.base && { base: options.base }),
+        server: { warmup: { clientFiles: ['./src/main.ts'] } },
+      })
+      try {
+        await untilSheetTransformed(server, app.root)
+        await untilSheetTransformed(server, app.root, SPACED)
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        const atStart = pluginWarnings(warned).length
+
+        const response = await fetch(new URL(request(app.root), url), {
+          headers: options.headers ?? {},
+        })
+        await response.text()
+        return { afterRequest: pluginWarnings(warned).length, atStart }
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }
+
+  it.each([
+    ['a path with a space, percent-encoded', () => '/src/my%20app.css', {}],
+    ['a path under a base', () => '/app/src/app.css', { base: '/app/' }],
+    [
+      'a path under a base, asked for as a stylesheet',
+      () => '/app/src/app.css',
+      { base: '/app/', headers: { Accept: 'text/css' } },
+    ],
+    ['a path with a timestamp query', () => '/src/app.css?t=123', {}],
+    ['a path under /@fs/', (root: string) => `/@fs${root}/src/app.css`, {}],
+  ] as const)(
+    'logs none at start and one after a request for %s',
+    async (_name, request, options) => {
+      expect(await warningsAround(request, options)).toEqual({ afterRequest: 1, atStart: 0 })
+    },
+    120_000,
+  )
+
+  it('notes no request whose path does not decode, which Vite refuses, and the server still answers', async () => {
+    expect(await warningsAround(() => '/src/app%E0%A4%A.css')).toEqual({
+      afterRequest: 0,
+      atStart: 0,
+    })
   }, 120_000)
 })
 

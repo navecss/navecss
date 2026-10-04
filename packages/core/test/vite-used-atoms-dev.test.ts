@@ -659,6 +659,15 @@ async function optimized(root: string): Promise<void> {
   }
 }
 
+/**
+ * The dev server's config for a row that looks only at the process-wide keep map. Dependency
+ * discovery is off, so no scan of the app's dependencies is running when the row closes the
+ * server and removes the app's directory.
+ */
+function keepMapConfig(root: string, plugins: PluginOption[]): InlineConfig {
+  return { ...devConfig(root, plugins), optimizeDeps: { noDiscovery: true } }
+}
+
 describe('AC-used-atoms-20 — the define in dev: server renders and the optimizer', () => {
   function makeFixture(): ReturnType<typeof makeUsedApp> {
     const app = makeUsedApp(
@@ -713,7 +722,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
   it('a restart keeps the map: a fresh render gives "" before and after it, and the global stays', async () => {
     const app = makeFixture()
     try {
-      const server = await startDev(devConfig(app.root, [navePlugin({ keep: ['flex'] })]))
+      const server = await startDev(keepMapConfig(app.root, [navePlugin({ keep: ['flex'] })]))
       try {
         const before = await render(server, '/src/ssr.ts')
         await server.restart()
@@ -733,8 +742,8 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     const first = makeFixture()
     const second = makeFixture()
     try {
-      const a = await startDev(devConfig(first.root, [navePlugin({ keep: ['flex'] })]))
-      const b = await startDev(devConfig(second.root, [navePlugin({ keep: ['grid'] })]))
+      const a = await startDev(keepMapConfig(first.root, [navePlugin({ keep: ['flex'] })]))
+      const b = await startDev(keepMapConfig(second.root, [navePlugin({ keep: ['grid'] })]))
       try {
         await stopDev(b)
 
@@ -749,12 +758,35 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     }
   }, 120_000)
 
+  it('closing the servers in the order they started leaves the second its own map, and then gives the global back what it held', async () => {
+    const first = makeFixture()
+    const second = makeFixture()
+    const held = { flex: 'held' }
+    Object.assign(globalThis, { __NAVE_KEEP_CLASSES__: held })
+    try {
+      const a = await startDev(keepMapConfig(first.root, [navePlugin({ keep: ['flex'] })]))
+      const b = await startDev(keepMapConfig(second.root, [navePlugin({ keep: ['grid'] })]))
+      try {
+        await stopDev(a)
+
+        expect(await render(b, '/src/ssr.ts')).toBe('nave-grid')
+      } finally {
+        await stopDev(b)
+      }
+      expect((globalThis as Record<string, unknown>).__NAVE_KEEP_CLASSES__).toBe(held)
+    } finally {
+      Reflect.deleteProperty(globalThis, '__NAVE_KEEP_CLASSES__')
+      first.dispose()
+      second.dispose()
+    }
+  }, 120_000)
+
   it('closing the only dev server gives the global back what it held before it started', async () => {
     const app = makeFixture()
     const held = { flex: 'held' }
     Object.assign(globalThis, { __NAVE_KEEP_CLASSES__: held })
     try {
-      const server = await startDev(devConfig(app.root, [navePlugin({ keep: ['flex'] })]))
+      const server = await startDev(keepMapConfig(app.root, [navePlugin({ keep: ['flex'] })]))
       const during = (globalThis as Record<string, unknown>).__NAVE_KEEP_CLASSES__
       await stopDev(server)
 

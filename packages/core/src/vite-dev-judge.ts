@@ -46,7 +46,9 @@ function stylesheetUrl(request: RequestLike, base: string): string | undefined {
 
 /**
  * Notes that the stylesheet at `url` was asked for. One that was transformed already is being
- * answered from the module graph, so the judgement is made now.
+ * answered from the module graph, so the judgement is made now. The URL is decoded first, as
+ * Vite's own transform middleware does, so `/src/my%20app.css` names `src/my app.css`; a URL that
+ * does not decode is one Vite refuses, and is not noted.
  */
 async function noteRequest(
   context: UsedContext,
@@ -55,7 +57,7 @@ async function noteRequest(
 ): Promise<void> {
   const { state } = context
   try {
-    const resolved = await environment.pluginContainer.resolveId(url)
+    const resolved = await environment.pluginContainer.resolveId(decodeURI(url))
     if (resolved === null) return
     const file = filePathOf(resolved.id)
     state.requested.add(file)

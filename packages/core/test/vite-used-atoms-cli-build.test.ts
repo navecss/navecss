@@ -6,7 +6,7 @@
  * The markup warning (AC-used-atoms-53) and the order failure (AC-used-atoms-13) hold across them,
  * and two builds of one root in one process keep their sets apart.
  */
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -55,6 +55,48 @@ async function viteBuild(app: ScratchApp, args: readonly string[] = []): Promise
     const failed = error as { code?: number; stderr: string; stdout: string }
     return { output: `${failed.stdout}\n${failed.stderr}`, exitCode: failed.code ?? 1 }
   }
+}
+
+/**
+ * Runs `vite build --watch` in the app until its first build has ended, then stops it, resolving
+ * to what it printed and how it ended.
+ */
+async function watchFirstBuild(
+  app: ScratchApp,
+): Promise<{ readonly output: string; readonly signal: NodeJS.Signals | null }> {
+  rmSync(path.join(app.root, 'dist'), { force: true, recursive: true })
+  const child = spawn(process.execPath, [viteBin, 'build', '--watch'], {
+    cwd: app.root,
+    env: { ...process.env, CI: '1', FORCE_COLOR: '0', NO_COLOR: '1' },
+  })
+  let output = ''
+  const ended = new Promise<void>((resolve, reject) => {
+    const take = (chunk: Buffer): void => {
+      output += chunk.toString()
+      if (output.includes('built in')) resolve()
+    }
+    child.stdout.on('data', take)
+    child.stderr.on('data', take)
+    child.on('error', reject)
+    child.on('exit', () => {
+      reject(new Error(`vite exited before its first build ended:\n${output}`))
+    })
+  })
+  try {
+    await ended
+  } catch (error) {
+    child.kill('SIGKILL')
+    throw error
+  } finally {
+    child.removeAllListeners('exit')
+  }
+  const exited = new Promise<NodeJS.Signals | null>((resolve) => {
+    child.on('exit', (_code, signal) => {
+      resolve(signal)
+    })
+  })
+  child.kill('SIGTERM')
+  return { output, signal: await exited }
 }
 
 /**
@@ -127,6 +169,15 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(0)
       expect(atomLayerAtoms(builtCss(app))).toEqual(atoms('flex', 'gap'))
+    }, 120_000)
+
+    it('prints none when the builder shares one config across the environments and uses Vite’s own buildApp', async () => {
+      writeConfig(app, 'builder: { sharedConfigBuild: true }')
+
+      const { exitCode, output } = await viteBuild(app)
+
+      expect(outcome({ exitCode, output })).toBe('exited 0')
+      expect(markupWarnings(output)).toBe(0)
     }, 120_000)
   })
 
@@ -201,6 +252,33 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(1)
+    }, 120_000)
+
+    it('prints exactly one when the builder shares one config across the environments and uses Vite’s own buildApp', async () => {
+      writeConfig(app, `${INPUT}, builder: { sharedConfigBuild: true }`)
+
+      const { exitCode, output } = await viteBuild(app)
+
+      expect(outcome({ exitCode, output })).toBe('exited 0')
+      expect(markupWarnings(output)).toBe(1)
+    }, 120_000)
+
+    it('prints exactly one for the first build of vite build --watch, and the process stops when asked', async () => {
+      writeConfig(app, INPUT)
+
+      const { output, signal } = await watchFirstBuild(app)
+
+      expect(markupWarnings(output)).toBe(1)
+      expect(signal).toBe('SIGTERM')
+    }, 120_000)
+
+    it('prints none when Vite’s own buildApp builds a server environment too, with one config shared', async () => {
+      writeConfig(app, `${INPUT}, builder: { sharedConfigBuild: true }, ${SERVER_ENVIRONMENT}`)
+
+      const { exitCode, output } = await viteBuild(app)
+
+      expect(outcome({ exitCode, output })).toBe('exited 0')
+      expect(markupWarnings(output)).toBe(0)
     }, 120_000)
   })
 })

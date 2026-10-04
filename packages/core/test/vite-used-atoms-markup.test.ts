@@ -9,7 +9,7 @@ import { writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
+import { promisify, stripVTControlCharacters } from 'node:util'
 import { createLogger } from 'vite'
 import { describe, expect, it } from 'vitest'
 
@@ -59,12 +59,16 @@ const INPUT = { rolldownOptions: { input: 'src/main.ts' } }
 
 /**
  * Every warning the plugin printed, whatever it says: a build prefixes the plugin's name, and the
- * dev server's logger gets the text as it is, which opens with the call.
+ * dev server's logger gets the text as it is, which opens with the call. Colour is on wherever
+ * `CI` is set, and a coloured warning opens with a control sequence, so the sequences are taken
+ * off before the opening is read.
  */
 function pluginWarnings(warnings: readonly string[] | undefined): string[] {
-  return (warnings ?? []).filter(
-    (warning) => /^\[plugin nave[^\]]*\]/.test(warning) || warning.startsWith('navePlugin()'),
-  )
+  return (warnings ?? [])
+    .map((warning) => stripVTControlCharacters(warning))
+    .filter(
+      (warning) => /^\[plugin nave[^\]]*\]/.test(warning) || warning.startsWith('navePlugin()'),
+    )
 }
 
 describe('AC-used-atoms-53 — the markup warning fires for a build that read no use and no markup', () => {
