@@ -27,7 +27,8 @@ const PAIR = classesOf('srOnly', 'srOnlyFocusable')
 const SKIP_LINK = '<a class="nave-sr-only nave-sr-only-focusable" href="#main">Skip</a>'
 
 // Lightning CSS at Vite's own default browser targets, minifying: where it merges the two atoms'
-// rules into one list, `.nave-sr-only,.nave-sr-only-focusable`.
+// rules into one list, `.nave-sr-only,.nave-sr-only-focusable`. Vite minifies after the prune from
+// 8.3 and while compiling the stylesheet (before the prune) on 8.2.1.
 const VITE_DEFAULTS: Pick<BuildOptions, 'build' | 'config'> = {
   build: { cssTarget: undefined, cssMinify: 'lightningcss' },
   config: { css: { transformer: 'lightningcss' } },

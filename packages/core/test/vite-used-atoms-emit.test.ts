@@ -573,9 +573,10 @@ describe.each(Object.entries(VITE_APIS))(
     })
 
     describe('AC-used-atoms-26 - the prune is handed a merged selector list', () => {
-      // Lightning CSS merges the two rules when it minifies, which Vite does after the prune. A
-      // scratch plugin after Nave's does the merge before Vite's CSS step, so that step receives
-      // the list the prune has to cut member by member; a second one records what it received.
+      // Lightning CSS merges the two rules when it minifies. Vite minifies after the prune from
+      // 8.3 and while compiling the stylesheet (before the prune) on 8.2.1. A scratch plugin after
+      // Nave's does the merge before Vite's CSS step on both, so that step receives the list the
+      // prune has to cut member by member; a second one records what it received.
       const merger = {
         name: 'merge-sr-only',
         transform(code: string, id: string) {

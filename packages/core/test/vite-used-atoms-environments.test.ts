@@ -21,9 +21,12 @@ import {
   buildUsed,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
-import { appConfig, startDev } from './helpers/vite-app.ts'
+import { appConfig, startDev, VITE_APIS } from './helpers/vite-app.ts'
 
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
+// The builder is Vite's multi-environment path, which the two Vites reach by their own code, so
+// every row that builds through it runs on each Vite measured.
+const LEGS = Object.entries(VITE_APIS)
 
 /**
  * An app with a client calling `flex`, a dependency bundled into it calling `gap`, and a server
@@ -44,34 +47,72 @@ function ssrApp(server: string) {
 }
 
 describe('AC-used-atoms-12 — every environment in one process, dependencies included', () => {
-  it('unions the client, a bundled dependency and the server render, whichever builds first', async () => {
-    for (const order of [
-      ['ssr', 'client'],
-      ['client', 'ssr'],
-    ] as const) {
+  it.each(LEGS)(
+    'unions the client, a bundled dependency and the server render, whichever builds first on Vite %s',
+    async (_version, api) => {
+      for (const order of [
+        ['ssr', 'client'],
+        ['client', 'ssr'],
+      ] as const) {
+        const app = ssrApp("cx('grid')")
+        try {
+          const built = await buildEnvironments(app, { api, order, options: { keep: ['grid'] } })
+
+          expect(built.error, order.join()).toBeUndefined()
+          expect(atomLayerAtoms(built.client.css)).toEqual(atoms('flex', 'gap', 'grid'))
+        } finally {
+          app.dispose()
+        }
+      }
+    },
+    60_000,
+  )
+
+  it.each(LEGS)(
+    'builds the server first and the client sees the server’s atom without keep on Vite %s',
+    async (_version, api) => {
       const app = ssrApp("cx('grid')")
       try {
-        const built = await buildEnvironments(app, { order, options: { keep: ['grid'] } })
+        const built = await buildEnvironments(app, { api, order: ['ssr', 'client'] })
 
-        expect(built.error, order.join()).toBeUndefined()
+        expect(built.error).toBeUndefined()
         expect(atomLayerAtoms(built.client.css)).toEqual(atoms('flex', 'gap', 'grid'))
       } finally {
         app.dispose()
       }
-    }
-  }, 60_000)
+    },
+    60_000,
+  )
 
-  it('builds the server first and the client sees the server’s atom without keep', async () => {
-    const app = ssrApp("cx('grid')")
-    try {
-      const built = await buildEnvironments(app, { order: ['ssr', 'client'] })
+  it.each(LEGS)(
+    'builds each environment on the Vite the leg names, %s',
+    async (_version, api) => {
+      const app = ssrApp("cx('grid')")
+      const seen = new Set<string>()
+      // Each Vite puts its own version on the context its plugins run in, so this reads which
+      // Vite's builder ran, not which one the row asked for.
+      const witness: PluginOption = {
+        name: 'record-vite-version',
+        buildStart() {
+          seen.add(`${this.environment.name} ${this.meta.viteVersion}`)
+        },
+      }
+      try {
+        const built = await buildEnvironments(app, {
+          api,
+          order: ['ssr', 'client'],
+          options: { keep: ['grid'] },
+          plugins: [witness],
+        })
 
-      expect(built.error).toBeUndefined()
-      expect(atomLayerAtoms(built.client.css)).toEqual(atoms('flex', 'gap', 'grid'))
-    } finally {
-      app.dispose()
-    }
-  }, 60_000)
+        expect(built.error).toBeUndefined()
+        expect([...seen].toSorted()).toEqual([`client ${api.version}`, `ssr ${api.version}`])
+      } finally {
+        app.dispose()
+      }
+    },
+    60_000,
+  )
 
   it('keeps the state of two projects apart, built one after the other in one process', async () => {
     const a = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
@@ -289,26 +330,32 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
     }
   }, 60_000)
 
-  it('gives each environment its own plugin instance for one root the same CSS as a shared one', async () => {
-    const app = ssrApp("cx('grid')")
-    try {
-      const shared = await buildEnvironments(app, { order: ['ssr', 'client'] })
-      const separate = await buildEnvironments(app, {
-        order: ['ssr', 'client'],
-        nave: navePlugin(),
-      })
-      const again = await buildEnvironments(app, {
-        order: ['ssr', 'client'],
-        nave: [...navePlugin(), ...navePlugin()],
-      })
+  it.each(LEGS)(
+    'gives each environment its own plugin instance for one root the same CSS as a shared one on Vite %s',
+    async (_version, api) => {
+      const app = ssrApp("cx('grid')")
+      try {
+        const shared = await buildEnvironments(app, { api, order: ['ssr', 'client'] })
+        const separate = await buildEnvironments(app, {
+          api,
+          order: ['ssr', 'client'],
+          nave: navePlugin(),
+        })
+        const again = await buildEnvironments(app, {
+          api,
+          order: ['ssr', 'client'],
+          nave: [...navePlugin(), ...navePlugin()],
+        })
 
-      expect(atomLayerAtoms(separate.client.css)).toEqual(atomLayerAtoms(shared.client.css))
-      expect(again.error).toBeUndefined()
-      expect(atomLayerAtoms(again.client.css)).toEqual(atomLayerAtoms(shared.client.css))
-    } finally {
-      app.dispose()
-    }
-  }, 60_000)
+        expect(atomLayerAtoms(separate.client.css)).toEqual(atomLayerAtoms(shared.client.css))
+        expect(again.error).toBeUndefined()
+        expect(atomLayerAtoms(again.client.css)).toEqual(atomLayerAtoms(shared.client.css))
+      } finally {
+        app.dispose()
+      }
+    },
+    60_000,
+  )
 })
 
 describe('AC-used-atoms-12 - an instance of the plugin for each environment', () => {
@@ -323,81 +370,104 @@ describe('AC-used-atoms-12 - an instance of the plugin for each environment', ()
       })),
     ) as never[]
 
-  it('unions the sets of the two instances when the server builds first', async () => {
-    const app = ssrApp("cx('grid')")
-    try {
-      const built = await buildEnvironments(app, {
-        order: ['ssr', 'client'],
-        nave: perEnvironment(),
-      })
+  it.each(LEGS)(
+    'unions the sets of the two instances when the server builds first on Vite %s',
+    async (_version, api) => {
+      const app = ssrApp("cx('grid')")
+      try {
+        const built = await buildEnvironments(app, {
+          api,
+          order: ['ssr', 'client'],
+          nave: perEnvironment(),
+        })
 
-      expect(built.error).toBeUndefined()
-      expect(atomLayerAtoms(built.client.css)).toEqual(atoms('flex', 'gap', 'grid'))
-    } finally {
-      app.dispose()
-    }
-  }, 60_000)
+        expect(built.error).toBeUndefined()
+        expect(atomLayerAtoms(built.client.css)).toEqual(atoms('flex', 'gap', 'grid'))
+      } finally {
+        app.dispose()
+      }
+    },
+    60_000,
+  )
 
-  it('fails naming the atom when the client builds first, as with one instance', async () => {
-    const app = ssrApp("cx('grid')")
-    try {
-      const built = await buildEnvironments(app, {
-        order: ['client', 'ssr'],
-        nave: perEnvironment(),
-      })
+  it.each(LEGS)(
+    'fails naming the atom when the client builds first, as with one instance on Vite %s',
+    async (_version, api) => {
+      const app = ssrApp("cx('grid')")
+      try {
+        const built = await buildEnvironments(app, {
+          api,
+          order: ['client', 'ssr'],
+          nave: perEnvironment(),
+        })
 
-      expect(built.error).toContain('grid')
-      expect(built.error).toContain('src/entry-server.ts')
-    } finally {
-      app.dispose()
-    }
-  }, 60_000)
+        expect(built.error).toContain('grid')
+        expect(built.error).toContain('src/entry-server.ts')
+      } finally {
+        app.dispose()
+      }
+    },
+    60_000,
+  )
 })
 
 describe('AC-used-atoms-13 — an atom collected after the CSS was written fails the build', () => {
-  it('fails naming the atom, the module and both remedies, client first', async () => {
-    const app = ssrApp("cx('grid')")
-    try {
-      const built = await buildEnvironments(app, { order: ['client', 'ssr'] })
+  it.each(LEGS)(
+    'fails naming the atom, the module and both remedies, client first on Vite %s',
+    async (_version, api) => {
+      const app = ssrApp("cx('grid')")
+      try {
+        const built = await buildEnvironments(app, { api, order: ['client', 'ssr'] })
 
-      expect(built.error).toContain('grid')
-      expect(built.error).toContain('src/entry-server.ts')
-      expect(built.error).toContain('keep')
-      expect(built.error).toContain('builder.buildApp')
-    } finally {
-      app.dispose()
-    }
-  }, 60_000)
+        expect(built.error).toContain('grid')
+        expect(built.error).toContain('src/entry-server.ts')
+        expect(built.error).toContain('keep')
+        expect(built.error).toContain('builder.buildApp')
+      } finally {
+        app.dispose()
+      }
+    },
+    60_000,
+  )
 
-  it('is green with keep, and green when the server only uses an atom the client has', async () => {
-    const withKeep = ssrApp("cx('grid')")
-    const sameAtom = ssrApp("cx('flex')")
-    try {
-      const kept = await buildEnvironments(withKeep, {
-        order: ['client', 'ssr'],
-        options: { keep: ['grid'] },
-      })
-      const same = await buildEnvironments(sameAtom, { order: ['client', 'ssr'] })
+  it.each(LEGS)(
+    'is green with keep, and green when the server only uses an atom the client has on Vite %s',
+    async (_version, api) => {
+      const withKeep = ssrApp("cx('grid')")
+      const sameAtom = ssrApp("cx('flex')")
+      try {
+        const kept = await buildEnvironments(withKeep, {
+          api,
+          order: ['client', 'ssr'],
+          options: { keep: ['grid'] },
+        })
+        const same = await buildEnvironments(sameAtom, { api, order: ['client', 'ssr'] })
 
-      expect(kept.error).toBeUndefined()
-      expect(atomLayerAtoms(kept.client.css)).toContain('grid')
-      expect(same.error).toBeUndefined()
-    } finally {
-      withKeep.dispose()
-      sameAtom.dispose()
-    }
-  }, 60_000)
+        expect(kept.error).toBeUndefined()
+        expect(atomLayerAtoms(kept.client.css)).toContain('grid')
+        expect(same.error).toBeUndefined()
+      } finally {
+        withKeep.dispose()
+        sameAtom.dispose()
+      }
+    },
+    60_000,
+  )
 
-  it('fails the same way for a literal class and no cx call', async () => {
-    const app = ssrApp("'nave-grid'")
-    try {
-      const built = await buildEnvironments(app, { order: ['client', 'ssr'] })
+  it.each(LEGS)(
+    'fails the same way for a literal class and no cx call on Vite %s',
+    async (_version, api) => {
+      const app = ssrApp("'nave-grid'")
+      try {
+        const built = await buildEnvironments(app, { api, order: ['client', 'ssr'] })
 
-      expect(built.error).toContain('grid')
-    } finally {
-      app.dispose()
-    }
-  }, 60_000)
+        expect(built.error).toContain('grid')
+      } finally {
+        app.dispose()
+      }
+    },
+    60_000,
+  )
 })
 
 describe('AC-used-atoms-14 — two invocations share their sets through cacheDir', () => {
