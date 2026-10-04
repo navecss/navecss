@@ -18,7 +18,7 @@ the build the same way. Next.js, webpack and the PostCSS plugin ship every atom.
 The dev server serves the same set as far as it has read: it filters the atom layer of each
 stylesheet to the atoms of the modules it has transformed, so a class the build cannot see has no
 rule in dev either. The first stylesheet response waits until every module reachable from the page's
-entry has been read, and the stylesheet reloads when an edit adds an atom. `@navecss/core` is left
+entries has been read, and the stylesheet reloads when an edit adds an atom. `@navecss/core` is left
 out of the dependency pre-bundle so a dependency's `cx()` calls are read, and a build or dev server
 that read no use and no markup (a backend rendering its own templates) warns once.
 
