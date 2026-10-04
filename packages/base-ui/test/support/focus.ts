@@ -26,12 +26,16 @@ export const THUMB_RING: Readonly<Record<string, string>> = {
 export const ringBlock: Readonly<Record<string, string>> =
   coreAtoms.focusRing.pseudos[':focus-visible']
 
+const isOwnRoot = (item: FlatDeclaration): boolean => item.selectors[0] === `.${item.owner}`
+
 const isBase = (item: FlatDeclaration): boolean =>
+  isOwnRoot(item) &&
   item.selectors.length === 1 &&
   item.property === 'outline' &&
   item.value === coreAtoms.focusRing.declarations.outline
 
 const isBlock = (item: FlatDeclaration): boolean =>
+  isOwnRoot(item) &&
   item.selectors.length === 2 &&
   item.selectors[1] === '&:focus-visible' &&
   ringBlock[item.property] === item.value

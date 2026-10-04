@@ -19,5 +19,9 @@ rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silve
 slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet
 wheat white whitesmoke yellow yellowgreen accentcolor accentcolortext activetext buttonborder
 buttonface buttontext canvas canvastext field fieldtext graytext highlight highlighttext linktext
-mark marktext selecteditem selecteditemtext visitedtext`.split(/\s+/),
+mark marktext selecteditem selecteditemtext visitedtext
+activeborder activecaption appworkspace background buttonhighlight buttonshadow captiontext
+inactiveborder inactivecaption inactivecaptiontext infobackground infotext menu menutext scrollbar
+threeddarkshadow threedface threedhighlight threedlightshadow threedshadow window windowframe
+windowtext`.split(/\s+/),
 )

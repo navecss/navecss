@@ -1,4 +1,4 @@
-import type { AtRule, ChildNode, Container, Root, Rule } from 'postcss'
+import type { AtRule, ChildNode, Root, Rule } from 'postcss'
 
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
@@ -115,9 +115,6 @@ interface Nested {
   readonly owner: string
 }
 
-const isLayer = (node: Container | Root | undefined): boolean =>
-  node?.type === 'atrule' && (node as AtRule).name === 'layer'
-
 /**
  * Every at-rule that is not a top-level node or the layer block, with the class rule it sits in.
  */
@@ -125,7 +122,7 @@ const nestedAtRules = (root: Root): Nested[] => {
   const found: Nested[] = []
   root.walkAtRules((at) => {
     const parent = at.parent
-    if (parent?.type === 'root' || isLayer(parent)) return
+    if (parent?.type === 'root') return
     found.push({ at, owner: parent?.type === 'rule' ? parent.selector : '' })
   })
   return found
@@ -301,7 +298,8 @@ const isPseudoOutside = (value: string, inside: readonly string[], owner: string
 }
 
 const isTypeAdmitted = (value: string, inside: readonly string[], owner: string): boolean =>
-  inside.includes(':dir') || (value === 'svg' && owner === `${PREFIX}disclosure-icon`)
+  (inside.includes(':dir') && ['ltr', 'rtl'].includes(value)) ||
+  (value === 'svg' && owner === `${PREFIX}disclosure-icon`)
 
 /**
  * Whether one node of a resolved selector is outside the vocabulary, as the text to report.

@@ -86,7 +86,8 @@ export const splitSelectorList = (list: string): string[] => {
   const parts: string[] = []
   let depth = 0
   let start = 0
-  for (const [index, char] of [...list].entries()) {
+  for (let index = 0; index < list.length; index += 1) {
+    const char = list[index]
     if (char === '(' || char === '[') depth += 1
     else if (char === ')' || char === ']') depth -= 1
     else if (char === ',' && depth === 0) {

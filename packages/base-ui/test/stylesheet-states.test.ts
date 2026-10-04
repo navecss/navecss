@@ -141,24 +141,41 @@ const declared = (found: FlatDeclaration[], owner: string, side: Side): string |
   )?.value
 
 /**
- * The resolved border radius minus the resolved border width: the curve the inset must clear.
+ * What a rounded corner takes off the inset's clearance, as a fraction of the corner's radius: the
+ * focus ring follows the popup's curve, and at 45 degrees the curve sits `1 - sqrt(1/2)`, about
+ * 0.293, of a radius away from the square corner it replaces.
  */
-const innerRadius = (found: FlatDeclaration[], owner: string): number => {
-  const radius = px(declared(found, owner, { property: 'border-radius' }) ?? '0') ?? 0
-  const border = declared(found, owner, { property: 'border' }) ?? ''
-  const width = px(/var\(--nave-border-width-[a-z]+\)/.exec(border)?.[0] ?? '0') ?? 0
-  return Math.max(0, radius - width)
+const CORNER_SAGITTA = 0.293
+
+/**
+ * The resolved border radius minus the resolved border width: the curve the inset must clear.
+ * A radius or width that is declared and does not resolve to px is undefined, never read as square.
+ */
+const innerRadius = (found: FlatDeclaration[], owner: string): number | undefined => {
+  const declaredRadius = declared(found, owner, { property: 'border-radius' })
+  const border = declared(found, owner, { property: 'border' })
+  const radius = declaredRadius === undefined ? 0 : px(declaredRadius)
+  const widthToken =
+    border === undefined ? '0' : /var\(--nave-border-width-[a-z]+\)/.exec(border)?.[0]
+  const width = widthToken === undefined ? undefined : px(widthToken)
+  return radius === undefined || width === undefined ? undefined : Math.max(0, radius - width)
 }
 
 const rowProblem = (found: FlatDeclaration[], owner: string, sides: readonly Side[]): string[] => {
   const width = px(ringBlock['outline-width'] ?? '')
   const offset = px(ringBlock['outline-offset'] ?? '')
+  const radius = innerRadius(found, owner)
   const insets = sides.map((side) => px(declared(found, owner, side) ?? ''))
-  if (width === undefined || offset === undefined || insets.includes(undefined)) {
+  if (
+    width === undefined ||
+    offset === undefined ||
+    radius === undefined ||
+    insets.includes(undefined)
+  ) {
     return [`${owner} has a side that does not resolve to px`]
   }
   const smallest = Math.min(...(insets as number[]))
-  const needed = width + offset + 0.293 * innerRadius(found, owner)
+  const needed = width + offset + CORNER_SAGITTA * radius
   return smallest >= needed ? [] : [`${owner}: ${smallest} < ${needed}`]
 }
 
@@ -166,7 +183,7 @@ const isClipping = (item: FlatDeclaration): boolean =>
   ['overflow', 'overflow-x', 'overflow-y'].includes(item.property) && item.value !== 'visible'
 
 /**
- * P >= W + O + 0.293 x R for each row of Table T3, and every overflow class a row.
+ * P >= W + O + CORNER_SAGITTA x R for each row of Table T3, and every overflow class a row.
  */
 const clipViolations = (css: string): string[] => {
   const found = flatten(css)
@@ -188,7 +205,7 @@ const withDeclaration = (rule: string, property: string, value: string): string 
 }
 
 describe('AC-base-ui-bridge-31: clip insets and scroll-padding, computed from the built tokens and atoms', () => {
-  it('holds P >= W + O + 0.293 x R for every row of Table T3', () => {
+  it('holds P >= W + O + CORNER_SAGITTA x R for every row of Table T3', () => {
     expect(clipViolations(readStylesheet())).toEqual([])
   })
 
@@ -200,6 +217,12 @@ describe('AC-base-ui-bridge-31: clip insets and scroll-padding, computed from th
 
   it('reds on a value that does not resolve to px instead of skipping the row (control)', () => {
     const css = withDeclaration('list-popup', 'padding', 'var(--nave-no-such-token)')
+
+    expect(clipViolations(css)).toEqual([expect.stringContaining('does not resolve to px')])
+  })
+
+  it('reds on a declared radius that does not resolve to px instead of reading it as square (control)', () => {
+    const css = withDeclaration('list-popup', 'border-radius', 'var(--nave-no-such-token)')
 
     expect(clipViolations(css)).toEqual([expect.stringContaining('does not resolve to px')])
   })

@@ -23,7 +23,8 @@ const settingRules = (css: string): SettingRule[] => {
       relative.length === 0
         ? `.${item.owner}`
         : relative.reduce(
-            (resolved, next) => next.replaceAll('&', () => resolved),
+            (resolved, next) =>
+              next.includes('&') ? next.replaceAll('&', () => resolved) : `${resolved} ${next}`,
             `.${item.owner}`,
           )
     const key = `${item.owner}|${selector}`

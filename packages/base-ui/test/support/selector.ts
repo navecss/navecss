@@ -57,7 +57,11 @@ const pseudoSpecificity = (pseudo: Pseudo): Triple => {
   if (pseudo.value.startsWith('::')) return [0, 0, 1]
   if (pseudo.value === ':where') return ZERO
   if ([':has', ':is', ':not'].includes(pseudo.value)) {
-    return largest(pseudo.nodes.map((inner) => selectorSpecificity(String(inner))))
+    return largest(
+      pseudo.nodes
+        .filter((inner) => inner.type === 'selector')
+        .map((inner) => selectorSpecificity(String(inner))),
+    )
   }
   return [0, 1, 0]
 }
@@ -89,15 +93,15 @@ const lastCompound = (selector: string): Node[] => {
 
 const attributeState = (node: Attribute): string => `${node.attribute}=${node.value ?? ''}`
 
-const excludedStates = (pseudo: Pseudo): string[] => {
-  const states: string[] = []
-  selectorParser((root) => {
-    root.walkAttributes((inner) => {
-      states.push(attributeState(inner))
-    })
-  }).processSync(String(pseudo))
-  return states
-}
+/**
+ * The states a `:not()` rules out on its own: an argument that is a single attribute selector.
+ * An argument made of several nodes (`:not([a][b])`) excludes no one attribute by itself.
+ */
+const excludedStates = (pseudo: Pseudo): string[] =>
+  pseudo.nodes.flatMap((argument) => {
+    const [only, ...rest] = argument.nodes
+    return rest.length === 0 && only?.type === 'attribute' ? [attributeState(only)] : []
+  })
 
 interface Constraints {
   readonly excluded: ReadonlySet<string>

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
-import { flatten, flattenRules, readStylesheet } from './support/stylesheet.ts'
+import { COLOR_KEYWORDS } from './support/colors.ts'
+import { flatten, flattenRules, readStylesheet, splitSelectorList } from './support/stylesheet.ts'
 import { focusRingClasses } from './support/table-p.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
 import { ADMITTED_FALLBACKS, valueViolations } from './support/value.ts'
@@ -65,24 +66,41 @@ const fallbackViolations = (css: string): string[] =>
     }),
   )
 
+/**
+ * Whether every alternative of some enclosing rule's selector list keys on the invalid state: one
+ * sibling alternative without it would let the paint reach a valid control.
+ */
 const isInvalidKey = (item: FlatDeclaration): boolean =>
-  item.selectors.some((selector) => selector.includes('[aria-invalid="true"]'))
+  item.selectors.some((list) =>
+    splitSelectorList(list).every((branch) => branch.includes('[aria-invalid="true"]')),
+  )
 
-const coloursIn = (value: string): string[] =>
-  value
-    .matchAll(/var\(--nave-color-[\w-]+\)/g)
-    .map((match) => match[0])
-    .toArray()
+/**
+ * The colours a border value names: token reads, named and system colours, and hex or functional
+ * forms. `transparent` and `currentColor` are returned too, for the caller to admit by name.
+ */
+const coloursIn = (value: string): string[] => {
+  const tokenReads = value.match(/var\(--nave-color-[\w-]+\)/g) ?? []
+  const rest = value.replaceAll(/var\([^()]*\)/g, ' ')
+  const others = rest.match(/#[\da-f]{3,8}\b|[a-z][\w-]*(?=\()|[a-z][\w-]*/gi) ?? []
+  return [...tokenReads, ...others.filter((word) => word.startsWith('#') || isColourWord(word))]
+}
 
 const isBorderOf = (item: FlatDeclaration): boolean =>
   CONTROLS.has(item.owner) && item.property.startsWith('border')
+
+const isColourWord = (word: string): boolean =>
+  COLOR_KEYWORDS.has(word.toLowerCase()) ||
+  ['currentcolor', 'transparent'].includes(word.toLowerCase()) ||
+  /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)$/i.test(word)
 
 const isColourAllowed = (
   colour: string,
   item: FlatDeclaration,
   allowed: readonly string[],
 ): boolean =>
-  colour === 'var(--nave-color-feedback-danger)' ? isInvalidKey(item) : allowed.includes(colour)
+  ['currentcolor', 'transparent'].includes(colour.toLowerCase()) ||
+  (colour === 'var(--nave-color-feedback-danger)' ? isInvalidKey(item) : allowed.includes(colour))
 
 /**
  * The colour a control's `border*` takes, allowed only as AC-24 and AC-32 list them.
@@ -119,6 +137,20 @@ describe('AC-base-ui-bridge-24: every declared value is one of the admitted form
 
   it.each(PLANTED_VALUES)('reds on a planted %s (control)', (value) => {
     expect(unacceptedValues(planted(`.${PREFIX}title { color: ${value} }`))).not.toEqual([])
+  })
+
+  it('reds on a named-colour border (control)', () => {
+    const css = planted(`.${PREFIX}input { border-color: red }`)
+
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([`${PREFIX}input border-color: red`])
+  })
+
+  it('reds on a danger border whose selector list has a branch outside the invalid key (control)', () => {
+    const css = planted(
+      `.${PREFIX}input { &[aria-invalid="true"], &:hover { border-color: var(--nave-color-feedback-danger) } }`,
+    )
+
+    expect(borderColourViolations(css, [])).not.toEqual([])
   })
 
   it('reds on a danger border outside an invalid key (control)', () => {

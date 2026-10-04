@@ -27,7 +27,7 @@ const isFocusKeyed = (item: FlatDeclaration): boolean =>
 const isAdmittedFocus = (item: FlatDeclaration): boolean =>
   isFocusRingDeclaration(item) ||
   isThumbRingDeclaration(item) ||
-  item.selectors.join(' ').includes(':has(:focus-visible)')
+  (item.owner === THUMB && item.selectors.join(' ').includes(':has(:focus-visible)'))
 
 const outlineProblems = (item: FlatDeclaration): string[] => {
   const where = `${item.owner} ${item.selectors.join(' ')}`
@@ -191,6 +191,7 @@ describe('AC-base-ui-bridge-28: B2 and motion', () => {
 
 const GROUP_FORMING = new Set([
   'backdrop-filter',
+  'clip-path',
   'contain',
   'filter',
   'isolation',
@@ -243,6 +244,12 @@ describe('AC-base-ui-bridge-29: B3, group-forming properties only where they are
     const css = planted(`.${PREFIX}input { &::placeholder { opacity: 0.5 } }`)
 
     expect(groupForming(css)).toContain(`${PREFIX}input|&::placeholder|opacity: 0.5`)
+  })
+
+  it('reds on a planted clip-path, which can cut a descendant focus ring (control)', () => {
+    const css = planted(`.${PREFIX}list-popup { clip-path: inset(0) }`)
+
+    expect(groupForming(css)).toContain(`${PREFIX}list-popup||clip-path: inset(0)`)
   })
 
   it('reds on a planted opacity under a starting-style key (control)', () => {
