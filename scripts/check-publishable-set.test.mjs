@@ -16,6 +16,7 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import {
+  composeChangesetConfigUnusableMessage,
   composeManifestNotAnObjectMessage,
   composeManifestUnreadableMessage,
   composePackageListUnreadableMessage,
@@ -50,11 +51,20 @@ const TRACKER_REFERENCE_PATTERN = /[\w-]+#\d+/
 
 /**
  * A throwaway workspace `main(rootDir)` can be pointed at directly: LICENSE is irrelevant to
- * this gate, so the fixture holds only `pnpm-workspace.yaml` and `packages/`.
+ * this gate, so the fixture holds only `pnpm-workspace.yaml`, `packages/` and Changesets'
+ * `config.json` (omitted means an empty `ignore` list, a string is written verbatim, `null` writes no file).
  */
-function buildFixture(workspaceYaml, packages) {
+function buildFixture(workspaceYaml, packages, changesetConfig) {
   const dir = mkdtempSync(path.join(tmpdir(), 'nave-publishable-set-'))
   mkdirSync(path.join(dir, 'packages'), { recursive: true })
+  if (changesetConfig !== null) {
+    const config = changesetConfig === undefined ? { ignore: [] } : changesetConfig
+    mkdirSync(path.join(dir, '.changeset'), { recursive: true })
+    writeFileSync(
+      path.join(dir, '.changeset', 'config.json'),
+      typeof config === 'string' ? config : JSON.stringify(config),
+    )
+  }
   if (workspaceYaml !== null) {
     writeFileSync(path.join(dir, 'pnpm-workspace.yaml'), workspaceYaml)
   }
@@ -185,14 +195,19 @@ test('main(): refuses when pnpm-workspace.yaml is missing entirely, comparing no
 })
 
 test('main(): a confirmed workspace with the expected publishable set passes with no mismatches', () => {
-  const dir = buildFixture(VALID_WORKSPACE_YAML, {
-    bridge: { name: '@navecss/bridge', private: true },
-    cli: { name: '@navecss/cli', private: true },
-    core: { name: '@navecss/core' },
-    'eslint-plugin': { name: '@navecss/eslint-plugin' },
-    'stylelint-config': { name: '@navecss/stylelint-config' },
-    tokens: { name: '@navecss/tokens' },
-  })
+  const dir = buildFixture(
+    VALID_WORKSPACE_YAML,
+    {
+      bridge: { name: '@navecss/bridge', private: true },
+      cli: { name: '@navecss/cli', private: true },
+      core: { name: '@navecss/core' },
+      'eslint-plugin': { name: '@navecss/eslint-plugin' },
+      'stylelint-config': { name: '@navecss/stylelint-config' },
+      tokens: { name: '@navecss/tokens' },
+    },
+    // Private packages on the list are the intended state; only a set member there is a fault.
+    { ignore: ['@navecss/cli', '@navecss/bridge'] },
+  )
   try {
     const { calls, exitCode } = runMain(dir)
     assert.equal(exitCode, undefined)
@@ -340,6 +355,20 @@ test("composeManifestUnreadableMessage composes this gate's own bytes, never the
   assert.ok(!message.includes('License parity gate'))
 })
 
+test("composeChangesetConfigUnusableMessage composes this gate's own bytes, never the license-parity gate's cleared ones", () => {
+  const message = composeChangesetConfigUnusableMessage(
+    '/repo/.changeset/config.json',
+    'is not valid JSON (Unexpected token)',
+  )
+  assert.equal(
+    message,
+    'Publishable-set gate: refusing to run. /repo/.changeset/config.json is not valid JSON ' +
+      '(Unexpected token). Nothing has been compared against the Changesets "ignore" list. ' +
+      'Repair the file and re-run.',
+  )
+  assert.ok(!message.includes('License parity gate'))
+})
+
 // A fix round: this gate's own JSON.parse(readFileSync(...)) was
 // unguarded and raw-crashed on a malformed manifest, the same defect class closed in the
 // sibling gate. This file states no licensing position (per a licensing-steward consult), so its
@@ -426,5 +455,293 @@ test('no message this gate PRINTS names a tracker a consumer cannot read', () =>
       !TRACKER_REFERENCE_PATTERN.test(message),
       `a message this gate prints names a tracker its reader cannot open: ${message}`,
     )
+  }
+})
+
+const EXPECTED_SET_PACKAGES = {
+  core: { name: '@navecss/core' },
+  'eslint-plugin': { name: '@navecss/eslint-plugin' },
+  'stylelint-config': { name: '@navecss/stylelint-config' },
+  tokens: { name: '@navecss/tokens' },
+}
+
+// Changesets' `version` skips every package named in `ignore`, private or not, so a package
+// promoted to published but left on that list is never bumped.
+test('main(): a package in the publishable set that is also on the Changesets ignore list is reported', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
+    ignore: ['@navecss/cli', '@navecss/eslint-plugin', '@navecss/tokens'],
+  })
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, 1)
+    assert.deepEqual(calls.error, [
+      'The Changesets "ignore" list names packages this repository intends to publish:\n',
+      '  - @navecss/tokens: in the publishable set but listed in "ignore" in .changeset/config.json',
+      '  - @navecss/eslint-plugin: in the publishable set but listed in "ignore" in .changeset/config.json',
+      '\nChangesets never versions a package on that list. Remove each one from "ignore" in ' +
+        '.changeset/config.json, in the same pull request that adds it to PUBLISHABLE_SET.',
+    ])
+    assert.equal(calls.log.length, 0)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('main(): a Changesets config without an ignore list has nothing to report', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {})
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, undefined)
+    assert.equal(calls.error.length, 0)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('main(): refuses when the Changesets config is missing, comparing nothing', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, null)
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, 1)
+    assert.equal(calls.error.length, 1)
+    assert.match(
+      calls.error[0],
+      /^Publishable-set gate: refusing to run\. .*config\.json could not be read \(ENOENT\)\./,
+    )
+    assert.equal(calls.log.length, 0)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('main(): refuses when the Changesets config is not valid JSON', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, '{ "ignore": [')
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, 1)
+    assert.equal(calls.error.length, 1)
+    assert.match(
+      calls.error[0],
+      /^Publishable-set gate: refusing to run\. .*config\.json is not valid JSON \(/,
+    )
+    assert.equal(calls.log.length, 0)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+for (const [shape, config] of [
+  ['an array', '[]'],
+  ['null', 'null'],
+  ['an ignore field that is not an array', '{ "ignore": "@navecss/cli" }'],
+  ['an ignore array with a non-string entry', '{ "ignore": ["@navecss/cli", 1] }'],
+]) {
+  test(`main(): refuses a Changesets config that is ${shape}, never reading it as an empty ignore list`, () => {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, config)
+    try {
+      const { calls, exitCode } = runMain(dir)
+      assert.equal(exitCode, 1)
+      assert.equal(calls.error.length, 1)
+      assert.match(
+        calls.error[0],
+        /^Publishable-set gate: refusing to run\. .*config\.json is not a usable Changesets config/,
+      )
+      assert.equal(calls.log.length, 0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+}
+
+test('nothing the ignore-list check prints names a tracker a reader cannot open', () => {
+  const printed = []
+  for (const config of [
+    { ignore: ['@navecss/core'] },
+    { ignore: ['@navecss/t*'] },
+    '{ "ignore": [',
+    null,
+    '[]',
+    '{ "ignore": "x" }',
+  ]) {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, config)
+    try {
+      const { calls } = runMain(dir)
+      assert.ok(calls.error.length > 0, 'every fixture here must reach a printed fault')
+      printed.push(...calls.error)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+  for (const message of printed) {
+    assert.ok(
+      !TRACKER_REFERENCE_PATTERN.test(message),
+      `a message this gate prints names a tracker its reader cannot open: ${message}`,
+    )
+  }
+})
+
+// Changesets reads each `ignore` entry as a glob (with `!` negation), while this gate compares
+// exact names, so a pattern that covers a set member would pass here and still make Changesets
+// skip it. The gate refuses any entry that is not a plain package name rather than expanding it.
+for (const [title, config, pattern] of [
+  [
+    'a glob that would cover a package in the publishable set',
+    { ignore: ['@navecss/t*'] },
+    /config\.json is not a usable Changesets config \("ignore" entry "@navecss\/t\*" is not a plain package name/,
+  ],
+  [
+    'a glob with a negation',
+    { ignore: ['@navecss/*', '!@navecss/core'] },
+    /"ignore" entry "@navecss\/\*" is not a plain package name/,
+  ],
+  ['an empty string', '{ "ignore": [""] }', /"ignore" entry "" is not a plain package name/],
+]) {
+  test(`main(): refuses an ignore entry that is ${title}, comparing nothing`, () => {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, config)
+    try {
+      const { calls, exitCode } = runMain(dir)
+      assert.equal(exitCode, 1)
+      assert.equal(calls.error.length, 1)
+      assert.match(calls.error[0], pattern)
+      assert.equal(calls.log.length, 0)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+}
+
+test('main(): ignore entries that are plain package names, scoped or not, still pass', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
+    ignore: ['@navecss/cli', '@navecss/bridge', 'left-pad', 'a.b_c~d-e'],
+  })
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, undefined)
+    assert.equal(calls.error.length, 0)
+    assert.equal(calls.log.length, 1)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// The set check runs first: a package set that is wrong is reported on its own, and the Changesets
+// config is only read once the set matches. These two tests hold that order so it stays a choice.
+const PACKAGES_WITH_TOKENS_PRIVATE = {
+  ...EXPECTED_SET_PACKAGES,
+  tokens: { name: '@navecss/tokens', private: true },
+}
+
+for (const [title, config, unwanted] of [
+  ['an ignore list that names a set member', { ignore: ['@navecss/core'] }, 'Changesets "ignore"'],
+  ['a config that is not valid JSON', '{ not json', 'config.json'],
+]) {
+  test(`main(): a wrong package set is reported before ${title} is looked at`, () => {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, PACKAGES_WITH_TOKENS_PRIVATE, config)
+    try {
+      const { calls, exitCode } = runMain(dir)
+      assert.equal(exitCode, 1)
+      assert.match(calls.error[0], /^The publishable package set does not match/)
+      for (const line of calls.error) {
+        assert.ok(!line.includes(unwanted), `the set fault must print alone, but saw: ${line}`)
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+}
+
+// Each way a config can be unusable says which one it is, so a reader is never told the wrong thing.
+for (const [title, config, pattern] of [
+  [
+    'is not an object',
+    '[]',
+    /config\.json is not a usable Changesets config \(it is not an object\)\./,
+  ],
+  [
+    'has an ignore field that is not an array',
+    '{ "ignore": "@navecss/cli" }',
+    /config\.json is not a usable Changesets config \("ignore" is not an array of strings\)\./,
+  ],
+  [
+    'has a null ignore field',
+    '{ "ignore": null }',
+    /config\.json is not a usable Changesets config \("ignore" is not an array of strings\)\./,
+  ],
+]) {
+  test(`main(): a Changesets config that ${title} is refused with the reason that matches`, () => {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, config)
+    try {
+      const { calls, exitCode } = runMain(dir)
+      assert.equal(exitCode, 1)
+      assert.equal(calls.error.length, 1)
+      assert.match(calls.error[0], pattern)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+}
+
+test('main(): a set member listed twice in ignore is reported once', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
+    ignore: ['@navecss/tokens', '@navecss/tokens'],
+  })
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, 1)
+    assert.equal(calls.error.length, 3)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// A pattern is refused wherever it sits in the entry, including ones whose tail alone looks like a
+// plain package name: Changesets still expands each of these, and the first two make it skip
+// `@navecss/tokens`.
+for (const entry of ['*@navecss/tokens', '**/tokens', '!@navecss/core']) {
+  test(`main(): refuses the ignore entry ${JSON.stringify(entry)}, whose tail alone looks like a plain package name`, () => {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, { ignore: [entry] })
+    try {
+      const { calls, exitCode } = runMain(dir)
+      assert.equal(exitCode, 1)
+      assert.equal(calls.error.length, 1)
+      assert.ok(
+        calls.error[0].includes(`${JSON.stringify(entry)} is not a plain package name`),
+        `expected the refusal to name ${JSON.stringify(entry)}, got: ${calls.error[0]}`,
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+}
+
+test('main(): the refusal names the entry that is not a plain package name, not the first one', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
+    ignore: ['@navecss/cli', '@navecss/t*'],
+  })
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, 1)
+    assert.match(calls.error[0], /"ignore" entry "@navecss\/t\*" is not a plain package name/)
+    assert.ok(!calls.error[0].includes('"@navecss/cli"'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('main(): the refusal for a pattern entry explains itself and says nothing was compared', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
+    ignore: ['@navecss/t*'],
+  })
+  try {
+    const { calls } = runMain(dir)
+    assert.ok(
+      calls.error[0].endsWith(
+        'this gate compares exact names without expanding patterns). Nothing has been compared ' +
+          'against the Changesets "ignore" list. Repair the file and re-run.',
+      ),
+      `unexpected ending: ${calls.error[0]}`,
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })

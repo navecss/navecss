@@ -69,7 +69,7 @@ describe('AC-consumer-constraints-30 covers: R19', () => {
       'Context',
     ).replaceAll(/\s+/g, ' ')
     expect(context).toContain('"private": true')
-    expect(context).toContain('governs versioning and tagging, not publishing')
+    expect(context).toContain("this repository's release script does not read it")
   })
 
   it('names @navecss/eslint-plugin as versioning independently, with its peers on eslint and @navecss/core', () => {
