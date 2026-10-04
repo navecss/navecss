@@ -22,7 +22,7 @@ export interface ResolvedConfigLike {
    */
   readonly builder?: unknown
   readonly css?: { readonly devSourcemap?: boolean; readonly transformer?: string }
-  readonly build?: { readonly sourcemap?: unknown }
+  readonly build?: { readonly lib?: unknown; readonly sourcemap?: unknown }
   readonly logger: LoggerLike
   /**
    * The plugins of the build, Vite's own among them.
@@ -37,6 +37,34 @@ export interface ResolvedConfigLike {
 export interface PluginLike {
   readonly name: string
   readonly transform?: unknown
+}
+
+/**
+ * A module of a dev server's module graph: its id and URL, the modules that import it and the
+ * ones it imports (static and dynamic alike).
+ */
+export interface GraphModuleLike {
+  readonly id: string | null
+  readonly url: string
+  readonly importers: ReadonlySet<GraphModuleLike>
+  readonly importedModules: ReadonlySet<GraphModuleLike>
+}
+
+/**
+ * The part of a dev environment the dev server's serving of the atomic layer uses: its module
+ * graph, the request that transforms a module, and the reload of one.
+ */
+export interface DevEnvironmentLike {
+  readonly moduleGraph: {
+    getModuleById(id: string): GraphModuleLike | undefined
+  }
+  transformRequest(url: string): Promise<unknown>
+  reloadModule(module: GraphModuleLike): Promise<void>
+  /**
+   * Resolves once the static imports the first request set off are processed; from a hook, the
+   * module the hook runs for is passed so it does not wait on itself.
+   */
+  waitForRequestsIdle(ignoredId?: string): Promise<void>
 }
 
 /**
@@ -112,6 +140,10 @@ export interface TransformContext {
  */
 export interface HotUpdateOptions {
   readonly file: string
+  /**
+   * The modules the changed file belongs to, which the update is about to reload.
+   */
+  readonly modules?: readonly GraphModuleLike[]
 }
 
 /**
@@ -119,13 +151,18 @@ export interface HotUpdateOptions {
  */
 export interface HotUpdateContext {
   readonly environment: {
-    readonly config?: { readonly command?: string; readonly inlineConfig?: object }
+    readonly config?: {
+      readonly command?: string
+      readonly consumer?: string
+      readonly inlineConfig?: object
+    }
     readonly hot: { send(payload: { type: 'full-reload' }): void }
     readonly moduleGraph: {
       getModuleById(id: string): unknown
       invalidateModule(module: never): void
     }
     readonly name: string
+    transformRequest?(url: string): Promise<unknown>
   }
 }
 

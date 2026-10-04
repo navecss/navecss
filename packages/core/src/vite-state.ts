@@ -4,7 +4,17 @@
  * to the same set. A fresh resolved config for the same root starts a fresh state.
  */
 import type { SetupExposures } from './vite-setup-member.ts'
+import type { DevEnvironmentLike } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
+
+/**
+ * A stylesheet the dev server served with the atomic layer filtered: the environment that serves
+ * it and the set it was filtered to.
+ */
+export interface ServedSheet {
+  readonly environment: DevEnvironmentLike
+  readonly atoms: ReadonlySet<string>
+}
 
 export interface Position {
   readonly file: string
@@ -88,6 +98,32 @@ export interface RootState {
    * The packages already warned about.
    */
   readonly warned: Set<string>
+  /**
+   * The stylesheets the dev server served filtered, by module id.
+   */
+  readonly served: Map<string, ServedSheet>
+  /**
+   * The served stylesheets whose set has grown since, waiting for the batched reload.
+   */
+  readonly stale: Set<string>
+  /**
+   * The stylesheets a reload was asked for and the page has not asked for again, by when.
+   */
+  readonly reloading: Map<string, number>
+  reloadTimer: ReturnType<typeof setTimeout> | undefined
+  /**
+   * How many file changes are being read ahead of their update, which send the stylesheets they
+   * outgrew in that update themselves, so the timer waits.
+   */
+  readAhead: number
+  /**
+   * What the markup warning reads: whether an HTML page was read, a module of a server
+   * environment was transformed, or a directive was expanded; and whether it was judged already.
+   */
+  htmlRead: boolean
+  serverTransformed: boolean
+  directiveExpanded: boolean
+  markupJudged: boolean
 }
 
 // Weakly held: a state lives as long as a plugin instance of its build does, so a long-lived
@@ -113,6 +149,15 @@ export function stateFor(root: string, config: object): RootState {
     externals: new Set(),
     clientEnded: false,
     warned: new Set(),
+    served: new Map(),
+    stale: new Set(),
+    reloading: new Map(),
+    reloadTimer: undefined,
+    readAhead: 0,
+    htmlRead: false,
+    serverTransformed: false,
+    directiveExpanded: false,
+    markupJudged: false,
   }
   registry.set(root, new WeakRef(fresh))
   return fresh

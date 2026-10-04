@@ -12,8 +12,10 @@ import type { UsedContext } from './vite-used.ts'
 import { isMentioningAtoms, recordModule } from './vite-collect-module.ts'
 import { isStylesheetId } from './vite-css-id.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
+import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
+import { judgeMarkup } from './vite-markup.ts'
 import { isNaveOwn } from './vite-module-kind.ts'
 import { assertOptions } from './vite-options.ts'
 import { checkEnvironmentOrder } from './vite-order.ts'
@@ -111,7 +113,9 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
 
     async transform(code, id, meta) {
       if (!isReadable(context, id)) return
+      if (this.environment?.config.consumer === 'server') context.state.serverTransformed = true
       const record = await recordModule(context, this, { code, id, moduleType: meta?.moduleType })
+      if (context.command === 'serve') devServing.noteGrowth(context)
       if (!record || context.command !== 'serve' || record.pkg !== undefined) return
       const problems = problemsOf(record, context)
       if (problems.length > 0) failModule(this, id, problems)
@@ -120,7 +124,9 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
     transformIndexHtml: {
       order: 'pre',
       handler(html, { filename }) {
-        if (filename === undefined || !isUsed(context) || !isMentioningAtoms(html)) return
+        if (!isUsed(context)) return
+        context.state.htmlRead = true
+        if (filename === undefined || !isMentioningAtoms(html)) return
         context.state.pages.set(filename, atomsWrittenIn(html))
       },
     },
@@ -138,6 +144,9 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
         noteServerExternals(this, context)
       } else {
         noteClientEnded(this, context)
+        // A builder's process judges once the last environment has built (the first half's
+        // `buildApp`); a build of one invocation judges here.
+        if (!context.inProcess) judgeMarkup(context, (message) => this.warn(message))
       }
     },
   }

@@ -77,13 +77,25 @@ function firstHalf(
   }
   return {
     name: 'nave',
-    config() {
-      const config = pickers.latest().nave.config()
+    config(userConfig, env) {
+      const config = pickers.latest().nave.config(userConfig, env)
       return config && { ...config, worker: { plugins: () => [workerPlugin] } }
     },
     configEnvironment: (name, options) => pickers.latest().nave.configEnvironment(name, options),
     configResolved(config: ResolvedConfigLike) {
       configure(config).nave.configResolved(config)
+    },
+    configureServer(server) {
+      pickers.latest().nave.configureServer(server)
+    },
+    closeBundle() {
+      pickers.latest().nave.closeBundle()
+    },
+    buildApp: {
+      order: 'post',
+      handler(builder) {
+        return pickers.latest().nave.buildApp.handler.call(this, builder)
+      },
     },
     transform(code, id) {
       const page = htmlPageOf(id)
