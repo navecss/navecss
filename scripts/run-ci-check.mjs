@@ -6,10 +6,10 @@
  * Each step is one root `package.json` script, run as `pnpm run <step>`, and CI runs each of
  * them as its own job (`.github/workflows/code-quality.yml`;
  * `check-ci-jobs-match-ci-check.mjs` keeps the two in step). Locally they run CONCURRENTLY: a
- * step starts as soon as every step it names in `after` has passed, so the whole gate takes
- * about as long as its slowest chain rather than the sum of its steps. A step whose `after`
- * did not pass is skipped rather than run against output that was never produced, and named in
- * the summary.
+ * step starts once every step in its `after` has passed and one of the `CONCURRENT_STEPS` slots
+ * is free, so independent steps overlap instead of running one after another. A step whose
+ * `after` did not pass is skipped rather than run against output that was never produced, and
+ * named in the summary.
  *
  * `after` is not a preference about order, it is a statement that two steps would otherwise
  * collide, so each edge carries its reason:
@@ -18,6 +18,13 @@
  *   on `build` in `turbo.json`, but two turbo processes building the same package at once would
  *   both write its `dist/`. Once `build` has finished, the others find it in turbo's cache with
  *   the same files already on disk and leave them untouched.
+ * - `test` runs alone, so every step that is not a prerequisite of it waits for it. It saturates
+ *   the machine by itself, so anything beside it stretches its timed tests past their budgets,
+ *   and it writes scratch files inside the tree (under `packages/core/test/`) that `lint`'s
+ *   `prettier --check .` walks. Its own prerequisites are the steps that need nothing else:
+ *   `build`, `knip`, `deps:lint` and `deps:dedupe-check`.
+ * - `knip` after `build`: tsup writes a transient `tsup.config.bundled_*.mjs` into
+ *   `packages/core` while it builds, and knip would report it as an unused file.
  * - `test:browser` after `test`: both run core's fixture generators, which rewrite
  *   `packages/core/test/browser/fixtures/` while the other suite may be reading it.
  * - `scripts:test` after `check:pack`: one of its tests runs core's own `check:pack`, which
@@ -37,23 +44,24 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const STEPS = [
-  { after: ['build'], name: 'typecheck' },
-  { after: ['build'], name: 'lint' },
-  { after: ['build'], name: 'test' },
+  { after: ['build', 'test'], name: 'typecheck' },
+  { after: ['build', 'test'], name: 'lint' },
+  { after: ['build', 'knip', 'deps:lint', 'deps:dedupe-check'], name: 'test' },
   { after: ['build', 'test'], name: 'test:browser' },
   { after: [], name: 'build' },
-  { after: ['build'], name: 'check:pack' },
-  { after: [], name: 'knip' },
+  { after: ['build', 'test'], name: 'check:pack' },
+  { after: ['build'], name: 'knip' },
   { after: [], name: 'deps:lint' },
   { after: [], name: 'deps:dedupe-check' },
-  { after: ['build', 'check:pack'], name: 'scripts:test' },
-  { after: ['build'], name: 'scripts:check' },
+  { after: ['build', 'check:pack', 'test'], name: 'scripts:test' },
+  { after: ['build', 'test'], name: 'scripts:check' },
 ]
 
 /**
  * How many steps run at once. Every step already runs its own work in parallel (turbo across
  * packages, vitest across files), so running all eleven at once does not finish sooner: it
- * overloads the machine until the suites' own timeouts fire.
+ * overloads the machine until the suites' own timeouts fire. `test` is the exception to even
+ * this: it runs alone (see the edges above).
  */
 const CONCURRENT_STEPS = 2
 

@@ -248,6 +248,57 @@ test('scripts:test waits for check:pack: it runs core’s check:pack itself, in 
   assert.ok(after('scripts:test').includes('check:pack'))
 })
 
+/**
+ * Runs the real `STEPS` through the scheduler with a fake `runStep` that takes a few
+ * milliseconds per step, and returns each step's `[start, end]` span as the runner saw it.
+ * The durations only shape the schedule: which steps overlap is decided by `after` and the cap.
+ */
+async function realSchedule() {
+  const durations = {
+    build: 6,
+    'check:pack': 15,
+    'deps:dedupe-check': 5,
+    'deps:lint': 2,
+    knip: 5,
+    lint: 45,
+    'scripts:check': 10,
+    'scripts:test': 30,
+    test: 50,
+    'test:browser': 20,
+    typecheck: 10,
+  }
+  const spans = new Map()
+  await runSteps(
+    STEPS,
+    (name) => {
+      const start = performance.now()
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          spans.set(name, [start, performance.now()])
+          resolve({ code: 0, output: '' })
+        }, durations[name])
+      })
+    },
+    { limit: 2, onStepDone: () => {} },
+  )
+  return spans
+}
+
+const overlaps = (a, b) => a[0] < b[1] && b[0] < a[1]
+
+test('test runs alone: it saturates the machine and writes scratch files into the tree', async () => {
+  const spans = await realSchedule()
+  const alongside = [...spans]
+    .filter(([name, span]) => name !== 'test' && overlaps(span, spans.get('test')))
+    .map(([name]) => name)
+  assert.deepEqual(alongside, [])
+})
+
+test('knip does not run while build does: tsup leaves a transient config file in core', async () => {
+  const spans = await realSchedule()
+  assert.equal(overlaps(spans.get('knip'), spans.get('build')), false)
+})
+
 test('package.json runs this runner as ci:check, and ci:check:fix runs ci:check', () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
   const { scripts } = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
