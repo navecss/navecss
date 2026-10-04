@@ -31,7 +31,7 @@ export function keepMap(kept: readonly string[]): Record<string, string> {
  * kept, or it is no atom. `atoms` lists every built-in atom. Self-contained, because its source
  * text becomes the expression of a `define` and is evaluated in the page.
  */
-export function devKeepMap(
+function devKeepMap(
   map: Readonly<Record<string, string>>,
   atoms: readonly string[],
 ): Readonly<Record<string, string>> {

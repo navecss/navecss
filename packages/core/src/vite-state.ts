@@ -11,7 +11,7 @@ import type { LocatedProblem } from './vite-used-report.ts'
  * A stylesheet the dev server served with the atomic layer filtered: the environment that serves
  * it and the set it was filtered to.
  */
-export interface ServedSheet {
+interface ServedSheet {
   readonly environment: DevEnvironmentLike
   readonly atoms: ReadonlySet<string>
 }

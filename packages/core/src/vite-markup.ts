@@ -9,7 +9,7 @@ import type { UsedContext } from './vite-used.ts'
 import { collectedAtoms } from './vite-state.ts'
 import { isUsed } from './vite-used.ts'
 
-export const MARKUP_WARNING =
+const MARKUP_WARNING =
   "navePlugin(): Nave read no HTML page and no server render, so your pages are likely rendered where it cannot see them, such as in a backend's own templates. A Nave class written there has no rule, in dev or in the build, unless its atom is listed in keep; if most of your Nave classes are written there, set atomic: 'all' to ship every atom. See \"Which atoms the build ships\" in node_modules/@navecss/core/README.md."
 
 /**
