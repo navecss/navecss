@@ -217,7 +217,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
   })
 
   it('an extend specifier that names no file fails, naming the specifier and the directory', () => {
-    const plugin = navePlugin({ extend: './missing-atoms.mjs' })
+    const [plugin] = navePlugin({ extend: './missing-atoms.mjs' })
 
     expect(() =>
       plugin.configResolved({

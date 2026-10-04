@@ -1,6 +1,6 @@
 /**
- * Nave Vite plugin: expands `@nave` directives in every stylesheet Vite compiles, then fails
- * the build when one survives into its CSS output.
+ * Nave Vite plugin: expands `@nave` directives in every stylesheet Vite compiles, fails the build
+ * when one survives into its CSS output, and by default filters the atomic layer of every stylesheet it can reach down to the atoms the build reads a use for.
  *
  * Setup:
  *   import { navePlugin } from '@navecss/core/vite'
@@ -8,31 +8,46 @@
  *   navePlugin({ extend: myAtoms })                          // Nave + consumer atoms
  *   navePlugin({ extend: './my-atoms.mjs' })                 // the same, from a module Vite watches
  *   navePlugin({ onUnknown: 'warn' })                        // report a problem and skip it
+ *   navePlugin({ keep: ['grid'] })                           // atoms a cx.dynamic() call can take
+ *   navePlugin({ atomic: 'all' })                            // ship every atom, read no cx() call
  *
- * A plain Vite plugin object with no dependency and no peer. Its transform runs in Vite's normal
- * order, after Vite's own CSS step, so a stylesheet reached through `@import`, a Sass or Less
- * file, a CSS Module, and a Vue or Svelte style block are all read as the CSS they compile to.
- * It never runs before Vite's CSS step: that order misses `@import`-reached files and breaks
- * Sass `@mixin`. It adds nothing to the browser bundle.
+ * `navePlugin()` returns two plain Vite plugin objects with no dependency and no peer, in an array
+ * that `plugins` takes as one entry. The first runs in Vite's normal order, after Vite's own CSS
+ * step, so a stylesheet reached through `@import`, a Sass or Less file, a CSS Module, and a Vue
+ * or Svelte style block are all read as the CSS they compile to. It never runs before Vite's CSS
+ * step: that order misses `@import`-reached files and breaks Sass `@mixin`. The second runs in
+ * post order and reads the JavaScript. Neither adds runtime machinery to the browser bundle.
  */
 import type { AtomDefinition } from './atoms.ts'
+import type { NaveCollectPlugin } from './vite-collect-plugin.ts'
+import type { UsedConfig } from './vite-config-hooks.ts'
+import type { UsedAtomOptions } from './vite-options.ts'
 import type {
   BundleContext,
   BundleEntry,
   HotUpdateContext,
   HotUpdateOptions,
+  RenderContext,
+  RenderedChunk,
   ResolvedConfigLike,
   TransformContext,
   TransformResultLike,
 } from './vite-types.ts'
 
-import { canHoldDirective, isStylesheetId } from './vite-css-id.ts'
-import { createExtendSource } from './vite-extend.ts'
+import { type Assembled, shareAcrossBuilds } from './vite-builds.ts'
+import { createCollectPlugin } from './vite-collect-plugin.ts'
+import { usedConfig, usedEnvironmentConfig } from './vite-config-hooks.ts'
+import { captureStylesheets } from './vite-css-capture.ts'
+import { checkAtomicLayers, refeedChunkStylesheets, warnTextImports } from './vite-emit.ts'
+import { emittedSet } from './vite-emitted.ts'
+import { createExtendSource, type ExtendSource } from './vite-extend.ts'
 import { dropLightningNaveWarning } from './vite-logger.ts'
+import { assertOptions, resolveUsedOptions } from './vite-options.ts'
 import { scanBundle } from './vite-scan.ts'
-import { transformStylesheet } from './vite-transform.ts'
+import { createStylesheets } from './vite-stylesheets.ts'
+import { configureUsed, createUsedContext, isUsed } from './vite-used.ts'
 
-export interface NaveViteOptions {
+export interface NaveViteOptions extends UsedAtomOptions {
   /**
    * Consumer-defined atoms merged with Nave built-in atoms. Consumer atoms win on name collision.
    * These atoms resolve via @nave only. No global class. Not available in cx().
@@ -57,11 +72,16 @@ export interface NaveViteOptions {
 }
 
 /**
- * The plugin object. Its `name` is the public string `nave`, the prefix of every message it
+ * The first plugin object. Its `name` is the public string `nave`, the prefix of every message it
  * prints.
  */
 export interface NaveVitePlugin {
   readonly name: 'nave'
+  config(): UsedConfig | undefined
+  configEnvironment(
+    name: string,
+    options: { readonly consumer?: string },
+  ): { resolve: { noExternal: string[] } } | undefined
   configResolved(config: ResolvedConfigLike): void
   transform(
     this: TransformContext,
@@ -69,6 +89,7 @@ export interface NaveVitePlugin {
     id: string,
   ): Promise<TransformResultLike | undefined>
   hotUpdate(this: HotUpdateContext, options: HotUpdateOptions): never[] | undefined
+  renderChunk(this: RenderContext, code: string, chunk: RenderedChunk): Promise<undefined>
   readonly generateBundle: {
     handler(this: BundleContext, options: unknown, bundle: Record<string, BundleEntry>): void
     readonly order: 'post'
@@ -76,93 +97,83 @@ export interface NaveVitePlugin {
 }
 
 /**
- * Whether Vite supplies a real source map for stylesheets in this run (see `TransformInput`).
+ * What `navePlugin()` returns: the same two plugin objects whatever the options.
  */
-function hasStylesheetMapsFor(config: ResolvedConfigLike): boolean {
-  return config.command === 'serve'
-    ? config.css?.devSourcemap === true
-    : Boolean(config.build?.sourcemap)
-}
+export type NavePlugins = [NaveVitePlugin, NaveCollectPlugin]
 
 /**
- * `file` with Vite's forward slashes, which is how it names every path it reports.
+ * The pair of plugin halves for one build, which share a context of their own. `extend` is the
+ * source of the atom map when it is one object for every build.
  */
-function withForwardSlashes(file: string): string {
-  return file.replaceAll('\\', '/')
-}
+function assemble(options: NaveViteOptions, extend: ExtendSource): Assembled {
+  const context = createUsedContext(resolveUsedOptions(options), extend)
+  const stylesheets = createStylesheets(extend, options.onUnknown ?? 'error')
 
-/**
- * The Nave Vite plugin: one entry in `plugins`.
- */
-export function navePlugin(options: NaveViteOptions = {}): NaveVitePlugin {
-  const { onUnknown = 'error' } = options
-  const extend = createExtendSource(options.extend)
-  let hasStylesheetMaps = false
-  // The stylesheets whose transform failed because the `extend` module would not load, by
-  // environment. Vite links a stylesheet to a file only from a transform that finished, so a
-  // stylesheet that failed never hears the module change, whether or not another stylesheet
-  // already uses it.
-  const failed = new Map<string, Set<string>>()
-
-  return {
+  const nave: NaveVitePlugin = {
     name: 'nave',
+
+    config: () => usedConfig(context),
+
+    configEnvironment: (name, environmentOptions) =>
+      usedEnvironmentConfig(context, name, environmentOptions),
 
     configResolved(config) {
       extend.configure?.(config.root)
-      hasStylesheetMaps = hasStylesheetMapsFor(config)
+      configureUsed(context, config)
+      stylesheets.configure(config)
+      if (context.command === 'build' && isUsed(context))
+        captureStylesheets(context, config.plugins)
       if (config.css?.transformer === 'lightningcss') dropLightningNaveWarning(config.logger)
     },
 
-    async transform(code, id) {
-      const environment = this.environment?.name ?? 'client'
-      if (!isStylesheetId(id) || !canHoldDirective(code)) {
-        // A stylesheet edited to hold no directive no longer waits on the module.
-        failed.get(environment)?.delete(id)
-        return
-      }
-      let atoms
-      try {
-        atoms = await extend.current((file) => {
-          this.addWatchFile(file)
-        })
-      } catch (error) {
-        const ids = failed.get(environment) ?? new Set<string>()
-        failed.set(environment, ids.add(id))
-        throw error
-      }
-      failed.get(environment)?.delete(id)
-      return transformStylesheet({
-        ctx: this,
-        code,
-        id,
-        extend: atoms,
-        onUnknown,
-        hasStylesheetMaps,
-      })
+    transform(code, id) {
+      return stylesheets.transform(this, code, id)
     },
 
     hotUpdate(hot) {
-      const ids = failed.get(this.environment.name)
-      const file = extend.file?.()
-      if (!ids || file === undefined || ids.size === 0) return
-      if (hot.file !== withForwardSlashes(file)) return
-      const { moduleGraph } = this.environment
-      for (const id of ids) {
-        const module = moduleGraph.getModuleById(id)
-        if (module) moduleGraph.invalidateModule(module as never)
-      }
-      ids.clear()
-      this.environment.hot.send({ type: 'full-reload' })
-      return []
+      return stylesheets.hotUpdate(this, hot)
+    },
+
+    async renderChunk(_code, chunk) {
+      if (!isUsed(context) || this.environment.config.consumer !== 'client') return
+      const emitted = emittedSet(context, this.environment, (message) => {
+        this.warn(message)
+      })
+      await refeedChunkStylesheets(this, chunk, context.state, emitted)
+      warnTextImports(this, chunk, context, emitted)
     },
 
     generateBundle: {
       order: 'post',
       handler(_options, bundle) {
+        if (isUsed(context) && this.environment?.config.consumer === 'client') {
+          checkAtomicLayers(
+            this,
+            bundle,
+            emittedSet(context, this.environment, (message) => {
+              this.warn(message)
+            }),
+          )
+        }
         scanBundle(this, bundle)
       },
     },
   }
+  return { nave, collect: createCollectPlugin(context) }
+}
+
+/**
+ * The Nave Vite plugin: one entry in `plugins`.
+ */
+export function navePlugin(options: NaveViteOptions = {}): NavePlugins {
+  const ownAtoms = typeof options.extend === 'object' ? options.extend : undefined
+  // The names of atoms in a module are known once it has loaded; the other half judges those then.
+  const own = typeof options.extend === 'string' ? undefined : new Set(Object.keys(ownAtoms ?? {}))
+  assertOptions(options, own)
+  // An atom map written inline is snapshotted and checked once; a module is loaded for each build,
+  // from the root of that build.
+  const inline = typeof options.extend === 'string' ? undefined : createExtendSource(options.extend)
+  return shareAcrossBuilds(() => assemble(options, inline ?? createExtendSource(options.extend)))
 }
 
 /**
