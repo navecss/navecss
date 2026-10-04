@@ -5,12 +5,12 @@
  */
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import vuePlugin from '@vitejs/plugin-vue'
-import type { Plugin } from 'vite'
+import type { PluginOption } from 'vite'
 
 /**
  * `[vue(), svelte(), ...rest]`. Named for the first because the helper that wires it in is the
  * place that decides plugin order for every fixture.
  */
-export function vue(...rest: Plugin[]): Plugin[] {
+export function vue(...rest: PluginOption[]): PluginOption[] {
   return [vuePlugin(), ...svelte(), ...rest]
 }

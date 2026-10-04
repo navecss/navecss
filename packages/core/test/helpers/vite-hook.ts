@@ -46,7 +46,7 @@ const NO_MAP: IncomingSourceMap = { sources: [], mappings: '' }
 export async function runHook(input: HookInput): Promise<HookRun> {
   const warnings: PluginLog[] = []
   const watched: string[] = []
-  const plugin = navePlugin(input.options)
+  const [plugin] = navePlugin(input.options)
   plugin.configResolved({
     root: process.cwd(),
     command: 'build',
@@ -55,6 +55,9 @@ export async function runHook(input: HookInput): Promise<HookRun> {
     logger: { warn() {} },
   })
   const ctx: TransformContext = {
+    parse: () => {
+      throw new Error('a stylesheet is not parsed')
+    },
     error(log) {
       throw new StopForTest(log)
     },

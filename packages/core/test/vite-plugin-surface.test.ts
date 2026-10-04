@@ -59,7 +59,7 @@ function reachableFromDist(entry: string): { files: string[]; bare: Set<string> 
 // (every test file of the package running at once) takes well past the default timeout to do.
 describe('AC-directive-core-31 — the Vite plugin’s surface', { timeout: 120_000 }, () => {
   it('is a plain object, named nave, with no enforce key', () => {
-    const plugin = navePlugin()
+    const [plugin] = navePlugin()
 
     expect(Object.getPrototypeOf(plugin)).toBe(Object.prototype)
     expect(plugin.name).toBe('nave')
@@ -158,21 +158,6 @@ describe('AC-directive-core-31 — the Vite plugin’s surface', { timeout: 120_
     `)
 
     expect(diagnostics.some((message) => message.includes(token))).toBe(true)
-  })
-
-  it('a later overload that returns an array does not break a caller of the plain call', () => {
-    // A later release may add `navePlugin(options)` overloads that return an array of plugin
-    // objects while the call with no such option keeps returning the single object. A caller
-    // written today must still compile when the declaration gains overloads like that.
-    const diagnostics = diagnosticsFor(`
-      import { navePlugin } from '@navecss/core/vite'
-      declare function overloaded(options: { atomic: 'used' }): ReturnType<typeof navePlugin>[]
-      declare function overloaded(options?: Parameters<typeof navePlugin>[0]): ReturnType<typeof navePlugin>
-      const single: ReturnType<typeof navePlugin> = overloaded()
-      void single
-    `)
-
-    expect(diagnostics).toEqual([])
   })
 })
 

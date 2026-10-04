@@ -1,0 +1,1 @@
+import{cx as o}from"@navecss/core/cx";var t=e=>o("flex",e?"grid":!1),c=e=>o(e?"block":void 0),r=()=>o("gap",void 0);export{t as a,c as b,r as c};
