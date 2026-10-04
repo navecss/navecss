@@ -15,7 +15,7 @@
  *
  * Run: node scripts/build-css.ts
  *
- * `renderNested`/`renderAtBlock` are exported for `test/build-css.test.ts`:
+ * `renderNested`/`renderAtBlock`/`renderStandalone` are exported for `test/build-css.test.ts`:
  * before that test existed, nothing exercised these two functions at all,
  * so the `anchorSelectorList` wiring below them could be reverted with the
  * whole local suite staying green. The file-writing
@@ -177,6 +177,16 @@ function inlineImports(indexCss: string): string {
 }
 
 /**
+ * `dist/standalone.css`: `layers.css`, then `index.css` with its imports inlined, read from `dist/`
+ * as the other writers left it. Exported for `test/build-css.test.ts`.
+ */
+export function renderStandalone(): string {
+  const layersCss = readFileSync(path.join(DIST, 'layers.css'), 'utf8')
+  const indexCss = readFileSync(path.join(DIST, 'index.css'), 'utf8')
+  return `${layersCss}\n${inlineImports(indexCss)}`
+}
+
+/**
  * The file-writing driver. Guarded behind `isMain` so importing this module
  * for `renderNested`/`renderAtBlock` (test) never touches the filesystem.
  */
@@ -257,13 +267,7 @@ if (isMain) {
    * `@import url('@navecss/core')` a browser cannot load. Written last, from the files above as
    * they are on disk, so it can never describe a stylesheet the others are not.
    */
-  const layersCss = readFileSync(path.join(DIST, 'layers.css'), 'utf8')
-  const indexCss = readFileSync(path.join(DIST, 'index.css'), 'utf8')
-  writeFileSync(
-    path.join(DIST, 'standalone.css'),
-    `${layersCss}\n${inlineImports(indexCss)}`,
-    'utf8',
-  )
+  writeFileSync(path.join(DIST, 'standalone.css'), renderStandalone(), 'utf8')
 
   console.log(`✓ Generated dist/atomic.css (${atomNames.length} atoms)`)
   console.log('✓ Generated dist/reset.css (self-layered)')

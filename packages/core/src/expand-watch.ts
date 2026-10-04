@@ -10,9 +10,10 @@ import path from 'node:path'
 const SETTLE_MS = 40
 
 /**
- * Starts watching; the watchers keep the process alive, so nothing is returned to stop them.
+ * Starts watching, and returns the function that stops it. The watchers keep the process alive
+ * until then.
  */
-export function watchFiles(files: readonly string[], onChange: () => void): void {
+export function watchFiles(files: readonly string[], onChange: () => void): () => void {
   const wanted = new Set(files.map((file) => path.resolve(file)))
   let timer: NodeJS.Timeout | undefined
   const schedule = (): void => {
@@ -44,5 +45,9 @@ export function watchFiles(files: readonly string[], onChange: () => void): void
     // Nothing stays half-watched: the caller reports the failure and the process can exit.
     for (const watcher of watchers) watcher.close()
     throw error
+  }
+  return () => {
+    clearTimeout(timer)
+    for (const watcher of watchers) watcher.close()
   }
 }

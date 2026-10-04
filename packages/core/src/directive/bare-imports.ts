@@ -52,7 +52,15 @@ function isBare(specifier: string, hasFile: (specifier: string) => boolean): boo
     specifier.startsWith('./') ||
     specifier.startsWith('../') ||
     SCHEME.test(specifier)
-  return !isUrlForm && !hasFile(decoded(specifier.replace(/[#?].*$/s, '')))
+  return !isUrlForm && !hasFile(decoded(withoutQueryOrFragment(specifier)))
+}
+
+/**
+ * `specifier` up to its first `?` or `#`.
+ */
+function withoutQueryOrFragment(specifier: string): string {
+  const ends = [specifier.indexOf('?'), specifier.indexOf('#')].filter((at) => at !== -1)
+  return ends.length === 0 ? specifier : specifier.slice(0, Math.min(...ends))
 }
 
 /**
@@ -120,8 +128,10 @@ export function findBareImports(
   const tokens = tokenize(css)
   const found: Diagnostic[] = []
   let depth = 0
-  for (let index = 0; index < tokens.length; index++) {
+  let index = 0
+  while (index < tokens.length) {
     const token = tokens[index]!
+    let next = index + 1
     // Every kind of open bracket counts, so an `@import` token inside `:is(...)` or `[...]` is
     // not an at-rule of the stylesheet.
     if (OPENERS.has(token.type)) depth++
@@ -133,8 +143,9 @@ export function findBareImports(
     ) {
       const read = readImport(tokens, index, hasFile)
       if (read.diagnostic) found.push(read.diagnostic)
-      index = read.end
+      next = read.end + 1
     }
+    index = next
   }
   return found
 }
