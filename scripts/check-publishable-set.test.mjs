@@ -693,3 +693,55 @@ test('main(): a set member listed twice in ignore is reported once', () => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+// A pattern is refused wherever it sits in the entry, including ones whose tail alone looks like a
+// plain package name: Changesets still expands each of these, and the first two make it skip
+// `@navecss/tokens`.
+for (const entry of ['*@navecss/tokens', '**/tokens', '!@navecss/core']) {
+  test(`main(): refuses the ignore entry ${JSON.stringify(entry)}, whose tail alone looks like a plain package name`, () => {
+    const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, { ignore: [entry] })
+    try {
+      const { calls, exitCode } = runMain(dir)
+      assert.equal(exitCode, 1)
+      assert.equal(calls.error.length, 1)
+      assert.ok(
+        calls.error[0].includes(`${JSON.stringify(entry)} is not a plain package name`),
+        `expected the refusal to name ${JSON.stringify(entry)}, got: ${calls.error[0]}`,
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+}
+
+test('main(): the refusal names the entry that is not a plain package name, not the first one', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
+    ignore: ['@navecss/cli', '@navecss/t*'],
+  })
+  try {
+    const { calls, exitCode } = runMain(dir)
+    assert.equal(exitCode, 1)
+    assert.match(calls.error[0], /"ignore" entry "@navecss\/t\*" is not a plain package name/)
+    assert.ok(!calls.error[0].includes('"@navecss/cli"'))
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('main(): the refusal for a pattern entry explains itself and says nothing was compared', () => {
+  const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
+    ignore: ['@navecss/t*'],
+  })
+  try {
+    const { calls } = runMain(dir)
+    assert.ok(
+      calls.error[0].endsWith(
+        'this gate compares exact names without expanding patterns). Nothing has been compared ' +
+          'against the Changesets "ignore" list. Repair the file and re-run.',
+      ),
+      `unexpected ending: ${calls.error[0]}`,
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
