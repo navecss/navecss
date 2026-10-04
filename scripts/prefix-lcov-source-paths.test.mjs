@@ -182,15 +182,31 @@ test('the real repo has no .sonarcloud.properties: a CI-driven scan reads sonar-
 })
 
 /**
-True when a vitest config's `coverage` block sets `enabled: true` on a line that is not a comment.
+ * A config's text with its comments removed: block comments, and lines that start with two
+ * slashes. What is left is what vitest actually reads.
  */
-function coverageTurnedOn(configText) {
-  const code = configText
+function configCode(configText) {
+  return configText
+    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
     .split('\n')
     .filter((line) => !line.trimStart().startsWith('//'))
     .join('\n')
-  return /coverage:\s*\{[^}]*\benabled:\s*true\b/.test(code)
 }
+
+/**
+True when a vitest config's `coverage` block sets `enabled: true` outside a comment.
+ */
+function coverageTurnedOn(configText) {
+  return /coverage:\s*\{[^}]*\benabled:\s*true\b/.test(configCode(configText))
+}
+
+test('coverageTurnedOn ignores a block-commented enabled: true', () => {
+  assert.equal(coverageTurnedOn("coverage: {\n  /* enabled: true, */\n  provider: 'v8',\n}"), false)
+  assert.equal(
+    coverageTurnedOn("coverage: {\n  /*\n   * enabled: true,\n   */\n  provider: 'v8',\n}"),
+    false,
+  )
+})
 
 test('coverageTurnedOn ignores a commented-out enabled: true', () => {
   assert.equal(coverageTurnedOn("coverage: {\n  // enabled: true,\n  provider: 'v8',\n}"), false)
@@ -290,20 +306,31 @@ test('the rewrite leaves Node’s lcov SF: paths repo-root-relative, for every r
 })
 
 /**
- * True when a vitest config sets `execArgv` to a list holding `--no-sparkplug` on a line that is
- * not a comment.
+ * True when a vitest config sets `execArgv` to a list holding `--no-sparkplug` outside a comment.
  */
 function runsWorkersWithoutSparkplug(configText) {
-  const code = configText
-    .split('\n')
-    .filter((line) => !line.trimStart().startsWith('//'))
-    .join('\n')
-  return /\bexecArgv:\s*\[[^\]]*'--no-sparkplug'[^\]]*\]/.test(code)
+  return /\bexecArgv:\s*\[[^\]]*'--no-sparkplug'[^\]]*\]/.test(configCode(configText))
 }
+
+test('runsWorkersWithoutSparkplug ignores a block-commented execArgv', () => {
+  assert.equal(
+    runsWorkersWithoutSparkplug("test: {\n  /* execArgv: ['--no-sparkplug'], */\n}"),
+    false,
+  )
+  assert.equal(
+    runsWorkersWithoutSparkplug("test: {\n  /*\n   * execArgv: ['--no-sparkplug'],\n   */\n}"),
+    false,
+  )
+})
 
 test('runsWorkersWithoutSparkplug ignores a commented-out execArgv', () => {
   assert.equal(runsWorkersWithoutSparkplug("// execArgv: ['--no-sparkplug'],"), false)
   assert.equal(runsWorkersWithoutSparkplug("test: {\n  execArgv: ['--no-sparkplug'],\n}"), true)
+})
+
+test('scripts:test makes its report directory without a shell-specific command', () => {
+  // pnpm runs scripts through cmd.exe on Windows, which has no `mkdir -p`.
+  assert.doesNotMatch(scriptsTestCommand(), /\bmkdir\b/)
 })
 
 test('scripts:test runs node without the baseline compiler, and node --test hands that on to its test files', () => {
