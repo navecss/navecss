@@ -70,7 +70,9 @@ async function servedLayer(server: DevServer, root: string): Promise<string> {
     readFileSync(path.join(root, 'index.html'), 'utf8'),
   )
   const served = await devCss(server, '/src/main.ts')
-  return stylesheetOf(served)
+  const css = stylesheetOf(served)
+  if (css === '') throw new Error(`no stylesheet was served: ${Object.keys(served).join(', ')}`)
+  return css
 }
 
 describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {

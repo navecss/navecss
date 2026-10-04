@@ -1,5 +1,5 @@
 import { playwright } from '@vitest/browser-playwright'
-import { defineConfig } from 'vitest/config'
+import { defaultExclude, defineConfig } from 'vitest/config'
 
 /**
  * A real-engine fixture, separate from the Node-environment unit tests
@@ -12,6 +12,8 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   test: {
     include: ['test/browser/**/*.browser.test.ts'],
+    // These drive a browser from Node, so they run under vitest.chromium.config.ts.
+    exclude: [...defaultExclude, 'test/browser/driven/**'],
     browser: {
       enabled: true,
       headless: true,

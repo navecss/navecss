@@ -1,4 +1,3 @@
-/// <reference lib="dom" />
 /* eslint-disable unicorn/isolated-functions -- the callbacks of page.evaluate run in the browser, where the DOM globals exist */
 /* eslint-disable unicorn/consistent-function-scoping -- each fixture sits beside the criterion whose rows use it */
 /**
@@ -13,12 +12,12 @@ import path from 'node:path'
 import { build, type InlineConfig, type PluginOption } from 'vite'
 import { afterAll, describe, expect, it } from 'vitest'
 
-import { atomClassMap } from '../src/atoms.ts'
-import { devServing } from '../src/vite-dev.ts'
-import { navePlugin, type NaveViteOptions } from '../src/vite.ts'
-import { addPackage, appFiles, atomLayerAtoms, makeUsedApp } from './helpers/used-atoms-app.ts'
-import { IMPORT } from './helpers/used-atoms-rows.ts'
-import { appConfig, stopDev } from './helpers/vite-app.ts'
+import { atomClassMap } from '../../../src/atoms.ts'
+import { devServing } from '../../../src/vite-dev.ts'
+import { navePlugin, type NaveViteOptions } from '../../../src/vite.ts'
+import { addPackage, appFiles, atomLayerAtoms, makeUsedApp } from '../../helpers/used-atoms-app.ts'
+import { IMPORT } from '../../helpers/used-atoms-rows.ts'
+import { appConfig, stopDev } from '../../helpers/vite-app.ts'
 import {
   atFirstStylesheet,
   consoleOf,
@@ -29,7 +28,7 @@ import {
   recordFrames,
   until,
   untilQuietly,
-} from './helpers/vite-browser.ts'
+} from '../../helpers/vite-browser.ts'
 
 const browser: Browser = await launchChromium()
 
