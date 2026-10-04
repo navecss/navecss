@@ -1,6 +1,7 @@
 /**
- * A byte order mark is not part of a stylesheet's text: a host counts positions after it and puts
- * it back first, so what it writes starts as the file did.
+ * A byte order mark is not part of a stylesheet's text: a host counts positions after it. One
+ * that writes the file puts it back first, so what it writes starts as the file did; text joined
+ * into a bundle leaves it off.
  */
 const BYTE_ORDER_MARK = '\u{FEFF}'
 

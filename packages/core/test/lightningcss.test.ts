@@ -337,7 +337,7 @@ describe.each(LIGHTNING_RELEASES)(
       const { code } = await lib.bundleAsync({ filename: entry, resolver: navePlugin().resolver })
 
       expect(code.toString()).not.toContain('\u{FEFF}')
-      expect(code.toString()).toMatch(/\.b\s*\{\s*display:\s*flex/)
+      expect(code.toString()).toMatch(/(^|\n)\.b\s*\{\s*display:\s*flex/)
     })
 
     it('AC-directive-core-26: neither expand() nor transform() adds an @import or a url() of its own, over every atom', () => {

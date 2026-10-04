@@ -414,6 +414,8 @@ describe('AC-directive-core-43 — a bare @import is reported, with the styleshe
     expect(run.status).toBe(1)
     expect(run.stderr).toContain('a browser cannot load')
     expect(run.stderr).not.toContain('standalone.css')
+    expect(run.stderr).not.toContain('no-tokens.css')
+    expect(run.stderr).toContain('Point it at a file the page can reach')
   })
 
   it.each([
