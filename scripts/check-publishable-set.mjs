@@ -161,15 +161,15 @@ function findIgnoredSetMembers(ignore) {
 /**
  * The `ignore` list of a parsed Changesets config, or the reason it cannot be read: the
  * config must be an object, and `ignore` (absent means empty, Changesets' own default) must be
- * an array.
+ * an array of strings.
  */
 function readIgnoreList(config) {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
     return { reason: 'is not a usable Changesets config (it is not an object)' }
   }
   if (config.ignore === undefined) return { ignore: [] }
-  if (!Array.isArray(config.ignore)) {
-    return { reason: 'is not a usable Changesets config ("ignore" is not an array)' }
+  if (!Array.isArray(config.ignore) || config.ignore.some((entry) => typeof entry !== 'string')) {
+    return { reason: 'is not a usable Changesets config ("ignore" is not an array of strings)' }
   }
   return { ignore: config.ignore }
 }

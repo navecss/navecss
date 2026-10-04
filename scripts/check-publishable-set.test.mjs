@@ -16,6 +16,7 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import {
+  composeChangesetConfigUnusableMessage,
   composeManifestNotAnObjectMessage,
   composeManifestUnreadableMessage,
   composePackageListUnreadableMessage,
@@ -354,6 +355,20 @@ test("composeManifestUnreadableMessage composes this gate's own bytes, never the
   assert.ok(!message.includes('License parity gate'))
 })
 
+test("composeChangesetConfigUnusableMessage composes this gate's own bytes, never the license-parity gate's cleared ones", () => {
+  const message = composeChangesetConfigUnusableMessage(
+    '/repo/.changeset/config.json',
+    'is not valid JSON (Unexpected token)',
+  )
+  assert.equal(
+    message,
+    'Publishable-set gate: refusing to run. /repo/.changeset/config.json is not valid JSON ' +
+      '(Unexpected token). Nothing has been compared against the Changesets "ignore" list. ' +
+      'Repair the file and re-run.',
+  )
+  assert.ok(!message.includes('License parity gate'))
+})
+
 // A fix round: this gate's own JSON.parse(readFileSync(...)) was
 // unguarded and raw-crashed on a malformed manifest, the same defect class closed in the
 // sibling gate. This file states no licensing position (per a licensing-steward consult), so its
@@ -520,6 +535,7 @@ for (const [shape, config] of [
   ['an array', '[]'],
   ['null', 'null'],
   ['an ignore field that is not an array', '{ "ignore": "@navecss/cli" }'],
+  ['an ignore array with a non-string entry', '{ "ignore": ["@navecss/cli", 1] }'],
 ]) {
   test(`main(): refuses a Changesets config that is ${shape}, never reading it as an empty ignore list`, () => {
     const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, config)
