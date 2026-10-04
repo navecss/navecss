@@ -4,7 +4,7 @@ import { atomClassMap, atoms as coreAtoms, toClassName } from '@navecss/core/ato
 import { describe, expect, it } from 'vitest'
 
 import { atoms } from '../styles/atoms.ts'
-import { selectorNodes } from './support/selector.ts'
+import { attributeReads, selectorNodes } from './support/selector.ts'
 import { classesOf, flatten, flattenRules, readStylesheet } from './support/stylesheet.ts'
 import { sliderClasses, tablePClasses } from './support/table-p.ts'
 
@@ -23,6 +23,19 @@ const dataNaveSelectors = (css: string): string[] =>
         .filter(({ node }) => node.type === 'attribute' && node.toString().includes('data-nave-'))
         .map(({ node }) => `${item.owner} ${node.toString().trim()}`),
     ),
+  )
+
+/**
+ * The values the arrow's selectors give `data-side`, read from the attribute selector itself.
+ */
+const arrowSides = (css: string): Set<string> =>
+  new Set(
+    flattenRules(css)
+      .filter((item) => item.owner === `${PREFIX}arrow`)
+      .flatMap((item) => item.selectors)
+      .flatMap((selector) => attributeReads(selector))
+      .filter((read) => read.name === 'data-side' && read.value !== undefined)
+      .map((read) => read.value ?? ''),
   )
 
 const deferredClasses = (css: string): string[] =>
@@ -110,18 +123,19 @@ describe('AC-base-ui-bridge-07: the deferrals are absent (stylesheet half)', () 
   })
 
   it("names only the physical data-side values in the arrow's selectors", () => {
-    const sides = flattenRules(css)
-      .filter((item) => item.owner === `${PREFIX}arrow`)
-      .flatMap((item) => item.selectors)
-      .flatMap((selector) =>
-        selector
-          .matchAll(/data-side="([^"]+)"/g)
-          .map((match) => match[1])
-          .toArray(),
-      )
-
-    expect(new Set(sides)).toEqual(new Set(['bottom', 'left', 'right', 'top']))
+    expect(arrowSides(css)).toEqual(new Set(['bottom', 'left', 'right', 'top']))
   })
+
+  it.each(['&[data-side=inline-start]', "&[data-side='inline-end']", '&[data-side="block-start"]'])(
+    'reads a logical side named by %s however it is quoted (control)',
+    (key) => {
+      const planted = `${css}\n@layer components.nave { .${PREFIX}arrow { ${key} { right: -4px } } }`
+
+      expect(arrowSides(planted).difference(new Set(['bottom', 'left', 'right', 'top'])).size).toBe(
+        1,
+      )
+    },
+  )
 
   it('has data-nave-variant only as primary and data-nave-size only as sm', () => {
     const attributes = dataNaveSelectors(css).map((entry) => entry.split(' ', 2)[1])

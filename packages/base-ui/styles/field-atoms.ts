@@ -203,6 +203,9 @@ export const fieldAtoms: Record<string, AtomDefinition> = {
     },
     media: { [reducedMotion]: { pseudos: { '&': motionOff } } },
   },
+  // The invalid border grows from the small width to the mark width. The resting padding of
+  // (mark - small) goes to 0 when invalid, so the border and the padding always add up to the same
+  // size and nothing inside the group moves. The Switch trades its padding the same way.
   baseUiNumberFieldGroup: {
     declarations: {
       'box-sizing': 'border-box',
@@ -211,11 +214,12 @@ export const fieldAtoms: Record<string, AtomDefinition> = {
       'min-block-size': V('size-control-md'),
       border: borderControl,
       'border-radius': V('radius-control'),
+      padding: `calc(${V('border-width-mark')} - ${V('border-width-sm')})`,
       'background-color': 'transparent',
       color: V('color-content-primary'),
     },
     pseudos: {
-      '&:has(> [aria-invalid="true"])': invalidBoundary,
+      '&:has(> [aria-invalid="true"])': { ...invalidBoundary, padding: '0' },
       '&[data-disabled]': {
         'border-color': V('color-border-disabled'),
         color: V('color-content-disabled'),

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
 import { ringBlock } from './support/focus.ts'
+import { requiresDisabled, requiresInvalidState } from './support/selector.ts'
 import { flatten, readStylesheet } from './support/stylesheet.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
 
@@ -11,14 +12,6 @@ const PREFIX = 'nave-base-ui-'
 const tokenValues = declaredTokens(workspaceTokensCss())
 
 const planted = (rule: string): string => `${readStylesheet()}\n@layer components.nave { ${rule} }`
-
-const DISABLED = /\[aria-disabled="true"\]|\[data-disabled\]|:disabled/
-
-/**
- * Whether a selector keys on a disabled state positively, not only inside a `:not()`.
- */
-const isDisabledKey = (selector: string): boolean =>
-  DISABLED.test(selector.replaceAll(/:not\([^)]*\)/g, ''))
 
 const DISABLED_PAINT = new Map([
   ['border-color', 'var(--nave-color-border-disabled)'],
@@ -32,7 +25,7 @@ const isTransparentFill = (item: FlatDeclaration): boolean =>
   [`${PREFIX}button`, `${PREFIX}toggle`].includes(item.owner)
 
 const disabledPaintProblems = (item: FlatDeclaration): string[] => {
-  if (item.selectors.every((selector) => !isDisabledKey(selector))) return []
+  if (item.selectors.every((selector) => !requiresDisabled(selector))) return []
   const where = `${item.owner} ${item.property}: ${item.value}`
   const problems: string[] = []
   if (!isTransparentFill(item) && DISABLED_PAINT.get(item.property) !== item.value) {
@@ -46,14 +39,14 @@ const disabledPaintProblems = (item: FlatDeclaration): string[] => {
 }
 
 const isInvalidKey = (item: FlatDeclaration): boolean =>
-  item.selectors.some((selector) => selector.includes('[aria-invalid="true"]'))
+  item.selectors.some((selector) => requiresInvalidState(selector))
 
 const orderProblems = (found: FlatDeclaration[]): string[] =>
   [...new Set(found.map((item) => item.owner))].flatMap((owner) => {
     const own = found.filter((item) => item.owner === owner)
     const lastInvalid = own.findLastIndex((item) => isInvalidKey(item))
     const firstDisabled = own.findIndex((item) =>
-      item.selectors.some((selector) => isDisabledKey(selector)),
+      item.selectors.some((selector) => requiresDisabled(selector)),
     )
     return lastInvalid !== -1 && firstDisabled !== -1 && lastInvalid > firstDisabled
       ? [`${owner} has its invalid rule after its disabled rule`]
@@ -79,6 +72,27 @@ describe('AC-base-ui-bridge-30: B4, disabled paint is tokens, never opacity', ()
     expect(disabledViolations(css)).toEqual(
       expect.arrayContaining([expect.stringContaining('is opacity or filter')]),
     )
+  })
+
+  it.each([
+    ['item', '&[aria-disabled=true]', 'color: var(--nave-color-content-secondary)'],
+    [
+      'number-field-group',
+      '&[data-disabled=""]',
+      'background-color: var(--nave-color-surface-raised)',
+    ],
+  ])('reads a disabled key however its value is quoted: %s %s (control)', (owner, key, paint) => {
+    const css = planted(`.${PREFIX}${owner} { ${key} { ${paint} } }`)
+
+    expect(disabledViolations(css)).toEqual([`${PREFIX}${owner} ${paint}`])
+  })
+
+  it('does not read a disabled attribute inside :not() as a disabled key (control)', () => {
+    const css = planted(
+      `.${PREFIX}item { &:not([aria-disabled=true]) { color: var(--nave-color-content-secondary) } }`,
+    )
+
+    expect(disabledViolations(css)).toEqual([])
   })
 
   it('reds on a disabled rule on a label (control)', () => {
@@ -179,11 +193,51 @@ const rowProblem = (found: FlatDeclaration[], owner: string, sides: readonly Sid
   return smallest >= needed ? [] : [`${owner}: ${smallest} < ${needed}`]
 }
 
-const isClipping = (item: FlatDeclaration): boolean =>
-  ['overflow', 'overflow-x', 'overflow-y'].includes(item.property) && item.value !== 'visible'
+const OVERFLOW_PROPERTIES = new Set([
+  'overflow',
+  'overflow-block',
+  'overflow-inline',
+  'overflow-x',
+  'overflow-y',
+])
 
 /**
- * P >= W + O + CORNER_SAGITTA x R for each row of Table T3, and every overflow class a row.
+ * `contain` values that clip a descendant: paint containment, and the `strict` and `content`
+ * shorthands that include it.
+ */
+const CLIPPING_CONTAIN = new Set(['content', 'paint', 'strict'])
+
+const unprefixed = (property: string): string => property.toLowerCase().replace(/^-[a-z]+-/, '')
+
+const wordsOf = (value: string): string[] => value.trim().toLowerCase().split(/\s+/)
+
+/**
+ * Whether a declaration makes a box clip its descendants, so that a focus ring drawn outside a
+ * child can be cut off: an overflow other than visible, paint containment, content-visibility
+ * other than visible, a `clip-path` other than none, or a `clip` other than auto. The property
+ * name is compared with any vendor prefix stripped.
+ */
+const isClipping = (item: FlatDeclaration): boolean => {
+  const property = unprefixed(item.property)
+  const words = wordsOf(item.value)
+  if (OVERFLOW_PROPERTIES.has(property)) return words.some((word) => word !== 'visible')
+  if (property === 'contain') return words.some((word) => CLIPPING_CONTAIN.has(word))
+  if (property === 'content-visibility') return words.some((word) => word !== 'visible')
+  return isUncomputableClip(item)
+}
+
+/**
+ * Whether a declaration clips along a shape or rectangle the inset rule cannot turn into a number.
+ */
+const isUncomputableClip = (item: FlatDeclaration): boolean => {
+  const property = unprefixed(item.property)
+  const value = item.value.trim().toLowerCase()
+  return (property === 'clip-path' && value !== 'none') || (property === 'clip' && value !== 'auto')
+}
+
+/**
+ * P >= W + O + CORNER_SAGITTA x R for each row of Table T3, every class that clips a row, and
+ * every clip the inset rule cannot compute reported to be checked by hand.
  */
 const clipViolations = (css: string): string[] => {
   const found = flatten(css)
@@ -191,7 +245,13 @@ const clipViolations = (css: string): string[] => {
   const missing = found
     .filter((item) => isClipping(item) && !T3.has(item.owner))
     .map((item) => `${item.owner} clips and is not a row of Table T3`)
-  return [...rows, ...missing]
+  const byHand = found
+    .filter((item) => isUncomputableClip(item))
+    .map(
+      (item) =>
+        `${item.owner} declares ${item.property}: ${item.value}, and its geometry needs checking by hand`,
+    )
+  return [...rows, ...new Set(missing), ...byHand]
 }
 
 const withDeclaration = (rule: string, property: string, value: string): string => {
@@ -231,5 +291,50 @@ describe('AC-base-ui-bridge-31: clip insets and scroll-padding, computed from th
     expect(clipViolations(planted(`.${PREFIX}title { overflow: hidden }`))).toEqual([
       expect.stringContaining('title clips'),
     ])
+  })
+
+  it.each([
+    'content-visibility: auto',
+    'content-visibility: hidden',
+    'contain: paint',
+    'contain: content',
+    'contain: strict',
+    'contain: layout paint',
+    'overflow-inline: hidden',
+    'overflow-block: clip',
+    '-webkit-overflow-x: hidden',
+  ])('reds on a planted %s on a class that is not a row (control)', (declaration) => {
+    expect(clipViolations(planted(`.${PREFIX}title { ${declaration} }`))).toEqual([
+      `${PREFIX}title clips and is not a row of Table T3`,
+    ])
+  })
+
+  it.each(['clip-path: inset(0)', '-webkit-clip-path: inset(0)', 'clip: rect(0 0 0 0)'])(
+    'reds on a planted %s, whose geometry the inset rule cannot compute (control)',
+    (declaration) => {
+      expect(clipViolations(planted(`.${PREFIX}title { ${declaration} }`))).toEqual([
+        `${PREFIX}title clips and is not a row of Table T3`,
+        expect.stringContaining('needs checking by hand'),
+      ])
+    },
+  )
+
+  it('reds on a clip-path planted on a row of Table T3 as well, by hand (control)', () => {
+    expect(clipViolations(planted(`.${PREFIX}list-popup { clip-path: inset(0) }`))).toEqual([
+      expect.stringContaining('needs checking by hand'),
+    ])
+  })
+
+  it.each([
+    'contain: layout',
+    'contain: size',
+    'container-type: inline-size',
+    'content-visibility: visible',
+    'overflow-clip-margin: 4px',
+    'overflow: visible',
+    'clip-path: none',
+    'clip: auto',
+  ])('does not report a planted %s, which clips nothing (control)', (declaration) => {
+    expect(clipViolations(planted(`.${PREFIX}title { ${declaration} }`))).toEqual([])
   })
 })

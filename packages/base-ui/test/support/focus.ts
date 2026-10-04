@@ -53,6 +53,26 @@ export const isFocusRingBase = (item: FlatDeclaration): boolean =>
   focusRingClasses.includes(item.owner) && isBase(item)
 
 /**
+ * The two insets that size the Slider thumb's focus bar, by the selector of the rule they sit in.
+ * They read the focus width token, so they carry its fallback.
+ */
+const THUMB_BAR_INSETS: Readonly<Record<string, string>> = {
+  '&:has(:focus-visible)::before': 'inset-inline',
+  '&[data-orientation="vertical"]:has(:focus-visible)::before': 'inset-block',
+}
+
+const THUMB_BAR_INSET_VALUE = 'calc(-1 * (var(--nave-border-width-focus, 2px) + 2px))'
+
+/**
+ * Whether a declaration is one of the Slider thumb's two focus bar insets.
+ */
+export const isThumbBarInset = (item: FlatDeclaration): boolean =>
+  item.owner === THUMB &&
+  item.selectors.length === 2 &&
+  THUMB_BAR_INSETS[item.selectors[1] ?? ''] === item.property &&
+  item.value === THUMB_BAR_INSET_VALUE
+
+/**
  * Whether a declaration belongs to the Slider thumb's focus rule.
  */
 export const isThumbRingDeclaration = (item: FlatDeclaration): boolean =>

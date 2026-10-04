@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
 import { COLOR_KEYWORDS } from './support/colors.ts'
+import { isFocusRingDeclaration, isThumbBarInset, isThumbRingDeclaration } from './support/focus.ts'
+import { requiresInvalid } from './support/selector.ts'
 import { flatten, flattenRules, readStylesheet, splitSelectorList } from './support/stylesheet.ts'
-import { focusRingClasses } from './support/table-p.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
 import { ADMITTED_FALLBACKS, valueViolations } from './support/value.ts'
 
@@ -52,8 +53,13 @@ const fallbacksIn = (item: FlatDeclaration): string[] =>
     .map((match) => match[0])
     .toArray()
 
-const isFallbackHome = (owner: string): boolean =>
-  owner === `${PREFIX}slider-thumb` || focusRingClasses.includes(owner)
+/**
+ * Whether a declaration sits in a rule that owns the focus fallbacks: the ring on a Table T2 class,
+ * the Slider thumb's focus rule, and the two insets of the thumb's focus bar. Admitted by the rule,
+ * not by the class that holds it, so the same fallback elsewhere on those classes still reds.
+ */
+const isFallbackHome = (item: FlatDeclaration): boolean =>
+  isFocusRingDeclaration(item) || isThumbRingDeclaration(item) || isThumbBarInset(item)
 
 /**
  * The `var()` fallbacks outside the admitted two, and the admitted two outside their parts.
@@ -62,18 +68,17 @@ const fallbackViolations = (css: string): string[] =>
   flatten(css).flatMap((item) =>
     fallbacksIn(item).flatMap((text) => {
       if (!ADMITTED_FALLBACKS.includes(text)) return [`${item.owner} ${text}`]
-      return isFallbackHome(item.owner) ? [] : [`${item.owner} ${text} outside its parts`]
+      return isFallbackHome(item) ? [] : [`${item.owner} ${text} outside its parts`]
     }),
   )
 
 /**
- * Whether every alternative of some enclosing rule's selector list keys on the invalid state: one
- * sibling alternative without it would let the paint reach a valid control.
+ * Whether some enclosing rule's selector list keys on the invalid state in every alternative: one
+ * sibling alternative without it, or a key only inside `:not()`, would let the paint reach a valid
+ * control.
  */
 const isInvalidKey = (item: FlatDeclaration): boolean =>
-  item.selectors.some((list) =>
-    splitSelectorList(list).every((branch) => branch.includes('[aria-invalid="true"]')),
-  )
+  item.selectors.some((list) => requiresInvalid(list))
 
 /**
  * The colours a border value names: token reads, named and system colours, and hex or functional
@@ -150,13 +155,68 @@ describe('AC-base-ui-bridge-24: every declared value is one of the admitted form
       `.${PREFIX}input { &[aria-invalid="true"], &:hover { border-color: var(--nave-color-feedback-danger) } }`,
     )
 
-    expect(borderColourViolations(css, [])).not.toEqual([])
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([
+      `${PREFIX}input border-color: var(--nave-color-feedback-danger)`,
+    ])
   })
 
   it('reds on a danger border outside an invalid key (control)', () => {
     const css = planted(`.${PREFIX}input { border-color: var(--nave-color-feedback-danger) }`)
 
-    expect(borderColourViolations(css, [])).not.toEqual([])
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([
+      `${PREFIX}input border-color: var(--nave-color-feedback-danger)`,
+    ])
+  })
+
+  it('reds on a danger border under :not() of the invalid key, which paints every valid control (control)', () => {
+    const css = planted(
+      `.${PREFIX}input { &:not([aria-invalid="true"]) { border-color: var(--nave-color-feedback-danger) } }`,
+    )
+
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([
+      `${PREFIX}input border-color: var(--nave-color-feedback-danger)`,
+    ])
+  })
+
+  it('reads the invalid key by its attribute and value, however the value is quoted', () => {
+    const css = planted(
+      `.${PREFIX}input { &[aria-invalid=true] { border-color: var(--nave-color-feedback-danger) } }`,
+    )
+
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([])
+  })
+
+  it('reds on a danger border under a :has() argument that is not bounded to a direct child (control)', () => {
+    const css = planted(
+      `.${PREFIX}number-field-group { &:has(> [aria-invalid="true"], [aria-invalid="true"]) { border-color: var(--nave-color-feedback-danger) } }`,
+    )
+
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([
+      `${PREFIX}number-field-group border-color: var(--nave-color-feedback-danger)`,
+    ])
+  })
+
+  it('reds on a focus-ring fallback outside the rules that own it (control)', () => {
+    const css = planted(`.${PREFIX}button { border-width: var(--nave-border-width-focus, 2px) }`)
+
+    expect(fallbackViolations(css)).toEqual([
+      `${PREFIX}button var(--nave-border-width-focus, 2px) outside its parts`,
+    ])
+  })
+
+  it('reds on a planted system colour, which a token must stand in for (control)', () => {
+    const css = planted(`.${PREFIX}title { color: windowtext }`)
+
+    expect(unacceptedValues(css)).toEqual([`${PREFIX}title color: windowtext`])
+  })
+})
+
+describe('the selector-list splitter that the border and disjointness readers rely on', () => {
+  it('splits at the top-level comma when a character outside the basic plane comes first', () => {
+    expect(splitSelectorList('&[data-x="\u{1F600}"], &:hover')).toEqual([
+      '&[data-x="\u{1F600}"]',
+      '&:hover',
+    ])
   })
 })
 

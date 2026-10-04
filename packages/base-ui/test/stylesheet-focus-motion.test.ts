@@ -46,13 +46,26 @@ const focusKeyProblems = (item: FlatDeclaration): string[] => {
   return problems
 }
 
-const ringCompleteness = (found: FlatDeclaration[]): string[] => {
-  const base = new Set(found.filter((item) => isFocusRingBase(item)).map((item) => item.owner))
-  const block = new Set(
+/**
+ * The classes that carry the whole ring block: every longhand of it, each with its value. A class
+ * with one longhand missing has no visible ring, since `outline-style` is `none` unless set.
+ */
+const classesWithWholeBlock = (found: FlatDeclaration[]): Set<string> => {
+  const written = new Set(
     found
       .filter((item) => isFocusRingDeclaration(item) && !isFocusRingBase(item))
-      .map((item) => item.owner),
+      .map((item) => `${item.owner}|${item.property}`),
   )
+  return new Set(
+    focusRingClasses.filter((name) =>
+      Object.keys(ringBlock).every((property) => written.has(`${name}|${property}`)),
+    ),
+  )
+}
+
+const ringCompleteness = (found: FlatDeclaration[]): string[] => {
+  const base = new Set(found.filter((item) => isFocusRingBase(item)).map((item) => item.owner))
+  const block = classesWithWholeBlock(found)
   const lacking = focusRingClasses.filter((name) => !base.has(name) || !block.has(name))
   const extra = base
     .union(block)
@@ -118,12 +131,44 @@ describe('AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures
     expect(focusViolations(css)).toEqual([expect.stringContaining('keys on focus')])
   })
 
+  it('reds on a :has(:focus-visible) rule outside the Slider thumb (control)', () => {
+    const css = planted(`.${PREFIX}title { &:has(:focus-visible) { color: red } }`)
+
+    expect(focusViolations(css)).toEqual([expect.stringContaining('keys on focus')])
+  })
+
+  it('reds on an outline under a hover-qualified root, even beside the four ring longhands (control)', () => {
+    const longhands = Object.entries(ringBlock)
+      .map(([property, value]) => `${property}: ${value}`)
+      .join('; ')
+    const css = planted(
+      `.${PREFIX}button:hover { outline: none; &:focus-visible { ${longhands} } }`,
+    )
+
+    expect(focusViolations(css)).toEqual(
+      expect.arrayContaining([expect.stringContaining('sets outline')]),
+    )
+  })
+
   it('reds on a focus-keyed box-shadow (control)', () => {
     const css = planted(`.${PREFIX}title { &:focus-visible { box-shadow: 0 0 0 1px red } }`)
 
     expect(focusViolations(css)).toEqual(
       expect.arrayContaining([expect.stringContaining('focus-keyed box-shadow')]),
     )
+  })
+
+  it('reds on a Table T2 class whose ring block loses one longhand (control)', () => {
+    const root = postcss.parse(readStylesheet())
+    root.walkRules('&:focus-visible', (rule) => {
+      if (rule.parent?.type === 'rule' && rule.parent.selector === `.${PREFIX}tab`) {
+        rule.walkDecls('outline-style', (decl) => {
+          decl.remove()
+        })
+      }
+    })
+
+    expect(focusViolations(root.toString())).toEqual([`${PREFIX}tab lacks focusRing`])
   })
 
   it('reds on a Table T2 class that loses its ring (control)', () => {

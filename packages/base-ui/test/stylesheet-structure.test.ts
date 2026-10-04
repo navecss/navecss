@@ -1,6 +1,7 @@
 import type { AtRule, ChildNode, Root, Rule } from 'postcss'
 
 import postcss from 'postcss'
+import selectorParser from 'postcss-selector-parser'
 import { describe, expect, it } from 'vitest'
 
 import type { SelectorNode } from './support/selector.ts'
@@ -66,7 +67,7 @@ const forbiddenViolations = (root: Root): string[] => {
  */
 const componentsOnlyViolations = (css: string): string[] => {
   const root = postcss.parse(css)
-  const [first, ...rest] = root.nodes
+  const [first, ...rest] = root.nodes.filter((node) => node.type !== 'comment')
   const stray = rest
     .filter((node) => !isLayerBlock(node))
     .map(() => 'a top-level node is not an @layer components.nave block')
@@ -76,6 +77,12 @@ const componentsOnlyViolations = (css: string): string[] => {
 describe('AC-base-ui-bridge-18: the stylesheet is components-only, and its order statement is live and first', () => {
   it('has nothing in it but the order statement and components.nave blocks, and no forbidden construct', () => {
     expect(componentsOnlyViolations(readStylesheet())).toEqual([])
+  })
+
+  it('admits a comment before the order statement and between nodes: comments are not nodes', () => {
+    const css = `/*! NaveCSS */\n${readStylesheet()}\n/* end */\n`
+
+    expect(componentsOnlyViolations(css)).toEqual([])
   })
 
   it('reds on a stylesheet that carries an @import first (the prototype shape)', () => {
@@ -231,6 +238,22 @@ describe('AC-base-ui-bridge-18: the only nested at-rule is the reduced-motion gu
     )
   })
 
+  it('reds on a media query planted directly in the layer block (control)', () => {
+    const css = `${readStylesheet()}\n@layer components.nave { @media (min-width: 1px) { .${PREFIX}title { color: red } } }`
+
+    expect(guardViolations(css)).toEqual(
+      expect.arrayContaining([expect.stringContaining('@media (min-width: 1px)')]),
+    )
+  })
+
+  it('reds on a sub-layer planted in the layer block, which the layer contract does not allow (control)', () => {
+    const css = `${readStylesheet()}\n@layer components.nave { @layer inner; }`
+
+    expect(guardViolations(css)).toEqual(
+      expect.arrayContaining([expect.stringContaining('@layer inner')]),
+    )
+  })
+
   it("reds when the icon's guard selector is changed to & (control)", () => {
     const css = mutate((root) => {
       classRule(root, 'disclosure-icon').walkAtRules('media', (at) => {
@@ -328,16 +351,24 @@ const isNodeOutside = ({ node, inside }: SelectorNode, owner: string): boolean =
 }
 
 /**
- * Every `:has()` argument begins with `>`, except `:has(:focus-visible)` on the Slider thumb.
+ * Every argument of every `:has()` begins with `>`, except `:has(:focus-visible)` on the Slider
+ * thumb. A list of arguments is judged one argument at a time.
  */
-const unadmittedHasArguments = (selector: string, owner: string): string[] =>
-  selector
-    .matchAll(/:has\(([^)]*)\)/g)
-    .map((match) => match[1] ?? '')
-    .filter((argument) => !argument.trimStart().startsWith('>'))
-    .filter((argument) => !(argument === ':focus-visible' && owner === THUMB))
-    .map((argument) => `:has(${argument}) in ${selector}`)
-    .toArray()
+const unadmittedHasArguments = (selector: string, owner: string): string[] => {
+  const found: string[] = []
+  selectorParser((root) => {
+    root.walkPseudos((pseudo) => {
+      if (pseudo.value !== ':has') return
+      for (const argument of pseudo.nodes) {
+        const text = String(argument).trim()
+        const isBounded = argument.first?.type === 'combinator' && argument.first.value === '>'
+        const isThumbFocus = text === ':focus-visible' && owner === THUMB
+        if (!isBounded && !isThumbFocus) found.push(`:has(${text}) in ${selector}`)
+      }
+    })
+  }).processSync(selector)
+  return found
+}
 
 /**
  * What AC-20 asserts, as the list of what is wrong.
@@ -375,6 +406,21 @@ describe('AC-base-ui-bridge-20: selectors use only the vocabulary', () => {
     const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}title:focus-visible { color: red } }`
 
     expect(vocabularyViolations(css)).toEqual([`:focus-visible in .${PREFIX}title:focus-visible`])
+  })
+
+  it('reds on every :has() argument that is not bounded to a direct child, not only the first (control)', () => {
+    const selector = `:has(> [aria-invalid="true"], [aria-invalid="true"])`
+    const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}number-field-group { &${selector} { border-color: red } } }`
+
+    expect(vocabularyViolations(css)).toEqual([
+      `:has([aria-invalid="true"]) in .${PREFIX}number-field-group${selector}`,
+    ])
+  })
+
+  it('reds on a type selector inside :dir() that is not a direction (control)', () => {
+    const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}tab-indicator { &:dir(span) { left: 0 } } }`
+
+    expect(vocabularyViolations(css)).toEqual([`span in .${PREFIX}tab-indicator:dir(span)`])
   })
 
   it('has the base outline declaration of focusRing only on Table T2 classes (cross-check)', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { compare, isMutuallyExclusive, selectorSpecificity } from './support/selector.ts'
-import { flatten, readStylesheet } from './support/stylesheet.ts'
+import { flatten, readStylesheet, splitSelectorList } from './support/stylesheet.ts'
 import { tableP } from './support/table-p.ts'
 
 const PREFIX = 'nave-base-ui-'
@@ -13,26 +13,33 @@ interface SettingRule {
 }
 
 /**
+ * A nested selector list resolved against its parents: each alternative on its own, with `&`
+ * replaced by the parent, or joined to it as a descendant when it has no `&`.
+ */
+const resolveAgainst = (parents: readonly string[], list: string): string[] =>
+  splitSelectorList(list).flatMap((branch) =>
+    parents.map((parent) =>
+      branch.includes('&') ? branch.replaceAll('&', () => parent) : `${parent} ${branch}`,
+    ),
+  )
+
+/**
 Every rule of a stylesheet with the properties it sets, its selector resolved against its class.
+A rule with a selector list is one rule per alternative, since each is judged on its own.
  */
 const settingRules = (css: string): SettingRule[] => {
   const byRule = new Map<string, SettingRule>()
   for (const item of flatten(css)) {
-    const relative = item.selectors.slice(1)
-    const selector =
-      relative.length === 0
-        ? `.${item.owner}`
-        : relative.reduce(
-            (resolved, next) =>
-              next.includes('&') ? next.replaceAll('&', () => resolved) : `${resolved} ${next}`,
-            `.${item.owner}`,
-          )
-    const key = `${item.owner}|${selector}`
-    const known = byRule.get(key)
-    if (known === undefined) {
-      byRule.set(key, { owner: item.owner, selector, properties: new Set([item.property]) })
-    } else {
-      known.properties.add(item.property)
+    let selectors = [`.${item.owner}`]
+    for (const list of item.selectors.slice(1)) selectors = resolveAgainst(selectors, list)
+    for (const selector of selectors) {
+      const key = `${item.owner}|${selector}`
+      const known = byRule.get(key)
+      if (known === undefined) {
+        byRule.set(key, { owner: item.owner, selector, properties: new Set([item.property]) })
+      } else {
+        known.properties.add(item.property)
+      }
     }
   }
   return byRule.values().toArray()
@@ -97,5 +104,30 @@ describe('AC-base-ui-bridge-08: the disjointness rule has an instrument, and it 
     const parts = new Map(tableP).set('Menu.Item', [`${PREFIX}item`, `${PREFIX}item-highlight`])
 
     expect(conflicts(css, parts)).toEqual([])
+  })
+
+  it('joins a nested selector with no & to its parent as a descendant (control)', () => {
+    const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}item-highlight { [data-highlighted] { color: x } } }`
+    const parts = new Map(tableP).set('Menu.Item', [`${PREFIX}item`, `${PREFIX}item-highlight`])
+
+    expect(conflicts(css, parts)).toEqual([
+      `color: .${PREFIX}item[aria-disabled="true"] (0,2,0) against .${PREFIX}item-highlight [data-highlighted] (0,2,0, equal)`,
+    ])
+  })
+
+  it('judges every branch of a selector list, not only the first (control)', () => {
+    const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}item-highlight { &[data-highlighted]:not([aria-disabled="true"]), &[data-highlighted] { color: x } } }`
+    const parts = new Map(tableP).set('Menu.Item', [`${PREFIX}item`, `${PREFIX}item-highlight`])
+
+    expect(conflicts(css, parts)).toEqual([
+      `color: .${PREFIX}item[aria-disabled="true"] (0,2,0) against .${PREFIX}item-highlight[data-highlighted] (0,2,0, equal)`,
+    ])
+  })
+
+  it('does not read a :not() holding two attributes as excluding either one (control)', () => {
+    const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}item-highlight { &[data-highlighted]:not([aria-disabled="true"][data-side="top"]) { color: x } } }`
+    const parts = new Map(tableP).set('Menu.Item', [`${PREFIX}item`, `${PREFIX}item-highlight`])
+
+    expect(conflicts(css, parts)).toHaveLength(1)
   })
 })

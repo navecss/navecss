@@ -20,7 +20,7 @@ const INDEPENDENT_BUILD = 'independent-build.css'
 // The same agreed bytes built a second time, independently of this package's atoms, with the
 // Slider block and the hit areas both in and before `focusRing` is composed in. Held by hash so
 // the copy cannot drift from what was agreed.
-const INDEPENDENT_BUILD_SHA256 = 'f1520ca5ff0af53aa37065dc6431add6b935b30f455679d5585ddb4503526cca'
+const INDEPENDENT_BUILD_SHA256 = '59cd8bad1cd24eab84fc9a7cae856d18b4193284d387d5872baa517df2caa8bb'
 
 // To regenerate the golden when a change to the stylesheet is intended:
 //   pnpm --filter @navecss/base-ui run build
@@ -34,6 +34,14 @@ const firstDifferingRule = (built: string, golden: string): string | undefined =
   return differing === undefined ? undefined : /\.nave-base-ui-[\w-]+/.exec(differing)?.[0]
 }
 
+/**
+ * Where a built stylesheet departs from the golden: undefined when the two are byte-identical, the
+ * first differing class rule when one is, and a stand-in when the difference sits outside them.
+ * The golden check and its controls both call this one comparator.
+ */
+const driftAt = (built: string, golden: string): string | undefined =>
+  built === golden ? undefined : (firstDifferingRule(built, golden) ?? 'outside the class rules')
+
 const withoutFocusRing = (css: string): unknown[][] =>
   flatten(css)
     .filter((item) => !isFocusRingDeclaration(item))
@@ -41,7 +49,7 @@ const withoutFocusRing = (css: string): unknown[][] =>
 
 describe('AC-base-ui-bridge-41: the golden of the built stylesheet reds on drift', () => {
   it('is byte-identical to the committed golden', async () => {
-    expect(await buildStyles()).toBe(fixture(GOLDEN))
+    expect(driftAt(await buildStyles(), fixture(GOLDEN))).toBeUndefined()
   })
 
   it('is what dist/styles.css holds', async () => {
@@ -53,7 +61,23 @@ describe('AC-base-ui-bridge-41: the golden of the built stylesheet reds on drift
     const drifted = golden.replace('right: -4px; rotate: -45deg', 'right: -5px; rotate: -45deg')
 
     expect(drifted).not.toBe(golden)
-    expect(firstDifferingRule(drifted, golden)).toBe('.nave-base-ui-arrow')
+    expect(driftAt(drifted, golden)).toBe('.nave-base-ui-arrow')
+  })
+
+  it('reds on a drift that keeps the length of the file, at that rule', () => {
+    const golden = fixture(GOLDEN)
+    const drifted = golden.replace('rotate: 135deg', 'rotate: 136deg')
+
+    expect(drifted).not.toBe(golden)
+    expect(drifted).toHaveLength(golden.length)
+    expect(driftAt(drifted, golden)).toBe('.nave-base-ui-arrow')
+  })
+
+  it('reds on a difference outside every class rule', () => {
+    const golden = fixture(GOLDEN)
+
+    expect(driftAt(`/* drift */\n${golden}`, golden)).toBe('outside the class rules')
+    expect(driftAt(golden, golden)).toBeUndefined()
   })
 
   it("reds when the input's invalid rule is deleted, at that rule", () => {
@@ -64,7 +88,7 @@ describe('AC-base-ui-bridge-41: the golden of the built stylesheet reds on drift
     const drifted = golden.slice(0, start) + golden.slice(end)
 
     expect(drifted).not.toBe(golden)
-    expect(firstDifferingRule(drifted, golden)).toBe('.nave-base-ui-input')
+    expect(driftAt(drifted, golden)).toBe('.nave-base-ui-input')
   })
 })
 
