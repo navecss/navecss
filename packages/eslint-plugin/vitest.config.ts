@@ -6,5 +6,13 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     setupFiles: ['./test/setup/rule-tester.ts'],
     testTimeout: 20_000,
+    coverage: {
+      // Measure and report only — no thresholds are configured, and none
+      // should be added here. A number that has to be gamed to stay green
+      // teaches the opposite habit of what coverage is for.
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      reportsDirectory: './coverage',
+    },
   },
 })
