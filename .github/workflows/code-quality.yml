@@ -112,7 +112,11 @@ jobs:
             label: node 22.18, the engines floor
             node-version: '22.18.0'
     steps:
+      # `packages/stylelint-config/test/values.test.ts` pins a fixture against a commit and is
+      # skipped without history, so this job fetches all of it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - uses: ./.github/actions/setup
         with:
