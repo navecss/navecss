@@ -106,12 +106,24 @@ export function atomsNamedBy(sheet: Sheet, from: number, to: number): string[] {
   return atoms
 }
 
-interface Alternatives {
-  readonly finished: string[][]
-  current: string[]
+type Part = string | readonly Part[]
+
+/**
+ * The atoms one alternative needs: its own, and the chunks its nested lists passed on, kept
+ * whole (never copied) with a count, so passing a chunk up costs nothing however deep the lists.
+ */
+interface Needs {
+  readonly parts: Part[]
+  size: number
 }
 
-const newList = (): Alternatives => ({ finished: [], current: [] })
+interface Alternatives {
+  readonly finished: Needs[]
+  current: Needs
+}
+
+const newNeeds = (): Needs => ({ parts: [], size: 0 })
+const newList = (): Alternatives => ({ finished: [], current: newNeeds() })
 
 /**
  * Closes the list of alternatives `done` into `parent`: the atoms every alternative needs, none
@@ -119,8 +131,25 @@ const newList = (): Alternatives => ({ finished: [], current: [] })
  */
 function closeList(done: Alternatives, parent: Alternatives): void {
   const all = [...done.finished, done.current]
-  if (all.some((needs) => needs.length === 0)) return
-  for (const needs of all) for (const atom of needs) parent.current.push(atom)
+  if (all.some((needs) => needs.size === 0)) return
+  for (const needs of all) {
+    parent.current.parts.push(needs.parts)
+    parent.current.size += needs.size
+  }
+}
+
+/**
+ * The atoms of `parts`, in order, found once.
+ */
+function flatten(parts: readonly Part[]): string[] {
+  const atoms: string[] = []
+  const stack: Part[] = [parts]
+  while (stack.length > 0) {
+    const part = stack.pop()!
+    if (typeof part === 'string') atoms.push(part)
+    else for (let index = part.length - 1; index >= 0; index -= 1) stack.push(part[index]!)
+  }
+  return atoms
 }
 
 /**
@@ -142,10 +171,13 @@ function readToken(
     closeList(lists.pop()!, lists.at(-1)!)
   } else if (isNested && type === 'comma-token') {
     list.finished.push(list.current)
-    list.current = []
+    list.current = newNeeds()
   } else {
     const atom = atomAt(sheet, index, limit.to)
-    if (atom && !limit.emitted.has(atom)) list.current.push(atom)
+    if (atom && !limit.emitted.has(atom)) {
+      list.current.parts.push(atom)
+      list.current.size += 1
+    }
   }
   return index + 1
 }
@@ -167,5 +199,5 @@ export function blockersOf(
   while (index < to) index = readToken(sheet, index, { emitted, to }, lists)
   // A list left open ends with the range, as the group would.
   while (lists.length > 1) closeList(lists.pop()!, lists.at(-1)!)
-  return lists[0]!.current
+  return flatten(lists[0]!.current.parts)
 }

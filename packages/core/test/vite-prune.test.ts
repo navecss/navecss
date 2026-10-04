@@ -244,14 +244,45 @@ describe('AC-used-atoms-27 - a selector is removed only when it needs an element
 })
 
 describe('AC-used-atoms-27 - a selector nested in :is() is read in time proportional to its depth', () => {
-  it('prunes and inspects :is(:is(:is(...))) at any depth', async () => {
+  // One unemitted atom at each level, so every level has something to pass on to the one above.
+  const nested = (depth: number): string => {
+    const open = ':is(.nave-flex'.repeat(depth)
+    return `@layer atomic { ${open}${')'.repeat(depth)} { color: red } .nave-block { display: block } }`
+  }
+  const emitted = new Set(['block'])
+
+  it('prunes and checks :is(.nave-flex:is(.nave-flex:is(...))) at any depth', async () => {
+    await assertScalesLinearly((depth) => {
+      const css = nested(depth)
+      const start = performance.now()
+      const pruned = pruneAtomicLayer(css, emitted)
+      const needs = unprunedAtoms(css, emitted)
+      const spent = performance.now() - start
+      expect(pruned).not.toContain('nave-flex')
+      expect(needs).toEqual(['flex'])
+      return spent
+    }, 800)
+  }, 120_000)
+
+  it('inspects the same layer, and names its atoms, at any depth', async () => {
+    await assertScalesLinearly((depth) => {
+      const css = nested(depth)
+      const start = performance.now()
+      const seen = inspectAtomicLayer(css)
+      const spent = performance.now() - start
+      expect([...seen.atoms].toSorted()).toEqual(['block', 'flex'])
+      return spent
+    }, 800)
+  }, 120_000)
+
+  it('prunes and inspects :is(:is(:is(...))) with nothing to pass on', async () => {
     await assertScalesLinearly((depth) => {
       const selector = `${':is('.repeat(depth)}.nave-grid${')'.repeat(depth)}`
       const css = `@layer atomic { ${selector} { color: red } .nave-flex { display: flex } }`
-      const emitted = new Set(['flex'])
+      const only = new Set(['flex'])
       const start = performance.now()
-      const pruned = pruneAtomicLayer(css, emitted)
-      const left = unprunedAtoms(pruned, emitted)
+      const pruned = pruneAtomicLayer(css, only)
+      const left = unprunedAtoms(pruned, only)
       const spent = performance.now() - start
       expect(pruned).not.toContain('nave-grid')
       expect(left).toEqual([])

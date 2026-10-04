@@ -149,27 +149,56 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('block'))\n` }))
     try {
       const shared = navePlugin()
-      const markup = (name: string, atom: string, delay: number): PluginOption => ({
+      // Promise barriers fix the order, so the overlap does not depend on a delay: the first
+      // build reads its page only after the second has compiled its own, and the second build
+      // finishes only after the first has read its page.
+      const gate = (): { done: () => void; passed: Promise<void> } => {
+        let done = (): void => undefined
+        const passed = new Promise<void>((resolve) => {
+          done = resolve
+        })
+        return { done, passed }
+      }
+      const secondCompiled = gate()
+      const firstRead = gate()
+      const markup = (name: string, atom: string, wait?: Promise<void>): PluginOption => ({
         name,
         enforce: 'pre',
         async load(id) {
           if (!id.endsWith('/index.html')) return undefined
-          await new Promise((resolve) => setTimeout(resolve, delay))
+          await wait
           return `<!doctype html><html><body><p class="nave-${atom}">x</p><script type="module" src="/src/main.ts"></script></body></html>`
         },
       })
-      // The second build is still compiling when the first reads its page.
-      const slowEntry: PluginOption = {
-        name: 'slow-entry',
-        enforce: 'pre',
-        async transform(_code, id) {
-          if (id.endsWith('/src/main.ts')) await new Promise((resolve) => setTimeout(resolve, 400))
+      // Listed after Nave's, so it runs once Nave has noted the page.
+      const afterPage = (signal: () => void): PluginOption => ({
+        name: 'after-page',
+        transform(_code, id) {
+          if (id.endsWith('/index.html')) signal()
           return undefined
         },
-      }
+      })
+      const atEntry = (signal: () => void, wait?: Promise<void>): PluginOption => ({
+        name: 'at-entry',
+        enforce: 'pre',
+        async transform(_code, id) {
+          if (!id.endsWith('/src/main.ts')) return undefined
+          signal()
+          await wait
+          return undefined
+        },
+      })
+      const nothing = (): void => undefined
       const [a, b] = await Promise.all([
-        buildUsed(app, { nave: shared, plugins: [markup('first', 'flex', 60)] }),
-        buildUsed(app, { nave: shared, plugins: [markup('second', 'grid', 0), slowEntry] }),
+        buildUsed(app, {
+          nave: shared,
+          plugins: [markup('first', 'flex', secondCompiled.passed), atEntry(firstRead.done)],
+        }),
+        buildUsed(app, {
+          nave: shared,
+          plugins: [markup('second', 'grid'), atEntry(nothing, firstRead.passed)],
+          after: [afterPage(secondCompiled.done)],
+        }),
       ])
 
       expect(a.error).toBeUndefined()
