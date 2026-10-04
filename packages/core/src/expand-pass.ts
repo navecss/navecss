@@ -3,7 +3,7 @@
  * every file, and write the outputs only when there is none. The result carries what the command
  * prints and the exit code it maps to, so the same pass serves one run and every `--watch` run.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 import type { ExpandedDiagnostic } from './directive/expand-text-diagnostics.ts'
@@ -43,18 +43,18 @@ type Outcome =
 function bareImportDiagnostics(css: string, source: string): ExpandedDiagnostic[] {
   const directory = path.dirname(path.resolve(source))
   const positionAt = createPositionFinder(css)
-  return findBareImports(css, (specifier) => existsSync(path.resolve(directory, specifier))).map(
-    (diagnostic) => {
-      const position = positionAt(diagnostic.offset)
-      return {
-        ...diagnostic,
-        severity: 'error',
-        file: source,
-        line: position.line,
-        column: position.column + 1,
-      }
-    },
-  )
+  const hasFile = (specifier: string): boolean =>
+    statSync(path.resolve(directory, specifier), { throwIfNoEntry: false })?.isFile() === true
+  return findBareImports(css, hasFile).map((diagnostic) => {
+    const position = positionAt(diagnostic.offset)
+    return {
+      ...diagnostic,
+      severity: 'error',
+      file: source,
+      line: position.line,
+      column: position.column + 1,
+    }
+  })
 }
 
 /**

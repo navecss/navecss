@@ -4,7 +4,7 @@
 
 `@nave` now has two more routes, for hosts that run Lightning CSS directly and for projects with no
 bundler, and Nave ships its whole stylesheet as one file. Nothing that built before changes: the
-export map only grows, and `@navecss/core` still has no dependency and no new peer.
+export map only grows, and `@navecss/core` gains no dependency and no new peer.
 
 - New `@navecss/core/lightningcss`: `navePlugin()` returns `{ expand, resolver }`. `expand(code,
 filename)` expands the directives in a stylesheet's text and returns `{ code, map }` to pass to
@@ -19,7 +19,7 @@ filename)` expands the directives in a stylesheet's text and returns `{ code, ma
   expands every `@nave` in each source and writes it, reporting every problem across every file in
   one run. `--source` and `--out` repeat as pairs, matched by order. Exit `0` when every file was
   written, `1` when a stylesheet had a problem (and nothing is written), `2` for a usage error or a
-  source that could not be read. It does not resolve or inline `@import`; an import of a package
+  source that could not be read or an `--extend` module that did not load. It does not resolve or inline `@import`; an import of a package
   (`@import url('@navecss/core')`) is reported as an error, because a browser cannot load it.
 - New `@navecss/core/standalone`, the file `dist/standalone.css`: the layer order statement, then
   the token layer, the reset and the atoms, each in its own layer as before, with no `@import` in

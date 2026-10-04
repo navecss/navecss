@@ -11,6 +11,8 @@ import type { Token } from './tokenizer.ts'
 import { atKeywordName } from './block-reader.ts'
 import { tokenize } from './tokenizer.ts'
 
+const OPENERS: ReadonlySet<string> = new Set(['(-token', '[-token', 'function-token', '{-token'])
+const CLOSERS: ReadonlySet<string> = new Set([')-token', ']-token', '}-token'])
 const SCHEME = /^[a-z][a-z\d+.-]*:/i
 
 /**
@@ -50,7 +52,19 @@ function isBare(specifier: string, hasFile: (specifier: string) => boolean): boo
     specifier.startsWith('./') ||
     specifier.startsWith('../') ||
     SCHEME.test(specifier)
-  return !isUrlForm && !hasFile(specifier.replace(/[#?].*$/s, ''))
+  return !isUrlForm && !hasFile(decoded(specifier.replace(/[#?].*$/s, '')))
+}
+
+/**
+ * The file name a URL path names: its percent-encoded characters read as the characters they are
+ * (`theme%20file.css` is `theme file.css`), or the text as it is when it is not valid encoding.
+ */
+function decoded(path: string): string {
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
 }
 
 /**
@@ -108,8 +122,10 @@ export function findBareImports(
   let depth = 0
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index]!
-    if (token.type === '{-token') depth++
-    else if (token.type === '}-token') depth = Math.max(0, depth - 1)
+    // Every kind of open bracket counts, so an `@import` token inside `:is(...)` or `[...]` is
+    // not an at-rule of the stylesheet.
+    if (OPENERS.has(token.type)) depth++
+    else if (CLOSERS.has(token.type)) depth = Math.max(0, depth - 1)
     else if (
       depth === 0 &&
       token.type === 'at-keyword-token' &&

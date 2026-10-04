@@ -102,11 +102,13 @@ export function navePlugin(options: NaveLightningOptions = {}): NaveLightningAda
 
   return {
     expand(code, filename) {
-      // `ignoreBOM` keeps a byte order mark in the text, so the bytes handed back start as they did.
-      const text =
+      // A byte order mark is not part of the stylesheet's text: positions are counted after it, and
+      // it is put back first, so the bytes handed back start as they did.
+      const raw =
         typeof code === 'string' ? code : new TextDecoder('utf-8', { ignoreBOM: true }).decode(code)
-      const { css, map } = expandToText(text, filename)
-      return { code: new TextEncoder().encode(css), map }
+      const bom = raw.startsWith('\u{FEFF}') ? '\u{FEFF}' : ''
+      const { css, map } = expandToText(raw.slice(bom.length), filename)
+      return { code: new TextEncoder().encode(bom + css), map }
     },
     resolver: {
       read: (filePath) => expandToText(readFileSync(filePath, 'utf8'), filePath).css,

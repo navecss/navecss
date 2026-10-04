@@ -251,7 +251,11 @@ importing Nave from your CSS.
 
 Run `pnpm run build` and serve the directory. Link Nave's stylesheet before your
 own: it opens with the `@layer` order statement, which has to be the first one
-the page sees. `navecss-core expand` does not resolve or inline `@import`. It
+the page sees. `navecss-core expand` does not resolve or inline `@import`, and it expands only the
+files you name with `--source`: a stylesheet you import that holds `@nave` needs a
+`--source` and `--out` pair of its own. A relative `@import` is kept as written, so it
+has to resolve from where the output is served: keep the output beside the files it
+imports, or write the paths for that place. It
 leaves a relative or absolute one where you wrote it and reports a bare import, one of a
 package (`@import url('@navecss/core')`, the bundler route's `app.css`) as an
 error, because a browser cannot load it: link `@navecss/core/standalone`

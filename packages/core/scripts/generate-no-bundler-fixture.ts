@@ -97,16 +97,12 @@ writeFileSync(
 const manifest = JSON.parse(fenceOf(fences, 'json')) as { scripts?: Record<string, string> }
 const build = manifest.scripts?.build
 if (build === undefined) throw new Error('the README package.json fence has no "build" script')
-// The shim's directory goes in front of PATH through the shell (`$0` is the first word after the
-// script), the way a `package.json` script finds the bins of node_modules.
-execFileSync(
-  '/bin/sh',
-  ['-c', `PATH="$0:$PATH"; ${build}`, path.join(FIXTURE, 'node_modules/.bin')],
-  {
-    cwd: FIXTURE,
-    stdio: 'inherit',
-  },
-)
+// The README's script is one `navecss-core expand ...` command: run the shim directly, with no
+// shell, so a script that is anything else fails here instead of running something unreviewed.
+const [command, ...flags] = build.split(' ')
+if (command !== 'navecss-core')
+  throw new Error(`the "build" script must run navecss-core: ${build}`)
+execFileSync(shim, flags, { cwd: FIXTURE, stdio: 'inherit' })
 const built = readFileSync(path.join(FIXTURE, 'app.css'), 'utf8')
 if (built.includes('@nave')) throw new Error('the README build left a directive in app.css')
 

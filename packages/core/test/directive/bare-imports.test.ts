@@ -115,3 +115,26 @@ describe('the text of a bare-import diagnostic', () => {
     expect(text.startsWith('@import ')).toBe(true)
   })
 })
+
+describe('findBareImports — what is not a top-level at-rule', () => {
+  it('an @import token inside a function, a parenthesis or a bracket is not an import', () => {
+    expect(specifiers("a:is(@import '@x') { color: red }")).toEqual([])
+    expect(specifiers('[data-x="1"] { background: image-set(@import \'@y\') }')).toEqual([])
+  })
+
+  it('a percent-encoded name is read as the file it names', () => {
+    const exists = (specifier: string): boolean => specifier === 'theme file.css'
+
+    expect(specifiers("@import 'theme%20file.css';", exists)).toEqual([])
+    expect(specifiers("@import 'theme%zz.css';", exists)).toEqual(['theme%zz.css'])
+  })
+
+  it('the text names Nave’s stylesheet only for a Nave import', () => {
+    const [nave] = findBareImports("@import '@navecss/core';", NOTHING_EXISTS)
+    const [other] = findBareImports("@import 'normalize.css';", NOTHING_EXISTS)
+
+    expect(formatDiagnostic(nave!)).toContain('standalone.css')
+    expect(formatDiagnostic(other!)).not.toContain('standalone.css')
+    expect(formatDiagnostic(other!)).toContain('a browser cannot load it')
+  })
+})

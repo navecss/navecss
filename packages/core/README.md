@@ -521,14 +521,17 @@ across every file is printed in one run, one report per stylesheet. Exit codes:
 - `2` — a usage error (a missing or unmatched `--out`, an unknown flag, an `--out` that is its own
   `--source`, a module that does not load) or a `--source` that could not be read.
 
-It does not resolve or inline `@import`; that would make it a CSS bundler. An `@import` of a
+It does not resolve or inline `@import`; that would make it a CSS bundler. It expands only the
+files you name with `--source`, so a stylesheet you import that holds `@nave` needs a pair of its
+own, and a relative `@import` is kept as written and has to resolve from where the output is
+served. An `@import` of a
 relative or absolute URL stays where you wrote it, and the file is not read. An `@import` of a
 package (`@import url('@navecss/core')`, which is how the bundler route's `app.css` starts) is an
 error, because a browser cannot load it: it is reported as a `bare-import` problem. Link
 `@navecss/core/standalone` instead, which has no `@import` in it, by path
 (`node_modules/@navecss/core/dist/standalone.css`) or from a CDN
-(`https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css`), before your expanded
-stylesheet. [Without a bundler](https://github.com/navecss/navecss#without-a-bundler) has the
+(`https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css`, with `@navecss/core` pinned to
+the version you installed, as `@navecss/core@<version>`), before your expanded stylesheet. [Without a bundler](https://github.com/navecss/navecss#without-a-bundler) has the
 whole setup.
 
 ---

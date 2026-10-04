@@ -160,6 +160,7 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
         .map((match) => `${match[1]}:${match[2]}:${match[3]}`)
         .toSorted()
       expect(actual).toEqual(expected)
+      expect(warned.length, 'a warning that is not a framed diagnostic').toBe(actual.length)
     })
 
     it('really transforms: a directive row changes, a directive-free row does not', () => {

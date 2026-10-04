@@ -1,6 +1,6 @@
 /**
  * AC-directive-core-28: host-loaded entry points also carry a default
- * export — `./postcss` is the only one shipped so far.
+ * export: `./postcss`, `./vite` and `./lightningcss`.
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'

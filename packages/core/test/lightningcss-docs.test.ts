@@ -126,7 +126,7 @@ describe('AC-directive-core-46 — the core README has the Lightning CSS adapter
 
   it('has a fence for transform() with inputSourceMap, and one for bundleAsync() with the resolver', () => {
     const fences = extractFences(
-      'README.md',
+      'packages/core/README.md',
       section(coreReadme, '### Lightning CSS adapter setup'),
     )
     const bodies = fences.map((fence) => fence.body).join('\n')
@@ -181,11 +181,27 @@ describe('AC-directive-core-42, -43 — the core README documents navecss-core e
 
   it('teaches it only inside package.json scripts, never as a bare npx line', () => {
     expect(coreReadme).not.toContain('npx navecss-core')
-    const fences = extractFences('README.md', section(coreReadme, '## `navecss-core expand`'))
+    const fences = extractFences(
+      'packages/core/README.md',
+      section(coreReadme, '## `navecss-core expand`'),
+    )
 
     expect(
       fences.some((fence) => fence.lang === 'json' && fence.body.includes('navecss-core expand')),
     ).toBe(true)
+  })
+})
+
+describe('navecss-core is run only from a package.json script, in every fence of both READMEs', () => {
+  it.each([
+    ['README.md', rootReadme],
+    ['packages/core/README.md', coreReadme],
+  ])('%s', (name, text) => {
+    const outside = extractFences(name, text).filter(
+      (fence) => fence.lang !== 'json' && /(^|[\s;&|])navecss-core\s/.test(fence.body),
+    )
+
+    expect(outside.map((fence) => fence.body)).toEqual([])
   })
 })
 

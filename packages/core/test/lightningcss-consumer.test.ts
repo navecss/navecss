@@ -5,7 +5,15 @@
  * without it, with `skipLibCheck` off).
  */
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -19,8 +27,16 @@ let consumer = ''
 
 beforeAll(() => {
   consumer = mkdtempSync(path.join(tmpdir(), 'nave-core-lightning-'))
-  mkdirSync(path.join(consumer, 'node_modules', '@navecss'), { recursive: true })
-  symlinkSync(PACKAGE_ROOT, path.join(consumer, 'node_modules', '@navecss', 'core'), 'dir')
+  // A copy of what the package publishes, with its one dependency beside it and nothing else: a
+  // link back to the package directory would let `lightningcss` resolve from its devDependencies.
+  const installed = path.join(consumer, 'node_modules', '@navecss')
+  mkdirSync(path.join(installed, 'core'), { recursive: true })
+  cpSync(path.join(PACKAGE_ROOT, 'dist'), path.join(installed, 'core', 'dist'), { recursive: true })
+  copyFileSync(
+    path.join(PACKAGE_ROOT, 'package.json'),
+    path.join(installed, 'core', 'package.json'),
+  )
+  symlinkSync(path.resolve(PACKAGE_ROOT, '../tokens'), path.join(installed, 'tokens'), 'dir')
   writeFileSync(
     path.join(consumer, 'package.json'),
     JSON.stringify({ name: 'consumer', private: true, type: 'module' }),
@@ -92,6 +108,13 @@ describe('@navecss/core/lightningcss, loaded by its package name', () => {
     ])
 
     expect(ran.output.trim()).toBe('false false')
+  })
+
+  it('the consumer really has no lightningcss to resolve', () => {
+    const ran = run(['--input-type=module', '-e', "await import('lightningcss')"])
+
+    expect(ran.status).not.toBe(0)
+    expect(ran.output).toMatch(/Cannot find package 'lightningcss'/)
   })
 
   it('its declarations type-check with skipLibCheck off, in a project with no lightningcss installed', () => {

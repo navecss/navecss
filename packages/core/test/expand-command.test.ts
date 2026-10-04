@@ -12,6 +12,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { expandText } from '../src/directive/expand-text.ts'
 import { navePlugin as lightningAdapter } from '../src/lightningcss.ts'
 import { navePlugin as postcssPlugin } from '../src/postcss.ts'
+import { runHook } from './helpers/vite-hook.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const BIN = path.resolve(HERE, '..', 'dist', 'bin.js')
@@ -77,6 +79,7 @@ function tree(): string[] {
   return readdirSync(project.dir, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => path.relative(project.dir, path.join(entry.parentPath, entry.name)))
+    .map((relative) => relative.split(path.sep).join('/'))
     .toSorted()
 }
 
@@ -266,6 +269,37 @@ describe('AC-directive-core-42 — navecss-core expand', () => {
     expect(run.stderr).toContain('nope.mjs')
   })
 
+  it('--extend given twice exits 2', () => {
+    write('src/app.css', '.a { @nave flex; }\n')
+    write('one.mjs', 'export default {}\n')
+
+    expect(
+      expand('--source=src/app.css', '--out=app.css', '--extend=one.mjs', '--extend=one.mjs')
+        .status,
+    ).toBe(2)
+  })
+
+  it('an --out that is a symlink to its --source exits 2 and leaves the source as it was', () => {
+    const source = '.a { @nave flex; }\n'
+    write('src/app.css', source)
+    symlinkSync(path.join(project.dir, 'src/app.css'), path.join(project.dir, 'alias.css'))
+
+    const run = expand('--source=src/app.css', '--out=alias.css')
+
+    expect(run.status).toBe(2)
+    expect(read('src/app.css')).toBe(source)
+  })
+
+  it('an --out that cannot be written exits 2 and says so', () => {
+    write('src/app.css', '.a { @nave flex; }\n')
+    write('blocker', 'a file where a directory is needed')
+
+    const run = expand('--source=src/app.css', '--out=blocker/app.css')
+
+    expect(run.status).toBe(2)
+    expect(run.stderr).toContain('Could not write the output')
+  })
+
   it('--help prints usage naming both subcommands and exits 0', () => {
     const result = spawnSync(process.execPath, [BIN, 'expand', '--help'], { encoding: 'utf8' })
 
@@ -281,6 +315,9 @@ describe('AC-directive-core-42 — navecss-core expand', () => {
     expect(postcssResult.css).toBe(quickStart)
     expect(expandText(quickStart, { onUnknown: 'warn' }).diagnostics).toEqual([])
     expect(() => lightningAdapter().expand(quickStart, 'app.css')).not.toThrow()
+    const vite = await runHook({ code: quickStart, id: '/proj/app.css' })
+    expect(vite.error).toBeUndefined()
+    expect(vite.warnings).toEqual([])
   })
 })
 
@@ -386,6 +423,20 @@ describe('AC-directive-core-43 — a bare @import is reported, with the styleshe
 
     expect(run.status).toBe(1)
     expect(run.stderr).toContain('bare module')
+  })
+
+  it('a directory named like the import is not a stylesheet beside the file: still bare', () => {
+    write('src/theme.css/inner.css', '.t { color: red; }\n')
+    write('src/app.css', "@import 'theme.css';\n")
+
+    expect(expand('--source=src/app.css', '--out=app.css').status).toBe(1)
+  })
+
+  it('a percent-encoded name that names a sibling file is not bare', () => {
+    write('src/theme file.css', '.t { color: red; }\n')
+    write('src/app.css', "@import 'theme%20file.css';\n")
+
+    expect(expand('--source=src/app.css', '--out=app.css').status).toBe(0)
   })
 
   it('a bare import written inside a comment or a string is not an import', () => {

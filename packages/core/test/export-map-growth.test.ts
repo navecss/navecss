@@ -109,7 +109,7 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
     expect(added.toSorted()).toEqual(['./check', './lightningcss', './standalone', './vite'])
   })
 
-  it('adds exactly ./lightningcss and ./standalone over the keys slice 2 left', () => {
+  it('adds only ./lightningcss and ./standalone to what ./check and ./vite already had', () => {
     const exports = manifest().exports as Record<string, unknown>
     const slice2 = [...Object.keys(PUBLISHED_0_1_0_EXPORTS), './check', './vite']
     const added = Object.keys(exports).filter((k) => !slice2.includes(k))

@@ -63,17 +63,26 @@ async function runOnce(
     console.error((error as Error).message)
     return 2
   }
-  const result = expandPass(job, extend)
-  print(result)
-  return result.status
+  try {
+    const result = expandPass(job, extend)
+    print(result)
+    return result.status
+  } catch (error) {
+    // A destination that cannot be created or written; files written before it stay written.
+    console.error(`Could not write the output: ${(error as Error).message}`)
+    return 2
+  }
 }
 
 /**
- * Watches the sources (and the `--extend` module) and runs the pass again after each change, one
- * at a time, keeping on after a problem. Resolves only when the process is stopped.
+ * Watches the sources (and the `--extend` module), runs the first pass, and runs the pass again
+ * after each change, one at a time, keeping on after a problem. The watchers go up before the
+ * first pass, so an edit made while it runs is not missed. Resolves with `2` when a directory
+ * cannot be watched (a source under a directory that does not exist); otherwise only when the
+ * process is stopped.
  */
-function watchForever(run: () => Promise<unknown>, files: readonly string[]): Promise<never> {
-  let isRunning = false
+async function watchAndRun(run: () => Promise<unknown>, files: readonly string[]): Promise<number> {
+  let isRunning = true
   let isPending = false
   const runAgain = async (): Promise<void> => {
     if (isRunning) {
@@ -87,8 +96,18 @@ function watchForever(run: () => Promise<unknown>, files: readonly string[]): Pr
     } while (isPending)
     isRunning = false
   }
-  watchFiles(files, () => void runAgain())
-  return new Promise<never>(() => {
+  try {
+    watchFiles(files, () => void runAgain())
+  } catch (error) {
+    console.error(`Could not watch: ${(error as Error).message}`)
+    return 2
+  }
+  do {
+    isPending = false
+    await run()
+  } while (isPending)
+  isRunning = false
+  return new Promise<number>(() => {
     // Never settles: the watchers keep the process running until it is stopped.
   })
 }
@@ -116,8 +135,7 @@ export async function runExpand(args: readonly string[]): Promise<number> {
   }
   const cache = new Map<string, Promise<ExtendMap>>()
   const run = (): Promise<0 | 1 | 2> => runOnce(job, extendFile, cache)
-  const status = await run()
-  if (!job.watch) return status
+  if (!job.watch) return run()
   const watched = [...job.pairs.map((pair) => pair.source), ...(extendFile ? [extendFile] : [])]
-  return watchForever(run, watched)
+  return watchAndRun(run, watched)
 }

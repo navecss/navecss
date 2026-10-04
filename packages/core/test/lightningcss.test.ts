@@ -40,14 +40,25 @@ function write(name: string, text: string): string {
 const FOCUS_VISIBLE = atoms.focusRing.pseudos![':focus-visible']!
 
 /**
- * Whether the printed CSS holds a rule for `.imported:focus-visible` carrying every declaration
- * `focusRing`'s pseudo block has, whichever way the printer nested it.
+ * Whether the printed CSS holds `.imported`'s own `:focus-visible` rule carrying every
+ * declaration `focusRing`'s pseudo block has, whichever way the printer nested it: the
+ * `:focus-visible` block is read from inside the `.imported` block, never from any other rule.
  */
 function hasFocusRule(css: string): boolean {
   const flat = css.replaceAll(/\s+/g, ' ')
-  const index = flat.indexOf(':focus-visible')
-  if (index === -1) return false
-  const body = /\{([^}]*)\}/.exec(flat.slice(index))?.[1] ?? ''
+  const start = flat.indexOf('.imported {')
+  if (start === -1) return false
+  let depth = 0
+  let end = flat.length
+  for (let index = flat.indexOf('{', start); index < flat.length; index++) {
+    if (flat[index] === '{') depth++
+    if (flat[index] === '}' && --depth === 0) {
+      end = index
+      break
+    }
+  }
+  const own = flat.slice(start, end)
+  const body = /:focus-visible \{([^}]*)\}/.exec(own)?.[1] ?? ''
   return Object.entries(FOCUS_VISIBLE).every(([prop, value]) => body.includes(`${prop}: ${value}`))
 }
 
@@ -374,12 +385,23 @@ describe('the adapter’s options', () => {
     )
   })
 
-  it('reads no file of its own beyond the one resolver.read is asked for', () => {
+  it('resolver.read writes nothing: the directory holds only what the test put there', () => {
     const before = readdirSync(scratch.dir)
     write('only.css', '.a { @nave flex; }')
 
     navePlugin().resolver.read(path.join(scratch.dir, 'only.css'))
 
     expect(readdirSync(scratch.dir).toSorted()).toEqual([...before, 'only.css'].toSorted())
+  })
+})
+
+describe('a byte order mark', () => {
+  it('is kept at the start of the bytes, and does not shift a diagnostic’s column', () => {
+    const nave = navePlugin()
+    const bom = '﻿'
+
+    expect(() => nave.expand(`${bom}.x { @nave nope; }`, '/p/a.css')).toThrow(/a\.css:1:12: /)
+    const result = nave.expand(`${bom}.a { @nave flex; }`, 'a.css')
+    expect(Buffer.from(result.code).toString().startsWith(`${bom}.a {`)).toBe(true)
   })
 })

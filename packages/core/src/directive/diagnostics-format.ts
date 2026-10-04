@@ -170,8 +170,14 @@ const FIXED_TEXTS: Readonly<
 > = {
   'bad-token': (d) =>
     `@nave: unexpected "${d.text ?? ''}"; a directive takes only atom names (separate atom names with spaces)`,
-  'bare-import': (d) =>
-    `@import ${JSON.stringify(d.text ?? '')} is a bare module specifier, and a browser cannot load it. Link Nave's self-contained stylesheet instead: ${STANDALONE_PATH}, or ${STANDALONE_CDN_URL}`,
+  'bare-import': (d) => {
+    const specifier = d.text ?? ''
+    const first = `@import ${JSON.stringify(specifier)} is a bare module specifier, and a browser cannot load it.`
+    if (!specifier.startsWith('@navecss/')) {
+      return `${first} Import a file or a URL the browser can load, or bundle the stylesheet.`
+    }
+    return `${first} Link Nave's self-contained stylesheet from the page instead, with a link element: ${STANDALONE_PATH}, or ${STANDALONE_CDN_URL} (pin the version you installed).`
+  },
   'has-block': () => '@nave: a directive with a {} block is not supported',
   'in-keyframes': () => '@nave cannot be used inside @keyframes',
   'missing-declarations': (d) =>

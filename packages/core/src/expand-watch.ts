@@ -4,7 +4,7 @@
  * an editor that saves by writing a new file and renaming it over the old one leaves a watcher on
  * the file itself watching nothing.
  */
-import { watch } from 'node:fs'
+import { realpathSync, watch } from 'node:fs'
 import path from 'node:path'
 
 const SETTLE_MS = 40
@@ -19,10 +19,21 @@ export function watchFiles(files: readonly string[], onChange: () => void): void
     clearTimeout(timer)
     timer = setTimeout(onChange, SETTLE_MS)
   }
+  const watchedNames = new Set(wanted)
   const directories = new Set([...wanted].map((file) => path.dirname(file)))
+  // A file that is a symlink changes where it points: watch that file's directory too.
+  for (const file of wanted) {
+    try {
+      const target = realpathSync(file)
+      watchedNames.add(target)
+      directories.add(path.dirname(target))
+    } catch {
+      // Not there yet: the lexical directory below sees it appear.
+    }
+  }
   for (const directory of directories) {
     watch(directory, (_event, name) => {
-      if (name === null || wanted.has(path.join(directory, name))) schedule()
+      if (name === null || watchedNames.has(path.join(directory, name))) schedule()
     })
   }
 }

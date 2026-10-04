@@ -3,6 +3,7 @@
  * order, an optional `--extend=<module>`, and `--watch`. Everything wrong with them is one
  * usage message, so the command can print it and exit 2 before it reads a file.
  */
+import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 
@@ -39,7 +40,7 @@ function readValues(args: readonly string[]): RawValues | string {
     const { values, positionals } = parseArgs({
       args: [...args],
       options: {
-        extend: { type: 'string' },
+        extend: { type: 'string', multiple: true },
         out: { type: 'string', multiple: true },
         source: { type: 'string', multiple: true },
         watch: { type: 'boolean' },
@@ -50,8 +51,9 @@ function readValues(args: readonly string[]): RawValues | string {
     if (positionals.length > 0) {
       return `expand does not take a positional argument: ${positionals[0]}`
     }
+    if ((values.extend?.length ?? 0) > 1) return 'expand takes one --extend.'
     return {
-      extend: values.extend,
+      extend: values.extend?.[0],
       out: values.out ?? [],
       source: values.source ?? [],
       watch: values.watch === true,
@@ -59,6 +61,18 @@ function readValues(args: readonly string[]): RawValues | string {
   } catch (error) {
     return `expand: ${(error as Error).message.split('\n', 1)[0]}`
   }
+}
+
+/**
+ * Whether two paths are one file: the same path, or (when both exist) the same file on disk, so a
+ * symlink or a hard link to a source is caught as well as its own name.
+ */
+function isSameFile(first: string, second: string): boolean {
+  if (path.resolve(first) === path.resolve(second)) return true
+  if (!existsSync(first) || !existsSync(second)) return false
+  const a = statSync(first)
+  const b = statSync(second)
+  return a.dev === b.dev && a.ino === b.ino
 }
 
 /**
@@ -73,9 +87,8 @@ function problemWith(raw: RawValues): string | undefined {
   if ([...raw.source, ...raw.out, raw.extend ?? '.'].includes('')) {
     return 'expand: a --source, --out or --extend value is empty.'
   }
-  const sources = new Set(raw.source.map((file) => path.resolve(file)))
   const outs = raw.out.map((file) => path.resolve(file))
-  const overwritten = outs.find((out) => sources.has(out))
+  const overwritten = outs.find((out) => raw.source.some((source) => isSameFile(source, out)))
   if (overwritten !== undefined) {
     return `expand: --out ${overwritten} is also a --source; it would overwrite its own input.`
   }
