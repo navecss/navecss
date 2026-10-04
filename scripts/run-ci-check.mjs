@@ -1,0 +1,347 @@
+#!/usr/bin/env node
+/**
+ * The local `pnpm run ci:check` gate: every check CI runs, in one command, as fast as the
+ * machine allows.
+ *
+ * Each step is one root `package.json` script, run as `pnpm run <step>`, and CI runs each of
+ * them as its own job (`.github/workflows/code-quality.yml`;
+ * `check-ci-jobs-match-ci-check.mjs` keeps the two in step). Locally they run CONCURRENTLY: a
+ * step starts once every step in its `after` has passed, every step in its `waitFor` has
+ * finished, and one of the `CONCURRENT_STEPS` slots is free, so independent steps overlap
+ * instead of running one after another.
+ *
+ * There are two kinds of edge, because "needs its output" and "would collide with it" are
+ * different facts with different answers to a failure:
+ *
+ * - `after` names a step whose OUTPUT this one needs. If it did not pass, this step is skipped
+ *   rather than run against output that was never produced, and named in the summary. Only
+ *   `build` is one: every step that reads `dist/` waits for it. The turbo tasks among them
+ *   already depend on `build` in `turbo.json`, but two turbo processes building the same
+ *   package at once would both write its `dist/`. Once `build` has finished, the others find it
+ *   in turbo's cache with the same files already on disk and leave them untouched.
+ * - `waitFor` names a step this one would COLLIDE with if they ran together, so it starts only
+ *   once that step has finished, passed or not. A failure there does not skip it: the failing
+ *   step is what the summary names, and the other results should still show.
+ *
+ * Each `waitFor` edge carries its reason:
+ *
+ * - `test` runs alone, so every step it does not wait for waits for it. It saturates the machine
+ *   by itself, so anything beside it stretches its timed tests past their budgets, and it writes
+ *   scratch files inside the tree (under `packages/core/test/`) that `lint`'s
+ *   `prettier --check .` walks. It waits for the steps that read nothing it writes: `knip`,
+ *   `deps:lint` and `deps:dedupe-check`.
+ * - `knip` waits for `build`: tsup writes a transient `tsup.config.bundled_*.mjs` into
+ *   `packages/core` while it builds, and knip would report it as an unused file.
+ * - `test:browser` waits for `test`: both run core's fixture generators, which rewrite
+ *   `packages/core/test/browser/fixtures/` while the other suite may be reading it.
+ * - `scripts:test` waits for `check:pack`: one of its tests runs core's own `check:pack`, which
+ *   packs a tarball inside the package directory, the same place the `check:pack` step packs.
+ *
+ * `TURBO_FORCE=1 pnpm run ci:check` still runs everything uncached: see `stepEnvironment`.
+ *
+ * Output is kept per step: each step's combined stdout and stderr is printed as one block when
+ * it finishes, then a summary lists every step in the order below with its result and time.
+ * The order of `STEPS` is also the order `.github/CONTRIBUTING.md` documents them in
+ * (`check-ci-check-order.mjs`).
+ */
+import { spawn } from 'node:child_process'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+export const STEPS = [
+  { after: ['build'], name: 'typecheck', waitFor: ['test'] },
+  { after: ['build'], name: 'lint', waitFor: ['test'] },
+  { after: ['build'], name: 'test', waitFor: ['knip', 'deps:lint', 'deps:dedupe-check'] },
+  { after: ['build'], name: 'test:browser', waitFor: ['test'] },
+  { after: [], name: 'build' },
+  { after: ['build'], name: 'check:pack', waitFor: ['test'] },
+  { after: [], name: 'knip', waitFor: ['build'] },
+  { after: [], name: 'deps:lint' },
+  { after: [], name: 'deps:dedupe-check' },
+  { after: ['build'], name: 'scripts:test', waitFor: ['check:pack', 'test'] },
+  { after: ['build'], name: 'scripts:check', waitFor: ['test'] },
+]
+
+/**
+ * How many steps run at once. Every step already runs its own work in parallel (turbo across
+ * packages, vitest across files), so running all eleven at once does not finish sooner: it
+ * overloads the machine until the suites' own timeouts fire. `test` is the exception to even
+ * this: it runs alone (see the edges above).
+ */
+const CONCURRENT_STEPS = 2
+
+/**
+ * Every step `step` must see a result for before it can start: its `after` and its `waitFor`.
+ */
+const edgesOf = (step) => [...step.after, ...(step.waitFor ?? [])]
+
+/**
+ * Throws if `steps` cannot all be run: a name declared twice, an `after` or `waitFor` naming no
+ * step, or a cycle through either, which would leave its members waiting forever.
+ */
+export function validateSteps(steps) {
+  if (steps.length === 0) throw new Error('The step list is empty.')
+  const names = new Set()
+  for (const step of steps) {
+    if (names.has(step.name)) throw new Error(`${step.name} is declared twice.`)
+    names.add(step.name)
+  }
+  for (const step of steps) {
+    for (const name of edgesOf(step)) {
+      if (!names.has(name)) throw new Error(`${step.name} waits on ${name}, which is not a step.`)
+    }
+  }
+  const reachable = new Set()
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const step of steps) {
+      if (reachable.has(step.name) || edgesOf(step).some((name) => !reachable.has(name))) continue
+      reachable.add(step.name)
+      grew = true
+    }
+  }
+  const stuck = steps.filter((step) => !reachable.has(step.name)).map((step) => step.name)
+  if (stuck.length > 0) {
+    throw new Error(`these steps wait on each other and would never start: ${stuck.join(', ')}.`)
+  }
+}
+
+/**
+ * Runs `steps` through `runStep(name)` (a promise of `{ code, output }`), each as soon as
+ * everything in its `after` has passed and everything in its `waitFor` has finished, whatever
+ * its result. A step whose `after` did not pass is skipped; a `waitFor` that did not pass skips
+ * nothing. Resolves to a Map of name to
+ * `{ status: 'passed' | 'failed' | 'skipped', durationMs?, output?, reason? }`, and calls
+ * `onStepDone(name, result)` once per step as its result is known. At most `limit` steps run at
+ * once; when more are ready, the earliest in `steps` goes first.
+ */
+export function runSteps(steps, runStep, { limit = Infinity, onStepDone }) {
+  const results = new Map()
+  const started = new Set()
+  let running = 0
+  const { promise: finished, resolve: finish } = Promise.withResolvers()
+
+  const settle = (name, result) => {
+    results.set(name, result)
+    onStepDone(name, result)
+  }
+
+  const execute = async (name) => {
+    const startedAt = Date.now()
+    const { code, output } = await runStep(name)
+    running -= 1
+    settle(name, {
+      durationMs: Date.now() - startedAt,
+      output,
+      status: code === 0 ? 'passed' : 'failed',
+    })
+    advance()
+  }
+
+  const advance = () => {
+    // A skip can unblock (and skip) a step earlier in the list, so sweep until nothing moves.
+    let skipped = true
+    while (skipped) {
+      skipped = false
+      for (const step of steps) {
+        if (started.has(step.name)) continue
+        const blocker = step.after.find(
+          (name) => results.has(name) && results.get(name).status !== 'passed',
+        )
+        if (blocker !== undefined) {
+          started.add(step.name)
+          settle(step.name, { reason: `${blocker} did not pass`, status: 'skipped' })
+          skipped = true
+          continue
+        }
+        if (running >= limit || edgesOf(step).some((name) => !results.has(name))) continue
+        started.add(step.name)
+        running += 1
+        // Never rejects: a step's failure is a result, settled inside `execute`.
+        void execute(step.name)
+      }
+    }
+    if (results.size === steps.length) finish(results)
+  }
+
+  advance()
+  return finished
+}
+
+/**
+The summary block: one line per step in `names` order, then a verdict line.
+ */
+export function formatSummary(names, results) {
+  const width = Math.max(...names.map((name) => name.length))
+  const lines = ['ci:check summary']
+  for (const name of names) {
+    const result = results.get(name)
+    const label = { failed: 'FAILED ', passed: 'passed ', skipped: 'skipped' }[result.status]
+    const detail =
+      result.status === 'skipped'
+        ? `(${result.reason})`
+        : `${(result.durationMs / 1000).toFixed(1).padStart(6)}s`
+    lines.push(`  ${label}  ${name.padEnd(width)}  ${detail}`)
+  }
+  const notPassed = names.filter((name) => results.get(name).status !== 'passed')
+  lines.push(
+    notPassed.length === 0
+      ? `ci:check: all ${names.length} steps passed`
+      : `ci:check: ${notPassed.length} of ${names.length} steps did not pass: ${notPassed.join(', ')}`,
+  )
+  return lines.join('\n')
+}
+
+/**
+ * The environment every step runs in. A forced run (`TURBO_FORCE=1`, the usual way to certify
+ * with turbo's cache off) cannot be passed to concurrent steps as it is: each turbo step would
+ * rebuild the packages it depends on, rewriting `dist/` while the others read it. It becomes one
+ * fresh, empty cache directory from `makeCacheDir` instead, shared by every step, which forces
+ * the same thing once: `build` runs for real, and every step's own tasks miss the cache and run.
+ */
+export function stepEnvironment(env, makeCacheDir) {
+  const forced = env.TURBO_FORCE !== undefined && !['', '0', 'false'].includes(env.TURBO_FORCE)
+  if (!forced) return env
+  const rest = Object.fromEntries(Object.entries(env).filter(([key]) => key !== 'TURBO_FORCE'))
+  // Local only: a configured remote cache would otherwise still answer with hits.
+  return { ...rest, TURBO_CACHE: 'local:rw', TURBO_CACHE_DIR: makeCacheDir() }
+}
+
+/**
+ * Runs `pnpm run <name>` in `env` with its stdout and stderr captured, in arrival order, into
+ * one string. `pnpm` is the very pnpm that started this gate (`pnpmEntry`, from
+ * `npm_execpath`), run by this Node, so no step depends on what `PATH` resolves `pnpm` to. The
+ * child gets a process group of its own (`detached`), so an interrupted gate can stop it and
+ * everything it started with one signal to the group; it is in `running` while it runs.
+ */
+function runPnpmScript(name, env, pnpmEntry, running) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [pnpmEntry, 'run', name], {
+      detached: true,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    running.add(child)
+    child.on('exit', () => running.delete(child))
+    const chunks = []
+    child.stdout.on('data', (chunk) => chunks.push(chunk))
+    child.stderr.on('data', (chunk) => chunks.push(chunk))
+    child.on('error', (error) => resolve({ code: 1, output: `${error.message}\n` }))
+    child.on('close', (code) =>
+      resolve({ code: code ?? 1, output: Buffer.concat(chunks).toString() }),
+    )
+  })
+}
+
+/**
+ * Sends `signal` to the whole process group of `child`, which `detached` made its own. A group
+ * that has already gone is not an error: macOS answers EPERM, not ESRCH, when the only members
+ * left are processes that have exited and not yet been reaped.
+ */
+function signalGroup(child, signal) {
+  try {
+    process.kill(-child.pid, signal)
+  } catch (error) {
+    if (error.code !== 'ESRCH' && error.code !== 'EPERM') throw error
+  }
+}
+
+/**
+Prints one finished step: a header naming it and its result, then everything it printed.
+ */
+function printStep(name, result) {
+  const header =
+    result.status === 'skipped'
+      ? `── ${name}: skipped, ${result.reason} ──`
+      : `── ${name}: ${result.status} in ${(result.durationMs / 1000).toFixed(1)}s ──`
+  console.log(`\n${header}`)
+  if (result.output) process.stdout.write(result.output)
+}
+
+/**
+ * Runs every step, prints each as it finishes and then the summary, and exits 1 unless all
+ * passed. `env` is this process's environment, where `pnpm run` puts its own entry point.
+ */
+async function main(env = process.env) {
+  const pnpmEntry = env.npm_execpath
+  if (!pnpmEntry) {
+    console.error('ci:check: run this as `pnpm run ci:check`, so the steps use the same pnpm.')
+    process.exitCode = 1
+    return
+  }
+  validateSteps(STEPS)
+  // A terminal that closes takes this process's output pipes with it, and the next write to one
+  // raises EPIPE. That must not replace the exit code of the signal that stopped the gate.
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', (error) => {
+      if (error.code !== 'EPIPE') throw error
+    })
+  }
+  const names = STEPS.map((step) => step.name)
+  let freshCacheDir
+  const stepEnv = {
+    ...stepEnvironment(env, () => {
+      freshCacheDir = mkdtempSync(path.join(tmpdir(), 'ci-check-turbo-cache-'))
+      return freshCacheDir
+    }),
+  }
+  // The steps write to a pipe, not a terminal, so keep their colour when this process has one.
+  if (process.stdout.isTTY) stepEnv.FORCE_COLOR = '1'
+  console.log(`ci:check: running ${names.length} steps: ${names.join(', ')}`)
+  if (freshCacheDir) console.log(`ci:check: TURBO_FORCE is set, so every step uses an empty cache`)
+
+  // An interrupted gate sends SIGTERM to every running step's process group (pnpm honours it, and
+  // ignores a SIGINT it is forwarded) and starts no more, then unwinds normally (a summary, and
+  // the cache directory removed) instead of leaving steps rebuilding dist/ after the gate has
+  // exited. A second signal sends SIGKILL to the groups, for steps that ignored the first. The
+  // steps are in sessions of their own, so a Ctrl-C in the terminal reaches only this process
+  // (and the pnpm that started it, which waits), and so does a hangup when the terminal closes:
+  // all three signals are handled and passed on, and the handlers stay in place for the second.
+  // SIGKILL cannot be handled: a runner killed that way leaves its steps to die at their next
+  // write into the closed pipe.
+  const running = new Set()
+  let interrupted
+  const exitCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }
+  const stop = (signal) => {
+    const again = interrupted !== undefined
+    interrupted ??= signal
+    if (!again) process.exitCode = exitCodes[signal]
+    for (const child of running) signalGroup(child, again ? 'SIGKILL' : 'SIGTERM')
+  }
+  for (const signal of Object.keys(exitCodes)) process.on(signal, () => stop(signal))
+
+  try {
+    const runStep = async (name) => {
+      if (interrupted) {
+        return { code: 1, output: `not started: ci:check received ${interrupted}\n` }
+      }
+      const { code, output } = await runPnpmScript(name, stepEnv, pnpmEntry, running)
+      // A step that settles after the signal was stopped by it, whatever code it left with.
+      return interrupted
+        ? { code: 1, output: `${output}stopped: ci:check received ${interrupted}\n` }
+        : { code, output }
+    }
+    const results = await runSteps(STEPS, runStep, {
+      limit: CONCURRENT_STEPS,
+      onStepDone: printStep,
+    })
+    console.log(`\n${formatSummary(names, results)}`)
+    if (!interrupted && names.some((name) => results.get(name).status !== 'passed')) {
+      process.exitCode = 1
+    }
+  } finally {
+    if (freshCacheDir) rmSync(freshCacheDir, { force: true, recursive: true })
+  }
+}
+
+// Compare REALPATHS on both sides: `import.meta.url` is symlink-resolved by Node and
+// `process.argv[1]` is not, so a symlinked invocation path would otherwise never run `main()`.
+if (
+  process.argv[1] &&
+  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+) {
+  await main()
+}

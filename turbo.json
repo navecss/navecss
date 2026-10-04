@@ -34,11 +34,11 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "outputs": ["test/browser/fixtures/**"]
+      "outputs": ["coverage/**", "test/browser/fixtures/**"]
     },
     "@navecss/tokens#test": {
       "dependsOn": ["build"],
-      "outputs": [],
+      "outputs": ["coverage/**"],
       "inputs": ["$TURBO_DEFAULT$", "../core/src/**", "../core/package.json"]
     },
     "check:pack": {
@@ -48,10 +48,6 @@
     "test:browser": {
       "dependsOn": ["build"],
       "outputs": ["test/browser/fixtures/**"]
-    },
-    "test:coverage": {
-      "dependsOn": ["build"],
-      "outputs": ["coverage/**", "test/browser/fixtures/**"]
     }
   }
 }
