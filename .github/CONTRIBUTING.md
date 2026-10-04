@@ -140,13 +140,14 @@ once and hands its output to every job that reads `dist/`, and `test` runs
 the suites once, with coverage, for the `sonar` job to scan. `build` and
 `test` also run on Node 22.18, the `engines` floor in `package.json`, which
 is the one deliberate repeat. `scripts/check-ci-jobs-match-ci-check.mjs`
-fails if a step is run by no job, by two jobs, or twice in one. Every job
-installs its toolchain through `.github/actions/setup`: mise-pinned
-(`mise.toml` pins node and pnpm exactly; the floor legs of `build` and
-`test` swap in Node 22.18 and check that it is the one running), while
-`package.json`'s `packageManager` field pins the same pnpm version for a
-local machine via corepack, so CI and a local machine run the identical
-toolchain from the same two numbers.
+fails if a step is run by no job, by two jobs, or twice in one. It reads each
+step as the literal `pnpm run <step>` in `code-quality.yml`, and its header
+lists what it cannot see. Every job installs its toolchain through
+`.github/actions/setup`: mise-pinned (`mise.toml` pins node and pnpm exactly;
+the floor legs of `build` and `test` swap in Node 22.18 and check that it is
+the one running), while `package.json`'s `packageManager` field pins the same
+pnpm version for a local machine via corepack, so CI and a local machine run
+the identical toolchain from the same two numbers.
 
 Run the same gate locally, as one command, before opening a pull request:
 

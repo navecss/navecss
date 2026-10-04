@@ -151,6 +151,8 @@ test('RED: a job running the whole local gate, which is not one of its steps', (
         run: pnpm run ci:check
 `
   assert.deepEqual(compareJobsToSteps(extractJobs(text), STEP_NAMES), [
+    'job full-gate mentions `ci:check`, which would run the whole local gate; ' +
+      'run each step as `pnpm run <step>` instead.',
     'job full-gate runs `pnpm run ci:check`, which is not a ci:check step.',
   ])
 })
@@ -180,6 +182,68 @@ test('RED: a step named by a GitHub expression cannot be read, so it is refused'
     'job build runs `pnpm run ${{ matrix.task }}`; name the step literally so this check can read it.',
     '`build` is a ci:check step that no job runs.',
   ])
+})
+
+/**
+ * `COMPLIANT` plus one more job whose only command is `command`.
+ */
+const withExtraRun = (command) => `${COMPLIANT}
+  extra:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ${command}
+`
+
+for (const command of [
+  'pnpm -s run ci:check',
+  'pnpm ci:check',
+  'node scripts/run-ci-check.mjs',
+  'pnpm --silent run test',
+  'pnpm -w run build',
+  'pnpm --filter @navecss/core run test',
+]) {
+  test(`RED: \`${command}\` in an extra job is refused, naming the job`, () => {
+    const violations = compareJobsToSteps(extractJobs(withExtraRun(command)), STEP_NAMES)
+    assert.ok(
+      violations.some((violation) => violation.startsWith('job extra ')),
+      `no violation names job extra for \`${command}\`: ${JSON.stringify(violations)}`,
+    )
+  })
+}
+
+test('RED: a flag before `run` is refused with the form to write instead', () => {
+  const violations = compareJobsToSteps(
+    extractJobs(withExtraRun('pnpm --silent run test')),
+    STEP_NAMES,
+  )
+  assert.ok(violations.some((violation) => violation.includes('pnpm run <step>')))
+})
+
+test('RED: mentioning ci:check or run-ci-check in a run is refused, in any command', () => {
+  for (const command of [
+    'npm run ci:check',
+    'pnpm ci:check:fix',
+    'node ./scripts/run-ci-check.mjs --help',
+  ]) {
+    const violations = compareJobsToSteps(extractJobs(withExtraRun(command)), STEP_NAMES)
+    assert.ok(
+      violations.some((violation) => violation.startsWith('job extra ')),
+      `\`${command}\` was not refused`,
+    )
+  }
+})
+
+test('commands that only look similar stay clean', () => {
+  for (const command of [
+    'pnpm install --frozen-lockfile',
+    'pnpm store path --silent',
+    'pnpm --filter @navecss/core exec playwright install --with-deps chromium',
+    'echo pnpm run knip',
+    'echo "ci:check"',
+  ]) {
+    const violations = compareJobsToSteps(extractJobs(withExtraRun(command)), STEP_NAMES)
+    assert.deepEqual(violations, [], command)
+  }
 })
 
 /**

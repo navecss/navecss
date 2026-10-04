@@ -13,8 +13,9 @@
  *
  * 1. every `ci:check` step is run by exactly one job;
  * 2. no job runs the same step twice;
- * 3. every `pnpm run <script>` in that workflow names a `ci:check` step, so the whole gate
- *    (`pnpm run ci:check`) or a script the local gate never runs cannot creep back in;
+ * 3. every `pnpm run <script>` in that workflow names a `ci:check` step, and no `run:` value
+ *    mentions `ci:check` or `run-ci-check`, so the whole gate cannot creep back in through the
+ *    shapes this reads;
  * 4. no job passes arguments to a step: turbo hashes them into every task it runs, `build`
  *    included, so the job would miss the build output it downloaded and build again.
  *
@@ -29,6 +30,16 @@
  * Parsed as plain text, not with a YAML parser, the same choice `check-actions-pinned-shas.mjs`
  * makes: a job is a two-space-indented key under the top-level `jobs:`, and a `run:` value is
  * either inline or a block scalar indented under its key.
+ *
+ * A construct this cannot read is invisible to it. As a step's only run, the step shows up as one
+ * "that no job runs" and this fails. As an EXTRA run it can pass unseen: an env prefix or a
+ * wrapper command (`TURBO_FORCE=1 pnpm run test`, `time pnpm run test`), turbo called directly, a
+ * subshell or an `if` block, the `pnpm <script>` shorthand for a script that is not a step,
+ * another workflow file, a composite action, or a job switched off with `if:` or
+ * `continue-on-error`. Two shapes are refused outright, because they are how a duplicate gate
+ * would come back: any mention of `ci:check` or `run-ci-check` in a `run:` value, and a pnpm
+ * command that runs a script in any form other than the literal `pnpm run <step>`. So every step
+ * is written as the literal `pnpm run <step>` in this one workflow.
  *
  * FAILS CLOSED when the workflow file is missing, when it has no jobs, or when the step list is
  * empty: each of those would otherwise compare nothing and report green.
@@ -120,35 +131,65 @@ function parsePnpmCommand(command) {
 }
 
 /**
- * The scripts one `run:` value runs through pnpm, as `{ target, args }`: every command that
- * STARTS with `pnpm run <x>`, or with the `pnpm <step>` shorthand naming one of `stepNames`, and
- * the arguments that follow the name in that command. A command starts a line or follows `&&`,
- * `||`, `;` or a pipe, so `echo pnpm run knip` runs no step. Line continuations are joined first,
- * quoted strings are dropped (a step named inside `'...'` or `"..."` is text, not a command), a
- * redirect (`> log`, `2>&1`) is not an argument, and comments are ignored, as is any other pnpm
- * command (`pnpm install`, `pnpm --filter ... exec`).
- *
- * This reads shell TEXT, not a shell parse: a heredoc, a subshell or a command built in a
- * variable is not recognised. The workflow it guards writes each step as one plain command, and
- * a construct this cannot read shows up as a step "that no job runs", which fails, rather than
- * passing unseen.
+ * The shell commands of one `run:` value, ready to read: line continuations are joined, quoted
+ * strings are dropped (a step named inside `'...'` or `"..."` is text, not a command), comments
+ * are removed, and each line is split into commands at `&&`, `||`, `;` and a pipe.
  */
-export function findStepRuns(runText, stepNames) {
-  const found = []
+function commandsOf(runText) {
   const lines = runText
     .replaceAll(/\\\n\s*/g, ' ')
     .replaceAll(/'[^'\n]*'|"[^"\n]*"/g, '""')
     .split('\n')
-  for (const line of lines) {
-    const code = line.replace(/(^|\s)#.*$/, '')
-    for (const command of code.split(/&&|\|\||;|\|/)) {
-      const parsed = parsePnpmCommand(command)
-      if (parsed && (parsed.run || stepNames.includes(parsed.target))) {
-        found.push({ args: parsed.args, target: parsed.target })
-      }
+  return lines.flatMap((line) => line.replace(/(^|\s)#.*$/, '').split(/&&|\|\||;|\|/))
+}
+
+/**
+ * The scripts one `run:` value runs through pnpm, as `{ target, args }`: every command that
+ * STARTS with `pnpm run <x>`, or with the `pnpm <step>` shorthand naming one of `stepNames`, and
+ * the arguments that follow the name in that command. A command starts a line or follows `&&`,
+ * `||`, `;` or a pipe, so `echo pnpm run knip` runs no step. Line continuations are joined first,
+ * quoted strings are dropped, a redirect (`> log`, `2>&1`) is not an argument, and comments are
+ * ignored, as is any other pnpm command (`pnpm install`, `pnpm --filter ... exec`).
+ *
+ * This reads shell TEXT, not a shell parse; the header lists what that leaves unseen.
+ */
+export function findStepRuns(runText, stepNames) {
+  const found = []
+  for (const command of commandsOf(runText)) {
+    const parsed = parsePnpmCommand(command)
+    if (parsed && (parsed.run || stepNames.includes(parsed.target))) {
+      found.push({ args: parsed.args, target: parsed.target })
     }
   }
   return found
+}
+
+/**
+ * What one `run:` value does that this check refuses outright, as sentences without the job: a
+ * mention of the whole local gate (a word starting `ci:check`, which takes in `ci:check:fix`, or
+ * any word containing `run-ci-check`), and a pnpm command that has the word `run` but is not the
+ * literal `pnpm run <target>`, such as `pnpm -s run ...` or `pnpm --filter x run ...`, where the
+ * step is hidden behind flags.
+ */
+export function findRefusedUses(runText) {
+  const refused = []
+  for (const command of commandsOf(runText)) {
+    const words = command.trim().split(/\s+/)
+    for (const word of words) {
+      if (word.startsWith('ci:check') || word.includes('run-ci-check')) {
+        refused.push(
+          `mentions \`${word}\`, which would run the whole local gate; ` +
+            'run each step as `pnpm run <step>` instead.',
+        )
+      }
+    }
+    if (words[0] === 'pnpm' && words[1] !== 'run' && words.includes('run')) {
+      refused.push(
+        `runs \`${words.join(' ')}\`, a form this check cannot read; write \`pnpm run <step>\`.`,
+      )
+    }
+  }
+  return refused
 }
 
 /**
@@ -171,6 +212,11 @@ export function compareJobsToSteps(jobs, stepNames) {
 
   for (const job of jobs) {
     const counts = new Map()
+    for (const run of job.runs) {
+      for (const refusal of findRefusedUses(run.text)) {
+        violations.push(`job ${job.id} ${refusal}`)
+      }
+    }
     const stepRuns = job.runs.flatMap((run) => findStepRuns(run.text, stepNames))
     for (const { args, target } of stepRuns) {
       if (target.startsWith('${{')) {
