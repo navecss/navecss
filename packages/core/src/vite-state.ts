@@ -14,6 +14,10 @@ export interface Position {
    * The call as the plugin reads it, cut for the report.
    */
   readonly construct: string
+  /**
+   * The sentence that ends the report line when the call has no position.
+   */
+  readonly unknownLine?: string
 }
 
 export interface ModuleRecord {

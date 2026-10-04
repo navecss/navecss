@@ -9,7 +9,7 @@ import type { PluginLog, RenderContext, TransformContext, TransformMeta } from '
 import type { LocatedProblem } from './vite-used-report.ts'
 import type { UsedContext } from './vite-used.ts'
 
-import { isMentioningAtoms, lineUnknownNote, recordModule } from './vite-collect-module.ts'
+import { isMentioningAtoms, recordModule } from './vite-collect-module.ts'
 import { isStylesheetId } from './vite-css-id.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
@@ -60,7 +60,7 @@ function dynamicProblems(record: ModuleRecord, context: UsedContext): LocatedPro
     line: call.line,
     column: call.column,
     pkg: record.pkg,
-    ...(call.line === 0 && { unknownLine: lineUnknownNote(context) }),
+    ...(call.unknownLine !== undefined && { unknownLine: call.unknownLine }),
   }))
 }
 

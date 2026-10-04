@@ -27,10 +27,10 @@ export const TOO_DEEP =
  */
 export function unreadableRecord(
   context: UsedContext,
-  input: { readonly id: string; readonly pkg: string | undefined },
+  input: { readonly code: string; readonly id: string; readonly pkg: string | undefined },
   text: string,
 ): ModuleRecord {
-  const { id, pkg } = input
+  const { code, id, pkg } = input
   const file = moduleLabel(context.root, id)
   const problem: LocatedProblem = {
     kind: 'unreadable',
@@ -44,7 +44,8 @@ export function unreadableRecord(
   }
   const isStandingIn = isListed(context, pkg)
   return {
-    atoms: new Set(),
+    // The classes written whole need no parse to be found.
+    atoms: atomsWrittenIn(code),
     problems: isStandingIn ? [] : [problem],
     suppressed: isStandingIn ? [problem] : [],
     dynamicCalls: [],
@@ -61,16 +62,53 @@ export function unreadableRecord(
 export const SOURCE_TYPES: ReadonlySet<string> = new Set(['js', 'jsx', 'ts', 'tsx'])
 
 /**
+/**
+ * The strings a JSON text holds, as the host will decode them (`"nave-\u0066lex"` is `nave-flex`),
+ * or none when it is no JSON.
+ */
+function jsonStrings(code: string): string[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(code)
+  } catch {
+    return []
+  }
+  const strings: string[] = []
+  const stack: unknown[] = [parsed]
+  while (stack.length > 0) {
+    const value = stack.pop()
+    if (typeof value === 'string') strings.push(value)
+    else if (Array.isArray(value)) stack.push(...(value as unknown[]))
+    else if (typeof value === 'object' && value !== null) {
+      strings.push(...Object.keys(value))
+      stack.push(...(Object.values(value) as unknown[]))
+    }
+  }
+  return strings
+}
+
+/**
  * The record of a module that is data when the build reads it: the Nave classes its text writes,
- * as for any other text, and no problem, since there is no call in it to read.
+ * as for any other text (and, for JSON, as its strings decode), and no problem, since there is no
+ * call in it to read.
  */
 export function textRecord(
   context: UsedContext,
-  input: { readonly code: string; readonly id: string; readonly pkg: string | undefined },
+  input: {
+    readonly code: string
+    readonly id: string
+    readonly moduleType?: string | undefined
+    readonly pkg: string | undefined
+  },
 ): ModuleRecord {
-  const { code, id, pkg } = input
+  const { code, id, moduleType, pkg } = input
+  const decoded = moduleType === 'json' ? jsonStrings(code) : []
   return {
-    atoms: atomsWrittenIn(code),
+    atoms: new Set(
+      [atomsWrittenIn(code), ...decoded.map((text) => atomsWrittenIn(text))].flatMap((found) => [
+        ...found,
+      ]),
+    ),
     problems: [],
     suppressed: [],
     dynamicCalls: [],

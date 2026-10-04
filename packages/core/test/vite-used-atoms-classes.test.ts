@@ -44,6 +44,58 @@ import type { Transformer } from './helpers/vite-app.ts'
 const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
+/**
+ * Runs the package's CSS build step from a copy of the package in a scratch directory, with `line`
+ * put before the script, recording every file it reads and every module it loads, wherever they
+ * are. `pluginFiles` are the recorded files that belong to the Vite plugin: a `vite*.ts` source
+ * or a `vite*.js` file of `dist`.
+ */
+function recordCssBuild(line: string): {
+  status: number | null
+  stderr: string
+  names: string[]
+  pluginFiles: string[]
+  wroteAtomic: boolean
+} {
+  const work = mkdtempSync(path.join(CORE_ROOT, '.nave-css-build-'))
+  try {
+    mkdirSync(path.join(work, 'scripts'))
+    cpSync(path.join(CORE_ROOT, 'src'), path.join(work, 'src'), { recursive: true })
+    const script = path.join(work, 'scripts/build-css.ts')
+    writeFileSync(script, line + readFileSync(path.join(CORE_ROOT, 'scripts/build-css.ts'), 'utf8'))
+    const log = path.join(work, 'record.log')
+    writeFileSync(
+      path.join(work, 'hooks.mjs'),
+      "import { appendFileSync } from 'node:fs'\nexport async function load(url, context, next) {\n  if (url.startsWith('file:')) appendFileSync(process.env.NAVE_RECORD, `module ${url}\\n`)\n  return next(url, context)\n}\n",
+    )
+    writeFileSync(
+      path.join(work, 'record.mjs'),
+      "import fs from 'node:fs'\nimport { register, syncBuiltinESMExports } from 'node:module'\nimport { pathToFileURL } from 'node:url'\nregister(pathToFileURL(process.env.NAVE_HOOKS).href)\nconst read = fs.readFileSync\nfs.readFileSync = function (file, ...rest) {\n  fs.appendFileSync(process.env.NAVE_RECORD, `read ${file}\\n`)\n  return read.call(this, file, ...rest)\n}\nsyncBuiltinESMExports()\n",
+    )
+    const run = spawnSync(process.execPath, ['--import', path.join(work, 'record.mjs'), script], {
+      cwd: work,
+      encoding: 'utf8',
+      env: { ...process.env, NAVE_RECORD: log, NAVE_HOOKS: path.join(work, 'hooks.mjs') },
+    })
+    const files = readFileSync(log, 'utf8')
+      .split('\n')
+      .filter((entry) => /^(?:read|module) /.test(entry))
+      .map((entry) => entry.replace(/^(?:read|module) /, ''))
+      .map((file) => (file.startsWith('file:') ? fileURLToPath(file) : file))
+      .map((file) => file.replaceAll('\\', '/'))
+    const root = `${work.replaceAll('\\', '/')}/`
+    return {
+      status: run.status,
+      stderr: run.stderr,
+      names: files.filter((file) => file.startsWith(root)).map((file) => file.slice(root.length)),
+      pluginFiles: files.filter((file) => /\/(?:src|dist)\/vite[^/]*\.[cm]?[jt]s$/.test(file)),
+      wroteAtomic: existsSync(path.join(work, 'dist/atomic.css')),
+    }
+  } finally {
+    rmSync(work, { force: true, recursive: true })
+  }
+}
+
 describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
   describe('AC-used-atoms-29 — a skip link in index.html after a newline is emitted whole', () => {
     const SEPARATORS: [string, string][] = [
@@ -377,52 +429,28 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
     })
 
     it('builds the published stylesheets from files no module of the Vite plugin can reach', () => {
-      // The build step runs from a copy of the package into a scratch directory, with every file it
-      // reads and every module it loads recorded. A lawful change to a stylesheet leaves this
-      // green; a module of the plugin getting into the build of a published file does not.
-      const work = mkdtempSync(path.join(CORE_ROOT, '.nave-css-build-'))
-      try {
-        mkdirSync(path.join(work, 'scripts'))
-        cpSync(path.join(CORE_ROOT, 'src'), path.join(work, 'src'), { recursive: true })
-        cpSync(
-          path.join(CORE_ROOT, 'scripts/build-css.ts'),
-          path.join(work, 'scripts/build-css.ts'),
-        )
-        const log = path.join(work, 'record.log')
-        writeFileSync(
-          path.join(work, 'hooks.mjs'),
-          "import { appendFileSync } from 'node:fs'\nexport async function load(url, context, next) {\n  if (url.startsWith('file:')) appendFileSync(process.env.NAVE_RECORD, `module ${url}\\n`)\n  return next(url, context)\n}\n",
-        )
-        writeFileSync(
-          path.join(work, 'record.mjs'),
-          "import fs from 'node:fs'\nimport { register, syncBuiltinESMExports } from 'node:module'\nimport { pathToFileURL } from 'node:url'\nregister(pathToFileURL(process.env.NAVE_HOOKS).href)\nconst read = fs.readFileSync\nfs.readFileSync = function (file, ...rest) {\n  fs.appendFileSync(process.env.NAVE_RECORD, `read ${file}\\n`)\n  return read.call(this, file, ...rest)\n}\nsyncBuiltinESMExports()\n",
-        )
-        const run = spawnSync(
-          process.execPath,
-          ['--import', path.join(work, 'record.mjs'), path.join(work, 'scripts/build-css.ts')],
-          {
-            cwd: work,
-            encoding: 'utf8',
-            env: { ...process.env, NAVE_RECORD: log, NAVE_HOOKS: path.join(work, 'hooks.mjs') },
-          },
-        )
-        const touched = readFileSync(log, 'utf8')
-          .split('\n')
-          .filter((line) => /^(?:read|module) /.test(line))
-          .map((line) => line.replace(/^(?:read|module) (?:file:\/\/)?/, ''))
-          .filter((file) => file.startsWith(work))
-        const names = touched.map((file) => path.relative(work, file).replaceAll('\\', '/'))
+      // A lawful change to a stylesheet leaves this green; a module of the plugin getting into the
+      // build of a published file does not, however the script reaches it.
+      const run = recordCssBuild('')
 
-        expect(run.status, run.stderr).toBe(0)
-        // The recording sees the build: its inputs and the modules it imports.
-        expect(names).toContain('src/reset.css')
-        expect(names).toContain('src/atoms.ts')
-        expect(names).toContain('src/directive/resolve.ts')
-        expect(names.filter((name) => /^src\/vite[^/]*\.ts$/.test(name))).toEqual([])
-        expect(existsSync(path.join(work, 'dist/atomic.css'))).toBe(true)
-      } finally {
-        rmSync(work, { force: true, recursive: true })
-      }
+      expect(run.status, run.stderr).toBe(0)
+      // The recording sees the build: its inputs and the modules it imports.
+      expect(run.names).toContain('src/reset.css')
+      expect(run.names).toContain('src/atoms.ts')
+      expect(run.names).toContain('src/directive/resolve.ts')
+      expect(run.pluginFiles).toEqual([])
+      expect(run.wroteAtomic).toBe(true)
+    })
+
+    it.each([
+      ['a relative import', "import '../src/vite-handshake.ts'\n"],
+      ['a read of a plugin file', "import '../src/vite-emit.ts'\n"],
+      ['a dynamic import', "await import('../src/vite-prune.ts')\n"],
+      ['the package’s own name', "import '@navecss/core/vite'\n"],
+    ])('sees a plugin module the script reaches through %s', (_name, line) => {
+      const run = recordCssBuild(line)
+
+      expect(run.pluginFiles).not.toEqual([])
     })
   })
 })

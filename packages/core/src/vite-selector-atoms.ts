@@ -1,10 +1,10 @@
 /**
  * Which built-in atoms a selector needs. A class selector in one of the selector's own compounds
- * is a need: no element lacking the class can match it. An `:is()` or `:where()` among those
- * compounds is a need only when every one of its alternatives is one. A class inside `:not()`,
- * `:has()` or any other functional argument never makes the selector removable, whatever that
- * function means: the rule is kept, which is the safe direction (it may ship a rule that matches
- * nothing, and never drops one that matches).
+ * is a need: no element lacking the class can match it. A class inside `:not()`, `:has()` or any
+ * functional argument other than `:is()` or `:where()` never makes a member removable, and inside
+ * `:is()` or `:where()` it does so only when every alternative is removable. A rule kept for
+ * either reason may ship a rule that matches nothing, and never drops one that matches: the safe
+ * direction.
  */
 import type { Sheet } from './vite-css-blocks.ts'
 

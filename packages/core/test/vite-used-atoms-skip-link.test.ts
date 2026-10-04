@@ -201,6 +201,48 @@ describe.each(TRANSFORMERS)(
       }
     }, 240_000)
 
+    it('a retried server build that missed fails again, and the next client build holds both atoms whole', async () => {
+      const kept = classesOf('focusRing', 'srOnlyFocusable')
+      const app = makeUsedApp(
+        appFiles(
+          {
+            'src/App.ts': `${IMPORT}console.log(cx('flex'))\n`,
+            'src/entry-server.ts': `${IMPORT}export const s = ['<a class="nave-sr-only-focusable" href="#main">Skip</a>', cx('interactive', 'focusRing')]\n`,
+          },
+          ['src/App.ts'],
+        ),
+      )
+      try {
+        const clientBuild = (): Promise<Built> =>
+          buildUsed(app, { transformer, build: { cssMinify: false } })
+        const serverBuild = (): Promise<Built> =>
+          buildUsed(app, {
+            transformer,
+            build: { ssr: 'src/entry-server.ts', outDir: 'dist-ssr', cssMinify: false },
+          })
+        const reference = await buildUsed(app, {
+          transformer,
+          options: { atomic: 'all' },
+          build: { cssMinify: false },
+        })
+        const expected = keepOnly(parseAtomicLayer(reference.css), kept)
+
+        await clientBuild()
+        const first = await serverBuild()
+        const again = await serverBuild()
+        const next = await clientBuild()
+        const last = await serverBuild()
+
+        expect(first.error).toContain('focusRing')
+        expect(again.error).toContain('focusRing')
+        expect(next.error).toBeUndefined()
+        expect(keepOnly(parseAtomicLayer(next.css), kept)).toEqual(expected)
+        expect(last.error).toBeUndefined()
+      } finally {
+        app.dispose()
+      }
+    }, 240_000)
+
     it('whenever the client layer holds .nave-sr-only it holds srOnlyFocusable whole', async () => {
       const { all, runs } = await pipeline(
         transformer,

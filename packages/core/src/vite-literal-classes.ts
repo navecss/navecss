@@ -76,20 +76,88 @@ function isEndingInNavePrefix(text: string): boolean {
 }
 
 /**
- * Whether what `operand` can be only ends an identifier: every value is a string that is empty or
- * starts with a character that cannot continue a CSS identifier (a backslash can, as an escape).
- * The class on its left is then whole in what the build reads. An operand that can be anything
- * else, or that does not resolve, may continue the identifier.
+ * What comes after a `+` in a chain: the operands to its right that the chain goes on with.
  */
-function isEndingTheClass(operand: AstNode | undefined, analysis: ScopeAnalysis): boolean {
-  const values = stringValues(operand, analysis)
-  if (!values) return false
-  return values.every((value) => value === '' || !(isIdentChar(value[0]) || value.startsWith('\\')))
+type After = { readonly next: After; readonly node: AstNode } | undefined
+
+/**
+ * Whether a string value leaves the class on its left whole: it begins with a character that
+ * cannot continue a CSS identifier (a backslash can, as an escape).
+ */
+function isEndingValue(value: string): boolean {
+  return !(isIdentChar(value[0]) || value.startsWith('\\'))
 }
 
 /**
- * Whether `node` is a template literal with a piece that ends in `nave-` followed by a
- * substitution that can continue the identifier.
+ * The two operands `element` joins, when it is a `+` (parentheses around it or not).
+ */
+function operandsOf(element: AstNode | string): [AstNode, AstNode] | undefined {
+  if (typeof element === 'string') return undefined
+  const inner = unwrap(element)
+  if (inner.type !== 'BinaryExpression' || inner.operator !== '+') return undefined
+  const left = nodeAt(inner, 'left')
+  const right = nodeAt(inner, 'right')
+  return left && right ? [left, right] : undefined
+}
+
+/**
+ * The elements of the sequence `first`, then `rest`, with each `+` replaced by the operands it
+ * joins, left to right, however the parentheses fall.
+ * @yields {AstNode | string} each element in order.
+ */
+function* sequenceOf(
+  first: readonly (AstNode | string)[],
+  rest: After,
+): Generator<AstNode | string> {
+  const pending = first.toReversed()
+  let later = rest
+  for (;;) {
+    let element = pending.pop()
+    if (element === undefined && later) {
+      element = later.node
+      later = later.next
+    }
+    if (element === undefined) return
+    const operands = operandsOf(element)
+    if (operands) pending.push(operands[1], operands[0])
+    else yield element
+  }
+}
+
+/**
+ * Whether the class on the left is whole in what the build reads, given what follows it, read as
+ * one sequence from left to right: `first`, then `rest`. Each element must be a string every
+ * value of which begins with a character that cannot continue the identifier, or is empty while
+ * what comes after it ends the class too (an empty value ends it only if nothing follows, or the
+ * next element does). An element that can be anything else, or that does not resolve, may
+ * continue the identifier.
+ */
+function isEndingTheClass(
+  first: readonly (AstNode | string)[],
+  rest: After,
+  analysis: ScopeAnalysis,
+): boolean {
+  for (const element of sequenceOf(first, rest)) {
+    const values = typeof element === 'string' ? [element] : stringValues(element, analysis)
+    if (!values?.every((value) => value === '' || isEndingValue(value))) return false
+    if (!values.includes('')) return true
+  }
+  return true
+}
+
+/**
+ * `node` without the parentheses around it.
+ */
+function unwrap(node: AstNode): AstNode {
+  let current = node
+  while (current.type === 'ParenthesizedExpression')
+    current = nodeAt(current, 'expression') ?? current
+  return current
+}
+
+/**
+ * Whether `node` is a template literal with a piece that ends in `nave-` followed by what can
+ * continue the identifier: the substitutions and pieces after it are read as one sequence.
  */
 function isBreakingOut(node: AstNode, analysis: ScopeAnalysis): boolean {
   if (node.type !== 'TemplateLiteral') return false
@@ -97,26 +165,31 @@ function isBreakingOut(node: AstNode, analysis: ScopeAnalysis): boolean {
   const substitutions = nodesAt(node, 'expressions')
   return quasis.slice(0, -1).some((quasi, index) => {
     const cooked = (quasi.value as { cooked?: string } | undefined)?.cooked
-    return (
-      cooked !== undefined &&
-      isEndingInNavePrefix(cooked) &&
-      !isEndingTheClass(substitutions[index], analysis)
-    )
+    if (cooked === undefined || !isEndingInNavePrefix(cooked)) return false
+    const following = substitutions.slice(index).flatMap((substitution, offset) => {
+      const next = quasis[index + 1 + offset]
+      const text = (next?.value as { cooked?: string } | undefined)?.cooked
+      return [substitution, ...(next ? [text ?? next] : [])]
+    })
+    return !isEndingTheClass(following, undefined, analysis)
   })
 }
 
 /**
- * The piece that ends in `nave-` at the left of a `+`, when `node` is such a concatenation.
+ * The piece that ends in `nave-` at the left of a `+`, when `node` is such a concatenation, and
+ * what follows its right operand in the chain is `after`.
  */
 function concatenatedPiece(
   node: AstNode,
   memo: PieceMemo,
   analysis: ScopeAnalysis,
+  after: After,
 ): Piece | undefined {
   if (!isPlus(node)) return undefined
   const piece = rightmostPiece(nodeAt(node, 'left'), memo)
   if (piece?.head !== 'nave-') return undefined
-  return isEndingTheClass(nodeAt(node, 'right'), analysis) ? undefined : piece
+  const right = nodeAt(node, 'right')
+  return isEndingTheClass(right ? [right] : [], after, analysis) ? undefined : piece
 }
 
 /**
@@ -164,11 +237,11 @@ export function concatenationProblems(
 ): Problem[] {
   const problems: Problem[] = []
   const memo: PieceMemo = { edges: new Map(), rightmost: new Map() }
-  const stack: AstNode[] = [program]
+  const stack: { after: After; node: AstNode }[] = [{ node: program, after: undefined }]
   while (stack.length > 0) {
-    const node = stack.pop()!
+    const { node, after } = stack.pop()!
     const offset =
-      concatenatedPiece(node, memo, analysis)?.node.start ??
+      concatenatedPiece(node, memo, analysis, after)?.node.start ??
       (isBreakingOut(node, analysis) ? node.start : -1)
     if (offset !== -1) {
       problems.push({
@@ -178,7 +251,26 @@ export function concatenationProblems(
         text: SENTENCE,
       })
     }
-    stack.push(...childrenOf(node))
+    stack.push(...childrenWithAfter(node, after))
   }
   return problems.toSorted((a, b) => a.offset - b.offset)
+}
+
+/**
+ * The children of `node`, each with what follows it in the chain of `+` it belongs to: the left
+ * operand of a `+` is followed by the right one and what follows the `+`; a parenthesized
+ * expression passes on what follows it; every other child starts a sequence of its own.
+ */
+function childrenWithAfter(node: AstNode, after: After): { after: After; node: AstNode }[] {
+  const isOperands = node.type === 'BinaryExpression' && node.operator === '+'
+  if (isOperands) {
+    const left = nodeAt(node, 'left')
+    const right = nodeAt(node, 'right')
+    return [
+      ...(left ? [{ node: left, after: right ? { node: right, next: after } : after }] : []),
+      ...(right ? [{ node: right, after }] : []),
+    ]
+  }
+  const isWrapper = node.type === 'ParenthesizedExpression'
+  return childrenOf(node).map((child) => ({ node: child, after: isWrapper ? after : undefined }))
 }

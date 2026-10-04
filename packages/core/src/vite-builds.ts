@@ -1,9 +1,12 @@
 /**
  * One `navePlugin()` call can serve several builds at once (a script that calls `build()` twice
- * with one plugin list), and what a build has read must stay that build's. Each project root gets
- * a pair of plugin halves of its own, made when Vite resolves its config; the two objects the call
- * returns hand every hook to the pair of the root it runs for. A hook that names no root (a host
- * that gives none) goes to the pair of the build configured last.
+ * with one plugin list, a dev server beside a build), and what a build has read must stay that
+ * build's. Each invocation, told apart by the config object the host was handed, gets a pair of
+ * plugin halves of its own for each command, made when Vite resolves its config; the two objects
+ * the call returns hand every hook to the pair of the invocation it runs for. A hook that names
+ * none (a host that gives none) goes to the pair configured last. A page is compiled by a hook
+ * that names no environment, so a page goes to the pairs that compiled it, or, when none did, to
+ * the pairs whose root holds it.
  */
 import type { NaveCollectPlugin } from './vite-collect-plugin.ts'
 import type { RenderContext, ResolvedConfigLike, TransformContext } from './vite-types.ts'
@@ -16,22 +19,36 @@ export interface Assembled {
 }
 
 interface Hosted {
-  readonly environment?: { readonly config?: { readonly root?: string } }
+  readonly environment?: {
+    readonly config?: { readonly command?: string; readonly inlineConfig?: object }
+  }
 }
 
 interface Pickers {
   /**
-   * The pair for the build a hook runs for.
+   * The pair for the invocation a hook runs for.
    */
   readonly forHook: (host: Hosted) => Assembled
   /**
-   * The pair for the build whose root holds the page `filename`.
+   * Notes that the HTML page `filename` is being compiled by the invocation `host` runs for.
    */
-  readonly forPage: (filename: string | undefined) => Assembled
+  readonly notePage: (filename: string, host: Hosted) => void
   /**
-   * The pair of the build configured last.
+   * The pairs that read the HTML page `filename`.
+   */
+  readonly forPage: (filename: string | undefined) => Assembled[]
+  /**
+   * The pair of the invocation configured last.
    */
   readonly latest: () => Assembled
+}
+
+/**
+ * The page a module id names, when it is an HTML file of a build: the path without its query.
+ */
+function htmlPageOf(id: string): string | undefined {
+  const file = id.split('?', 1)[0]!
+  return file.toLowerCase().endsWith('.html') ? file : undefined
 }
 
 /**
@@ -40,9 +57,7 @@ interface Pickers {
  */
 function firstHalf(
   pickers: Pickers,
-  builds: Map<string, Assembled>,
-  assemble: () => Assembled,
-  setLatest: (build: Assembled) => void,
+  configure: (config: ResolvedConfigLike) => Assembled,
 ): NaveVitePlugin {
   // A module worker is built apart from the build that holds it, so the reader it runs finds the
   // pair of the root it reads for.
@@ -66,12 +81,11 @@ function firstHalf(
     },
     configEnvironment: (name, options) => pickers.latest().nave.configEnvironment(name, options),
     configResolved(config: ResolvedConfigLike) {
-      const build = builds.get(config.root) ?? assemble()
-      builds.set(config.root, build)
-      setLatest(build)
-      build.nave.configResolved(config)
+      configure(config).nave.configResolved(config)
     },
     transform(code, id) {
+      const page = htmlPageOf(id)
+      if (page !== undefined) pickers.notePage(page, this)
       return pickers.forHook(this).nave.transform.call(this, code, id)
     },
     hotUpdate(options) {
@@ -102,7 +116,10 @@ function secondHalf(pickers: Pickers): NaveCollectPlugin {
     transformIndexHtml: {
       order: 'pre',
       handler(html, page) {
-        return pickers.forPage(page.filename).collect.transformIndexHtml.handler(html, page)
+        for (const build of pickers.forPage(page.filename)) {
+          build.collect.transformIndexHtml.handler(html, page)
+        }
+        return
       },
     },
     buildStart() {
@@ -115,32 +132,63 @@ function secondHalf(pickers: Pickers): NaveCollectPlugin {
 }
 
 /**
- * The two plugin objects of `navePlugin()`, handing each hook to the pair `assemble` made for the
- * root it runs for.
+ * Whether `file` lies inside the directory `root`, by whole path components: `/repo/app2/a.html`
+ * is not inside `/repo/app`.
  */
-export function shareAcrossBuilds(assemble: () => Assembled): NavePlugins {
-  const builds = new Map<string, Assembled>()
+function isInside(root: string, file: string): boolean {
+  const base = root.endsWith('/') ? root : `${root}/`
+  return file.startsWith(base)
+}
+
+/**
+ * The pairs `navePlugin()` has made, by the invocation (and command) they were made for.
+ */
+function registry(assemble: () => Assembled): {
+  readonly configure: (config: ResolvedConfigLike) => Assembled
+  readonly pickers: Pickers
+} {
+  const byInvocation = new WeakMap<object, Map<string, Assembled>>()
+  const roots = new Map<Assembled, string>()
+  const pages = new Map<string, Set<Assembled>>()
   let latest = assemble()
+  const find = (host: Hosted): Assembled | undefined => {
+    const config = host.environment?.config
+    if (config?.inlineConfig === undefined) return undefined
+    return byInvocation.get(config.inlineConfig)?.get(config.command ?? 'build')
+  }
   const pickers: Pickers = {
     latest: () => latest,
-    forHook(host) {
-      const root = host.environment?.config?.root
-      return (root === undefined ? undefined : builds.get(root)) ?? latest
+    forHook: (host) => find(host) ?? latest,
+    notePage(filename, host) {
+      const build = find(host) ?? latest
+      pages.set(filename, (pages.get(filename) ?? new Set()).add(build))
     },
     forPage(filename) {
-      // The longest root that is a prefix of the page's path.
-      const roots = builds
-        .keys()
-        .filter((root) => filename?.startsWith(root))
-        .toArray()
-        .toSorted((a, b) => b.length - a.length)
-      return (roots[0] === undefined ? undefined : builds.get(roots[0])) ?? latest
+      if (filename === undefined) return [latest]
+      const noted = pages.get(filename)
+      if (noted) return [...noted]
+      const holding = [...roots].filter(([, root]) => isInside(root, filename)).map(([b]) => b)
+      return holding.length > 0 ? holding : [latest]
     },
   }
-  return [
-    firstHalf(pickers, builds, assemble, (build) => {
-      latest = build
-    }),
-    secondHalf(pickers),
-  ]
+  const configure = (config: ResolvedConfigLike): Assembled => {
+    const key = config.inlineConfig ?? config
+    const commands = byInvocation.get(key) ?? new Map<string, Assembled>()
+    byInvocation.set(key, commands)
+    const build = commands.get(config.command) ?? assemble()
+    commands.set(config.command, build)
+    roots.set(build, config.root)
+    latest = build
+    return build
+  }
+  return { pickers, configure }
+}
+
+/**
+ * The two plugin objects of `navePlugin()`, handing each hook to the pair `assemble` made for the
+ * invocation it runs for.
+ */
+export function shareAcrossBuilds(assemble: () => Assembled): NavePlugins {
+  const { pickers, configure } = registry(assemble)
+  return [firstHalf(pickers, configure), secondHalf(pickers)]
 }

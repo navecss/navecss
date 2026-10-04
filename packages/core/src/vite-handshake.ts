@@ -21,7 +21,8 @@ export interface PackageRecord {
    */
   readonly collected: readonly string[]
   /**
-   * `path:line:column` of each call the build could not read.
+   * `path:line:column` of each call the build could not read, or the path alone when no source
+   * map leads to a line.
    */
   readonly unreadable: readonly string[]
 }
@@ -46,10 +47,10 @@ export interface Handshake {
    */
   readonly consumed: boolean
   /**
-   * The atoms a server build already failed on against this client set. A server build that meets
-   * the same miss again, with no client build in between, leaves its own set instead of failing.
+   * The atoms of server builds that failed against this client set. The next client build
+   * ships them, so the server build that follows it passes.
    */
-  readonly serverFailed?: readonly string[]
+  readonly pending?: readonly string[]
   readonly keepFor?: Readonly<Record<string, PackageRecord>>
   /**
    * `keepFor` keys that name no package any environment of the writing invocation transformed.

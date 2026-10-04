@@ -24,6 +24,7 @@ describe('AC-used-atoms-27 - rebuilds in watch mode', () => {
       'src/main.ts': `import './app.css'\nimport { a } from './a.ts'\n${IMPORT}console.log(cx('flex'), a)\n`,
     })
     const warnings: string[] = []
+    let closing: { close(): Promise<void> } | undefined
     const logger = createLogger('silent')
     logger.warn = (message) => {
       warnings.push(message)
@@ -40,6 +41,7 @@ describe('AC-used-atoms-27 - rebuilds in watch mode', () => {
         off(event: 'event', listener: (event: { code: string; error?: Error }) => void): void
         close(): Promise<void>
       }
+      closing = watcher
       const rebuilt = (): Promise<void> =>
         new Promise((resolve, reject) => {
           const listener = (event: { code: string; error?: Error }): void => {
@@ -74,13 +76,13 @@ describe('AC-used-atoms-27 - rebuilds in watch mode', () => {
       const second = written()
       await edit("cx('block')")
       const third = written()
-      await watcher.close()
 
       expect(first).toEqual({ page: ['flex'], asset: ['flex'] })
       expect(second).toEqual({ page: ['flex', 'grid'], asset: ['flex', 'grid'] })
       expect(third).toEqual({ page: ['block'], asset: ['block'] })
       expect(warnings.filter((message) => message.includes('src/inline.css'))).toHaveLength(3)
     } finally {
+      await closing?.close()
       app.dispose()
     }
   }, 120_000)

@@ -36,33 +36,6 @@ interface Context {
 }
 
 /**
- * The strings `node` can evaluate to that `cx()` would not filter out, or `undefined` when the
- * build cannot tell.
- */
-function possibles(node: AstNode | undefined, context: Context): Possible[] | undefined {
-  if (!node) return undefined
-  const text = staticStringOf(node)
-  if (text !== undefined) return text === '' ? [] : [{ value: text, node }]
-  return COMPOSITES[node.type]?.(node, context) ?? undefined
-}
-
-/**
- * The union of the resolutions of `nodes`, or `undefined` when any of them is unreadable.
- */
-function unionOf(
-  nodes: readonly (AstNode | undefined)[],
-  context: Context,
-): Possible[] | undefined {
-  const all: Possible[] = []
-  for (const node of nodes) {
-    const found = possibles(node, context)
-    if (!found) return undefined
-    all.push(...found)
-  }
-  return all
-}
-
-/**
  * A literal that is no string: only the values `cx()` filters out are readable.
  */
 function literalValue(node: AstNode): Possible[] | undefined {
@@ -93,57 +66,6 @@ export function soleInitialiserBinding(binding: Binding | undefined): Binding | 
 }
 
 /**
- * The binding the identifier `init` names, when a declaration's initialiser is just another name.
- */
-function aliasedBinding(init: AstNode, context: Context): Binding | undefined {
-  return soleInitialiserBinding(context.analysis.referenceOf(init)?.binding)
-}
-
-/**
- * Where a declaration's initialiser leads: to another name (`alias`), or to a result.
- */
-function stepOf(
-  init: AstNode,
-  context: Context,
-): { readonly alias: Binding | undefined; readonly result: Resolved } {
-  if (init.type !== 'Identifier') return { alias: undefined, result: possibles(init, context) }
-  if (context.analysis.referenceOf(init)?.binding) {
-    return { alias: aliasedBinding(init, context), result: undefined }
-  }
-  return { alias: undefined, result: stringAt(init, 'name') === 'undefined' ? [] : undefined }
-}
-
-/**
- * A name: `undefined` when nothing declares it, else what its sole declaration holds. A name
- * bound to another name (`const b = a`) is followed in a loop, not by recursion, so a chain of any
- * length resolves, once however many calls read its end.
- */
-function identifierValue(node: AstNode, context: Context): Possible[] | undefined {
-  const reference = context.analysis.referenceOf(node)
-  if (!reference?.binding) return stringAt(node, 'name') === 'undefined' ? [] : undefined
-  const chain: Binding[] = []
-  let result: Resolved
-  let binding = soleInitialiserBinding(reference.binding)
-  while (binding) {
-    if (context.resolved.has(binding)) {
-      result = context.resolved.get(binding)
-      break
-    }
-    if (context.resolving.has(binding)) break
-    chain.push(binding)
-    context.resolving.add(binding)
-    const step = stepOf(binding.init!, context)
-    result = step.result
-    binding = step.alias
-  }
-  for (const link of chain) {
-    context.resolving.delete(link)
-    context.resolved.set(link, result)
-  }
-  return result
-}
-
-/**
  * What a literal operand decides about `&&`, `||` and `??`: whether it is falsy, and whether it is
  * nullish. `undefined` for anything that is not a literal.
  */
@@ -156,19 +78,6 @@ function operandOf(
 }
 
 /**
- * `a && X` is `X` or something `cx()` filters out; `a || X` and `a ?? X` are either side. A literal
- * left operand can decide the call alone, and then the other side is never read.
- */
-function logicalValue(node: AstNode, context: Context): Possible[] | undefined {
-  const left = nodeAt(node, 'left')
-  const right = nodeAt(node, 'right')
-  const operand = operandOf(left)
-  if (node.operator === '&&') return operand?.isFalsy ? [] : possibles(right, context)
-  const isDecided = node.operator === '||' ? operand?.isFalsy : operand?.isNullish
-  return isDecided === false ? possibles(left, context) : unionOf([left, right], context)
-}
-
-/**
  * `$setup.v`, where the component's script exposes `v` bound to a string.
  */
 function setupValue(node: AstNode, context: Context): Possible[] | undefined {
@@ -178,19 +87,6 @@ function setupValue(node: AstNode, context: Context): Possible[] | undefined {
   const exposure = name === undefined ? undefined : context.setup?.get(name)
   if (exposure?.kind !== 'values') return undefined
   return exposure.values.filter((value) => value !== '').map((value) => ({ value, node }))
-}
-
-const COMPOSITES: Readonly<
-  Record<string, (node: AstNode, context: Context) => Possible[] | undefined>
-> = {
-  Literal: (node) => literalValue(node),
-  UnaryExpression: (node) => unaryValue(node),
-  Identifier: identifierValue,
-  LogicalExpression: logicalValue,
-  ConditionalExpression: (node, context) =>
-    unionOf([nodeAt(node, 'consequent'), nodeAt(node, 'alternate')], context),
-  ParenthesizedExpression: (node, context) => possibles(nodeAt(node, 'expression'), context),
-  MemberExpression: setupValue,
 }
 
 const RESOLVED = new WeakMap<ScopeAnalysis, Map<Binding, Resolved>>()
@@ -207,6 +103,146 @@ function resolvedFor(
   const found = RESOLVED.get(analysis) ?? new Map<Binding, Resolved>()
   RESOLVED.set(analysis, found)
   return found
+}
+
+/**
+ * The result of `parts`, each of which must be readable: their union, one entry for each value
+ * and node, so a name read twice (`c ? a : a`) adds its values once however deep the chain.
+ */
+function unionOf(parts: readonly Resolved[]): Resolved {
+  if (parts.includes(undefined)) return undefined
+  const seen = new Map<AstNode, Set<string>>()
+  const isNew = (possible: Possible): boolean => {
+    const values = seen.get(possible.node) ?? new Set<string>()
+    seen.set(possible.node, values)
+    const before = values.size
+    values.add(possible.value)
+    return values.size > before
+  }
+  return parts.flatMap((part) => part!.filter((possible) => isNew(possible)))
+}
+
+/**
+ * How one node resolves: the nodes whose results it needs, in order, and what it makes of them.
+ */
+interface Plan {
+  readonly deps: readonly (AstNode | undefined)[]
+  readonly combine: (done: readonly Resolved[]) => Resolved
+  /**
+   * Called with the result once it is known, for a name that was being resolved.
+   */
+  readonly finish?: (result: Resolved) => void
+}
+
+const first = (done: readonly Resolved[]): Resolved => done[0]
+const leaf = (result: Resolved): Plan => ({ deps: [], combine: () => result })
+
+/**
+ * The plan for a name: what its sole declaration's initialiser holds. A name whose resolution is
+ * already known, or under way (a cycle), needs nothing more.
+ */
+function planOfName(node: AstNode, context: Context): Plan {
+  const reference = context.analysis.referenceOf(node)
+  if (!reference?.binding) return leaf(stringAt(node, 'name') === 'undefined' ? [] : undefined)
+  const binding = soleInitialiserBinding(reference.binding)
+  if (!binding) return leaf(undefined)
+  if (context.resolved.has(binding)) return leaf(context.resolved.get(binding))
+  if (context.resolving.has(binding)) return leaf(undefined)
+  context.resolving.add(binding)
+  return {
+    deps: [binding.init],
+    combine: first,
+    finish(result) {
+      context.resolving.delete(binding)
+      context.resolved.set(binding, result)
+    },
+  }
+}
+
+/**
+ * The plan for `a && X`, `a || X` and `a ?? X`: `a && X` is `X` or something `cx()` filters out;
+ * the others are either side. A literal left operand can decide the call alone, and then the
+ * other side is never read.
+ */
+function planOfLogical(node: AstNode): Plan {
+  const left = nodeAt(node, 'left')
+  const right = nodeAt(node, 'right')
+  const operand = operandOf(left)
+  if (node.operator === '&&') {
+    return operand?.isFalsy ? leaf([]) : { deps: [right], combine: first }
+  }
+  const isDecided = node.operator === '||' ? operand?.isFalsy : operand?.isNullish
+  if (isDecided === false) return { deps: [left], combine: first }
+  return { deps: [left, right], combine: unionOf }
+}
+
+/**
+ * The plan for `node`: a string, a literal or name `cx()` filters out, or an expression over
+ * other nodes.
+ */
+function planOf(node: AstNode, context: Context): Plan {
+  const text = staticStringOf(node)
+  if (text !== undefined) return leaf(text === '' ? [] : [{ value: text, node }])
+  switch (node.type) {
+    case 'ConditionalExpression': {
+      return {
+        deps: [nodeAt(node, 'consequent'), nodeAt(node, 'alternate')],
+        combine: unionOf,
+      }
+    }
+    case 'Identifier': {
+      return planOfName(node, context)
+    }
+    case 'Literal': {
+      return leaf(literalValue(node))
+    }
+    case 'LogicalExpression': {
+      return planOfLogical(node)
+    }
+    case 'MemberExpression': {
+      return leaf(setupValue(node, context))
+    }
+    case 'ParenthesizedExpression': {
+      return { deps: [nodeAt(node, 'expression')], combine: first }
+    }
+    case 'UnaryExpression': {
+      return leaf(unaryValue(node))
+    }
+    default: {
+      return leaf(undefined)
+    }
+  }
+}
+
+interface Frame {
+  readonly plan: Plan
+  readonly done: Resolved[]
+}
+
+/**
+ * The strings `root` can evaluate to that `cx()` would not filter out, or `undefined` when the
+ * build cannot tell. The expression is walked with a stack of its own, so the nesting of the
+ * expression (a chain of a few thousand `||`, a name bound to a name bound to a name) is no
+ * limit of the call stack.
+ */
+function possibles(root: AstNode | undefined, context: Context): Resolved {
+  if (!root) return undefined
+  const stack: Frame[] = [{ plan: planOf(root, context), done: [] }]
+  let result: Resolved
+  while (stack.length > 0) {
+    const top = stack.at(-1)!
+    const next = top.plan.deps[top.done.length]
+    if (top.done.length < top.plan.deps.length) {
+      if (next) stack.push({ plan: planOf(next, context), done: [] })
+      else top.done.push(undefined)
+      continue
+    }
+    result = top.plan.combine(top.done)
+    top.plan.finish?.(result)
+    stack.pop()
+    stack.at(-1)?.done.push(result)
+  }
+  return result
 }
 
 /**

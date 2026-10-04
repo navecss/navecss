@@ -81,9 +81,10 @@ function specifiersOf(ctx: RenderContext, importer: Importer): string[] | undefi
 }
 
 /**
- * Whether `specifier` resolves to `cxId`, asked once per specifier: an alias is the same from
- * every importer. A relative specifier is not asked; it names a file beside the importer, never
- * the installed package's.
+ * Whether `specifier` resolves to `cxId` from `importer`, asked once for each importer and
+ * specifier: a subpath import (`#cx`) resolves through the nearest `package.json`, so the same
+ * text can name different files from different importers. A relative specifier is asked too, since
+ * it can name the installed file.
  */
 async function isResolvingToCx(
   ctx: RenderContext,
@@ -91,12 +92,13 @@ async function isResolvingToCx(
   importer: Importer,
   known: { readonly answers: Map<string, boolean>; readonly cxId: string },
 ): Promise<boolean> {
-  if (specifier === CX_SOURCE || specifier.startsWith('.')) return false
-  const answered = known.answers.get(specifier)
+  if (specifier === CX_SOURCE) return false
+  const key = `${importer.id}\0${specifier}`
+  const answered = known.answers.get(key)
   if (answered !== undefined) return answered
   const resolved = await ctx.resolve?.(specifier, importer.id)
   const isCx = resolved?.id === known.cxId
-  known.answers.set(specifier, isCx)
+  known.answers.set(key, isCx)
   return isCx
 }
 

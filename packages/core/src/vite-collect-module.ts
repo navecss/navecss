@@ -68,12 +68,22 @@ interface Placing {
 const NO_PLACE = { line: 0, column: 0 }
 
 /**
- * The sentence that ends a problem line with no position: a build that asks for no source map is
- * told to ask for one, and any other module whose map does not reach the position is told so.
+ * Whether the module `id` is an inline script of an HTML file: no setting leads back from it.
  */
-export function lineUnknownNote(context: UsedContext): string {
+function isInlineScript(id: string): boolean {
+  return /[?&]html-proxy\b/.test(id)
+}
+
+/**
+ * The sentence that ends a problem line with no position: a build that asks for no source map is
+ * told what asking for one can do, and any other module whose map does not reach the position,
+ * an inline script of an HTML file included, is told so.
+ */
+function lineUnknownNote(context: UsedContext, id: string): string {
   const isBuildWithoutMaps = context.command === 'build' && !context.buildSourcemap
-  return isBuildWithoutMaps ? LINE_UNKNOWN_WITHOUT_MAP : LINE_UNKNOWN_UNMAPPED
+  return isBuildWithoutMaps && !isInlineScript(id)
+    ? LINE_UNKNOWN_WITHOUT_MAP
+    : LINE_UNKNOWN_UNMAPPED
 }
 
 /**
@@ -91,19 +101,34 @@ function locate(problems: readonly Problem[], placing: Placing): LocatedProblem[
  * The calls of `cx.dynamic()`, placed and quoted.
  */
 function locateDynamic(reading: ModuleReading, placing: Placing): Position[] {
-  return reading.dynamicCalls.map(({ offset, construct }) => ({
-    file: placing.file,
-    construct,
-    ...(placing.place(offset) ?? NO_PLACE),
-  }))
+  return reading.dynamicCalls.map(({ offset, construct }) => {
+    const place = placing.place(offset)
+    return {
+      file: placing.file,
+      construct,
+      ...(place ?? { ...NO_PLACE, unknownLine: placing.unknownLine }),
+    }
+  })
 }
+
+const COMPILED_LANGS: ReadonlyMap<string, 'jsx' | 'ts' | 'tsx'> = new Map([
+  ['jsx', 'jsx'],
+  ['ts', 'ts'],
+  ['tsx', 'tsx'],
+])
 
 /**
  * The parse of `code`, or `undefined` for a module the host cannot parse.
  */
-function parseOrUndefined(ctx: TransformContext, code: string): AstNode | undefined {
+function parseOrUndefined(
+  ctx: TransformContext,
+  code: string,
+  moduleType: string | undefined,
+): AstNode | undefined {
   try {
-    return ctx.parse(code) as AstNode
+    // A module the host has not compiled to JavaScript is parsed as the language its type names.
+    const lang = moduleType === undefined ? undefined : COMPILED_LANGS.get(moduleType)
+    return ctx.parse(code, lang && { lang }) as AstNode
   } catch {
     return undefined
   }
@@ -138,7 +163,7 @@ async function recordOf(
     file: moduleLabel(context.root, id),
     pkg,
     place: placerFor(code, map, authored),
-    unknownLine: lineUnknownNote(context),
+    unknownLine: lineUnknownNote(context, id),
   }
   const isStandingIn = isListed(context, pkg)
   return {
@@ -196,7 +221,7 @@ async function recordParsed(
   })
   if (!reading) {
     context.state.exposures.delete(key)
-    return unreadableRecord(context, { id, pkg }, TOO_DEEP)
+    return unreadableRecord(context, { code, id, pkg }, TOO_DEEP)
   }
   // What a script exposed before an edit is not what it exposes now.
   if (reading.exposes.size > 0) context.state.exposures.set(key, reading.exposes)
@@ -228,14 +253,14 @@ export async function recordModule(
   const pkg = isDependency ? await packageNameOf(filePathOf(id), context.packageNames) : undefined
   if (moduleType !== undefined && !SOURCE_TYPES.has(moduleType)) {
     context.state.exposures.delete(key)
-    const record = textRecord(context, { code, id, pkg })
+    const record = textRecord(context, { code, id, moduleType, pkg })
     context.state.modules.set(key, record)
     return record
   }
-  const program = parseOrUndefined(ctx, code)
+  const program = parseOrUndefined(ctx, code, moduleType)
   const record = program
     ? await recordParsed(context, ctx, { code, id, pkg, program }, key)
-    : unreadableRecord(context, { id, pkg }, NOT_PARSED)
+    : unreadableRecord(context, { code, id, pkg }, NOT_PARSED)
   if (!program) context.state.exposures.delete(key)
   context.state.modules.set(key, record)
   return record

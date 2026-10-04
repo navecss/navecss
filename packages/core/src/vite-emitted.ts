@@ -13,6 +13,14 @@ import { compareText } from './vite-problems.ts'
 import { collectedAtoms, recordsOf } from './vite-state.ts'
 
 /**
+ * Where a call the build could not read is: `path:line:column`, or the path alone when no source
+ * map leads to a line.
+ */
+function positionText(place: { column: number; file: string; line: number }): string {
+  return place.line === 0 ? place.file : `${place.file}:${place.line}:${place.column}`
+}
+
+/**
  * What the file records about each package listed in `keepFor`.
  */
 function packageRecords(context: UsedContext): Record<string, PackageRecord> {
@@ -25,7 +33,7 @@ function packageRecords(context: UsedContext): Record<string, PackageRecord> {
     const places = modules.flatMap((record) => [...record.suppressed, ...record.dynamicCalls])
     records[pkg] = {
       collected: [...new Set(modules.flatMap((record) => [...record.atoms]))].toSorted(compareText),
-      unreadable: places.map((place) => `${place.file}:${place.line}:${place.column}`),
+      unreadable: places.map((place) => positionText(place)),
     }
   }
   return records
@@ -50,6 +58,19 @@ function withRestorers(atoms: Set<string>): Set<string> {
 }
 
 /**
+ * What a client invocation takes from the file an earlier invocation left: the set of a server
+ * invocation that ran first, or, from a client invocation's file, the atoms server builds failed
+ * on against its CSS. `took` says whether it took a set at all, empty or not.
+ */
+function takenFromCache(context: UsedContext): { atoms: readonly string[]; took: boolean } {
+  const file = context.inProcess ? undefined : readHandshake(context.cacheDir)
+  if (file === undefined) return { atoms: [], took: false }
+  if (file.writer !== 'client') return { atoms: file.emitted, took: true }
+  const pending = file.pending ?? []
+  return { atoms: pending, took: pending.length > 0 }
+}
+
+/**
  * The emitted set. A client environment fixes it (and writes the cache file); any other
  * environment reads what is known so far and fixes nothing.
  */
@@ -62,9 +83,8 @@ export function emittedSet(
   if (state.emitted) return state.emitted
   const atoms = collectedAtoms(state, context.kept)
   if (environment.config.consumer !== 'client') return atoms
-  const waiting = context.inProcess ? undefined : readHandshake(context.cacheDir)
-  const hasServerSet = waiting !== undefined && waiting.writer !== 'client'
-  if (hasServerSet) for (const atom of waiting.emitted) atoms.add(atom)
+  const taken = takenFromCache(context)
+  for (const atom of taken.atoms) atoms.add(atom)
   withRestorers(atoms)
   state.emitted = atoms
   writeHandshake(
@@ -72,7 +92,7 @@ export function emittedSet(
     {
       emitted: [...atoms],
       writer: 'client',
-      consumed: hasServerSet,
+      consumed: taken.took,
       keepFor: packageRecords(context),
       unmatchedKeepFor: unmatchedKeys(context),
     },
@@ -102,7 +122,7 @@ function missingFromClient(
   return [
     'The client build already wrote its CSS without atoms this server build names, so their rules are missing from it:',
     ...namingLines(ctx, context, missing),
-    'List the atoms in keep in navePlugin(), or build the server first (vite build --ssr, then vite build).',
+    `They are recorded in ${handshakePath(context.cacheDir)} for the next client build. List the atoms in keep in navePlugin(), or build the client again, then the server (vite build, then vite build --ssr). To keep this from recurring, build the server first, then the client (vite build --ssr, then vite build).`,
   ].join('\n')
 }
 
@@ -142,10 +162,9 @@ function recordForNextClient(
 }
 
 /**
- * Checks the atoms of a server invocation against a client set that is waiting for it: a miss
- * fails the build, once; the same miss again, with no client build in between, leaves the set of
- * this build for the client build that follows, because failing again would leave the build the
- * failure recommends failing for good.
+ * Checks the atoms of a server invocation against a client set that is waiting for it. A miss
+ * fails the build, every time: the client CSS on disk still lacks the atoms. The build records
+ * its atoms in the file as pending, and the next client build ships them.
  */
 function checkWaitingClient(
   ctx: RenderContext,
@@ -154,21 +173,13 @@ function checkWaitingClient(
   file: Handshake,
 ): void {
   const missing = [...atoms].filter((atom) => !file.emitted.includes(atom)).toSorted(compareText)
-  const failed = file.serverFailed ?? []
   if (missing.length === 0) {
     writeHandshake(context.cacheDir, { ...file, consumed: true }, (message) => ctx.warn(message))
-  } else if (missing.every((atom) => failed.includes(atom))) {
-    recordForNextClient(ctx, context, atoms, file.emitted)
-  } else {
-    // The file is not marked checked, so a server build against this CSS fails until its atoms
-    // are in it or it has failed once on them; the file keeps what it failed on.
-    writeHandshake(
-      context.cacheDir,
-      { ...file, serverFailed: [...new Set([...failed, ...missing])] },
-      (message) => ctx.warn(message),
-    )
-    ctx.error(missingFromClient(ctx, context, missing))
+    return
   }
+  const pending = [...new Set([...(file.pending ?? []), ...withRestorers(new Set(atoms))])]
+  writeHandshake(context.cacheDir, { ...file, pending }, (message) => ctx.warn(message))
+  ctx.error(missingFromClient(ctx, context, missing))
 }
 
 /**

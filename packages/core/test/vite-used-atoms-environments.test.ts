@@ -9,6 +9,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/vite.ts'
+import { stateFor } from '../src/vite-state.ts'
 import { HANDSHAKE_FILE } from '../src/vite-handshake.ts'
 import {
   addPackage,
@@ -19,6 +20,7 @@ import {
   buildUsed,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
+import { appConfig, startDev } from './helpers/vite-app.ts'
 
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 
@@ -102,6 +104,122 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
     } finally {
       a.dispose()
       b.dispose()
+    }
+  }, 60_000)
+
+  it('keeps the atoms of two concurrent builds of one root apart, each with its own entry', async () => {
+    const app = makeUsedApp(
+      appFiles(
+        {
+          'src/A.ts': `import './app.css'\n${IMPORT}console.log(cx('flex'))\n`,
+          'src/B.ts': `import './app.css'\n${IMPORT}console.log(cx('grid'))\n`,
+        },
+        [],
+      ),
+    )
+    try {
+      const shared = navePlugin()
+      const entry = (name: string) => ({
+        build: { rolldownOptions: { input: path.join(app.root, name) } },
+      })
+      writeFileSync(
+        path.join(app.root, 'a.html'),
+        '<!doctype html><script type="module" src="/src/A.ts"></script>',
+      )
+      writeFileSync(
+        path.join(app.root, 'b.html'),
+        '<!doctype html><script type="module" src="/src/B.ts"></script>',
+      )
+      const [a, b] = await Promise.all([
+        buildUsed(app, { nave: shared, ...entry('a.html') }),
+        buildUsed(app, { nave: shared, ...entry('b.html') }),
+      ])
+
+      expect(a.error).toBeUndefined()
+      expect(b.error).toBeUndefined()
+      expect(atomLayerAtoms(a.css)).toEqual(['flex'])
+      expect(atomLayerAtoms(b.css)).toEqual(['grid'])
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('keeps the atoms of a page of the outer build when a build of a root inside it ran before', async () => {
+    const app = makeUsedApp(
+      appFiles(
+        {
+          'src/App.ts': `${IMPORT}console.log(cx('flex'))\n`,
+          'sub/index.html':
+            '<!doctype html><a class="nave-sr-only-focusable" href="#m">Skip</a><p class="nave-hidden">x</p><script type="module" src="./main.js"></script>',
+          'sub/main.js': 'console.log(1)\n',
+        },
+        ['src/App.ts'],
+      ),
+    )
+    try {
+      const shared = navePlugin()
+      const inner = { root: path.join(app.root, 'sub'), dispose: () => undefined }
+      const first = await buildUsed(inner, { nave: shared })
+      const outer = await buildUsed(app, {
+        nave: shared,
+        build: {
+          rolldownOptions: {
+            input: [path.join(app.root, 'index.html'), path.join(app.root, 'sub/index.html')],
+          },
+        },
+      })
+
+      expect(first.error).toBeUndefined()
+      expect(outer.error).toBeUndefined()
+      expect(atomLayerAtoms(outer.css)).toEqual(atoms('flex', 'hidden', 'srOnlyFocusable'))
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('gives a page of /repo/app2 to the build of /repo, not to the build of /repo/app', () => {
+    const [nave, collect] = navePlugin()
+    const configs = ['/repo', '/repo/app'].map((root) => ({
+      root,
+      command: 'build',
+      logger: { warn() {} },
+    }))
+    for (const config of configs) nave.configResolved(config)
+    collect.transformIndexHtml.handler('<p class="nave-hidden">x</p>', {
+      filename: '/repo/app2/index.html',
+    })
+
+    expect(stateFor('/repo', configs[0]!).pages.size).toBe(1)
+    expect(stateFor('/repo/app', configs[1]!).pages.size).toBe(0)
+  })
+
+  it('keeps the per-module error of a dev server after a build of the same root, sharing one instance', async () => {
+    const app = makeUsedApp(
+      appFiles({
+        'src/Bad.ts': `${IMPORT}export const f = (variant: string) => cx(variant as 'flex')\n`,
+      }),
+    )
+    try {
+      const shared = navePlugin()
+      const server = await startDev(appConfig(app.root, 'postcss', [shared]))
+      try {
+        const request = (): Promise<string> =>
+          server.transformRequest('/src/Bad.ts').then(
+            () => 'no error',
+            (error: Error) => error.message,
+          )
+        const before = await request()
+        const built = await buildUsed(app, { nave: shared })
+        const after = await request()
+
+        expect(before).toContain('src/Bad.ts:')
+        expect(built.error).toContain('src/Bad.ts')
+        expect(after).toContain('src/Bad.ts:')
+      } finally {
+        await server.close()
+      }
+    } finally {
+      app.dispose()
     }
   }, 60_000)
 
@@ -349,29 +467,37 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     }
   }, 120_000)
 
-  it('leaves no deadlock after a client-only build: the server records its atoms, and the next client build holds them', async () => {
-    const app = ssrApp("cx('grid')")
-    try {
-      const alone = await client(app)
-      const first = await server(app)
-      const second = await server(app)
-      const last = await client(app)
+  describe.each(['postcss', 'lightningcss'] as const)('under css.transformer %s', (transformer) => {
+    it('fails a server build on every miss, records its atoms, and passes once the client build has shipped them', async () => {
+      const app = ssrApp("cx('grid')")
+      try {
+        const file = path.join(app.root, '.vite', HANDSHAKE_FILE)
+        const remedy = `They are recorded in ${file} for the next client build. List the atoms in keep in navePlugin(), or build the client again, then the server (vite build, then vite build --ssr). To keep this from recurring, build the server first, then the client (vite build --ssr, then vite build).`
+        const build = (extra = {}) => buildUsed(app, { transformer, ...extra })
+        const ssr = { build: { ssr: 'src/entry-server.ts', outDir: 'dist-ssr', cssMinify: false } }
 
-      expect(atomLayerAtoms(alone.css)).toEqual(atoms('flex', 'gap'))
-      // The client build of a client-first pipeline is the same file on disk, so the first server
-      // build still fails on a miss; a server build run again is what the failure asks for.
-      expect(first.error).toContain('grid')
-      expect(second.error).toBeUndefined()
-      expect(pluginWarnings(second)).toHaveLength(1)
-      expect(pluginWarnings(second)[0]).toContain(
-        staleWarning(app, ['src/entry-server.ts: names grid.']),
-      )
-      expect(last.error).toBeUndefined()
-      expect(atomLayerAtoms(last.css)).toEqual(atoms('flex', 'gap', 'grid'))
-    } finally {
-      app.dispose()
-    }
-  }, 60_000)
+        const alone = await build()
+        const first = await build(ssr)
+        const again = await build(ssr)
+        const next = await build()
+        const last = await build(ssr)
+
+        expect(atomLayerAtoms(alone.css)).toEqual(atoms('flex', 'gap'))
+        for (const failed of [first, again]) {
+          expect(failed.error).toContain('src/entry-server.ts: names grid.')
+          expect(failed.error!.endsWith(remedy)).toBe(true)
+          expect(failed.error).not.toContain('already used')
+          expect(failed.error).not.toContain('could not be checked')
+        }
+        expect(next.error).toBeUndefined()
+        expect(atomLayerAtoms(next.css)).toEqual(atoms('flex', 'gap', 'grid'))
+        expect(last.error).toBeUndefined()
+        expect(pluginWarnings(last)).toEqual([])
+      } finally {
+        app.dispose()
+      }
+    }, 120_000)
+  })
 
   it.each([
     ['grid', "cx('grid')"],
@@ -412,14 +538,16 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     }
   }, 120_000)
 
-  it('fails the server on every run of a client-first pipeline whose server needs an atom the client lacks', async () => {
+  it('fails the server of a client-first pipeline once, then the client ships the atom it missed', async () => {
     const app = ssrApp("cx('grid')")
     try {
       for (let run = 1; run <= 3; run += 1) {
-        await client(app)
+        const first = await client(app)
         const second = await server(app)
 
-        expect(second.error, `run ${run}`).toContain('grid')
+        if (run === 1) expect(second.error, 'run 1').toContain('grid')
+        else expect(second.error, `run ${run}`).toBeUndefined()
+        if (run > 1) expect(atomLayerAtoms(first.css), `run ${run}`).toContain('grid')
       }
     } finally {
       app.dispose()
@@ -459,21 +587,6 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       missApp.dispose()
       staleApp.dispose()
-    }
-  }, 120_000)
-
-  it('fails the client-first pair again on the second run, naming grid', async () => {
-    const app = ssrApp("cx('grid')")
-    try {
-      for (let run = 1; run <= 2; run += 1) {
-        await client(app)
-        const second = await server(app)
-
-        expect(second.error, `run ${run}`).toContain('grid')
-        expect(second.error, `run ${run}`).toContain('src/entry-server.ts')
-      }
-    } finally {
-      app.dispose()
     }
   }, 120_000)
 

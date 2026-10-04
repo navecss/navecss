@@ -222,7 +222,7 @@ describe('the setup return is the compiler’s own', () => {
 })
 
 describe('a module the host cannot parse', () => {
-  it('fails the build, naming the module, when TypeScript reaches the build unconverted', async () => {
+  it('reads TypeScript that reaches the build unconverted, as the language its module type names', async () => {
     const built = await build(
       {
         'src/a.ts': `${IMPORT}const n: string = 'x'\nexport const a = cx('grid')\nconsole.log(a, n)\n`,
@@ -230,12 +230,11 @@ describe('a module the host cannot parse', () => {
       { config: { oxc: false } },
     )
 
-    expect(built.error).toMatch(/^1 problem in 1 file/)
-    expect(built.error).toContain('src/a.ts:')
-    expect(built.error).toContain('could not be read')
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(['grid'])
   })
 
-  it('does the same for a module the TypeScript transform is told to leave', async () => {
+  it('reads a module the TypeScript transform is told to leave', async () => {
     const built = await build(
       {
         'src/legacy/c.ts': `${IMPORT}const n: string = 'x'\nexport const c = cx('gap')\nconsole.log(c, n)\n`,
@@ -243,8 +242,8 @@ describe('a module the host cannot parse', () => {
       { config: { oxc: { exclude: [/legacy/] } } },
     )
 
-    expect(built.error).toMatch(/^1 problem in 1 file/)
-    expect(built.error).toContain('src/legacy/c.ts:')
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(['gap'])
   })
 
   it('control: with the default TypeScript transform the same module is read', async () => {
@@ -700,7 +699,7 @@ describe('a long chain of constants resolves', () => {
 })
 
 const UNKNOWN_WITHOUT_MAP =
-  " (line unknown: this file's compiled code has no source map in this build; set build.sourcemap in the Vite config to report the line)"
+  " (line unknown: this file's compiled code has no source map in this build; setting build.sourcemap in the Vite config reports the line when every plugin that compiles this file returns a map)"
 const UNKNOWN_UNMAPPED = ' (line unknown: no source map leads from the compiled code to this file)'
 
 describe('AC-used-atoms-34: a position is printed only where the source map leads to it', () => {

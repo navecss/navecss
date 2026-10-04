@@ -12,6 +12,10 @@ export interface LoggerLike {
 export interface ResolvedConfigLike {
   readonly root: string
   readonly command: string
+  /**
+   * The config object the host was handed, which every environment of one invocation shares.
+   */
+  readonly inlineConfig?: object
   readonly cacheDir?: string
   /**
    * Set when the config asks for a builder, so one process builds every environment.
@@ -41,7 +45,12 @@ export interface PluginLike {
  */
 export interface EnvironmentLike {
   readonly name: string
-  readonly config: { readonly consumer: string; readonly root?: string }
+  readonly config: {
+    readonly command?: string
+    readonly consumer: string
+    readonly inlineConfig?: object
+    readonly root?: string
+  }
   readonly plugins: readonly PluginLike[]
 }
 
@@ -87,7 +96,7 @@ export interface TransformContext {
   /**
    * The host's parse of `code`, an ESTree (read as an `AstNode`).
    */
-  parse(code: string): unknown
+  parse(code: string, options?: { readonly lang?: 'dts' | 'js' | 'jsx' | 'ts' | 'tsx' }): unknown
   /**
    * Resolves `source` as imported from `importer`.
    */
@@ -110,7 +119,7 @@ export interface HotUpdateOptions {
  */
 export interface HotUpdateContext {
   readonly environment: {
-    readonly config?: { readonly root?: string }
+    readonly config?: { readonly command?: string; readonly inlineConfig?: object }
     readonly hot: { send(payload: { type: 'full-reload' }): void }
     readonly moduleGraph: {
       getModuleById(id: string): unknown
