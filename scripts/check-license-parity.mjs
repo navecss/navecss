@@ -65,16 +65,15 @@ export function isNonPrivate(manifest) {
 
 /**
  * Package directory names cleared to carry a third-party attribution section AFTER the
- * root licence text, per the licensing steward's ruling: "The
- * exception is per-package and named, not a general relaxation. A blanket startsWith
- * over all four packages would let any package append anything for ever with the gate
- * green, which trades a real assertion for a convenience." `tokens` carries that ruling's
- * block, appended to packages/tokens/LICENSE after the MIT
- * text. Adding a package here is a review change landing a block cleared by the licensing
- * steward, never a test fixup for a gate that started failing. `core` carries two such
- * blocks, appended to packages/core/LICENSE after the MIT text: one for the CSS Syntax
- * Level 3 material in its directive tokenizer, and one for the ECMA-426 and RFC 4648
- * material in its source-map encoder.
+ * root licence text. The exception is per-package and named, not a general relaxation: a
+ * blanket startsWith over every package would let any package append anything for ever with
+ * the gate green, which trades a real assertion for a convenience. Adding a package here is a
+ * review change that lands that package's attribution block with it, its wording reviewed as
+ * licence text, never a test fixup for a gate that started failing. `tokens` carries one such
+ * block, appended to packages/tokens/LICENSE after the MIT text. `core` carries two such
+ * blocks, appended to packages/core/LICENSE after the MIT text: one for the CSS Syntax Level 3
+ * material in its directive tokenizer, and one for the ECMA-426 and RFC 4648 material in its
+ * source-map encoder.
  */
 export const THIRD_PARTY_SECTION_ALLOWLIST = new Set(['core', 'tokens'])
 

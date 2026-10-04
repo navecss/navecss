@@ -58,10 +58,10 @@ const SCRIPT_PATH = path.join(ROOT, 'scripts', SCRIPT_NAME)
 const ROOT_LICENSE = Buffer.from('MIT License\n\nCopyright (c) 2026 Nave Contributors\n')
 const VALID_WORKSPACE_YAML = "packages:\n  - 'packages/*'\n"
 
-// The third-party attribution section, cleared by the project's licensing steward,
-// packages/tokens/LICENSE carries after the root text, read here from the shipped file's own
-// bytes (never retyped) so the pinning test below compares against a literal that cannot drift
-// from what this repository actually ships.
+// The third-party attribution section packages/tokens/LICENSE carries after the root text,
+// typed out here by hand as an independent copy of the bytes that file must ship (it is not
+// read from the file). The pinning test below compares the shipped file against this copy, so
+// a change to either one without the same change to the other turns that test red.
 //
 // The block is WIDENED by one paragraph per clearance, never rewritten. The third paragraph
 // credits the two token-format specifications this package implements: their own licence makes
@@ -104,11 +104,12 @@ diagnostics and everything around them are this package's own, and everything in
 this package is offered under the MIT licence above.
 `
 
-// The third-party attribution section, cleared by the project's licensing steward,
-// packages/core/LICENSE carries after the root text, read here from the shipped file's own
-// bytes (never retyped) so the pinning test below compares against a literal that cannot drift
-// from what this repository actually ships. Changing this literal is a review change landing
-// a re-cleared block, never a test fixup for a row that started failing.
+// The third-party attribution section packages/core/LICENSE carries after the root text,
+// typed out here by hand as an independent copy of the bytes that file must ship (it is not
+// read from the file). The pinning test below compares the shipped file against this copy, so
+// a change to either one without the same change to the other turns that test red. Changing
+// this literal is a review change landing a re-cleared block, never a test fixup for a row
+// that started failing.
 const CORE_THIRD_PARTY_SECTION = `
 THIRD-PARTY MATERIAL
 
