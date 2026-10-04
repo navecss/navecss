@@ -230,7 +230,7 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
   /**
    * `lib` is ES2022 only. This target's default lib adds the DOM lib, which `dist/tokens.d.ts`
    * never references and which is most of each probe's compile time: enough, under
-   * `test:coverage` on a loaded CI runner, to push a probe past vitest's 5 s default. A narrower
+   * coverage on a loaded CI runner, to push a probe past vitest's 5 s default. A narrower
    * lib can only add diagnostics, so it cannot hide the "not assignable" errors the negative
    * probes assert; the DOM probe below pins that the DOM lib stays out.
    */
