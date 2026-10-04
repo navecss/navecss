@@ -218,8 +218,9 @@ test('sync with the real repo: scripts:test writes its lcov report where sonar.j
 })
 
 test('scripts:test measures the scripts, not their tests: its lcov names run-ci-check.mjs and no *.test.mjs', () => {
-  // Runs the shipped command's own flags over one small test file, with the report redirected to
-  // a scratch directory, so this does not start the whole suite from inside itself.
+  // Runs the shipped command's own flags over one small test file (it imports run-ci-check.mjs and
+  // starts no processes), with the report redirected to a scratch directory, so this does not
+  // start the whole suite from inside itself.
   // Node does not create the report's directory, so the command makes it first; drop that part.
   const words = scriptsTestCommand().split(' && ').at(-1).split(/\s+/)
   assert.equal(words[0], 'node')
@@ -230,7 +231,7 @@ test('scripts:test measures the scripts, not their tests: its lcov names run-ci-
       .slice(1)
       .map((word) =>
         word === 'scripts/*.test.mjs'
-          ? 'scripts/run-ci-check.test.mjs'
+          ? 'scripts/check-ci-jobs-match-ci-check.test.mjs'
           : word.replace(/=\S*lcov\.info$/, () => `=${lcovPath}`),
       )
     // Inside a `node --test` run these two would make the nested run behave as one of its tests.
@@ -286,6 +287,39 @@ test('the rewrite leaves Node’s lcov SF: paths repo-root-relative, for every r
   } finally {
     rmSync(root, { force: true, recursive: true })
   }
+})
+
+/**
+ * True when a vitest config sets `execArgv` to a list holding `--no-sparkplug` on a line that is
+ * not a comment.
+ */
+function runsWorkersWithoutSparkplug(configText) {
+  const code = configText
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n')
+  return /\bexecArgv:\s*\[[^\]]*'--no-sparkplug'[^\]]*\]/.test(code)
+}
+
+test('runsWorkersWithoutSparkplug ignores a commented-out execArgv', () => {
+  assert.equal(runsWorkersWithoutSparkplug("// execArgv: ['--no-sparkplug'],"), false)
+  assert.equal(runsWorkersWithoutSparkplug("test: {\n  execArgv: ['--no-sparkplug'],\n}"), true)
+})
+
+test('scripts:test runs node without the baseline compiler, and node --test hands that on to its test files', () => {
+  assert.match(scriptsTestCommand(), /\bnode --no-sparkplug --test\b/)
+})
+
+test('sync with the real repo: every package vitest config runs its workers without the baseline compiler', () => {
+  // A V8 crash in Node 24's baseline compiler kills a test worker with SIGSEGV, so each node
+  // config sets the flag. Reading the files means a new package cannot drop it unnoticed.
+  const packagesDir = path.join(ROOT, 'packages')
+  const missing = readdirSync(packagesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => `packages/${entry.name}/vitest.config.ts`)
+    .filter((file) => existsSync(path.join(ROOT, file)))
+    .filter((file) => !runsWorkersWithoutSparkplug(readFileSync(path.join(ROOT, file), 'utf8')))
+  assert.deepEqual(missing, [])
 })
 
 test('sync with the real repo: packages whose test run writes coverage match sonar.javascript.lcov.reportPaths', () => {
