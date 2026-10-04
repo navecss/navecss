@@ -45,6 +45,16 @@ beforeAll(() => {
   } finally {
     rmSync(packDestination, { recursive: true, force: true })
   }
+
+  // The consumer's first stylelint run costs far more than any later one: about 1 to 3 seconds
+  // alone, and 13 to 16 inside the full check, where other packages' tests run beside it, against
+  // a 20 second per-test timeout; a later run takes under one. Pay it once here, under this hook's
+  // own budget, so the first timed test below does not carry it.
+  writeFileSync(path.join(consumerDir, 'warm-up.css'), '')
+  spawnSync(path.join(consumerDir, 'node_modules/.bin/stylelint'), ['warm-up.css'], {
+    cwd: consumerDir,
+    encoding: 'utf8',
+  })
 }, 120_000)
 
 /**

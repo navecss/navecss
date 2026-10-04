@@ -1,0 +1,3 @@
+import { cx as e } from "@navecss/core/cx";
+var t = (t) => e("flex", t ? "grid" : !1), n = (t) => e(t ? "block" : void 0), r = () => e("gap", void 0);
+export { t as a, n as b, r as c };

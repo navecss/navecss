@@ -10,9 +10,10 @@ import { fileURLToPath } from 'node:url'
 import * as viteFloor from 'vite-floor'
 import {
   build as buildOnNewest,
+  createBuilder as createBuilderOnNewest,
   createServer as createServerOnNewest,
   type InlineConfig,
-  type Plugin,
+  type PluginOption,
   version as newestVersion,
   type ViteDevServer,
 } from 'vite'
@@ -31,6 +32,7 @@ export type Transformer = 'lightningcss' | 'postcss'
  */
 export interface ViteApi {
   readonly build: typeof buildOnNewest
+  readonly createBuilder: typeof createBuilderOnNewest
   readonly createServer: typeof createServerOnNewest
   readonly version: string
 }
@@ -39,6 +41,7 @@ export const VITE_APIS: Readonly<Record<string, ViteApi>> = {
   '8.2.1': viteFloor as unknown as ViteApi,
   'newest 8.x': {
     build: buildOnNewest,
+    createBuilder: createBuilderOnNewest,
     createServer: createServerOnNewest,
     version: newestVersion,
   },
@@ -80,7 +83,7 @@ export function makeApp(files: Readonly<Record<string, string>>): ScratchApp {
 export function appConfig(
   root: string,
   transformer: Transformer,
-  plugins: Plugin[],
+  plugins: PluginOption[],
   extra: InlineConfig = {},
 ): InlineConfig {
   return {
@@ -120,7 +123,17 @@ export async function buildOutputs(
   js: string
   assets: Record<string, string>
 }> {
-  const result = await api.build(config)
+  return outputsOf(await api.build(config))
+}
+
+/**
+ * The CSS, the JavaScript and the assets of a build result (one output or several).
+ */
+export function outputsOf(result: unknown): {
+  css: string
+  js: string
+  assets: Record<string, string>
+} {
   const outputs = (Array.isArray(result) ? result : [result]) as unknown as {
     output: OutputLike[]
   }[]
@@ -206,4 +219,19 @@ export async function startDev(
 export function ruleBodyFor(css: string, name: string): string | undefined {
   const match = new RegExp(`${name}[^{}]*\\{([^}]*)\\}`).exec(css)
   return match?.[1]?.replaceAll(/\s+/g, ' ').trim()
+}
+
+/**
+ * Closes a dev server, giving up after `ms` on one whose dependency optimizer is still crawling.
+ */
+export async function stopDev(server: ViteDevServer, ms = 5000): Promise<void> {
+  let timer: NodeJS.Timeout | undefined
+  const giveUp = new Promise((resolve) => {
+    timer = setTimeout(resolve, ms)
+  })
+  try {
+    await Promise.race([server.close(), giveUp])
+  } finally {
+    clearTimeout(timer)
+  }
 }

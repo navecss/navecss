@@ -5,7 +5,7 @@
  * and no other.
  */
 import path from 'node:path'
-import { createLogger, type Logger, type Plugin } from 'vite'
+import { createLogger, type Logger, type Plugin, type PluginOption } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/vite.ts'
@@ -143,7 +143,10 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
       'src/foo.css': '.f { @foo; }',
     }
 
-    async function captureWarnings(plugins: Plugin[], customLogger?: Logger): Promise<string[]> {
+    async function captureWarnings(
+      plugins: PluginOption[],
+      customLogger?: Logger,
+    ): Promise<string[]> {
       const warnings: string[] = []
       const scratch = makeApp({ ...APP_FILES, ...FOO })
       try {

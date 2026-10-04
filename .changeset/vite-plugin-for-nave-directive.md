@@ -3,9 +3,9 @@
 ---
 
 New: `@navecss/core/vite`, a Vite plugin for the `@nave` directive. Add `navePlugin()` from it to
-`plugins`, with the same `extend` and `onUnknown` options as the PostCSS plugin. It is a plain Vite
-plugin with no dependency and no peer, it needs no PostCSS, and it adds nothing to the browser
-bundle. It expands `@nave` after Vite's own CSS step has run, so a stylesheet reached only through
+`plugins`, with the same `extend` and `onUnknown` options as the PostCSS plugin. It returns two Vite plugins in
+an array, which `plugins` takes as one entry. It has no dependency and no peer, it needs no PostCSS,
+and it adds no code to the browser bundle. It expands `@nave` after Vite's own CSS step has run, so a stylesheet reached only through
 `@import`, a Sass file (a `@mixin` that holds a directive included), a CSS Module, an `?inline` or
 `?url` import, and a Vue or Svelte style block are all covered, in `vite build` and in the dev
 server, under either `css.transformer`. Under `css.transformer: 'lightningcss'` it also drops
@@ -24,7 +24,8 @@ dev server serves the new value with no restart, and `vite build --watch` rebuil
 
 To migrate a project that already runs the PostCSS plugin on Vite: move `navePlugin()` from
 `css.postcss` or `postcss.config.js` to `plugins`, importing it from `@navecss/core/vite`. Leaving
-both is harmless, because whichever pass runs second finds no directive left. Next.js, webpack and any other
+both is harmless, because whichever pass runs second finds no directive left. Moving also changes
+which atoms ship, as another entry in this release describes. Next.js, webpack and any other
 pipeline that runs PostCSS plugins keep using `@navecss/core/postcss`. The plugin sets no browser
 floor of its own: `build.cssTarget` (and, under Lightning CSS, `css.lightningcss.targets`) stay
 yours, and the package README shows both at the floor.
