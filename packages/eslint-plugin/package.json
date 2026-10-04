@@ -35,7 +35,6 @@
     "lint": "eslint src test --max-warnings 0",
     "lint:fix": "eslint src test --fix",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
     "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
