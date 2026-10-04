@@ -6,23 +6,30 @@
  * Each step is one root `package.json` script, run as `pnpm run <step>`, and CI runs each of
  * them as its own job (`.github/workflows/code-quality.yml`;
  * `check-ci-jobs-match-ci-check.mjs` keeps the two in step). Locally they run CONCURRENTLY: a
- * step starts once every step in its `after` has passed and one of the `CONCURRENT_STEPS` slots
- * is free, so independent steps overlap instead of running one after another. A step whose
- * `after` did not pass is skipped rather than run against output that was never produced, and
- * named in the summary.
+ * step starts once every step in its `after` has passed, every step in its `waitFor` has
+ * finished, and one of the `CONCURRENT_STEPS` slots is free, so independent steps overlap
+ * instead of running one after another.
  *
- * `after` is not a preference about order, it is a statement that two steps would otherwise
- * collide, so each edge carries its reason:
+ * There are two kinds of edge, because "needs its output" and "would collide with it" are
+ * different facts with different answers to a failure:
  *
- * - build first, for every step that reads `dist/`. The turbo tasks among them already depend
- *   on `build` in `turbo.json`, but two turbo processes building the same package at once would
- *   both write its `dist/`. Once `build` has finished, the others find it in turbo's cache with
- *   the same files already on disk and leave them untouched.
- * - `test` runs alone, so every step that is not a prerequisite of it waits for it. It saturates
- *   the machine by itself, so anything beside it stretches its timed tests past their budgets,
- *   and it writes scratch files inside the tree (under `packages/core/test/`) that `lint`'s
- *   `prettier --check .` walks. Its own prerequisites are the steps that need nothing else:
- *   `build`, `knip`, `deps:lint` and `deps:dedupe-check`.
+ * - `after` names a step whose OUTPUT this one needs. If it did not pass, this step is skipped
+ *   rather than run against output that was never produced, and named in the summary. Only
+ *   `build` is one: every step that reads `dist/` waits for it. The turbo tasks among them
+ *   already depend on `build` in `turbo.json`, but two turbo processes building the same
+ *   package at once would both write its `dist/`. Once `build` has finished, the others find it
+ *   in turbo's cache with the same files already on disk and leave them untouched.
+ * - `waitFor` names a step this one would COLLIDE with if they ran together, so it starts only
+ *   once that step has finished, passed or not. A failure there does not skip it: the failing
+ *   step is what the summary names, and the other results should still show.
+ *
+ * Each `waitFor` edge carries its reason:
+ *
+ * - `test` runs alone, so every step it does not wait for waits for it. It saturates the machine
+ *   by itself, so anything beside it stretches its timed tests past their budgets, and it writes
+ *   scratch files inside the tree (under `packages/core/test/`) that `lint`'s
+ *   `prettier --check .` walks. It waits for the steps that read nothing it writes: `knip`,
+ *   `deps:lint` and `deps:dedupe-check`.
  * - `knip` after `build`: tsup writes a transient `tsup.config.bundled_*.mjs` into
  *   `packages/core` while it builds, and knip would report it as an unused file.
  * - `test:browser` after `test`: both run core's fixture generators, which rewrite
@@ -44,17 +51,17 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const STEPS = [
-  { after: ['build', 'test'], name: 'typecheck' },
-  { after: ['build', 'test'], name: 'lint' },
-  { after: ['build', 'knip', 'deps:lint', 'deps:dedupe-check'], name: 'test' },
-  { after: ['build', 'test'], name: 'test:browser' },
+  { after: ['build'], name: 'typecheck', waitFor: ['test'] },
+  { after: ['build'], name: 'lint', waitFor: ['test'] },
+  { after: ['build'], name: 'test', waitFor: ['knip', 'deps:lint', 'deps:dedupe-check'] },
+  { after: ['build'], name: 'test:browser', waitFor: ['test'] },
   { after: [], name: 'build' },
-  { after: ['build', 'test'], name: 'check:pack' },
-  { after: ['build'], name: 'knip' },
+  { after: ['build'], name: 'check:pack', waitFor: ['test'] },
+  { after: [], name: 'knip', waitFor: ['build'] },
   { after: [], name: 'deps:lint' },
   { after: [], name: 'deps:dedupe-check' },
-  { after: ['build', 'check:pack', 'test'], name: 'scripts:test' },
-  { after: ['build', 'test'], name: 'scripts:check' },
+  { after: ['build'], name: 'scripts:test', waitFor: ['check:pack', 'test'] },
+  { after: ['build'], name: 'scripts:check', waitFor: ['test'] },
 ]
 
 /**
@@ -66,8 +73,13 @@ export const STEPS = [
 const CONCURRENT_STEPS = 2
 
 /**
- * Throws if `steps` cannot all be run: a name declared twice, an `after` naming no step, or a
- * cycle, which would leave its members waiting forever.
+ * Every step `step` must see a result for before it can start: its `after` and its `waitFor`.
+ */
+const edgesOf = (step) => [...step.after, ...(step.waitFor ?? [])]
+
+/**
+ * Throws if `steps` cannot all be run: a name declared twice, an `after` or `waitFor` naming no
+ * step, or a cycle through either, which would leave its members waiting forever.
  */
 export function validateSteps(steps) {
   if (steps.length === 0) throw new Error('The step list is empty.')
@@ -77,7 +89,7 @@ export function validateSteps(steps) {
     names.add(step.name)
   }
   for (const step of steps) {
-    for (const name of step.after) {
+    for (const name of edgesOf(step)) {
       if (!names.has(name)) throw new Error(`${step.name} waits on ${name}, which is not a step.`)
     }
   }
@@ -86,7 +98,7 @@ export function validateSteps(steps) {
   while (grew) {
     grew = false
     for (const step of steps) {
-      if (reachable.has(step.name) || step.after.some((name) => !reachable.has(name))) continue
+      if (reachable.has(step.name) || edgesOf(step).some((name) => !reachable.has(name))) continue
       reachable.add(step.name)
       grew = true
     }
@@ -99,7 +111,9 @@ export function validateSteps(steps) {
 
 /**
  * Runs `steps` through `runStep(name)` (a promise of `{ code, output }`), each as soon as
- * everything in its `after` has passed. Resolves to a Map of name to
+ * everything in its `after` has passed and everything in its `waitFor` has finished, whatever
+ * its result. A step whose `after` did not pass is skipped; a `waitFor` that did not pass skips
+ * nothing. Resolves to a Map of name to
  * `{ status: 'passed' | 'failed' | 'skipped', durationMs?, output?, reason? }`, and calls
  * `onStepDone(name, result)` once per step as its result is known. At most `limit` steps run at
  * once; when more are ready, the earliest in `steps` goes first.
@@ -143,7 +157,7 @@ export function runSteps(steps, runStep, { limit = Infinity, onStepDone }) {
           skipped = true
           continue
         }
-        if (running >= limit || step.after.some((name) => !results.has(name))) continue
+        if (running >= limit || edgesOf(step).some((name) => !results.has(name))) continue
         started.add(step.name)
         running += 1
         // Never rejects: a step's failure is a result, settled inside `execute`.
@@ -224,13 +238,14 @@ function runPnpmScript(name, env, pnpmEntry, running) {
 
 /**
  * Sends `signal` to the whole process group of `child`, which `detached` made its own. A group
- * that has already gone is not an error.
+ * that has already gone is not an error: macOS answers EPERM, not ESRCH, when the only members
+ * left are processes that have exited and not yet been reaped.
  */
 function signalGroup(child, signal) {
   try {
     process.kill(-child.pid, signal)
   } catch (error) {
-    if (error.code !== 'ESRCH') throw error
+    if (error.code !== 'ESRCH' && error.code !== 'EPERM') throw error
   }
 }
 
@@ -274,17 +289,22 @@ async function main(env = process.env) {
   // An interrupted gate sends SIGTERM to every running step's process group (pnpm honours it, and
   // ignores a SIGINT it is forwarded) and starts no more, then unwinds normally (a summary, and
   // the cache directory removed) instead of leaving steps rebuilding dist/ after the gate has
-  // exited. The steps are in groups of their own, so a Ctrl-C in the terminal reaches only this
-  // process: the handlers stay in place for a second one.
+  // exited. A second signal sends SIGKILL to the groups, for steps that ignored the first. The
+  // steps are in sessions of their own, so a Ctrl-C in the terminal reaches only this process
+  // (and the pnpm that started it, which waits), and so does a hangup when the terminal closes:
+  // all three signals are handled and passed on, and the handlers stay in place for the second.
+  // SIGKILL cannot be handled: a runner killed that way leaves its steps to die at their next
+  // write into the closed pipe.
   const running = new Set()
   let interrupted
+  const exitCodes = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }
   const stop = (signal) => {
-    interrupted = signal
-    process.exitCode = signal === 'SIGINT' ? 130 : 143
-    for (const child of running) signalGroup(child, 'SIGTERM')
+    const again = interrupted !== undefined
+    interrupted ??= signal
+    if (!again) process.exitCode = exitCodes[signal]
+    for (const child of running) signalGroup(child, again ? 'SIGKILL' : 'SIGTERM')
   }
-  process.on('SIGINT', stop)
-  process.on('SIGTERM', stop)
+  for (const signal of Object.keys(exitCodes)) process.on(signal, () => stop(signal))
 
   try {
     const runStep = async (name) => {

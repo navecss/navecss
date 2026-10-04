@@ -151,8 +151,8 @@ test('RED: a job running the whole local gate, which is not one of its steps', (
         run: pnpm run ci:check
 `
   assert.deepEqual(compareJobsToSteps(extractJobs(text), STEP_NAMES), [
-    'job full-gate mentions `ci:check`, which would run the whole local gate; ' +
-      'run each step as `pnpm run <step>` instead.',
+    'job full-gate names `ci:check`; a workflow has no reason to name the local gate, so run ' +
+      'each step as `pnpm run <step>` instead.',
     'job full-gate runs `pnpm run ci:check`, which is not a ci:check step.',
   ])
 })
@@ -229,6 +229,37 @@ test('RED: mentioning ci:check or run-ci-check in a run is refused, in any comma
     assert.ok(
       violations.some((violation) => violation.startsWith('job extra ')),
       `\`${command}\` was not refused`,
+    )
+  }
+})
+
+test('RED: `pnpm run-script` is a run in another spelling, and is refused', () => {
+  const violations = compareJobsToSteps(
+    extractJobs(withExtraRun('pnpm run-script test')),
+    STEP_NAMES,
+  )
+  assert.ok(violations.some((violation) => violation.startsWith('job extra ')))
+})
+
+test('a mention of the local gate is refused even in an echo, and the message says why', () => {
+  for (const command of ['echo checking ci:check parity', 'git log | grep ci:check']) {
+    const violations = compareJobsToSteps(extractJobs(withExtraRun(command)), STEP_NAMES)
+    assert.equal(violations.length, 1, command)
+    assert.match(violations[0], /^job extra names `ci:check`/)
+    assert.doesNotMatch(violations[0], /would run/)
+  }
+})
+
+test('`run` after pnpm exec or pnpm dlx belongs to the tool, not to pnpm, and stays clean', () => {
+  for (const command of [
+    'pnpm exec vitest run --project x',
+    'pnpm dlx actionlint run',
+    'pnpm --filter @navecss/core exec vitest run',
+  ]) {
+    assert.deepEqual(
+      compareJobsToSteps(extractJobs(withExtraRun(command)), STEP_NAMES),
+      [],
+      command,
     )
   }
 })

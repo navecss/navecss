@@ -155,11 +155,13 @@ Run the same gate locally, as one command, before opening a pull request:
 pnpm ci:check
 ```
 
-It runs `test` on its own, and the other steps two at a time once what
-each needs has passed (`build` before everything that reads `dist/`, and the
-other reasons `scripts/run-ci-check.mjs` lists). It prints each step's output
-as one block when it finishes, and ends with a summary naming every step that
-failed. A step whose prerequisite failed is skipped and named too.
+It runs `test` on its own, and the other steps two at a time. `build` comes
+before everything that reads `dist/`, and a step that needs it is skipped if
+it fails. Other steps only wait for the ones they would collide with (the
+reasons are in `scripts/run-ci-check.mjs`), and start once those have
+finished, whether they passed or not, so one failure does not hide the
+results of the steps behind it. It prints each step's output as one block
+when it finishes, and ends with a summary naming every step that did not pass.
 
 To auto-fix what can be auto-fixed, then verify:
 

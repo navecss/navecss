@@ -13,9 +13,9 @@
  *
  * 1. every `ci:check` step is run by exactly one job;
  * 2. no job runs the same step twice;
- * 3. every `pnpm run <script>` in that workflow names a `ci:check` step, and no `run:` value
- *    mentions `ci:check` or `run-ci-check`, so the whole gate cannot creep back in through the
- *    shapes this reads;
+ * 3. every `pnpm run <script>` in that workflow names a `ci:check` step, and no unquoted word
+ *    of a `run:` value starts with `ci:check` or contains `run-ci-check`, so the whole gate
+ *    cannot creep back in through the shapes this reads;
  * 4. no job passes arguments to a step: turbo hashes them into every task it runs, `build`
  *    included, so the job would miss the build output it downloaded and build again.
  *
@@ -34,12 +34,19 @@
  * A construct this cannot read is invisible to it. As a step's only run, the step shows up as one
  * "that no job runs" and this fails. As an EXTRA run it can pass unseen: an env prefix or a
  * wrapper command (`TURBO_FORCE=1 pnpm run test`, `time pnpm run test`), turbo called directly, a
- * subshell or an `if` block, the `pnpm <script>` shorthand for a script that is not a step,
- * another workflow file, a composite action, or a job switched off with `if:` or
- * `continue-on-error`. Two shapes are refused outright, because they are how a duplicate gate
- * would come back: any mention of `ci:check` or `run-ci-check` in a `run:` value, and a pnpm
- * command that runs a script in any form other than the literal `pnpm run <step>`. So every step
- * is written as the literal `pnpm run <step>` in this one workflow.
+ * subshell or an `if` block, a command inside `sh -c` or `bash -c`, a YAML-quoted `run:` value,
+ * the `pnpm <script>` shorthand for a script that is not a step or with a flag before the script
+ * (`pnpm -s test`, `pnpm --filter x test`), another workflow file, a composite action, or a job
+ * switched off with `if:` or `continue-on-error`. Quoted text is dropped before reading, which is
+ * why the `sh -c` and YAML-quoted forms are unseen.
+ *
+ * Two shapes are refused outright, because they are how a duplicate gate would come back: a word
+ * starting `ci:check`, or containing `run-ci-check`, anywhere in an unquoted `run:` value (an
+ * `echo` included: a workflow has no reason to name the local gate), and a pnpm command whose
+ * command word is `run` or `run-script` but that is not the literal `pnpm run <step>` (`pnpm -s
+ * run ...`, `pnpm --filter x run ...`). A `run` after `pnpm exec` or `pnpm dlx` is the tool's own
+ * and is left alone. So every step is written as the literal `pnpm run <step>` in this one
+ * workflow.
  *
  * FAILS CLOSED when the workflow file is missing, when it has no jobs, or when the step list is
  * empty: each of those would otherwise compare nothing and report green.
@@ -166,10 +173,10 @@ export function findStepRuns(runText, stepNames) {
 
 /**
  * What one `run:` value does that this check refuses outright, as sentences without the job: a
- * mention of the whole local gate (a word starting `ci:check`, which takes in `ci:check:fix`, or
- * any word containing `run-ci-check`), and a pnpm command that has the word `run` but is not the
- * literal `pnpm run <target>`, such as `pnpm -s run ...` or `pnpm --filter x run ...`, where the
- * step is hidden behind flags.
+ * word starting `ci:check` (which takes in `ci:check:fix`) or containing `run-ci-check`, and a
+ * pnpm command whose command word, the first of `run`, `run-script`, `exec` and `dlx` among its
+ * words, is `run` or `run-script` while the command is not the literal `pnpm run <target>`, such
+ * as `pnpm -s run ...` or `pnpm --filter x run ...`, where the step is hidden behind flags.
  */
 export function findRefusedUses(runText) {
   const refused = []
@@ -178,12 +185,13 @@ export function findRefusedUses(runText) {
     for (const word of words) {
       if (word.startsWith('ci:check') || word.includes('run-ci-check')) {
         refused.push(
-          `mentions \`${word}\`, which would run the whole local gate; ` +
-            'run each step as `pnpm run <step>` instead.',
+          `names \`${word}\`; a workflow has no reason to name the local gate, so run each ` +
+            'step as `pnpm run <step>` instead.',
         )
       }
     }
-    if (words[0] === 'pnpm' && words[1] !== 'run' && words.includes('run')) {
+    const commandWord = words.find((word) => ['dlx', 'exec', 'run', 'run-script'].includes(word))
+    if (words[0] === 'pnpm' && words[1] !== 'run' && ['run', 'run-script'].includes(commandWord)) {
       refused.push(
         `runs \`${words.join(' ')}\`, a form this check cannot read; write \`pnpm run <step>\`.`,
       )

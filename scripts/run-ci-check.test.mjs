@@ -9,7 +9,7 @@
  */
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -194,6 +194,57 @@ test('validateSteps refuses a cycle, which would otherwise leave steps waiting f
   )
 })
 
+test('validateSteps refuses a waitFor that names no step', () => {
+  assert.throws(
+    () => validateSteps([{ after: [], name: 'a', waitFor: ['ghost'] }]),
+    /a waits on ghost, which is not a step/,
+  )
+})
+
+test('validateSteps refuses a cycle that runs through a waitFor', () => {
+  assert.throws(
+    () =>
+      validateSteps([
+        { after: [], name: 'a', waitFor: ['b'] },
+        { after: ['a'], name: 'b' },
+      ]),
+    /never start: a, b/,
+  )
+})
+
+test('a waitFor step starts once the step has finished, and runs even if that step failed', async () => {
+  const steps = [
+    { after: [], name: 'a' },
+    { after: [], name: 'b', waitFor: ['a'] },
+  ]
+  const { finish, runStep, started } = controlledRunner()
+  const done = runSteps(steps, runStep, quiet)
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.deepEqual(started, ['a'])
+  await finish('a', 1)
+  assert.deepEqual(started, ['a', 'b'])
+  await finish('b')
+  const results = await done
+  assert.equal(results.get('a').status, 'failed')
+  assert.equal(results.get('b').status, 'passed')
+})
+
+test('an `after` step that failed still skips, while a waitFor step that failed does not', async () => {
+  const steps = [
+    { after: [], name: 'a' },
+    { after: [], name: 'b' },
+    { after: ['a'], name: 'needs-a', waitFor: ['b'] },
+    { after: [], name: 'after-b', waitFor: ['a', 'b'] },
+  ]
+  const results = await runSteps(
+    steps,
+    async (name) => ({ code: name === 'a' ? 1 : 0, output: '' }),
+    quiet,
+  )
+  assert.equal(results.get('needs-a').status, 'skipped')
+  assert.equal(results.get('after-b').status, 'passed')
+})
+
 test('a forced run (TURBO_FORCE) becomes one fresh, empty turbo cache shared by every step', () => {
   // Forcing each concurrent step would make every turbo step rebuild the dist/ the others are
   // reading. An empty cache directory forces the same thing once: build runs for real, and each
@@ -242,12 +293,69 @@ test('every step that reads built output waits for build', () => {
   }
 })
 
+const waitsFor = (name) => STEPS.find((step) => step.name === name).waitFor ?? []
+
 test('test:browser waits for test: both regenerate core’s test/browser/fixtures/', () => {
-  assert.ok(after('test:browser').includes('test'))
+  assert.ok(waitsFor('test:browser').includes('test'))
 })
 
 test('scripts:test waits for check:pack: it runs core’s check:pack itself, in the same directory', () => {
-  assert.ok(after('scripts:test').includes('check:pack'))
+  assert.ok(waitsFor('scripts:test').includes('check:pack'))
+})
+
+/**
+ * Runs the real `STEPS` with `failing` steps exiting 1 and the rest 0, and returns each step's
+ * status.
+ */
+async function statusesWhenFailing(failing) {
+  const results = await runSteps(
+    STEPS,
+    async (name) => ({ code: failing.includes(name) ? 1 : 0, output: '' }),
+    { limit: 2, onStepDone: () => {} },
+  )
+  return Object.fromEntries([...results].map(([name, result]) => [name, result.status]))
+}
+
+test('only build is a prerequisite: a failure elsewhere does not skip a step', async () => {
+  const statuses = await statusesWhenFailing(['deps:dedupe-check'])
+  const others = Object.entries(statuses).filter(([name]) => name !== 'deps:dedupe-check')
+  assert.equal(statuses['deps:dedupe-check'], 'failed')
+  assert.deepEqual(
+    others.filter(([, status]) => status !== 'passed'),
+    [],
+  )
+})
+
+test('a failing test skips nothing: the steps that wait for it still run', async () => {
+  const statuses = await statusesWhenFailing(['test'])
+  for (const name of [
+    'typecheck',
+    'lint',
+    'check:pack',
+    'test:browser',
+    'scripts:test',
+    'scripts:check',
+  ]) {
+    assert.equal(statuses[name], 'passed', `${name} was ${statuses[name]}`)
+  }
+})
+
+test('a failing build skips what reads dist/ and still runs knip and the dependency checks', async () => {
+  const statuses = await statusesWhenFailing(['build'])
+  for (const name of ['knip', 'deps:lint', 'deps:dedupe-check']) {
+    assert.equal(statuses[name], 'passed', `${name} was ${statuses[name]}`)
+  }
+  for (const name of [
+    'typecheck',
+    'lint',
+    'test',
+    'test:browser',
+    'check:pack',
+    'scripts:test',
+    'scripts:check',
+  ]) {
+    assert.equal(statuses[name], 'skipped', `${name} was ${statuses[name]}`)
+  }
 })
 
 /**
@@ -306,8 +414,9 @@ test('knip does not run while build does: tsup leaves a transient config file in
 /**
  * A stand-in for the pnpm entry point the runner starts each step with (`npm_execpath`). Every
  * step exits at once except the one named in `FAKE_SLOW_STEP`: that one starts a child of its
- * own, records both process ids in `FAKE_PIDS_FILE`, ignores SIGINT as pnpm does when it is
- * forwarded one, and then waits far longer than the test does.
+ * own, records both process ids in `FAKE_PIDS_FILE` once the child is up, ignores SIGINT as pnpm
+ * does when it is forwarded one, and then waits far longer than the test does. With
+ * `FAKE_TRAP_TERM` set, both processes ignore SIGTERM as well.
  */
 const FAKE_PNPM = `
 import { spawn } from 'node:child_process'
@@ -315,8 +424,12 @@ import { writeFileSync } from 'node:fs'
 const [, , , name] = process.argv
 if (name !== process.env.FAKE_SLOW_STEP) process.exit(0)
 process.on('SIGINT', () => {})
-const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
-writeFileSync(process.env.FAKE_PIDS_FILE, JSON.stringify([process.pid, grandchild.pid]))
+if (process.env.FAKE_TRAP_TERM) process.on('SIGTERM', () => {})
+const child = 'if (process.env.FAKE_TRAP_TERM) process.on("SIGTERM", () => {}); console.log("up"); setInterval(() => {}, 1000)'
+const grandchild = spawn(process.execPath, ['-e', child], { stdio: ['ignore', 'pipe', 'ignore'] })
+grandchild.stdout.once('data', () => {
+  writeFileSync(process.env.FAKE_PIDS_FILE, JSON.stringify([process.pid, grandchild.pid]))
+})
 setInterval(() => {}, 1000)
 `
 
@@ -337,7 +450,29 @@ const until = async (condition, timeoutMs) => {
   return condition()
 }
 
-test('SIGINT to the runner stops the step that is running, which is never reported as passed', async () => {
+/**
+ * Resolves to what `promise` resolves to, or to `fallback` after `ms`. The timer is cleared as
+ * soon as the race is settled, so a promise that wins does not leave it holding the process open.
+ */
+async function within(promise, ms, fallback) {
+  let timer
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Starts the real runner, in a process group of its own, with every step faked and `build` the
+ * slow one, and calls `body({ child, exited, output, pids })` once the slow step is up. `exited`
+ * resolves to the runner's exit code (null when a signal killed it). Whatever is still running
+ * afterwards is killed by process id.
+ */
+async function withRunningSlowStep({ trapTerm = false }, body) {
   const dir = mkdtempSync(path.join(tmpdir(), 'ci-check-signal-'))
   const pidsFile = path.join(dir, 'pids.json')
   const entry = path.join(dir, 'fake-pnpm.mjs')
@@ -347,7 +482,14 @@ test('SIGINT to the runner stops the step that is running, which is never report
     Object.entries(process.env).filter(([key]) => key !== 'TURBO_FORCE'),
   )
   const child = spawn(process.execPath, [runner], {
-    env: { ...env, FAKE_PIDS_FILE: pidsFile, FAKE_SLOW_STEP: 'build', npm_execpath: entry },
+    detached: true,
+    env: {
+      ...env,
+      FAKE_PIDS_FILE: pidsFile,
+      FAKE_SLOW_STEP: 'build',
+      ...(trapTerm && { FAKE_TRAP_TERM: '1' }),
+      npm_execpath: entry,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   const chunks = []
@@ -356,26 +498,64 @@ test('SIGINT to the runner stops the step that is running, which is never report
   const exited = new Promise((resolve) => child.on('close', (code) => resolve(code)))
   let pids = []
   try {
-    assert.ok(await until(() => existsSync(pidsFile), 10_000), 'the slow step never started')
-    pids = JSON.parse(readFileSync(pidsFile, 'utf8'))
-    const signalledAt = Date.now()
-    child.kill('SIGINT')
-    const code = await Promise.race([
-      exited,
-      new Promise((resolve) => setTimeout(() => resolve('still running'), 5000)),
-    ])
-    const output = Buffer.concat(chunks).toString()
-    assert.equal(code, 130, output)
-    assert.ok(Date.now() - signalledAt < 5000)
-    assert.doesNotMatch(output, /passed\s+build/)
-    assert.match(output, /FAILED\s+build/)
-    assert.match(output, /stopped: ci:check received SIGINT/)
-    assert.ok(await until(() => pids.every((pid) => !isAlive(pid)), 2000), 'a step process is left')
+    // The file can be seen before its contents are complete, so wait until it parses.
+    const started = await until(() => {
+      try {
+        pids = JSON.parse(readFileSync(pidsFile, 'utf8'))
+        return true
+      } catch {
+        return false
+      }
+    }, 10_000)
+    assert.ok(started, 'the slow step never started')
+    await body({ child, exited, output: () => Buffer.concat(chunks).toString(), pids })
   } finally {
-    child.kill('SIGKILL')
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
     for (const pid of pids) if (isAlive(pid)) process.kill(pid, 'SIGKILL')
     rmSync(dir, { force: true, recursive: true })
   }
+}
+
+const allGone = (pids, ms) => until(() => pids.every((pid) => !isAlive(pid)), ms)
+
+test('SIGINT to the runner stops the step that is running, which is never reported as passed', async () => {
+  await withRunningSlowStep({}, async ({ child, exited, output, pids }) => {
+    const signalledAt = Date.now()
+    child.kill('SIGINT')
+    const code = await within(exited, 5000, 'still running')
+    assert.equal(code, 130, output())
+    assert.ok(Date.now() - signalledAt < 5000)
+    assert.doesNotMatch(output(), /passed\s+build/)
+    assert.match(output(), /FAILED\s+build/)
+    assert.match(output(), /stopped: ci:check received SIGINT/)
+    assert.ok(await allGone(pids, 2000), 'a step process is left')
+  })
+})
+
+test('SIGHUP to the runner’s group stops the steps too, with exit code 129', async () => {
+  await withRunningSlowStep({}, async ({ child, exited, output, pids }) => {
+    // The steps are in sessions of their own, so a hangup on the runner's group (a closed
+    // terminal) does not reach them: the runner has to pass it on.
+    process.kill(-child.pid, 'SIGHUP')
+    const code = await within(exited, 5000, 'still running')
+    assert.equal(code, 129, output())
+    assert.match(output(), /stopped: ci:check received SIGHUP/)
+    assert.ok(await allGone(pids, 3000), 'a step process is left')
+  })
+})
+
+test('a second signal kills the steps that ignored the first', async () => {
+  await withRunningSlowStep({ trapTerm: true }, async ({ child, exited, output, pids }) => {
+    child.kill('SIGINT')
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    assert.ok(isAlive(pids[0]), 'the step should have ignored SIGTERM')
+    const signalledAt = Date.now()
+    child.kill('SIGINT')
+    const code = await within(exited, 2000, 'still running')
+    assert.equal(code, 130, output())
+    assert.ok(Date.now() - signalledAt < 2000)
+    assert.ok(await allGone(pids, 2000), 'a step process is left')
+  })
 })
 
 test('package.json runs this runner as ci:check, and ci:check:fix runs ci:check', () => {
