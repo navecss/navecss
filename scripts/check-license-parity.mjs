@@ -71,9 +71,10 @@ export function isNonPrivate(manifest) {
  * green, which trades a real assertion for a convenience." `tokens` carries that ruling's
  * block, appended to packages/tokens/LICENSE after the MIT
  * text. Adding a package here is a review change landing a block cleared by the licensing
- * steward, never a test fixup for a gate that started failing. `core` carries the same
- * ruling's block for the CSS Syntax Level 3 material in its directive tokenizer, appended
- * to packages/core/LICENSE after the MIT text.
+ * steward, never a test fixup for a gate that started failing. `core` carries two such
+ * blocks, appended to packages/core/LICENSE after the MIT text: one for the CSS Syntax
+ * Level 3 material in its directive tokenizer, and one for the ECMA-426 and RFC 4648
+ * material in its source-map encoder.
  */
 export const THIRD_PARTY_SECTION_ALLOWLIST = new Set(['core', 'tokens'])
 
