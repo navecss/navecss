@@ -38,8 +38,10 @@ describe('the Vite fixture legs', () => {
 
   it('wires each leg to the functions of the Vite it reports', () => {
     expect(VITE_APIS[FLOOR]?.build).toBe(viteFloor.build)
+    expect(VITE_APIS[FLOOR]?.createBuilder).toBe(viteFloor.createBuilder)
     expect(VITE_APIS[FLOOR]?.createServer).toBe(viteFloor.createServer)
     expect(VITE_APIS[NEWEST]?.build).toBe(viteNewest.build)
+    expect(VITE_APIS[NEWEST]?.createBuilder).toBe(viteNewest.createBuilder)
     expect(VITE_APIS[NEWEST]?.createServer).toBe(viteNewest.createServer)
   })
 
@@ -47,7 +49,10 @@ describe('the Vite fixture legs', () => {
     // README: "the fixtures run on Vite <floor> and on the newest 8.x at the time of each release"
     const stated = /fixtures run on Vite (\d+\.\d+\.\d+) and on the\s+newest 8\.x/.exec(readme)?.[1]
 
-    expect(stated).toBe(FLOOR)
+    expect(
+      stated,
+      'packages/core/README.md must say "the fixtures run on Vite X.Y.Z and on the newest 8.x"',
+    ).toBe(FLOOR)
     expect(manifest.devDependencies['vite-floor']).toBe(`npm:vite@${FLOOR}`)
   })
 })
