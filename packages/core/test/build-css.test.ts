@@ -13,6 +13,7 @@
  * covers the `@media`/`@container` nested-pseudos path — both were wired to
  * `anchorSelectorList` and neither had a test that could tell.
  */
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import type { ConditionalBlock, ResolvedAtom } from '../src/directive/resolve.ts'
@@ -80,5 +81,15 @@ describe('renderAtBlock — anchors every branch of a plain comma-separated pseu
 
     expect(rendered).toContain('&:focus, &[data-selected="true"]')
     expect(rendered).not.toMatch(/&:focus,\s*\[data-selected="true"\]/)
+  })
+})
+
+describe('renderStandalone — the whole stylesheet in one file', () => {
+  it('is what the build wrote to dist/standalone.css, from dist/layers.css and dist/index.css', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { renderStandalone } = await import('../scripts/build-css.ts')
+    const dist = path.resolve(import.meta.dirname, '../dist')
+
+    expect(renderStandalone()).toBe(readFileSync(path.join(dist, 'standalone.css'), 'utf8'))
   })
 })

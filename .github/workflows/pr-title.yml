@@ -38,6 +38,7 @@ jobs:
             tokens
             core
             bridge
+            base-ui
             cli
             stylelint-config
             eslint-plugin

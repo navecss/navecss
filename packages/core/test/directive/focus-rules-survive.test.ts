@@ -14,7 +14,9 @@ import { describe, expect, it } from 'vitest'
 
 import { atoms } from '../../src/atoms.ts'
 import { expandText } from '../../src/directive/expand-text.ts'
+import { navePlugin as lightningAdapter } from '../../src/lightningcss.ts'
 import { navePlugin } from '../../src/postcss.ts'
+import { LIGHTNING_RELEASES } from '../helpers/lightningcss-releases.ts'
 import { runHook } from '../helpers/vite-hook.ts'
 
 const FOCUS_VISIBLE = atoms.focusRing.pseudos![':focus-visible']!
@@ -110,7 +112,11 @@ describe('AC-directive-core-20 — the focus rules survive every leg', () => {
 
     expect(viteRun.error, 'the Vite leg failed on a directive row').toBeUndefined()
     expect(viteOutput, 'the Vite leg left a directive row untouched').toBeDefined()
-    for (const output of [postcssOutput, expandTextOutput, viteOutput!]) {
+    const lightningOutputs = LIGHTNING_RELEASES.map(({ lib }) => {
+      const expanded = lightningAdapter().expand(css, '/proj/app.css')
+      return lib.transform({ filename: '/proj/app.css', code: expanded.code }).code.toString()
+    })
+    for (const output of [postcssOutput, expandTextOutput, viteOutput!, ...lightningOutputs]) {
       assertPseudoRuleSurvives(output, pseudo, revealed)
       assertBaseDeclarationsSurvive(output, base)
     }

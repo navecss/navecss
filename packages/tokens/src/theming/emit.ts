@@ -130,8 +130,9 @@ export function emitCss(result: PipelineResult, layer = 'tokens.defaults'): Emit
   const lines: string[] = [
     // This line ships inside dist/tokens.css, which every consumer of this package installs,
     // so it may only point at a document that consumer can open. It names this package's own
-    // README instead of an internal path.
-    '/* Nave theming — generated, do not edit. See this package\'s README ("Theming"). */',
+    // README instead of an internal path, by package name: the line also ships inside
+    // @navecss/core's standalone stylesheet, whose README is a different one.
+    '/* Nave theming — generated, do not edit. See the @navecss/tokens README ("Theming"). */',
     '',
     `@property ${TINT_PROPERTY} {`,
     `  syntax: '<color>';`,

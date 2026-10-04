@@ -119,7 +119,7 @@ Format: `type(scope): description`
 
 Types: feat, fix, chore, docs, test, refactor, perf, ci, build, style, revert
 
-Scopes: tokens, core, bridge, cli, repo, deps, release
+Scopes: tokens, core, bridge, base-ui, cli, repo, deps, release
 
 Examples:
 feat(core): add container atom
