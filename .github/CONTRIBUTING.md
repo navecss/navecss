@@ -119,7 +119,7 @@ Format: `type(scope): description`
 
 Types: feat, fix, chore, docs, test, refactor, perf, ci, build, style, revert
 
-Scopes: tokens, core, bridge, cli, repo, deps, release
+Scopes: tokens, core, bridge, base-ui, cli, repo, deps, release
 
 Examples:
 feat(core): add container atom
@@ -134,19 +134,34 @@ Clean up the commit message before opening a pull request.
 
 ## Quality check
 
-`code-quality.yml` runs on every pull request: a matrix job over `typecheck` / `lint` /
-`test` / `build` (so one failure never masks the rest), plus a `full-gate` job
-running the same `pnpm ci:check` described below end to end (packaging
-validation included). The toolchain is mise-pinned (`mise.toml`, node and
-pnpm both exact-versioned there for CI); `package.json`'s `packageManager`
-field pins the same pnpm version for a local machine via corepack, so CI and
-a local machine run the identical toolchain from the same two numbers.
+`code-quality.yml` runs on every pull request, one job per `ci:check` step,
+so a red run names the check that failed. No check runs twice: `build` runs
+once and hands its output to every job that reads `dist/`, and `test` runs
+the suites once, with coverage, for the `sonar` job to scan. `build` and
+`test` also run on Node 22.18, the `engines` floor in `package.json`, which
+is the one deliberate repeat. `scripts/check-ci-jobs-match-ci-check.mjs`
+fails if a step is run by no job, by two jobs, or twice in one. It reads each
+step as the literal `pnpm run <step>` in `code-quality.yml`, and its header
+lists what it cannot see. Every job installs its toolchain through
+`.github/actions/setup`: mise-pinned (`mise.toml` pins node and pnpm exactly;
+the floor legs of `build` and `test` swap in Node 22.18 and check that it is
+the one running), while `package.json`'s `packageManager` field pins the same
+pnpm version for a local machine via corepack, so CI and a local machine run
+the identical toolchain from the same two numbers.
 
-Run the same gate locally before opening a pull request:
+Run the same gate locally, as one command, before opening a pull request:
 
 ```bash
 pnpm ci:check
 ```
+
+It runs `test` on its own, and the other steps two at a time. `build` comes
+before everything that reads `dist/`, and a step that needs it is skipped if
+it fails. Other steps only wait for the ones they would collide with (the
+reasons are in `scripts/run-ci-check.mjs`), and start once those have
+finished, whether they passed or not, so one failure does not hide the
+results of the steps behind it. It prints each step's output as one block
+when it finishes, and ends with a summary naming every step that did not pass.
 
 To auto-fix what can be auto-fixed, then verify:
 
@@ -154,48 +169,49 @@ To auto-fix what can be auto-fixed, then verify:
 pnpm ci:check:fix
 ```
 
-`ci:check` runs, in order:
+`ci:check` runs these steps:
 
 1. **`typecheck`** — `tsc --noEmit` per package (core additionally
    type-checks `test/browser/` against its own DOM-aware `tsconfig.json`).
 2. **`lint`** — ESLint (flat config, every rule `error`), Stylelint
    (`order`, `declaration-strict-value`, `declaration-block-no-ignored-properties`,
    `high-performance-animation`), then a repo-wide Prettier check.
-3. **`test`** — Vitest unit tests (Node environment) per package.
-4. **`test:coverage`** — Vitest with `@vitest/coverage-v8`, text/html/lcov
-   reports. Measured and reported only: no coverage threshold gates the
-   build, and none should be added — a library that is mostly CSS and
-   generated output would have coverage percentages measuring the wrong
-   thing, and a threshold that has to be gamed to stay green teaches the
-   opposite habit.
-5. **`test:browser`** — Vitest browser mode with the Playwright provider,
+3. **`test`** — Vitest unit tests (Node environment) per package, with
+   `@vitest/coverage-v8` text/html/lcov reports from the packages that
+   turn coverage on. Measured and reported only: no coverage threshold
+   gates the build, and none should be added — a library that is mostly
+   CSS and generated output would have coverage percentages measuring the
+   wrong thing, and a threshold that has to be gamed to stay green teaches
+   the opposite habit.
+4. **`test:browser`** — Vitest browser mode with the Playwright provider,
    over a small fixture in `packages/core/test/browser/`, in a real
    headless Chromium: `@layer` order resolving as documented and the
    `@nave` directive's nested-output transform cascading correctly are
    cascade behaviour, not text, so this is the one layer of the suite a
    Node-side string or AST assertion cannot cover.
-6. **`build`** — Turbo build graph (`@navecss/tokens` via the
+5. **`build`** — Turbo build graph (`@navecss/tokens` via the
    first-party token build, `@navecss/core` via a CSS build step
    plus `tsup`, `@navecss/cli` via `tsup`).
-7. **`check:pack`** — `publint` and `@arethetypeswrong/cli --pack` against
+6. **`check:pack`** — `publint` and `@arethetypeswrong/cli --pack` against
    the packed tarball of every package (including the still-private
    `@navecss/cli`, so nothing has to be remembered when it goes public).
    Also wired into each publishable package's `prepublishOnly`, so a
    broken export map cannot be published even by a hand-run release.
-8. **`knip`** — dead code, unused exports and unused dependencies,
+7. **`knip`** — dead code, unused exports and unused dependencies,
    repo-wide.
-9. **`deps:lint`** — `syncpack lint`: consistent dependency versions
+8. **`deps:lint`** — `syncpack lint`: consistent dependency versions
    across the workspace (respecting the Changesets `fixed` group for
    tokens + core).
-10. **`deps:dedupe-check`** — `pnpm dedupe --check`: fails when the
-    lockfile holds a duplicate resolution `pnpm dedupe` could collapse
-    (each caret range already satisfied by a single copy). Catches a
-    grouped Dependabot bump that updates the lockfile minimally instead
-    of collapsing it. Needs the npm registry reachable: it re-reads
-    package metadata, so it fails offline even with a warm pnpm cache.
-11. **`scripts:test`** — `node --test` over the repo-root `scripts/`
-    gates' own unit coverage (`scripts/*.test.mjs`).
-12. **`scripts:check`** — the repo-root gates in `scripts/`, run in the
+9. **`deps:dedupe-check`** — `pnpm dedupe --check`: fails when the
+   lockfile holds a duplicate resolution `pnpm dedupe` could collapse
+   (each caret range already satisfied by a single copy). Catches a
+   grouped Dependabot bump that updates the lockfile minimally instead
+   of collapsing it. Needs the npm registry reachable: it re-reads
+   package metadata, so it fails offline even with a warm pnpm cache.
+10. **`scripts:test`** — `node --test` over the repo-root `scripts/`
+    gates' own unit coverage (`scripts/*.test.mjs`), measuring the
+    scripts' coverage and writing an lcov report for Sonar.
+11. **`scripts:check`** — the repo-root gates in `scripts/`, run in the
     order `package.json` chains them: the licence and provenance gates,
     the packaging and publishable-set gates, the scans over the
     repository's own docs, manifests and generated output, and the
@@ -203,11 +219,10 @@ pnpm ci:check:fix
     failing gate names the file it is unhappy with, so you do not need
     the list to read a failure.
 
-`turbo.json` gives `test`, `test:coverage`, `test:browser` and `check:pack`
-a `dependsOn: ["build"]` at the package level, so turbo builds the package
-ahead of each of those tasks regardless of where the standalone `build`
-step sits in the chain — so that step's position in the chain does not
-affect those four tasks.
+`turbo.json` gives `test`, `test:browser` and `check:pack` a
+`dependsOn: ["build"]` at the package level, so each of them, run on its
+own, builds the package first; under `ci:check` and in CI they find that
+build already done.
 
 ### Measuring the repository from the shell
 

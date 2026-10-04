@@ -120,6 +120,36 @@ importers:
         specifier: 5.0.3
         version: 5.0.3(@types/node@26.6.3)(@vitest/browser-playwright@5.0.3)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.1)(yaml@2.9.1))
 
+  packages/base-ui:
+    devDependencies:
+      '@navecss/core':
+        specifier: workspace:*
+        version: link:../core
+      '@navecss/tokens':
+        specifier: workspace:*
+        version: link:../tokens
+      '@types/node':
+        specifier: ^26.6.3
+        version: 26.6.3
+      '@vitest/coverage-v8':
+        specifier: 5.0.3
+        version: 5.0.3(@vitest/browser@5.0.3)(vitest@5.0.3)
+      postcss:
+        specifier: ^8.5.28
+        version: 8.5.28
+      postcss-selector-parser:
+        specifier: ^7.1.6
+        version: 7.1.6
+      postcss-value-parser:
+        specifier: ^4.2.0
+        version: 4.2.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 5.0.3
+        version: 5.0.3(@types/node@26.6.3)(@vitest/browser-playwright@5.0.3)(@vitest/coverage-v8@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.1(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.105.1)(yaml@2.9.1))
+
   packages/bridge:
     dependencies:
       '@navecss/tokens':

@@ -181,25 +181,198 @@ test('the real repo has no .sonarcloud.properties: a CI-driven scan reads sonar-
   assert.equal(existsSync(path.join(ROOT, '.sonarcloud.properties')), false)
 })
 
-test('sync with the real repo: packages with a test:coverage script match sonar.javascript.lcov.reportPaths', () => {
+/**
+ * A config's text with its comments removed: block comments, and lines that start with two
+ * slashes. What is left is what vitest actually reads.
+ */
+function configCode(configText) {
+  return configText
+    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n')
+}
+
+/**
+True when a vitest config's `coverage` block sets `enabled: true` outside a comment.
+ */
+function coverageTurnedOn(configText) {
+  return /coverage:\s*\{[^}]*\benabled:\s*true\b/.test(configCode(configText))
+}
+
+test('coverageTurnedOn ignores a block-commented enabled: true', () => {
+  assert.equal(coverageTurnedOn("coverage: {\n  /* enabled: true, */\n  provider: 'v8',\n}"), false)
+  assert.equal(
+    coverageTurnedOn("coverage: {\n  /*\n   * enabled: true,\n   */\n  provider: 'v8',\n}"),
+    false,
+  )
+})
+
+test('coverageTurnedOn ignores a commented-out enabled: true', () => {
+  assert.equal(coverageTurnedOn("coverage: {\n  // enabled: true,\n  provider: 'v8',\n}"), false)
+  assert.equal(coverageTurnedOn("coverage: {\n  enabled: true,\n  provider: 'v8',\n}"), true)
+})
+
+/**
+ * The root `scripts:test` command, as package.json spells it.
+ */
+function scriptsTestCommand() {
+  const { scripts } = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
+  return scripts['scripts:test']
+}
+
+test('sync with the real repo: scripts:test writes its lcov report where sonar.javascript.lcov.reportPaths reads it', () => {
+  const command = scriptsTestCommand()
+  assert.match(command, /--experimental-test-coverage/)
+  const destination = /--test-reporter-destination=(\S+lcov\.info)/.exec(command)?.[1]
+  assert.ok(destination, `scripts:test has no lcov reporter destination: ${command}`)
+  const propertiesText = readFileSync(path.join(ROOT, 'sonar-project.properties'), 'utf8')
+  assert.ok(
+    readPropertyValue(propertiesText, 'sonar.javascript.lcov.reportPaths').includes(destination),
+    `${destination} is not in sonar.javascript.lcov.reportPaths`,
+  )
+})
+
+test('scripts:test measures the scripts, not their tests: its lcov names run-ci-check.mjs and no *.test.mjs', () => {
+  // Runs the shipped command's own flags over one small test file (it imports run-ci-check.mjs and
+  // starts no processes), with the report redirected to a scratch directory, so this does not
+  // start the whole suite from inside itself.
+  // Node does not create the report's directory, so the command makes it first; drop that part.
+  const words = scriptsTestCommand().split(' && ').at(-1).split(/\s+/)
+  assert.equal(words[0], 'node')
+  const scratch = mkdtempSync(path.join(realpathSync(tmpdir()), 'scripts-lcov-'))
+  const lcovPath = path.join(scratch, 'lcov.info')
+  try {
+    const args = words
+      .slice(1)
+      .map((word) =>
+        word === 'scripts/*.test.mjs'
+          ? 'scripts/check-ci-jobs-match-ci-check.test.mjs'
+          : word.replace(/=\S*lcov\.info$/, () => `=${lcovPath}`),
+      )
+    // Inside a `node --test` run these two would make the nested run behave as one of its tests.
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([key]) => key !== 'NODE_TEST_CONTEXT' && key !== 'NODE_V8_COVERAGE',
+      ),
+    )
+    const result = spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8', env })
+    assert.equal(result.status, 0, result.stdout + result.stderr)
+    const sourceFiles = readFileSync(lcovPath, 'utf8')
+      .split('\n')
+      .filter((line) => line.startsWith('SF:'))
+      .map((line) => line.slice(3))
+    assert.ok(sourceFiles.includes('scripts/run-ci-check.mjs'), sourceFiles.join('\n'))
+    assert.deepEqual(
+      sourceFiles.filter((file) => file.endsWith('.test.mjs')),
+      [],
+    )
+  } finally {
+    rmSync(scratch, { force: true, recursive: true })
+  }
+})
+
+test('the rewrite leaves Node’s lcov SF: paths repo-root-relative, for every report the properties list', () => {
+  // Node writes `SF:` relative to the directory it ran in, which for scripts:test is the
+  // repository root already, so a report in scripts/coverage must come out unchanged.
+  const nodeLcov = [
+    'TN:',
+    'SF:scripts/run-script-in-test-helper.mjs',
+    'FN:14,runScriptIn',
+    'DA:1,4',
+    'end_of_record',
+    '',
+  ].join('\n')
+  const propertiesText = readFileSync(path.join(ROOT, 'sonar-project.properties'), 'utf8')
+  const dirs = packageDirsFromReportPaths(propertiesText)
+  const root = mkdtempSync(path.join(realpathSync(tmpdir()), 'lcov-nodes-'))
+  try {
+    for (const dir of dirs) {
+      mkdirSync(path.join(root, dir, 'coverage'), { recursive: true })
+      writeFileSync(
+        path.join(root, dir, 'coverage', 'lcov.info'),
+        dir === 'scripts' ? nodeLcov : 'SF:src/a.ts\nend_of_record\n',
+      )
+    }
+    main(root, dirs)
+    assert.ok(dirs.includes('scripts'))
+    assert.equal(
+      readFileSync(path.join(root, 'scripts', 'coverage', 'lcov.info'), 'utf8'),
+      nodeLcov,
+    )
+  } finally {
+    rmSync(root, { force: true, recursive: true })
+  }
+})
+
+/**
+ * True when a vitest config sets `execArgv` to a list holding `--no-sparkplug` outside a comment.
+ */
+function runsWorkersWithoutSparkplug(configText) {
+  return /\bexecArgv:\s*\[[^\]]*'--no-sparkplug'[^\]]*\]/.test(configCode(configText))
+}
+
+test('runsWorkersWithoutSparkplug ignores a block-commented execArgv', () => {
+  assert.equal(
+    runsWorkersWithoutSparkplug("test: {\n  /* execArgv: ['--no-sparkplug'], */\n}"),
+    false,
+  )
+  assert.equal(
+    runsWorkersWithoutSparkplug("test: {\n  /*\n   * execArgv: ['--no-sparkplug'],\n   */\n}"),
+    false,
+  )
+})
+
+test('runsWorkersWithoutSparkplug ignores a commented-out execArgv', () => {
+  assert.equal(runsWorkersWithoutSparkplug("// execArgv: ['--no-sparkplug'],"), false)
+  assert.equal(runsWorkersWithoutSparkplug("test: {\n  execArgv: ['--no-sparkplug'],\n}"), true)
+})
+
+test('scripts:test makes its report directory without a shell-specific command', () => {
+  // pnpm runs scripts through cmd.exe on Windows, which has no `mkdir -p`.
+  assert.doesNotMatch(scriptsTestCommand(), /\bmkdir\b/)
+})
+
+test('scripts:test runs node without the baseline compiler, and node --test hands that on to its test files', () => {
+  assert.match(scriptsTestCommand(), /\bnode --no-sparkplug --test\b/)
+})
+
+test('sync with the real repo: every package vitest config runs its workers without the baseline compiler', () => {
+  // A V8 crash in Node 24's baseline compiler kills a test worker with SIGSEGV, so each node
+  // config sets the flag. Reading the files means a new package cannot drop it unnoticed.
   const packagesDir = path.join(ROOT, 'packages')
-  const packagesWithCoverageScript = readdirSync(packagesDir, { withFileTypes: true })
+  const missing = readdirSync(packagesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => `packages/${entry.name}/vitest.config.ts`)
+    .filter((file) => existsSync(path.join(ROOT, file)))
+    .filter((file) => !runsWorkersWithoutSparkplug(readFileSync(path.join(ROOT, file), 'utf8')))
+  assert.deepEqual(missing, [])
+})
+
+test('sync with the real repo: packages whose test run writes coverage match sonar.javascript.lcov.reportPaths', () => {
+  // A package's `test` writes a coverage report when its vitest config turns coverage on, so
+  // that switch is what decides which lcov files exist for the scan to read.
+  const packagesDir = path.join(ROOT, 'packages')
+  const packagesWritingCoverage = readdirSync(packagesDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .filter((entry) => {
-      const packageJsonPath = path.join(packagesDir, entry.name, 'package.json')
       try {
-        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
-        return Boolean(packageJson.scripts && packageJson.scripts['test:coverage'])
+        const config = readFileSync(path.join(packagesDir, entry.name, 'vitest.config.ts'), 'utf8')
+        return coverageTurnedOn(config)
       } catch {
         return false
       }
     })
     .map((entry) => `packages/${entry.name}`)
+  // The repo-root scripts are measured by `node --test` itself, which `scripts:test` asks to.
+  if (scriptsTestCommand().includes('--experimental-test-coverage')) {
+    packagesWritingCoverage.push('scripts')
+  }
 
   const propertiesText = readFileSync(path.join(ROOT, 'sonar-project.properties'), 'utf8')
   const reportedPackageDirs = packageDirsFromReportPaths(propertiesText)
 
-  assert.deepEqual(new Set(packagesWithCoverageScript), new Set(reportedPackageDirs))
+  assert.deepEqual(new Set(packagesWritingCoverage), new Set(reportedPackageDirs))
 })
 
 // ── End to end: the SHIPPED script, driven as a child process (the way the workflow runs it) ──

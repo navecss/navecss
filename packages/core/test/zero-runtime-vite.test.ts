@@ -122,10 +122,10 @@ describe.each(['postcss', 'vite'] as const)(
  * Every URL the dev server is asked for on a page load of the fixture: the entry, then each module
  * a transformed module imports, which is the set a browser requests.
  */
-async function requestedUrls(adapter: Adapter): Promise<string[]> {
+async function requestedUrls(adapter: Adapter, cacheDir: string): Promise<string[]> {
   const server = await createServer({
     appType: 'custom',
-    cacheDir: path.join(FIXTURE_ROOT, '.vite'),
+    cacheDir,
     configFile: false,
     css: adapter === 'postcss' ? { postcss: { plugins: [navePlugin()] } } : {},
     logLevel: 'silent',
@@ -153,10 +153,18 @@ async function requestedUrls(adapter: Adapter): Promise<string[]> {
 
 describe('AC-directive-core-26 — the dev server requests the same URLs with the Vite plugin', () => {
   it('on page load, the set of URLs is identical with and without navePlugin()', async () => {
-    const without = await requestedUrls('none')
-    const withPlugin = await requestedUrls('vite')
+    const before = readdirSync(FIXTURE_ROOT).toSorted(byLocaleOrder)
+    const cacheDir = mkdtempSync(path.join(os.tmpdir(), 'nave-zero-runtime-vite-cache-'))
+    try {
+      const without = await requestedUrls('none', cacheDir)
+      const withPlugin = await requestedUrls('vite', cacheDir)
 
-    expect(without.length).toBeGreaterThan(1)
-    expect(withPlugin).toEqual(without)
+      expect(without.length).toBeGreaterThan(1)
+      expect(withPlugin).toEqual(without)
+    } finally {
+      rmSync(cacheDir, { force: true, recursive: true })
+    }
+    // the dev server writes nothing into the fixture it serves
+    expect(readdirSync(FIXTURE_ROOT).toSorted(byLocaleOrder)).toEqual(before)
   }, 20_000)
 })
