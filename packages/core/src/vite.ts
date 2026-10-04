@@ -23,6 +23,7 @@ import type { NaveCollectPlugin } from './vite-collect-plugin.ts'
 import type { UsedConfig } from './vite-config-hooks.ts'
 import type { UsedAtomOptions } from './vite-options.ts'
 import type {
+  BuilderLike,
   BundleContext,
   BundleEntry,
   HotUpdateContext,
@@ -88,7 +89,7 @@ export interface NaveVitePlugin {
   configureServer(server: unknown): void
   closeBundle(): void
   readonly buildApp: {
-    handler(this: { warn(message: string): void }, builder: unknown): Promise<void>
+    handler(this: { warn(message: string): void }, builder: BuilderLike): Promise<void>
     readonly order: 'post'
   }
   transform(

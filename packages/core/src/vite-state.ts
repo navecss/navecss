@@ -1,7 +1,10 @@
 /**
- * What the build has read so far, held at module scope keyed by the project root: separate plugin
- * instances per environment are possible, and every environment of one `vite build` process adds
- * to the same set. A fresh resolved config for the same root starts a fresh state.
+ * What the build has read so far, held at module scope: separate plugin instances per environment
+ * are possible (Vite resolves a config, and makes a plugin list, for the builder's top level and
+ * for each of its environments), and every environment of one build adds to the same set. The
+ * build is told apart by the config object the host was handed, which all of those resolutions
+ * share; a build that has begun reading closes its state, so the next build of the same root,
+ * even from the same config object, starts a fresh one.
  */
 import type { SetupExposures } from './vite-setup-member.ts'
 import type { DevEnvironmentLike } from './vite-types.ts'
@@ -53,9 +56,10 @@ export interface ModuleRecord {
 
 export interface RootState {
   /**
-   * The resolved config this state was made for.
+   * Whether an environment has started building: the resolutions of one build all come before
+   * that, so a resolution after it belongs to a later build.
    */
-  readonly config: object
+  started: boolean
   /**
    * Each environment's modules: `<environment>\0<id>` to what was read.
    */
@@ -95,6 +99,13 @@ export interface RootState {
    */
   clientEnded: boolean
   /**
+   * The environments the builder was going to build when it reached its last stage, and the ones
+   * whose modules have been read since: the markup warning is judged when the second holds the
+   * first.
+   */
+  expectedEnvironments: ReadonlySet<string> | undefined
+  readonly builtEnvironments: Set<string>
+  /**
    * The packages already warned about.
    */
   readonly warned: Set<string>
@@ -126,19 +137,45 @@ export interface RootState {
   markupJudged: boolean
 }
 
-// Weakly held: a state lives as long as a plugin instance of its build does, so a long-lived
+/**
+ * What `stateFor` reads of a resolved config.
+ */
+interface ConfigLike {
+  readonly command?: string
+  readonly inlineConfig?: object
+}
+
+// Weakly held: a state lives as long as the config objects of its build do, so a long-lived
 // process that builds many projects does not keep every project's state.
-const registry = new Map<string, WeakRef<RootState>>()
+const byConfig = new WeakMap<object, Map<string, RootState>>()
+const byBuild = new WeakMap<object, Map<string, RootState>>()
 
 /**
- * The state for `root` under the resolved config `config`: the existing one when this config made
- * it, a new one otherwise.
+ * The config object every resolution of one build shares, when `config` is one a build resolved.
+ * A dev server holds one resolution, and a restart resolves again with a config of its own.
  */
-export function stateFor(root: string, config: object): RootState {
-  const existing = registry.get(root)?.deref()
-  if (existing?.config === config) return existing
-  const fresh: RootState = {
-    config,
+function buildOf(config: ConfigLike): object | undefined {
+  return config.command === 'build' ? config.inlineConfig : undefined
+}
+
+/**
+ * The map of `owner` in `registry`, made when it has none.
+ */
+function mapOf(
+  registry: WeakMap<object, Map<string, RootState>>,
+  owner: object,
+): Map<string, RootState> {
+  const found = registry.get(owner) ?? new Map<string, RootState>()
+  registry.set(owner, found)
+  return found
+}
+
+/**
+ * A state that has read nothing.
+ */
+function freshState(): RootState {
+  return {
+    started: false,
     modules: new Map(),
     exposures: new Map(),
     templateLinks: new Map(),
@@ -148,6 +185,8 @@ export function stateFor(root: string, config: object): RootState {
     emitted: undefined,
     externals: new Set(),
     clientEnded: false,
+    expectedEnvironments: undefined,
+    builtEnvironments: new Set(),
     warned: new Set(),
     served: new Map(),
     stale: new Set(),
@@ -159,8 +198,21 @@ export function stateFor(root: string, config: object): RootState {
     directiveExpanded: false,
     markupJudged: false,
   }
-  registry.set(root, new WeakRef(fresh))
-  return fresh
+}
+
+/**
+ * The state for `root` under the resolved config `config`: the one this config made, else the
+ * one of the build it belongs to while that build has not started reading, else a new one.
+ */
+export function stateFor(root: string, config: ConfigLike): RootState {
+  const known = byConfig.get(config)?.get(root)
+  if (known) return known
+  const build = buildOf(config)
+  const shared = build && byBuild.get(build)?.get(root)
+  const state = shared && !shared.started ? shared : freshState()
+  mapOf(byConfig, config).set(root, state)
+  if (build) mapOf(byBuild, build).set(root, state)
+  return state
 }
 
 /**

@@ -68,6 +68,13 @@ export interface DevEnvironmentLike {
 }
 
 /**
+ * The builder `buildApp` is given: its environments by name, and whether each has been built.
+ */
+export interface BuilderLike {
+  readonly environments: Readonly<Record<string, { readonly isBuilt: boolean }>>
+}
+
+/**
  * The environment a hook runs for: a name, whether it renders for a browser or a server, and the
  * plugins it runs.
  */

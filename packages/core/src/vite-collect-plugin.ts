@@ -15,7 +15,7 @@ import { checkCxImporters } from './vite-cx-importers.ts'
 import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
-import { judgeMarkup } from './vite-markup.ts'
+import { judgeAfterLastEnvironment } from './vite-markup.ts'
 import { isNaveOwn } from './vite-module-kind.ts'
 import { assertOptions } from './vite-options.ts'
 import { checkEnvironmentOrder } from './vite-order.ts'
@@ -103,6 +103,8 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
     enforce: 'post',
 
     async buildStart() {
+      // The resolutions of one build are all made before any environment starts.
+      context.state.started = true
       // The names of the consumer's own atoms are known once the `extend` module has loaded, so a
       // list that names one is judged now. A rebuild in watch mode fixes its emitted set again.
       assertOptions(context.options, await ownAtomNames(context))
@@ -144,10 +146,8 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
         noteServerExternals(this, context)
       } else {
         noteClientEnded(this, context)
-        // A builder's process judges once the last environment has built (the first half's
-        // `buildApp`); a build of one invocation judges here.
-        if (!context.inProcess) judgeMarkup(context, (message) => this.warn(message))
       }
+      judgeAfterLastEnvironment(context, this.environment, (message) => this.warn(message))
     },
   }
   return plugin
