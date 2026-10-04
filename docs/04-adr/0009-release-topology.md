@@ -17,7 +17,8 @@ one design-token contract, and a consumer who bumps one without the other can la
 incompatible pair. `@navecss/bridge` and `@navecss/cli` do not publish yet: each keeps
 `"private": true` in its manifest until it has real content to ship, and that field is what
 keeps a package off npm, because the publish step skips every private package. Both are also in
-Changesets' `ignore` list, which governs versioning and tagging, not publishing.
+Changesets' `ignore` list, which Changesets' own `version`, `tag` and `publish` commands honour;
+this repository's release script does not read it.
 
 A third published package, `@navecss/stylelint-config`, now exists. Whether it joins the fixed
 pair, or versions on its own, is a release-topology decision worth recording once rather than

@@ -2,18 +2,12 @@
 /**
  * Tripwire for the current launch-scope call on which packages publish.
  *
- * `changeset publish` does not consult `.changeset/config.json`'s `ignore`
- * list when deciding what to publish (verified against the installed
- * `@changesets/cli` dist): it computes
- * `packages.filter(pkg => !pkg.packageJson.private)` and publishes every
- * package whose local version is not already on the registry. `ignore` is
- * read by the `version` command and the tagging path only. So the ONE thing
- * that actually keeps a workspace package off npm on a real `changeset
- * publish` run is its own manifest's `private: true`, and nothing before
- * this script asserted that the set of non-private packages matched the
- * publishing scope decided for this release. The release now ends in
- * `stage-release.mjs` rather than `changeset publish`, and it applies the
- * same filter by importing `isPublishable` below, so all of this holds for it.
+ * A real release ends in `stage-release.mjs`, which selects the packages to
+ * publish by importing `isPublishable` below: every workspace package whose
+ * manifest is not `private: true`. So the ONE thing that keeps a workspace
+ * package off npm on a real release is its own manifest's `private: true`,
+ * and nothing before this script asserted that the set of non-private
+ * packages matched the publishing scope decided for this release.
  *
  * Exactly `@navecss/tokens`, `@navecss/core`, `@navecss/stylelint-config` and
  * `@navecss/eslint-plugin` are meant to publish (`@navecss/bridge` publishes
@@ -28,6 +22,15 @@
  * direction, so a package that SHOULD stay private losing that field is
  * caught, and so is a package that should start publishing being left
  * `private: true` by mistake.
+ *
+ * The same gate also asserts that no package in the set is on `.changeset/config.json`'s
+ * `ignore` list. `changeset version` skips every package named there, private or not, so a
+ * package promoted to published but left on that list is never bumped and its changesets are
+ * skipped; a changeset naming an ignored and a non-ignored package together fails outright.
+ * Promoting a private package is therefore three edits in one pull request: drop `private`,
+ * join `PUBLISHABLE_SET`, come off `ignore`. An "ignore" entry that is not a plain package name
+ * (a glob or a negation, which Changesets expands) is refused rather than expanded: this gate
+ * compares exact names, and the first pull request to need a pattern there extends it.
  *
  * This script decides no product or launch-scope question and never will:
  * PUBLISHABLE_SET is the current scope call, not
@@ -52,6 +55,10 @@ export const PUBLISHABLE_SET = new Set([
   '@navecss/stylelint-config',
   '@navecss/eslint-plugin',
 ])
+
+// A plain npm package name, scoped or not; anything else (a glob, a negation, an empty string) is
+// refused because this gate compares exact names and does not expand patterns.
+const PLAIN_PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/
 
 /**
  * This gate's own refusal, printed when `findWorkspaceGlobViolation` (imported from
@@ -131,6 +138,92 @@ export function composePackageListUnreadableMessage(packagesDir, reason) {
 }
 
 /**
+ * This gate's own message when `.changeset/config.json` cannot be used to read the `ignore`
+ * list: missing, not valid JSON, or not a config object with an array `ignore`. `reason` names
+ * which. Reading any of those as an empty list would let a set member on the list pass, so
+ * the gate refuses instead, as it does for an unreadable manifest.
+ */
+export function composeChangesetConfigUnusableMessage(configPath, reason) {
+  return (
+    `Publishable-set gate: refusing to run. ${configPath} ${reason}. Nothing has been ` +
+    `compared against the Changesets "ignore" list. Repair the file and re-run.`
+  )
+}
+
+/**
+ * The members of `PUBLISHABLE_SET` named in a Changesets `ignore` list. In the set's own
+ * declaration order, which is the same on every runner.
+ */
+function findIgnoredSetMembers(ignore) {
+  return [...PUBLISHABLE_SET].filter((name) => ignore.includes(name))
+}
+
+/**
+ * The `ignore` list of a parsed Changesets config, or the reason it cannot be read: the
+ * config must be an object, and `ignore` (absent means empty, Changesets' own default) must be
+ * an array of strings, each a plain package name.
+ */
+function readIgnoreList(config) {
+  if (config === null || typeof config !== 'object' || Array.isArray(config)) {
+    return { reason: 'is not a usable Changesets config (it is not an object)' }
+  }
+  if (config.ignore === undefined) return { ignore: [] }
+  if (!Array.isArray(config.ignore) || config.ignore.some((entry) => typeof entry !== 'string')) {
+    return { reason: 'is not a usable Changesets config ("ignore" is not an array of strings)' }
+  }
+  const unusableEntry = config.ignore.find((entry) => !PLAIN_PACKAGE_NAME.test(entry))
+  if (unusableEntry !== undefined) {
+    return {
+      reason: `is not a usable Changesets config ("ignore" entry ${JSON.stringify(unusableEntry)} is not a plain package name, and this gate compares exact names without expanding patterns)`,
+    }
+  }
+  return { ignore: config.ignore }
+}
+
+/**
+ * The Changesets `ignore` list under `rootDir`, or the refusal message to print when
+ * `.changeset/config.json` is missing, not valid JSON, or not a usable config.
+ */
+function loadIgnoreList(rootDir) {
+  const configPath = path.join(rootDir, '.changeset', 'config.json')
+  let rawConfig
+  try {
+    rawConfig = readFileSync(configPath, 'utf8')
+  } catch (error) {
+    const reason = `could not be read (${error.code ?? error.message})`
+    return { refusal: composeChangesetConfigUnusableMessage(configPath, reason) }
+  }
+  let config
+  try {
+    config = JSON.parse(rawConfig)
+  } catch (error) {
+    const reason = `is not valid JSON (${error.message})`
+    return { refusal: composeChangesetConfigUnusableMessage(configPath, reason) }
+  }
+  const { ignore, reason } = readIgnoreList(config)
+  if (reason !== undefined) {
+    return { refusal: composeChangesetConfigUnusableMessage(configPath, reason) }
+  }
+  return { ignore }
+}
+
+/**
+ * Prints the ignore-list fault: the set members found on the list, and how to fix it.
+ */
+function reportIgnoredSetMembers(names) {
+  console.error('The Changesets "ignore" list names packages this repository intends to publish:\n')
+  for (const name of names) {
+    console.error(
+      `  - ${name}: in the publishable set but listed in "ignore" in .changeset/config.json`,
+    )
+  }
+  console.error(
+    '\nChangesets never versions a package on that list. Remove each one from "ignore" in ' +
+      '.changeset/config.json, in the same pull request that adds it to PUBLISHABLE_SET.',
+  )
+}
+
+/**
  * A short descriptor of a parsed-JSON value that is not a usable manifest object, for
  * `composeManifestNotAnObjectMessage`'s `parsedAs` parameter. `typeof null === 'object'` in
  * JavaScript, so `null` and arrays both need their own check ahead of the `typeof` fallback.
@@ -157,8 +250,8 @@ function listPackageDirs(packagesDir) {
 
 /**
  * True if `manifest` would be published by a real release: the
- * `!pkg.packageJson.private` filter `@changesets/cli` uses, which
- * `stage-release.mjs` applies through this function.
+ * `!pkg.packageJson.private` filter `stage-release.mjs` applies through
+ * this function.
  */
 export function isPublishable(manifest) {
   return manifest.private !== true
@@ -241,6 +334,20 @@ export function main(rootDir = ROOT) {
         'publish for the first time is a release decision and not only a manifest edit: do not ' +
         'flip it in a pull request on its own, open an issue proposing it.',
     )
+    process.exitCode = 1
+    return
+  }
+
+  const { ignore, refusal } = loadIgnoreList(rootDir)
+  if (refusal !== undefined) {
+    console.error(refusal)
+    process.exitCode = 1
+    return
+  }
+
+  const ignoredSetMembers = findIgnoredSetMembers(ignore)
+  if (ignoredSetMembers.length > 0) {
+    reportIgnoredSetMembers(ignoredSetMembers)
     process.exitCode = 1
     return
   }
