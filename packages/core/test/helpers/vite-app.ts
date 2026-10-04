@@ -23,8 +23,11 @@ export type Transformer = 'lightningcss' | 'postcss'
 
 /**
  * A Vite to run a fixture on. The supported range is measured, not declared: the fixtures run on
- * the floor (8.2.1, an alias dependency, `vite-floor`, that nothing bumps) and on the newest 8.x
- * at the time of the release (the package's own `vite`, which Dependabot raises).
+ * the floor (8.2.1, an alias dependency, `vite-floor`, which Dependabot's version updates skip)
+ * and on the newest 8.x at the time of the release (the package's own `vite`, which Dependabot
+ * raises). A helper called with no `api` runs on the floor. Types come from the newest Vite and the
+ * floor leg is cast to them, so the floor is checked by running the fixtures on it, not by typing
+ * them.
  */
 export interface ViteApi {
   readonly build: typeof buildOnNewest
