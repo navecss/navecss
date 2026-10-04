@@ -30,11 +30,11 @@
  *   scratch files inside the tree (under `packages/core/test/`) that `lint`'s
  *   `prettier --check .` walks. It waits for the steps that read nothing it writes: `knip`,
  *   `deps:lint` and `deps:dedupe-check`.
- * - `knip` after `build`: tsup writes a transient `tsup.config.bundled_*.mjs` into
+ * - `knip` waits for `build`: tsup writes a transient `tsup.config.bundled_*.mjs` into
  *   `packages/core` while it builds, and knip would report it as an unused file.
- * - `test:browser` after `test`: both run core's fixture generators, which rewrite
+ * - `test:browser` waits for `test`: both run core's fixture generators, which rewrite
  *   `packages/core/test/browser/fixtures/` while the other suite may be reading it.
- * - `scripts:test` after `check:pack`: one of its tests runs core's own `check:pack`, which
+ * - `scripts:test` waits for `check:pack`: one of its tests runs core's own `check:pack`, which
  *   packs a tarball inside the package directory, the same place the `check:pack` step packs.
  *
  * `TURBO_FORCE=1 pnpm run ci:check` still runs everything uncached: see `stepEnvironment`.
