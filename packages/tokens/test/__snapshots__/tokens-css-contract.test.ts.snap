@@ -390,7 +390,7 @@ exports[`dist/tokens.css contract > matches the checked-in snapshot 1`] = `
   }
 }
 
-/* Nave theming — generated, do not edit. See this package's README ("Theming"). */
+/* Nave theming — generated, do not edit. See the @navecss/tokens README ("Theming"). */
 
 @property --nave-color-tint {
   syntax: '<color>';

@@ -145,11 +145,30 @@ function formatUnknownAtom(name: string, extend: ExtendMap): string {
 }
 
 /**
- * The self-contained stylesheet a bare `@import` is answered with: its path inside an installed
- * package, and its URL on a CDN that serves npm. Both are public contracts, frozen with the file.
+ * The bare `@import`s that Nave's self-contained stylesheet answers: each names a stylesheet that
+ * file holds in full, on the route that uses Nave's own token layer. `reset` and `atomic` are here
+ * rather than sent to their own files because, linked alone, either would be the first layer the
+ * page sees, ahead of the order statement.
+ */
+const ANSWERED_BY_STANDALONE: ReadonlySet<string> = new Set([
+  '@navecss/core',
+  '@navecss/core/atomic',
+  '@navecss/core/layers',
+  '@navecss/core/reset',
+  '@navecss/core/standalone',
+  '@navecss/tokens/css',
+])
+
+/**
+ * The files a page links in place of a bare `@import` of Nave: their path inside an installed
+ * package, and their URL on a CDN that serves npm, with the version left for the reader to fill in.
+ * The paths are public contracts, frozen with the files.
  */
 const STANDALONE_PATH = 'node_modules/@navecss/core/dist/standalone.css'
-const STANDALONE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css'
+const STANDALONE_CDN_URL =
+  'https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/standalone.css'
+const NO_TOKENS_PATH = 'node_modules/@navecss/core/dist/no-tokens.css'
+const NO_TOKENS_CDN_URL = 'https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/no-tokens.css'
 
 const BAD_PARENT_WORKAROUND =
   '. A directive here can be written `& { @nave ...; }` inside the group rule instead.'
@@ -172,11 +191,14 @@ const FIXED_TEXTS: Readonly<
     `@nave: unexpected "${d.text ?? ''}"; a directive takes only atom names (separate atom names with spaces)`,
   'bare-import': (d) => {
     const specifier = d.text ?? ''
-    const first = `@import ${JSON.stringify(specifier)} is a bare module specifier, and a browser cannot load it.`
-    if (!specifier.startsWith('@navecss/')) {
-      return `${first} Import a file or a URL the browser can load, or bundle the stylesheet.`
+    const quoted = JSON.stringify(specifier)
+    if (ANSWERED_BY_STANDALONE.has(specifier)) {
+      return `@import ${quoted} names a package, so a browser cannot load it. Link Nave's self-contained stylesheet from the page instead, ahead of your own stylesheets: ${STANDALONE_PATH}, or ${STANDALONE_CDN_URL} with <version> replaced by the version you installed.`
     }
-    return `${first} Link Nave's self-contained stylesheet from the page instead, with a link element: ${STANDALONE_PATH}, or ${STANDALONE_CDN_URL} (pin the version you installed).`
+    if (specifier === '@navecss/core/no-tokens') {
+      return `@import ${quoted} names a package, so a browser cannot load it. Link that entry's own file from the page instead, ahead of your own stylesheets: ${NO_TOKENS_PATH}, or ${NO_TOKENS_CDN_URL} with <version> replaced by the version you installed. Not the self-contained stylesheet: it holds Nave's token layer, which this entry leaves out.`
+    }
+    return `@import ${quoted} names no file relative to the output, so a browser cannot load it. Point it at a file the page can reach, by a path that works from the output or by a URL, or bundle the stylesheet.`
   },
   'has-block': () => '@nave: a directive with a {} block is not supported',
   'in-keyframes': () => '@nave cannot be used inside @keyframes',

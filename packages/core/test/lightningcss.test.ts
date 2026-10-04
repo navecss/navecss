@@ -329,13 +329,12 @@ describe.each(LIGHTNING_RELEASES)(
       expect(path.resolve(error!.fileName!)).toBe(path.join(scratch.dir, 'card.css'))
     })
 
-    it('transform(): adds no @import and no url() of its own', () => {
-      const result = lib.transform({
-        filename: 'a.css',
-        code: navePlugin().expand('.a { @nave flex focusRing; }', 'a.css').code,
-      })
+    it('AC-directive-core-26: neither expand() nor transform() adds an @import or a url() of its own, over every atom', () => {
+      const expanded = navePlugin().expand(`.a { @nave ${Object.keys(atoms).join(' ')}; }`, 'a.css')
+      const result = lib.transform({ filename: 'a.css', code: expanded.code })
 
-      expect(result.code.toString()).not.toMatch(/@import|url\(/)
+      expect(Buffer.from(expanded.code).toString()).not.toMatch(/@import|url\(/i)
+      expect(result.code.toString()).not.toMatch(/@import|url\(/i)
     })
   },
 )
@@ -403,5 +402,17 @@ describe('a byte order mark', () => {
     expect(() => nave.expand(`${bom}.x { @nave nope; }`, '/p/a.css')).toThrow(/a\.css:1:12: /)
     const result = nave.expand(`${bom}.a { @nave flex; }`, 'a.css')
     expect(Buffer.from(result.code).toString().startsWith(`${bom}.a {`)).toBe(true)
+  })
+
+  it('does not shift a diagnostic’s column when the resolver reads the file either', () => {
+    const file = write('a.css', '\u{FEFF}.x { @nave nope; }')
+
+    expect(() => navePlugin().resolver.read(file)).toThrow(/a\.css:1:12: /)
+  })
+
+  it('is kept at the start of what the resolver reads', () => {
+    const file = write('a.css', '\u{FEFF}.a { @nave flex; }')
+
+    expect(navePlugin().resolver.read(file).startsWith('\u{FEFF}.a {')).toBe(true)
   })
 })

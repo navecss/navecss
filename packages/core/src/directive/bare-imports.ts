@@ -42,12 +42,13 @@ function specifierOf(prelude: readonly Token[]): string | undefined {
 
 /**
  * Whether `specifier` is a bare module specifier: none of the URL forms a browser resolves on its
- * own (an absolute path, a relative one, anything with a scheme), and no file of that name beside
- * the importing stylesheet (`hasFile`, asked about the specifier without a query or fragment).
+ * own (an absolute path, a relative one, anything with a scheme, a query or fragment alone), and no
+ * file of that name beside the importing stylesheet (`hasFile`, asked about the specifier without a
+ * query or fragment).
  */
 function isBare(specifier: string, hasFile: (specifier: string) => boolean): boolean {
   const isUrlForm =
-    specifier === '' ||
+    withoutQueryOrFragment(specifier) === '' ||
     specifier.startsWith('/') ||
     specifier.startsWith('./') ||
     specifier.startsWith('../') ||

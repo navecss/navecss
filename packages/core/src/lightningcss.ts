@@ -22,6 +22,7 @@ import { readFileSync } from 'node:fs'
 import type { AtomDefinition } from './atoms.ts'
 import type { ExtendMap } from './directive/resolve.ts'
 
+import { splitByteOrderMark } from './byte-order-mark.ts'
 import { expandText } from './directive/expand-text.ts'
 import { foldedText, warningTexts } from './directive/report-text.ts'
 import { snapshotExtendMap } from './snapshot-extend-atoms.ts'
@@ -102,16 +103,17 @@ export function navePlugin(options: NaveLightningOptions = {}): NaveLightningAda
 
   return {
     expand(code, filename) {
-      // A byte order mark is not part of the stylesheet's text: positions are counted after it, and
-      // it is put back first, so the bytes handed back start as they did.
       const raw =
         typeof code === 'string' ? code : new TextDecoder('utf-8', { ignoreBOM: true }).decode(code)
-      const bom = raw.startsWith('\u{FEFF}') ? '\u{FEFF}' : ''
-      const { css, map } = expandToText(raw.slice(bom.length), filename)
+      const { bom, text } = splitByteOrderMark(raw)
+      const { css, map } = expandToText(text, filename)
       return { code: new TextEncoder().encode(bom + css), map }
     },
     resolver: {
-      read: (filePath) => expandToText(readFileSync(filePath, 'utf8'), filePath).css,
+      read: (filePath) => {
+        const { bom, text } = splitByteOrderMark(readFileSync(filePath, 'utf8'))
+        return bom + expandToText(text, filePath).css
+      },
     },
   }
 }

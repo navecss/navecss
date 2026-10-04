@@ -4,8 +4,9 @@
  * nothing; a bare one is a problem it reports, since a browser cannot load it.
  *
  * Exit codes: `0` every file was expanded and written; `1` a stylesheet held a problem and
- * nothing was written; `2` a usage error, an `--extend` module that does not load, or a
- * `--source` that could not be read.
+ * nothing was written; `2` a usage error, an `--extend` module that could not be used, a
+ * `--source` that could not be read, an `--out` that could not be written (files written before it
+ * stay written), or a directory `--watch` could not watch.
  */
 import type { ExtendMap } from './directive/resolve.ts'
 import type { ExpandJob } from './expand-args.ts'
@@ -38,12 +39,16 @@ async function loadExtend(
 }
 
 /**
- * Says what a pass did: each file written on stdout, each problem and unreadable source on stderr.
+ * Says what a pass did: each file written on stdout, each problem, unreadable source and failed
+ * write on stderr.
  */
 function print(result: PassResult): void {
   for (const { source, out } of result.expanded) console.log(`Expanded ${source} to ${out}.`)
   for (const report of result.reports) console.error(report)
-  for (const source of result.unreadable) console.error(`Could not read ${source}.`)
+  for (const source of result.unreadable) {
+    console.error(`Could not read ${source}, so no file was written.`)
+  }
+  if (result.writeFailure !== undefined) console.error(result.writeFailure)
 }
 
 /**
@@ -63,15 +68,9 @@ async function runOnce(
     console.error((error as Error).message)
     return 2
   }
-  try {
-    const result = expandPass(job, extend)
-    print(result)
-    return result.status
-  } catch (error) {
-    // A destination that cannot be created or written; files written before it stay written.
-    console.error(`Could not write the output: ${(error as Error).message}`)
-    return 2
-  }
+  const result = expandPass(job, extend)
+  print(result)
+  return result.status
 }
 
 /**

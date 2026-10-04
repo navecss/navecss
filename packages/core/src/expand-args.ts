@@ -88,9 +88,15 @@ function problemWith(raw: RawValues): string | undefined {
     return 'expand: a --source, --out or --extend value is empty.'
   }
   const outs = raw.out.map((file) => path.resolve(file))
-  const overwritten = outs.find((out) => raw.source.some((source) => isSameFile(source, out)))
-  if (overwritten !== undefined) {
-    return `expand: --out ${overwritten} is also a --source; it would overwrite its own input.`
+  const inputs = [
+    ...raw.source.map((file) => ({ file, name: 'a --source' })),
+    ...(raw.extend === undefined ? [] : [{ file: raw.extend, name: 'the --extend module' }]),
+  ]
+  for (const out of outs) {
+    const input = inputs.find(({ file }) => isSameFile(file, out))
+    if (input !== undefined) {
+      return `expand: --out ${out} is also ${input.name}; it would overwrite its own input.`
+    }
   }
   if (new Set(outs).size !== outs.length)
     return 'expand: two files would be written to the same --out.'

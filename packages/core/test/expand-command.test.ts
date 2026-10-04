@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 import postcss from 'postcss'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { atoms } from '../src/atoms.ts'
 import { expandText } from '../src/directive/expand-text.ts'
 import { navePlugin as lightningAdapter } from '../src/lightningcss.ts'
 import { navePlugin as postcssPlugin } from '../src/postcss.ts'
@@ -30,7 +31,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const BIN = path.resolve(HERE, '..', 'dist', 'bin.js')
 
 const STANDALONE_PATH = 'node_modules/@navecss/core/dist/standalone.css'
-const STANDALONE_CDN = 'https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css'
+const STANDALONE_CDN = 'https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/standalone.css'
+const NO_TOKENS_PATH = 'node_modules/@navecss/core/dist/no-tokens.css'
+const NO_TOKENS_CDN = 'https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/no-tokens.css'
 
 const project = { dir: '' }
 
@@ -114,12 +117,13 @@ describe('AC-directive-core-42 — navecss-core expand', () => {
     expect(read('src/app.css')).toBe(source)
   })
 
-  it('adds no @import and no url() of its own', () => {
-    write('src/app.css', '.btn { @nave interactive focusRing flex; }\n')
+  it('AC-directive-core-26: adds no @import and no url() of its own, over every atom', () => {
+    write('src/app.css', `.btn { @nave ${Object.keys(atoms).join(' ')}; }\n`)
 
-    expand('--source=src/app.css', '--out=app.css')
+    const run = expand('--source=src/app.css', '--out=app.css')
 
-    expect(read('app.css')).not.toMatch(/@import|url\(/)
+    expect(run.status, run.all).toBe(0)
+    expect(read('app.css')).not.toMatch(/@import|url\(/i)
   })
 
   it('with two files each holding one unknown atom, one run prints both, each with its own file and position, and exits 1', () => {
@@ -247,7 +251,7 @@ describe('AC-directive-core-42 — navecss-core expand', () => {
     expect(run.stderr).toMatch(/Usage/)
   })
 
-  it('--extend=<module> adds the consumer’s own atoms, read as the specifier form of R15', () => {
+  it('--extend=<module> adds the consumer’s own atoms, read from a path the way the PostCSS plugin reads one', () => {
     write(
       'my-atoms.mjs',
       "export default { brand: { declarations: { color: 'rebeccapurple' } } }\n",
@@ -297,7 +301,8 @@ describe('AC-directive-core-42 — navecss-core expand', () => {
     const run = expand('--source=src/app.css', '--out=blocker/app.css')
 
     expect(run.status).toBe(2)
-    expect(run.stderr).toContain('Could not write the output')
+    expect(run.stderr).toContain('Could not write blocker/app.css: ')
+    expect(run.stderr).toContain('No file after it was written.')
   })
 
   it('--help prints usage naming both subcommands and exits 0', () => {
@@ -390,6 +395,27 @@ describe('AC-directive-core-43 — a bare @import is reported, with the styleshe
     expect(run.stderr).toContain(STANDALONE_CDN)
   })
 
+  it('names the entry’s own file for @navecss/core/no-tokens, not the self-contained stylesheet', () => {
+    write('src/app.css', "@import '@navecss/core/no-tokens';\n")
+
+    const run = expand('--source=src/app.css', '--out=app.css')
+
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain(NO_TOKENS_PATH)
+    expect(run.stderr).toContain(NO_TOKENS_CDN)
+    expect(run.stderr).not.toContain('standalone.css')
+  })
+
+  it('does not send a bridge import to the self-contained stylesheet, which holds no bridge', () => {
+    write('src/app.css', "@import '@navecss/bridge/base-ui';\n")
+
+    const run = expand('--source=src/app.css', '--out=app.css')
+
+    expect(run.status).toBe(1)
+    expect(run.stderr).toContain('a browser cannot load')
+    expect(run.stderr).not.toContain('standalone.css')
+  })
+
   it.each([
     "@import './theme.css';",
     "@import '../theme.css';",
@@ -407,11 +433,11 @@ describe('AC-directive-core-43 — a bare @import is reported, with the styleshe
     expect(run.status, run.all).toBe(0)
   })
 
-  it("@import 'theme.css'; gives none when theme.css exists beside the importing file", () => {
-    write('src/theme.css', '.t { color: red; }\n')
+  it("@import 'theme.css'; gives none when theme.css exists beside the output, where the browser looks", () => {
+    write('public/theme.css', '.t { color: red; }\n')
     write('src/app.css', "@import 'theme.css';\n")
 
-    const run = expand('--source=src/app.css', '--out=app.css')
+    const run = expand('--source=src/app.css', '--out=public/app.css')
 
     expect(run.status, run.all).toBe(0)
   })
@@ -419,24 +445,24 @@ describe('AC-directive-core-43 — a bare @import is reported, with the styleshe
   it("@import 'theme.css'; gives one bare-import when it does not", () => {
     write('src/app.css', "@import 'theme.css';\n")
 
-    const run = expand('--source=src/app.css', '--out=app.css')
+    const run = expand('--source=src/app.css', '--out=public/app.css')
 
     expect(run.status).toBe(1)
-    expect(run.stderr).toContain('bare module')
+    expect(run.stderr).toContain('names no file relative to the output')
   })
 
-  it('a directory named like the import is not a stylesheet beside the file: still bare', () => {
-    write('src/theme.css/inner.css', '.t { color: red; }\n')
+  it('a directory named like the import is not a stylesheet beside the output: still bare', () => {
+    write('public/theme.css/inner.css', '.t { color: red; }\n')
     write('src/app.css', "@import 'theme.css';\n")
 
-    expect(expand('--source=src/app.css', '--out=app.css').status).toBe(1)
+    expect(expand('--source=src/app.css', '--out=public/app.css').status).toBe(1)
   })
 
-  it('a percent-encoded name that names a sibling file is not bare', () => {
-    write('src/theme file.css', '.t { color: red; }\n')
+  it('a percent-encoded name that names a file beside the output is not bare', () => {
+    write('public/theme file.css', '.t { color: red; }\n')
     write('src/app.css', "@import 'theme%20file.css';\n")
 
-    expect(expand('--source=src/app.css', '--out=app.css').status).toBe(0)
+    expect(expand('--source=src/app.css', '--out=public/app.css').status).toBe(0)
   })
 
   it('a bare import written inside a comment or a string is not an import', () => {
@@ -455,7 +481,7 @@ describe('AC-directive-core-43 — a bare @import is reported, with the styleshe
 
     expect(run.status).toBe(1)
     expect(run.stderr).toMatch(
-      /src\/app\.css:1:1: .*bare module[\s\S]*1 more in this stylesheet:\n2:12: unknown atom "nope"/,
+      /src\/app\.css:1:1: .*a browser cannot load[\s\S]*1 more in this stylesheet:\n2:12: unknown atom "nope"/,
     )
   })
 

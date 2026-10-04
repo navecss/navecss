@@ -79,9 +79,9 @@ text lose their colours. [Why this floor](docs/04-adr/0005-browser-floor.md).
 **A CSS resolver that reads `exports` maps.** `@navecss/core` publishes one and
 no legacy fallback field, so a resolver that reads only the older fields cannot
 find it at all. The Vite setup below is one that does. With no bundler there is
-no resolver to read it, so
-[`navecss-core expand` and Nave's single-file `standalone` stylesheet](#without-a-bundler)
-stand in for it.
+no resolver at all: the page links
+[Nave's single-file `standalone` stylesheet](#without-a-bundler) instead, and
+`navecss-core expand` reports any package import left in your CSS.
 
 **A build step that resolves `@nave`.** On Vite that is the plugin below, and it
 is the one route this page teaches; on a pipeline that runs PostCSS plugins and
@@ -208,12 +208,16 @@ declarations beside the directive, as above. Both are listed in full:
 ### Without a bundler
 
 A project that serves its files as they are, with no Vite, webpack or PostCSS
-step, has two things to do that a bundler would have done for it: resolve
-`@nave`, and bring Nave's stylesheet to the page. `navecss-core expand` does the
-first. It rewrites your stylesheet and leaves everything else in it as it is,
-`@import` included. `@navecss/core/standalone` does the second: Nave's whole
-stylesheet in one file with no `@import` in it, which the page links instead of
-importing Nave from your CSS.
+step, takes this route in place of the `app.css` and Vite setup above. It has two
+things to do that a bundler would have done for it: resolve `@nave`, and bring
+Nave's stylesheet to the page. `navecss-core expand` does the first: it writes a
+copy of your stylesheet with each `@nave` expanded and everything else as you
+wrote it, `@import` included. `@navecss/core/standalone` does the second: Nave's
+whole stylesheet in one file with no `@import` in it, which the page links
+instead of importing Nave from your CSS.
+
+Install the package as above (`pnpm add @navecss/core`); the command comes with
+it. Then add it to your `package.json` scripts:
 
 ```json
 {
@@ -242,30 +246,36 @@ importing Nave from your CSS.
 <meta charset="utf-8" />
 <title>Nave without a bundler</title>
 <link rel="stylesheet" href="node_modules/@navecss/core/dist/standalone.css" />
-<!-- or from a CDN, in place of the line above:
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css" />
+<!-- or from a CDN, in place of the line above, with <version> the version you installed:
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/standalone.css" />
 -->
 <link rel="stylesheet" href="app.css" />
 <button class="btn">Save</button>
 ```
 
-Run `pnpm run build` and serve the directory. Link Nave's stylesheet before your
-own: it opens with the `@layer` order statement, which has to be the first one
-the page sees. `navecss-core expand` does not resolve or inline `@import`, and it expands only the
-files you name with `--source`: a stylesheet you import that holds `@nave` needs a
-`--source` and `--out` pair of its own. A relative `@import` is kept as written, so it
-has to resolve from where the output is served: keep the output beside the files it
-imports, or write the paths for that place. It
-leaves a relative or absolute one where you wrote it and reports a bare import, one of a
-package (`@import url('@navecss/core')`, the bundler route's `app.css`) as an
-error, because a browser cannot load it: link `@navecss/core/standalone`
-instead, as above. The route has two costs. Its `app.css` is a second shape
+Run `pnpm run build`, or `pnpm run watch` while you work, and serve the
+directory. Link Nave's stylesheet before your own: it opens with the `@layer`
+order statement, which has to be the first one the page sees.
+
+`navecss-core expand` does not resolve or inline `@import`. It expands only the
+files you name with `--source`, so a stylesheet you import that holds `@nave`
+needs a `--source` and `--out` pair of its own. An `@import` of a file is kept as
+written, so its path has to work from where the output is served: written to
+`app.css`, an `@import './theme.css'` in `src/app.css` asks for the `theme.css`
+beside `app.css`, not `src/theme.css`. Keep each output beside the files it
+imports, or write the paths for the output's place. A bare import, such as one
+of a package (the bundler route's `@import url('@navecss/core')`), is reported as
+an error, because a browser cannot load it, and nothing is written: link
+`@navecss/core/standalone` instead, as above.
+
+The route has two costs. Its `app.css` is a second shape
 beside the bundler one, with no Nave import in it. And a link into
 `node_modules` works only while the page is served from the project directory:
-to deploy, copy the file out of `node_modules` in your build and link the copy,
-or link the CDN URL, pinned to the version you installed
-(`@navecss/core@<version>` in place of `@navecss/core`). Browser floor, `@layer`
-contract and token layer are the same as everywhere else on this page.
+a deployed page cannot load the file from that path unless a build step copies
+the file out of `node_modules` to a path the page serves. The CDN URL needs no
+such step; pin it to the version you installed (`@navecss/core@<version>` in
+place of `@navecss/core`). Browser floor, `@layer` contract and token layer are
+the same as everywhere else on this page.
 
 ## Getting started
 

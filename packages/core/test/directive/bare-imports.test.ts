@@ -100,15 +100,21 @@ describe('the text of a bare-import diagnostic', () => {
   const [diagnostic] = findBareImports("@import url('@navecss/core/layers');", NOTHING_EXISTS)
   const text = formatDiagnostic(diagnostic!)
 
-  it('names the import, and says a browser cannot load a bare module', () => {
+  it('names the import, and says a browser cannot load a package', () => {
     expect(text).toContain('"@navecss/core/layers"')
-    expect(text).toContain('bare module')
+    expect(text).toContain('names a package')
     expect(text).toContain('a browser cannot load')
   })
 
-  it('names the self-contained stylesheet, by path and by CDN URL', () => {
+  it('names the self-contained stylesheet, by path and by CDN URL with the version to fill in', () => {
     expect(text).toContain('node_modules/@navecss/core/dist/standalone.css')
-    expect(text).toContain('https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css')
+    expect(text).toContain(
+      'https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/standalone.css',
+    )
+  })
+
+  it('says where the link goes: ahead of the reader’s own stylesheets', () => {
+    expect(text).toContain('ahead of your own stylesheets')
   })
 
   it('is not a directive message: it carries no @nave prefix', () => {
@@ -129,12 +135,41 @@ describe('findBareImports — what is not a top-level at-rule', () => {
     expect(specifiers("@import 'theme%zz.css';", exists)).toEqual(['theme%zz.css'])
   })
 
-  it('the text names Nave’s stylesheet only for a Nave import', () => {
-    const [nave] = findBareImports("@import '@navecss/core';", NOTHING_EXISTS)
-    const [other] = findBareImports("@import 'normalize.css';", NOTHING_EXISTS)
+  it('the text names the self-contained stylesheet only for the imports it holds in full', () => {
+    const held = [
+      '@navecss/core',
+      '@navecss/core/layers',
+      '@navecss/core/reset',
+      '@navecss/core/atomic',
+      '@navecss/core/standalone',
+      '@navecss/tokens/css',
+    ]
+    for (const specifier of held) {
+      const [found] = findBareImports(`@import '${specifier}';`, NOTHING_EXISTS)
+      expect(formatDiagnostic(found!), specifier).toContain('standalone.css')
+    }
+    const notHeld = ['normalize.css', '@navecss/bridge/base-ui', '@navecss/cli', '@navecss/nope']
+    for (const specifier of notHeld) {
+      const [found] = findBareImports(`@import '${specifier}';`, NOTHING_EXISTS)
+      expect(formatDiagnostic(found!), specifier).not.toContain('standalone.css')
+      expect(formatDiagnostic(found!), specifier).toContain('a browser cannot load it')
+    }
+  })
 
-    expect(formatDiagnostic(nave!)).toContain('standalone.css')
-    expect(formatDiagnostic(other!)).not.toContain('standalone.css')
-    expect(formatDiagnostic(other!)).toContain('a browser cannot load it')
+  it('@navecss/core/no-tokens is sent to its own file, not to the stylesheet that holds the tokens it leaves out', () => {
+    const [found] = findBareImports("@import '@navecss/core/no-tokens';", NOTHING_EXISTS)
+    const text = formatDiagnostic(found!)
+
+    expect(text).toContain('node_modules/@navecss/core/dist/no-tokens.css')
+    expect(text).toContain(
+      'https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/no-tokens.css',
+    )
+    expect(text).not.toContain('standalone.css')
+  })
+
+  it('an import that is only a query or a fragment is a URL form, not a bare specifier', () => {
+    expect(specifiers("@import '#x';")).toEqual([])
+    expect(specifiers("@import '?q';")).toEqual([])
+    expect(specifiers("@import url('#x');")).toEqual([])
   })
 })

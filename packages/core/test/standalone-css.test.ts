@@ -9,7 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-import { tokenize } from '../src/directive/tokenizer.ts'
+import { type Token, tokenize } from '../src/directive/tokenizer.ts'
 import { packCoreTarball } from './helpers/pack-core.ts'
 
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -21,27 +21,54 @@ function dist(name: string): string {
 }
 
 /**
- * The file a CSS `@import url('<specifier>')` of `index.css` names, resolved the way a CSS tool
- * that reads `exports` maps would, and written here on its own: a relative specifier against
- * `dist/`, a package specifier through the package's own export map. It is deliberately not the
- * build step's code, so the derivation below can disagree with it.
+ * The file a CSS `@import` of `index.css` names, resolved the way a CSS tool that reads `exports`
+ * maps would, and written here on its own: a relative specifier against `dist/`, a package
+ * specifier through the platform's own `import.meta.resolve`. It is deliberately not the build
+ * step's code, so the derivation below can disagree with it.
  */
 function resolveImport(specifier: string): string {
-  return specifier.startsWith('.') ? path.join(DIST, specifier) : requireFromCore.resolve(specifier)
+  return specifier.startsWith('.')
+    ? path.join(DIST, specifier)
+    : fileURLToPath(import.meta.resolve(specifier))
 }
 
-const IMPORT_LINE = /@import url\('([^']+)'\);/g
+/**
+ * The specifier of the `@import` whose keyword is `tokens[index]`, read from the tokens up to its
+ * `;`: a string, a `url()` token, or `url(` with a string argument.
+ */
+function specifierAfter(tokens: readonly Token[], index: number): string {
+  const end = tokens.findIndex((token, at) => at > index && token.type === 'semicolon-token')
+  const [first, second] = tokens
+    .slice(index + 1, end)
+    .filter((token) => token.type !== 'whitespace-token' && token.type !== 'comment')
+  const value = (token: Token | undefined): string => (token!.structured as { value: string }).value
+  return first!.type === 'function-token' ? value(second) : value(first)
+}
 
 /**
- * `dist/layers.css`, then `dist/index.css` with each `@import` replaced by the text of the file
- * it names (its trailing whitespace trimmed, so the line break after the `;` stays).
+ * `dist/layers.css`, then `dist/index.css` with each `@import` at-rule, read from its tokens,
+ * replaced by the text of the file it names (its trailing whitespace trimmed, so the line break
+ * after the `;` stays).
  */
 function derive(): { imports: string[]; text: string } {
+  const indexCss = dist('index.css')
+  const tokens = tokenize(indexCss)
   const imports: string[] = []
-  const index = dist('index.css').replaceAll(IMPORT_LINE, (_match, specifier: string) => {
+  let index = ''
+  let copiedTo = 0
+  tokens.forEach((token, at) => {
+    const isImport =
+      token.type === 'at-keyword-token' &&
+      (token.structured as { value: string }).value.toLowerCase() === 'import'
+    if (!isImport) return
+    const specifier = specifierAfter(tokens, at)
+    const end = tokens.findIndex((later, after) => after > at && later.type === 'semicolon-token')
     imports.push(specifier)
-    return readFileSync(resolveImport(specifier), 'utf8').trimEnd()
+    index += indexCss.slice(copiedTo, token.startIndex)
+    index += readFileSync(resolveImport(specifier), 'utf8').trimEnd()
+    copiedTo = tokens[end]!.endIndex
   })
+  index += indexCss.slice(copiedTo)
   return { imports, text: `${dist('layers.css')}\n${index}` }
 }
 

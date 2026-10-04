@@ -59,6 +59,19 @@ function stylesheetStatuses(frame: HTMLIFrameElement): Record<string, number> {
   )
 }
 
+/**
+ * The files a stylesheet of the page imported that were not answered with 200 (Resource Timing
+ * records an `@import` request with the initiator `css`, apart from the `link` one).
+ */
+function failedImports(frame: HTMLIFrameElement): string[] {
+  const entries = frame.contentWindow!.performance.getEntriesByType(
+    'resource',
+  ) as PerformanceResourceTiming[]
+  return entries
+    .filter((entry) => entry.initiatorType === 'css' && entry.responseStatus !== 200)
+    .map((entry) => new URL(entry.name).pathname.split('/').pop()!)
+}
+
 async function tabTo(frame: HTMLIFrameElement, target: Element): Promise<void> {
   for (let press = 0; press < 4 && frame.contentDocument!.activeElement !== target; press++) {
     await userEvent.tab()
@@ -71,6 +84,7 @@ describe('AC-directive-core-44 — a no-bundler page renders in a real browser',
     const frame = await open('index.html')
 
     expect(stylesheetStatuses(frame)).toEqual({ 'standalone.css': 200, 'app.css': 200 })
+    expect(failedImports(frame)).toEqual([])
   })
 
   it('the button has its token colour, the same as a probe styled with the token', async () => {

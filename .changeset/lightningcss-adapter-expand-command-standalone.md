@@ -12,14 +12,16 @@ filename)` expands the directives in a stylesheet's text and returns `{ code, ma
   each file `bundleAsync()` asks for, so a file reached through `@import` is covered. Lightning CSS
   never sees a directive, so it prints no `Unknown at rule` warning and cannot fail on a malformed
   one; Nave's own messages name the real file, line and column. The adapter imports nothing from
-  `lightningcss` and declares no peer: bring your own copy, version 1.22 or later (1.20 cannot parse
-  nested output). It takes `extend` (an object) and `onUnknown`, as the other plugins do. It is for
+  `lightningcss` and declares no peer: bring your own copy, version 1.22 or later, the first with CSS
+  nesting on by default (1.20 and 1.21 cannot parse the nested rules the adapter writes). It takes `extend` (an object) and `onUnknown`, as the other plugins do. It is for
   a host that runs Lightning CSS itself, not for Vite: on Vite, keep using the Vite plugin.
 - New `navecss-core expand --source=<file> --out=<file>`, with `--extend=<module>` and `--watch`:
   expands every `@nave` in each source and writes it, reporting every problem across every file in
   one run. `--source` and `--out` repeat as pairs, matched by order. Exit `0` when every file was
-  written, `1` when a stylesheet had a problem (and nothing is written), `2` for a usage error or a
-  source that could not be read or an `--extend` module that did not load. It does not resolve or
+  written; `1` when a stylesheet had a problem, and then nothing is written; `2` when the run could
+  not be done as asked: a usage error, an `--extend` module that could not be used, a source that
+  could not be read, or an output that could not be written (files written before it stay
+  written). It does not resolve or
   inline `@import`; an import of a package (`@import url('@navecss/core')`) is reported as an
   error, because a browser cannot load it.
 - New `@navecss/core/standalone`, the file `dist/standalone.css`: the layer order statement, then

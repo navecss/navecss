@@ -378,14 +378,15 @@ For a host that runs Lightning CSS directly: your own script, or a tool that cal
 [the Vite plugin](#vite-plugin-setup), which also runs under `css.transformer: 'lightningcss'`.
 
 ```js
+import { readFile } from 'node:fs/promises'
 import { bundleAsync, transform } from 'lightningcss'
 import { navePlugin } from '@navecss/core/lightningcss'
 
 const nave = navePlugin()
 
 // One file, through transform(): expand it first, then pass the code and the map on.
-const { code, map } = nave.expand(source, 'src/app.css')
-const result = transform({ filename: 'src/app.css', code, inputSourceMap: map })
+const { code, map } = nave.expand(await readFile('src/app.css'), 'src/app.css')
+const result = transform({ filename: 'src/app.css', code, inputSourceMap: map, sourceMap: true })
 
 // An entry file and everything it @imports, through bundleAsync().
 const bundled = await bundleAsync({ filename: 'src/app.css', resolver: nave.resolver })
@@ -393,7 +394,7 @@ const bundled = await bundleAsync({ filename: 'src/app.css', resolver: nave.reso
 
 The adapter expands the text before Lightning CSS reads it, so Lightning CSS never sees a
 directive: no `Unknown at rule` warning, no Lightning CSS parse error on a malformed directive, and
-Nave's own messages, with the real file path and the line and column of the name.
+Nave's own messages, with the file's path and the line and column of each problem.
 `expand(code, filename)` takes the text or its bytes and returns `{ code, map }`, the code as bytes
 and the map as a string, ready for `transform()`'s `code` and `inputSourceMap`. `resolver.read` reads each file
 `bundleAsync()` asks for and returns its expanded text, so a file reached through `@import` is
@@ -402,7 +403,8 @@ do ([Options](#options)); under `'warn'` it prints each problem with `console.wa
 
 The adapter imports nothing from `lightningcss`, types included, and declares no peer: you bring
 your own copy. The supported range is documented, not declared: `lightningcss` 1.22 and later,
-which is Lightning CSS's own nesting floor (1.20 cannot parse nested output). The fixtures run on
+the first release with CSS nesting on by default (1.20 and 1.21 cannot parse the nested rules the
+adapter writes). The fixtures run on
 1.22.1 and on the newest release at the time of each release of this package. One cost, on the
 `bundleAsync()` path: `read` returns a string and no source map, so Nave's insertions are not in
 the output map there. The inserted text adds no line breaks, so line numbers hold. On the
@@ -517,22 +519,29 @@ across every file is printed in one run, one report per stylesheet. Exit codes:
 
 - `0` — every file was expanded and written.
 - `1` — at least one stylesheet held a problem; the problems are printed and `--out` is not
-  written.
-- `2` — a usage error (a missing or unmatched `--out`, an unknown flag, an `--out` that is its own
-  `--source`, a module that does not load) or a `--source` that could not be read.
+  written, for any of the pairs.
+- `2` — the run could not be done as asked: a usage error (such as a missing or unmatched `--out`,
+  an unknown flag, or an `--out` that is also a `--source`), an `--extend` module that could not be
+  used, a `--source` that could not be read, an `--out` that could not be written, or, under
+  `--watch`, a directory that could not be watched. Nothing is written, except that files written
+  before an `--out` that failed stay written.
 
-It does not resolve or inline `@import`; that would make it a CSS bundler. It expands only the
-files you name with `--source`, so a stylesheet you import that holds `@nave` needs a pair of its
-own, and a relative `@import` is kept as written and has to resolve from where the output is
-served. An `@import` of a
-relative or absolute URL stays where you wrote it, and the file is not read. An `@import` of a
-package (`@import url('@navecss/core')`, which is how the bundler route's `app.css` starts) is an
-error, because a browser cannot load it: it is reported as a `bare-import` problem. Link
+It does not resolve or inline `@import`; that would make it a CSS bundler. It
+expands only the files you name with `--source`, so a stylesheet you import that
+holds `@nave` needs a pair of its own. An `@import` of a relative or absolute URL
+is kept as written and the file it names is not read, so its path has to work
+from where the output is served, not from the source's directory. A bare import,
+such as one of a package (`@import url('@navecss/core')`, which is how the
+bundler route's `app.css` starts), is reported as a `bare-import` problem,
+because a browser cannot load it. For Nave's stylesheets, link
 `@navecss/core/standalone` instead, which has no `@import` in it, by path
 (`node_modules/@navecss/core/dist/standalone.css`) or from a CDN
-(`https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css`, with `@navecss/core` pinned to
-the version you installed, as `@navecss/core@<version>`), before your expanded stylesheet. [Without a bundler](https://github.com/navecss/navecss#without-a-bundler) has the
-whole setup.
+(`https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/standalone.css`, with
+`<version>` the version you installed), before your expanded stylesheet. For
+`@navecss/core/no-tokens`, link that entry's own file, `dist/no-tokens.css`, the
+same way: the standalone stylesheet holds Nave's token layer, which that entry
+leaves out. [Without a bundler](https://github.com/navecss/navecss#without-a-bundler)
+has the whole setup.
 
 ---
 

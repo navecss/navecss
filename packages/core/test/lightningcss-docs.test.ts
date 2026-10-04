@@ -1,5 +1,5 @@
 /**
- * What the slice that adds the Lightning CSS adapter, `navecss-core expand` and the self-contained
+ * What the change that adds the Lightning CSS adapter, `navecss-core expand` and the self-contained
  * stylesheet has to say, and what it must stop saying: AC-directive-core-46 (the surfaces it adds),
  * and the README sentences AC-40, -42, -43, -44 and -45 each name. The fences that carry a claim a
  * run can check are run by `scripts/generate-no-bundler-fixture.ts` and the browser test over it.
@@ -36,7 +36,7 @@ function section(markdown: string, heading: string): string {
 const flat = (text: string): string => text.replaceAll(/\s+/g, ' ')
 
 const STANDALONE_PATH = 'node_modules/@navecss/core/dist/standalone.css'
-const STANDALONE_CDN = 'https://cdn.jsdelivr.net/npm/@navecss/core/dist/standalone.css'
+const STANDALONE_CDN = 'https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/standalone.css'
 
 describe('AC-directive-core-46 — the root README teaches the no-bundler route', () => {
   const quickStart = rootReadme.slice(

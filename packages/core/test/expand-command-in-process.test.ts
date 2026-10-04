@@ -4,6 +4,7 @@
  * `expand-watch.ts`, `expand-command.ts`). `expand-command.test.ts` runs the shipped bin as a
  * script would; this file is the same behaviour without the child process.
  */
+import { spawnSync } from 'node:child_process'
 import {
   existsSync,
   linkSync,
@@ -11,6 +12,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -81,6 +83,12 @@ describe('parseExpandArgs', () => {
     expect(parsed.kind === 'usageError' && parsed.message).toMatch(/overwrite its own input/)
   })
 
+  it('an --out that is the --extend module is a usage error', () => {
+    const parsed = parseExpandArgs(['--source=a.css', '--out=m.mjs', '--extend=m.mjs'])
+
+    expect(parsed.kind === 'usageError' && parsed.message).toMatch(/overwrite its own input/)
+  })
+
   it.each([
     [['--out=a'], /at least one --source/],
     [['--source=a'], /--out/],
@@ -133,14 +141,18 @@ describe('runExpand', () => {
     expect(existsSync(file('oa'))).toBe(false)
     expect(existsSync(file('ob'))).toBe(false)
     expect(err.join('\n')).toContain(`${a}:1:12: @nave: unknown atom "nope"`)
-    expect(err.join('\n')).toContain(`${b}:1:1: @import "@navecss/core" is a bare module specifier`)
+    expect(err.join('\n')).toContain(
+      `${b}:1:1: @import "@navecss/core" names a package, so a browser cannot load it.`,
+    )
   })
 
   it('answers 2 and names a source that cannot be read', async () => {
     const status = await runExpand([`--source=${file('missing.css')}`, `--out=${file('o')}`])
 
     expect(status).toBe(2)
-    expect(err.join('\n')).toContain(`Could not read ${file('missing.css')}.`)
+    expect(err.join('\n')).toContain(
+      `Could not read ${file('missing.css')}, so no file was written.`,
+    )
   })
 
   it('answers 2 when an output cannot be written', async () => {
@@ -150,7 +162,78 @@ describe('runExpand', () => {
     const status = await runExpand([`--source=${source}`, `--out=${file('blocker/o.css')}`])
 
     expect(status).toBe(2)
-    expect(err.join('\n')).toContain('Could not write the output')
+    expect(err.join('\n')).toContain(`Could not write ${file('blocker/o.css')}: `)
+    expect(err.join('\n')).toContain('No file after it was written.')
+  })
+
+  it('says which files were written before an output that could not be, and answers 2', async () => {
+    const a = write('a.css', '.a { @nave flex; }\n')
+    const b = write('b.css', '.b { @nave block; }\n')
+    write('blocker', 'a file')
+
+    const status = await runExpand([
+      `--source=${a}`,
+      `--out=${file('out/a.css')}`,
+      `--source=${b}`,
+      `--out=${file('blocker/b.css')}`,
+    ])
+
+    expect(status).toBe(2)
+    expect(existsSync(file('out/a.css'))).toBe(true)
+    expect(out).toEqual([`Expanded ${a} to ${file('out/a.css')}.`])
+    expect(err.join('\n')).toContain(`Could not write ${file('blocker/b.css')}: `)
+  })
+
+  it('keeps a byte order mark at the start of the output and counts positions after it', async () => {
+    const a = write('a.css', '\u{FEFF}.x { @nave nope; }\n')
+    const b = write('b.css', "\u{FEFF}@import '@navecss/core';\n")
+    const c = write('c.css', '\u{FEFF}.c { @nave flex; }\n')
+
+    expect(
+      await runExpand([
+        `--source=${a}`,
+        `--out=${file('oa')}`,
+        `--source=${b}`,
+        `--out=${file('ob')}`,
+      ]),
+    ).toBe(1)
+    expect(err.join('\n')).toContain(`${a}:1:12: @nave: unknown atom "nope"`)
+    expect(err.join('\n')).toContain(`${b}:1:1: @import`)
+
+    expect(await runExpand([`--source=${c}`, `--out=${file('oc')}`])).toBe(0)
+    expect(readFileSync(file('oc'), 'utf8').startsWith('\u{FEFF}.c {')).toBe(true)
+  })
+
+  it('judges a bare import by the directory the output is written to, where a browser resolves it', async () => {
+    write('src/theme.css', '.t {}\n')
+    const source = write('src/app.css', "@import 'src/theme.css';\n")
+
+    expect(await runExpand([`--source=${source}`, `--out=${file('app.css')}`])).toBe(0)
+    expect(readFileSync(file('app.css'), 'utf8')).toBe("@import 'src/theme.css';\n")
+  })
+
+  it('reports a file that sits beside the source but not beside the output', async () => {
+    write('src/theme.css', '.t {}\n')
+    const source = write('src/app.css', "@import 'theme.css';\n")
+
+    expect(await runExpand([`--source=${source}`, `--out=${file('app.css')}`])).toBe(1)
+    expect(existsSync(file('app.css'))).toBe(false)
+  })
+
+  it('an import of another output of the same run is not bare, though nothing is written there yet', async () => {
+    const theme = write('src/theme.css', '.t { @nave flex; }\n')
+    const app = write('src/app.css', "@import 'theme.css';\n")
+
+    const status = await runExpand([
+      `--source=${theme}`,
+      `--out=${file('theme.css')}`,
+      `--source=${app}`,
+      `--out=${file('app.css')}`,
+    ])
+
+    expect(status).toBe(0)
+    expect(existsSync(file('theme.css'))).toBe(true)
+    expect(existsSync(file('app.css'))).toBe(true)
   })
 
   it('reads atoms of its own from --extend, and answers 2 for a module that does not load', async () => {
@@ -223,7 +306,38 @@ describe('watchFiles', () => {
     expect(changed.mock.calls.length).toBe(calls)
   }, 30_000)
 
-  it('throws, and leaves no watcher behind, for a directory that does not exist', () => {
+  it('throws for a directory that does not exist', () => {
     expect(() => watchFiles([file('nope/a.css')], vi.fn())).toThrow()
   })
+
+  it('closes the watchers it opened when a later directory cannot be watched', () => {
+    mkdirSync(file('exists'))
+    const module = path.resolve(import.meta.dirname, '../src/expand-watch.ts')
+    const script = `import { watchFiles } from ${JSON.stringify(module)}; try { watchFiles([${JSON.stringify(file('exists/a.css'))}, ${JSON.stringify(file('missing/b.css'))}], () => {}) } catch {}`
+
+    const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      timeout: 10_000,
+    })
+
+    expect(ran.signal, 'the process was still alive: a watcher was left open').toBeNull()
+    expect(ran.status).toBe(0)
+  })
+
+  it('watches a symlinked source through its target', async () => {
+    write('real/a.css', 'one')
+    mkdirSync(file('src'))
+    symlinkSync(file('real/a.css'), file('src/a.css'))
+    const changed = vi.fn()
+    const close = watchFiles([file('src/a.css')], changed)
+
+    try {
+      // Let a delayed event for the files created above arrive, so only the change below counts.
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      changed.mockClear()
+      writeFileSync(file('real/a.css'), 'two')
+      await vi.waitFor(() => expect(changed).toHaveBeenCalled(), { timeout: 10_000 })
+    } finally {
+      close()
+    }
+  }, 20_000)
 })
