@@ -11,6 +11,7 @@ export default {
         'tokens', // @navecss/tokens
         'core', // @navecss/core
         'bridge', // @navecss/bridge
+        'base-ui', // @navecss/base-ui
         'cli', // @navecss/cli
         'stylelint-config', // @navecss/stylelint-config
         'eslint-plugin', // @navecss/eslint-plugin
