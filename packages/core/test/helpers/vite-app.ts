@@ -7,12 +7,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as viteNewest from 'vite-newest'
+import * as viteFloor from 'vite-floor'
 import {
-  build as buildWith821,
-  createServer as createServerWith821,
+  build as buildOnNewest,
+  createServer as createServerOnNewest,
   type InlineConfig,
   type Plugin,
+  version as newestVersion,
   type ViteDevServer,
 } from 'vite'
 
@@ -22,17 +23,22 @@ export type Transformer = 'lightningcss' | 'postcss'
 
 /**
  * A Vite to run a fixture on. The supported range is measured, not declared: the fixtures run on
- * the Vite the package pins (8.2.1) and on the newest 8.x at the time of the release (an alias
- * dependency, `vite-newest`, raised with it).
+ * the floor (8.2.1, an alias dependency, `vite-floor`, that nothing bumps) and on the newest 8.x
+ * at the time of the release (the package's own `vite`, which Dependabot raises).
  */
 export interface ViteApi {
-  readonly build: typeof buildWith821
-  readonly createServer: typeof createServerWith821
+  readonly build: typeof buildOnNewest
+  readonly createServer: typeof createServerOnNewest
+  readonly version: string
 }
 
 export const VITE_APIS: Readonly<Record<string, ViteApi>> = {
-  '8.2.1': { build: buildWith821, createServer: createServerWith821 },
-  'newest 8.x': viteNewest as unknown as ViteApi,
+  '8.2.1': viteFloor as unknown as ViteApi,
+  'newest 8.x': {
+    build: buildOnNewest,
+    createServer: createServerOnNewest,
+    version: newestVersion,
+  },
 }
 
 /**
