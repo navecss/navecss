@@ -6,6 +6,7 @@ packages/*/dist/
 
 # Coverage reports — generated, no threshold gate, local/CI artifact only
 packages/*/coverage/
+scripts/coverage/
 
 # Turborepo
 .turbo/

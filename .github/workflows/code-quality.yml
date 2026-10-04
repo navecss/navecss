@@ -6,8 +6,9 @@ name: code-quality
 #
 # - `build` hands its output to every job that reads `dist/` as an artifact: `dist/` itself plus
 #   turbo's cache, so a job's turbo task finds `build` already done instead of running it again.
-# - `test` runs the suites once, with coverage, and the `sonar` job scans the pinned leg's
-#   reports rather than running the suites a second time to produce its own.
+# - `test` runs the suites once, with coverage, and `scripts:test` runs the scripts' own tests
+#   with coverage; the `sonar` job scans the pinned leg's reports and the scripts' report rather
+#   than running anything a second time to produce its own.
 # - `build` and `test` each have a second leg on Node 22.18, the package.json "engines" floor.
 #   That is the one deliberate repeat: the same check on a different Node, to prove the floor
 #   the packages claim.
@@ -236,6 +237,16 @@ jobs:
       - name: The repository gates' own tests
         run: pnpm run scripts:test
 
+      # The scripts' coverage report is produced by this job, not by the test job, so it travels to
+      # the sonar job as an artifact of its own.
+      - name: Hand the coverage report to the sonar job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scripts-coverage
+          path: scripts/coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 1
+
   scripts-check:
     name: scripts:check
     needs: build
@@ -255,7 +266,7 @@ jobs:
 
   sonar:
     name: sonar
-    needs: test
+    needs: [test, scripts-test]
     runs-on: ubuntu-latest
     env:
       # A step's `if:` cannot reference the `secrets` context directly (GitHub Actions rejects
@@ -278,6 +289,14 @@ jobs:
         with:
           name: coverage
           path: packages
+
+      # The scripts' report was uploaded from scripts/coverage/lcov.info, so its directory is the
+      # artifact's root and that is where it goes back.
+      - name: Take the coverage report from the scripts:test job
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: scripts-coverage
+          path: scripts/coverage
 
       - name: 'Rewrite coverage lcov SF: paths to be repo-root-relative'
         run: node scripts/prefix-lcov-source-paths.mjs

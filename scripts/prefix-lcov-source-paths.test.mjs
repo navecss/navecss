@@ -197,6 +197,97 @@ test('coverageTurnedOn ignores a commented-out enabled: true', () => {
   assert.equal(coverageTurnedOn("coverage: {\n  enabled: true,\n  provider: 'v8',\n}"), true)
 })
 
+/**
+ * The root `scripts:test` command, as package.json spells it.
+ */
+function scriptsTestCommand() {
+  const { scripts } = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
+  return scripts['scripts:test']
+}
+
+test('sync with the real repo: scripts:test writes its lcov report where sonar.javascript.lcov.reportPaths reads it', () => {
+  const command = scriptsTestCommand()
+  assert.match(command, /--experimental-test-coverage/)
+  const destination = /--test-reporter-destination=(\S+lcov\.info)/.exec(command)?.[1]
+  assert.ok(destination, `scripts:test has no lcov reporter destination: ${command}`)
+  const propertiesText = readFileSync(path.join(ROOT, 'sonar-project.properties'), 'utf8')
+  assert.ok(
+    readPropertyValue(propertiesText, 'sonar.javascript.lcov.reportPaths').includes(destination),
+    `${destination} is not in sonar.javascript.lcov.reportPaths`,
+  )
+})
+
+test('scripts:test measures the scripts, not their tests: its lcov names run-ci-check.mjs and no *.test.mjs', () => {
+  // Runs the shipped command's own flags over one small test file, with the report redirected to
+  // a scratch directory, so this does not start the whole suite from inside itself.
+  // Node does not create the report's directory, so the command makes it first; drop that part.
+  const words = scriptsTestCommand().split(' && ').at(-1).split(/\s+/)
+  assert.equal(words[0], 'node')
+  const scratch = mkdtempSync(path.join(realpathSync(tmpdir()), 'scripts-lcov-'))
+  const lcovPath = path.join(scratch, 'lcov.info')
+  try {
+    const args = words
+      .slice(1)
+      .map((word) =>
+        word === 'scripts/*.test.mjs'
+          ? 'scripts/run-ci-check.test.mjs'
+          : word.replace(/=\S*lcov\.info$/, () => `=${lcovPath}`),
+      )
+    // Inside a `node --test` run these two would make the nested run behave as one of its tests.
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([key]) => key !== 'NODE_TEST_CONTEXT' && key !== 'NODE_V8_COVERAGE',
+      ),
+    )
+    const result = spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8', env })
+    assert.equal(result.status, 0, result.stdout + result.stderr)
+    const sourceFiles = readFileSync(lcovPath, 'utf8')
+      .split('\n')
+      .filter((line) => line.startsWith('SF:'))
+      .map((line) => line.slice(3))
+    assert.ok(sourceFiles.includes('scripts/run-ci-check.mjs'), sourceFiles.join('\n'))
+    assert.deepEqual(
+      sourceFiles.filter((file) => file.endsWith('.test.mjs')),
+      [],
+    )
+  } finally {
+    rmSync(scratch, { force: true, recursive: true })
+  }
+})
+
+test('the rewrite leaves Node’s lcov SF: paths repo-root-relative, for every report the properties list', () => {
+  // Node writes `SF:` relative to the directory it ran in, which for scripts:test is the
+  // repository root already, so a report in scripts/coverage must come out unchanged.
+  const nodeLcov = [
+    'TN:',
+    'SF:scripts/run-script-in-test-helper.mjs',
+    'FN:14,runScriptIn',
+    'DA:1,4',
+    'end_of_record',
+    '',
+  ].join('\n')
+  const propertiesText = readFileSync(path.join(ROOT, 'sonar-project.properties'), 'utf8')
+  const dirs = packageDirsFromReportPaths(propertiesText)
+  const root = mkdtempSync(path.join(realpathSync(tmpdir()), 'lcov-nodes-'))
+  try {
+    for (const dir of dirs) {
+      mkdirSync(path.join(root, dir, 'coverage'), { recursive: true })
+      writeFileSync(
+        path.join(root, dir, 'coverage', 'lcov.info'),
+        dir === 'scripts' ? nodeLcov : 'SF:src/a.ts\nend_of_record\n',
+      )
+    }
+    main(root, dirs)
+    assert.ok(dirs.includes('scripts'))
+    assert.equal(
+      readFileSync(path.join(root, 'scripts', 'coverage', 'lcov.info'), 'utf8'),
+      nodeLcov,
+    )
+  } finally {
+    rmSync(root, { force: true, recursive: true })
+  }
+})
+
 test('sync with the real repo: packages whose test run writes coverage match sonar.javascript.lcov.reportPaths', () => {
   // A package's `test` writes a coverage report when its vitest config turns coverage on, so
   // that switch is what decides which lcov files exist for the scan to read.
@@ -212,6 +303,10 @@ test('sync with the real repo: packages whose test run writes coverage match son
       }
     })
     .map((entry) => `packages/${entry.name}`)
+  // The repo-root scripts are measured by `node --test` itself, which `scripts:test` asks to.
+  if (scriptsTestCommand().includes('--experimental-test-coverage')) {
+    packagesWritingCoverage.push('scripts')
+  }
 
   const propertiesText = readFileSync(path.join(ROOT, 'sonar-project.properties'), 'utf8')
   const reportedPackageDirs = packageDirsFromReportPaths(propertiesText)

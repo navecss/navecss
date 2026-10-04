@@ -209,7 +209,8 @@ pnpm ci:check:fix
    of collapsing it. Needs the npm registry reachable: it re-reads
    package metadata, so it fails offline even with a warm pnpm cache.
 10. **`scripts:test`** — `node --test` over the repo-root `scripts/`
-    gates' own unit coverage (`scripts/*.test.mjs`).
+    gates' own unit coverage (`scripts/*.test.mjs`), measuring the
+    scripts' coverage and writing an lcov report for Sonar.
 11. **`scripts:check`** — the repo-root gates in `scripts/`, run in the
     order `package.json` chains them: the licence and provenance gates,
     the packaging and publishable-set gates, the scans over the
