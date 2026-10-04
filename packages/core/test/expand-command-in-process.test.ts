@@ -4,7 +4,15 @@
  * `expand-watch.ts`, `expand-command.ts`). `expand-command.test.ts` runs the shipped bin as a
  * script would; this file is the same behaviour without the child process.
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -64,6 +72,15 @@ describe('parseExpandArgs', () => {
     })
   })
 
+  it('an --out that is a hard link to a --source is a usage error', () => {
+    const source = write('src/a.css', '.a {}\n')
+    linkSync(source, file('alias.css'))
+
+    const parsed = parseExpandArgs([`--source=${source}`, `--out=${file('alias.css')}`])
+
+    expect(parsed.kind === 'usageError' && parsed.message).toMatch(/overwrite its own input/)
+  })
+
   it.each([
     [['--out=a'], /at least one --source/],
     [['--source=a'], /--out/],
@@ -113,6 +130,8 @@ describe('runExpand', () => {
     ])
 
     expect(status).toBe(1)
+    expect(existsSync(file('oa'))).toBe(false)
+    expect(existsSync(file('ob'))).toBe(false)
     expect(err.join('\n')).toContain(`${a}:1:12: @nave: unknown atom "nope"`)
     expect(err.join('\n')).toContain(`${b}:1:1: @import "@navecss/core" is a bare module specifier`)
   })
@@ -172,7 +191,7 @@ describe('runExpand', () => {
       `--extend=${atoms}`,
     ])
 
-    expect([1, 2]).toContain(status)
+    expect(status).toBe(1)
     expect(err.join('\n')).toMatch(/declarations object/)
   })
 
