@@ -1,5 +1,5 @@
 /**
- * The four runs every render test makes (R13 (iii)): the Base UI floor (`@base-ui/react@1.0.0`,
+ * The four runs every render test makes (R13 (iii)): the Base UI floor (`@base-ui/react@1.3.0`,
  * installed as `base-ui-react-floor`) and the current devDependency, each on React 18 and on
  * React 19. A run is a vitest project; the project name is the run's name.
  */

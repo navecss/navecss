@@ -41,8 +41,8 @@
     "packages/base-ui": {
       // The test runs read these by name at run time, which knip's static import analysis does not
       // follow: `vitest.config.ts` and `test/support/react-18-hooks.mjs` point `react` at the React
-      // 18 copies, and the floor run points `@base-ui/react` at the 1.0.0 copy, so a run can load
-      // either React and either Base UI in one install.
+      // 18 copies, and the floor run points `@base-ui/react` at the 1.3.0 copy (the peer floor), so
+      // a run can load either React and either Base UI in one install.
       "ignoreDependencies": ["base-ui-react-floor", "react-18", "react-dom-18"],
     },
     "packages/stylelint-config": {

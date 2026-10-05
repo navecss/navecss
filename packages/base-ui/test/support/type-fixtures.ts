@@ -93,7 +93,7 @@ const importsFor = (subpaths: readonly SubpathTypes[]): string[] =>
 const typeOf = (side: 'B' | 'N', subpath: string, part: string): string =>
   `typeof ${side}_${identifier(subpath)}.${accessor(subpath, part)}`
 
-const variantAssertions = (subpaths: readonly SubpathTypes[], version: BaseUiVersion): string[] =>
+const variantAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
   VARIANT_PARTS.flatMap(({ kind, part, subpath }) => {
     const installed = subpaths
       .find((entry) => entry.subpath === subpath)
@@ -108,20 +108,26 @@ const variantAssertions = (subpaths: readonly SubpathTypes[], version: BaseUiVer
     // Equal as types are in use: each assignable to the other, with the same property names, and
     // leaving `ref` out. Base UI types a trigger's `ref` as the intersection of its own element and
     // `HTMLElement`; the wrapper accepts a ref to the element the part declares, which is the same
-    // ref to a consumer. The Toggle became generic after 1.0.0 and the wrapper follows the current
-    // declarations, so at the floor its props are checked for the added props alone.
+    // ref to a consumer, so `ref` is held by its own assertion below.
     const [left, right] = [`Omit<${nProps}, 'ref'>`, `Omit<${bProps} & ${added}, 'ref'>`]
-    const props =
-      version === 'floor' && subpath === 'toggle'
-        ? []
-        : [
-            `export type V_${id} = Assert<Same<${left}, ${right}>>`,
-            `export type N_${id} = Assert<Equal<keyof ${left}, keyof ${right}>>`,
-          ]
     return [
-      ...props,
+      `export type V_${id} = Assert<Same<${left}, ${right}>>`,
+      `export type N_${id} = Assert<Equal<keyof ${left}, keyof ${right}>>`,
       `export type K_${id} = Assert<Equal<Extract<keyof ${bProps}, 'variant' | 'size'>, never>>`,
     ]
+  })
+
+const refAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
+  VARIANT_PARTS.map(({ part, subpath }) => {
+    const installed = subpaths
+      .find((entry) => entry.subpath === subpath)
+      ?.parts.find((p) => p.name === part)
+    const n = typeOf('N', subpath, part)
+    const props =
+      (installed?.callTypeParameters.length ?? 0) > 0
+        ? `Parameters<${n}<string>>[0]`
+        : `Parameters<${n}>[0]`
+    return `export const ref_${identifier(subpath)}_${part === '.' ? 'self' : part}: ${props} = { ref: createRef<HTMLButtonElement>() }`
   })
 
 const equalityAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
@@ -153,21 +159,26 @@ const genericAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
 /**
 AC-15's assertions about the wrapped parts' types, for the Base UI the subpaths were read from.
  */
-export const assertionFixture = (
-  subpaths: readonly SubpathTypes[],
-  version: BaseUiVersion,
-): string =>
+export const assertionFixture = (subpaths: readonly SubpathTypes[]): string =>
   [
     ...importsFor(subpaths),
     EQUAL,
     ...equalityAssertions(subpaths),
-    ...variantAssertions(subpaths, version),
+    ...variantAssertions(subpaths),
     ...genericAssertions(subpaths),
   ].join('\n')
 
 /**
+Every Button-family part renders a button, so each one's props must accept a ref to a button.
+ */
+export const refFixture = (subpaths: readonly SubpathTypes[]): string =>
+  ["import { createRef } from 'react'", ...importsFor(subpaths), ...refAssertions(subpaths)].join(
+    '\n',
+  )
+
+/**
 The three type errors AC-15 requires, as source: a size and a variant outside the unions, and a
-`variant` on a Toggle.
+`variant` on a Toggle. They are compiled against both Base UI versions.
  */
 export const REJECTED_PROPS = `
 import * as Button from '${NAVE}/button'
@@ -224,7 +235,7 @@ export const compile = async (
         moduleResolution: 'Bundler',
         noEmit: true,
         paths,
-        skipLibCheck: true,
+        skipLibCheck: false,
         strict: true,
         target: 'ES2022',
         types: [],

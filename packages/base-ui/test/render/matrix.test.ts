@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { PACKAGE_DIR } from '../support/stylesheet.ts'
 
-const FLOOR_VERSION = '1.0.0'
+const FLOOR_VERSION = '1.3.0'
 
 describe('the run matrix', () => {
   it('loads the React major the run names', () => {

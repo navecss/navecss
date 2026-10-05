@@ -9,7 +9,7 @@ const FLOOR = path.join(PACKAGE_DIR, 'node_modules/base-ui-react-floor/esm')
 
 /**
  * Table T1, extended with the form rows: the data attributes and variables the stylesheet keys on,
- * each with the declaration file of the floor package (`@base-ui/react@1.0.0`) that declares it.
+ * each with the declaration file of the floor package (`@base-ui/react@1.3.0`) that declares it.
  * The transition attributes are declared through a shared enum, whose member name stands for them.
  */
 const rows: readonly { files: readonly string[]; items: readonly string[] }[] = [
