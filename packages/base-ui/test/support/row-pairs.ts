@@ -2,9 +2,10 @@
  * Which (class, item) pairs the render rows of AC-22 have asserted so far in this test file. A row
  * records the pairs it asserts once its assertions hold; the file's last test then compares what
  * was recorded with the table the file owns. A pair that only that row records is left
- * unrecorded when the row is skipped, removed or never reached, and reds that test; a pair that
- * several rows record stays recorded as long as one of them runs, so the file's other checks (the
- * disabled-part list, the rows' own assertions) hold what the tie does not.
+ * unrecorded when the row is skipped, removed or never reached, and reds that test. A pair that
+ * several rows record (the class of every Arrow, of the two list popups, of the disabled items)
+ * stays recorded while any one of them runs, so each file also lists the parts, components and
+ * values its rows loop over and fails when one is dropped from the loop.
  */
 import type { Pair } from './vocabulary-pairs.ts'
 

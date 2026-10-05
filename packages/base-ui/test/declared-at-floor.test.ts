@@ -1,6 +1,15 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
 import { attributeReads } from './support/selector.ts'
 import { flatten, PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
@@ -8,18 +17,25 @@ import { flatten, PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
 const FLOOR = path.join(PACKAGE_DIR, 'node_modules/base-ui-react-floor/esm')
 
 /**
- * An item a Base UI file declares through a shared enum: the file assigns the enum's member
- * (`X["side"] = CommonPopupDataAttributes.side`), and the enum's own file maps that member to the
- * item (`CommonPopupDataAttributes["side"] = "data-side"`).
+ * An item a Base UI file declares through a shared enum: the file assigns the member from the
+ * enum the row names (`X["side"] = CommonPopupDataAttributes.side`), and that enum's own file maps
+ * the member to the item (`CommonPopupDataAttributes["side"] = "data-side"`).
  */
 interface SharedItem {
   readonly enumFile: string
+  readonly enumName: string
   readonly item: string
   readonly member: string
 }
 
-const POPUP: Pick<SharedItem, 'enumFile'> = { enumFile: 'utils/popupStateMapping.js' }
-const TRANSITION: Pick<SharedItem, 'enumFile'> = { enumFile: 'utils/stateAttributesMapping.js' }
+const POPUP: Pick<SharedItem, 'enumFile' | 'enumName'> = {
+  enumFile: 'utils/popupStateMapping.js',
+  enumName: 'CommonPopupDataAttributes',
+}
+const TRANSITION: Pick<SharedItem, 'enumFile' | 'enumName'> = {
+  enumFile: 'utils/stateAttributesMapping.js',
+  enumName: 'TransitionStatusDataAttributes',
+}
 
 const DATA_SIDE: SharedItem = { ...POPUP, item: 'data-side', member: 'side' }
 const STARTING_STYLE: SharedItem = {
@@ -109,13 +125,14 @@ const escapeRegExp = (value: string): string =>
   value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 
 /**
- * Whether a file declares the item through its shared enum. A member name that only occurs
- * elsewhere in the file (a doc comment says "side" too) does not count: the assignment from the
- * enum must be there, and the enum's own file must map the member to the item.
+ * Whether a file declares the item through its shared enum. Both must hold: the file assigns the
+ * member from the enum the row names (`["side"] = CommonPopupDataAttributes.side]`, not the same
+ * member of another enum), and the enum's own file maps the member to the item. A member name that
+ * only occurs elsewhere in the file (a doc comment says "side" too) does not count.
  */
 const isSharedItemDeclared = (file: string, shared: SharedItem, root: string = FLOOR): boolean => {
-  const { enumFile, item, member } = shared
-  const isAssigned = new RegExp(String.raw`\["${member}"\]\s*=\s*\w+\.${member}\]`).test(
+  const { enumFile, enumName, item, member } = shared
+  const isAssigned = new RegExp(String.raw`\["${member}"\]\s*=\s*${enumName}\.${member}\]`).test(
     readFileSync(path.join(root, file), 'utf8'),
   )
   const isMapped = new RegExp(String.raw`\["${member}"\]\s*=\s*"${escapeRegExp(item)}"`).test(
@@ -141,15 +158,18 @@ const keyedVariables = (css: string): string[] =>
     )
     .filter((name) => !name.startsWith('--nave-'))
 
-const CACHE = path.join(PACKAGE_DIR, 'node_modules/.cache/declared-at-floor')
+const COPIES = mkdtempSync(path.join(os.tmpdir(), 'nave-declared-at-floor-'))
+
+afterAll(() => {
+  rmSync(COPIES, { force: true, recursive: true })
+})
 
 /**
  * A copy of the files of the floor package a control damages, so the floor itself is never
- * touched. Returns the copy's root.
+ * touched. Returns the copy's root, inside a directory made for this run and removed after it.
  */
 const copyOfFloor = (name: string, files: readonly string[]): string => {
-  const root = path.join(CACHE, name)
-  rmSync(root, { force: true, recursive: true })
+  const root = path.join(COPIES, name)
   for (const file of files) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
     cpSync(path.join(FLOOR, file), path.join(root, file))
@@ -189,6 +209,19 @@ describe('AC-base-ui-bridge-21: every attribute and variable the stylesheet keys
         .join('\n'),
     )
     expect(isSharedItemDeclared(ARROW, DATA_SIDE)).toBe(true)
+    expect(isSharedItemDeclared(ARROW, DATA_SIDE, root)).toBe(false)
+  })
+
+  it('control: a member assigned from another enum than the row names is reported', () => {
+    const root = copyOfFloor('other-enum', [ARROW, DATA_SIDE.enumFile])
+    const file = path.join(root, ARROW)
+    writeFileSync(
+      file,
+      readFileSync(file, 'utf8').replace(
+        'CommonPopupDataAttributes.side]',
+        'CommonTriggerDataAttributes.side]',
+      ),
+    )
     expect(isSharedItemDeclared(ARROW, DATA_SIDE, root)).toBe(false)
   })
 

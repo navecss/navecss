@@ -148,12 +148,13 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
   }
 
   const SIDES = ['top', 'bottom', 'left', 'right', 'inline-start', 'inline-end']
-  for (const [subpath, namespace] of [
+  const ARROWS = [
     ['popover', 'Popover'],
     ['menu', 'Menu'],
     ['select', 'Select'],
     ['tooltip', 'Tooltip'],
-  ] as const) {
+  ] as const
+  for (const [subpath, namespace] of ARROWS) {
     for (const side of SIDES) {
       it(`${namespace}.Arrow carries data-side="${side}" with the class, for side="${side}"`, async () => {
         await renderScene(nave, subpath, { ...openProps(), [`${namespace}.Positioner`]: { side } })
@@ -164,6 +165,21 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
       })
     }
   }
+
+  it('lists the components AC-22 names: the Positioner variables, the four Arrows and the six sides', () => {
+    expect(CASES.map(({ positioner }) => positioner)).toEqual([
+      'Menu.Positioner',
+      'Select.Positioner',
+      'Popover.Positioner',
+    ])
+    expect(ARROWS.map(([, namespace]) => namespace)).toEqual([
+      'Popover',
+      'Menu',
+      'Select',
+      'Tooltip',
+    ])
+    expect(SIDES).toEqual(['top', 'bottom', 'left', 'right', 'inline-start', 'inline-end'])
+  })
 
   it('Select.Value carries data-placeholder when there is no value, with the class', async () => {
     // eslint-disable-next-line unicorn/no-null -- null is the Select's empty value, which undefined would leave uncontrolled

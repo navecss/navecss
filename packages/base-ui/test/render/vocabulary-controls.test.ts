@@ -311,7 +311,7 @@ describe('AC-base-ui-bridge-22: every disabled part carries the state the styles
     })
   }
 
-  it('has an entry for every disabled part AC-26 names', () => {
+  it('lists the disabled parts the vocabulary table covers, so a deleted entry reds', () => {
     expect(DISABLED.map(({ marker, subpath }) => `${subpath}: ${marker}`)).toEqual([
       'menu: Menu.Item',
       'menu: Menu.CheckboxItem',

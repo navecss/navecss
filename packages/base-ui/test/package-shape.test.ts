@@ -66,9 +66,9 @@ const importsOf = (code: string): string[] =>
     .toArray()
 
 /**
- * A subpath of Base UI that this package wraps: one of the 23 v1 components. Base UI exports 21
- * more besides its root and internals (hooks, utilities and types, and components this package
- * does not wrap), and a wrapper has no reason to import any of them.
+ * A subpath of Base UI that this package wraps: one of the 23 v1 components. Base UI exports more
+ * besides its root and internals (21 at 1.8.0, 20 at the 1.3.0 floor: hooks, utilities and types,
+ * and components this package does not wrap), and a wrapper has no reason to import any of them.
  */
 const isComponentSubpath = (specifier: string): boolean =>
   SUBPATHS.some((subpath) => specifier === `@base-ui/react/${subpath}`)
