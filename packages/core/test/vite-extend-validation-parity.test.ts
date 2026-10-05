@@ -254,7 +254,7 @@ describe('a falsy value at a nested position is skipped, so `cond && { ... }` ke
     expect(run.code).not.toMatch(/&:hover|&:focus|@container/)
     expect(run.code).not.toMatch(/\{\s*\}/)
     const hasMargin = JSON.stringify(nested).includes('margin')
-    expect(hasMargin || !(run.code ?? '').includes('@media')).toBe(true)
+    expect(hasMargin || !(run.code ?? '').includes('@media'), String(run.code)).toBe(true)
   })
 
   it('a pseudo whose declarations are null expands without throwing', async () => {

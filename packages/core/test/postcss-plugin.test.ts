@@ -900,7 +900,7 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
     const css = await runOrRefused('.x { @nave evil; }', { extend })
 
     expect(css ?? '').not.toContain('display: none')
-    expect(css === undefined || css.includes('color: red')).toBe(true)
+    expect(css === undefined || css.includes('color: red'), `output was: ${css}`).toBe(true)
   })
 
   it('never emits injected text from a declaration value object whose toString answers differently on a second read', async () => {
@@ -922,7 +922,7 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
     const css = await runOrRefused('.x { @nave evil; } .y { @nave evil; }', { extend })
 
     expect(css ?? '').not.toContain('display: none')
-    expect(css === undefined || css.includes('color: red')).toBe(true)
+    expect(css === undefined || css.includes('color: red'), `output was: ${css}`).toBe(true)
   })
 })
 

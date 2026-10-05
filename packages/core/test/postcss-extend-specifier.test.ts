@@ -159,7 +159,7 @@ describe('AC-directive-core-25 — an extend specifier is a PostCSS dependency, 
     }
 
     expect(css ?? '').not.toContain('display: none')
-    expect(css === undefined || css.includes('color: red')).toBe(true)
+    expect(css === undefined || css.includes('color: red'), `output was: ${css}`).toBe(true)
   })
 
   it('reds under a mutant that skips validation on a path-form load', async () => {
