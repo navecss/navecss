@@ -35,6 +35,9 @@ const NOTICE =
 
 // The component's own name is exported from the parts module as well as by the star re-export of
 // Base UI's types, and TypeScript lets the named export win; the lint rule does not know that.
+// Part names that are also JavaScript globals (`Field.Error`).
+const GLOBAL_NAMES: ReadonlySet<string> = new Set(['Error'])
+
 const SINGLE_NOTICE =
   '/* eslint-disable import-x/export -- the named export wins over the star re-export, as TypeScript has it */\n'
 
@@ -126,10 +129,20 @@ const partBlock = (
   if (styled !== undefined) {
     used.add(isSingle ? top : `${top}.${part.name}`)
   }
+  const lines = (local: string): string[] => [
+    valueOf(local, reference, styled, part),
+    ...classOf(local, reference, part),
+    ...namespaceOf(local, reference, part, styled),
+  ]
+  if (!GLOBAL_NAMES.has(name)) {
+    return lines(name)
+  }
+  // Declaring a variable called `Error` shadows the global, so it is declared under another name
+  // and exported as `Error`.
+  const local = `${top}${name}`
   return [
-    valueOf(name, reference, styled, part),
-    ...classOf(name, reference, part),
-    ...namespaceOf(name, reference, part, styled),
+    ...lines(local).map((line) => line.replace(/^export /, '')),
+    `export { ${local} as ${name} }`,
   ]
 }
 

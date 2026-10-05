@@ -9,7 +9,18 @@ import { PACKAGE_DIR } from './support/stylesheet.ts'
 
 const byName = (a: string, b: string): number => a.localeCompare(b)
 
-const DIRECTIVE = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(['"])use client\1/
+/**
+ * Whether a module's first statement is the `'use client'` directive: leading whitespace and
+ * comments are skipped one at a time, so no pattern has to match across them.
+ */
+const hasDirective = (code: string): boolean => {
+  let rest = code.trimStart()
+  while (rest.startsWith('//') || rest.startsWith('/*')) {
+    const end = rest.startsWith('//') ? rest.indexOf('\n') : rest.indexOf('*/') + 1
+    rest = end <= 0 ? '' : rest.slice(end + 1).trimStart()
+  }
+  return /^(['"])use client\1/.test(rest)
+}
 
 describe("AC-base-ui-bridge-13: 'use client' survives, per file", () => {
   const sources = filesUnder(SRC_DIR, ['.ts', '.tsx'])
@@ -22,7 +33,7 @@ describe("AC-base-ui-bridge-13: 'use client' survives, per file", () => {
   })
 
   it('begins every built module with the directive', () => {
-    expect(built.filter((file) => !DIRECTIVE.test(readDist(file)))).toEqual([])
+    expect(built.filter((file) => !hasDirective(readDist(file)))).toEqual([])
   })
 
   it('control: the same source bundled with esbuild loses the directive', async () => {
@@ -41,7 +52,7 @@ describe("AC-base-ui-bridge-13: 'use client' survives, per file", () => {
       write: false,
     })
     const text = result.outputFiles[0]?.text ?? ''
-    expect(DIRECTIVE.test(text)).toBe(false)
+    expect(hasDirective(text)).toBe(false)
   })
 })
 

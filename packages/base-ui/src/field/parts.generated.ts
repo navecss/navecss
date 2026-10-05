@@ -15,11 +15,12 @@ export declare namespace Label {
   export type State = Base.Label.State
   export type Props = Base.Label.Props
 }
-export const Error: typeof Base.Error = /*#__PURE__*/ (() => wrapPart(Base.Error, 'nave-base-ui-field-error'))()
-export declare namespace Error {
+const FieldError: typeof Base.Error = /*#__PURE__*/ (() => wrapPart(Base.Error, 'nave-base-ui-field-error'))()
+declare namespace FieldError {
   export type State = Base.Error.State
   export type Props = Base.Error.Props
 }
+export { FieldError as Error }
 export const Description: typeof Base.Description = /*#__PURE__*/ (() => wrapPart(Base.Description, 'nave-base-ui-field-description'))()
 export declare namespace Description {
   export type State = Base.Description.State
