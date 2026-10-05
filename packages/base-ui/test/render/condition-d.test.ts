@@ -13,11 +13,16 @@ import { openProps } from '../support/states.ts'
 const nave: Source = await loadNave()
 afterEach(cleanup)
 
-type Act = 'click' | 'enter' | 'space'
+type Act = 'arrow-right' | 'arrow-up' | 'click' | 'enter' | 'space'
 type Spy = ReturnType<typeof vi.fn>
 
 interface Row {
   readonly acts?: readonly Act[]
+  /**
+  What the disabled part carries on the element the act is delivered to: an `aria-disabled="true"`,
+  a native `disabled`, or both. Left out where another row already pins it.
+   */
+  readonly attrs?: { readonly aria: boolean; readonly native: boolean }
   /**
   A custom tree, for the rows a scene cannot express.
    */
@@ -29,7 +34,7 @@ interface Row {
   readonly marker: string
   readonly name: string
   /**
-  The props by part: what disables the part, and what hasItem the spy on the signal.
+  The props by part: what disables the part, and what carries the spy on the signal.
    */
   readonly props?: (isDisabled: boolean, spy: Spy) => Record<string, Props>
   /**
@@ -37,6 +42,10 @@ interface Row {
    */
   readonly state: (target: HTMLElement) => string
   readonly subpath: string
+  /**
+  The element the act is delivered to, when it is inside the marked part (the Slider's input).
+   */
+  readonly target?: (marked: HTMLElement) => HTMLElement
   /**
   Whether the click is followed by typing, for the text inputs, which a click alone does not change.
    */
@@ -138,6 +147,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Button',
     name: 'Button (disabled)',
+    attrs: { aria: false, native: true },
     props: (d, s) => ({ Button: { disabled: d, onClick: s } }),
     state: attribute('class'),
     subpath: 'button',
@@ -159,6 +169,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Dialog.Trigger',
     name: 'Dialog.Trigger',
+    attrs: { aria: false, native: true },
     props: (d, s) => ({ 'Dialog.Root': { onOpenChange: s }, 'Dialog.Trigger': { disabled: d } }),
     state: attribute('aria-expanded'),
     subpath: 'dialog',
@@ -166,6 +177,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Popover.Trigger',
     name: 'Popover.Trigger',
+    attrs: { aria: false, native: true },
     props: (d, s) => ({ 'Popover.Root': { onOpenChange: s }, 'Popover.Trigger': { disabled: d } }),
     state: attribute('aria-expanded'),
     subpath: 'popover',
@@ -173,6 +185,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Menu.Trigger',
     name: 'Menu.Trigger',
+    attrs: { aria: false, native: true },
     props: (d, s) => ({ 'Menu.Root': { onOpenChange: s }, 'Menu.Trigger': { disabled: d } }),
     state: attribute('aria-expanded'),
     subpath: 'menu',
@@ -237,6 +250,7 @@ const ROWS: readonly Row[] = [
     },
     marker: 'Field.Control',
     name: 'Field.Control (Fieldset disabled)',
+    attrs: { aria: false, native: true },
     state: value,
     subpath: 'field',
     typing: true,
@@ -245,10 +259,38 @@ const ROWS: readonly Row[] = [
     acts: ['click'],
     marker: 'Input',
     name: 'Input',
+    attrs: { aria: false, native: true },
     props: (d, s) => ({ Input: { disabled: d, onValueChange: s } }),
     state: value,
     subpath: 'input',
     typing: true,
+  },
+  {
+    acts: ['click'],
+    attrs: { aria: true, native: true },
+    marker: 'NumberField.Increment',
+    name: 'NumberField.Increment (Root disabled)',
+    props: (d, s) => ({ 'NumberField.Root': { disabled: d, onValueChange: s } }),
+    state: () => value(partsNamed('NumberField.Input')[0]!),
+    subpath: 'number-field',
+  },
+  {
+    acts: ['arrow-up'],
+    marker: 'NumberField.Input',
+    name: 'NumberField.Input (Root disabled)',
+    props: (d, s) => ({ 'NumberField.Root': { disabled: d, onValueChange: s } }),
+    state: value,
+    subpath: 'number-field',
+  },
+  {
+    acts: ['arrow-right'],
+    attrs: { aria: false, native: true },
+    marker: 'Slider.Thumb',
+    name: "Slider.Thumb's input (Root disabled)",
+    props: (d, s) => ({ 'Slider.Root': { disabled: d, onValueChange: s } }),
+    state: value,
+    subpath: 'slider',
+    target: (marked) => marked.querySelector('input')!,
   },
 ]
 
@@ -261,6 +303,13 @@ const settle = (): Promise<void> =>
     await new Promise((resolve) => setTimeout(resolve, 100))
   })
 
+const KEYS = {
+  'arrow-right': '{ArrowRight}',
+  'arrow-up': '{ArrowUp}',
+  enter: '{Enter}',
+  space: ' ',
+} as const
+
 const deliver = async (target: HTMLElement, act: Act, isTyping: boolean): Promise<void> => {
   const session = user()
   if (act === 'click') {
@@ -270,7 +319,7 @@ const deliver = async (target: HTMLElement, act: Act, isTyping: boolean): Promis
     }
   } else {
     await act_(() => target.focus())
-    await session.keyboard(act === 'enter' ? '{Enter}' : ' ')
+    await session.keyboard(KEYS[act])
   }
   await settle()
 }
@@ -282,6 +331,28 @@ const act_ = (callback: () => void): Promise<void> =>
   })
 
 /**
+ * Renders the row and finds the element its act is delivered to.
+ */
+const renderRow = async (
+  row: Row,
+  isDisabled: boolean,
+  spy: Spy,
+): Promise<{ read: () => string; target: HTMLElement }> => {
+  if (row.element === undefined) {
+    await renderScene(nave, row.subpath, row.props?.(isDisabled, spy) ?? {})
+  } else {
+    await render(row.element(nave, isDisabled, spy))
+  }
+  const marked = (): HTMLElement | undefined => partsNamed(row.marker)[row.index ?? 0]
+  const found = marked()
+  if (found === undefined) {
+    throw new Error(`${row.name}: ${row.marker} did not render`)
+  }
+  const target = row.target?.(found) ?? found
+  return { read: () => row.state(row.target?.(marked() ?? found) ?? marked() ?? found), target }
+}
+
+/**
  * Renders the row, delivers the act to its target and reports whether the signal fired and what
  * the state read before and after.
  */
@@ -291,22 +362,10 @@ const attempt = async (
   actName: Act,
 ): Promise<{ after: string; before: string; called: boolean }> => {
   const spy = vi.fn()
-  if (row.element === undefined) {
-    await renderScene(nave, row.subpath, row.props?.(isDisabled, spy) ?? {})
-  } else {
-    await render(row.element(nave, isDisabled, spy))
-  }
-  const target = partsNamed(row.marker)[row.index ?? 0]
-  if (target === undefined) {
-    throw new Error(`${row.name}: ${row.marker} did not render`)
-  }
-  const before = row.state(target)
+  const { read, target } = await renderRow(row, isDisabled, spy)
+  const before = read()
   await deliver(target, actName, row.typing === true)
-  return {
-    after: row.state(partsNamed(row.marker)[row.index ?? 0] ?? target),
-    before,
-    called: spy.mock.calls.length > 0,
-  }
+  return { after: read(), before, called: spy.mock.calls.length > 0 }
 }
 
 describe('AC-base-ui-bridge-26: condition D, every disabled part is inactive, and each act is proven able to activate', () => {
@@ -322,14 +381,30 @@ describe('AC-base-ui-bridge-26: condition D, every disabled part is inactive, an
         }
         await cleanup()
       }
-      // The positive control: the click always activates the enabled part.
-      expect(activating).toContain('click')
+      // The positive control: the row's first act (the click, or the key a part without a click
+      // target answers to) always activates the enabled part.
+      expect(activating).toContain(acts[0])
       for (const actName of activating) {
         const { after, before, called } = await attempt(row, true, actName)
         expect({ act: actName, called }).toEqual({ act: actName, called: false })
         expect(after).toBe(before)
         await cleanup()
       }
+    })
+  }
+})
+
+const ROWS_WITH_ATTRS = ROWS.filter(({ attrs }) => attrs !== undefined)
+
+describe('AC-base-ui-bridge-26: the disabled part carries the attributes its row names', () => {
+  for (const row of ROWS_WITH_ATTRS) {
+    // eslint-disable-next-line vitest/valid-title -- each row's own name is the title, a plain string
+    it(row.name, async () => {
+      const { target } = await renderRow(row, true, vi.fn())
+      expect({
+        aria: target.getAttribute('aria-disabled') === 'true',
+        native: target.hasAttribute('disabled'),
+      }).toEqual(row.attrs)
     })
   }
 })

@@ -5,15 +5,14 @@ import type { Source } from '../support/scenes.ts'
 
 import { partsNamed } from '../support/dom.ts'
 import { act, cleanup, user } from '../support/react.ts'
+import { recordPairs, unrecordedPairs } from '../support/row-pairs.ts'
 import { hasClass, hasItem, part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
+import { OVERLAY_PAIRS, pair } from '../support/vocabulary-pairs.ts'
 
 const nave: Source = await loadNave()
 afterEach(cleanup)
-
-// eslint-disable-next-line turbo/no-undeclared-env-vars -- a test-run variable set by vitest.config.ts, not a build input
-const IS_FLOOR = process.env.NAVE_BASE_UI === 'floor'
 
 const settle = (): Promise<void> =>
   act(async () => {
@@ -93,18 +92,21 @@ const iconChild = (token: string): unknown => {
 describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where its rule reaches (overlays)', () => {
   const CASES = [
     {
+      cls: 'list-popup',
       items: ['--anchor-width', '--available-height'],
       owner: 'Menu.Popup',
       positioner: 'Menu.Positioner',
       subpath: 'menu',
     },
     {
+      cls: 'list-popup',
       items: ['--anchor-width', '--available-height'],
       owner: 'Select.Popup',
       positioner: 'Select.Positioner',
       subpath: 'select',
     },
     {
+      cls: 'popover-popup',
       items: ['--available-height'],
       owner: 'Popover.Popup',
       positioner: 'Popover.Positioner',
@@ -112,14 +114,15 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     },
   ] as const
 
-  for (const { items, owner, positioner, subpath } of CASES) {
-    it(`${positioner} hasItem ${items.join(' and ')}, and ${owner} sits inside it with its class`, async () => {
+  for (const { cls, items, owner, positioner, subpath } of CASES) {
+    it(`${positioner} carries ${items.join(' and ')}, and ${owner} sits inside it with its class`, async () => {
       await renderScene(nave, subpath, openProps())
       const carrier = part(positioner)
       const popup = part(owner)
       expect(items.filter((item) => !hasItem(carrier, item))).toEqual([])
       expect(popup !== undefined && carrier?.contains(popup) === true).toBe(true)
-      expect(popup?.className).toContain('nave-base-ui-')
+      expect(hasClass(popup, `nave-base-ui-${cls}`)).toBe(true)
+      recordPairs(items.map((item) => pair(cls, item)))
     })
   }
 
@@ -131,21 +134,23 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     ['tooltip', 'Tooltip'],
   ] as const) {
     for (const side of SIDES) {
-      it(`${namespace}.Arrow hasItem data-side="${side}" with the class, for side="${side}"`, async () => {
+      it(`${namespace}.Arrow carries data-side="${side}" with the class, for side="${side}"`, async () => {
         await renderScene(nave, subpath, { ...openProps(), [`${namespace}.Positioner`]: { side } })
         const arrow = part(`${namespace}.Arrow`)
         expect(hasItem(arrow, 'data-side', side)).toBe(true)
         expect(hasClass(arrow, 'nave-base-ui-arrow')).toBe(true)
+        recordPairs(OVERLAY_PAIRS.arrow ?? [])
       })
     }
   }
 
-  it('Select.Value hasItem data-placeholder when there is no value, with the class', async () => {
+  it('Select.Value carries data-placeholder when there is no value, with the class', async () => {
     // eslint-disable-next-line unicorn/no-null -- null is the Select's empty value, which undefined would leave uncontrolled
     await renderScene(nave, 'select', { 'Select.Root': { defaultValue: null } })
     const value = part('Select.Value')
     expect(hasItem(value, 'data-placeholder')).toBe(true)
     expect(hasClass(value, 'nave-base-ui-select-value')).toBe(true)
+    recordPairs(OVERLAY_PAIRS.placeholder ?? [])
   })
 })
 
@@ -154,12 +159,13 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
     ['accordion', 'Accordion'],
     ['collapsible', 'Collapsible'],
   ] as const) {
-    it(`${namespace}: the Panel hasItem its height variable once opened, with the class`, async () => {
+    it(`${namespace}: the Panel carries its height variable once opened, with the class`, async () => {
       await renderScene(nave, subpath)
       await user().click(part(`${namespace}.Trigger`)!)
       const panel = part(`${namespace}.Panel`)
       expect(hasItem(panel, `--${subpath}-panel-height`)).toBe(true)
       expect(hasClass(panel, `nave-base-ui-${subpath}-panel`)).toBe(true)
+      recordPairs([pair(`${subpath}-panel`, `--${subpath}-panel-height`)])
     })
 
     it(`${namespace}: opening then closing is seen as data-starting-style then data-ending-style`, async () => {
@@ -172,9 +178,13 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
       // The control: without the test stylesheet the exit is never observed.
       const withoutStyle = await attributesSeen(subpath, namespace, false)
       expect(withoutStyle.has('data-ending-style')).toBe(false)
+      recordPairs([
+        pair(`${subpath}-panel`, 'data-ending-style'),
+        pair(`${subpath}-panel`, 'data-starting-style'),
+      ])
     })
 
-    it(`${namespace}: the Trigger hasItem aria-expanded when opened, and the icon key reaches by shape`, async () => {
+    it(`${namespace}: the Trigger carries aria-expanded when opened, and the icon key reaches by shape`, async () => {
       const SHAPES = [
         { children: ['Title', '<svg>'], reached: 1 },
         { children: ['<svg>', 'Title'], reached: 1 },
@@ -193,6 +203,7 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
         await cleanup()
       }
       expect(widths).toEqual(SHAPES.map((shape) => shape.reached))
+      recordPairs(OVERLAY_PAIRS.disclosureIcon ?? [])
     })
 
     it(`${namespace}: the Panel's first and last element children are the ones the inset keys reach`, async () => {
@@ -209,7 +220,7 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
     })
   }
 
-  it('Tabs: a vertical list hasItem aria-orientation, the Indicator data-orientation, with the classes', async () => {
+  it('Tabs: a vertical list carries aria-orientation, the Indicator data-orientation, with the classes', async () => {
     await renderScene(nave, 'tabs', { 'Tabs.Root': { orientation: 'vertical' } })
     const list = part('Tabs.List')
     const indicator = part('Tabs.Indicator')
@@ -217,9 +228,10 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
     expect(hasClass(list, 'nave-base-ui-tab-list')).toBe(true)
     expect(hasItem(indicator, 'data-orientation', 'vertical')).toBe(true)
     expect(hasClass(indicator, 'nave-base-ui-tab-indicator')).toBe(true)
+    recordPairs(OVERLAY_PAIRS.tabOrientation ?? [])
   })
 
-  it('Tabs: the Indicator hasItem the active-tab variables', async () => {
+  it('Tabs: the Indicator carries the active-tab variables', async () => {
     await renderScene(nave, 'tabs')
     const indicator = part('Tabs.Indicator')
     expect(
@@ -227,9 +239,22 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
         (item) => !hasItem(indicator, item),
       ),
     ).toEqual([])
+    recordPairs(OVERLAY_PAIRS.tabIndicatorVariables ?? [])
   })
 
   it('names every Tabs part it looks at', () => {
-    expect(IS_FLOOR || partsNamed('Tabs.List').length === 0).toBe(true)
+    expect(partsNamed('Tabs.List')).toHaveLength(0)
+  })
+})
+
+describe("AC-base-ui-bridge-22: the overlays' render rows cover every pair they own", () => {
+  it('has recorded every pair of the overlays table', () => {
+    expect(unrecordedPairs(OVERLAY_PAIRS)).toEqual([])
+  })
+
+  it('control: a pair no row asserted is reported', () => {
+    expect(unrecordedPairs({ planted: [pair('arrow', 'data-planted')] })).toEqual([
+      'nave-base-ui-arrow data-planted',
+    ])
   })
 })

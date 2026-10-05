@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { ElementRecord } from '../support/dom.ts'
 import type { Props } from '../support/scenes.ts'
 
 import { describeDocument, marked, parityViolations, partsNamed } from '../support/dom.ts'
-import { cleanup, render, user } from '../support/react.ts'
+import { act, cleanup, render, user } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
 import { isOverlay, openProps } from '../support/states.ts'
@@ -26,12 +27,49 @@ const VARIANT_PARTS = [
   'Tooltip.Trigger',
 ]
 
+const HIGHLIGHT_ATTRIBUTE = '[data-highlighted]'
+
 const VARIANT_PROPS: Record<string, Props> = {
   ...Object.fromEntries(
     VARIANT_PARTS.map((part) => [part, { size: 'sm', variant: 'primary' }] as const),
   ),
   Toggle: { size: 'sm' },
 }
+
+const TRANSITION_ATTRIBUTES = ['data-starting-style', 'data-ending-style']
+
+const settle = (milliseconds: number): Promise<void> =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, milliseconds))
+  })
+
+const isInTransition = (): boolean =>
+  document.querySelector(TRANSITION_ATTRIBUTES.map((name) => `[${name}]`).join(',')) !== null
+
+const serialized = (records: readonly ElementRecord[]): string =>
+  JSON.stringify(records.map(({ attributes, tag }) => [tag, [...attributes]]))
+
+/**
+ * The document once it is at rest: no element is mid-transition, and two reads a moment apart
+ * agree. Base UI marks an opening part with `data-starting-style` (and a transient
+ * `transition: none`) for a frame or two, and which side of that a read lands on depends on how
+ * busy the machine is, so a comparison of two documents is made between documents at rest.
+ */
+const describeAtRest = async (): Promise<ElementRecord[]> => {
+  let previous = ''
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const records = describeDocument()
+    const current = serialized(records)
+    if (current === previous && !isInTransition()) {
+      return records
+    }
+    previous = current
+    await settle(25)
+  }
+  throw new Error('the document never came to rest')
+}
+
+const VARIANT_PART_NAMES: ReadonlySet<string> = new Set(Object.keys(VARIANT_PROPS))
 
 describe("AC-base-ui-bridge-12: a wrapper renders exactly the bare part's DOM, plus its class and data-nave-*", () => {
   for (const subpath of SUBPATHS) {
@@ -49,15 +87,44 @@ describe("AC-base-ui-bridge-12: a wrapper renders exactly the bare part's DOM, p
             throw new Error(`no scene for ${subpath}`)
           }
           await render(scene.render(bare, { props }))
-          const expected = describeDocument()
+          const expected = await describeAtRest()
           await render(
             scene.render(nave, { props: { ...props, ...(isVariants && VARIANT_PROPS) } }),
           )
-          expect(parityViolations(expected, describeDocument())).toEqual([])
+          expect(parityViolations(expected, await describeAtRest())).toEqual([])
         })
       }
     }
   }
+
+  it('gives a data-nave-* attribute to no part but the ones AC-14 names', async () => {
+    const offenders: string[] = []
+    for (const subpath of SUBPATHS) {
+      await render(
+        scenes[subpath]?.render(nave, { props: { ...openProps(), ...VARIANT_PROPS } }) as never,
+      )
+      for (const { element, part } of marked()) {
+        const names = element
+          .getAttributeNames()
+          .filter((name) => name.startsWith('data-nave-'))
+          .join(' ')
+        if (names !== '' && !VARIANT_PART_NAMES.has(part)) {
+          offenders.push(`${part}: ${names}`)
+        }
+      }
+      await cleanup()
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('control: a document still in a starting style is read only once it has rested', async () => {
+    await render(scenes.button?.render(bare) as never)
+    const button = document.querySelector('button')
+    button?.setAttribute('data-starting-style', '')
+    setTimeout(() => button?.removeAttribute('data-starting-style'), 100)
+    const records = await describeAtRest()
+    expect(records.some(({ attributes }) => attributes.has('data-starting-style'))).toBe(false)
+  })
 
   it('control: a part that gains an aria-label is reported, naming its element', async () => {
     const scene = scenes.button
@@ -134,6 +201,18 @@ const STATES: Readonly<
 
 type Scene = NonNullable<(typeof scenes)[string]>
 
+/**
+ * The marked elements the highlight is on, keyed as `ownAttributes` keys them.
+ */
+const highlighted = (): string[] => {
+  const seen = new Map<string, number>()
+  return marked().flatMap(({ element, part }) => {
+    const index = seen.get(part) ?? 0
+    seen.set(part, index + 1)
+    return element.matches(HIGHLIGHT_ATTRIBUTE) ? [`${part}#${index}`] : []
+  })
+}
+
 const styledPartsOf = (subpath: string): string[] =>
   tableP
     .keys()
@@ -205,6 +284,30 @@ describe("AC-base-ui-bridge-37: Nave's contribution is chosen by the consumer's 
       expect(differing).toEqual([])
     })
   }
+
+  describe.each([
+    ['menu', 'Menu.Item'],
+    ['select', 'Select.Item'],
+  ] as const)('%s: moving the highlight', (subpath, item) => {
+    it(`leaves the class and data-nave-* of every part alone`, async () => {
+      const scene = scenes[subpath]
+      if (scene === undefined) {
+        throw new Error(`no scene for ${subpath}`)
+      }
+      const consumer = Object.fromEntries(
+        styledPartsOf(subpath).map((part) => [part, { className: 'consumer' }]),
+      )
+      const props = mergeProps(consumer, openProps())
+      await render(scene.render(nave, { props }))
+      await settle(100)
+      const [before, highlightedBefore] = [ownAttributes(), highlighted()]
+      await user().hover(partsNamed(item).at(-1)!)
+      await settle(100)
+      // The control: the highlight did move, so the comparison below is between two states.
+      expect(highlighted()).not.toEqual(highlightedBefore)
+      expect([...ownAttributes()]).toEqual([...before])
+    })
+  })
 
   it('changes only when variant, size or className change', async () => {
     const scene = scenes.button

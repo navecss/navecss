@@ -4,15 +4,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Props, Source } from '../support/scenes.ts'
 
 import { cleanup, render } from '../support/react.ts'
+import { recordCarried, recordPairs, unrecordedPairs } from '../support/row-pairs.ts'
 import { hasClass, hasItem, part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 import { topName } from '../support/subpaths.ts'
+import { CONTROL_PAIRS, pair } from '../support/vocabulary-pairs.ts'
 
 const nave: Source = await loadNave()
 afterEach(cleanup)
 
-// eslint-disable-next-line turbo/no-undeclared-env-vars -- a test-run variable set by vitest.config.ts, not a build input
-const IS_FLOOR = process.env.NAVE_BASE_UI === 'floor'
 const C = 'nave-base-ui-'
 
 describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where its rule reaches (controls)', () => {
@@ -23,6 +23,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     await renderScene(nave, 'toggle-group')
     expect(hasItem(part('Toggle'), 'aria-pressed', 'true')).toBe(true)
     expect(hasClass(part('Toggle'), `${C}toggle`)).toBe(true)
+    recordPairs(CONTROL_PAIRS.pressed ?? [])
   })
 
   it('ToggleGroup and Toolbar.Group carry data-orientation when vertical, with the class', async () => {
@@ -32,14 +33,22 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     await renderScene(nave, 'toolbar', { 'Toolbar.Root': { orientation: 'vertical' } })
     expect(hasItem(part('Toolbar.Group'), 'data-orientation', 'vertical')).toBe(true)
     expect(hasClass(part('Toolbar.Group'), `${C}toolbar-group`)).toBe(true)
+    recordPairs([
+      pair('toggle-group', 'data-orientation'),
+      pair('toolbar-group', 'data-orientation'),
+    ])
   })
 
-  it('Toolbar hasItem aria-orientation, and its Separator the opposite value, with the classes', async () => {
+  it('Toolbar carries aria-orientation, and its Separator the opposite value, with the classes', async () => {
     await renderScene(nave, 'toolbar', { 'Toolbar.Root': { orientation: 'vertical' } })
     expect(hasItem(part('Toolbar.Root'), 'aria-orientation', 'vertical')).toBe(true)
     expect(hasClass(part('Toolbar.Root'), `${C}toolbar`)).toBe(true)
     expect(hasItem(part('Toolbar.Separator'), 'aria-orientation', 'horizontal')).toBe(true)
     expect(hasClass(part('Toolbar.Separator'), `${C}toolbar-separator`)).toBe(true)
+    recordPairs([
+      pair('toolbar', 'aria-orientation'),
+      pair('toolbar-separator', 'aria-orientation'),
+    ])
   })
 
   it('Slider parts carry data-orientation when vertical, with the classes', async () => {
@@ -51,24 +60,27 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     ] as const) {
       expect(hasItem(part(marker), 'data-orientation', 'vertical')).toBe(true)
       expect(hasClass(part(marker), `${C}${name}`)).toBe(true)
+      recordPairs([pair(name, 'data-orientation')])
     }
   })
 
-  it('Checkbox hasItem aria-checked, and its Indicator is mounted as a direct child', async () => {
+  it('Checkbox carries aria-checked, and its Indicator is mounted as a direct child', async () => {
     await renderScene(nave, 'checkbox', { 'Checkbox.Root': { defaultChecked: true } })
     expect(hasItem(part('Checkbox.Root'), 'aria-checked', 'true')).toBe(true)
     expect(part('Checkbox.Indicator')?.parentElement).toBe(part('Checkbox.Root'))
     expect(hasClass(part('Checkbox.Indicator'), `${C}checkbox-indicator`)).toBe(true)
+    recordPairs([pair('checkbox-indicator', 'aria-checked')])
     await renderScene(nave, 'checkbox', { 'Checkbox.Root': { indeterminate: true } })
     expect(hasItem(part('Checkbox.Root'), 'aria-checked', 'mixed')).toBe(true)
     expect(part('Checkbox.Indicator')?.parentElement).toBe(part('Checkbox.Root'))
   })
 
-  it('Switch hasItem aria-checked, and its Thumb is a direct child of the Root', async () => {
+  it('Switch carries aria-checked, and its Thumb is a direct child of the Root', async () => {
     await renderScene(nave, 'switch', { 'Switch.Root': { defaultChecked: true } })
     expect(hasItem(part('Switch.Root'), 'aria-checked', 'true')).toBe(true)
     expect(part('Switch.Thumb')?.parentElement).toBe(part('Switch.Root'))
     expect(hasClass(part('Switch.Thumb'), `${C}switch-thumb`)).toBe(true)
+    recordPairs([pair('switch-thumb', 'aria-checked')])
   })
 
   it('an invalid Field gives aria-invalid to each control, with the class', async () => {
@@ -110,6 +122,8 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
       const element = part(marker)
       if (!hasItem(element, 'aria-invalid', 'true') || !hasClass(element, `${C}${cls}`)) {
         problems.push(marker)
+      } else {
+        recordPairs([pair(cls, 'aria-invalid')])
       }
     }
     expect(problems).toEqual([])
@@ -134,6 +148,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     expect(hasItem(part('NumberField.Input'), 'aria-invalid', 'true')).toBe(true)
     expect(part('NumberField.Input')?.parentElement).toBe(part('NumberField.Group'))
     expect(hasClass(part('NumberField.Group'), `${C}number-field-group`)).toBe(true)
+    recordPairs([pair('number-field-group', 'aria-invalid')])
   })
 
   it('NumberField and Slider carry data-disabled when disabled, with the class', async () => {
@@ -143,162 +158,192 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     await renderScene(nave, 'slider', { 'Slider.Root': { disabled: true } })
     expect(hasItem(part('Slider.Thumb'), 'data-disabled')).toBe(true)
     expect(hasClass(part('Slider.Thumb'), `${C}slider-thumb`)).toBe(true)
+    recordPairs([
+      pair('number-field-group', 'data-disabled'),
+      pair('slider-thumb', 'data-disabled'),
+    ])
   })
 })
 
 /**
- * Each disabled part the stylesheet paints: how to disable it, and what it hasItem at the floor
- * and at the current Base UI (an ARIA state, a native `disabled`, or both).
+ * Each disabled part the stylesheet paints: how to disable it, and what it carries (an ARIA state,
+ * a native `disabled`, or both).
  */
 const DISABLED: readonly {
-  aria: { current: boolean; floor: boolean }
+  aria: boolean
   disable: Record<string, Props>
   marker: string
-  native: { current: boolean; floor: boolean }
+  native: boolean
   subpath: string
 }[] = [
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Menu.Root': { open: true }, 'Menu.Item': { disabled: true } },
     marker: 'Menu.Item',
-    native: both(false),
+    native: false,
     subpath: 'menu',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Menu.Root': { open: true }, 'Menu.CheckboxItem': { disabled: true } },
     marker: 'Menu.CheckboxItem',
-    native: both(false),
+    native: false,
     subpath: 'menu',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Menu.Root': { open: true }, 'Menu.RadioItem': { disabled: true } },
     marker: 'Menu.RadioItem',
-    native: both(false),
+    native: false,
     subpath: 'menu',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Menu.Root': { open: true }, 'Menu.SubmenuTrigger': { disabled: true } },
     marker: 'Menu.SubmenuTrigger',
-    native: both(false),
+    native: false,
     subpath: 'menu',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Select.Root': { open: true }, 'Select.Item': { disabled: true } },
     marker: 'Select.Item',
-    native: both(false),
+    native: false,
     subpath: 'select',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Tabs.Tab': { disabled: true } },
     marker: 'Tabs.Tab',
-    native: both(false),
+    native: false,
     subpath: 'tabs',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Accordion.Item': { disabled: true } },
     marker: 'Accordion.Trigger',
-    native: { current: false, floor: true },
+    native: false,
     subpath: 'accordion',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Collapsible.Root': { disabled: true } },
     marker: 'Collapsible.Trigger',
-    native: { current: false, floor: true },
+    native: false,
     subpath: 'collapsible',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { Button: { disabled: true, focusableWhenDisabled: true } },
     marker: 'Button',
-    native: both(false),
+    native: false,
     subpath: 'button',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Toolbar.Button': { disabled: true } },
     marker: 'Toolbar.Button',
-    native: both(false),
+    native: false,
     subpath: 'toolbar',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Toolbar.Input': { disabled: true } },
     marker: 'Toolbar.Input',
-    native: both(false),
+    native: false,
     subpath: 'toolbar',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Checkbox.Root': { disabled: true } },
     marker: 'Checkbox.Root',
-    native: both(false),
+    native: false,
     subpath: 'checkbox',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Radio.Root': { disabled: true } },
     marker: 'Radio.Root',
-    native: { current: false, floor: true },
+    native: false,
     subpath: 'radio',
   },
   {
-    aria: both(false),
+    aria: false,
     disable: { Toggle: { disabled: true } },
     marker: 'Toggle',
-    native: both(true),
+    native: true,
     subpath: 'toggle',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { Toggle: { disabled: true } },
     marker: 'Toggle',
-    native: both(true),
+    native: true,
     subpath: 'toggle-group',
   },
   {
-    aria: both(true),
+    aria: true,
     disable: { 'Switch.Root': { disabled: true } },
     marker: 'Switch.Root',
-    native: both(false),
+    native: false,
     subpath: 'switch',
   },
   {
-    aria: { current: true, floor: false },
+    aria: true,
     disable: { 'NumberField.Root': { disabled: true } },
     marker: 'NumberField.Increment',
-    native: both(true),
+    native: true,
     subpath: 'number-field',
   },
   {
-    aria: both(false),
+    aria: false,
     disable: { 'Select.Root': { disabled: true } },
     marker: 'Select.Trigger',
-    native: both(true),
+    native: true,
     subpath: 'select',
   },
 ]
 
-function both(isOn: boolean): { current: boolean; floor: boolean } {
-  return { current: isOn, floor: isOn }
-}
-
-describe('AC-base-ui-bridge-22: every disabled part hasItem the state the stylesheet keys on', () => {
+describe('AC-base-ui-bridge-22: every disabled part carries the state the stylesheet keys on', () => {
   for (const { aria, disable, marker, native, subpath } of DISABLED) {
-    it(`${subpath}: ${marker} disabled hasItem ${aria[IS_FLOOR ? 'floor' : 'current'] ? 'aria-disabled' : 'no aria-disabled'} and ${native[IS_FLOOR ? 'floor' : 'current'] ? 'native disabled' : 'no native disabled'}`, async () => {
+    it(`${subpath}: ${marker} disabled carries ${aria ? 'aria-disabled' : 'no aria-disabled'} and ${native ? 'native disabled' : 'no native disabled'}`, async () => {
       await renderScene(nave, subpath, disable)
       const element = part(marker)
       expect(element, `${marker} rendered`).toBeDefined()
-      const run = IS_FLOOR ? 'floor' : 'current'
-      expect(hasItem(element, 'aria-disabled', 'true')).toBe(aria[run])
-      expect(element?.hasAttribute('disabled')).toBe(native[run])
+      expect(hasItem(element, 'aria-disabled', 'true')).toBe(aria)
+      expect(element?.hasAttribute('disabled')).toBe(native)
       expect(element?.className).toContain(C)
+      recordCarried(element, 'aria-disabled', 'true')
     })
   }
+
+  it('Select.Trigger carries aria-disabled when it is not a native button, whichever part disables it', async () => {
+    const asDiv = { nativeButton: false, render: createElement('div') }
+    const routes: readonly (readonly [string, Record<string, Props>])[] = [
+      ['Root', { 'Select.Root': { disabled: true }, 'Select.Trigger': asDiv }],
+      ['Trigger', { 'Select.Trigger': { ...asDiv, disabled: true } }],
+    ]
+    for (const [disabledBy, props] of routes) {
+      await renderScene(nave, 'select', props)
+      const trigger = part('Select.Trigger')
+      expect(trigger?.tagName, `${disabledBy} disabled: the trigger is a div`).toBe('DIV')
+      expect(hasItem(trigger, 'aria-disabled', 'true'), `${disabledBy} disabled`).toBe(true)
+      expect(trigger?.hasAttribute('disabled')).toBe(false)
+      expect(hasClass(trigger, `${C}select-trigger`)).toBe(true)
+      recordCarried(trigger, 'aria-disabled', 'true')
+      await cleanup()
+    }
+  })
+})
+
+describe("AC-base-ui-bridge-22: the controls' render rows cover every pair they own", () => {
+  it('has recorded every pair of the controls table', () => {
+    expect(unrecordedPairs(CONTROL_PAIRS)).toEqual([])
+  })
+
+  it('control: a pair no row asserted is reported', () => {
+    expect(unrecordedPairs({ planted: [pair('toggle', 'data-planted')] })).toEqual([
+      'nave-base-ui-toggle data-planted',
+    ])
+  })
 })

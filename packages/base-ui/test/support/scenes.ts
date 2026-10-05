@@ -6,12 +6,9 @@
  * that component's export (`Menu`, or `Button` itself), from either Base UI or the wrapper, so the
  * same tree renders bare and through the wrapper, and a group component's children come from the
  * same source as the group.
- *
- * A part the installed Base UI does not have (a part younger than the floor) renders as nothing
- * around its children, which is how a scene runs at the floor.
  */
 /* eslint-disable unicorn/max-nested-calls -- a scene is a tree, written as the nested calls it renders */
-import { createElement, type ElementType, Fragment, type ReactElement, type ReactNode } from 'react'
+import { createElement, type ElementType, type ReactElement, type ReactNode } from 'react'
 
 import { overlayBuilds } from './overlay-scenes.ts'
 import { topName } from './subpaths.ts'
@@ -47,9 +44,6 @@ const maker =
   (ui: Ui, namespace: string, config: SceneConfig): Make =>
   (part, props = {}, ...children) => {
     const type = part === '.' ? ui : ui[part]
-    if (type === undefined) {
-      return createElement(Fragment, undefined, ...children)
-    }
     const marker = part === '.' ? namespace : `${namespace}.${part}`
     const extra = config.props?.[marker]
     // A config can replace a part's children, for a test about what a part is given to hold.

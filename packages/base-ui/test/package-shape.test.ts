@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { DIST_DIR, filesUnder, manifest, readDist, SRC_DIR } from './support/dist.ts'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
+import { SUBPATHS } from './support/subpaths.ts'
 
 const byName = (a: string, b: string): number => a.localeCompare(b)
 
@@ -65,12 +66,18 @@ const importsOf = (code: string): string[] =>
     .toArray()
 
 /**
+ * A public component subpath of Base UI: one of the components this package wraps. Base UI's other
+ * subpaths (its internals, its hooks and utilities, its types) are not components.
+ */
+const isComponentSubpath = (specifier: string): boolean =>
+  SUBPATHS.some((subpath) => specifier === `@base-ui/react/${subpath}`)
+
+/**
  * The specifiers that reach into Base UI beyond a public component subpath.
  */
 const nonPublicBaseUiImports = (code: string): string[] =>
   importsOf(code).filter(
-    (specifier) =>
-      specifier.startsWith('@base-ui/react') && !/^@base-ui\/react\/[a-z-]+$/.test(specifier),
+    (specifier) => specifier.startsWith('@base-ui/react') && !isComponentSubpath(specifier),
   )
 
 const hash = (file: string): string => createHash('sha256').update(readFileSync(file)).digest('hex')
@@ -88,13 +95,13 @@ describe('AC-base-ui-bridge-36: provenance and packaging', () => {
       readDist(file)
         .matchAll(/@base-ui\/react(?:\/[\w./-]*)?/g)
         .map((match) => match[0])
-        .filter((specifier) => !/^@base-ui\/react\/[a-z-]+$/.test(specifier))
+        .filter((specifier) => !isComponentSubpath(specifier))
         .toArray(),
     )
     expect(reached).toEqual([])
   })
 
-  it('hasItem no source of Base UI or React: they are imported, never inlined', () => {
+  it('carries no source of Base UI or React: they are imported, never inlined', () => {
     const inlined = built.filter((file) =>
       /useRenderElement|react\.element|react\.transitional/.test(readDist(file)),
     )
@@ -114,6 +121,19 @@ describe('AC-base-ui-bridge-36: provenance and packaging', () => {
         "import { useRenderElement } from '@base-ui/react/internals/useRenderElement'",
       ),
     ).toEqual(['@base-ui/react/internals/useRenderElement'])
+  })
+
+  it.each(['unstable-use-media-query', 'merge-props', 'use-render', 'types', 'csp-provider'])(
+    'control: a planted import of the non-component subpath %s is reported',
+    (subpath) => {
+      expect(nonPublicBaseUiImports(`export { thing } from '@base-ui/react/${subpath}'`)).toEqual([
+        `@base-ui/react/${subpath}`,
+      ])
+    },
+  )
+
+  it('control: a planted import of a component subpath is not reported', () => {
+    expect(nonPublicBaseUiImports("import { Dialog } from '@base-ui/react/dialog'")).toEqual([])
   })
 })
 

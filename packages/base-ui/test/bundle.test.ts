@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { rolldown } from 'rolldown'
 import { describe, expect, it } from 'vitest'
@@ -12,10 +12,10 @@ import { tableP } from './support/table-p.ts'
 const WORK = path.join(PACKAGE_DIR, 'node_modules/.cache/bundle-tests')
 
 /**
- * The minified size of a consumer entry bundled by rolldown, with React left external. `alias`
- * points `@navecss/base-ui` at the built package.
+ * The minified size of a consumer entry bundled by rolldown, with React left external. `dist` is
+ * the built package `@navecss/base-ui` resolves to.
  */
-const sizeOf = async (name: string, source: string): Promise<number> => {
+const sizeOf = async (name: string, source: string, dist: string = DIST_DIR): Promise<number> => {
   mkdirSync(WORK, { recursive: true })
   const entry = path.join(WORK, `${name}.js`)
   writeFileSync(entry, source)
@@ -23,7 +23,7 @@ const sizeOf = async (name: string, source: string): Promise<number> => {
     external: /^react(?:-dom)?(?:\/|$)/,
     input: entry,
     logLevel: 'silent',
-    resolve: { alias: { '@navecss/base-ui': DIST_DIR } },
+    resolve: { alias: { '@navecss/base-ui': dist } },
   })
   const { output } = await bundle.generate({ format: 'esm', minify: true })
   return output[0].code.length
@@ -32,22 +32,31 @@ const sizeOf = async (name: string, source: string): Promise<number> => {
 const entry = (specifier: string, top: string, parts: readonly string[]): string =>
   `import { ${top} } from '${specifier}'\nconsole.log(${parts.map((part) => `${top}.${part}`).join(', ')})\n`
 
-const sizeWith = (
-  specifier: string,
-  top: string,
-  parts: readonly string[],
-  name: string,
-): Promise<number> => sizeOf(name, entry(specifier, top, parts))
+/**
+ * What the wrapper helper costs a bundle on its own: the built `part.js`, minified, with React
+ * external. Any wrapped part pays it once.
+ */
+const helperCost = (dist: string, name: string): Promise<number> =>
+  sizeOf(
+    `${name}-helper`,
+    `import { wrapPart } from '${path.join(dist, 'part.js')}'\nconsole.log(wrapPart)\n`,
+    dist,
+  )
+
+// The helper is the wrapper's one fixed cost, and the other bounds are measured against it, so it
+// is held to a ceiling of its own.
+const HELPER_CEILING = 1024
+
+// What the used, wrapped part may add besides the helper: its call and its class string.
+const SLACK = 120
 
 /**
- * The sizes for one component: Root plus its main styled part as the pair (the Popup where it has
- * one), and, as what an unused part costs, the largest of the parts the pair leaves out. The
- * largest, not the first: the wrapper's own fixed cost (about half a kilobyte of helper) is paid
- * once by any wrapped part, so a part smaller than twice that could never show in a relative bound.
+ * The pair a component is measured with: its Root plus its Popup (or, without one, its first
+ * styled part), and every other part of its namespace.
  */
-const measure = async (
+const partsOf = async (
   subpath: string,
-): Promise<{ direct: number; extended: number; extra: string; nave: number } | undefined> => {
+): Promise<{ others: string[]; pair: string[]; top: string } | undefined> => {
   const top = topName(subpath)
   const keys = Object.keys(
     ((await import(/* @vite-ignore */ `@base-ui/react/${subpath}`)) as Record<string, object>)[
@@ -61,42 +70,55 @@ const measure = async (
     return undefined
   }
   const pair = ['Root', styled]
-  const base = `@base-ui/react/${subpath}`
-  const direct = await sizeWith(base, top, pair, `${subpath}-a`)
-  let largest = { cost: 0, extra: '', extended: direct }
-  const unusedKeys = keys.filter((candidate) => !pair.includes(candidate))
-  for (const key of unusedKeys) {
-    const extended = await sizeWith(base, top, [...pair, key], `${subpath}-b`)
-    if (extended - direct > largest.cost) {
-      largest = { cost: extended - direct, extended, extra: key }
-    }
-  }
-  const nave = await sizeWith(`@navecss/base-ui/${subpath}`, top, pair, `${subpath}-c`)
-  return { direct, extended: largest.extended, extra: largest.extra, nave }
+  return { others: keys.filter((key) => !pair.includes(key)), pair, top }
 }
 
 /**
- * What the wrapper helper costs a bundle on its own: the built `part.js`, minified, with React
- * external. Any wrapped part pays it once.
+ * Where a component's wrapper breaks the bound, by the clause it breaks. With (a) the pair from
+ * Base UI, (b) as (a) plus one more part P, (c) the pair from the wrapper and (d) as (c) plus P:
+ * the second clause is that (c) costs no more than the helper and the used parts' own calls over
+ * (a); the third is that, for every P, (d) adds at least half of what (b) adds, which compares the
+ * wrapper with itself, so the helper's cost cancels and a small part is checked as well as a
+ * large one.
  */
-const helperCost = (): Promise<number> =>
-  sizeOf(
-    'helper',
-    `import { wrapPart } from '${path.join(DIST_DIR, 'part.js')}'\nconsole.log(wrapPart)\n`,
-  )
+const bundleProblems = async (
+  subpath: string,
+  helper: number,
+  dist: string,
+  name: string,
+): Promise<{ second: string[]; third: string[] }> => {
+  const parts = await partsOf(subpath)
+  if (parts === undefined) {
+    return { second: [`${subpath}: no Root and styled part to measure`], third: [] }
+  }
+  const { others, pair, top } = parts
+  const [bare, wrapped] = [`@base-ui/react/${subpath}`, `@navecss/base-ui/${subpath}`]
+  const a = await sizeOf(`${name}-a`, entry(bare, top, pair), dist)
+  const c = await sizeOf(`${name}-c`, entry(wrapped, top, pair), dist)
+  const second =
+    c - a > helper + SLACK ? [`${subpath}: c-a ${c - a} > helper ${helper} + ${SLACK}`] : []
+  const third: string[] = []
+  for (const part of others) {
+    const b = await sizeOf(`${name}-b`, entry(bare, top, [...pair, part]), dist)
+    const d = await sizeOf(`${name}-d`, entry(wrapped, top, [...pair, part]), dist)
+    if (d - c < (b - a) / 2) {
+      third.push(`${subpath}.${part}: d-c ${d - c} < (b-a)/2 ${(b - a) / 2}`)
+    }
+  }
+  return { second, third }
+}
 
-// What the used, wrapped part may add besides the helper: its call and its class string.
-const SLACK = 120
-
-const isUnusedDropped = ({
-  direct,
-  extended,
-  nave,
-}: {
-  direct: number
-  extended: number
-  nave: number
-}): boolean => nave - direct < (extended - direct) / 2
+/**
+ * A copy of the built package for a control to damage: the helper and one component's modules.
+ */
+const scratchDist = (name: string, subpath: string): string => {
+  const copy = path.join(WORK, name)
+  rmSync(copy, { force: true, recursive: true })
+  mkdirSync(copy, { recursive: true })
+  cpSync(path.join(DIST_DIR, 'part.js'), path.join(copy, 'part.js'))
+  cpSync(path.join(DIST_DIR, subpath), path.join(copy, subpath), { recursive: true })
+  return copy
+}
 
 describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bundler", () => {
   // Components with a Root, a styled part and a part to leave unused: the ones of three or more
@@ -122,55 +144,55 @@ describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bund
     ])
   })
 
+  it(`keeps the helper at most ${HELPER_CEILING} bytes`, { timeout: 120_000 }, async () => {
+    expect(await helperCost(DIST_DIR, 'built')).toBeLessThanOrEqual(HELPER_CEILING)
+  })
+
   for (const subpath of subpaths) {
     it(
-      `${subpath}: the wrapper adds less than half of what an unused part costs`,
-      { timeout: 180_000 },
+      `${subpath}: the wrapper adds the helper and its own calls, and drops every unused part`,
+      { timeout: 300_000 },
       async () => {
-        const sizes = await measure(subpath)
-        expect(sizes, `${subpath} has a Root and a styled part`).toBeDefined()
-        if (sizes === undefined) {
-          return
-        }
-        expect(sizes.extended - sizes.direct, `${sizes.extra} costs something`).toBeGreaterThan(0)
-        // The wrapper adds its helper and the used part's own call, and nothing of any unused part.
-        const helper = await helperCost()
-        expect(
-          sizes.nave - sizes.direct,
-          `${JSON.stringify(sizes)}, helper ${helper}`,
-        ).toBeLessThanOrEqual(helper + SLACK)
-        // Where an unused part costs enough to show against the helper, the relative bound holds too.
-        const isShownAgainstHelper = sizes.extended - sizes.direct >= 2 * helper
-        expect(
-          !isShownAgainstHelper || isUnusedDropped(sizes),
-          `${sizes.extra}: ${JSON.stringify(sizes)}`,
-        ).toBe(true)
+        const helper = await helperCost(DIST_DIR, subpath)
+        const { second, third } = await bundleProblems(subpath, helper, DIST_DIR, subpath)
+        expect([...second, ...third]).toEqual([])
       },
     )
   }
 
   it(
-    'control: a pass-through written as a plain property is not dropped',
-    { timeout: 120_000 },
+    'control: a helper that keeps a whole component at module scope is reported, by its size and by every part it keeps',
+    { timeout: 300_000 },
     async () => {
-      mkdirSync(WORK, { recursive: true })
+      const dist = scratchDist('retaining-helper', 'dialog')
+      const helperFile = path.join(dist, 'part.js')
       writeFileSync(
-        path.join(WORK, 'naive.js'),
-        "import { Dialog as B } from '@base-ui/react/dialog'\nexport const Dialog = { Root: B.Root, Popup: B.Popup, Trigger: B.Trigger, Portal: B.Portal, Backdrop: B.Backdrop, Title: B.Title }\n",
+        helperFile,
+        `import { Dialog } from '@base-ui/react/dialog'\nglobalThis.retained = Dialog\n${readFileSync(helperFile, 'utf8')}`,
       )
-      const direct = await sizeOf(
-        'naive-a',
-        entry('@base-ui/react/dialog', 'Dialog', ['Root', 'Popup']),
+      const helper = await helperCost(dist, 'retaining')
+      expect(helper).toBeGreaterThan(HELPER_CEILING)
+      const { third } = await bundleProblems('dialog', helper, dist, 'retaining')
+      expect(third.length).toBeGreaterThan(0)
+    },
+  )
+
+  it(
+    'control: a pass-through written as a plain property is reported where the bundler cannot drop it',
+    { timeout: 300_000 },
+    async () => {
+      const dist = scratchDist('plain-properties', 'popover')
+      const modules = path.join(dist, 'popover/parts.generated.js')
+      writeFileSync(
+        modules,
+        readFileSync(modules, 'utf8').replaceAll(
+          /\/\*#__PURE__\*\/ \(\(\) => (Base\.\w+)\)\(\)/g,
+          '$1',
+        ),
       )
-      const extended = await sizeOf(
-        'naive-b',
-        entry('@base-ui/react/dialog', 'Dialog', ['Root', 'Popup', 'Trigger']),
-      )
-      const nave = await sizeOf(
-        'naive-c',
-        entry(path.join(WORK, 'naive.js'), 'Dialog', ['Root', 'Popup']),
-      )
-      expect(isUnusedDropped({ direct, extended, nave })).toBe(false)
+      const helper = await helperCost(dist, 'plain')
+      const { second } = await bundleProblems('popover', helper, dist, 'plain')
+      expect(second).toHaveLength(1)
     },
   )
 })

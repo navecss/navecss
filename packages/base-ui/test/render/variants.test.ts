@@ -4,6 +4,7 @@ import type { Props, Source } from '../support/scenes.ts'
 
 import { partsNamed } from '../support/dom.ts'
 import { cleanup, render } from '../support/react.ts'
+import { renderScene } from '../support/rows.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
@@ -68,4 +69,12 @@ describe('AC-base-ui-bridge-14: variants render as data-nave-* only off the defa
       })
     }
   }
+
+  it('Toggle given a variant (a type error) renders no variant: it carries data-nave-size alone', async () => {
+    await renderScene(nave, 'toggle', { Toggle: { size: 'sm', variant: 'primary' } })
+    const toggle = partsNamed('Toggle')[0]
+    expect(toggle, 'Toggle rendered').toBeDefined()
+    expect(toggle === undefined ? [] : naveAttributes(toggle)).toEqual({ 'data-nave-size': 'sm' })
+    expect(toggle?.hasAttribute('variant')).toBe(false)
+  })
 })
