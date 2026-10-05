@@ -34,8 +34,17 @@ export function serverHooks(context: UsedContext): {
 } {
   return {
     configureServer(server) {
-      installServerKeepMap(context, (server as DevServerLike).environments.client)
-      noteStylesheetRequests(context, server as DevServerLike)
+      const devServer = server as DevServerLike
+      const owner = devServer.environments.client
+      installServerKeepMap(context, owner)
+      // The map comes off when the server is told to close, not only when its environments finish
+      // closing: Vite 8.2.1 skips the close hooks of an environment whose `buildEnd` throws.
+      const close = devServer.close.bind(devServer)
+      devServer.close = () => {
+        removeServerKeepMap(owner)
+        return close()
+      }
+      noteStylesheetRequests(context, devServer)
     },
     closeBundle(this: { readonly environment?: object }) {
       removeServerKeepMap(this.environment)

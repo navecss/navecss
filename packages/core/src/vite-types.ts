@@ -92,6 +92,7 @@ export interface RequestLike {
  * and the client environment.
  */
 export interface DevServerLike {
+  close: () => Promise<void>
   readonly config: { readonly base: string }
   readonly environments: { readonly client: DevEnvironmentLike }
   readonly middlewares: {

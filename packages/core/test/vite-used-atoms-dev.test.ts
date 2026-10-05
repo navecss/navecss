@@ -798,6 +798,30 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     }
   }, 60_000)
 
+  it('a server whose close fails in a plugin of its own still gives the global back what it held', async () => {
+    const app = makeFixture()
+    try {
+      // Vite 8.2.1 skips the close hooks of an environment whose `buildEnd` throws, so the
+      // server's own close is what has to take the map off.
+      const failsToClose: PluginOption = {
+        name: 'fails-to-close',
+        buildEnd() {
+          throw new Error('this plugin cannot close')
+        },
+      }
+      const server = await startDev(
+        keepMapConfig(app.root, [navePlugin({ keep: ['flex'] }), failsToClose]),
+      )
+      expect('__NAVE_KEEP_CLASSES__' in globalThis).toBe(true)
+      await stopDev(server)
+
+      expect('__NAVE_KEEP_CLASSES__' in globalThis).toBe(false)
+    } finally {
+      Reflect.deleteProperty(globalThis, '__NAVE_KEEP_CLASSES__')
+      app.dispose()
+    }
+  }, 60_000)
+
   it('dyn-lib’s prebundled chunk keeps core’s import and holds no keep map', async () => {
     const app = makeFixture()
     try {
