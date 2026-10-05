@@ -17,8 +17,9 @@
  * putting the repository name in front of the number clears the rule against BARE references,
  * which fences qualified spellings out by construction, and lands squarely on the separate rule
  * against naming the internal repository at all. The two obligations close on the sentence from
- * opposite sides, so deletion was the only compliant act. Sentences one through four are
- * byte-identical to the 2026-08-22 clearance.
+ * opposite sides, so deletion was the only compliant act. Sentences one through three are
+ * byte-identical to the 2026-08-22 clearance. Sentence four was replaced by a later
+ * re-clearance, described at the digest below.
  *
  * WHAT THIS FILE NO LONGER DOES, and why that is not a coverage loss. It used to run a
  * repository-side identifier detector over the constant, in this same file, because the only
@@ -134,13 +135,13 @@ function containingSection(markdown: string, needle: string): string {
  *
  * What the number is worth is entirely its provenance, so this states that rather than the
  * stronger thing it is tempting to state. It is NOT a check against the spec, which CI cannot
- * read. It is a check that the constant still equals bytes four parties computed independently
- * from R27's source spec on 2026-09-07 (engineering, quality, architecture and
- * accessibility/licensing review), each stripping
- * exactly those two markers and each reading 481 characters, zero non-ASCII, straight
- * apostrophes. The digest has moved once since, with a re-clearance that replaced the one
- * sentence about checks run over a consumer's values (481 bytes to 493); that reading describes
- * the paragraph as first cleared.
+ * read. The digest was first set to bytes four parties computed independently from R27's
+ * source spec on 2026-09-07 (engineering, quality, architecture and accessibility/licensing
+ * review), each stripping exactly those two markers and each reading 481 characters, zero
+ * non-ASCII, straight apostrophes. It has moved once since, in the commit that carried a
+ * re-clearance replacing the one sentence about checks run over a consumer's values. The value
+ * above is that paragraph's: 493 bytes, zero non-ASCII, computed from the previous constant
+ * with only that sentence replaced, and reproduced independently before it landed.
  */
 const CLEARED_PARAGRAPH_SHA256 = '1bf60330f686f5558888c574d017200fdcad7bcc14de3dd722ea3a051dc13092'
 
