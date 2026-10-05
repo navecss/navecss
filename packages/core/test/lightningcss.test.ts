@@ -44,7 +44,8 @@ function write(name: string, text: string): string {
 /**
  * Busy work that allocates for `milliseconds`, standing in for a resolver that does real work (it
  * expands a file's text) before it throws. Lightning CSS releases before 1.24.1 can lose the
- * message of an error thrown after such work, and lose it more often the longer the work runs.
+ * message of an error thrown once the resolver has done some work, while a resolver that throws
+ * at once keeps it, which is why the row builds a string first.
  */
 function allocateFor(milliseconds: number): number {
   const until = performance.now() + milliseconds
