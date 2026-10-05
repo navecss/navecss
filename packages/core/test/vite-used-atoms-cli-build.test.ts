@@ -96,7 +96,8 @@ async function watchFirstBuild(
     })
   })
   child.kill('SIGTERM')
-  return { output, signal: await exited }
+  const signal = await exited
+  return { output, signal }
 }
 
 /**

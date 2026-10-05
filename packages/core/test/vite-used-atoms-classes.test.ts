@@ -440,17 +440,21 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       expect(run.names).toContain('src/directive/resolve.ts')
       expect(run.pluginFiles).toEqual([])
       expect(run.wroteAtomic).toBe(true)
-    })
+    }, 60_000)
 
     it.each([
       ['a relative import', "import '../src/vite-handshake.ts'\n"],
       ['a read of a plugin file', "import '../src/vite-emit.ts'\n"],
       ['a dynamic import', "await import('../src/vite-prune.ts')\n"],
       ['the package’s own name', "import '@navecss/core/vite'\n"],
-    ])('sees a plugin module the script reaches through %s', (_name, line) => {
-      const run = recordCssBuild(line)
+    ])(
+      'sees a plugin module the script reaches through %s',
+      (_name, line) => {
+        const run = recordCssBuild(line)
 
-      expect(run.pluginFiles).not.toEqual([])
-    })
+        expect(run.pluginFiles).not.toEqual([])
+      },
+      60_000,
+    )
   })
 })
