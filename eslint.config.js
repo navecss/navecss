@@ -648,6 +648,17 @@ export default defineConfig([
     },
   },
 
+  // ── core's browser tests import stylesheets that `scripts/generate-*-fixtures.ts` writes into
+  // the gitignored test/browser/fixtures/ before the browser run. On a clean checkout they do not
+  // exist yet, so the resolver would fail lint before any generator ran; the browser tests that
+  // load them are what checks they exist ─────────────────────────────────────────────────────────
+  {
+    files: ['packages/core/test/browser/**/*.ts'],
+    rules: {
+      'import-x/no-unresolved': ['error', { ignore: [String.raw`^\./fixtures/[^/]+\.css\?raw$`] }],
+    },
+  },
+
   // ── eslint-plugin's own rule sources — @typescript-eslint/types' AST_NODE_TYPES is a real TS
   // string enum, so `node.type === 'TemplateLiteral'` (comparing the enum-typed field against a
   // plain string literal, the idiom every ESLint rule in the ecosystem uses) trips
