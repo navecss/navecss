@@ -5,7 +5,7 @@
  * compile step so `scripts/check-bundling-guard-coverage.mjs`
  * stays green the instant either arms the tripwire — R28's own text: "`bin: navecss-tokens`
  * arms the tripwire by itself, and R8's compile step arms it a second time independently."
- * Cédric's 2026-08-15 instruction stands verbatim and is this item's: expect the guard to
+ * The 2026-08-15 instruction stands verbatim and is this item's: expect the guard to
  * trip once R1/R8 land, and do not narrow the criterion or exempt the package to quiet it.
  *
  * A GENERATOR-shaped property, not a bundler-shaped one — R28's own warning: this package has

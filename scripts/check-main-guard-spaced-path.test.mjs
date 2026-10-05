@@ -56,7 +56,7 @@ import assert from 'node:assert/strict'
  *      `process.argv[1] &&` limb dropped), any third form, and a new script shipped with no
  *      guard at all: all three pass an absence check and all three are the same class of
  *      defect the presence check exists to catch.
- *   4. A REAL-FILE subprocess import (the same round-2 finding) of each of the
+ *   4. A REAL-FILE subprocess import of each of the
  *      fifteen swept files with `process.argv[1]` left undefined — the exact shape
  *      `node -e "import(...)"` produces and the shape `node --test` can never construct for a
  *      file other than its own, since `node --test` always sets `argv[1]` to the invoking
@@ -533,7 +533,7 @@ test('every swept file that defines main() guards it with the exact correct form
   )
 })
 
-// 🔵 nit follow-up: pins the tolerance itself, so a future edit cannot silently narrow
+// pins the tolerance itself, so a future edit cannot silently narrow
 // GUARD_PATTERN back to a byte-exact match without a test naming the regression. The body
 // covers two eras: the first four assertions predate the symlink fix
 // (the tolerance itself, and the two earlier offender forms it must still reject), and the

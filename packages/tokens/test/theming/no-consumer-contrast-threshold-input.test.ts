@@ -2,7 +2,7 @@
  * AC-token-build-27 covers: R27.
  *
  * R27's cleared paragraph states this entry point's contrast-threshold posture to a consumer.
- * The surface is `packages/tokens/README.md`, ruled by product on the
+ * The surface is `packages/tokens/README.md`, ruled on the
  * criterion's own words: the criterion ranges over "the shipped documentation surface where
  * THIS ENTRY POINT's contrast-threshold posture is stated to a consumer", and the paragraph's
  * own subject is this entry point's FLAGS, which are documented to a consumer here and nowhere
@@ -98,7 +98,7 @@ const SHIPPED_READMES = [
  *
  * THE LEVEL SCOPE IS DELIBERATELY 1 AND 2, and it is stated because widening it silently was a
  * regression here. These are SECTION boundaries: `#{1,2}` restores
- * exactly what the pre-round-2 `## ` anchor bounded, and `# ` joins it because a level-1 heading
+ * exactly what the earlier `## ` anchor bounded, and `# ` joins it because a level-1 heading
  * certainly ends a section. A SUB-heading does NOT bound a section: a `### ` lawfully added
  * between a conformance-framing sentence and the paragraph leaves that sentence inside the
  * section the paragraph is in, and the suite must still red on it. That is the property this

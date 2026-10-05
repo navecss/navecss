@@ -52,9 +52,9 @@ describe('AC-theming-01 covers: R1', () => {
   //    that assertion was withdrawn, NOT relocated. LADDER is an
   //    internal data structure, not exported and in no dist/ file, and it is the same
   //    artifact AC-theming-34/-36 are scoped out for NOT being.
-  //    Product ruled that asserting a documentation criterion against LADDER "would
-  //    make the criterion pass while still not checking the thing it names", the
-  //    proxy-assertion class this was raised for, and that at 0.1.0 the artifact these
+  //    Asserting a documentation criterion against LADDER "would make the
+  //    criterion pass while still not checking the thing it names" is the
+  //    proxy-assertion class this was raised for, and at 0.1.0 the artifact these
   //    claims range over is README.md's theming section, landed via a separate
   //    PR. THAT SECTION NOW EXISTS (that PR landed; since corrected). This slice
   //    stays uncovered for a different reason: scripts/readme-ac-theming-34-36.test.mjs

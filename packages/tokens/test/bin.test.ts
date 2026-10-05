@@ -1091,7 +1091,7 @@ function sourceWithASpaceInItsPath(projectDir: string, name: string, content: st
 }
 
 describe(
-  'R3-03 covers: R15/R21 (the file label is delimited at every door)',
+  'covers: R15/R21 (the file label is delimited at every door)',
   { timeout: SPAWN_TEST_TIMEOUT_MS },
   () => {
     it.each([

@@ -104,11 +104,11 @@ export interface BuildRecord {
    * entirely, rather than reporting `[]` — the exact value that, on the path where this key
    * IS populated, means "measured, and nothing is open". An empty array and an absent key are
    * not interchangeable: only the latter says "not measured". The value type is
-   * `MeasuredOpenSlots`, not a bare `readonly string[]` (🔵 nit): only
+   * `MeasuredOpenSlots`, not a bare `readonly string[]`: only
    * `assertNoOrphanedSemanticSlot` can produce one, so a future caller cannot claim
    * "measured" by passing a `[]` literal without ever running the guard.
    *
-   * 🔵 nit: an absent key is ALSO what any producer of this JSON shape that never had this
+   * an absent key is ALSO what any producer of this JSON shape that never had this
    * field would emit — indistinguishable from "not measured" on the bytes alone. Vacuous
    * today: `composeBuildRecord` is this file's only producer, and every call site is either
    * measured (`build-step.ts`) or omits the key outright (`consumer-build.ts`), so there is

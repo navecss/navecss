@@ -96,7 +96,7 @@ function contextDependentDetail(input: string): string {
  * Hex-shaped input (leading `#`) that isn't one of the four accepted digit counts, or whose
  * digits aren't hex at all. Hex IS one of R5's accepted forms, so this is a `channel-value`
  * refusal, never `form-acceptance` — mirroring the function forms' own bad-channel handling,
- * which the round-2 act fix reached but this hex branch did not.
+ * which the earlier act fix reached but this hex branch did not.
  */
 function badHexRefusal(raw: string, input: string): SeedIngestRefusal {
   const body = input.slice(1)

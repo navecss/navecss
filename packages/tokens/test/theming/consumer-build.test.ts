@@ -261,7 +261,7 @@ describe('AC-token-build-06 covers: R7', () => {
    * same reason: coverage alone, or bite alone, is satisfiable by an instrument that proves
    * nothing.
    */
-  it('row R3-02: the scan reaches bin.ts, the consumer-invocable entry point itself, and reds on a process.env default planted there', () => {
+  it('the scan reaches bin.ts, the consumer-invocable entry point itself, and reds on a process.env default planted there', () => {
     const sources = reachableSources(...SCAN_ROOTS)
     const reached = new Set(sources.keys().map((f) => path.basename(f)))
 

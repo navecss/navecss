@@ -170,7 +170,7 @@ describe('AC-token-build-15 covers: R15', () => {
    * discriminated pair rather than "quote it always" because the default is a generic PHRASE, and quoting
    * that prints `"this validate source" is not valid JSON`, which reads as a file named that.
    *
-   * The CLI-visible bytes do NOT move — R3-03's three rows in `bin.test.ts` pin every
+   * The CLI-visible bytes do NOT move — the three rows in `bin.test.ts` pin every
    * door through `isEveryMentionQuoted`, and they were re-confirmed by name at this head.
    */
   it('a PATH-shaped label is delimited by the function that knows it is a path; the generic PHRASE default stays bare', () => {

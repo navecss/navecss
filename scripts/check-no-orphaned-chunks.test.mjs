@@ -588,7 +588,7 @@ test('main(rootDir): a package with no dist/ at all is skipped, not an error', (
   }
 })
 
-// ROW (F4): the measured nested-entry tree from the round-1 review. Two entry files under
+// ROW (F4): the measured nested-entry tree. Two entry files under
 // `dist/theming/` both import one chunk in `dist/`. A non-recursive read cannot see the entries
 // and a `./`-only specifier pattern cannot express the edge, so the check reds on a build that is
 // entirely lawful, and its own printed remedy ("delete dist/ and rebuild") reproduces it exactly.

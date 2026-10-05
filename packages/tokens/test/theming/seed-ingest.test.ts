@@ -845,7 +845,7 @@ describe('AC-token-build-23 covers: R23', () => {
    * is 🟡 and why the row exercises the STRIPPER — the subject of that diagnosis — rather than
    * claiming a live hole this guard does not have.
    */
-  it('row R3-01: the purity guard strips COMMENTS, never code following a /* opened inside a string literal', () => {
+  it('the purity guard strips COMMENTS, never code following a /* opened inside a string literal', () => {
     const tracker = readFileSync(
       path.resolve(import.meta.dirname, '../../src/theming/comment-open-tracker.ts'),
       'utf8',

@@ -689,10 +689,10 @@ describe('AC-theming-08 covers: R7 (the contact sheet is emitted and complete)',
  *
  *     Note which direction the allowlist runs, because the opposite reading is the tempting
  *     one: this is NOT a ban on markdown references. `packages/tokens/README.md` is packed,
- *     and it is the surface product ruled this package's cleared contrast-threshold paragraph
- *     onto BY NAME, so a blanket
+ *     and it is the surface this package's cleared contrast-threshold paragraph
+ *     was placed on BY NAME, so a blanket
  *     `\.md` shape would forbid the one documentation pointer this package is supposed to
- *     make. The allowlist is what keeps the guard on the reader's side of that ruling instead
+ *     make. The allowlist is what keeps the guard on the reader's side of that placement instead
  *     of against it.
  *   - CARVED OUT, still: none. Both gaps are closed; nothing is currently known-open.
  */
@@ -788,7 +788,7 @@ const UNRESOLVABLE_REFERENCE_SHAPES: readonly (readonly [string, RegExp])[] = [
   [RECORD_ID_LABEL, RECORD_ID_PATTERN],
 ]
 
-// 🔵 nit: a plain `expect().not.toMatch()` per pair throws on the
+// a plain `expect().not.toMatch()` per pair throws on the
 // FIRST hit, which means a second, real regression in a different artifact or shape is
 // masked until the first is fixed and the suite reruns. Collecting every violation first
 // and asserting once reports the whole set in one failing run.

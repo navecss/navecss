@@ -342,9 +342,8 @@ describe('AC-theming-39 covers: R34', () => {
  *
  * The placement assertions below measure that a notice FOLLOWS its snippet, which is what the
  * artifact does. `AC-theming-39`'s round-22 `Then` reads "adjacent to that act, in reading
- * order before the act can be composed". The criterion's owner and that clause's own
- * author ruled in review that the FOLLOWING reading binds and that the
- * round-22 wording is a drafting error; the round-23 correction is drafted and carried on
+ * order before the act can be composed". The FOLLOWING reading binds, and the
+ * round-22 wording is a drafting error; the round-23 correction is drafted and has not landed.
  * Until it lands, the spec's uncorrected sentence and these assertions
  * point opposite ways, and these assertions are the ruled reading.
  */
@@ -399,7 +398,7 @@ describe('AC-theming-39 covers: R34 (packages/tokens/README.md, round 22 rule)',
     // byte-identical to a markdown heading's own opening), which truncates the search window
     // before a real heading and hides everything past it (demonstrated live,
     // round 2: a two-line bash comment right after validate's own fence
-    // let a spurious notice slip through 48/48 green under the round-2 landed guard).
+    // let a spurious notice slip through 48/48 green under the guard as first landed).
     //
     // ANY heading level closes this window, which is why 6 and not the sibling caller's 2. The
     // bound is "the rest of THIS subsection", so a `### ` sub-heading legitimately ends it;

@@ -30,8 +30,9 @@
  * string that CLOSES on its own line is skipped whole before that scan resumes, matching
  * one piece of real CSS tokenization this module models: a closed string is consumed as a
  * single token before the tokenizer ever looks for a comment start again, so an opening or
- * closing comment delimiter inside one is ordinary string content, never a delimiter (S12,
- * which closes the false alarm recorded for exactly that closed-string shape). A string that does NOT close on its line
+ * closing comment delimiter inside one is ordinary string content, never a delimiter. This
+ * closes a false alarm once recorded for exactly that closed-string shape. A string that does
+ * NOT close on its line
  * has no single reading, so this module does not pick one. Where an unescaped line break cuts
  * it off, CSS consumes it as a bad-string token running to the end of the line, which makes a
  * comment opener after the quote string content to a parser, while a reader can take the quote

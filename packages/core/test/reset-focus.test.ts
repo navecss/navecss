@@ -62,7 +62,7 @@ function tokensOf(text: string): string[] {
 /** The value with every function call's arguments removed, to a fixed point. Without this a
  * zero CHANNEL of modern space-separated colour syntax reads as a zero outline WIDTH, so
  * `outline: 2px solid rgb(0 0 0)` and the house `light-dark(oklch(...), oklch(...))` idiom are
- * fully visible outlines classified as removals (found in review). */
+ * fully visible outlines classified as removals. */
 function topLevel(value: string): string {
   let out = value
   for (;;) {

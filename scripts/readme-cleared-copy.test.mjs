@@ -10,8 +10,8 @@
  * The project's licensing policy independently requires the same shape in its own words: a text
  * that was signed off and then copied into an implementation artifact needs a mechanical equality
  * check against the source it was copied from, or the copy quietly becomes the operative wording.
- * And the maintainer's instruction was that this test may land here if this file is its
- * cleanest home, which it is. It asserts only the LANDED bytes: the README's `## License`
+ * This test lands here because this file is its
+ * cleanest home. It asserts only the LANDED bytes: the README's `## License`
  * block must fold-whitespace-match `MIT © Nave Contributors`. It mints no constant to compare
  * against: the README is the only place this repository carries that line, and a constant
  * typed here would be a second copy checked against nothing but itself.

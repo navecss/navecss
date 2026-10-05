@@ -131,10 +131,10 @@ function printSourceLabel(source: ValidateSourceLabel): string {
  * it has — a `path` or a `phrase` — and the DELIMITING DECISION IS MADE HERE, once, by the code
  * that knows which it was given.
  *
- * It is a discriminated pair rather than "quote it always" because of why the outlier existed: the default is a generic PHRASE, not a path, and
+ * It is a discriminated pair rather than "quote it always" because the default is a generic PHRASE, not a path, and
  * quoting it would print `"this validate source" is not valid JSON`, reading as a file named that.
  *
- * The JSON-parse-error wrapper above (R15's dated precision, 2026-09-14) stopped ONE CALL SHORT. A file that parses as JSON but whose
+ * Under R15's dated precision (2026-09-14), the JSON-parse-error wrapper above stopped ONE CALL SHORT. A file that parses as JSON but whose
  * ROOT is not a JSON object went to `readTokens` unwrapped, so `[]`, a bare number, a bare string
  * and `null` escaped to `bin.ts`'s catch-all as `DTCG reader: expected an object at "", got []` —
  * exit `1`, the file unnamed — while the SAME file with malformed JSON exits `2` naming it and

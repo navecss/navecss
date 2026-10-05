@@ -345,7 +345,8 @@ test('the exported header and guidance constants equal the cleared bytes', () =>
 // replaced named per-entry provenance fields, and both sentences that
 // stand here were drafted during a clearance rather than written at the call site. The SECOND
 // is the one drafted in the clearance cited above, unchanged since. The FIRST was drafted
-// earlier, when the branch's own wording was cleared and then replaced: "untrimmed-safe" was a coinage that did not state the rule it was enforcing.
+// earlier, when the branch's own wording was cleared and then replaced: "untrimmed-safe" was a
+// coinage that did not state the rule it was enforcing.
 // Anchored separately so the boundary stays visible to whoever reads this next, and so a
 // re-wording of either half cannot hide inside a full-string diff of the whole constant.
 test('the guidance ends with the cleared second sentence, byte-exact', () => {
@@ -375,8 +376,8 @@ test('the non-object entry reason equals the cleared bytes', () => {
 // is in the source text, so that is what this reads: each cleared string must appear exactly
 // once in the module, at its own definition.
 //
-// The phrase counted below is searched for in a SPLICED copy of the source, not the raw text
-// (found during a round-2 verification read): a cleared constant's own literal can be
+// The phrase counted below is searched for in a SPLICED copy of the source, not the raw text:
+// a cleared constant's own literal can be
 // re-wrapped across a `+` boundary that happens to split the very phrase this test counts,
 // which would report zero copies of a phrase that still runs byte-identical — a false red on a
 // faithful re-wrap, not a real duplicate. Splicing every `'...' + '...'`/`"..." + "..."` join
