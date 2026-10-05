@@ -548,12 +548,14 @@ describe('AC-used-atoms-20 — the dev define, from the built package', { timeou
       navePlugin: typeof navePlugin
     }
     const [nave] = built.navePlugin({ keep: ['flex'] })
-    const expression = nave.config(undefined, { command: 'serve' })!.define[
-      '__NAVE_KEEP_CLASSES__'
-    ]!
+    const expression = nave.config(undefined, { command: 'serve' })!.define.__NAVE_KEEP_CLASSES__!
     const logged: string[] = []
     const map = vm.runInNewContext(expression, {
-      console: { error: (message: string) => logged.push(message) },
+      console: {
+        error: (message: string) => {
+          logged.push(message)
+        },
+      },
     }) as Record<string, string>
 
     expect(Object.keys(map)).toEqual(['flex'])

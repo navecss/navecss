@@ -61,13 +61,13 @@ async function hasElement(page: Page, selector: string): Promise<boolean> {
  * Whether the dev server has transformed the stylesheet `file` (`src/app.css` unless another is
  * named) of `root` already.
  */
-async function isSheetTransformed(
+function isSheetTransformed(
   server: Awaited<ReturnType<typeof listenDev>>['server'],
   root: string,
   file = 'src/app.css',
-): Promise<boolean> {
+): boolean {
   const module = server.environments.client.moduleGraph.getModuleById(path.join(root, file))
-  return module?.transformResult != null
+  return Boolean(module?.transformResult)
 }
 
 /**
@@ -79,16 +79,16 @@ async function untilSheetTransformed(
   file = 'src/app.css',
 ): Promise<void> {
   const deadline = Date.now() + 20_000
-  while (Date.now() < deadline && !(await isSheetTransformed(server, root, file))) {
+  while (Date.now() < deadline && !isSheetTransformed(server, root, file)) {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  expect(await isSheetTransformed(server, root, file)).toBe(true)
+  expect(isSheetTransformed(server, root, file)).toBe(true)
 }
 
 describe('AC-used-atoms-42 — HTML read after the stylesheet was first transformed', () => {
   const GRID_PAGE = PAGE('<div class="nave-flex"></div><div id="g" class="nave-grid"></div>')
 
-  async function afterHtmlEdit(options: NaveViteOptions): Promise<boolean> {
+  async function isRuledAfterHtmlEdit(options: NaveViteOptions): Promise<boolean> {
     const app = makeUsedApp(
       appFiles({ 'index.html': PAGE('<div class="nave-flex"></div>'), 'src/main.ts': MAIN }),
     )
@@ -113,14 +113,14 @@ describe('AC-used-atoms-42 — HTML read after the stylesheet was first transfor
   }
 
   it('an edit of index.html that adds a class gives it a rule once the page has reloaded', async () => {
-    expect(await afterHtmlEdit({})).toBe(true)
+    expect(await isRuledAfterHtmlEdit({})).toBe(true)
   }, 120_000)
 
   it('control: with the atom in keep it has one', async () => {
-    expect(await afterHtmlEdit({ keep: ['grid'] })).toBe(true)
+    expect(await isRuledAfterHtmlEdit({ keep: ['grid'] })).toBe(true)
   }, 120_000)
 
-  async function aboutPageRuled(visits: readonly string[]): Promise<boolean> {
+  async function isAboutPageRuled(visits: readonly string[]): Promise<boolean> {
     const app = makeUsedApp(
       appFiles({
         'index.html': PAGE('<div class="nave-flex"></div>'),
@@ -149,11 +149,11 @@ describe('AC-used-atoms-42 — HTML read after the stylesheet was first transfor
   }
 
   it('the second page of the app, visited after the first, has the rule for its class', async () => {
-    expect(await aboutPageRuled(['/', '/about.html'])).toBe(true)
+    expect(await isAboutPageRuled(['/', '/about.html'])).toBe(true)
   }, 120_000)
 
   it('control: the same page visited first has it', async () => {
-    expect(await aboutPageRuled(['/about.html'])).toBe(true)
+    expect(await isAboutPageRuled(['/about.html'])).toBe(true)
   }, 120_000)
 })
 
@@ -215,11 +215,14 @@ describe('AC-used-atoms-42 and -54 — a server that warms the entry up before a
         await new Promise((resolve) => setTimeout(resolve, 500))
         expect(plugin()).toBe(0)
 
-        await (await fetch(new URL('src/app.css', url))).text()
+        const firstSheet = await fetch(new URL('src/app.css', url))
+        await firstSheet.text()
         expect(plugin()).toBe(1)
 
-        await (await fetch(new URL('src/app.css', url))).text()
-        await (await fetch(new URL('src/main.ts', url))).text()
+        const secondSheet = await fetch(new URL('src/app.css', url))
+        await secondSheet.text()
+        const script = await fetch(new URL('src/main.ts', url))
+        await script.text()
         expect(plugin()).toBe(1)
       } finally {
         await stopDev(server)
@@ -305,23 +308,25 @@ describe('AC-used-atoms-54 — a backend under a warm-up is warned when the styl
 const appends = (id: string, atom: string): string =>
   `${IMPORT}document.body.append(Object.assign(document.createElement('div'), { id: '${id}', className: cx('${atom}') }))\n`
 
-describe('AC-used-atoms-41 — the first frame after an update, for a module the update brings in', () => {
-  // The shape a framework's refresh has: the update imports the new module, and the render runs
-  // after every module of the update is in.
-  const appModule = (isEdited: boolean): string =>
-    [
-      isEdited ? "import { view } from './New.ts'" : '',
-      IMPORT,
-      'export const render = () => {',
-      "  document.querySelector('#t')!.className = cx('flex')",
-      isEdited
-        ? "  document.body.append(Object.assign(document.createElement('div'), { id: 'n', className: view() }))"
-        : '',
-      '}',
-      'if (import.meta.hot) import.meta.hot.accept((module) => module?.render())',
-      '',
-    ].join('\n')
+/**
+ * The shape a framework's refresh has: the update imports the new module, and the render runs
+ * after every module of the update is in.
+ */
+const appModule = (isEdited: boolean): string =>
+  [
+    isEdited ? "import { view } from './New.ts'" : '',
+    IMPORT,
+    'export const render = () => {',
+    "  document.querySelector('#t')!.className = cx('flex')",
+    isEdited
+      ? "  document.body.append(Object.assign(document.createElement('div'), { id: 'n', className: view() }))"
+      : '',
+    '}',
+    'if (import.meta.hot) import.meta.hot.accept((module) => module?.render())',
+    '',
+  ].join('\n')
 
+describe('AC-used-atoms-41 — the first frame after an update, for a module the update brings in', () => {
   it('an edit that imports a module new to the graph gives its class a rule on the first frame', async () => {
     const app = makeUsedApp(
       appFiles({
@@ -346,7 +351,8 @@ describe('AC-used-atoms-41 — the first frame after an update, for a module the
           6000,
         )
 
-        expect((await framesOf(page))['nave-block']).toBe(true)
+        const frames = await framesOf(page)
+        expect(frames['nave-block']).toBe(true)
         await page.close()
       } finally {
         await stopDev(server)
@@ -399,7 +405,8 @@ describe('AC-used-atoms-40 — what the first stylesheet response has read', () 
           6000,
         )
 
-        expect((await framesOf(page))['nave-block']).toBe(true)
+        const frames = await framesOf(page)
+        expect(frames['nave-block']).toBe(true)
         await page.close()
       } finally {
         await stopDev(server)

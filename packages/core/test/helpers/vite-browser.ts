@@ -153,20 +153,21 @@ export async function atFirstStylesheet(page: Page): Promise<Record<string, bool
 /**
  * Whether a stylesheet of the page holds a rule that selects `.<name>` right now.
  */
-export function hasRuleNow(page: Page, name: string): Promise<boolean> {
-  return page.evaluate((target) => {
-    const walk = (rules: CSSRuleList): boolean =>
+export async function hasRuleNow(page: Page, name: string): Promise<boolean> {
+  return await page.evaluate((target) => {
+    const hasRuleIn = (rules: CSSRuleList): boolean =>
       [...rules].some((rule) => {
         const text = (rule as CSSStyleRule).selectorText
         if (typeof text === 'string' && new RegExp(String.raw`\.${target}(?![\w-])`).test(text)) {
           return true
         }
         const inner = (rule as CSSGroupingRule).cssRules
-        return inner ? walk(inner) : false
+        return inner ? hasRuleIn(inner) : false
       })
+    // eslint-disable-next-line unicorn/isolated-functions -- this callback runs in the browser, where `document` exists
     return [...document.styleSheets].some((sheet) => {
       try {
-        return walk(sheet.cssRules)
+        return hasRuleIn(sheet.cssRules)
       } catch {
         return false
       }
