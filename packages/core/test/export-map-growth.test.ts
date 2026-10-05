@@ -100,13 +100,13 @@ function assertPublishedExportsPresent(exports: Record<string, unknown>): void {
 describe('AC-directive-core-27 — the export map only grows, and core gains no dependency', () => {
   it('keeps every 0.1.0 key, each with every 0.1.0 condition', () => {
     const exports = manifest().exports as Record<string, unknown>
-    assertPublishedExportsPresent(exports)
+    expect(() => assertPublishedExportsPresent(exports)).not.toThrow()
   })
 
   it('adds exactly ./check and ./vite beyond the 0.1.0 keys', () => {
     const exports = manifest().exports as Record<string, unknown>
     const added = Object.keys(exports).filter((k) => !Object.hasOwn(PUBLISHED_0_1_0_EXPORTS, k))
-    expect(added.toSorted()).toEqual(['./check', './vite'])
+    expect(added.toSorted((a, b) => a.localeCompare(b))).toEqual(['./check', './vite'])
   })
 
   it('keeps dependencies exactly @navecss/tokens, and postcss the sole optional peer', () => {

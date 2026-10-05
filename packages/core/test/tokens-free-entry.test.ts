@@ -17,11 +17,10 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
-import { emitCss } from '../../tokens/src/theming/emit.ts'
 import { formatCssTokens } from '../../tokens/src/formats.ts'
+import { emitCss } from '../../tokens/src/theming/emit.ts'
 import { runPipeline, type Seeds } from '../../tokens/src/theming/pipeline.ts'
 import { DEFAULT_ENV } from '../../tokens/src/theming/ramp.ts'
 
@@ -32,13 +31,18 @@ interface ExportTarget {
   [condition: string]: ExportTarget | string
 }
 
-function pickTarget(entry: ExportTarget | string): string {
-  if (typeof entry === 'string') return entry
+function firstCondition(entry: ExportTarget): ExportTarget | string {
   for (const condition of ['style', 'import', 'default']) {
     const value = entry[condition]
-    if (value !== undefined) return pickTarget(value)
+    if (value !== undefined) return value
   }
   throw new Error(`no resolvable condition in ${JSON.stringify(entry)}`)
+}
+
+function pickTarget(entry: ExportTarget | string): string {
+  let current = entry
+  while (typeof current !== 'string') current = firstCondition(current)
+  return current
 }
 
 function resolveSubpath(subpath: string): string {
@@ -114,7 +118,10 @@ describe('AC-token-build-11 first Given — static, packaging-level, no browser 
   })
 
   it('every @property it registers is declared inside the tokens.presets layer, and nothing is declared before it', () => {
-    const registered = [...composed.matchAll(/@property\s+(--[\w-]+)\s*\{/g)].map((m) => m[1]!)
+    const registered = composed
+      .matchAll(/@property\s+(--[\w-]+)\s*\{/g)
+      .map((m) => m[1]!)
+      .toArray()
     expect(registered.length).toBeGreaterThan(0)
 
     const openerIndex = themingHalf.indexOf('@layer tokens.presets {')
@@ -146,7 +153,7 @@ describe('AC-token-build-11 first Given — static, packaging-level, no browser 
       expect(
         layerBody,
         `${name} is @property-registered but not declared inside the tokens.presets layer`,
-      ).toMatch(new RegExp(`\\n\\s*${name}\\s*:`))
+      ).toMatch(new RegExp(String.raw`\n\s*${name}\s*:`))
     }
   })
 

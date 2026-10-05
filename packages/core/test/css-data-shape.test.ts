@@ -9,7 +9,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { PackedCoreTarball } from './helpers/pack-core.ts'
@@ -19,7 +18,9 @@ import { exportTargets, packCoreTarball } from './helpers/pack-core.ts'
 import { shippedChangesetProse } from './helpers/released-changeset.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-/** This slice's changeset while pending, the CHANGELOG entry that carries its text once released. */
+/**
+ * This slice's changeset while pending, the CHANGELOG entry that carries its text once released.
+ */
 const shippedChangeset = (): string =>
   shippedChangesetProse(
     path.resolve(HERE, '../../../.changeset/ship-editor-custom-data.md'),
@@ -31,11 +32,11 @@ const ATOMS_DOC_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-atoms
 
 interface CssCustomData {
   version: number
-  atDirectives?: Array<{
-    name: string
+  atDirectives?: {
     description?: { kind: string; value: string }
+    name: string
     references?: unknown
-  }>
+  }[]
 }
 
 function readCommittedCssData(): CssCustomData {
@@ -51,7 +52,10 @@ function readCommittedCssData(): CssCustomData {
  * import or a dynamic `import(...)` of a disallowed package would pass unseen.
  */
 function importSpecifiers(src: string): string[] {
-  return [...src.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)(['"])([^'"]+)\1/g)].map((m) => m[2]!)
+  return src
+    .matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*)(['"])([^'"]+)\1/g)
+    .map((m) => m[2]!)
+    .toArray()
 }
 
 describe('AC-consumer-constraints-06: the packed tarball ships the file at the package root only', () => {
@@ -87,9 +91,11 @@ describe('AC-consumer-constraints-06: the packed tarball ships the file at the p
   })
 })
 
-describe('AC-consumer-constraints-08: the @nave entry claims only what it delivers', () => {
-  const entry = () => readCommittedCssData().atDirectives![0]!
+function entry(): NonNullable<CssCustomData['atDirectives']>[number] {
+  return readCommittedCssData().atDirectives![0]!
+}
 
+describe('AC-consumer-constraints-08: the @nave entry claims only what it delivers', () => {
   it('has no references entry', () => {
     const value = entry().references
     expect(value === undefined || (Array.isArray(value) && value.length === 0)).toBe(true)
@@ -117,12 +123,12 @@ describe('AC-consumer-constraints-08: the @nave entry claims only what it delive
   it('the generator imports no third-party CSS/browser data package', () => {
     const specifiers = importSpecifiers(GENERATOR_SRC)
     const allowed = new Set([
+      '../src/atoms.ts',
+      './generate-atoms-doc.ts',
       'node:fs',
       'node:path',
       'node:url',
       'prettier',
-      './generate-atoms-doc.ts',
-      '../src/atoms.ts',
     ])
     for (const specifier of specifiers) {
       expect(allowed.has(specifier), `unexpected import: ${specifier}`).toBe(true)
@@ -136,13 +142,13 @@ describe('AC-consumer-constraints-08: the @nave entry claims only what it delive
   })
 })
 
-describe('AC-consumer-constraints-09: no README/changeset sentence overclaims completion', () => {
-  function sentencesNaming(text: string): string[] {
-    return text
-      .split(/(?<=[.!?])\s+/)
-      .filter((s) => /nave\.css-data\.json|css\.customData|custom data|data file/i.test(s))
-  }
+function sentencesNaming(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .filter((s) => /nave\.css-data\.json|css\.customData|custom data|data file/i.test(s))
+}
 
+describe('AC-consumer-constraints-09: no README/changeset sentence overclaims completion', () => {
   it('no sentence naming the file or css.customData claims completion or IntelliSense', () => {
     for (const sentence of sentencesNaming(shippedChangeset())) {
       expect(sentence, `changeset: "${sentence}"`).not.toMatch(/complet/i)
@@ -151,7 +157,7 @@ describe('AC-consumer-constraints-09: no README/changeset sentence overclaims co
   })
 
   it('the check reports a planted overclaiming sentence', () => {
-    const planted = 'The data file ' + 'autocompletes' + ' atom names in VS Code.'
+    const planted = ['The data file', 'autocompletes', 'atom names in VS Code.'].join(' ')
     expect(sentencesNaming(planted).some((s) => /complet/i.test(s))).toBe(true)
   })
 })
@@ -167,33 +173,35 @@ describe('AC-consumer-constraints-02 (scoped to this slice): no prose count', ()
   })
 
   it('the scan reports a planted count', () => {
-    const planted = 'Nave ships ' + '48' + ' atoms today.'
+    const planted = ['Nave ships', '48', 'atoms today.'].join(' ')
     expect(COUNT_NEAR_VOCAB.test(planted)).toBe(true)
   })
 
   it('the scan reports a planted three-digit count', () => {
-    const planted = 'Nave ships ' + '150' + ' tokens today.'
+    const planted = ['Nave ships', '150', 'tokens today.'].join(' ')
     expect(COUNT_NEAR_VOCAB.test(planted)).toBe(true)
   })
 
   it('the scan reports a planted number word above ten', () => {
-    const planted = 'Nave ships ' + 'twenty' + ' atoms today.'
+    const planted = ['Nave ships', 'twenty', 'atoms today.'].join(' ')
     expect(COUNT_NEAR_VOCAB.test(planted)).toBe(true)
   })
 
   it('the scan reports a planted number word for a rule count', () => {
-    const planted = 'Nave ships ' + 'eleven' + ' rules today.'
+    const planted = ['Nave ships', 'eleven', 'rules today.'].join(' ')
     expect(COUNT_NEAR_VOCAB.test(planted)).toBe(true)
   })
 })
 
 describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference', () => {
   it('nave.css-data.json carries no tracker, persona, dated-id or brain-path reference', () => {
-    scanForBrainReferences(JSON.stringify(readCommittedCssData()), 'nave.css-data.json')
+    expect(() =>
+      scanForBrainReferences(JSON.stringify(readCommittedCssData()), 'nave.css-data.json'),
+    ).not.toThrow()
   })
 
   it('this slice’s changeset carries none either', () => {
-    scanForBrainReferences(shippedChangeset(), 'the changeset')
+    expect(() => scanForBrainReferences(shippedChangeset(), 'the changeset')).not.toThrow()
   })
 
   it('the scan reports a planted copy carrying a tracker ref, a persona id and a dated id', () => {

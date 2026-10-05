@@ -23,7 +23,7 @@ const FIXTURE_ROOT = path.resolve(
 )
 
 /**
-Every file path under `dir`, recursively, relative to `dir`, with `/`-separated segments regardless of platform.
+ * Every file path under `dir`, recursively, relative to `dir`, with `/`-separated segments regardless of platform.
  */
 function listFilesRecursively(dir: string): string[] {
   const entries: string[] = []
@@ -39,7 +39,7 @@ function listFilesRecursively(dir: string): string[] {
 }
 
 /**
-Replaces a Rollup/Vite content hash (`-DgELXKtN` immediately before the extension) with a fixed placeholder, so two builds whose hashes differ only because unrelated bytes changed elsewhere are still comparable.
+ * Replaces a Rollup/Vite content hash (`-DgELXKtN` immediately before the extension) with a fixed placeholder, so two builds whose hashes differ only because unrelated bytes changed elsewhere are still comparable.
  */
 function normalizeHashes(text: string): string {
   return text.replaceAll(/-[\w-]{8,}(?=\.\w+(?:[?#]|$))/g, '-HASH')
@@ -48,7 +48,7 @@ function normalizeHashes(text: string): string {
 type Adapter = 'none' | 'postcss' | 'vite'
 
 /**
-Runs a production build of the fixture into `outDir`. `adapter` selects whether `navePlugin()` is wired into `css.postcss`, into Vite's `plugins` or not at all; the rest of the config is identical between the calls, which is the whole point of the comparison.
+ * Runs a production build of the fixture into `outDir`. `adapter` selects whether `navePlugin()` is wired into `css.postcss`, into Vite's `plugins` or not at all; the rest of the config is identical between the calls, which is the whole point of the comparison.
  */
 async function buildFixture(outDir: string, adapter: Adapter): Promise<void> {
   await build({
@@ -141,9 +141,8 @@ async function requestedUrls(adapter: Adapter, cacheDir: string): Promise<string
       if (seen.has(url)) continue
       seen.add(url)
       const result = await server.transformRequest(url)
-      for (const match of result?.code.matchAll(/(?:import|from)\s*["'](\/[^"']+)["']/g) ?? []) {
-        queue.push(match[1]!)
-      }
+      const matches = result?.code.matchAll(/(?:import|from)\s*["'](\/[^"']+)["']/g) ?? []
+      for (const match of matches) queue.push(match[1]!)
     }
     return [...seen].toSorted(byLocaleOrder)
   } finally {
