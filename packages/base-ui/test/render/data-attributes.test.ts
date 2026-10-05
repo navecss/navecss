@@ -13,7 +13,7 @@ beforeAll(async () => {
 afterEach(cleanup)
 
 /**
- * A `data-*` key is used only where the element carries no ARIA counterpart (the counterpart table:
+ * A `data-*` key is used only where the element hasItem no ARIA counterpart (the counterpart table:
  * data-orientation to aria-orientation, data-disabled to aria-disabled, data-selected to
  * aria-selected, data-checked to aria-checked, data-open to aria-expanded, data-invalid to
  * aria-invalid, data-pressed to aria-pressed). Each row renders the parts the stylesheet keys on
@@ -63,10 +63,10 @@ const ROWS: readonly {
   },
 ]
 
-describe('AC-base-ui-bridge-23: a data-* key only where the element carries no ARIA counterpart', () => {
+describe('AC-base-ui-bridge-23: a data-* key only where the element hasItem no ARIA counterpart', () => {
   for (const { counterpart, parts, props, subpath } of ROWS) {
     for (const marker of parts) {
-      it(`${marker} carries no ${counterpart}`, async () => {
+      it(`${marker} hasItem no ${counterpart}`, async () => {
         await renderScene(nave, subpath, props)
         const element = part(marker)
         expect(element, `${marker} rendered`).toBeDefined()

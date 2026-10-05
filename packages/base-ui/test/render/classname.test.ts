@@ -60,7 +60,7 @@ const renderedStyledParts = async (): Promise<string[]> => {
   return present
 }
 
-describe('AC-base-ui-bridge-10: className composes in both forms, and render carries the class', () => {
+describe('AC-base-ui-bridge-10: className composes in both forms, and render hasItem the class', () => {
   it('composes for every styled part in every form', async () => {
     const problems: string[] = []
     for (const part of await renderedStyledParts()) {

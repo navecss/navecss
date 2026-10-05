@@ -72,7 +72,7 @@ describe('AC-base-ui-bridge-36: provenance and packaging', () => {
     expect(reached).toEqual([])
   })
 
-  it('carries no source of Base UI or React: they are imported, never inlined', () => {
+  it('hasItem no source of Base UI or React: they are imported, never inlined', () => {
     const inlined = built.filter((file) =>
       /useRenderElement|react\.element|react\.transitional/.test(readDist(file)),
     )

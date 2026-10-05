@@ -10,7 +10,7 @@ import { loadBare, loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
 import { SUBPATHS } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
-import { inT0 } from '../support/table-t0.ts'
+import { isInT0 } from '../support/table-t0.ts'
 
 let bare: Source
 let nave: Source
@@ -51,7 +51,7 @@ const subjects = async (): Promise<{ part: string; subpath: string }[]> => {
     found.push(
       ...parts.filter((part) => tableP.has(part)).map((part) => ({ part, subpath })),
       ...parts
-        .filter((part) => inT0(part))
+        .filter((part) => isInT0(part))
         .slice(0, 1)
         .map((part) => ({ part, subpath })),
     )

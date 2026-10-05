@@ -9,7 +9,7 @@ import { loadBare, loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
 import { SUBPATHS, topName } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
-import { inT0 } from '../support/table-t0.ts'
+import { isInT0 } from '../support/table-t0.ts'
 
 let bare: Source
 let nave: Source
@@ -24,7 +24,7 @@ afterEach(cleanup)
  * Every key of every v1 component that is in neither Table P nor Table T0, or in both.
  */
 const unplaced = (keys: readonly string[]): string[] =>
-  keys.filter((part) => (tableP.has(part) ? 1 : 0) + (inT0(part) ? 1 : 0) !== 1)
+  keys.filter((part) => (tableP.has(part) ? 1 : 0) + (isInT0(part) ? 1 : 0) !== 1)
 
 const keysAt = (source: Source, subpath: string): string[] => {
   const ui = source(subpath)

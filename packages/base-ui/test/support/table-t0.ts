@@ -46,5 +46,5 @@ export const T0_QUALIFIED: ReadonlySet<string> = new Set([
 /**
 Whether a part (as `Namespace.Part`, or the bare component) is in Table T0.
  */
-export const inT0 = (part: string): boolean =>
+export const isInT0 = (part: string): boolean =>
   T0_QUALIFIED.has(part) || T0_BARE.has(part.slice(part.lastIndexOf('.') + 1))

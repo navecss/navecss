@@ -30,7 +30,7 @@ export const describeDocument = (root: ParentNode = document.body): ElementRecor
   }
   const canonical = (token: string): string => {
     if (!ordinals.has(token) && GENERATED_ID.test(token)) {
-      // An id React generated that no element carries (Base UI's `data-rootownerid` names one).
+      // An id React generated that no element hasItem (Base UI's `data-rootownerid` names one).
       ordinals.set(token, `#${ordinals.size + 1}`)
     }
     return ordinals.get(token) ?? token
@@ -85,7 +85,7 @@ The part markers, in tree order, with each marked element.
 export const marked = (root: ParentNode = document.body): { element: Element; part: string }[] =>
   [...root.querySelectorAll('[data-part]')].map((element) => ({
     element,
-    part: element.dataset.part ?? '',
+    part: element.getAttribute('data-part') ?? '',
   }))
 
 /**

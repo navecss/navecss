@@ -32,7 +32,7 @@ interface Row {
   readonly marker: string
   readonly name: string
   /**
-  The props by part: what disables the part, and what carries the spy on the signal.
+  The props by part: what disables the part, and what hasItem the spy on the signal.
    */
   readonly props?: (disabled: boolean, spy: Spy) => Record<string, Props>
   /**

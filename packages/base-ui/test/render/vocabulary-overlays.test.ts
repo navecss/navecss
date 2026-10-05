@@ -4,7 +4,7 @@ import type { Source } from '../support/scenes.ts'
 
 import { partsNamed } from '../support/dom.ts'
 import { act, cleanup, user } from '../support/react.ts'
-import { carries, hasClass, part, renderScene } from '../support/rows.ts'
+import { hasItem, hasClass, part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
 
@@ -44,11 +44,11 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
   ] as const
 
   for (const { items, owner, positioner, subpath } of CASES) {
-    it(`${positioner} carries ${items.join(' and ')}, and ${owner} sits inside it with its class`, async () => {
+    it(`${positioner} hasItem ${items.join(' and ')}, and ${owner} sits inside it with its class`, async () => {
       await renderScene(nave, subpath, openProps())
       const carrier = part(positioner)
       const popup = part(owner)
-      expect(items.filter((item) => !carries(carrier, item))).toEqual([])
+      expect(items.filter((item) => !hasItem(carrier, item))).toEqual([])
       expect(carrier?.contains(popup ?? null)).toBe(true)
       expect(popup?.className).toContain('nave-base-ui-')
     })
@@ -62,19 +62,19 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     ['tooltip', 'Tooltip'],
   ] as const) {
     for (const side of SIDES) {
-      it(`${namespace}.Arrow carries data-side="${side}" with the class, for side="${side}"`, async () => {
+      it(`${namespace}.Arrow hasItem data-side="${side}" with the class, for side="${side}"`, async () => {
         await renderScene(nave, subpath, { ...openProps(), [`${namespace}.Positioner`]: { side } })
         const arrow = part(`${namespace}.Arrow`)
-        expect(carries(arrow, 'data-side', side)).toBe(true)
+        expect(hasItem(arrow, 'data-side', side)).toBe(true)
         expect(hasClass(arrow, 'nave-base-ui-arrow')).toBe(true)
       })
     }
   }
 
-  it('Select.Value carries data-placeholder when there is no value, with the class', async () => {
+  it('Select.Value hasItem data-placeholder when there is no value, with the class', async () => {
     await renderScene(nave, 'select', { 'Select.Root': { defaultValue: null } })
     const value = part('Select.Value')
-    expect(carries(value, 'data-placeholder')).toBe(true)
+    expect(hasItem(value, 'data-placeholder')).toBe(true)
     expect(hasClass(value, 'nave-base-ui-select-value')).toBe(true)
   })
 })
@@ -84,11 +84,11 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
     ['accordion', 'Accordion'],
     ['collapsible', 'Collapsible'],
   ] as const) {
-    it(`${namespace}: the Panel carries its height variable once opened, with the class`, async () => {
+    it(`${namespace}: the Panel hasItem its height variable once opened, with the class`, async () => {
       await renderScene(nave, subpath)
       await user().click(part(`${namespace}.Trigger`)!)
       const panel = part(`${namespace}.Panel`)
-      expect(carries(panel, `--${subpath}-panel-height`)).toBe(true)
+      expect(hasItem(panel, `--${subpath}-panel-height`)).toBe(true)
       expect(hasClass(panel, `nave-base-ui-${subpath}-panel`)).toBe(true)
     })
 
@@ -146,7 +146,7 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
       expect((await seen(false)).has('data-ending-style')).toBe(false)
     })
 
-    it(`${namespace}: the Trigger carries aria-expanded when opened, and the icon key reaches by shape`, async () => {
+    it(`${namespace}: the Trigger hasItem aria-expanded when opened, and the icon key reaches by shape`, async () => {
       const SHAPES = [
         { children: ['Title', '<svg>'], reached: 1 },
         { children: ['<svg>', 'Title'], reached: 1 },
@@ -189,22 +189,22 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
     })
   }
 
-  it('Tabs: a vertical list carries aria-orientation, the Indicator data-orientation, with the classes', async () => {
+  it('Tabs: a vertical list hasItem aria-orientation, the Indicator data-orientation, with the classes', async () => {
     await renderScene(nave, 'tabs', { 'Tabs.Root': { orientation: 'vertical' } })
     const list = part('Tabs.List')
     const indicator = part('Tabs.Indicator')
-    expect(carries(list, 'aria-orientation', 'vertical')).toBe(true)
+    expect(hasItem(list, 'aria-orientation', 'vertical')).toBe(true)
     expect(hasClass(list, 'nave-base-ui-tab-list')).toBe(true)
-    expect(carries(indicator, 'data-orientation', 'vertical')).toBe(true)
+    expect(hasItem(indicator, 'data-orientation', 'vertical')).toBe(true)
     expect(hasClass(indicator, 'nave-base-ui-tab-indicator')).toBe(true)
   })
 
-  it('Tabs: the Indicator carries the active-tab variables', async () => {
+  it('Tabs: the Indicator hasItem the active-tab variables', async () => {
     await renderScene(nave, 'tabs')
     const indicator = part('Tabs.Indicator')
     expect(
       ['--active-tab-left', '--active-tab-top', '--active-tab-width', '--active-tab-height'].filter(
-        (item) => !carries(indicator, item),
+        (item) => !hasItem(indicator, item),
       ),
     ).toEqual([])
   })

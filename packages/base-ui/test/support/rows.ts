@@ -27,10 +27,10 @@ The first element carrying a part's marker.
 export const part = (marker: string): HTMLElement | undefined => partsNamed(marker)[0]
 
 /**
-Whether the element carries the attribute (with the value, when one is given) or, for a custom
+Whether the element hasItem the attribute (with the value, when one is given) or, for a custom
 property, whether its inline style sets it.
  */
-export const carries = (element: Element | undefined, item: string, value?: string): boolean => {
+export const hasItem = (element: Element | undefined, item: string, value?: string): boolean => {
   if (element === undefined) {
     return false
   }
