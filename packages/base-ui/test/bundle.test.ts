@@ -161,7 +161,7 @@ describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bund
   }
 
   it(
-    'control: a helper that keeps a whole component at module scope is reported, by its size and by every part it keeps',
+    'control: a helper that keeps a whole component at module scope is reported, by its size and for every other part of the component',
     { timeout: 300_000 },
     async () => {
       const dist = scratchDist('retaining-helper', 'dialog')
@@ -173,7 +173,9 @@ describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bund
       const helper = await helperCost(dist, 'retaining')
       expect(helper).toBeGreaterThan(HELPER_CEILING)
       const { third } = await bundleProblems('dialog', helper, dist, 'retaining')
-      expect(third.length).toBeGreaterThan(0)
+      const parts = await partsOf('dialog')
+      const kept = parts?.others.map((part) => `dialog.${part}`)
+      expect(third.map((problem) => problem.split(':', 1)[0])).toEqual(kept)
     },
   )
 

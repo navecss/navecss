@@ -66,14 +66,15 @@ const importsOf = (code: string): string[] =>
     .toArray()
 
 /**
- * A public component subpath of Base UI: one of the components this package wraps. Base UI's other
- * subpaths (its internals, its hooks and utilities, its types) are not components.
+ * A subpath of Base UI that this package wraps: one of the 23 v1 components. Base UI exports 21
+ * more besides its root and internals (hooks, utilities and types, and components this package
+ * does not wrap), and a wrapper has no reason to import any of them.
  */
 const isComponentSubpath = (specifier: string): boolean =>
   SUBPATHS.some((subpath) => specifier === `@base-ui/react/${subpath}`)
 
 /**
- * The specifiers that reach into Base UI beyond a public component subpath.
+ * The specifiers that reach into Base UI beyond the subpaths this package wraps.
  */
 const nonPublicBaseUiImports = (code: string): string[] =>
   importsOf(code).filter(
@@ -85,11 +86,11 @@ const hash = (file: string): string => createHash('sha256').update(readFileSync(
 describe('AC-base-ui-bridge-36: provenance and packaging', () => {
   const built = filesUnder(DIST_DIR, ['.js'])
 
-  it('imports Base UI only through its public component subpaths', () => {
+  it('imports Base UI only through the subpaths it wraps', () => {
     expect(built.flatMap((file) => nonPublicBaseUiImports(readDist(file)))).toEqual([])
   })
 
-  it('names no module of Base UI beyond its public component subpaths in any declaration either', () => {
+  it('names no module of Base UI beyond the subpaths it wraps in any declaration either', () => {
     const declarations = filesUnder(DIST_DIR, ['.d.ts'])
     const reached = declarations.flatMap((file) =>
       readDist(file)
@@ -124,7 +125,7 @@ describe('AC-base-ui-bridge-36: provenance and packaging', () => {
   })
 
   it.each(['unstable-use-media-query', 'merge-props', 'use-render', 'types', 'csp-provider'])(
-    'control: a planted import of the non-component subpath %s is reported',
+    'control: a planted import of the subpath %s, which this package does not wrap, is reported',
     (subpath) => {
       expect(nonPublicBaseUiImports(`export { thing } from '@base-ui/react/${subpath}'`)).toEqual([
         `@base-ui/react/${subpath}`,
@@ -132,7 +133,7 @@ describe('AC-base-ui-bridge-36: provenance and packaging', () => {
     },
   )
 
-  it('control: a planted import of a component subpath is not reported', () => {
+  it('control: a planted import of a subpath this package wraps is not reported', () => {
     expect(nonPublicBaseUiImports("import { Dialog } from '@base-ui/react/dialog'")).toEqual([])
   })
 })

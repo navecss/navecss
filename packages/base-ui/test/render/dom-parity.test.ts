@@ -43,8 +43,18 @@ const settle = (milliseconds: number): Promise<void> =>
     await new Promise((resolve) => setTimeout(resolve, milliseconds))
   })
 
-const isInTransition = (): boolean =>
-  document.querySelector(TRANSITION_ATTRIBUTES.map((name) => `[${name}]`).join(',')) !== null
+const IN_TRANSITION = TRANSITION_ATTRIBUTES.map((name) => `[${name}]`).join(',')
+
+const isInTransition = (): boolean => document.querySelector(IN_TRANSITION) !== null
+
+/**
+ * The elements still mid-transition, as `<tag> data-part (the attributes)`, for a message.
+ */
+const inTransition = (): string[] =>
+  [...document.querySelectorAll(IN_TRANSITION)].map((element) => {
+    const names = element.getAttributeNames().filter((name) => TRANSITION_ATTRIBUTES.includes(name))
+    return `<${element.tagName.toLowerCase()}> ${(element as HTMLElement).dataset.part ?? 'unmarked'} (${names.join(' ')})`
+  })
 
 const serialized = (records: readonly ElementRecord[]): string =>
   JSON.stringify(records.map(({ attributes, tag }) => [tag, [...attributes]]))
@@ -66,7 +76,10 @@ const describeAtRest = async (): Promise<ElementRecord[]> => {
     previous = current
     await settle(25)
   }
-  throw new Error('the document never came to rest')
+  const stuck = inTransition()
+  throw new Error(
+    `the document never came to rest: ${stuck.length === 0 ? 'its attributes kept changing' : stuck.join(', ')}`,
+  )
 }
 
 const VARIANT_PART_NAMES: ReadonlySet<string> = new Set(Object.keys(VARIANT_PROPS))
@@ -115,6 +128,14 @@ describe("AC-base-ui-bridge-12: a wrapper renders exactly the bare part's DOM, p
       await cleanup()
     }
     expect(offenders).toEqual([])
+  })
+
+  it('names the elements still in a transition when a document never comes to rest', async () => {
+    await render(scenes.button?.render(bare) as never)
+    document.querySelector('button')?.setAttribute('data-starting-style', '')
+    await expect(describeAtRest()).rejects.toThrow(
+      'the document never came to rest: <button> Button (data-starting-style)',
+    )
   })
 
   it('control: a document still in a starting style is read only once it has rested', async () => {
