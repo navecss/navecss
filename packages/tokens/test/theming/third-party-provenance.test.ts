@@ -11,8 +11,7 @@
  *    R28's compiled-JS half).
  * 2. The ROUTING OBLIGATION exists as a checkable fact, not only as spec prose — the AC's own
  *    words: "this scenario asserts the ROUTING obligation exists, not that any instance has
- *    been cleared." Nothing here clears an instance; nothing here is the accessibility/licensing
- *    steward's to clear.
+ *    been cleared." Nothing here clears an instance, and nothing in this file is cleared copy.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'

@@ -304,7 +304,7 @@ test('nothing this gate prints down ANY path names a tracker a reader cannot ope
   }
 })
 
-// A prior review round (consulting the licensing steward) named this report as one whose
+// A prior review round named this report as one whose
 // docblock made no byte-exact claim, without measuring it. Measured here: the row above (and
 // every other test in this file that touches the mismatch path) checks SHAPE and OPACITY, never
 // the bytes. The header, the two per-package line templates and the closing guidance are
@@ -371,7 +371,7 @@ test("composeChangesetConfigUnusableMessage composes this gate's own bytes, neve
 
 // A fix round: this gate's own JSON.parse(readFileSync(...)) was
 // unguarded and raw-crashed on a malformed manifest, the same defect class closed in the
-// sibling gate. This file states no licensing position (per a licensing-steward consult), so its
+// sibling gate. This file states no licensing position, so its
 // message is ordinary mechanism prose and must not borrow the license-parity gate's cleared
 // bytes.
 test("main(): a malformed package manifest under a confirmed workspace refuses with this gate's own message, never an uncaught exception", () => {

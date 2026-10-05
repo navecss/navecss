@@ -7,8 +7,8 @@
  * The project's design lead settled the shape: key the atom off both `:disabled` and
  * `[aria-disabled="true"]`, same nesting shape `focusRing` already ships for
  * `:focus-visible` (a bare pseudo-selector-list key, not the two-attribute doc-comment
- * instruction). The project's accessibility steward then required that the replacement doc
- * comment also state the aria-disabled branch's activation-handler obligation:
+ * instruction). The replacement doc comment also states the aria-disabled branch's
+ * activation-handler obligation:
  * `pointer-events: none` blocks pointer activation only, so a component's own handler must
  * check the attribute and no-op on Enter/Space, since CSS cannot prevent keyboard activation
  * on a still-focusable element.

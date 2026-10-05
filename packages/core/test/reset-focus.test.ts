@@ -16,8 +16,8 @@
  * ruling ("no rule strips outline"); the other half is "and nothing
  * replaces it". A global `:focus-visible { outline: ...; outline-offset: ...
  * }` fallback shipped in reset.css despite never removing anything, so the
- * two tests above both passed while the ruling's second half did not hold,
- * caught by the project's accessibility steward. A ruling whose content is "and we ship nothing
+ * two tests above both passed while the ruling's second half did not hold.
+ * A ruling whose content is "and we ship nothing
  * here" needs an assertion of ABSENCE, not just of non-removal — the third
  * test below is that assertion, against the class of author-styled
  * document-scope focus indicators, not the one instance found.

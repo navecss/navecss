@@ -3,7 +3,7 @@
  * Licence allow-list gate, signed off by the project's maintainer:
  * `pnpm licenses list --prod --json` plus a small first-party allow-list
  * script. No new dependency, no counterparty (no FOSSA — a deliberate
- * choice by the licensing steward, not an oversight).
+ * choice, not an oversight).
  *
  * `pnpm licenses list` documents no non-zero exit code on its own — it is
  * an inventory command, not a gate. So the gate is this script, over its
@@ -12,9 +12,9 @@
  * versioned, not implicit in a scanner's defaults).
  *
  * This script decides no licensing question. Its buckets and their rules
- * were set by the project's licensing steward; this file only applies
- * them. Anything that trips either check is a review item for the
- * licensing steward, never resolved here.
+ * were set in a licensing review; this file only applies
+ * them. Anything that trips either check is an item for licensing
+ * review, never resolved here.
  *
  * Buckets (the reasoning behind them is summarized inline below):
  *   A. Bundled into shipped output — not checked HERE. Bucket A is kept
@@ -43,8 +43,7 @@
  *      Weak copyleft (MPL-2.0, LGPL) is a review item, not an auto-pass;
  *      strong copyleft (GPL, AGPL) is a stop. Both fail this gate the same
  *      way "not on the list" does, and are told apart only in the message.
- *      Compound SPDX expressions — ruled on by the project's licensing
- *      steward, then amended in a follow-up ruling — are handled over
+ *      Compound SPDX expressions are handled over
  *      three tiers:
  *        Tier 1, a bare identifier: exact, case-sensitive match against
  *          `prodPermissive[].id`.
@@ -73,8 +72,8 @@
  *          operator changes only the message, never the verdict.
  *        Tier 3, anything else: `{ allowed: false }` with a distinct
  *          reason — the gate cannot decompose the expression, so it
- *          declines to classify and flags it for the licensing steward to
- *          review, rather than approximating one operand and discarding
+ *          declines to classify and flags it for licensing review, rather
+ *          than approximating one operand and discarding
  *          the rest (an earlier version of this gate approximated
  *          `(MIT OR ISC) AND GPL-3.0-only` by keeping one operand and
  *          silently discarding the other, which is the failure mode this
@@ -85,7 +84,7 @@
  *      the only automated carve-out is `alwaysBlockedPatterns` (source-
  *      available USE-restricting licences, which condition on use rather
  *      than distribution and so are not made safe by "it's only a build
- *      tool"). The OTHER carve-out the licensing steward names — a dev
+ *      tool"). The OTHER carve-out — a dev
  *      dependency whose OUTPUT is encumbered — is a judgement call this
  *      script cannot make from a licence string and does not attempt to.
  */
@@ -97,7 +96,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
- * Cleared by the project's licensing steward: the second sentence printed on both the
+ * Cleared wording: the second sentence printed on both the
  * invalid-JSON and the malformed-shape policy-file failure paths in this file. The two sites
  * carried identical text before this clearance and carry identical text after, by design, so
  * this constant is the one place a later tidy touches instead of two.
@@ -197,7 +196,7 @@ export function isAlwaysBlocked(license, policy) {
   )
 }
 
-// SPDX-shaped identifier charset, per the project's licensing steward's ruling: no residual
+// SPDX-shaped identifier charset: no residual
 // whitespace, no residual parenthesis, no ` WITH `.
 const IDENTIFIER_RE = /^[A-Za-z0-9.+-]+$/
 
@@ -215,8 +214,7 @@ const SINGLE_OPERAND_PAREN_RE = /(^|(?<= ))\(([A-Za-z0-9.+-]+)\)(?=$| )/g
 /**
  * Decomposes a licence expression into its identifiers and (if compound)
  * its single uniform operator, or returns `null` if the expression is not
- * DECIDABLE by this gate, per the project's licensing steward's ruling
- * (later amended in a follow-up ruling): the gate declines to approximate
+ * DECIDABLE by this gate: the gate declines to approximate
  * an expression it cannot fully decompose rather than guess at one operand
  * and silently discard the rest, which is the failure mode an earlier
  * version of this gate hit (`(MIT OR ISC) AND GPL-3.0-only` discarding its
@@ -251,7 +249,7 @@ function decomposeExpression(expression) {
 }
 
 /**
- * Cleared by the project's licensing steward: the trailing routing clause is dropped, not
+ * Cleared wording: the trailing routing clause is dropped, not
  * restated — the surrounding printed frame (header + closing guidance) already names the
  * "open an issue" route once, and naming it a second time inside this reason read as an
  * instruction to a named agent rather than a description of why the row is a violation.
@@ -261,15 +259,15 @@ export const BUCKET_B_UNDECIDABLE_REASON =
   'confidence, and it declines to approximate a licensing question rather than guess'
 
 /**
- * Bucket B: prod dependency licence check, over the three tiers ruled on
- * by the project's licensing steward. Tier 1 (bare identifier) and
+ * Bucket B: prod dependency licence check, over the three tiers described
+ * in this file's header. Tier 1 (bare identifier) and
  * tier 2 (a fully decidable expression) both require EVERY identifier to
  * be admitted, for BOTH operators — the disjunction case is not exempted,
  * because "the licensee may elect the permissive branch" is itself an
  * unsigned licensing proposition, not arithmetic, and a
  * disjunction whose branches are all admitted needs no election rule at
- * all. Tier 3 (undecidable) refuses to classify and flags it for the
- * licensing steward to review, rather than approximating. Returns
+ * all. Tier 3 (undecidable) refuses to classify and flags it for
+ * licensing review, rather than approximating. Returns
  * `{ allowed, reason }`.
  */
 export function classifyBucketB(license, policy) {
@@ -287,9 +285,8 @@ export function classifyBucketB(license, policy) {
 
   // prodPermissive entries are id-bearing objects, not bare strings
   // (`{ id }`, checked for well-formedness by check-license-enumeration-provenance.mjs) —
-  // match on the entry's `id`, exact and case-sensitive (per the licensing steward's ruling:
-  // a value matching only case-insensitively has already degraded to "custom"). Do not
-  // lowercase either side.
+  // match on the entry's `id`, exact and case-sensitive (a value matching only
+  // case-insensitively has already degraded to "custom"). Do not lowercase either side.
   // Guard against a null/undefined ENTRY the same way a bare string is
   // already handled above: no `id` to match means "not permissive", not a
   // thrown TypeError. Entry-level only, deliberately: a missing or
@@ -331,7 +328,7 @@ export function classifyBucketC(license, policy) {
 
 /**
  * The message printed when `pnpm licenses list` itself cannot be run — a non-zero exit, or
- * `pnpm` absent entirely — cleared by the project's licensing steward: this is the case a
+ * `pnpm` absent entirely — this is the case a
  * human actually hits, since running this gate in a fresh clone before `pnpm install` dies
  * on a raw stack trace without it. `reason` is `error.code ?? error.message` from the caught
  * error, the same idiom the sibling gate's read guards use, narrowed HERE to its FIRST LINE:
@@ -370,8 +367,8 @@ export class LicenseEnumeratorError extends Error {}
  * repo's ROOT (what `main()` actually runs against); exported and parameterised so a test's
  * routing instrument can point it at a scratch pnpm workspace instead of mutating the real
  * repo's dependency graph. Raises `LicenseEnumeratorError` (rather than the raw execFileSync
- * error) when the command itself cannot be run, so `main()` can print the message cleared by
- * the project's licensing steward above instead of an uncaught crash.
+ * error) when the command itself cannot be run, so `main()` can print the cleared message
+ * above instead of an uncaught crash.
  */
 export function runLicensesList(extraArgs, cwd = ROOT) {
   let raw
@@ -432,7 +429,7 @@ export function readLicensePolicy(rootDir = ROOT) {
  * is not recorded here. The fixture supplies values that differ by construction instead.
  *
  * The printed bytes are unchanged by this extraction (byte-identical to the pre-extraction
- * inline form) and were examined and found clean by the project's licensing steward.
+ * inline form) and were examined and found clean.
  * Re-wrapping is not re-wording; a reword is.
  *
  * Extracting a formatter pins the FORMAT and nothing else: which count reaches which slot is
@@ -444,7 +441,7 @@ export function formatAllowlistSuccessLine(prodCount, devOnlyCount) {
 }
 
 /**
- * The line cleared by the project's licensing steward, printed INSTEAD of
+ * The cleared line printed INSTEAD of
  * formatAllowlistSuccessLine when BOTH counts are zero:
  * formatAllowlistSuccessLine(0, 0) reads identically to a real clean pass with only the
  * numerals differing, which published `licensing` overview §4/§5's rider forbids — what a
@@ -460,7 +457,7 @@ export const ALLOWLIST_NOTHING_CLASSIFIED_LINE =
   '`pnpm install` and re-run.'
 
 /**
- * The two strings a red run prints, verbatim as cleared by the project's licensing steward.
+ * The two strings a red run prints, verbatim as cleared.
  * Transcribed, not re-worded: a re-wording is a fresh
  * clearance turn, a re-wrapping of the same bytes is not. The guidance block is new: this
  * gate printed no guidance block before it, only the routing parenthetical the header

@@ -203,12 +203,10 @@ export function composeThemingOutputs(options: ThemingBuildOptions = {}): Themin
 
   const { css } = emitCss(result)
 
-  // R20/R34: the presence guarantee assertNoticeIsClean does not provide (reviewed and
-  // cleared by the project's accessibility steward) — each notice must actually reach the
-  // composed CSS, not only pass the source-level framing check above. R34's notice (also
-  // reviewed and cleared by the accessibility steward) had the identical gap: a build that
-  // imported it and forgot to emit it, or emitted a truncated copy, would have passed
-  // runSourceGuards() cleanly.
+  // R20/R34: the presence guarantee assertNoticeIsClean does not provide. Each notice must
+  // actually reach the composed CSS, not only pass the source-level framing check above. R34's
+  // notice had the identical gap: a build that imported it and forgot to emit it, or emitted a
+  // truncated copy, would have passed runSourceGuards() cleanly.
   assertNoticeIsEmitted(css, FEEDBACK_SHARED_IDENTITY_NOTICE, 'Feedback notice')
   assertNoticeIsEmitted(css, RETHEMING_NOTICE, 'Retheming notice')
 

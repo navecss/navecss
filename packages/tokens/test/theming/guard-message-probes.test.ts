@@ -36,8 +36,8 @@ const NOTICE_PROBES: readonly { label: string; opening: string }[] = [
   },
   {
     label: "the emitted-notice guard's not-a-self-contained-comment refusal",
-    // Widened through the disjunct the accessibility steward's
-    // clearance added ("or sits inside a comment opened on an earlier line") — a bare
+    // Widened through the disjunct the cleared wording
+    // added ("or sits inside a comment opened on an earlier line") — a bare
     // `the`→`a` article fix here would turn this anchor green while pinning nothing about
     // that clause, since the old anchor stopped at the comma right before it.
     opening:

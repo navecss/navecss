@@ -126,7 +126,7 @@ test('the real license-policy.json entries no longer carry signedBy/finding', ()
 })
 
 // The three prose strings in license-policy.json are CLEARED BYTES, transcribed verbatim from
-// the project's licensing steward's clearance turn taken on this branch, not
+// the clearance turn taken on this branch, not
 // drafted here. A re-wording of any of them is a fresh clearance turn; a re-wrapping of the
 // same bytes is not. Nothing anchored these byte-exact before, so a later tidy could re-word a
 // cleared licensing-position string with every gate still green — this is that anchor, and it
@@ -177,7 +177,7 @@ test('an entry with no "id" key at all is a violation (RED)', () => {
   assert.match(violations[0].reason, /missing or empty "id"/)
 })
 
-// Per the licensing steward's ruling: `id` gets no SPDX-shape check, deliberately — the one
+// `id` gets no SPDX-shape check, deliberately — the one
 // warranted check is that `id` equals its own trimmed form, since classifyBucketB
 // (check-license-allowlist.mjs) matches it with no trimming on the entry side. Unaffected by
 // the later reshaping that removed signedBy/finding, never this check.
@@ -267,7 +267,7 @@ test('the duplicate message identifies both entries by POSITION (RED)', () => {
   assert.match(violations[0].reason, /index 1/)
 })
 
-// A prior review round (consulting the licensing steward) named this reason as one whose
+// A prior review round named this reason as one whose
 // docblock made no byte-exact claim, without measuring it. Measured here: every prior assertion
 // on this reason matched only a FRAGMENT (/duplicate "id"/, /index 0/, /index 1/), which is
 // what let the STATIC words around those fragments drift with the whole suite staying green —
@@ -322,7 +322,7 @@ test('an array entry gets the designed "not an object" message, not the missing-
   assert.doesNotMatch(violations[0].reason, /missing or empty/)
 })
 
-// --- The printed strings, anchored byte-exact (cleared by the project's licensing steward) ---
+// --- The printed strings, anchored byte-exact (cleared bytes) ---
 
 // Three of the four strings this gate can print were rewritten by that reshape, and the
 // clearance turn returned cleared bytes for all three. Nothing anchored them,
@@ -402,8 +402,8 @@ test('the gate module carries exactly one copy of each cleared printed string', 
   assert.equal(source.includes('PROVENANCE_FAILURE_GUIDANCE'), true)
 })
 
-// The invalid-JSON path's second sentence is cleared bytes too, cleared by the project's
-// licensing steward. It is the same public route cleared for the two sibling sites in the
+// The invalid-JSON path's second sentence is cleared bytes too. It is the same public route
+// cleared for the two sibling sites in the
 // allow-list gate, so four copies of one sentence converge instead of diverging — which holds
 // only for as long as nothing re-words one of them, and that is what this anchors.
 test('the exported invalid-JSON guidance equals the cleared bytes', () => {

@@ -5,7 +5,7 @@
  * regex, reused by all three surfaces, so the forbidden-word list has one home.
  *
  * Relocating `assertNoticeIsEmitted`, either notice constant, or either refusal string out of
- * this file re-opens the accessibility steward's file-level clearance with no byte changed:
+ * this file re-opens the clearance this file holds as a whole, with no byte changed:
  * the one-home condition and the instruction that any re-wording is a fresh clearance are
  * stated in the docblocks below, and a split can leave the condition's prose in one file and
  * the bytes it governs in another with nothing noticing. Move any of them only through a
@@ -98,8 +98,7 @@ export function assertDescriptionsAreClean(
 /**
  * R34: the CANONICAL re-theming responsibility notice. One-directional (states what
  * changes hands, not what was in hand), no ratio, no SC id, none of the forbidden words,
- * not phrased as a warranty disclaimer. Cleared verbatim by the project's accessibility steward,
- * applied path.
+ * not phrased as a warranty disclaimer. Cleared verbatim.
  *
  * This package's own landing point (the comment emitted immediately above the seed
  * declaration in the generated CSS, `emit.ts`) ALWAYS uses this constant: one text, one
@@ -110,7 +109,7 @@ export function assertDescriptionsAreClean(
  * production constant for it and never emits it; its test-purposes declaration lives at
  * `packages/tokens/test/theming/cleared-copy.ts`, which corrects an earlier claim that the
  * variant lived in one place only. The authoritative homes are the theming specification's
- * R34 and the accessibility steward's own clearance record, neither of them in this
+ * R34 and the notice's own clearance record, neither of them in this
  * repository. Rung 2 carries the canonical notice too, and every landing point this package
  * does not own (README rungs `1a`, `1b`, 2, 3, 4, 5) is PRESUMED canonical: nothing in this
  * package reads them.
@@ -139,7 +138,7 @@ export function assertNoticeIsClean(
 /**
  * R20: the feedback family's shared-identity notice — `warning`, `success` and `info`, and
  * their `-foreground` variants, resolve to one shared value in the shipped default; only
- * `danger` differs. Cleared verbatim by the project's accessibility steward, applied path.
+ * `danger` differs. Cleared verbatim.
  * The `-foreground` hyphen is load-bearing: all four
  * `on-feedback-*` declarations (including `on-feedback-danger`) are byte-identical, so a
  * paraphrase reading "foreground roles" as covering `on-feedback-*` would make "only danger
@@ -151,19 +150,18 @@ export function assertNoticeIsClean(
  * tightest reading; the sentence names its own three subjects and states that `danger`
  * differs, so it is self-locating and would also be correct placed above `danger`.
  *
- * One home only, per the accessibility steward's own condition 1: if `descriptions.ts`, the
- * README or any docs surface ever wants these words, it imports or quotes this constant
- * rather than holding a second copy. Any re-wording, including shortening, returns to the
- * accessibility steward for re-clearance — wrapping the SAME words across lines is not a
- * re-wording and needs no further clearance.
+ * One home only: if `descriptions.ts`, the README or any docs surface ever wants these words,
+ * it imports or quotes this constant rather than holding a second copy. Any re-wording,
+ * including shortening, is a change to cleared copy and needs review as one; wrapping the SAME
+ * words across lines is not a re-wording and needs no further clearance.
  */
 export const FEEDBACK_SHARED_IDENTITY_NOTICE =
   'warning, success and info, and their -foreground variants, resolve to one shared value here; only danger differs. Colour alone therefore cannot tell those three states apart, so wherever a feedback token carries meaning, give it a text label naming the state and a distinct icon or shape that differs per state.'
 
 /**
  * R27: the CANONICAL statement of this entry point's contrast-threshold posture. Cleared
- * verbatim by the project's accessibility steward on the applied path (2026-08-22), and
- * re-cleared with a new final sentence on 2026-09-07; sentences one through four are
+ * verbatim on 2026-08-22, and re-cleared with a new final sentence on 2026-09-07; sentences
+ * one through four are
  * byte-identical across the two.
  *
  * The old final sentence pointed at an internal tracking id, an identifier no reader of the
@@ -188,7 +186,8 @@ export const FEEDBACK_SHARED_IDENTITY_NOTICE =
  * blockquote marker are how the spec PRESENTS cleared copy and are not part of the cleared
  * bytes (`RETHEMING_NOTICE` above is the settled precedent: bold and quoted in the theming
  * spec's R34, plain in the constant and plain on this same README). Any re-wording, including
- * shortening, returns to the accessibility steward; re-wrapping the same words does not.
+ * shortening, is a change to cleared copy and needs review as one; re-wrapping the same words
+ * does not.
  */
 export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
   "0.1.0 ships no consumer contrast-threshold input. No flag of this entry point sets one, and the build reads none. This is the absence of an input, not a limit on the consumer: a consumer may hold whatever contrast target they choose and check their palette against it with their own tooling. Where a check Nave ships runs in a consumer's build over the consumer's values, it reports and does not fail. A consumer-settable target is deliberately out of 0.1.0 rather than overlooked."
@@ -224,10 +223,10 @@ export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
  *
  * A carrying line holding a SECOND, self-contained comment beside the notice's own passes
  * this predicate DELIBERATELY, and it is not a hole. The requirement the predicate serves is
- * the accessibility steward's own, applied path: "the text this check lints must
- * never be a SUBSET of what a reader sees around the notice, and where it cannot be equal it
- * must refuse", a superset being acceptable because it can only raise a false alarm a human
- * resolves. The framing lint below reads the WHOLE trimmed line, so when one comment closes
+ * that the text this check lints must never be a SUBSET of what a reader sees around the
+ * notice, and where it cannot be equal it must refuse. A superset is acceptable, because it can
+ * only raise a false alarm a human resolves. The framing lint below reads the WHOLE trimmed
+ * line, so when one comment closes
  * and another opens before the notice, the sibling comment is linted too. That is a superset,
  * and a conformance word anywhere on that line still stops the build. Narrowing this to one
  * comment per line would refuse a line the check reads in full, which is the one thing the
@@ -249,11 +248,11 @@ export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
  * near-identical message would double the cleared surface to discriminate on a fact they do not
  * need. What sharing it may NOT do is assert one shape as though it were the other: a line
  * reaching this tracker IS self-contained by the predicate above, so the string names BOTH
- * shapes and lets its elided remainder show which one a reader is in (per the accessibility
- * steward's review). Two bounds on that tracker, both from that same review. It may only ever
+ * shapes and lets its elided remainder show which one a reader is in. Two bounds hold on that
+ * tracker. It may only ever
  * ADD a refusal and must never change WHICH text is linted, so it runs LAST of the three
  * per-line checks and no message that fires today is replaced by it. Its scan is quote-aware
- * while outside a comment (the accessibility steward's condition S12, applied path), so a
+ * while outside a comment, so a
  * declaration VALUE carrying a comment delimiter inside a string that CLOSES on its own line is
  * read as ordinary string content, not as an open comment. A string that does not close on its
  * line has no single reading: where an unescaped line break cuts it off, CSS consumes it as a

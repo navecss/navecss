@@ -366,8 +366,7 @@ test('end to end: the ordinary pass line counts the packages it compared, distin
   }
 })
 
-// Cleared by the project's licensing steward:
-// the pass line's own vocabulary fixes "match" as verbatim equality (this file's failure header
+// The pass line's own vocabulary fixes "match" as verbatim equality (this file's failure header
 // reads "do not match the root LICENSE"), so it went false the moment packages/tokens/LICENSE
 // started carrying a cleared third-party section after the root text and was never compared for
 // equality at all. This drives the real main(scratchRoot) over a scratch workspace reproducing
@@ -440,7 +439,7 @@ test('main(): the pass line names both the byte-identical count and the third-pa
  * and it is the only thing there".
  *
  * Deliberately a COUNT and not a second wording comparison. `normalizedDocblockBefore` owns the
- * wording (the licensing steward's discriminator, whose five mutations keep their
+ * wording (a discriminator whose five mutations keep their
  * verdicts across this change); a second comparison here would give one cleared literal two owners
  * and two places to update in the commit that must update neither.
  *
@@ -614,7 +613,7 @@ const EXPECTED_HEADER_DOCBLOCK =
 const EXPECTED_IS_NON_PRIVATE_DOCBLOCK =
   "True if `manifest` would ship a published tarball (private packages never do, so Condition 2's per-tarball licence-text requirement does not apply to them). Reused by scripts/check-readme-export-coverage.mjs (a documentation gate) to scope which packages' READMEs it checks; that reuse does not make this predicate a documentation concern — it stays Condition 2's, and moves only for Condition 2 reasons."
 
-// Cleared by the project's licensing steward: the zero-scope verdict's own comment,
+// The zero-scope verdict's own comment,
 // stating what the branch covers (an empty non-private set) as distinct from why it is empty
 // (a discovery that legitimately found nothing, vs. one that skipped everything).
 const EXPECTED_ZERO_SCOPE_COMMENT =
@@ -1030,7 +1029,7 @@ test('findWorkspaceGlobViolation: a missing pnpm-workspace.yaml is a violation, 
 })
 
 test('findWorkspaceGlobViolation: an unrelated top-level key alongside the correct packages: block is NOT a violation', () => {
-  // The licensing steward's explicit correctness bar: this must key ONLY on the top-level
+  // The explicit correctness bar: this must key ONLY on the top-level
   // `packages:` key, ignoring every other key pnpm keeps in this file (onlyBuiltDependencies,
   // overrides, anything else). A gate that refused here would trip on every unrelated
   // pnpm-workspace.yaml edit, not only a genuine widening.
@@ -1056,9 +1055,8 @@ test('findWorkspaceGlobViolation: an inline (flow-style) packages: value cannot 
 // A fix round: a blank line or a whole-line comment inside the
 // packages: block sequence used to BREAK the scan early, reading only a PREFIX of the
 // sequence and reporting null (no violation) over a workspace that had actually widened past
-// packages/*. The licensing steward measured this against real pnpm (both shapes resolve to
-// one list) and drafted the fix: skip blank/comment lines in the sequence instead of stopping
-// on them.
+// packages/*. Measured against real pnpm, both shapes resolve to one list, so the fix is to
+// skip blank/comment lines in the sequence instead of stopping on them.
 test('findWorkspaceGlobViolation: a blank line inside the packages: block sequence does not truncate the read', () => {
   const dir = buildWorkspaceYamlFixture("packages:\n  - 'packages/*'\n\n  - 'tools/*'\n")
   try {
@@ -1164,20 +1162,20 @@ test('composeLicenseUnreadableMessage and composeManifestInvalidJsonMessage comp
   )
 })
 
-// A prior review round (consulting the licensing steward, finding 5):
+// A prior review round (finding 5):
 // WORKSPACE_GLOB_VIOLATION_MESSAGE's own docblock says it is "Anchored byte-exact in
 // check-license-parity.test.mjs" — and until this test it was not. Every assertion on it in this
 // file and in check-publishable-set.test.mjs compares it to its own imported symbol, which pins
 // ROUTING (does this branch print THIS constant) and nothing about the bytes;
 // check-publishable-set.test.mjs:259-263 already says exactly that about its own copy, so two
-// artifacts disagreed and the source one was wrong. The licensing steward proved it by mutation: of
+// artifacts disagreed and the source one was wrong. A mutation run proved it: of
 // the nine constants whose docblocks claim a byte-exact anchor, eight red correctly when reworded
 // and this one alone stayed green.
 //
 // A claimed check that does not exist is worse than an absent one, because it stops the reader who
-// did the right thing. These are bytes cleared by the project's licensing steward, transcribed and
+// did the right thing. These are cleared bytes, transcribed and
 // never re-worded: if this assertion ever fails, the fix is to restore the message, NOT to update
-// the expectation. A reword is a fresh clearance and returns to the licensing steward.
+// the expectation. A reword is a change to cleared copy and needs review as one.
 test('WORKSPACE_GLOB_VIOLATION_MESSAGE is anchored byte-exact, as its docblock claims', () => {
   assert.equal(
     WORKSPACE_GLOB_VIOLATION_MESSAGE,
@@ -1352,11 +1350,10 @@ test('main(): a package LICENSE that is unreadable (EACCES) refuses, never an un
   }
 })
 
-// A fix round (finding C), widened per the licensing steward's determination
-// (consult 2 section 3): a manifest that parses to `null`, an array, or a string is not a
-// usable manifest object. `null` alone raw-crashes; the other shapes raise no exception at all
-// and instead ship a printed FALSE PASS over a directory never established to be a package,
-// which is worse in kind. The guard is keyed on "not a usable object", not on `null` alone.
+// A fix round (finding C), widened: a manifest that parses to `null`, an array, or a string is not
+// a usable manifest object. `null` alone raw-crashes; the other shapes raise no exception at all
+// and instead ship a printed FALSE PASS over a directory never established to be a package, which
+// is worse in kind. The guard is keyed on "not a usable object", not on `null` alone.
 test('main(): a package manifest that is valid JSON but not a usable object refuses, never an uncaught exception or a silent false pass', () => {
   const shapes = [
     { json: 'null', parsedAs: 'null' },

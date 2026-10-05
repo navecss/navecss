@@ -197,7 +197,7 @@ describe('reduced motion: packages/core/src/reset.css', () => {
   })
 
   /**
-   * Per the project's accessibility steward, Cap 2's obligation is RETENTION
+   * Cap 2's obligation is RETENTION
    * of the four `!important` flags, which neither existing instrument guards. A lint forbidding
    * a NEW `!important` in reset.css does not assert retention (a contributor who deletes all
    * four flags also deletes their disables and the build stays green); `reducedMotionDeclarations`

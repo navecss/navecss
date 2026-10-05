@@ -63,17 +63,17 @@ test('readLicensePolicy returns undefined (never throws) on invalid JSON, printi
   }
 })
 
-// Cleared by the project's licensing steward: both the invalid-JSON path here and main()'s
-// shape-violation path used to end "...route the licensing question to the licensing steward,
-// never resolve it here...", naming the gatekeeper in a message printed to every contributor
-// who hits either failure. Byte-anchored on the shared exported constant, which is the one
+// Cleared wording: both the invalid-JSON path here and main()'s shape-violation path used to
+// end by routing the licensing question to a named internal reviewer, which put the gatekeeper
+// in a message printed to every contributor who hits either failure. Byte-anchored on the
+// shared exported constant, which is the one
 // place both call sites now source it from, so a re-wording of either printed message goes red.
 // A follow-up fix: the doesNotMatch check used to sit here, on the
 // constant alone. Mutation testing proved it was dead at this level (the block above it aborts
 // on a failing equality before this line ever runs, and it is logically implied by the
 // hardcoded literal on the passing branch), so it moved to the composed-output tests below,
 // where it covers ground the byte anchor above cannot see: each print site's own HEADER.
-test("POLICY_FILE_INVALID_GUIDANCE is the licensing steward's cleared bytes, byte-exact, and names no persona", () => {
+test('POLICY_FILE_INVALID_GUIDANCE is the cleared bytes, byte-exact, and names no persona', () => {
   assert.equal(
     POLICY_FILE_INVALID_GUIDANCE,
     'No package was classified. Repair the JSON syntax without changing which licences the ' +
@@ -200,7 +200,7 @@ test('formatAllowlistSuccessLine: the literal format, with the two counts pairwi
 // formatAllowlistSuccessLine(0, 0)
 // reads identically to a real clean pass with only the numerals differing. This line is printed
 // INSTEAD of it when both counts are zero.
-test("ALLOWLIST_NOTHING_CLASSIFIED_LINE is the licensing steward's cleared bytes, byte-exact", () => {
+test('ALLOWLIST_NOTHING_CLASSIFIED_LINE is the cleared bytes, byte-exact', () => {
   assert.equal(
     ALLOWLIST_NOTHING_CLASSIFIED_LINE,
     'Licence allow-list gate: 0 prod package(s) and 0 dev-only package(s) were classified, so ' +
@@ -242,7 +242,6 @@ test('composeLicenseEnumeratorUnrunnableMessage composes the cleared bytes', () 
   assert.equal(Buffer.byteLength(message), 506)
 })
 
-// Ruled by the project's licensing steward on that review round:
 // `pnpm` writes its own diagnostics to stderr, and execFileSync appends that whole dump to
 // `error.message`, so the interpolated reason can arrive multi-line. Reachable with this
 // gate's hardcoded arguments, measured: a malformed `pnpm-workspace.yaml` (exit 1, a seven-line
@@ -332,7 +331,7 @@ test('bucket B: BUSL-1.1 is blocked regardless of prod/dev (always-blocked, RED)
   assert.match(result.reason, /source-available use-restricting/)
 })
 
-test('bucket B: an OR expression passes only if every alternative is permissive (per the licensing steward: election is not a signed guarantee)', () => {
+test('bucket B: an OR expression passes only if every alternative is permissive (election is not a signed guarantee)', () => {
   assert.equal(classifyBucketB('(MIT OR CC0-1.0)', policy).allowed, true)
 })
 
@@ -340,13 +339,12 @@ test('bucket B: an OR expression with a non-permissive branch is a review item, 
   const result = classifyBucketB('(GPL-3.0-only OR MIT)', policy)
   assert.equal(result.allowed, false)
   assert.match(result.reason, /election|not a signed guarantee/)
-  // A prior review round consulted the licensing steward: the `assert.match` above pins the
-  // ROUTING, not the bytes — the licensing steward measured that rewording this reason leaves
-  // the suite 65/65 green. It carries the licensing steward's ruling in contributor-facing
+  // The `assert.match` above pins the ROUTING, not the bytes: measured, rewording this reason
+  // left the suite 65/65 green. The reason states a licensing position in contributor-facing
   // words, so the wording is the product and not a paraphrase anyone may tune. Same discipline
   // as WORKSPACE_GLOB_VIOLATION_MESSAGE's anchor in
   // check-license-parity.test.mjs: if this fails, restore the reason, do not update the
-  // expectation. A reword is a fresh clearance and returns to the licensing steward.
+  // expectation. A reword is a change to cleared copy and needs review as one.
   assert.equal(
     result.reason,
     'an OR expression carrying at least one non-permissive branch — whether the licensee ' +
@@ -367,10 +365,10 @@ test('bucket B: an AND expression requires every part to be permissive', () => {
 // --- Nested compound expressions: Tier 3, refuse to classify ---
 // An earlier defect: splitExpression branched on ` OR ` before ` AND `, so a nested
 // compound silently discarded its AND term and leaked strong/network copyleft as
-// "permissive". Per the licensing steward's ruling: reordering the branches is
-// not the fix (it swaps which direction leaks), the gate must REFUSE to classify anything
-// it cannot fully decompose. The two shapes below are the exact pair that ruling names as
-// mattering most, one per leak direction.
+// "permissive". Reordering the branches is
+// not the fix (it swaps which direction leaks): the gate must REFUSE to classify anything
+// it cannot fully decompose. The two shapes below are the pair that matters most, one per
+// leak direction.
 
 test('bucket B: a nested compound that would have leaked AGPL is refused, not passed (RED before the fix, reproducing the OR-before-AND branch-order defect)', () => {
   const result = classifyBucketB('(MIT OR ISC) AND AGPL-3.0-only', policy)
@@ -379,8 +377,8 @@ test('bucket B: a nested compound that would have leaked AGPL is refused, not pa
   assert.match(result.reason, /cannot decompose/)
 })
 
-// Cleared by the project's licensing steward: the tier-3 undecidable reason used to end "...and
-// routes to the licensing steward", composing with the printed frame around it into a message
+// Cleared wording: the tier-3 undecidable reason used to end by routing to a named internal
+// reviewer, composing with the printed frame around it into a message
 // that names the gatekeeper a second time inside its own middle. Byte-anchored so a re-wording
 // of this cleared sentence goes red; re-wrapping it across different line breaks does not,
 // since only the concatenated VALUE is compared.
@@ -389,7 +387,7 @@ test('bucket B: a nested compound that would have leaked AGPL is refused, not pa
 // NOT relocated to a composed-output test here, because no such test in this file interpolates
 // this reason into its own printed header today (unlike (g)/(h)'s two call sites) — a residual
 // left open rather than closed by inventing a new composed test out of this round's scope.
-test("BUCKET_B_UNDECIDABLE_REASON is the licensing steward's cleared bytes, byte-exact, and names no persona", () => {
+test('BUCKET_B_UNDECIDABLE_REASON is the cleared bytes, byte-exact, and names no persona', () => {
   assert.equal(
     BUCKET_B_UNDECIDABLE_REASON,
     'this gate cannot decompose the expression into identifiers it can classify with ' +
@@ -442,7 +440,7 @@ test('a bucket-B tier-3 violation composes into the contributor-facing line with
   assert.doesNotMatch(calls[1], /STEWARD/)
 })
 
-test("bucket B: a nested compound that is entirely permissive is refused rather than approximated as blocked (the fail-closed false-stop found during the licensing steward's review)", () => {
+test('bucket B: a nested compound that is entirely permissive is refused rather than approximated as blocked (the fail-closed false-stop found during review)', () => {
   const result = classifyBucketB('MIT AND (ISC OR GPL-3.0-only)', policy)
   assert.equal(result.allowed, false)
   assert.match(result.reason, /cannot decompose/)
@@ -472,11 +470,11 @@ test('bucket B: tier-1 identifier matching is case-sensitive (a value matching o
   assert.equal(result.allowed, false)
 })
 
-// --- Regression fixtures for the shapes the quality reviewer and the licensing steward
+// --- Regression fixtures for the shapes two reviewers
 // probed live during a review round (and its own self-correction) ---
 // `MIT+`, `LicenseRef-Proprietary` and `WITH` land where they do because
 // the charset (IDENTIFIER_RE) governs over its own looser prose elsewhere,
-// which the licensing steward corrected against itself in this review. `MIT  OR  ISC`
+// a correction made during that same review. `MIT  OR  ISC`
 // decomposing as tier 2 (allowed: true) is deliberate and must not be
 // "hardened" out: it cannot admit an unadmitted identifier, because the
 // verdict is `every`.

@@ -515,7 +515,7 @@ test('end to end: the failure text explains the boundary when a longer sibling i
 })
 
 test('end to end: the zero-scope line explains itself without claiming the tree is all-private', () => {
-  // Measured by the licensing steward: this tree has ZERO private packages, so any
+  // Measured: this tree has ZERO private packages, so any
   // explanation naming privateness as the cause is false here while the census beside it
   // reads `0 private package(s)`. The rider's load-bearing half must still be present.
   const dir = buildFixture(NO_IN_SCOPE_SUBPATHS_FIXTURE)

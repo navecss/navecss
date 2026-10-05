@@ -86,7 +86,7 @@ export function mayCarryThirdPartySection(dir) {
 }
 
 /**
- * The reason string, cleared by the project's licensing steward, for a
+ * The reason string for a
  * THIRD_PARTY_SECTION_ALLOWLIST package whose LICENSE does not even begin with the root licence
  * text. Condition 2 is not weakened by the allowlist above: an allowlisted package still must
  * carry the root text verbatim, as a prefix; only what may follow it changes. Anchored
@@ -146,7 +146,7 @@ function listPackageDirs(packagesDir) {
 }
 
 /**
- * The refusal, cleared by the project's licensing steward, this gate prints when
+ * The refusal this gate prints when
  * `pnpm-workspace.yaml` cannot confirm the
  * `packages/*` assumption `findWorkspaceGlobViolation` below exists to check.
  * Transcribed, not re-worded. Anchored byte-exact in
@@ -238,7 +238,7 @@ export function findWorkspaceGlobViolation(rootDir = ROOT) {
 }
 
 /**
- * The two strings a red run prints, verbatim as cleared by the project's licensing steward.
+ * The two strings a red run prints, verbatim as cleared.
  * Transcribed, not re-worded: a re-wording is a fresh
  * clearance turn, a re-wrapping of the same bytes is not. The requirement sentence stays
  * because it is this file's own encoded position, but it was restated rather than kept
@@ -253,7 +253,7 @@ export const PARITY_FAILURE_HEADER =
   'License parity gate: package LICENSE files do not match the root LICENSE:\n'
 
 /**
- * The sentence, cleared by the project's licensing steward, acknowledging
+ * The sentence acknowledging
  * THIRD_PARTY_SECTION_ALLOWLIST, appended to
  * PARITY_FAILURE_GUIDANCE after its existing last sentence, nothing else in the guidance
  * moving. Anchored byte-exact,
@@ -291,7 +291,7 @@ export function reportLicenseParityViolations(violations) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when the repository root
+ * The message printed when the repository root
  * LICENSE cannot be read at all, before any package is compared. `reason` is `error.code ??
  * error.message` from the caught read error — the same idiom `check-license-allowlist.mjs`'s
  * `readLicensePolicy` already uses for its own ENOENT branch. Extracted into its own function
@@ -311,7 +311,7 @@ export function composeLicenseUnreadableMessage(licensePath, reason) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when a package manifest
+ * The message printed when a package manifest
  * is not valid JSON, refusing on the FIRST bad manifest rather than skipping it and
  * scanning past it: a skipped-and-continued package is a worse defect than a crash, per this
  * file's own "a run that compared nothing must not read as a run that compared and passed"
@@ -328,7 +328,7 @@ export function composeManifestInvalidJsonMessage(manifestPath, errorMessage) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when a non-private
+ * The message printed when a non-private
  * package's own LICENSE cannot be read
  * at all, after the workspace and root-LICENSE guards above it have
  * already passed. `reason` is `error.code ?? error.message` from the caught read error, the
@@ -346,7 +346,7 @@ export function composePackageLicenseUnreadableMessage(licensePath, reason) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when the `packages/`
+ * The message printed when the `packages/`
  * directory itself cannot be
  * listed — a missing `packages/` directory, or an entry under it that cannot be `stat`-ed
  * (a dangling symlink, or a readdir/stat race) — before any package is examined (the same
@@ -366,7 +366,7 @@ export function composePackageListUnreadableMessage(packagesDir, reason) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when a package manifest
+ * The message printed when a package manifest
  * parses as valid JSON but is not a usable manifest object: `null`, an array, a string, a
  * number, or a boolean. Keyed on "not a usable manifest object" rather than on `null` alone,
  * because every other non-object shape raises no exception at all and instead produces a

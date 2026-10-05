@@ -167,8 +167,8 @@ const RETHEMING_RUNGS = ['1a', '1b', '2', '3', '4', '5']
 // no colour") re-shows THE SAME command with a grey rather than performing a second act, and one
 // act is owed one instance. Its own words: "A second byte-identical copy thirty lines apart is
 // the shape a later editor harmonises. Do not add one." If rung `1b` ever grows a genuine second
-// ACT, this red is the correct behaviour rather than a defect: it returns the edit to the
-// project's steward, who ruled this rung by name.
+// ACT, this red is the correct behaviour rather than a defect: this rung's single instance was
+// settled by name, so the edit needs a review rather than a test fixup.
 test('the re-theming notice appears at every rung that performs a re-theming act', () => {
   for (const name of RETHEMING_RUNGS) {
     const count = visibleOccurrences(rungBody(name), RETHEMING_NOTICE)
@@ -469,7 +469,7 @@ const licenseBody = bodyOf(README_LINES, LICENSE_RANGE)
 // `~~MIT © Nave Contributors~~`, `Not MIT © Nave Contributors`, a negating clause in front of
 // the line and a `display: none` span around it were all GREEN, and the strikethrough is a
 // two-character edit that RENDERS as a retraction of signed licensing copy. Limb 2 reds all
-// four. The cleared unit (per the licensing steward's clearance, §6) is this line standing on
+// four. The cleared unit is this line standing on
 // its own, so holding the line is reading that clearance rather than widening it.
 //
 // LIMB 4 MAKES LIMBS 1 AND 2 HOLD WHAT THEY ALREADY SAY, and it exists because they did not.
@@ -507,8 +507,8 @@ const licenseBody = bodyOf(README_LINES, LICENSE_RANGE)
 // A RED HERE IS A ROUTING ACT, NOT A FALSE RED, and it is rung 1b's shape above. Bolding the
 // line, wrapping part of it in a link, appending a clause to it or splitting it across two lines
 // all red, and every one of those is a byte change to signed copy that costs a clearance turn on
-// its own account: the red returns the edit to the project's licensing steward, who cleared this
-// line by name. Limb 4's
+// its own account: this line was cleared by name, so the red sends the edit to review as a
+// licence-text change. Limb 4's
 // OVER-INCLUSION is that same act, and its extent is measured rather than asserted: it reds an
 // `<a name>` anchor or a `<sub>` note added to this block, and it also reds the two ANGLE-BRACKET
 // AUTOLINKS, `<https://...>` and `<mail@...>`, which are markdown rather than HTML and share only
@@ -522,8 +522,8 @@ const licenseBody = bodyOf(README_LINES, LICENSE_RANGE)
 // OWN LINE, at the top level of this block's own prose. It does not, and no presence-shaped
 // guard can, hold that the prose AROUND the line does not negate it: a retraction in the
 // neighbouring sentence passes all four limbs, measured. Closing that would mean pinning the
-// whole `## License` block, whose surrounding prose is not cleared copy and is not the
-// project's licensing steward's to freeze, or minting a vocabulary of negations. A FENCED
+// whole `## License` block, whose surrounding prose is not cleared copy and was never frozen
+// by a licensing review, or minting a vocabulary of negations. A FENCED
 // instance stays green for the reason
 // `visible()` gives above (a reader sees it), and so do the line moved under a sub-heading
 // inside the block (it is still under `## License`) and a four-space-indented instance (the

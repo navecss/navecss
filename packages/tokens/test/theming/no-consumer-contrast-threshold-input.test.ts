@@ -11,8 +11,8 @@
  * claim: R27 is about an absent INPUT, the accessibility non-promises about an absent VERDICT.
  * That refusal is pinned below, because it is a ruling a later well-meaning edit could undo.
  *
- * The paragraph carries a NEW last sentence, re-cleared by the project's accessibility/licensing
- * steward on 2026-09-07 (applied path). The old one named an internal tracking id, which no
+ * The paragraph carries a NEW last sentence, re-cleared on 2026-09-07. The old one named an
+ * internal tracking id, which no
  * reader of the published package can resolve, and it could not be repaired by qualifying it:
  * putting the repository name in front of the number clears the rule against BARE references,
  * which fences qualified spellings out by construction, and lands squarely on the separate rule
@@ -234,7 +234,7 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
     // the messages they throw and must be able to. Both wordings R27 excludes BY NAME pass this
     // predicate, and inside the paragraph it is the digest pin above, not this, that holds them
     // out. For the prose AROUND the paragraph nothing mechanical holds them, by decision and not
-    // by oversight (an explicit call by the accessibility/licensing steward): that is caught by the
+    // by oversight: that is caught by the
     // first-publish sweep over the whole packed set, and widening this lint to reach it would red
     // the shipped guard messages the same function checks.
     expect(findConformanceFraming(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT)).toBeUndefined()
