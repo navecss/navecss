@@ -46,10 +46,10 @@ const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 
 /**
  * The budget of a test that runs `recordCssBuild`. The work is one `node` child started from a
- * fresh copy of `src/` and it takes about 0.2 s alone, but the child is a cold start of the whole
- * module graph, so when many runs start together it waits in the OS queue: 21 s was measured with
- * 40 copies of this file running at once, against the 20 s every other test here gets. Each row
- * therefore carries the 60 s the file's other real builds carry.
+ * fresh copy of `src/`, a cold start of the whole module graph. Under load the time goes to the
+ * operating system starting many short child processes, not to work the test does, so a test's
+ * budget scales with the children it starts. Each row therefore carries the 60 s the file's other
+ * real builds carry, not the default every other test here gets.
  */
 const CSS_BUILD_TEST_TIMEOUT_MS = 60_000
 
