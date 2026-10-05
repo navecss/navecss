@@ -152,8 +152,8 @@ export function assertNoticeIsClean(
  *
  * One home only: if `descriptions.ts`, the README or any docs surface ever wants these words,
  * it imports or quotes this constant rather than holding a second copy. Any re-wording,
- * including shortening, is a change to cleared copy and needs review as one; wrapping the SAME
- * words across lines is not a re-wording and needs no further clearance.
+ * including shortening, is a change to cleared copy and needs re-clearance; wrapping the SAME
+ * words across lines is not a re-wording and needs none.
  */
 export const FEEDBACK_SHARED_IDENTITY_NOTICE =
   'warning, success and info, and their -foreground variants, resolve to one shared value here; only danger differs. Colour alone therefore cannot tell those three states apart, so wherever a feedback token carries meaning, give it a text label naming the state and a distinct icon or shape that differs per state.'

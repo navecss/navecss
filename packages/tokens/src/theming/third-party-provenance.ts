@@ -26,8 +26,8 @@
  * two fence tests cannot drift apart from each other.
  *
  * `core-contract.json` still ships in the published tarball (`exports['./core-contract']`) and
- * is scanned by nothing in this module — deliberate scope (the completeness property is over
- * R6's set BY NAME), not an oversight, recorded so the absence does not later read as a
+ * is scanned by nothing in this module — deliberate scope (the scan's completeness is defined
+ * over R6's set BY NAME), not an oversight, recorded so the absence does not later read as a
  * clearance. R8 grows the tarball's unscanned remainder further (compiled library JS outside
  * this set); widening the scan past R6 is a licensing-scope call, not this module's to make.
  */

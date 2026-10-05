@@ -263,11 +263,11 @@ export function assertNoOrphanedSemanticSlot(
       openSlots.push(slot)
       continue
     }
-    // The prior text
-    // named ADJACENCY_EXCLUSIONS as an escape "with a citable reason" in the same breath as
-    // declaring and marking open, which reads as three equally-weighted options — and adding
-    // an exclusion is the one that silently drops a slot from R22's coverage. This wording
-    // describes both escape records without inviting a reader to take either.
+    // An earlier wording of this message named ADJACENCY_EXCLUSIONS as an escape "with a
+    // citable reason" in the same breath as declaring and marking open, which reads as three
+    // equally-weighted options — and adding an exclusion is the one that silently drops a slot
+    // from R22's coverage. This wording describes both escape records without inviting a reader
+    // to take either.
     throw new Error(
       `Adjacency coverage: the semantic slot "${slot}" carries no adjacency declaration, so ` +
         'no contrast pair in this build touches it at all. Declare its legal partners in ' +
