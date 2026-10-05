@@ -29,6 +29,10 @@ export default defineConfig([
     // linting it as JSON pulls in the unscoped unicorn/* rules, which jsonc's language does not
     // support at all (a hard ESLint config error, not a rule violation).
     'packages/eslint-plugin/src/generated/**',
+    // The one JSON file inside a linted test tree. ESLint computes a config for every file it
+    // walks past, JSON included, and for this one it hits the same unicorn-versus-jsonc language
+    // error as above, which fails the whole package lint before any test file is read.
+    'packages/core/test/browser/tsconfig.json',
   ]),
 
   // ── Base ───────────────────────────────────────────────────────────────────
@@ -622,10 +626,36 @@ export default defineConfig([
     plugins: { vitest: vitestPlugin },
     rules: {
       ...vitestPlugin.configs.recommended.rules,
+      // vitest's expect takes an optional message as its second argument.
+      'vitest/valid-expect': ['error', { maxArgs: 2 }],
       'max-lines': 'off',
       'max-lines-per-function': 'off',
       'jsdoc/require-jsdoc': 'off',
       '@typescript-eslint/no-empty-function': 'off',
+    },
+  },
+
+  // ── Two suites that simulate a build mode by assigning NODE_ENV themselves and restoring it
+  // afterwards; the variable is a value the test sets, not an input the build reads from the
+  // environment, so turbo has nothing to hash for it ───────────────────────────────────────────
+  {
+    files: [
+      'packages/core/test/vite-used-atoms-collect-reach.test.ts',
+      'packages/core/test/vite-used-atoms-frameworks.test.ts',
+    ],
+    rules: {
+      'turbo/no-undeclared-env-vars': 'off',
+    },
+  },
+
+  // ── core's browser tests import stylesheets that `scripts/generate-*-fixtures.ts` writes into
+  // the gitignored test/browser/fixtures/ before the browser run. On a clean checkout they do not
+  // exist yet, so the resolver would fail lint before any generator ran; the browser tests that
+  // load them are what checks they exist ─────────────────────────────────────────────────────────
+  {
+    files: ['packages/core/test/browser/**/*.ts'],
+    rules: {
+      'import-x/no-unresolved': ['error', { ignore: [String.raw`^\./fixtures/[^/]+\.css\?raw$`] }],
     },
   },
 

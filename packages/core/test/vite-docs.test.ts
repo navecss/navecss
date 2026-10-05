@@ -7,7 +7,14 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import ts from 'typescript'
+import {
+  createProgram,
+  flattenDiagnosticMessageText,
+  getPreEmitDiagnostics,
+  ModuleKind,
+  ModuleResolutionKind,
+  ScriptTarget,
+} from 'typescript'
 import { build } from 'vite'
 import { describe, expect, it } from 'vitest'
 
@@ -29,11 +36,11 @@ const manifest = JSON.parse(readFileSync(path.join(CORE_ROOT, 'package.json'), '
  * level.
  */
 function section(markdown: string, heading: string): string {
-  const level = heading.match(/^#+/)![0].length
+  const level = /^#+/.exec(heading)![0].length
   const start = markdown.indexOf(`\n${heading}\n`)
   expect(start, `no "${heading}" heading`).toBeGreaterThanOrEqual(0)
   const rest = markdown.slice(start + heading.length + 2)
-  const next = new RegExp(`\\n#{1,${level}} `).exec(rest)
+  const next = new RegExp(String.raw`\n#{1,${level}} `).exec(rest)
   return next ? rest.slice(0, next.index) : rest
 }
 
@@ -246,10 +253,10 @@ describe(
           )
           return file
         })
-        const program = ts.createProgram(files, {
-          module: ts.ModuleKind.ESNext,
-          moduleResolution: ts.ModuleResolutionKind.Bundler,
-          target: ts.ScriptTarget.ESNext,
+        const program = createProgram(files, {
+          module: ModuleKind.ESNext,
+          moduleResolution: ModuleResolutionKind.Bundler,
+          target: ScriptTarget.ESNext,
           strict: true,
           skipLibCheck: false,
           noEmit: true,
@@ -258,9 +265,9 @@ describe(
           baseUrl: dir,
           paths: { postcss: ['./no-postcss-installed'] },
         })
-        const messages = ts
-          .getPreEmitDiagnostics(program)
-          .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
+        const messages = getPreEmitDiagnostics(program).map((d) =>
+          flattenDiagnosticMessageText(d.messageText, '\n'),
+        )
 
         expect(messages).toEqual([])
       } finally {

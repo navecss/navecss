@@ -9,6 +9,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import type { ScratchApp } from './helpers/vite-app.ts'
+
 import { atomClassMap } from '../src/atoms.ts'
 import { navePlugin } from '../src/vite.ts'
 import {
@@ -29,7 +31,7 @@ const FIXTURES = path.join(
 /**
  * An app importing the packages `names` (each for its effect), and calling `flex` itself.
  */
-function appUsing(names: readonly string[], files: Record<string, string> = {}) {
+function appUsing(names: readonly string[], files: Record<string, string> = {}): ScratchApp {
   const imports = names.map((name) => `import '${name}'`).join('\n')
   return makeUsedApp(
     appFiles({ 'src/App.ts': `${IMPORT}${imports}\nconsole.log(cx('flex'))\n`, ...files }, [
@@ -186,7 +188,7 @@ describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split
   /**
    * An app whose `src/Tone.ts` calls `cx.dynamic()` twice and whose `dyn-lib` calls it once.
    */
-  function dynamicApp() {
+  function dynamicApp(): ScratchApp {
     const app = makeUsedApp(
       appFiles({
         'src/Tone.ts': `${tone}console.log(Tone, Tone2)\n`,
@@ -286,7 +288,7 @@ describe('AC-used-atoms-44 — keepFor reaches packages under node_modules only'
    * An app importing `@acme/ui` (laid out as pnpm lays it out), `plain-lib`, and a workspace
    * package linked into `node_modules`.
    */
-  function threePackages() {
+  function threePackages(): ScratchApp {
     const app = appUsing(['@acme/ui', 'plain-lib', '@acme/ws-ui'])
     const pnpm = path.join(app.root, 'node_modules/.pnpm/@acme+ui@1.2.0/node_modules/@acme/ui')
     mkdirSync(path.join(pnpm, 'dist'), { recursive: true })
@@ -440,7 +442,7 @@ describe('AC-used-atoms-55 — the remedy block is split by owner', () => {
       expect(built.error).toMatch(/^5 problems in 5 files/)
       expect(built.error).not.toMatch(/atomic|'used'|'all'/)
       expect(remedies[0]).toMatch(/^Name the atoms at the call/)
-      const owners = remedies.map((line) => line.split(' ')[0])
+      const owners = remedies.map((line) => line.split(' ', 1)[0])
       expect(owners.indexOf('@acme/ds')).toBeLessThan(owners.indexOf('aa-lib'))
       expect(owners.indexOf('aa-lib')).toBeLessThan(owners.indexOf('zz-lib'))
       expect(remedies.at(-1)).toMatch(/^Available: /)
@@ -455,7 +457,7 @@ describe('AC-used-atoms-55 — the remedy block is split by owner', () => {
     addPackage(app, 'zz-lib', { 'index.js': `${IMPORT}export const z = (v) => cx(v)\n` })
     try {
       const built = await buildUsed(app)
-      const [, , ...rest] = built.error!.split('\n')
+      const rest = built.error!.split('\n').slice(2)
 
       expect(rest[0]).toMatch(/^zz-lib is a dependency/)
       expect(built.error).not.toContain('Name the atoms at the call')

@@ -7,7 +7,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 import type { AtomDefinition } from '../src/atoms.ts'
@@ -21,15 +20,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const committed = readFileSync(OUTPUT_PATH, 'utf8')
 const GENERATOR_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-skill.ts'), 'utf8')
 
-describe('AC-consumer-constraints-40: composes no prose around the vocabulary', () => {
-  async function renderWith(overrides: Partial<Parameters<typeof generate>[0]>): Promise<string> {
-    return generate(baseSkillGuideSources(overrides))
-  }
+async function renderWith(overrides: Partial<Parameters<typeof generate>[0]>): Promise<string> {
+  return generate(baseSkillGuideSources(overrides))
+}
 
+describe('AC-consumer-constraints-40: composes no prose around the vocabulary', () => {
   it('adding one atom changes only that atom’s entry', async () => {
     const before = await renderWith({})
     const sections = new Map(readSections())
-    const displaySection = [...sections.keys()][0]!
+    const displaySection = sections.keys().toArray()[0]!
     sections.set(displaySection, [...sections.get(displaySection)!, 'plantedAtom' as never])
     const plantedAtom: AtomDefinition = { declarations: { color: 'red' } }
     const after = await renderWith({
@@ -46,7 +45,10 @@ describe('AC-consumer-constraints-40: composes no prose around the vocabulary', 
     // Every added line mentions the planted atom or is blank table padding around it — nothing
     // else in the document moved.
     for (const line of added) {
-      expect(line === '' || line.includes('plantedAtom') || /^\|[\s-]*\|/.test(line)).toBe(true)
+      expect(
+        line === '' || line.includes('plantedAtom') || /^\|[\s-]*\|/.test(line),
+        `unexpected added line: ${line}`,
+      ).toBe(true)
     }
   })
 
@@ -114,7 +116,10 @@ describe('AC-consumer-constraints-40: disabledState / interactive', () => {
 
 describe('AC-consumer-constraints-41: feedback colours, shared-identity notice, no comparative naming', () => {
   it('no fence uses a --nave-color-feedback-* or --nave-color-on-feedback-* name', () => {
-    const fences = [...committed.matchAll(/```css\n([\s\S]*?)```/g)].map((m) => m[1]!)
+    const fences = committed
+      .matchAll(/```css\n([\s\S]*?)```/g)
+      .map((m) => m[1]!)
+      .toArray()
     for (const fence of fences) {
       expect(fence).not.toMatch(/--nave-color-(on-)?feedback-/)
     }

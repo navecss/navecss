@@ -14,19 +14,19 @@ import { describe, expect, it } from 'vitest'
 import type { AstNode } from '../src/vite-ast.ts'
 
 import { hintFor, judgeAtom } from '../src/vite-atom-check.ts'
-import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
 import { recordModule } from '../src/vite-collect-module.ts'
+import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
 import { checkAtomicLayers, refeedChunkStylesheets } from '../src/vite-emit.ts'
 import { createExtendSource } from '../src/vite-extend.ts'
-import { resolveUsedOptions } from '../src/vite-options.ts'
-import { createUsedContext } from '../src/vite-used.ts'
 import { writeHandshake } from '../src/vite-handshake.ts'
+import { resolveUsedOptions } from '../src/vite-options.ts'
 import { cut } from '../src/vite-problems.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from '../src/vite-prune.ts'
 import { positionIn } from '../src/vite-source-map.ts'
 import { stateFor } from '../src/vite-state.ts'
 import { isDeclaringCore } from '../src/vite-untransformed.ts'
 import { buildReport, type LocatedProblem } from '../src/vite-used-report.ts'
+import { createUsedContext } from '../src/vite-used.ts'
 import { navePlugin } from '../src/vite.ts'
 
 const IMPORT = `import { cx } from '${CX_SOURCE}'\n`
@@ -107,7 +107,7 @@ describe('a short-circuit that decides the call', () => {
 
 describe('an escaped class literal', () => {
   it('is decoded before it is matched', () => {
-    const reading = read(String.raw`export const s = 'nave-\x66lex'` + '\n')
+    const reading = read(`${String.raw`export const s = 'nave-\x66lex'`}\n`)
 
     expect([...reading.classes]).toEqual(['flex'])
   })
@@ -154,18 +154,21 @@ describe('the pruning step reads CSS spellings', () => {
   })
 })
 
-describe('the report', () => {
-  const problem = (overrides: Partial<LocatedProblem>): LocatedProblem => ({
-    kind: 'argument',
-    offset: 0,
-    construct: 'cx(x)',
-    text: 'the argument is not a literal atom name.',
-    file: 'src/a.ts',
-    line: 1,
-    column: 1,
-    ...overrides,
-  })
+/**
+ * A located problem with every field filled in, and any of them replaced by `overrides`.
+ */
+const problem = (overrides: Partial<LocatedProblem>): LocatedProblem => ({
+  kind: 'argument',
+  offset: 0,
+  construct: 'cx(x)',
+  text: 'the argument is not a literal atom name.',
+  file: 'src/a.ts',
+  line: 1,
+  column: 1,
+  ...overrides,
+})
 
+describe('the report', () => {
   it('prints a construct on one line', () => {
     expect(cut('cx(a,\n   b)')).toBe('cx(a, b)')
   })
@@ -191,6 +194,7 @@ describe('option validation', () => {
   })
 
   it('does not crash on extend: null', () => {
+    // eslint-disable-next-line unicorn/no-null -- the test hands the plugin a literal null on purpose, to prove it does not crash on one
     expect(() => navePlugin({ extend: null as never, keep: ['sr-only' as never] })).toThrow(
       'navePlugin(): keep names an unknown atom "sr-only"',
     )
@@ -207,8 +211,8 @@ describe('a place in the module', () => {
   it.each([
     ['carriage return', 'a\rb'],
     ['carriage return and line feed', 'a\r\nb'],
-    ['line separator', 'a\u2028b'],
-    ['paragraph separator', 'a\u2029b'],
+    ['line separator', 'a\u{2028}b'],
+    ['paragraph separator', 'a\u{2029}b'],
     ['line feed', 'a\nb'],
   ])('counts a %s as a line break', (_name, code) => {
     expect(positionIn(code)(code.indexOf('b'))).toEqual({ line: 2, column: 1 })
@@ -225,7 +229,9 @@ describe('a failed cache file write', () => {
       writeHandshake(
         path.join(blocker, 'cache'),
         { emitted: ['flex'], writer: 'client', consumed: false },
-        (message) => messages.push(message),
+        (message) => {
+          messages.push(message)
+        },
       )
 
       expect(messages).toHaveLength(1)
@@ -237,7 +243,7 @@ describe('a failed cache file write', () => {
 })
 
 describe('a stylesheet edited in watch mode', () => {
-  it('forgets its layer once the layer is gone', async () => {
+  it('forgets its layer once the layer is gone', () => {
     const [nave] = navePlugin()
     // Vite's CSS step, which the plugin wraps to read each stylesheet as that step receives it.
     const cssStep = { name: 'vite:css-post', transform: { handler: (): undefined => undefined } }
@@ -262,12 +268,22 @@ describe('a stylesheet edited in watch mode', () => {
   })
 })
 
-describe('the checks on the emitted CSS', () => {
-  const asset = (fileName: string, source: string) => ({ type: 'asset', fileName, source })
-  const fail = (): never => {
-    throw new Error('failed')
-  }
+/**
+ * A build output asset, as the bundle holds it.
+ */
+const asset = (
+  fileName: string,
+  source: string,
+): { fileName: string; source: string; type: string } => ({ type: 'asset', fileName, source })
 
+/**
+ * A stand-in for the host's `error`, which never returns.
+ */
+const fail = (): never => {
+  throw new Error('failed')
+}
+
+describe('the checks on the emitted CSS', () => {
   it('compares the union of the atomic layers of all assets, so a layer of the consumer’s own elsewhere is no mismatch', () => {
     const bundle = {
       'core.css': asset('core.css', '@layer atomic{.nave-flex{display:flex}}'),
@@ -379,9 +395,8 @@ describe('state per build in watch mode', () => {
     const state = stateFor('/watch-build', config)
     state.emitted = new Set(['flex'])
     state.clientEnded = true
-    const start = collect.buildStart as (this: never) => Promise<void>
 
-    await start.call({
+    await collect.buildStart.call({
       environment: { name: 'client', config: { consumer: 'client' }, plugins: [] },
     } as never)
 

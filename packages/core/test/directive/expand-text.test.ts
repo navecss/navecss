@@ -7,14 +7,14 @@ import { tokenize } from '../../src/directive/tokenizer.ts'
 import { assertScalesLinearly } from '../helpers/perf-scaling.ts'
 
 /**
-Collapses whitespace runs so assertions don't pin the exact spacing expandText happens to choose.
+ * Collapses whitespace runs so assertions don't pin the exact spacing expandText happens to choose.
  */
 function norm(css: string): string {
   return css.replaceAll(/\s+/g, ' ').trim()
 }
 
 /**
-One field's VLQ base64 encoding, for building a scratch source map by hand.
+ * One field's VLQ base64 encoding, for building a scratch source map by hand.
  */
 function encodeVLQ(n: number): string {
   const base64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -288,53 +288,45 @@ describe('nested frames left open at EOF each close only their own level, never 
   })
 })
 
+/**
+ * `.a` itself is never closed by any of these inputs (there is no real
+ * `}` for it anywhere in the source), so parsing the raw output always
+ * hits postcss's own "Unclosed block" error regardless of how the INNER
+ * content came out — a fact about `.a`, not about what this test checks.
+ * A trailing `}`, added only for the parse, closes exactly that one
+ * outer level so the inner structure can be inspected the normal way (the
+ * one tail that leaves a trailing comment still open, unrelated to this
+ * fix, gets its own closing bytes first, for the same reason).
+ */
+function parseWithOuterClosed(css: string): ReturnType<typeof postcss.parse> {
+  // A bare substring search for "*/" cannot tell a real close from the
+  // "/*/" shape itself, whose own two closing bytes overlap its opener —
+  // the same reason `closeInfoFor` uses the tokenizer's own read of the
+  // last token rather than a substring check.
+  const last = tokenize(css).at(-1)
+  const hasOpenComment =
+    last?.type === 'comment' && !(last.raw.length >= 4 && last.raw.endsWith('*/'))
+  const closedComment = hasOpenComment ? `${css}*/` : css
+  return postcss.parse(`${closedComment}}`)
+}
+
+function hasFocusVisibleChildOf(root: ReturnType<typeof postcss.parse>, selector: string): boolean {
+  let isFound = false
+  root.walkRules((rule) => {
+    const parentSelector = (rule.parent as { selector?: string } | undefined)?.selector
+    if (parentSelector === selector && rule.selector === '&:focus-visible') {
+      isFound = true
+    }
+  })
+  return isFound
+}
+
 describe('an unterminated declaration at EOF is given its own semicolon before the appended block', () => {
   it('ends a bare declaration with no dangling string, url or bracket', () => {
     const { css } = expandText('.a { @nave focusRing; color: red')
 
     expect(css).toMatch(/color: red;\s*&:focus-visible/)
   })
-
-  /**
-   * `.a` itself is never closed by any of these inputs (there is no real
-   * `}` for it anywhere in the source), so parsing the raw output always
-   * hits postcss's own "Unclosed block" error regardless of how the INNER
-   * content came out — a fact about `.a`, not about what this test checks.
-   * A trailing `}`, added only for the parse, closes exactly that one
-   * outer level so the inner structure can be inspected the normal way (the
-   * one tail that leaves a trailing comment still open, unrelated to this
-   * fix, gets its own closing bytes first, for the same reason).
-   */
-  function parseWithOuterClosed(css: string): ReturnType<typeof postcss.parse> {
-    // A bare substring search for "*/" cannot tell a real close from the
-    // "/*/" shape itself, whose own two closing bytes overlap its opener —
-    // the same reason `closeInfoFor` uses the tokenizer's own read of the
-    // last token rather than a substring check.
-    const last = tokenize(css).at(-1)
-    const hasOpenComment =
-      last?.type === 'comment' && !(last.raw.length >= 4 && last.raw.endsWith('*/'))
-    const closedComment = hasOpenComment ? css + '*/' : css
-    return postcss.parse(closedComment + '}')
-  }
-
-  function hasFocusVisibleChildOf(
-    root: ReturnType<typeof postcss.parse>,
-    selector: string,
-  ): boolean {
-    let found = false
-    root.walkRules((rule) => {
-      const parent = rule.parent
-      if (
-        rule.selector === '&:focus-visible' &&
-        parent &&
-        'selector' in parent &&
-        (parent as { selector: string }).selector === selector
-      ) {
-        found = true
-      }
-    })
-    return found
-  }
 
   it.each([
     [' content: "abc', 'an unterminated double-quoted string'],
@@ -380,12 +372,14 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
   it(
     'stays roughly linear on a stylesheet with no directive',
     async () => {
-      await assertScalesLinearly((n) => {
-        const css = '.a { color: red; }\n'.repeat(n)
-        const start = performance.now()
-        expandText(css)
-        return performance.now() - start
-      }, 5000)
+      await expect(
+        assertScalesLinearly((n) => {
+          const css = '.a { color: red; }\n'.repeat(n)
+          const start = performance.now()
+          expandText(css)
+          return performance.now() - start
+        }, 5000),
+      ).resolves.toMatchObject({ n: 5000 })
     },
     SCALING_ROW_TIMEOUT,
   )
@@ -393,12 +387,14 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
   it(
     'stays roughly linear across many directives, each on its own line',
     async () => {
-      await assertScalesLinearly((n) => {
-        const css = '.a { @nave flex; }\n'.repeat(n)
-        const start = performance.now()
-        expandText(css)
-        return performance.now() - start
-      }, 5000)
+      await expect(
+        assertScalesLinearly((n) => {
+          const css = '.a { @nave flex; }\n'.repeat(n)
+          const start = performance.now()
+          expandText(css)
+          return performance.now() - start
+        }, 5000),
+      ).resolves.toMatchObject({ n: 5000 })
     },
     SCALING_ROW_TIMEOUT,
   )
@@ -416,12 +412,14 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
   it(
     'stays roughly linear closing levels left open at EOF (none of them closed for real)',
     async () => {
-      await assertScalesLinearly((n) => {
-        const css = '.a{'.repeat(n)
-        const start = performance.now()
-        expandText(css)
-        return performance.now() - start
-      }, 20_000)
+      await expect(
+        assertScalesLinearly((n) => {
+          const css = '.a{'.repeat(n)
+          const start = performance.now()
+          expandText(css)
+          return performance.now() - start
+        }, 20_000),
+      ).resolves.toMatchObject({ n: 20_000 })
     },
     SCALING_ROW_TIMEOUT,
   )
@@ -449,23 +447,25 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
   it(
     'stays roughly linear chaining through an incoming source map across many directives',
     async () => {
-      await assertScalesLinearly((n) => {
-        const css = '.a { @nave flex; }\n'.repeat(n)
-        const lineCount = css.split('\n').length
+      await expect(
+        assertScalesLinearly((n) => {
+          const css = '.a { @nave flex; }\n'.repeat(n)
+          const lineCount = css.split('\n').length
 
-        // An identity mapping, one segment per line at column 0: every line
-        // maps to itself in a single source, 'a.css'.
-        const mappings = Array.from({ length: lineCount }, (_, i) =>
-          i === 0
-            ? `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}`
-            : `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(1)}${encodeVLQ(0)}`,
-        ).join(';')
-        const inputSourceMap = { version: 3 as const, sources: ['a.css'], names: [], mappings }
+          // An identity mapping, one segment per line at column 0: every line
+          // maps to itself in a single source, 'a.css'.
+          const mappings = Array.from({ length: lineCount }, (_, i) =>
+            i === 0
+              ? `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(0)}`
+              : `${encodeVLQ(0)}${encodeVLQ(0)}${encodeVLQ(1)}${encodeVLQ(0)}`,
+          ).join(';')
+          const inputSourceMap = { version: 3 as const, sources: ['a.css'], names: [], mappings }
 
-        const start = performance.now()
-        expandText(css, { inputSourceMap })
-        return performance.now() - start
-      }, 5000)
+          const start = performance.now()
+          expandText(css, { inputSourceMap })
+          return performance.now() - start
+        }, 5000),
+      ).resolves.toMatchObject({ n: 5000 })
     },
     SCALING_ROW_TIMEOUT,
   )

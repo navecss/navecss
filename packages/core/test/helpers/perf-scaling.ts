@@ -8,25 +8,36 @@
 import { expect } from 'vitest'
 
 export interface ScalingMeasurement {
-  /** The smaller of the two sizes measured. */
+  /**
+   * The smaller of the two sizes measured.
+   */
   n: number
-  /** Median elapsed time, in milliseconds, across 3 runs at `n`. */
+  /**
+   * Median elapsed time, in milliseconds, across 3 runs at `n`.
+   */
   nMs: number
-  /** Median elapsed time, in milliseconds, across 3 runs at `4 * n`. */
+  /**
+   * Median elapsed time, in milliseconds, across 3 runs at `4 * n`.
+   */
   fourNMs: number
-  /** `fourNMs / nMs`: ~4 for a linear subject, ~16 for a quadratic one. */
+  /**
+   * `fourNMs / nMs`: ~4 for a linear subject, ~16 for a quadratic one.
+   */
   ratio: number
 }
 
+/**
+ * The middle sample of a trio, which shrugs off one slow or fast outlier run.
+ */
 function median(samples: readonly number[]): number {
-  const sorted = [...samples].sort((a, b) => a - b)
+  const sorted = samples.toSorted((a, b) => a - b)
   return sorted[1]!
 }
 
 const RATIO_BUDGET = 8
 
 /**
-One pass: one throwaway warm-up run at `n`, then 3 measured runs at each of `n` and `4 * n` (median taken of each trio).
+ * One pass: one throwaway warm-up run at `n`, then 3 measured runs at each of `n` and `4 * n` (median taken of each trio).
  */
 async function measureOnce(
   timeAt: (size: number) => number | Promise<number>,

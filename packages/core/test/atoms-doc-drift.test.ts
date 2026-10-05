@@ -5,7 +5,6 @@
  * (`CONSUMER-ATOMS.md` said "~40" while the real count was 48 — the failure mode this guards).
  */
 import { readFileSync } from 'node:fs'
-
 import { describe, expect, it } from 'vitest'
 
 import { generate, OUTPUT_PATH } from '../scripts/generate-atoms-doc.ts'

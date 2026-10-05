@@ -143,9 +143,8 @@ describe('AC-directive-core-16 — every problem in one stylesheet, in one repor
     const [badResult, goodResult] = await Promise.allSettled([bad, good])
 
     expect(badResult.status).toBe('rejected')
-    if (badResult.status === 'rejected') {
-      expect((badResult.reason as { message: string }).message).toContain('unknown atom "nope"')
-    }
+    const reason: unknown = (badResult as PromiseRejectedResult).reason
+    expect((reason as { message: string }).message).toContain('unknown atom "nope"')
 
     expect(goodResult.status).toBe('fulfilled')
   })

@@ -41,14 +41,14 @@ describe('AC-directive-core-28 — ./postcss also carries a default export', () 
     const fences = DOC_PATHS.flatMap((file) =>
       extractFences(path.relative(REPO_ROOT, file), readFileSync(file, 'utf8')),
     )
-    const hostSpecifiers = [
+    const hostSpecifiers = new Set([
+      '@navecss/core/lightningcss',
       '@navecss/core/postcss',
       '@navecss/core/vite',
-      '@navecss/core/lightningcss',
-    ]
+    ])
     const defaultHostImports = fences
       .flatMap((f) => extractCoreImports(f.body))
-      .filter((imp) => hostSpecifiers.includes(imp.specifier))
+      .filter((imp) => hostSpecifiers.has(imp.specifier))
       .flatMap((imp) => imp.names)
       .filter((name) => name.isDefault)
 

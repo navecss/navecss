@@ -21,7 +21,7 @@ const FIND_SURVIVORS_SRC = path.resolve(HERE, '..', '..', 'src', 'directive', 'f
 function runCheck(
   cwd: string,
   ...args: string[]
-): { status: number | null; signal: string | null } {
+): { signal: string | null; status: number | null } {
   const result = spawnSync(process.execPath, [BIN, 'check', ...args], {
     cwd,
     encoding: 'utf8',

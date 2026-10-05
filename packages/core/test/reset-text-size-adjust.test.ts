@@ -21,6 +21,10 @@ const resetCssSrc = readFileSync(path.resolve(HERE, '../src/reset.css'), 'utf8')
 // declarations.
 const resetCssDeclarationsOnly = resetCssSrc.replaceAll(/\/\*[\s\S]*?\*\//g, '')
 
+function numberOf(line: string | undefined): string | undefined {
+  return line?.match(/\/\*\s*(\d+)\s*\*\//)?.[1]
+}
+
 describe('reset text-size-adjust', () => {
   it('declares both the -webkit- prefixed and unprefixed property, valued 100%, never none', () => {
     expect(resetCssDeclarationsOnly).toMatch(/-webkit-text-size-adjust:\s*100%/)
@@ -39,7 +43,6 @@ describe('reset text-size-adjust', () => {
       .filter((line) => line.includes('text-size-adjust'))
     expect(textRenderingLine).toBeDefined()
     expect(textSizeAdjustLines).toHaveLength(2)
-    const numberOf = (line: string | undefined) => line?.match(/\/\*\s*(\d+)\s*\*\//)?.[1]
     expect(numberOf(textRenderingLine)).not.toBe(numberOf(textSizeAdjustLines[0]))
     // both text-size-adjust declarations (webkit + standard) still carry the same number
     expect(numberOf(textSizeAdjustLines[0])).toBe(numberOf(textSizeAdjustLines[1]))

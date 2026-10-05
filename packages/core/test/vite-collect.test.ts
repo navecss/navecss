@@ -5,12 +5,13 @@
  * and the literal `nave-*` classes it matches or refuses (AC-used-atoms-30, -31). The build-level
  * fixtures in vite-used-atoms-*.test.ts run the same rows through a real `vite build`.
  */
-import { atoms } from '../src/atoms.ts'
 import { parseAst } from 'vite'
 import { describe, expect, it } from 'vitest'
 
-import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
 import type { AstNode } from '../src/vite-ast.ts'
+
+import { atoms } from '../src/atoms.ts'
+import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
 
 const IMPORT = `import { cx } from '${CX_SOURCE}'\n`
 
@@ -122,7 +123,7 @@ describe('AC-used-atoms-07 — references are attributed by lexical scope', () =
 
   it('collects flex and grid and refuses nothing', () => {
     const reading = read(code)
-    expect([...reading.atoms].toSorted()).toEqual(['flex', 'grid'])
+    expect([...reading.atoms].toSorted((a, b) => a.localeCompare(b))).toEqual(['flex', 'grid'])
     expect(reading.problems).toEqual([])
   })
 
@@ -169,7 +170,9 @@ describe('AC-used-atoms-09 — every shape that resolves statically, and the set
   it.each(rows)('%s', (body, expected) => {
     const reading = read(`${IMPORT}export function C(props) { ${body} }`)
     expect(reading.problems).toEqual([])
-    expect([...reading.atoms].toSorted()).toEqual(expected.toSorted())
+    expect([...reading.atoms].toSorted((a, b) => a.localeCompare(b))).toEqual(
+      expected.toSorted((a, b) => a.localeCompare(b)),
+    )
   })
 })
 
@@ -211,21 +214,25 @@ describe('AC-used-atoms-10 — anything else is a build error', () => {
 
 describe('AC-used-atoms-11 — a literal that is no atom name, with extend atoms out of the hint', () => {
   const own = ['brandBox']
-  const rows: [string, RegExp | undefined][] = [
+  const hintRows: [string, RegExp][] = [
     ['interactve', /Did you mean "interactive"\?/],
     ['sr-only', /Did you mean "srOnly"\? Atom names are camelCase; "nave-sr-only" is its class\./],
     ['nave-flex', /Did you mean "flex"\? Atom names are camelCase/],
-    ['brandBoxx', undefined],
-    ['legacy-card', undefined],
-    ['toString', undefined],
   ]
-  it.each(rows)('%s', (literal, hint) => {
+  const noHintRows: [string][] = [['brandBoxx'], ['legacy-card'], ['toString']]
+  it.each(hintRows)('%s', (literal, hint) => {
     const [problem] = read(`${IMPORT}cx('${literal}')`, own).problems
     expect(problem!.kind).toBe('unknown')
     expect(problem!.text).toContain(`unknown atom "${literal}"`)
-    if (hint) expect(problem!.text).toMatch(hint)
-    else expect(problem!.text).not.toMatch(/Did you mean/)
-    expect(problem!.needsAvailable).toBe(!hint)
+    expect(problem!.text).toMatch(hint)
+    expect(problem!.needsAvailable).toBe(false)
+  })
+  it.each(noHintRows)('%s', (literal) => {
+    const [problem] = read(`${IMPORT}cx('${literal}')`, own).problems
+    expect(problem!.kind).toBe('unknown')
+    expect(problem!.text).toContain(`unknown atom "${literal}"`)
+    expect(problem!.text).not.toMatch(/Did you mean/)
+    expect(problem!.needsAvailable).toBe(true)
   })
 
   it('names an atom of the consumer’s own as having no class, with @nave as the remedy', () => {

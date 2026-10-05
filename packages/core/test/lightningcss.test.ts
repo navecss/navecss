@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { SourceMapConsumer } from 'source-map'
+import { type RawSourceMap, SourceMapConsumer } from 'source-map'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { atoms } from '../src/atoms.ts'
@@ -21,6 +21,10 @@ const CORE_ROOT = path.resolve(HERE, '..')
 const DIST = path.join(CORE_ROOT, 'dist')
 
 const scratch = { dir: '' }
+
+function at(line: number, column: number): object {
+  return expect.objectContaining({ source: 'a.scss', line, column }) as object
+}
 
 beforeEach(() => {
   scratch.dir = mkdtempSync(path.join(tmpdir(), 'nave-lightning-'))
@@ -37,7 +41,7 @@ function write(name: string, text: string): string {
   return file
 }
 
-const FOCUS_VISIBLE = atoms.focusRing.pseudos![':focus-visible']!
+const FOCUS_VISIBLE = atoms.focusRing.pseudos[':focus-visible']
 
 /**
  * Whether the printed CSS holds `.imported`'s own `:focus-visible` rule carrying every
@@ -66,7 +70,10 @@ describe('AC-directive-core-40 — the Lightning CSS adapter imports nothing fro
   it('returns exactly expand and resolver, whose only key is read, with no visitor or customAtRules', () => {
     const plugin = navePlugin()
 
-    expect(Object.keys(plugin).toSorted()).toEqual(['expand', 'resolver'])
+    expect(Object.keys(plugin).toSorted((a, b) => a.localeCompare(b))).toEqual([
+      'expand',
+      'resolver',
+    ])
     expect(Object.keys(plugin.resolver)).toEqual(['read'])
     expect(plugin).not.toHaveProperty('visitor')
     expect(plugin).not.toHaveProperty('customAtRules')
@@ -125,6 +132,8 @@ describe('AC-directive-core-40 — the Lightning CSS adapter imports nothing fro
     ]
 
     for (const field of declaring) {
+      // JSON.stringify(undefined) is undefined, not a string: null is what makes an absent field text.
+      // eslint-disable-next-line unicorn/no-null -- the fallback must serialise to a string
       expect(JSON.stringify(manifest[field] ?? null), field).not.toContain('lightningcss')
     }
     expect(JSON.stringify(manifest.devDependencies)).toContain('lightningcss')
@@ -150,8 +159,10 @@ describe.each(LIGHTNING_RELEASES)(
     it('runs the release this suite says it does', () => {
       const version = installedVersion(release.package)
 
-      if (release.package === 'lightningcss-1-22') expect(version).toBe('1.22.1')
-      else expect(version.split('.').map(Number)[1]).toBeGreaterThanOrEqual(22)
+      const minor = version.split('.').map(Number)[1]!
+      const isExpectedRelease =
+        release.package === 'lightningcss-1-22' ? version === '1.22.1' : minor >= 22
+      expect(isExpectedRelease, `${release.package} resolved to ${version}`).toBe(true)
     })
 
     it('transform(): zero warnings, no @nave, the imported file carries the focus rule', () => {
@@ -221,7 +232,7 @@ describe.each(LIGHTNING_RELEASES)(
 
       expect(() => nave.expand('\n\n.x { @nave flex, block; }\n', file)).toThrow(
         new RegExp(
-          `${file.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}:3:\\d+: .*separate atom names with spaces`,
+          String.raw`${file.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}:3:\d+: .*separate atom names with spaces`,
         ),
       )
     })
@@ -268,7 +279,9 @@ describe.each(LIGHTNING_RELEASES)(
         inputSourceMap: chained,
       })
       const printed = result.code.toString().split('\n')
-      const consumer = await new SourceMapConsumer(JSON.parse(result.map!.toString()))
+      const consumer = await new SourceMapConsumer(
+        JSON.parse(result.map!.toString()) as RawSourceMap,
+      )
       const originOf = (
         opening: string,
       ): { column: number | null; line: number | null; source: string | null } => {
@@ -279,8 +292,6 @@ describe.each(LIGHTNING_RELEASES)(
           column: printed[index]!.length - printed[index]!.trimStart().length,
         })
       }
-      const at = (line: number, column: number): object =>
-        expect.objectContaining({ source: 'a.scss', line, column })
       try {
         expect(originOf('.a {')).toEqual(at(1, 0))
         expect(originOf('&:hover {')).toEqual(at(3, 2))
@@ -317,12 +328,12 @@ describe.each(LIGHTNING_RELEASES)(
       write('card.css', card)
       const entry = write('entry.css', '@import "./card.css";\n.o { color: blue; }\n')
 
-      const error = await lib
-        .bundleAsync({ filename: entry, resolver: navePlugin().resolver })
-        .then(
-          () => undefined,
-          (reason: unknown) => reason as { fileName?: string; loc?: { line: number } },
-        )
+      let error: { fileName?: string; loc?: { line: number } } | undefined
+      try {
+        await lib.bundleAsync({ filename: entry, resolver: navePlugin().resolver })
+      } catch (error_) {
+        error = error_ as { fileName?: string; loc?: { line: number } }
+      }
 
       expect(error, 'Lightning CSS accepted the invalid token').toBeDefined()
       expect(error!.loc?.line).toBe(7)
@@ -352,7 +363,7 @@ describe.each(LIGHTNING_RELEASES)(
 
 describe('the adapter’s options', () => {
   it('onUnknown: "warn" prints one warning per problem and still expands the valid names', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const nave = navePlugin({ onUnknown: 'warn' })
       const result = nave.expand('.x {\n  @nave flex nope;\n}\n', '/proj/x.css')
@@ -368,7 +379,7 @@ describe('the adapter’s options', () => {
   })
 
   it('onUnknown: "ignore" reports nothing and still expands the valid names', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const result = navePlugin({ onUnknown: 'ignore' }).expand('.x { @nave flex nope; }', 'x.css')
 
@@ -401,7 +412,9 @@ describe('the adapter’s options', () => {
 
     navePlugin().resolver.read(path.join(scratch.dir, 'only.css'))
 
-    expect(readdirSync(scratch.dir).toSorted()).toEqual([...before, 'only.css'].toSorted())
+    expect(readdirSync(scratch.dir).toSorted((a, b) => a.localeCompare(b))).toEqual(
+      [...before, 'only.css'].toSorted((a, b) => a.localeCompare(b)),
+    )
   })
 })
 

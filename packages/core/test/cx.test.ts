@@ -6,7 +6,7 @@
  * the narrowing leaves unchecked.
  *
  * The typecheck half is asserted by `pnpm typecheck`, not by vitest: an UNUSED
- * @ts-expect-error is itself a tsc error, so every directive below goes red if
+ * `@ts-expect-error` is itself a tsc error, so every directive below goes red if
  * cx() ever widens back to accepting arbitrary strings.
  */
 import { describe, expect, it } from 'vitest'
@@ -22,11 +22,12 @@ describe('cx', () => {
   })
 
   it('drops falsy arguments', () => {
+    // eslint-disable-next-line unicorn/no-null -- null is one of the falsy arguments cx() is documented to drop, so the test has to pass it
     expect(cx('flex', undefined, null, false)).toBe('nave-flex')
   })
 
   it('C7a — refuses a name that is not a built-in atom (typecheck assertion)', () => {
-    const moduleHash: string = 'button_a1b2c3'
+    const moduleHash = 'button_a1b2c3'
 
     // @ts-expect-error a typo'd atom name is not an AtomName
     cx('interactve')
@@ -81,6 +82,7 @@ describe('cx.raw', () => {
   })
 
   it('drops falsy arguments', () => {
+    // eslint-disable-next-line unicorn/no-null -- null is one of the falsy arguments cx.raw() is documented to drop, so the test has to pass it
     expect(cx.raw('legacy-card', undefined, null, false)).toBe('legacy-card')
   })
 

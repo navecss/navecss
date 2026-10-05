@@ -8,13 +8,12 @@ import { describe, expect, it } from 'vitest'
 import { findBareImports } from '../../src/directive/bare-imports.ts'
 import { formatDiagnostic } from '../../src/directive/diagnostics-format.ts'
 
-const NOTHING_EXISTS = (): boolean => false
+const HAS_NO_FILE = (): boolean => false
+const hasThemeCss = (specifier: string): boolean => specifier === 'theme.css'
+const hasThemeFileCss = (specifier: string): boolean => specifier === 'theme file.css'
 
-function specifiers(
-  css: string,
-  exists: (specifier: string) => boolean = NOTHING_EXISTS,
-): string[] {
-  return findBareImports(css, exists).map((diagnostic) => diagnostic.text!)
+function specifiers(css: string, hasFile: (specifier: string) => boolean = HAS_NO_FILE): string[] {
+  return findBareImports(css, hasFile).map((diagnostic) => diagnostic.text!)
 }
 
 describe('findBareImports — which @import is a bare module specifier', () => {
@@ -46,17 +45,13 @@ describe('findBareImports — which @import is a bare module specifier', () => {
   })
 
   it('a specifier that names a file beside the stylesheet is not bare, and one that names none is', () => {
-    const exists = (specifier: string): boolean => specifier === 'theme.css'
-
-    expect(specifiers("@import 'theme.css';", exists)).toEqual([])
-    expect(specifiers("@import 'other.css';", exists)).toEqual(['other.css'])
+    expect(specifiers("@import 'theme.css';", hasThemeCss)).toEqual([])
+    expect(specifiers("@import 'other.css';", hasThemeCss)).toEqual(['other.css'])
   })
 
   it('a query or fragment after the file name does not hide the file', () => {
-    const exists = (specifier: string): boolean => specifier === 'theme.css'
-
-    expect(specifiers("@import 'theme.css?v=2';", exists)).toEqual([])
-    expect(specifiers("@import 'theme.css#top';", exists)).toEqual([])
+    expect(specifiers("@import 'theme.css?v=2';", hasThemeCss)).toEqual([])
+    expect(specifiers("@import 'theme.css#top';", hasThemeCss)).toEqual([])
   })
 
   it('reads only a top-level @import: not one in a comment, a string, a block or a declaration value', () => {
@@ -73,7 +68,7 @@ describe('findBareImports — which @import is a bare module specifier', () => {
   it('reports every bare import, in source order, each at its @ and spanning the whole at-rule', () => {
     const css = "@import '@a';\n.x { color: red }\n@import url('@b') layer(z);\n"
 
-    const found = findBareImports(css, NOTHING_EXISTS)
+    const found = findBareImports(css, HAS_NO_FILE)
 
     expect(found.map((diagnostic) => diagnostic.text)).toEqual(['@a', '@b'])
     expect(found.every((diagnostic) => diagnostic.code === 'bare-import')).toBe(true)
@@ -90,14 +85,14 @@ describe('findBareImports — which @import is a bare module specifier', () => {
   it('an @import at the end of input with no semicolon is read to the end', () => {
     const css = "@import '@a'"
 
-    const [found] = findBareImports(css, NOTHING_EXISTS)
+    const [found] = findBareImports(css, HAS_NO_FILE)
 
     expect(css.slice(found!.offset, found!.endOffset)).toBe(css)
   })
 })
 
 describe('the text of a bare-import diagnostic', () => {
-  const [diagnostic] = findBareImports("@import url('@navecss/core/layers');", NOTHING_EXISTS)
+  const [diagnostic] = findBareImports("@import url('@navecss/core/layers');", HAS_NO_FILE)
   const text = formatDiagnostic(diagnostic!)
 
   it('names the import, and says a browser cannot load a package', () => {
@@ -129,10 +124,8 @@ describe('findBareImports — what is not a top-level at-rule', () => {
   })
 
   it('a percent-encoded name is read as the file it names', () => {
-    const exists = (specifier: string): boolean => specifier === 'theme file.css'
-
-    expect(specifiers("@import 'theme%20file.css';", exists)).toEqual([])
-    expect(specifiers("@import 'theme%zz.css';", exists)).toEqual(['theme%zz.css'])
+    expect(specifiers("@import 'theme%20file.css';", hasThemeFileCss)).toEqual([])
+    expect(specifiers("@import 'theme%zz.css';", hasThemeFileCss)).toEqual(['theme%zz.css'])
   })
 
   it('the text names the self-contained stylesheet only for the imports it holds in full', () => {
@@ -145,19 +138,19 @@ describe('findBareImports — what is not a top-level at-rule', () => {
       '@navecss/tokens/css',
     ]
     for (const specifier of held) {
-      const [found] = findBareImports(`@import '${specifier}';`, NOTHING_EXISTS)
+      const [found] = findBareImports(`@import '${specifier}';`, HAS_NO_FILE)
       expect(formatDiagnostic(found!), specifier).toContain('standalone.css')
     }
     const notHeld = ['normalize.css', '@navecss/bridge/base-ui', '@navecss/cli', '@navecss/nope']
     for (const specifier of notHeld) {
-      const [found] = findBareImports(`@import '${specifier}';`, NOTHING_EXISTS)
+      const [found] = findBareImports(`@import '${specifier}';`, HAS_NO_FILE)
       expect(formatDiagnostic(found!), specifier).not.toContain('standalone.css')
       expect(formatDiagnostic(found!), specifier).toContain('a browser cannot load it')
     }
   })
 
   it('@navecss/core/no-tokens is sent to its own file, not to the stylesheet that holds the tokens it leaves out', () => {
-    const [found] = findBareImports("@import '@navecss/core/no-tokens';", NOTHING_EXISTS)
+    const [found] = findBareImports("@import '@navecss/core/no-tokens';", HAS_NO_FILE)
     const text = formatDiagnostic(found!)
 
     expect(text).toContain('node_modules/@navecss/core/dist/no-tokens.css')

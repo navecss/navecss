@@ -7,7 +7,6 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { AtomDefinition, AtomName } from '../src/atoms.ts'
@@ -17,8 +16,37 @@ import { generate, OUTPUT_PATH, readDeclaredPropertyNames } from '../scripts/gen
 import { atoms } from '../src/atoms.ts'
 import { baseSkillGuideSources } from './helpers/skill-guide-sources.ts'
 
+/**
+ * The part of `scripts/readme-sections.mjs` this test reads, typed because the module is plain JavaScript.
+ */
+interface ReadmeSections {
+  bodyOf: (lines: string[], range: SectionRange) => string
+  headingLines: (lines: string[]) => Set<number>
+  readReadme: () => string
+  sectionRange: (
+    lines: string[],
+    headings: Set<number>,
+    headingPattern: RegExp,
+    depth: number,
+  ) => SectionRange
+}
+
+interface SectionRange {
+  end: number
+  start: number
+}
+
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ATOMS_SRC_PATH = path.resolve(HERE, '../src/atoms.ts')
+
+/**
+ * The markdown table row that names atom `name`.
+ */
+function rowFor(markdown: string, name: string): string {
+  const row = markdown.split('\n').find((line) => new RegExp(`^\\| \`${name}\` +\\|`).test(line))
+  if (row === undefined) throw new Error(`no row found for atom "${name}"`)
+  return row
+}
 
 describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts', () => {
   // The real generator run (a full @navecss/tokens build under the hood) takes the better part
@@ -71,24 +99,22 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
       committed.indexOf('## Atoms'),
       committed.indexOf('## Custom properties'),
     )
-    const headings = [...atomsSection.matchAll(/^### (.+)$/gm)].map((m) => m[1]!)
-    const names = [...atomsSection.matchAll(/^\| `([a-zA-Z0-9]+)` +\|/gm)].map((m) => m[1]!)
+    const headings = atomsSection
+      .matchAll(/^### (.+)$/gm)
+      .map((m) => m[1]!)
+      .toArray()
+    const names = atomsSection
+      .matchAll(/^\| `([a-zA-Z0-9]+)` +\|/gm)
+      .map((m) => m[1]!)
+      .toArray()
     expect(new Set(names)).toEqual(new Set(Object.keys(atoms)))
-    expect(headings).toEqual([...readSections().keys()])
+    expect(headings).toEqual(readSections().keys().toArray())
   })
 
   it('each atom entry is identical in content to that atom row in the regenerated ATOMS.md', async () => {
     const atomsDoc = await import('../scripts/generate-atoms-doc.ts')
     const atomsMd = await atomsDoc.generate()
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
-
-    function rowFor(markdown: string, name: string): string {
-      const row = markdown
-        .split('\n')
-        .find((line) => new RegExp(`^\\| \`${name}\` +\\|`).test(line))
-      if (row === undefined) throw new Error(`no row found for atom "${name}"`)
-      return row
-    }
 
     let checked = 0
     for (const name of Object.keys(atoms) as AtomName[]) {
@@ -113,7 +139,10 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
       committed.indexOf('## Custom properties'),
       committed.indexOf('## Layers'),
     )
-    const names = [...section.matchAll(/^- `(--nave-[\w-]+)`/gm)].map((m) => m[1]!)
+    const names = section
+      .matchAll(/^- `(--nave-[\w-]+)`/gm)
+      .map((m) => m[1]!)
+      .toArray()
     expect(new Set(names)).toEqual(new Set(readDeclaredPropertyNames()))
     // no primitive
     expect(names.every((n) => !n.includes('_'))).toBe(true)
@@ -128,15 +157,18 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
   })
 
   it('contains no rung of the root README customization ladder', async () => {
-    const { readReadme, headingLines, sectionRange, bodyOf } = await import(
+    const { readReadme, headingLines, sectionRange, bodyOf } = (await import(
       path.resolve(HERE, '../../../scripts/readme-sections.mjs')
-    )
+    )) as ReadmeSections
     const readme = readReadme()
     const lines = readme.split('\n')
     const headings = headingLines(lines)
     const themingRange = sectionRange(lines, headings, /^## Theming\b/, 2)
     const ladder = bodyOf(lines, themingRange)
-    const rungHeadings = [...ladder.matchAll(/^### (Rung .+)$/gm)].map((m) => m[1]!)
+    const rungHeadings = ladder
+      .matchAll(/^### (Rung .+)$/gm)
+      .map((m) => m[1]!)
+      .toArray()
     expect(rungHeadings.length).toBeGreaterThan(0)
 
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
@@ -147,7 +179,7 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
 
   it('points at where theming is documented in one sentence, with a link carrying no package version', () => {
     const committed = readFileSync(OUTPUT_PATH, 'utf8')
-    const themingLinks = [...committed.matchAll(/\[Theming\]\(([^)]+)\)/g)]
+    const themingLinks = committed.matchAll(/\[Theming\]\(([^)]+)\)/g).toArray()
     expect(themingLinks).toHaveLength(1)
     expect(themingLinks[0]![1]).not.toMatch(/@navecss\/(core|tokens)@|\/v\d/)
   })

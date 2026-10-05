@@ -6,7 +6,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import {
@@ -36,11 +35,16 @@ const GENERATOR_SRC = [
  * both go through `resolveExport`, which this scanner could not see until this clause was added).
  */
 function importSpecifiers(src: string): string[] {
+  const specifiersOf = (pattern: RegExp): string[] =>
+    src
+      .matchAll(pattern)
+      .map((m) => m[2]!)
+      .toArray()
   return [
-    ...[...src.matchAll(/\bimport\b[^'";]*\bfrom\s*(['"])([^'"]+)\1/g)].map((m) => m[2]!),
-    ...[...src.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1/g)].map((m) => m[2]!),
-    ...[...src.matchAll(/import\.meta\.resolve\(\s*(['"])([^'"]+)\1/g)].map((m) => m[2]!),
-    ...[...src.matchAll(/\bresolveExport\(\s*(['"])([^'"]+)\1/g)].map((m) => m[2]!),
+    ...specifiersOf(/\bimport\b[^'";]*\bfrom\s*(['"])([^'"]+)\1/g),
+    ...specifiersOf(/\bimport\s*\(\s*(['"])([^'"]+)\1/g),
+    ...specifiersOf(/import\.meta\.resolve\(\s*(['"])([^'"]+)\1/g),
+    ...specifiersOf(/\bresolveExport\(\s*(['"])([^'"]+)\1/g),
   ]
 }
 
@@ -48,18 +52,18 @@ describe('AC-consumer-constraints-33: no path into packages/tokens/src', () => {
   it('every specifier the generator imports or resolves is @navecss/tokens, one of its exported subpaths, or this package’s own src', () => {
     const specifiers = importSpecifiers(GENERATOR_SRC)
     const allowed = new Set([
+      '../src/atoms.ts',
+      './disabled-state-note.ts',
+      './generate-atoms-doc.ts',
+      './generate-skill-sources.ts',
+      '@navecss/tokens/build',
+      '@navecss/tokens/css',
+      '@navecss/tokens/tokens.json',
       'node:fs',
       'node:os',
       'node:path',
       'node:url',
       'prettier',
-      './disabled-state-note.ts',
-      './generate-atoms-doc.ts',
-      './generate-skill-sources.ts',
-      '../src/atoms.ts',
-      '@navecss/tokens/build',
-      '@navecss/tokens/tokens.json',
-      '@navecss/tokens/css',
     ])
     for (const specifier of specifiers) {
       expect(allowed.has(specifier), `unexpected import/resolve: ${specifier}`).toBe(true)
@@ -95,7 +99,7 @@ describe('AC-consumer-constraints-33: no path into packages/tokens/src', () => {
     const tokensPkg = JSON.parse(
       readFileSync(path.resolve(HERE, '../../tokens/package.json'), 'utf8'),
     ) as { exports: Record<string, unknown> }
-    expect(Object.keys(tokensPkg.exports).toSorted()).toEqual(
+    expect(Object.keys(tokensPkg.exports).toSorted((a, b) => a.localeCompare(b))).toEqual(
       [
         '.',
         './css',
@@ -105,7 +109,7 @@ describe('AC-consumer-constraints-33: no path into packages/tokens/src', () => {
         './build',
         './package.json',
         './tokens.json',
-      ].toSorted(),
+      ].toSorted((a, b) => a.localeCompare(b)),
     )
   })
 })
@@ -142,7 +146,12 @@ describe('AC-consumer-constraints-33: description fidelity', () => {
     // A dropped-one-token subset (the pre-fix "tautology" control) fails THIS assertion, since
     // the size no longer matches the independently-walked count.
     expect(descriptions.size).toBe(expectedValues.length)
-    expect([...descriptions.values()].toSorted()).toEqual(expectedValues.toSorted())
+    expect(
+      descriptions
+        .values()
+        .toArray()
+        .toSorted((a, b) => a.localeCompare(b)),
+    ).toEqual(expectedValues.toSorted((a, b) => a.localeCompare(b)))
 
     // Three of the real entries, still pinned by name (not just by value-set membership), so a
     // wrong NAME for a right value would still be visible somewhere in this file's other tests
@@ -225,7 +234,7 @@ describe('AC-consumer-constraints-33: kebab() matches the real @navecss/tokens b
     // none of which would ever exercise a kebab() naming mismatch — every OTHER name could have
     // silently missed the declared set with nothing here to notice.
     const declared = new Set(readDeclaredPropertyNames())
-    const names = [...readTokenDescriptions().keys()]
+    const names = readTokenDescriptions().keys().toArray()
     expect(names.length).toBeGreaterThan(0)
     for (const name of names) {
       expect(declared.has(name), `${name} is not in the declared --nave-* set`).toBe(true)
