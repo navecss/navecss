@@ -3,28 +3,36 @@
  * emission. A real `vite build` of a scratch app, under both CSS transformers, compared against
  * an `'all'` build of the same app through the same pipeline.
  */
+import type { PluginOption } from 'vite'
+
+import vuePlugin from '@vitejs/plugin-vue'
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
-import vuePlugin from '@vitejs/plugin-vue'
 import { describe, expect, it } from 'vitest'
 
 import { atomClassMap } from '../src/atoms.ts'
 import { navePlugin } from '../src/vite.ts'
-import { classesOf, keepOnly, parseAtomicLayer, withoutAtomicLayer } from './helpers/css-layer.ts'
+import {
+  classesOf,
+  keepOnly,
+  type Node,
+  parseAtomicLayer,
+  withoutAtomicLayer,
+} from './helpers/css-layer.ts'
 import {
   APP_CSS,
   appFiles,
   atomLayerAtoms,
   atoms,
-  type Built,
   type BuildOptions,
   buildUsed,
+  type Built,
   makeUsedApp,
   tamperCss,
 } from './helpers/used-atoms-app.ts'
-import { VITE_APIS, type Transformer, type ViteApi } from './helpers/vite-app.ts'
+import { type Transformer, VITE_APIS, type ViteApi } from './helpers/vite-app.ts'
 
 const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
 // Lightning CSS at Vite's own default browser targets (the fixtures' floor is above them), which
@@ -38,6 +46,10 @@ const LEGS = Object.entries(VITE_APIS).flatMap(([version, api]) =>
   TRANSFORMERS.map((transformer) => ({ version, api, transformer })),
 )
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
+/**
+ * Orders strings by UTF-16 code unit, which is what `sort()` does when given no comparator.
+ */
+const byCodeUnit = (a: string, b: string): number => Number(a > b) - Number(a < b)
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
@@ -48,6 +60,69 @@ function cssName(built: Built): string {
   expect(names).toHaveLength(1)
   return names[0]!
 }
+
+/**
+ * The text of every stylesheet in a build's output, each cut of its atomic layer, in a fixed order.
+ */
+const outside = (built: Built): string[] =>
+  Object.entries(built.assets)
+    .filter(([name]) => name.endsWith('.css'))
+    .map(([, text]) => withoutAtomicLayer(text))
+    .toSorted(byCodeUnit)
+
+/**
+ * An HTML entry with `head` inside its `<head>`, loading `src/main.ts`.
+ */
+const page = (head = ''): string =>
+  `<!doctype html><html><head>${head}</head><body><script type="module" src="/src/main.ts"></script></body></html>`
+
+/**
+ * The warnings in `built` that name the plugin.
+ */
+const pluginWarnings = (built: { warnings?: readonly string[] }): string[] =>
+  (built.warnings ?? []).filter((message) => message.includes('[plugin nave'))
+
+/**
+ * The sentence the plugin prints for a stylesheet imported as text.
+ */
+const textWarning = (file: string, query: '?inline' | '?raw'): string =>
+  `${file} is imported with ${query}, so its stylesheet is text in the JavaScript, which the plugin does not filter: every atom in its atomic layer ships, not only the atoms this build emits. Import it without ${query} to have the layer filtered.`
+
+/**
+ * The CSS strings in the JavaScript a build wrote, unescaped.
+ */
+const stringsIn = (js: string): string => js.replaceAll(String.raw`\n`, '\n')
+
+/**
+ * An app that imports `inline` as a stylesheet with `?inline`, from two modules.
+ */
+const inlineApp = (inline: string): ReturnType<typeof makeUsedApp> =>
+  makeUsedApp({
+    'index.html': page(),
+    'src/app.css': APP_CSS,
+    'src/inline.css': inline,
+    'src/a.ts': "import css from './inline.css?inline'\nexport const a = css\n",
+    'src/b.ts': "import css from './inline.css?inline'\nexport const b = css\n",
+    'src/main.ts': `import './app.css'\nimport { a } from './a.ts'\nimport { b } from './b.ts'\n${IMPORT}console.log(cx('flex'), a, b)\n`,
+  })
+
+/**
+ * An app that imports `css` as text with `?raw`.
+ */
+const makeRawApp = (css: string): ReturnType<typeof makeUsedApp> =>
+  makeUsedApp({
+    'index.html': page(),
+    'src/raw.css': css,
+    'src/main.ts': `import css from './raw.css?raw'\n${IMPORT}console.log(cx('flex'), css)\n`,
+  })
+
+/**
+ * A plugin that adds `rule` to the opening of the `layer` layer in every built stylesheet.
+ */
+const insertion = (rule: string, layer: 'atomic' | 'overrides'): PluginOption =>
+  tamperCss((css) =>
+    css.replace(new RegExp(String.raw`@layer\s+${layer}\s*\{`), (opener) => `${opener}${rule}`),
+  )
 
 describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, transformer }) => {
   describe('AC-used-atoms-24 — the CSS file name follows the emitted set', () => {
@@ -111,11 +186,9 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
  */
 async function layerOf(
   app: ReturnType<typeof makeUsedApp>,
-  transformer: Transformer,
-  atomic: 'all' | 'used',
-  api: ViteApi,
+  { api, atomic, transformer }: { api: ViteApi; atomic: 'all' | 'used'; transformer: Transformer },
   settings: Pick<BuildOptions, 'build' | 'config'> = {},
-) {
+): Promise<{ built: Built; tree: Node[] }> {
   const built = await buildUsed(app, {
     api,
     transformer,
@@ -136,8 +209,8 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
         }),
       )
       try {
-        const used = await layerOf(app, transformer, 'used', api)
-        const all = await layerOf(app, transformer, 'all', api)
+        const used = await layerOf(app, { api, atomic: 'used', transformer })
+        const all = await layerOf(app, { api, atomic: 'all', transformer })
         const expected = keepOnly(all.tree, classesOf('focusRing', 'srOnlyFocusable'))
 
         expect(used.tree).toEqual(expected)
@@ -158,8 +231,8 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
         appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('srOnlyFocusable')\n` }),
       )
       try {
-        const usedLayer = await layerOf(app, transformer, 'used', api)
-        const allLayer = await layerOf(app, transformer, 'all', api)
+        const usedLayer = await layerOf(app, { api, atomic: 'used', transformer })
+        const allLayer = await layerOf(app, { api, atomic: 'all', transformer })
 
         expect(usedLayer.tree).toEqual(keepOnly(allLayer.tree, classesOf('srOnlyFocusable')))
         expect(atomLayerAtoms(usedLayer.built.css)).toEqual(['srOnlyFocusable'])
@@ -203,11 +276,6 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
 
         expect(used.error).toBeUndefined()
         expect(atomLayerAtoms(used.css)).toEqual(atoms('flex', 'grid', 'hidden'))
-        const outside = (built: Built): string[] =>
-          Object.entries(built.assets)
-            .filter(([name]) => name.endsWith('.css'))
-            .map(([, text]) => withoutAtomicLayer(text))
-            .toSorted()
         expect(outside(used)).toEqual(outside(all))
         expect(used.css).toContain('.lazy')
         expect(used.css).toContain('.menu .nave-hidden')
@@ -222,7 +290,7 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
         appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('disabledState')\n` }),
       )
       try {
-        const { tree, built } = await layerOf(app, transformer, 'used', api)
+        const { tree, built } = await layerOf(app, { api, atomic: 'used', transformer })
         const text = JSON.stringify(tree)
 
         expect(atomLayerAtoms(built.css)).toEqual(['disabledState'])
@@ -249,8 +317,8 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
         }),
       )
       try {
-        const used = await layerOf(app, transformer, 'used', api)
-        const all = await layerOf(app, transformer, 'all', api)
+        const used = await layerOf(app, { api, atomic: 'used', transformer })
+        const all = await layerOf(app, { api, atomic: 'all', transformer })
         const text = JSON.stringify(used.tree)
 
         expect(used.built.error).toBeUndefined()
@@ -267,12 +335,6 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
   })
 
   describe('AC-used-atoms-27 - a plugin listed after Nave keeps what it did to a stylesheet', () => {
-    const outside = (built: Built): string[] =>
-      Object.entries(built.assets)
-        .filter(([name]) => name.endsWith('.css'))
-        .map(([, text]) => withoutAtomicLayer(text))
-        .toSorted()
-
     it('keeps a rule a later plugin appended, and every other byte outside the layer as under all', async () => {
       const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
       const later = {
@@ -347,9 +409,6 @@ ${IMPORT}const c = cx('flex')
   })
 
   describe('AC-used-atoms-32 - every route that brings the layer is filtered, or the build says it was not', () => {
-    const page = (head = ''): string =>
-      `<!doctype html><html><head>${head}</head><body><script type="module" src="/src/main.ts"></script></body></html>`
-
     it('filters a layer an @import with a media condition wraps', async () => {
       const app = makeUsedApp(
         appFiles({
@@ -386,24 +445,6 @@ ${IMPORT}const c = cx('flex')
       }
     }, 60_000)
 
-    const pluginWarnings = (built: { warnings?: readonly string[] }): string[] =>
-      (built.warnings ?? []).filter((message) => message.includes('[plugin nave'))
-    const textWarning = (file: string, query: '?inline' | '?raw'): string =>
-      `${file} is imported with ${query}, so its stylesheet is text in the JavaScript, which the plugin does not filter: every atom in its atomic layer ships, not only the atoms this build emits. Import it without ${query} to have the layer filtered.`
-    /**
-     * The CSS strings in the JavaScript a build wrote, unescaped.
-     */
-    const stringsIn = (js: string): string => js.replaceAll('\\n', '\n')
-    const inlineApp = (inline: string) =>
-      makeUsedApp({
-        'index.html': page(),
-        'src/app.css': APP_CSS,
-        'src/inline.css': inline,
-        'src/a.ts': "import css from './inline.css?inline'\nexport const a = css\n",
-        'src/b.ts': "import css from './inline.css?inline'\nexport const b = css\n",
-        'src/main.ts': `import './app.css'\nimport { a } from './a.ts'\nimport { b } from './b.ts'\n${IMPORT}console.log(cx('flex'), a, b)\n`,
-      })
-
     it('AC-used-atoms-60: warns once, in the words the build prints, for a layer imported with ?inline, and ships it whole', async () => {
       const app = inlineApp(APP_CSS)
       try {
@@ -439,14 +480,8 @@ ${IMPORT}const c = cx('flex')
 
     it('says the same for a stylesheet imported with ?raw, naming it, and not for one with no layer or under all', async () => {
       const layer = readFileSync(path.join(CORE_ROOT, 'dist/atomic.css'), 'utf8')
-      const make = (css: string) =>
-        makeUsedApp({
-          'index.html': page(),
-          'src/raw.css': css,
-          'src/main.ts': `import css from './raw.css?raw'\n${IMPORT}console.log(cx('flex'), css)\n`,
-        })
-      const withLayer = make(layer)
-      const without = make(APP_CSS)
+      const withLayer = makeRawApp(layer)
+      const without = makeRawApp(APP_CSS)
       try {
         const used = await buildUsed(withLayer, { api, transformer })
         const all = await buildUsed(withLayer, { api, transformer, options: { atomic: 'all' } })
@@ -493,16 +528,11 @@ ${IMPORT}const c = cx('flex')
   })
 
   describe('AC-used-atoms-28 — the build fails when the Vite-internal step did not take', () => {
-    const insertion = (rule: string, layer: 'atomic' | 'overrides') =>
-      tamperCss((css) =>
-        css.replace(new RegExp(String.raw`@layer\s+${layer}\s*\{`), (opener) => `${opener}${rule}`),
-      )
-
     it('(a) names an inserted rule for an atom that is not emitted, (b) a removed rule for one that is', async () => {
       const app = makeUsedApp(
         appFiles({
           'src/App.ts': `${IMPORT}export const a = cx('flex')\n`,
-          'src/app.css': `${"@import url('@navecss/core/layers');\n@import url('@navecss/core');\n"}@layer overrides { .x { color: red } }\n`,
+          'src/app.css': `@import url('@navecss/core/layers');\n@import url('@navecss/core');\n@layer overrides { .x { color: red } }\n`,
         }),
       )
       try {
@@ -537,6 +567,7 @@ ${IMPORT}const c = cx('flex')
       const [nave, collect] = navePlugin()
       try {
         // The scratch copy of the plugin: its stylesheets are never handed back to Vite.
+        // eslint-disable-next-line unicorn/no-null -- `null` is what a rollup `renderChunk` hook returns to say it changed nothing
         const copy = [{ ...nave, renderChunk: () => Promise.resolve(null) }, collect]
         const built = await buildUsed(app, { api, transformer, nave: copy })
 
@@ -557,7 +588,11 @@ describe.each(Object.entries(VITE_APIS))(
       it('control: a filter keeping only rules whose selector is exactly an emitted class drops the pseudo-class rules of the build’s own layer', async () => {
         const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = 1\n` }))
         try {
-          const all = await layerOf(app, 'lightningcss', 'all', api, VITE_DEFAULTS)
+          const all = await layerOf(
+            app,
+            { api, atomic: 'all', transformer: 'lightningcss' },
+            VITE_DEFAULTS,
+          )
           const wrong = all.tree.filter((node) =>
             /^\.nave-(?:focus-ring|sr-only-focusable)$/.test(node.prelude),
           )
@@ -584,7 +619,7 @@ describe.each(Object.entries(VITE_APIS))(
           const rules =
             /(\.nave-sr-only)\s*\{([^{}]*)\}\s*(\.nave-sr-only-focusable)\s*\{([^{}]*)\}/.exec(code)
           if (rules?.[2]?.trim() !== rules?.[4]?.trim()) return
-          return { code: code.replace(rules![0], `${rules![1]},${rules![3]}{${rules![2]}}`) }
+          return { code: code.replace(rules![0], () => `${rules![1]},${rules![3]}{${rules![2]}}`) }
         },
       }
 
@@ -627,7 +662,9 @@ describe.each(Object.entries(VITE_APIS))(
                 ? '.nave-sr-only-focusable'
                 : '.nave-sr-only,.nave-sr-only-focusable',
             )
-            expect(atomLayerAtoms(usedBuilt.css)).toEqual(shipped.toSorted())
+            expect(atomLayerAtoms(usedBuilt.css)).toEqual(
+              shipped.toSorted((a, b) => a.localeCompare(b)),
+            )
           } finally {
             app.dispose()
           }
@@ -642,8 +679,16 @@ describe.each(Object.entries(VITE_APIS))(
           appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('srOnlyFocusable')\n` }),
         )
         try {
-          const usedLayer = await layerOf(app, 'lightningcss', 'used', api, VITE_DEFAULTS)
-          const allLayer = await layerOf(app, 'lightningcss', 'all', api, VITE_DEFAULTS)
+          const usedLayer = await layerOf(
+            app,
+            { api, atomic: 'used', transformer: 'lightningcss' },
+            VITE_DEFAULTS,
+          )
+          const allLayer = await layerOf(
+            app,
+            { api, atomic: 'all', transformer: 'lightningcss' },
+            VITE_DEFAULTS,
+          )
           // A class name is a whole name: `.nave-sr-only` is no part of `.nave-sr-only-focusable`.
           const named = /\.nave-sr-only(?![\w-])/
           const preludes = (nodes: typeof allLayer.tree): string[] =>
@@ -665,6 +710,28 @@ describe.each(Object.entries(VITE_APIS))(
     })
   },
 )
+
+/**
+ * Whether an app calling only `cx(name)` builds the layer the full set gives that atom, and no other.
+ */
+async function isBuiltWithOnlyItsRules(
+  name: string,
+  allTree: Node[],
+  settings: Parameters<typeof buildUsed>[1],
+): Promise<boolean> {
+  const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('${name}'))\n` }))
+  try {
+    const built = await buildUsed(app, settings)
+    // An atom that restores what another removes ships with it.
+    const expected = keepOnly(
+      allTree,
+      classesOf(name, ...(name === 'srOnly' ? ['srOnlyFocusable'] : [])),
+    )
+    return built.error === undefined && isDeepStrictEqual(parseAtomicLayer(built.css), expected)
+  } finally {
+    app.dispose()
+  }
+}
 
 describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
   describe('AC-used-atoms-25 - each atom built alone keeps the rules the full layer gives it, and no other', () => {
@@ -688,24 +755,8 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
           })
           const allTree = parseAtomicLayer(all.css)
           for (const name of names) {
-            const app = makeUsedApp(
-              appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('${name}'))\n` }),
-            )
-            try {
-              const built = await buildUsed(app, { transformer, ...settings })
-              // An atom that restores what another removes ships with it.
-              const expected = keepOnly(
-                allTree,
-                classesOf(name, ...(name === 'srOnly' ? ['srOnlyFocusable'] : [])),
-              )
-              if (
-                built.error !== undefined ||
-                !isDeepStrictEqual(parseAtomicLayer(built.css), expected)
-              ) {
-                mismatches.push(name)
-              }
-            } finally {
-              app.dispose()
+            if (!(await isBuiltWithOnlyItsRules(name, allTree, { transformer, ...settings }))) {
+              mismatches.push(name)
             }
           }
 

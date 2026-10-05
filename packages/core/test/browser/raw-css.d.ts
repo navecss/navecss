@@ -6,5 +6,6 @@
  */
 declare module '*.css?raw' {
   const css: string
+  // eslint-disable-next-line no-restricted-syntax -- an ambient `?raw` module must expose the file text as its default export; that is how every `import css from 'x.css?raw'` consumes it
   export default css
 }

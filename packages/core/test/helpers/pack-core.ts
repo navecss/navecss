@@ -18,13 +18,26 @@ import { fileURLToPath } from 'node:url'
 const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 export interface PackedCoreTarball {
-  /** Every path `tar` reports inside the tarball, `package/`-prefixed, as npm packs it. */
+  /**
+   * Every path `tar` reports inside the tarball, `package/`-prefixed, as npm packs it.
+   */
   readonly files: readonly string[]
-  /** Reads one packed file's bytes as utf8, given its `package/`-relative path. */
+  /**
+   * Reads one packed file's bytes as utf8, given its `package/`-relative path.
+   */
   read(relPath: string): string
 }
 
-let cached: PackedCoreTarball | undefined
+const cache: { tarball?: PackedCoreTarball } = {}
+
+/**
+ * The tarball entries of either `npm pack --json` reply shape: an array, or an object of entries.
+ */
+function packEntries(parsed: unknown): unknown[] {
+  if (Array.isArray(parsed)) return parsed
+  if (parsed !== null && typeof parsed === 'object') return Object.values(parsed)
+  return []
+}
 
 /**
  * The tarball filename `npm pack --json` reports for its first entry, reading BOTH reply shapes:
@@ -36,18 +49,13 @@ let cached: PackedCoreTarball | undefined
  */
 export function tarballFilename(raw: string): string {
   const parsed: unknown = JSON.parse(raw)
-  const entries = Array.isArray(parsed)
-    ? parsed
-    : parsed !== null && typeof parsed === 'object'
-      ? Object.values(parsed)
-      : []
-  const entry: unknown = entries[0]
+  const entry: unknown = packEntries(parsed)[0]
   if (entry === null || typeof entry !== 'object') {
     throw new Error('npm pack --json produced no tarball entry')
   }
   const filename = (entry as { filename?: unknown }).filename
   if (typeof filename !== 'string') {
-    throw new Error('npm pack --json produced a tarball entry with no filename')
+    throw new TypeError('npm pack --json produced a tarball entry with no filename')
   }
   return filename
 }
@@ -58,12 +66,13 @@ export function tarballFilename(raw: string): string {
  * so a one-level read of the values would hand an object to a string method.
  */
 export function exportTargets(exportsMap: Record<string, unknown>): string[] {
-  const collect = (value: unknown): string[] =>
-    typeof value === 'string'
-      ? [value]
-      : value !== null && typeof value === 'object'
-        ? Object.values(value).flatMap(collect)
-        : []
+  const collect = (value: unknown): string[] => {
+    if (typeof value === 'string') return [value]
+    if (value !== null && typeof value === 'object') {
+      return Object.values(value).flatMap((nested) => collect(nested))
+    }
+    return []
+  }
   return collect(exportsMap)
 }
 
@@ -83,8 +92,11 @@ function runTool(
   return execFileSync(command, args, options) // NOSONAR
 }
 
+/**
+ * Packs this package once with `npm pack` and returns the cached tarball reader.
+ */
 export function packCoreTarball(): PackedCoreTarball {
-  if (cached) return cached
+  if (cache.tarball) return cache.tarball
 
   const packDestination = mkdtempSync(path.join(tmpdir(), 'nave-core-pack-'))
   const raw = runTool('npm', ['pack', '--json', '--pack-destination', packDestination], {
@@ -109,9 +121,9 @@ export function packCoreTarball(): PackedCoreTarball {
     rmSync(extractDir, { recursive: true, force: true })
   })
 
-  cached = {
+  cache.tarball = {
     files: fileList,
     read: (relPath: string) => readFileSync(path.join(extractDir, relPath), 'utf8'),
   }
-  return cached
+  return cache.tarball
 }

@@ -91,6 +91,7 @@ describe('AC-directive-core-05 — an atom with no declarations object stays a t
 
   it('does not render a boxed primitive as a declarations map, so no per-character declaration', () => {
     const extend = {
+      // eslint-disable-next-line unicorn/new-for-builtins -- the test needs a real boxed String object (typeof 'object'); String('x') would return a primitive and test nothing
       boxed: { declarations: new String('x') },
     } as unknown as Record<string, AtomDefinition>
 
