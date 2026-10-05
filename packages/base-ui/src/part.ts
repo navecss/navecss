@@ -72,11 +72,19 @@ const build = (
   })
 
 /**
- * A part that is Base UI's own, with `className` composed. Typed as the part it wraps. A part the
- * installed Base UI does not have (one younger than the peer floor) stays absent.
+ * The wrapped part, or nothing where the installed Base UI has no such part (one younger than the
+ * peer floor): the export stays absent instead of becoming a component that throws when rendered.
  */
-export const wrapPart = <P>(part: P, className: string): P =>
-  part === undefined ? part : (build(part as ElementType, className, undefined) as unknown as P)
+const wrap = <T>(part: unknown, className: string, variants: 'size' | 'variant' | undefined): T =>
+  part === undefined
+    ? (part as T)
+    : (build(part as ElementType, className, variants) as unknown as T)
+
+/**
+ * A part that is Base UI's own, with `className` composed. Typed as the part it wraps. A part the
+ * installed Base UI does not have stays absent.
+ */
+export const wrapPart = <P>(part: P, className: string): P => wrap<P>(part, className, undefined)
 
 /**
  * A part of the Button family: as `wrapPart`, and its props gain `variant` and `size`. The type it
@@ -84,10 +92,11 @@ export const wrapPart = <P>(part: P, className: string): P =>
  * `Props` so that a generic part (a trigger's `Payload`) stays generic.
  */
 export const wrapVariantPart = <T>(part: unknown, className: string): T =>
-  build(part as ElementType, className, 'variant') as unknown as T
+  wrap<T>(part, className, 'variant')
 
 /**
- * A part that gains `size` alone, as the Toggle does.
+ * A part that gains `size` alone, as the Toggle does. A part the installed Base UI does not have
+ * stays absent, as for `wrapPart`.
  */
 export const wrapSizePart = <T>(part: unknown, className: string): T =>
-  build(part as ElementType, className, 'size') as unknown as T
+  wrap<T>(part, className, 'size')

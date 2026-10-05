@@ -5,10 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Props } from '../support/scenes.ts'
 
-import { wrapPart } from '../../src/part.ts'
+import { wrapPart, wrapSizePart, wrapVariantPart } from '../../src/part.ts'
 import { filesUnder, SRC_DIR } from '../support/dist.ts'
 import { marked, partsNamed } from '../support/dom.ts'
-import { cleanup, render } from '../support/react.ts'
+import { act, cleanup, render, user } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
@@ -26,8 +26,7 @@ const subpathOf = (part: string): string | undefined => {
 }
 
 /**
-Which styled parts this Base UI renders at all (a part younger than the floor does not), by the
-subpath whose scene holds them.
+Which styled parts the scene of each subpath renders, by the subpath whose scene holds them.
  */
 const renderedStyledParts = async (): Promise<Map<string, string[]>> => {
   const bySubpath = new Map<string, string[]>()
@@ -123,7 +122,23 @@ const problemsOf = async (
   })
 }
 
-describe('AC-base-ui-bridge-10: className composes in both forms, and render hasItem the class', () => {
+// A literal outcome for each state, so a test never derives its expectation from what the
+// function happened to receive.
+const classOfOpenState = (state: { open?: boolean }): string =>
+  state.open ? 'mine-open' : 'mine-x'
+
+const untilClass = async (marker: string, expected: string): Promise<void> => {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    if (partsNamed(marker)[0]?.className === expected) {
+      return
+    }
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    })
+  }
+}
+
+describe('AC-base-ui-bridge-10: className composes in both forms, and render carries the class', () => {
   it('composes for every styled part in every form', async () => {
     const problems: string[] = []
     const styledParts = await renderedStyledParts()
@@ -144,6 +159,29 @@ describe('AC-base-ui-bridge-10: className composes in both forms, and render has
       }) as never,
     )
     expect(received.get('Dialog.Popup')).toBeTypeOf('object')
+  })
+
+  it("calls a className function with the part's real state: an open Dialog.Popup reads the open class", async () => {
+    await render(
+      scenes.dialog?.render(nave, {
+        props: { ...openProps(), 'Dialog.Popup': { className: classOfOpenState } },
+      }) as never,
+    )
+    const own = (tableP.get('Dialog.Popup') ?? []).join(' ')
+    expect(partsNamed('Dialog.Popup')[0]?.className).toBe(`${own} mine-open`)
+  })
+
+  it('keeps a className function a function: its class follows the state after a click', async () => {
+    await render(
+      scenes.collapsible?.render(nave, {
+        props: { 'Collapsible.Trigger': { className: classOfOpenState } },
+      }) as never,
+    )
+    const own = (tableP.get('Collapsible.Trigger') ?? []).join(' ')
+    expect(partsNamed('Collapsible.Trigger')[0]?.className).toBe(`${own} mine-x`)
+    await user().click(partsNamed('Collapsible.Trigger')[0]!)
+    await untilClass('Collapsible.Trigger', `${own} mine-open`)
+    expect(partsNamed('Collapsible.Trigger')[0]?.className).toBe(`${own} mine-open`)
   })
 })
 
@@ -190,9 +228,16 @@ const isMemoizedBy = async (wrap: Wrap): Promise<boolean> => {
 }
 
 describe('AC-base-ui-bridge-11: the composed className function is memoized on the consumer function', () => {
-  it('hands the part the same function until the consumer function changes', async () => {
-    expect(await isMemoizedBy(wrapPart as Wrap)).toBe(true)
-  })
+  it.each([
+    ['wrapPart', wrapPart],
+    ['wrapVariantPart', wrapVariantPart],
+    ['wrapSizePart', wrapSizePart],
+  ] as const)(
+    'hands the part the same function until the consumer function changes: %s',
+    async (_name, wrap) => {
+      expect(await isMemoizedBy(wrap as Wrap)).toBe(true)
+    },
+  )
 
   it('control: a wrapper that composes a new function on every render is reported', async () => {
     expect(await isMemoizedBy(naive)).toBe(false)
@@ -205,5 +250,17 @@ describe('AC-base-ui-bridge-11: the composed className function is memoized on t
         /\b(?:forwardRef|createElement)\b/.test(readFileSync(path.join(SRC_DIR, file), 'utf8')),
       ),
     ).toEqual([])
+  })
+})
+
+describe('the shared helper keeps a part the installed Base UI lacks absent', () => {
+  it.each([
+    ['wrapPart', wrapPart],
+    ['wrapVariantPart', wrapVariantPart],
+    ['wrapSizePart', wrapSizePart],
+  ] as const)('%s returns undefined for an undefined part', (_name, wrap) => {
+    expect((wrap as (part: undefined, className: string) => unknown)(undefined, 'nave-x')).toBe(
+      undefined,
+    )
   })
 })
