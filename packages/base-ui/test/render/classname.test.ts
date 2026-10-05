@@ -7,7 +7,7 @@ import type { Props } from '../support/scenes.ts'
 
 import { wrapPart } from '../../src/part.ts'
 import { filesUnder, SRC_DIR } from '../support/dist.ts'
-import { partsNamed } from '../support/dom.ts'
+import { marked, partsNamed } from '../support/dom.ts'
 import { cleanup, render } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
@@ -26,100 +26,124 @@ const subpathOf = (part: string): string | undefined => {
 }
 
 /**
- * The element a styled part renders, given the props the consumer passed it.
+Which styled parts this Base UI renders at all (a part younger than the floor does not), by the
+subpath whose scene holds them.
  */
-const elementWith = async (part: string, props: Props): Promise<HTMLElement | undefined> => {
-  const subpath = subpathOf(part)
-  const scene = subpath === undefined ? undefined : scenes[subpath]
-  if (scene === undefined) {
-    throw new Error(`no scene for ${part}`)
+const renderedStyledParts = async (): Promise<Map<string, string[]>> => {
+  const bySubpath = new Map<string, string[]>()
+  for (const subpath of SUBPATHS) {
+    await render(scenes[subpath]?.render(bare, { props: openProps() }) as never)
+    const present = new Set(marked().map(({ part }) => part))
+    bySubpath.set(
+      subpath,
+      tableP
+        .keys()
+        .filter((part) => present.has(part) && subpathOf(part) === subpath)
+        .toArray(),
+    )
   }
-  await render(scene.render(nave, { props: { ...openProps(), [part]: props } }))
-  return partsNamed(part)[0]
+  return bySubpath
 }
 
+interface Form {
+  readonly label: string
+  /**
+  The props for a part, and what its class must read: the part's own classes, then the rest.
+   */
+  readonly props: (part: string, received: Map<string, unknown>) => Props
+  readonly suffix: (own: string, received: unknown) => string
+  readonly tag?: string
+}
+
+const stateName = (state: unknown): string =>
+  `mine-${(state as { open?: boolean }).open ? 'open' : 'x'}`
+
+const FORMS: readonly Form[] = [
+  { label: 'no className', props: () => ({}), suffix: (own) => own },
+  { label: 'className=""', props: () => ({ className: '' }), suffix: (own) => own },
+  {
+    label: 'className="mine"',
+    props: () => ({ className: 'mine' }),
+    suffix: (own) => `${own} mine`,
+  },
+  {
+    label: 'a function of state',
+    props: (part, received) => ({
+      className: (state: unknown) => {
+        received.set(part, state)
+        return stateName(state)
+      },
+    }),
+    suffix: (own, state) => `${own} ${stateName(state)}`,
+  },
+  {
+    label: 'a function returning undefined',
+    props: () => ({ className: () => {} }),
+    suffix: (own) => own,
+  },
+  {
+    label: 'render as an element',
+    props: () => ({ render: createElement('section', { className: 'r' }) }),
+    suffix: (own) => `r ${own}`,
+    tag: 'SECTION',
+  },
+  {
+    label: 'render as a function',
+    props: () => ({ render: (props: Props): ReactElement => createElement('section', props) }),
+    suffix: (own) => own,
+    tag: 'SECTION',
+  },
+]
+
 /**
-Which styled parts this Base UI renders at all (a part younger than the floor does not).
+ * Renders a subpath's scene with every styled part given the form's props, and reports each part
+ * whose class or element is not what the form promises.
  */
-const renderedStyledParts = async (): Promise<string[]> => {
-  const present: string[] = []
-  for (const part of tableP.keys()) {
-    const subpath = subpathOf(part)
-    const scene = subpath === undefined ? undefined : scenes[subpath]
-    if (scene !== undefined) {
-      await render(scene.render(bare, { props: openProps() }))
-      if (partsNamed(part).length > 0) {
-        present.push(part)
-      }
+const problemsOf = async (
+  subpath: string,
+  parts: readonly string[],
+  form: Form,
+): Promise<string[]> => {
+  const received = new Map<string, unknown>()
+  const props = Object.fromEntries(parts.map((part) => [part, form.props(part, received)]))
+  await render(scenes[subpath]?.render(nave, { props: { ...openProps(), ...props } }) as never)
+  return parts.flatMap((part) => {
+    const element = partsNamed(part)[0]
+    const own = (tableP.get(part) ?? []).join(' ')
+    const expected = form.suffix(own, received.get(part))
+    if (element === undefined) {
+      return [`${part} (${form.label}) did not render`]
     }
-  }
-  return present
+    if (element.className.trim() !== expected) {
+      return [`${part} (${form.label}): "${element.className}", expected "${expected}"`]
+    }
+    return form.tag !== undefined && element.tagName !== form.tag
+      ? [`${part} (${form.label}): <${element.tagName}>`]
+      : []
+  })
 }
 
 describe('AC-base-ui-bridge-10: className composes in both forms, and render hasItem the class', () => {
   it('composes for every styled part in every form', async () => {
     const problems: string[] = []
-    const parts = await renderedStyledParts()
-    for (const part of parts) {
-      const own = (tableP.get(part) ?? []).join(' ')
-      let received: unknown
-      const forms: {
-        expected: (el: HTMLElement) => string
-        label: string
-        props: Props
-        tag?: string
-      }[] = [
-        { expected: () => own, label: 'no className', props: {} },
-        { expected: () => own, label: 'className=""', props: { className: '' } },
-        { expected: () => `${own} mine`, label: 'className="mine"', props: { className: 'mine' } },
-        {
-          expected: () => {
-            const state = received as { open?: boolean } | undefined
-            return `${own} mine-${state?.open ? 'open' : 'x'}`
-          },
-          label: 'a function of state',
-          props: {
-            className: (state: unknown) => {
-              received = state
-              return `mine-${(state as { open?: boolean }).open ? 'open' : 'x'}`
-            },
-          },
-        },
-        {
-          expected: () => own,
-          label: 'a function returning undefined',
-          props: { className: () => {} },
-        },
-        {
-          expected: () => `r ${own}`,
-          label: 'render as an element',
-          props: { render: createElement('section', { className: 'r' }) },
-          tag: 'SECTION',
-        },
-        {
-          expected: () => own,
-          label: 'render as a function',
-          props: { render: (props: Props): ReactElement => createElement('section', props) },
-          tag: 'SECTION',
-        },
-      ]
-      for (const form of forms) {
-        const element = await elementWith(part, form.props)
-        if (element === undefined) {
-          problems.push(`${part} (${form.label}) did not render`)
-        } else if (element.className.trim() !== form.expected(element)) {
-          problems.push(
-            `${part} (${form.label}): "${element.className}", expected "${form.expected(element)}"`,
-          )
-        } else if (form.tag !== undefined && element.tagName !== form.tag) {
-          problems.push(`${part} (${form.label}): <${element.tagName}>`)
-        }
-      }
-      if (typeof received !== 'object' || received === null) {
-        problems.push(`${part}: the className function did not receive the part's state`)
+    const styledParts = await renderedStyledParts()
+    for (const [subpath, parts] of styledParts) {
+      for (const form of FORMS) {
+        problems.push(...(await problemsOf(subpath, parts, form)))
       }
     }
     expect(problems).toEqual([])
+  })
+
+  it("hands a className function the part's state", async () => {
+    const received = new Map<string, unknown>()
+    const form = FORMS.find((candidate) => candidate.label === 'a function of state')!
+    await render(
+      scenes.dialog?.render(nave, {
+        props: { ...openProps(), 'Dialog.Popup': form.props('Dialog.Popup', received) },
+      }) as never,
+    )
+    expect(received.get('Dialog.Popup')).toBeTypeOf('object')
   })
 })
 

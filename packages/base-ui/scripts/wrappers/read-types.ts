@@ -18,7 +18,7 @@ export type BaseUiVersion = 'current' | 'floor'
 One member of a part's type namespace, with the type parameters it declares as written and the
 names to pass them on by.
  */
-export interface MemberTypes {
+interface MemberTypes {
   readonly arguments: readonly string[]
   /**
   The parameters without their defaults, as a function would declare them.
@@ -67,7 +67,7 @@ const NODE_MODULES = path.join(PACKAGE_DIR, 'node_modules')
 /**
 Where an installed Base UI keeps a subpath's declaration entry.
  */
-export const declarationEntry = (version: BaseUiVersion, subpath: string): string =>
+const declarationEntry = (version: BaseUiVersion, subpath: string): string =>
   version === 'current'
     ? path.join(NODE_MODULES, '@base-ui/react', subpath, 'index.d.mts')
     : path.join(NODE_MODULES, 'base-ui-react-floor/esm', subpath, 'index.d.ts')
