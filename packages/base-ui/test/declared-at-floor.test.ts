@@ -10,7 +10,8 @@ const FLOOR = path.join(PACKAGE_DIR, 'node_modules/base-ui-react-floor/esm')
 /**
  * Table T1, extended with the form rows: the data attributes and variables the stylesheet keys on,
  * each with the declaration file of the floor package (`@base-ui/react@1.3.0`) that declares it.
- * The transition attributes are declared through a shared enum, whose member name stands for them.
+ * The transition attributes and the Arrows' `data-side` are declared through a shared enum, whose
+ * member name stands for them.
  */
 const rows: readonly { files: readonly string[]; items: readonly string[] }[] = [
   {
@@ -28,7 +29,7 @@ const rows: readonly { files: readonly string[]; items: readonly string[] }[] = 
       'select/arrow/SelectArrowDataAttributes.js',
       'tooltip/arrow/TooltipArrowDataAttributes.js',
     ],
-    items: ['data-side'],
+    items: ['side'],
   },
   { files: ['accordion/panel/AccordionPanelCssVars.js'], items: ['--accordion-panel-height'] },
   {
@@ -70,8 +71,9 @@ const rows: readonly { files: readonly string[]; items: readonly string[] }[] = 
   },
 ]
 
-const TRANSITION_MEMBER: Readonly<Record<string, string>> = {
+const SHARED_ENUM_MEMBER: Readonly<Record<string, string>> = {
   'data-ending-style': 'endingStyle',
+  'data-side': 'side',
   'data-starting-style': 'startingStyle',
 }
 
@@ -119,7 +121,7 @@ describe('AC-base-ui-bridge-21: every attribute and variable the stylesheet keys
       rows.flatMap(({ items }) =>
         items.flatMap((item) => [
           item,
-          ...Object.entries(TRANSITION_MEMBER)
+          ...Object.entries(SHARED_ENUM_MEMBER)
             .filter(([, member]) => member === item)
             .map(([name]) => name),
         ]),
