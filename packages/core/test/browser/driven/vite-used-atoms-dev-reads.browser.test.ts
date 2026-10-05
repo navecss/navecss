@@ -200,7 +200,7 @@ describe('AC-used-atoms-42 and -54 — a server that warms the entry up before a
     expect({ isRuled, warned: pluginWarnings(warned) }).toEqual({ isRuled: true, warned: [] })
   }, 120_000)
 
-  it('AC-used-atoms-53: a backend app under a warm-up logs nothing at start and one warning after the first request for its stylesheet', async () => {
+  it('AC-used-atoms-54: a backend app under a warm-up logs nothing at start and one warning after the first request for its stylesheet', async () => {
     const app = makeUsedApp({ 'src/app.css': APP_CSS, 'src/main.ts': MAIN })
     const { logger, warned } = warningLogger()
     const plugin = (): number => pluginWarnings(warned).length
@@ -230,7 +230,7 @@ describe('AC-used-atoms-42 and -54 — a server that warms the entry up before a
   }, 120_000)
 })
 
-describe('AC-used-atoms-53 — a backend under a warm-up is warned when the stylesheet is requested, however the request spells it', () => {
+describe('AC-used-atoms-54 — a backend under a warm-up is warned when the stylesheet is requested, however the request spells it', () => {
   const SPACED = 'src/my app.css'
 
   /**
