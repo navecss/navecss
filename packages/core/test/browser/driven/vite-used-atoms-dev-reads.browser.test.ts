@@ -6,7 +6,7 @@
  * own graph does not hold.
  */
 import type { Browser, Page } from 'playwright'
-import type { PluginOption } from 'vite'
+import type { PluginOption, ViteDevServer } from 'vite'
 
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -364,19 +364,41 @@ describe('AC-used-atoms-41 — the first frame after an update, for a module the
 })
 
 /**
- * A scratch plugin that makes every transform of the stylesheet after its first take 400 ms, as
- * one of a large project does, so a reload of it comes later than the script that asked for it.
+ * A scratch plugin for the stylesheet `file`. Every transform of it after its first takes 400 ms,
+ * as one of a large project does, so a reload of it comes later than the script that asked for it.
+ * The first transform waits until the dev server has been asked for the module `asked`, so what
+ * the row sees does not depend on which request the browser sends first.
  */
-function slowAfterFirst(file: string): PluginOption {
+function slowAfterFirst(file: string, asked: string): PluginOption {
   let count = 0
+  let server: ViteDevServer | undefined
   return {
     name: 'slow-stylesheet',
+    configureServer(started) {
+      server = started
+    },
     async transform(_code: string, id: string) {
       if (!id.endsWith(file)) return
       count += 1
-      if (count > 1) await new Promise((resolve) => setTimeout(resolve, 400))
+      if (count > 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        return
+      }
+      const deadline = Date.now() + 30_000
+      while (!hasModule(server, asked)) {
+        if (Date.now() > deadline) throw new Error(`the dev server was never asked for ${asked}`)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
     },
   }
+}
+
+/**
+ * Whether the client module graph of `server` holds a module whose id ends with `file`.
+ */
+function hasModule(server: ViteDevServer | undefined, file: string): boolean {
+  const ids = server?.environments.client.moduleGraph.idToModuleMap.keys() ?? []
+  return [...ids].some((id) => id.endsWith(file))
 }
 
 describe('AC-used-atoms-40 — what the first stylesheet response has read', () => {
@@ -392,7 +414,7 @@ describe('AC-used-atoms-40 — what the first stylesheet response has read', () 
     )
     try {
       const { server, url } = await listenDev(
-        devConfig(app.root, [slowAfterFirst('app.css'), navePlugin()]),
+        devConfig(app.root, [slowAfterFirst('app.css', 'src/widget.ts'), navePlugin()]),
       )
       try {
         const page = await browser.newPage()
