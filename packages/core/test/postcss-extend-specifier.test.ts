@@ -10,7 +10,6 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-
 import postcss from 'postcss'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -24,7 +23,7 @@ const PACKAGE_ROOT = path.resolve(HERE, '..')
 const POSTCSS_DIST = path.resolve(PACKAGE_ROOT, 'dist', 'postcss.js')
 
 const PLAIN_ATOMS_FIXTURE = fileURLToPath(
-  new URL('./fixtures/extend-specifier/plain-atoms.mjs', import.meta.url),
+  new URL('fixtures/extend-specifier/plain-atoms.mjs', import.meta.url),
 )
 
 describe('AC-directive-core-25 — an extend specifier is a PostCSS dependency, re-read on change', () => {
@@ -149,15 +148,18 @@ describe('AC-directive-core-25 — an extend specifier is a PostCSS dependency, 
     )
     const plugin = navePlugin({ extend: f })
 
-    const outcome = await postcss([plugin])
-      .process('.x { @nave evil; }', { from: undefined })
-      .then(
-        (result) => ({ ok: true as const, css: result.css }),
-        () => ({ ok: false as const }),
-      )
+    // Either the build refuses outright (no output), or it keeps the first read and the
+    // injected rule never appears.
+    let css: string | undefined
+    try {
+      const result = await postcss([plugin]).process('.x { @nave evil; }', { from: undefined })
+      css = result.css
+    } catch {
+      // A refused build leaves `css` unset.
+    }
 
-    expect(outcome.ok ? outcome.css : '').not.toContain('display: none')
-    if (outcome.ok) expect(outcome.css).toContain('color: red')
+    expect(css ?? '').not.toContain('display: none')
+    expect(css === undefined || css.includes('color: red'), `output was: ${css}`).toBe(true)
   })
 
   it('reds under a mutant that skips validation on a path-form load', async () => {

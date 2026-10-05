@@ -1,4 +1,4 @@
-import { SourceMapConsumer } from 'source-map'
+import { type RawSourceMap, SourceMapConsumer } from 'source-map'
 import { describe, expect, it } from 'vitest'
 
 import { expandText } from '../../src/directive/expand-text.ts'
@@ -296,7 +296,7 @@ describe('chaining through an incoming map never invents a position it never mad
     }
 
     const { map } = expandText('.a{}\nx .b{c:d}', { inputSourceMap })
-    const consumer = await new SourceMapConsumer(JSON.parse(map))
+    const consumer = await new SourceMapConsumer(JSON.parse(map) as RawSourceMap)
 
     expect(consumer.originalPositionFor({ line: 2, column: 0 }).source).toBeNull()
 

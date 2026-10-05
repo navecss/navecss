@@ -7,11 +7,12 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { atoms } from '../src/atoms.ts'
-import { assertScalesLinearly } from './helpers/perf-scaling.ts'
+import type { Node } from './helpers/css-layer.ts'
 
+import { atoms } from '../src/atoms.ts'
 import { inspectAtomicLayer, pruneAtomicLayer, unprunedAtoms } from '../src/vite-prune.ts'
 import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
+import { assertScalesLinearly } from './helpers/perf-scaling.ts'
 
 const NESTED = `
 @layer tokens, reset, atomic, overrides;
@@ -48,7 +49,10 @@ const LOWERED = `
  * The class names (without the dot) a stylesheet's rules select, in order of appearance.
  */
 function classesIn(css: string): string[] {
-  return [...css.matchAll(/\.(nave-[\w-]+)/g)].map((match) => match[1]!)
+  return css
+    .matchAll(/\.(nave-[\w-]+)/g)
+    .map((match) => match[1]!)
+    .toArray()
 }
 
 describe('AC-used-atoms-27 — the emitted set, and nothing outside the layer changes', () => {
@@ -135,7 +139,12 @@ describe('inspecting a layer (AC-used-atoms-28)', () => {
   it('lists every built-in atom a rule in the layer selects, and says whether it holds a layer', () => {
     const seen = inspectAtomicLayer(NESTED)
     expect(seen.hasLayer).toBe(true)
-    expect([...seen.atoms].toSorted()).toEqual(['flex', 'focusRing', 'grid', 'hidePhoneOnly'])
+    expect([...seen.atoms].toSorted((a, b) => a.localeCompare(b))).toEqual([
+      'flex',
+      'focusRing',
+      'grid',
+      'hidePhoneOnly',
+    ])
   })
 
   it('reads atoms only inside the atomic layer', () => {
@@ -148,7 +157,7 @@ describe('inspecting a layer (AC-used-atoms-28)', () => {
     const seen = inspectAtomicLayer(
       '@layer atomic{.nave-flex{display:flex}@media (width>=1px){.nave-grid{display:grid}}}',
     )
-    expect([...seen.atoms].toSorted()).toEqual(['flex', 'grid'])
+    expect([...seen.atoms].toSorted((a, b) => a.localeCompare(b))).toEqual(['flex', 'grid'])
   })
 
   it('finds the layer after a statement-form declaration of the same name', () => {
@@ -160,9 +169,15 @@ describe('inspecting a layer (AC-used-atoms-28)', () => {
   })
 })
 
-describe('AC-used-atoms-27 - a selector is removed only when it needs an element of an unemitted atom', () => {
-  const layer = (rule: string): string => `@layer atomic { ${rule} }`
+function layer(rule: string): string {
+  return `@layer atomic { ${rule} }`
+}
 
+function singleRule(prelude: string): Node[] {
+  return [{ body: 'x:y', prelude }]
+}
+
+describe('AC-used-atoms-27 - a selector is removed only when it needs an element of an unemitted atom', () => {
   it('keeps a member that an emitted atom’s element can match, inside :is() or :where()', () => {
     const is = layer(':is(.nave-flex, .nave-grid):hover { color: red }')
     const where = layer(':where(.nave-grid, .nave-flex) > .child { color: red }')
@@ -228,27 +243,28 @@ describe('AC-used-atoms-27 - a selector is removed only when it needs an element
 
     expect(unprunedAtoms(css, new Set(['flex']))).toEqual(['grid'])
     expect(unprunedAtoms(css, new Set(['flex', 'grid']))).toEqual([])
-    expect(unprunedAtoms(pruneAtomicLayer(css, new Set(['flex'])), new Set(['flex']))).toEqual([])
+    const pruned = pruneAtomicLayer(css, new Set(['flex']))
+    expect(unprunedAtoms(pruned, new Set(['flex']))).toEqual([])
   })
 
   it('has a reader in the tests that removes the same members', () => {
-    const rule = (prelude: string) => [{ prelude, body: 'x:y' }]
     const kept = classesOf('flex')
 
-    expect(keepOnly(rule(':is(.nave-flex,.nave-grid):hover'), kept)).toHaveLength(1)
-    expect(keepOnly(rule('.card:not(.nave-grid)'), kept)).toHaveLength(1)
-    expect(keepOnly(rule(':is(.nave-grid,.nave-block)'), kept)).toHaveLength(0)
-    expect(keepOnly(rule('.nave-grid>.child'), kept)).toHaveLength(0)
+    expect(keepOnly(singleRule(':is(.nave-flex,.nave-grid):hover'), kept)).toHaveLength(1)
+    expect(keepOnly(singleRule('.card:not(.nave-grid)'), kept)).toHaveLength(1)
+    expect(keepOnly(singleRule(':is(.nave-grid,.nave-block)'), kept)).toHaveLength(0)
+    expect(keepOnly(singleRule('.nave-grid>.child'), kept)).toHaveLength(0)
     expect(parseAtomicLayer('@layer atomic{.a{x:y}}')).toHaveLength(1)
   })
 })
 
+// One unemitted atom at each level, so every level has something to pass on to the one above.
+function nested(depth: number): string {
+  const open = ':is(.nave-flex'.repeat(depth)
+  return `@layer atomic { ${open}${')'.repeat(depth)} { color: red } .nave-block { display: block } }`
+}
+
 describe('AC-used-atoms-27 - a selector nested in :is() is read in time proportional to its depth', () => {
-  // One unemitted atom at each level, so every level has something to pass on to the one above.
-  const nested = (depth: number): string => {
-    const open = ':is(.nave-flex'.repeat(depth)
-    return `@layer atomic { ${open}${')'.repeat(depth)} { color: red } .nave-block { display: block } }`
-  }
   const emitted = new Set(['block'])
 
   it('prunes and checks :is(.nave-flex:is(.nave-flex:is(...))) at any depth', async () => {
@@ -270,7 +286,7 @@ describe('AC-used-atoms-27 - a selector nested in :is() is read in time proporti
       const start = performance.now()
       const seen = inspectAtomicLayer(css)
       const spent = performance.now() - start
-      expect([...seen.atoms].toSorted()).toEqual(['block', 'flex'])
+      expect([...seen.atoms].toSorted((a, b) => a.localeCompare(b))).toEqual(['block', 'flex'])
       return spent
     }, 800)
   }, 120_000)

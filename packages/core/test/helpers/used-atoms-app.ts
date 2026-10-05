@@ -7,16 +7,16 @@
 import { cpSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createLogger, type PluginOption } from 'vite'
+import { createLogger, type InlineConfig, type PluginOption } from 'vite'
 
 import type { NaveViteOptions } from '../../src/vite.ts'
-import { atomClassMap } from '../../src/atoms.ts'
+
 import { navePlugin } from '../../src/vite.ts'
 import {
   appConfig,
   buildOutputs,
-  outputsOf,
   makeApp,
+  outputsOf,
   type ScratchApp,
   type Transformer,
   VITE_APIS,
@@ -97,7 +97,7 @@ export function addPackage(
   app: ScratchApp,
   name: string,
   files: Readonly<Record<string, string>>,
-  dependsOnCore = true,
+  requiresCore = true,
 ): void {
   const directory = path.join(app.root, 'node_modules', name)
   const manifest = {
@@ -105,7 +105,7 @@ export function addPackage(
     version: '1.0.0',
     type: 'module',
     main: './index.js',
-    ...(dependsOnCore && { dependencies: { '@navecss/core': '*' } }),
+    ...(requiresCore && { dependencies: { '@navecss/core': '*' } }),
   }
   mkdirSync(directory, { recursive: true })
   writeFileSync(path.join(directory, 'package.json'), JSON.stringify(manifest))
@@ -150,10 +150,13 @@ export interface BuildOptions {
 }
 
 /**
- * Builds `app` with `navePlugin(options)`, resolving to what it wrote or the error it failed with.
+ * The config both builders start from, and the warnings its logger collects as a build prints them.
  */
-export async function buildUsed(app: ScratchApp, settings: BuildOptions = {}): Promise<Built> {
-  const { options, transformer = 'postcss', api = VITE_APIS['8.2.1']! } = settings
+function usedConfig(
+  app: ScratchApp,
+  settings: BuildOptions,
+): { config: InlineConfig; warnings: string[] } {
+  const { options, transformer = 'postcss' } = settings
   const warnings: string[] = []
   const logger = createLogger('silent')
   logger.warn = (message) => {
@@ -168,11 +171,20 @@ export async function buildUsed(app: ScratchApp, settings: BuildOptions = {}): P
         settings.nave ?? navePlugin(options),
         ...(settings.after ?? []),
       ],
-      settings.build ? ({ build: settings.build } as never) : {},
+      settings.build ? { build: settings.build } : {},
     ),
     customLogger: logger,
-    ...settings.config,
   }
+  return { config, warnings }
+}
+
+/**
+ * Builds `app` with `navePlugin(options)`, resolving to what it wrote or the error it failed with.
+ */
+export async function buildUsed(app: ScratchApp, settings: BuildOptions = {}): Promise<Built> {
+  const { api = VITE_APIS['8.2.1']! } = settings
+  const { config: shared, warnings } = usedConfig(app, settings)
+  const config = { ...shared, ...settings.config }
   try {
     return { ...(await buildOutputs(config, api)), error: undefined, warnings }
   } catch (error) {
@@ -190,49 +202,6 @@ function reportOf(error: unknown): string {
   const body = marker === -1 ? message : message.slice(marker + 'RolldownError: '.length)
   const stack = body.search(/\n[ \t]+at /)
   return (stack === -1 ? body : body.slice(0, stack)).trimEnd()
-}
-
-/**
- * The text of every `@layer atomic { ... }` block in `css`, found by counting braces.
- */
-function atomicBlocks(css: string): string[] {
-  const blocks: string[] = []
-  const opener = /@layer\s+atomic\s*\{/g
-  for (let match = opener.exec(css); match; match = opener.exec(css)) {
-    let depth = 1
-    let index = match.index + match[0].length
-    const start = index
-    while (depth > 0 && index < css.length) {
-      depth += css[index] === '{' ? 1 : css[index] === '}' ? -1 : 0
-      index += 1
-    }
-    blocks.push(css.slice(start, index - 1))
-    opener.lastIndex = index
-  }
-  return blocks
-}
-
-const ATOM_OF_CLASS = new Map(Object.entries(atomClassMap).map(([atom, name]) => [name, atom]))
-
-/**
- * The atoms whose class a rule selector in the atomic layer of `css` names, sorted.
- */
-export function atomLayerAtoms(css: string): string[] {
-  const names = new Set<string>()
-  for (const block of atomicBlocks(css)) {
-    for (const match of block.matchAll(/\.(nave-[\w-]+)/g)) {
-      const atom = ATOM_OF_CLASS.get(match[1]!)
-      if (atom) names.add(atom)
-    }
-  }
-  return [...names].toSorted((a, b) => a.localeCompare(b))
-}
-
-/**
- * Sorted, for an `expect(...).toEqual([...])` over a list of atoms.
- */
-export function atoms(...names: string[]): string[] {
-  return names.toSorted((a, b) => a.localeCompare(b))
 }
 
 export interface BuiltEnvironments {
@@ -258,29 +227,14 @@ export async function buildEnvironments(
     readonly order?: readonly ('client' | 'ssr')[]
   } = {},
 ): Promise<BuiltEnvironments> {
-  const {
-    options,
-    transformer = 'postcss',
-    api = VITE_APIS['8.2.1']!,
-    order = ['client', 'ssr'],
-  } = settings
-  const warnings: string[] = []
-  const logger = createLogger('silent')
-  logger.warn = (message) => {
-    warnings.push(message)
+  const { api = VITE_APIS['8.2.1']!, order = ['client', 'ssr'] } = settings
+  const { config: shared, warnings } = usedConfig(app, settings)
+  const results: Partial<Record<'client' | 'ssr', Built>> = {}
+  const collect = (name: 'client' | 'ssr', result: unknown): void => {
+    results[name] = { ...outputsOf(result), error: undefined }
   }
   const config = {
-    ...appConfig(
-      app.root,
-      transformer,
-      [
-        ...(settings.plugins ?? []),
-        settings.nave ?? navePlugin(options),
-        ...(settings.after ?? []),
-      ],
-      settings.build ? ({ build: settings.build } as never) : {},
-    ),
-    customLogger: logger,
+    ...shared,
     environments: {
       ssr: {
         build: {
@@ -292,58 +246,30 @@ export async function buildEnvironments(
     },
     builder: {
       buildApp: async (builder: {
-        environments: Record<string, unknown>
         build(environment: unknown): Promise<unknown>
+        environments: Record<string, unknown>
       }) => {
-        for (const name of order)
-          await collected(name, await builder.build(builder.environments[name]))
+        for (const name of order) collect(name, await builder.build(builder.environments[name]))
       },
     },
     ...settings.config,
   }
-  const results: Partial<Record<'client' | 'ssr', Built>> = {}
-  const collected = async (name: 'client' | 'ssr', result: unknown): Promise<void> => {
-    results[name] = { ...outputsOf(result), error: undefined }
-  }
   const empty: Built = { css: '', js: '', assets: {}, error: undefined }
+  const settled = (error: string | undefined): BuiltEnvironments => ({
+    client: results.client ?? empty,
+    ssr: results.ssr ?? empty,
+    error,
+    warnings,
+  })
   try {
     const builder = await (
       api as unknown as { createBuilder(config: unknown): Promise<{ buildApp(): Promise<void> }> }
     ).createBuilder(config)
     await builder.buildApp()
-    return {
-      client: results.client ?? empty,
-      ssr: results.ssr ?? empty,
-      error: undefined,
-      warnings,
-    }
+    return settled(undefined)
   } catch (error) {
-    return {
-      client: results.client ?? empty,
-      ssr: results.ssr ?? empty,
-      error: reportOf(error),
-      warnings,
-    }
+    return settled(reportOf(error))
   }
 }
 
-/**
- * A scratch plugin that rewrites the text of every CSS asset in `generateBundle`, ahead of Nave's
- * own check (which is ordered after every other plugin).
- */
-export function tamperCss(rewrite: (css: string) => string): PluginOption {
-  return {
-    name: 'tamper-css',
-    generateBundle(_options, bundle) {
-      for (const entry of Object.values(bundle)) {
-        if (entry.type === 'asset' && entry.fileName.endsWith('.css')) {
-          entry.source = rewrite(
-            typeof entry.source === 'string'
-              ? entry.source
-              : new TextDecoder().decode(entry.source),
-          )
-        }
-      }
-    },
-  }
-}
+export { atomLayerAtoms, atoms, tamperCss } from './used-atoms-css.ts'

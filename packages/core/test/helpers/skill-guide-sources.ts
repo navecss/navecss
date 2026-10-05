@@ -15,6 +15,9 @@ import {
 } from '../../scripts/generate-skill.ts'
 import { atoms } from '../../src/atoms.ts'
 
+/**
+ * The real skill-guide sources, with any of them replaced by `overrides`.
+ */
 export function baseSkillGuideSources(
   overrides: Partial<SkillGuideSources> = {},
 ): SkillGuideSources {

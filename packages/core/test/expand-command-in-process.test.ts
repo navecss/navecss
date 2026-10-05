@@ -24,15 +24,19 @@ import { runExpand } from '../src/expand-command.ts'
 import { watchFiles } from '../src/expand-watch.ts'
 
 const project = { dir: '' }
-let out: string[] = []
-let err: string[] = []
+const out: string[] = []
+const err: string[] = []
 
 beforeEach(() => {
   project.dir = mkdtempSync(path.join(tmpdir(), 'nave-expand-inproc-'))
-  out = []
-  err = []
-  vi.spyOn(console, 'log').mockImplementation((text: unknown) => out.push(String(text)))
-  vi.spyOn(console, 'error').mockImplementation((text: unknown) => err.push(String(text)))
+  out.length = 0
+  err.length = 0
+  vi.spyOn(console, 'log').mockImplementation((text: unknown) => {
+    out.push(String(text))
+  })
+  vi.spyOn(console, 'error').mockImplementation((text: unknown) => {
+    err.push(String(text))
+  })
 })
 
 afterEach(() => {

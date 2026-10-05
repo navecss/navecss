@@ -6,7 +6,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 

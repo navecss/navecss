@@ -3,9 +3,8 @@
  * about a project that holds no directive and sets no browser floor of its own, and a `?raw` import
  * hands back a stylesheet's text as it is.
  */
+import { type InlineConfig, resolveConfig } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-
-import { resolveConfig } from 'vite'
 
 import { navePlugin } from '../src/vite.ts'
 import { withoutAtomicLayer } from './helpers/css-layer.ts'
@@ -36,7 +35,9 @@ const NO_DIRECTIVE = {
 let app: ScratchApp
 let raw: ScratchApp
 beforeAll(() => {
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- the setup hook builds the app the suite shares; a hook cannot return it
   app = makeApp(NO_DIRECTIVE)
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- the setup hook builds the app the suite shares; a hook cannot return it
   raw = makeApp({
     'index.html': APP_FILES['index.html']!,
     'src/main.js': "import text from './r.css?raw'\nconsole.log(text)",
@@ -52,7 +53,11 @@ afterAll(() => {
  * A bare config, with neither floor key set by the project, so what the plugin leaves is what
  * Vite's own defaults give.
  */
-function bare(root: string, transformer: Transformer, plugins: ReturnType<typeof navePlugin>[]) {
+function bare(
+  root: string,
+  transformer: Transformer,
+  plugins: ReturnType<typeof navePlugin>[],
+): InlineConfig {
   return {
     root,
     configFile: false as const,
@@ -61,6 +66,11 @@ function bare(root: string, transformer: Transformer, plugins: ReturnType<typeof
     css: { transformer },
   }
 }
+
+/**
+ * How many `light-dark(` calls `css` holds.
+ */
+const tokens = (css: string): number => css.split('light-dark(').length - 1
 
 describe('AC-directive-core-36 — the plugin leaves the floor keys to the consumer', () => {
   it.each(TRANSFORMERS)(
@@ -93,7 +103,6 @@ describe('AC-directive-core-36 — the plugin leaves the floor keys to the consu
   )
 
   it('the documented floor keeps every light-dark(); build.cssTarget alone rewrites them (README claim)', async () => {
-    const tokens = (css: string): number => css.split('light-dark(').length - 1
     const floor = await buildOutputs(appConfig(app.root, 'lightningcss', [navePlugin()]))
     const targetOnly = await buildOutputs({
       ...appConfig(app.root, 'lightningcss', [navePlugin()]),
@@ -123,7 +132,7 @@ describe('AC-directive-core-36 (amended 2026-10-03) — a project that imports t
         }),
       )
       try {
-        const build = async (plugins: ReturnType<typeof navePlugin>[]) =>
+        const build = (plugins: ReturnType<typeof navePlugin>[]): ReturnType<typeof buildOutputs> =>
           buildOutputs({ ...bare(quickStart.root, transformer, plugins), build: { write: false } })
         const without = await build([])
         const everyAtom = await build([navePlugin({ atomic: 'all' })])

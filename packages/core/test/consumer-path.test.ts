@@ -11,7 +11,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -21,17 +20,25 @@ interface ExportTarget {
   [condition: string]: ExportTarget | string
 }
 
-/** Picks the CSS/ESM target out of an export-map entry, honouring conditions. */
+/**
+ * Picks the CSS/ESM target out of an export-map entry, honouring conditions.
+ */
 function pickTarget(entry: ExportTarget | string): string {
-  if (typeof entry === 'string') return entry
-  for (const condition of ['style', 'import', 'default']) {
-    const value = entry[condition]
-    if (value !== undefined) return pickTarget(value)
+  let current = entry
+  while (typeof current !== 'string') {
+    const node = current
+    const condition = ['style', 'import', 'default'].find((name) => node[name] !== undefined)
+    if (condition === undefined) {
+      throw new Error(`no resolvable condition in ${JSON.stringify(node)}`)
+    }
+    current = node[condition]!
   }
-  throw new Error(`no resolvable condition in ${JSON.stringify(entry)}`)
+  return current
 }
 
-/** Resolves a bare `@navecss/*` specifier through that package's export map. */
+/**
+ * Resolves a bare `@navecss/*` specifier through that package's export map.
+ */
 function resolveWorkspace(specifier: string): string {
   const [, name, ...rest] = specifier.split('/')
   const packageDir = path.join(PACKAGES, name!)
@@ -52,7 +59,9 @@ function resolveImport(specifier: string, importerDir: string): string {
 
 const IMPORT_RE = /@import\s+url\(\s*['"]([^'"]+)['"]\s*\)([^;]*);/g
 
-/** Recursively inlines the @import graph, failing loud on a missing target. */
+/**
+ * Recursively inlines the @import graph, failing loud on a missing target.
+ */
 function flatten(file: string, seen = new Set<string>()): string {
   if (seen.has(file)) return ''
   seen.add(file)
@@ -66,9 +75,13 @@ function flatten(file: string, seen = new Set<string>()): string {
 }
 
 interface CustomPropertyDeclaration {
-  /** The declared custom-property name. */
+  /**
+   * The declared custom-property name.
+   */
   name: string
-  /** Whether any block open at this point is a `prefers-reduced-motion` query. */
+  /**
+   * Whether any block open at this point is a `prefers-reduced-motion` query.
+   */
   conditional: boolean
 }
 
@@ -99,22 +112,37 @@ function scanCustomPropertyDeclarations(css: string): CustomPropertyDeclaration[
     buffer = ''
   }
 
-  for (const char of css.replaceAll(/\/\*[\s\S]*?\*\//g, '')) {
-    if (char === '{') {
-      openBlocks.push(buffer.trim())
-      buffer = ''
-    } else if (char === '}') {
-      flush()
-      openBlocks.pop()
-    } else if (char === ';') {
-      flush()
-    } else {
-      buffer += char
+  const consume = (char: string): void => {
+    switch (char) {
+      case ';': {
+        flush()
+
+        break
+      }
+      case '{': {
+        openBlocks.push(buffer.trim())
+        buffer = ''
+
+        break
+      }
+      case '}': {
+        flush()
+        openBlocks.pop()
+
+        break
+      }
+      default: {
+        buffer += char
+      }
     }
   }
 
+  for (const char of css.replaceAll(/\/\*[\s\S]*?\*\//g, '')) consume(char)
+
   return declarations
 }
+
+const byName = (a: string, b: string): number => a.localeCompare(b)
 
 describe('C1 — the documented one-line setup resolves end to end', () => {
   const entry = resolveWorkspace('@navecss/core')
@@ -209,7 +237,6 @@ describe('C13 — every self-layered entry point is wrapped exactly once', () =>
 
     const counts = new Map<string, number>()
     for (const { name } of declarations) counts.set(name, (counts.get(name) ?? 0) + 1)
-    const byName = (a: string, b: string): number => a.localeCompare(b)
     const declaredTwice = [...counts]
       .filter(([, count]) => count > 1)
       .map(([name]) => name)

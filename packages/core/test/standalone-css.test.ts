@@ -42,7 +42,7 @@ function specifierAfter(tokens: readonly Token[], index: number): string {
     .slice(index + 1, end)
     .filter((token) => token.type !== 'whitespace-token' && token.type !== 'comment')
   const value = (token: Token | undefined): string => (token!.structured as { value: string }).value
-  return first!.type === 'function-token' ? value(second) : value(first)
+  return value(first!.type === 'function-token' ? second : first)
 }
 
 /**
@@ -56,18 +56,18 @@ function derive(): { imports: string[]; text: string } {
   const imports: string[] = []
   let index = ''
   let copiedTo = 0
-  tokens.forEach((token, at) => {
+  for (const [at, token] of tokens.entries()) {
     const isImport =
       token.type === 'at-keyword-token' &&
       (token.structured as { value: string }).value.toLowerCase() === 'import'
-    if (!isImport) return
+    if (!isImport) continue
     const specifier = specifierAfter(tokens, at)
     const end = tokens.findIndex((later, after) => after > at && later.type === 'semicolon-token')
     imports.push(specifier)
     index += indexCss.slice(copiedTo, token.startIndex)
     index += readFileSync(resolveImport(specifier), 'utf8').trimEnd()
     copiedTo = tokens[end]!.endIndex
-  })
+  }
   index += indexCss.slice(copiedTo)
   return { imports, text: `${dist('layers.css')}\n${index}` }
 }

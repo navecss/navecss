@@ -23,13 +23,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const TSC = createRequire(import.meta.url).resolve('typescript/bin/tsc')
 
-let consumer = ''
+const consumer = { dir: '' }
 
 beforeAll(() => {
-  consumer = mkdtempSync(path.join(tmpdir(), 'nave-core-lightning-'))
+  consumer.dir = mkdtempSync(path.join(tmpdir(), 'nave-core-lightning-'))
   // A copy of what the package publishes, with its one dependency beside it and nothing else: a
   // link back to the package directory would let `lightningcss` resolve from its devDependencies.
-  const installed = path.join(consumer, 'node_modules', '@navecss')
+  const installed = path.join(consumer.dir, 'node_modules', '@navecss')
   mkdirSync(path.join(installed, 'core'), { recursive: true })
   cpSync(path.join(PACKAGE_ROOT, 'dist'), path.join(installed, 'core', 'dist'), { recursive: true })
   copyFileSync(
@@ -38,13 +38,13 @@ beforeAll(() => {
   )
   symlinkSync(path.resolve(PACKAGE_ROOT, '../tokens'), path.join(installed, 'tokens'), 'dir')
   writeFileSync(
-    path.join(consumer, 'package.json'),
+    path.join(consumer.dir, 'package.json'),
     JSON.stringify({ name: 'consumer', private: true, type: 'module' }),
   )
 })
 
 afterAll(() => {
-  rmSync(consumer, { force: true, recursive: true })
+  rmSync(consumer.dir, { force: true, recursive: true })
 })
 
 interface Ran {
@@ -55,7 +55,7 @@ interface Ran {
 function run(args: string[]): Ran {
   try {
     const stdout = execFileSync(process.execPath, args, {
-      cwd: consumer,
+      cwd: consumer.dir,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -67,9 +67,9 @@ function run(args: string[]): Ran {
 }
 
 function typecheck(name: string, source: string): Ran {
-  writeFileSync(path.join(consumer, name), source)
+  writeFileSync(path.join(consumer.dir, name), source)
   writeFileSync(
-    path.join(consumer, 'tsconfig.json'),
+    path.join(consumer.dir, 'tsconfig.json'),
     JSON.stringify({
       compilerOptions: {
         lib: ['ES2022'],
@@ -83,7 +83,7 @@ function typecheck(name: string, source: string): Ran {
       files: [name],
     }),
   )
-  return run([TSC, '-p', consumer])
+  return run([TSC, '-p', consumer.dir])
 }
 
 describe('@navecss/core/lightningcss, loaded by its package name', () => {

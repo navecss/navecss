@@ -10,9 +10,13 @@
 import { existsSync, readFileSync } from 'node:fs'
 
 export interface ChangelogEntry {
-  /** The `### ` heading the entry sits under, e.g. `Minor Changes` or `Patch Changes`. */
+  /**
+   * The `### ` heading the entry sits under, e.g. `Minor Changes` or `Patch Changes`.
+   */
   readonly kind: string
-  /** The entry's text, with the leading `<commit>: ` that `changeset version` adds removed. */
+  /**
+   * The entry's text, with the leading `<commit>: ` that `changeset version` adds removed.
+   */
   readonly text: string
 }
 

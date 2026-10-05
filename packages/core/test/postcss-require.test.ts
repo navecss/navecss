@@ -22,9 +22,11 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_ROOT = path.resolve(HERE, '..')
 const TSC = createRequire(import.meta.url).resolve('typescript/bin/tsc')
 
-let consumer: string
+const consumer = { dir: '' }
 
-/** A directory whose `node_modules/@navecss/core` is this package, as an install would put it. */
+/**
+ * A directory whose `node_modules/@navecss/core` is this package, as an install would put it.
+ */
 function makeConsumer(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'nave-core-require-'))
   mkdirSync(path.join(dir, 'node_modules', '@navecss'), { recursive: true })
@@ -38,17 +40,19 @@ interface Ran {
   readonly output: string
 }
 
-/** Runs `node` on a CommonJS script inside the consumer, never throwing on a non-zero exit. */
+/**
+ * Runs `node` on a CommonJS script inside the consumer, never throwing on a non-zero exit.
+ */
 function runCommonJs(script: string): Ran {
   try {
     const stdout = execFileSync(process.execPath, ['--input-type=commonjs', '-e', script], {
-      cwd: consumer,
+      cwd: consumer.dir,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     return { status: 0, output: stdout }
   } catch (error) {
-    const failed = error as { status?: number; stdout?: string; stderr?: string }
+    const failed = error as { status?: number; stderr?: string; stdout?: string }
     return { status: failed.status ?? 1, output: `${failed.stdout ?? ''}${failed.stderr ?? ''}` }
   }
 }
@@ -65,11 +69,13 @@ const NODENEXT: TypeCheckSettings = {
   skipLibCheck: false,
 }
 
-/** Type-checks one `.cts` source as a CommonJS consumer under the given compiler settings. */
+/**
+ * Type-checks one `.cts` source as a CommonJS consumer under the given compiler settings.
+ */
 function typecheckCts(name: string, source: string, settings: TypeCheckSettings): Ran {
-  writeFileSync(path.join(consumer, name), source)
+  writeFileSync(path.join(consumer.dir, name), source)
   writeFileSync(
-    path.join(consumer, 'tsconfig.json'),
+    path.join(consumer.dir, 'tsconfig.json'),
     JSON.stringify({
       compilerOptions: {
         module: settings.module,
@@ -84,24 +90,24 @@ function typecheckCts(name: string, source: string, settings: TypeCheckSettings)
     }),
   )
   try {
-    const stdout = execFileSync(process.execPath, [TSC, '-p', consumer], {
-      cwd: consumer,
+    const stdout = execFileSync(process.execPath, [TSC, '-p', consumer.dir], {
+      cwd: consumer.dir,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     return { status: 0, output: stdout }
   } catch (error) {
-    const failed = error as { status?: number; stdout?: string; stderr?: string }
+    const failed = error as { status?: number; stderr?: string; stdout?: string }
     return { status: failed.status ?? 1, output: `${failed.stdout ?? ''}${failed.stderr ?? ''}` }
   }
 }
 
 beforeAll(() => {
-  consumer = makeConsumer()
+  consumer.dir = makeConsumer()
 })
 
 afterAll(() => {
-  rmSync(consumer, { recursive: true, force: true })
+  rmSync(consumer.dir, { recursive: true, force: true })
 })
 
 describe('require(@navecss/core/postcss) from a CommonJS file', () => {
@@ -274,7 +280,9 @@ describe('the CommonJS shim is a pointer, not a second copy of the plugin', () =
     }
 
     for (const subpath of ['./cx', './atoms']) {
-      expect(Object.keys(manifest.exports[subpath]!).toSorted()).toEqual(['import', 'types'])
+      expect(
+        Object.keys(manifest.exports[subpath]!).toSorted((a, b) => a.localeCompare(b)),
+      ).toEqual(['import', 'types'])
     }
   })
 })

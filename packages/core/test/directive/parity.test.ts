@@ -104,10 +104,10 @@ const LEGS = {
   vite: throughVite,
 }
 
-let warned: string[] = []
+const warned: string[] = []
 
 beforeEach(() => {
-  warned = []
+  warned.length = 0
   vi.spyOn(console, 'warn').mockImplementation((message: unknown) => {
     warned.push(String(message))
   })
@@ -150,7 +150,7 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
       const file = '/proj/app.css'
       const expected = expandText(css, { onUnknown: 'warn', extend: EXTEND, from: file })
         .diagnostics.map((d) => `${d.file}:${d.line}:${d.column}`)
-        .toSorted()
+        .toSorted((a, b) => a.localeCompare(b))
 
       throughLightning(lib, css)
 
@@ -158,7 +158,7 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
         .map((message) => /^(.*):(\d+):(\d+): /.exec(message))
         .filter((match) => match !== null)
         .map((match) => `${match[1]}:${match[2]}:${match[3]}`)
-        .toSorted()
+        .toSorted((a, b) => a.localeCompare(b))
       expect(actual).toEqual(expected)
       expect(warned.length, 'a warning that is not a framed diagnostic').toBe(actual.length)
     })

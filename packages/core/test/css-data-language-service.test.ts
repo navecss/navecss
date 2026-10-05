@@ -12,7 +12,7 @@ import { atoms } from '../src/atoms.ts'
 import { packCoreTarball } from './helpers/pack-core.ts'
 
 interface PackedCssData {
-  atDirectives: Array<{ description: { kind: string; value: string } }>
+  atDirectives: { description: { kind: string; value: string } }[]
 }
 
 function readPackedCssData(): PackedCssData {

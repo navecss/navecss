@@ -21,19 +21,22 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 const ATOMIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist/atomic.css')
 
-/** The class name `toClassName('focusRing')` produces (src/atoms.ts). */
+/**
+ * The class name `toClassName('focusRing')` produces (src/atoms.ts).
+ */
 const FOCUS_RING_CLASS = '.nave-focus-ring'
 
-/** Matches a genuine outline declaration whose value is not `none`/`0` — i.e. one
+/**
+ * Matches a genuine outline declaration whose value is not `none`/`0` — i.e. one
  * that actually renders in forced-colors mode. The ring is written as longhands
  * (`outline-style: solid`) rather than the `outline` shorthand: a shorthand with an
- * unresolvable `var()` is invalid as a whole and collapses to `outline: none`. */
+ * unresolvable `var()` is invalid as a whole and collapses to `outline: none`.
+ */
 const RENDERS_OUTLINE = /^outline(-style)?$/i
 const OUTLINE_IS_NONE = /^\s*(none|0)\b/i
 
@@ -68,17 +71,19 @@ function collectDeclarations(
   return found
 }
 
-/** Every `--nave-border-width-focus` declaration in a tokens stylesheet, in px (NaN when the
+/**
+ * Every `--nave-border-width-focus` declaration in a tokens stylesheet, in px (NaN when the
  * value is not a px length). Walks every rule, not only the first match, so a later `:root`
  * block (e.g. under `@media (prefers-contrast: more)`) is not missed. `@property` descriptors
  * (`syntax`, `inherits`, `initial-value`) are declarations too, and `walkDecls` visits them;
  * they are excluded here only because their names never match `--nave-border-width-focus`, the
- * property name this walk filters on. */
+ * property name this walk filters on.
+ */
 function focusWidthsPx(css: string): number[] {
   const widths: number[] = []
   postcss.parse(css).walkDecls('--nave-border-width-focus', (decl) => {
     const px = /^([\d.]+)px$/.exec(decl.value.trim())
-    widths.push(px ? Number.parseFloat(px[1]!) : Number.NaN)
+    widths.push(px ? Number(px[1]!) : NaN)
   })
   return widths
 }
@@ -88,35 +93,37 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
   const root = postcss.parse(css)
 
   it('declares a rendering outline somewhere in the focusRing rule', () => {
-    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const decls = collectDeclarations(
+      root,
+      new RegExp(`^${FOCUS_RING_CLASS.replace('.', String.raw`\.`)}`),
+    )
 
-    const renderingOutline = decls.some(
+    const isRenderingOutline = decls.some(
       (d) => RENDERS_OUTLINE.test(d.prop) && !OUTLINE_IS_NONE.test(d.value),
     )
 
     expect(
-      renderingOutline,
+      isRenderingOutline,
       `${FOCUS_RING_CLASS} must declare a non-"none" outline: forced-colors mode does not ` +
         'render box-shadow, so an indicator built from box-shadow alone is invisible there',
     ).toBe(true)
   })
 
   it('is not built from box-shadow alone: if box-shadow is present, outline must be too', () => {
-    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const decls = collectDeclarations(
+      root,
+      new RegExp(`^${FOCUS_RING_CLASS.replace('.', String.raw`\.`)}`),
+    )
 
-    const usesBoxShadow = decls.some((d) => /^box-shadow$/i.test(d.prop))
-    const renderingOutline = decls.some(
+    const hasBoxShadow = decls.some((d) => /^box-shadow$/i.test(d.prop))
+    const isRenderingOutline = decls.some(
       (d) => RENDERS_OUTLINE.test(d.prop) && !OUTLINE_IS_NONE.test(d.value),
     )
 
-    if (usesBoxShadow) {
-      expect(
-        renderingOutline,
-        `${FOCUS_RING_CLASS} declares box-shadow without a rendering outline alongside it`,
-      ).toBe(true)
-    } else {
-      expect(renderingOutline).toBe(true)
-    }
+    const message = hasBoxShadow
+      ? `${FOCUS_RING_CLASS} declares box-shadow without a rendering outline alongside it`
+      : undefined
+    expect(isRenderingOutline, message).toBe(true)
   })
 
   // Pinning rows: this file's whole purpose is guarding the shipped focus indicator, so it is the
@@ -125,7 +132,10 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
   // leaves a ring. The toHaveLength(1) guards keep first-match ambiguity from ever masking a
   // cascade winner.
   it('reads the focus-ring-specific width token, not a general-purpose one', () => {
-    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const decls = collectDeclarations(
+      root,
+      new RegExp(`^${FOCUS_RING_CLASS.replace('.', String.raw`\.`)}`),
+    )
     const widthDecls = decls.filter((d) => /^outline-width$/i.test(d.prop))
     expect(
       widthDecls,
@@ -135,7 +145,10 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
   })
 
   it('reads the focus-ring-specific colour token, not a general-purpose one', () => {
-    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const decls = collectDeclarations(
+      root,
+      new RegExp(`^${FOCUS_RING_CLASS.replace('.', String.raw`\.`)}`),
+    )
     const colorDecls = decls.filter((d) => /^outline-color$/i.test(d.prop))
     expect(
       colorDecls,
@@ -152,7 +165,10 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
   // pinned so that the degraded ring cannot quietly become an author-picked colour or a hairline:
   // the colour falls back to `currentColor`, the element's own text colour, and the width to 2px.
   it('draws a ring when the tokens are missing: longhands, never the outline shorthand', () => {
-    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const decls = collectDeclarations(
+      root,
+      new RegExp(`^${FOCUS_RING_CLASS.replace('.', String.raw`\.`)}`),
+    )
     const shorthandRings = decls.filter(
       (d) => /^outline$/i.test(d.prop) && !OUTLINE_IS_NONE.test(d.value),
     )
@@ -168,21 +184,27 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
   })
 
   it('falls back to the element’s own text colour and a ring of at least 2px', () => {
-    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const decls = collectDeclarations(
+      root,
+      new RegExp(`^${FOCUS_RING_CLASS.replace('.', String.raw`\.`)}`),
+    )
     const width = decls.find((d) => /^outline-width$/i.test(d.prop))?.value ?? ''
     const color = decls.find((d) => /^outline-color$/i.test(d.prop))?.value ?? ''
 
     expect(color).toMatch(/^var\(--nave-color-border-focus,\s*currentColor\)$/i)
     const fallbackPx = /^var\(--nave-border-width-focus,\s*([\d.]+)px\)$/.exec(width)
     expect(fallbackPx, 'the width fallback must be a px length').not.toBeNull()
-    expect(Number.parseFloat(fallbackPx![1]!)).toBeGreaterThanOrEqual(2)
+    expect(Number(fallbackPx![1]!)).toBeGreaterThanOrEqual(2)
   })
 
   // Absence assertion, the class the instance test in test/browser/ cannot
   // reach: that one focuses a pill in one engine and proves that case, and a
   // rule can mutate geometry in ways no single fixture happens to focus.
   it('mutates no box geometry: the indicator decorates the element, never reshapes it', () => {
-    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const decls = collectDeclarations(
+      root,
+      new RegExp(`^${FOCUS_RING_CLASS.replace('.', String.raw`\.`)}`),
+    )
 
     const offenders = decls
       .filter((d) => MUTATES_BOX_GEOMETRY.test(d.prop))
@@ -219,10 +241,14 @@ describe('dist/atomic.css — focusRing forced-colors indicator', () => {
   // place for the offset check. The thickness check also reads the built tokens, because the
   // shipped rule carries a var() reference rather than a literal.
   it("focusRing's outline-offset is strictly positive: at zero a 2px ring has no area to spare, and below zero the ring moves into the border box", () => {
-    const decls = collectDeclarations(root, new RegExp(`^${FOCUS_RING_CLASS.replace('.', '\\.')}`))
+    const decls = collectDeclarations(
+      root,
+      new RegExp(`^${FOCUS_RING_CLASS.replace('.', String.raw`\.`)}`),
+    )
     const offsetDecls = decls.filter((d) => /^outline-offset$/i.test(d.prop))
 
     expect(offsetDecls, `${FOCUS_RING_CLASS} must declare outline-offset`).toHaveLength(1)
+    // eslint-disable-next-line unicorn/prefer-number-coercion -- the value is a length such as `2px`: parseFloat reads the leading number, Number() would give NaN
     expect(Number.parseFloat(offsetDecls[0]!.value)).toBeGreaterThan(0)
   })
 

@@ -13,7 +13,8 @@ const NAVE_LINK = /href="node_modules\/@navecss\/core\/dist\/standalone\.css"/
 const frames: HTMLIFrameElement[] = []
 
 afterEach(() => {
-  for (const frame of frames.splice(0)) frame.remove()
+  for (const frame of frames) frame.remove()
+  frames.length = 0
 })
 
 function mount(attributes: Partial<HTMLIFrameElement>): Promise<HTMLIFrameElement> {
@@ -30,14 +31,19 @@ function mount(attributes: Partial<HTMLIFrameElement>): Promise<HTMLIFrameElemen
   return loaded
 }
 
-/** The page as served. */
+/**
+ * The page as served.
+ */
 function open(name: string): Promise<HTMLIFrameElement> {
   return mount({ src: `${BASE}${name}` })
 }
 
-/** The same page with the self-contained stylesheet's request made to fail. */
+/**
+ * The same page with the self-contained stylesheet's request made to fail.
+ */
 async function openWithoutNaveStylesheet(): Promise<HTMLIFrameElement> {
-  const html = await (await fetch(`${BASE}index.html`)).text()
+  const response = await fetch(`${BASE}index.html`)
+  const html = await response.text()
   expect(html).toMatch(NAVE_LINK)
   const broken = html.replace(NAVE_LINK, 'href="no-such-stylesheet.css"')
   return mount({ srcdoc: `<base href="${location.origin}${BASE}">${broken}` })
@@ -109,6 +115,8 @@ describe('AC-directive-core-44 — a no-bundler page renders in a real browser',
     expect(button.matches(':focus-visible')).toBe(true)
     const ring = frame.contentWindow!.getComputedStyle(button)
     expect(ring.outlineStyle).toBe('solid')
+    // outlineWidth is a length such as "3px": Number() would give NaN, parseFloat reads the number
+    // eslint-disable-next-line unicorn/prefer-number-coercion -- strict Number() turns a unit-bearing length into NaN
     expect(Number.parseFloat(ring.outlineWidth)).toBeGreaterThan(0)
   })
 
@@ -129,6 +137,8 @@ describe('AC-directive-core-44 — a no-bundler page renders in a real browser',
     expect(button.matches(':focus-visible')).toBe(true)
     const ring = frame.contentWindow!.getComputedStyle(button)
     expect(ring.outlineStyle).toBe('solid')
+    // outlineWidth is a length such as "3px": Number() would give NaN, parseFloat reads the number
+    // eslint-disable-next-line unicorn/prefer-number-coercion -- strict Number() turns a unit-bearing length into NaN
     expect(Number.parseFloat(ring.outlineWidth)).toBeGreaterThan(0)
   })
 })

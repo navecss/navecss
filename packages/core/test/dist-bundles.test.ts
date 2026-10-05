@@ -6,14 +6,15 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist')
 
 const read = (file: string): string => readFileSync(path.join(DIST, file), 'utf8')
 
-/** A declaration string that only ever appears in the atoms source of truth. */
+/**
+ * A declaration string that only ever appears in the atoms source of truth.
+ */
 const ATOM_DECLARATION_MARKER = 'container-type'
 
 describe('C12 — the atoms object is bundled once, not three times', () => {

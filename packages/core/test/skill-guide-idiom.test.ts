@@ -2,12 +2,21 @@
  * AC-consumer-constraints-38: every fenced code block in `SKILL.md` compiles/type-checks for
  * real, and carries none of the forms R22 describes only in prose.
  */
+import type { AtRule } from 'postcss'
+import type { Diagnostic } from 'typescript'
+
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import postcss from 'postcss'
-import ts from 'typescript'
+import {
+  createProgram,
+  getPreEmitDiagnostics,
+  ModuleKind,
+  ModuleResolutionKind,
+  ScriptTarget,
+} from 'typescript'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { OUTPUT_PATH } from '../scripts/generate-skill.ts'
@@ -16,14 +25,17 @@ import { navePlugin } from '../src/postcss.ts'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const DIST_CX_PATH = path.resolve(HERE, '../dist/cx.js')
 
-function extractFences(markdown: string): Array<{ lang: string; content: string }> {
-  return [...markdown.matchAll(/```(\w+)\n([\s\S]*?)```/g)].map((m) => ({
-    lang: m[1]!,
-    content: m[2]!,
-  }))
+function extractFences(markdown: string): { content: string; lang: string }[] {
+  return markdown
+    .matchAll(/```(\w+)\n([\s\S]*?)```/g)
+    .map((m) => ({
+      lang: m[1]!,
+      content: m[2]!,
+    }))
+    .toArray()
 }
 
-const SCRIPT_FENCE_LANGS = new Set(['js', 'jsx', 'mjs', 'ts', 'tsx', 'mts'])
+const SCRIPT_FENCE_LANGS = new Set(['js', 'jsx', 'mjs', 'mts', 'ts', 'tsx'])
 const STRING_LITERAL = /(['"`])(?:\\.|(?!\1)[^\\])*\1/g
 const CX_CALL = /\bcx(?:\.raw)?\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g
 
@@ -34,9 +46,9 @@ const CX_CALL = /\bcx(?:\.raw)?\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g
  * (`as React.CSSProperties`, `as Array<string>[number]`) still is.
  */
 function hasCxArgumentCast(content: string): boolean {
-  return [...content.matchAll(CX_CALL)].some((call) =>
-    /\bas\s+[A-Za-z_$]/.test(call[1]!.replaceAll(STRING_LITERAL, '')),
-  )
+  return content
+    .matchAll(CX_CALL)
+    .some((call) => /\bas\s+[A-Za-z_$]/.test(call[1]!.replaceAll(STRING_LITERAL, '')))
 }
 
 const committed = readFileSync(OUTPUT_PATH, 'utf8')
@@ -75,13 +87,13 @@ describe('AC-consumer-constraints-38: every css fence compiles through the real 
   it('every top-level rule in every css fence sits inside @layer components.consumer or @layer overrides', () => {
     for (const fence of cssFences) {
       const root = postcss.parse(fence.content)
-      for (const node of root.nodes) {
-        if (node.type === 'comment') continue // e.g. the /* button.module.css */ filename comment
+      // A comment is not a rule, e.g. the /* button.module.css */ filename comment.
+      const nodes = root.nodes.filter((node) => node.type !== 'comment')
+      for (const node of nodes) {
         expect(node.type, 'no bare top-level rule outside a layer').toBe('atrule')
-        if (node.type === 'atrule') {
-          expect(node.name).toBe('layer')
-          expect(['components.consumer', 'overrides']).toContain(node.params)
-        }
+        const atRule = node as AtRule
+        expect(atRule.name).toBe('layer')
+        expect(['components.consumer', 'overrides']).toContain(atRule.params)
       }
     }
   })
@@ -151,7 +163,7 @@ describe('AC-consumer-constraints-38: every css fence compiles through the real 
  * `cx(`/`cx.raw(` that never invoked `tsc`, `ts-morph`, or any type-checking API at all — a
  * detector for whether a fence CALLS `cx`, not for whether that call type-checks.
  */
-function typeCheckAgainstPublishedCx(snippet: string): readonly ts.Diagnostic[] {
+function typeCheckAgainstPublishedCx(snippet: string): readonly Diagnostic[] {
   const dir = mkdtempSync(path.join(tmpdir(), 'nave-skill-tsc-'))
   try {
     const file = path.join(dir, 'fixture.ts')
@@ -161,15 +173,15 @@ function typeCheckAgainstPublishedCx(snippet: string): readonly ts.Diagnostic[] 
       file,
       [`import { cx } from '${importSpecifier}'`, `void (${snippet})`, ''].join('\n'),
     )
-    const program = ts.createProgram([file], {
+    const program = createProgram([file], {
       noEmit: true,
       strict: true,
-      target: ts.ScriptTarget.ES2022,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      target: ScriptTarget.ES2022,
+      module: ModuleKind.ESNext,
+      moduleResolution: ModuleResolutionKind.Bundler,
       skipLibCheck: true,
     })
-    return ts.getPreEmitDiagnostics(program)
+    return getPreEmitDiagnostics(program)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -178,11 +190,11 @@ function typeCheckAgainstPublishedCx(snippet: string): readonly ts.Diagnostic[] 
 describe('AC-consumer-constraints-38: the tsc clause is a real type-check, never a regex existence-detector', () => {
   const cxFences = fences.filter((f) => /\bcx(\.raw)?\(/.test(f.content))
 
-  // Each planted probe below spins up a real `ts.createProgram` against the published
+  // Each planted probe below spins up a real `createProgram` against the published
   // `cx.d.ts` — noticeably slower than the rest of this file's assertions and, under load,
   // close enough to vitest's 5s default to be worth running once rather than once per `it()`.
-  let notAnAtomDiagnostics: readonly ts.Diagnostic[]
-  let realAtomsDiagnostics: readonly ts.Diagnostic[]
+  let notAnAtomDiagnostics: readonly Diagnostic[]
+  let realAtomsDiagnostics: readonly Diagnostic[]
 
   beforeAll(() => {
     notAnAtomDiagnostics = typeCheckAgainstPublishedCx("cx('not-an-atom')")

@@ -36,7 +36,6 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { isBuiltin } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -45,7 +44,9 @@ const DIST_DIR = path.resolve(HERE, '../dist')
 
 const IMPORT_RE = /(?:^|\n)\s*(?:import|export)(?:[^'"]*?from\s*)?['"]([^'"]+)['"]/g
 
-/** Recursively lists files under `dir` whose name ends with one of `extensions`. */
+/**
+ * Recursively lists files under `dir` whose name ends with one of `extensions`.
+ */
 function listFiles(dir: string, extensions: string[]): string[] {
   if (!existsSync(dir)) return []
   const out: string[] = []
@@ -60,23 +61,36 @@ function listFiles(dir: string, extensions: string[]): string[] {
   return out
 }
 
-/** Escapes a string for safe use inside a `new RegExp(...)` pattern. */
+/**
+ * Escapes a string for safe use inside a `new RegExp(...)` pattern.
+ */
 function escapeRegExp(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 }
 
-/** External (non-relative, non-Node-builtin) import specifiers referenced by `files`. */
+/**
+ * External (non-relative, non-Node-builtin) import specifiers referenced in one file's `text`.
+ */
+function externalSpecifiersIn(text: string): string[] {
+  return text
+    .matchAll(IMPORT_RE)
+    .map((match) => match[1]!)
+    .filter((specifier) => {
+      if (specifier.startsWith('.') || specifier.startsWith('/')) return false
+      const builtinName = specifier.startsWith('node:') ? specifier.slice(5) : specifier
+      return !isBuiltin(builtinName)
+    })
+    .toArray()
+}
+
+/**
+ * External (non-relative, non-Node-builtin) import specifiers referenced by `files`.
+ */
 function externalSpecifiers(files: string[]): Set<string> {
   const specifiers = new Set<string>()
   for (const file of files) {
-    const text = readFileSync(file, 'utf8')
-    for (const match of text.matchAll(IMPORT_RE)) {
-      const specifier = match[1]!
-      if (specifier.startsWith('.') || specifier.startsWith('/')) continue
-      const builtinName = specifier.startsWith('node:') ? specifier.slice(5) : specifier
-      if (isBuiltin(builtinName)) continue
-      specifiers.add(specifier)
-    }
+    const fileSpecifiers = externalSpecifiersIn(readFileSync(file, 'utf8'))
+    for (const specifier of fileSpecifiers) specifiers.add(specifier)
   }
   return specifiers
 }
@@ -94,6 +108,6 @@ describe('no build inlines a third-party dependency', () => {
   })
 
   it.each(sourceSpecifiers)('keeps "%s" external in dist/, never inlined', (specifier) => {
-    expect(distText).toMatch(new RegExp(`from\\s*['"]${escapeRegExp(specifier)}['"]`))
+    expect(distText).toMatch(new RegExp(String.raw`from\s*['"]${escapeRegExp(specifier)}['"]`))
   })
 })

@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import NEWEST_CSS from './fixtures/lightningcss.css?raw'
 import OLDEST_CSS from './fixtures/lightningcss-1-22.css?raw'
+import NEWEST_CSS from './fixtures/lightningcss.css?raw'
 
 function computedDisplay(css: string, className: string): string {
   document.head.querySelectorAll('style[data-fixture]').forEach((node) => node.remove())

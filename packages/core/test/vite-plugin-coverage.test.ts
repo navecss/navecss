@@ -9,7 +9,6 @@ import { createLogger, type Logger, type Plugin, type PluginOption } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/vite.ts'
-import { vue } from './helpers/vite-plugins.ts'
 import { APP_FILES, COVERED_SOURCES } from './helpers/vite-app-files.ts'
 import {
   appConfig,
@@ -22,11 +21,13 @@ import {
   type Transformer,
   VITE_APIS,
 } from './helpers/vite-app.ts'
+import { vue } from './helpers/vite-plugins.ts'
 
 const TRANSFORMERS: readonly Transformer[] = ['postcss', 'lightningcss']
 
 let app: ScratchApp
 beforeAll(() => {
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- the setup hook builds the app the suite shares; a hook cannot return it
   app = makeApp(APP_FILES)
 })
 afterAll(() => app?.dispose())
@@ -35,7 +36,7 @@ afterAll(() => app?.dispose())
  * The last value `prop` is declared with in `body`: the one that wins the cascade.
  */
 function winning(body: string | undefined, prop: string): string | undefined {
-  const values = [...(body ?? '').matchAll(new RegExp(`${prop}:\\s*([^;}]+)`, 'g'))]
+  const values = (body ?? '').matchAll(new RegExp(String.raw`${prop}:\s*([^;}]+)`, 'g')).toArray()
   return values.at(-1)?.[1]?.trim()
 }
 
@@ -56,17 +57,25 @@ it('each scratch app keeps its own Vite dependency cache, so concurrent dev serv
   expect(appConfig(root, 'postcss', []).cacheDir).toBe(path.join(root, '.vite'))
 })
 
+/**
+ * A scratch app holding one stylesheet, `q.css`, loaded by a bare script.
+ */
+const oneSheet = (css: string): ScratchApp =>
+  makeApp({
+    'index.html': '<script type="module" src="/main.js"></script>',
+    'main.js': "import './q.css'",
+    'q.css': `${css}\n`,
+  })
+
 describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
   describe('AC-directive-core-32 — coverage, every style source, build and dev, both transformers', () => {
     it.each(TRANSFORMERS)(
       'vite build under css.transformer %s',
       async (transformer) => {
-        const { css, js } = await buildOutputs(
-          appConfig(app.root, transformer, vue(navePlugin())),
-          api,
-        )
+        const config = appConfig(app.root, transformer, vue(navePlugin()))
+        const { css, js } = await buildOutputs(config, api)
 
-        expectCovered(`${css}\n${js}`)
+        expect(() => expectCovered(`${css}\n${js}`)).not.toThrow()
       },
       60_000,
     )
@@ -74,11 +83,12 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
     it.each(TRANSFORMERS)(
       'the dev server under css.transformer %s',
       async (transformer) => {
-        const server = await startDev(appConfig(app.root, transformer, vue(navePlugin())), api)
+        const config = appConfig(app.root, transformer, vue(navePlugin()))
+        const server = await startDev(config, api)
         try {
           const served = await devCss(server, '/src/main.js', ['/src/u.css?direct'])
 
-          expectCovered(Object.values(served).join('\n'))
+          expect(() => expectCovered(Object.values(served).join('\n'))).not.toThrow()
         } finally {
           await server.close()
         }
@@ -88,13 +98,6 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
   })
 
   describe('a nested rule before a directive, under Lightning CSS at the documented floor', () => {
-    const oneSheet = (css: string): ScratchApp =>
-      makeApp({
-        'index.html': '<script type="module" src="/main.js"></script>',
-        'main.js': "import './q.css'",
-        'q.css': `${css}\n`,
-      })
-
     it('the last display declaration that applies to the rule is the directive’s', async () => {
       const sheet = oneSheet('.q { &:hover { color: red; } display: grid; @nave flex; }')
       try {
@@ -126,9 +129,10 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
         // At the floor Lightning CSS keeps nesting: drop the nested rules that carry a selector
         // (they do not apply to `.q` unconditionally) and read a bare `&{...}` as `.q`'s own.
         const flat = css.replaceAll(/&[^{};]+\{[^{}]*\}/g, '').replaceAll(/&\{([^{}]*)\}/g, '$1')
-        const displays = [...flat.matchAll(/(?:^|\})\.q\{([^}]*)\}/g)].flatMap((rule) =>
-          [...rule[1]!.matchAll(/display:([^;}]+)/g)].map((d) => d[1]!.trim()),
-        )
+        const displays = flat
+          .matchAll(/(?:^|\})\.q\{([^}]*)\}/g)
+          .flatMap((rule) => rule[1]!.matchAll(/display:([^;}]+)/g).map((d) => d[1]!.trim()))
+          .toArray()
 
         expect(displays.at(-1)).toBe('flex')
       } finally {
@@ -151,10 +155,10 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
       const scratch = makeApp({ ...APP_FILES, ...FOO })
       try {
         const logger = customLogger ?? createLogger('silent')
-        const original = logger.warn
+        const original = logger.warn.bind(logger)
         logger.warn = (message, options) => {
           warnings.push(message)
-          original.call(logger, message, options)
+          original(message, options)
         }
         const config = appConfig(scratch.root, 'lightningcss', plugins)
         await buildOutputs({ ...config, customLogger: logger }, api)
@@ -200,6 +204,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
       const probe = (): Plugin => ({
         name: 'probe',
         configResolved: (config) => {
+          // eslint-disable-next-line @typescript-eslint/unbound-method -- the function reference itself is compared, it is never called
           seen.push(config.logger.warn)
         },
       })

@@ -11,7 +11,7 @@
  */
 import { expect } from 'vitest'
 
-const join = (...parts: string[]) => parts.join('')
+const join = (...parts: string[]): string => parts.join('')
 
 export const PERSONA_IDS = [
   'PM',
@@ -28,13 +28,17 @@ export const PERSONA_IDS = [
 
 export const DATED_ID = /\b(?:F|D|E|LE|L|Lc)-\d{8}(?:-[a-z0-9]+)*\b/
 
-/** A requirement/acceptance-criteria id, e.g. `AC-consumer-constraints-39`: earlier this scan had
- * no clause for this shape at all, so a copy carrying only this kind of reference scanned clean. */
+/**
+ * A requirement/acceptance-criteria id, e.g. `AC-consumer-constraints-39`: earlier this scan had
+ * no clause for this shape at all, so a copy carrying only this kind of reference scanned clean.
+ */
 export const AC_ID = /\bAC-[a-z0-9-]+-\d+\b/
 
-export const HASH = String.fromCharCode(35)
+export const HASH = String.fromCodePoint(35)
 
-/** A synthetic dated id, for a test that plants one without writing a literal recognisable id. */
+/**
+ * A synthetic dated id, for a test that plants one without writing a literal recognisable id.
+ */
 export function syntheticDatedId(): string {
   return join('D', '-', '20200101', '-', '01')
 }
@@ -49,8 +53,8 @@ const BARE_HASH_REF = /(?<![\w/-])#(\d{1,4})(?!\d)/g
  * as a colour rather than a reference.
  */
 function isHexColourContext(text: string, matchIndex: number, digits: string): boolean {
-  const looksHex = /^[0-9a-fA-F]+$/.test(digits) && [3, 4, 6, 8].includes(digits.length)
-  if (!looksHex) return false
+  const isHexLength = /^[0-9a-fA-F]+$/.test(digits) && [3, 4, 6, 8].includes(digits.length)
+  if (!isHexLength) return false
   const before = text.slice(0, matchIndex)
   const after = text.slice(matchIndex + 1 + digits.length)
   return before.endsWith('`') && after.startsWith('`')
@@ -66,7 +70,7 @@ function isHexColourContext(text: string, matchIndex: number, digits: string): b
 function findBrainReferenceViolations(text: string): string[] {
   const violations: string[] = []
   for (const id of PERSONA_IDS) {
-    if (new RegExp(`\\b${id}\\b`).test(text)) violations.push(`persona id ${id}`)
+    if (new RegExp(String.raw`\b${id}\b`).test(text)) violations.push(`persona id ${id}`)
   }
   if (DATED_ID.test(text)) violations.push('a dated id')
   if (AC_ID.test(text)) violations.push('an AC id')
