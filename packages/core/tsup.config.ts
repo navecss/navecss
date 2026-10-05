@@ -7,6 +7,7 @@ export default defineConfig({
     bin: 'src/bin.ts',
     check: 'src/directive/check.ts',
     cx: 'src/cx.ts',
+    lightningcss: 'src/lightningcss.ts',
     postcss: 'src/postcss.ts',
     vite: 'src/vite.ts',
   },

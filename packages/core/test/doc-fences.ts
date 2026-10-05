@@ -211,10 +211,11 @@ export function checkCoreImport(
   return checkImportedNames(imp, srcFile, readSource)
 }
 
-// Only the subcommand this release ships. A later subcommand (e.g. `expand`)
-// is added here when it ships — until then, a fence naming it is a real doc bug.
+// Only the subcommands this release ships. A later subcommand is added here when it ships —
+// until then, a fence naming it is a real doc bug.
 const KNOWN_BIN_SUBCOMMANDS: Readonly<Record<string, ReadonlySet<string>>> = {
   check: new Set(['help', 'source']),
+  expand: new Set(['extend', 'help', 'out', 'source', 'watch']),
 }
 
 /**

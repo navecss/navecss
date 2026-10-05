@@ -128,11 +128,26 @@ function withoutBorderWidthMark(text: string, ...fragments: string[]): string {
 }
 
 /**
+ * The theming block's header comment names the package whose README it points at, AFTER this
+ * migration too, for reasons that have nothing to do with it: the line also ships inside
+ * `@navecss/core`'s own stylesheet, where "this package's README" meant a README without a
+ * "Theming" section. Folded back to its pre-change wording before the exhaustive delta check
+ * below, after asserting it occurs EXACTLY ONCE, so the frozen oracle never carries the change.
+ */
+const THEMING_POINTER = 'See the @navecss/tokens README ("Theming").'
+const PRE_THEMING_POINTER = 'See this package\'s README ("Theming").'
+
+function withoutNamedThemingPointer(text: string): string {
+  expect(text.split(THEMING_POINTER).length - 1, 'the theming pointer occurs exactly once').toBe(1)
+  return text.replace(THEMING_POINTER, () => PRE_THEMING_POINTER)
+}
+
+/**
  * `built('tokens.css')`, with every later addition above folded back to its pre-addition
  * rendering, so the exhaustive delta check below stays about the migration alone.
  */
 function builtTokensCssBeforeLaterAdditions(): string {
-  const withAdditions = built('tokens.css')
+  const withAdditions = withoutNamedThemingPointer(built('tokens.css'))
   return withoutBorderWidthMark(
     withoutZIndexSyntaxNarrowing(withoutAlphaPinningSuffix(withAdditions)),
     MARK_CSS_PROPERTY,
