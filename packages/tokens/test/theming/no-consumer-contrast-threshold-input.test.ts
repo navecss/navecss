@@ -140,7 +140,7 @@ function containingSection(markdown: string, needle: string): string {
  * review), each stripping exactly those two markers and each reading 481 characters, zero
  * non-ASCII, straight apostrophes. It has moved once since, in the commit that carried a
  * re-clearance replacing the one sentence about checks run over a consumer's values. The value
- * above is that paragraph's: 493 bytes, zero non-ASCII, computed from the previous constant
+ * below is that paragraph's: 493 bytes, zero non-ASCII, computed from the previous constant
  * with only that sentence replaced, and reproduced independently before it landed.
  */
 const CLEARED_PARAGRAPH_SHA256 = '1bf60330f686f5558888c574d017200fdcad7bcc14de3dd722ea3a051dc13092'
