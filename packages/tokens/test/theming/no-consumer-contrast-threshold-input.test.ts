@@ -209,11 +209,14 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
     // The containment test at the top lets text be appended to the paragraph, or put in front of
     // it, without anyone noticing, and the digest only pins the constant, never the README. So
     // the README's paragraph that holds the constant has to be the constant and nothing else.
+    // That is strict about presentation on purpose: a blockquote, list or emphasis marker in front
+    // of it is also something put in front of it, so presenting the paragraph that way is a
+    // change to make here, in the same commit, and not one this test waves through.
     const holding = TOKENS_README.split(/\n[ \t]*\n/).filter((paragraph) =>
       paragraph.includes(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT),
     )
     expect(holding).toHaveLength(1)
-    expect(holding[0]?.trim()).toBe(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT)
+    expect(holding[0]?.replaceAll(/^\n+|\n+$/g, '')).toBe(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT)
   })
 
   it('does not reach the repository-root README, the one surface product refused BY NAME', () => {
