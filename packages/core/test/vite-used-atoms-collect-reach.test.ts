@@ -7,27 +7,27 @@
  */
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import vuePlugin from '@vitejs/plugin-vue'
-import { type PluginOption, parseAst } from 'vite'
+import { parseAst, type PluginOption } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import type { AstNode } from '../src/vite-ast.ts'
 
-import { navePlugin } from '../src/vite.ts'
-import { CX_SOURCE, readModule } from '../src/vite-collect.ts'
 import { recordModule } from '../src/vite-collect-module.ts'
-import { resolveUsedOptions } from '../src/vite-options.ts'
+import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
 import { createExtendSource } from '../src/vite-extend.ts'
-import { createUsedContext } from '../src/vite-used.ts'
+import { resolveUsedOptions } from '../src/vite-options.ts'
 import { buildReport } from '../src/vite-used-report.ts'
+import { createUsedContext } from '../src/vite-used.ts'
+import { navePlugin } from '../src/vite.ts'
+import { assertScalesLinearly } from './helpers/perf-scaling.ts'
 import {
-  type Built,
   appFiles,
   atomLayerAtoms,
   atoms,
   buildUsed,
+  type Built,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
-import { assertScalesLinearly } from './helpers/perf-scaling.ts'
 import { IMPORT } from './helpers/used-atoms-rows.ts'
 import { appConfig, startDev } from './helpers/vite-app.ts'
 
@@ -35,7 +35,7 @@ import { appConfig, startDev } from './helpers/vite-app.ts'
  * Reads `code` as an application module; `isVueScript` says whether it is a compiled component's
  * script.
  */
-function read(code: string, isVueScript = false) {
+function read(code: string, isVueScript = false): ModuleReading {
   return readModule(code, parseAst(code) as unknown as AstNode, {
     cxSources: new Set([CX_SOURCE]),
     ownAtoms: new Set(),
@@ -60,6 +60,12 @@ async function build(
   }
 }
 
+/**
+ * The `<script setup>` block of a component that imports `cx`; `lang` is the attribute text after `setup`.
+ */
+const script = (lang: string): string =>
+  `<script setup${lang}>\nimport { cx } from '@navecss/core/cx'\nconst v = 'grid'\n</script>\n`
+
 describe('AC-used-atoms-06: a template compiled into the module that returns the setup', () => {
   let previous: string | undefined
   beforeAll(() => {
@@ -71,8 +77,6 @@ describe('AC-used-atoms-06: a template compiled into the module that returns the
   })
 
   const DEVTOOLS = { __VUE_PROD_DEVTOOLS__: 'true' }
-  const script = (lang: string): string =>
-    `<script setup${lang}>\nimport { cx } from '@navecss/core/cx'\nconst v = 'grid'\n</script>\n`
   const TEMPLATE = `<div :class="cx('flex', v)" />`
 
   const shapes: [string, Record<string, string>, Record<string, string>][] = [
@@ -256,16 +260,20 @@ describe('a module the host cannot parse', () => {
   })
 })
 
+/**
+ * A plugin that serves `code` for the virtual module `virtual:ui`, under the module id `id`.
+ */
+const virtualPlugin = (id: string, code: string): PluginOption => ({
+  name: 'virtual-ui',
+  resolveId(source) {
+    return source === 'virtual:ui' ? id : undefined
+  },
+  load(loaded) {
+    return loaded === id ? code : undefined
+  },
+})
+
 describe('a virtual module', () => {
-  const virtualPlugin = (id: string, code: string): PluginOption => ({
-    name: 'virtual-ui',
-    resolveId(source) {
-      return source === 'virtual:ui' ? id : undefined
-    },
-    load(loaded) {
-      return loaded === id ? code : undefined
-    },
-  })
   const entry = { 'src/a.js': "import { c } from 'virtual:ui'\nconsole.log(c)\n" }
 
   it.each(['\0virtual:ui', 'virtual:ui'])(
@@ -528,7 +536,10 @@ function elapsed(work: () => void): number {
  * A context and a host stand-in to record a module through, as the plugin's transform does; the
  * stand-in parses with `parse` (Vite's own parser by default).
  */
-function recordingFixture(parse: (code: string) => unknown = (code) => parseAst(code)) {
+function recordingFixture(parse: (code: string) => unknown = (code) => parseAst(code)): {
+  context: ReturnType<typeof createUsedContext>
+  ctx: never
+} {
   const context = createUsedContext(resolveUsedOptions({}), createExtendSource(undefined))
   context.root = '/scale-root'
   const ctx = {
@@ -578,37 +589,41 @@ describe('a module nested deeper than the reader can follow', () => {
 
 describe('reading a long module costs time in proportion to its length', () => {
   it('a long chain of concatenated strings', async () => {
-    await assertScalesLinearly((size) => {
-      const chain = Array.from({ length: size }, (_, index) => `'p${index} '`).join(' + ')
-      const code = `${IMPORT}export const s = ${chain}\n`
-      const program = parseAst(code) as unknown as AstNode
-      return elapsed(() => {
-        readModule(code, program, {
-          cxSources: new Set([CX_SOURCE]),
-          ownAtoms: new Set(),
-          isDependency: false,
+    await expect(
+      assertScalesLinearly((size) => {
+        const chain = Array.from({ length: size }, (_, index) => `'p${index} '`).join(' + ')
+        const code = `${IMPORT}export const s = ${chain}\n`
+        const program = parseAst(code) as unknown as AstNode
+        return elapsed(() => {
+          readModule(code, program, {
+            cxSources: new Set([CX_SOURCE]),
+            ownAtoms: new Set(),
+            isDependency: false,
+          })
         })
-      })
-    }, 500)
+      }, 500),
+    ).resolves.toBeDefined()
   }, 120_000)
 
   it('a long chain of constants, each read by a call', async () => {
-    await assertScalesLinearly((size) => {
-      const chain = Array.from({ length: size }, (_, index) => `const c${index + 1} = c${index}`)
-      const calls = Array.from(
-        { length: size },
-        (_, index) => `export const u${index} = cx(c${size})`,
-      )
-      const code = `${IMPORT}const c0 = 'flex'\n${chain.join('\n')}\n${calls.join('\n')}\n`
-      const program = parseAst(code) as unknown as AstNode
-      return elapsed(() => {
-        readModule(code, program, {
-          cxSources: new Set([CX_SOURCE]),
-          ownAtoms: new Set(),
-          isDependency: false,
+    await expect(
+      assertScalesLinearly((size) => {
+        const chain = Array.from({ length: size }, (_, index) => `const c${index + 1} = c${index}`)
+        const calls = Array.from(
+          { length: size },
+          (_, index) => `export const u${index} = cx(c${size})`,
+        )
+        const code = `${IMPORT}const c0 = 'flex'\n${chain.join('\n')}\n${calls.join('\n')}\n`
+        const program = parseAst(code) as unknown as AstNode
+        return elapsed(() => {
+          readModule(code, program, {
+            cxSources: new Set([CX_SOURCE]),
+            ownAtoms: new Set(),
+            isDependency: false,
+          })
         })
-      })
-    }, 150)
+      }, 150),
+    ).resolves.toBeDefined()
   }, 120_000)
 
   it('recording a module with many problems', async () => {
@@ -638,17 +653,21 @@ describe('reading a long module costs time in proportion to its length', () => {
   }, 120_000)
 })
 
+/**
+ * A plugin that serves a JSON-looking virtual module under the given `moduleType`.
+ */
+const dataPlugin = (moduleType: string): PluginOption => ({
+  name: 'data-module',
+  resolveId(source) {
+    return source === 'virtual:data' ? '\0virtual:data' : undefined
+  },
+  load(id) {
+    if (id !== '\0virtual:data') return
+    return { code: '{ "cls": "nave-grid" }', moduleType }
+  },
+})
+
 describe('a module that is not JavaScript when the build reads it', () => {
-  const dataPlugin = (moduleType: string): PluginOption => ({
-    name: 'data-module',
-    resolveId(source) {
-      return source === 'virtual:data' ? '\0virtual:data' : undefined
-    },
-    load(id) {
-      if (id !== '\0virtual:data') return undefined
-      return { code: '{ "cls": "nave-grid" }', moduleType } as never
-    },
-  })
   const entry = { 'src/a.js': "import d from 'virtual:data'\nconsole.log(d)\n" }
 
   it.each(['json', 'text'])(
@@ -739,6 +758,7 @@ describe('AC-used-atoms-34: a position is printed only where the source map lead
     name: 'prepend-lines',
     enforce: 'pre',
     transform(code, id) {
+      // eslint-disable-next-line unicorn/no-null -- `map: null` is the host's own way of saying "this transform returns no source map"; leaving it out means something else to the host
       return id.endsWith('src/a.js') ? { code: `\n\n\n${code}`, map: null } : undefined
     },
   }

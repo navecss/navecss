@@ -7,15 +7,16 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as viteNewest from 'vite-newest'
 import {
-  build as buildWith821,
-  createBuilder as createBuilderWith821,
-  createServer as createServerWith821,
+  build as buildOnNewest,
+  createBuilder as createBuilderOnNewest,
+  createServer as createServerOnNewest,
   type InlineConfig,
+  version as newestVersion,
   type PluginOption,
   type ViteDevServer,
 } from 'vite'
+import * as viteFloor from 'vite-floor'
 
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -23,22 +24,28 @@ export type Transformer = 'lightningcss' | 'postcss'
 
 /**
  * A Vite to run a fixture on. The supported range is measured, not declared: the fixtures run on
- * the Vite the package pins (8.2.1) and on the newest 8.x at the time of the release (an alias
- * dependency, `vite-newest`, raised with it).
+ * the floor (8.2.1, an alias dependency, `vite-floor`, which Dependabot's version updates skip)
+ * and on the newest 8.x at the time of the release (the package's own `vite`, which Dependabot
+ * raises). A helper called with no `api` runs on the floor. Types come from the newest Vite and the
+ * floor leg is cast to them, so the floor is checked by running the fixtures on it, not by typing
+ * them. The Vue and Svelte plugins resolve `vite` by name, so on the floor leg they run linked to
+ * the newest Vite: the floor host is 8.2.1, its framework plugins are not.
  */
 export interface ViteApi {
-  readonly build: typeof buildWith821
-  readonly createBuilder: typeof createBuilderWith821
-  readonly createServer: typeof createServerWith821
+  readonly build: typeof buildOnNewest
+  readonly createBuilder: typeof createBuilderOnNewest
+  readonly createServer: typeof createServerOnNewest
+  readonly version: string
 }
 
 export const VITE_APIS: Readonly<Record<string, ViteApi>> = {
-  '8.2.1': {
-    build: buildWith821,
-    createBuilder: createBuilderWith821,
-    createServer: createServerWith821,
+  '8.2.1': viteFloor as unknown as ViteApi,
+  'newest 8.x': {
+    build: buildOnNewest,
+    createBuilder: createBuilderOnNewest,
+    createServer: createServerOnNewest,
+    version: newestVersion,
   },
-  'newest 8.x': viteNewest as unknown as ViteApi,
 }
 
 /**
@@ -113,9 +120,9 @@ export async function buildOutputs(
   config: InlineConfig,
   api: ViteApi = VITE_APIS['8.2.1']!,
 ): Promise<{
+  assets: Record<string, string>
   css: string
   js: string
-  assets: Record<string, string>
 }> {
   return outputsOf(await api.build(config))
 }
@@ -124,9 +131,9 @@ export async function buildOutputs(
  * The CSS, the JavaScript and the assets of a build result (one output or several).
  */
 export function outputsOf(result: unknown): {
+  assets: Record<string, string>
   css: string
   js: string
-  assets: Record<string, string>
 } {
   const outputs = (Array.isArray(result) ? result : [result]) as unknown as {
     output: OutputLike[]
@@ -163,7 +170,8 @@ function cssOfModule(url: string, code: string): string | undefined {
   if (url.includes('?direct')) return code
   const injected = CSS_STRING.exec(code)
   if (injected) return JSON.parse(injected[1]!) as string
-  const inline = url.includes('?inline') ? DEFAULT_STRING.exec(code) : null
+  if (!url.includes('?inline')) return undefined
+  const inline = DEFAULT_STRING.exec(code)
   return inline ? (JSON.parse(inline[1]!) as string) : undefined
 }
 
@@ -195,6 +203,10 @@ export async function devCss(
   return served
 }
 
+/**
+ * Starts a Vite dev server in middleware mode on `config` through the given Vite API, so a test
+ * can request modules from it without binding a port.
+ */
 export async function startDev(
   config: InlineConfig,
   api: ViteApi = VITE_APIS['8.2.1']!,
@@ -211,7 +223,7 @@ export async function startDev(
  * when no rule does.
  */
 export function ruleBodyFor(css: string, name: string): string | undefined {
-  const match = new RegExp(`${name}[^{}]*\\{([^}]*)\\}`).exec(css)
+  const match = new RegExp(String.raw`${name}[^{}]*\{([^}]*)\}`).exec(css)
   return match?.[1]?.replaceAll(/\s+/g, ' ').trim()
 }
 

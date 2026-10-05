@@ -32,6 +32,10 @@ export default defineConfig([
     // Written by packages/base-ui/scripts/generate-wrappers.ts, one generated module per Base UI
     // subpath; the generator and the roster it reads are what get linted and reviewed.
     'packages/base-ui/src/**/*.generated.ts',
+    // The one JSON file inside a linted test tree. ESLint computes a config for every file it
+    // walks past, JSON included, and for this one it hits the same unicorn-versus-jsonc language
+    // error as above, which fails the whole package lint before any test file is read.
+    'packages/core/test/browser/tsconfig.json',
   ]),
 
   // ── Base ───────────────────────────────────────────────────────────────────
@@ -258,6 +262,16 @@ export default defineConfig([
       'unicorn/no-this-outside-of-class': 'off',
     },
   },
+  // ── lightningcss.ts — a host-loaded entry point, like postcss.ts and vite.ts, so it also
+  // carries the default export hosts load it by. Under `onUnknown: 'warn'` it has no host to hand
+  // a warning to, so `console.warn` is that mode's output channel. ───────────────────────────
+  {
+    files: ['**/src/lightningcss.ts'],
+    rules: {
+      'no-console': 'off',
+      'no-restricted-syntax': 'off',
+    },
+  },
   // The post-order half is the second plugin object `navePlugin()` returns, and the plugin a
   // worker's build runs is its sibling: the same host convention, hooks whose `this` is the
   // host's plugin context.
@@ -363,11 +377,12 @@ export default defineConfig([
     },
   },
 
-  // ── navecss-core bin (navecss-core check) ───────────────────────────────────
+  // ── navecss-core bin (navecss-core check, navecss-core expand) ──────────────
   // Same shape as navecss-tokens' own bin.ts override above: stdout/stderr IS this
-  // entry point's whole output channel.
+  // entry point's whole output channel, and `expand-command.ts` is where the second subcommand
+  // prints it.
   {
-    files: ['packages/core/src/bin.ts'],
+    files: ['packages/core/src/bin.ts', 'packages/core/src/expand-command.ts'],
     rules: {
       'no-console': 'off',
     },
@@ -382,6 +397,10 @@ export default defineConfig([
       '**/scripts/generate-consumer-theming-fixtures.ts',
       // And the one-line progress line of the Vite plugin's real-browser fixture, run beside it.
       '**/scripts/generate-vite-plugin-fixtures.ts',
+      // And the same one-line progress line of the Lightning CSS adapter's and the no-bundler
+      // page's fixtures, which sit beside it.
+      '**/scripts/generate-lightningcss-fixtures.ts',
+      '**/scripts/generate-no-bundler-fixture.ts',
       // Same shape again: a one-line "Wrote <path>" progress line for the doc/data generators
       // (ATOMS.md, TOKENS.md, nave.css-data.json, SKILL.md) run by hand or from a maintainer's
       // own terminal, never imported for their output.
@@ -610,10 +629,36 @@ export default defineConfig([
     plugins: { vitest: vitestPlugin },
     rules: {
       ...vitestPlugin.configs.recommended.rules,
+      // vitest's expect takes an optional message as its second argument.
+      'vitest/valid-expect': ['error', { maxArgs: 2 }],
       'max-lines': 'off',
       'max-lines-per-function': 'off',
       'jsdoc/require-jsdoc': 'off',
       '@typescript-eslint/no-empty-function': 'off',
+    },
+  },
+
+  // ── Two suites that simulate a build mode by assigning NODE_ENV themselves and restoring it
+  // afterwards; the variable is a value the test sets, not an input the build reads from the
+  // environment, so turbo has nothing to hash for it ───────────────────────────────────────────
+  {
+    files: [
+      'packages/core/test/vite-used-atoms-collect-reach.test.ts',
+      'packages/core/test/vite-used-atoms-frameworks.test.ts',
+    ],
+    rules: {
+      'turbo/no-undeclared-env-vars': 'off',
+    },
+  },
+
+  // ── core's browser tests import stylesheets that `scripts/generate-*-fixtures.ts` writes into
+  // the gitignored test/browser/fixtures/ before the browser run. On a clean checkout they do not
+  // exist yet, so the resolver would fail lint before any generator ran; the browser tests that
+  // load them are what checks they exist ─────────────────────────────────────────────────────────
+  {
+    files: ['packages/core/test/browser/**/*.ts'],
+    rules: {
+      'import-x/no-unresolved': ['error', { ignore: [String.raw`^\./fixtures/[^/]+\.css\?raw$`] }],
     },
   },
 

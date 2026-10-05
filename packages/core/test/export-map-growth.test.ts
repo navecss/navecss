@@ -100,13 +100,32 @@ function assertPublishedExportsPresent(exports: Record<string, unknown>): void {
 describe('AC-directive-core-27 — the export map only grows, and core gains no dependency', () => {
   it('keeps every 0.1.0 key, each with every 0.1.0 condition', () => {
     const exports = manifest().exports as Record<string, unknown>
-    assertPublishedExportsPresent(exports)
+    expect(() => assertPublishedExportsPresent(exports)).not.toThrow()
   })
 
-  it('adds exactly ./check and ./vite beyond the 0.1.0 keys', () => {
+  it('adds exactly ./check, ./vite, ./lightningcss and ./standalone beyond the 0.1.0 keys', () => {
     const exports = manifest().exports as Record<string, unknown>
     const added = Object.keys(exports).filter((k) => !Object.hasOwn(PUBLISHED_0_1_0_EXPORTS, k))
-    expect(added.toSorted()).toEqual(['./check', './vite'])
+    expect(added.toSorted((a, b) => a.localeCompare(b))).toEqual([
+      './check',
+      './lightningcss',
+      './standalone',
+      './vite',
+    ])
+  })
+
+  it('adds only ./lightningcss and ./standalone to what ./check and ./vite already had', () => {
+    const exports = manifest().exports as Record<string, unknown>
+    const slice2 = new Set([...Object.keys(PUBLISHED_0_1_0_EXPORTS), './check', './vite'])
+    const added = Object.keys(exports).filter((k) => !slice2.has(k))
+    expect(added.toSorted((a, b) => a.localeCompare(b))).toEqual(['./lightningcss', './standalone'])
+  })
+
+  it('exports no host subpath without a green fixture: none of rspack, esbuild, rollup, rolldown, webpack, turbopack', () => {
+    const exports = manifest().exports as Record<string, unknown>
+    for (const key of Object.keys(exports)) {
+      expect(key).not.toMatch(/^\.\/(?:rspack|esbuild|rollup|rolldown|webpack|turbopack)\b/)
+    }
   })
 
   it('keeps dependencies exactly @navecss/tokens, and postcss the sole optional peer', () => {

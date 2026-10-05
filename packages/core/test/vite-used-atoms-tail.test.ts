@@ -4,28 +4,29 @@
  * compiles from TypeScript, expressions nested deeper than a call stack, the specifiers a module
  * imports `cx` through, and the classes a module the build cannot read still writes.
  */
+import vuePlugin from '@vitejs/plugin-vue'
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import vuePlugin from '@vitejs/plugin-vue'
-import { type PluginOption, parseAst } from 'vite'
+import { parseAst, type PluginOption } from 'vite'
 import { describe, expect, it } from 'vitest'
 
 import type { AstNode } from '../src/vite-ast.ts'
 
-import { CX_SOURCE, readModule } from '../src/vite-collect.ts'
+import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
+import { createExtendSource } from '../src/vite-extend.ts'
 import { HANDSHAKE_FILE } from '../src/vite-handshake.ts'
 import { resolveUsedOptions } from '../src/vite-options.ts'
-import { createExtendSource } from '../src/vite-extend.ts'
 import { NOT_PARSED, textRecord, unreadableRecord } from '../src/vite-unread-record.ts'
 import { createUsedContext } from '../src/vite-used.ts'
+import { assertScalesLinearly } from './helpers/perf-scaling.ts'
 import {
   addPackage,
   appFiles,
   atomLayerAtoms,
   buildUsed,
+  type Built,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
-import { assertScalesLinearly } from './helpers/perf-scaling.ts'
 import { IMPORT } from './helpers/used-atoms-rows.ts'
 
 const UNMAPPED = ' (line unknown: no source map leads from the compiled code to this file)'
@@ -35,7 +36,7 @@ const WITHOUT_MAP =
 /**
  * Reads `code` as an application module.
  */
-function read(code: string) {
+function read(code: string): ModuleReading {
   return readModule(code, parseAst(code) as unknown as AstNode, {
     cxSources: new Set([CX_SOURCE]),
     ownAtoms: new Set(),
@@ -49,7 +50,7 @@ function read(code: string) {
 async function build(
   modules: Record<string, string>,
   settings: Parameters<typeof buildUsed>[1] = {},
-) {
+): Promise<Built> {
   const app = makeUsedApp(appFiles(modules))
   try {
     return await buildUsed(app, settings)
@@ -81,11 +82,14 @@ describe('AC-used-atoms-34: an inline script of an HTML file is never told to as
   )
 })
 
-describe('AC-used-atoms-31: an empty value ends a class only when what follows it ends it too', () => {
-  const module = (expression: string): Record<string, string> => ({
-    'src/a.js': `export const f = (on) => ${expression}\n`,
-  })
+/**
+ * An app module whose `f` returns `expression`.
+ */
+const module = (expression: string): Record<string, string> => ({
+  'src/a.js': `export const f = (on) => ${expression}\n`,
+})
 
+describe('AC-used-atoms-31: an empty value ends a class only when what follows it ends it too', () => {
   it.each([
     "`nave-flex${''}-col`",
     "'nave-flex' + (on ? '' : ' x') + '-col'",
@@ -165,7 +169,7 @@ describe('AC-used-atoms-02: a module the host compiles from TypeScript is parsed
         return id === 'virtual:ts' ? '\0virtual:ts' : undefined
       },
       load(id) {
-        if (id !== '\0virtual:ts') return undefined
+        if (id !== '\0virtual:ts') return
         return {
           code: `${IMPORT}const n: string = 'x'\nexport const c = cx('grid') + n\n`,
           moduleType: 'ts',
@@ -189,10 +193,24 @@ describe('AC-used-atoms-02: a module the host compiles from TypeScript is parsed
   }, 60_000)
 })
 
-describe('AC-used-atoms-03: an expression nested deeper than a call stack is read', () => {
-  const chainOf = (size: number): string =>
-    `${IMPORT}export const a = cx(${Array.from({ length: size }, () => "''").join(' || ')} || 'flex')\n`
+/**
+ * A `cx()` call whose argument is a chain of `size` empty strings joined by `||`, ending in `'flex'`.
+ */
+const chainOf = (size: number): string =>
+  `${IMPORT}export const a = cx(${Array.from({ length: size }, () => "''").join(' || ')} || 'flex')\n`
 
+/**
+ * A module with `size` names that each read the one before twice, ending in a call that reads the last.
+ */
+const doubleReadChain = (size: number): string => {
+  const links = Array.from(
+    { length: size },
+    (_, index) => `const a${index + 1} = on ? a${index} : a${index}`,
+  )
+  return `${IMPORT}export const f = (on) => {\nconst a0 = 'flex'\n${links.join('\n')}\nreturn ['nave-grid' + a${size}, cx(a${size})]\n}\n`
+}
+
+describe('AC-used-atoms-03: an expression nested deeper than a call stack is read', () => {
   it('builds a 2500-term chain of || green, with flex', async () => {
     const built = await build({ 'src/a.js': chainOf(2500) })
 
@@ -226,21 +244,14 @@ describe('AC-used-atoms-03: an expression nested deeper than a call stack is rea
   })
 
   it('reads names that each read the one before twice in time proportional to their number', async () => {
-    const make = (size: number): string => {
-      const links = Array.from(
-        { length: size },
-        (_, index) => `const a${index + 1} = on ? a${index} : a${index}`,
-      )
-      return `${IMPORT}export const f = (on) => {\nconst a0 = 'flex'\n${links.join('\n')}\nreturn ['nave-grid' + a${size}, cx(a${size})]\n}\n`
-    }
     await assertScalesLinearly((size) => {
       const start = performance.now()
-      const reading = read(make(size))
+      const reading = read(doubleReadChain(size))
       const spent = performance.now() - start
       expect(reading.problems.map((problem) => problem.kind)).toEqual(['concatenation'])
       return spent
     }, 5)
-    const reading = read(make(40))
+    const reading = read(doubleReadChain(40))
     expect([...reading.atoms]).toEqual(['flex'])
   }, 120_000)
 })
@@ -297,13 +308,16 @@ describe('AC-used-atoms-47: a specifier is judged from the module that writes it
   }, 60_000)
 })
 
-describe('AC-used-atoms-17: a module the build cannot read still writes its classes', () => {
-  const context = (): ReturnType<typeof createUsedContext> =>
-    createUsedContext(
-      resolveUsedOptions({ keepFor: { 'ui-lib': ['flex'] } }),
-      createExtendSource(undefined),
-    )
+/**
+ * A used-atoms context whose `keepFor` lists `ui-lib`.
+ */
+const context = (): ReturnType<typeof createUsedContext> =>
+  createUsedContext(
+    resolveUsedOptions({ keepFor: { 'ui-lib': ['flex'] } }),
+    createExtendSource(undefined),
+  )
 
+describe('AC-used-atoms-17: a module the build cannot read still writes its classes', () => {
   it('keeps the classes of an unreadable module of a listed package', () => {
     const record = unreadableRecord(
       context(),
@@ -322,13 +336,13 @@ describe('AC-used-atoms-17: a module the build cannot read still writes its clas
 
   it('decodes the strings of a JSON module before it looks for classes', () => {
     const record = textRecord(context(), {
-      code: '{"c":"nave-\\u0066lex","d":["a nave-grid"]}',
+      code: String.raw`{"c":"nave-\u0066lex","d":["a nave-grid"]}`,
       id: '/r/src/data.json',
       moduleType: 'json',
       pkg: undefined,
     })
 
-    expect([...record.atoms].toSorted()).toEqual(['flex', 'grid'])
+    expect([...record.atoms].toSorted((a, b) => a.localeCompare(b))).toEqual(['flex', 'grid'])
   })
 
   it('writes the file nothing else would: a JSON module the build reads names its classes', async () => {
@@ -339,7 +353,7 @@ describe('AC-used-atoms-17: a module the build cannot read still writes its clas
       },
       load(id) {
         return id === '\0virtual:data'
-          ? { code: '{"c":"nave-\\u0066lex"}', moduleType: 'json' }
+          ? { code: String.raw`{"c":"nave-\u0066lex"}`, moduleType: 'json' }
           : undefined
       },
     }
@@ -388,10 +402,14 @@ describe('AC-used-atoms-31: a long chain that goes on after the prefix is read o
   }, 120_000)
 })
 
+/**
+ * A module of `f`, with `prefix` before its import and `lineBreak` between its lines.
+ */
+const source = (prefix: string, lineBreak: string): string =>
+  `${prefix}${IMPORT.trim()}${lineBreak}export const f = (v) => cx(v)${lineBreak}`
+
 describe('AC-used-atoms-34: a map that differs from the file only by a byte order mark or line breaks', () => {
-  const bom = '\uFEFF'
-  const source = (prefix: string, lineBreak: string): string =>
-    `${prefix}${IMPORT.trim()}${lineBreak}export const f = (v) => cx(v)${lineBreak}`
+  const bom = '\u{FEFF}'
 
   it.each([
     ['a byte order mark', bom, '\n'],
@@ -404,9 +422,9 @@ describe('AC-used-atoms-34: a map that differs from the file only by a byte orde
         name: 'normalizing-load',
         enforce: 'pre',
         load(id) {
-          if (!id.endsWith('src/a.js')) return undefined
+          if (!id.endsWith('src/a.js')) return
           return readFileSync(id, 'utf8')
-            .replace(/^\uFEFF/, '')
+            .replace(/^\u{FEFF}/u, '')
             .replaceAll('\r\n', '\n')
         },
       }

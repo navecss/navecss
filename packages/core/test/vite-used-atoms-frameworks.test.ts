@@ -3,13 +3,14 @@
  * `@vitejs/plugin-vue` compiles them in a build, a build that keeps the template apart, and the
  * dev server; and Svelte.
  */
+import type { PluginOption } from 'vite'
+
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import vuePlugin from '@vitejs/plugin-vue'
-import type { PluginOption } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { navePlugin } from '../src/vite.ts'
 import { collectedAtoms, stateFor } from '../src/vite-state.ts'
+import { navePlugin } from '../src/vite.ts'
 import {
   appFiles,
   atomLayerAtoms,

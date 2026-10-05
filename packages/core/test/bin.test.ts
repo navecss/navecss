@@ -26,7 +26,7 @@ const BIN = path.resolve(HERE, '..', 'dist', 'bin.js')
 function run(
   cwd: string,
   ...args: string[]
-): { out: string; status: number | null; signal: NodeJS.Signals | null } {
+): { out: string; signal: NodeJS.Signals | null; status: number | null } {
   const result = spawnSync(process.execPath, [BIN, 'check', ...args], {
     cwd,
     encoding: 'utf8',

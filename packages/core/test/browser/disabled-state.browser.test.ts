@@ -42,12 +42,12 @@ import { describe, expect, it } from 'vitest'
 // computed-value time, and the reset is what carries the `currentcolor`
 // fill rule the doc comment claims reaches inline icons.
 import TOKENS_CSS from '../../../tokens/dist/tokens.css?raw'
-import CORE_RESET_CSS from '../../dist/reset.css?raw'
 import CORE_ATOMIC_CSS from '../../dist/atomic.css?raw'
+import CORE_RESET_CSS from '../../dist/reset.css?raw'
 
 function mount(): void {
   document.head.querySelectorAll('style[data-fixture]').forEach((node) => node.remove())
-  document.body.innerHTML = ''
+  document.body.replaceChildren()
   // Each of the three files self-declares the same @layer order, so
   // concatenating them here reproduces the shipped cascade rather than a
   // fixture-specific one.

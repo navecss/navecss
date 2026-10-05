@@ -17,8 +17,9 @@
  * putting the repository name in front of the number clears the rule against BARE references,
  * which fences qualified spellings out by construction, and lands squarely on the separate rule
  * against naming the internal repository at all. The two obligations close on the sentence from
- * opposite sides, so deletion was the only compliant act. Sentences one through four are
- * byte-identical to the 2026-08-22 clearance.
+ * opposite sides, so deletion was the only compliant act. Sentences one through three are
+ * byte-identical to the 2026-08-22 clearance. Sentence four was replaced by a later
+ * re-clearance, described at the digest below.
  *
  * WHAT THIS FILE NO LONGER DOES, and why that is not a coverage loss. It used to run a
  * repository-side identifier detector over the constant, in this same file, because the only
@@ -123,7 +124,7 @@ function containingSection(markdown: string, needle: string): string {
 }
 
 /**
- * SHA-256 of R27's cleared paragraph, over the paragraph's own 481 bytes: the spec presents it
+ * SHA-256 of R27's cleared paragraph, over the paragraph's own 493 bytes: the spec presents it
  * as a bold-opened blockquote, and the `> ` and `**` markers are how the spec PRESENTS cleared
  * copy rather than part of the cleared bytes (`RETHEMING_NOTICE` is the settled precedent, bold
  * and quoted in its spec, plain in its constant and plain in this README).
@@ -134,13 +135,15 @@ function containingSection(markdown: string, needle: string): string {
  *
  * What the number is worth is entirely its provenance, so this states that rather than the
  * stronger thing it is tempting to state. It is NOT a check against the spec, which CI cannot
- * read. It is a check that the constant still equals bytes four parties computed independently
- * from R27's source spec on 2026-09-07 (engineering, quality, architecture and
- * accessibility/licensing review), each stripping
- * exactly those two markers and each reading 481 characters, zero non-ASCII, straight
- * apostrophes.
+ * read. The digest was first set to bytes four parties computed independently from R27's
+ * source spec on 2026-09-07 (engineering, quality, architecture and accessibility/licensing
+ * review), each stripping exactly those two markers and each reading 481 characters, zero
+ * non-ASCII, straight apostrophes. It has moved once since, in the commit that carried a
+ * re-clearance replacing the one sentence about checks run over a consumer's values. The value
+ * below is that paragraph's: 493 bytes, zero non-ASCII, computed from the previous constant
+ * with only that sentence replaced, and reproduced independently before it landed.
  */
-const CLEARED_PARAGRAPH_SHA256 = '23e9780e3fc3bb9912ae9fff460601eee678c9d6afa88b3b0a5c1f057ffa73a7'
+const CLEARED_PARAGRAPH_SHA256 = '1bf60330f686f5558888c574d017200fdcad7bcc14de3dd722ea3a051dc13092'
 
 /**
  * A qualified tracker reference, `<slug>#<digits>`: what a bare number turns into when someone
@@ -200,6 +203,20 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
   it('is sourced from that one constant: exactly one instance, never authored a second time', () => {
     const occurrences = TOKENS_README.split(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT).length - 1
     expect(occurrences).toBe(1)
+  })
+
+  it('is the whole paragraph the README carries there: nothing is appended to it or prepended to it', () => {
+    // The containment test at the top lets text be appended to the paragraph, or put in front of
+    // it, without anyone noticing, and the digest only pins the constant, never the README. So
+    // the README's paragraph that holds the constant has to be the constant and nothing else.
+    // That is strict about presentation on purpose: a blockquote, list or emphasis marker in front
+    // of it is also something put in front of it, so presenting the paragraph that way is a
+    // change to make here, in the same commit, and not one this test waves through.
+    const holding = TOKENS_README.split(/\n[ \t]*\n/).filter((paragraph) =>
+      paragraph.includes(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT),
+    )
+    expect(holding).toHaveLength(1)
+    expect(holding[0]?.replaceAll(/^\n+|\n+$/g, '')).toBe(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT)
   })
 
   it('does not reach the repository-root README, the one surface product refused BY NAME', () => {

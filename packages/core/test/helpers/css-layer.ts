@@ -126,18 +126,22 @@ function closingParen(text: string, open: number): number {
  * Whether the selector `text` can only match when some element carries a built-in atom class that
  * is not in `kept`.
  */
-function needsUnkept(text: string, kept: ReadonlySet<string>): boolean {
+function requiresUnkept(text: string, kept: ReadonlySet<string>): boolean {
   let own = ''
   let index = 0
   while (index < text.length) {
     const group = /^:(is|where)\(/i.exec(text.slice(index))
-    if (text[index] === '(' || text[index] === '[' || group) {
+    if (group || text[index] === '(' || text[index] === '[') {
       // Skip a bracket or an argument whole; an :is() or :where() is judged by its alternatives.
       const open = group ? index + group[0].length - 1 : index
       const close = text[open] === '[' ? text.indexOf(']', open) : closingParen(text, open)
-      if (group) {
-        const alternatives = membersOf(text.slice(open + 1, close))
-        if (alternatives.every((alternative) => needsUnkept(alternative, kept))) return true
+      if (
+        group &&
+        membersOf(text.slice(open + 1, close)).every((alternative) =>
+          requiresUnkept(alternative, kept),
+        )
+      ) {
+        return true
       }
       index = close + 1
     } else {
@@ -145,9 +149,9 @@ function needsUnkept(text: string, kept: ReadonlySet<string>): boolean {
       index += 1
     }
   }
-  return [...own.matchAll(/\.(nave-[\w-]+)/g)].some(
-    (match) => ATOM_CLASSES.has(match[1]!) && !kept.has(match[1]!),
-  )
+  return own
+    .matchAll(/\.(nave-[\w-]+)/g)
+    .some((match) => ATOM_CLASSES.has(match[1]!) && !kept.has(match[1]!))
 }
 
 /**
@@ -162,7 +166,7 @@ export function keepOnly(nodes: readonly Node[], kept: ReadonlySet<string>): Nod
       if (children.length > 0) result.push({ prelude: node.prelude, children })
       continue
     }
-    const members = membersOf(node.prelude).filter((member) => !needsUnkept(member, kept))
+    const members = membersOf(node.prelude).filter((member) => !requiresUnkept(member, kept))
     if (members.length > 0) result.push({ prelude: members.join(','), body: node.body! })
   }
   return result

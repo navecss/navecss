@@ -119,10 +119,42 @@ describe('AC-directive-core-29 — every documented config fence names a real su
     ])
   })
 
-  it('reds on a fence running a subcommand the bin does not have (control)', () => {
-    expect(checkBinInvocation({ flags: ['out'], subcommand: 'expand' })).toEqual([
-      'navecss-core has no subcommand "expand"',
+  it('the fence set includes the Lightning CSS adapter’s fence and the no-bundler fences', () => {
+    const lightning = coreImports.filter(
+      ({ imp }) => imp.specifier === '@navecss/core/lightningcss',
+    )
+    const expand = binInvocations.filter(({ inv }) => inv.subcommand === 'expand')
+
+    expect(lightning.length).toBeGreaterThan(0)
+    expect(expand.length).toBeGreaterThan(0)
+  })
+
+  it('reds on a fence importing a misspelled name from the Lightning CSS subpath (control)', () => {
+    const imp: CoreImport = {
+      names: [{ isDefault: false, isType: false, name: 'navePlugn' }],
+      specifier: '@navecss/core/lightningcss',
+    }
+    expect(checkCoreImport(imp, realExportsMap(), realEntryMap(), readRealSource)).toEqual([
+      '@navecss/core/lightningcss exports no "navePlugn"',
     ])
+  })
+
+  it('reds on a fence running a subcommand the bin does not have (control)', () => {
+    expect(checkBinInvocation({ flags: ['out'], subcommand: 'bundle' })).toEqual([
+      'navecss-core has no subcommand "bundle"',
+    ])
+  })
+
+  it('reds on a fence running expand with a flag it does not accept (control)', () => {
+    expect(
+      checkBinInvocation({ flags: ['source', 'out', 'inline'], subcommand: 'expand' }),
+    ).toEqual(['navecss-core expand accepts no --inline'])
+  })
+
+  it('passes a fence running expand with every flag it accepts', () => {
+    expect(
+      checkBinInvocation({ flags: ['source', 'out', 'extend', 'watch'], subcommand: 'expand' }),
+    ).toEqual([])
   })
 
   it('reds on a fence running a real subcommand with a flag it does not accept (control)', () => {
@@ -153,30 +185,36 @@ describe('extractFences and extractCoreImports cover every fence and import shap
   // can run its subject up to 21 times, and a slow shared runner's per-call time can be an
   // order of magnitude past a fast local machine's. The ratio assertion inside decides pass or fail.
   it('stays roughly linear on an opener followed by a long unterminated run of word characters', async () => {
-    await assertScalesLinearly((n) => {
-      const text = '```' + 'a'.repeat(n)
-      const start = performance.now()
-      extractFences('x', text)
-      return performance.now() - start
-    }, 2500)
+    await expect(
+      assertScalesLinearly((n) => {
+        const text = `\`\`\`${'a'.repeat(n)}`
+        const start = performance.now()
+        extractFences('x', text)
+        return performance.now() - start
+      }, 2500),
+    ).resolves.toBeDefined()
   }, 45_000)
 
   it('stays roughly linear on many openers that are never closed', async () => {
-    await assertScalesLinearly((n) => {
-      const text = '```a\n'.repeat(n)
-      const start = performance.now()
-      extractFences('x', text)
-      return performance.now() - start
-    }, 5000)
+    await expect(
+      assertScalesLinearly((n) => {
+        const text = '```a\n'.repeat(n)
+        const start = performance.now()
+        extractFences('x', text)
+        return performance.now() - start
+      }, 5000),
+    ).resolves.toBeDefined()
   }, 45_000)
 
   it('stays roughly linear on one long run of backticks that is never closed', async () => {
-    await assertScalesLinearly((n) => {
-      const text = '`'.repeat(n)
-      const start = performance.now()
-      extractFences('x', text)
-      return performance.now() - start
-    }, 5000)
+    await expect(
+      assertScalesLinearly((n) => {
+        const text = '`'.repeat(n)
+        const start = performance.now()
+        extractFences('x', text)
+        return performance.now() - start
+      }, 5000),
+    ).resolves.toBeDefined()
   }, 45_000)
 
   it('extracts a dynamic import() of a core subpath', () => {

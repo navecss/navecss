@@ -132,7 +132,7 @@ describe('AC-directive-core-11 — the prelude is read as component values, thro
     },
   )
 
-  it.each(rows.filter(([, , problems]) => problems > 0))(
+  it.each(rows.filter((row) => row[2] > 0))(
     'under error, %s fails with one report',
     async (prelude) => {
       const run = await runHook({
@@ -290,22 +290,25 @@ describe('AC-directive-core-16 — every problem in one stylesheet, in one repor
   })
 })
 
+/**
+ * A source map from the authored `/proj/a.scss` to the compiled stylesheet, as an earlier tool would hand Vite.
+ */
+function incomingMap(): { mappings: string; names: string[]; sources: string[] } {
+  const generator = new SourceMapGenerator({ file: 'compiled.css' })
+  generator.addMapping({
+    source: '/proj/a.scss',
+    original: { line: 4, column: 2 },
+    generated: { line: 3, column: 2 },
+  })
+  return JSON.parse(generator.toString()) as {
+    mappings: string
+    names: string[]
+    sources: string[]
+  }
+}
+
 describe('AC-directive-core-17 — whose line and column (Vite)', () => {
   const CSS = '.x {\n  color: red;\n  @nave nope;\n}'
-
-  function incomingMap(): { sources: string[]; mappings: string; names: string[] } {
-    const generator = new SourceMapGenerator({ file: 'compiled.css' })
-    generator.addMapping({
-      source: '/proj/a.scss',
-      original: { line: 4, column: 2 },
-      generated: { line: 3, column: 2 },
-    })
-    return JSON.parse(generator.toString()) as {
-      sources: string[]
-      mappings: string
-      names: string[]
-    }
-  }
 
   it('maps the diagnostic to the authored file and line when Vite supplies a map', async () => {
     const run = await runHook({ code: CSS, id: '/proj/compiled.css', incomingMap: incomingMap() })

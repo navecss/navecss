@@ -1,6 +1,6 @@
 /**
  * AC-directive-core-28: host-loaded entry points also carry a default
- * export — `./postcss` is the only one shipped so far.
+ * export: `./postcss`, `./vite` and `./lightningcss`.
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -41,12 +41,17 @@ describe('AC-directive-core-28 — ./postcss also carries a default export', () 
     const fences = DOC_PATHS.flatMap((file) =>
       extractFences(path.relative(REPO_ROOT, file), readFileSync(file, 'utf8')),
     )
-    const defaultPostcssImports = fences
+    const hostSpecifiers = new Set([
+      '@navecss/core/lightningcss',
+      '@navecss/core/postcss',
+      '@navecss/core/vite',
+    ])
+    const defaultHostImports = fences
       .flatMap((f) => extractCoreImports(f.body))
-      .filter((imp) => imp.specifier === '@navecss/core/postcss')
+      .filter((imp) => hostSpecifiers.has(imp.specifier))
       .flatMap((imp) => imp.names)
       .filter((name) => name.isDefault)
 
-    expect(defaultPostcssImports).toEqual([])
+    expect(defaultHostImports).toEqual([])
   })
 })

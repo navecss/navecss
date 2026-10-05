@@ -3,13 +3,15 @@
  * expandText() and the Vite plugin's transform hook fed each file directly), one equivalence.
  */
 import postcss from 'postcss'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AtomDefinition } from '../../src/atoms.ts'
 
 import { expandText } from '../../src/directive/expand-text.ts'
+import { navePlugin as lightningAdapter } from '../../src/lightningcss.ts'
 import { navePlugin } from '../../src/postcss.ts'
 import { isEquivalent } from '../helpers/css-equivalence.ts'
+import { LIGHTNING_RELEASES, type LightningLib } from '../helpers/lightningcss-releases.ts'
 import { runHook } from '../helpers/vite-hook.ts'
 
 const EXTEND: Record<string, AtomDefinition> = {
@@ -80,11 +82,40 @@ async function throughVite(css: string): Promise<string> {
   return run.code ?? css
 }
 
+/**
+ * The Lightning leg: the Lightning adapter's `expand`, then `transform()`, against the PostCSS
+ * adapter's output through the same `transform()` on the same release (so a difference is the
+ * adapter's, never Lightning CSS's own printing).
+ */
+function printed(lib: LightningLib, css: string): string {
+  return lib
+    .transform({ filename: '/proj/app.css', code: Buffer.from(css), errorRecovery: true })
+    .code.toString()
+}
+
+function throughLightning(lib: LightningLib, css: string): string {
+  const nave = lightningAdapter({ onUnknown: 'warn', extend: EXTEND })
+  return printed(lib, Buffer.from(nave.expand(css, '/proj/app.css').code).toString())
+}
+
 const LEGS = {
   postcss: throughPostcss,
   expandText: (css: string) => Promise.resolve(throughExpandText(css)),
   vite: throughVite,
 }
+
+const warned: string[] = []
+
+beforeEach(() => {
+  warned.length = 0
+  vi.spyOn(console, 'warn').mockImplementation((message: unknown) => {
+    warned.push(String(message))
+  })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () => {
   it.each(CORPUS)('%s', async (css) => {
@@ -108,8 +139,44 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
     expect(actual).toEqual(expected)
   })
 
+  describe.each(LIGHTNING_RELEASES)('the Lightning leg on $label', ({ lib }) => {
+    it.each(CORPUS)('%s', async (css) => {
+      const reference = printed(lib, await LEGS.postcss(css))
+
+      expect(isEquivalent(reference, throughLightning(lib, css))).toBe(true)
+    })
+
+    it.each(CORPUS)('diagnostics agree with expandText(): %s', (css) => {
+      const file = '/proj/app.css'
+      const expected = expandText(css, { onUnknown: 'warn', extend: EXTEND, from: file })
+        .diagnostics.map((d) => `${d.file}:${d.line}:${d.column}`)
+        .toSorted((a, b) => a.localeCompare(b))
+
+      throughLightning(lib, css)
+
+      const actual = warned
+        .map((message) => /^(.*):(\d+):(\d+): /.exec(message))
+        .filter((match) => match !== null)
+        .map((match) => `${match[1]}:${match[2]}:${match[3]}`)
+        .toSorted((a, b) => a.localeCompare(b))
+      expect(actual).toEqual(expected)
+      expect(warned.length, 'a warning that is not a framed diagnostic').toBe(actual.length)
+    })
+
+    it('really transforms: a directive row changes, a directive-free row does not', () => {
+      expect(throughLightning(lib, '.a { @nave flex; }')).toContain('display: flex')
+      expect(isEquivalent(throughLightning(lib, '.a { color: red; }'), '.a { color: red; }')).toBe(
+        true,
+      )
+    })
+  })
+
   it('runs exactly the legs there are, each over a non-empty corpus', () => {
     expect(Object.keys(LEGS)).toEqual(['postcss', 'expandText', 'vite'])
+    expect(LIGHTNING_RELEASES.map((release) => release.package)).toEqual([
+      'lightningcss-1-22',
+      'lightningcss',
+    ])
     expect(CORPUS.length).toBeGreaterThan(0)
   })
 

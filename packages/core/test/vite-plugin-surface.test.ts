@@ -8,7 +8,14 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import ts from 'typescript'
+import {
+  createProgram,
+  flattenDiagnosticMessageText,
+  getPreEmitDiagnostics,
+  ModuleKind,
+  ModuleResolutionKind,
+  ScriptTarget,
+} from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 import viteModule, { navePlugin } from '../src/vite.ts'
@@ -28,8 +35,8 @@ const DYNAMIC_SPECIFIER = /\bimport\(\s*['"]([^'"]+)['"]/g
 
 function specifiersOf(source: string): string[] {
   return [
-    ...[...source.matchAll(IMPORT_SPECIFIER)].map((m) => m[1]!),
-    ...[...source.matchAll(DYNAMIC_SPECIFIER)].map((m) => m[1]!),
+    ...source.matchAll(IMPORT_SPECIFIER).map((m) => m[1]!),
+    ...source.matchAll(DYNAMIC_SPECIFIER).map((m) => m[1]!),
   ]
 }
 
@@ -37,7 +44,7 @@ function specifiersOf(source: string): string[] {
  * Every file reachable from `entry` (a name in `dist/`) by relative import, with the bare
  * specifiers each of them names.
  */
-function reachableFromDist(entry: string): { files: string[]; bare: Set<string> } {
+function reachableFromDist(entry: string): { bare: Set<string>; files: string[] } {
   const files: string[] = []
   const bare = new Set<string>()
   const queue = [path.join(DIST, entry)]
@@ -47,12 +54,41 @@ function reachableFromDist(entry: string): { files: string[]; bare: Set<string> 
     if (seen.has(file)) continue
     seen.add(file)
     files.push(file)
-    for (const specifier of specifiersOf(readFileSync(file, 'utf8'))) {
+    const specifiers = specifiersOf(readFileSync(file, 'utf8'))
+    for (const specifier of specifiers) {
       if (specifier.startsWith('.')) queue.push(path.resolve(path.dirname(file), specifier))
       else bare.add(specifier)
     }
   }
   return { files, bare }
+}
+
+/**
+ * Type-checks `source` as a consumer's file, against the built `dist/vite.d.ts` and Vite's own
+ * types, with `skipLibCheck` off so a broken declaration surfaces.
+ */
+function diagnosticsFor(source: string): string[] {
+  const dir = mkdtempSync(path.join(CORE_ROOT, '.nave-vite-types-'))
+  try {
+    mkdirSync(dir, { recursive: true })
+    const file = path.join(dir, 'consumer.ts')
+    writeFileSync(file, source.replaceAll('@navecss/core/vite', '../dist/vite.js'))
+    const program = createProgram([file], {
+      module: ModuleKind.ESNext,
+      moduleResolution: ModuleResolutionKind.Bundler,
+      target: ScriptTarget.ESNext,
+      strict: true,
+      skipLibCheck: false,
+      noEmit: true,
+      types: ['node'],
+      ignoreDeprecations: '6.0',
+    })
+    return getPreEmitDiagnostics(program).map((d) =>
+      flattenDiagnosticMessageText(d.messageText, '\n'),
+    )
+  } finally {
+    rmSync(dir, { force: true, recursive: true })
+  }
 }
 
 // Each type-check builds a TypeScript program over Vite's own types, which a loaded runner
@@ -99,34 +135,6 @@ describe('AC-directive-core-31 — the Vite plugin’s surface', { timeout: 120_
       expect([...bare].filter((s) => s === 'postcss')).toEqual([])
     }
   })
-
-  /**
-   * Type-checks `source` as a consumer's file, against the built `dist/vite.d.ts` and Vite's own
-   * types, with `skipLibCheck` off so a broken declaration surfaces.
-   */
-  function diagnosticsFor(source: string): string[] {
-    const dir = mkdtempSync(path.join(CORE_ROOT, '.nave-vite-types-'))
-    try {
-      mkdirSync(dir, { recursive: true })
-      const file = path.join(dir, 'consumer.ts')
-      writeFileSync(file, source.replaceAll('@navecss/core/vite', '../dist/vite.js'))
-      const program = ts.createProgram([file], {
-        module: ts.ModuleKind.ESNext,
-        moduleResolution: ts.ModuleResolutionKind.Bundler,
-        target: ts.ScriptTarget.ESNext,
-        strict: true,
-        skipLibCheck: false,
-        noEmit: true,
-        types: ['node'],
-        ignoreDeprecations: '6.0',
-      })
-      return ts
-        .getPreEmitDiagnostics(program)
-        .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
-    } finally {
-      rmSync(dir, { force: true, recursive: true })
-    }
-  }
 
   it('type-checks in a Vite project: plugins takes it, and the default export has its type', () => {
     const diagnostics = diagnosticsFor(`

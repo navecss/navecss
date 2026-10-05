@@ -12,10 +12,9 @@
  * rather than comparing it with a hard-coded list of current keys, which would fail on any later,
  * unrelated export the package adds.
  */
-import { readFileSync, readdirSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))

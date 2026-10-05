@@ -31,10 +31,11 @@ const PACKAGE_JSON = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.js
 
 // Every case that copies `dist/` into a scratch install and spawns a real `node` process via
 // `runNode` queues behind the OS scheduler when the whole monorepo's tests run in parallel, and
-// can exceed the 5s default even though the same case takes well under a second in isolation.
+// can exceed the 5s default even though the same case takes well under a second in isolation. Under
+// several runs sharing a loaded machine 20s was not enough either, so the value is 60s.
 // Cases that assert on static values with no spawn keep the default, so a genuine hang still
 // shows up fast.
-const SPAWN_TEST_TIMEOUT_MS = 20_000
+const SPAWN_TEST_TIMEOUT_MS = 60_000
 
 // The running test's effective timeout, read by `runNode` so that a spawn inside a test still on
 // the 5s default fails on every run, not only on a loaded one. Without it, a new spawn case

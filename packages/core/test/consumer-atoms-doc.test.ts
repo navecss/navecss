@@ -15,7 +15,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
@@ -27,7 +26,9 @@ const docSrc = readFileSync(path.resolve(HERE, '../CONSUMER-ATOMS.md'), 'utf8')
 const DIRECTIVE_LINE = '@nave interactive focusRing transition primaryButton;'
 const BUILT_IN_ATOMS_IN_DIRECTIVE_ORDER = ['interactive', 'focusRing', 'transition'] as const
 
-/** Extracts the ```css fence that immediately follows "Compiles to:" after the directive. */
+/**
+ * Extracts the ```css fence that immediately follows "Compiles to:" after the directive.
+ */
 function extractCompilesToFence(): string {
   const directiveIndex = docSrc.indexOf(DIRECTIVE_LINE)
   expect(
@@ -47,7 +48,9 @@ function extractCompilesToFence(): string {
   return docSrc.slice(contentStart, fenceEnd)
 }
 
-/** The fence's first `.root { ... }` rule — the atoms' base `declarations`, not a pseudo/media block. */
+/**
+ * The fence's first `.root { ... }` rule — the atoms' base `declarations`, not a pseudo/media block.
+ */
 function extractRootDeclarations(fenceCss: string): { prop: string; value: string }[] {
   const root = postcss.parse(fenceCss)
   let rootRule: postcss.Rule | undefined
@@ -72,7 +75,7 @@ describe('CONSUMER-ATOMS.md "Compiles to:" fence stays in sync with the atom map
     for (const atomName of BUILT_IN_ATOMS_IN_DIRECTIVE_ORDER) {
       const declarations = atoms[atomName].declarations ?? {}
       for (const [prop, value] of Object.entries(declarations)) {
-        expected.push({ prop, value: String(value) })
+        expected.push({ prop, value })
       }
     }
     // Fixture guard: if the atom map ever ships these three atoms with no base

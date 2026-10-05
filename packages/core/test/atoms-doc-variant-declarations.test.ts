@@ -11,7 +11,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 import type { AtomDefinition, AtomName } from '../src/atoms.ts'
@@ -19,10 +18,8 @@ import type { AtomDefinition, AtomName } from '../src/atoms.ts'
 import { renderVariants } from '../scripts/generate-atoms-doc.ts'
 import { atoms } from '../src/atoms.ts'
 
-const ATOMS_MD = readFileSync(
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../ATOMS.md'),
-  'utf8',
-)
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const ATOMS_MD = readFileSync(path.resolve(HERE, '../ATOMS.md'), 'utf8')
 
 function rowFor(atomName: string): string {
   const row = ATOMS_MD.split('\n').find((line) => line.startsWith(`| \`${atomName}\``))
@@ -40,7 +37,7 @@ function rowFor(atomName: string): string {
  */
 function missingVariantDeclarationsForAtom(row: string, atom: AtomDefinition): string[] {
   const expected: string[] = []
-  const collect = (declarations: Record<string, string>) => {
+  const collect = (declarations: Record<string, string>): void => {
     for (const [prop, value] of Object.entries(declarations)) {
       expected.push(`${prop}: ${value};`)
     }
@@ -52,15 +49,16 @@ function missingVariantDeclarationsForAtom(row: string, atom: AtomDefinition): s
     if (!blocks) continue
     for (const block of Object.values(blocks)) {
       if (block.declarations) collect(block.declarations)
-      if (block.pseudos) {
-        for (const declarations of Object.values(block.pseudos)) collect(declarations)
-      }
+      const pseudoBlocks = Object.values(block.pseudos ?? {})
+      for (const declarations of pseudoBlocks) collect(declarations)
     }
   }
   return expected.filter((declaration) => !row.includes(declaration))
 }
 
-/** `missingVariantDeclarationsForAtom`, looked up by the name of a live built-in atom. */
+/**
+ * `missingVariantDeclarationsForAtom`, looked up by the name of a live built-in atom.
+ */
 function missingVariantDeclarations(row: string, atomName: AtomName): string[] {
   return missingVariantDeclarationsForAtom(row, atoms[atomName])
 }

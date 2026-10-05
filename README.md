@@ -54,7 +54,7 @@ without claiming conformance, certification or endorsement.
 | Package                                                         | Description                                                                                                                                    |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                                                         |
-| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, Vite plugin, PostCSS plugin                                                                       |
+| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, Vite plugin, PostCSS plugin, Lightning CSS adapter, `navecss-core` command                        |
 | [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check, declared `--nave-*` names |
 | [`@navecss/eslint-plugin`](packages/eslint-plugin#readme)       | A literal class in `className` unless declared, or a literal value on a tokenized `style` property, reported                                   |
 
@@ -78,13 +78,19 @@ text lose their colours. [Why this floor](docs/04-adr/0005-browser-floor.md).
 
 **A CSS resolver that reads `exports` maps.** `@navecss/core` publishes one and
 no legacy fallback field, so a resolver that reads only the older fields cannot
-find it at all. The Vite setup below is one that does.
+find it at all. The Vite setup below is one that does. With no bundler there is
+no resolver at all: the page links
+[Nave's single-file `standalone` stylesheet](#without-a-bundler) instead, and
+`navecss-core expand` reports any package import left in your CSS.
 
 **A build step that resolves `@nave`.** On Vite that is the plugin below, and it
 is the one route this page teaches; on a pipeline that runs PostCSS plugins and
 is not Vite, [the PostCSS plugin](packages/core/README.md#postcss-plugin-setup)
-does the same. Either way `@nave` is resolved at build time and nothing of it is
-left at run time. Without one, `@nave` is an unknown at-rule, nothing errors, and
+does the same; a host that runs Lightning CSS directly uses
+[the Lightning CSS adapter](packages/core/README.md#lightning-css-adapter-setup),
+and a project with no build tool at all uses
+[`navecss-core expand`](#without-a-bundler). Either way `@nave` is resolved at
+build time and nothing of it is left at run time. Without one, `@nave` is an unknown at-rule, nothing errors, and
 the rule renders with none of the declarations its atoms were going to give it.
 The other tier needs no build step at all: `cx()` composes the same built-in
 atoms from JavaScript. The Vite plugin fails the build on any `@nave` that
@@ -198,6 +204,80 @@ and grid, position, overflow, text wrapping, focus and interaction, and a few
 shapes. Colour, spacing and type come from the tokens, written as ordinary
 declarations beside the directive, as above. Both are listed in full:
 [the atoms](packages/core/ATOMS.md) and [the tokens](packages/tokens/TOKENS.md).
+
+### Without a bundler
+
+A project that serves its files as they are, with no Vite, webpack or PostCSS
+step, takes this route in place of the `app.css` and Vite setup above. It has two
+things to do that a bundler would have done for it: resolve `@nave`, and bring
+Nave's stylesheet to the page. `navecss-core expand` does the first: it writes a
+copy of your stylesheet with each `@nave` expanded and everything else as you
+wrote it, `@import` included. `@navecss/core/standalone` does the second: Nave's
+whole stylesheet in one file with no `@import` in it, which the page links
+instead of importing Nave from your CSS.
+
+Install the package as above (`pnpm add @navecss/core`); the command comes with
+it. Then add it to your `package.json` scripts:
+
+```json
+{
+  "scripts": {
+    "build": "navecss-core expand --source=src/app.css --out=app.css",
+    "watch": "navecss-core expand --source=src/app.css --out=app.css --watch"
+  }
+}
+```
+
+```css
+/* src/app.css */
+@layer components.consumer {
+  .btn {
+    @nave interactive focusRing;
+    background: var(--nave-color-action-primary);
+    padding: var(--nave-spacing-control-md) var(--nave-spacing-control-lg);
+    border-radius: var(--nave-radius-control);
+  }
+}
+```
+
+```html
+<!-- index.html -->
+<!doctype html>
+<meta charset="utf-8" />
+<title>Nave without a bundler</title>
+<link rel="stylesheet" href="node_modules/@navecss/core/dist/standalone.css" />
+<!-- or from a CDN, in place of the line above, with <version> the version you installed:
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@navecss/core@<version>/dist/standalone.css" />
+-->
+<link rel="stylesheet" href="app.css" />
+<button class="btn">Save</button>
+```
+
+Run `pnpm run build`, or `pnpm run watch` while you work, and serve the
+directory. Link Nave's stylesheet before your own: it opens with the `@layer`
+order statement, which has to be the first one the page sees.
+
+`navecss-core expand` does not resolve or inline `@import`. It expands only the
+files you name with `--source`, so a stylesheet you import that holds `@nave`
+needs a `--source` and `--out` pair of its own. An `@import` of a file is kept as
+written, so its path has to work from where the output is served: written to
+`app.css`, an `@import './theme.css'` in `src/app.css` asks for the `theme.css`
+beside `app.css`, not `src/theme.css`. Keep each output beside the files it
+imports, or write the paths for the output's place. A bare import, such as one
+of a package (the bundler route's `@import url('@navecss/core')`), is reported as
+an error, because a browser cannot load it, and nothing is written. For that
+import, link `@navecss/core/standalone` instead, as above, and for
+`@navecss/core/no-tokens`, link its own file, `dist/no-tokens.css`. For any
+other bare import, the error says what to do.
+
+The route has two costs. Its `app.css` is a second shape
+beside the bundler one, with no Nave import in it. And a link into
+`node_modules` works only while the page is served from the project directory:
+a deployed page cannot load the file from that path unless a build step copies
+the file out of `node_modules` to a path the page serves. The CDN URL needs no
+such step; pin it to the version you installed (`@navecss/core@<version>` in
+place of `@navecss/core`). Browser floor, `@layer` contract and token layer are
+the same as everywhere else on this page.
 
 ## Getting started
 
@@ -600,12 +680,13 @@ below carry equal weight.
 
 ### What Nave promises about what it ships
 
-**A visible keyboard focus indicator by default, with no author action
-required.** Nave's reset ships no rule that removes the browser's own focus
-indicator at document scope, so every focusable element in a document using
-the reset keeps one (supports SC 2.4.7 Focus Visible, Level AA). A regression
-test asserts that no reset rule strips the indicator outside a
-`:focus-visible` gate.
+**The browser's own keyboard focus indicator, kept by default, with no author
+action required.** Nave's reset ships no rule that removes the browser's own
+focus indicator at document scope, so every focusable element in a document
+using the reset keeps one (supports SC 2.4.7 Focus Visible, Level AA). A
+focused element that is itself visually hidden shows no indicator, whatever
+hid it. A regression test asserts that no reset rule strips the indicator
+outside a `:focus-visible` gate.
 
 **Motion tokens honour `prefers-reduced-motion` in the shipped CSS** (supports
 SC 2.3.3 Animation from Interactions, Level AAA; it does not on its own satisfy

@@ -99,7 +99,9 @@ describe('anchorSelectorList — escaped quotes do not break the top-level-comma
     // string immediately, so the following ], stops being "inside a quote" and the comma
     // after it is read as a branch separator mid-string — reproducing the same unanchored-branch
     // failure mode one level down, in the splitter rather than the emitter that first exhibited it.
-    expect(anchorSelectorList('[data-x="a\\"b"], :hover')).toBe('&[data-x="a\\"b"], &:hover')
+    expect(anchorSelectorList(String.raw`[data-x="a\"b"], :hover`)).toBe(
+      String.raw`&[data-x="a\"b"], &:hover`,
+    )
   })
 })
 

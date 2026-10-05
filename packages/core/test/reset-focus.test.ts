@@ -25,16 +25,17 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 const RESET = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/reset.css')
 const css = readFileSync(RESET, 'utf8')
 
-/** The value KEYWORDS that remove an outline. Scanned over the WHOLE value, functions
+/**
+ * The value KEYWORDS that remove an outline. Scanned over the WHOLE value, functions
  * included, because a keyword cannot turn up inside a colour function by coincidence the way
- * a bare `0` can: `color-mix(in srgb, transparent, red)` still counts. */
+ * a bare `0` can: `color-mix(in srgb, transparent, red)` still counts.
+ */
 const REMOVING_KEYWORD = /^(none|hidden|transparent)$/i
 
 /**
@@ -48,21 +49,25 @@ const ZERO_LENGTH = /^0(?:\.0+)?(?:[a-z]+|%)?$/i
  */
 const ZERO_ALPHA = /\/\s*(?:0|0?\.0+)%?\s*\)/
 
-/** The outline shorthand and its three removing longhands. `outline-offset` is deliberately
+/**
+ * The outline shorthand and its three removing longhands. `outline-offset` is deliberately
  * absent: it MOVES an indicator, it does not remove one. Widened: the
  * shorthand-only predicate this replaces read the whole class in its docblock and asserted
  * only `outline: none|0`, so `a:focus { outline-width: 0 }` passed all three tests here while
- * the README publishes that no reset rule strips the indicator outside a :focus-visible gate. */
+ * the README publishes that no reset rule strips the indicator outside a :focus-visible gate.
+ */
 const OUTLINE_PROPERTY = /^outline(-(width|style|color))?$/i
 
 function tokensOf(text: string): string[] {
   return text.split(/[\s,]+/).filter(Boolean)
 }
 
-/** The value with every function call's arguments removed, to a fixed point. Without this a
+/**
+ * The value with every function call's arguments removed, to a fixed point. Without this a
  * zero CHANNEL of modern space-separated colour syntax reads as a zero outline WIDTH, so
  * `outline: 2px solid rgb(0 0 0)` and the house `light-dark(oklch(...), oklch(...))` idiom are
- * fully visible outlines classified as removals (found in review). */
+ * fully visible outlines classified as removals (found in review).
+ */
 function topLevel(value: string): string {
   let out = value
   for (;;) {
@@ -72,7 +77,7 @@ function topLevel(value: string): string {
   }
 }
 
-function removesOutline(declaration: { prop: string; value: string }): boolean {
+function isRemovingOutline(declaration: { prop: string; value: string }): boolean {
   if (!OUTLINE_PROPERTY.test(declaration.prop)) return false
   const value = declaration.value.replace(/\s*!\s*important\s*$/i, '').trim()
   return (
@@ -82,17 +87,21 @@ function removesOutline(declaration: { prop: string; value: string }): boolean {
   )
 }
 
-/** A selector that is exactly a bare, document-scope `:focus` / `:focus-visible`
+/**
+ * A selector that is exactly a bare, document-scope `:focus` / `:focus-visible`
  * (optionally prefixed with the universal selector), not scoped further by an
  * element, class, id or attribute — e.g. `:focus-visible` or `*:focus`, but
- * not `.focusRing:focus-visible` or `input:focus-visible`. */
+ * not `.focusRing:focus-visible` or `input:focus-visible`.
+ */
 const BARE_DOCUMENT_SCOPE_FOCUS_SELECTOR = /^\*?:focus(-visible)?$/i
 
-/** Properties that constitute an author-styled focus indicator, per the
+/**
+ * Properties that constitute an author-styled focus indicator, per the
  * ruling's second option it named and rejected ("ship a global
  * :focus-visible fallback"): outline, box-shadow, border and background,
  * including their longhands (outline-color, border-width, background-color,
- * and so on). */
+ * and so on).
+ */
 const DECLARES_FOCUS_INDICATOR = /^(outline|box-shadow|border|background)(-[\w-]+)?$/i
 
 describe('reset.css focus visibility', () => {
@@ -103,15 +112,15 @@ describe('reset.css focus visibility', () => {
     root.walkRules((rule) => {
       // Only bare declarations of this rule's own body count; nested rules
       // (e.g. a :focus-visible child) are walked separately by walkRules.
-      const ownsOutlineRemoval = rule.nodes.some(
-        (node) => node.type === 'decl' && removesOutline(node),
+      const hasOutlineRemoval = rule.nodes.some(
+        (node) => node.type === 'decl' && isRemovingOutline(node),
       )
-      if (!ownsOutlineRemoval) return
+      if (!hasOutlineRemoval) return
 
-      const gatedOnFocusVisible = rule.selectors.every((selector) =>
+      const isGatedOnFocusVisible = rule.selectors.every((selector) =>
         selector.includes(':focus-visible'),
       )
-      if (!gatedOnFocusVisible) offenders.push(rule.selector)
+      if (!isGatedOnFocusVisible) offenders.push(rule.selector)
     })
 
     expect(
@@ -122,13 +131,13 @@ describe('reset.css focus visibility', () => {
 
   it('does not set a document-wide :focus { outline: none } rule', () => {
     const root = postcss.parse(css)
-    let found = false
+    let isFound = false
 
     root.walkRules(/(^|,)\s*:focus\s*(,|$)/, () => {
-      found = true
+      isFound = true
     })
 
-    expect(found).toBe(false)
+    expect(isFound).toBe(false)
   })
 
   it('declares no author-styled focus indicator at document scope', () => {
@@ -136,10 +145,10 @@ describe('reset.css focus visibility', () => {
     const offenders: string[] = []
 
     root.walkRules((rule) => {
-      const declaresIndicator = rule.nodes.some(
+      const hasIndicator = rule.nodes.some(
         (node) => node.type === 'decl' && DECLARES_FOCUS_INDICATOR.test(node.prop),
       )
-      if (!declaresIndicator) return
+      if (!hasIndicator) return
 
       const isBareDocumentScope = rule.selectors.some((selector) =>
         BARE_DOCUMENT_SCOPE_FOCUS_SELECTOR.test(selector.trim()),

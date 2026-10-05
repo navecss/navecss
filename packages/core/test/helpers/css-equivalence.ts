@@ -7,6 +7,9 @@
  */
 import postcss, { type ChildNode, type Container } from 'postcss'
 
+/**
+ * Reduces one PostCSS node to the plain shape the equivalence compares, children included.
+ */
 function normalize(node: ChildNode): unknown {
   if (node.type === 'comment') return { type: 'comment', text: node.text }
   if (node.type === 'decl')
@@ -31,10 +34,16 @@ function normalize(node: ChildNode): unknown {
   }
 }
 
+/**
+ * Normalises every child of a container, in order.
+ */
 function normalizeChildren(container: Container): unknown[] {
   return (container.nodes ?? []).map((n) => normalize(n))
 }
 
+/**
+ * True when both stylesheets parse to the same normalised tree.
+ */
 export function isEquivalent(cssA: string, cssB: string): boolean {
   const treeA = normalizeChildren(postcss.parse(cssA))
   const treeB = normalizeChildren(postcss.parse(cssB))

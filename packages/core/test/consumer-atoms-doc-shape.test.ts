@@ -17,12 +17,12 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-
 import postcss from 'postcss'
-import prettier from 'prettier'
+import { format } from 'prettier'
 import { describe, expect, it } from 'vitest'
 
 import type { AtomDefinition } from '../src/atoms.ts'
+
 import { navePlugin } from '../src/postcss.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -37,8 +37,10 @@ const PRETTIER_OPTIONS = {
   tabWidth: 2,
 }
 
-/** The ```css fence immediately following the first "Compiles to:" label at or after `from`. */
-function extractFenceAfter(from: number): { fence: string; end: number } {
+/**
+ * The ```css fence immediately following the first "Compiles to:" label at or after `from`.
+ */
+function extractFenceAfter(from: number): { end: number; fence: string } {
   const compilesToIndex = docSrc.indexOf('Compiles to:', from)
   expect(compilesToIndex, 'expected a "Compiles to:" label').not.toBe(-1)
   const fenceStart = docSrc.indexOf('```css', compilesToIndex)
@@ -49,7 +51,9 @@ function extractFenceAfter(from: number): { fence: string; end: number } {
   return { fence: docSrc.slice(contentStart, fenceEnd), end: fenceEnd }
 }
 
-/** The ```css input fence immediately preceding `beforeIndex` (the nearest one above it). */
+/**
+ * The ```css input fence immediately preceding `beforeIndex` (the nearest one above it).
+ */
 function extractInputFenceBefore(beforeIndex: number): string {
   const fenceEnd = docSrc.lastIndexOf('```', beforeIndex)
   const fenceStartMarker = docSrc.lastIndexOf('```css', fenceEnd)
@@ -58,7 +62,9 @@ function extractInputFenceBefore(beforeIndex: number): string {
   return docSrc.slice(contentStart, fenceEnd)
 }
 
-/** The ```ts fence immediately following `heading` — one of the doc's own atom definitions. */
+/**
+ * The ```ts fence immediately following `heading` — one of the doc's own atom definitions.
+ */
 function extractTsFenceAfter(heading: string): string {
   const headingIndex = docSrc.indexOf(heading)
   expect(headingIndex, `expected the heading "${heading}"`).not.toBe(-1)
@@ -90,8 +96,10 @@ async function loadMyAtoms(tsSource: string): Promise<Record<string, AtomDefinit
   }
 }
 
-/** Strips the doc's leading filename comment (e.g. "button.module.css"): it is a label for
- * the reader, not part of the CSS the plugin is meant to transform. */
+/**
+ * Strips the doc's leading filename comment (e.g. "button.module.css"): it is a label for
+ * the reader, not part of the CSS the plugin is meant to transform.
+ */
 function stripFilenameComment(css: string): string {
   return css.replace(/^\s*\/\*[^*]*\*\/\s*\n/, '')
 }
@@ -100,7 +108,8 @@ async function compile(input: string, extend: Record<string, AtomDefinition>): P
   const result = await postcss([navePlugin({ extend })]).process(stripFilenameComment(input), {
     from: undefined,
   })
-  return (await prettier.format(result.css, PRETTIER_OPTIONS)).trimEnd()
+  const formatted = await format(result.css, PRETTIER_OPTIONS)
+  return formatted.trimEnd()
 }
 
 describe('CONSUMER-ATOMS.md "Compiles to:" fences match the real plugin output', () => {

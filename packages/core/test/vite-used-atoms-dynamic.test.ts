@@ -4,13 +4,13 @@
  * and in a server build that bundles core, so the same class strings apply wherever the call is.
  * The dev half (the dev server's own global, the console texts) belongs to the dev-serving change.
  */
-import { pathToFileURL } from 'node:url'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { resolveConfig } from 'vite'
 import { describe, expect, it } from 'vitest'
 
-import { navePlugin } from '../src/vite.ts'
 import { KEEP_CONSTANT } from '../src/vite-config-hooks.ts'
+import { navePlugin } from '../src/vite.ts'
 import {
   addPackage,
   appFiles,
@@ -29,7 +29,7 @@ globalThis.__r = [tone('grid'), tone('flex'), tone('block'), cx.dynamic('grid'),
 /**
  * An app whose client calls `cx.dynamic()` itself and through `dyn-lib`.
  */
-function dynamicApp() {
+function dynamicApp(): ReturnType<typeof makeUsedApp> {
   const app = makeUsedApp(appFiles({ 'src/App.ts': MAIN }))
   addPackage(app, 'dyn-lib', { 'index.js': `${IMPORT}export const tone = (t) => cx.dynamic(t)\n` })
   return app
@@ -42,7 +42,8 @@ function runClient(js: string): string[] {
   const scope: { __r?: string[]; document: unknown } = {
     document: { createElement: () => ({ relList: { supports: () => true } }) },
   }
-  new Function('globalThis', 'document', `${js.replaceAll(/\bimport\.meta\b/g, '({})')}`)(
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call -- running the built client bundle is the point of this helper
+  new Function('globalThis', 'document', js.replaceAll(/\bimport\.meta\b/g, '({})'))(
     scope,
     scope.document,
   )
@@ -93,7 +94,7 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
   it('adds exactly one define key under the default, and no built asset names it', async () => {
     const app = dynamicApp()
     try {
-      const definedBy = async (settings: Parameters<typeof navePlugin>[0]) => {
+      const definedBy = async (settings: Parameters<typeof navePlugin>[0]): Promise<string[]> => {
         const resolved = await resolveConfig(
           appConfig(app.root, 'postcss', [navePlugin(settings)]),
           'build',
@@ -140,8 +141,8 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
         'build',
       )
       const module = (await import(pathToFileURL(path.join(app.root, 'dist-ssr/ssr.js')).href)) as {
-        own: string
         lib: string
+        own: string
       }
 
       expect(resolved.environments.ssr?.resolve.noExternal).toContain('@navecss/core')
