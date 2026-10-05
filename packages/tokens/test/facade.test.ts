@@ -343,10 +343,10 @@ describe('AC-token-build-16 covers: R16', () => {
 
   /**
    * Computing the union first is what preserves R16's ordering clause rather than trading it
-   * away (nothing generates before the answer is known), and nothing held it: moving the whole validation block to sit AFTER
-   * both compositions was measured 522/522 green. The R23 half (nothing
-   * left on disk) IS held, by `expect(existsSync(outDir)).toBe(false)` above; "before either
-   * half composes" is a strictly stronger, separate property and needs its own assertion.
+   * away (nothing generates before the answer is known), and nothing held it: moving the whole
+   * validation block to sit AFTER both compositions was measured 522/522 green. The R23 half
+   * (nothing left on disk) IS held, by `expect(existsSync(outDir)).toBe(false)` above; "before
+   * either half composes" is a strictly stronger, separate property and needs its own assertion.
    *
    * Both directions live in ONE test on purpose. The refusal case alone would pass just as
    * happily against a spy that never records anything, so the same spies are driven through
@@ -932,13 +932,13 @@ describe("a colour on its own space's neutral axis selects the achromatic branch
 })
 
 /**
- * This is a PINNING test (green at HEAD by design). `facade.ts` carries its own module-private `const CONSUMER_LAYER = 'tokens.presets'` for
- * the DTCG-reader half (`composeDtcgOutputs`) rather than importing `consumer-build.ts`'s
- * exported one, while `composeDtcgOutputs`'s own docblock says both halves target the SAME
- * R10 layer. They agree today — nothing pins it. facade.ts's own constant is not exported, so
- * there is no binding to import and compare directly; this reads the REAL merged tokens.css
- * `build()` writes and asserts every `@layer` block it contains — one from each half — names
- * the SAME layer as the exported `CONSUMER_LAYER`.
+ * This is a PINNING test (green at HEAD by design). `facade.ts` carries its own module-private
+ * `const CONSUMER_LAYER = 'tokens.presets'` for the DTCG-reader half (`composeDtcgOutputs`) rather
+ * than importing `consumer-build.ts`'s exported one, while `composeDtcgOutputs`'s own docblock says
+ * both halves target the SAME R10 layer. They agree today — nothing pins it. facade.ts's own
+ * constant is not exported, so there is no binding to import and compare directly; this reads the
+ * REAL merged tokens.css `build()` writes and asserts every `@layer` block it contains — one from
+ * each half — names the SAME layer as the exported `CONSUMER_LAYER`.
  */
 describe('facade.ts and consumer-build.ts agree on the R10 consumer layer', () => {
   it("every @layer block in the merged tokens.css — the DTCG half's and the theming half's — names the exported CONSUMER_LAYER, not merely a literal that happens to match it today", async () => {

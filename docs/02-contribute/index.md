@@ -22,6 +22,8 @@
 - **Dependency direction:** `core` and `bridge` depend on `tokens`, never the reverse; the CLI stays a thin registry client.
 - **Deliberate versioning:** public-API and token-contract changes are versioned events (Changesets), not incidental edits.
 
-## Specs and tracking
+## Proposing a change
 
-Feature work for a persona- or phase-framed session follows a phase flow driven from project context outside this repo. The phase entry points are user-installed skills (`/nave:implement`, `/nave:review`, `/nave:orch-auto`, `/nave:orch-board`); this repo ships none of them, and each is self-sufficient — it tells the session what to read and where.
+For a new feature, or a change to anything the invariants above protect, [open an issue](https://github.com/navecss/navecss/issues) before you start building it. The project has one maintainer, who decides what goes in, so the issue settles whether the change fits before you spend time on it. A bug fix or a documentation correction can go straight to a pull request.
+
+The maintainer plans their own work outside this repository, and their pull requests usually have no public issue or written spec behind them. You need nothing from there to contribute: the invariants above, [`.github/CONTRIBUTING.md`](../../.github/CONTRIBUTING.md) and the [ADRs](../04-adr/index.md) state what a change must respect, and anything they leave open is settled in review on your pull request.

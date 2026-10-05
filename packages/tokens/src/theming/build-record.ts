@@ -108,7 +108,7 @@ export interface BuildRecord {
    * `assertNoOrphanedSemanticSlot` can produce one, so a future caller cannot claim
    * "measured" by passing a `[]` literal without ever running the guard.
    *
-   * an absent key is ALSO what any producer of this JSON shape that never had this
+   * An absent key is ALSO what any producer of this JSON shape that never had this
    * field would emit — indistinguishable from "not measured" on the bytes alone. Vacuous
    * today: `composeBuildRecord` is this file's only producer, and every call site is either
    * measured (`build-step.ts`) or omits the key outright (`consumer-build.ts`), so there is

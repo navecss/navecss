@@ -67,9 +67,9 @@ const CSS_NUMBER = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/
  * First, text that is empty or whitespace-only: `Number('')` is `0`, not `NaN`, which is the one
  * gap `Number.isFinite` alone cannot see afterwards, and it let a bare `%` (no digits before the
  * sign) read as channel value `0` instead of refusing (and the same gap existed in
- * `oklch()`'s inline percentage parsing and in `parseHueDeg`'s `deg`-stripping). Callers pass the text AFTER
- * stripping a percentage sign or a `deg` unit, since that is exactly where the text can turn up
- * empty.
+ * `oklch()`'s inline percentage parsing and in `parseHueDeg`'s `deg`-stripping). Callers pass the
+ * text AFTER stripping a percentage sign or a `deg` unit, since that is exactly where the text can
+ * turn up empty.
  *
  * Second, text still carrying whitespace of ANY kind once the tokeniser has run. The tokeniser
  * splits on CSS whitespace alone, so a token reaching here can only still contain a space

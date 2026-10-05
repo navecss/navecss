@@ -193,8 +193,8 @@ export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
   "0.1.0 ships no consumer contrast-threshold input. No flag of this entry point sets one, and the build reads none. This is the absence of an input, not a limit on the consumer: a consumer may hold whatever contrast target they choose and check their palette against it with their own tooling. No contrast check this entry point runs over a consumer's values can fail the build, and none prints or returns a result. A consumer-settable target is deliberately out of 0.1.0 rather than overlooked."
 
 /**
- * The presence guarantee `assertNoticeIsClean` does not provide (flagged during an
- * accessibility review): that function reads only the SOURCE constant's framing and
+ * The presence guarantee `assertNoticeIsClean` does not provide: that function reads only
+ * the SOURCE constant's framing and
  * never the emitted CSS, so a build that imports a notice constant and forgets to emit it,
  * or emits a truncated copy, would pass it cleanly. This reads the actual composed CSS and
  * throws if `notice` is not present byte-for-byte, naming which notice by a plain-prose
@@ -208,17 +208,19 @@ export const NO_CONSUMER_CONTRAST_THRESHOLD_INPUT =
  * emitted more than once, with the framing on a
  * line other than the first carrying line, is a violation the earlier `.find()`-based check
  * passed silently. Two further shapes the check's LINE frame can come apart from the
- * COMMENT a consumer actually reads, both ruled refusals from an accessibility review rather
- * than silent passes: a notice spanning more than one line, so no single emitted line carries it
+ * COMMENT a consumer actually reads, and both are refused rather than passed silently, because
+ * in each the line this check reads may be only part of the comment a reader sees (the
+ * no-SUBSET requirement set out below): a notice spanning more than one line, so no single
+ * emitted line carries it
  * whole (checked by an empty carrying-line set — `css.includes(notice)` above already proved the
  * notice is present, so an empty set here means no single line could have carried it, which holds
  * if and only if the notice itself contains a newline); and a carrying line that is not a
  * SELF-CONTAINED comment (trimmed, opens and closes its own comment delimiters with nothing left
  * dangling), so the notice's own comment continues onto a line this check does not read. Both
- * refuse loudly rather than skip, per this domain's own recorded lesson four lines above this
- * function's history (this file's own `lintDescriptions` docblock): a control whose stated surface
- * is wider than its wired surface retires the attention that was the real control. After this round
- * the stated and the wired surface coincide: every carrying line is read, and each case where no
+ * refuse loudly rather than skip, for the reason this file's `lintDescriptions` docblock gives:
+ * a control whose stated surface is wider than its wired surface retires the attention that was
+ * the real control. Here the stated and the wired surface coincide: every carrying line is
+ * read, and each case where no
  * single line can be read in full stops the build instead of passing under it.
  *
  * A carrying line holding a SECOND, self-contained comment beside the notice's own passes

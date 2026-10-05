@@ -1080,8 +1080,8 @@ function isEveryMentionQuoted(text: string, filePath: string): boolean {
  * is what makes the undelimited form genuinely ambiguous rather than merely untidy.
  */
 /**
- * A source file under a directory whose name contains a SPACE: it is what makes an undelimited path genuinely
- * ambiguous to a reader rather than merely untidy.
+ * A source file under a directory whose name contains a SPACE: it is what makes an undelimited path
+ * genuinely ambiguous to a reader rather than merely untidy.
  */
 function sourceWithASpaceInItsPath(projectDir: string, name: string, content: string): string {
   const dir = path.join(projectDir, 'My Project')

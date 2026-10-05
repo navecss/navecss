@@ -269,12 +269,12 @@ function stripComments(content: string): string {
 }
 
 /**
- * The R31 guard's OWN audit pattern. Deliberately DUPLICATES `NAVE_VAR_PATTERN` above rather than sharing it: a guard
- * that derives its EXPECTED set from the same pattern as the subject it guards measures
- * wiring, never content — sharing made `assertContractPreconditions`'s limb (b) structurally
- * incapable of firing (narrowing `NAVE_VAR_PATTERN` to the earlier colour-only form produced
- * the old manifest with no throw at all, the exact regression the guard is named for). If the
- * scan's pattern is ever narrowed, this must NOT be narrowed with it. `stripComments` above IS
+ * The R31 guard's OWN audit pattern. Deliberately DUPLICATES `NAVE_VAR_PATTERN` above rather than
+ * sharing it: a guard that derives its EXPECTED set from the same pattern as the subject it guards
+ * measures wiring, never content — sharing made `assertContractPreconditions`'s limb (b)
+ * structurally incapable of firing (narrowing `NAVE_VAR_PATTERN` to the earlier colour-only form
+ * produced the old manifest with no throw at all, the exact regression the guard is named for). If
+ * the scan's pattern is ever narrowed, this must NOT be narrowed with it. `stripComments` above IS
  * shared between the scan and this guard's own audit; see its own doc for why that differs
  * from the pattern above.
  */

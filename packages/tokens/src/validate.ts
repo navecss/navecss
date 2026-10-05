@@ -131,17 +131,18 @@ function printSourceLabel(source: ValidateSourceLabel): string {
  * it has — a `path` or a `phrase` — and the DELIMITING DECISION IS MADE HERE, once, by the code
  * that knows which it was given.
  *
- * It is a discriminated pair rather than "quote it always" because the default is a generic PHRASE, not a path, and
- * quoting it would print `"this validate source" is not valid JSON`, reading as a file named that.
+ * It is a discriminated pair rather than "quote it always" because the default is a generic PHRASE,
+ * not a path, and quoting it would print `"this validate source" is not valid JSON`, reading as a
+ * file named that.
  *
- * Under R15's dated precision (2026-09-14), the JSON-parse-error wrapper above stopped ONE CALL SHORT. A file that parses as JSON but whose
- * ROOT is not a JSON object went to `readTokens` unwrapped, so `[]`, a bare number, a bare string
- * and `null` escaped to `bin.ts`'s catch-all as `DTCG reader: expected an object at "", got []` —
- * exit `1`, the file unnamed — while the SAME file with malformed JSON exits `2` naming it and
- * `--overrides` gives the same input the same `2` one flag over. Extension, parseability and root
- * shape are three answers to one question, and this is the third: **the file you named is not an
- * input of the kind this flag takes**, which is R4's `2` with its gloss exactly as it already
- * reads.
+ * Under R15's dated precision (2026-09-14), the JSON-parse-error wrapper above stopped ONE CALL
+ * SHORT. A file that parses as JSON but whose ROOT is not a JSON object went to `readTokens`
+ * unwrapped, so `[]`, a bare number, a bare string and `null` escaped to `bin.ts`'s catch-all as
+ * `DTCG reader: expected an object at "", got []` — exit `1`, the file unnamed — while the SAME
+ * file with malformed JSON exits `2` naming it and `--overrides` gives the same input the same `2`
+ * one flag over. Extension, parseability and root shape are three answers to one question, and this
+ * is the third: **the file you named is not an input of the kind this flag takes**, which is R4's
+ * `2` with its gloss exactly as it already reads.
  *
  * **The line is at the ROOT, not at the reader.** A document accepted as a DTCG object and
  * FAULTY INSIDE — a reference cycle, an unresolved reference, an unsupported value type, a

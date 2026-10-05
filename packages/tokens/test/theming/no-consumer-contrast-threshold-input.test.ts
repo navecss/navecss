@@ -2,14 +2,14 @@
  * AC-token-build-27 covers: R27.
  *
  * R27's cleared paragraph states this entry point's contrast-threshold posture to a consumer.
- * The surface is `packages/tokens/README.md`, ruled on the
- * criterion's own words: the criterion ranges over "the shipped documentation surface where
- * THIS ENTRY POINT's contrast-threshold posture is stated to a consumer", and the paragraph's
- * own subject is this entry point's FLAGS, which are documented to a consumer here and nowhere
- * else. The repository-root README's accessibility section was refused BY NAME in that same
- * ruling, on the ground that placement can convert an artifact fact into a conformance-adjacent
- * claim: R27 is about an absent INPUT, the accessibility non-promises about an absent VERDICT.
- * That refusal is pinned below, because it is a ruling a later well-meaning edit could undo.
+ * The surface is `packages/tokens/README.md`, on the criterion's own words: the criterion
+ * ranges over "the shipped documentation surface where THIS ENTRY POINT's contrast-threshold
+ * posture is stated to a consumer", and the paragraph's own subject is this entry point's
+ * FLAGS, which are documented to a consumer here and nowhere else. The repository-root README's
+ * accessibility section is refused BY NAME, because placement can convert an artifact fact into
+ * a conformance-adjacent claim: R27 is about an absent INPUT, the accessibility non-promises
+ * about an absent VERDICT. That refusal is pinned below, because a later well-meaning edit could
+ * undo it.
  *
  * The paragraph carries a NEW last sentence, re-cleared on 2026-09-07. The old one named an
  * internal tracking id, which no
@@ -217,7 +217,7 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
     expect(holding[0]?.replaceAll(/^\n+|\n+$/g, '')).toBe(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT)
   })
 
-  it('does not reach the repository-root README, the one surface product refused BY NAME', () => {
+  it('does not reach the repository-root README, the one surface refused BY NAME', () => {
     expect(REPO_ROOT_README).not.toContain(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT)
     // Not the whole paragraph and not a partial transcription of it either: the opening sentence
     // is what the criterion pins, so a fragment landing at the refused surface is caught too.
@@ -226,7 +226,7 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
 
   it('is never independently authored at a second site: of every README this repository ships, only packages/tokens carries it', () => {
     // The criterion's clause quantifies over every surface a consumer reads, so the check has
-    // to as well: one assertion above pins the surface product refused BY NAME, and this one pins
+    // to as well: one assertion above pins the surface refused BY NAME, and this one pins
     // the COUNT across the whole set, which is what the word "never" actually claims. Checked
     // against the OPENING SENTENCE rather than the whole paragraph, because a second site that
     // copies only the opening is the same defect and the cheaper one to write by accident.
