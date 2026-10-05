@@ -90,8 +90,8 @@ const SHIPPED_READMES = [
  *
  * A plain `indexOf('\n## ')` is fooled by a `## ` line inside a fence in BOTH directions:
  * forwards it ends the section early, backwards it moves the section's start past prose that is
- * really in it. The quality reviewer measured the backwards half on this very file,
- * where a `bash` fence between a conformance-framing sentence and the paragraph left the suite
+ * really in it. Measured on this very file for the backwards half:
+ * a `bash` fence between a conformance-framing sentence and the paragraph left the suite
  * green. The fence tracking that closes that lives in `markdown-headings.ts`, shared with
  * `remaining-ac.test.ts`, and its own docblock carries the tracker's
  * reasoning and its measured residuals.

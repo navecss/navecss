@@ -34,7 +34,7 @@ function manifestOf(tokens: readonly string[]): CoreContractManifest {
  * name-set answer computed from a schema this build has never seen.
  */
 /**
- * A round-2 fix (the quality reviewer's note F1): the two zero-checkable-set tests below used to
+ * The two zero-checkable-set tests below used to
  * assert on `lines[1]` — an INDEX, correct only because of where the success line happened
  * to land in `formatValidateReport`'s current return order. A pure reorder of that return
  * (moving `NAMESPACE_PREAMBLE` later) leaves the two tests reading `formatSuppliedLines`'s
@@ -301,9 +301,9 @@ describe('AC-token-build-17 covers: R17', () => {
     // `supplied` non-empty, `formatSuppliedLines` independently emits the same "(true only if
     // you build with that tool)" phrase elsewhere in the output, so a whole-report
     // `toContain` would pass even if the success line itself never carried the premise
-    // (caught by red-first). Located by CONTENT (a round-2 fix, the quality reviewer's note F1):
+    // (caught by red-first). Located by CONTENT:
     // only `formatSuccessLine`'s zero-checkable `resolved` branch emits "Manifest from" — verified
-    // stacked against the quality reviewer's own mutant below.
+    // stacked against the mutant below.
     const lines = formatValidateReport(manifest, [], undefined, {
       status: 'resolved',
       supplied: manifest.tokens,

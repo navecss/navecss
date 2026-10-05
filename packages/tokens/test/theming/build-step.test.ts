@@ -533,7 +533,7 @@ describe('R3(a)/R3(b)/R5/R6 recorded in the build output: dist/build-record.json
     const built = record()
     // Nave's own build always passes the array (build-step.ts:243), so the key is always
     // present here; the `?? []` only satisfies the type, which is optional because the
-    // consumer build path (round 2, finding C) genuinely omits the key when unmeasured.
+    // consumer build path genuinely omits the key when unmeasured.
     const openSlots = built.openAdjacencySlots ?? []
     expect(openSlots.toSorted((a, b) => a.localeCompare(b))).toEqual([
       'border.strong',
@@ -659,15 +659,15 @@ describe('AC-theming-08 covers: R7 (the contact sheet is emitted and complete)',
  * value or an HTML numeric character reference (e.g. `&#8202;`) respectively. Neither
  * precedes a real citation in any artifact this build composes.
  *
- * A later round (finding G) named three more shapes this detector missed, all
+ * Three more shapes were found that this detector missed, all
  * inert against today's shipped artifacts (0 hits, checked at the ref each was written
  * against — a fact about the current build, not a guarantee about a future one). Two are
- * closed here (review round 4); the third stays a deliberate carve-out:
+ * closed here; the third stays a deliberate carve-out:
  *
  *   - CLOSED: a numeric reference preceded by `,`, `(` or `=` rather than `:` or `&` —
  *     `var(--x, #123456)` (a CSS custom-property fallback), `url(#123)`, `href="#123"`
  *     (SVG/HTML fragment refs). Widening the lookbehind above to a blanket `[:&,(=]` was
- *     rejected in round 2: a parenthesized bare citation is this codebase's own genuine
+ *     rejected: a parenthesized bare citation is this codebase's own genuine
  *     bare-citation shape (pinned below), and a paren immediately precedes the `#` there
  *     exactly as it does in `url(#123)` — a punctuation-only lookbehind cannot tell them apart.
  *     The three additional lookbehinds below instead anchor on the SPECIFIC surrounding syntax
@@ -694,7 +694,7 @@ describe('AC-theming-08 covers: R7 (the contact sheet is emitted and complete)',
  *     `\.md` shape would forbid the one documentation pointer this package is supposed to
  *     make. The allowlist is what keeps the guard on the reader's side of that ruling instead
  *     of against it.
- *   - CARVED OUT, still: none. Both round-2 gaps are closed; nothing is currently known-open.
+ *   - CARVED OUT, still: none. Both gaps are closed; nothing is currently known-open.
  */
 const ISSUE_REFERENCE_PATTERN =
   /(?<![:&]\s{0,20})(?<!\burl\(\s{0,20})(?<!var\(--[\w-]+,\s{0,20})(?<!(?:href|xlink:href)\s*=\s*["'])#\d+\b/
@@ -852,9 +852,9 @@ describe('the widened issue-reference shape', () => {
     }
   })
 
-  // Round 2 (finding G), closed round 4: the three named
-  // false-positive shapes are now excluded by SYNTAX-ANCHORED lookbehinds rather than a
-  // blanket punctuation widening, so they do not reopen the round-2 tension below.
+  // The three named false-positive shapes are excluded by SYNTAX-ANCHORED
+  // lookbehinds rather than a blanket punctuation widening, so they do not reopen the
+  // tension below.
   it('does not false-positive on a CSS custom-property fallback, a url() fragment ref, or an href fragment ref', () => {
     for (const text of [
       'color: var(--x, #123456);',
@@ -866,7 +866,7 @@ describe('the widened issue-reference shape', () => {
     }
   })
 
-  // The exact tension round 2 declined to resolve by widening the general lookbehind: a
+  // The exact tension that widening the general lookbehind does not resolve: a
   // genuine bare-paren citation and a url() fragment ref both put `(` immediately before the
   // `#`, so only a pattern anchored on `url(` specifically — not on the paren alone — can
   // tell them apart. Both directions pinned in one test so a future edit cannot fix one by
@@ -878,7 +878,7 @@ describe('the widened issue-reference shape', () => {
   })
 })
 
-// Round 2 (finding G), closed round 4, and re-cut when the enumeration it used to depend on
+// The unresolvable-markdown-document shape was re-cut when the enumeration it used to depend on
 // was replaced by the packed-document allowlist: a markdown filename the package's own reader
 // has no copy of. Every fixture below is synthetic; the shape is what is pinned, never a
 // particular document's name.
@@ -983,11 +983,11 @@ describe('the tracker-URL shape', () => {
   })
 })
 
-// Round 2 (finding M): the widened G\d -> G\d+ shape, pinned directly —
-// nothing in this suite previously exercised the widened entry, and today's real artifacts
-// carry zero G-shorthand references either way.
+// The widened G\d -> G\d+ shape, pinned directly: nothing in this suite previously
+// exercised the widened entry, and today's real artifacts carry zero G-shorthand
+// references either way.
 //
-// 🔵 nit (flagged in review round 3): this used to re-declare a second
+// This used to re-declare a second
 // literal `/\bG\d+\b/` rather than reading `UNRESOLVABLE_REFERENCE_SHAPES`, so a future
 // narrowing of that entry (e.g. back to `/\bG\d\b/`) would leave this test green — a
 // transcription that loses the tripwire it exists to protect. Reads the live entry by its

@@ -420,8 +420,7 @@ test("composeManifestNotAnObjectMessage composes this gate's own bytes, never th
 // A corpus-gated tail fix: this gate's manifest guard
 // only covered SYNTAX errors (JSON.parse throwing), while the sibling gate's identical-shaped
 // guard also covers a manifest that parses fine but is not a usable object. A `null` manifest
-// raw-crashed main() with an uncaught TypeError reading `.private` off null (measured by the
-// quality reviewer, PR comment 5602791504); mirrors the sibling gate's
+// raw-crashed main() with an uncaught TypeError reading `.private` off null (measured); mirrors the sibling gate's
 // composeManifestNotAnObjectMessage guard.
 test("main(): a package manifest that is valid JSON but not a usable object refuses, never an uncaught exception (mirrors the sibling gate's guard)", () => {
   const dir = buildFixture(VALID_WORKSPACE_YAML, {})

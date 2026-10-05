@@ -31,7 +31,7 @@
  * clearance. R8 grows the tarball's unscanned remainder further (compiled library JS outside
  * this set); widening the scan past R6 is a licensing-scope call, not this module's to make.
  */
-export const R6_CONSUMER_ARTIFACTS = [
+export const CONSUMER_ARTIFACTS = [
   'tokens.css',
   'tokens.js',
   'tokens.d.ts',

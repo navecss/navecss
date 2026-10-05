@@ -269,8 +269,7 @@ function stripComments(content: string): string {
 }
 
 /**
- * The R31 guard's OWN audit pattern (raised by a quality reviewer during an early review
- * round). Deliberately DUPLICATES `NAVE_VAR_PATTERN` above rather than sharing it: a guard
+ * The R31 guard's OWN audit pattern. Deliberately DUPLICATES `NAVE_VAR_PATTERN` above rather than sharing it: a guard
  * that derives its EXPECTED set from the same pattern as the subject it guards measures
  * wiring, never content — sharing made `assertContractPreconditions`'s limb (b) structurally
  * incapable of firing (narrowing `NAVE_VAR_PATTERN` to the earlier colour-only form produced
@@ -423,8 +422,7 @@ export class StaleContractPreconditionError extends Error {
  * `--nave-*` property). Either throws rather than the generation step silently writing a
  * stale manifest.
  *
- * WHAT THIS REACHES, AND WHAT IT DOES NOT (raised by a quality reviewer during an early
- * review round).
+ * WHAT THIS REACHES, AND WHAT IT DOES NOT.
  * Limb (b) reaches the PATTERN the scan matches with, and only because it re-derives its
  * expected set with `CONTRACT_AUDIT_PATTERN`, an independent statement of what a `--nave-*`
  * reference is — see that constant's own doc for why sharing the scan's pattern made this

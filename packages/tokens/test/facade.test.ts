@@ -319,8 +319,8 @@ describe('AC-token-build-16 covers: R16', () => {
     expect((caught as InstanceType<typeof MissingContractTokensError>).missing).toEqual([
       '--nave-spacing-content-md',
     ])
-    // A review round (finding F13a) found that the `not.toMatch(/Slot not found for
-    // contrast check/)` assertion that used to sit here is removed. That string is thrown
+    // The `not.toMatch(/Slot not found for contrast check/)` assertion that used to sit here
+    // is removed. That string is thrown
     // only by `findSlot` in `theming/contrast.ts`, which looks up the theming pipeline's own
     // resolved slots — a pure function of the seeds, never of the consumer's source — so
     // after the relocation to `facade.build` no source this test can construct reaches it.
@@ -721,11 +721,11 @@ describe('AC-token-build-14 covers: R14 (facade wiring — the named gap slice 1
   })
 
   /**
-   * The quality reviewer refuted the structural test's own argument ("no PARAMETER could
-   * ever name a consumer directory") with a mutation using no parameter at all —
+   * The structural test's own argument ("no PARAMETER could ever name a consumer directory")
+   * does not hold against a mutation that uses no parameter at all:
    * `readManifest()` preferring `path.join(process.cwd(), 'out', 'core-contract.json')` when
-   * present — and the suite stayed 454/454 green. This is the behavioural test that mutation
-   * demanded: a decoy manifest sitting exactly where that mutation would read it, with a
+   * present left the suite 454/454 green. This is the behavioural test that mutation
+   * demands: a decoy manifest sitting exactly where that mutation would read it, with a
    * declared format version this build does not understand, so ANY read of it is loudly
    * visible in the report.
    */
@@ -933,8 +933,7 @@ describe("a colour on its own space's neutral axis selects the achromatic branch
 })
 
 /**
- * A quality review (finding 3, a PINNING test — green at HEAD by design) noted that
- * `facade.ts` carries its own module-private `const CONSUMER_LAYER = 'tokens.presets'` for
+ * This is a PINNING test (green at HEAD by design). `facade.ts` carries its own module-private `const CONSUMER_LAYER = 'tokens.presets'` for
  * the DTCG-reader half (`composeDtcgOutputs`) rather than importing `consumer-build.ts`'s
  * exported one, while `composeDtcgOutputs`'s own docblock says both halves target the SAME
  * R10 layer. They agree today — nothing pins it. facade.ts's own constant is not exported, so

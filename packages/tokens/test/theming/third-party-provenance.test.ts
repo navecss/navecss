@@ -19,9 +19,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import {
+  CONSUMER_ARTIFACTS,
   findThirdPartyResidue,
   findUnattributedHeader,
-  R6_CONSUMER_ARTIFACTS,
   THIRD_PARTY_TEXT_ROUTING_POLICY,
 } from '../../src/theming/third-party-provenance.ts'
 
@@ -30,7 +30,7 @@ const DIST_DIR = path.resolve(HERE, '../../dist')
 
 describe('AC-token-build-30 covers: R30 (provenance — every R6 artifact traces to first-party source)', () => {
   it('no R6 artifact carries a byte traceable to a third-party source (style-dictionary residue, or an unattributed generated-file header)', () => {
-    const artifacts = R6_CONSUMER_ARTIFACTS.map((name) => ({
+    const artifacts = CONSUMER_ARTIFACTS.map((name) => ({
       path: name,
       content: readFileSync(path.join(DIST_DIR, name), 'utf8'),
     }))

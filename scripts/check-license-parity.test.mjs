@@ -426,7 +426,7 @@ test('main(): the pass line names both the byte-identical count and the third-pa
  * `/* … *\/` comment or an UNBROKEN run of `//` lines; a blank line or any code line closes a run,
  * so two runs with something between them are two blocks.
  *
- * What this exists for (a review's finding B4). `normalizedDocblockBefore`
+ * What this exists for: `normalizedDocblockBefore`
  * pins a cleared block's WORDING and its adjacency to the declaration below it, and nothing pinned
  * what sits ABOVE it: `lastIndexOf('/**', anchor)` takes the block nearest the declaration, so a
  * contradicting docblock inserted above the cleared one is outside what that helper reads. Measured
@@ -1092,8 +1092,8 @@ test('findWorkspaceGlobViolation: tab-indented block items cannot be confirmed (
 
 // A corpus-gated tail fix: the tab-refusal check above used to run BEFORE the blank/comment
 // skip, so a tab-indented comment or a tab-only blank line inside an otherwise-lawful packages:
-// block falsely refused a workspace real pnpm resolves fine. Measured against real pnpm by the
-// quality reviewer (PR comment 5602791504): pnpm fatally refuses a tab indenting an actual list
+// block falsely refused a workspace real pnpm resolves fine. Measured against real pnpm:
+// pnpm fatally refuses a tab indenting an actual list
 // item, but tolerates one indenting a comment or a blank line.
 test('findWorkspaceGlobViolation: a tab-indented comment line inside the packages: block sequence does not falsely refuse (pnpm resolves this file fine, verified by running it)', () => {
   const dir = buildWorkspaceYamlFixture("packages:\n  - 'packages/*'\n\t# comment\n")
@@ -1162,7 +1162,6 @@ test('composeLicenseUnreadableMessage and composeManifestInvalidJsonMessage comp
   )
 })
 
-// A prior review round (finding 5):
 // WORKSPACE_GLOB_VIOLATION_MESSAGE's own docblock says it is "Anchored byte-exact in
 // check-license-parity.test.mjs" — and until this test it was not. Every assertion on it in this
 // file and in check-publishable-set.test.mjs compares it to its own imported symbol, which pins
@@ -1286,7 +1285,7 @@ test('composePackageLicenseUnreadableMessage and composeManifestNotAnObjectMessa
   )
 })
 
-// A fix round (finding B): main()'s per-package LICENSE read (`content: exists ?
+// main()'s per-package LICENSE read (`content: exists ?
 // readFileSync(licensePath) : null`) sat two lines below the guarded root LICENSE read and
 // raw-crashed on a directory or an unreadable file, the exact "raw Node stack trace instead of a
 // designed message" class this fix exists to close. A reviewer's consult landed these two rows
@@ -1350,7 +1349,7 @@ test('main(): a package LICENSE that is unreadable (EACCES) refuses, never an un
   }
 })
 
-// A fix round (finding C), widened: a manifest that parses to `null`, an array, or a string is not
+// A manifest that parses to `null`, an array, or a string is not
 // a usable manifest object. `null` alone raw-crashes; the other shapes raise no exception at all
 // and instead ship a printed FALSE PASS over a directory never established to be a package, which
 // is worse in kind. The guard is keyed on "not a usable object", not on `null` alone.

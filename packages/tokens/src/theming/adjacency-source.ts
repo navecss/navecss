@@ -147,7 +147,7 @@ export const ADJACENCY_EXCLUSIONS: Readonly<Record<string, string>> = {
  * itself as unmade, and it is not decided here or by this list.
  * `feedback.warning/success/info.foreground`: whether these families gain a standalone
  * foreground role paralleling `feedback.danger.foreground`'s R18c split is unresolved
- * (the project's token record lists it as open under that section, routed to the design lead).
+ * (the project's token record lists it as open under that section).
  */
 export const ADJACENCY_OPEN: Readonly<Record<string, string>> = {
   'border.strong':

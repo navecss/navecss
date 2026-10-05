@@ -453,11 +453,11 @@ test('under `node -e "<code>" <nonexistent positional>` the realpath guard THROW
  * offender (proven vulnerable to the symlink class above), which is why it is no longer
  * accepted here and the real scripts no longer use it.
  *
- * 🔵 nit (a quality-review finding): the prior version of this check was a
+ * The prior version of this check was a
  * byte-exact `source.includes(CORRECT_GUARD)`, which flagged a legitimate `!== undefined`
  * variant or a guard reformatted across several lines as an "offender" even though both run
- * identically to the pinned form. That review rated this maintenance fragility only, not a
- * coverage hole: the paired real-file subprocess import below (finding A's other half) still
+ * identically to the pinned form. That was a maintenance fragility only, not a
+ * coverage hole: the paired real-file subprocess import below still
  * passes a functionally correct variant clean, so no live defect was ever let through by the
  * false positive — but a legitimate reformat would have broken CI on this check alone, which
  * this pattern fixes. Whitespace is normalised to single spaces before matching, so a guard

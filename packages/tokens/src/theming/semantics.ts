@@ -71,8 +71,8 @@ export const CHROMATIC_MAPPING: Record<string, SlotMapping> = {
   'border.control': { light: ref('neutral', 500), dark: ref('neutral', 500) },
   'border.disabled': { light: ref('neutral', 150), dark: ref('neutral', 800) },
   // Round 15 (write-back 7): border.focus diverges from R16's coupled step
-  // to a scheme-invariant primary-500 — the project's accessibility and licensing reviewer's
-  // window, and the design lead's pick. The prior value, primary-600/primary-300,
+  // to a scheme-invariant primary-500, inside the project's accessibility and licensing
+  // reviewer's window. The prior value, primary-600/primary-300,
   // failed row 9 against surface.inverse in both schemes; primary-500 is the unique
   // step clearing all five shipped surfaces in both schemes. No contrast conclusion is
   // drawn here (one canonical home per fact); this module transcribes the settled value.

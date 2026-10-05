@@ -497,7 +497,7 @@ describe('the two comment stems are cleared bytes with no anchor of their own', 
   it('TINT_SEED_COMMENT_STEM and FEEDBACK_TOKENS_COMMENT_STEM match their cleared, hardcoded literals exactly', () => {
     // Both stems are cleared as EXACT bytes, so changing either stem is a change to cleared
     // text and needs review as one. Before this
-    // test, the quality reviewer measured that neither constant had a byte anchor of its own:
+    // test, it was measured that neither constant had a byte anchor of its own:
     // mutating either one's VALUE at its definition left every test THIS package's own
     // theming suite runs green, caught only by test/theming/remaining-ac.test.ts (AC-theming-39)
     // and test/theming/emit-r20-notice.test.ts, both anchored on their own deliberately RETYPED
@@ -628,7 +628,7 @@ describe('AC-theming-22 covers: R20 obligation 1: the feedback shared-identity n
   })
 
   it('the Feedback-notice analogue of the Retheming shared-const identity pin — captureNoticeViolation reached for the way a future caller naturally would, now parameterized over the notice constant and its label', () => {
-    // The quality reviewer found that captureNoticeViolation was hoisted to module scope
+    // captureNoticeViolation was hoisted to module scope
     // but its body was hardcoded to RETHEMING_NOTICE/'Retheming notice', despite its name and
     // position reading as general-purpose. Red-first evidence for this test: before
     // parameterization, calling the helper over Feedback fixtures the way a future caller naturally
@@ -857,8 +857,8 @@ describe('AC-theming-42 covers: R36', () => {
 
     // Proves the SEVENTH probe (the same-step lint's REAL 'fail'
     // violation output, distinct from the widening's fail-closed probe above) is actually
-    // wired, not vacuously green — the exact shape the quality reviewer found missing for the
-    // first four widened probes in that change's own review.
+    // wired, not vacuously green — the exact shape that was missing for the
+    // first four widened probes.
     it("a conformance word injected into assertNoSameStepViolations's message fails assertHarnessFramingIsClean", async () => {
       vi.resetModules()
       vi.doMock('../../src/theming/contrast.ts', async () => {
@@ -878,7 +878,7 @@ describe('AC-theming-42 covers: R36', () => {
       )
     })
 
-    // One of the three guards a quality reviewer used to demonstrate this gap. Before this
+    // One of the three guards that demonstrated this gap. Before this
     // probe existed, injecting this exact poisoned wording into the real assertCoverageFloor
     // left assertHarnessFramingIsClean() green.
     it('a conformance word injected into assertCoverageFloor fails assertHarnessFramingIsClean', async () => {

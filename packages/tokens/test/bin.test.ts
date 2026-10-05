@@ -537,7 +537,7 @@ describe(
     })
 
     /**
-     * A review round (the quality reviewer's note F10): `build`'s own `readFile` +
+     * `build`'s own `readFile` +
      * `namesFromSource('json', ...)` (R16's union check) runs before `composeDtcgOutputs`, so a
      * malformed `--source` is now rejected as a `UsageError` (exit 2) where it used to surface
      * as the DTCG reader's raw `SyntaxError` (exit 1). That is the RIGHT answer — it matches
@@ -832,7 +832,7 @@ function installOlderCoreWithNoPackageJsonExport(projectDir: string, version: st
 }
 
 /**
- * A review round 2 (the quality reviewer's note F1): a core that IS installed and IS BROKEN. Node's
+ * A core that IS installed and IS BROKEN. Node's
  * resolver throws a DIFFERENT code for each of these, and `resolveInstalledCoreVersion` used
  * to sniff exactly one code (`ERR_PACKAGE_PATH_NOT_EXPORTED`) and drop everything else into
  * `not-installed` — the one state R14 precision 1 sends to exit `0` with the printed sentence

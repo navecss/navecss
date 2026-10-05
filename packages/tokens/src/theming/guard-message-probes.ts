@@ -199,7 +199,7 @@ export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = 
   },
   {
     label: 'the adjacency coverage-floor output',
-    // One of the three guards a quality reviewer used to demonstrate this gap: a poisoned
+    // One of the three guards that demonstrated this gap: a poisoned
     // wording injected into each of these three real functions still passed
     // assertHarnessFramingIsClean, because none of the three was in this registry. Same
     // fixture as contrast.test.ts's own full-content pin: dropping every `border.control`

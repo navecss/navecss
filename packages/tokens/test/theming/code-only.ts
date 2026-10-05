@@ -10,7 +10,7 @@
  * unanchored form is not reintroduced as a simplification. Unanchored, it treats a `/*`
  * opened inside a STRING LITERAL as a comment opener and deletes everything up to the next
  * closer, code included — and `formats.ts`'s generated-artifact header is exactly that, a CSS
- * comment held in a template literal. A quality reviewer's measured mutation (a `new
+ * comment held in a template literal. A measured mutation (a `new
  * Date().toISOString()` interpolated into that header) was deleted by this function before the R7
  * scan ever saw it, so widening the scan's roots alone would have left it green on the one mutation
  * it was widened for. The premise the anchor rests on was measured across the 38 files of the

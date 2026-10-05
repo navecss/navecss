@@ -219,7 +219,7 @@ describe('AC-token-build-06 covers: R7', () => {
    * not the theming half alone. Two conjuncts, because either one alone is satisfiable by an
    * instrument that proves nothing: (a) the scan's own roots reach `formats.ts` — the file
    * that writes five of R7's seven COMMITTED artifacts — and (b) the scan's own predicate
-   * bites on exactly the mutation the quality reviewer measured, which at the narrow roots left the
+   * bites on exactly the mutation that was measured, which at the narrow roots left the
    * whole 707-test suite green while two builds 1.2s apart differed on line 1 of `tokens.css`,
    * `tokens.d.ts`, `breakpoints.d.ts` and `breakpoints.js`.
    *

@@ -416,7 +416,7 @@ describe('AC-token-build-21 covers: R21', () => {
     expect(ingestSeed('hsl(120deg 100% 50%)')).toEqual(ingestSeed('hsl(120 100% 50%)'))
   })
 
-  // Quality-review finding B, elected for fix by Cédric at GATE 2. The
+  // The
   // tokeniser split and trimmed on JavaScript's `\s`, which is WIDER than CSS's own
   // `<whitespace-token>` set: it also matches U+00A0 and the other Unicode space separators. So an
   // invisible non-CSS space acted as a channel separator, and `lab(50<NBSP>20 30)` was silently

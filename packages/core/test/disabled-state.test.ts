@@ -4,7 +4,7 @@
  * comment instructed consumers to "pair with [disabled] or [aria-disabled] attributes" by
  * hand — the two-things-to-keep-in-sync failure mode the convention exists to remove.
  *
- * The project's design lead settled the shape: key the atom off both `:disabled` and
+ * The shape is: key the atom off both `:disabled` and
  * `[aria-disabled="true"]`, same nesting shape `focusRing` already ships for
  * `:focus-visible` (a bare pseudo-selector-list key, not the two-attribute doc-comment
  * instruction). The replacement doc comment also states the aria-disabled branch's

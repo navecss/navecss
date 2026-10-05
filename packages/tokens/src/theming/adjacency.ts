@@ -199,9 +199,9 @@ const FORBIDDEN_ADJACENCY_RULES: readonly ForbiddenAdjacencyRule[] = [
   {
     entry: 3,
     // Two rules under one number (R22/AC-theming-51): the chromatic fills fail their floor
-    // (N1), and `action.secondary` clears and stays undeclared on a design decision (the
-    // product lead's, the design lead's) — this predicate is the shared AUTHORING instruction,
-    // asserting nothing about either pair's arithmetic (one canonical home per fact).
+    // (N1), and `action.secondary` clears and stays undeclared on a design decision. This
+    // predicate is the shared AUTHORING instruction, asserting nothing about either pair's
+    // arithmetic (one canonical home per fact).
     description: 'any filled `action.*` or `feedback.*` adjacent to `surface.inverse`',
     forbids: (subject, against) =>
       (isFillSlot(subject, 'action.') || isFillSlot(subject, 'feedback.')) &&

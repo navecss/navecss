@@ -15,8 +15,8 @@ import { clamp01 } from './seed-refusal.ts'
  * feed), which is strictly NARROWER than JavaScript's `\s`. `\s` also matches U+00A0 and the
  * other Unicode space separators, so tokenising with it lets an invisible non-CSS space act as
  * a channel separator: `lab(50<NBSP>20 30)` split on `\s` yields three well-formed tokens and
- * was silently accepted as `lab(50 20 30)` (a quality reviewer's
- * finding B, elected for fix by Cédric at GATE 2). Every trimming and splitting step below uses
+ * was silently accepted as `lab(50 20 30)` (fixed here).
+ * Every trimming and splitting step below uses
  * this set, so an NBSP stays INSIDE the token it was typed in, where `readNumericToken` refuses it.
  */
 const CSS_WHITESPACE_CHARS = ' \t\n\r\f'
@@ -76,7 +76,7 @@ const CSS_NUMBER = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/
  * splits on CSS whitespace alone, so a token reaching here can only still contain a space
  * character CSS does not tokenise on (an NBSP, say). `Number` trims those before converting, so
  * `Number` of an NBSP followed by `5` is `5`; refusing instead keeps an invisible character from being
- * read as part of a value (a quality reviewer's finding B). No valid input reaches here with
+ * read as part of a value. No valid input reaches here with
  * whitespace in it.
  *
  * Third, text that is not a CSS `<number>` at all but IS a JavaScript numeral `Number` accepts:

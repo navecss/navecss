@@ -63,9 +63,8 @@ function wallClockLike(value: unknown, at: string): string[] {
 /**
  * Stands in for the CLI's future consumer-invocable validator entry point
  * (core-contract.ts's own docstring: "validateAgainstManifest ... is the CLI's
- * validator's core check"). An earlier request from the quality reviewer left the
- * sequencing question of whether the CLI's real implementation lands now or later
- * explicitly to engineering; building the full consumer-invocable token build is out of
+ * validator's core check"). Whether the CLI's real implementation lands now or later is
+ * not decided by this test; building the full consumer-invocable token build is out of
  * scope here (a separate, much larger item). This wraps the same core check in the shape
  * an entry point actually has — an exit code plus reported names — without
  * pre-building the CLI itself.

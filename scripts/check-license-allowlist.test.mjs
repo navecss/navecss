@@ -401,7 +401,7 @@ test('bucket B: an undecidable expression’s reason is exactly BUCKET_B_UNDECID
   assert.equal(result.reason, BUCKET_B_UNDECIDABLE_REASON)
 })
 
-// A round-2 review (blue finding 1): BUCKET_B_UNDECIDABLE_REASON's own byte
+// BUCKET_B_UNDECIDABLE_REASON's own byte
 // anchor above proves the CONSTANT is clean; it cannot see whether a violation carrying that
 // reason still prints clean once composed into reportAllowlistViolations' contributor-facing
 // line, because no test drove a real undecidable violation through the reporter. Mirrors the
