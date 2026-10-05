@@ -143,7 +143,7 @@ describe('AC-token-build-02 covers: R2', () => {
   })
 
   it("the compiled facade.d.ts's TokensBuildOptions interface declares EXACTLY R3's members — no 'env', no 'distDir', and no unanticipated sixth field either", () => {
-    // A review found this was two negative matches (`env`, `distDir`) plus four
+    // This was two negative matches (`env`, `distDir`) plus four
     // presence checks, which is a denylist wearing a whitelist's words. R2/R3's criterion is
     // "exactly the members this spec's R3 enumerates", and a denylist passes every member
     // nobody thought to name in advance. The member set is parsed and compared as a SET
@@ -160,7 +160,7 @@ describe('AC-token-build-02 covers: R2', () => {
     expect(declaredMembersOf('TokensValidateOptions')).toEqual(['source'])
   })
 
-  // A review round found `formatVersionSkewFact` re-exported here with no test pinning the
+  // `formatVersionSkewFact` was re-exported here with no test pinning the
   // module's runtime export set — an incidental public export could slip in (or a real one
   // drop out) with nothing here to catch it. Read directly from `../src/facade.ts` (rather
   // than `dist/lib/facade.js`) so the pin holds before a build step runs, matching this
@@ -342,9 +342,8 @@ describe('AC-token-build-16 covers: R16', () => {
   })
 
   /**
-   * A review round (tracked as F8) found that a prior ask said "computing the union first is
-   * what preserves R16's ordering clause rather than trading it away — nothing generates before
-   * the answer is known", and nothing held it: moving the whole validation block to sit AFTER
+   * Computing the union first is what preserves R16's ordering clause rather than trading it
+   * away (nothing generates before the answer is known), and nothing held it: moving the whole validation block to sit AFTER
    * both compositions was measured 522/522 green. The R23 half (nothing
    * left on disk) IS held, by `expect(existsSync(outDir)).toBe(false)` above; "before either
    * half composes" is a strictly stronger, separate property and needs its own assertion.
@@ -760,7 +759,7 @@ describe('AC-token-build-14 covers: R14 (facade wiring — the named gap slice 1
 })
 
 describe('AC-token-build-35 covers: R35 (in-process: resolvedSeed is the RESOLVED value the pipeline built from)', () => {
-  // A review found that `resolvedSeed` returned `options.seed` verbatim, so it was the
+  // `resolvedSeed` used to return `options.seed` verbatim, so it was the
   // raw input under a name (and a `bin.ts` docblock) that both promise the resolved one. The
   // property asserted here is the one the raw input cannot satisfy: two DIFFERENT spellings
   // of the SAME colour resolve to the SAME value. Deliberately not `formatOklch(ingestSeed(x))`

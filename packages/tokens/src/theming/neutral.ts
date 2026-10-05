@@ -82,7 +82,7 @@ function hueSweepSpreadAt(l: number, ceiling: number, anchor: Oklch): number {
  * Computed generically, against a fixed achromatic reference rather than any one declared
  * pair, so this stays a ceiling-level bound and does not widen R21's harness into evaluating
  * the hue sweep itself (one candidate remedy, explicitly not taken here).
- * The project's accessibility and licensing reviewer's ceiling-clearance statement is what
+ * The ceiling-clearance statement is what
  * this instruments ("if
  * the neutral chroma ceiling rises, the 0.70 percent spread grows against T7's fixed 1
  * percent, and the agreement has to be re-measured rather than inherited").
@@ -102,8 +102,7 @@ export function computeNeutralHueBandSpread(ceiling = computeNeutralChromaCeilin
 /**
  * The reason clause for `assertNeutralChromaCeilingWithinMargin`'s thrown
  * message, promoted to a named constant for the same review-diff-visibility reason as the
- * three constants in `adjacency.ts`. Cleared bytes (cleared by the project's licensing and
- * accessibility reviewer); extraction only.
+ * three constants in `adjacency.ts`. Cleared bytes; extraction only.
  */
 const NEUTRAL_CHROMA_CEILING_MARGIN_REASON =
   'at or past the 1 percent margin this build holds. That margin is a fixed constraint ' +

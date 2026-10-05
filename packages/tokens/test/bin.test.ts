@@ -733,8 +733,8 @@ describe(
     })
 
     /**
-     * An architecture reviewer's finding pointed at a real mechanism rather than the fs-spy the
-     * original ask declined: Node's own `--permission` model, on the pinned runtime (v24.17.0),
+     * This uses Node's own `--permission` model, on the pinned runtime (v24.17.0), rather than
+     * an fs-spy: it
      * refuses any read/write path outside the granted globs at the RUNTIME level, covering every fs
      * API — `readFile`, `readFileSync`, `open`, `createReadStream`, dynamic `import()` — with nothing
      * to keep in sync with Node's fs surface, unlike a spy on one API. Both globs are realpath'd
@@ -914,7 +914,7 @@ describe(
     })
 
     /**
-     * Rows F1a / F1b from a quality-review pass (Phase 3 round 2). These exercise the PROBE,
+     * These exercise the PROBE,
      * out of process through the shipped bin, on a FOURTH population R14's three states never
      * named: `@navecss/core` installed and broken. R14 precision 3 sends a broken installation
      * to `2` ("the installation is broken, which is what R4's `2` means") and R4's precision 4
@@ -935,7 +935,7 @@ describe(
         installCoreWithOutOfPackageExportTarget,
       ],
     ] as const)(
-      'a quality-review finding (F1): an installed but BROKEN @navecss/core — %s — is not classified as absent: exit 2, and the report never says no installed core was found',
+      'an installed but BROKEN @navecss/core — %s — is not classified as absent: exit 2, and the report never says no installed core was found',
       (_label, breakCore) => {
         const { binPath, projectDir } = scratchInstall()
         const outDir = path.join(projectDir, 'out')
@@ -972,9 +972,9 @@ describe(
   { timeout: SPAWN_TEST_TIMEOUT_MS },
   () => {
     /**
-     * ROW F2 from a quality-review pass (Phase 3 round 2). R17 property 3 has read "on SUCCESS as
-     * well as on failure" since it was written, and its second dated precision (product,
-     * 2026-09-14) extends R14 precision 1's constraint to every outcome of the run: in R14's
+     * R17 property 3 has read "on SUCCESS as
+     * well as on failure" since it was written, and its second dated precision
+     * (2026-09-14) extends R14 precision 1's constraint to every outcome of the run: in R14's
      * state 1, the provenance states the manifest's RECORDED producer as recorded AND states
      * that no installed `@navecss/core` was found and that no version-skew check ran.
      *
@@ -983,7 +983,7 @@ describe(
      * stronger claim of the two, in the active voice, beside a list its reader is about to act
      * on. The exit code does not move: this stays `1`.
      */
-    it('a quality-review finding (F2): with no @navecss/core installed, the FAILURE line does not present the recorded producer version without the no-skew-check disclaimer', () => {
+    it('with no @navecss/core installed, the FAILURE line does not present the recorded producer version without the no-skew-check disclaimer', () => {
       const { binPath, projectDir } = scratchInstall()
       const source = path.join(projectDir, 'incomplete.css')
       // Declares one contract name and omits the rest: a real failure on the merits.
@@ -1005,7 +1005,7 @@ describe(
   { timeout: SPAWN_TEST_TIMEOUT_MS },
   () => {
     /**
-     * ROW F4 from a quality-review pass (Phase 3 round 2). Product's R15 precision (2026-09-14): a
+     * R15's precision (2026-09-14): a
      * `--source` file that parses as JSON but whose ROOT is not a JSON object is a USAGE error
      * — exit `2`, the file named. Extension, parseability and root shape are three answers to
      * one question, and the two siblings (`AC-token-build-15`'s extension clause, the malformed-JSON
@@ -1016,7 +1016,7 @@ describe(
      * "your file is the wrong shape".
      */
     it.each([['[]'], ['42'], ['"a string"'], ['null']])(
-      'a quality-review finding (F4): a --source whose entire content is %s is a usage error at exit 2, naming the file',
+      'a --source whose entire content is %s is a usage error at exit 2, naming the file',
       (content) => {
         const { binPath, projectDir } = scratchInstall()
         const source = path.join(projectDir, 'arr.json')
@@ -1034,7 +1034,7 @@ describe(
      * as a DTCG object and FAULTY INSIDE is the entry point judging a token source on its
      * merits, and stays at `1`.
      */
-    it('a quality-review finding, negative half: a --source accepted at the ROOT and faulty INSIDE still exits 1, not 2', () => {
+    it('negative half: a --source accepted at the ROOT and faulty INSIDE still exits 1, not 2', () => {
       const { binPath, projectDir } = scratchInstall()
       const source = path.join(projectDir, 'legacy.json')
       // A legacy `value`/`type` node: the root IS an object, the fault is one level in.
@@ -1066,22 +1066,20 @@ function isEveryMentionQuoted(text: string, filePath: string): boolean {
 }
 
 /**
- * PINNING ROW R3-03, from a quality-review pass (Phase 3 verifier-gated tail; free in any
- * round). The developer-relations reviewer's bytes, transcribed: `validate` passed its source label
+ * PINNING ROW: `validate` passed its source label
  * to `namesFromSource` BARE while `build` passed it pre-quoted, so one guard function printed two
  * spellings of its own file label — and an unquoted absolute path with a space in it is unreadable,
  * which is the harm rather than the inconsistency. Eight sibling refusals in this package already
  * quote; this was the sole outlier.
  *
- * The developer-relations reviewer measured that the one label feeds TWO messages, not one — the
+ * The one label feeds TWO messages, not one: the
  * root-shape refusal (R15's 2026-09-14 precision) and the malformed-JSON refusal — so both doors
  * are pinned, plus the `build` door that was already correct, so a later change cannot fix one
  * spelling by breaking the other. The path carries a directory segment with a SPACE in it, which
  * is what makes the undelimited form genuinely ambiguous rather than merely untidy.
  */
 /**
- * A source file under a directory whose name contains a SPACE — the developer-relations reviewer's
- * "cheapest strengthening" for the row below: it is what makes an undelimited path genuinely
+ * A source file under a directory whose name contains a SPACE: it is what makes an undelimited path genuinely
  * ambiguous to a reader rather than merely untidy.
  */
 function sourceWithASpaceInItsPath(projectDir: string, name: string, content: string): string {
@@ -1320,7 +1318,7 @@ describe(
   'AC-token-build-07 covers: R8 (the compiled bin locates its own root by NAME)',
   { timeout: SPAWN_TEST_TIMEOUT_MS },
   () => {
-    // The review probed exactly this on a real scratch install and measured exit 1 with a raw
+    // Measured on a real scratch install: exit 1 with a raw
     // `Error: ENOENT ... /dist/tokens.json` plus a Node stack: `findPackageRoot` stopped at the
     // nearest ancestor CARRYING a package.json, and a `dist/package.json` (the standard
     // dual-publish `{"type":"module"}` marker) is nearer than the real root. It fires at module

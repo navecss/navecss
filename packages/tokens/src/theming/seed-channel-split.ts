@@ -66,9 +66,8 @@ const CSS_NUMBER = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/
  *
  * First, text that is empty or whitespace-only: `Number('')` is `0`, not `NaN`, which is the one
  * gap `Number.isFinite` alone cannot see afterwards, and it let a bare `%` (no digits before the
- * sign) read as channel value `0` instead of refusing (quality-review
- * findings F1/F1b, and the same gap in `oklch()`'s inline percentage parsing and in
- * `parseHueDeg`'s `deg`-stripping, quality-review findings F5/F6). Callers pass the text AFTER
+ * sign) read as channel value `0` instead of refusing (and the same gap existed in
+ * `oklch()`'s inline percentage parsing and in `parseHueDeg`'s `deg`-stripping). Callers pass the text AFTER
  * stripping a percentage sign or a `deg` unit, since that is exactly where the text can turn up
  * empty.
  *

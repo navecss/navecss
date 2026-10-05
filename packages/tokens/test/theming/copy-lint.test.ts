@@ -940,7 +940,7 @@ describe('AC-theming-42 covers: R36', () => {
   })
 })
 
-describe('assertDescriptionsAreClean (a quality-review finding, F4): aggregation across every map it is given', () => {
+describe('assertDescriptionsAreClean: aggregation across every map it is given', () => {
   // Its own docblock claims "all violations in one throw rather than the first"; before this
   // block, no test called it directly, and every existing caller keeps one map clean and
   // dirties only the other, so a short-circuit-at-the-first-map bug would have shipped clean.

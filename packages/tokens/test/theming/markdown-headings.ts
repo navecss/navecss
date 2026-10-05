@@ -15,8 +15,8 @@
  * marker cannot tell a fence MARKER from fence CONTENT of the other spelling: a `~~~` line inside
  * a backtick fence flips it, the `## ` heading that opens a section is then read as fenced and
  * swallowed, the section start falls back to the heading before it, and prose from the PREVIOUS
- * section is dragged into the window (round 3, a defect that round's fix
- * introduced and its verification read measured). Recording the opening marker and closing only
+ * section is dragged into the window (a defect an earlier fix
+ * introduced, which was measured). Recording the opening marker and closing only
  * on a same-character run of at least equal length is immune to that by construction, and it also
  * closes the NESTED differing-length case (a four-backtick fence wrapping a three-backtick block)
  * for free, because closing-fence-length matching is exactly the mechanism that case needed.
@@ -25,13 +25,13 @@
  * where a SECTION boundary sits, where a `### ` sub-heading must NOT count; the other asks where
  * the next heading of any level sits, to bound a subsection. Forcing either scope onto the other
  * changes a verdict: narrowing the second WIDENS its window, and widening the first was a
- * measured regression (round 3, row R2). Each caller states its own scope and
+ * measured regression. Each caller states its own scope and
  * its own reason at the call site, which is where that reason is legible.
  *
  * INDENTATION UP TO THREE SPACES IS HANDLED, on both patterns, because CommonMark permits it on
  * both: an opening fence and an ATX heading may each be indented up to three spaces and are an
  * indented code block from four. Anchoring at column 0, as this tracker did until
- * an earlier fix round, meant an indented fence opened nothing at all, so a `## ` line
+ * it was changed, meant an indented fence opened nothing at all, so a `## ` line
  * inside one was read as a real heading. Its exposure needed the markers indented while the
  * fenced CONTENT sat at column 0, because the heading pattern was anchored too, so a wholly
  * indented block failed both patterns and the caller's check came out right for the wrong reason.
@@ -47,7 +47,7 @@
  * because markdown-in-markdown is conventionally written with a longer OUTER fence, which the
  * length rule already handled, and the length rule still applies on top of this one.
  *
- * WHAT IT STILL DOES NOT DO, measured rather than reasoned about (that same fix round),
+ * WHAT IT STILL DOES NOT DO, measured rather than reasoned about,
  * stated so no caller reads a green as wider than it is:
  *
  * - A fence indented FOUR or more spaces still opens nothing. That is markdown's own rule at the

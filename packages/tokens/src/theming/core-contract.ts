@@ -323,9 +323,8 @@ export function discoverSourceFiles(
 /**
  * R13 [blocking]: the manifest-format version this file's own schema is at. A validator
  * meeting a future shape (a manifest with a higher `formatVersion`) refuses it rather than
- * mis-reading it — this is the project's principal engineer's
- * 2026-08-11 note ("version the
- * manifest format inside the manifest") implemented.
+ * mis-reading it. This implements the 2026-08-11 note to version the
+ * manifest format inside the manifest.
  */
 export const MANIFEST_FORMAT_VERSION = 1
 

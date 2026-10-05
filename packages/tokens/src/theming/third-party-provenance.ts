@@ -2,7 +2,7 @@
  * R28 and R30 (the token-build specification), and the shared instrument they both need.
  *
  * R30, paraphrased rather than quoted because the spec's own sentence names an internal
- * reviewer: every artifact this entry point emits onto a consumer's disk is FIRST-PARTY TEXT,
+ * party: every artifact this entry point emits onto a consumer's disk is FIRST-PARTY TEXT,
  * and any third-party-derived emitted text needs a licensing review before publication. R30
  * records that this is the predicate the item CREATES and the one with no
  * instrument, and that what must not happen is that it rides as prose, since prose is exactly

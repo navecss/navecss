@@ -49,7 +49,7 @@ import assert from 'node:assert/strict'
  *      `import.meta.url` resolves through that symlink while a path built from
  *      `process.argv[1]` alone would not — using the physical path is what makes this a test
  *      of the SPACE, not an accidental second test of the symlink.
- *   3. A STATIC PRESENCE sweep (a round-2 review finding) over the same real
+ *   3. A STATIC PRESENCE sweep over the same real
  *      files, asserting each one that defines a `main()` entry point carries the one correct
  *      guard VERBATIM — not merely that it lacks the old broken template. Absence-only misses
  *      the naive `pathToFileURL(process.argv[1]).href` form (the load-bearing
@@ -124,7 +124,7 @@ const SCRIPTS_DIR = path.join(ROOT, 'scripts')
 // does not itself start matching the pattern it is checking for.
 const BROKEN_GUARD = 'import.meta.url === `file://${process.argv[1]}`'
 
-// Recursive by construction (a round-3 review finding): the file set derives
+// Recursive by construction: the file set derives
 // from what is actually on disk under scripts/, not from a naming of known directories, so a
 // script landing in any future subdirectory is swept the same as scripts/*.mjs is today. That
 // property is why a later removal of scripts/hooks/ needed no change here beyond
@@ -400,7 +400,7 @@ function importWithPositionalArgv1(file, positional) {
   }
 }
 
-// 🔵 (a principal-engineer review finding): the realpath mechanism's one new failure path,
+// The realpath mechanism's one new failure path,
 // pinned rather than left latent. Under `node -e "<code>" <positional>` the positional lands
 // in `argv[1]`, so a swept file imported by that code evaluates `realpathSync(<positional>)`
 // and throws `ENOENT` when it names nothing on disk. No runner in this repo produces that
@@ -440,7 +440,7 @@ test('under `node -e "<code>" <nonexistent positional>` the realpath guard THROW
   )
 })
 
-// --- A round-2 review finding: presence check + real-file subprocess import ---
+// --- Presence check + real-file subprocess import ---
 
 /**
  * The correct guard's ESSENTIAL shape, tolerant of whitespace/line-break reformatting and of
@@ -569,7 +569,7 @@ test('GUARD_PATTERN tolerates a !== undefined variant and a reformatted guard, a
   )
 })
 
-// A follow-up review round: hasMainEntryPoint is the SOLE gate on the presence sweep above,
+// hasMainEntryPoint is the SOLE gate on the presence sweep above,
 // so a spelling it misses is a file that sweep never examines. One assertion per covered
 // spelling, so a future narrowing back to the one form the fourteen current entry points use
 // fails a named test rather than silently reopening the hole. The prior predicate was
@@ -591,7 +591,7 @@ test('hasMainEntryPoint recognises every module-scope spelling of a main() entry
     ['export let main = () => {}', 'an exported let binding'],
     ['export var main = () => {}', 'an exported var binding'],
     ['function main () {}', 'a space before the parameter list'],
-    ['export const main = () => {}', 'the spelling a reviewer probed at (export + arrow)'],
+    ['export const main = () => {}', 'the export plus arrow spelling probed live'],
   ]
   for (const [source, description] of covered) {
     assert.ok(
@@ -681,7 +681,7 @@ test('every real swept file import()s cleanly with argv[1] undefined and main() 
   }
 })
 
-// --- 🔵 (a principal-engineer review finding): evaluate every real swept file's guard
+// --- Evaluate every real swept file's guard
 // EXPRESSION, not only its short-circuit ---
 
 /**

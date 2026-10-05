@@ -252,7 +252,7 @@ export interface SameStepViolation {
 /**
  * Fails for Nave's own defaults, reports (never fails) for a consumer's build — same
  * predicate, only severity differs. No suppression flag or allowlist here; the one lawful
- * exemption is the project's accessibility and licensing reviewer's.
+ * exemption is a human review call, not this function's.
  */
 export function checkSameStepLint(
   result: PipelineResult,

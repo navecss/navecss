@@ -2,8 +2,7 @@
  * G1 theming pipeline (the accepted theming specification), R31's mandated order:
  *   seed -> generate ramp -> apply per-step overrides -> resolve semantics
  *
- * Exported as a module `build.ts` calls (the project's principal engineer's
- * implementation-shape request): this is what makes `AC-theming-37`'s three-call ordering
+ * Exported as a module `build.ts` calls: this is what makes `AC-theming-37`'s three-call ordering
  * test possible without a subprocess harness, and what the consumer-invocable entry point
  * wraps.
  */

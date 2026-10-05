@@ -242,7 +242,7 @@ export function findWorkspaceGlobViolation(rootDir = ROOT) {
  * Transcribed, not re-worded: a re-wording needs a fresh
  * clearance, a re-wrapping of the same bytes does not. The requirement sentence stays
  * because it is this file's own encoded position, but it was restated rather than kept
- * verbatim: the citations and the persona went, the subject moved from the published
+ * verbatim: the citations and the internal name went, the subject moved from the published
  * tarball to the published package, the modality from "Condition 2 requires" to a bare
  * "must", and the closing sentence now forbids changing the licence text in a pull request
  * rather than only forbidding silencing the check. The published position is unchanged;

@@ -113,7 +113,7 @@ test('formatCoverageSummary handles zero capable packages without a stray "all 0
   )
 })
 
-// A review finding (principal-engineer and quality review), updated in a later slice (R1's `bin:
+// Updated in a later slice (R1's `bin:
 // navecss-tokens` landed): `AC-token-build-28`'s second clause obliges
 // check-bundling-guard-coverage.mjs to find @navecss/tokens's guard file and pass. Until R1
 // landed, the package had no `bin`, so `bundlingCapabilityReasons` returned `[]` and `main()`'s
@@ -126,7 +126,7 @@ test('formatCoverageSummary handles zero capable packages without a stray "all 0
 // premise flip: the guard file `packages/tokens/test/no-inlined-dependency.test.ts` (R28's own
 // deliverable, landed in an earlier slice) must exist, or the armed tripwire would fire for real.
 
-// A review found: asserted with `includes` and deliberately NOT as an exact set.
+// Asserted with `includes` and deliberately NOT as an exact set.
 // The premise this test exists to hold is "the package qualifies, so main() reaches the
 // guardPath check below" — and `deepEqual(reasons, ['bin entry'])` reddens the day
 // @navecss/tokens gains a non-workspace runtime dependency (which R29's own gate contemplates
@@ -154,15 +154,14 @@ test('R28: the required no-inlining guard exists for @navecss/tokens, so the arm
   )
 })
 
-// A review finding: every test above exercises `formatCoverageSummary` DIRECTLY,
-// never `main()`'s call site — the argument-binding property that finding measured (`read` and
+// Every test above exercises `formatCoverageSummary` DIRECTLY,
+// never `main()`'s call site, so the argument-binding property (`read` and
 // `capable` swapped at the call, no test noticing) is invisible to a unit test on the
 // formatter alone. This drives the real shipped script end to end against a synthetic
 // `packages/` tree built with `read`, `capable` and `notCapable` all DIFFERENT sizes, so a
 // swap at the call site prints a wrong-but-plausible-looking line rather than one that
 // happens to still be numerically correct by coincidence.
 //
-// A follow-up finding from that same review (round 2), sizes CORRECTED in round 3:
 // ONE fixture size is not enough. Measured: `formatCoverageSummary(new Array(3), capable,
 // notCapable)` at `check-bundling-guard-coverage.mjs:152` leaves the whole
 // `pnpm run scripts:test` suite GREEN against the single 3/2/1 case below (measured before this
@@ -172,7 +171,7 @@ test('R28: the required no-inlining guard exists for @navecss/tokens, so the arm
 // binds the printed number to the variable it claims to report.
 //
 // What a SECOND case has to beat is an affine substitution, not merely a constant, and "two
-// different sizes" does not get there on its own. Round 3 measured this against the 3/2/1 plus
+// different sizes" does not get there on its own. Measured against the 3/2/1 plus
 // 5/3/2 pair the comment first shipped: substituting `capable` at the call site with
 // `new Array(notCapable.length + 1)` leaves the whole suite GREEN and prints "2 capable of
 // bundling, all 2 have a no-inlining guard" on the real repository, where the truth is 3,
@@ -294,14 +293,14 @@ for (const { packages, expectedLine } of BUNDLING_FIXTURE_CASES) {
   })
 }
 
-// A prior review round named this report as one whose
-// docblock made no byte-exact claim, without measuring it. Measured here: every test above
+// This report's docblock made no byte-exact claim, and none was
+// measured. Measured here: every test above
 // exercises the SUCCESS path (`formatCoverageSummary`) or the shape of `uncovered` (the R28
 // tripwire tests). Nothing pinned the FAILURE path's own printed bytes — the header, the
 // per-package reason line and the closing guidance are all composed inline in main()'s
 // `uncovered.length > 0` branch, reachable only by driving the real gate end to end against a
 // capable-but-unguarded package. This is the byte-exact backstop, not the gate: the primary
-// control is a reviewer reading main()'s own source. CHANGING THIS LITERAL IS A WORDING CHANGE
+// control is review of main()'s own source. CHANGING THIS LITERAL IS A WORDING CHANGE
 // TO A CHECK'S OWN OUTPUT, NOT A TEST FIXUP — if this goes red because the source message was
 // reworded, restore the wording or get it decided, never edit the literal to match.
 test('the uncovered-package failure report is byte-exact, not only shape-checked', () => {

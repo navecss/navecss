@@ -432,7 +432,7 @@ export default defineConfig([
   // A later change landed mid-review and shifted several by a handful (it deleted a 350-line
   // gate and rewrote another), which is precisely how a live-sounding number becomes a wrong
   // claim that nobody re-measures. Group 5's count is the one exception and says so on its own
-  // line: it was re-measured after round 2 narrowed that group.
+  // line: it was re-measured after that group was narrowed.
   {
     files: ['scripts/**/*.mjs'],
     rules: {
@@ -532,7 +532,7 @@ export default defineConfig([
       // Unlike groups 1-4, the corpus has no positive reason for its form here; the rule's
       // form is simply an alternative. They are off because adopting them means hand-editing
       // ~14 sites across seven files, 13 of them in six gate scripts — re-measured at this
-      // commit, after round 2 moved four rules out of this group into the test-file block
+      // commit, after four rules were moved out of this group into the test-file block
       // below — and a linter's first commit is the wrong place to spend that risk. This group
       // is the burn-down list: re-enable one, do the work, delete the line. Every one was read
       // and none marks a defect.

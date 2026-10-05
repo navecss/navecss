@@ -105,7 +105,7 @@ const DEFAULT_SOURCE_LABEL: ValidateSourceLabel = { phrase: 'this validate sourc
 /**
  * A path is DELIMITED, a phrase is not. The delimiters are what make an absolute path with a
  * space in it readable as one token rather than as a sentence that lost its way, which is the
- * harm flagged in quality review — the inconsistency was the symptom.
+ * harm; the inconsistency was the symptom.
  */
 function printSourceLabel(source: ValidateSourceLabel): string {
   return 'path' in source ? `"${source.path}"` : source.phrase
@@ -122,21 +122,19 @@ function printSourceLabel(source: ValidateSourceLabel): string {
  * source in the resulting message; it defaults to a generic phrase so every existing caller of
  * this function is unaffected.
  *
- * Per Cédric's GATE-2 decision, that parameter was a `string`
+ * That parameter used to be a `string`
  * whose contract read "a label already in its final printed form", and a contract a `string`
  * cannot carry is a contract held by its callers. It was held by two of them and not by the
  * third: `facade.ts` quoted the path itself at both of its call sites, `validate`'s door
  * passed it bare, and one guard function printed two spellings of its own file label
- * (the same inconsistency flagged in quality review). The caller now says which of the two things
+ * (the same inconsistency). The caller now says which of the two things
  * it has — a `path` or a `phrase` — and the DELIMITING DECISION IS MADE HERE, once, by the code
  * that knows which it was given.
  *
- * It is a discriminated pair rather than "quote it always" because a developer-experience
- * reviewer measured why the outlier existed: the default is a generic PHRASE, not a path, and
+ * It is a discriminated pair rather than "quote it always" because of why the outlier existed: the default is a generic PHRASE, not a path, and
  * quoting it would print `"this validate source" is not valid JSON`, reading as a file named that.
  *
- * A later quality-review pass (R15's dated precision, product review 2026-09-14) found that
- * the JSON-parse-error wrapper above stopped ONE CALL SHORT. A file that parses as JSON but whose
+ * The JSON-parse-error wrapper above (R15's dated precision, 2026-09-14) stopped ONE CALL SHORT. A file that parses as JSON but whose
  * ROOT is not a JSON object went to `readTokens` unwrapped, so `[]`, a bare number, a bare string
  * and `null` escaped to `bin.ts`'s catch-all as `DTCG reader: expected an object at "", got []` —
  * exit `1`, the file unnamed — while the SAME file with malformed JSON exits `2` naming it and

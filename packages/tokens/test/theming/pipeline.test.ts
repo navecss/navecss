@@ -309,7 +309,7 @@ describe('AC-theming-28 covers: R23', () => {
     // Round 11: border.focus's achromatic value moved to neutral-500/neutral-500, the
     // first REAL slot pinned to the same step in both
     // schemes (was previously constructed only, see the AC-theming-27 test above and
-    // its comment). R23's gate is existence, never difference, so a Phase 2
+    // its comment). R23's gate is existence, never difference, so an
     // implementation that hardened "carries both branches" into "the two differ" would
     // wrongly fail this slot against the spec's own mapping.
     const result = runPipeline(seeds(GREY))
@@ -339,7 +339,7 @@ describe('AC-theming-28 covers: R23', () => {
 
     const light = focus.find((s) => s.branch === 'light')!
     const dark = focus.find((s) => s.branch === 'dark')!
-    // A Phase 2 implementation that hardened "carries both branches" into "the two
+    // An implementation that hardened "carries both branches" into "the two
     // differ" would wrongly fail this slot against every consumer's chromatic build.
     expect(light.resolved).toEqual(dark.resolved)
   })

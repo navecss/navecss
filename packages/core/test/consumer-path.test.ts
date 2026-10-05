@@ -242,7 +242,7 @@ describe('the @layer order statement is byte-identical across every entry point'
   // to load governs, later copies change nothing and report nothing). Every
   // additional copy is another chance to drift into a guarantee that
   // depends on load order, so this is an equality check rather than a
-  // per-file presence check (an architecture reviewer's call).
+  // per-file presence check.
   const ORDER_STATEMENT_RE =
     /@layer tokens\.defaults, tokens\.presets, reset, atomic, components\.nave, components\.consumer, overrides;/
 

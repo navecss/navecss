@@ -53,7 +53,7 @@ describe('AC-token-build-30 covers: R30 (provenance — every R6 artifact traces
 describe('AC-token-build-30 covers: R30 (the routing obligation exists as a checkable fact)', () => {
   it('names the licence-review route, "before publication", and the three named shapes — as examples, never an enumeration', () => {
     const policy = THIRD_PARTY_TEXT_ROUTING_POLICY
-    // The persona name this constant used to carry (a reviewer's role label) compiled
+    // An internal name this constant used to carry compiled
     // into a published tarball under R8 (dist/lib preserving comments AND runtime string
     // literals), which no reader outside the project can resolve. Replaced with a
     // self-sufficient description of the same routing obligation.

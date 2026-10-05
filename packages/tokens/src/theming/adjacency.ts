@@ -19,7 +19,7 @@ export {
 } from './adjacency-source.ts'
 
 /**
- * C5 (Cédric's signed ruling, N1 + C5 + N3): R22's coverage
+ * C5 (signed ruling, N1 + C5 + N3): R22's coverage
  * list is the referenced MINIMUM declaration set; the nine names below are its categories.
  * `AC-theming-25`/`AC-theming-53`: a present category going missing is narrowing (gated);
  * adding beyond the minimum is ordinary (ungated).
@@ -67,10 +67,10 @@ export function coverageCategories(
 
 /**
  * The reason clause for `assertCoverageFloor`'s thrown message, promoted
- * to a named constant so a future copy edit is a one-place diff a reviewer sees. Cleared
- * bytes (cleared by the project's licensing and accessibility reviewer, applied path);
- * extraction changes no resolved byte, only its location. Any re-wording, including
- * shortening, returns to that reviewer; re-wrapping the same words does not.
+ * to a named constant so a future copy edit is a one-place diff in review. Cleared
+ * bytes; extraction changes no resolved byte, only its location. Any re-wording, including
+ * shortening, is a change to cleared copy and needs review as one; re-wrapping the same
+ * words does not.
  */
 const COVERAGE_FLOOR_VIOLATION_REASON =
   'missing from the declared adjacency set. This set has a required minimum: every ' +
@@ -112,9 +112,9 @@ export function assertCoverageFloor(adjacency: readonly Adjacency[] = ADJACENCY)
  * comparing against it, not against strengthening this local pin. A membership check is
  * constructible (the names exist today only as this record's prose) but is not built today.
  *
- * The `citation` field below is cleared copy from the project's licensing and accessibility
- * reviewer, transcribed byte-exact. Any re-wording, including shortening, returns to that
- * reviewer; re-wrapping the same words does not.
+ * The `citation` field below is cleared copy, transcribed byte-exact. Any re-wording,
+ * including shortening, is a change to cleared copy and needs review as one; re-wrapping
+ * the same words does not.
  */
 const SHIPPED_SURFACE_PROVENANCE = {
   count: 5,
@@ -230,8 +230,8 @@ export function findForbiddenAdjacencyRule(
 /**
  * The reason clause below, promoted to a named constant for the same
  * reason as `COVERAGE_FLOOR_VIOLATION_REASON` above. Cleared bytes; extraction only. Any
- * re-wording, including shortening, returns to the project's licensing and accessibility
- * reviewer; re-wrapping the same words does not.
+ * re-wording, including shortening, is a change to cleared copy and needs review as one;
+ * re-wrapping the same words does not.
  */
 const FORBIDDEN_ADJACENCY_REASON =
   'The rules in this file record decisions about which colour ' +
@@ -273,9 +273,9 @@ const isActionFill = (slot: string): boolean => slot.startsWith('action.')
 
 /**
  * The reason clause below, promoted to a named constant for the same
- * review-diff-visibility reason as the two above (cleared by the project's licensing and
- * accessibility reviewer, extraction only). Any re-wording, including shortening, returns
- * to that reviewer; re-wrapping the same words does not.
+ * review-diff-visibility reason as the two above (cleared copy, extraction only). Any
+ * re-wording, including shortening, is a change to cleared copy and needs review as one;
+ * re-wrapping the same words does not.
  */
 const FOCUSABLE_ADJACENT_TO_ACTION_FILL_REASON =
   'A focus indicator is drawn offset outside the control ' +

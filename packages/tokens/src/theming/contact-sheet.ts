@@ -17,7 +17,7 @@
  * the arithmetic, not an oversight.
  *
  * The sheet renders values and asserts no contrast, conformance or quality verdict about any
- * of them; whether the ramps are worth shipping is Cédric's judgement at the approval gate
+ * of them; whether the ramps are worth shipping is a human judgement at the approval gate
  * (`AC-theming-08`) and is not a claim this file makes.
  *
  * Emitted into `dist/`, where the build's other artifacts live and where it is easy to open,

@@ -335,8 +335,8 @@ describe('runSourceGuards lints the real DTCG source, not only SLOT_DESCRIPTIONS
     }
   })
 
-  // A violation in the FIRST of two colliding source files must still be reported (a
-  // quality-review finding, F3): a merge-into-one-map implementation lets a clean SECOND
+  // A violation in the FIRST of two colliding source files must still be reported: a
+  // merge-into-one-map implementation lets a clean SECOND
   // file's entry at the same dotted path silently overwrite the first file's violating one,
   // and the build passes with nothing to catch it.
   it('a violation in the FIRST of two source paths sharing a dotted path is still reported, not silently overwritten by the second', async () => {
@@ -366,7 +366,7 @@ describe('runSourceGuards lints the real DTCG source, not only SLOT_DESCRIPTIONS
     }
   })
 
-  // A quality-review finding, F1: the two prior tests inject a fixture; neither pins the
+  // The two prior tests inject a fixture; neither pins the
   // DEFAULT (no options passed) to the real, non-empty tokens.json. A bare
   // `expect(() => composeThemingOutputs()).not.toThrow()` (this block's prior version of this
   // test, byte-identical to the "positive direction, run unmocked" assertion above) would stay
@@ -438,7 +438,7 @@ async function composeWithRewrittenNotice(
  * `composeThemingOutputs` calls `assertNoticeIsEmitted` once per cleared notice, and the two
  * calls sit on consecutive lines. Written as one parameterised block rather than two copies so
  * that a third notice costs one line, and, more to the point, so that neither call can be the
- * one nothing exercises: a prior review measured that deleting the R20 call left
+ * one nothing exercises: measured, deleting the R20 call left
  * the whole tokens suite green, because the only tests reaching this code path named R34.
  * `emit-r20-notice.test.ts` cannot cover it either, since it calls `emitCss(runPipeline(...))`
  * directly and never enters `composeThemingOutputs`.

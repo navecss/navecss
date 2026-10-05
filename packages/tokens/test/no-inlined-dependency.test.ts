@@ -162,7 +162,7 @@ describe('AC-token-build-28 covers: R28 (compiled-JS half — external specifier
     // in src/, this fails with "expected 0 to be 1", which is the signal that the it.each
     // below has real work to do.
     //
-    // A review found this title used to read "no bundler, no bin, no compile step
+    // This title used to read "no bundler, no bin, no compile step
     // yet — R1/R8 both untouched", and this same PR falsified it: R1's `bin: navecss-tokens`
     // and R8's `tsc` step both landed here. None of those three was ever the premise the
     // assertion measures, which is only that `src/` names no external specifier, so the

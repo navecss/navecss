@@ -142,13 +142,13 @@ describe('AC-token-build-15 covers: R15', () => {
   })
 
   /**
-   * ROW F4 from a quality-review pass (Phase 3 round 2) at the fix site. R15's dated precision
-   * (product, 2026-09-14): a `--source` that parses as JSON but whose ROOT is not a JSON object
+   * R15's dated precision
+   * (2026-09-14): a `--source` that parses as JSON but whose ROOT is not a JSON object
    * is a USAGE error naming the file — the guard belongs HERE, in `namesFromSource` before
    * `namesFromDtcgSource`, never in `bin.ts` (R4's precision 5's catch-all decline stands).
    */
   it.each([['[]'], ['42'], ['"a string"'], ['null']])(
-    'a quality-review finding (F4): a .json source whose root is %s throws a UsageError naming the file, never a bare DTCG reader error',
+    'a .json source whose root is %s throws a UsageError naming the file, never a bare DTCG reader error',
     (content) => {
       expect(() => namesFromSource('json', content, { path: 'tokens.json' })).toThrow(UsageError)
       expect(() => namesFromSource('json', content, { path: 'tokens.json' })).toThrow(
@@ -158,23 +158,22 @@ describe('AC-token-build-15 covers: R15', () => {
   )
 
   /**
-   * ROW G2 from an architecture-review pass (still-open row 2, fixed on Cédric's GATE-2 decision).
    * The third parameter used to be a `string` whose contract was "a label already in its final
    * printed form", held nowhere but in its callers: `facade.ts` quoted the path itself at both
    * call sites, `validate`'s door did not, and one guard function printed two spellings of its
-   * own file label — which is row R3-03 from the quality-review pass, the defect this parameter's
+   * own file label — which is the defect this parameter's
    * shape produced.
    *
    * The contract now lives in the SIGNATURE. A caller says which of the two things it has, a
    * `path` or a `phrase`, and the delimiting decision is made once, here, by the code that
-   * knows which it was given. The developer-relations reviewer's decline is the reason this is a
-   * discriminated pair rather than "quote it always": the default is a generic PHRASE, and quoting
+   * knows which it was given. It is a
+   * discriminated pair rather than "quote it always" because the default is a generic PHRASE, and quoting
    * that prints `"this validate source" is not valid JSON`, which reads as a file named that.
    *
    * The CLI-visible bytes do NOT move — R3-03's three rows in `bin.test.ts` pin every
    * door through `isEveryMentionQuoted`, and they were re-confirmed by name at this head.
    */
-  it('architecture-review row G2: a PATH-shaped label is delimited by the function that knows it is a path; the generic PHRASE default stays bare', () => {
+  it('a PATH-shaped label is delimited by the function that knows it is a path; the generic PHRASE default stays bare', () => {
     expect(() => namesFromSource('json', '{oops', { path: 'tokens.json' })).toThrow(
       /"tokens\.json" is not valid JSON/,
     )
@@ -186,7 +185,7 @@ describe('AC-token-build-15 covers: R15', () => {
     )
   })
 
-  it('a quality-review finding (F4, negative half): the line is at the ROOT — a document accepted as an object and faulty INSIDE is still the readers error, not a UsageError', () => {
+  it('negative half: the line is at the ROOT — a document accepted as an object and faulty INSIDE is still the readers error, not a UsageError', () => {
     const faultyInside = JSON.stringify({ color: { base: { value: '#fff', type: 'color' } } })
     expect(() => namesFromSource('json', faultyInside, { path: 'tokens.json' })).toThrow(
       /legacy token shape/,
@@ -296,7 +295,7 @@ describe('AC-token-build-17 covers: R17', () => {
     expect(joined).toMatch(/no installed @navecss\/core was found/i)
   })
 
-  it("product's follow-up: the zero-checkable sentence ITSELF (not merely the report as a whole, which also carries formatSuppliedLines's own copy of this phrase) states the SUPPLIED premise, on the 'resolved' branch — a rung-5 consumer who does not build with navecss-tokens build must be able to reject the claim from that one line alone", () => {
+  it("the zero-checkable sentence ITSELF (not merely the report as a whole, which also carries formatSuppliedLines's own copy of this phrase) states the SUPPLIED premise, on the 'resolved' branch — a rung-5 consumer who does not build with navecss-tokens build must be able to reject the claim from that one line alone", () => {
     // Isolate the success LINE, not the joined report and not an assumed index: with
     // `supplied` non-empty, `formatSuppliedLines` independently emits the same "(true only if
     // you build with that tool)" phrase elsewhere in the output, so a whole-report
@@ -312,7 +311,7 @@ describe('AC-token-build-17 covers: R17', () => {
     expect(successLine).toContain('(true only if you build with that tool)')
   })
 
-  it("product's follow-up: the zero-checkable sentence carries the SUPPLIED premise on the 'not-installed' branch too, isolated the same way", () => {
+  it("the zero-checkable sentence carries the SUPPLIED premise on the 'not-installed' branch too, isolated the same way", () => {
     const lines = formatValidateReport(manifest, [], undefined, {
       status: 'not-installed',
       supplied: manifest.tokens,
@@ -328,15 +327,15 @@ describe('AC-token-build-17 covers: R17', () => {
   })
 
   /**
-   * ROW F2 from a quality-review pass (Phase 3 round 2) at the unit level, beside the renderer
-   * it constrains. R17 property 3's SECOND dated precision (product, 2026-09-14): in R14's
+   * At the unit level, beside the renderer
+   * it constrains. R17 property 3's SECOND dated precision (2026-09-14): in R14's
    * state 1, EVERY outcome's provenance states the manifest's recorded producer as recorded
    * and states that no installed `@navecss/core` was found and no skew check ran. Fence (a)
    * of that precision is that the sentence is TRANSCRIBED, not re-worded — so this row
    * EXTRACTS it from the success line rather than re-typing it into the expectation, because
    * a hand-copied expectation is precisely how one fact acquires two voices.
    */
-  it("a quality-review finding (F2): in R14 state 1 the FAILURE line carries the success line's no-skew-check sentence VERBATIM, and states the recorded producer as recorded", () => {
+  it("in R14 state 1 the FAILURE line carries the success line's no-skew-check sentence VERBATIM, and states the recorded producer as recorded", () => {
     const successLine = uniqueLine(
       formatValidateReport(manifest, [], undefined, { status: 'not-installed' }),
       /^0 missing against/,
@@ -360,7 +359,7 @@ describe('AC-token-build-17 covers: R17', () => {
     expect(provenanceLine.toLowerCase()).toContain('recorded')
   })
 
-  it('a quality-review finding (F2, negative half): the resolved state is untouched — a comparison DID happen, so the failure line carries no no-core disclaimer', () => {
+  it('negative half: the resolved state is untouched — a comparison DID happen, so the failure line carries no no-core disclaimer', () => {
     const failureLines = formatValidateReport(manifest, ['--nave-color-b'], undefined, {
       status: 'resolved',
     }).join('\n')
@@ -443,7 +442,7 @@ describe('AC-token-build-18 covers: R18', () => {
     expect(joined).toContain('ENOENT')
   })
 
-  it('a round-2 fix (the developer-relations reviewer\'s note F7): "unreadable" (exit 2) composes no name-set verdict either, matching the "unresolvable" sibling above — the property the README\'s exit-code paragraph now states ("a run that exits 2 reports none") armed on the one exit-2 branch that lacked its own assertion', () => {
+  it('"unreadable" (exit 2) composes no name-set verdict either, matching the "unresolvable" sibling above — the property the README\'s exit-code paragraph now states ("a run that exits 2 reports none") armed on the one exit-2 branch that lacked its own assertion', () => {
     const manifest = manifestOf(['--nave-color-a'])
     // A NON-EMPTY missing array, so this is armed rather than vacuous: were the short-circuit
     // ever removed and the report composed alongside the refusal, this would be the case that

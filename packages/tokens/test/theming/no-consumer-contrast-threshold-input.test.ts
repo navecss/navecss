@@ -135,8 +135,7 @@ function containingSection(markdown: string, needle: string): string {
  * What the number is worth is entirely its provenance, so this states that rather than the
  * stronger thing it is tempting to state. It is NOT a check against the spec, which CI cannot
  * read. It is a check that the constant still equals bytes four parties computed independently
- * from R27's source spec on 2026-09-07 (engineering, quality, architecture and
- * accessibility/licensing review), each stripping
+ * from R27's source spec on 2026-09-07, each stripping
  * exactly those two markers and each reading 481 characters, zero non-ASCII, straight
  * apostrophes.
  */
@@ -187,9 +186,8 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
   })
 
   it('opens on the sentence AC-token-build-27 pins it by, so the criterions parenthetical stays live', () => {
-    // Product's fence 1: the criterion pins the paragraph by its opening in a parenthetical, so a
-    // variant that moves the opening makes that parenthetical stale and owes a quality-review
-    // delta.
+    // The criterion pins the paragraph by its opening in a parenthetical, so a
+    // variant that moves the opening makes that parenthetical stale, and it then needs updating.
     expect(
       NO_CONSUMER_CONTRAST_THRESHOLD_INPUT.startsWith(
         '0.1.0 ships no consumer contrast-threshold input.',

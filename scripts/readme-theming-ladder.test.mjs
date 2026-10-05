@@ -6,10 +6,10 @@
  * top of `AC-theming-36`'s coverage, which is referenced and not re-derived.
  *
  * ONE CODE-BLOCK KIND IS RECOGNISED: THE BACKTICK FENCE. Everything else is prose. This is a
- * deliberate narrowing (round 4 of an earlier review) of a file that had grown a general
+ * deliberate narrowing of a file that had grown a general
  * CommonMark block parser — tilde fences, indented blocks, an inline-span scanner — to assert
  * seven propositions about one fixed, cleared document. Measured on the `## Theming` section
- * this file reads, on this branch rather than taken from the round that reported it: NINE
+ * this file reads, on this branch rather than taken from an earlier report: NINE
  * fences (18 delimiter lines), all backtick, info strings `bash` / `css` / `json`; ZERO tilde
  * fences; ZERO indented blocks; 42 list markers. So the deleted machinery guarded constructs
  * the artifact does not contain while adding false-red surface over 42 constructs it does,

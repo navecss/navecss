@@ -117,7 +117,7 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * other places a guard in this family registers, neither mechanically tied to this one; a future
  * guard added there without a probe here repeats this gap.
  *
- * Three more, from its review: `assertNoticeIsEmitted`'s absent-notice, multi-line-notice and
+ * Three more: `assertNoticeIsEmitted`'s absent-notice, multi-line-notice and
  * not-a-self-contained-comment refusals, three of its four reachable messages. These were not
  * among the eight above: the original measurement listed no `assertNoticeIsEmitted` message,
  * so probing them widened the registry without shrinking that residual. The fourth
@@ -313,7 +313,7 @@ export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = 
  * the author's own input and never a claim of Nave's. That ground is narrow by construction,
  * which a scope carve-out would not be: it exempts a quotation, not a message. If anything
  * ever DOES read this list to skip a check, it has become a suppression and the exemption
- * returns to the project's accessibility and licensing reviewer.
+ * needs a human review call.
  */
 export const STRUCTURALLY_UNPROBEABLE_GUARD_MESSAGES: readonly GuardMessageProbe[] = [
   {

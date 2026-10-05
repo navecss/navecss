@@ -267,8 +267,8 @@ test('the duplicate message identifies both entries by POSITION (RED)', () => {
   assert.match(violations[0].reason, /index 1/)
 })
 
-// A prior review round named this reason as one whose
-// docblock made no byte-exact claim, without measuring it. Measured here: every prior assertion
+// This reason's docblock made no byte-exact claim, and none was
+// measured. Measured here: every prior assertion
 // on this reason matched only a FRAGMENT (/duplicate "id"/, /index 0/, /index 1/), which is
 // what let the STATIC words around those fragments drift with the whole suite staying green —
 // rewording "each id must appear at most once in prodPermissive" to a paraphrase left every
@@ -342,11 +342,10 @@ test('the exported header and guidance constants equal the cleared bytes', () =>
 })
 
 // Neither sentence of this guidance is pre-existing branch text: the text that reshape
-// replaced named per-entry provenance fields and routed to a named persona, and both sentences that
+// replaced named per-entry provenance fields, and both sentences that
 // stand here were drafted during a clearance rather than written at the call site. The SECOND
 // is the one drafted in the clearance cited above, unchanged since. The FIRST was drafted
-// at an earlier review turn, which cleared the branch's own wording on the licensing axis and
-// then replaced it: "untrimmed-safe" was a coinage that did not state the rule it was enforcing.
+// earlier, when the branch's own wording was cleared and then replaced: "untrimmed-safe" was a coinage that did not state the rule it was enforcing.
 // Anchored separately so the boundary stays visible to whoever reads this next, and so a
 // re-wording of either half cannot hide inside a full-string diff of the whole constant.
 test('the guidance ends with the cleared second sentence, byte-exact', () => {
@@ -576,7 +575,7 @@ for (const entryIds of [['a'], ['a', 'b', 'c', 'd', 'e']]) {
       // above anchors the suffix only (pre-existing), this one anchors the full sentence
       // including its count. A future cleared rewording of that sentence now updates both. This
       // test asserts an existing string and rewords nothing, so it needs no fresh clearance
-      // (row 1's own note, this file's docblock above).
+      // (see this file's docblock above).
       assert.ok(
         (result.stdout ?? '').includes(
           `License enumeration provenance gate: ${entryIds.length} prodPermissive entr(y/ies), all carry a well-formed id.`,

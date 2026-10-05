@@ -2,8 +2,8 @@
  * Regression guard: the reset formerly removed the
  * user-agent focus indicator document-wide (`:focus { outline: none }`),
  * unconditionally, while only elements carrying the opt-in `focusRing` atom
- * got a `:focus-visible` replacement. Cédric ruled the rule deleted outright
- * with no replacement shipped — the reset falls back to user-agent focus
+ * got a `:focus-visible` replacement. The rule was deleted outright
+ * with no replacement shipped: the reset falls back to user-agent focus
  * indicators.
  *
  * This defect was invisible for the life of the project and was found by

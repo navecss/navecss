@@ -174,10 +174,10 @@ export const FEEDBACK_SHARED_IDENTITY_NOTICE =
  * is asserted at zero across every tracked file of this repository, this one included, and the
  * internal reference is kept out on the authoring side, before a byte reaches this tree.
  *
- * The landing point is `packages/tokens/README.md`, ruled by the project's product lead: the
+ * The landing point is `packages/tokens/README.md`: the
  * criterion ranges over the surface where THIS entry point's posture is stated to a consumer,
  * and this paragraph's own subject is this entry point's flags. The repository-root README's
- * accessibility section was refused BY NAME in that ruling, because placement can convert an
+ * accessibility section was refused BY NAME, because placement can convert an
  * artifact fact into a conformance-adjacent claim: this paragraph is about an absent INPUT,
  * those non-promises about an absent VERDICT, and they do not belong in one list.
  *

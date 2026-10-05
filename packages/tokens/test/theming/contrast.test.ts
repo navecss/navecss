@@ -330,7 +330,7 @@ describe('AC-theming-25 covers: R22', () => {
     // threshold table (tagged there as R18a), not R22 itself. R22's own coverage list reads
     // the weaker, unquantified "border.control against the surfaces a control sits on". That
     // prior fix describes row 8's quantifier as the same CLASS of quantifier as row 9's, not
-    // identical to it. A declaration set short of the recorded minimum is a Phase 2 gap
+    // identical to it. A declaration set short of the recorded minimum is a gap
     // against an approved [blocking] requirement, not a widening (the same fix's argument,
     // applied to the row above).
     // See the border.focus enumeration above for why this reads the one

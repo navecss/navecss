@@ -84,7 +84,7 @@ function visible(text) {
  * SPLIT DELIBERATELY, AND THE SPLIT IS THE POINT. `occurrences` reads the SOURCE;
  * `visibleOccurrences` reads what a reader of the RENDERED README sees. Stripping HTML comments
  * is right for a PRESENCE check (a commented-out notice is not present to any reader, which is
- * the false green closed at round 2) and WRONG for every ABSENCE check
+ * the false green this closes) and WRONG for every ABSENCE check
  * in this file, because the harm those record is a SOURCE-level duplication:
  * the clearance's own ground is that "a second byte-identical copy
  * thirty lines apart is the shape a later editor harmonises", and commenting that copy out does
@@ -154,7 +154,7 @@ function rungBody(name) {
 const RETHEMING_RUNGS = ['1a', '1b', '2', '3', '4', '5']
 
 // A FLOOR AT EVERY RUNG, PLUS THE ONE EXACT COUNT THAT WAS ACTUALLY CLEARED.
-// `AC-theming-39` (round 22 of that review; settled round 23) counts RUNGS COVERED
+// `AC-theming-39` (round 22 of the theming spec; settled round 23) counts RUNGS COVERED
 // and never notice OCCURRENCES — "a rung with an act of its own needs its own instance" — and
 // round 22's own correction says in terms that on a DOCUMENTATION surface "any number of
 // BYTE-IDENTICAL occurrences of the one text the round-12 routing selects for that surface is
@@ -207,7 +207,7 @@ test('rung 0 carries no re-theming notice, and no instance sits outside the ladd
   )
 })
 
-// Round 12 of that review: the "Neutral actions" worked example at rung 2 is
+// Round 12 of the theming spec: the "Neutral actions" worked example at rung 2 is
 // the one landing point where a reader transcribes values Nave chose rather than values they
 // set themselves, and it carries a separately cleared TRANSCRIPTION VARIANT instead of the
 // canonical notice. `copy-lint.ts` carries no constant for it (out of that package's scope),
@@ -250,8 +250,8 @@ test("the worked example's separately-cleared notice variant appears exactly onc
 
 test('the worked example carries no "tested against ..." caption', () => {
   // The caption slot is empty at 0.1.0: no sentence claims the worked-example values were
-  // tested against anything. Adding one is exactly the mutation a reviewer proposed, and which
-  // this guard exists to catch.
+  // tested against anything. Adding one is exactly the mutation this
+  // guard exists to catch.
   //
   // A LETTER-BOUNDED LOOKAROUND, NOT `\b`: markdown emphasis wraps a caption in `_..._`, and
   // `_` is a word character to regex, so `_Tested` has NO `\b` between them and `\btested\b`

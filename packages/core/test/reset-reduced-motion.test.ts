@@ -12,7 +12,7 @@
  * declares its cache inputs from `packages/tokens/` alone, so with `packages/core/src/reset.css`
  * edited it is replayed FROM CACHE, on the exact edit this check exists to catch: an unforced
  * local `turbo run test --filter=@navecss/tokens` returns FULL TURBO and exit 0. CI is
- * unaffected (no turbo remote cache) and the Phase 3 review gate forces `TURBO_FORCE=1`, so the
+ * unaffected (no turbo remote cache) and a run that sets `TURBO_FORCE=1` bypasses the cache, so the
  * exposure is the local run, which is the first signal the next person sees. `@navecss/core#test`
  * has `src/reset.css` in its own input set and depends on `@navecss/tokens`, so it invalidates
  * on BOTH sides. (An `inputs` entry on `tokens#test` was weighed and rejected: turbo inputs are

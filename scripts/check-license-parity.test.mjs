@@ -232,7 +232,7 @@ function zeroScopeVerdict(scanned, skippedPrivate, skippedNoManifest) {
  * carries, so a counter wired to the wrong branch is visible on the passing path too and not
  * only on the empty one.
  *
- * A follow-up fix round: the fixtures this
+ * The fixtures this
  * helper serves (`licensed` packages written as byte-identical root copies, never a third-party
  * section) always resolve to every matched package being exact and none carrying a section, so
  * `matched` doubles as the exact count and the third-party count is always 0 here. That is a
@@ -447,7 +447,7 @@ test('main(): the pass line names both the byte-identical count and the third-pa
  * - anything OUTSIDE the two anchors. A contradicting block placed elsewhere in the file (below the
  *   imports, after `isNonPrivate`) is in neither home region and stays green. The claim is about a
  *   cleared block's home, never about the whole file.
- * - A review finding (S6), a literal `/**` spliced into the cleared block's own content. It
+ * - A literal `/**` spliced into the cleared block's own content. It
  *   re-points `normalizedDocblockBefore`'s opener while leaving the compared tail identical, and it
  *   adds no second block here either, so it stays green. Cosmetic, visible in any diff, and not
  *   what this closes.
@@ -1052,7 +1052,7 @@ test('findWorkspaceGlobViolation: an inline (flow-style) packages: value cannot 
   }
 })
 
-// A fix round: a blank line or a whole-line comment inside the
+// A blank line or a whole-line comment inside the
 // packages: block sequence used to BREAK the scan early, reading only a PREFIX of the
 // sequence and reporting null (no violation) over a workspace that had actually widened past
 // packages/*. Measured against real pnpm, both shapes resolve to one list, so the fix is to
@@ -1288,7 +1288,7 @@ test('composePackageLicenseUnreadableMessage and composeManifestNotAnObjectMessa
 // main()'s per-package LICENSE read (`content: exists ?
 // readFileSync(licensePath) : null`) sat two lines below the guarded root LICENSE read and
 // raw-crashed on a directory or an unreadable file, the exact "raw Node stack trace instead of a
-// designed message" class this fix exists to close. A reviewer's consult landed these two rows
+// designed message" class this fix exists to close. These two rows were landed
 // without saving/restoring console.error/process.exitCode; every sibling guard test in this file
 // does (see guard1/guard2 above). Without it, main()'s designed `process.exitCode = 1` return
 // leaks past the test into the file's overall run and the printed message goes to the real stderr

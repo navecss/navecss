@@ -64,7 +64,7 @@ test('readLicensePolicy returns undefined (never throws) on invalid JSON, printi
 })
 
 // Cleared wording: both the invalid-JSON path here and main()'s shape-violation path used to
-// end by routing the licensing question to a named internal reviewer, which put the gatekeeper
+// end with an internal routing instruction that named the gatekeeper
 // in a message printed to every contributor who hits either failure. Byte-anchored on the
 // shared exported constant, which is the one
 // place both call sites now source it from, so a re-wording of either printed message goes red.
@@ -73,7 +73,7 @@ test('readLicensePolicy returns undefined (never throws) on invalid JSON, printi
 // on a failing equality before this line ever runs, and it is logically implied by the
 // hardcoded literal on the passing branch), so it moved to the composed-output tests below,
 // where it covers ground the byte anchor above cannot see: each print site's own HEADER.
-test('POLICY_FILE_INVALID_GUIDANCE is the cleared bytes, byte-exact, and names no persona', () => {
+test('POLICY_FILE_INVALID_GUIDANCE is the cleared bytes, byte-exact, and names no internal role', () => {
   assert.equal(
     POLICY_FILE_INVALID_GUIDANCE,
     'No package was classified. Repair the JSON syntax without changing which licences the ' +
@@ -130,8 +130,8 @@ test('main() prints exactly POLICY_FILE_INVALID_GUIDANCE on a shape violation, n
   }
   assert.equal(exitCode, 1)
   assert.match(printed, /\n\n/)
-  // A prior review round found the SECOND paragraph was the only half pinned here — mutation
-  // testing proved it by mutating "is malformed. " to "is broken. " and the suite stayed green.
+  // Only the SECOND paragraph was pinned here: mutation
+  // testing showed it by mutating "is malformed. " to "is broken. " and the suite stayed green.
   // The first paragraph is asserted byte-exact too, built from the same
   // `findPolicyShapeViolation` call the source itself makes over this test's own fixture, not a
   // hand-copied string.
@@ -143,9 +143,9 @@ test('main() prints exactly POLICY_FILE_INVALID_GUIDANCE on a shape violation, n
   assert.doesNotMatch(printed, /STEWARD/)
 })
 
-// A prior review round found only the return value was pinned here, so
-// EITHER paragraph of the printed refusal could be reworded with nothing going red — mutation
-// testing proved it by mutating "could not read " to "cannot read the file " and the suite stayed
+// Only the return value was pinned here, so
+// EITHER paragraph of the printed refusal could be reworded with nothing going red: mutation
+// testing showed it by mutating "could not read " to "cannot read the file " and the suite stayed
 // green. Both paragraphs are asserted now. The first is byte-exact but not a bare literal:
 // `policyPath` and `error.code` are read off this test's own `dir`, not hand-copied, so the
 // assertion tracks the real composed template rather than one snapshot of it.
@@ -377,8 +377,8 @@ test('bucket B: a nested compound that would have leaked AGPL is refused, not pa
   assert.match(result.reason, /cannot decompose/)
 })
 
-// Cleared wording: the tier-3 undecidable reason used to end by routing to a named internal
-// reviewer, composing with the printed frame around it into a message
+// Cleared wording: the tier-3 undecidable reason used to end with an internal routing
+// instruction, composing with the printed frame around it into a message
 // that names the gatekeeper a second time inside its own middle. Byte-anchored so a re-wording
 // of this cleared sentence goes red; re-wrapping it across different line breaks does not,
 // since only the concatenated VALUE is compared.
@@ -387,7 +387,7 @@ test('bucket B: a nested compound that would have leaked AGPL is refused, not pa
 // NOT relocated to a composed-output test here, because no such test in this file interpolates
 // this reason into its own printed header today (unlike (g)/(h)'s two call sites) — a residual
 // left open rather than closed by inventing a new composed test out of this round's scope.
-test('BUCKET_B_UNDECIDABLE_REASON is the cleared bytes, byte-exact, and names no persona', () => {
+test('BUCKET_B_UNDECIDABLE_REASON is the cleared bytes, byte-exact, and names no internal role', () => {
   assert.equal(
     BUCKET_B_UNDECIDABLE_REASON,
     'this gate cannot decompose the expression into identifiers it can classify with ' +
@@ -408,7 +408,7 @@ test('bucket B: an undecidable expression’s reason is exactly BUCKET_B_UNDECID
 // (g)/(h) composed-output tests already covering POLICY_FILE_INVALID_GUIDANCE's two call
 // sites, closing the same class of gap for (f)'s one call site (classifyBucketB's tier-3
 // return, consumed by main()'s bucket-B loop, printed by reportAllowlistViolations).
-test('a bucket-B tier-3 violation composes into the contributor-facing line with exactly BUCKET_B_UNDECIDABLE_REASON, naming no persona', () => {
+test('a bucket-B tier-3 violation composes into the contributor-facing line with exactly BUCKET_B_UNDECIDABLE_REASON, naming no internal role', () => {
   const { reason } = classifyBucketB('(MIT OR ISC) AND GPL-3.0-only', policy)
   const violations = [
     {
@@ -470,11 +470,10 @@ test('bucket B: tier-1 identifier matching is case-sensitive (a value matching o
   assert.equal(result.allowed, false)
 })
 
-// --- Regression fixtures for the shapes two reviewers
-// probed live during a review round (and its own self-correction) ---
+// --- Regression fixtures for the shapes that were probed live ---
 // `MIT+`, `LicenseRef-Proprietary` and `WITH` land where they do because
-// the charset (IDENTIFIER_RE) governs over its own looser prose elsewhere,
-// a correction made during that same review. `MIT  OR  ISC`
+// the charset (IDENTIFIER_RE) governs over its own looser prose elsewhere.
+// `MIT  OR  ISC`
 // decomposing as tier 2 (allowed: true) is deliberate and must not be
 // "hardened" out: it cannot admit an unadmitted identifier, because the
 // verdict is `every`.
@@ -650,10 +649,10 @@ test('an empty alwaysBlockedPatterns is well-formed, not a violation (GREEN)', (
   assert.equal(findPolicyShapeViolation({ alwaysBlockedPatterns: [] }), null)
 })
 
-// A prior review round found: the four assertions above are all
+// The four assertions above are all
 // `assert.match` on a fragment, and main()'s own pin composes its expected value by CALLING
 // findPolicyShapeViolation, so the interpolated tail moves on both sides together
-// (a self-reference shape). That review measured the gap: a re-wording that PRESERVES
+// (a self-reference shape). Measured: a re-wording that PRESERVES
 // `"alwaysBlockedPatterns"` and `index 1` ships with nothing going red. These two pin the
 // composed bytes outright, which is what makes the fragment matches above safe to keep as the
 // readable statement of intent. This is the text that tells a contributor what is wrong with

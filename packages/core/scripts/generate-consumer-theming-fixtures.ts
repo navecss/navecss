@@ -71,7 +71,7 @@ for (const [name, seeds] of Object.entries(SEEDS)) {
 
 /**
  * `AC-token-build-10` (R11), for the registration-COUNT pinning row added in the
- * consumer-invocable token build's Phase 3 review. The two fixtures above are the THEMING
+ * consumer-invocable token build. The two fixtures above are the THEMING
  * HALF alone, which is all the R11a render assertions turn on; the count turns on the WHOLE
  * artifact, both halves, because
  * it is the DTCG half that carries the bulk of the `@property` registrations. So this runs the

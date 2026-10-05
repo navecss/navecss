@@ -5,7 +5,7 @@
  * `packages/core/README.md`'s own `## Exports` table is a hand transcription of the
  * machine-readable `exports` map in that package's own `package.json`, and it went stale
  * within one pull request of being correct: `@navecss/core/no-tokens` was added to the
- * export map and the table did not carry it until a review round added the row. The `exports`
+ * export map and the table did not carry it until the row was added. The `exports`
  * map is the source of truth and can simply be read, so this script does: for every
  * `packages/*` package with a manifest, every consumer-facing subpath its own `exports` map
  * declares must appear as a whole name in that package's own `README.md`.
@@ -40,8 +40,8 @@
  *      resolver machinery (`import.meta.resolve('pkg/package.json')`), never a subpath a
  *      reader looks up.
  *
- * Conditions 1 to 3 arrived in an earlier review round. The predicate originally
- * kept every key of any object `exports` value, while that review granted this check GATING
+ * Conditions 1 to 3 were added later. The predicate originally
+ * kept every key of any object `exports` value, while this check was granted GATING
  * status on the express ground that such a predicate "has no false-positive mode"; the three
  * shapes above each falsify that, so the predicate is narrowed to match the ground.
  *

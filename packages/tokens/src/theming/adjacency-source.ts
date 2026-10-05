@@ -90,7 +90,7 @@ export function materializeAdjacency(source: unknown): Adjacency[] {
 }
 
 /**
- * R22's minimum declaration set (the coverage list Cédric's ruling names as the
+ * R22's minimum declaration set (the coverage list the signed ruling names as the
  * signed table's referenced minimum, C5) — a representative, non-exhaustive instance of
  * every required category rather than the full slot cross-product, per N1. Materialized
  * from `tokens.json` at module load, not hand-typed.

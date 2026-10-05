@@ -102,7 +102,7 @@ test('readReadme reads the repository-root README, not one relative to any calle
   assert.match(readme, /^## Accessibility$/m)
 })
 
-// PINNING ROWS (round-3 terminal read; free under a later ruling).
+// PINNING ROWS.
 // The module's docblock promises that `contentStart` / `contentEnd` are EXACT offsets into the
 // body "so a command can be located in the artifact it was found in", and
 // `readme-theming-ladder.test.mjs` spends that promise on a real assertion

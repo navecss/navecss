@@ -12,7 +12,7 @@
  * than `.foo:disabled, .foo[aria-disabled="true"]`.
  *
  * `disabledState`'s own key was fixed at the DATA level (embedding `&` in the string
- * itself) rather than here, scoped to that one atom per the review brief that found it. The
+ * itself) rather than here, scoped to that one atom. The
  * generator's blind spot for ANY comma-separated key is the general defect this module
  * closes, so a future atom with a plain (no embedded `&`) comma-separated pseudo key is
  * anchored correctly by construction rather than depending on its author remembering to

@@ -164,8 +164,8 @@ describe('R11 (AC-token-build-10) — the tokens-free entry composed with a cons
 })
 
 /**
- * PINNING ROW for `AC-token-build-10` (R11), added during this project's Phase 3 review
- * (a coverage gap found by an off-line measurement is PINNED, not filed).
+ * PINNING ROW for `AC-token-build-10` (R11): a coverage gap found by an off-line
+ * measurement is PINNED, not filed.
  * The measurement of this property lived only off-line; nothing in the repo checked it. This is
  * that measurement, committed.
  *
