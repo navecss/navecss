@@ -45,8 +45,9 @@
  * (which only forbids the OUTPUT), chosen because it is the simplest way to guarantee R26
  * holds with no separate suppression step to keep in sync. `checkSameStepLint` runs with
  * `source: 'consumer'` (R25's second clause: a source-conditioned guard is invoked with the
- * consumer's own source-class), so every violation it finds is REPORTED and none fails the
- * build. Its one unconditional throw is a fail-closed guard on the pair-declaration source
+ * consumer's own source-class), so every violation it finds is marked `report` and none fails
+ * the build. This path then discards the list, so nothing it finds is printed or returned
+ * (R26). Its one unconditional throw is a fail-closed guard on the pair-declaration source
  * being absent; that source is this package's own shipped `tokens.json`, and no input this
  * entry point accepts can empty it, so the throw is unreachable from a consumer's own
  * values. The guarantee is the ENTRY POINT'S input set, not the function: if a
@@ -132,7 +133,7 @@ export function composeConsumerBuild(options: ConsumerBuildOptions): ConsumerBui
 
   // R25's second clause: the same-step lint is source-conditioned and is invoked with the
   // consumer's own source-class in every call reachable from this entry point, so every
-  // violation it finds is reported and none fails the build. Its one unconditional throw
+  // violation it finds is marked `report` and none fails the build. Its one unconditional throw
   // guards the pair-declaration source being absent, which is this package's own shipped
   // source rather than a consumer input. Deliberately not read further: R26 forbids
   // surfacing a contrast number, verdict or badge, so nothing here inspects or forwards
