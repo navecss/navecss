@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Source } from '../support/scenes.ts'
 
@@ -11,13 +11,9 @@ import { SUBPATHS, topName } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 import { isInT0 } from '../support/table-t0.ts'
 
-let bare: Source
-let nave: Source
+const bare = await loadBare()
+const nave = await loadNave()
 
-beforeAll(async () => {
-  bare = await loadBare()
-  nave = await loadNave()
-})
 afterEach(cleanup)
 
 /**
@@ -78,6 +74,11 @@ describe('AC-base-ui-bridge-04: every part of every v1 component is either style
     expect(problems).toEqual([])
     // Every row's part that this Base UI has was rendered, so no row passed without being looked at.
     const present = new Set(SUBPATHS.flatMap((subpath) => keysAt(bare, subpath)))
-    expect([...tableP.keys()].filter((part) => present.has(part) && !seen.has(part))).toEqual([])
+    expect(
+      tableP
+        .keys()
+        .filter((part) => present.has(part) && !seen.has(part))
+        .toArray(),
+    ).toEqual([])
   })
 })

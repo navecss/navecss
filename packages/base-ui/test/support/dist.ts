@@ -16,6 +16,13 @@ export const manifest = (): {
   sideEffects: unknown
 } => JSON.parse(readFileSync(path.join(PACKAGE_DIR, 'package.json'), 'utf8')) as never
 
+const byCodeUnit = (a: string, b: string): number => {
+  if (a === b) {
+    return 0
+  }
+  return a < b ? -1 : 1
+}
+
 /**
 Every file under a directory with one of the extensions, as paths relative to it.
  */
@@ -23,7 +30,7 @@ export const filesUnder = (directory: string, extensions: readonly string[]): st
   readdirSync(directory, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile() && extensions.some((ext) => entry.name.endsWith(ext)))
     .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)))
-    .toSorted()
+    .toSorted(byCodeUnit)
 
 export const readDist = (relative: string): string =>
   readFileSync(path.join(DIST_DIR, relative), 'utf8')

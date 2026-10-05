@@ -57,14 +57,15 @@ const measure = async (
   const styled = keys.includes('Popup')
     ? 'Popup'
     : keys.find((key) => key !== 'Root' && tableP.has(`${top}.${key}`))
-  if (!keys.includes('Root') || styled === undefined) {
+  if (styled === undefined || !keys.includes('Root')) {
     return undefined
   }
   const pair = ['Root', styled]
   const base = `@base-ui/react/${subpath}`
   const direct = await sizeWith(base, top, pair, `${subpath}-a`)
   let largest = { cost: 0, extra: '', extended: direct }
-  for (const key of keys.filter((candidate) => !pair.includes(candidate))) {
+  const unusedKeys = keys.filter((candidate) => !pair.includes(candidate))
+  for (const key of unusedKeys) {
     const extended = await sizeWith(base, top, [...pair, key], `${subpath}-b`)
     if (extended - direct > largest.cost) {
       largest = { cost: extended - direct, extended, extra: key }
@@ -87,7 +88,7 @@ const helperCost = (): Promise<number> =>
 // What the used, wrapped part may add besides the helper: its call and its class string.
 const SLACK = 120
 
-const dropsUnused = ({
+const isUnusedDropped = ({
   direct,
   extended,
   nave,
@@ -139,9 +140,11 @@ describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bund
           `${JSON.stringify(sizes)}, helper ${helper}`,
         ).toBeLessThanOrEqual(helper + SLACK)
         // Where an unused part costs enough to show against the helper, the relative bound holds too.
-        if (sizes.extended - sizes.direct >= 2 * helper) {
-          expect(dropsUnused(sizes), `${sizes.extra}: ${JSON.stringify(sizes)}`).toBe(true)
-        }
+        const isShownAgainstHelper = sizes.extended - sizes.direct >= 2 * helper
+        expect(
+          !isShownAgainstHelper || isUnusedDropped(sizes),
+          `${sizes.extra}: ${JSON.stringify(sizes)}`,
+        ).toBe(true)
       },
     )
   }
@@ -167,7 +170,7 @@ describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bund
         'naive-c',
         entry(path.join(WORK, 'naive.js'), 'Dialog', ['Root', 'Popup']),
       )
-      expect(dropsUnused({ direct, extended, nave })).toBe(false)
+      expect(isUnusedDropped({ direct, extended, nave })).toBe(false)
     },
   )
 })

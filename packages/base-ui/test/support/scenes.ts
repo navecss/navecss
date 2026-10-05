@@ -10,8 +10,10 @@
  * A part the installed Base UI does not have (a part younger than the floor) renders as nothing
  * around its children, which is how a scene runs at the floor.
  */
+/* eslint-disable unicorn/max-nested-calls -- a scene is a tree, written as the nested calls it renders */
 import { createElement, type ElementType, Fragment, type ReactElement, type ReactNode } from 'react'
 
+import { overlayBuilds } from './overlay-scenes.ts'
 import { topName } from './subpaths.ts'
 
 export type Props = Record<string, unknown>
@@ -38,7 +40,7 @@ export interface Scene {
   readonly subpath: string
 }
 
-type Make = (part: string, props?: Props, ...children: ReactNode[]) => ReactNode
+export type Make = (part: string, props?: Props, ...children: ReactNode[]) => ReactNode
 type Other = (subpath: string) => Make
 
 const maker =
@@ -46,7 +48,7 @@ const maker =
   (part, props = {}, ...children) => {
     const type = part === '.' ? ui : ui[part]
     if (type === undefined) {
-      return createElement(Fragment, null, ...children)
+      return createElement(Fragment, undefined, ...children)
     }
     const marker = part === '.' ? namespace : `${namespace}.${part}`
     const extra = config.props?.[marker]
@@ -67,132 +69,8 @@ const scene = (subpath: string, build: (h: Make, other: Other) => ReactNode): Sc
   subpath,
 })
 
-const menuContent = (h: Make): ReactNode[] => [
-  h('Arrow'),
-  h(
-    'Viewport',
-    {},
-    h('Item', {}, 'Item'),
-    h('LinkItem', { href: '#' }, 'Link'),
-    h('CheckboxItem', { defaultChecked: true }, h('CheckboxItemIndicator', {}, 'x'), 'Check'),
-    h(
-      'RadioGroup',
-      { defaultValue: 'a' },
-      h('RadioItem', { value: 'a' }, h('RadioItemIndicator', {}, 'o'), 'Radio'),
-    ),
-    h('Group', {}, h('GroupLabel', {}, 'Group'), h('Item', {}, 'Grouped')),
-    h('Separator'),
-    h(
-      'SubmenuRoot',
-      {},
-      h('SubmenuTrigger', {}, 'More'),
-      h('Portal', {}, h('Positioner', {}, h('Popup', {}, h('Item', {}, 'Nested')))),
-    ),
-  ),
-]
-
-const selectContent = (h: Make): ReactNode[] => [
-  h('ScrollUpArrow'),
-  h('Arrow'),
-  h(
-    'List',
-    {},
-    h(
-      'Group',
-      {},
-      h('GroupLabel', {}, 'Group'),
-      h('Item', { value: 'a' }, h('ItemText', {}, 'A'), h('ItemIndicator', {}, 'x')),
-      h('Item', { value: 'b' }, h('ItemText', {}, 'B'), h('ItemIndicator', {}, 'x')),
-    ),
-    h('Separator'),
-  ),
-  h('ScrollDownArrow'),
-]
-
-const dialogScene = scene('dialog', (h) =>
-  h(
-    'Root',
-    {},
-    h('Trigger', {}, 'Open'),
-    h(
-      'Portal',
-      {},
-      h('Backdrop'),
-      h(
-        'Viewport',
-        {},
-        h(
-          'Popup',
-          {},
-          h('Title', {}, 'Title'),
-          h('Description', {}, 'Description'),
-          h('Close', {}, 'Close'),
-        ),
-      ),
-    ),
-  ),
-)
-
-const popoverScene = scene('popover', (h) =>
-  h(
-    'Root',
-    {},
-    h('Trigger', {}, 'Open'),
-    h(
-      'Portal',
-      {},
-      h('Backdrop'),
-      h(
-        'Positioner',
-        {},
-        h(
-          'Popup',
-          {},
-          h('Arrow'),
-          h(
-            'Viewport',
-            {},
-            h('Title', {}, 'Title'),
-            h('Description', {}, 'Description'),
-            h('Close', {}, 'Close'),
-          ),
-        ),
-      ),
-    ),
-  ),
-)
-
-const menuScene = scene('menu', (h) =>
-  h(
-    'Root',
-    {},
-    h('Trigger', {}, 'Open'),
-    h('Portal', {}, h('Backdrop'), h('Positioner', {}, h('Popup', {}, ...menuContent(h)))),
-  ),
-)
-
-const selectScene = scene('select', (h) =>
-  h(
-    'Root',
-    { defaultValue: 'a' },
-    h('Label', {}, 'Label'),
-    h('Trigger', {}, h('Value'), h('Icon', {}, 'v')),
-    h('Portal', {}, h('Backdrop'), h('Positioner', {}, h('Popup', {}, ...selectContent(h)))),
-  ),
-)
-
-const tooltipScene = scene('tooltip', (h) =>
-  h(
-    'Provider',
-    {},
-    h(
-      'Root',
-      {},
-      h('Trigger', {}, 'Hover'),
-      h('Portal', {}, h('Positioner', {}, h('Popup', {}, h('Arrow'), h('Viewport', {}, 'Tip')))),
-    ),
-  ),
-)
+// eslint-disable-next-line unicorn/no-null -- a render prop that renders nothing returns null
+const renderNothing = (): null => null
 
 const disclosureScenes = [
   scene('accordion', (h) =>
@@ -239,7 +117,7 @@ const fieldScenes = [
       h('Description', {}, 'Description'),
       h('Error', { match: true }, 'Error'),
       h('Item', {}, 'Item'),
-      h('Validity', {}, (() => null) as never),
+      h('Validity', {}, renderNothing as never),
     ),
   ),
   scene('fieldset', (h) => h('Root', {}, h('Legend', {}, 'Legend'))),
@@ -308,11 +186,7 @@ The scenes, by subpath.
  */
 export const scenes: Readonly<Record<string, Scene>> = Object.fromEntries(
   [
-    dialogScene,
-    popoverScene,
-    menuScene,
-    selectScene,
-    tooltipScene,
+    ...Object.entries(overlayBuilds).map(([subpath, build]) => scene(subpath, build)),
     ...disclosureScenes,
     ...fieldScenes,
     ...choiceScenes,

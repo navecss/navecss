@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Props, Source } from '../support/scenes.ts'
 
@@ -7,10 +7,7 @@ import { part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
 
-let nave: Source
-beforeAll(async () => {
-  nave = await loadNave()
-})
+const nave: Source = await loadNave()
 afterEach(cleanup)
 
 const declarations = (element: Element | undefined): Map<string, string> =>
@@ -70,9 +67,8 @@ describe('AC-base-ui-bridge-34: Positioners, Popups and the Slider Thumb at rest
       await renderScene(nave, subpath, openProps())
       await untilAtRest(`${namespace}.Positioner`)
       const popup = part(`${namespace}.Popup`)
-      expect(
-        popup?.hasAttribute('data-starting-style') || popup?.hasAttribute('data-ending-style'),
-      ).toBe(false)
+      expect(popup).toBeDefined()
+      expect(TRANSITION_ATTRIBUTES.some((name) => popup?.hasAttribute(name))).toBe(false)
       expect(nonTranslationStyles(part(`${namespace}.Positioner`))).toEqual([])
       expect(nonTranslationStyles(popup)).toEqual([])
     })

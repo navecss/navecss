@@ -13,16 +13,24 @@ declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined
 }
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+const setActEnvironment = (value: boolean | undefined): void => {
+  // eslint-disable-next-line unicorn/no-global-object-property-assignment -- React reads this flag off the global object
+  globalThis.IS_REACT_ACT_ENVIRONMENT = value
+}
 
+// eslint-disable-next-line unicorn/no-top-level-side-effects -- the harness is wired once, on import
+setActEnvironment(true)
+
+// eslint-disable-next-line unicorn/no-top-level-side-effects -- the harness is wired once, on import
 configure({
   asyncWrapper: async (callback) => {
     const previous = globalThis.IS_REACT_ACT_ENVIRONMENT
-    globalThis.IS_REACT_ACT_ENVIRONMENT = false
+    setActEnvironment(false)
     try {
-      return await callback()
+      const result: unknown = await callback()
+      return result
     } finally {
-      globalThis.IS_REACT_ACT_ENVIRONMENT = previous
+      setActEnvironment(previous)
     }
   },
   eventWrapper: (callback) => {
@@ -35,6 +43,15 @@ configure({
 })
 
 export const act = React.act
+
+/**
+Runs work inside `act` and settles it, the way an `async` callback does.
+ */
+const settled = (work: () => void): Promise<void> =>
+  act(() => {
+    work()
+    return Promise.resolve()
+  })
 
 export interface Mounted {
   readonly container: HTMLElement
@@ -54,18 +71,18 @@ export const render = async (element: React.ReactElement): Promise<Mounted> => {
   document.body.append(container)
   const root = createRoot(container)
   mounted.push({ container, root })
-  await act(async () => {
+  await settled(() => {
     root.render(element)
   })
   return {
     container,
     rerender: async (next) => {
-      await act(async () => {
+      await settled(() => {
         root.render(next)
       })
     },
     unmount: async () => {
-      await act(async () => {
+      await settled(() => {
         root.unmount()
       })
     },
@@ -76,8 +93,10 @@ export const render = async (element: React.ReactElement): Promise<Mounted> => {
 Unmounts everything this file rendered and empties the document.
  */
 export const cleanup = async (): Promise<void> => {
-  for (const { container, root } of mounted.splice(0)) {
-    await act(async () => {
+  const pending = [...mounted]
+  mounted.length = 0
+  for (const { container, root } of pending) {
+    await settled(() => {
       root.unmount()
     })
     container.remove()

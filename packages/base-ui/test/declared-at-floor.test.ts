@@ -75,8 +75,25 @@ const TRANSITION_MEMBER: Readonly<Record<string, string>> = {
   'data-starting-style': 'startingStyle',
 }
 
-const missingFrom = (file: string, item: string): boolean =>
+const isMissingFrom = (file: string, item: string): boolean =>
   !readFileSync(path.join(FLOOR, file), 'utf8').includes(item)
+
+const keyedAttributes = (css: string): string[] =>
+  flatten(css)
+    .flatMap(({ selectors }) =>
+      selectors.flatMap((selector) => attributeReads(selector).map(({ name }) => name)),
+    )
+    .filter((name) => !name.startsWith('aria-') && !name.startsWith('data-nave-'))
+
+const keyedVariables = (css: string): string[] =>
+  flatten(css)
+    .flatMap(({ value }) =>
+      value
+        .matchAll(/var\((--[\w-]+)/g)
+        .map((match) => match[1] ?? '')
+        .toArray(),
+    )
+    .filter((name) => !name.startsWith('--nave-'))
 
 describe('AC-base-ui-bridge-21: every attribute and variable the stylesheet keys on is declared at the floor', () => {
   it('finds the floor package installed through its alias', () => {
@@ -86,35 +103,18 @@ describe('AC-base-ui-bridge-21: every attribute and variable the stylesheet keys
   for (const { files, items } of rows) {
     for (const file of files) {
       it(`${file} declares ${items.join(', ')}`, () => {
-        expect(items.filter((item) => missingFrom(file, item))).toEqual([])
+        expect(items.filter((item) => isMissingFrom(file, item))).toEqual([])
       })
     }
   }
 
   it('control: an item a file does not declare is reported', () => {
-    expect(missingFrom('menu/arrow/MenuArrowDataAttributes.js', 'data-nope')).toBe(true)
+    expect(isMissingFrom('menu/arrow/MenuArrowDataAttributes.js', 'data-nope')).toBe(true)
   })
 
   it('has a row for every Base UI attribute and variable the stylesheet uses', () => {
     const css = readStylesheet()
-    const keyed = new Set<string>()
-    for (const { selectors } of flatten(css)) {
-      for (const selector of selectors) {
-        for (const { name } of attributeReads(selector)) {
-          if (!name.startsWith('aria-') && !name.startsWith('data-nave-')) {
-            keyed.add(name)
-          }
-        }
-      }
-    }
-    for (const { value } of flatten(css)) {
-      for (const match of value.matchAll(/var\((--[\w-]+)/g)) {
-        const name = match[1] ?? ''
-        if (!name.startsWith('--nave-')) {
-          keyed.add(name)
-        }
-      }
-    }
+    const keyed = new Set([...keyedAttributes(css), ...keyedVariables(css)])
     const covered = new Set(
       rows.flatMap(({ items }) =>
         items.flatMap((item) => [

@@ -1,25 +1,94 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Source } from '../support/scenes.ts'
 
 import { partsNamed } from '../support/dom.ts'
 import { act, cleanup, user } from '../support/react.ts'
-import { hasItem, hasClass, part, renderScene } from '../support/rows.ts'
+import { hasClass, hasItem, part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
 
-let nave: Source
-beforeAll(async () => {
-  nave = await loadNave()
-})
+const nave: Source = await loadNave()
 afterEach(cleanup)
 
+// eslint-disable-next-line turbo/no-undeclared-env-vars -- a test-run variable set by vitest.config.ts, not a build input
 const IS_FLOOR = process.env.NAVE_BASE_UI === 'floor'
 
 const settle = (): Promise<void> =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
   })
+
+const panelSelector = (namespace: string): string => `[data-part="${CSS.escape(namespace)}.Panel"]`
+
+// Every attribute name carried by the Panels in an added node, the node itself included.
+const panelAttributeNamesIn = (node: Node, selector: string): string[] => {
+  if (!(node instanceof Element)) {
+    return []
+  }
+  return [node, ...node.querySelectorAll(selector)]
+    .filter((target) => target.matches(selector))
+    .flatMap((target) => target.getAttributeNames())
+}
+
+const panelAttributeNamesOf = (record: MutationRecord, selector: string): string[] => {
+  const isPanelAttribute =
+    record.type === 'attributes' &&
+    record.target instanceof Element &&
+    record.target.matches(selector)
+  const changed = isPanelAttribute ? [record.attributeName ?? ''] : []
+  const added = [...record.addedNodes].flatMap((node) => panelAttributeNamesIn(node, selector))
+  return [...changed, ...added]
+}
+
+/**
+ * Opens then closes the Panel and returns every attribute name it carried on the way, with or
+ * without a transition on the Panel.
+ */
+const attributesSeen = async (
+  subpath: string,
+  namespace: string,
+  hasTransition: boolean,
+): Promise<Set<string>> => {
+  const style = document.createElement('style')
+  style.textContent = `[data-part="${namespace}.Panel"] { transition-property: height; transition-duration: 200ms }`
+  if (hasTransition) {
+    document.head.append(style)
+  }
+  const names = new Set<string>()
+  const selector = panelSelector(namespace)
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      for (const name of panelAttributeNamesOf(record, selector)) {
+        names.add(name)
+      }
+    }
+  })
+  await renderScene(nave, subpath)
+  observer.observe(document.body, { attributes: true, childList: true, subtree: true })
+  const trigger = part(`${namespace}.Trigger`)!
+  await user().click(trigger)
+  await settle()
+  await user().click(trigger)
+  await settle()
+  observer.disconnect()
+  style.remove()
+  await cleanup()
+  return names
+}
+
+const svgChild = (): unknown => createElement('svg', { 'data-test': 'svg', key: Math.random() })
+
+const iconChild = (token: string): unknown => {
+  if (token === '<svg>') {
+    return svgChild()
+  }
+  if (token === '<span>') {
+    return createElement('span', { key: 'span' }, createElement('svg', { 'data-test': 'svg' }))
+  }
+  return token
+}
 
 describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where its rule reaches (overlays)', () => {
   const CASES = [
@@ -49,7 +118,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
       const carrier = part(positioner)
       const popup = part(owner)
       expect(items.filter((item) => !hasItem(carrier, item))).toEqual([])
-      expect(carrier?.contains(popup ?? null)).toBe(true)
+      expect(popup !== undefined && carrier?.contains(popup) === true).toBe(true)
       expect(popup?.className).toContain('nave-base-ui-')
     })
   }
@@ -72,6 +141,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
   }
 
   it('Select.Value hasItem data-placeholder when there is no value, with the class', async () => {
+    // eslint-disable-next-line unicorn/no-null -- null is the Select's empty value, which undefined would leave uncontrolled
     await renderScene(nave, 'select', { 'Select.Root': { defaultValue: null } })
     const value = part('Select.Value')
     expect(hasItem(value, 'data-placeholder')).toBe(true)
@@ -93,57 +163,15 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
     })
 
     it(`${namespace}: opening then closing is seen as data-starting-style then data-ending-style`, async () => {
-      const seen = async (withTransition: boolean): Promise<Set<string>> => {
-        const style = document.createElement('style')
-        style.textContent = `[data-part="${namespace}.Panel"] { transition-property: height; transition-duration: 200ms }`
-        if (withTransition) {
-          document.head.append(style)
-        }
-        const names = new Set<string>()
-        const observer = new MutationObserver((records) => {
-          for (const record of records) {
-            if (
-              record.type === 'attributes' &&
-              record.target instanceof Element &&
-              record.target.matches(`[data-part="${CSS.escape(namespace)}.Panel"]`)
-            ) {
-              names.add(record.attributeName ?? '')
-            }
-            for (const node of record.addedNodes) {
-              if (node instanceof Element) {
-                for (const target of [
-                  node,
-                  ...node.querySelectorAll(`[data-part="${CSS.escape(namespace)}.Panel"]`),
-                ]) {
-                  if (target.matches(`[data-part="${CSS.escape(namespace)}.Panel"]`)) {
-                    for (const name of target.getAttributeNames()) {
-                      names.add(name)
-                    }
-                  }
-                }
-              }
-            }
-          }
-        })
-        await renderScene(nave, subpath)
-        observer.observe(document.body, { attributes: true, childList: true, subtree: true })
-        const trigger = part(`${namespace}.Trigger`)!
-        await user().click(trigger)
-        await settle()
-        await user().click(trigger)
-        await settle()
-        observer.disconnect()
-        style.remove()
-        await cleanup()
-        return names
-      }
-      const withStyle = await seen(true)
-      expect([...withStyle].filter((name) => name.endsWith('-style')).toSorted()).toEqual([
+      const withStyle = await attributesSeen(subpath, namespace, true)
+      const styleNames = [...withStyle].filter((name) => name.endsWith('-style'))
+      expect(styleNames.toSorted((a, b) => a.localeCompare(b))).toEqual([
         'data-ending-style',
         'data-starting-style',
       ])
       // The control: without the test stylesheet the exit is never observed.
-      expect((await seen(false)).has('data-ending-style')).toBe(false)
+      const withoutStyle = await attributesSeen(subpath, namespace, false)
+      expect(withoutStyle.has('data-ending-style')).toBe(false)
     })
 
     it(`${namespace}: the Trigger hasItem aria-expanded when opened, and the icon key reaches by shape`, async () => {
@@ -153,17 +181,10 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
         { children: ['<svg>', 'Title', '<svg>'], reached: 1 },
         { children: ['<span>', 'Title'], reached: 0 },
       ] as const
-      const { createElement } = await import('react')
-      const make = (token: string): unknown =>
-        token === '<svg>'
-          ? createElement('svg', { 'data-test': 'svg', key: Math.random() })
-          : token === '<span>'
-            ? createElement('span', { key: 'span' }, createElement('svg', { 'data-test': 'svg' }))
-            : token
       const widths: number[] = []
       for (const shape of SHAPES) {
         await renderScene(nave, subpath, {
-          [`${namespace}.Trigger`]: { children: shape.children.map(make) },
+          [`${namespace}.Trigger`]: { children: shape.children.map((token) => iconChild(token)) },
         })
         const trigger = part(`${namespace}.Trigger`)!
         await user().click(trigger)
@@ -175,7 +196,6 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
     })
 
     it(`${namespace}: the Panel's first and last element children are the ones the inset keys reach`, async () => {
-      const { createElement } = await import('react')
       await renderScene(nave, subpath, {
         [`${namespace}.Panel`]: {
           children: [createElement('p', { key: 'a' }, 'a'), createElement('p', { key: 'b' }, 'b')],

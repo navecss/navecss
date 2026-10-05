@@ -1,5 +1,5 @@
 import { createElement, createRef, type RefObject } from 'react'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Source } from '../support/scenes.ts'
 
@@ -12,13 +12,9 @@ import { SUBPATHS } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 import { isInT0 } from '../support/table-t0.ts'
 
-let bare: Source
-let nave: Source
+const bare = await loadBare()
+const nave = await loadNave()
 
-beforeAll(async () => {
-  bare = await loadBare()
-  nave = await loadNave()
-})
 afterEach(cleanup)
 
 /**
@@ -62,8 +58,10 @@ const subjects = async (): Promise<{ part: string; subpath: string }[]> => {
 describe('AC-base-ui-bridge-09: a wrapped part forwards its ref to the DOM', () => {
   it('reaches the element Base UI renders, for every styled part and one pass-through per subpath', async () => {
     const problems: string[] = []
-    for (const { part, subpath } of await subjects()) {
-      const expected = (await refAndElement(bare, subpath, part)).elements
+    const placed = await subjects()
+    for (const { part, subpath } of placed) {
+      const bareRender = await refAndElement(bare, subpath, part)
+      const expected = bareRender.elements
       const { elements, ref } = await refAndElement(nave, subpath, part)
       const reached = elements.find((element) => element === ref.current)
       if (elements.length === 0 || expected.length === 0) {
@@ -84,26 +82,18 @@ describe('AC-base-ui-bridge-09: a wrapped part forwards its ref to the DOM', () 
     const Plain = (props: Record<string, unknown>): ReturnType<typeof createElement> =>
       createElement(Dialog.Close as never, props)
     const ref = createRef<unknown>()
-    await render(
-      createElement(
-        Dialog.Root as never,
-        { open: true },
-        createElement(
-          Dialog.Portal as never,
-          null,
-          createElement(
-            Dialog.Popup as never,
-            null,
-            createElement(Plain, { ref, 'data-part': 'plain' }),
-          ),
-        ),
-      ),
+    const popup = createElement(
+      Dialog.Popup as never,
+      undefined,
+      createElement(Plain, { ref, 'data-part': 'plain' }),
     )
-    if (process.env.NAVE_REACT === '18') {
-      expect(ref.current).toBeNull()
-    } else {
-      // React 19 passes `ref` as an ordinary prop, so a plain function component forwards it.
-      expect(ref.current).toBe(partsNamed('plain')[0])
-    }
+    const portal = createElement(Dialog.Portal as never, undefined, popup)
+    await render(createElement(Dialog.Root as never, { open: true }, portal))
+    // eslint-disable-next-line turbo/no-undeclared-env-vars -- a test-run variable set by vitest.config.ts, not a build input
+    const isReact18 = process.env.NAVE_REACT === '18'
+    // React 19 passes `ref` as an ordinary prop, so a plain function component forwards it.
+    // eslint-disable-next-line unicorn/no-null -- on React 18 the unforwarded ref stays the null it starts as
+    const expected = isReact18 ? null : partsNamed('plain')[0]
+    expect(ref.current).toBe(expected)
   })
 })

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { importDist, manifest } from './support/dist.ts'
 import { SUBPATHS, topName } from './support/subpaths.ts'
 
+const byCodeUnit = (a: string, b: string): number => a.localeCompare(b)
+
 /**
  * What differs between this package's runtime exports and Base UI's for one subpath: names only in
  * one, and, for a namespace export, the names only in one of its parts.
@@ -13,12 +15,16 @@ const exportDifferences = (
   base: Record<string, unknown>,
 ): string[] => {
   const top = topName(subpath)
+  const naveNames = new Set(Object.keys(nave))
+  const baseNames = new Set(Object.keys(base))
   const differences = [
-    ...Object.keys(base)
-      .filter((key) => !(key in nave))
+    ...baseNames
+      .values()
+      .filter((key) => !naveNames.has(key))
       .map((key) => `${subpath}: ${key} is missing`),
-    ...Object.keys(nave)
-      .filter((key) => !(key in base))
+    ...naveNames
+      .values()
+      .filter((key) => !baseNames.has(key))
       .map((key) => `${subpath}: ${key} is extra`),
   ]
   const naveTop = nave[top]
@@ -41,13 +47,13 @@ const exportDifferences = (
 
 describe('AC-base-ui-bridge-01: the export map mirrors Base UI, and each subpath exports what Base UI does', () => {
   it('has exactly the package root, the stylesheet, the manifest and the v1 subpaths', () => {
-    expect(Object.keys(manifest().exports).toSorted()).toEqual(
+    expect(Object.keys(manifest().exports).toSorted(byCodeUnit)).toEqual(
       [
         '.',
         './package.json',
         './styles.css',
         ...SUBPATHS.map((subpath) => `./${subpath}`),
-      ].toSorted(),
+      ].toSorted(byCodeUnit),
     )
   })
 

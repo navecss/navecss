@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { createElement, forwardRef, memo, type ReactElement } from 'react'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import type { Props, Source } from '../support/scenes.ts'
+import type { Props } from '../support/scenes.ts'
 
 import { wrapPart } from '../../src/part.ts'
 import { filesUnder, SRC_DIR } from '../support/dist.ts'
@@ -15,13 +15,9 @@ import { openProps } from '../support/states.ts'
 import { SUBPATHS } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 
-let bare: Source
-let nave: Source
+const bare = await loadBare()
+const nave = await loadNave()
 
-beforeAll(async () => {
-  bare = await loadBare()
-  nave = await loadNave()
-})
 afterEach(cleanup)
 
 const subpathOf = (part: string): string | undefined => {
@@ -63,7 +59,8 @@ const renderedStyledParts = async (): Promise<string[]> => {
 describe('AC-base-ui-bridge-10: className composes in both forms, and render hasItem the class', () => {
   it('composes for every styled part in every form', async () => {
     const problems: string[] = []
-    for (const part of await renderedStyledParts()) {
+    const parts = await renderedStyledParts()
+    for (const part of parts) {
       const own = (tableP.get(part) ?? []).join(' ')
       let received: unknown
       const forms: {
@@ -126,53 +123,55 @@ describe('AC-base-ui-bridge-10: className composes in both forms, and render has
   })
 })
 
+type Wrap = (part: never, className: string) => unknown
+
+const consumer = (): string => 'mine'
+
+// A wrapper that composes a new className function on every render.
+const naive: Wrap = (part, className) =>
+  forwardRef<unknown, { className?: unknown }>((props, ref) =>
+    createElement(part, {
+      ...props,
+      className:
+        typeof props.className === 'function'
+          ? (state: unknown) => `${className} ${(props.className as (s: unknown) => string)(state)}`
+          : className,
+      ref,
+    }),
+  )
+
+/**
+ * Re-renders a parent twice with the same consumer function and once with a new one, around a
+ * `React.memo` double that counts its renders and records the className it is given.
+ */
+const isMemoizedBy = async (wrap: Wrap): Promise<boolean> => {
+  const classNames: unknown[] = []
+  let count = 0
+  const Double = memo(
+    forwardRef<HTMLDivElement, { className?: unknown }>((props, ref) => {
+      count += 1
+      classNames.push(props.className)
+      return createElement('div', { ref })
+    }),
+  )
+  const Wrapped = wrap(Double as never, 'nave-x') as never
+  const element = (fn: () => string): ReactElement => createElement(Wrapped, { className: fn })
+  const mounted = await render(element(consumer))
+  await mounted.rerender(element(consumer))
+  await mounted.rerender(element(consumer))
+  const isSameWhileUnchanged = count === 1 && Object.is(classNames[0], classNames.at(-1))
+  await mounted.rerender(element(() => 'other'))
+  const isNewAfterChange = count === 2 && !Object.is(classNames[0], classNames.at(-1))
+  return isSameWhileUnchanged && isNewAfterChange
+}
+
 describe('AC-base-ui-bridge-11: the composed className function is memoized on the consumer function', () => {
-  type Wrap = (part: never, className: string) => unknown
-
-  /**
-   * Re-renders a parent twice with the same consumer function and once with a new one, around a
-   * `React.memo` double that counts its renders and records the className it is given.
-   */
-  const memoizedBy = async (wrap: Wrap): Promise<boolean> => {
-    const classNames: unknown[] = []
-    let count = 0
-    const Double = memo(
-      forwardRef<HTMLDivElement, { className?: unknown }>((props, ref) => {
-        count += 1
-        classNames.push(props.className)
-        return createElement('div', { ref })
-      }),
-    )
-    const Wrapped = wrap(Double as never, 'nave-x') as never
-    const consumer = (): string => 'mine'
-    const element = (fn: () => string): ReactElement => createElement(Wrapped, { className: fn })
-    const mounted = await render(element(consumer))
-    await mounted.rerender(element(consumer))
-    await mounted.rerender(element(consumer))
-    const isSameWhileUnchanged = count === 1 && Object.is(classNames[0], classNames.at(-1))
-    await mounted.rerender(element(() => 'other'))
-    const isNewAfterChange = count === 2 && !Object.is(classNames[0], classNames.at(-1))
-    return isSameWhileUnchanged && isNewAfterChange
-  }
-
   it('hands the part the same function until the consumer function changes', async () => {
-    expect(await memoizedBy(wrapPart as Wrap)).toBe(true)
+    expect(await isMemoizedBy(wrapPart as Wrap)).toBe(true)
   })
 
   it('control: a wrapper that composes a new function on every render is reported', async () => {
-    const naive: Wrap = (part, className) =>
-      forwardRef<unknown, { className?: unknown }>((props, ref) =>
-        createElement(part, {
-          ...props,
-          className:
-            typeof props.className === 'function'
-              ? (state: unknown) =>
-                  `${className} ${(props.className as (s: unknown) => string)(state)}`
-              : className,
-          ref,
-        }),
-      )
-    expect(await memoizedBy(naive)).toBe(false)
+    expect(await isMemoizedBy(naive)).toBe(false)
   })
 
   it('builds every part module with the shared helper: no module but the helper makes a component', () => {

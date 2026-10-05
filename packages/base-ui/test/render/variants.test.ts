@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Props, Source } from '../support/scenes.ts'
 
@@ -8,10 +8,7 @@ import { scenes } from '../support/scenes.ts'
 import { loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
 
-let nave: Source
-beforeAll(async () => {
-  nave = await loadNave()
-})
+const nave: Source = await loadNave()
 afterEach(cleanup)
 
 const VARIANT_PARTS = [
@@ -47,13 +44,13 @@ const naveAttributes = (element: Element): Record<string, string> =>
       .map(({ name, value }) => [name, value]),
   )
 
+// The Toggle has no variant, so a case that sets one does not apply to it.
+const casesFor = (part: string): typeof CASES =>
+  CASES.filter(({ props }) => part !== 'Toggle' || !('variant' in props))
+
 describe('AC-base-ui-bridge-14: variants render as data-nave-* only off the default, never as DOM props', () => {
   for (const [subpath, part] of [...VARIANT_PARTS, ['toggle', 'Toggle'] as const]) {
-    for (const { expected, label, props } of CASES) {
-      const isToggle = part === 'Toggle'
-      if (isToggle && 'variant' in props) {
-        continue
-      }
+    for (const { expected, label, props } of casesFor(part)) {
       it(`${part} with ${label}`, async () => {
         const scene = scenes[subpath]
         if (scene === undefined) {

@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest'
 import { DIST_DIR, filesUnder, manifest, readDist, SRC_DIR } from './support/dist.ts'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
 
+const byName = (a: string, b: string): number => a.localeCompare(b)
+
 const DIRECTIVE = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(['"])use client\1/
 
 describe("AC-base-ui-bridge-13: 'use client' survives, per file", () => {
@@ -14,7 +16,9 @@ describe("AC-base-ui-bridge-13: 'use client' survives, per file", () => {
   const built = filesUnder(DIST_DIR, ['.js'])
 
   it('has exactly one built module for every source module, at the same path', () => {
-    expect(built).toEqual(sources.map((file) => file.replace(/\.tsx?$/, '.js')).toSorted())
+    expect(built.toSorted(byName)).toEqual(
+      sources.map((file) => file.replace(/\.tsx?$/, '.js')).toSorted(byName),
+    )
   })
 
   it('begins every built module with the directive', () => {
@@ -44,7 +48,10 @@ describe("AC-base-ui-bridge-13: 'use client' survives, per file", () => {
 const IMPORT_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])([^'"]+)\1/g
 
 const importsOf = (code: string): string[] =>
-  [...code.matchAll(IMPORT_SPECIFIER)].map((match) => match[2] ?? '')
+  code
+    .matchAll(IMPORT_SPECIFIER)
+    .map((match) => match[2] ?? '')
+    .toArray()
 
 /**
  * The specifiers that reach into Base UI beyond a public component subpath.
@@ -54,6 +61,8 @@ const nonPublicBaseUiImports = (code: string): string[] =>
     (specifier) =>
       specifier.startsWith('@base-ui/react') && !/^@base-ui\/react\/[a-z-]+$/.test(specifier),
   )
+
+const hash = (file: string): string => createHash('sha256').update(readFileSync(file)).digest('hex')
 
 describe('AC-base-ui-bridge-36: provenance and packaging', () => {
   const built = filesUnder(DIST_DIR, ['.js'])
@@ -65,9 +74,11 @@ describe('AC-base-ui-bridge-36: provenance and packaging', () => {
   it('names no module of Base UI beyond its public component subpaths in any declaration either', () => {
     const declarations = filesUnder(DIST_DIR, ['.d.ts'])
     const reached = declarations.flatMap((file) =>
-      [...readDist(file).matchAll(/@base-ui\/react(?:\/[\w./-]*)?/g)]
+      readDist(file)
+        .matchAll(/@base-ui\/react(?:\/[\w./-]*)?/g)
         .map((match) => match[0])
-        .filter((specifier) => !/^@base-ui\/react\/[a-z-]+$/.test(specifier)),
+        .filter((specifier) => !/^@base-ui\/react\/[a-z-]+$/.test(specifier))
+        .toArray(),
     )
     expect(reached).toEqual([])
   })
@@ -81,8 +92,6 @@ describe('AC-base-ui-bridge-36: provenance and packaging', () => {
 
   it('is licensed MIT, with a LICENSE byte-identical to the repository LICENSE', () => {
     expect(manifest().license).toBe('MIT')
-    const hash = (file: string): string =>
-      createHash('sha256').update(readFileSync(file)).digest('hex')
     expect(hash(path.join(PACKAGE_DIR, 'LICENSE'))).toBe(
       hash(path.join(PACKAGE_DIR, '../../LICENSE')),
     )

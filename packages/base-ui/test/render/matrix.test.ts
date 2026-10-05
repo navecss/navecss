@@ -9,6 +9,7 @@ const FLOOR_VERSION = '1.0.0'
 
 describe('the run matrix', () => {
   it('loads the React major the run names', () => {
+    // eslint-disable-next-line turbo/no-undeclared-env-vars -- a test-run variable set by vitest.config.ts, not a build input
     expect(React.version.split('.', 1)[0]).toBe(process.env.NAVE_REACT)
   })
 
@@ -23,6 +24,7 @@ describe('the run matrix', () => {
       }
     ).devDependencies['@base-ui/react']
     expect(version).toBe(
+      // eslint-disable-next-line turbo/no-undeclared-env-vars -- a test-run variable set by vitest.config.ts, not a build input
       process.env.NAVE_BASE_UI === 'floor' ? FLOOR_VERSION : devDependency?.replace(/^\^/, ''),
     )
   })

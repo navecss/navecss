@@ -1,6 +1,6 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import type { Props, Source } from '../support/scenes.ts'
+import type { Props } from '../support/scenes.ts'
 
 import { describeDocument, marked, parityViolations, partsNamed } from '../support/dom.ts'
 import { cleanup, render, user } from '../support/react.ts'
@@ -10,28 +10,28 @@ import { isOverlay, openProps } from '../support/states.ts'
 import { SUBPATHS, topName } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 
-let bare: Source
-let nave: Source
+const bare = await loadBare()
+const nave = await loadNave()
 
-beforeAll(async () => {
-  bare = await loadBare()
-  nave = await loadNave()
-})
 afterEach(cleanup)
 
-const VARIANT_PROPS: Record<string, Props> = Object.fromEntries([
-  ...[
-    'Button',
-    'Toolbar.Button',
-    'Dialog.Trigger',
-    'Dialog.Close',
-    'Popover.Trigger',
-    'Popover.Close',
-    'Menu.Trigger',
-    'Tooltip.Trigger',
-  ].map((part) => [part, { size: 'sm', variant: 'primary' }]),
-  ['Toggle', { size: 'sm' }],
-])
+const VARIANT_PARTS = [
+  'Button',
+  'Toolbar.Button',
+  'Dialog.Trigger',
+  'Dialog.Close',
+  'Popover.Trigger',
+  'Popover.Close',
+  'Menu.Trigger',
+  'Tooltip.Trigger',
+]
+
+const VARIANT_PROPS: Record<string, Props> = {
+  ...Object.fromEntries(
+    VARIANT_PARTS.map((part) => [part, { size: 'sm', variant: 'primary' }] as const),
+  ),
+  Toggle: { size: 'sm' },
+}
 
 describe("AC-base-ui-bridge-12: a wrapper renders exactly the bare part's DOM, plus its class and data-nave-*", () => {
   for (const subpath of SUBPATHS) {
@@ -132,6 +132,57 @@ const STATES: Readonly<
   toolbar: { configs: [{}, { 'Toolbar.Root': { disabled: true, orientation: 'vertical' } }] },
 }
 
+type Scene = NonNullable<(typeof scenes)[string]>
+
+const styledPartsOf = (subpath: string): string[] =>
+  tableP
+    .keys()
+    .filter((part) => part === topName(subpath) || part.startsWith(`${topName(subpath)}.`))
+    .toArray()
+
+const mergeProps = (
+  consumer: Record<string, Props>,
+  config: Record<string, Props>,
+): Record<string, Props> =>
+  Object.fromEntries(
+    new Set([...Object.keys(consumer), ...Object.keys(config)])
+      .values()
+      .map((part) => [part, { ...consumer[part], ...config[part] }] as const),
+  )
+
+/**
+ * The own attributes after each click on the parts a click flips, for the component that is
+ * currently rendered.
+ */
+const clickedSnapshots = async (subpath: string): Promise<Map<string, string>[]> => {
+  const snapshots: Map<string, string>[] = []
+  const clicks = STATES[subpath]?.clicks ?? []
+  for (const part of clicks) {
+    const [target] = partsNamed(part)
+    if (target !== undefined) {
+      await user().click(target)
+      snapshots.push(ownAttributes())
+    }
+  }
+  return snapshots
+}
+
+const snapshotsAcross = async (
+  scene: Scene,
+  subpath: string,
+  consumer: Record<string, Props>,
+  configs: readonly Record<string, Props>[],
+): Promise<Map<string, string>[]> => {
+  const snapshots: Map<string, string>[] = []
+  for (const config of configs) {
+    await render(scene.render(nave, { props: mergeProps(consumer, config) }))
+    snapshots.push(ownAttributes())
+    const clicked = await clickedSnapshots(subpath)
+    snapshots.push(...clicked)
+  }
+  return snapshots
+}
+
 describe("AC-base-ui-bridge-37: Nave's contribution is chosen by the consumer's props, never by state", () => {
   for (const subpath of SUBPATHS) {
     it(`${subpath}: the class and data-nave-* are identical in every state`, async () => {
@@ -139,29 +190,10 @@ describe("AC-base-ui-bridge-37: Nave's contribution is chosen by the consumer's 
       if (scene === undefined) {
         throw new Error(`no scene for ${subpath}`)
       }
-      const styled = [...tableP.keys()].filter(
-        (part) => part === topName(subpath) || part.startsWith(`${topName(subpath)}.`),
-      )
+      const styled = styledPartsOf(subpath)
       const consumer = Object.fromEntries(styled.map((part) => [part, { className: 'consumer' }]))
       const configs = isOverlay(subpath) ? [{}, openProps()] : (STATES[subpath]?.configs ?? [{}])
-      const snapshots: Map<string, string>[] = []
-      for (const config of configs) {
-        const merged = Object.fromEntries(
-          [...new Set([...Object.keys(consumer), ...Object.keys(config)])].map((part) => [
-            part,
-            { ...consumer[part], ...config[part] },
-          ]),
-        )
-        await render(scene.render(nave, { props: merged }))
-        snapshots.push(ownAttributes())
-        for (const part of STATES[subpath]?.clicks ?? []) {
-          const [target] = partsNamed(part)
-          if (target !== undefined) {
-            await user().click(target)
-            snapshots.push(ownAttributes())
-          }
-        }
-      }
+      const snapshots = await snapshotsAcross(scene, subpath, consumer, configs)
       const [first, ...rest] = snapshots
       const differing = rest.flatMap((snapshot) =>
         [...snapshot]

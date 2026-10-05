@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Props, Source } from '../support/scenes.ts'
 
@@ -6,10 +6,7 @@ import { cleanup } from '../support/react.ts'
 import { part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 
-let nave: Source
-beforeAll(async () => {
-  nave = await loadNave()
-})
+const nave: Source = await loadNave()
 afterEach(cleanup)
 
 /**

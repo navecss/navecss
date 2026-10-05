@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { attributeReads } from './support/selector.ts'
-import { flatten, readStylesheet } from './support/stylesheet.ts'
+import { type FlatDeclaration, flatten, readStylesheet } from './support/stylesheet.ts'
 import { ROW_PAIRS } from './support/vocabulary-pairs.ts'
 
 /**
@@ -9,24 +9,22 @@ import { ROW_PAIRS } from './support/vocabulary-pairs.ts'
  * and every Base UI variable in every value, by the class that owns the rule. `data-nave-*` is
  * Nave's own and is asserted by the variants rows.
  */
-const stylesheetPairs = (css: string): Set<string> => {
-  const found = new Set<string>()
-  for (const { owner, selectors, value } of flatten(css)) {
-    for (const selector of selectors) {
-      for (const { name } of attributeReads(selector)) {
-        if (!name.startsWith('data-nave-')) {
-          found.add(`${owner} ${name}`)
-        }
-      }
-    }
-    for (const match of value.matchAll(/var\((--[\w-]+)/g)) {
-      if (!(match[1] ?? '').startsWith('--nave-')) {
-        found.add(`${owner} ${match[1]}`)
-      }
-    }
-  }
-  return found
+const declarationPairs = ({ owner, selectors, value }: FlatDeclaration): string[] => {
+  const attributes = selectors
+    .flatMap((selector) => attributeReads(selector).map(({ name }) => name))
+    .filter((name) => !name.startsWith('data-nave-'))
+  const variables = value
+    .matchAll(/var\((--[\w-]+)/g)
+    .map((match) => match[1] ?? '')
+    .filter((name) => !name.startsWith('--nave-'))
+    .toArray()
+  return [...attributes, ...variables].map((item) => `${owner} ${item}`)
 }
+
+const stylesheetPairs = (css: string): Set<string> =>
+  new Set(flatten(css).flatMap((declaration) => declarationPairs(declaration)))
+
+const byName = (a: string, b: string): number => a.localeCompare(b)
 
 const asserted = new Set(
   Object.values(ROW_PAIRS)
@@ -37,13 +35,13 @@ const asserted = new Set(
 describe('AC-base-ui-bridge-22: the stylesheet-to-render linkage is complete', () => {
   it('has a render row for every pair the stylesheet extracts', () => {
     expect(
-      [...stylesheetPairs(readStylesheet())].filter((pair) => !asserted.has(pair)).toSorted(),
+      [...stylesheetPairs(readStylesheet())].filter((pair) => !asserted.has(pair)).toSorted(byName),
     ).toEqual([])
   })
 
   it('asserts no pair the stylesheet does not use', () => {
     expect(
-      [...asserted].filter((pair) => !stylesheetPairs(readStylesheet()).has(pair)).toSorted(),
+      [...asserted].filter((pair) => !stylesheetPairs(readStylesheet()).has(pair)).toSorted(byName),
     ).toEqual([])
   })
 

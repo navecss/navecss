@@ -1,19 +1,17 @@
 import { createElement, type ReactElement } from 'react'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Props, Source } from '../support/scenes.ts'
 
 import { cleanup, render } from '../support/react.ts'
-import { hasItem, hasClass, part, renderScene } from '../support/rows.ts'
+import { hasClass, hasItem, part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 import { topName } from '../support/subpaths.ts'
 
-let nave: Source
-beforeAll(async () => {
-  nave = await loadNave()
-})
+const nave: Source = await loadNave()
 afterEach(cleanup)
 
+// eslint-disable-next-line turbo/no-undeclared-env-vars -- a test-run variable set by vitest.config.ts, not a build input
 const IS_FLOOR = process.env.NAVE_BASE_UI === 'floor'
 const C = 'nave-base-ui-'
 
@@ -90,14 +88,18 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
         marker: 'Radio.Root',
         tree: createElement(
           nave('radio-group') as never,
-          null,
+          undefined,
           make('radio', 'Root', { value: 'a' }),
         ),
       },
       {
         cls: 'select-trigger',
         marker: 'Select.Trigger',
-        tree: createElement(component('select').Root as never, null, make('select', 'Trigger')),
+        tree: createElement(
+          component('select').Root as never,
+          undefined,
+          make('select', 'Trigger'),
+        ),
       },
     ]
     const problems: string[] = []
@@ -116,21 +118,19 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
   it('an invalid Field gives aria-invalid to NumberField.Input, a direct child of the Group', async () => {
     const field = nave('field') as Record<string, never>
     const number = nave('number-field') as Record<string, never>
-    await render(
-      createElement(
-        field.Root as never,
-        { invalid: true } as never,
-        createElement(
-          number.Root as never,
-          null,
-          createElement(
-            number.Group as never,
-            { 'data-part': 'NumberField.Group' } as never,
-            createElement(number.Input as never, { 'data-part': 'NumberField.Input' } as never),
-          ),
-        ),
-      ),
+    const input = createElement(
+      number.Input as never,
+      {
+        'data-part': 'NumberField.Input',
+      } as never,
     )
+    const group = createElement(
+      number.Group as never,
+      { 'data-part': 'NumberField.Group' } as never,
+      input,
+    )
+    const root = createElement(number.Root as never, undefined, group)
+    await render(createElement(field.Root as never, { invalid: true } as never, root))
     expect(hasItem(part('NumberField.Input'), 'aria-invalid', 'true')).toBe(true)
     expect(part('NumberField.Input')?.parentElement).toBe(part('NumberField.Group'))
     expect(hasClass(part('NumberField.Group'), `${C}number-field-group`)).toBe(true)
@@ -285,8 +285,8 @@ const DISABLED: readonly {
   },
 ]
 
-function both(value: boolean): { current: boolean; floor: boolean } {
-  return { current: value, floor: value }
+function both(isOn: boolean): { current: boolean; floor: boolean } {
+  return { current: isOn, floor: isOn }
 }
 
 describe('AC-base-ui-bridge-22: every disabled part hasItem the state the stylesheet keys on', () => {

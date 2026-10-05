@@ -1,5 +1,5 @@
 import { createElement, type ReactElement } from 'react'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Props, Source } from '../support/scenes.ts'
 
@@ -10,10 +10,7 @@ import { partOf } from '../support/scenes.ts'
 import { loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
 
-let nave: Source
-beforeAll(async () => {
-  nave = await loadNave()
-})
+const nave: Source = await loadNave()
 afterEach(cleanup)
 
 type Act = 'click' | 'enter' | 'space'
@@ -24,7 +21,7 @@ interface Row {
   /**
   A custom tree, for the rows a scene cannot express.
    */
-  readonly element?: (source: Source, disabled: boolean, spy: Spy) => ReactElement
+  readonly element?: (source: Source, isDisabled: boolean, spy: Spy) => ReactElement
   /**
   The part acted on, and which of its occurrences.
    */
@@ -34,7 +31,7 @@ interface Row {
   /**
   The props by part: what disables the part, and what hasItem the spy on the signal.
    */
-  readonly props?: (disabled: boolean, spy: Spy) => Record<string, Props>
+  readonly props?: (isDisabled: boolean, spy: Spy) => Record<string, Props>
   /**
   What must not move when the act is delivered to the disabled part.
    */
@@ -99,6 +96,7 @@ const ROWS: readonly Row[] = [
     name: 'Select.Item',
     props: (d, s) => ({
       ...openProps(),
+      // eslint-disable-next-line unicorn/no-null -- null is the Select's empty value, which undefined would leave uncontrolled
       'Select.Root': { defaultValue: null, onValueChange: s, open: true },
       'Select.Item': { disabled: d },
     }),
@@ -229,19 +227,14 @@ const ROWS: readonly Row[] = [
   },
   {
     acts: ['click'],
-    element: (source, d, s) =>
-      createElement(
-        partOf(source, 'fieldset', 'Root'),
-        { disabled: d },
-        createElement(
-          partOf(source, 'field', 'Root'),
-          null,
-          createElement(partOf(source, 'field', 'Control'), {
-            'data-part': 'Field.Control',
-            onValueChange: s,
-          }),
-        ),
-      ),
+    element: (source, d, s) => {
+      const control = createElement(partOf(source, 'field', 'Control'), {
+        'data-part': 'Field.Control',
+        onValueChange: s,
+      })
+      const field = createElement(partOf(source, 'field', 'Root'), undefined, control)
+      return createElement(partOf(source, 'fieldset', 'Root'), { disabled: d }, field)
+    },
     marker: 'Field.Control',
     name: 'Field.Control (Fieldset disabled)',
     state: value,
@@ -268,11 +261,11 @@ const settle = (): Promise<void> =>
     await new Promise((resolve) => setTimeout(resolve, 100))
   })
 
-const deliver = async (target: HTMLElement, act: Act, typing: boolean): Promise<void> => {
+const deliver = async (target: HTMLElement, act: Act, isTyping: boolean): Promise<void> => {
   const session = user()
   if (act === 'click') {
     await session.click(target)
-    if (typing) {
+    if (isTyping) {
       await session.keyboard('abc')
     }
   } else {
@@ -283,8 +276,9 @@ const deliver = async (target: HTMLElement, act: Act, typing: boolean): Promise<
 }
 
 const act_ = (callback: () => void): Promise<void> =>
-  act(async () => {
+  act(() => {
     callback()
+    return Promise.resolve()
   })
 
 /**
@@ -293,14 +287,14 @@ const act_ = (callback: () => void): Promise<void> =>
  */
 const attempt = async (
   row: Row,
-  disabled: boolean,
+  isDisabled: boolean,
   actName: Act,
 ): Promise<{ after: string; before: string; called: boolean }> => {
   const spy = vi.fn()
   if (row.element === undefined) {
-    await renderScene(nave, row.subpath, row.props?.(disabled, spy) ?? {})
+    await renderScene(nave, row.subpath, row.props?.(isDisabled, spy) ?? {})
   } else {
-    await render(row.element(nave, disabled, spy))
+    await render(row.element(nave, isDisabled, spy))
   }
   const target = partsNamed(row.marker)[row.index ?? 0]
   if (target === undefined) {
@@ -317,11 +311,13 @@ const attempt = async (
 
 describe('AC-base-ui-bridge-26: condition D, every disabled part is inactive, and each act is proven able to activate', () => {
   for (const row of ROWS) {
+    // eslint-disable-next-line vitest/valid-title -- each row's own name is the title, a plain string
     it(row.name, async () => {
       const acts = row.acts ?? (['click', 'enter', 'space'] as const)
       const activating: Act[] = []
       for (const actName of acts) {
-        if ((await attempt(row, false, actName)).called) {
+        const { called } = await attempt(row, false, actName)
+        if (called) {
           activating.push(actName)
         }
         await cleanup()

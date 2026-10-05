@@ -43,7 +43,12 @@ export const describeDocument = (root: ParentNode = document.body): ElementRecor
     attributes: new Map(
       [...element.attributes].map(({ name, value }) => [
         name,
-        name === 'class' ? value : value.split(/\s+/).map(canonical).join(' '),
+        name === 'class'
+          ? value
+          : value
+              .split(/\s+/)
+              .map((token) => canonical(token))
+              .join(' '),
       ]),
     ),
     tag: element.tagName.toLowerCase(),
@@ -65,7 +70,7 @@ export const parityViolations = (
   }
   return bare.flatMap((expected, index) => {
     const actual = wrapped[index]
-    if (actual === undefined || actual.tag !== expected.tag) {
+    if (actual?.tag !== expected.tag) {
       return [`element ${index}: <${actual?.tag}>, the bare render has <${expected.tag}>`]
     }
     const names = new Set([...expected.attributes.keys(), ...actual.attributes.keys()])
@@ -83,9 +88,9 @@ export const parityViolations = (
 The part markers, in tree order, with each marked element.
  */
 export const marked = (root: ParentNode = document.body): { element: Element; part: string }[] =>
-  [...root.querySelectorAll('[data-part]')].map((element) => ({
+  [...root.querySelectorAll<HTMLElement>('[data-part]')].map((element) => ({
     element,
-    part: element.getAttribute('data-part') ?? '',
+    part: element.dataset.part ?? '',
   }))
 
 /**
