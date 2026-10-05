@@ -402,10 +402,12 @@ covered too. It takes `extend` (an object of your own atoms) and `onUnknown` as 
 do ([Options](#options)); under `'warn'` it prints each problem with `console.warn`.
 
 The adapter imports nothing from `lightningcss`, types included, and declares no peer: you bring
-your own copy. The supported range is documented, not declared: `lightningcss` 1.22 and later,
-the first release with CSS nesting on by default (1.20 and 1.21 cannot parse the nested rules the
-adapter writes). The fixtures run on 1.22.1 and on the newest release at the time of each release
-of this package. One cost, on the `bundleAsync()` path: `read` returns a string and no source
+your own copy. The supported range is documented, not declared: `lightningcss` 1.24.1 and later.
+Earlier releases can drop the message of an error a resolver throws during `bundleAsync()`, so a
+malformed directive can fail a build with an empty error instead of Nave's message. The nested rules
+the adapter writes also need CSS nesting, on by default only from 1.22 (1.20 and 1.21 cannot parse
+them). The fixtures run on 1.24.1 and on the newest release at the time of each release of this
+package. One cost, on the `bundleAsync()` path: `read` returns a string and no source
 map, so Nave's insertions are not in the output map there. The inserted text adds no line breaks,
 so line numbers hold. On the `transform()` path the map is chained through `inputSourceMap`.
 

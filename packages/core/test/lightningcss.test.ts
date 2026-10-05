@@ -41,6 +41,18 @@ function write(name: string, text: string): string {
   return file
 }
 
+/**
+ * Busy work that allocates for `milliseconds`, standing in for a resolver that does real work (it
+ * expands a file's text) before it throws. Lightning CSS releases before 1.24.1 can lose the
+ * message of an error thrown after such work, and lose it more often the longer the work runs.
+ */
+function allocateFor(milliseconds: number): number {
+  const until = performance.now() + milliseconds
+  let text = ''
+  while (performance.now() < until) text += 'x'.repeat(100)
+  return text.length
+}
+
 const FOCUS_VISIBLE = atoms.focusRing.pseudos[':focus-visible']
 
 /**
@@ -161,7 +173,7 @@ describe.each(LIGHTNING_RELEASES)(
 
       const minor = version.split('.').map(Number)[1]!
       const isExpectedRelease =
-        release.package === 'lightningcss-1-22' ? version === '1.22.1' : minor >= 22
+        release.package === 'lightningcss-1-24' ? version === '1.24.1' : minor >= 24
       expect(isExpectedRelease, `${release.package} resolved to ${version}`).toBe(true)
     })
 
@@ -249,6 +261,30 @@ describe.each(LIGHTNING_RELEASES)(
       await expect(
         lib.bundleAsync({ filename: entry, resolver: navePlugin().resolver }),
       ).rejects.toThrow(/separate atom names with spaces/)
+    })
+
+    it('bundleAsync(): a resolver that works and then throws, called ten times in a row, is heard with its own message every time', async () => {
+      const entry = write('entry.css', '.x { color: red; }\n')
+      const heard: string[] = []
+
+      for (let call = 0; call < 10; call++) {
+        const resolver = {
+          read(): string {
+            allocateFor(10)
+            throw new Error(`the resolver failed on call ${call}`)
+          },
+        }
+        try {
+          await lib.bundleAsync({ filename: entry, resolver })
+          heard.push('the call resolved')
+        } catch (error) {
+          heard.push(error instanceof Error ? error.message : String(error))
+        }
+      }
+
+      expect(heard).toEqual(
+        Array.from({ length: 10 }, (_, call) => `the resolver failed on call ${call}`),
+      )
     })
 
     it('transform(): the output map sends an untouched rule to its authored position, and the rules Nave inserted to their directive', async () => {
