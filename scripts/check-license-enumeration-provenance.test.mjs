@@ -126,9 +126,9 @@ test('the real license-policy.json entries no longer carry signedBy/finding', ()
 })
 
 // The three prose strings in license-policy.json are CLEARED BYTES, transcribed verbatim from
-// the clearance turn taken on this branch, not
-// drafted here. A re-wording of any of them is a fresh clearance turn; a re-wrapping of the
-// same bytes is not. Nothing anchored these byte-exact before, so a later tidy could re-word a
+// the clearance taken on this branch, not drafted here. A re-wording of any of them needs a
+// fresh clearance; a re-wrapping of the same bytes does not. Nothing anchored these byte-exact
+// before, so a later tidy could re-word a
 // cleared licensing-position string with every gate still green — this is that anchor, and it
 // is deliberately an equality check rather than a pattern match.
 test('the real license-policy.json prose strings equal the cleared bytes', () => {
@@ -325,7 +325,7 @@ test('an array entry gets the designed "not an object" message, not the missing-
 // --- The printed strings, anchored byte-exact (cleared bytes) ---
 
 // Three of the four strings this gate can print were rewritten by that reshape, and the
-// clearance turn returned cleared bytes for all three. Nothing anchored them,
+// clearance supplied cleared bytes for all three. Nothing anchored them,
 // so a later re-wording would have shipped green and silent; these are equality checks, not
 // pattern matches, for exactly that reason. The header and the guidance are read from the
 // exported constants rather than captured off a red run: a red run proves the composition,
@@ -343,8 +343,8 @@ test('the exported header and guidance constants equal the cleared bytes', () =>
 
 // Neither sentence of this guidance is pre-existing branch text: the text that reshape
 // replaced named per-entry provenance fields and routed to a named persona, and both sentences that
-// stand here were drafted in a clearance turn rather than written at the call site. The SECOND
-// is the one drafted in the clearance turn cited above, unchanged since. The FIRST was drafted
+// stand here were drafted during a clearance rather than written at the call site. The SECOND
+// is the one drafted in the clearance cited above, unchanged since. The FIRST was drafted
 // at an earlier review turn, which cleared the branch's own wording on the licensing axis and
 // then replaced it: "untrimmed-safe" was a coinage that did not state the rule it was enforcing.
 // Anchored separately so the boundary stays visible to whoever reads this next, and so a
@@ -575,7 +575,7 @@ for (const entryIds of [['a'], ['a', 'b', 'c', 'd', 'e']]) {
       // This pins the licensing gate's cleared pass-line sentence at a SECOND test site: `:488`
       // above anchors the suffix only (pre-existing), this one anchors the full sentence
       // including its count. A future cleared rewording of that sentence now updates both. This
-      // test asserts an existing string and rewords nothing, so no clearance turn is owed by it
+      // test asserts an existing string and rewords nothing, so it needs no fresh clearance
       // (row 1's own note, this file's docblock above).
       assert.ok(
         (result.stdout ?? '').includes(

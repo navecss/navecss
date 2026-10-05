@@ -327,8 +327,8 @@ export function classifyBucketC(license, policy) {
 }
 
 /**
- * The message printed when `pnpm licenses list` itself cannot be run — a non-zero exit, or
- * `pnpm` absent entirely — this is the case a
+ * The cleared message printed when `pnpm licenses list` itself cannot be run — a non-zero
+ * exit, or `pnpm` absent entirely — this is the case a
  * human actually hits, since running this gate in a fresh clone before `pnpm install` dies
  * on a raw stack trace without it. `reason` is `error.code ?? error.message` from the caught
  * error, the same idiom the sibling gate's read guards use, narrowed HERE to its FIRST LINE:
@@ -444,7 +444,7 @@ export function formatAllowlistSuccessLine(prodCount, devOnlyCount) {
  * The cleared line printed INSTEAD of
  * formatAllowlistSuccessLine when BOTH counts are zero:
  * formatAllowlistSuccessLine(0, 0) reads identically to a real clean pass with only the
- * numerals differing, which published `licensing` overview §4/§5's rider forbids — what a
+ * numerals differing, which breaks a rule the licensing gates here follow — what a
  * gate prints when it compared nothing must differ from what it prints when it compared
  * and passed. The exit stays 0 deliberately, mirroring the sibling parity gate's own
  * zero-non-private-package branch: a workspace with no dependencies breaches nothing.
@@ -458,8 +458,8 @@ export const ALLOWLIST_NOTHING_CLASSIFIED_LINE =
 
 /**
  * The two strings a red run prints, verbatim as cleared.
- * Transcribed, not re-worded: a re-wording is a fresh
- * clearance turn, a re-wrapping of the same bytes is not. The guidance block is new: this
+ * Transcribed, not re-worded: a re-wording needs a fresh
+ * clearance, a re-wrapping of the same bytes does not. The guidance block is new: this
  * gate printed no guidance block before it, only the routing parenthetical the header
  * replacement removes. Anchored byte-exact in check-license-allowlist.test.mjs.
  */

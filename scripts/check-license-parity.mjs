@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Tripwire for the project's published licensing requirement.
+ * Tripwire for one of the project's licensing requirements.
  *
- * Condition 2 of the published `licensing` overview §2, signed off by the
- * project's maintainer, requires each published tarball to carry its own
- * licence text, and names its remedy in a preference order: "a copy, or a
- * build step, or a verified-packing symlink, in that order of preference".
+ * That requirement, signed off by the project's maintainer and called
+ * Condition 2 below, is that each published tarball carries its own licence
+ * text. It names its remedy in a preference order: "a copy, or a build step,
+ * or a verified-packing symlink, in that order of preference".
  * The project took the first — `packages/{tokens,core,bridge,cli}/LICENSE`
  * are copies of the root `LICENSE` — and nothing before this script asserted
  * the copies actually still MATCH the root they were taken from.
@@ -15,8 +15,8 @@
  * that makes Condition 2 true was held by whoever remembered to update all
  * five files together, and it had already been exercised once by hand: an
  * earlier review named `LICENSE` and the copyright line turned out to
- * live in five files, caught by the developer-relations reviewer running the
- * class rather than the list. This script converts "whoever remembers" into
+ * live in five files, caught by checking the whole class rather than the
+ * list. This script converts "whoever remembers" into
  * an assertion.
  *
  * The package set is every directory under `packages/` that carries a
@@ -239,8 +239,8 @@ export function findWorkspaceGlobViolation(rootDir = ROOT) {
 
 /**
  * The two strings a red run prints, verbatim as cleared.
- * Transcribed, not re-worded: a re-wording is a fresh
- * clearance turn, a re-wrapping of the same bytes is not. The requirement sentence stays
+ * Transcribed, not re-worded: a re-wording needs a fresh
+ * clearance, a re-wrapping of the same bytes does not. The requirement sentence stays
  * because it is this file's own encoded position, but it was restated rather than kept
  * verbatim: the citations and the persona went, the subject moved from the published
  * tarball to the published package, the modality from "Condition 2 requires" to a bare
@@ -520,8 +520,8 @@ export function main(rootDir = ROOT) {
   }
 
   if (packages.length === 0) {
-    // A run that compared nothing must not read as a run that compared and passed (published
-    // `licensing` overview §4/§5's rider). Two halves, both load-bearing. The closing clause
+    // A run that compared nothing must not read as a run that compared and passed, a rule the
+    // licensing gates here follow. Two halves, both load-bearing. The closing clause
     // names what the branch actually tested, an empty non-private set, and not why it is empty:
     // a set emptied by directories carrying no package.json is not an all-private workspace.
     // The census is what tells a legitimately empty set from one emptied by a discovery that

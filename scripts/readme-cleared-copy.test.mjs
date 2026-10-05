@@ -506,8 +506,8 @@ const licenseBody = bodyOf(README_LINES, LICENSE_RANGE)
 //
 // A RED HERE IS A ROUTING ACT, NOT A FALSE RED, and it is rung 1b's shape above. Bolding the
 // line, wrapping part of it in a link, appending a clause to it or splitting it across two lines
-// all red, and every one of those is a byte change to signed copy that costs a clearance turn on
-// its own account: this line was cleared by name, so the red sends the edit to review as a
+// all red, and every one of those is a byte change to signed copy that needs a clearance of
+// its own: this line was cleared by name, so the red sends the edit to review as a
 // licence-text change. Limb 4's
 // OVER-INCLUSION is that same act, and its extent is measured rather than asserted: it reds an
 // `<a name>` anchor or a `<sub>` note added to this block, and it also reds the two ANGLE-BRACKET

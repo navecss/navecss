@@ -268,8 +268,8 @@ function main() {
     `${counts.skippedNoInScopeSubpaths} non-private package(s) declare no in-scope subpath`
 
   if (counts.checkedSubpaths === 0) {
-    // A run that compared nothing must not read as a run that compared and passed (the rider
-    // published `licensing` overview §4/§5 carries). The exit stays 0
+    // A run that compared nothing must not read as a run that compared and passed (the same
+    // rule the licensing gates here follow). The exit stays 0
     // because nothing in scope is a legitimate state for this check, and the closing clause
     // says exactly that. It must NOT diagnose WHY the set is empty: this branch keys on
     // `counts.checkedSubpaths === 0`, which an all-private tree reaches and so does a tree

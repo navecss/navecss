@@ -197,8 +197,10 @@ describe('reduced motion: packages/core/src/reset.css', () => {
   })
 
   /**
-   * Cap 2's obligation is RETENTION
-   * of the four `!important` flags, which neither existing instrument guards. A lint forbidding
+   * The reduced-motion block is a deliberate exception to Nave's otherwise-overridable
+   * defaults: its `!important` flags beat a consumer's own `!important` in any later layer, which
+   * is what lets the collapse reach third-party and consumer motion. The obligation here is
+   * RETENTION of the four flags, which neither existing instrument guards. A lint forbidding
    * a NEW `!important` in reset.css does not assert retention (a contributor who deletes all
    * four flags also deletes their disables and the build stays green); `reducedMotionDeclarations`
    * strips the flag before this file's other assertions ever see it, which is the exact
@@ -211,7 +213,7 @@ describe('reduced motion: packages/core/src/reset.css', () => {
    * `property: value;` directly (rather than splitting) is what keeps this to real declarations
    * only, verified against a real injected removal before trusting it.
    */
-  it('every declaration inside every reduced-motion block carries !important (Cap 2 retention)', () => {
+  it('every declaration in every reduced-motion block keeps its !important', () => {
     const DECLARATION_PATTERN = /([\w-]+)\s*:\s*([^;{}]+);/g
     let checked = 0
     for (const block of reducedMotionBlocks(resetCss)) {

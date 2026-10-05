@@ -474,7 +474,7 @@ test('end to end: a violating fixture exits 1 and names the specifier and the fi
 })
 
 test('end to end: a run that examined nothing says so instead of printing the success sentence', () => {
-  // A prior ruling's rider, in published `licensing` overview §4/§5's own words: a run
+  // The same rule the licensing gates here follow: a run
   // that compared nothing must not read as a run that compared and passed. Exit stays 0 —
   // having nothing in scope to examine is a legitimate state, and the branch keys on that,
   // not on the tree being all-private.
