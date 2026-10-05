@@ -1,0 +1,121 @@
+import { build } from 'esbuild'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+import { DIST_DIR, filesUnder, manifest, readDist, SRC_DIR } from './support/dist.ts'
+import { PACKAGE_DIR } from './support/stylesheet.ts'
+
+const DIRECTIVE = /^(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*(['"])use client\1/
+
+describe("AC-base-ui-bridge-13: 'use client' survives, per file", () => {
+  const sources = filesUnder(SRC_DIR, ['.ts', '.tsx'])
+  const built = filesUnder(DIST_DIR, ['.js'])
+
+  it('has exactly one built module for every source module, at the same path', () => {
+    expect(built).toEqual(sources.map((file) => file.replace(/\.tsx?$/, '.js')).toSorted())
+  })
+
+  it('begins every built module with the directive', () => {
+    expect(built.filter((file) => !DIRECTIVE.test(readDist(file)))).toEqual([])
+  })
+
+  it('control: the same source bundled with esbuild loses the directive', async () => {
+    // A consumer's entry that imports the package: the modules' own directives are not the
+    // bundle's, which is what a bundler that merges the files does to them.
+    const result = await build({
+      absWorkingDir: PACKAGE_DIR,
+      bundle: true,
+      stdin: {
+        contents: `export { Dialog } from ${JSON.stringify(path.join(DIST_DIR, 'dialog/index.js'))}`,
+        resolveDir: PACKAGE_DIR,
+      },
+      external: ['react', 'react-dom', '@base-ui/react', '@base-ui/react/*'],
+      format: 'esm',
+      logLevel: 'silent',
+      write: false,
+    })
+    const text = result.outputFiles[0]?.text ?? ''
+    expect(DIRECTIVE.test(text)).toBe(false)
+  })
+})
+
+const IMPORT_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])([^'"]+)\1/g
+
+const importsOf = (code: string): string[] =>
+  [...code.matchAll(IMPORT_SPECIFIER)].map((match) => match[2] ?? '')
+
+/**
+ * The specifiers that reach into Base UI beyond a public component subpath.
+ */
+const nonPublicBaseUiImports = (code: string): string[] =>
+  importsOf(code).filter(
+    (specifier) =>
+      specifier.startsWith('@base-ui/react') && !/^@base-ui\/react\/[a-z-]+$/.test(specifier),
+  )
+
+describe('AC-base-ui-bridge-36: provenance and packaging', () => {
+  const built = filesUnder(DIST_DIR, ['.js'])
+
+  it('imports Base UI only through its public component subpaths', () => {
+    expect(built.flatMap((file) => nonPublicBaseUiImports(readDist(file)))).toEqual([])
+  })
+
+  it('names no module of Base UI beyond its public component subpaths in any declaration either', () => {
+    const declarations = filesUnder(DIST_DIR, ['.d.ts'])
+    const reached = declarations.flatMap((file) =>
+      [...readDist(file).matchAll(/@base-ui\/react(?:\/[\w./-]*)?/g)]
+        .map((match) => match[0])
+        .filter((specifier) => !/^@base-ui\/react\/[a-z-]+$/.test(specifier)),
+    )
+    expect(reached).toEqual([])
+  })
+
+  it('carries no source of Base UI or React: they are imported, never inlined', () => {
+    const inlined = built.filter((file) =>
+      /useRenderElement|react\.element|react\.transitional/.test(readDist(file)),
+    )
+    expect(inlined).toEqual([])
+  })
+
+  it('is licensed MIT, with a LICENSE byte-identical to the repository LICENSE', () => {
+    expect(manifest().license).toBe('MIT')
+    const hash = (file: string): string =>
+      createHash('sha256').update(readFileSync(file)).digest('hex')
+    expect(hash(path.join(PACKAGE_DIR, 'LICENSE'))).toBe(
+      hash(path.join(PACKAGE_DIR, '../../LICENSE')),
+    )
+  })
+
+  it('control: a planted internal import is reported', () => {
+    expect(
+      nonPublicBaseUiImports(
+        "import { useRenderElement } from '@base-ui/react/internals/useRenderElement'",
+      ),
+    ).toEqual(['@base-ui/react/internals/useRenderElement'])
+  })
+})
+
+describe('AC-base-ui-bridge-05: no declaration names a class', () => {
+  it('has no class name and no atom name in any built declaration file', () => {
+    const declarations = filesUnder(DIST_DIR, ['.d.ts'])
+    expect(declarations.length).toBeGreaterThan(0)
+    expect(declarations.filter((file) => /nave-base-ui-|baseUi[A-Z]/.test(readDist(file)))).toEqual(
+      [],
+    )
+  })
+})
+
+describe('AC-base-ui-bridge-40: the built package loads through require() (ADR 0007)', () => {
+  it('requires a subpath of the built package and yields the Dialog namespace', async () => {
+    const { execFile } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    const { stdout } = await promisify(execFile)(
+      process.execPath,
+      ['-e', "process.stdout.write(Object.keys(require('@navecss/base-ui/dialog')).join())"],
+      { cwd: PACKAGE_DIR },
+    )
+    expect(stdout).toBe('Dialog')
+  })
+})

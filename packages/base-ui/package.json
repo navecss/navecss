@@ -6,6 +6,126 @@
   "license": "MIT",
   "type": "module",
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./dialog": {
+      "types": "./dist/dialog/index.d.ts",
+      "import": "./dist/dialog/index.js",
+      "default": "./dist/dialog/index.js"
+    },
+    "./popover": {
+      "types": "./dist/popover/index.d.ts",
+      "import": "./dist/popover/index.js",
+      "default": "./dist/popover/index.js"
+    },
+    "./menu": {
+      "types": "./dist/menu/index.d.ts",
+      "import": "./dist/menu/index.js",
+      "default": "./dist/menu/index.js"
+    },
+    "./select": {
+      "types": "./dist/select/index.d.ts",
+      "import": "./dist/select/index.js",
+      "default": "./dist/select/index.js"
+    },
+    "./tooltip": {
+      "types": "./dist/tooltip/index.d.ts",
+      "import": "./dist/tooltip/index.js",
+      "default": "./dist/tooltip/index.js"
+    },
+    "./accordion": {
+      "types": "./dist/accordion/index.d.ts",
+      "import": "./dist/accordion/index.js",
+      "default": "./dist/accordion/index.js"
+    },
+    "./collapsible": {
+      "types": "./dist/collapsible/index.d.ts",
+      "import": "./dist/collapsible/index.js",
+      "default": "./dist/collapsible/index.js"
+    },
+    "./tabs": {
+      "types": "./dist/tabs/index.d.ts",
+      "import": "./dist/tabs/index.js",
+      "default": "./dist/tabs/index.js"
+    },
+    "./button": {
+      "types": "./dist/button/index.d.ts",
+      "import": "./dist/button/index.js",
+      "default": "./dist/button/index.js"
+    },
+    "./input": {
+      "types": "./dist/input/index.d.ts",
+      "import": "./dist/input/index.js",
+      "default": "./dist/input/index.js"
+    },
+    "./number-field": {
+      "types": "./dist/number-field/index.d.ts",
+      "import": "./dist/number-field/index.js",
+      "default": "./dist/number-field/index.js"
+    },
+    "./field": {
+      "types": "./dist/field/index.d.ts",
+      "import": "./dist/field/index.js",
+      "default": "./dist/field/index.js"
+    },
+    "./fieldset": {
+      "types": "./dist/fieldset/index.d.ts",
+      "import": "./dist/fieldset/index.js",
+      "default": "./dist/fieldset/index.js"
+    },
+    "./form": {
+      "types": "./dist/form/index.d.ts",
+      "import": "./dist/form/index.js",
+      "default": "./dist/form/index.js"
+    },
+    "./checkbox": {
+      "types": "./dist/checkbox/index.d.ts",
+      "import": "./dist/checkbox/index.js",
+      "default": "./dist/checkbox/index.js"
+    },
+    "./checkbox-group": {
+      "types": "./dist/checkbox-group/index.d.ts",
+      "import": "./dist/checkbox-group/index.js",
+      "default": "./dist/checkbox-group/index.js"
+    },
+    "./radio": {
+      "types": "./dist/radio/index.d.ts",
+      "import": "./dist/radio/index.js",
+      "default": "./dist/radio/index.js"
+    },
+    "./radio-group": {
+      "types": "./dist/radio-group/index.d.ts",
+      "import": "./dist/radio-group/index.js",
+      "default": "./dist/radio-group/index.js"
+    },
+    "./switch": {
+      "types": "./dist/switch/index.d.ts",
+      "import": "./dist/switch/index.js",
+      "default": "./dist/switch/index.js"
+    },
+    "./slider": {
+      "types": "./dist/slider/index.d.ts",
+      "import": "./dist/slider/index.js",
+      "default": "./dist/slider/index.js"
+    },
+    "./toggle": {
+      "types": "./dist/toggle/index.d.ts",
+      "import": "./dist/toggle/index.js",
+      "default": "./dist/toggle/index.js"
+    },
+    "./toggle-group": {
+      "types": "./dist/toggle-group/index.d.ts",
+      "import": "./dist/toggle-group/index.js",
+      "default": "./dist/toggle-group/index.js"
+    },
+    "./toolbar": {
+      "types": "./dist/toolbar/index.d.ts",
+      "import": "./dist/toolbar/index.js",
+      "default": "./dist/toolbar/index.js"
+    },
     "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json"
   },
@@ -13,21 +133,36 @@
     "dist"
   ],
   "scripts": {
-    "build": "node scripts/build-styles.ts",
+    "build": "node scripts/build-styles.ts && tsc -p tsconfig.build.json",
+    "generate": "node scripts/generate-wrappers.ts",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint styles scripts test --max-warnings 0",
-    "lint:fix": "eslint styles scripts test --fix",
-    "test": "vitest run"
+    "lint": "eslint src styles scripts test --max-warnings 0",
+    "lint:fix": "eslint src styles scripts test --fix",
+    "test": "vitest run",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints styles.css"
   },
   "devDependencies": {
+    "@base-ui/react": "1.8.0",
     "@navecss/core": "workspace:*",
     "@navecss/tokens": "workspace:*",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitest/coverage-v8": "5.0.3",
+    "base-ui-react-floor": "npm:@base-ui/react@1.0.0",
+    "esbuild": "^0.28.1",
+    "jsdom": "^30.1.1",
     "postcss": "^8.5.28",
     "postcss-selector-parser": "^7.1.6",
     "postcss-value-parser": "^4.2.0",
+    "react": "^19.3.0",
+    "react-18": "npm:react@^18.3.1",
+    "react-dom": "^19.3.0",
+    "react-dom-18": "npm:react-dom@^18.3.1",
+    "rolldown": "1.2.12",
     "typescript": "6.0.3",
     "vitest": "5.0.3"
   },
@@ -41,5 +176,13 @@
   },
   "bugs": {
     "url": "https://github.com/navecss/navecss/issues"
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "peerDependencies": {
+    "@base-ui/react": "^1.0.0",
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19"
   }
 }
