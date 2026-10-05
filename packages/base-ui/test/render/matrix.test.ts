@@ -28,4 +28,15 @@ describe('the run matrix', () => {
       process.env.NAVE_BASE_UI === 'floor' ? FLOOR_VERSION : devDependency?.replace(/^\^/, ''),
     )
   })
+
+  it('declares the floor as the peer range and as the alias the floor runs install', () => {
+    const manifest = JSON.parse(readFileSync(path.join(PACKAGE_DIR, 'package.json'), 'utf8')) as {
+      devDependencies: Record<string, string>
+      peerDependencies: Record<string, string>
+    }
+    expect(manifest.peerDependencies['@base-ui/react']).toBe(`^${FLOOR_VERSION}`)
+    expect(manifest.devDependencies['base-ui-react-floor']).toBe(
+      `npm:@base-ui/react@${FLOOR_VERSION}`,
+    )
+  })
 })

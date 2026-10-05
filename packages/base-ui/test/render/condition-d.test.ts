@@ -20,9 +20,13 @@ interface Row {
   readonly acts?: readonly Act[]
   /**
   What the disabled part carries on the element the act is delivered to: an `aria-disabled="true"`,
-  a native `disabled`, or both. Left out where another row already pins it.
+  a native `disabled`, or both, and its `tabindex` where AC-26's row names one.
    */
-  readonly attrs?: { readonly aria: boolean; readonly native: boolean }
+  readonly attrs: {
+    readonly aria: boolean
+    readonly native: boolean
+    readonly tabindex?: string
+  }
   /**
   A custom tree, for the rows a scene cannot express.
    */
@@ -63,6 +67,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Menu.Item',
     name: 'Menu.Item',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({ ...openProps(), 'Menu.Item': { disabled: d, onClick: s } }),
     state: countOf('Menu.Popup'),
     subpath: 'menu',
@@ -70,6 +75,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Menu.CheckboxItem',
     name: 'Menu.CheckboxItem',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({
       ...openProps(),
       'Menu.CheckboxItem': { defaultChecked: false, disabled: d, onCheckedChange: s },
@@ -80,6 +86,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Menu.RadioItem',
     name: 'Menu.RadioItem',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({
       ...openProps(),
       'Menu.RadioGroup': { defaultValue: 'b', onValueChange: s },
@@ -92,6 +99,7 @@ const ROWS: readonly Row[] = [
     acts: ['click', 'enter', 'space'],
     marker: 'Menu.SubmenuTrigger',
     name: 'Menu.SubmenuTrigger',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({
       ...openProps(),
       'Menu.SubmenuRoot': { onOpenChange: s },
@@ -103,6 +111,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Select.Item',
     name: 'Select.Item',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({
       ...openProps(),
       // eslint-disable-next-line unicorn/no-null -- null is the Select's empty value, which undefined would leave uncontrolled
@@ -116,6 +125,7 @@ const ROWS: readonly Row[] = [
     marker: 'Tabs.Tab',
     index: 1,
     name: 'Tabs.Tab',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({ 'Tabs.Root': { onValueChange: s }, 'Tabs.Tab': { disabled: d } }),
     state: attribute('aria-selected'),
     subpath: 'tabs',
@@ -123,6 +133,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Accordion.Trigger',
     name: 'Accordion.Trigger (Item disabled)',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({
       'Accordion.Item': { disabled: d },
       'Accordion.Root': { onValueChange: s },
@@ -133,6 +144,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Accordion.Trigger',
     name: 'Accordion.Trigger (Root disabled)',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({ 'Accordion.Root': { disabled: d, onValueChange: s } }),
     state: attribute('aria-expanded'),
     subpath: 'accordion',
@@ -140,6 +152,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Collapsible.Trigger',
     name: 'Collapsible.Trigger (Root disabled)',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({ 'Collapsible.Root': { disabled: d, onOpenChange: s } }),
     state: attribute('aria-expanded'),
     subpath: 'collapsible',
@@ -155,6 +168,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Button',
     name: 'Button (disabled, focusableWhenDisabled)',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({ Button: { disabled: d, focusableWhenDisabled: true, onClick: s } }),
     state: attribute('class'),
     subpath: 'button',
@@ -162,6 +176,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Toolbar.Button',
     name: 'Toolbar.Button',
+    attrs: { aria: true, native: false },
     props: (d, s) => ({ 'Toolbar.Button': { disabled: d, onClick: s } }),
     state: attribute('class'),
     subpath: 'toolbar',
@@ -193,6 +208,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Toggle',
     name: 'Toggle (standalone)',
+    attrs: { aria: false, native: true },
     props: (d, s) => ({ Toggle: { disabled: d, onPressedChange: s } }),
     state: attribute('aria-pressed'),
     subpath: 'toggle',
@@ -201,6 +217,7 @@ const ROWS: readonly Row[] = [
     marker: 'Toggle',
     index: 1,
     name: 'Toggle in ToggleGroup',
+    attrs: { aria: true, native: true },
     props: (d, s) => ({ Toggle: { disabled: d }, ToggleGroup: { onValueChange: s } }),
     state: attribute('aria-pressed'),
     subpath: 'toggle-group',
@@ -208,6 +225,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Checkbox.Root',
     name: 'Checkbox.Root',
+    attrs: { aria: true, native: false, tabindex: '-1' },
     props: (d, s) => ({
       'Checkbox.Root': { defaultChecked: false, disabled: d, onCheckedChange: s },
     }),
@@ -218,6 +236,7 @@ const ROWS: readonly Row[] = [
     marker: 'Radio.Root',
     index: 1,
     name: 'Radio.Root in RadioGroup',
+    attrs: { aria: true, native: false, tabindex: '-1' },
     props: (d, s) => ({ RadioGroup: { onValueChange: s }, 'Radio.Root': { disabled: d } }),
     state: attribute('aria-checked'),
     subpath: 'radio-group',
@@ -225,6 +244,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Switch.Root',
     name: 'Switch.Root',
+    attrs: { aria: true, native: false, tabindex: '-1' },
     props: (d, s) => ({
       'Switch.Root': { defaultChecked: false, disabled: d, onCheckedChange: s },
     }),
@@ -234,6 +254,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Select.Trigger',
     name: 'Select.Trigger',
+    attrs: { aria: false, native: true, tabindex: '-1' },
     props: (d, s) => ({ 'Select.Root': { disabled: d, onOpenChange: s } }),
     state: attribute('aria-expanded'),
     subpath: 'select',
@@ -267,7 +288,7 @@ const ROWS: readonly Row[] = [
   },
   {
     acts: ['click'],
-    attrs: { aria: true, native: true },
+    attrs: { aria: true, native: true, tabindex: '-1' },
     marker: 'NumberField.Increment',
     name: 'NumberField.Increment (Root disabled)',
     props: (d, s) => ({ 'NumberField.Root': { disabled: d, onValueChange: s } }),
@@ -278,6 +299,7 @@ const ROWS: readonly Row[] = [
     acts: ['arrow-up'],
     marker: 'NumberField.Input',
     name: 'NumberField.Input (Root disabled)',
+    attrs: { aria: false, native: true },
     props: (d, s) => ({ 'NumberField.Root': { disabled: d, onValueChange: s } }),
     state: value,
     subpath: 'number-field',
@@ -394,17 +416,17 @@ describe('AC-base-ui-bridge-26: condition D, every disabled part is inactive, an
   }
 })
 
-const ROWS_WITH_ATTRS = ROWS.filter(({ attrs }) => attrs !== undefined)
-
 describe('AC-base-ui-bridge-26: the disabled part carries the attributes its row names', () => {
-  for (const row of ROWS_WITH_ATTRS) {
+  for (const row of ROWS) {
     // eslint-disable-next-line vitest/valid-title -- each row's own name is the title, a plain string
     it(row.name, async () => {
       const { target } = await renderRow(row, true, vi.fn())
+      const { aria, native, tabindex } = row.attrs
       expect({
         aria: target.getAttribute('aria-disabled') === 'true',
         native: target.hasAttribute('disabled'),
-      }).toEqual(row.attrs)
+        ...(tabindex !== undefined && { tabindex: target.getAttribute('tabindex') }),
+      }).toEqual({ aria, native, ...(tabindex !== undefined && { tabindex }) })
     })
   }
 })

@@ -3,8 +3,10 @@
  * UI attribute or variable its rules key on. The linkage scenario compares their union with the
  * pairs read out of the stylesheet, so a key added to a rule without a render row reds it. Each
  * render test file records the pairs its rows assert as they run (`support/row-pairs.ts`) and ends
- * by checking that its own table was recorded in full, so a row that is skipped or removed reds
- * the file instead of leaving its pairs listed here.
+ * by checking that its own table was recorded in full. That check holds one pair at a time: a
+ * pair that no row records any more reds the file, and a pair that several rows record (the
+ * `aria-disabled` of the items, say) stays recorded while any one of them runs. The disabled-part
+ * table has its own check that every part is still listed.
  */
 export type Pair = readonly [string, string]
 

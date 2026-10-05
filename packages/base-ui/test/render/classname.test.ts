@@ -20,6 +20,13 @@ const nave = await loadNave()
 
 afterEach(cleanup)
 
+// The scenes with a part that renders only once opened: the Panels of the disclosure components.
+const withPanelsOpen = (): Record<string, Props> => ({
+  ...openProps(),
+  'Accordion.Root': { defaultValue: ['a'] },
+  'Collapsible.Root': { defaultOpen: true },
+})
+
 const subpathOf = (part: string): string | undefined => {
   const top = part.split('.', 1)[0] ?? ''
   return SUBPATHS.find((subpath) => subpath.replaceAll('-', '').toLowerCase() === top.toLowerCase())
@@ -31,7 +38,7 @@ Which styled parts the scene of each subpath renders, by the subpath whose scene
 const renderedStyledParts = async (): Promise<Map<string, string[]>> => {
   const bySubpath = new Map<string, string[]>()
   for (const subpath of SUBPATHS) {
-    await render(scenes[subpath]?.render(bare, { props: openProps() }) as never)
+    await render(scenes[subpath]?.render(bare, { props: withPanelsOpen() }) as never)
     const present = new Set(marked().map(({ part }) => part))
     bySubpath.set(
       subpath,
@@ -105,7 +112,7 @@ const problemsOf = async (
 ): Promise<string[]> => {
   const received = new Map<string, unknown>()
   const props = Object.fromEntries(parts.map((part) => [part, form.props(part, received)]))
-  await render(scenes[subpath]?.render(nave, { props: { ...openProps(), ...props } }) as never)
+  await render(scenes[subpath]?.render(nave, { props: { ...withPanelsOpen(), ...props } }) as never)
   return parts.flatMap((part) => {
     const element = partsNamed(part)[0]
     const own = (tableP.get(part) ?? []).join(' ')
@@ -148,6 +155,14 @@ describe('AC-base-ui-bridge-10: className composes in both forms, and render car
       }
     }
     expect(problems).toEqual([])
+    // Every styled part was looked at, so no row passed without being composed.
+    const looked = new Set(styledParts.values().toArray().flat())
+    expect(
+      tableP
+        .keys()
+        .filter((part) => !looked.has(part))
+        .toArray(),
+    ).toEqual([])
   })
 
   it("hands a className function the part's state", async () => {

@@ -2,13 +2,14 @@ import { createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Source } from '../support/scenes.ts'
+import type { Pair } from '../support/vocabulary-pairs.ts'
 
-import { partsNamed } from '../support/dom.ts'
 import { act, cleanup, user } from '../support/react.ts'
-import { recordPairs, unrecordedPairs } from '../support/row-pairs.ts'
+import { recordCarried, recordPairs, recordRelated, unrecordedPairs } from '../support/row-pairs.ts'
 import { hasClass, hasItem, part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
+import { tableP } from '../support/table-p.ts'
 import { OVERLAY_PAIRS, pair } from '../support/vocabulary-pairs.ts'
 
 const nave: Source = await loadNave()
@@ -21,46 +22,64 @@ const settle = (): Promise<void> =>
 
 const panelSelector = (namespace: string): string => `[data-part="${CSS.escape(namespace)}.Panel"]`
 
-// Every attribute name carried by the Panels in an added node, the node itself included.
-const panelAttributeNamesIn = (node: Node, selector: string): string[] => {
+interface PanelAttribute {
+  readonly element: Element
+  readonly name: string
+}
+
+// Every attribute carried by the Panels in an added node, the node itself included.
+const panelAttributesIn = (node: Node, selector: string): PanelAttribute[] => {
   if (!(node instanceof Element)) {
     return []
   }
   return [node, ...node.querySelectorAll(selector)]
     .filter((target) => target.matches(selector))
-    .flatMap((target) => target.getAttributeNames())
+    .flatMap((element) => element.getAttributeNames().map((name) => ({ element, name })))
 }
 
-const panelAttributeNamesOf = (record: MutationRecord, selector: string): string[] => {
-  const isPanelAttribute =
+const panelAttributesOf = (record: MutationRecord, selector: string): PanelAttribute[] => {
+  const changed =
     record.type === 'attributes' &&
     record.target instanceof Element &&
     record.target.matches(selector)
-  const changed = isPanelAttribute ? [record.attributeName ?? ''] : []
-  const added = [...record.addedNodes].flatMap((node) => panelAttributeNamesIn(node, selector))
+      ? [{ element: record.target, name: record.attributeName ?? '' }]
+      : []
+  const added = [...record.addedNodes].flatMap((node) => panelAttributesIn(node, selector))
   return [...changed, ...added]
+}
+
+interface Seen {
+  /**
+  Every attribute name the Panel carried.
+   */
+  readonly names: Set<string>
+  /**
+  The (class, attribute) pairs of the Panel element as it was rendered.
+   */
+  readonly pairs: Pair[]
 }
 
 /**
  * Opens then closes the Panel and returns every attribute name it carried on the way, with or
- * without a transition on the Panel.
+ * without a transition on the Panel, and the pairs of its classes with those names.
  */
 const attributesSeen = async (
   subpath: string,
   namespace: string,
   hasTransition: boolean,
-): Promise<Set<string>> => {
+): Promise<Seen> => {
   const style = document.createElement('style')
   style.textContent = `[data-part="${namespace}.Panel"] { transition-property: height; transition-duration: 200ms }`
   if (hasTransition) {
     document.head.append(style)
   }
-  const names = new Set<string>()
+  const seen: Seen = { names: new Set<string>(), pairs: [] }
   const selector = panelSelector(namespace)
   const observer = new MutationObserver((records) => {
     for (const record of records) {
-      for (const name of panelAttributeNamesOf(record, selector)) {
-        names.add(name)
+      for (const { element, name } of panelAttributesOf(record, selector)) {
+        seen.names.add(name)
+        seen.pairs.push(...[...element.classList].map((cls) => [cls, name] as const))
       }
     }
   })
@@ -74,7 +93,7 @@ const attributesSeen = async (
   observer.disconnect()
   style.remove()
   await cleanup()
-  return names
+  return seen
 }
 
 const svgChild = (): unknown => createElement('svg', { 'data-test': 'svg', key: Math.random() })
@@ -117,12 +136,14 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
   for (const { cls, items, owner, positioner, subpath } of CASES) {
     it(`${positioner} carries ${items.join(' and ')}, and ${owner} sits inside it with its class`, async () => {
       await renderScene(nave, subpath, openProps())
-      const carrier = part(positioner)
+      const holder = part(positioner)
       const popup = part(owner)
-      expect(items.filter((item) => !hasItem(carrier, item))).toEqual([])
-      expect(popup !== undefined && carrier?.contains(popup) === true).toBe(true)
+      expect(items.filter((item) => !hasItem(holder, item))).toEqual([])
+      expect(popup !== undefined && holder?.contains(popup) === true).toBe(true)
       expect(hasClass(popup, `nave-base-ui-${cls}`)).toBe(true)
-      recordPairs(items.map((item) => pair(cls, item)))
+      for (const item of items) {
+        recordRelated(popup, holder, item)
+      }
     })
   }
 
@@ -139,7 +160,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
         const arrow = part(`${namespace}.Arrow`)
         expect(hasItem(arrow, 'data-side', side)).toBe(true)
         expect(hasClass(arrow, 'nave-base-ui-arrow')).toBe(true)
-        recordPairs(OVERLAY_PAIRS.arrow ?? [])
+        recordCarried(arrow, 'data-side', side)
       })
     }
   }
@@ -150,7 +171,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     const value = part('Select.Value')
     expect(hasItem(value, 'data-placeholder')).toBe(true)
     expect(hasClass(value, 'nave-base-ui-select-value')).toBe(true)
-    recordPairs(OVERLAY_PAIRS.placeholder ?? [])
+    recordCarried(value, 'data-placeholder')
   })
 })
 
@@ -165,23 +186,20 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
       const panel = part(`${namespace}.Panel`)
       expect(hasItem(panel, `--${subpath}-panel-height`)).toBe(true)
       expect(hasClass(panel, `nave-base-ui-${subpath}-panel`)).toBe(true)
-      recordPairs([pair(`${subpath}-panel`, `--${subpath}-panel-height`)])
+      recordCarried(panel, `--${subpath}-panel-height`)
     })
 
     it(`${namespace}: opening then closing is seen as data-starting-style then data-ending-style`, async () => {
-      const withStyle = await attributesSeen(subpath, namespace, true)
-      const styleNames = [...withStyle].filter((name) => name.endsWith('-style'))
+      const { names, pairs } = await attributesSeen(subpath, namespace, true)
+      const styleNames = [...names].filter((name) => name.endsWith('-style'))
       expect(styleNames.toSorted((a, b) => a.localeCompare(b))).toEqual([
         'data-ending-style',
         'data-starting-style',
       ])
       // The control: without the test stylesheet the exit is never observed.
       const withoutStyle = await attributesSeen(subpath, namespace, false)
-      expect(withoutStyle.has('data-ending-style')).toBe(false)
-      recordPairs([
-        pair(`${subpath}-panel`, 'data-ending-style'),
-        pair(`${subpath}-panel`, 'data-starting-style'),
-      ])
+      expect(withoutStyle.names.has('data-ending-style')).toBe(false)
+      recordPairs(pairs.filter(([, name]) => name.endsWith('-style')))
     })
 
     it(`${namespace}: the Trigger carries aria-expanded when opened, and the icon key reaches by shape`, async () => {
@@ -199,11 +217,12 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
         const trigger = part(`${namespace}.Trigger`)!
         await user().click(trigger)
         expect(trigger.getAttribute('aria-expanded')).toBe('true')
+        expect(hasClass(trigger, 'nave-base-ui-disclosure-icon')).toBe(true)
+        recordCarried(trigger, 'aria-expanded', 'true')
         widths.push(trigger.querySelectorAll(':scope > svg:last-child').length)
         await cleanup()
       }
       expect(widths).toEqual(SHAPES.map((shape) => shape.reached))
-      recordPairs(OVERLAY_PAIRS.disclosureIcon ?? [])
     })
 
     it(`${namespace}: the Panel's first and last element children are the ones the inset keys reach`, async () => {
@@ -228,7 +247,8 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
     expect(hasClass(list, 'nave-base-ui-tab-list')).toBe(true)
     expect(hasItem(indicator, 'data-orientation', 'vertical')).toBe(true)
     expect(hasClass(indicator, 'nave-base-ui-tab-indicator')).toBe(true)
-    recordPairs(OVERLAY_PAIRS.tabOrientation ?? [])
+    recordCarried(list, 'aria-orientation', 'vertical')
+    recordCarried(indicator, 'data-orientation', 'vertical')
   })
 
   it('Tabs: the Indicator carries the active-tab variables', async () => {
@@ -239,11 +259,25 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
         (item) => !hasItem(indicator, item),
       ),
     ).toEqual([])
-    recordPairs(OVERLAY_PAIRS.tabIndicatorVariables ?? [])
+    for (const item of [
+      '--active-tab-left',
+      '--active-tab-top',
+      '--active-tab-width',
+      '--active-tab-height',
+    ]) {
+      recordCarried(indicator, item)
+    }
   })
 
-  it('names every Tabs part it looks at', () => {
-    expect(partsNamed('Tabs.List')).toHaveLength(0)
+  it('names every Tabs part it looks at: each is rendered, with its class', async () => {
+    await renderScene(nave, 'tabs')
+    const names = ['Tabs.List', 'Tabs.Indicator']
+    expect(
+      names.filter((name) => {
+        const classes = tableP.get(name) ?? []
+        return classes.length === 0 || classes.some((cls) => !hasClass(part(name), cls))
+      }),
+    ).toEqual([])
   })
 })
 

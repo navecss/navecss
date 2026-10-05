@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Props, Source } from '../support/scenes.ts'
 
 import { cleanup, render } from '../support/react.ts'
-import { recordCarried, recordPairs, unrecordedPairs } from '../support/row-pairs.ts'
+import { recordCarried, recordRelated, unrecordedPairs } from '../support/row-pairs.ts'
 import { hasClass, hasItem, part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 import { topName } from '../support/subpaths.ts'
@@ -23,20 +23,18 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     await renderScene(nave, 'toggle-group')
     expect(hasItem(part('Toggle'), 'aria-pressed', 'true')).toBe(true)
     expect(hasClass(part('Toggle'), `${C}toggle`)).toBe(true)
-    recordPairs(CONTROL_PAIRS.pressed ?? [])
+    recordCarried(part('Toggle'), 'aria-pressed', 'true')
   })
 
   it('ToggleGroup and Toolbar.Group carry data-orientation when vertical, with the class', async () => {
     await renderScene(nave, 'toggle-group', { ToggleGroup: { orientation: 'vertical' } })
     expect(hasItem(part('ToggleGroup'), 'data-orientation', 'vertical')).toBe(true)
     expect(hasClass(part('ToggleGroup'), `${C}toggle-group`)).toBe(true)
+    recordCarried(part('ToggleGroup'), 'data-orientation', 'vertical')
     await renderScene(nave, 'toolbar', { 'Toolbar.Root': { orientation: 'vertical' } })
     expect(hasItem(part('Toolbar.Group'), 'data-orientation', 'vertical')).toBe(true)
     expect(hasClass(part('Toolbar.Group'), `${C}toolbar-group`)).toBe(true)
-    recordPairs([
-      pair('toggle-group', 'data-orientation'),
-      pair('toolbar-group', 'data-orientation'),
-    ])
+    recordCarried(part('Toolbar.Group'), 'data-orientation', 'vertical')
   })
 
   it('Toolbar carries aria-orientation, and its Separator the opposite value, with the classes', async () => {
@@ -45,10 +43,8 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     expect(hasClass(part('Toolbar.Root'), `${C}toolbar`)).toBe(true)
     expect(hasItem(part('Toolbar.Separator'), 'aria-orientation', 'horizontal')).toBe(true)
     expect(hasClass(part('Toolbar.Separator'), `${C}toolbar-separator`)).toBe(true)
-    recordPairs([
-      pair('toolbar', 'aria-orientation'),
-      pair('toolbar-separator', 'aria-orientation'),
-    ])
+    recordCarried(part('Toolbar.Root'), 'aria-orientation', 'vertical')
+    recordCarried(part('Toolbar.Separator'), 'aria-orientation', 'horizontal')
   })
 
   it('Slider parts carry data-orientation when vertical, with the classes', async () => {
@@ -60,7 +56,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     ] as const) {
       expect(hasItem(part(marker), 'data-orientation', 'vertical')).toBe(true)
       expect(hasClass(part(marker), `${C}${name}`)).toBe(true)
-      recordPairs([pair(name, 'data-orientation')])
+      recordCarried(part(marker), 'data-orientation', 'vertical')
     }
   })
 
@@ -69,7 +65,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     expect(hasItem(part('Checkbox.Root'), 'aria-checked', 'true')).toBe(true)
     expect(part('Checkbox.Indicator')?.parentElement).toBe(part('Checkbox.Root'))
     expect(hasClass(part('Checkbox.Indicator'), `${C}checkbox-indicator`)).toBe(true)
-    recordPairs([pair('checkbox-indicator', 'aria-checked')])
+    recordRelated(part('Checkbox.Indicator'), part('Checkbox.Root'), 'aria-checked', 'true')
     await renderScene(nave, 'checkbox', { 'Checkbox.Root': { indeterminate: true } })
     expect(hasItem(part('Checkbox.Root'), 'aria-checked', 'mixed')).toBe(true)
     expect(part('Checkbox.Indicator')?.parentElement).toBe(part('Checkbox.Root'))
@@ -80,7 +76,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     expect(hasItem(part('Switch.Root'), 'aria-checked', 'true')).toBe(true)
     expect(part('Switch.Thumb')?.parentElement).toBe(part('Switch.Root'))
     expect(hasClass(part('Switch.Thumb'), `${C}switch-thumb`)).toBe(true)
-    recordPairs([pair('switch-thumb', 'aria-checked')])
+    recordRelated(part('Switch.Thumb'), part('Switch.Root'), 'aria-checked', 'true')
   })
 
   it('an invalid Field gives aria-invalid to each control, with the class', async () => {
@@ -123,7 +119,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
       if (!hasItem(element, 'aria-invalid', 'true') || !hasClass(element, `${C}${cls}`)) {
         problems.push(marker)
       } else {
-        recordPairs([pair(cls, 'aria-invalid')])
+        recordCarried(element, 'aria-invalid', 'true')
       }
     }
     expect(problems).toEqual([])
@@ -148,20 +144,18 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
     expect(hasItem(part('NumberField.Input'), 'aria-invalid', 'true')).toBe(true)
     expect(part('NumberField.Input')?.parentElement).toBe(part('NumberField.Group'))
     expect(hasClass(part('NumberField.Group'), `${C}number-field-group`)).toBe(true)
-    recordPairs([pair('number-field-group', 'aria-invalid')])
+    recordRelated(part('NumberField.Group'), part('NumberField.Input'), 'aria-invalid', 'true')
   })
 
   it('NumberField and Slider carry data-disabled when disabled, with the class', async () => {
     await renderScene(nave, 'number-field', { 'NumberField.Root': { disabled: true } })
     expect(hasItem(part('NumberField.Group'), 'data-disabled')).toBe(true)
     expect(hasClass(part('NumberField.Group'), `${C}number-field-group`)).toBe(true)
+    recordCarried(part('NumberField.Group'), 'data-disabled')
     await renderScene(nave, 'slider', { 'Slider.Root': { disabled: true } })
     expect(hasItem(part('Slider.Thumb'), 'data-disabled')).toBe(true)
     expect(hasClass(part('Slider.Thumb'), `${C}slider-thumb`)).toBe(true)
-    recordPairs([
-      pair('number-field-group', 'data-disabled'),
-      pair('slider-thumb', 'data-disabled'),
-    ])
+    recordCarried(part('Slider.Thumb'), 'data-disabled')
   })
 })
 
@@ -316,6 +310,29 @@ describe('AC-base-ui-bridge-22: every disabled part carries the state the styles
       recordCarried(element, 'aria-disabled', 'true')
     })
   }
+
+  it('has an entry for every disabled part AC-26 names', () => {
+    expect(DISABLED.map(({ marker, subpath }) => `${subpath}: ${marker}`)).toEqual([
+      'menu: Menu.Item',
+      'menu: Menu.CheckboxItem',
+      'menu: Menu.RadioItem',
+      'menu: Menu.SubmenuTrigger',
+      'select: Select.Item',
+      'tabs: Tabs.Tab',
+      'accordion: Accordion.Trigger',
+      'collapsible: Collapsible.Trigger',
+      'button: Button',
+      'toolbar: Toolbar.Button',
+      'toolbar: Toolbar.Input',
+      'checkbox: Checkbox.Root',
+      'radio: Radio.Root',
+      'toggle: Toggle',
+      'toggle-group: Toggle',
+      'switch: Switch.Root',
+      'number-field: NumberField.Increment',
+      'select: Select.Trigger',
+    ])
+  })
 
   it('Select.Trigger carries aria-disabled when it is not a native button, whichever part disables it', async () => {
     const asDiv = { nativeButton: false, render: createElement('div') }
