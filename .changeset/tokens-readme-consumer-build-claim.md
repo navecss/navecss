@@ -3,6 +3,6 @@
 ---
 
 The README no longer says a check run in a consumer's build "reports" its findings. The consumer build
-runs one contrast check and discards its result, so nothing is printed or returned. No contrast check
-it runs can fail the build. The sentence now says exactly that, and is scoped to contrast checks this
-entry point runs. No behaviour changes.
+runs one contrast check and discards its result. The sentence now says that no contrast check this
+entry point runs over a consumer's values can fail the build, and that none prints or returns a
+result. No behaviour changes.

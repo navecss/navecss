@@ -164,7 +164,8 @@ export const FEEDBACK_SHARED_IDENTITY_NOTICE =
  * R27: the CANONICAL statement of this entry point's contrast-threshold posture. Cleared
  * verbatim by the project's accessibility steward on the applied path (2026-08-22), and
  * re-cleared with a new final sentence on 2026-09-07; sentences one through four are
- * byte-identical across the two.
+ * byte-identical across the two. A re-clearance on 2026-10-04 then replaced sentence four
+ * alone (the one about checks run over a consumer's values).
  *
  * The old final sentence pointed at an internal tracking id, an identifier no reader of the
  * published package can resolve. Qualifying it was not a repair, and that is the part worth
