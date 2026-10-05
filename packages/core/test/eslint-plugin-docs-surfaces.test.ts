@@ -124,7 +124,10 @@ describe('AC-eslint-plugin-23: a changeset releases @navecss/core at patch (23d)
     ).some(
       (entry) => entry.kind === 'Patch Changes' && entry.text.includes('@navecss/eslint-plugin'),
     )
-    expect(isPending || isReleased).toBe(true)
+    expect(
+      isPending || isReleased,
+      `no pending changeset bumps @navecss/core at patch (changeset files: ${files.join(', ') || 'none'}), and no released Patch Changes entry in core's CHANGELOG.md mentions @navecss/eslint-plugin`,
+    ).toBe(true)
   })
 })
 

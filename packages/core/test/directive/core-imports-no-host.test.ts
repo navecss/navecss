@@ -43,8 +43,7 @@ const IMPORT_SPECIFIER = /\bimport\s+(?:type\s+)?(?:[\s\S]*?\bfrom\s+)?['"]([^'"
 const DYNAMIC_IMPORT_SPECIFIER = /\bimport\(\s*['"]([^'"]+)['"]/g
 
 function extractSpecifiers(source: string): string[] {
-  const specifiers: string[] = []
-  for (const match of source.matchAll(IMPORT_SPECIFIER)) specifiers.push(match[1]!)
+  const specifiers: string[] = Array.from(source.matchAll(IMPORT_SPECIFIER), (match) => match[1]!)
   for (const match of source.matchAll(DYNAMIC_IMPORT_SPECIFIER)) specifiers.push(match[1]!)
   return specifiers
 }
@@ -56,8 +55,8 @@ function extractSpecifiers(source: string): string[] {
  * which the workspace resolves outside this package's own `src/`).
  */
 function walkSourceGraph(entries: readonly string[]): {
-  files: Set<string>
   bareSpecifiers: Set<string>
+  files: Set<string>
 } {
   const files = new Set<string>()
   const bareSpecifiers = new Set<string>()
@@ -71,12 +70,12 @@ function walkSourceGraph(entries: readonly string[]): {
 
     const source = readFileSync(absolute, 'utf8')
     for (const specifier of extractSpecifiers(source)) {
-      if (!specifier.startsWith('.')) {
+      if (specifier.startsWith('.')) {
+        const next = path.resolve(path.dirname(absolute), specifier)
+        queue.push(path.relative(SRC, next))
+      } else {
         bareSpecifiers.add(specifier)
-        continue
       }
-      const next = path.resolve(path.dirname(absolute), specifier)
-      queue.push(path.relative(SRC, next))
     }
   }
 
@@ -85,6 +84,20 @@ function walkSourceGraph(entries: readonly string[]): {
 
 function isAllowedBareSpecifier(specifier: string): boolean {
   return specifier.startsWith('node:') || specifier.startsWith('@navecss/tokens')
+}
+
+/**
+ * The real guard: none of `FORBIDDEN_HOSTS` appears in `bareSpecifiers`. A
+ * function, not inlined into the test body below, so the control can run
+ * this SAME check against a tampered specifier set and show it throws,
+ * rather than asserting a fact about the tampered text alone that never
+ * exercises the guard at all.
+ */
+function assertNoForbiddenHost(bareSpecifiers: ReadonlySet<string>): void {
+  for (const host of FORBIDDEN_HOSTS) {
+    const hit = [...bareSpecifiers].find((specifier) => specifier.startsWith(host))
+    expect(hit, `${host} must not appear in the core's import graph`).toBeUndefined()
+  }
 }
 
 describe('AC-directive-core-02 — the core imports no host', () => {
@@ -110,24 +123,10 @@ describe('AC-directive-core-02 — the core imports no host', () => {
     expect(disallowed).toEqual([])
   })
 
-  /**
-   * The real guard: none of `FORBIDDEN_HOSTS` appears in `bareSpecifiers`. A
-   * function, not inlined into the test body below, so the control can run
-   * this SAME check against a tampered specifier set and show it throws,
-   * rather than asserting a fact about the tampered text alone that never
-   * exercises the guard at all.
-   */
-  function assertNoForbiddenHost(bareSpecifiers: ReadonlySet<string>): void {
-    for (const host of FORBIDDEN_HOSTS) {
-      const hit = [...bareSpecifiers].find((specifier) => specifier.startsWith(host))
-      expect(hit, `${host} must not appear in the core's import graph`).toBeUndefined()
-    }
-  }
-
   it('never imports a host build tool, directly or transitively', () => {
     const { bareSpecifiers } = walkSourceGraph(CORE_ENTRIES)
 
-    assertNoForbiddenHost(bareSpecifiers)
+    expect(() => assertNoForbiddenHost(bareSpecifiers)).not.toThrow()
   })
 
   it('control: a scratch copy importing postcss from expandText’s own module reds the check', () => {
@@ -166,9 +165,8 @@ describe('AC-directive-core-02 — the core imports no host', () => {
         /\.name === (['"])vite:css-post\1/g,
         '',
       )
-      for (const host of FORBIDDEN_HOSTS.filter(
-        (h) => file !== 'vite.js' || h !== 'lightningcss',
-      )) {
+      const scannedHosts = FORBIDDEN_HOSTS.filter((h) => file !== 'vite.js' || h !== 'lightningcss')
+      for (const host of scannedHosts) {
         expect(
           source.includes(`'${host}`) || source.includes(`"${host}`),
           `${file} mentions ${host}`,
@@ -224,11 +222,12 @@ describe('AC-directive-core-02 — the core imports no host', () => {
       ]
       const swapped = `declarations: {\n${indentB}${lineB}\n${indentA}${lineA}\n`
       const mutated =
-        original.slice(0, truncateAt) + original.slice(truncateAt).replace(wholeMatch, swapped)
+        original.slice(0, truncateAt) +
+        original.slice(truncateAt).replace(wholeMatch, () => swapped)
       expect(mutated).not.toBe(original)
       writeFileSync(atomsPath, mutated)
 
-      await new Promise<void>((resolvePromise, rejectPromise) => {
+      await new Promise<void>((resolve, reject) => {
         const child = spawn(process.execPath, [path.join(scratch, 'scripts', 'build-css.ts')], {
           cwd: scratch,
         })
@@ -236,11 +235,9 @@ describe('AC-directive-core-02 — the core imports no host', () => {
         child.stderr.on('data', (chunk: Buffer) => {
           stderr += chunk.toString()
         })
-        child.on('error', rejectPromise)
+        child.on('error', reject)
         child.on('exit', (code) =>
-          code === 0
-            ? resolvePromise()
-            : rejectPromise(new Error(`build-css.ts exited ${code}\n${stderr}`)),
+          code === 0 ? resolve() : reject(new Error(`build-css.ts exited ${code}\n${stderr}`)),
         )
       })
 

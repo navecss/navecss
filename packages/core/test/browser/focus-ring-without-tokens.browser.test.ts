@@ -17,12 +17,12 @@ import { describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
 import TOKENS_CSS from '../../../tokens/dist/tokens.css?raw'
-import CORE_RESET_CSS from '../../dist/reset.css?raw'
 import CORE_ATOMIC_CSS from '../../dist/atomic.css?raw'
+import CORE_RESET_CSS from '../../dist/reset.css?raw'
 
 function mount(...layers: string[]): void {
   document.head.querySelectorAll('style[data-fixture]').forEach((node) => node.remove())
-  document.body.innerHTML = ''
+  document.body.replaceChildren()
   const style = document.createElement('style')
   style.dataset.fixture = 'true'
   style.textContent = [...layers, CORE_RESET_CSS, CORE_ATOMIC_CSS].join('\n')

@@ -7,7 +7,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 import { readSections } from '../scripts/generate-atoms-doc.ts'
@@ -17,7 +16,7 @@ import { atoms } from '../src/atoms.ts'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
 interface CommittedCssData {
-  atDirectives: Array<{ description: { value: string } }>
+  atDirectives: { description: { value: string } }[]
 }
 
 describe('AC-consumer-constraints-07: nave.css-data.json stays in sync with src/atoms.ts', () => {
@@ -33,15 +32,30 @@ describe('AC-consumer-constraints-07: nave.css-data.json stays in sync with src/
     // dropped section, a broken join) could pass here while the shipped description was wrong.
     const committed = JSON.parse(readFileSync(OUTPUT_PATH, 'utf8')) as CommittedCssData
     const value = committed.atDirectives[0]!.description.value
-    const listItems = [...value.matchAll(/^- \*\*(.+):\*\* (.+)$/gm)]
+    const listItems = value.matchAll(/^- \*\*(.+):\*\* (.+)$/gm).toArray()
     const sections = listItems.map((match) => match[1]!)
     const names = listItems.flatMap((match) =>
-      [...match[2]!.matchAll(/`([^`]+)`/g)].map((codeSpan) => codeSpan[1]!),
+      match[2]!
+        .matchAll(/`([^`]+)`/g)
+        .map((codeSpan) => codeSpan[1]!)
+        .toArray(),
     )
     expect(new Set(names)).toEqual(new Set(Object.keys(atoms)))
-    expect(sections).toEqual([...readSections().keys()])
+    expect(sections).toEqual(readSections().keys().toArray())
   })
 })
+
+/**
+ * The `label`s of every source in `sources` whose `text` mentions `package.json`. A real scan
+ * function, not a bare regex match on a string literal: calling it is what makes "the widened
+ * scan catches the plant" a claim about the scan's own behaviour rather than a fact about the
+ * plant string being true by construction.
+ */
+function sourcesMentioningPackageJson(sources: { label: string; text: string }[]): string[] {
+  return sources
+    .filter((source) => source.text.includes('package.json'))
+    .map((source) => source.label)
+}
 
 describe('AC-consumer-constraints-01: immune to a package-version change', () => {
   it('embeds neither package.json version string', async () => {
@@ -58,18 +72,6 @@ describe('AC-consumer-constraints-01: immune to a package-version change', () =>
 
   const cssDataSrc = readFileSync(path.resolve(HERE, '../scripts/generate-css-data.ts'), 'utf8')
   const atomsDocSrc = readFileSync(path.resolve(HERE, '../scripts/generate-atoms-doc.ts'), 'utf8')
-
-  /**
-   * The `label`s of every source in `sources` whose `text` mentions `package.json`. A real scan
-   * function, not a bare regex match on a string literal: calling it is what makes "the widened
-   * scan catches the plant" a claim about the scan's own behaviour rather than a fact about the
-   * plant string being true by construction.
-   */
-  function sourcesMentioningPackageJson(sources: Array<{ label: string; text: string }>): string[] {
-    return sources
-      .filter((source) => /package\.json/.test(source.text))
-      .map((source) => source.label)
-  }
 
   // Structural rather than a scratch-copy dual run: `generate()` never reads either package.json,
   // only `src/atoms.ts` (via `readSections`, itself defined in `generate-atoms-doc.ts`), so its

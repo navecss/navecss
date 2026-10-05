@@ -25,11 +25,11 @@ const manifest = JSON.parse(readFileSync(path.join(CORE_ROOT, 'package.json'), '
  * level.
  */
 function section(markdown: string, heading: string): string {
-  const level = heading.match(/^#+/)![0].length
+  const level = /^#+/.exec(heading)![0].length
   const start = markdown.indexOf(`\n${heading}\n`)
   expect(start, `no "${heading}" heading`).toBeGreaterThanOrEqual(0)
   const rest = markdown.slice(start + heading.length + 2)
-  const next = new RegExp(`\\n#{1,${level}} `).exec(rest)
+  const next = new RegExp(String.raw`\n#{1,${level}} `).exec(rest)
   return next ? rest.slice(0, next.index) : rest
 }
 

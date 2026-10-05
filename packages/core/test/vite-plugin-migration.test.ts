@@ -20,6 +20,7 @@ const FILES = {
 
 let app: ScratchApp
 beforeAll(() => {
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- the setup hook builds the app the suite shares; a hook cannot return it
   app = makeApp(FILES)
 })
 afterAll(() => app?.dispose())

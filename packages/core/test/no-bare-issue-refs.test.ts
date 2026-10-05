@@ -51,13 +51,13 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Worker } from 'node:worker_threads'
-
 import { describe, expect, it } from 'vitest'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const PACKAGE_DIR = 'packages/core/'
 
-/** A bare `#<digits>`, excluded when the character right before `#` is a word character — the
+/**
+ * A bare `#<digits>`, excluded when the character right before `#` is a word character — the
  * shape a fully qualified `owner/repo#N` reference (e.g. `owner/repo#N`) always has right there,
  * since `repo` ends in a word character. Nothing else is excused by this lookbehind. A URL or SVG
  * fragment written directly after `url(` or `href=` and a quote is excused separately, by
@@ -83,7 +83,8 @@ const PACKAGE_DIR = 'packages/core/'
  * gate. Four digits is a deliberate bound rather than an open one: it covers every issue
  * number this repository can reach for the life of this pin (it is in the low hundreds),
  * while excluding the 6- and 8-digit hex forms outright. The 3- and 4-digit hex shorthands
- * are what the `.css` skip covers, since that is the only place this package writes them. */
+ * are what the `.css` skip covers, since that is the only place this package writes them.
+ */
 const BARE_ISSUE_REF = /(?<!\w)#(\d{1,4})(?!\d)/g
 
 /**
@@ -131,13 +132,15 @@ const CSS_VALUE_KEYWORDS = [
   'auto',
 ].join('|')
 
-/** The value segment between a colour property/function's operator and the `#` under test has
+/**
+ * The value segment between a colour property/function's operator and the `#` under test has
  * to look like an actual CSS value — whitespace, punctuation, numbers with units, hex tokens, a
  * function name immediately followed by `(`, or the small keyword set above — never open-ended
  * prose. This is what stops a colour keyword earlier on a line from excusing an unrelated real
  * reference written later on the SAME line (a hex colour value followed by ", see " and a bare
  * reference, all on one `background:` line, must still report the reference), which an earlier
- * `[^;{]*$` tail did not catch. */
+ * `[^;{]*$` tail did not catch.
+ */
 // The numeric branch is forced MAXIMAL with a trailing `(?![\d.])`: without it, `\d+` sitting
 // inside an alternation that is itself starred lets a run of N digits be partitioned in 2^(N-1)
 // ways, and when the tail then fails to reach `$` the engine walks every partition before giving
@@ -148,10 +151,12 @@ const CSS_VALUE_KEYWORDS = [
 // before/after; mirrors the canonical copy in `scripts/check-no-bare-issue-refs.test.mjs`.
 const CSS_VALUE_TOKEN = String.raw`(?:\s|[,()'"/]|\d+(?:\.\d+)?[a-z%]*(?![\d.])|#[0-9a-fA-F]+|[a-zA-Z][\w-]*(?=\()|\b(?:${CSS_VALUE_KEYWORDS})\b)`
 
-/** A colour written in a CSS declaration, a presentation attribute, or a colour function
+/**
+ * A colour written in a CSS declaration, a presentation attribute, or a colour function
  * (including `light-dark(...)`), where the property or function name immediately before the
  * `#` says what the digits are, and the value segment in between is bounded by `;`, `{` and `}`
- * as well as by the value-shape gate above. */
+ * as well as by the value-shape gate above.
+ */
 const COLOUR_DECLARATION = new RegExp(
   String.raw`(?:color|background|border|outline|fill|stroke|shadow|gradient|light-dark)[\w-]*\s*[:(=]\s*${CSS_VALUE_TOKEN}*$`,
   'i',
@@ -209,9 +214,11 @@ function listTrackedCoreCssFiles(): string[] {
   return listAllTrackedCoreFiles().filter((file) => file.endsWith('.css'))
 }
 
-/** Bare issue numbers found in a single LINE, paired with lawfulness judged against that same
+/**
+ * Bare issue numbers found in a single LINE, paired with lawfulness judged against that same
  * line — matching the repo-wide guard's per-line scoping, so the two copies agree on any text
- * that spans more than one physical line differently. */
+ * that spans more than one physical line differently.
+ */
 function sitesInLine(line: string): number[] {
   return line
     .matchAll(BARE_ISSUE_REF)
@@ -220,19 +227,23 @@ function sitesInLine(line: string): number[] {
     .toArray()
 }
 
-/** Matches a `/* ... *\/` block and captures its body, across as many lines as the comment
+/**
+ * Matches a `/* ... *\/` block and captures its body, across as many lines as the comment
  * spans. Used only to re-scan the `.css` files the main check skips: a comment body can never
  * contain a lawful hex colour (those only occur in declarations), so running `BARE_ISSUE_REF`
- * against comment bodies excludes hex colours by construction, with no digit-count guesswork. */
+ * against comment bodies excludes hex colours by construction, with no digit-count guesswork.
+ */
 const CSS_COMMENT = /\/\*([\s\S]*?)\*\//g
 
 function lineNumberAt(text: string, index: number): number {
   return text.slice(0, index).split('\n').length
 }
 
-/** Bare issue numbers found inside `/* ... *\/` comment bodies only, paired with the 1-based
+/**
+ * Bare issue numbers found inside `/* ... *\/` comment bodies only, paired with the 1-based
  * line each occurs on (computed from the absolute offset, since a comment body can span
- * several lines). Declarations (where a hex colour could appear) are never visited. */
+ * several lines). Declarations (where a hex colour could appear) are never visited.
+ */
 function findBareIssueSitesInCssComments(text: string): { line: number; n: number }[] {
   const sites: { line: number; n: number }[] = []
   for (const comment of text.matchAll(CSS_COMMENT)) {
@@ -489,7 +500,7 @@ describe('isLawfulNonReference: the excluded shapes (ported, both directions)', 
 
 /**
  * Runs `COLOUR_DECLARATION.test(input)` inside a worker thread and resolves with the elapsed
- * milliseconds, or `null` if it has not finished within `timeoutMs`. A hard `timeoutMs` bound on
+ * milliseconds, or `undefined` if it has not finished within `timeoutMs`. A hard `timeoutMs` bound on
  * `COLOUR_DECLARATION.test()` itself cannot be enforced on the MAIN thread: the call is
  * synchronous and, when it backtracks catastrophically, blocks the event loop outright, so a
  * `setTimeout` racing it on the same thread never gets to fire. Running it inside a `Worker` and
@@ -502,7 +513,7 @@ describe('isLawfulNonReference: the excluded shapes (ported, both directions)', 
 function measureColourDeclarationOnWorker(
   input: string,
   timeoutMs: number,
-): Promise<number | null> {
+): Promise<number | undefined> {
   return new Promise((resolve) => {
     const workerSource = `
       const { parentPort, workerData } = require('node:worker_threads')
@@ -515,25 +526,25 @@ function measureColourDeclarationOnWorker(
       eval: true,
       workerData: { source: COLOUR_DECLARATION.source, flags: COLOUR_DECLARATION.flags, input },
     })
-    let settled = false
+    let isSettled = false
     const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      worker.terminate()
-      resolve(null)
+      if (isSettled) return
+      isSettled = true
+      void worker.terminate()
+      resolve(undefined)
     }, timeoutMs)
     worker.once('message', (elapsedMs: number) => {
-      if (settled) return
-      settled = true
+      if (isSettled) return
+      isSettled = true
       clearTimeout(timer)
-      worker.terminate()
+      void worker.terminate()
       resolve(elapsedMs)
     })
     worker.once('error', () => {
-      if (settled) return
-      settled = true
+      if (isSettled) return
+      isSettled = true
       clearTimeout(timer)
-      resolve(null)
+      resolve(undefined)
     })
   })
 }
@@ -562,7 +573,7 @@ describe('CSS_VALUE_TOKEN stays linear', () => {
       `COLOUR_DECLARATION.test() on a 40-digit run did not finish within ${TIMEOUT_MS}ms; the ` +
         'numeric branch of CSS_VALUE_TOKEN has regained ambiguous alternation over `\\d+` ' +
         'under a `*` and is catastrophically backtracking again',
-    ).not.toBeNull()
+    ).toBeDefined()
     expect(
       elapsedMs,
       `COLOUR_DECLARATION.test() took ${elapsedMs}ms on a 40-digit run; expected well under a ` +

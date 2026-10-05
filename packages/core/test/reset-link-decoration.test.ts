@@ -18,7 +18,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
@@ -26,14 +25,18 @@ const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist
 
 const distCssFiles = readdirSync(DIST).filter((file) => file.endsWith('.css'))
 
-/** Matches `text-decoration: none` (with or without !important), any casing;
- * also catches the longhand `text-decoration-line: none`. */
+/**
+ * Matches `text-decoration: none` (with or without !important), any casing;
+ * also catches the longhand `text-decoration-line: none`.
+ */
 const REMOVES_DECORATION = /text-decoration(-line)?\s*:\s*none\b/i
 
-/** A selector compound that targets the anchor element itself: a bare `a`,
+/**
+ * A selector compound that targets the anchor element itself: a bare `a`,
  * optionally with pseudo-classes/attributes/classes/ids attached, as the
  * rightmost component of a (possibly descendant/child) selector. Does not
- * match tags that merely contain "a" (e.g. `abbr`, `area`, `.card`). */
+ * match tags that merely contain "a" (e.g. `abbr`, `area`, `.card`).
+ */
 const TARGETS_ANCHOR_ELEMENT = /(^|[\s>+~,])a(?=$|[.:#[\s>+~])/i
 
 describe('shipped CSS never strips text-decoration on a', () => {
@@ -43,13 +46,15 @@ describe('shipped CSS never strips text-decoration on a', () => {
     const offenders: string[] = []
 
     root.walkRules((rule) => {
-      const ownsDecorationRemoval = rule.nodes.some(
+      const hasDecorationRemoval = rule.nodes.some(
         (node) => node.type === 'decl' && REMOVES_DECORATION.test(`${node.prop}: ${node.value}`),
       )
-      if (!ownsDecorationRemoval) return
+      if (!hasDecorationRemoval) return
 
-      const targetsAnchor = rule.selectors.some((selector) => TARGETS_ANCHOR_ELEMENT.test(selector))
-      if (targetsAnchor) offenders.push(rule.selector)
+      const hasAnchorTarget = rule.selectors.some((selector) =>
+        TARGETS_ANCHOR_ELEMENT.test(selector),
+      )
+      if (hasAnchorTarget) offenders.push(rule.selector)
     })
 
     expect(

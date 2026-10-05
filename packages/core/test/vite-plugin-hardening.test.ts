@@ -12,15 +12,18 @@ import { describe, expect, it } from 'vitest'
 
 import type { AtomDefinition } from '../src/atoms.ts'
 
-import { foldLocated } from '../src/directive/fold.ts'
 import { formatFinding } from '../src/directive/findings.ts'
+import { foldLocated } from '../src/directive/fold.ts'
 import { applyExtendModule } from '../src/postcss-extend-module.ts'
 import { validateExtendAtoms } from '../src/validate-extend-atoms.ts'
 import { validateExtendAtomsHostFree } from '../src/validate-extend-host-free.ts'
 import { dropLightningNaveWarning } from '../src/vite-logger.ts'
 import { runHook } from './helpers/vite-hook.ts'
 
-const refuses = (validate: (extend: Record<string, AtomDefinition>) => void, extend: unknown) => {
+const isRefused = (
+  validate: (extend: Record<string, AtomDefinition>) => void,
+  extend: unknown,
+): boolean => {
   try {
     validate(extend as Record<string, AtomDefinition>)
     return false
@@ -53,15 +56,15 @@ describe('a nested extend shape that is not a plain object is refused, not rende
   ]
 
   it.each(shapes)('%s, in both validators', (_name, extend) => {
-    expect(refuses(validateExtendAtoms, extend)).toBe(true)
-    expect(refuses(validateExtendAtomsHostFree, extend)).toBe(true)
+    expect(isRefused(validateExtendAtoms, extend)).toBe(true)
+    expect(isRefused(validateExtendAtomsHostFree, extend)).toBe(true)
   })
 
   it('still lets an empty or absent nested map through', () => {
     const ok = { x: { declarations: {}, pseudos: {}, media: { '(x)': { declarations: {} } } } }
 
-    expect(refuses(validateExtendAtoms, ok)).toBe(false)
-    expect(refuses(validateExtendAtomsHostFree, ok)).toBe(false)
+    expect(isRefused(validateExtendAtoms, ok)).toBe(false)
+    expect(isRefused(validateExtendAtomsHostFree, ok)).toBe(false)
   })
 
   it('the Vite plugin refuses an array of pseudo declarations before it can be spliced', async () => {
@@ -161,15 +164,18 @@ describe('a diagnostic’s position through the source map', () => {
   })
 })
 
-describe('the Lightning CSS warning filter’s boundary', () => {
-  function warnings(...messages: string[]): string[] {
-    const received: string[] = []
-    const logger = { warn: (message: string) => void received.push(message) }
-    dropLightningNaveWarning(logger)
-    for (const message of messages) logger.warn(message)
-    return received
-  }
+/**
+ * What a logger passed through `dropLightningNaveWarning` still receives after `messages` are warned.
+ */
+function warnings(...messages: string[]): string[] {
+  const received: string[] = []
+  const logger = { warn: (message: string) => void received.push(message) }
+  dropLightningNaveWarning(logger)
+  for (const message of messages) logger.warn(message)
+  return received
+}
 
+describe('the Lightning CSS warning filter’s boundary', () => {
   it('drops the @nave warning and keeps another at-rule’s, including one that extends the name', () => {
     expect(
       warnings(
@@ -215,21 +221,21 @@ describe('the Lightning CSS warning filter’s boundary', () => {
 
 describe('an escaped comment opener inside a string is plain text to both validators', () => {
   it.each([
-    ['a declaration value', { x: { declarations: { content: '"a\\/*b"' } } }],
+    ['a declaration value', { x: { declarations: { content: String.raw`"a\/*b"` } } }],
     [
       'an attribute selector',
       { x: { declarations: {}, pseudos: { '[a="\\/*"]': { color: 'red' } } } },
     ],
   ])('%s is accepted by both', (_name, extend) => {
-    expect(refuses(validateExtendAtoms, extend)).toBe(false)
-    expect(refuses(validateExtendAtomsHostFree, extend)).toBe(false)
+    expect(isRefused(validateExtendAtoms, extend)).toBe(false)
+    expect(isRefused(validateExtendAtomsHostFree, extend)).toBe(false)
   })
 
   it('outside a string it is still refused by both', () => {
-    const extend = { x: { declarations: { color: 'red\\/* c */' } } }
+    const extend = { x: { declarations: { color: String.raw`red\/* c */` } } }
 
-    expect(refuses(validateExtendAtoms, extend)).toBe(true)
-    expect(refuses(validateExtendAtomsHostFree, extend)).toBe(true)
+    expect(isRefused(validateExtendAtoms, extend)).toBe(true)
+    expect(isRefused(validateExtendAtomsHostFree, extend)).toBe(true)
   })
 
   it('an unquoted url with no comment opener in it is accepted in a prelude, by both', () => {
@@ -240,7 +246,9 @@ describe('an escaped comment opener inside a string is plain text to both valida
       },
     }
 
-    expect(refuses(validateExtendAtoms, extend)).toBe(refuses(validateExtendAtomsHostFree, extend))
+    expect(isRefused(validateExtendAtoms, extend)).toBe(
+      isRefused(validateExtendAtomsHostFree, extend),
+    )
   })
 })
 
@@ -252,7 +260,7 @@ describe('the extend module cache does not keep one entry per edit', () => {
       const cache = new Map<string, Promise<Record<string, AtomDefinition>>>()
       for (const margin of ['1px', '2px', '3px']) {
         writeFileSync(file, JSON.stringify({ a: { declarations: { margin } } }))
-        await applyExtendModule(file, cache as never, () => undefined)
+        await applyExtendModule(file, cache, () => {})
       }
 
       expect(cache.size).toBe(1)

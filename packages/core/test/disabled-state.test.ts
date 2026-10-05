@@ -16,7 +16,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
@@ -73,14 +72,14 @@ describe('disabledState', () => {
 
   it('the built CSS never sets the disabled visual outside the gated selector (no unconditional rule)', () => {
     const root = postcss.parse(atomicCss)
-    let baseRuleDeclaresDisabledVisual = false
+    let hasBaseRuleDisabledVisual = false
     root.walkRules('.nave-disabled-state', (rule) => {
       const ownDecls = rule.nodes.filter((n) => n.type === 'decl')
-      if (ownDecls.some((d) => ['color', 'border-color', 'pointer-events'].includes(d.prop))) {
-        baseRuleDeclaresDisabledVisual = true
+      if (ownDecls.some((d) => ['border-color', 'color', 'pointer-events'].includes(d.prop))) {
+        hasBaseRuleDisabledVisual = true
       }
     })
-    expect(baseRuleDeclaresDisabledVisual).toBe(false)
+    expect(hasBaseRuleDisabledVisual).toBe(false)
   })
 
   it('the built CSS forms no compositing group for this atom at all (exit 4)', () => {

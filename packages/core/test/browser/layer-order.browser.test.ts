@@ -1,5 +1,5 @@
 /**
- * @layer order resolves as documented, verified in a real browser engine.
+ * The `@layer` order resolves as documented, verified in a real browser engine.
  *
  * consumer-path.test.ts (Node) proves the @import graph resolves and
  * concatenates in the declared order; it cannot prove a real engine picks
@@ -11,12 +11,12 @@
  */
 import { describe, expect, it } from 'vitest'
 
+import CORE_ATOMIC_CSS from '../../dist/atomic.css?raw'
 // Browser-mode test files execute inside the real browser, so the built CSS
 // has to be inlined at bundle time (Vite's `?raw` import) rather than read
 // with node:fs the way the Node-side smoke tests do — `?raw` is what keeps
 // this reading the REAL, built dist/ output rather than a hand-typed copy.
 import CORE_INDEX_CSS from '../../dist/index.css?raw'
-import CORE_ATOMIC_CSS from '../../dist/atomic.css?raw'
 import CORE_LAYERS_CSS from '../../dist/layers.css?raw'
 
 // Anchored to line start so the doc comment's prose ("@layer declaration
@@ -54,7 +54,7 @@ describe('@layer order resolves as documented, in a real engine', () => {
     `)
     document.body.innerHTML = '<div id="probe" class="probe a b c"></div>'
 
-    const probe = document.querySelector('#probe') as HTMLElement
+    const probe = document.querySelector('#probe')!
     expect(getComputedStyle(probe).color).toBe('rgb(0, 0, 255)')
   })
 
@@ -74,7 +74,7 @@ describe('@layer order resolves as documented, in a real engine', () => {
     `)
     document.body.innerHTML = '<div id="probe" class="probe a b c"></div>'
 
-    const probe = document.querySelector('#probe') as HTMLElement
+    const probe = document.querySelector('#probe')!
     expect(getComputedStyle(probe).color).toBe('rgb(255, 0, 0)')
   })
 
@@ -92,7 +92,7 @@ describe('@layer order resolves as documented, in a real engine', () => {
     `)
     document.body.innerHTML = '<div id="probe" class="probe nave-hidden"></div>'
 
-    const probe = document.querySelector('#probe') as HTMLElement
+    const probe = document.querySelector('#probe')!
     expect(getComputedStyle(probe).display).toBe('block')
   })
 })
@@ -113,7 +113,7 @@ describe('the cascade contract precondition: Nave must be the first @layer decla
     `)
     document.body.innerHTML = '<div id="probe" class="probe nave-hidden"></div>'
 
-    const probe = document.querySelector('#probe') as HTMLElement
+    const probe = document.querySelector('#probe')!
     expect(getComputedStyle(probe).display).toBe('none')
   })
 
@@ -134,7 +134,7 @@ describe('the cascade contract precondition: Nave must be the first @layer decla
     `)
     document.body.innerHTML = '<div id="probe" class="probe nave-hidden"></div>'
 
-    const probe = document.querySelector('#probe') as HTMLElement
+    const probe = document.querySelector('#probe')!
     expect(getComputedStyle(probe).display).toBe('block')
   })
 })

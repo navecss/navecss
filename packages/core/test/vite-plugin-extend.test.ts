@@ -8,9 +8,9 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { navePlugin } from '../src/vite.ts'
-import { runHook } from './helpers/vite-hook.ts'
 import { APP_FILES } from './helpers/vite-app-files.ts'
 import { appConfig, makeApp, type ScratchApp, startDev } from './helpers/vite-app.ts'
+import { runHook } from './helpers/vite-hook.ts'
 
 const atomsModule = (margin: string): string =>
   `export default { brand: { declarations: { margin: '${margin}' } } }\n`
@@ -25,16 +25,32 @@ const FILES = {
 const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
   // Last registered, first run: a server or watcher closes before the app it watches is removed.
-  for (const cleanup of cleanups.splice(0).toReversed()) await cleanup()
+  const pending = cleanups.toReversed()
+  cleanups.length = 0
+  for (const cleanup of pending) await cleanup()
 })
 
-async function until(check: () => Promise<boolean>, what: string): Promise<void> {
+async function until(isMet: () => Promise<boolean>, what: string): Promise<void> {
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline) {
-    if (await check()) return
+    if (await isMet()) return
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
   throw new Error(`timed out waiting for ${what}`)
+}
+
+/**
+ * Records every payload the dev server sends its client, passing each on as before.
+ */
+function spyOnClient(server: Awaited<ReturnType<typeof startDev>>): { type: string }[] {
+  const sent: { type: string }[] = []
+  const hot = server.environments.client.hot
+  const send: (payload: { type: string }) => void = hot.send.bind(hot)
+  hot.send = (payload: { type: string }) => {
+    sent.push(payload)
+    send(payload)
+  }
+  return sent
 }
 
 describe('AC-directive-core-37 — the Vite plugin watches the extend module', () => {
@@ -58,20 +74,6 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
       return next?.code.includes('margin: 2px') === true
     }, 'the dev server to serve margin: 2px')
   }, 60_000)
-
-  /**
-   * Records every payload the dev server sends its client, passing each on as before.
-   */
-  function spyOnClient(server: Awaited<ReturnType<typeof startDev>>): { type: string }[] {
-    const sent: { type: string }[] = []
-    const hot = server.environments.client.hot
-    const send = hot.send.bind(hot) as (payload: { type: string }) => void
-    hot.send = ((payload: { type: string }) => {
-      sent.push(payload)
-      send(payload)
-    }) as never
-    return sent
-  }
 
   it('a module that failed on its first load tells the client to reload once it is fixed', async () => {
     const app: ScratchApp = makeApp({ ...FILES, 'atoms.mjs': "throw new Error('not ready')\n" })
@@ -144,7 +146,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
     // A reload, if one is coming, comes within a few seconds; stop looking as soon as one does.
     const deadline = Date.now() + 4000
-    while (Date.now() < deadline && !sent.some((payload) => payload.type === 'full-reload')) {
+    while (Date.now() < deadline && sent.every((payload) => payload.type !== 'full-reload')) {
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
 
@@ -197,9 +199,12 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
       }
     }
 
-    await until(() => Promise.resolve(/margin:1px/.test(outputs())), 'the first build to write 1px')
+    await until(
+      () => Promise.resolve(outputs().includes('margin:1px')),
+      'the first build to write 1px',
+    )
     writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
-    await until(() => Promise.resolve(/margin:2px/.test(outputs())), 'the rebuild to write 2px')
+    await until(() => Promise.resolve(outputs().includes('margin:2px')), 'the rebuild to write 2px')
 
     expect(outputs()).toMatch(/margin:2px/)
   }, 60_000)

@@ -20,16 +20,17 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 const DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist')
 
-/** Every `.css` file under `dir`, at any depth, as sorted paths relative to `dir`. */
+/**
+ * Every `.css` file under `dir`, at any depth, as sorted paths relative to `dir`.
+ */
 function cssFilesUnder(dir: string): string[] {
   return readdirSync(dir, { encoding: 'utf8', recursive: true })
     .filter((file) => file.endsWith('.css'))
-    .sort((a, b) => a.localeCompare(b))
+    .toSorted((a, b) => a.localeCompare(b))
 }
 
 /**

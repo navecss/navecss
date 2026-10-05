@@ -49,8 +49,8 @@ describe('reset button-like inputs', () => {
       // (`input, button, textarea, select, optgroup`), and a last-match wins scan would
       // then assert against its bare `input` selector if the two were ever reordered —
       // a false red on a behaviour-neutral edit.
-      const declaresCursor = rule.nodes.some((n) => n.type === 'decl' && n.prop === 'cursor')
-      if (rule.selectors.includes('button') && declaresCursor) {
+      const hasCursorDeclaration = rule.nodes.some((n) => n.type === 'decl' && n.prop === 'cursor')
+      if (hasCursorDeclaration && rule.selectors.includes('button')) {
         buttonLikeRule = rule
       }
     })

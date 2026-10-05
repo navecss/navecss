@@ -7,7 +7,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 import { generate, OUTPUT_PATH, renderNaveSection } from '../scripts/generate-skill.ts'
@@ -19,7 +18,7 @@ const committed = readFileSync(OUTPUT_PATH, 'utf8')
 const coreReadme = readFileSync(path.resolve(HERE, '../README.md'), 'utf8')
 
 function escapeRegExp(literal: string): string {
-  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return literal.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 }
 
 function extractButtonFence(markdown: string): string {
@@ -36,7 +35,7 @@ describe('AC-consumer-constraints-39: one example fence, byte-identical to the R
   })
 
   it('has exactly one css fence', () => {
-    const cssFences = [...committed.matchAll(/```css\n/g)]
+    const cssFences = committed.matchAll(/```css\n/g).toArray()
     expect(cssFences).toHaveLength(1)
   })
 })
@@ -119,33 +118,35 @@ describe("AC-consumer-constraints-39: cx('container')/cx.raw('container') appear
   })
 
   it('every occurrence of the code spans sits outside any fence', () => {
-    const fenceRanges: Array<[number, number]> = [...committed.matchAll(/```[\s\S]*?```/g)].map(
-      (m) => [m.index!, m.index! + m[0].length],
-    )
-    const insideAFence = (index: number) =>
+    const fenceRanges: [number, number][] = committed
+      .matchAll(/```[\s\S]*?```/g)
+      .map((m) => [m.index, m.index + m[0].length] as [number, number])
+      .toArray()
+    const isInsideFence = (index: number): boolean =>
       fenceRanges.some(([start, end]) => index >= start && index < end)
 
     for (const span of ["cx('container')", "cx.raw('container')"]) {
       // matchAll, never indexOf: a SECOND occurrence placed inside a fence would sit past the
       // first (correctly outside) one, and an indexOf-based check never looks past it.
-      const occurrences = [...committed.matchAll(new RegExp(escapeRegExp(span), 'g'))]
+      const occurrences = committed.matchAll(new RegExp(escapeRegExp(span), 'g')).toArray()
       expect(occurrences.length, `expected to find ${span}`).toBeGreaterThan(0)
       for (const occurrence of occurrences) {
-        expect(insideAFence(occurrence.index!), `${span} unexpectedly inside a fence`).toBe(false)
+        expect(isInsideFence(occurrence.index), `${span} unexpectedly inside a fence`).toBe(false)
       }
     }
   })
 
   it('the matchAll check above does catch a second occurrence placed inside a fence', () => {
     const withPlantedFence = `${committed}\n\n\`\`\`tsx\ncx('container')\n\`\`\`\n`
-    const fenceRanges: Array<[number, number]> = [
-      ...withPlantedFence.matchAll(/```[\s\S]*?```/g),
-    ].map((m) => [m.index!, m.index! + m[0].length] as [number, number])
-    const insideAFence = (index: number) =>
+    const fenceRanges: [number, number][] = withPlantedFence
+      .matchAll(/```[\s\S]*?```/g)
+      .map((m) => [m.index, m.index + m[0].length] as [number, number])
+      .toArray()
+    const isInsideFence = (index: number): boolean =>
       fenceRanges.some(([start, end]) => index >= start && index < end)
-    const occurrences = [...withPlantedFence.matchAll(/cx\('container'\)/g)]
+    const occurrences = withPlantedFence.matchAll(/cx\('container'\)/g).toArray()
     expect(occurrences.length).toBeGreaterThan(1)
-    expect(occurrences.some((occurrence) => insideAFence(occurrence.index!))).toBe(true)
+    expect(occurrences.some((occurrence) => isInsideFence(occurrence.index))).toBe(true)
   })
 
   it('the cx.raw(isActive && styles.active) code span is byte-identical to core README’s', () => {

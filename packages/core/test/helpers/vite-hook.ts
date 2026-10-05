@@ -4,21 +4,21 @@
  * `getCombinedSourcemap` answers with the map the caller supplies (none by default, Vite's own
  * answer in a build that writes no stylesheet maps).
  */
-import type { NaveViteOptions } from '../../src/vite.ts'
 import type { IncomingSourceMap, PluginLog, TransformContext } from '../../src/vite-types.ts'
+import type { NaveViteOptions } from '../../src/vite.ts'
 
 import { navePlugin } from '../../src/vite.ts'
 
 export interface HookRun {
   /**
-  The transformed text, or `undefined` when the plugin left the module alone.
+   * The transformed text, or `undefined` when the plugin left the module alone.
    */
   readonly code: string | undefined
   readonly map: string | undefined
   readonly warnings: readonly PluginLog[]
   readonly watched: readonly string[]
   /**
-  What `this.error` was called with, when it was.
+   * What `this.error` was called with, when it was.
    */
   readonly error: PluginLog | undefined
 }
@@ -28,7 +28,7 @@ export interface HookInput {
   readonly id?: string
   readonly options?: NaveViteOptions
   /**
-  The map Vite supplies, with `hasStylesheetMaps` telling the plugin it is a real one.
+   * The map Vite supplies, with `hasStylesheetMaps` telling the plugin it is a real one.
    */
   readonly incomingMap?: IncomingSourceMap
 }
@@ -43,6 +43,10 @@ class StopForTest extends Error {
 
 const NO_MAP: IncomingSourceMap = { sources: [], mappings: '' }
 
+/**
+ * Runs the plugin's `transform` hook once over `input.code` and returns what it produced: the
+ * code and map, the warnings and watched files it recorded, and the error it raised, if any.
+ */
 export async function runHook(input: HookInput): Promise<HookRun> {
   const warnings: PluginLog[] = []
   const watched: string[] = []
@@ -52,7 +56,11 @@ export async function runHook(input: HookInput): Promise<HookRun> {
     command: 'build',
     css: {},
     build: { sourcemap: input.incomingMap !== undefined },
-    logger: { warn() {} },
+    logger: {
+      warn() {
+        // The config-time logger is not under test here; the hook reports through `ctx.warn`.
+      },
+    },
   })
   const ctx: TransformContext = {
     parse: () => {

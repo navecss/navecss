@@ -1,5 +1,5 @@
 /**
- * @nave nested output behaves identically in a real engine.
+ * `@nave` nested output behaves identically in a real engine.
  *
  * postcss-plugin.test.ts (Node) proves the transform emits the syntactically
  * correct wrapped shape (`& { ... }` after a nested rule, per ADR 0001) via
@@ -13,15 +13,14 @@
  * the rendered behaviour matches what the fix corrected.
  */
 import postcss from 'postcss'
-import { userEvent } from 'vitest/browser'
 import { describe, expect, it } from 'vitest'
-
-import { navePlugin } from '../../src/postcss.ts'
+import { userEvent } from 'vitest/browser'
 
 // Browser-mode test files execute inside the real browser, so the built CSS
 // has to be inlined at bundle time (Vite's `?raw` import) rather than read
 // with node:fs — this is the real, built tokens.css, not a hand-typed copy.
 import TOKENS_CSS from '../../../tokens/dist/tokens.css?raw'
+import { navePlugin } from '../../src/postcss.ts'
 
 const run = async (css: string): Promise<string> => {
   const result = await postcss([navePlugin()]).process(css, { from: undefined })
@@ -44,7 +43,7 @@ describe('the wrapped declaration cascades correctly in a real engine', () => {
     const css = await run('.card { &:hover { color: red; } @nave interactive; }')
     mount(css, '<div class="card" id="card">card</div>')
 
-    const card = document.querySelector('#card') as HTMLElement
+    const card = document.querySelector('#card')!
 
     // The wrapped bare declaration (cursor: pointer from `interactive`)
     // applies at rest.
@@ -60,7 +59,7 @@ describe('the wrapped declaration cascades correctly in a real engine', () => {
     const css = await run('.card { &:hover { color: red; } @nave focusRing; }')
     mount(css, '<button class="card" id="ring" type="button">ring</button>')
 
-    const ring = document.querySelector('#ring') as HTMLElement
+    const ring = document.querySelector('#ring')!
 
     // outline: none is the wrapped base declaration; resting state carries no ring.
     expect(getComputedStyle(ring).outlineStyle).toBe('none')

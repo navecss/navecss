@@ -11,7 +11,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { describe, expect, it } from 'vitest'
 
 import { atoms } from '../src/atoms.ts'
@@ -32,12 +31,12 @@ describe('srOnly', () => {
   it('srOnlyFocusable reveals on :focus-visible and :focus-within, identically', () => {
     const pseudos = atoms.srOnlyFocusable.pseudos
     expect(pseudos).toBeDefined()
-    expect(pseudos![':focus-visible']).toBeDefined()
-    expect(pseudos![':focus-within']).toBeDefined()
-    expect(pseudos![':focus-visible']).toEqual(pseudos![':focus-within'])
+    expect(pseudos[':focus-visible']).toBeDefined()
+    expect(pseudos[':focus-within']).toBeDefined()
+    expect(pseudos[':focus-visible']).toEqual(pseudos[':focus-within'])
     // The revealed state must actually be visible again.
-    expect(pseudos![':focus-visible']!.position).toBe('static')
-    expect(pseudos![':focus-visible']!.overflow).toBe('visible')
+    expect(pseudos[':focus-visible'].position).toBe('static')
+    expect(pseudos[':focus-visible'].overflow).toBe('visible')
   })
 
   it('generated atomic.css nests both revealing pseudos under .nave-sr-only-focusable', () => {

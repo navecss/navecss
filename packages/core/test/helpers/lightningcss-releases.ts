@@ -4,12 +4,11 @@
  * type declarations that differ in their own AST, so each is seen here through the few calls the
  * suites make, which are the same on both.
  */
+import * as newest from 'lightningcss'
+import * as oldest from 'lightningcss-1-22'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
-import * as newest from 'lightningcss'
-import * as oldest from 'lightningcss-1-22'
 
 export interface LightningResult {
   readonly code: Uint8Array

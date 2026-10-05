@@ -4,6 +4,7 @@
  * boundaries, a Nave class built from pieces is a build error, and every route to the atomic layer
  * is filtered by content.
  */
+import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { spawnSync } from 'node:child_process'
 import {
   cpSync,
@@ -16,30 +17,29 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { describe, expect, it } from 'vitest'
+
+import type { Transformer } from './helpers/vite-app.ts'
 
 import { atomClassMap } from '../src/atoms.ts'
 import { navePlugin } from '../src/vite.ts'
+import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
 import {
   addPackage,
   APP_CSS,
   appFiles,
   atomLayerAtoms,
   atoms,
-  type Built,
   buildUsed,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
-import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
 import {
   EXEMPT_PIECE_ROWS,
   IMPORT,
   PIECED_CLASS_ROWS,
   pieceModule,
 } from './helpers/used-atoms-rows.ts'
-import { startDev, appConfig } from './helpers/vite-app.ts'
-import type { Transformer } from './helpers/vite-app.ts'
+import { appConfig, startDev } from './helpers/vite-app.ts'
 
 const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -51,10 +51,10 @@ const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
  * or a `vite*.js` file of `dist`.
  */
 function recordCssBuild(line: string): {
-  status: number | null
-  stderr: string
   names: string[]
   pluginFiles: string[]
+  status: number | null
+  stderr: string
   wroteAtomic: boolean
 } {
   const work = mkdtempSync(path.join(CORE_ROOT, '.nave-css-build-'))
@@ -96,6 +96,9 @@ function recordCssBuild(line: string): {
   }
 }
 
+const page = (separator: string): string =>
+  `<!doctype html><html><body><a href="#main" class="skip${separator}nave-sr-only-focusable">Skip to content</a><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>`
+
 describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
   describe('AC-used-atoms-29 — a skip link in index.html after a newline is emitted whole', () => {
     const SEPARATORS: [string, string][] = [
@@ -104,8 +107,6 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       ['a form feed', '\f'],
       ['a carriage return', '\r'],
     ]
-    const page = (separator: string): string =>
-      `<!doctype html><html><body><a href="#main" class="skip${separator}nave-sr-only-focusable">Skip to content</a><div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>`
 
     it.each(SEPARATORS)(
       'emits srOnlyFocusable whole when %s follows the first class',
@@ -153,7 +154,11 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       const app = makeUsedApp(appFiles({ 'index.html': page('\n') }))
       try {
         const [nave, real] = navePlugin()
-        const late = { ...real, transformIndexHtml: real.transformIndexHtml.handler }
+        const late = {
+          ...real,
+          transformIndexHtml: (html: string, context: { filename?: string }) =>
+            real.transformIndexHtml.handler(html, context),
+        }
         const built = await buildUsed(app, { transformer, nave: [nave, late] })
 
         expect(built.error).toBeUndefined()
@@ -338,6 +343,10 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
   })
 
   describe('AC-used-atoms-32 — every route to the atom layer is filtered by content', () => {
+    const QUICK_START_ROUTE: Record<string, string> = {
+      'src/main.ts': "import './app.css'\nimport './App.ts'\n",
+      'src/app.css': `${APP_CSS}.card { display: flex }\n@layer atomic { .brand-x { color: red } .nave-grid > .child { color: blue } }\n`,
+    }
     const routes: [string, Record<string, string>][] = [
       ['@navecss/core', { 'src/main.ts': "import '@navecss/core'\nimport './App.ts'\n" }],
       [
@@ -348,13 +357,7 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
         },
       ],
       ['no-tokens', { 'src/main.ts': "import '@navecss/core/no-tokens'\nimport './App.ts'\n" }],
-      [
-        'the Quick start’s app.css',
-        {
-          'src/main.ts': "import './app.css'\nimport './App.ts'\n",
-          'src/app.css': `${APP_CSS}.card { display: flex }\n@layer atomic { .brand-x { color: red } .nave-grid > .child { color: blue } }\n`,
-        },
-      ],
+      ['the Quick start’s app.css', QUICK_START_ROUTE],
     ]
 
     it.each(routes)(
@@ -374,31 +377,44 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
           const consumer = (css: string): string =>
             css.match(/\.brand-x\s*\{[^}]*\}|\.card\s*\{[^}]*\}/g)?.join('|') ?? ''
           expect(consumer(used.css)).toBe(consumer(all.css))
-          if (extra['src/app.css']) {
-            expect(all.css).toContain('.nave-grid > .child')
-            expect(used.css).not.toContain('.nave-grid > .child')
-            // The fixture reaches the Quick start shape: the atom rules sit inside app.css itself.
-            let appCss = ''
-            await buildUsed(app, {
-              ...options,
-              options: { atomic: 'all' },
-              after: [
-                {
-                  name: 'record-app-css',
-                  transform(code: string, id: string) {
-                    if (id.endsWith('/src/app.css')) appCss = code
-                  },
-                },
-              ],
-            })
-            expect(atomLayerAtoms(appCss).length).toBe(Object.keys(atomClassMap).length)
-          }
         } finally {
           app.dispose()
         }
       },
       60_000,
     )
+
+    it('the Quick start’s app.css keeps its own atom rules whole when every atom is asked for, and prunes them otherwise', async () => {
+      const app = makeUsedApp({
+        ...appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }),
+        ...QUICK_START_ROUTE,
+      })
+      try {
+        const options = { transformer, build: { cssMinify: false } }
+        const used = await buildUsed(app, options)
+        const all = await buildUsed(app, { ...options, options: { atomic: 'all' } })
+
+        expect(all.css).toContain('.nave-grid > .child')
+        expect(used.css).not.toContain('.nave-grid > .child')
+        // The fixture reaches the Quick start shape: the atom rules sit inside app.css itself.
+        let appCss = ''
+        await buildUsed(app, {
+          ...options,
+          options: { atomic: 'all' },
+          after: [
+            {
+              name: 'record-app-css',
+              transform(code: string, id: string) {
+                if (id.endsWith('/src/app.css')) appCss = code
+              },
+            },
+          ],
+        })
+        expect(atomLayerAtoms(appCss).length).toBe(Object.keys(atomClassMap).length)
+      } finally {
+        app.dispose()
+      }
+    }, 60_000)
 
     it('keeps a rule that selects an emitted atom’s class among other selectors, byte for byte', async () => {
       const app = makeUsedApp(

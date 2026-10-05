@@ -5,10 +5,9 @@
  * lands; this file extends the same scans to this slice's own artifacts, mirroring that file's
  * pattern rather than re-deriving it.
  */
-import { readFileSync, readdirSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import type { PackedCoreTarball } from './helpers/pack-core.ts'
@@ -20,7 +19,9 @@ import { shippedChangesetProse } from './helpers/released-changeset.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.resolve(HERE, '../dist')
-/** This slice's changeset while pending, the CHANGELOG entry that carries its text once released. */
+/**
+ * This slice's changeset while pending, the CHANGELOG entry that carries its text once released.
+ */
 const shippedChangeset = (): string =>
   shippedChangesetProse(
     path.resolve(HERE, '../../../.changeset/ship-agent-skill-guide.md'),
@@ -40,7 +41,10 @@ const GENERATOR_SRC = readFileSync(path.resolve(HERE, '../scripts/generate-skill
  */
 function isValidYamlDescriptionValue(frontmatter: string, firstLineValue: string): boolean {
   if (/^['"]/.test(firstLineValue)) return true
-  const continuationLines = [...frontmatter.matchAll(/\n {2}(.*)/g)].map((m) => m[1]!)
+  const continuationLines = frontmatter
+    .matchAll(/\n {2}(.*)/g)
+    .map((m) => m[1]!)
+    .toArray()
   const fullValue = [firstLineValue, ...continuationLines].join(' ')
   return !fullValue.includes(': ')
 }
@@ -52,7 +56,7 @@ describe('AC-consumer-constraints-31: the guide packs at the documented path', (
     tarball = packCoreTarball()
   }, 120_000)
 
-  it('is present in the tarball, with valid frontmatter and no AGENTS.md file anywhere', async () => {
+  it('is present in the tarball, with valid frontmatter and no AGENTS.md file anywhere', () => {
     expect(tarball.files).toContain('package/skills/navecss/SKILL.md')
     const content = tarball.read('package/skills/navecss/SKILL.md')
     const frontmatter = /^---\n([\s\S]*?)\n---/.exec(content)
@@ -78,12 +82,15 @@ describe('AC-consumer-constraints-31: the guide packs at the documented path', (
 
   it('every relative Markdown link resolves to a file inside the tarball', () => {
     const content = tarball.read('package/skills/navecss/SKILL.md')
-    const links = [...content.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]!)
+    const links = content
+      .matchAll(/\]\(([^)]+)\)/g)
+      .map((m) => m[1]!)
+      .toArray()
     const relativeLinks = links.filter((link) => !/^https?:\/\//.test(link))
     expect(relativeLinks.length).toBeGreaterThan(0)
     for (const link of relativeLinks) {
       const resolved = path.posix.normalize(
-        path.posix.join('package/skills/navecss', link.split('#')[0]!),
+        path.posix.join('package/skills/navecss', link.split('#', 1)[0]!),
       )
       expect(tarball.files, `link "${link}" resolves to ${resolved}`).toContain(resolved)
     }
@@ -101,31 +108,36 @@ describe('AC-consumer-constraints-31: the guide packs at the documented path', (
 describe('AC-consumer-constraints-34: byte ceiling', () => {
   const BYTE_CEILING = 32_768
 
-  /** The one guard both tests below exercise, so the padded-copy "control" runs through the
+  /**
+   * The one guard both tests below exercise, so the padded-copy "control" runs through the
    * SAME code path as the real-file check — not a bare `Buffer.byteLength` call that would stay
-   * green even if this function's own logic were stubbed to always pass. */
-  function exceedsByteCeiling(content: string): boolean {
+   * green even if this function's own logic were stubbed to always pass.
+   */
+  function isOverByteCeiling(content: string): boolean {
     return Buffer.byteLength(content, 'utf8') > BYTE_CEILING
   }
 
   it('the committed guide is at most 32,768 bytes', () => {
-    expect(exceedsByteCeiling(readFileSync(OUTPUT_PATH, 'utf8'))).toBe(false)
+    expect(isOverByteCeiling(readFileSync(OUTPUT_PATH, 'utf8'))).toBe(false)
   })
 
   it('fails on a copy padded one byte past the ceiling, through the same helper', () => {
     const oneByteOver = 'x'.repeat(BYTE_CEILING + 1)
-    expect(exceedsByteCeiling(oneByteOver)).toBe(true)
+    expect(isOverByteCeiling(oneByteOver)).toBe(true)
   })
 })
 
-describe('AC-consumer-constraints-03 (scoped to this slice): the guide is build-inert', () => {
-  function listFilesRecursive(dir: string): string[] {
-    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      const full = path.join(dir, entry.name)
-      return entry.isDirectory() ? listFilesRecursive(full) : [full]
-    })
-  }
+/**
+ * Every file under `dir`, at any depth.
+ */
+function listFilesRecursive(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name)
+    return entry.isDirectory() ? listFilesRecursive(full) : [full]
+  })
+}
 
+describe('AC-consumer-constraints-03 (scoped to this slice): the guide is build-inert', () => {
   it('no built .css or .js file references skills/ or SKILL.md', () => {
     const offenders = listFilesRecursive(DIST)
       .filter((file) => file.endsWith('.css') || file.endsWith('.js'))
@@ -153,18 +165,20 @@ describe('AC-consumer-constraints-02 (scoped to this slice): no prose count', ()
   })
 
   it('the scan reports a planted count', () => {
-    expect(COUNT_NEAR_VOCAB.test('Nave ships ' + '48' + ' atoms today.')).toBe(true)
-    expect(COUNT_NEAR_VOCAB.test('Nave ships ' + 'twenty' + ' tokens today.')).toBe(true)
+    expect(COUNT_NEAR_VOCAB.test('Nave ships 48 atoms today.')).toBe(true)
+    expect(COUNT_NEAR_VOCAB.test('Nave ships twenty tokens today.')).toBe(true)
   })
 })
 
 describe('AC-consumer-constraints-04 (scoped to this slice): no brain reference', () => {
   it('SKILL.md carries no tracker, persona, dated-id or brain-path reference', () => {
-    scanForBrainReferences(readFileSync(OUTPUT_PATH, 'utf8'), 'SKILL.md')
+    expect(() =>
+      scanForBrainReferences(readFileSync(OUTPUT_PATH, 'utf8'), 'SKILL.md'),
+    ).not.toThrow()
   })
 
   it('this slice’s changeset carries none either', () => {
-    scanForBrainReferences(shippedChangeset(), 'the changeset')
+    expect(() => scanForBrainReferences(shippedChangeset(), 'the changeset')).not.toThrow()
   })
 
   it('the scan reports a planted copy carrying a tracker ref, a persona id and a dated id', () => {

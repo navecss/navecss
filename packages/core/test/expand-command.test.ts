@@ -77,13 +77,23 @@ function expand(...args: string[]): Run {
   }
 }
 
-/** Every file under the project, as relative paths: the "writes exactly its --out files" check. */
+/**
+ * Every file under the project, as relative paths: the "writes exactly its --out files" check.
+ */
 function tree(): string[] {
   return readdirSync(project.dir, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => path.relative(project.dir, path.join(entry.parentPath, entry.name)))
     .map((relative) => relative.split(path.sep).join('/'))
-    .toSorted()
+    .toSorted((a, b) => a.localeCompare(b))
+}
+
+async function until(isDone: () => boolean, what: string): Promise<void> {
+  const deadline = Date.now() + 10_000
+  while (!isDone()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
 }
 
 const IS_ROOT = process.getuid?.() === 0
@@ -330,16 +340,9 @@ describe('AC-directive-core-42 — --watch', () => {
   const children: ChildProcess[] = []
 
   afterEach(() => {
-    for (const child of children.splice(0)) child.kill()
+    for (const child of children) child.kill()
+    children.length = 0
   })
-
-  async function until(check: () => boolean, what: string): Promise<void> {
-    const deadline = Date.now() + 10_000
-    while (!check()) {
-      if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`)
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    }
-  }
 
   it('rewrites --out when the source changes, and keeps running after a diagnostic', async () => {
     const source = write('src/app.css', '.a { @nave flex; }\n')
@@ -350,7 +353,7 @@ describe('AC-directive-core-42 — --watch', () => {
     )
     children.push(child)
     let stderr = ''
-    child.stderr!.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
     const out = path.join(project.dir, 'out/app.css')
 
     await until(
