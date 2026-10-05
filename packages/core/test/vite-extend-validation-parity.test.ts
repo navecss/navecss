@@ -11,9 +11,9 @@ import { describe, expect, it } from 'vitest'
 
 import type { AtomDefinition } from '../src/atoms.ts'
 
-import { navePlugin } from '../src/vite.ts'
 import { validateExtendAtoms } from '../src/validate-extend-atoms.ts'
 import { validateExtendAtomsHostFree } from '../src/validate-extend-host-free.ts'
+import { navePlugin } from '../src/vite.ts'
 import { runHook } from './helpers/vite-hook.ts'
 
 type Atom = AtomDefinition
@@ -69,7 +69,10 @@ const MATRIX: readonly (readonly [string, Record<string, Atom>])[] = [
   ['a media condition ending in a comment', media('(x) /* c */')],
 ]
 
-function verdict(validate: (extend: Record<string, Atom>) => void, extend: Record<string, Atom>) {
+function verdict(
+  validate: (extend: Record<string, Atom>) => void,
+  extend: Record<string, Atom>,
+): { message: string; refused: boolean } {
   try {
     validate(extend)
     return { refused: false, message: '' }
@@ -126,12 +129,13 @@ describe('the host-free extend validator agrees with the PostCSS-backed one', ()
       if (depth === 0) return
       for (const fragment of fragments) yield* build(depth - 1, prefix + fragment)
     }
-    for (const text of new Set(build(3))) {
+    const texts = new Set(build(3))
+    for (const text of texts) {
       for (const shape of shapes) {
         const extend = shape(text)
-        const refusedByPostcss = verdict(validateExtendAtoms, extend).refused
-        const refusedHostFree = verdict(validateExtendAtomsHostFree, extend).refused
-        if (refusedByPostcss && !refusedHostFree) unsafe.push(JSON.stringify(text))
+        const isRefusedByPostcss = verdict(validateExtendAtoms, extend).refused
+        const isRefusedHostFree = verdict(validateExtendAtomsHostFree, extend).refused
+        if (isRefusedByPostcss && !isRefusedHostFree) unsafe.push(JSON.stringify(text))
       }
     }
 
@@ -171,6 +175,7 @@ describe('an atom that is not a plain object is refused by both validators, used
   })
 
   it.each([
+    // eslint-disable-next-line unicorn/no-null -- the case under test is a literal `null` atom
     ['null', null],
     ['undefined', undefined],
   ])(
@@ -191,7 +196,7 @@ describe('an atom that is not a plain object is refused by both validators, used
   it.each([
     ['0', 0],
     ['an empty string', ''],
-    ['NaN', Number.NaN],
+    ['NaN', NaN],
     ['-0', -0],
   ])(
     '%s is read as an unknown atom where a directive uses it, not refused up front',
@@ -234,20 +239,22 @@ describe('a falsy value at a nested position is skipped, so `cond && { ... }` ke
     ],
   ]
   const cases = positions.flatMap(([name, at]) =>
+    // eslint-disable-next-line unicorn/no-null -- a literal `null` at each position is what is under test
     [false, null].map((value) => [`${name} is ${String(value)}`, at(value)] as const),
   )
 
   it.each(cases)('%s: it builds and nothing comes from that position', async (_name, nested) => {
     const run = await runHook({
       code: '.a { @nave nested; }',
-      options: { extend: { nested: { declarations: { color: 'red' }, ...nested } as never } },
+      options: { extend: { nested: { declarations: { color: 'red' }, ...nested } } },
     })
 
     expect(run.error).toBeUndefined()
     expect(run.code).toContain('color: red;')
     expect(run.code).not.toMatch(/&:hover|&:focus|@container/)
     expect(run.code).not.toMatch(/\{\s*\}/)
-    if (!JSON.stringify(nested).includes('margin')) expect(run.code).not.toContain('@media')
+    const hasMargin = JSON.stringify(nested).includes('margin')
+    expect(hasMargin || !(run.code ?? '').includes('@media')).toBe(true)
   })
 
   it('a pseudo whose declarations are null expands without throwing', async () => {
@@ -255,6 +262,7 @@ describe('a falsy value at a nested position is skipped, so `cond && { ... }` ke
       code: '.a { @nave nested; }',
       options: {
         extend: {
+          // eslint-disable-next-line unicorn/no-null -- a literal `null` declarations map is what is under test
           nested: { declarations: { color: 'red' }, pseudos: { ':hover': null } } as never,
         },
       },
@@ -267,6 +275,7 @@ describe('a falsy value at a nested position is skipped, so `cond && { ... }` ke
     const run = await runHook({
       code: '.a { @nave nested; }',
       options: {
+        // eslint-disable-next-line unicorn/no-null -- a literal `null` media block is what is under test
         extend: { nested: { declarations: { color: 'red' }, media: { md: null } } as never },
       },
     })
@@ -327,8 +336,8 @@ describe('a refusal says why it refuses', () => {
   })
 
   it.each([
-    ['Infinity', Number.POSITIVE_INFINITY, 'Infinity'],
-    ['-Infinity', Number.NEGATIVE_INFINITY, '-Infinity'],
+    ['Infinity', Infinity, 'Infinity'],
+    ['-Infinity', -Infinity, '-Infinity'],
   ])('a non-finite number atom (%s) is printed as itself, not as null', (_name, atom, printed) => {
     for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
       const { refused, message } = verdict(validate, { sneaky: atom as never })
@@ -422,28 +431,64 @@ describe('a refusal that stays inside its rule does not claim to break out of it
   })
 })
 
-describe('a boxed primitive is not a plain object, so it is refused and never read as a map', () => {
-  const nested = (declarations: unknown) => ({
-    a: { declarations: { color: 'red' }, pseudos: { ':hover': declarations } },
-  })
+/**
+ * An atom whose pseudo `:hover` carries `declarations` as its declarations map.
+ */
+const nested = (declarations: unknown): Record<string, unknown> => ({
+  a: { declarations: { color: 'red' }, pseudos: { ':hover': declarations } },
+})
 
+/**
+ * A boxed String, which `new String(...)` makes and the call form `String(...)` does not.
+ */
+const boxedString = (text: string): object =>
+  // eslint-disable-next-line unicorn/new-for-builtins -- the boxed object is the subject, the call form returns a primitive
+  new String(text)
+
+/**
+ * A boxed Number, which `new Number(...)` makes and the call form `Number(...)` does not.
+ */
+const boxedNumber = (value: number): object =>
+  // eslint-disable-next-line unicorn/new-for-builtins -- the boxed object is the subject, the call form returns a primitive
+  new Number(value)
+
+/**
+ * A boxed Boolean, which `new Boolean(...)` makes and the call form `Boolean(...)` does not.
+ */
+const boxedBoolean = (isTrue: boolean): object =>
+  // eslint-disable-next-line unicorn/new-for-builtins -- the boxed object is the subject, the call form returns a primitive
+  new Boolean(isTrue)
+
+/**
+ * A function-valued atom whose `declarations` getter answers with a safe map on its first read
+ * and with one that closes the rule on every later read.
+ */
+const flippingFunctionAtom = (): object => {
+  let reads = 0
+  return Object.defineProperty(function atom() {}, 'declarations', {
+    enumerable: true,
+    get: () => (++reads === 1 ? { color: 'red' } : { color: 'red; } body { display: none' }),
+  })
+}
+
+describe('a boxed primitive is not a plain object, so it is refused and never read as a map', () => {
   it.each([
     [
       "new String('x') as a pseudo's declarations",
-      nested(new String('x')),
+      nested(boxedString('x')),
       'a String object',
       '"x"',
     ],
-    ["new String('x') as an atom", { a: new String('x') }, 'a String object', '"x"'],
+    ["new String('x') as an atom", { a: boxedString('x') }, 'a String object', '"x"'],
     [
       'new Number(1) as a media block',
-      { a: { declarations: {}, media: { '(min-width: 1px)': new Number(1) } } },
+      { a: { declarations: {}, media: { '(min-width: 1px)': boxedNumber(1) } } },
       'a Number object',
       '1',
     ],
     [
       'new Boolean(true) as a container map',
-      { a: { declarations: {}, container: new Boolean(true) } },
+      { a: { declarations: {}, container: boxedBoolean(true) } },
       'a Boolean object',
       'true',
     ],
@@ -460,7 +505,7 @@ describe('a boxed primitive is not a plain object, so it is refused and never re
     const { default: postcss } = await import('postcss')
     const { navePlugin: postcssNave } = await import('../src/postcss.ts')
 
-    expect(() => postcssNave({ extend: nested(new String('ab')) as never })).toThrow(
+    expect(() => postcssNave({ extend: nested(boxedString('ab')) as never })).toThrow(
       /is a String object, not a plain object/,
     )
     const css = await postcss([postcssNave({ extend: nested(undefined) as never })]).process(
@@ -476,7 +521,7 @@ describe('a boxed primitive is not a plain object, so it is refused and never re
     }
     const run = await runHook({
       code: '.x { @nave a; }',
-      options: { extend: { a: new Atom() as never } },
+      options: { extend: { a: new Atom() } },
     })
 
     expect(run.code).toContain('color: red;')
@@ -507,56 +552,53 @@ describe('a refusal is not fooled by a string that spells the sentinel or a nest
 
 describe('a String object as an atom’s own declarations is refused like every nested position', () => {
   it("a String object as an atom's own declarations never reaches the CSS, through either adapter", async () => {
-    const extend = { a: { declarations: new String('} body { display: none; }') as never } }
+    const extend = { a: { declarations: boxedString('} body { display: none; }') as never } }
     const reason = /atom "a"'s declarations is a String object, not a plain object/
     const { default: postcss } = await import('postcss')
     const { navePlugin: postcssNave } = await import('../src/postcss.ts')
 
     await expect(runHook({ code: '.x { @nave a; }', options: { extend } })).rejects.toThrow(reason)
-    await expect(
-      Promise.resolve().then(() =>
-        postcss([postcssNave({ extend })]).process('.x { @nave a; }', { from: undefined }),
-      ),
-    ).rejects.toThrow(reason)
+    const throughPostcss = async (): Promise<unknown> =>
+      postcss([postcssNave({ extend })]).process('.x { @nave a; }', { from: undefined })
+    await expect(throughPostcss()).rejects.toThrow(reason)
   })
 })
 
-describe('a boxed primitive is recognised by its brand, never by its Symbol.toStringTag', () => {
-  const retagged = Object.assign(new String('x'), { [Symbol.toStringTag]: 'Object' })
-  const tagged = { declarations: { color: 'red' }, [Symbol.toStringTag]: 'String' }
-  const nested = (declarations: unknown) => ({
-    a: { declarations: { color: 'red' }, pseudos: { ':hover': declarations } },
-  })
-
-  async function viaBoth(extend: Record<string, unknown>): Promise<(string | undefined)[]> {
-    const { default: postcss } = await import('postcss')
-    const { navePlugin: postcssNave } = await import('../src/postcss.ts')
-    const viaVite = await runHook({
-      code: '.x { @nave a; }',
-      options: { extend: extend as never },
-    }).then(
-      (run) => run.code,
-      () => undefined,
-    )
-    const viaPostcss = await Promise.resolve()
-      .then(() =>
-        postcss([postcssNave({ extend: extend as never })]).process('.x { @nave a; }', {
-          from: undefined,
-        }),
-      )
-      .then(
-        (result) => result.css,
-        () => undefined,
-      )
-    return [viaVite, viaPostcss]
+/**
+ * What the Vite plugin and the PostCSS adapter each emit for an atom `a` built from `extend`, or
+ * `undefined` for an adapter that refused it.
+ */
+async function viaBoth(extend: Record<string, unknown>): Promise<(string | undefined)[]> {
+  const { default: postcss } = await import('postcss')
+  const { navePlugin: postcssNave } = await import('../src/postcss.ts')
+  let viaVite: string | undefined
+  try {
+    const run = await runHook({ code: '.x { @nave a; }', options: { extend: extend as never } })
+    viaVite = run.code
+  } catch {
+    // A refused extend leaves the output unset.
   }
+  let viaPostcss: string | undefined
+  try {
+    const result = await postcss([postcssNave({ extend: extend as never })]).process(
+      '.x { @nave a; }',
+      { from: undefined },
+    )
+    viaPostcss = result.css
+  } catch {
+    // A refused extend leaves the output unset.
+  }
+  return [viaVite, viaPostcss]
+}
+
+describe('a boxed primitive is recognised by its brand, never by its Symbol.toStringTag', () => {
+  const retagged = Object.assign(boxedString('x'), { [Symbol.toStringTag]: 'Object' })
+  const tagged = { declarations: { color: 'red' }, [Symbol.toStringTag]: 'String' }
+  const proxied = new Proxy(boxedString('ab'), {})
 
   it.each([
     ['a String object retagged as an Object, as a pseudo’s declarations', nested(retagged)],
-    [
-      'a Proxy over a String object, as a pseudo’s declarations',
-      nested(new Proxy(new String('ab'), {})),
-    ],
+    ['a Proxy over a String object, as a pseudo’s declarations', nested(proxied)],
     [
       'a String object from another realm, as a pseudo’s declarations',
       nested(vm.runInNewContext("new String('x')")),
@@ -565,17 +607,19 @@ describe('a boxed primitive is recognised by its brand, never by its Symbol.toSt
     for (const validate of [validateExtendAtoms, validateExtendAtomsHostFree]) {
       expect(verdict(validate, extend as never).refused).toBe(true)
     }
-    for (const output of await viaBoth(extend)) expect(output).toBeUndefined()
+    const outputs = await viaBoth(extend)
+    for (const output of outputs) expect(output).toBeUndefined()
   })
 
   it.each([
     ['a plain object tagged String', { a: tagged }],
     [
       'a plain object from another realm',
-      { a: vm.runInNewContext("({ declarations: { color: 'red' } })") },
+      { a: vm.runInNewContext("({ declarations: { color: 'red' } })") as unknown },
     ],
   ])('%s still expands', async (_name, extend) => {
-    for (const output of await viaBoth(extend)) expect(output).toContain('color: red')
+    const outputs = await viaBoth(extend)
+    for (const output of outputs) expect(output).toContain('color: red')
   })
 })
 
@@ -636,14 +680,6 @@ describe('the Vite plugin validates extend before it reaches expandText()', () =
     expect(run.code).toContain('color: red;')
     expect(run.code).not.toContain('body')
   })
-
-  const flippingFunctionAtom = () => {
-    let reads = 0
-    return Object.defineProperty(function atom() {}, 'declarations', {
-      enumerable: true,
-      get: () => (++reads === 1 ? { color: 'red' } : { color: 'red; } body { display: none' }),
-    })
-  }
 
   it('a function-valued atom whose declarations getter turns evil on its second read is refused (Vite)', async () => {
     await expect(

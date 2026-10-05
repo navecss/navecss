@@ -34,19 +34,21 @@ import { describe, expect, it } from 'vitest'
 // Browser-mode test files execute inside the real browser, so built CSS is inlined at
 // bundle time (Vite's `?raw` import), exactly as the existing `nave-nested-output` fixture
 // already does for tokens.css.
+import NAVE_TOKENS_CSS from '../../../tokens/dist/tokens.css?raw'
+import ATOMIC_CSS from '../../dist/atomic.css?raw'
 import DEFAULT_ENTRY_CSS from '../../dist/index.css?raw'
 import NO_TOKENS_ENTRY_CSS from '../../dist/no-tokens.css?raw'
 import RESET_CSS from '../../dist/reset.css?raw'
-import ATOMIC_CSS from '../../dist/atomic.css?raw'
 import CONSUMER_A_CSS from './fixtures/consumer-a.css?raw'
 import CONSUMER_B_CSS from './fixtures/consumer-b.css?raw'
 import CONSUMER_BUILD_CSS from './fixtures/consumer-build.css?raw'
-import NAVE_TOKENS_CSS from '../../../tokens/dist/tokens.css?raw'
 
-/** Every `--name: value;` declaration inside a `tokens.presets`/`tokens.defaults` `:root`
+/**
+ * Every `--name: value;` declaration inside a `tokens.presets`/`tokens.defaults` `:root`
  * block, name -> value. A plain regex scan (not a CSS parser) is enough: the fixtures are
  * generated, one declaration per line, so this needs only what `emit.ts`'s own
- * `EmittedCss.customProperties` Map already carried before it was serialized to text. */
+ * `EmittedCss.customProperties` Map already carried before it was serialized to text.
+ */
 function parseDeclaredCustomProperties(css: string): Map<string, string> {
   const found = new Map<string, string>()
   for (const match of css.matchAll(/^\s{4}(--nave-color-[\w-]+):\s*(.+);\s*$/gm)) {
@@ -67,7 +69,8 @@ const ATOMIC_IMPORT_RE = /@import\s+url\(\s*['"]\.\/atomic\.css['"]\s*\);?/
  *
  * A function replacer, deliberately: `String.replace`'s STRING form interprets `$&`/`$1`/…
  * inside the replacement, and `NAVE_TOKENS_CSS` is a large generated file this test does not
- * control the contents of. */
+ * control the contents of.
+ */
 function inlineImports(css: string): string {
   return css
     .replace(TOKENS_IMPORT_RE, () => NAVE_TOKENS_CSS)
@@ -83,9 +86,11 @@ function mount(css: string): void {
   document.head.append(style)
 }
 
-/** Renders one probe element with the given inline declaration and returns its resolved
+/**
+ * Renders one probe element with the given inline declaration and returns its resolved
  * `background-color`, which the browser always normalizes to `rgb()`/`rgba()`, unlike a
- * custom property's own serialized value (spec-ambiguous, engine-dependent). */
+ * custom property's own serialized value (spec-ambiguous, engine-dependent).
+ */
 function probeBackground(declaration: string): string {
   const el = document.createElement('div')
   el.style.cssText = declaration
@@ -102,7 +107,10 @@ describe('R11 (AC-token-build-10) — the tokens-free entry composed with a cons
     // Every @property registration in the composed document, by name — derived, not
     // inferred from prose, so this does not silently stop testing anything if a future
     // step-table change registers more than one colour.
-    const registeredNames = [...composed.matchAll(/@property\s+(--[\w-]+)\s*\{/g)].map((m) => m[1]!)
+    const registeredNames = composed
+      .matchAll(/@property\s+(--[\w-]+)\s*\{/g)
+      .map((m) => m[1]!)
+      .toArray()
     expect(registeredNames.length).toBeGreaterThan(0)
     expect(new Set(registeredNames).size).toBe(registeredNames.length)
 
@@ -164,6 +172,26 @@ describe('R11 (AC-token-build-10) — the tokens-free entry composed with a cons
 })
 
 /**
+ * Every `@property` REGISTRATION in the document, by name, with how many times it is
+ * registered. Derived from the text rather than from a list, so a future token addition is
+ * counted without anyone remembering to name it. The `{` is part of the pattern
+ * deliberately: `@property` also appears in the generated artifact's own header COMMENT,
+ * which is a mention and not a registration.
+ */
+function registrationsByName(css: string): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const match of css.matchAll(/@property\s+(--[\w-]+)\s*\{/g)) {
+    counts.set(match[1]!, (counts.get(match[1]!) ?? 0) + 1)
+  }
+  return counts
+}
+
+const sum = (counts: Map<string, number>): number =>
+  counts.values().reduce((total, n) => total + n, 0)
+
+const byName = (a: string, b: string): number => a.localeCompare(b)
+
+/**
  * PINNING ROW for `AC-token-build-10` (R11), added during this project's Phase 3 review
  * (a coverage gap found by an off-line measurement is PINNED, not filed).
  * The project's quality reviewer measured this property in round 1 and the measurement lived
@@ -189,22 +217,6 @@ describe('R11 (AC-token-build-10) — the tokens-free entry composed with a cons
  *    nowhere. This row counts registrations. It does not rank them.
  */
 describe('AC-token-build-10 — the registration COUNT over the composed document', () => {
-  /** Every `@property` REGISTRATION in the document, by name, with how many times it is
-   * registered. Derived from the text rather than from a list, so a future token addition is
-   * counted without anyone remembering to name it. The `{` is part of the pattern
-   * deliberately: `@property` also appears in the generated artifact's own header COMMENT,
-   * which is a mention and not a registration. */
-  function registrationsByName(css: string): Map<string, number> {
-    const counts = new Map<string, number>()
-    for (const match of css.matchAll(/@property\s+(--[\w-]+)\s*\{/g)) {
-      counts.set(match[1]!, (counts.get(match[1]!) ?? 0) + 1)
-    }
-    return counts
-  }
-
-  const sum = (counts: Map<string, number>): number =>
-    [...counts.values()].reduce((total, n) => total + n, 0)
-
   it('the documented rung-1b composition registers every Nave custom property EXACTLY ONCE, and the forgotten-act composition registers every one of them TWICE', () => {
     // The documented act: the tokens-free entry, which never imports @navecss/tokens/css,
     // plus the consumer's own committed build artifact.
@@ -231,8 +243,9 @@ describe('AC-token-build-10 — the registration COUNT over the composed documen
     // THE POSITIVE CONTROL, and it is what gives the assertion above its meaning: without it,
     // a future change that silently stopped composing anything at all would leave
     // "no name registered twice" trivially true over an empty or half-built document.
-    const byName = (a: string, b: string): number => a.localeCompare(b)
-    expect([...forgotten.keys()].toSorted(byName)).toEqual([...documented.keys()].toSorted(byName))
+    expect(forgotten.keys().toArray().toSorted(byName)).toEqual(
+      documented.keys().toArray().toSorted(byName),
+    )
     expect([...forgotten].filter(([, n]) => n !== 2)).toEqual([])
     expect(sum(forgotten)).toBe(2 * sum(documented))
   })

@@ -7,15 +7,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { atomClassMap } from '../src/atoms.ts'
-import { navePlugin } from '../src/vite.ts'
 import { REPORT_CAUSE } from '../src/vite-used-report.ts'
+import { navePlugin } from '../src/vite.ts'
 import {
   addPackage,
   appFiles,
   atomLayerAtoms,
   atoms,
-  type Built,
   buildUsed,
+  type Built,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
 import {
@@ -161,7 +161,7 @@ describe('AC-used-atoms-07 — references are attributed by lexical scope', () =
     const places = built
       .error!.split('\n')
       .filter((line) => line.startsWith('src/scope.js:'))
-      .map((line) => line.split(': ')[0]!)
+      .map((line) => line.split(': ', 1)[0]!)
     const at = (line: number, snippet: string, offset: number): string =>
       `src/scope.js:${line}:${renamed[line - 1]!.indexOf(snippet) + offset + 1}`
     expect(places).toEqual([
@@ -246,32 +246,50 @@ describe('AC-used-atoms-10 — anything else is a build error, never a warning',
   })
 })
 
+/**
+ * The message `request` was rejected with.
+ */
+async function rejectionMessage(request: Promise<unknown>): Promise<string> {
+  try {
+    await request
+  } catch (error) {
+    return (error as Error).message
+  }
+  throw new Error('the request was expected to be rejected and was not')
+}
+
 describe('AC-used-atoms-11 — a literal that is no atom name, with extend atoms out of the hint', () => {
   const extend = { brandBox: { declarations: { color: 'red' } } }
-  const rows: [string, string | undefined][] = [
+  const hinted: [string, string][] = [
     ['interactve', 'Did you mean "interactive"?'],
     ['sr-only', 'Did you mean "srOnly"? Atom names are camelCase; "nave-sr-only" is its class.'],
     ['nave-flex', 'Did you mean "flex"?'],
-    ['brandBoxx', undefined],
-    ['legacy-card', undefined],
-    ['toString', undefined],
   ]
+  const unhinted = ['brandBoxx', 'legacy-card', 'toString']
+  const literals = [...hinted.map(([literal]) => literal), ...unhinted]
 
-  it.each(rows)('%s', async (literal, hint) => {
-    const built = await build(
-      { 'src/row.js': `${IMPORT}cx('${literal}')\n` },
-      { options: { extend } },
-    )
+  const buildRow = (literal: string): Promise<Built> =>
+    build({ 'src/row.js': `${IMPORT}cx('${literal}')\n` }, { options: { extend } })
+
+  it.each(hinted)('%s', async (literal, hint) => {
+    const built = await buildRow(literal)
 
     expect(built.error).toMatch(/^1 problem in 1 file/)
     expect(built.error).toContain(`unknown atom "${literal}"`)
-    if (hint) expect(built.error).toContain(hint)
-    else expect(built.error).not.toContain('Did you mean')
+    expect(built.error).toContain(hint)
+  })
+
+  it.each(unhinted)('%s', async (literal) => {
+    const built = await buildRow(literal)
+
+    expect(built.error).toMatch(/^1 problem in 1 file/)
+    expect(built.error).toContain(`unknown atom "${literal}"`)
+    expect(built.error).not.toContain('Did you mean')
   })
 
   it('all rows together print the Available line once, last, with no extend atom', async () => {
     const modules = Object.fromEntries(
-      rows.map(([literal], index) => [`src/r${index}.js`, `${IMPORT}cx('${literal}')\n`]),
+      literals.map((literal, index) => [`src/r${index}.js`, `${IMPORT}cx('${literal}')\n`]),
     )
     const built = await build(modules, { options: { extend } })
     const lines = built.error!.split('\n')
@@ -350,7 +368,7 @@ describe('AC-used-atoms-34 — one report at build end, 1-based root-relative po
   })
 
   it('opens with the count and the cause, naming no option', () => {
-    const [first] = built.error!.split('\n')
+    const [first] = built.error!.split('\n', 1)
     expect(first).toBe(`5 problems in 4 files: ${REPORT_CAUSE}`)
     expect(REPORT_CAUSE).toBe(
       'the build cannot tell which atoms these apply, and it ships only the atoms it can read.',
@@ -408,20 +426,16 @@ describe('AC-used-atoms-35 — in dev, a per-module error with the same line tex
       })
       const server = await startDev(appConfig(app.root, 'postcss', [navePlugin()]))
       try {
-        const card = await server
-          .transformRequest('/src/Card.tsx')
-          .catch((error: Error) => error.message)
-        const only = await server
-          .transformRequest('/src/Only.tsx')
-          .catch((error: Error) => error.message)
+        const card = await rejectionMessage(server.transformRequest('/src/Card.tsx'))
+        const only = await rejectionMessage(server.transformRequest('/src/Only.tsx'))
 
         const buildLines = built.error!.split('\n')
         const cardLine = buildLines.find((line) => line.startsWith('src/Card.tsx:'))!
         const onlyLine = buildLines.find((line) => line.startsWith('src/Only.tsx:'))!
-        expect(String(card).split('\n')[0]).toBe(cardLine)
-        expect(String(card)).toContain('Name the atoms at the call')
-        expect(String(only).split('\n')[0]).toBe(onlyLine)
-        expect(String(card)).not.toMatch(/^\d+ problems? in/)
+        expect(card.split('\n', 1)[0]).toBe(cardLine)
+        expect(card).toContain('Name the atoms at the call')
+        expect(only.split('\n', 1)[0]).toBe(onlyLine)
+        expect(card).not.toMatch(/^\d+ problems? in/)
       } finally {
         await server.close()
       }
@@ -433,12 +447,12 @@ describe('AC-used-atoms-35 — in dev, a per-module error with the same line tex
   it('gives an application error for every row of AC-05, AC-10 and AC-31 that is application code, and none under all', async () => {
     const files: Record<string, string> = {}
     for (const [, file, text] of REFERENCE_ROWS) files[file] = text
-    ARGUMENT_ROWS.forEach(([, body], index) => {
+    for (const [index, [, body]] of ARGUMENT_ROWS.entries()) {
       files[`src/arg${index}.js`] = `${IMPORT}${body}\n`
-    })
-    PIECED_CLASS_ROWS.forEach(([expression], index) => {
+    }
+    for (const [index, [expression]] of PIECED_CLASS_ROWS.entries()) {
       files[`src/piece${index}.js`] = pieceModule(expression).text
-    })
+    }
     files['src/Dyn.js'] = `${IMPORT}export const d = (t) => cx.dynamic(t)\n`
     const app = makeUsedApp(appFiles(files))
     try {

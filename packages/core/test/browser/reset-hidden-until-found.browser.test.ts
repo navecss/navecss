@@ -16,7 +16,7 @@ import CORE_RESET_CSS from '../../dist/reset.css?raw'
 
 function mount(): void {
   document.head.querySelectorAll('style[data-fixture]').forEach((node) => node.remove())
-  document.body.innerHTML = ''
+  document.body.replaceChildren()
   const style = document.createElement('style')
   style.dataset.fixture = 'true'
   style.textContent = CORE_RESET_CSS

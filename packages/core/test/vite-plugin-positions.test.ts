@@ -20,6 +20,7 @@ const FILES = {
 
 let app: ScratchApp
 beforeAll(() => {
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- the setup hook builds the app the suite shares; a hook cannot return it
   app = makeApp(FILES)
 })
 afterAll(() => app?.dispose())
@@ -35,7 +36,8 @@ async function messageOf(run: Promise<unknown>): Promise<string> {
 
 describe('AC-directive-core-17 — whose line and column, through Vite', () => {
   it('a default build, with no stylesheet map, reports the file Vite passed and says so', async () => {
-    const message = await messageOf(buildOutputs(appConfig(app.root, 'postcss', [navePlugin()])))
+    const config = appConfig(app.root, 'postcss', [navePlugin()])
+    const message = await messageOf(buildOutputs(config))
 
     expect(message).toContain('[plugin nave]')
     expect(message).toMatch(/entry\.css:\d+:\d+: @nave: unknown atom "nope"/)

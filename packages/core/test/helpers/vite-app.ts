@@ -7,16 +7,16 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as viteFloor from 'vite-floor'
 import {
   build as buildOnNewest,
   createBuilder as createBuilderOnNewest,
   createServer as createServerOnNewest,
   type InlineConfig,
-  type PluginOption,
   version as newestVersion,
+  type PluginOption,
   type ViteDevServer,
 } from 'vite'
+import * as viteFloor from 'vite-floor'
 
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -120,9 +120,9 @@ export async function buildOutputs(
   config: InlineConfig,
   api: ViteApi = VITE_APIS['8.2.1']!,
 ): Promise<{
+  assets: Record<string, string>
   css: string
   js: string
-  assets: Record<string, string>
 }> {
   return outputsOf(await api.build(config))
 }
@@ -131,9 +131,9 @@ export async function buildOutputs(
  * The CSS, the JavaScript and the assets of a build result (one output or several).
  */
 export function outputsOf(result: unknown): {
+  assets: Record<string, string>
   css: string
   js: string
-  assets: Record<string, string>
 } {
   const outputs = (Array.isArray(result) ? result : [result]) as unknown as {
     output: OutputLike[]
@@ -170,7 +170,8 @@ function cssOfModule(url: string, code: string): string | undefined {
   if (url.includes('?direct')) return code
   const injected = CSS_STRING.exec(code)
   if (injected) return JSON.parse(injected[1]!) as string
-  const inline = url.includes('?inline') ? DEFAULT_STRING.exec(code) : null
+  if (!url.includes('?inline')) return undefined
+  const inline = DEFAULT_STRING.exec(code)
   return inline ? (JSON.parse(inline[1]!) as string) : undefined
 }
 
@@ -202,6 +203,10 @@ export async function devCss(
   return served
 }
 
+/**
+ * Starts a Vite dev server in middleware mode on `config` through the given Vite API, so a test
+ * can request modules from it without binding a port.
+ */
 export async function startDev(
   config: InlineConfig,
   api: ViteApi = VITE_APIS['8.2.1']!,
@@ -218,7 +223,7 @@ export async function startDev(
  * when no rule does.
  */
 export function ruleBodyFor(css: string, name: string): string | undefined {
-  const match = new RegExp(`${name}[^{}]*\\{([^}]*)\\}`).exec(css)
+  const match = new RegExp(String.raw`${name}[^{}]*\{([^}]*)\}`).exec(css)
   return match?.[1]?.replaceAll(/\s+/g, ' ').trim()
 }
 

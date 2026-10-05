@@ -2,10 +2,11 @@
  * AC-directive-core-33: the build fails when a directive reaches emitted CSS, with the same lines
  * `navecss-core check` prints for the same content, and nothing turns the scan off.
  */
+import type { Plugin } from 'vite'
+
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import type { Plugin } from 'vite'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { check } from '../src/directive/check.ts'
@@ -20,7 +21,9 @@ let clean: ScratchApp
 let valueSurvivor: ScratchApp
 beforeAll(() => {
   const entry = { 'index.html': APP_FILES['index.html']!, 'src/main.js': "import './plain.css'" }
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- the setup hook builds the apps the suite shares; a hook cannot return them
   clean = makeApp({ ...entry, 'src/plain.css': '.a { @nave flex; }' })
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- the setup hook builds the apps the suite shares; a hook cannot return them
   valueSurvivor = makeApp({ ...entry, 'src/plain.css': '.a { color: @nave flex; }' })
 })
 afterAll(() => {
@@ -36,6 +39,7 @@ function emitSurvivor(): Plugin {
   return {
     name: 'emit-survivor',
     generateBundle() {
+      // eslint-disable-next-line unicorn/no-this-outside-of-class -- a Rollup hook receives its plugin context as `this`
       this.emitFile({ type: 'asset', fileName: 'x.css', source: '.b{@nave flex}' })
     },
   }
@@ -50,6 +54,7 @@ const emitterAt = (name: string): Plugin => ({
   generateBundle: {
     order: 'post',
     handler() {
+      // eslint-disable-next-line unicorn/no-this-outside-of-class -- a Rollup hook receives its plugin context as `this`
       this.emitFile({ type: 'asset', fileName: 'late.css', source: '.b{@nave flex}' })
     },
   },
@@ -112,14 +117,10 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
     }, 30_000)
 
     it('a CSS file a plugin listed before the Nave one emits from a post-ordered generateBundle fails the build', async () => {
-      const error = await failureOf(
-        buildOutputs(
-          appConfig(clean.root, 'postcss', [emitterAt('early'), navePlugin()], {
-            build: { write: true },
-          }),
-          api,
-        ),
-      )
+      const config = appConfig(clean.root, 'postcss', [emitterAt('early'), navePlugin()], {
+        build: { write: true },
+      })
+      const error = await failureOf(buildOutputs(config, api))
 
       expect(error.message).toContain('late.css:1:4: @nave flex (in .b)')
     }, 60_000)
@@ -127,8 +128,8 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
     it('the count line states how many CSS assets the build wrote', async () => {
       const config = appConfig(clean.root, 'postcss', [emitSurvivor(), navePlugin()])
       const error = await failureOf(buildOutputs(config, api))
-      const written = (await buildOutputs(appConfig(clean.root, 'postcss', [navePlugin()]), api))
-        .css.length
+      const plain = await buildOutputs(appConfig(clean.root, 'postcss', [navePlugin()]), api)
+      const written = plain.css.length
 
       expect(written).toBeGreaterThan(0)
       expect(error.message).toMatch(/Scanned 2 CSS assets this build wrote\./)

@@ -97,8 +97,8 @@ export const EXEMPT_PIECE_ROWS: readonly (readonly [string, readonly string[]])[
  * Nothing is imported from Nave unless the expression itself calls `cx`.
  */
 export function pieceModule(expression: string): {
-  readonly text: string
   readonly column: number
+  readonly text: string
 } {
   const prefix = 'export const row = (tone, on) => '
   const head = expression.includes('cx.') ? IMPORT : '\n'

@@ -17,9 +17,9 @@ import { expandText } from '../../src/directive/expand-text.ts'
 import { navePlugin } from '../../src/postcss.ts'
 import { runHook } from '../helpers/vite-hook.ts'
 
-const FOCUS_VISIBLE = atoms.focusRing.pseudos![':focus-visible']!
+const FOCUS_VISIBLE = atoms.focusRing.pseudos[':focus-visible']
 const SR_ONLY_HIDDEN = atoms.srOnlyFocusable.declarations
-const SR_ONLY_REVEALED = atoms.srOnlyFocusable.pseudos![':focus-within']!
+const SR_ONLY_REVEALED = atoms.srOnlyFocusable.pseudos[':focus-within']
 
 interface Row {
   readonly atom: 'focusRing' | 'srOnlyFocusable'
@@ -103,7 +103,8 @@ function assertBaseDeclarationsSurvive(output: string, declarations: Record<stri
 
 describe('AC-directive-core-20 — the focus rules survive every leg', () => {
   it.each(ROWS)('$atom: $css', async ({ css, pseudo, revealed, base }) => {
-    const postcssOutput = (await postcss([navePlugin()]).process(css, { from: undefined })).css
+    const postcssResult = await postcss([navePlugin()]).process(css, { from: undefined })
+    const postcssOutput = postcssResult.css
     const expandTextOutput = expandText(css, {}).css
     const viteRun = await runHook({ code: css })
     const viteOutput = viteRun.code
@@ -125,6 +126,6 @@ describe('AC-directive-core-20 — the focus rules survive every leg', () => {
   it('control: a declaration-only row (no pseudo expected) is not exercised by this check', () => {
     const output = postcss.parse('.btn { outline: none; }').toString()
 
-    assertBaseDeclarationsSurvive(output, { outline: 'none' })
+    expect(() => assertBaseDeclarationsSurvive(output, { outline: 'none' })).not.toThrow()
   })
 })

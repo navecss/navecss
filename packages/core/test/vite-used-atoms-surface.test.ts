@@ -7,14 +7,23 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import ts from 'typescript'
+import {
+  createProgram,
+  flattenDiagnosticMessageText,
+  getPreEmitDiagnostics,
+  ModuleKind,
+  ModuleResolutionKind,
+  ScriptTarget,
+} from 'typescript'
 import { parseAst } from 'vite'
 import { describe, expect, it, vi } from 'vitest'
 
+import type { Transformer } from './helpers/vite-app.ts'
+
 import { atomClassMap } from '../src/atoms.ts'
 import { cx } from '../src/cx.ts'
-import { navePlugin } from '../src/vite.ts'
 import { stateFor } from '../src/vite-state.ts'
+import { navePlugin } from '../src/vite.ts'
 import {
   APP_CSS,
   appFiles,
@@ -23,7 +32,6 @@ import {
   buildUsed,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
-import type { Transformer } from './helpers/vite-app.ts'
 
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
@@ -137,20 +145,22 @@ function checkSnippets(): Map<SnippetName, string[]> {
       )
       files.set(file, name as SnippetName)
     }
-    const program = ts.createProgram([...files.keys()], {
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
-      target: ts.ScriptTarget.ESNext,
+    const program = createProgram(files.keys().toArray(), {
+      module: ModuleKind.ESNext,
+      moduleResolution: ModuleResolutionKind.Bundler,
+      target: ScriptTarget.ESNext,
       strict: true,
       skipLibCheck: false,
       noEmit: true,
       types: ['node'],
       ignoreDeprecations: '6.0',
     })
-    const own = new Map<SnippetName, string[]>([...files.values()].map((name) => [name, []]))
+    const own = new Map<SnippetName, string[]>(
+      files.values().map((name): [SnippetName, string[]] => [name, []]),
+    )
     const shared: string[] = []
-    for (const diagnostic of ts.getPreEmitDiagnostics(program)) {
-      const message = `TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`
+    for (const diagnostic of getPreEmitDiagnostics(program)) {
+      const message = `TS${diagnostic.code}: ${flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`
       const name = diagnostic.file && files.get(path.normalize(diagnostic.file.fileName))
       if (name) own.get(name)!.push(message)
       else shared.push(message)
@@ -167,6 +177,7 @@ let checked: Map<SnippetName, string[]> | undefined
  * The diagnostics of the snippet `name`; the first call checks them all.
  */
 function diagnosticsFor(name: SnippetName): string[] {
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- a lazy memo: the first call checks every snippet and later calls reuse the result
   checked ??= checkSnippets()
   return checked.get(name)!
 }
@@ -209,7 +220,7 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
         }),
       )
       try {
-        const trees = async (options?: Parameters<typeof navePlugin>[0]) => {
+        const trees = async (options?: Parameters<typeof navePlugin>[0]): Promise<string> => {
           const built = await buildUsed(app, { transformer, ...(options && { options }) })
           expect(built.error).toBeUndefined()
           return JSON.stringify([built.assets, built.js])
@@ -282,12 +293,14 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
         }
         nave.configResolved(config)
         const warn = vi.fn()
-        const environment = (consumer: string) => ({
+        const environment = (
+          consumer: string,
+        ): { config: { consumer: string }; name: string; plugins: (typeof cssStep)[] } => ({
           name: consumer === 'client' ? 'client' : 'ssr',
           config: { consumer },
           plugins: [cssStep],
         })
-        const hostOf = (consumer: string) =>
+        const hostOf = (consumer: string): never =>
           ({
             environment: environment(consumer),
             parse: parseAst,
@@ -413,6 +426,7 @@ describe(
       ['keep: a number', { keep: 42 }],
       ['keep: a Set', { keep: new Set(['flex']) }],
       ['keepFor: a string', { keepFor: 'x-lib' }],
+      // eslint-disable-next-line unicorn/no-null -- a literal `null` option value is what is under test
       ['keepFor: null', { keepFor: null }],
       ['keepFor: an entry that is a string', { keepFor: { a: 'flex' } }],
     ])(
@@ -480,6 +494,7 @@ describe('AC-used-atoms-18 — cx.dynamic() without the plugin', { timeout: 120_
   it('maps an atom through the full map and returns an empty string for anything else', () => {
     expect(cx.dynamic('grid')).toBe(cx('grid'))
     expect(cx.dynamic('grid')).toBe('nave-grid')
+    // eslint-disable-next-line unicorn/no-null -- a literal `null` argument is what is under test
     for (const value of ['legacy-card', 'toString', null, undefined, false] as const) {
       expect(cx.dynamic(value as never)).toBe('')
     }
@@ -537,10 +552,15 @@ describe('AC-used-atoms-23 — the post-order half never changes a module', () =
     try {
       const results: unknown[] = []
       const modules = new Map<string, string[]>()
-      const probe = (label: string) => ({
+      const probe = (
+        label: string,
+      ): { buildEnd(this: { getModuleIds(): IterableIterator<string> }): void; name: string } => ({
         name: `probe-${label}`,
         buildEnd(this: { getModuleIds(): IterableIterator<string> }) {
-          modules.set(label, [...this.getModuleIds()].toSorted())
+          modules.set(
+            label,
+            [...this.getModuleIds()].toSorted((a, b) => Number(a > b) - Number(a < b)),
+          )
         },
       })
       const [nave, collect] = navePlugin()

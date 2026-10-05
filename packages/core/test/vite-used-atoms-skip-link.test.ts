@@ -9,17 +9,18 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import type { Transformer } from './helpers/vite-app.ts'
+
 import { HANDSHAKE_FILE } from '../src/vite-handshake.ts'
 import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
 import {
   appFiles,
   atomLayerAtoms,
-  type Built,
   type BuildOptions,
   buildUsed,
+  type Built,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
-import type { Transformer } from './helpers/vite-app.ts'
 
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
@@ -92,10 +93,10 @@ describe.each(LEGS)('AC-used-atoms-26 - srOnly always ships with srOnlyFocusable
         const used = await build(app, leg, extra)
         const all = await build(app, leg, { options: { atomic: 'all' } })
         const expected = keepOnly(parseAtomicLayer(all.css), PAIR)
-        const handshake = JSON.parse(
-          readFileSync(path.join(app.root, '.vite', HANDSHAKE_FILE), 'utf8'),
-        ) as { emitted: string[] }
+        const readHandshake = (): unknown =>
+          JSON.parse(readFileSync(path.join(app.root, '.vite', HANDSHAKE_FILE), 'utf8'))
 
+        expect(readHandshake).not.toThrow()
         expect(used.error).toBeUndefined()
         expect(parseAtomicLayer(used.css)).toEqual(expected)
         expect(atomLayerAtoms(used.css)).toEqual(['srOnly', 'srOnlyFocusable'])
@@ -142,7 +143,7 @@ async function pipeline(
   client: string,
 ): Promise<{
   all: ReturnType<typeof parseAtomicLayer>
-  runs: { order: string; run: number; serverError: string | undefined; client: Built }[]
+  runs: { client: Built; order: string; run: number; serverError: string | undefined }[]
 }> {
   const app = makeUsedApp(
     appFiles({ 'src/App.ts': client, 'src/entry-server.ts': server }, ['src/App.ts']),
@@ -195,10 +196,10 @@ describe.each(TRANSFORMERS)(
       for (const { order, run, serverError, client } of runs) {
         const label = `${order} run ${run}`
         expect(client.error, label).toBeUndefined()
-        const holdsBoth =
+        const hasBoth =
           JSON.stringify(keepOnly(parseAtomicLayer(client.css), kept)) === JSON.stringify(expected)
-        expect(holdsBoth || serverError !== undefined, label).toBe(true)
-        if (order === 'server first') expect(holdsBoth, label).toBe(true)
+        expect(hasBoth || serverError !== undefined, label).toBe(true)
+        expect(order !== 'server first' || hasBoth, label).toBe(true)
       }
     }, 240_000)
 

@@ -10,13 +10,41 @@ import type { AtRule } from 'postcss'
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
-import { navePlugin } from '../src/postcss.ts'
-
 import type { AtomDefinition } from '../src/atoms.ts'
+
+import { navePlugin } from '../src/postcss.ts'
 
 const run = async (css: string, options?: Parameters<typeof navePlugin>[0]): Promise<string> => {
   const result = await postcss([navePlugin(options)]).process(css, { from: undefined })
   return result.css
+}
+
+/**
+ * What `run` produced, or `undefined` when the run was refused.
+ */
+async function runOrRefused(
+  css: string,
+  options?: Parameters<typeof navePlugin>[0],
+): Promise<string | undefined> {
+  let output: string | undefined
+  try {
+    output = await run(css, options)
+  } catch {
+    // A refused run leaves `output` unset.
+  }
+  return output
+}
+
+/**
+ * The error `run` was refused with.
+ */
+async function refusalOf(css: string): Promise<{ reason: string }> {
+  try {
+    await run(css)
+  } catch (error) {
+    return error as { reason: string }
+  }
+  throw new Error(`expected a refusal for: ${css}`)
 }
 
 describe('C3 — selector lists must not break pseudo rules', () => {
@@ -78,10 +106,10 @@ describe('declarations never follow a nested rule bare', () => {
     // nested rule/at-rule inside the parsed output.
     const root = postcss.parse(css)
     root.walkRules((rule) => {
-      let sawNested = false
+      let hasSeenNested = false
       for (const node of rule.nodes) {
-        if (node.type === 'rule' || node.type === 'atrule') sawNested = true
-        else if (node.type === 'decl' && sawNested) {
+        if (node.type === 'rule' || node.type === 'atrule') hasSeenNested = true
+        else if (hasSeenNested && node.type === 'decl') {
           throw new Error(
             `bare declaration "${node.toString()}" follows a nested node in "${rule.selector}"`,
           )
@@ -102,7 +130,7 @@ describe('declarations never follow a nested rule bare', () => {
 
     const block = css.slice(css.indexOf('&:hover'))
     // Exactly one `& {` wrapper carries both declarations, not one per atom.
-    expect([...block.matchAll(/&\s*\{/g)]).toHaveLength(1)
+    expect(block.matchAll(/&\s*\{/g).toArray()).toHaveLength(1)
     expect(block).toContain('display: flex')
     expect(block).toContain('align-items: center')
   })
@@ -249,7 +277,7 @@ describe('AC-directive-core-10 — the directive name matches ASCII case-insensi
     },
   )
 
-  it.each(['.a { @n\\61vex flex; }', '.a { @navex flex; }'])(
+  it.each([String.raw`.a { @n\61vex flex; }`, '.a { @navex flex; }'])(
     '%s passes through unchanged, no diagnostic, even with an escape before the boundary',
     async (css) => {
       const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(css, {
@@ -317,13 +345,11 @@ describe('the refused-parent text names the & workaround only for a group rule n
   })
 
   it('never appends the workaround sentence for a group rule nested inside a keyframe step, even with a style-rule ancestor further out', async () => {
-    const e = await run('@keyframes k { from { @media (x) { @nave flex; } } }').catch((x) => x)
-    expect((e as { reason: string }).reason).not.toContain('& { @nave')
+    const e = await refusalOf('@keyframes k { from { @media (x) { @nave flex; } } }')
+    expect(e.reason).not.toContain('& { @nave')
 
-    const e2 = await run('.a { @keyframes k { from { @media (x) { @nave flex; } } } }').catch(
-      (x) => x,
-    )
-    expect((e2 as { reason: string }).reason).not.toContain('& { @nave')
+    const e2 = await refusalOf('.a { @keyframes k { from { @media (x) { @nave flex; } } } }')
+    expect(e2.reason).not.toContain('& { @nave')
   })
 
   it('a group rule nested in a style rule appends the workaround sentence', async () => {
@@ -549,28 +575,30 @@ describe('onUnknown default is error', () => {
   // shape is registered under its own atom name so the thrown message says
   // which spelling failed.
   it('rejects an extend atom whose declarations is not a plain object, in every spelling', async () => {
-    const shapes = {
+    // A missing or null `declarations` is read where a directive uses the atom.
+    const refusedAtUse = {
       missing: {},
-      nulled: JSON.parse('{"declarations":null}'),
+      nulled: JSON.parse('{"declarations":null}') as unknown,
+    } as unknown as Record<string, AtomDefinition>
+    // A truthy value that is not a map (an array, a string) is refused as soon as the plugin is
+    // built, by name.
+    const refusedAtBuild = {
       emptyArray: { declarations: [] },
       filledArray: { declarations: ['color: red'] },
       primitive: { declarations: 'color: red' },
     } as unknown as Record<string, AtomDefinition>
 
-    // A missing or null `declarations` is read where a directive uses the atom; a truthy value
-    // that is not a map (an array, a string) is refused as soon as the plugin is built, by name.
-    const refusedAtUse = new Set(['missing', 'nulled'])
-    for (const [name, atom] of Object.entries(shapes)) {
+    for (const [name, atom] of Object.entries(refusedAtUse)) {
       const extend = { [name]: atom }
-      if (refusedAtUse.has(name)) {
-        await expect(run(`.x { @nave ${name}; }`, { extend })).rejects.toThrow(
-          new RegExp(`atom "${name}" is registered without a declarations object`),
-        )
-      } else {
-        expect(() => navePlugin({ extend })).toThrow(
-          new RegExp(`atom "${name}"'s declarations is .*, not a plain object`),
-        )
-      }
+      await expect(run(`.x { @nave ${name}; }`, { extend })).rejects.toThrow(
+        new RegExp(`atom "${name}" is registered without a declarations object`),
+      )
+    }
+    for (const [name, atom] of Object.entries(refusedAtBuild)) {
+      const extend = { [name]: atom }
+      expect(() => navePlugin({ extend })).toThrow(
+        new RegExp(`atom "${name}"'s declarations is .*, not a plain object`),
+      )
     }
   })
 
@@ -798,7 +826,7 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
     await expect(run('.x { @nave __proto__; }', { extend })).resolves.toBe('.x { color: red; }')
   })
 
-  it('never validates the built-in atom map, only consumer-supplied extend entries', async () => {
+  it('never validates the built-in atom map, only consumer-supplied extend entries', () => {
     // A built-in atom's own declarations never carry these characters, so this
     // is just confirming the check is scoped to `extend` and does not walk `atoms`
     // on every plugin creation for no reason.
@@ -869,13 +897,10 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
       },
     } as unknown as Record<string, AtomDefinition>
 
-    const outcome = await run('.x { @nave evil; }', { extend }).then(
-      (css) => ({ ok: true as const, css }),
-      () => ({ ok: false as const }),
-    )
+    const css = await runOrRefused('.x { @nave evil; }', { extend })
 
-    expect(outcome.ok ? outcome.css : '').not.toContain('display: none')
-    if (outcome.ok) expect(outcome.css).toContain('color: red')
+    expect(css ?? '').not.toContain('display: none')
+    expect(css === undefined || css.includes('color: red')).toBe(true)
   })
 
   it('never emits injected text from a declaration value object whose toString answers differently on a second read', async () => {
@@ -894,13 +919,10 @@ describe('an extend atom cannot break out of the declaration or rule it is splic
     // already been read and converted to a plain string, so a second use of
     // the same atom in one stylesheet is what a coercion left until emission
     // time would see differently from the first.
-    const outcome = await run('.x { @nave evil; } .y { @nave evil; }', { extend }).then(
-      (css) => ({ ok: true as const, css }),
-      () => ({ ok: false as const }),
-    )
+    const css = await runOrRefused('.x { @nave evil; } .y { @nave evil; }', { extend })
 
-    expect(outcome.ok ? outcome.css : '').not.toContain('display: none')
-    if (outcome.ok) expect(outcome.css).toContain('color: red')
+    expect(css ?? '').not.toContain('display: none')
+    expect(css === undefined || css.includes('color: red')).toBe(true)
   })
 })
 
