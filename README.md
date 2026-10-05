@@ -680,12 +680,13 @@ below carry equal weight.
 
 ### What Nave promises about what it ships
 
-**A visible keyboard focus indicator by default, with no author action
-required.** Nave's reset ships no rule that removes the browser's own focus
-indicator at document scope, so every focusable element in a document using
-the reset keeps one (supports SC 2.4.7 Focus Visible, Level AA). A regression
-test asserts that no reset rule strips the indicator outside a
-`:focus-visible` gate.
+**The browser's own keyboard focus indicator, kept by default, with no author
+action required.** Nave's reset ships no rule that removes the browser's own
+focus indicator at document scope, so every focusable element in a document
+using the reset keeps one (supports SC 2.4.7 Focus Visible, Level AA). A
+focused element that is itself visually hidden shows no indicator, whatever
+hid it. A regression test asserts that no reset rule strips the indicator
+outside a `:focus-visible` gate.
 
 **Motion tokens honour `prefers-reduced-motion` in the shipped CSS** (supports
 SC 2.3.3 Animation from Interactions, Level AAA; it does not on its own satisfy
