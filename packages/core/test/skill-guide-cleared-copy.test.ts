@@ -45,7 +45,10 @@ describe('AC-consumer-constraints-40: composes no prose around the vocabulary', 
     // Every added line mentions the planted atom or is blank table padding around it — nothing
     // else in the document moved.
     for (const line of added) {
-      expect(line === '' || line.includes('plantedAtom') || /^\|[\s-]*\|/.test(line)).toBe(true)
+      expect(
+        line === '' || line.includes('plantedAtom') || /^\|[\s-]*\|/.test(line),
+        `unexpected added line: ${line}`,
+      ).toBe(true)
     }
   })
 

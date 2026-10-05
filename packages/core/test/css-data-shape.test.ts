@@ -98,7 +98,10 @@ function entry(): NonNullable<CssCustomData['atDirectives']>[number] {
 describe('AC-consumer-constraints-08: the @nave entry claims only what it delivers', () => {
   it('has no references entry', () => {
     const value = entry().references
-    expect(value === undefined || (Array.isArray(value) && value.length === 0)).toBe(true)
+    expect(
+      value === undefined || (Array.isArray(value) && value.length === 0),
+      `references was: ${JSON.stringify(value)}`,
+    ).toBe(true)
   })
 
   it('contains no URL', () => {
