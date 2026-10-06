@@ -153,9 +153,7 @@ function stylelintTaskHashes(cwd: string): Record<string, string> {
     }),
   ) as { tasks: { hash: string; taskId: string }[] }
   const hashes = Object.fromEntries(
-    dryRun.tasks
-      .filter((t) => t.taskId === '@navecss/core#lint')
-      .map((t) => [t.taskId, t.hash]),
+    dryRun.tasks.filter((t) => t.taskId === '@navecss/core#lint').map((t) => [t.taskId, t.hash]),
   )
   expect(Object.keys(hashes)).toEqual(['@navecss/core#lint'])
   return hashes
