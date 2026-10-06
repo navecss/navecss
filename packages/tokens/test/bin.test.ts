@@ -31,22 +31,31 @@ const PACKAGE_JSON = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.js
 
 // Every case that copies `dist/` into a scratch install and spawns a real `node` process via
 // `runNode` queues behind the OS scheduler when the whole monorepo's tests run in parallel, and
-// can exceed the 5s default even though the same case takes well under a second in isolation. Under
-// several runs sharing a loaded machine 20s was not enough either, so the value is 60s.
+// can exceed the default timeout even though the same case does little work in isolation. Under
+// load the time goes to the operating system starting many short child processes and copying
+// files, not to work the test does, so a child gets a generous allowance of its own: 60s.
 // Cases that assert on static values with no spawn keep the default, so a genuine hang still
 // shows up fast.
 const SPAWN_TEST_TIMEOUT_MS = 60_000
 
-// The running test's effective timeout, read by `runNode` so that a spawn inside a test still on
-// the 5s default fails on every run, not only on a loaded one. Without it, a new spawn case
-// added outside a `{ timeout: SPAWN_TEST_TIMEOUT_MS }` describe passes alone and flakes later.
-// One shared value can only describe one running test, so it reads 0 (and `runNode` refuses)
-// between tests, which covers hooks, and for concurrent tests, whose runs interleave.
-const currentTest = { timeout: 0 }
+// The time a test needs is the time of its slowest child times the number of children it starts,
+// because each one waits in the same queue: a test that starts two carries two children's worth.
+const spawnBudget = (children: number): number => SPAWN_TEST_TIMEOUT_MS * children
+
+// The running test's effective timeout and the children it has started so far, read by `runNode`
+// so that a spawn inside a test still on the 5s default, or one more child than the test's budget
+// covers, fails on every run, not only on a loaded one. Without it, a new spawn case added outside
+// a `{ timeout: SPAWN_TEST_TIMEOUT_MS }` describe, or one that adds a build to a test that already
+// has one, passes alone and flakes later. One shared value can only describe one running test, so
+// the timeout reads 0 (and `runNode` refuses) between tests, which covers hooks, and for
+// concurrent tests, whose runs interleave.
+const currentTest = { spawns: 0, timeout: 0 }
 beforeEach(({ task }) => {
+  currentTest.spawns = 0
   currentTest.timeout = task.concurrent ? 0 : task.timeout
 })
 afterEach(() => {
+  currentTest.spawns = 0
   currentTest.timeout = 0
 })
 
@@ -72,9 +81,11 @@ function runNode(
   cwd: string,
   nodeFlags: string[] = [],
 ): RunResult {
-  if (currentTest.timeout < SPAWN_TEST_TIMEOUT_MS) {
+  currentTest.spawns += 1
+  const needed = spawnBudget(currentTest.spawns)
+  if (currentTest.timeout < needed) {
     throw new Error(
-      `runNode needs a sequential test with a timeout of at least ${SPAWN_TEST_TIMEOUT_MS}ms but read ${currentTest.timeout}ms (0 means a hook or a concurrent test); spawn only from a non-concurrent \`it\` inside a describe carrying { timeout: SPAWN_TEST_TIMEOUT_MS }`,
+      `runNode needs a sequential test with a timeout of at least ${needed}ms for child number ${currentTest.spawns} but read ${currentTest.timeout}ms (0 means a hook or a concurrent test); spawn only from a non-concurrent \`it\` inside a describe carrying { timeout: SPAWN_TEST_TIMEOUT_MS }, and give a test that starts more than one child { timeout: spawnBudget(<children>) }`,
     )
   }
   return spawnNode([...nodeFlags, scriptPath, ...args], cwd, SPAWN_TEST_TIMEOUT_MS)
@@ -169,48 +180,52 @@ describe(
       expect(existsSync(outDirBefore)).toBe(false) // no directory was ever created
     })
 
-    it('build resolves the pipeline in the R31-mandated order (seed, ramp, per-step overrides, semantics) through the REAL shipped entry point', () => {
-      const { binPath, projectDir } = scratchInstall()
-      const overridesPath = path.join(projectDir, 'overrides.json')
-      writeFileSync(overridesPath, JSON.stringify({ primary: { 500: 0.01 } }))
+    it(
+      'build resolves the pipeline in the R31-mandated order (seed, ramp, per-step overrides, semantics) through the REAL shipped entry point',
+      { timeout: spawnBudget(2) },
+      () => {
+        const { binPath, projectDir } = scratchInstall()
+        const overridesPath = path.join(projectDir, 'overrides.json')
+        writeFileSync(overridesPath, JSON.stringify({ primary: { 500: 0.01 } }))
 
-      const outWithOverride = path.join(projectDir, 'out-with-override')
-      const withOverride = runNode(
-        binPath,
-        [
-          'build',
-          '--seed',
-          'oklch(0.55 0.18 250)',
-          '--out',
-          outWithOverride,
-          '--overrides',
-          overridesPath,
-        ],
-        projectDir,
-      )
-      expect(withOverride.status).toBe(0)
+        const outWithOverride = path.join(projectDir, 'out-with-override')
+        const withOverride = runNode(
+          binPath,
+          [
+            'build',
+            '--seed',
+            'oklch(0.55 0.18 250)',
+            '--out',
+            outWithOverride,
+            '--overrides',
+            overridesPath,
+          ],
+          projectDir,
+        )
+        expect(withOverride.status).toBe(0)
 
-      const outNoOverride = path.join(projectDir, 'out-no-override')
-      const withoutOverride = runNode(
-        binPath,
-        ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outNoOverride],
-        projectDir,
-      )
-      expect(withoutOverride.status).toBe(0)
+        const outNoOverride = path.join(projectDir, 'out-no-override')
+        const withoutOverride = runNode(
+          binPath,
+          ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outNoOverride],
+          projectDir,
+        )
+        expect(withoutOverride.status).toBe(0)
 
-      // The per-step override changes the resolved primary ramp — a real, out-of-process
-      // effect of the OVERRIDE step running after ramp generation and before semantics
-      // resolve, not an in-memory unit-test double.
-      const withOverrideResolved = readFileSync(
-        path.join(outWithOverride, 'palette-record.json'),
-        'utf8',
-      )
-      const withoutOverrideResolved = readFileSync(
-        path.join(outNoOverride, 'palette-record.json'),
-        'utf8',
-      )
-      expect(withOverrideResolved).not.toBe(withoutOverrideResolved)
-    })
+        // The per-step override changes the resolved primary ramp — a real, out-of-process
+        // effect of the OVERRIDE step running after ramp generation and before semantics
+        // resolve, not an in-memory unit-test double.
+        const withOverrideResolved = readFileSync(
+          path.join(outWithOverride, 'palette-record.json'),
+          'utf8',
+        )
+        const withoutOverrideResolved = readFileSync(
+          path.join(outNoOverride, 'palette-record.json'),
+          'utf8',
+        )
+        expect(withOverrideResolved).not.toBe(withoutOverrideResolved)
+      },
+    )
   },
 )
 
@@ -238,33 +253,37 @@ describe(
      * exactly at its own invocation cwd — the one place discovery, if it existed, would find it
      * first — and asserts the build output is unaffected by its presence.
      */
-    it('a plausible config file sitting at the invoking cwd itself changes nothing: no discovery is ever attempted', () => {
-      const { binPath, projectDir: withConfigDir } = scratchInstall()
-      writeFileSync(
-        path.join(withConfigDir, 'navecss.config.json'),
-        JSON.stringify({ seed: 'oklch(0.1 0.3 10)' }),
-      )
-      const outWithConfig = path.join(withConfigDir, 'out')
-      const withConfig = runNode(
-        binPath,
-        ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outWithConfig],
-        withConfigDir, // the config file's own directory IS the invocation cwd
-      )
-      expect(withConfig.status).toBe(0)
+    it(
+      'a plausible config file sitting at the invoking cwd itself changes nothing: no discovery is ever attempted',
+      { timeout: spawnBudget(2) },
+      () => {
+        const { binPath, projectDir: withConfigDir } = scratchInstall()
+        writeFileSync(
+          path.join(withConfigDir, 'navecss.config.json'),
+          JSON.stringify({ seed: 'oklch(0.1 0.3 10)' }),
+        )
+        const outWithConfig = path.join(withConfigDir, 'out')
+        const withConfig = runNode(
+          binPath,
+          ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outWithConfig],
+          withConfigDir, // the config file's own directory IS the invocation cwd
+        )
+        expect(withConfig.status).toBe(0)
 
-      const { binPath: binPath2, projectDir: withoutConfigDir } = scratchInstall()
-      const outWithoutConfig = path.join(withoutConfigDir, 'out')
-      const withoutConfig = runNode(
-        binPath2,
-        ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outWithoutConfig],
-        withoutConfigDir,
-      )
-      expect(withoutConfig.status).toBe(0)
+        const { binPath: binPath2, projectDir: withoutConfigDir } = scratchInstall()
+        const outWithoutConfig = path.join(withoutConfigDir, 'out')
+        const withoutConfig = runNode(
+          binPath2,
+          ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outWithoutConfig],
+          withoutConfigDir,
+        )
+        expect(withoutConfig.status).toBe(0)
 
-      expect(readFileSync(path.join(outWithConfig, 'tokens.css'), 'utf8')).toBe(
-        readFileSync(path.join(outWithoutConfig, 'tokens.css'), 'utf8'),
-      )
-    })
+        expect(readFileSync(path.join(outWithConfig, 'tokens.css'), 'utf8')).toBe(
+          readFileSync(path.join(outWithoutConfig, 'tokens.css'), 'utf8'),
+        )
+      },
+    )
   },
 )
 
@@ -314,26 +333,30 @@ describe(
       expect(result.status).toBe(1)
     })
 
-    it('the exit-code set observed across every case above is exactly {0, 1, 2}', () => {
-      const { binPath, projectDir } = scratchInstall()
-      const source = path.join(projectDir, 'consumer.css')
-      writeFileSync(source, ':root {}')
-      const outcomes = [
-        runNode(
-          binPath,
-          ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', path.join(projectDir, 'o1')],
-          projectDir,
-        ),
-        runNode(
-          binPath,
-          ['build', '--seed', 'nope', '--out', path.join(projectDir, 'o2')],
-          projectDir,
-        ),
-        runNode(binPath, ['validate', '--source', source], projectDir),
-      ]
-      const statuses = new Set(outcomes.map((outcome) => outcome.status))
-      expect(statuses).toEqual(new Set([0, 1, 2]))
-    })
+    it(
+      'the exit-code set observed across every case above is exactly {0, 1, 2}',
+      { timeout: spawnBudget(3) },
+      () => {
+        const { binPath, projectDir } = scratchInstall()
+        const source = path.join(projectDir, 'consumer.css')
+        writeFileSync(source, ':root {}')
+        const outcomes = [
+          runNode(
+            binPath,
+            ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', path.join(projectDir, 'o1')],
+            projectDir,
+          ),
+          runNode(
+            binPath,
+            ['build', '--seed', 'nope', '--out', path.join(projectDir, 'o2')],
+            projectDir,
+          ),
+          runNode(binPath, ['validate', '--source', source], projectDir),
+        ]
+        const statuses = new Set(outcomes.map((outcome) => outcome.status))
+        expect(statuses).toEqual(new Set([0, 1, 2]))
+      },
+    )
   },
 )
 
@@ -566,51 +589,63 @@ describe(
       expect(existsSync(outDir)).toBe(false)
     })
 
-    it('--help and -h at the top level print usage and exit 0, never "unknown subcommand"', () => {
-      const { binPath, projectDir } = scratchInstall()
-      for (const flag of ['--help', '-h']) {
-        const result = runNode(binPath, [flag], projectDir)
-        expect(result.status).toBe(0)
-        expect(result.stdout).toMatch(/^Usage:/)
-        expect(result.stdout).not.toMatch(/unknown subcommand/)
-      }
-    })
+    it(
+      '--help and -h at the top level print usage and exit 0, never "unknown subcommand"',
+      { timeout: spawnBudget(2) },
+      () => {
+        const { binPath, projectDir } = scratchInstall()
+        for (const flag of ['--help', '-h']) {
+          const result = runNode(binPath, [flag], projectDir)
+          expect(result.status).toBe(0)
+          expect(result.stdout).toMatch(/^Usage:/)
+          expect(result.stdout).not.toMatch(/unknown subcommand/)
+        }
+      },
+    )
 
-    it('build --help and validate --help print usage and exit 0, never "Unknown option"', () => {
-      const { binPath, projectDir } = scratchInstall()
-      for (const args of [
-        ['build', '--help'],
-        ['validate', '--help'],
-        ['build', '-h'],
-      ]) {
-        const result = runNode(binPath, args, projectDir)
-        expect(result.status).toBe(0)
-        expect(result.stdout).toMatch(/^Usage:/)
-        expect(result.stderr).not.toMatch(/Unknown option/)
-      }
-    })
+    it(
+      'build --help and validate --help print usage and exit 0, never "Unknown option"',
+      { timeout: spawnBudget(3) },
+      () => {
+        const { binPath, projectDir } = scratchInstall()
+        for (const args of [
+          ['build', '--help'],
+          ['validate', '--help'],
+          ['build', '-h'],
+        ]) {
+          const result = runNode(binPath, args, projectDir)
+          expect(result.status).toBe(0)
+          expect(result.stdout).toMatch(/^Usage:/)
+          expect(result.stderr).not.toMatch(/Unknown option/)
+        }
+      },
+    )
 
-    it('a missing required flag prints the usage block alongside the specific error, not the error alone', () => {
-      const { binPath, projectDir } = scratchInstall()
-      const missingSeed = runNode(
-        binPath,
-        ['build', '--out', path.join(projectDir, 'out')],
-        projectDir,
-      )
-      expect(missingSeed.status).toBe(2)
-      expect(missingSeed.stderr).toMatch(/build requires --seed/)
-      expect(missingSeed.stderr).toMatch(/Usage:/)
+    it(
+      'a missing required flag prints the usage block alongside the specific error, not the error alone',
+      { timeout: spawnBudget(3) },
+      () => {
+        const { binPath, projectDir } = scratchInstall()
+        const missingSeed = runNode(
+          binPath,
+          ['build', '--out', path.join(projectDir, 'out')],
+          projectDir,
+        )
+        expect(missingSeed.status).toBe(2)
+        expect(missingSeed.stderr).toMatch(/build requires --seed/)
+        expect(missingSeed.stderr).toMatch(/Usage:/)
 
-      const missingOut = runNode(binPath, ['build', '--seed', 'oklch(0.55 0.18 250)'], projectDir)
-      expect(missingOut.status).toBe(2)
-      expect(missingOut.stderr).toMatch(/build requires --out/)
-      expect(missingOut.stderr).toMatch(/Usage:/)
+        const missingOut = runNode(binPath, ['build', '--seed', 'oklch(0.55 0.18 250)'], projectDir)
+        expect(missingOut.status).toBe(2)
+        expect(missingOut.stderr).toMatch(/build requires --out/)
+        expect(missingOut.stderr).toMatch(/Usage:/)
 
-      const missingSource = runNode(binPath, ['validate'], projectDir)
-      expect(missingSource.status).toBe(2)
-      expect(missingSource.stderr).toMatch(/validate requires --source/)
-      expect(missingSource.stderr).toMatch(/Usage:/)
-    })
+        const missingSource = runNode(binPath, ['validate'], projectDir)
+        expect(missingSource.status).toBe(2)
+        expect(missingSource.stderr).toMatch(/validate requires --source/)
+        expect(missingSource.stderr).toMatch(/Usage:/)
+      },
+    )
   },
 )
 
@@ -716,22 +751,26 @@ describe(
   'AC-token-build-08 covers: R9 (out-of-process black-box clause)',
   { timeout: SPAWN_TEST_TIMEOUT_MS },
   () => {
-    it('neither subcommand reads any path outside its own installed directory and the caller-named paths, from a directory with no monorepo present', () => {
-      const { binPath, projectDir } = scratchInstall()
-      const outDir = path.join(projectDir, 'out')
-      const buildResult = runNode(
-        binPath,
-        ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
-        projectDir,
-      )
-      expect(buildResult.status).toBe(0)
-      expect(buildResult.stderr).not.toMatch(/ENOENT/)
+    it(
+      'neither subcommand reads any path outside its own installed directory and the caller-named paths, from a directory with no monorepo present',
+      { timeout: spawnBudget(2) },
+      () => {
+        const { binPath, projectDir } = scratchInstall()
+        const outDir = path.join(projectDir, 'out')
+        const buildResult = runNode(
+          binPath,
+          ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+          projectDir,
+        )
+        expect(buildResult.status).toBe(0)
+        expect(buildResult.stderr).not.toMatch(/ENOENT/)
 
-      const source = path.join(outDir, 'tokens.css')
-      const validateResult = runNode(binPath, ['validate', '--source', source], projectDir)
-      expect(validateResult.status).toBe(0)
-      expect(validateResult.stderr).not.toMatch(/ENOENT/)
-    })
+        const source = path.join(outDir, 'tokens.css')
+        const validateResult = runNode(binPath, ['validate', '--source', source], projectDir)
+        expect(validateResult.status).toBe(0)
+        expect(validateResult.stderr).not.toMatch(/ENOENT/)
+      },
+    )
 
     /**
      * This uses Node's own `--permission` model, on the pinned runtime (v24.17.0), rather than
@@ -750,42 +789,46 @@ describe(
      * NOT prove no read reaches an unnamed file INSIDE the project subtree; the achievable bound
      * is the subtree, not the exact path list R9 enumerates.
      */
-    it('build and validate both complete under a real fs permission fence scoped to the scratch project subtree alone, on the pinned Node runtime', () => {
-      const { binPath, projectDir } = scratchInstall()
-      const outDir = path.join(projectDir, 'permission-out')
-      const permissionArgs = [
-        '--permission',
-        `--allow-fs-read=${projectDir}/*`,
-        `--allow-fs-write=${outDir}/*`,
-      ]
-
-      const buildResult = runNode(
-        binPath,
-        ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
-        projectDir,
-        permissionArgs,
-      )
-      expect(buildResult.stderr).not.toMatch(
-        /ERR_ACCESS_DENIED|Access to this API has been restricted/,
-      )
-      expect(buildResult.status).toBe(0)
-
-      const validateResult = runNode(
-        binPath,
-        ['validate', '--source', path.join(outDir, 'tokens.css')],
-        projectDir,
-        [
+    it(
+      'build and validate both complete under a real fs permission fence scoped to the scratch project subtree alone, on the pinned Node runtime',
+      { timeout: spawnBudget(2) },
+      () => {
+        const { binPath, projectDir } = scratchInstall()
+        const outDir = path.join(projectDir, 'permission-out')
+        const permissionArgs = [
           '--permission',
           `--allow-fs-read=${projectDir}/*`,
-          // validate writes nothing; an empty write glob keeps the fence as narrow as the
-          // subcommand's own contract (R23-adjacent: validate never writes).
-        ],
-      )
-      expect(validateResult.stderr).not.toMatch(
-        /ERR_ACCESS_DENIED|Access to this API has been restricted/,
-      )
-      expect(validateResult.status).toBe(0)
-    })
+          `--allow-fs-write=${outDir}/*`,
+        ]
+
+        const buildResult = runNode(
+          binPath,
+          ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+          projectDir,
+          permissionArgs,
+        )
+        expect(buildResult.stderr).not.toMatch(
+          /ERR_ACCESS_DENIED|Access to this API has been restricted/,
+        )
+        expect(buildResult.status).toBe(0)
+
+        const validateResult = runNode(
+          binPath,
+          ['validate', '--source', path.join(outDir, 'tokens.css')],
+          projectDir,
+          [
+            '--permission',
+            `--allow-fs-read=${projectDir}/*`,
+            // validate writes nothing; an empty write glob keeps the fence as narrow as the
+            // subcommand's own contract (R23-adjacent: validate never writes).
+          ],
+        )
+        expect(validateResult.stderr).not.toMatch(
+          /ERR_ACCESS_DENIED|Access to this API has been restricted/,
+        )
+        expect(validateResult.status).toBe(0)
+      },
+    )
 
     it('a real permission fence refuses a read outside the granted subtree at the runtime level, on a bare control script (proves the instrument itself refuses, independent of this package)', () => {
       const scratch = realpathSync(scratchDir('navecss-tokens-perm-'))
@@ -868,51 +911,61 @@ describe(
   'AC-token-build-14 covers: R14 (installedCoreVersion, real resolution, both failure directions)',
   { timeout: SPAWN_TEST_TIMEOUT_MS },
   () => {
-    it("no installed @navecss/core at all: success line states the manifest's own RECORDED version and that no skew check ran, never a version nobody compared against", () => {
-      const { binPath, projectDir } = scratchInstall()
-      const outDir = path.join(projectDir, 'out')
-      const build = runNode(
-        binPath,
-        ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
-        projectDir,
-      )
-      expect(build.status).toBe(0)
+    it(
+      "no installed @navecss/core at all: success line states the manifest's own RECORDED version and that no skew check ran, never a version nobody compared against",
+      { timeout: spawnBudget(2) },
+      () => {
+        const { binPath, projectDir } = scratchInstall()
+        const outDir = path.join(projectDir, 'out')
+        const build = runNode(
+          binPath,
+          ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+          projectDir,
+        )
+        expect(build.status).toBe(0)
 
-      const validate = runNode(
-        binPath,
-        ['validate', '--source', path.join(outDir, 'tokens.css')],
-        projectDir, // no node_modules/@navecss/core exists in this scratch project
-      )
-      expect(validate.status).toBe(0)
-      expect(validate.stdout).toMatch(
-        /no installed @navecss\/core was found, so no version-skew check ran/i,
-      )
-    })
+        const validate = runNode(
+          binPath,
+          ['validate', '--source', path.join(outDir, 'tokens.css')],
+          projectDir, // no node_modules/@navecss/core exists in this scratch project
+        )
+        expect(validate.status).toBe(0)
+        expect(validate.stdout).toMatch(
+          /no installed @navecss\/core was found, so no version-skew check ran/i,
+        )
+      },
+    )
 
-    it('an older installed @navecss/core with no "./package.json" export: reported as a named failure at exit 1, not silently treated as absent', () => {
-      const { binPath, projectDir } = scratchInstall()
-      const outDir = path.join(projectDir, 'out')
-      const build = runNode(
-        binPath,
-        ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
-        projectDir,
-      )
-      expect(build.status).toBe(0)
+    it(
+      'an older installed @navecss/core with no "./package.json" export: reported as a named failure at exit 1, not silently treated as absent',
+      { timeout: spawnBudget(2) },
+      () => {
+        const { binPath, projectDir } = scratchInstall()
+        const outDir = path.join(projectDir, 'out')
+        const build = runNode(
+          binPath,
+          ['build', '--seed', 'oklch(0.55 0.18 250)', '--out', outDir],
+          projectDir,
+        )
+        expect(build.status).toBe(0)
 
-      installOlderCoreWithNoPackageJsonExport(projectDir, '0.0.9')
+        installOlderCoreWithNoPackageJsonExport(projectDir, '0.0.9')
 
-      const validate = runNode(
-        binPath,
-        ['validate', '--source', path.join(outDir, 'tokens.css')],
-        projectDir,
-      )
-      // Before this fix this printed "0 missing ... from @navecss/core@0.1.0"
-      // and exited 0 — the manifest's RECORDED version, presented as though it had been
-      // compared against the (unreachable) installed one.
-      expect(validate.status).toBe(1)
-      expect(validate.stdout).not.toMatch(/^0 missing\. Checked/m)
-      expect(validate.stdout).toMatch(/could not determine the installed @navecss\/core's version/i)
-    })
+        const validate = runNode(
+          binPath,
+          ['validate', '--source', path.join(outDir, 'tokens.css')],
+          projectDir,
+        )
+        // Before this fix this printed "0 missing ... from @navecss/core@0.1.0"
+        // and exited 0 — the manifest's RECORDED version, presented as though it had been
+        // compared against the (unreachable) installed one.
+        expect(validate.status).toBe(1)
+        expect(validate.stdout).not.toMatch(/^0 missing\. Checked/m)
+        expect(validate.stdout).toMatch(
+          /could not determine the installed @navecss\/core's version/i,
+        )
+      },
+    )
 
     /**
      * These exercise the PROBE,
@@ -937,6 +990,7 @@ describe(
       ],
     ] as const)(
       'an installed but BROKEN @navecss/core — %s — is not classified as absent: exit 2, and the report never says no installed core was found',
+      { timeout: spawnBudget(2) },
       (_label, breakCore) => {
         const { binPath, projectDir } = scratchInstall()
         const outDir = path.join(projectDir, 'out')
@@ -1351,8 +1405,15 @@ describe(
   },
 )
 
-// The guard above, pinned: each case must refuse before any process is spawned, and name a fix
-// that applies to it.
+// A child that does nothing, so the cases below measure the guard and not a build.
+function noop(): string {
+  const script = path.join(realpathSync(scratchDir('navecss-tokens-bin-')), 'noop.mjs')
+  writeFileSync(script, '')
+  return script
+}
+
+// The guard above, pinned: each case must refuse before the process it refuses is spawned, and name
+// a fix that applies to it.
 describe('runNode refuses to spawn outside a sequential test carrying the spawn timeout', () => {
   const refusal = /runNode needs a sequential test.*spawn only from a non-concurrent `it`/
   let hookError: unknown
@@ -1377,6 +1438,33 @@ describe('runNode refuses to spawn outside a sequential test carrying the spawn 
     { timeout: SPAWN_TEST_TIMEOUT_MS },
     ({ expect }) => {
       expect(() => runNode(process.execPath, [], PACKAGE_ROOT)).toThrow(refusal)
+    },
+  )
+
+  it(
+    'for a second child in a test carrying one child’s budget (the first runs)',
+    { timeout: spawnBudget(1) },
+    () => {
+      const script = noop()
+
+      expect(runNode(script, [], PACKAGE_ROOT).status).toBe(0)
+      expect(() => runNode(script, [], PACKAGE_ROOT)).toThrow(
+        new RegExp(`at least ${spawnBudget(2)}ms for child number 2`),
+      )
+    },
+  )
+
+  it(
+    'for a third child in a test carrying two children’s budget (two run)',
+    { timeout: spawnBudget(2) },
+    () => {
+      const script = noop()
+
+      expect(runNode(script, [], PACKAGE_ROOT).status).toBe(0)
+      expect(runNode(script, [], PACKAGE_ROOT).status).toBe(0)
+      expect(() => runNode(script, [], PACKAGE_ROOT)).toThrow(
+        new RegExp(`at least ${spawnBudget(3)}ms for child number 3`),
+      )
     },
   )
 })

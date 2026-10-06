@@ -12,10 +12,11 @@ filename)` expands the directives in a stylesheet's text and returns `{ code, ma
   each file `bundleAsync()` asks for, so a file reached through `@import` is covered. Lightning CSS
   never sees a directive, so it prints no `Unknown at rule` warning and cannot fail on a malformed
   one; Nave's own messages name the real file, line and column. The adapter imports nothing from
-  `lightningcss` and declares no peer: bring your own copy, version 1.22 or later, the first with CSS
-  nesting on by default (1.20 and 1.21 cannot parse the nested rules the adapter writes). It takes
-  `extend` (an object) and `onUnknown`, as the other plugins do. It is for a host that runs
-  Lightning CSS itself, not for Vite: on Vite, keep using the Vite plugin.
+  `lightningcss` and declares no peer: bring your own copy, version 1.24.1 or later. Earlier
+  releases can drop the message of an error a resolver throws during `bundleAsync()`, so a malformed
+  directive could fail a build with an empty error, and 1.20 and 1.21 cannot parse the nested rules
+  the adapter writes. It takes `extend` (an object) and `onUnknown`, as the other plugins do. It is
+  for a host that runs Lightning CSS itself, not for Vite: on Vite, keep using the Vite plugin.
 - New `navecss-core expand --source=<file> --out=<file>`, with `--extend=<module>` and `--watch`:
   expands every `@nave` in each source and writes it, reporting every problem across every file in
   one run. `--source` and `--out` repeat as pairs, matched by order. Exit `0` when every file was

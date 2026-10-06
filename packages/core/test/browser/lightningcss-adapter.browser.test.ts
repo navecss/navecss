@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import OLDEST_CSS from './fixtures/lightningcss-1-22.css?raw'
+import OLDEST_CSS from './fixtures/lightningcss-1-24.css?raw'
 import NEWEST_CSS from './fixtures/lightningcss.css?raw'
 
 function computedDisplay(css: string, className: string): string {

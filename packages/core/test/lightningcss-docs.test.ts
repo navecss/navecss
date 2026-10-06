@@ -106,8 +106,11 @@ describe('AC-directive-core-46 — the core README has the Lightning CSS adapter
     expect(lightning).toMatch(/not (?:the route )?for Vite/i)
   })
 
-  it('states the supported range as 1.22 and later, with 1.20’s nesting reason (AC-40)', () => {
-    expect(lightning).toMatch(/1\.22 and later/)
+  it('states the supported range as 1.24.1 and later, with the lost-message reason and 1.20’s nesting reason (AC-40)', () => {
+    expect(lightning).toMatch(/1\.24\.1 and later/)
+    expect(lightning).toMatch(
+      /drop the message of an error a resolver throws during `bundleAsync\(\)`/,
+    )
     expect(lightning).toMatch(/1\.20/)
     expect(lightning).toMatch(/nesting/)
     expect(lightning).toMatch(/measured, not declared|documented, not declared/)

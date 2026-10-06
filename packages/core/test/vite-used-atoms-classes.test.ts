@@ -45,18 +45,41 @@ const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
- * Runs the package's CSS build step from a copy of the package in a scratch directory, with `line`
- * put before the script, recording every file it reads and every module it loads, wherever they
- * are. `pluginFiles` are the recorded files that belong to the Vite plugin: a `vite*.ts` source
- * or a `vite*.js` file of `dist`.
+ * The budget of a test that runs `recordCssBuild`. The work is one `node` child started from a
+ * fresh copy of `src/`, a cold start of the whole module graph. Under load the time goes to the
+ * operating system starting many short child processes, not to work the test does, so a test's
+ * budget scales with the children it starts. Each row therefore carries the 60 s the file's other
+ * real builds carry, not the default every other test here gets.
  */
-function recordCssBuild(line: string): {
+const CSS_BUILD_TEST_TIMEOUT_MS = 60_000
+
+interface CssBuildRecording {
   names: string[]
   pluginFiles: string[]
   status: number | null
   stderr: string
   wroteAtomic: boolean
-} {
+}
+
+// The recording runs the build script, never Vite, so it is the same under both `css.transformer`
+// values: one child per script line serves both, instead of one per value.
+const recordings = new Map<string, CssBuildRecording>()
+
+function recordCssBuild(line: string): CssBuildRecording {
+  const known = recordings.get(line)
+  if (known) return known
+  const recording = runCssBuild(line)
+  recordings.set(line, recording)
+  return recording
+}
+
+/**
+ * Runs the package's CSS build step from a copy of the package in a scratch directory, with `line`
+ * put before the script, recording every file it reads and every module it loads, wherever they
+ * are. `pluginFiles` are the recorded files that belong to the Vite plugin: a `vite*.ts` source
+ * or a `vite*.js` file of `dist`.
+ */
+function runCssBuild(line: string): CssBuildRecording {
   const work = mkdtempSync(path.join(CORE_ROOT, '.nave-css-build-'))
   try {
     mkdirSync(path.join(work, 'scripts'))
@@ -444,29 +467,37 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       for (const className of Object.values(atomClassMap)) expect(atomic).toContain(`.${className}`)
     })
 
-    it('builds the published stylesheets from files no module of the Vite plugin can reach', () => {
-      // A lawful change to a stylesheet leaves this green; a module of the plugin getting into the
-      // build of a published file does not, however the script reaches it.
-      const run = recordCssBuild('')
+    it(
+      'builds the published stylesheets from files no module of the Vite plugin can reach',
+      () => {
+        // A lawful change to a stylesheet leaves this green; a module of the plugin getting into the
+        // build of a published file does not, however the script reaches it.
+        const run = recordCssBuild('')
 
-      expect(run.status, run.stderr).toBe(0)
-      // The recording sees the build: its inputs and the modules it imports.
-      expect(run.names).toContain('src/reset.css')
-      expect(run.names).toContain('src/atoms.ts')
-      expect(run.names).toContain('src/directive/resolve.ts')
-      expect(run.pluginFiles).toEqual([])
-      expect(run.wroteAtomic).toBe(true)
-    })
+        expect(run.status, run.stderr).toBe(0)
+        // The recording sees the build: its inputs and the modules it imports.
+        expect(run.names).toContain('src/reset.css')
+        expect(run.names).toContain('src/atoms.ts')
+        expect(run.names).toContain('src/directive/resolve.ts')
+        expect(run.pluginFiles).toEqual([])
+        expect(run.wroteAtomic).toBe(true)
+      },
+      CSS_BUILD_TEST_TIMEOUT_MS,
+    )
 
     it.each([
       ['a relative import', "import '../src/vite-handshake.ts'\n"],
       ['a read of a plugin file', "import '../src/vite-emit.ts'\n"],
       ['a dynamic import', "await import('../src/vite-prune.ts')\n"],
       ['the package’s own name', "import '@navecss/core/vite'\n"],
-    ])('sees a plugin module the script reaches through %s', (_name, line) => {
-      const run = recordCssBuild(line)
+    ])(
+      'sees a plugin module the script reaches through %s',
+      (_name, line) => {
+        const run = recordCssBuild(line)
 
-      expect(run.pluginFiles).not.toEqual([])
-    })
+        expect(run.pluginFiles).not.toEqual([])
+      },
+      CSS_BUILD_TEST_TIMEOUT_MS,
+    )
   })
 })

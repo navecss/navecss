@@ -1,11 +1,11 @@
 /**
  * The two Lightning CSS releases the adapter's suites run on: the oldest the documentation
- * supports (1.22.1, installed under an alias) and the newest installed one. The two releases ship
+ * supports (1.24.1, installed under an alias) and the newest installed one. The two releases ship
  * type declarations that differ in their own AST, so each is seen here through the few calls the
  * suites make, which are the same on both.
  */
 import * as newest from 'lightningcss'
-import * as oldest from 'lightningcss-1-22'
+import * as oldest from 'lightningcss-1-24'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,7 +42,7 @@ export const LIGHTNING_RELEASES: readonly LightningRelease[] = [
   {
     label: 'the oldest supported release',
     lib: oldest as unknown as LightningLib,
-    package: 'lightningcss-1-22',
+    package: 'lightningcss-1-24',
   },
   {
     label: 'the newest installed release',
