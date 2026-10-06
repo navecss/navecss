@@ -43,6 +43,6 @@ Published to npm:
 
 In the repository but not published (`private: true`):
 
-- **[packages/base-ui](../packages/base-ui/)** (`@navecss/base-ui`): Base UI's components pre-styled with Nave's tokens. Its role atoms are expanded at build time through core's PostCSS adapter into one `styles.css`, so a consumer needs neither PostCSS nor the `@nave` directive.
+- **[packages/base-ui](../packages/base-ui/)** (`@navecss/base-ui`): Base UI's components pre-styled with Nave's tokens. Each component has its own subpath (`./dialog`, `./select` and the rest; the package root exports them all) that re-exports the parts of `@base-ui/react`, adding Nave's class names to the ones it styles. Their styles are one `styles.css`, built from role atoms through core's PostCSS adapter, so a consumer needs neither PostCSS nor the `@nave` directive. `@base-ui/react`, `react` and `react-dom` are peer dependencies.
 - **[packages/bridge](../packages/bridge/)** (`@navecss/bridge`): CSS files that map Nave's tokens onto the CSS variables Base UI and Radix UI read.
 - **[packages/cli](../packages/cli/)** (`@navecss/cli`): the `navecss` component-registry command; its commands are stubs until the registry exists.
