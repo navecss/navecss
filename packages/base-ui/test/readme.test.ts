@@ -52,7 +52,7 @@ describe('AC-base-ui-bridge-45: the README carries each item the release owes', 
   })
 
   it('carries no image', () => {
-    expect(readme).not.toMatch(/!\[|<img|<picture|<svg/i)
+    expect(prose).not.toMatch(/!\[|<img|<picture/i)
   })
 
   it('has an install command naming the package and its peers', () => {

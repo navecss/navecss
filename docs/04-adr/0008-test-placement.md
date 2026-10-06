@@ -95,6 +95,11 @@ Vitest's `__snapshots__/` directory sits beside its test, wherever that is.
 **5. No test or fixture file ever ships, and that is checked, not assumed.**
 
 - `@navecss/bridge`'s `files` gains `"!src/**/*.test.*"`.
+  **Correction (2026-10-06):** `@navecss/bridge` was retired before it published,
+  so this line and the Context's example of a package that ships `src/` no longer
+  describe a package. `@navecss/base-ui`, which took its place, ships `dist/` only,
+  keeps its tests in `test/`, and has a test that reads its packed file list for any
+  test file.
 - `@navecss/tokens`'s `tsconfig.build.json` excludes `src/**/*.test.ts`.
 - Every package's Vitest configuration includes `src/**/*.test.ts` as well as
   `test/**/*.test.ts`, and its typecheck configuration covers both.

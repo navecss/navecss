@@ -1,6 +1,6 @@
 # Releasing
 
-How a new version of `@navecss/tokens` and `@navecss/core` gets to npm. These two packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`); `@navecss/bridge` and `@navecss/cli` are not published yet.
+How a new version of `@navecss/tokens` and `@navecss/core` gets to npm. These two packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of that pair ([ADR 0009](../04-adr/0009-release-topology.md)), and `@navecss/cli` is not published yet.
 
 You need publish rights on both packages on npmjs.com, with two-factor authentication on your npm account.
 
@@ -79,7 +79,7 @@ Trusted publishing cannot create a package: every credential-free path npm offer
 
 A new publishable package's first version goes live by hand, the same way the first version (`0.1.0`) of `@navecss/tokens` and `@navecss/core` did:
 
-1. Merge the pull request that adds the package, as usual: with its changeset, and with the package added to `PUBLISHABLE_SET` in `scripts/check-publishable-set.mjs` (the full check fails until it is). If the package already exists in the workspace as a private package (as `@navecss/bridge` and `@navecss/cli` do today), the same pull request also removes `"private": true` from its `package.json` and removes it from `ignore` in `.changeset/config.json`: Changesets never versions a package on that list, and the same full check fails while a publishable package is still on it.
+1. Merge the pull request that adds the package, as usual: with its changeset, and with the package added to `PUBLISHABLE_SET` in `scripts/check-publishable-set.mjs` (the full check fails until it is). If the package already exists in the workspace as a private package (as `@navecss/cli` does today), the same pull request also removes `"private": true` from its `package.json` and removes it from `ignore` in `.changeset/config.json`: Changesets never versions a package on that list, and the same full check fails while a publishable package is still on it.
 2. Version it as in "1. Version the packages" above, and merge the version pull request.
 3. From that commit, with a clean working tree, build, then pack and publish the package by hand under two-factor authentication. `dist` is not committed, so packing without building first would publish a package with nothing in it, and a published version can never be replaced:
    ```sh

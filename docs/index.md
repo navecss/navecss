@@ -1,6 +1,6 @@
 # NaveCSS monorepo documentation
 
-Engineering documentation for the **NaveCSS** monorepo: a standards-first, zero-runtime CSS design-system library published as the `@navecss/*` packages (`tokens`, `core`, `bridge`, `cli`), built with pnpm + Turborepo and versioned with Changesets.
+Engineering documentation for the **NaveCSS** monorepo: a standards-first, zero-runtime CSS design-system library published as the `@navecss/*` packages (`tokens`, `core`, `base-ui`, `cli`), built with pnpm + Turborepo and versioned with Changesets.
 
 This tree holds the docs that version with the code: getting started, contribution workflow, technical deep-dives, and Architecture Decision Records. The reasoning behind an architectural decision is in its ADR under [`04-adr/`](./04-adr/index.md), which is the place to read before changing what it covers. For anything these pages do not answer, such as a feature request, a bug or a question about where the project is heading, [open an issue](https://github.com/navecss/navecss/issues).
 
@@ -20,7 +20,7 @@ Branching, Conventional Commits, Changesets, the CI check set, and how a change 
 
 ## 🧑‍🚀 Technical documentation
 
-How the packages work and why: the `@layer` model, the DTCG 2025.10 token pipeline, the `@nave` directive (core implements it; PostCSS is one adapter), the bridges, the CLI registry.
+How the packages work and why: the `@layer` model, the DTCG 2025.10 token pipeline, the `@nave` directive (core implements it; PostCSS is one adapter), the Base UI package, the CLI registry.
 
 [Let's dive in!](./03-tech-docs/index.md)
 
@@ -34,5 +34,5 @@ The key architectural decisions that shape this library, with context, options, 
 
 - **[packages/tokens](../packages/tokens/)** — DTCG 2025.10 token source + first-party build pipeline; emits CSS custom properties and JS/TS.
 - **[packages/core](../packages/core/README.md)** — Layer architecture, reset, generated atomic utilities, `cx()`/atoms, implements the `@nave` directive (PostCSS is one adapter).
-- **[packages/bridge](../packages/bridge/)** — CSS token bridges for Base UI and Radix UI.
+- **[packages/base-ui](../packages/base-ui/)** — Base UI's components, wrapped and styled with Nave's tokens.
 - **[packages/cli](../packages/cli/)** — Component-registry CLI (`navecss add ...`).

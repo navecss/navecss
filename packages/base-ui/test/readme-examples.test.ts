@@ -51,6 +51,6 @@ describe('AC-base-ui-bridge-48: the README examples typecheck against the built 
     }
     const result = await compile('readme-examples-planted', files([planted]), 'current')
     expect(result.code).not.toBe(0)
-    expect(result.output).toMatch(/size/)
+    expect(result.output).toMatch(/not assignable/)
   })
 })

@@ -85,16 +85,16 @@ test('a manifest with private: true is not publishable', () => {
 })
 
 test('a manifest with private: false is publishable (changesets checks strict !== true)', () => {
-  assert.equal(isPublishable({ name: '@navecss/bridge', private: false }), true)
+  assert.equal(isPublishable({ name: '@navecss/base-ui', private: false }), true)
 })
 
-test('the shipped set (tokens + core + stylelint-config + eslint-plugin publishable, bridge + cli private) matches with no mismatches', () => {
+test('the shipped set (tokens + core + stylelint-config + eslint-plugin + base-ui publishable, cli private) matches with no mismatches', () => {
   const manifests = [
     { name: '@navecss/tokens' },
     { name: '@navecss/core' },
     { name: '@navecss/stylelint-config' },
     { name: '@navecss/eslint-plugin' },
-    { name: '@navecss/bridge', private: true },
+    { name: '@navecss/base-ui' },
     { name: '@navecss/cli', private: true },
   ]
   assert.deepEqual(findMismatches(manifests), {
@@ -107,11 +107,10 @@ test('a package outside the expected set losing "private: true" is caught as une
   const manifests = [
     { name: '@navecss/tokens' },
     { name: '@navecss/core' },
-    { name: '@navecss/bridge' }, // no private: true — the defect this guards against
-    { name: '@navecss/cli', private: true },
+    { name: '@navecss/cli' }, // no private: true — the defect this guards against
   ]
   const { unexpectedlyPublishable } = findMismatches(manifests)
-  assert.deepEqual(unexpectedlyPublishable, ['@navecss/bridge'])
+  assert.deepEqual(unexpectedlyPublishable, ['@navecss/cli'])
 })
 
 test('an expected-set member gaining "private: true" by mistake is caught as unexpectedly private', () => {
@@ -120,15 +119,16 @@ test('an expected-set member gaining "private: true" by mistake is caught as une
     { name: '@navecss/core' },
     { name: '@navecss/stylelint-config' },
     { name: '@navecss/eslint-plugin' },
-    { name: '@navecss/bridge', private: true },
+    { name: '@navecss/base-ui' },
     { name: '@navecss/cli', private: true },
   ]
   const { unexpectedlyPrivate } = findMismatches(manifests)
   assert.deepEqual(unexpectedlyPrivate, ['@navecss/tokens'])
 })
 
-test('PUBLISHABLE_SET is exactly {tokens, core, stylelint-config, eslint-plugin} today', () => {
+test('PUBLISHABLE_SET is exactly {tokens, core, stylelint-config, eslint-plugin, base-ui} today', () => {
   assert.deepEqual([...PUBLISHABLE_SET].sort(), [
+    '@navecss/base-ui',
     '@navecss/core',
     '@navecss/eslint-plugin',
     '@navecss/stylelint-config',
@@ -198,7 +198,7 @@ test('main(): a confirmed workspace with the expected publishable set passes wit
   const dir = buildFixture(
     VALID_WORKSPACE_YAML,
     {
-      bridge: { name: '@navecss/bridge', private: true },
+      'base-ui': { name: '@navecss/base-ui' },
       cli: { name: '@navecss/cli', private: true },
       core: { name: '@navecss/core' },
       'eslint-plugin': { name: '@navecss/eslint-plugin' },
@@ -206,7 +206,7 @@ test('main(): a confirmed workspace with the expected publishable set passes wit
       tokens: { name: '@navecss/tokens' },
     },
     // Private packages on the list are the intended state; only a set member there is a fault.
-    { ignore: ['@navecss/cli', '@navecss/bridge'] },
+    { ignore: ['@navecss/cli'] },
   )
   try {
     const { calls, exitCode } = runMain(dir)
@@ -317,6 +317,7 @@ test('nothing this gate prints down ANY path names a tracker a reader cannot ope
 // private) in one fixture so both are anchored.
 test('the mismatch report is byte-exact, not only opacity- and shape-checked', () => {
   const mismatched = buildFixture(VALID_WORKSPACE_YAML, {
+    'base-ui': { name: '@navecss/base-ui' },
     core: { name: '@navecss/core', private: true },
     'eslint-plugin': { name: '@navecss/eslint-plugin' },
     'stylelint-config': { name: '@navecss/stylelint-config' },
@@ -459,6 +460,7 @@ test('no message this gate PRINTS names a tracker a consumer cannot read', () =>
 })
 
 const EXPECTED_SET_PACKAGES = {
+  'base-ui': { name: '@navecss/base-ui' },
   core: { name: '@navecss/core' },
   'eslint-plugin': { name: '@navecss/eslint-plugin' },
   'stylelint-config': { name: '@navecss/stylelint-config' },
@@ -612,7 +614,7 @@ for (const [title, config, pattern] of [
 
 test('main(): ignore entries that are plain package names, scoped or not, still pass', () => {
   const dir = buildFixture(VALID_WORKSPACE_YAML, EXPECTED_SET_PACKAGES, {
-    ignore: ['@navecss/cli', '@navecss/bridge', 'left-pad', 'a.b_c~d-e'],
+    ignore: ['@navecss/cli', 'left-pad', 'a.b_c~d-e'],
   })
   try {
     const { calls, exitCode } = runMain(dir)

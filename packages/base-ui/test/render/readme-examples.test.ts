@@ -62,7 +62,7 @@ describe('AC-base-ui-bridge-48: the README examples render, and each styled part
     'renders example $index without error, every part it writes that renders carrying its class',
     async ({ body, index }) => {
       const Example = await load(`example-${index}`, body)
-      render(createElement(Example))
+      await render(createElement(Example))
       const rendered = styledTags(body).filter(([, classes]) =>
         classes.some((name) => document.body.querySelector(`.${name}`) !== null),
       )
@@ -81,7 +81,7 @@ describe('AC-base-ui-bridge-48: the README examples render, and each styled part
     const body =
       "import { Button } from '@base-ui/react/button'\nexport default function Bare() {\n  return <Button>Save</Button>\n}"
     const Example = await load('planted', body)
-    render(createElement(Example))
+    await render(createElement(Example))
     expect(missingClasses(body, document.body)).toEqual(['Button -> nave-base-ui-button'])
   })
 })

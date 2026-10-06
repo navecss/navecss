@@ -67,7 +67,7 @@ describe('AC-05: zero-runtime (R2)', () => {
   })
 
   it('no source file in this workspace, outside this package itself, imports the package', () => {
-    const otherPackageSrcDirs = ['core', 'tokens', 'bridge', 'cli', 'stylelint-config']
+    const otherPackageSrcDirs = ['core', 'tokens', 'base-ui', 'cli', 'stylelint-config']
       .map((name) => path.join(WORKSPACE_ROOT, 'packages', name, 'src'))
       .filter((dir) => statSync(dir, { throwIfNoEntry: false })?.isDirectory())
 
@@ -83,7 +83,7 @@ describe('AC-05: zero-runtime (R2)', () => {
   })
 
   it('no other package.json names this package in dependencies, peerDependencies or optionalDependencies', () => {
-    for (const name of ['core', 'tokens', 'bridge', 'cli', 'stylelint-config']) {
+    for (const name of ['core', 'tokens', 'base-ui', 'cli', 'stylelint-config']) {
       const manifestPath = path.join(WORKSPACE_ROOT, 'packages', name, 'package.json')
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
         dependencies?: Record<string, string>

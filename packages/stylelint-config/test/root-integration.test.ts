@@ -142,7 +142,7 @@ function scratchCopyOfTrackedFiles(): string {
 }
 
 /**
- * The turbo task hashes of the two packages that run stylelint, from a dry run in `cwd`.
+ * The turbo task hash of the package that runs stylelint, from a dry run in `cwd`.
  */
 function stylelintTaskHashes(cwd: string): Record<string, string> {
   const dryRun = JSON.parse(
@@ -154,13 +154,10 @@ function stylelintTaskHashes(cwd: string): Record<string, string> {
   ) as { tasks: { hash: string; taskId: string }[] }
   const hashes = Object.fromEntries(
     dryRun.tasks
-      .filter((t) => t.taskId === '@navecss/core#lint' || t.taskId === '@navecss/bridge#lint')
+      .filter((t) => t.taskId === '@navecss/core#lint')
       .map((t) => [t.taskId, t.hash]),
   )
-  expect(Object.keys(hashes).toSorted((a, b) => a.localeCompare(b))).toEqual([
-    '@navecss/bridge#lint',
-    '@navecss/core#lint',
-  ])
+  expect(Object.keys(hashes)).toEqual(['@navecss/core#lint'])
   return hashes
 }
 
@@ -177,9 +174,9 @@ describe('AC-consumer-constraints-21 covers: R10', () => {
   })
 
   it.each([
-    ['.stylelintrc.json', ['@navecss/bridge#lint', '@navecss/core#lint']],
-    ['packages/stylelint-config/README.md', ['@navecss/bridge#lint', '@navecss/core#lint']],
-    ['stylelint.outline-guard.mjs', ['@navecss/bridge#lint', '@navecss/core#lint']],
+    ['.stylelintrc.json', ['@navecss/core#lint']],
+    ['packages/stylelint-config/README.md', ['@navecss/core#lint']],
+    ['stylelint.outline-guard.mjs', ['@navecss/core#lint']],
     ['packages/core/src/reset.css', ['@navecss/core#lint']],
   ])(
     'a whitespace-only edit to %s changes exactly the hashes of %j',

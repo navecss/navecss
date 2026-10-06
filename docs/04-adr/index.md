@@ -24,5 +24,6 @@ ADRs record significant architectural choices: the context, the options consider
 | [0007](0007-es-modules-only-and-require.md)             | Nave ships ES modules only, with no CommonJS build, and every JavaScript entry point also loads through `require()`        | accepted |
 | [0008](0008-test-placement.md)                          | A test lives beside the one source file it tests; tests of the package as a whole live in `test/`; no test file ever ships | accepted |
 | [0009](0009-release-topology.md)                        | Release topology: which packages version together, and why `@navecss/stylelint-config` does not                            | accepted |
+| [0010](0010-wrapper-package-per-headless-library.md)    | Styled headless components ship as one wrapper package per library, built from Nave's tokens                               | accepted |
 
-_Still to back-fill: the first-party token build pipeline (its mechanism; the format it targets is 0002), pnpm + Turborepo + Changesets as the release topology, and the headless-bridge approach (Base UI / Radix)._
+_Still to back-fill: the first-party token build pipeline (its mechanism; the format it targets is 0002), and pnpm + Turborepo + Changesets as the release topology._

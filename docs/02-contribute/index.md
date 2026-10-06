@@ -19,7 +19,7 @@
 
 - **Zero runtime:** `@nave` directives inline at build time; `cx()` maps to static atoms. No runtime style computation, ever.
 - **`@layer` order is a public contract:** changing layer ordering or naming is a breaking change.
-- **Dependency direction:** `core` and `bridge` depend on `tokens`, never the reverse; the CLI stays a thin registry client.
+- **Dependency direction:** `core` depends on `tokens`, and `base-ui` peers on it, never the reverse; the CLI stays a thin registry client.
 - **Deliberate versioning:** public-API and token-contract changes are versioned events (Changesets), not incidental edits.
 
 ## Specs and tracking

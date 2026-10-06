@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@navecss/cli", "@navecss/bridge", "@navecss/base-ui"]
+  "ignore": ["@navecss/cli"]
 }

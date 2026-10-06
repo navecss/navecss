@@ -1,6 +1,6 @@
 # NaveCSS — Claude Code Context
 
-Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo publishing `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `bridge` (Base UI / Radix token bridges), `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
+Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo publishing `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `base-ui` (Nave-styled Base UI components: wrappers plus one built stylesheet), `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
 
 ## Principles
 
@@ -11,7 +11,7 @@ Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monore
 - **Adopt at Baseline, and state the floor:** a platform feature is adoptable once it is Baseline (shipped in all three engines). If that raises the supported browser floor, the ADR adopting it says so explicitly. Drafts and single-engine features are not adoptable.
 - **Zero-runtime is an invariant** (and it outranks the standards rule above — that is what the "stated decision" rider is for)**:** `@nave` directives inline at build time and `cx()` maps to static atoms. Nothing may reintroduce runtime style computation. What the invariant covers and excludes: `docs/04-adr/0004-zero-runtime-scope.md`.
 - **The `@layer` cascade order is a public contract** (`tokens -> reset -> atomic -> components.nave -> components.consumer -> overrides`): consumer overrides always win, no specificity conflicts, **provided Nave's order statement is the first `@layer` declaration the document sees** (a consumer layer registered earlier inverts the order). A change to layer ordering or naming is a breaking change. The seven names, the precondition and the consumer's obligation: `docs/04-adr/0003-layer-cascade-contract.md`.
-- **Tokens flow one way:** DTCG source in `@navecss/tokens` builds to CSS custom properties and JS. `core` and `bridge` depend on `tokens`, never the reverse; the CLI stays a thin registry client; no package leaks another's internals across its export map.
+- **Tokens flow one way:** DTCG source in `@navecss/tokens` builds to CSS custom properties and JS. `core` depends on `tokens`, and `base-ui` peers on it and builds from `core` (a dev dependency), never the reverse; the CLI stays a thin registry client; no package leaks another's internals across its export map.
 
 ## Before You Code
 
@@ -38,13 +38,13 @@ For multi-step tasks, state a brief plan with a verify step per item before exec
 ```
 packages/tokens/   → DTCG token source (tokens.json) + first-party DTCG reader (build.ts); emits CSS custom properties + JS/TS
 packages/core/     → reset.css, @layer stack (index.css), generated atomic utilities, cx()/atoms, implements @nave (PostCSS is one adapter)
-packages/bridge/   → base-ui.css / radix.css token bridges (CSS-only; depends on tokens)
+packages/base-ui/  → @navecss/base-ui: Base UI's components, wrapped and pre-styled (static classes + one stylesheet in `components.nave`, built from core's atoms); peer on tokens
 packages/cli/      → navecss CLI (component registry: `navecss add ...`); thin registry client
 packages/stylelint-config/ → published stylelint rules for a consumer's project (`@nave` known, `var()`-or-keyword values on listed properties, the outline guard, declared `--nave-*` names); peer on tokens
 packages/eslint-plugin/   → published ESLint rules for a consumer's project (a declared/atom class channel in JSX, a reasoned `cx.raw()` escape, its count, tokenized `style` values); peer on core
 ```
 
-Dependency direction: `core`, `bridge` -> `tokens`. `cli` orchestrates, owns no styles. Public-API and token-contract changes are deliberate, versioned events (Changesets), not incidental.
+Dependency direction: `core` -> `tokens`; `base-ui` -> `tokens` (peer), `core` (dev only). `cli` orchestrates, owns no styles. Public-API and token-contract changes are deliberate, versioned events (Changesets), not incidental.
 
 ## Before You Start
 
