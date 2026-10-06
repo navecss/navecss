@@ -1,6 +1,6 @@
 # NaveCSS monorepo documentation
 
-Engineering documentation for the **NaveCSS** monorepo: a standards-first, zero-runtime CSS design-system library published as the `@navecss/*` packages (`tokens`, `core`, `bridge`, `cli`), built with pnpm + Turborepo and versioned with Changesets.
+Engineering documentation for the **NaveCSS** monorepo: a standards-first, zero-runtime CSS design-system library published as the `@navecss/*` packages (`tokens`, `core`, `stylelint-config`, `eslint-plugin`), built with pnpm + Turborepo and versioned with Changesets.
 
 This tree holds the docs that version with the code: getting started, contribution workflow, technical deep-dives, and Architecture Decision Records. The reasoning behind an architectural decision is in its ADR under [`04-adr/`](./04-adr/index.md), which is the place to read before changing what it covers. For anything these pages do not answer, such as a feature request, a bug or a question about where the project is heading, [open an issue](https://github.com/navecss/navecss/issues).
 
@@ -32,7 +32,17 @@ The key architectural decisions that shape this library, with context, options, 
 
 ## Packages
 
-- **[packages/tokens](../packages/tokens/)** — DTCG 2025.10 token source + first-party build pipeline; emits CSS custom properties and JS/TS.
-- **[packages/core](../packages/core/README.md)** — Layer architecture, reset, generated atomic utilities, `cx()`/atoms, implements the `@nave` directive (PostCSS is one adapter).
-- **[packages/bridge](../packages/bridge/)** — CSS token bridges for Base UI and Radix UI.
-- **[packages/cli](../packages/cli/)** — Component-registry CLI (`navecss add ...`).
+Every directory under `packages/`. The published ones are also in the [README's package table](../README.md#packages), which is the place to look for what to install.
+
+Published to npm:
+
+- **[packages/tokens](../packages/tokens/README.md)** (`@navecss/tokens`): DTCG 2025.10 token source and first-party build pipeline; emits CSS custom properties and JS/TS.
+- **[packages/core](../packages/core/README.md)** (`@navecss/core`): layer architecture, reset, generated atomic utilities, `cx()`/atoms, and the `@nave` directive, with its Vite, PostCSS and Lightning CSS adapters and the `navecss-core` command.
+- **[packages/stylelint-config](../packages/stylelint-config/README.md)** (`@navecss/stylelint-config`): stylelint rules for a consumer's project that make `@nave` known to stylelint, require a `var()` or an admitted keyword on listed properties, flag `outline: none` and `outline: 0`, and check that a `var(--nave-*)` reference names a declared custom property.
+- **[packages/eslint-plugin](../packages/eslint-plugin/README.md)** (`@navecss/eslint-plugin`): ESLint rules for a consumer's project that report a literal class in `className` unless it is declared, and a literal value on a tokenized `style` property.
+
+In the repository but not published (`private: true`):
+
+- **[packages/base-ui](../packages/base-ui/)** (`@navecss/base-ui`): Base UI's components pre-styled with Nave's tokens. Its role atoms are expanded at build time through core's PostCSS adapter into one `styles.css`, so a consumer needs neither PostCSS nor the `@nave` directive.
+- **[packages/bridge](../packages/bridge/)** (`@navecss/bridge`): CSS files that map Nave's tokens onto the CSS variables Base UI and Radix UI read.
+- **[packages/cli](../packages/cli/)** (`@navecss/cli`): the `navecss` component-registry command; its commands are stubs until the registry exists.

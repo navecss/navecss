@@ -1,6 +1,6 @@
 # NaveCSS — Claude Code Context
 
-Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo publishing `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `bridge` (Base UI / Radix token bridges), `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
+Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo of `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `stylelint-config` and `eslint-plugin` (rules for a consumer's project), all four published; and, not yet published, `bridge` (Base UI / Radix token bridges), `base-ui` (Base UI's components styled with Nave's tokens) and `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
 
 ## Principles
 
@@ -39,12 +39,13 @@ For multi-step tasks, state a brief plan with a verify step per item before exec
 packages/tokens/   → DTCG token source (tokens.json) + first-party DTCG reader (build.ts); emits CSS custom properties + JS/TS
 packages/core/     → reset.css, @layer stack (index.css), generated atomic utilities, cx()/atoms, implements @nave (PostCSS is one adapter)
 packages/bridge/   → base-ui.css / radix.css token bridges (CSS-only; depends on tokens)
+packages/base-ui/  → Base UI's components styled with Nave's tokens: role atoms built through @nave into one stylesheet (dist/styles.css); private for now; builds on core and tokens
 packages/cli/      → navecss CLI (component registry: `navecss add ...`); thin registry client
 packages/stylelint-config/ → published stylelint rules for a consumer's project (`@nave` known, `var()`-or-keyword values on listed properties, the outline guard, declared `--nave-*` names); peer on tokens
 packages/eslint-plugin/   → published ESLint rules for a consumer's project (a declared/atom class channel in JSX, a reasoned `cx.raw()` escape, its count, tokenized `style` values); peer on core
 ```
 
-Dependency direction: `core`, `bridge` -> `tokens`. `cli` orchestrates, owns no styles. Public-API and token-contract changes are deliberate, versioned events (Changesets), not incidental.
+Dependency direction: `core`, `bridge` -> `tokens`; `base-ui` -> `core`, `tokens` (at build time). `cli` orchestrates, owns no styles. Public-API and token-contract changes are deliberate, versioned events (Changesets), not incidental.
 
 ## Before You Start
 
