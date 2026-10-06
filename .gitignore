@@ -56,3 +56,6 @@ Thumbs.db
 .vscode/*.local.json
 .idea/
 *.swp
+
+# Written by packages/base-ui's render tests: the README's examples, one directory per run.
+packages/base-ui/test/fixtures/readme-examples/
