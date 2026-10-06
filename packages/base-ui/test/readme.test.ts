@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest'
 
 import { manifest } from './support/dist.ts'
 import {
-  CLEARED,
   fencesOf,
+  FIXED_SENTENCES,
   PROMISE_SENTENCE,
   proseOf,
   readReadme,
@@ -139,8 +139,8 @@ describe('AC-base-ui-bridge-45: the README carries each item the release owes', 
 
   it('carries the Menu.LinkItem sentence and the reduced-motion sentence', () => {
     for (const name of ['Menu.LinkItem', 'reduced motion']) {
-      const cleared = CLEARED.find((sentence) => sentence.name === name)
-      expect(readme).toContain(cleared?.text)
+      const fixed = FIXED_SENTENCES.find((sentence) => sentence.name === name)
+      expect(readme).toContain(fixed?.text)
     }
   })
 
@@ -151,18 +151,21 @@ describe('AC-base-ui-bridge-45: the README carries each item the release owes', 
   })
 })
 
-describe('AC-base-ui-bridge-46: the cleared sentences are carried byte for byte', () => {
-  it.each(CLEARED)('holds the $name sentence at its length and hash', ({ bytes, prefix, text }) => {
-    expect(Buffer.byteLength(text, 'utf8')).toBe(bytes)
-    expect(sha256(text).startsWith(prefix)).toBe(true)
-  })
+describe('AC-base-ui-bridge-46: the fixed sentences are carried byte for byte', () => {
+  it.each(FIXED_SENTENCES)(
+    'holds the $name sentence at its length and hash',
+    ({ bytes, prefix, text }) => {
+      expect(Buffer.byteLength(text, 'utf8')).toBe(bytes)
+      expect(sha256(text).startsWith(prefix)).toBe(true)
+    },
+  )
 
-  it.each(CLEARED)('contains the $name sentence', ({ text }) => {
+  it.each(FIXED_SENTENCES)('contains the $name sentence', ({ text }) => {
     expect(readme).toContain(text)
   })
 
   it('carries the non-affiliation line as its own paragraph', () => {
-    const line = CLEARED.find((sentence) => sentence.name === 'non-affiliation')?.text
+    const line = FIXED_SENTENCES.find((sentence) => sentence.name === 'non-affiliation')?.text
     expect(readme.split(/\n{2,}/).map((paragraph) => paragraph.trim())).toContain(line)
   })
 
@@ -173,12 +176,13 @@ describe('AC-base-ui-bridge-46: the cleared sentences are carried byte for byte'
   })
 
   it('control: changing one word of the panel sentence reds containment', () => {
-    const panel = CLEARED.find((sentence) => sentence.name === 'disclosure panel')?.text ?? ''
+    const panel =
+      FIXED_SENTENCES.find((sentence) => sentence.name === 'disclosure panel')?.text ?? ''
     expect(readme.replace(panel, () => panel.replace('Keep', 'Hold'))).not.toContain(panel)
   })
 
   it('control: editing a literal reds its hash', () => {
-    const [first] = CLEARED
+    const [first] = FIXED_SENTENCES
     const edited = first?.text.replace('Accordion', 'Accordions') ?? ''
     expect(sha256(edited).startsWith(first?.prefix ?? '')).toBe(false)
   })
@@ -199,15 +203,15 @@ const FORBIDDEN: readonly RegExp[] = [
 ]
 
 const remainder = (text: string): string =>
-  [...CLEARED.map(({ text: sentence }) => sentence), PROMISE_SENTENCE].reduce(
+  [...FIXED_SENTENCES.map(({ text: sentence }) => sentence), PROMISE_SENTENCE].reduce(
     (rest, sentence) => rest.replaceAll(sentence, ''),
     text,
   )
 
 const COLOUR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i
 
-describe('AC-base-ui-bridge-47: no accessibility claim beyond the cleared copy', () => {
-  it('contains none of the forbidden words once the cleared sentences are removed', () => {
+describe('AC-base-ui-bridge-47: no accessibility claim beyond the fixed wording', () => {
+  it('contains none of the forbidden words once the fixed sentences are removed', () => {
     const rest = remainder(readme)
     expect(FORBIDDEN.filter((pattern) => pattern.test(rest)).map(String)).toEqual([])
   })
@@ -217,12 +221,14 @@ describe('AC-base-ui-bridge-47: no accessibility claim beyond the cleared copy',
     expect(FORBIDDEN.filter((pattern) => pattern.test(planted))).toHaveLength(2)
   })
 
-  it('control: a cleared sentence left in the text is what the removal takes out', () => {
-    expect(FORBIDDEN.some((pattern) => pattern.test(CLEARED.map((c) => c.text).join('\n')))).toBe(
-      true,
-    )
+  it('control: a fixed sentence left in the text is what the removal takes out', () => {
     expect(
-      FORBIDDEN.some((pattern) => pattern.test(remainder(CLEARED.map((c) => c.text).join('\n')))),
+      FORBIDDEN.some((pattern) => pattern.test(FIXED_SENTENCES.map((c) => c.text).join('\n'))),
+    ).toBe(true)
+    expect(
+      FORBIDDEN.some((pattern) =>
+        pattern.test(remainder(FIXED_SENTENCES.map((c) => c.text).join('\n'))),
+      ),
     ).toBe(false)
   })
 

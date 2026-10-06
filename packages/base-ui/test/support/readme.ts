@@ -33,7 +33,7 @@ The text with every fenced block removed.
  */
 export const proseOf = (markdown: string): string => markdown.replaceAll(FENCE, '')
 
-export interface ClearedSentence {
+export interface FixedSentence {
   /**
   The sentence's UTF-8 length in bytes.
    */
@@ -49,7 +49,7 @@ export interface ClearedSentence {
 /**
 The sentences the README carries as written, markdown source and no trailing newline.
  */
-export const CLEARED: readonly ClearedSentence[] = [
+export const FIXED_SENTENCES: readonly FixedSentence[] = [
   {
     bytes: 552,
     name: 'disclosure panel',
@@ -83,7 +83,7 @@ export const CLEARED: readonly ClearedSentence[] = [
 ]
 
 /**
-A sentence once cleared and since withdrawn: it described a wrapper element this package does not
+A sentence once in the README and since withdrawn: it described a wrapper element this package does not
 have, and it must not come back.
  */
 export const WITHDRAWN = {
@@ -93,7 +93,7 @@ export const WITHDRAWN = {
 } as const
 
 /**
-The one cleared sentence that is not a sentence about this package.
+The one fixed sentence that is not a sentence about this package.
  */
 export const PROMISE_SENTENCE = 'Nave promises its values, not their semantics.'
 

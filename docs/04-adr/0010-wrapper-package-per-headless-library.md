@@ -82,7 +82,7 @@ a copy of one component. It does not exist yet, and nothing here depends on it.
 - ADR 0004 carries the test that keeps this inside the zero-runtime invariant: Nave's
   contribution to a part is chosen from a static table by props the consumer passed.
 - The package's accessibility and licensing positions are not made here: they are carried by
-  the package's own checks and its README's cleared sentences.
+  the package's own checks and its README's fixed wording.
 
 ## Alternatives considered
 
