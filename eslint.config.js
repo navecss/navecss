@@ -29,6 +29,9 @@ export default defineConfig([
     // linting it as JSON pulls in the unscoped unicorn/* rules, which jsonc's language does not
     // support at all (a hard ESLint config error, not a rule violation).
     'packages/eslint-plugin/src/generated/**',
+    // Written by packages/base-ui/scripts/generate-wrappers.ts, one generated module per Base UI
+    // subpath; the generator and the roster it reads are what get linted and reviewed.
+    'packages/base-ui/src/**/*.generated.ts',
     // The one JSON file inside a linted test tree. ESLint computes a config for every file it
     // walks past, JSON included, and for this one it hits the same unicorn-versus-jsonc language
     // error as above, which fails the whole package lint before any test file is read.
