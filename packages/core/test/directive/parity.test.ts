@@ -174,7 +174,7 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
   it('runs exactly the legs there are, each over a non-empty corpus', () => {
     expect(Object.keys(LEGS)).toEqual(['postcss', 'expandText', 'vite'])
     expect(LIGHTNING_RELEASES.map((release) => release.package)).toEqual([
-      'lightningcss-1-22',
+      'lightningcss-1-24',
       'lightningcss',
     ])
     expect(CORPUS.length).toBeGreaterThan(0)
