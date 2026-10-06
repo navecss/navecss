@@ -15,8 +15,9 @@ const files = (list: readonly { body: string; language: string }[]): Record<stri
 describe('AC-base-ui-bridge-48: the README examples typecheck against the built package', () => {
   it('has examples, and every TSX example is a component the render test can mount', () => {
     expect(examples.length).toBeGreaterThan(0)
-    for (const { body, language } of examples.filter(({ language }) => language === 'tsx')) {
-      expect(language).toBe('tsx')
+    const components = examples.filter(({ language }) => language === 'tsx')
+    expect(components.length).toBeGreaterThan(0)
+    for (const { body } of components) {
       expect(body).toMatch(/export default function \w+\(/)
     }
   })

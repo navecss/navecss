@@ -23,7 +23,7 @@ const firstBlocklessLayer = (css: string): string | undefined =>
 
 describe('AC-base-ui-bridge-49: the ADRs this release owes', () => {
   const index = read('docs/04-adr/index.md')
-  const wrapperAdr = adrFiles.find((file) => /wrapper/.test(file))
+  const wrapperAdr = adrFiles.find((file) => file.includes('wrapper'))
 
   it('has a new ADR rendering the wrapper-package decision, with a row in the index', () => {
     expect(wrapperAdr).toBeDefined()
@@ -83,12 +83,9 @@ describe('AC-base-ui-bridge-49: the ADRs this release owes', () => {
   })
 
   it('leaves the layer order and its names unchanged', () => {
-    expect(
-      firstBlocklessLayer(readFileSync(path.join(ROOT, 'packages/core/dist/layers.css'), 'utf8')),
-    ).toBe(LAYER_ORDER)
-    expect(
-      firstBlocklessLayer(readFileSync(path.join(ROOT, 'packages/tokens/dist/tokens.css'), 'utf8')),
-    ).toBe(LAYER_ORDER)
+    for (const file of ['packages/core/dist/layers.css', 'packages/tokens/dist/tokens.css']) {
+      expect(firstBlocklessLayer(read(file)), file).toBe(LAYER_ORDER)
+    }
   })
 
   it('control: a statement with one name moved is not the order', () => {
@@ -105,7 +102,8 @@ describe('AC-base-ui-bridge-50: every sentence and config this release makes fal
   })
 
   it('leaves Changesets ignoring the CLI only', () => {
-    expect(JSON.parse(read('.changeset/config.json')).ignore).toEqual(['@navecss/cli'])
+    const config = JSON.parse(read('.changeset/config.json')) as { ignore: string[] }
+    expect(config.ignore).toEqual(['@navecss/cli'])
   })
 
   it('names the new package in the publishable-set docblock, not the bridge', () => {

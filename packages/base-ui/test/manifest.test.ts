@@ -29,6 +29,8 @@ const changesetConfig = readJson<{ fixed: string[][]; ignore: string[]; linked: 
   '.changeset/config.json',
 )
 
+const byName = (a: string, b: string): number => a.localeCompare(b)
+
 const TOKEN_NAME = '--nave-border-width-mark'
 
 /**
@@ -49,7 +51,7 @@ const firstTokensVersionWithTheMark = (): string => {
   const pending = readdirSync(path.join(ROOT, '.changeset'))
     .filter((file) => file.endsWith('.md') && file !== 'README.md')
     .map((file) => readFileSync(path.join(ROOT, '.changeset', file), 'utf8'))
-    .find((text) => text.includes(TOKEN_NAME) && /'@navecss\/tokens': minor/.test(text))
+    .find((text) => text.includes(TOKEN_NAME) && text.includes("'@navecss/tokens': minor"))
   expect(pending, 'no release and no pending changeset adds the mark token').toBeDefined()
   const [major = 0, minor = 0] = tokens.version.split('.').map(Number)
   return `${major}.${minor + 1}.0`
@@ -70,7 +72,7 @@ describe('AC-base-ui-bridge-38: the manifest', () => {
   })
 
   it('has exactly the four peers, none optional', () => {
-    expect(Object.keys(manifest.peerDependencies).toSorted()).toEqual([
+    expect(Object.keys(manifest.peerDependencies).toSorted(byName)).toEqual([
       '@base-ui/react',
       '@navecss/tokens',
       'react',

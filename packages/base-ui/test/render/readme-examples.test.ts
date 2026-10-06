@@ -42,7 +42,7 @@ const PART_TAG = /<([A-Z]\w*(?:\.[A-Z]\w*)?)[\s/>]/g
 Every styled part the example writes as a tag, with the classes its row names.
  */
 const styledTags = (body: string): [string, readonly string[]][] =>
-  [...new Set([...body.matchAll(PART_TAG)].map((match) => match[1] ?? ''))]
+  [...new Set(body.matchAll(PART_TAG).map((match) => match[1] ?? ''))]
     .filter((tag) => tableP.has(tag))
     .map((tag) => [tag, tableP.get(tag) ?? []])
 

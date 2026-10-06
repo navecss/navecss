@@ -26,8 +26,16 @@ const sentencesOf = (text: string): string[] =>
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.trim())
 
-const everySentenceHas = (patterns: readonly RegExp[]): boolean =>
+const hasSentenceWith = (patterns: readonly RegExp[]): boolean =>
   sentencesOf(prose).some((sentence) => patterns.every((pattern) => pattern.test(sentence)))
+
+const importedFrom = (pattern: RegExp): string[] =>
+  fences.flatMap(({ body }) =>
+    body
+      .matchAll(pattern)
+      .map((match) => match[1] ?? '')
+      .toArray(),
+  )
 
 describe('AC-base-ui-bridge-45: the README carries each item the release owes', () => {
   it('opens with a sentence that starts "NaveCSS" and says it styles Base UI\'s components', () => {
@@ -47,7 +55,7 @@ describe('AC-base-ui-bridge-45: the README carries each item the release owes', 
 
   it('says @base-ui/react is a separately installed peer from its own maintainers', () => {
     expect(
-      everySentenceHas([/`@base-ui\/react`/, /separately installed/, /peer/, /maintainers/]),
+      hasSentenceWith([/`@base-ui\/react`/, /separately installed/, /peer/, /maintainers/]),
     ).toBe(true)
   })
 
@@ -69,14 +77,10 @@ describe('AC-base-ui-bridge-45: the README carries each item the release owes', 
   })
 
   it('shows the prefix swap with one example: the same component imported from both', () => {
-    const before = fences.flatMap(({ body }) =>
-      [...body.matchAll(/from '@base-ui\/react\/([\w-]+)'/g)].map((match) => match[1]),
-    )
-    const after = fences.flatMap(({ body }) =>
-      [...body.matchAll(/from '@navecss\/base-ui\/([\w-]+)'/g)].map((match) => match[1]),
-    )
+    const before = importedFrom(/from '@base-ui\/react\/([\w-]+)'/g)
+    const after = new Set(importedFrom(/from '@navecss\/base-ui\/([\w-]+)'/g))
     expect(before.length).toBeGreaterThan(0)
-    expect(before.some((component) => after.includes(component))).toBe(true)
+    expect(before.some((component) => after.has(component))).toBe(true)
   })
 
   it('shows importing the tokens, then the stylesheet', () => {
@@ -107,7 +111,7 @@ describe('AC-base-ui-bridge-45: the README carries each item the release owes', 
   })
 
   it('says to scope a token on the part or on :root, never on an ancestor of a portalled part', () => {
-    expect(everySentenceHas([/`:root`/, /ancestor/, /portal/])).toBe(true)
+    expect(hasSentenceWith([/`:root`/, /ancestor/, /portal/])).toBe(true)
   })
 
   it('documents variant and size as props, with their values and defaults', () => {
@@ -129,8 +133,8 @@ describe('AC-base-ui-bridge-45: the README carries each item the release owes', 
   })
 
   it("says the trigger's last child turns when it is an svg, and to wrap a leading icon", () => {
-    expect(everySentenceHas([/last child/, /`svg`/, /turns/])).toBe(true)
-    expect(everySentenceHas([/leading icon/, /inside/, /element/])).toBe(true)
+    expect(hasSentenceWith([/last child/, /`svg`/, /turns/])).toBe(true)
+    expect(hasSentenceWith([/leading icon/, /inside/, /element/])).toBe(true)
   })
 
   it('carries the Menu.LinkItem sentence and the reduced-motion sentence', () => {
@@ -170,7 +174,7 @@ describe('AC-base-ui-bridge-46: the cleared sentences are carried byte for byte'
 
   it('control: changing one word of the panel sentence reds containment', () => {
     const panel = CLEARED.find((sentence) => sentence.name === 'disclosure panel')?.text ?? ''
-    expect(readme.replace(panel, panel.replace('Keep', 'Hold'))).not.toContain(panel)
+    expect(readme.replace(panel, () => panel.replace('Keep', 'Hold'))).not.toContain(panel)
   })
 
   it('control: editing a literal reds its hash', () => {

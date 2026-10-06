@@ -36,6 +36,14 @@
       "dependsOn": ["build"],
       "outputs": ["coverage/**", "test/browser/fixtures/**"]
     },
+    "@navecss/base-ui#typecheck": {
+      "dependsOn": ["^build", "build"],
+      "outputs": []
+    },
+    "@navecss/base-ui#lint": {
+      "dependsOn": ["^build", "build"],
+      "outputs": []
+    },
     "@navecss/tokens#test": {
       "dependsOn": ["build"],
       "outputs": ["coverage/**"],

@@ -12,7 +12,9 @@ What a tarball holds that a consumer must not receive: a test file, or anything 
 const unwanted = (entries: readonly string[]): string[] =>
   entries.filter((entry) => /\.test\.|\/test\//.test(entry))
 
-const TOP_LEVEL = new Set(['package/LICENSE', 'package/README.md', 'package/package.json'])
+const byName = (a: string, b: string): number => a.localeCompare(b)
+
+const TOP_LEVEL = new Set(['package/LICENSE', 'package/package.json', 'package/README.md'])
 
 const pack = async (): Promise<string[]> => {
   const { stdout } = await run('npm', ['pack', '--ignore-scripts', '--dry-run', '--json'], {
@@ -28,8 +30,8 @@ const pack = async (): Promise<string[]> => {
 describe('AC-base-ui-bridge-40: the tarball', () => {
   it('holds dist, the manifest, the README and the LICENSE, and no test file or test directory', async () => {
     const entries = await pack()
-    expect(entries.filter((entry) => TOP_LEVEL.has(entry)).toSorted()).toEqual(
-      [...TOP_LEVEL].toSorted(),
+    expect(entries.filter((entry) => TOP_LEVEL.has(entry)).toSorted(byName)).toEqual(
+      [...TOP_LEVEL].toSorted(byName),
     )
     expect(
       entries.filter((entry) => !TOP_LEVEL.has(entry) && !entry.startsWith('package/dist/')),
