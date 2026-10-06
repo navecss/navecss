@@ -36,6 +36,9 @@ export default defineConfig([
     // walks past, JSON included, and for this one it hits the same unicorn-versus-jsonc language
     // error as above, which fails the whole package lint before any test file is read.
     'packages/core/test/browser/tsconfig.json',
+    // The consumer app the base-ui browser tests build with a real `vite build` before every run:
+    // generated, gitignored, and bundled JavaScript that is not ours to lint.
+    'packages/base-ui/test/browser/fixtures/**',
   ]),
 
   // ── Base ───────────────────────────────────────────────────────────────────
@@ -234,6 +237,7 @@ export default defineConfig([
       'prettier.config.js',
       'commitlint.config.js',
       '**/vitest.config.ts',
+      '**/vitest.browser.config.ts',
       '**/tsup.config.ts',
       'stylelint.outline-guard.mjs',
       'packages/stylelint-config/index.js',
