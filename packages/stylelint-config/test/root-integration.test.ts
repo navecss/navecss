@@ -4,8 +4,10 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -142,7 +144,30 @@ function scratchCopyOfTrackedFiles(): string {
 }
 
 /**
- * The turbo task hash of the package that runs stylelint, from a dry run in `cwd`.
+ * The workspace packages whose `lint` script runs stylelint, read from their manifests and not
+ * written into the test, so a package that starts or stops running stylelint changes the set and
+ * not the test.
+ */
+function stylelintPackages(): string[] {
+  return readdirSync(path.join(ROOT, 'packages'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      const manifestPath = path.join(ROOT, 'packages', entry.name, 'package.json')
+      if (!existsSync(manifestPath)) {
+        return []
+      }
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        name: string
+        scripts?: Record<string, string>
+      }
+      return manifest.scripts?.lint?.includes('stylelint') === true ? [manifest.name] : []
+    })
+    .toSorted((a, b) => a.localeCompare(b))
+}
+
+/**
+ * The turbo `lint` task hash of every package that runs stylelint, from a dry run in `cwd`. A
+ * package with no `lint` task in the dry run fails here rather than dropping out of the set.
  */
 function stylelintTaskHashes(cwd: string): Record<string, string> {
   const dryRun = JSON.parse(
@@ -152,10 +177,14 @@ function stylelintTaskHashes(cwd: string): Record<string, string> {
       stdio: ['ignore', 'pipe', 'pipe'],
     }),
   ) as { tasks: { hash: string; taskId: string }[] }
-  const hashes = Object.fromEntries(
-    dryRun.tasks.filter((t) => t.taskId === '@navecss/core#lint').map((t) => [t.taskId, t.hash]),
-  )
-  expect(Object.keys(hashes)).toEqual(['@navecss/core#lint'])
+  const members = stylelintPackages()
+  expect(members).toContain('@navecss/core')
+  const hashes: Record<string, string> = {}
+  for (const name of members) {
+    const task = dryRun.tasks.find((t) => t.taskId === `${name}#lint`)
+    expect(task, `${name} has a lint task in the dry run`).toBeDefined()
+    hashes[`${name}#lint`] = task?.hash ?? ''
+  }
   return hashes
 }
 
@@ -172,13 +201,13 @@ describe('AC-consumer-constraints-21 covers: R10', () => {
   })
 
   it.each([
-    ['.stylelintrc.json', ['@navecss/core#lint']],
-    ['packages/stylelint-config/README.md', ['@navecss/core#lint']],
-    ['stylelint.outline-guard.mjs', ['@navecss/core#lint']],
-    ['packages/core/src/reset.css', ['@navecss/core#lint']],
+    ['.stylelintrc.json', 'every package that runs stylelint'],
+    ['packages/stylelint-config/README.md', 'every package that runs stylelint'],
+    ['stylelint.outline-guard.mjs', 'every package that runs stylelint'],
+    ['packages/core/src/reset.css', '@navecss/core only'],
   ])(
-    'a whitespace-only edit to %s changes exactly the hashes of %j',
-    (file, expectedChanged) => {
+    'a whitespace-only edit to %s changes the lint hashes of %s',
+    (file, scope) => {
       const scratch = scratchCopyOfTrackedFiles()
       try {
         const before = stylelintTaskHashes(scratch)
@@ -188,7 +217,11 @@ describe('AC-consumer-constraints-21 covers: R10', () => {
         const changed = Object.keys(before)
           .filter((taskId) => before[taskId] !== after[taskId])
           .toSorted((a, b) => a.localeCompare(b))
-        expect(changed).toEqual(expectedChanged)
+        const expected =
+          scope === '@navecss/core only'
+            ? ['@navecss/core#lint']
+            : Object.keys(before).toSorted((a, b) => a.localeCompare(b))
+        expect(changed).toEqual(expected)
       } finally {
         rmSync(scratch, { recursive: true, force: true })
       }
