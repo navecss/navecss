@@ -12,12 +12,28 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import { shippedChangesetProse } from './helpers/released-changeset.ts'
+
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const BIN = path.resolve(HERE, '..', 'dist', 'bin.js')
 const CORE_README = path.resolve(HERE, '..', 'README.md')
 const ROOT_README = path.resolve(HERE, '..', '..', '..', 'README.md')
 const CONSUMER_ATOMS = path.resolve(HERE, '..', 'CONSUMER-ATOMS.md')
+const CORE_CHANGELOG = path.resolve(HERE, '..', 'CHANGELOG.md')
 const CHANGESET = path.resolve(HERE, '..', '..', '..', '.changeset', 'directive-core-resolver.md')
+
+/**
+ * The prose the directive-core change ships: its pending changeset while one exists, and the
+ * CHANGELOG entry the release wrote from it afterwards.
+ */
+const changesetProse = (): string =>
+  shippedChangesetProse(
+    CHANGESET,
+    CORE_CHANGELOG,
+    "The `@nave` directive's resolution and placement",
+  )
+
+const readFile = (filePath: string) => (): string => readFileSync(filePath, 'utf8')
 
 function run(cwd: string, ...args: string[]): { out: string; status: number | null } {
   const result = spawnSync(process.execPath, [BIN, 'check', ...args], {
@@ -67,14 +83,14 @@ describe('AC-directive-core-24 — the README-taught check command actually runs
   })
 
   it.each([
-    ['README.md', ROOT_README],
-    ['packages/core/README.md', CORE_README],
-    ['packages/core/CONSUMER-ATOMS.md', CONSUMER_ATOMS],
-    ['.changeset/directive-core-resolver.md', CHANGESET],
+    ['README.md', readFile(ROOT_README)],
+    ['packages/core/README.md', readFile(CORE_README)],
+    ['packages/core/CONSUMER-ATOMS.md', readFile(CONSUMER_ATOMS)],
+    ['the directive-core changeset, or the CHANGELOG entry that released it', changesetProse],
   ])(
     '%s: every runnable check invocation is chained with && inside a package.json script fence',
-    (_name, filePath) => {
-      const text = readFileSync(filePath, 'utf8')
+    (_name, read) => {
+      const text = read()
       const invocationPattern = /navecss-core check --source=\S+/g
       const blocks = fencedBlocks(text)
 
@@ -88,12 +104,12 @@ describe('AC-directive-core-24 — the README-taught check command actually runs
   )
 
   it.each([
-    ['README.md', ROOT_README],
-    ['packages/core/README.md', CORE_README],
-    ['packages/core/CONSUMER-ATOMS.md', CONSUMER_ATOMS],
-    ['.changeset/directive-core-resolver.md', CHANGESET],
-  ])('%s: never teaches a bare npx invocation', (_name, filePath) => {
-    const text = readFileSync(filePath, 'utf8')
+    ['README.md', readFile(ROOT_README)],
+    ['packages/core/README.md', readFile(CORE_README)],
+    ['packages/core/CONSUMER-ATOMS.md', readFile(CONSUMER_ATOMS)],
+    ['the directive-core changeset, or the CHANGELOG entry that released it', changesetProse],
+  ])('%s: never teaches a bare npx invocation', (_name, read) => {
+    const text = read()
 
     expect(text.replaceAll(/\s+/g, ' ')).not.toContain('npx navecss-core')
   })
