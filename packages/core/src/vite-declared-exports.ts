@@ -4,7 +4,9 @@
  * exports of `cx` is a problem in that module: Nave's `cx` under another name, as a default or in a
  * namespace, a `cx` that is not Nave's (its own function, a wrapper, one taken from another
  * module, a star of another module when Nave's `cx` is not exported beside it), and the `cx` of a
- * module that is already listed, which would be a second hop.
+ * module that is already listed, which would be a second hop. A star of another module is no
+ * problem beside an export of Nave's `cx` of the module's own: an explicit export wins over a star,
+ * and two stars that give `cx` one binding are not ambiguous.
  */
 import type { AstNode } from './vite-ast.ts'
 import type { CxBinding } from './vite-cx-reference.ts'
@@ -150,19 +152,25 @@ function namedExportProblems(node: AstNode, input: DeclaredExportsInput): Proble
 
 /**
  * The problems of `export * from <source>` and `export * as n from <source>`: the first is the plain
- * re-export from Nave's own module, a second hop from a listed one; the second is a namespace,
- * which no importer can read as `cx`, and which from any other module is a `cx` that is not Nave's
- * when it is named `cx`. A plain star from another module is judged with the whole module, by
- * `unfollowedStarProblems`.
+ * re-export from Nave's own module, a second hop from a listed one unless the module exports Nave's
+ * `cx` itself (`hasNaveCx`: both stars then give `cx` the same binding, or an explicit export wins
+ * over the star); the second is a namespace, which no importer can read as `cx`, and which from any
+ * other module is a `cx` that is not Nave's when it is named `cx`. A plain star from another module
+ * is judged with the whole module, by `unfollowedStarProblems`.
  */
-function starExportProblems(node: AstNode, input: DeclaredExportsInput): Problem[] {
+function starExportProblems(
+  node: AstNode,
+  input: DeclaredExportsInput,
+  hasNaveCx: boolean,
+): Problem[] {
   const source = staticStringOf(nodeAt(node, 'source'))
   if (source === undefined) return []
   const exported = nodeAt(node, 'exported')
   if (!input.cxSources.has(source)) {
     return exportNameOf(exported) === 'cx' ? [problem(node)] : []
   }
-  return exported !== undefined || input.declaredSources.has(source) ? [problem(node)] : []
+  if (exported !== undefined) return [problem(node)]
+  return !hasNaveCx && input.declaredSources.has(source) ? [problem(node)] : []
 }
 
 /**
@@ -243,7 +251,6 @@ function defaultExportProblems(node: AstNode, input: DeclaredExportsInput): Prob
 const EXPORT_PROBLEMS: Readonly<
   Record<string, (node: AstNode, input: DeclaredExportsInput) => Problem[]>
 > = {
-  ExportAllDeclaration: starExportProblems,
   ExportDefaultDeclaration: defaultExportProblems,
   ExportNamedDeclaration: namedExportProblems,
 }
@@ -253,8 +260,13 @@ const EXPORT_PROBLEMS: Readonly<
  */
 export function declaredExportProblems(input: DeclaredExportsInput): Problem[] {
   const body = nodesAt(input.program, 'body')
+  const hasNaveCx = body.some((node) => isNaveCxExport(node, input))
   return [
-    ...body.flatMap((node) => EXPORT_PROBLEMS[node.type]?.(node, input) ?? []),
+    ...body.flatMap((node) =>
+      node.type === 'ExportAllDeclaration'
+        ? starExportProblems(node, input, hasNaveCx)
+        : (EXPORT_PROBLEMS[node.type]?.(node, input) ?? []),
+    ),
     ...unfollowedStarProblems(body, input),
   ]
 }

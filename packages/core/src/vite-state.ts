@@ -46,6 +46,10 @@ export interface ModuleRecord {
   readonly suppressed: readonly LocatedProblem[]
   readonly dynamicCalls: readonly Position[]
   /**
+   * The listed files the module reads a `cx` from, when it reads no other `cx`.
+   */
+  readonly onlyVia?: ReadonlySet<string> | undefined
+  /**
    * The package the module belongs to, when it lies under `node_modules`.
    */
   readonly pkg: string | undefined
@@ -83,10 +87,11 @@ export interface RootState {
    */
   readonly declared: Map<string, Promise<DeclaredModules>>
   /**
-   * The imports of a listed module that were recognised, as `<environment>\0<file>\0<importer>`,
-   * for the build-end check against the module graph.
+   * The imports of a listed module that were recognised, by `<environment>\0<file>\0<importer>`:
+   * the specifiers the importer was recognised through, for the build-end check against the module
+   * graph.
    */
-  readonly recognised: Set<string>
+  readonly recognised: Map<string, Set<string>>
   /**
    * The text of each stylesheet holding the atomic layer, by `<environment>\0<id>`.
    */
@@ -197,7 +202,7 @@ function freshState(): RootState {
     templateLinks: new Map(),
     packages: new Set(),
     declared: new Map(),
-    recognised: new Set(),
+    recognised: new Map(),
     sheets: new Map(),
     pages: new Map(),
     emitted: undefined,

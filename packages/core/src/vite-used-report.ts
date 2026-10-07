@@ -9,7 +9,7 @@ import type { Problem, ProblemKind } from './vite-problems.ts'
 
 import { availableLine } from './vite-atom-check.ts'
 import { compareText, cut, cxModulesArray, PROBLEM_KINDS } from './vite-problems.ts'
-import { isListableReexport, packageLines } from './vite-used-package-lines.ts'
+import { isListableReexport, packageLines, withoutRemoved } from './vite-used-package-lines.ts'
 
 export interface LocatedProblem extends Problem {
   /**
@@ -37,6 +37,11 @@ export interface LocatedProblem extends Problem {
    * module that holds it, when a `cxModules` entry can name it.
    */
   readonly specifier?: string | undefined
+  /**
+   * For a dependency's listed module that exports a `cx` the build does not follow: the
+   * `cxModules` entries, as written, that name it.
+   */
+  readonly entries?: readonly string[] | undefined
 }
 
 export const LINE_UNKNOWN_WITHOUT_MAP =
@@ -116,7 +121,8 @@ function reexportRemedy(
  * The remedy block: the application's lines in the fixed order of the kinds present, then each
  * dependency's line sorted by package name, then `Available:` when a unknown name had no hint.
  */
-function remedyBlock(problems: readonly LocatedProblem[], configured: readonly string[]): string[] {
+function remedyBlock(problems: readonly LocatedProblem[], listed: readonly string[]): string[] {
+  const configured = withoutRemoved(problems, listed)
   const application = problems.filter((problem) => problem.pkg === undefined)
   const lines: string[] = []
   for (const kind of PROBLEM_KINDS) {

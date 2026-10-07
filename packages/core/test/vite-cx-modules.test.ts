@@ -13,7 +13,12 @@ import type { TransformContext } from '../src/vite-types.ts'
 
 import { createCollectPlugin } from '../src/vite-collect-plugin.ts'
 import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
-import { recognisedKey } from '../src/vite-cx-modules.ts'
+import {
+  declaredModulesFor,
+  isAboutListed,
+  isRelative,
+  recognisedKey,
+} from '../src/vite-cx-modules.ts'
 import { createExtendSource } from '../src/vite-extend.ts'
 import { resolveUsedOptions } from '../src/vite-options.ts'
 import { createUsedContext } from '../src/vite-used.ts'
@@ -111,6 +116,12 @@ describe('AC-used-atoms-47 - a namespace import of a declared module is read for
       `${NS}const { Button, Card: C } = U\nexport const k = [Button, C]`,
       [],
     ],
+    ['a destructuring by assignment', `${NS}let B\n;({ Button: B } = U)\nexport const k = B`, []],
+    [
+      'a destructuring in a parameter default',
+      `${NS}export const a = ({ Button } = U) => Button`,
+      [],
+    ],
   ]
 
   it.each(reads)('%s is no use of cx and no problem', (_name, code, atoms) => {
@@ -130,6 +141,12 @@ describe('AC-used-atoms-47 - a namespace import of a declared module is read for
       `${NS}const { Button, ...rest } = U\nexport const p = [Button, rest]`,
     ],
     ['assigned', `${NS}export const q = U`],
+    ['destructured by cx in an assignment', `${NS}let c\n;({ cx: c } = U)\nexport const o = c`],
+    [
+      'destructured with a rest element in an assignment',
+      `${NS}let r\n;({ ...r } = U)\nexport const p = r`,
+    ],
+    ['assigned to a plain name', `${NS}let w\nw = U\nexport const q = w`],
   ]
 
   it.each(refused)('%s is one problem in the importer', (_name, code) => {
@@ -194,6 +211,22 @@ describe('AC-used-atoms-48 — what a declared module may not do, and the hidden
       [],
     ],
     ['two stars, one problem', "export * from './a'\nexport * from './b'", ['declared']],
+    [
+      'Nave’s explicit re-export beside a star of a listed module',
+      `export { cx } from '${CX_SOURCE}'\nexport * from './ui/index.ts'`,
+      [],
+    ],
+    [
+      'Nave’s star beside a star of a listed module',
+      `export * from '${CX_SOURCE}'\nexport * from './ui/index.ts'`,
+      [],
+    ],
+    [
+      'Nave’s cx exported from an import, beside a star of a listed module',
+      `${IMPORT}export { cx }\nexport * from './ui/index.ts'`,
+      [],
+    ],
+    ['a star of a listed module alone', "export * from './ui/index.ts'", ['declared']],
   ]
 
   it.each(stars)('%s is the expected problems', (_name, code, expected) => {
@@ -260,6 +293,7 @@ describe('AC-used-atoms-49 — the text test decides what is parsed and what is 
   const ANSWERS = new Map<string, string>([
     ['#ds', `${ROOT}/src/ds-entry.ts`],
     ['#internal/ui', DECLARED],
+    ['#scoped', DECLARED],
     ['@/ui', DECLARED],
     ['@acme/ds', `${ROOT}/node_modules/@acme/ds/index.js`],
   ])
@@ -353,6 +387,10 @@ describe('AC-used-atoms-49 — the text test decides what is parsed and what is 
     { name: 's', code: "const s = \"it's\"; import { cx } from './ui'", isParsed: true },
     { name: 't', code: "/* it's */ import { cx } from './ui'", isParsed: true },
     { name: 'u', code: "import { x } from './uix?v=1'", isParsed: false },
+    // A directory specifier may climb more than one level, or name the directory with a dot.
+    { name: 'v', code: "import { cx } from '../..'", isParsed: true },
+    { name: 'w', code: "import { cx } from '../../'", isParsed: true },
+    { name: 'x', code: "import { cx } from './.'", isParsed: true },
   ]
 
   it('parses exactly the modules whose text can name Nave’s cx or a declared module', async () => {
@@ -408,6 +446,9 @@ describe('AC-used-atoms-49 — the text test decides what is parsed and what is 
         [`${ROOT}/src/ui/forms/i.ts`, '..'],
         [`${ROOT}/src/ui/forms/j.ts`, '../'],
         [`${ROOT}/src/k.ts`, '#internal/ui'],
+        [`${ROOT}/src/ui/forms/inputs/l.ts`, '../..'],
+        [`${ROOT}/src/ui/forms/inputs/m.ts`, '../../'],
+        [`${ROOT}/src/ui/n.ts`, './.'],
       ] as const
 
       expect(await recognised(['./src/ui/index.ts'], rows)).toEqual(rows.map(([id]) => id))
@@ -448,6 +489,28 @@ describe('AC-used-atoms-49 — the text test decides what is parsed and what is 
       expect([...(context.state.modules.get(`client\0${ROOT}/src/e.ts`)?.atoms ?? [])]).toEqual([
         'flex',
       ])
+    })
+
+    it('binds a # entry only when the import resolves, from its own module, to a listed file', async () => {
+      // `#scoped` is the barrel from the project root, and another package scope's own function
+      // from `feature/b.ts`: the same text, so the text alone binds nothing.
+      const modules = ['./src/ui/index.ts', '#scoped']
+      const other = fixture(modules, { '#scoped': `${ROOT}/src/feature/ui.ts` })
+      const own = `${ROOT}/src/feature/b.ts`
+      await other.transform(
+        "import { cx } from '#scoped'\nexport const b = (v) => cx('card', v)",
+        own,
+      )
+
+      expect(other.context.state.modules.get(`client\0${own}`)?.problems).toEqual([])
+      expect(other.context.state.recognised.has(recognisedKey('client', DECLARED, own))).toBe(false)
+      const same = fixture(modules)
+      const importer = `${ROOT}/src/a.ts`
+      await same.transform("import { cx } from '#scoped'\nexport const a = cx('flex')", importer)
+
+      expect(same.context.state.recognised.has(recognisedKey('client', DECLARED, importer))).toBe(
+        true,
+      )
     })
 
     it('records an import through an entry that resolved to nothing from the root, once it lands on a listed file', async () => {
@@ -507,6 +570,125 @@ describe('AC-used-atoms-49 — the text test decides what is parsed and what is 
     // The control: the same module importing the declared file's directory is read.
     await transform("import { cx } from './ui'\nexport const a = cx('flex')", `${ROOT}/src/o.ts`)
     expect(atomsRead()).toEqual(['flex'])
+  })
+})
+
+describe('AC-used-atoms-49 - a relative specifier is judged without its query', () => {
+  it.each(['./ui', '../ui?v=1', '.?v=1', '..?v=1', './.?x#y', './ui#top'])(
+    'reads %s as relative',
+    (specifier) => {
+      expect(isRelative(specifier)).toBe(true)
+    },
+  )
+
+  it.each(['#ds', '#ds?v=1', '@acme/ui', '@acme/ui?v=1', '/src/ui', 'ui'])(
+    'does not read %s as relative',
+    (specifier) => {
+      expect(isRelative(specifier)).toBe(false)
+    },
+  )
+})
+
+describe('AC-used-atoms-49 - the text test grows with the text, not with its worst runs', () => {
+  const ROOT = '/scale-root'
+  const DECLARED = `${ROOT}/src/ui/index.ts`
+
+  async function listing(): ReturnType<typeof declaredModulesFor> {
+    const context = createUsedContext(
+      resolveUsedOptions({ cxModules: ['./src/ui/index.ts'] }),
+      createExtendSource(undefined),
+    )
+    context.root = ROOT
+    const resolver = {
+      resolve: (source: string) =>
+        // Vite's resolver answers `null` for a specifier that names no file.
+        // eslint-disable-next-line unicorn/no-null -- the host's own answer
+        Promise.resolve(source === './src/ui/index.ts' ? { id: DECLARED } : null),
+    }
+    return declaredModulesFor(context, resolver, 'client')
+  }
+
+  /**
+   * The fastest of several runs of `work`, repeated until one run takes a few milliseconds so a
+   * clock's grain does not decide the answer. Load only ever adds time, so the fastest run is
+   * the one that says what the pattern costs.
+   */
+  function fastest(work: () => void): number {
+    const once = performance.now()
+    work()
+    const elapsed = Math.max(performance.now() - once, 0.001)
+    const reps = Math.max(1, Math.ceil(8 / elapsed))
+    let best = Infinity
+    for (let run = 0; run < 7; run += 1) {
+      const start = performance.now()
+      for (let rep = 0; rep < reps; rep += 1) work()
+      best = Math.min(best, (performance.now() - start) / reps)
+    }
+    return best
+  }
+
+  /**
+   * How much longer the text test takes for `make(2n)` than for `make(n)`: about 2 when it is
+   * linear, about 4 when it is quadratic. Never a time budget.
+   */
+  async function growth(make: (n: number) => string): Promise<number> {
+    const declared = await listing()
+    const time = (n: number): number => {
+      const code = make(n)
+      return fastest(() => isAboutListed({ code, id: `${ROOT}/src/m.ts` }, declared))
+    }
+    return time(8000) / time(4000)
+  }
+
+  const MOST = 3
+  const shapes: [string, (n: number) => string][] = [
+    ['a quote-free run of names and queries', (n) => `'${'/ui?x'.repeat(n)}`],
+    ['a quote-free run of names and hashes', (n) => `\`${'/index#a'.repeat(n)}`],
+    ['`from` followed by many spaces', (n) => `from${' '.repeat(n)}`],
+    ['many `from` each followed by spaces', (n) => `from${' '.repeat(40)}`.repeat(n)],
+    ['many quotes each opening a long text', (n) => `'ui?${'x'.repeat(60)}`.repeat(n)],
+  ]
+
+  it.each(shapes)(
+    'stays linear for %s',
+    async (_name, make) => {
+      expect(await growth(make)).toBeLessThan(MOST)
+    },
+    60_000,
+  )
+
+  it('takes about twice as long for twice as many typical modules', async () => {
+    const typical = [
+      "import { cx } from './ui'",
+      'const s = "it\'s"',
+      'const t = `a ${s} b`',
+      "export const x = 'a.b.c'.split('.')",
+      "export const y = import('./lazy')",
+    ].join('\n')
+
+    expect(await growth((n) => `${typical}\n`.repeat(n / 4))).toBeLessThan(MOST)
+  }, 60_000)
+
+  const spellings: [string, boolean][] = [
+    ["import { cx } from './ui'", true],
+    ["import { cx } from '../ui/'", true],
+    ["import { cx } from './ui?v=1'", true],
+    ["import { cx } from '#internal/ui'", true],
+    ["import { cx } from '.'", true],
+    ['import{cx}from"."', true],
+    ["export const l = import('..')", true],
+    ["export const l = import(\n '..'\n)", true],
+    ["import { cx } from './ui/index.ts#x'", true],
+    ["import { cx } from\n '..'", true],
+    ["import { cx } from './uix'", false],
+    ["export const s = 'a.b'.split('.')", false],
+    ["import { cx } from './ui.d.ts'", false],
+  ]
+
+  it.each(spellings)('reads %j the same way: parsed is %s', async (code, expected) => {
+    const declared = await listing()
+
+    expect(isAboutListed({ code, id: `${ROOT}/src/m.ts` }, declared)).toBe(expected)
   })
 })
 

@@ -12,15 +12,14 @@
  */
 import path from 'node:path'
 
-import type { AstNode } from './vite-ast.ts'
 import type { RootState } from './vite-state.ts'
 import type { UsedContext } from './vite-used.ts'
 
 import { CX_SOURCE } from './vite-collect.ts'
 import { filePathOf } from './vite-css-id.ts'
-import { specifiersIn } from './vite-cx-importers.ts'
+import { textTestOf } from './vite-cx-text-test.ts'
 
-interface Resolver {
+export interface Resolver {
   resolve?(source: string, importer?: string): Promise<{ readonly id: string } | null>
 }
 
@@ -52,10 +51,13 @@ export interface DeclaredModules {
 }
 
 /**
- * Whether an entry or a specifier is relative: a path from the module that writes it.
+ * Whether an entry or a specifier is relative: a path from the module that writes it, whatever
+ * `?query` or `#hash` follows it (`.?v=1` is the directory `.`).
  */
 export function isRelative(text: string): boolean {
-  return text === '.' || text === '..' || text.startsWith('./') || text.startsWith('../')
+  const cut = text.search(/[#?]/)
+  const path = cut === -1 ? text : text.slice(0, cut)
+  return path === '.' || path === '..' || path.startsWith('./') || path.startsWith('../')
 }
 
 /**
@@ -71,6 +73,19 @@ export function fileOf(id: string): string {
 function namesOf(file: string): string[] {
   const name = path.basename(file, path.extname(file))
   return name === 'index' ? [name, path.basename(path.dirname(file))] : [name]
+}
+
+/**
+ * The entries as written whose file, resolved from the project root, is the file of the module
+ * `id`.
+ */
+export function entriesNaming(declared: DeclaredModules, id: string): string[] {
+  const file = fileOf(id)
+  return declared.ids
+    .entries()
+    .filter(([, resolved]) => fileOf(resolved) === file)
+    .map(([entry]) => entry)
+    .toArray()
 }
 
 /**
@@ -94,7 +109,7 @@ export async function declaredModulesFor(
 /**
  * What the host's resolver says of `source` from `importer`: nothing when it has no answer or fails.
  */
-async function resolveOrNull(
+export async function resolveOrNull(
   resolver: Resolver,
   source: string,
   importer: string,
@@ -141,35 +156,8 @@ async function resolveEntries(context: UsedContext, resolver: Resolver): Promise
 export function forgetDeclared(state: RootState, environment: string): void {
   state.declared.delete(environment)
   const prefix = `${environment}\0`
-  for (const key of state.recognised) if (key.startsWith(prefix)) state.recognised.delete(key)
-}
-
-/**
- * `text` as a pattern that matches it and nothing else.
- */
-function literalPattern(text: string): string {
-  return text.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`)
-}
-
-// What may stand in a quoted specifier (no quote, no escape, no line break), and what an
-// extension is (a dot and what follows it up to the next dot, slash, query or hash).
-const INSIDE = String.raw`[^\n'"\x60\\]`
-const EXTENSION = String.raw`\.[^\n'"\x60\\/?#.]*`
-const QUOTE = String.raw`['"\x60]`
-
-/**
- * The search the text test makes of a module for a specifier that can name a listed file. It
- * pairs no quotes: each name is looked for where a quote opens, so an apostrophe elsewhere in the
- * text cannot hide a specifier. A specifier names a file by its last segment, whether or not a
- * `/`, a `?query` or a `#hash` follows it. A directory specifier that writes no name (`.`, `..`)
- * names `index`, and is looked for in an import position only, so `s.split('.')` is not one.
- */
-function textTestOf(names: ReadonlySet<string>): RegExp | undefined {
-  if (names.size === 0) return undefined
-  const listed = [...names].map((name) => literalPattern(name)).join('|')
-  const named = `${QUOTE}(?:${INSIDE}*/)?(?:${listed})(?:${EXTENSION})?/*(?:[?#]${INSIDE}*)?${QUOTE}`
-  const directory = String.raw`(?:\bfrom|\bimport)\s*\(?\s*${QUOTE}\.{1,2}/?${QUOTE}`
-  return new RegExp(names.has('index') ? `${named}|${directory}` : named)
+  for (const key of state.recognised.keys())
+    if (key.startsWith(prefix)) state.recognised.delete(key)
 }
 
 /**
@@ -187,7 +175,7 @@ function lastSegmentOf(specifier: string): string {
 /**
  * Whether `specifier`'s last segment, without its extension, is the name of a listed file.
  */
-function isNamingListed(specifier: string, declared: DeclaredModules): boolean {
+export function isNamingListed(specifier: string, declared: DeclaredModules): boolean {
   const segment = lastSegmentOf(specifier)
   if (declared.names.has(segment)) return true
   const extension = path.extname(segment)
@@ -210,7 +198,7 @@ export function isAboutListed(
  * Whether the module `id` is one of the listed files. It is always read, whatever its text says,
  * since a listed module that exports a `cx` of its own is a problem.
  */
-function isListedFile(declared: DeclaredModules, id: string): boolean {
+export function isListedFile(declared: DeclaredModules, id: string): boolean {
   return declared.files.has(fileOf(id))
 }
 
@@ -224,76 +212,9 @@ function isMentioningDeclared(code: string, declared: DeclaredModules): boolean 
 }
 
 /**
- * The key a recognised import is held under.
+ * The key the recognised imports of one importer of a listed file are held under; the value is the
+ * specifiers it was recognised through.
  */
 export function recognisedKey(environment: string, file: string, importer: string): string {
   return `${environment}\0${file}\0${importer}`
-}
-
-interface Reading {
-  readonly code: string
-  readonly id: string
-  readonly program: AstNode
-}
-
-/**
- * What the module `id` is, as to `cxModules`: whether it is listed itself, and which of the
- * specifiers it imports name a listed module. Each import it recognises is kept for the build-end
- * check.
- */
-export async function declaredReadingOf(
-  context: UsedContext,
-  resolver: Resolver,
-  declared: DeclaredModules | undefined,
-  input: { readonly environment: string; readonly module: Reading },
-): Promise<{ readonly declaredSources: Set<string>; readonly isDeclared: boolean }> {
-  const { environment, module } = input
-  const declaredSources = new Set<string>()
-  if (!declared) return { declaredSources, isDeclared: false }
-  for (const source of specifiersIn(module.program)) {
-    if (source === CX_SOURCE) continue
-    const found = await listedFileOf(resolver, declared, source, module.id)
-    if (!found) continue
-    declaredSources.add(source)
-    if (found.file !== undefined) {
-      context.state.recognised.add(recognisedKey(environment, found.file, module.id))
-    }
-  }
-  return { declaredSources, isDeclared: isListedFile(declared, module.id) }
-}
-
-/**
- * The listed file `source` resolves to from `importer`, if it resolves to one.
- */
-async function listedFileFrom(
-  resolver: Resolver,
-  declared: DeclaredModules,
-  source: string,
-  importer: string,
-): Promise<string | undefined> {
-  const resolved = await resolveOrNull(resolver, source, importer)
-  const file = resolved ? fileOf(resolved.id) : undefined
-  return file !== undefined && declared.files.has(file) ? file : undefined
-}
-
-/**
- * Whether `source`, written in `importer`, names a listed module, and the file when it is known:
- * an entry that is not relative names its module as written, whether or not it resolved from the
- * root (when it did not, the importer's own resolution says which file), and any other specifier
- * that passes the text test names one when it resolves to a listed file.
- */
-async function listedFileOf(
-  resolver: Resolver,
-  declared: DeclaredModules,
-  source: string,
-  importer: string,
-): Promise<{ readonly file: string | undefined } | undefined> {
-  if (declared.entries.has(source)) {
-    const id = declared.ids.get(source)
-    if (id !== undefined) return { file: fileOf(id) }
-    return { file: await listedFileFrom(resolver, declared, source, importer) }
-  }
-  if (!isNamingListed(source, declared)) return undefined
-  const file = await listedFileFrom(resolver, declared, source, importer)
-  return file === undefined ? undefined : { file }
 }

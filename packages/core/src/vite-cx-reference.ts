@@ -213,14 +213,30 @@ function isOtherKey(property: AstNode): boolean {
 }
 
 /**
- * Whether `expression` is the whole initialiser of an object destructuring that takes static keys
- * other than `cx` and nothing else: no rest element, no computed key.
+ * The pattern `expression` is destructured by, when it is the whole initialiser of a declaration
+ * (`const { a } = ns`), the right side of an assignment (`({ a } = ns)`) or a parameter's default
+ * (`({ a } = ns) => a`).
+ */
+function patternDestructuring(reading: Reading, expression: AstNode): AstNode | undefined {
+  const parent = reading.analysis.parentOf.get(expression)
+  if (parent?.type === 'VariableDeclarator' && nodeAt(parent, 'init') === expression) {
+    return nodeAt(parent, 'id')
+  }
+  const isAssignment =
+    (parent?.type === 'AssignmentExpression' && parent.operator === '=') ||
+    parent?.type === 'AssignmentPattern'
+  return isAssignment && nodeAt(parent, 'right') === expression ? nodeAt(parent, 'left') : undefined
+}
+
+/**
+ * Whether `expression` is the whole source of an object destructuring that takes static keys other
+ * than `cx` and nothing else: no rest element, no computed key.
  */
 function isOtherKeysDestructuring(reading: Reading, expression: AstNode): boolean {
-  const parent = reading.analysis.parentOf.get(expression)
-  if (parent?.type !== 'VariableDeclarator' || nodeAt(parent, 'init') !== expression) return false
-  const id = nodeAt(parent, 'id')
-  return id?.type === 'ObjectPattern' && nodesAt(id, 'properties').every((p) => isOtherKey(p))
+  const pattern = patternDestructuring(reading, expression)
+  return (
+    pattern?.type === 'ObjectPattern' && nodesAt(pattern, 'properties').every((p) => isOtherKey(p))
+  )
 }
 
 /**

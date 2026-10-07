@@ -14,7 +14,7 @@ import type { UsedContext } from './vite-used.ts'
 
 import { filePathOf } from './vite-css-id.ts'
 import { specifiersOf } from './vite-cx-importers.ts'
-import { fileOf } from './vite-cx-modules.ts'
+import { declaredModulesFor, entriesNaming, fileOf } from './vite-cx-modules.ts'
 import { isDependencyId, packageNameOf } from './vite-module-kind.ts'
 import { compareText } from './vite-problems.ts'
 import { isListableReexport } from './vite-used-package-lines.ts'
@@ -28,7 +28,7 @@ interface Resolution {
 /**
  * Whether the specifier, written in `from`, resolves to `file`.
  */
-async function isResolvingTo(ctx: RenderContext, input: Resolution): Promise<boolean> {
+export async function isResolvingTo(ctx: RenderContext, input: Resolution): Promise<boolean> {
   try {
     const resolved = await ctx.resolve?.(input.specifier, input.from)
     return resolved !== null && resolved !== undefined && fileOf(resolved.id) === input.file
@@ -105,8 +105,9 @@ async function clearingSpecifier(
 
 /**
  * The problems with each dependency re-export of `cx` given the specifier that clears it, when it
- * has one: the report prints a `cxModules` line for those and the package's `keepFor` line for the
- * others.
+ * has one (the report prints a `cxModules` line for those and the package's `keepFor` line for the
+ * others), and each dependency's listed module that exports a `cx` the build does not follow given
+ * the entries that name it, which the report tells the consumer to remove.
  */
 export async function withClearingSpecifiers(
   ctx: RenderContext,
@@ -121,12 +122,16 @@ export async function withClearingSpecifiers(
     asked.set(id, answer)
     return answer
   }
+  const entriesOf = async (id: string): Promise<string[]> => {
+    const declared = await declaredModulesFor(context, ctx, ctx.environment.name)
+    return declared ? entriesNaming(declared, id) : []
+  }
   return await Promise.all(
     problems.map(async (problem) => {
       const { moduleId, pkg } = problem
-      if (pkg === undefined || moduleId === undefined || !isListableReexport(problem)) {
-        return problem
-      }
+      if (pkg === undefined || moduleId === undefined) return problem
+      if (problem.kind === 'declared') return { ...problem, entries: await entriesOf(moduleId) }
+      if (!isListableReexport(problem)) return problem
       const specifier = await clearing(pkg, moduleId)
       return specifier === undefined ? problem : { ...problem, specifier }
     }),

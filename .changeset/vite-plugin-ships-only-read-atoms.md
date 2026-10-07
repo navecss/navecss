@@ -36,5 +36,5 @@ that imports `cx` from one is read as if it imported it from `@navecss/core/cx` 
 as `@navecss/eslint-plugin`'s); and `atomic: 'all'`, which reads no `cx()` call and ships every
 atom.
 
-A file that imports a module listed in `cxModules` through a specifier the build does not
+A file of yours that imports a module listed in `cxModules` through a specifier the build does not
 recognise fails `vite build`, which names the file and says how to fix it.

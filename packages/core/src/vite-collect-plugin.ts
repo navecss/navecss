@@ -14,6 +14,7 @@ import { isStylesheetId } from './vite-css-id.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
 import { declaredImporterError } from './vite-cx-module-importers.ts'
 import { forgetDeclared } from './vite-cx-modules.ts'
+import { withoutEchoes } from './vite-declared-echoes.ts'
 import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
 import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
@@ -24,6 +25,7 @@ import { assertOptions } from './vite-options.ts'
 import { checkEnvironmentOrder } from './vite-order.ts'
 import { recordsOf } from './vite-state.ts'
 import { noteClientEnded, noteServerExternals } from './vite-untransformed.ts'
+import { withoutRemoved } from './vite-used-package-lines.ts'
 import { buildReport, moduleReport } from './vite-used-report.ts'
 import { isUsed, ownAtomNames } from './vite-used.ts'
 
@@ -103,6 +105,29 @@ export function isReadable(context: UsedContext, id: string): boolean {
 }
 
 /**
+ * What the build fails with at its end: the report of what it cannot read, then the check of the
+ * listed modules' importers, which tells apart what the report already says, in one failure.
+ */
+async function failuresOf(ctx: RenderContext, context: UsedContext): Promise<string[]> {
+  const problems = await withClearingSpecifiers(
+    ctx,
+    context,
+    withoutEchoes(
+      recordsOf(context.state, ctx.environment.name).map((record) => ({
+        onlyVia: record.onlyVia,
+        problems: problemsOf(record, context),
+      })),
+    ),
+  )
+  const report = problems.length > 0 ? buildReport(problems, context.options.cxModules) : undefined
+  const importers = await declaredImporterError(ctx, context, {
+    configured: withoutRemoved(problems, context.options.cxModules),
+    report,
+  })
+  return [report, importers].filter((failure) => failure !== undefined)
+}
+
+/**
  * The post-order half. `context` is what it shares with the other half.
  */
 export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
@@ -145,18 +170,7 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
 
     async buildEnd(error) {
       if (error || !isUsed(context) || context.command !== 'build') return
-      const problems = await withClearingSpecifiers(
-        this,
-        context,
-        recordsOf(context.state, this.environment.name).flatMap((record) =>
-          problemsOf(record, context),
-        ),
-      )
-      // The report and the check of the listed modules' importers print in one failure.
-      const failures = [
-        problems.length > 0 ? buildReport(problems, context.options.cxModules) : undefined,
-        await declaredImporterError(this, context),
-      ].filter((failure) => failure !== undefined)
+      const failures = await failuresOf(this, context)
       if (failures.length > 0) this.error(failures.join('\n\n'))
       await checkCxImporters(this, context)
       checkEnvironmentOrder(this, context)

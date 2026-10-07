@@ -14,12 +14,8 @@ import type { UsedContext } from './vite-used.ts'
 
 import { CX_SOURCE, readModule } from './vite-collect.ts'
 import { filePathOf } from './vite-css-id.ts'
-import {
-  type DeclaredModules,
-  declaredModulesFor,
-  declaredReadingOf,
-  isAboutListed,
-} from './vite-cx-modules.ts'
+import { type DeclaredModules, declaredModulesFor, isAboutListed } from './vite-cx-modules.ts'
+import { declaredReadingOf } from './vite-cx-reading.ts'
 import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
 import { setupExposuresFor } from './vite-setup-link.ts'
 import { combinedMapOf, placerFor } from './vite-source-map.ts'
@@ -222,7 +218,7 @@ async function recordParsed(
   key: string,
 ): Promise<ModuleRecord> {
   const { code, id, pkg, program, declared } = input
-  const { declaredSources, isDeclared } = await declaredReadingOf(context, ctx, declared, {
+  const { declaredSources, isDeclared, onlyVia } = await declaredReadingOf(context, ctx, declared, {
     environment: ctx.environment?.name ?? 'client',
     module: { code, id, program },
   })
@@ -245,7 +241,8 @@ async function recordParsed(
   if (reading.exposes.size > 0) context.state.exposures.set(key, reading.exposes)
   else context.state.exposures.delete(key)
   if (pkg !== undefined && reading.usesCx) context.state.packages.add(pkg)
-  return await recordOf(context, ctx, { code, id, pkg }, reading)
+  const record = await recordOf(context, ctx, { code, id, pkg }, reading)
+  return onlyVia === undefined ? record : { ...record, onlyVia }
 }
 
 /**
