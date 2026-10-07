@@ -33,12 +33,16 @@ export interface UsedAtomOptions {
   keepFor?: Readonly<Record<string, readonly AtomName[]>>
 
   /**
-   * Modules of yours that re-export `cx` from `@navecss/core/cx` unchanged, as
-   * `export { cx } from '@navecss/core/cx'`: a file that imports `cx` from one is read as if it
-   * imported it from `@navecss/core/cx`. Write each entry as you import it: a path from the
-   * project root (Vite's `root`), an alias, or a package name. The build follows a listed module
-   * one step; an entry that names no module of this build is ignored. The same setting, with the
-   * same entries, as `@navecss/eslint-plugin`'s `cxModules`.
+   * Modules that re-export `cx` from `@navecss/core/cx` unchanged, as
+   * `export { cx } from '@navecss/core/cx'`, in your code or in a dependency: a file that imports
+   * `cx` from one is read as if it imported it from `@navecss/core/cx`. The build follows a listed
+   * module one step. A relative entry (`'./src/ui/index.ts'`) is a path from Vite's `root`, and
+   * an import matches it when it resolves to that file. Any other entry (a package name or
+   * subpath, an alias, a `#` import, an absolute path) matches an import that resolves to the
+   * same file or is written the same way. A relative entry that resolves to no file is ignored,
+   * and so is an entry naming `@navecss/core/cx`, which the build always reads. The same setting,
+   * with the same entries, as `@navecss/eslint-plugin`'s `cxModules`, which reads a relative entry
+   * from the working directory instead of Vite's `root`.
    */
   cxModules?: readonly string[]
 }

@@ -1,8 +1,10 @@
+/* eslint-disable unicorn/consistent-function-scoping -- a helper reads through the fixture of the criterion whose rows use it */
 /**
  * `cxModules` (AC-used-atoms-47 to -49, and the option's own validation) without a build: the
  * collector reading a declared module and its importers, the post-order half's text test that
  * decides which modules are parsed and which sources are resolved, and the option's validation.
  */
+import path from 'node:path'
 import { parseAst } from 'vite'
 import { describe, expect, it } from 'vitest'
 
@@ -11,6 +13,7 @@ import type { TransformContext } from '../src/vite-types.ts'
 
 import { createCollectPlugin } from '../src/vite-collect-plugin.ts'
 import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
+import { recognisedKey } from '../src/vite-cx-modules.ts'
 import { createExtendSource } from '../src/vite-extend.ts'
 import { resolveUsedOptions } from '../src/vite-options.ts'
 import { createUsedContext } from '../src/vite-used.ts'
@@ -95,6 +98,51 @@ describe('AC-used-atoms-47 — a declared module re-exporting Nave’s cx, and e
   })
 })
 
+describe('AC-used-atoms-47 - a namespace import of a declared module is read for its other exports', () => {
+  const NS = "import * as U from './ui'\n"
+  const reads: [string, string, string[]][] = [
+    ['a member', `${NS}export const h = U.Button`, []],
+    ['a member beside a call', `${NS}export const i = [U.cx('flex'), U.Button]`, ['flex']],
+    ['a string key', `${NS}export const j = U['Button']`, []],
+    ['a template key', `${NS}export const j = U[\`Button\`]`, []],
+    ['a destructuring', `${NS}const { Button } = U\nexport const k = Button`, []],
+    [
+      'a destructuring of several keys, one renamed',
+      `${NS}const { Button, Card: C } = U\nexport const k = [Button, C]`,
+      [],
+    ],
+  ]
+
+  it.each(reads)('%s is no use of cx and no problem', (_name, code, atoms) => {
+    const reading = read(code, { declared: ['./ui'] })
+
+    expect(reading.problems).toEqual([])
+    expect([...reading.atoms]).toEqual(atoms)
+  })
+
+  const refused: [string, string][] = [
+    ['passed', `${NS}export const l = f(U)`],
+    ['spread', `${NS}export const m = ({ ...U })`],
+    ['read by a computed key', `${NS}export const n = (k) => U[k]`],
+    ['destructured by cx', `${NS}const { cx: c } = U\nexport const o = c`],
+    [
+      'destructured with a rest element',
+      `${NS}const { Button, ...rest } = U\nexport const p = [Button, rest]`,
+    ],
+    ['assigned', `${NS}export const q = U`],
+  ]
+
+  it.each(refused)('%s is one problem in the importer', (_name, code) => {
+    expect(kinds(read(code, { declared: ['./ui'] }))).toEqual(['reference'])
+  })
+
+  it('control: the namespace of Nave’s own module holds nothing but cx, so any other member is a problem', () => {
+    const code = `import * as N from '${CX_SOURCE}'\nexport const b = N.Button`
+
+    expect(kinds(read(code))).toEqual(['reference'])
+  })
+})
+
 describe('AC-used-atoms-48 — what a declared module may not do, and the hidden second hop', () => {
   const rows: [string, string, string[]][] = [
     ['another name', `export { cx as x } from '${CX_SOURCE}'`, ['declared']],
@@ -122,6 +170,41 @@ describe('AC-used-atoms-48 — what a declared module may not do, and the hidden
     const reading = read(code, { isDeclared: true, declared: ['./ui/index.ts'] })
 
     expect(kinds(reading)).toEqual(expected)
+  })
+
+  const stars: [string, string, string[]][] = [
+    ['a star from a module that may export its own cx', "export * from './helpers'", ['declared']],
+    ['a star re-exported as cx', "export * as cx from './other'", ['declared']],
+    ['a star from a module that is itself a Nave barrel', "export * from './inner'", ['declared']],
+    ['a star from a module with no cx', "export * from './parts'", ['declared']],
+    ['a star re-exported under another name', "export * as n from './other'", []],
+    [
+      'Nave’s explicit re-export beside a star',
+      `export { cx } from '${CX_SOURCE}'\nexport * from './parts'`,
+      [],
+    ],
+    [
+      'Nave’s star beside another star',
+      `export * from '${CX_SOURCE}'\nexport * from './parts'`,
+      [],
+    ],
+    [
+      'Nave’s cx exported from an import, beside a star',
+      `${IMPORT}export { cx }\nexport * from './parts'`,
+      [],
+    ],
+    ['two stars, one problem', "export * from './a'\nexport * from './b'", ['declared']],
+  ]
+
+  it.each(stars)('%s is the expected problems', (_name, code, expected) => {
+    expect(kinds(read(code, { isDeclared: true, declared: ['./ui/index.ts'] }))).toEqual(expected)
+  })
+
+  it('positions the star problem at the first star statement', () => {
+    const code = "export const first = 1\nexport * from './a'\nexport * from './b'"
+    const reading = read(code, { isDeclared: true })
+
+    expect(reading.problems.map((problem) => problem.offset)).toEqual([code.indexOf('export *')])
   })
 
   it('does not take an export of something else for a problem', () => {
@@ -163,18 +246,38 @@ describe('AC-used-atoms-48 — what a declared module may not do, and the hidden
 describe('AC-used-atoms-49 — the text test decides what is parsed and what is resolved', () => {
   const ROOT = '/scale-root'
   const DECLARED = `${ROOT}/src/ui/index.ts`
-  // What the host's resolver answers: the entries from the project root, and the specifiers
-  // that name the declared file or another one from the modules that write them.
-  const RESOLUTIONS = new Map<string, string>([
+  // The files the host's resolver can find, and the specifiers it answers whatever the importer.
+  // A relative specifier is resolved from the module that writes it, as the host's resolver does,
+  // so the same text names different files in different directories.
+  const FILES = new Set([
+    `${ROOT}/node_modules/@acme/ds/index.js`,
+    `${ROOT}/src/components/index.ts`,
+    `${ROOT}/src/ds-entry.ts`,
+    `${ROOT}/src/feature/ui.ts`,
+    `${ROOT}/ui/index.ts`,
+    DECLARED,
+  ])
+  const ANSWERS = new Map<string, string>([
     ['#ds', `${ROOT}/src/ds-entry.ts`],
-    ['../ui', DECLARED],
-    ['./components/index', `${ROOT}/src/components/index.ts`],
-    ['./src/ui/index.ts', DECLARED],
-    ['./ui', DECLARED],
-    ['./ui/index', DECLARED],
+    ['#internal/ui', DECLARED],
     ['@/ui', DECLARED],
     ['@acme/ds', `${ROOT}/node_modules/@acme/ds/index.js`],
   ])
+
+  /**
+   * The id the host's resolver gives `source` written in `importer`: the file with the query kept,
+   * as Vite's ids are, or nothing.
+   */
+  function answerFor(source: string, importer: string): string | undefined {
+    const answer = ANSWERS.get(source)
+    if (answer !== undefined || !source.startsWith('.')) return answer
+    const [bare = '', ...query] = source.split('?')
+    const base = path.posix.resolve(path.posix.dirname(importer), bare)
+    const found = [base, `${base}.ts`, `${base}/index.ts`].find((file) => FILES.has(file))
+    return found === undefined
+      ? undefined
+      : `${found}${query.length > 0 ? `?${query.join('?')}` : ''}`
+  }
 
   interface Fixture {
     readonly context: ReturnType<typeof createUsedContext>
@@ -183,7 +286,10 @@ describe('AC-used-atoms-49 — the text test decides what is parsed and what is 
     readonly transform: (code: string, id: string) => Promise<void>
   }
 
-  function fixture(cxModules: readonly string[]): Fixture {
+  function fixture(
+    cxModules: readonly string[],
+    fromModules: Readonly<Record<string, string>> = {},
+  ): Fixture {
     const context = createUsedContext(
       resolveUsedOptions({ cxModules }),
       createExtendSource(undefined),
@@ -201,7 +307,9 @@ describe('AC-used-atoms-49 — the text test decides what is parsed and what is 
       },
       resolve: (source: string, importer: string) => {
         resolved.push({ importer, source })
-        const id = RESOLUTIONS.get(source)
+        // An answer only a module can get: the project root's own question has none.
+        const own = importer.endsWith('/index.html') ? undefined : fromModules[source]
+        const id = own ?? answerFor(source, importer)
         return Promise.resolve(id === undefined ? undefined : { id })
       },
       getCombinedSourcemap: () => ({ sources: [], mappings: '' }),
@@ -230,6 +338,21 @@ describe('AC-used-atoms-49 — the text test decides what is parsed and what is 
     { name: 'h', code: "import { x } from './uix'", isParsed: false },
     { name: 'i', code: "const s = 'nave-flex'", isParsed: true },
     { name: 'j', code: 'export const y = 1', isParsed: false },
+    // A directory specifier that writes no name reads as `index`, and a declared file is `index.ts`.
+    { name: 'k', code: "import { cx } from '.'", isParsed: true },
+    { name: 'l', code: "import { cx } from '..'", isParsed: true },
+    { name: 'm', code: "import { cx } from './'", isParsed: true },
+    { name: 'n', code: "import { cx } from '../'", isParsed: true },
+    // The last segment is read without a trailing slash, a query or a hash, but a leading `#`
+    // begins a subpath import.
+    { name: 'o', code: "import { cx } from '../ui/'", isParsed: true },
+    { name: 'p', code: "import { cx } from './ui?v=1'", isParsed: true },
+    { name: 'q', code: "import { cx } from '#internal/ui'", isParsed: true },
+    { name: 'r', code: "import { cx } from './ui.ts#top'", isParsed: true },
+    // An apostrophe elsewhere in the text cannot hide a specifier: quotes are not paired.
+    { name: 's', code: "const s = \"it's\"; import { cx } from './ui'", isParsed: true },
+    { name: 't', code: "/* it's */ import { cx } from './ui'", isParsed: true },
+    { name: 'u', code: "import { x } from './uix?v=1'", isParsed: false },
   ]
 
   it('parses exactly the modules whose text can name Nave’s cx or a declared module', async () => {
@@ -246,6 +369,111 @@ describe('AC-used-atoms-49 — the text test decides what is parsed and what is 
     for (const { name, code } of MODULES) await transform(code, `${ROOT}/src/m-${name}.ts`)
 
     expect(parsed.toSorted(byText)).toEqual([`${ROOT}/src/m-a.ts`, `${ROOT}/src/m-i.ts`])
+  })
+
+  it('control: with no index file declared, a directory specifier is not parsed', async () => {
+    const { parsed, transform } = fixture(['./src/ui/button.ts'])
+    await transform("import { cx } from '..'", `${ROOT}/src/ui/forms/m.ts`)
+    await transform("import { cx } from '.'", `${ROOT}/src/ui/m.ts`)
+
+    expect(parsed).toEqual([])
+  })
+
+  describe('recognition by the module that writes the specifier', () => {
+    const recognised = async (
+      cxModules: readonly string[],
+      rows: readonly (readonly [importer: string, source: string])[],
+    ): Promise<string[]> => {
+      const { context, transform } = fixture(cxModules)
+      for (const [importer, source] of rows) {
+        await transform(`import { cx } from '${source}'\nexport const r = cx('flex')`, importer)
+      }
+      return rows
+        .filter(([importer]) =>
+          context.state.recognised.has(recognisedKey('client', DECLARED, importer)),
+        )
+        .map(([importer]) => importer)
+    }
+
+    it('recognises each spelling that resolves, from where it is written, to the declared file', async () => {
+      const rows = [
+        [`${ROOT}/src/a.ts`, './ui'],
+        [`${ROOT}/src/b.ts`, './ui/index'],
+        [`${ROOT}/src/c.ts`, '@/ui'],
+        [`${ROOT}/src/pages/d.ts`, '../ui'],
+        [`${ROOT}/src/pages/e.ts`, '../ui/'],
+        [`${ROOT}/src/f.ts`, './ui?v=1'],
+        [`${ROOT}/src/ui/g.ts`, '.'],
+        [`${ROOT}/src/ui/h.ts`, './'],
+        [`${ROOT}/src/ui/forms/i.ts`, '..'],
+        [`${ROOT}/src/ui/forms/j.ts`, '../'],
+        [`${ROOT}/src/k.ts`, '#internal/ui'],
+      ] as const
+
+      expect(await recognised(['./src/ui/index.ts'], rows)).toEqual(rows.map(([id]) => id))
+    })
+
+    it('does not recognise the same text where it names another file', async () => {
+      const rows = [
+        [`${ROOT}/src/feature/b.ts`, './ui'],
+        [`${ROOT}/src/pages/c.ts`, './ui'],
+        [`${ROOT}/src/ui/forms/d.ts`, '.'],
+      ] as const
+
+      expect(await recognised(['./src/ui/index.ts'], rows)).toEqual([])
+    })
+
+    it('reads a relative entry by its file only, never as written', async () => {
+      const { context, transform } = fixture(['./ui'])
+      const importer = `${ROOT}/src/feature/b.ts`
+      // The sibling `./ui` is a plain function; the entry names the barrel at `<root>/ui`.
+      await transform("import { cx } from './ui'\nexport const b = cx('card', v)", importer)
+      await transform("import { cx } from '../ui'\nexport const a = cx('flex')", `${ROOT}/src/a.ts`)
+
+      expect(context.state.modules.get(`client\0${importer}`)?.problems).toEqual([])
+      expect(
+        context.state.recognised.has(recognisedKey('client', `${ROOT}/ui/index.ts`, importer)),
+      ).toBe(false)
+      expect(
+        context.state.recognised.has(
+          recognisedKey('client', `${ROOT}/ui/index.ts`, `${ROOT}/src/a.ts`),
+        ),
+      ).toBe(true)
+    })
+
+    it('still reads an entry that is not relative as written', async () => {
+      const { context, transform } = fixture(['#ds'])
+      await transform("import { cx } from '#ds'\nexport const e = cx('flex')", `${ROOT}/src/e.ts`)
+
+      expect([...(context.state.modules.get(`client\0${ROOT}/src/e.ts`)?.atoms ?? [])]).toEqual([
+        'flex',
+      ])
+    })
+
+    it('records an import through an entry that resolved to nothing from the root, once it lands on a listed file', async () => {
+      // `#local` names nothing from the project root, and the declared barrel from a module.
+      const { context, transform } = fixture(['./src/ui/index.ts', '#local'], {
+        '#local': DECLARED,
+      })
+      const importer = `${ROOT}/src/p.ts`
+      await transform("import { cx } from '#local'\nexport const p = cx('flex')", importer)
+
+      expect(context.state.recognised.has(recognisedKey('client', DECLARED, importer))).toBe(true)
+    })
+
+    it('ignores an entry that is Nave’s own module, whatever it is read beside', async () => {
+      const { context, parsed, transform } = fixture(['@navecss/core/cx'])
+      await transform(
+        "import { cx } from '@navecss/core/cx'\nexport const d = cx('grid')",
+        `${ROOT}/src/d.ts`,
+      )
+
+      expect([...(context.state.modules.get(`client\0${ROOT}/src/d.ts`)?.atoms ?? [])]).toEqual([
+        'grid',
+      ])
+      expect(parsed).toEqual([`${ROOT}/src/d.ts`])
+      expect(context.state.recognised.size).toBe(0)
+    })
   })
 
   it('resolves only the sources that pass the test, from the module that writes them', async () => {

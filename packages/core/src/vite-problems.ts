@@ -52,6 +52,22 @@ export function compareText(a: string, b: string): number {
 }
 
 /**
+ * The `cxModules` array a remedy prints: the entries already configured, as written and in their
+ * order, then each module to add once, in code-unit order. `undefined` when there is nothing to
+ * add, since an array equal to the configured list is no remedy.
+ */
+export function cxModulesArray(
+  configured: readonly string[],
+  added: Iterable<string>,
+): string | undefined {
+  const extra = [...new Set(added)]
+    .filter((entry) => !configured.includes(entry))
+    .toSorted(compareText)
+  if (extra.length === 0) return undefined
+  return `[${[...configured, ...extra].map((entry) => `'${entry}'`).join(', ')}]`
+}
+
+/**
  * The first `limit` characters of `text`, then `...` when it was longer.
  */
 export function cut(text: string, limit = 40): string {

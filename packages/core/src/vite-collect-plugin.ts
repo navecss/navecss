@@ -14,6 +14,7 @@ import { isStylesheetId } from './vite-css-id.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
 import { declaredImporterError } from './vite-cx-module-importers.ts'
 import { forgetDeclared } from './vite-cx-modules.ts'
+import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
 import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
@@ -78,8 +79,13 @@ function problemsOf(record: ModuleRecord, context: UsedContext): LocatedProblem[
 /**
  * Throws the dev server's error for the application problems of one module.
  */
-function failModule(ctx: TransformContext, id: string, problems: readonly LocatedProblem[]): never {
-  const message = moduleReport(problems)
+function failModule(
+  ctx: TransformContext,
+  context: UsedContext,
+  input: { readonly id: string; readonly problems: readonly LocatedProblem[] },
+): never {
+  const { id, problems } = input
+  const message = moduleReport(problems, context.options.cxModules)
   const first = problems[0]!
   return ctx.error({
     message,
@@ -123,7 +129,7 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
       if (context.command === 'serve') devServing.noteGrowth(context)
       if (!record || context.command !== 'serve' || record.pkg !== undefined) return
       const problems = problemsOf(record, context)
-      if (problems.length > 0) failModule(this, id, problems)
+      if (problems.length > 0) failModule(this, context, { id, problems })
     },
 
     transformIndexHtml: {
@@ -139,12 +145,16 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
 
     async buildEnd(error) {
       if (error || !isUsed(context) || context.command !== 'build') return
-      const problems = recordsOf(context.state, this.environment.name).flatMap((record) =>
-        problemsOf(record, context),
+      const problems = await withClearingSpecifiers(
+        this,
+        context,
+        recordsOf(context.state, this.environment.name).flatMap((record) =>
+          problemsOf(record, context),
+        ),
       )
       // The report and the check of the listed modules' importers print in one failure.
       const failures = [
-        problems.length > 0 ? buildReport(problems) : undefined,
+        problems.length > 0 ? buildReport(problems, context.options.cxModules) : undefined,
         await declaredImporterError(this, context),
       ].filter((failure) => failure !== undefined)
       if (failures.length > 0) this.error(failures.join('\n\n'))

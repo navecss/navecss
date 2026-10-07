@@ -204,22 +204,66 @@ export function useOfExpression(reading: Reading, start: AstNode, local: string)
 }
 
 /**
- * The use one reference to a cx binding makes.
+ * Whether the property is a destructured key that is static and is not `cx`.
  */
-export function useOf(reading: Reading, reference: Reference, cx: CxBinding): CxUse {
-  const local = cx.binding.name
-  const expression = reference.node
-  if (!cx.isNamespace) {
-    const use = useOfExpression(reading, expression, local)
-    if (!use.isReexport) return use
-    const isDeclaredSource = reading.declaredSources?.has(cx.binding.source ?? '') === true
-    return { ...use, isListable: !isDeclaredSource }
-  }
+function isOtherKey(property: AstNode): boolean {
+  if (property.type !== 'Property') return false
+  const name = propertyNameOf(nodeAt(property, 'key'), property.computed === true)
+  return name !== undefined && name !== 'cx'
+}
+
+/**
+ * Whether `expression` is the whole initialiser of an object destructuring that takes static keys
+ * other than `cx` and nothing else: no rest element, no computed key.
+ */
+function isOtherKeysDestructuring(reading: Reading, expression: AstNode): boolean {
+  const parent = reading.analysis.parentOf.get(expression)
+  if (parent?.type !== 'VariableDeclarator' || nodeAt(parent, 'init') !== expression) return false
+  const id = nodeAt(parent, 'id')
+  return id?.type === 'ObjectPattern' && nodesAt(id, 'properties').every((p) => isOtherKey(p))
+}
+
+/**
+ * The member read `expression.key` that `expression` is the object of, with the static key it
+ * reads (`undefined` when the key is computed from anything but a string).
+ */
+function memberReadOf(
+  reading: Reading,
+  expression: AstNode,
+): { key: string | undefined; member: AstNode } | undefined {
   const member = reading.analysis.parentOf.get(expression)
-  const isCx =
-    member?.type === 'MemberExpression' &&
-    nodeAt(member, 'object') === expression &&
-    propertyNameOf(nodeAt(member, 'property'), member.computed === true) === 'cx'
-  if (!isCx) return refused(expression, local, `${local} is used other than as ${local}.cx`)
-  return useOfExpression(reading, member, `${local}.cx`)
+  if (member?.type !== 'MemberExpression' || nodeAt(member, 'object') !== expression) {
+    return undefined
+  }
+  return { member, key: propertyNameOf(nodeAt(member, 'property'), member.computed === true) }
+}
+
+/**
+ * The use one reference to a namespace import makes, or `undefined` when it makes none of `cx`.
+ * `ns.cx` is Nave's `cx`. For a namespace of a listed module, which exports more than `cx`, a
+ * member read by a static key other than `cx`, and a destructuring of such keys, read another
+ * export. Everything else may carry `cx` where the build cannot follow it.
+ */
+function namespaceUse(reading: Reading, expression: AstNode, cx: CxBinding): CxUse | undefined {
+  const local = cx.binding.name
+  const read = memberReadOf(reading, expression)
+  if (read?.key === 'cx') return useOfExpression(reading, read.member, `${local}.cx`)
+  const isListed = reading.declaredSources?.has(cx.binding.source ?? '') === true
+  const isOtherExport = read
+    ? read.key !== undefined
+    : isOtherKeysDestructuring(reading, expression)
+  if (isListed && isOtherExport) return undefined
+  return refused(expression, local, `${local} is used other than as ${local}.cx`)
+}
+
+/**
+ * The use one reference to a cx binding makes, or `undefined` when it makes none of `cx`.
+ */
+export function useOf(reading: Reading, reference: Reference, cx: CxBinding): CxUse | undefined {
+  if (cx.isNamespace) return namespaceUse(reading, reference.node, cx)
+  const local = cx.binding.name
+  const use = useOfExpression(reading, reference.node, local)
+  if (!use.isReexport) return use
+  const isDeclaredSource = reading.declaredSources?.has(cx.binding.source ?? '') === true
+  return { ...use, isListable: !isDeclaredSource }
 }

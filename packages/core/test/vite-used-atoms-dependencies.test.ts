@@ -267,6 +267,10 @@ describe('AC-used-atoms-43 — what listing a package in keepFor covers, and wha
 
       expect(without.error).toMatch(/^6 problems in 6 files/)
       expect(without.error).toContain('wide-lib')
+      // The re-export in `dist/cx.js` is reached only from inside the package: no cxModules line
+      // could clear it, and the package's keepFor line, printed once, does.
+      expect(without.error).not.toMatch(/cxModules: \[/)
+      expect(without.error!.match(/keepFor: \{ 'wide-lib'/g)).toHaveLength(1)
       expect(listed.error).toBeUndefined()
       expect(atomLayerAtoms(listed.css)).toEqual(atoms('flex', 'block', 'gap', 'truncate'))
     } finally {
@@ -447,6 +451,9 @@ describe('AC-used-atoms-55 — the remedy block is split by owner', () => {
       expect(owners.indexOf('aa-lib')).toBeLessThan(owners.indexOf('zz-lib'))
       expect(remedies.at(-1)).toMatch(/^Available: /)
       expect(remedies.slice(0, 3).join('\n')).not.toContain('keepFor')
+      expect(remedies.find((line) => line.startsWith('@acme/ds'))).toBe(
+        "@acme/ds re-exports cx in '@acme/ds'. List it in navePlugin(): cxModules: ['@acme/ds'].",
+      )
     } finally {
       app.dispose()
     }

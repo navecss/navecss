@@ -30,7 +30,11 @@ maps like `cx()`, except that a name that is no atom returns `''` where `cx()` r
 unchanged.
 
 New Vite plugin options: `keep`, the atoms always shipped; `keepFor`, by package name, the atoms a
-dependency's calls can produce, for a package whose calls the build cannot read; `cxModules`,
-modules of yours that re-export `cx` from `@navecss/core/cx`, so a file that imports `cx` from one
-is read as if it imported it from `@navecss/core/cx` (the same setting as
-`@navecss/eslint-plugin`'s); and `atomic: 'all'`, which reads no `cx()` call and ships every atom.
+dependency's calls can produce, for a package whose calls the build cannot read; `cxModules`, the
+modules that re-export `cx` from `@navecss/core/cx`, in your code or in a dependency, so a file
+that imports `cx` from one is read as if it imported it from `@navecss/core/cx` (the same setting
+as `@navecss/eslint-plugin`'s); and `atomic: 'all'`, which reads no `cx()` call and ships every
+atom.
+
+A file that imports a module listed in `cxModules` through a specifier the build does not
+recognise fails `vite build`, which names the file and says how to fix it.

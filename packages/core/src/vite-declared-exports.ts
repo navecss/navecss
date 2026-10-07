@@ -3,7 +3,8 @@
  * the `cx` it re-exports from `@navecss/core/cx` itself, under the name `cx`. Anything else it
  * exports of `cx` is a problem in that module: Nave's `cx` under another name, as a default or in a
  * namespace, a `cx` that is not Nave's (its own function, a wrapper, one taken from another
- * module), and the `cx` of a module that is already listed, which would be a second hop.
+ * module, a star of another module when Nave's `cx` is not exported beside it), and the `cx` of a
+ * module that is already listed, which would be a second hop.
  */
 import type { AstNode } from './vite-ast.ts'
 import type { CxBinding } from './vite-cx-reference.ts'
@@ -13,7 +14,7 @@ import type { Binding, ScopeAnalysis } from './vite-scope.ts'
 import { nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
 
 const DECLARED_TEXT =
-  "listed in cxModules, but its cx is not Nave's cx re-exported: the build follows a listed module one step, to a cx it imports from @navecss/core/cx."
+  "listed in cxModules, but this export can give it a cx the build does not follow: the build follows a listed module one step, to Nave's cx re-exported from @navecss/core/cx under the name cx."
 
 export interface DeclaredExportsInput {
   readonly program: AstNode
@@ -150,13 +151,84 @@ function namedExportProblems(node: AstNode, input: DeclaredExportsInput): Proble
 /**
  * The problems of `export * from <source>` and `export * as n from <source>`: the first is the plain
  * re-export from Nave's own module, a second hop from a listed one; the second is a namespace,
- * which no importer can read as `cx`.
+ * which no importer can read as `cx`, and which from any other module is a `cx` that is not Nave's
+ * when it is named `cx`. A plain star from another module is judged with the whole module, by
+ * `unfollowedStarProblems`.
  */
 function starExportProblems(node: AstNode, input: DeclaredExportsInput): Problem[] {
   const source = staticStringOf(nodeAt(node, 'source'))
-  if (source === undefined || !input.cxSources.has(source)) return []
-  const isNamespace = nodeAt(node, 'exported') !== undefined
-  return isNamespace || input.declaredSources.has(source) ? [problem(node)] : []
+  if (source === undefined) return []
+  const exported = nodeAt(node, 'exported')
+  if (!input.cxSources.has(source)) {
+    return exportNameOf(exported) === 'cx' ? [problem(node)] : []
+  }
+  return exported !== undefined || input.declaredSources.has(source) ? [problem(node)] : []
+}
+
+/**
+ * Whether `source` is Nave's own module, as opposed to a listed one or any other.
+ */
+function isNaveSource(source: string | undefined, input: DeclaredExportsInput): boolean {
+  return source !== undefined && input.cxSources.has(source) && !input.declaredSources.has(source)
+}
+
+/**
+ * Whether `export { local as exported }`, with no source, exports an imported binding of Nave's
+ * `cx` under the name `cx`.
+ */
+function isNaveLocalExport(
+  local: AstNode | undefined,
+  exported: string | undefined,
+  input: DeclaredExportsInput,
+): boolean {
+  const binding = local && input.analysis.referenceOf(local)?.binding
+  const cx = binding ? input.bindings.get(binding) : undefined
+  const isListed = input.declaredSources.has(binding?.source ?? '')
+  return exported === 'cx' && cx !== undefined && !cx.isNamespace && !isListed
+}
+
+/**
+ * Whether one specifier of `export { ... }` gives the module Nave's `cx` under the name `cx`: a
+ * plain re-export from Nave's module (`source`), or the export of an imported binding of it.
+ */
+function isNaveSpecifier(
+  specifier: AstNode,
+  source: string | undefined,
+  input: DeclaredExportsInput,
+): boolean {
+  const local = nodeAt(specifier, 'local')
+  const exported = exportNameOf(nodeAt(specifier, 'exported'))
+  if (source === undefined) return isNaveLocalExport(local, exported, input)
+  return isNaveSource(source, input) && isPlainReExport(exportNameOf(local), exported)
+}
+
+/**
+ * Whether the statement gives the module Nave's `cx` under the name `cx`: a plain re-export from
+ * Nave's module, a star from it, or an export of an imported binding of it.
+ */
+function isNaveCxExport(node: AstNode, input: DeclaredExportsInput): boolean {
+  const source = staticStringOf(nodeAt(node, 'source'))
+  if (node.type === 'ExportAllDeclaration') {
+    return isNaveSource(source, input) && nodeAt(node, 'exported') === undefined
+  }
+  if (node.type !== 'ExportNamedDeclaration' || nodeAt(node, 'declaration')) return false
+  return nodesAt(node, 'specifiers').some((specifier) => isNaveSpecifier(specifier, source, input))
+}
+
+/**
+ * The problem of a module that gives itself no Nave `cx` but has `export * from` another module:
+ * its `cx` can only come from there, as a second hop or as another function. It is judged from the
+ * module's own text, at the first such statement, whether or not the other module exports a `cx`.
+ */
+function unfollowedStarProblems(body: readonly AstNode[], input: DeclaredExportsInput): Problem[] {
+  if (body.some((node) => isNaveCxExport(node, input))) return []
+  const star = body.find((node) => {
+    const source = staticStringOf(nodeAt(node, 'source'))
+    const isPlainStar =
+      node.type === 'ExportAllDeclaration' && nodeAt(node, 'exported') === undefined
+    return isPlainStar && source !== undefined && !input.cxSources.has(source)
+  })
+  return star ? [problem(star)] : []
 }
 
 /**
@@ -180,7 +252,9 @@ const EXPORT_PROBLEMS: Readonly<
  * The problems in the exports of a module listed in `cxModules`.
  */
 export function declaredExportProblems(input: DeclaredExportsInput): Problem[] {
-  return nodesAt(input.program, 'body').flatMap(
-    (node) => EXPORT_PROBLEMS[node.type]?.(node, input) ?? [],
-  )
+  const body = nodesAt(input.program, 'body')
+  return [
+    ...body.flatMap((node) => EXPORT_PROBLEMS[node.type]?.(node, input) ?? []),
+    ...unfollowedStarProblems(body, input),
+  ]
 }

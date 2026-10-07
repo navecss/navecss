@@ -59,6 +59,7 @@ export function isMentioningAtoms(code: string): boolean {
 
 interface Placing {
   readonly code: string
+  readonly id: string
   readonly file: string
   readonly pkg: string | undefined
   readonly place: (offset: number) => { column: number; line: number } | undefined
@@ -99,7 +100,7 @@ function locate(problems: readonly Problem[], placing: Placing): LocatedProblem[
   return problems.map((problem) => {
     const place = placing.place(problem.offset)
     const where = place ?? { ...NO_PLACE, unknownLine: placing.unknownLine }
-    return { ...problem, file: placing.file, pkg: placing.pkg, ...where }
+    return { ...problem, file: placing.file, pkg: placing.pkg, moduleId: placing.id, ...where }
   })
 }
 
@@ -166,6 +167,7 @@ async function recordOf(
   const authored = map ? await authoredTextOf(id) : undefined
   const placing: Placing = {
     code,
+    id,
     file: moduleLabel(context.root, id),
     pkg,
     place: placerFor(code, map, authored),

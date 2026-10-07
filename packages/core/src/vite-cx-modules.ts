@@ -1,11 +1,14 @@
 /**
  * `cxModules`: the modules a consumer lists as re-exporting Nave's `cx`, and what the post-order
- * half does with them. An import is from a listed module when its specifier equals an entry as
- * written, or resolves, from the importing module, to a listed module's file. A module is parsed
- * only when its text can name one (a text test, so an application of thousands of modules parses
- * the importers and no more), and a build-end check compares the importers it recognised with the
- * module graph's, so an import through a spelling the text test cannot see fails the build
- * instead of shipping every call made through it with no rule.
+ * half does with them. An import is from a listed module when its specifier resolves, from the
+ * importing module, to a listed module's file, or, for an entry that is not relative, when it
+ * equals the entry as written (a relative specifier names a file relative to the module that
+ * writes it, so its text alone names nothing). An entry that is, or resolves to, Nave's own `cx`
+ * module is no entry: that module is always followed. A module is parsed only when its text can
+ * name a listed one (a text test, so an application of thousands of modules parses the importers
+ * and no more), and a build-end check compares the importers it recognised with the module
+ * graph's, so an import through a spelling the text test cannot see fails the build instead of
+ * shipping every call made through it with no rule.
  */
 import path from 'node:path'
 
@@ -23,11 +26,12 @@ interface Resolver {
 
 export interface DeclaredModules {
   /**
-   * The entries as written.
+   * The entries a specifier may equal as written: every entry but a relative one.
    */
   readonly entries: ReadonlySet<string>
   /**
-   * The module id each entry resolves to; an entry that resolves to nothing has none.
+   * The module id each entry resolves to from the project root; an entry that resolves to nothing
+   * has none.
    */
   readonly ids: ReadonlyMap<string, string>
   /**
@@ -39,6 +43,19 @@ export interface DeclaredModules {
    * extension, and its directory's when it is an `index` file.
    */
   readonly names: ReadonlySet<string>
+  /**
+   * Finds, in a module's text, a quoted specifier that can name a listed file: one whose last
+   * segment is one of `names`, or a directory specifier that writes no name when a listed file
+   * is an `index` file. `undefined` when no listed file resolved.
+   */
+  readonly textTest: RegExp | undefined
+}
+
+/**
+ * Whether an entry or a specifier is relative: a path from the module that writes it.
+ */
+export function isRelative(text: string): boolean {
+  return text === '.' || text === '..' || text.startsWith('./') || text.startsWith('../')
 }
 
 /**
@@ -90,23 +107,31 @@ async function resolveOrNull(
 }
 
 /**
- * Resolves every entry from the project root with the host's resolver.
+ * Resolves every entry from the project root with the host's resolver, leaving out an entry that
+ * is, or resolves to, Nave's own `cx` module.
  */
 async function resolveEntries(context: UsedContext, resolver: Resolver): Promise<DeclaredModules> {
   const from = path.join(context.root, 'index.html')
+  const nave = await resolveOrNull(resolver, CX_SOURCE, from)
+  const naveFile = nave === undefined ? undefined : fileOf(nave.id)
   const resolved = await Promise.all(
     context.options.cxModules.map(async (entry) => {
       const found = await resolveOrNull(resolver, entry, from)
       return [entry, found?.id] as const
     }),
   )
-  const ids = new Map(resolved.filter((pair): pair is [string, string] => pair[1] !== undefined))
+  const kept = resolved.filter(
+    ([entry, id]) => entry !== CX_SOURCE && (id === undefined || fileOf(id) !== naveFile),
+  )
+  const ids = new Map(kept.filter((pair): pair is [string, string] => pair[1] !== undefined))
   const files = new Set(ids.values().map((id) => fileOf(id)))
+  const names = new Set(files.values().flatMap((file) => namesOf(file)))
   return {
-    entries: new Set(context.options.cxModules),
+    entries: new Set(kept.map(([entry]) => entry).filter((entry) => !isRelative(entry))),
     ids,
     files,
-    names: new Set(files.values().flatMap((file) => namesOf(file))),
+    names,
+    textTest: textTestOf(names),
   }
 }
 
@@ -120,17 +145,54 @@ export function forgetDeclared(state: RootState, environment: string): void {
 }
 
 /**
+ * `text` as a pattern that matches it and nothing else.
+ */
+function literalPattern(text: string): string {
+  return text.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`)
+}
+
+// What may stand in a quoted specifier (no quote, no escape, no line break), and what an
+// extension is (a dot and what follows it up to the next dot, slash, query or hash).
+const INSIDE = String.raw`[^\n'"\x60\\]`
+const EXTENSION = String.raw`\.[^\n'"\x60\\/?#.]*`
+const QUOTE = String.raw`['"\x60]`
+
+/**
+ * The search the text test makes of a module for a specifier that can name a listed file. It
+ * pairs no quotes: each name is looked for where a quote opens, so an apostrophe elsewhere in the
+ * text cannot hide a specifier. A specifier names a file by its last segment, whether or not a
+ * `/`, a `?query` or a `#hash` follows it. A directory specifier that writes no name (`.`, `..`)
+ * names `index`, and is looked for in an import position only, so `s.split('.')` is not one.
+ */
+function textTestOf(names: ReadonlySet<string>): RegExp | undefined {
+  if (names.size === 0) return undefined
+  const listed = [...names].map((name) => literalPattern(name)).join('|')
+  const named = `${QUOTE}(?:${INSIDE}*/)?(?:${listed})(?:${EXTENSION})?/*(?:[?#]${INSIDE}*)?${QUOTE}`
+  const directory = String.raw`(?:\bfrom|\bimport)\s*\(?\s*${QUOTE}\.{1,2}/?${QUOTE}`
+  return new RegExp(names.has('index') ? `${named}|${directory}` : named)
+}
+
+/**
+ * The last path segment of a specifier, as the text test reads it: without a `?query` or a
+ * `#hash` (a leading `#` begins a Node subpath import and is part of the specifier), without a
+ * trailing `/`, and `index` for a directory specifier that writes no name.
+ */
+function lastSegmentOf(specifier: string): string {
+  const cut = specifier.slice(1).search(/[#?]/)
+  const bare = (cut === -1 ? specifier : specifier.slice(0, cut + 1)).replace(/\/+$/, '')
+  const segment = bare.slice(bare.lastIndexOf('/') + 1)
+  return segment === '.' || segment === '..' ? 'index' : segment
+}
+
+/**
  * Whether `specifier`'s last segment, without its extension, is the name of a listed file.
  */
 function isNamingListed(specifier: string, declared: DeclaredModules): boolean {
-  const segment = specifier.slice(specifier.lastIndexOf('/') + 1)
+  const segment = lastSegmentOf(specifier)
   if (declared.names.has(segment)) return true
   const extension = path.extname(segment)
   return extension !== '' && declared.names.has(segment.slice(0, -extension.length))
 }
-
-// A quoted string with no escape and no line break: the specifiers the text test reads.
-const QUOTED = /['"`]([^\n'"\\`]*)['"`]/g
 
 /**
  * Whether the module could be about a listed module: it is one itself, or its text can import
@@ -158,8 +220,7 @@ function isListedFile(declared: DeclaredModules, id: string): boolean {
  */
 function isMentioningDeclared(code: string, declared: DeclaredModules): boolean {
   for (const entry of declared.entries) if (code.includes(entry)) return true
-  for (const match of code.matchAll(QUOTED)) if (isNamingListed(match[1]!, declared)) return true
-  return false
+  return declared.textTest?.test(code) ?? false
 }
 
 /**
@@ -202,9 +263,24 @@ export async function declaredReadingOf(
 }
 
 /**
+ * The listed file `source` resolves to from `importer`, if it resolves to one.
+ */
+async function listedFileFrom(
+  resolver: Resolver,
+  declared: DeclaredModules,
+  source: string,
+  importer: string,
+): Promise<string | undefined> {
+  const resolved = await resolveOrNull(resolver, source, importer)
+  const file = resolved ? fileOf(resolved.id) : undefined
+  return file !== undefined && declared.files.has(file) ? file : undefined
+}
+
+/**
  * Whether `source`, written in `importer`, names a listed module, and the file when it is known:
- * an entry as written names its module whether or not it resolved, and any other specifier that
- * passes the text test names one when it resolves to a listed file.
+ * an entry that is not relative names its module as written, whether or not it resolved from the
+ * root (when it did not, the importer's own resolution says which file), and any other specifier
+ * that passes the text test names one when it resolves to a listed file.
  */
 async function listedFileOf(
   resolver: Resolver,
@@ -214,10 +290,10 @@ async function listedFileOf(
 ): Promise<{ readonly file: string | undefined } | undefined> {
   if (declared.entries.has(source)) {
     const id = declared.ids.get(source)
-    return { file: id === undefined ? undefined : fileOf(id) }
+    if (id !== undefined) return { file: fileOf(id) }
+    return { file: await listedFileFrom(resolver, declared, source, importer) }
   }
   if (!isNamingListed(source, declared)) return undefined
-  const resolved = await resolveOrNull(resolver, source, importer)
-  const file = resolved ? fileOf(resolved.id) : undefined
-  return file !== undefined && declared.files.has(file) ? { file } : undefined
+  const file = await listedFileFrom(resolver, declared, source, importer)
+  return file === undefined ? undefined : { file }
 }
