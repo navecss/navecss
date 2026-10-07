@@ -75,7 +75,7 @@
     "lint": "eslint src scripts \"test/**/*.ts\" --max-warnings 0 && stylelint \"src/**/*.css\" --max-warnings 0",
     "lint:fix": "eslint src scripts \"test/**/*.ts\" --fix && stylelint \"src/**/*.css\" --fix",
     "test": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && vitest run",
-    "test:browser": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && node scripts/generate-lightningcss-fixtures.ts && node scripts/generate-no-bundler-fixture.ts && vitest run --config vitest.browser.config.ts",
+    "test:browser": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && node scripts/generate-lightningcss-fixtures.ts && node scripts/generate-no-bundler-fixture.ts && vitest run --config vitest.browser.config.ts && vitest run --config vitest.chromium.config.ts",
     "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints . layers no-tokens reset atomic standalone",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },

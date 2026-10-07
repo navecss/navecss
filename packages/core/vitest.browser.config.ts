@@ -1,7 +1,7 @@
 import { createReadStream, statSync } from 'node:fs'
 import path from 'node:path'
 import { playwright } from '@vitest/browser-playwright'
-import { defineConfig, type Plugin } from 'vitest/config'
+import { defaultExclude, defineConfig, type Plugin } from 'vitest/config'
 
 const FIXTURES = path.resolve(import.meta.dirname, 'test/browser/fixtures')
 const MIME: Readonly<Record<string, string>> = {
@@ -50,6 +50,8 @@ export default defineConfig({
   plugins: [serveFixturesAsTheyAre()],
   test: {
     include: ['test/browser/**/*.browser.test.ts'],
+    // These drive a browser from Node, so they run under vitest.chromium.config.ts.
+    exclude: [...defaultExclude, 'test/browser/driven/**'],
     browser: {
       enabled: true,
       headless: true,

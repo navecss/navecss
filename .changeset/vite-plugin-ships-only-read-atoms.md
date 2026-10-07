@@ -15,9 +15,17 @@ cannot read fails the build: `vite build` lists every such use once, at the end,
 each one is in, then says how to fix them. A Nave class built from pieces (`'nave-' + tone`) fails
 the build the same way. Next.js, webpack and the PostCSS plugin ship every atom.
 
-New: `cx.dynamic(name)` on `@navecss/core/cx`, for a name known only at run time. In code that
-`vite build` bundles under the Vite plugin, it returns a class only for an atom listed in `keep` or
-in a `keepFor` list, unless `atomic` is `'all'`. Under `atomic: 'all'`, and without the plugin, it
+The dev server serves the same set as far as it has read: it filters the atom layer of each
+stylesheet to the atoms of the modules it has transformed, so a class the build cannot see has no
+rule in dev either. The first stylesheet response waits until every module reachable from the page's
+entries has been read, and the stylesheet reloads when an edit adds an atom. `@navecss/core` is left
+out of the dependency pre-bundle so a dependency's `cx()` calls are read, and a build or dev server
+that read no use and no markup (a backend rendering its own templates) warns once.
+
+New: `cx.dynamic(name)` on `@navecss/core/cx`, for a name known only at run time. In the dev server
+and in code that `vite build` bundles under the Vite plugin, it returns a class only for an atom
+listed in `keep` or in a `keepFor` list, unless `atomic` is `'all'`; in dev a name outside the list
+also prints a line to the console. Under `atomic: 'all'`, and without the plugin, it
 maps like `cx()`, except that a name that is no atom returns `''` where `cx()` returns it
 unchanged.
 

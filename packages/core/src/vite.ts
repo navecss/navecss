@@ -23,6 +23,7 @@ import type { NaveCollectPlugin } from './vite-collect-plugin.ts'
 import type { UsedConfig } from './vite-config-hooks.ts'
 import type { UsedAtomOptions } from './vite-options.ts'
 import type {
+  BuilderLike,
   BundleContext,
   BundleEntry,
   HotUpdateContext,
@@ -38,12 +39,14 @@ import { type Assembled, shareAcrossBuilds } from './vite-builds.ts'
 import { createCollectPlugin } from './vite-collect-plugin.ts'
 import { usedConfig, usedEnvironmentConfig } from './vite-config-hooks.ts'
 import { captureStylesheets } from './vite-css-capture.ts'
+import { devServing, serveStylesheet } from './vite-dev.ts'
 import { checkAtomicLayers, refeedChunkStylesheets, warnTextImports } from './vite-emit.ts'
 import { emittedSet } from './vite-emitted.ts'
 import { createExtendSource, type ExtendSource } from './vite-extend.ts'
 import { dropLightningNaveWarning } from './vite-logger.ts'
 import { assertOptions, resolveUsedOptions } from './vite-options.ts'
 import { scanBundle } from './vite-scan.ts'
+import { serverHooks } from './vite-server-hooks.ts'
 import { createStylesheets } from './vite-stylesheets.ts'
 import { configureUsed, createUsedContext, isUsed } from './vite-used.ts'
 
@@ -77,18 +80,27 @@ export interface NaveViteOptions extends UsedAtomOptions {
  */
 export interface NaveVitePlugin {
   readonly name: 'nave'
-  config(): UsedConfig | undefined
+  config(config?: unknown, env?: { readonly command?: string }): UsedConfig | undefined
   configEnvironment(
     name: string,
     options: { readonly consumer?: string },
   ): { resolve: { noExternal: string[] } } | undefined
   configResolved(config: ResolvedConfigLike): void
+  configureServer(server: unknown): void
+  closeBundle(this: { readonly environment?: object }): void
+  readonly buildApp: {
+    handler(this: { warn(message: string): void }, builder: BuilderLike): Promise<void>
+    readonly order: 'post'
+  }
   transform(
     this: TransformContext,
     code: string,
     id: string,
   ): Promise<TransformResultLike | undefined>
-  hotUpdate(this: HotUpdateContext, options: HotUpdateOptions): never[] | undefined
+  hotUpdate(
+    this: HotUpdateContext,
+    options: HotUpdateOptions,
+  ): Promise<never[] | undefined> | never[] | undefined
   renderChunk(this: RenderContext, code: string, chunk: RenderedChunk): Promise<undefined>
   readonly generateBundle: {
     handler(this: BundleContext, options: unknown, bundle: Record<string, BundleEntry>): void
@@ -112,7 +124,7 @@ function assemble(options: NaveViteOptions, extend: ExtendSource): Assembled {
   const nave: NaveVitePlugin = {
     name: 'nave',
 
-    config: () => usedConfig(context),
+    config: (_config, env) => usedConfig(context, env?.command),
 
     configEnvironment: (name, environmentOptions) =>
       usedEnvironmentConfig(context, name, environmentOptions),
@@ -126,12 +138,20 @@ function assemble(options: NaveViteOptions, extend: ExtendSource): Assembled {
       if (config.css?.transformer === 'lightningcss') dropLightningNaveWarning(config.logger)
     },
 
-    transform(code, id) {
-      return stylesheets.transform(this, code, id)
+    ...serverHooks(context),
+
+    async transform(code, id) {
+      const expanded = await stylesheets.transform(this, code, id)
+      if (expanded !== undefined && expanded.code !== code) context.state.directiveExpanded = true
+      if (context.command !== 'serve' || !isUsed(context)) return expanded
+      const served = await serveStylesheet(context, this, { css: expanded?.code ?? code, id })
+      return served ?? expanded
     },
 
     hotUpdate(hot) {
-      return stylesheets.hotUpdate(this, hot)
+      const handled = stylesheets.hotUpdate(this, hot)
+      if (handled || context.command !== 'serve' || !isUsed(context)) return handled
+      return devServing.modulesWithGrown(context, this, hot)
     },
 
     async renderChunk(_code, chunk) {

@@ -7,6 +7,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import vm from 'node:vm'
 import {
   createProgram,
   flattenDiagnosticMessageText,
@@ -538,6 +539,32 @@ describe('AC-used-atoms-18 — cx.dynamic() without the plugin', { timeout: 120_
     expect(diagnostics).toHaveLength(2)
     expect(diagnostics.some((message) => message.includes('nope'))).toBe(true)
     expect(diagnostics.some((message) => message.includes('Expected 1 arguments'))).toBe(true)
+  })
+})
+
+describe('AC-used-atoms-20 — the dev define, from the built package', { timeout: 60_000 }, () => {
+  it('evaluates in a context with nothing but a console, maps keep, and logs the not-kept line once per hasOwn call', async () => {
+    const built = (await import(pathToFileURL(path.join(CORE_ROOT, 'dist/vite.js')).href)) as {
+      navePlugin: typeof navePlugin
+    }
+    const [nave] = built.navePlugin({ keep: ['flex'] })
+    const expression = nave.config(undefined, { command: 'serve' })!.define.__NAVE_KEEP_CLASSES__!
+    const logged: string[] = []
+    const map = vm.runInNewContext(expression, {
+      console: {
+        error: (message: string) => {
+          logged.push(message)
+        },
+      },
+    }) as Record<string, string>
+
+    expect(Object.keys(map)).toEqual(['flex'])
+    expect(map.flex).toBe('nave-flex')
+    expect(logged).toEqual([])
+    expect(Object.hasOwn(map, 'grid')).toBe(false)
+    expect(logged).toEqual([
+      '[nave] cx.dynamic("grid") applied no class: "grid" is not kept, so the build does not ship it either. Add "grid" to keep in navePlugin(), or, when a dependency makes the call, to its list in keepFor.',
+    ])
   })
 })
 
