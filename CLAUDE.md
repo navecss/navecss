@@ -1,6 +1,6 @@
 # NaveCSS — Claude Code Context
 
-Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo of `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `stylelint-config` and `eslint-plugin` (rules for a consumer's project), all four published; `base-ui` (Base UI's components styled with Nave's tokens), publishable, its first release pending; and, not yet published, `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
+Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo of `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `stylelint-config` and `eslint-plugin` (rules for a consumer's project), all four published; `base-ui` (Base UI's components styled with Nave's tokens), publishable; and, not yet published, `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
 
 ## Principles
 

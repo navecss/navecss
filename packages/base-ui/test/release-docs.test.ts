@@ -163,6 +163,13 @@ describe('AC-base-ui-bridge-50: every sentence and config this release makes fal
     )
   })
 
+  it.each(['CLAUDE.md', 'docs/index.md'])(
+    'says nothing about the first release that stops being true when it publishes, in %s',
+    (file) => {
+      expect(read(file)).not.toMatch(/first release pending/)
+    },
+  )
+
   it('describes the new package in the places a reader learns the packages', () => {
     expect(read('CLAUDE.md')).toContain('packages/base-ui/')
     expect(read('docs/index.md')).toContain('packages/base-ui')
