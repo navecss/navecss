@@ -7,7 +7,7 @@ import type { InlineConfig, PluginOption } from 'vite'
  * stylesheet it serves to the atoms the build would emit, as far as it has read. The dev server
  * runs in this process; the criteria that need a browser are in `vite-used-atoms-dev-browser`.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -271,39 +271,63 @@ interface Update {
 }
 
 /**
+ * The most a row waits for an update it expects the dev server to send. A row that has the update
+ * does not wait for this long: it is only what bounds a row whose update never comes.
+ */
+const UPDATE_CEILING_MS = 30_000
+
+/**
+ * What the client environment's channel has sent since `recordUpdates`, and a wait for the send
+ * of one update.
+ */
+interface Recording {
+  readonly sent: readonly Update[]
+  /**
+   * Resolves `true` as soon as an update naming every one of `paths` has been sent, or `false`
+   * once `ms` have passed without one.
+   */
+  isSent(paths: readonly string[], ms: number): Promise<boolean>
+}
+
+/**
  * Records what the client environment's channel sends from now on, passing it on.
  */
-function recordUpdates(server: DevServer): Update[] {
+function recordUpdates(server: DevServer): Recording {
   const { hot } = server.environments.client
   const sent: Update[] = []
+  const listeners = new Set<() => void>()
   const send = hot.send.bind(hot)
   Object.assign(hot, {
     send: (payload: Parameters<typeof send>[0]) => {
       sent.push(payload as unknown as Update)
+      for (const listener of listeners) listener()
       send(payload)
     },
   })
-  return sent
-}
-
-/**
- * Whether `sent` holds, within `ms`, an update that names every one of `paths`.
- */
-async function isUpdateSent(
-  sent: readonly Update[],
-  paths: readonly string[],
-  ms: number,
-): Promise<boolean> {
-  const isWanted = (): boolean =>
+  const isNaming = (paths: readonly string[]): boolean =>
     sent.some((update) => {
       const named = update.updates?.map((entry) => entry.path) ?? []
       return paths.every((path) => named.includes(path))
     })
-  const deadline = Date.now() + ms
-  while (Date.now() < deadline && !isWanted()) {
-    await new Promise((resolve) => setTimeout(resolve, 20))
+  return {
+    sent,
+    isSent: (paths, ms) =>
+      new Promise<boolean>((resolve) => {
+        const finish = (isFound: boolean): void => {
+          clearTimeout(timer)
+          listeners.delete(check)
+          resolve(isFound)
+        }
+        const check = (): void => {
+          if (isNaming(paths)) finish(true)
+        }
+        const timer = setTimeout(() => {
+          finish(false)
+        }, ms)
+        listeners.add(check)
+        check()
+      }),
   }
-  return isWanted()
 }
 
 /**
@@ -325,6 +349,63 @@ async function stylesheetServedAgain(server: DevServer, root: string): Promise<s
   return stylesheetOf(await devCss(server, '/src/main.ts'))
 }
 
+/**
+ * Resolves once the server has asked for a reload of a module, as Nave does for a stylesheet whose
+ * atoms were outgrown, and rejects after `ms`. `stop` ends the watch.
+ */
+function reloadAsked(server: DevServer, ms: number): { done: Promise<void>; stop: () => void } {
+  const { client } = server.environments
+  const reloadModule = client.reloadModule.bind(client)
+  let timer: NodeJS.Timeout | undefined
+  const stop = (): void => {
+    clearTimeout(timer)
+    client.reloadModule = reloadModule
+  }
+  const done = new Promise<void>((resolve, reject) => {
+    timer = setTimeout(() => {
+      stop()
+      reject(new Error('no reload of a stylesheet was asked for'))
+    }, ms)
+    client.reloadModule = async (module) => {
+      try {
+        await reloadModule(module)
+      } finally {
+        stop()
+        resolve()
+      }
+    }
+  })
+  return { done, stop }
+}
+
+/**
+ * `servedLayer`, for a row that starts from the layer naming `expected`. The stylesheet can be
+ * served from the warm-up that follows the entry's first transform, before the modules that name
+ * atoms have been read; the dev server then asks for a reload of it once they are, and the
+ * request after that reload is the one that names them. A row that compares the first layer, or
+ * counts the reloads sent, waits for that reload and reads again, so it does not read the answer
+ * that was about to be replaced. A reload that never comes leaves the first answer, which the
+ * row then fails on.
+ */
+async function servedOnceRead(
+  server: DevServer,
+  root: string,
+  expected: readonly string[],
+): Promise<string> {
+  const reload = reloadAsked(server, UPDATE_CEILING_MS)
+  const layer = await servedLayer(server, root)
+  if (atomLayerAtoms(layer).join(',') === expected.join(',')) {
+    reload.stop()
+    return layer
+  }
+  try {
+    await reload.done
+  } catch {
+    return layer
+  }
+  return servedLayer(server, root)
+}
+
 const ACCEPTING = (body: string): string =>
   `${IMPORT}export const a = ${body}\nif (import.meta.hot) import.meta.hot.accept()\n`
 
@@ -334,11 +415,12 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     try {
       const server = await startDev(devConfig(app.root, [navePlugin()], NO_WATCHER))
       try {
-        expect(atomLayerAtoms(await servedLayer(server, app.root))).toEqual(atoms('flex'))
+        const first = await servedOnceRead(server, app.root, atoms('flex'))
+        expect(atomLayerAtoms(first)).toEqual(atoms('flex'))
 
-        const sent = recordUpdates(server)
+        const updates = recordUpdates(server)
         await edit(server, app.root, "cx('flex', 'block')")
-        const isSent = await isUpdateSent(sent, ['/src/app.css'], 10_000)
+        const isSent = await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)
         const grown = await stylesheetServedAgain(server, app.root)
 
         expect(isSent).toBe(true)
@@ -353,27 +435,27 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  }, 120_000)
 
   it('sends the stylesheet in the same update as the script whose edit grew the set', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': ACCEPTING("cx('flex')") }))
     try {
       const server = await startDev(devConfig(app.root, [navePlugin()], NO_WATCHER))
       try {
-        await servedLayer(server, app.root)
-        const sent = recordUpdates(server)
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
         const file = path.join(app.root, 'src/App.ts')
         writeFileSync(file, ACCEPTING("cx('flex', 'block')"))
         server.watcher.emit('change', file)
 
-        expect(await isUpdateSent(sent, ['/src/App.ts', '/src/app.css'], 10_000)).toBe(true)
+        expect(await updates.isSent(['/src/App.ts', '/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
       } finally {
         await stopDev(server)
       }
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  }, 120_000)
 
   it('batches: several modules adding atoms in one burst send one reload of app.css, and none from inside the transform that grew the set', async () => {
     const app = makeUsedApp(
@@ -399,10 +481,12 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     try {
       const server = await startDev(devConfig(app.root, [navePlugin(), probe], NO_WATCHER))
       try {
-        await servedLayer(server, app.root)
-        const sent = recordUpdates(server)
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
         const reloads = (): Update[] =>
-          sent.filter((update) => update.updates?.some((entry) => entry.path === '/src/app.css'))
+          updates.sent.filter((update) =>
+            update.updates?.some((entry) => entry.path === '/src/app.css'),
+          )
         const { client } = server.environments
         const askedFor: string[] = []
         const reloadModule = client.reloadModule.bind(client)
@@ -418,6 +502,9 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           moduleGraph.invalidateModule(moduleGraph.getModuleById(path.join(app.root, file))!)
           await server.transformRequest(`/${file}`)
         }
+        // The reload goes out on the next turn of the event loop, so it is waited for. A second
+        // reload, if the burst were not batched, would follow it at once: a short grace covers it.
+        await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)
         await new Promise((resolve) => setTimeout(resolve, 300))
 
         expect(sentAtEnd['B.ts']).toBe(0)
@@ -428,7 +515,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  }, 120_000)
 
   it('control: without the stylesheet reload nothing is sent when the set grows', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -439,11 +526,11 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
       const server = await startDev(devConfig(app.root, [navePlugin()], NO_WATCHER))
       try {
         await servedLayer(server, app.root)
-        const sent = recordUpdates(server)
+        const updates = recordUpdates(server)
 
         await edit(server, app.root, "cx('flex', 'block')")
 
-        expect(await isUpdateSent(sent, ['/src/app.css'], 1000)).toBe(false)
+        expect(await updates.isSent(['/src/app.css'], 1000)).toBe(false)
       } finally {
         await stopDev(server)
       }
@@ -706,19 +793,74 @@ describe('AC-used-atoms-42 — what dev shows as the build will, and the diverge
 })
 
 /**
- * Waits for the dependency optimizer to write its metadata, which it does once its crawl ends.
+ * What the dependency optimizer is given to settle, for each time a row waits for it. The wait
+ * ends when the optimizer has committed, so this only bounds an optimizer that never does.
  */
-async function optimized(root: string): Promise<void> {
-  const file = path.join(root, 'node_modules', '.vite', 'deps', '_metadata.json')
-  for (let tries = 0; tries < 200 && !existsSync(file); tries += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 50))
+const OPTIMIZER_CEILING_MS = 60_000
+
+/**
+ * The time a row that waits for the optimizer `settles` times is allowed: each wait's ceiling, and
+ * room for the server starts and reads around them.
+ */
+const optimizerBudget = (settles: number): number => OPTIMIZER_CEILING_MS * (settles + 1)
+
+/**
+ * The dependencies of the client environment that the optimizer has found and not yet committed.
+ */
+function uncommitted(server: DevServer): Promise<void>[] {
+  const { depsOptimizer } = server.environments.client
+  return Object.values(depsOptimizer?.metadata.discovered ?? {}).flatMap(({ processing }) =>
+    processing ? [processing] : [],
+  )
+}
+
+/**
+ * Waits until the client environment's dependency optimizer has committed what it found: the
+ * crawl of the static imports has ended, the scan has ended, and every dependency either found
+ * has been written to the cache with its metadata. A server that is closed before this, and an app
+ * whose directory is removed, leave an optimizer run that fails on the missing files, which Vite
+ * reports as an unhandled rejection after the row has ended.
+ */
+async function optimizerSettled(server: DevServer): Promise<void> {
+  const { depsOptimizer } = server.environments.client
+  if (!depsOptimizer) return
+  let timer: NodeJS.Timeout | undefined
+  const ceiling = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error('the dependency optimizer did not commit'))
+    }, OPTIMIZER_CEILING_MS)
+  })
+  const committed = (async (): Promise<void> => {
+    await server.waitForRequestsIdle()
+    await depsOptimizer.scanProcessing
+    // A dependency the crawl finds after the scan starts another run, so look again after each.
+    for (let pending = uncommitted(server); pending.length > 0; pending = uncommitted(server)) {
+      await Promise.all(pending)
+    }
+  })()
+  try {
+    await Promise.race([committed, ceiling])
+  } finally {
+    clearTimeout(timer)
   }
 }
 
 /**
- * The dev server's config for a row that looks only at the process-wide keep map. Dependency
- * discovery is off, so no scan of the app's dependencies is running when the row closes the
- * server and removes the app's directory.
+ * Closes a dev server whose optimizer may be running, once the optimizer has committed.
+ */
+async function stopOptimized(server: DevServer): Promise<void> {
+  try {
+    await optimizerSettled(server)
+  } finally {
+    await stopDev(server)
+  }
+}
+
+/**
+ * The dev server's config for a row that renders on the server or looks only at the process-wide
+ * keep map, and so never asks for a prebundled dependency. Dependency discovery is off, so no scan
+ * of the app's dependencies is running when the row closes the server and removes the app's
+ * directory.
  */
 function keepMapConfig(root: string, plugins: PluginOption[]): InlineConfig {
   return { ...devConfig(root, plugins), optimizeDeps: { noDiscovery: true } }
@@ -744,7 +886,9 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     const app = makeFixture()
     try {
       const server = await startDev(
-        devConfig(app.root, [navePlugin({ keep: ['flex'], keepFor: { 'dyn-lib': ['block'] } })]),
+        keepMapConfig(app.root, [
+          navePlugin({ keep: ['flex'], keepFor: { 'dyn-lib': ['block'] } }),
+        ]),
       )
       try {
         const module = (await server.ssrLoadModule('/src/ssr.ts')) as { default: string }
@@ -760,7 +904,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
   it('a server render takes a listed atom through the same map', async () => {
     const app = makeFixture()
     try {
-      const server = await startDev(devConfig(app.root, [navePlugin({ keep: ['grid'] })]))
+      const server = await startDev(keepMapConfig(app.root, [navePlugin({ keep: ['grid'] })]))
       try {
         const module = (await server.ssrLoadModule('/src/ssr.ts')) as { default: string }
         expect(module.default).toBe('nave-grid')
@@ -878,68 +1022,76 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     }
   }, 60_000)
 
-  it('dyn-lib’s prebundled chunk keeps core’s import and holds no keep map', async () => {
-    const app = makeFixture()
-    try {
-      const server = await startDev(
-        devConfig(app.root, [navePlugin({ keep: ['flex'], keepFor: { 'dyn-lib': ['block'] } })]),
-      )
+  it(
+    'dyn-lib’s prebundled chunk keeps core’s import and holds no keep map',
+    async () => {
+      const app = makeFixture()
       try {
-        await server.transformRequest('/src/main.ts')
-        await optimized(app.root)
-        const chunk = readFileSync(
-          path.join(app.root, 'node_modules', '.vite', 'deps', 'dyn-lib.js'),
-          'utf8',
+        const server = await startDev(
+          devConfig(app.root, [navePlugin({ keep: ['flex'], keepFor: { 'dyn-lib': ['block'] } })]),
         )
-
-        expect(chunk).toContain('cx.dynamic(')
-        expect(chunk).toMatch(/import \{ cx \} from ["']@navecss\/core\/cx["']/)
-        for (const absent of [
-          '__NAVE_KEEP_CLASSES__',
-          'nave-flex',
-          'nave-block',
-          'applied no class',
-        ]) {
-          expect(chunk).not.toContain(absent)
-        }
-      } finally {
-        await stopDev(server)
-      }
-    } finally {
-      app.dispose()
-    }
-  }, 60_000)
-
-  it('the resolved define has exactly one key more than under all, and the optimizer’s hash does not change with keep', async () => {
-    const app = makeFixture()
-    const hashWith = async (keep: readonly string[]): Promise<string> => {
-      const server = await startDev(devConfig(app.root, [navePlugin({ keep: keep as never })]))
-      try {
-        await server.transformRequest('/src/main.ts')
-        await optimized(app.root)
-        const metadata = readFileSync(
-          path.join(app.root, 'node_modules', '.vite', 'deps', '_metadata.json'),
-          'utf8',
-        )
-        const all = await startDev(devConfig(app.root, [navePlugin({ atomic: 'all' })]))
         try {
-          expect(
-            Object.keys(server.config.define ?? {}).length -
-              Object.keys(all.config.define ?? {}).length,
-          ).toBe(1)
+          await server.transformRequest('/src/main.ts')
+          await optimizerSettled(server)
+          const chunk = readFileSync(
+            path.join(app.root, 'node_modules', '.vite', 'deps', 'dyn-lib.js'),
+            'utf8',
+          )
+
+          expect(chunk).toContain('cx.dynamic(')
+          expect(chunk).toMatch(/import \{ cx \} from ["']@navecss\/core\/cx["']/)
+          for (const absent of [
+            '__NAVE_KEEP_CLASSES__',
+            'nave-flex',
+            'nave-block',
+            'applied no class',
+          ]) {
+            expect(chunk).not.toContain(absent)
+          }
         } finally {
-          await stopDev(all)
+          await stopOptimized(server)
         }
-        return (JSON.parse(metadata) as { hash: string }).hash
       } finally {
-        await stopDev(server)
+        app.dispose()
       }
-    }
-    try {
-      const first = await hashWith(['flex'])
-      expect(await hashWith(['grid'])).toBe(first)
-    } finally {
-      app.dispose()
-    }
-  }, 120_000)
+    },
+    optimizerBudget(1),
+  )
+
+  it(
+    'the resolved define has exactly one key more than under all, and the optimizer’s hash does not change with keep',
+    async () => {
+      const app = makeFixture()
+      const hashWith = async (keep: readonly string[]): Promise<string> => {
+        const server = await startDev(devConfig(app.root, [navePlugin({ keep: keep as never })]))
+        try {
+          await server.transformRequest('/src/main.ts')
+          await optimizerSettled(server)
+          const metadata = readFileSync(
+            path.join(app.root, 'node_modules', '.vite', 'deps', '_metadata.json'),
+            'utf8',
+          )
+          const all = await startDev(devConfig(app.root, [navePlugin({ atomic: 'all' })]))
+          try {
+            expect(
+              Object.keys(server.config.define ?? {}).length -
+                Object.keys(all.config.define ?? {}).length,
+            ).toBe(1)
+          } finally {
+            await stopOptimized(all)
+          }
+          return (JSON.parse(metadata) as { hash: string }).hash
+        } finally {
+          await stopOptimized(server)
+        }
+      }
+      try {
+        const first = await hashWith(['flex'])
+        expect(await hashWith(['grid'])).toBe(first)
+      } finally {
+        app.dispose()
+      }
+    },
+    optimizerBudget(4),
+  )
 })
