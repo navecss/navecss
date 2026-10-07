@@ -163,6 +163,14 @@ describe('AC-directive-core-22 — navecss-core check, the exit contract', () =>
 // assertion inside it is what actually decides pass or fail.
 const SCALING_ROW_TIMEOUT = 45_000
 
+// The mesh row's smaller size, in directory entries, and how many times each size's mesh is walked.
+// The row's own timeout is longer than the others': a walk that is quadratic in the entries takes
+// the whole of three attempts to be called one, and the row should fail on the ratio, which names
+// the problem, not on the clock.
+const MESH_ENTRIES = 300
+const MESH_WALKS = 3
+const MESH_ROW_TIMEOUT = 150_000
+
 describe('check() stays roughly linear, not quadratic, and stack-safe on a large stylesheet', () => {
   it(
     'stays roughly linear reporting survivors in a single file',
@@ -301,6 +309,14 @@ describe('a directory --source follows symlinks, loop-safe', () => {
       // other), so the scaling assertion is driven off the total directory-entry count rather
       // than the mesh width directly: doubling the width quadruples the entries, matching the
       // n-vs-4n comparison `assertScalesLinearly` makes.
+      //
+      // A walk of a mesh this size takes tens of milliseconds, so one stall of a few
+      // milliseconds, or of a few tens on a shared runner, moves the ratio of two such times a
+      // long way. Two things keep that out of the ratio: the sizes are large enough that a stall
+      // is a small part of what is timed, and each size is timed as the fastest of several walks
+      // of the same mesh, since a stall only ever adds time. A walk that is quadratic in the
+      // entries is slower by the same factor in every walk, so the fastest of them still shows
+      // it.
       await assertScalesLinearly(async (totalEntries) => {
         const width = Math.max(2, Math.round(Math.sqrt(totalEntries)))
         const dir = await mkdtemp(path.join(tmpdir(), 'nave-check-mesh-'))
@@ -316,19 +332,24 @@ describe('a directory --source follows symlinks, loop-safe', () => {
           }
         }
 
-        const start = performance.now()
-        const result = await check({ source: [dir] })
-        const elapsed = performance.now() - start
+        let fastest = Infinity
+        for (let walk = 0; walk < MESH_WALKS; walk++) {
+          const start = performance.now()
+          const result = await check({ source: [dir] })
+          const elapsed = performance.now() - start
 
-        expect(result.status).toBe(0)
-        expect(result.stylesheetsRead).toBe(width)
+          expect(result.status).toBe(0)
+          expect(result.stylesheetsRead).toBe(width)
+
+          fastest = Math.min(fastest, elapsed)
+        }
 
         await rm(dir, { recursive: true, force: true })
 
-        return elapsed
-      }, 196)
+        return fastest
+      }, MESH_ENTRIES)
     },
-    SCALING_ROW_TIMEOUT,
+    MESH_ROW_TIMEOUT,
   )
 })
 

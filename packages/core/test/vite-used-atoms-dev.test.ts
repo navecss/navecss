@@ -43,6 +43,14 @@ function devConfig(
   }
 }
 
+/**
+ * `config` with dependency discovery off: no dependency is prebundled, so the optimizer never runs
+ * under the server and a file of a dependency is served as it is on disk.
+ */
+function withoutDiscovery(config: InlineConfig): InlineConfig {
+  return { ...config, optimizeDeps: { ...config.optimizeDeps, noDiscovery: true } }
+}
+
 // The edits in these rows are made by a request and an event of the test's own, so the file
 // watcher, which would report each write as well, is switched off.
 // eslint-disable-next-line unicorn/no-null -- `null` is Vite's own spelling for "no watcher"
@@ -97,8 +105,15 @@ describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {
   it('names the same atoms as the build, each with the rules the full layer gives it', async () => {
     const app = makeFixture()
     try {
-      const used = await startDev(devConfig(app.root, [navePlugin(OPTIONS)]))
-      const all = await startDev(devConfig(app.root, [navePlugin({ atomic: 'all' })]))
+      // Under load the dependency optimizer can run again while a request is being served, and
+      // Vite then refuses the request for a prebundled file it has replaced as outdated. These
+      // two servers also share the app's dependency cache. The row compares atoms and rules, not
+      // how a dependency is prebundled (the next criterion's rows exercise that), so discovery
+      // is off and the libraries are served as they are.
+      const config = (plugin: PluginOption): InlineConfig =>
+        withoutDiscovery(devConfig(app.root, [plugin]))
+      const used = await startDev(config(navePlugin(OPTIONS)))
+      const all = await startDev(config(navePlugin({ atomic: 'all' })))
       try {
         const dev = await servedLayer(used, app.root)
         const full = await servedLayer(all, app.root)
@@ -453,6 +468,31 @@ function slow(file: string, delay: number): PluginOption {
   }
 }
 
+/**
+ * A scratch plugin that does not finish reading the module `file` until `release` is called, or
+ * until `ceiling` milliseconds have passed, so the module is certain not to have been read by any
+ * response that returns before `release` is. The ceiling only bounds a response that is itself
+ * waiting for the module: it is set far above what a response that waits for nothing needs.
+ */
+function held(file: string, ceiling: number): { plugin: PluginOption; release: () => void } {
+  let release = (): void => {}
+  const released = new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ceiling)
+    release = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+  })
+  const plugin: PluginOption = {
+    name: 'held-module',
+    async transform(_code: string, id: string) {
+      if (id.endsWith(file)) await released
+      return
+    },
+  }
+  return { plugin, release }
+}
+
 describe('AC-used-atoms-40 — the first stylesheet response waits for the graph', () => {
   const files = {
     'src/A.ts': `${IMPORT}import './B.ts'\nexport const a = cx('flex')\n`,
@@ -460,20 +500,29 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
     'src/C.ts': `${IMPORT}export const c = cx('grid')\n`,
   }
 
-  async function atomsServedAtOnce(): Promise<string[]> {
+  /**
+   * The atoms in the stylesheet served when it is requested right after `main.ts`, with `plugin`
+   * standing in the way of the module `src/C.ts`. `afterResponse` runs once the response is back.
+   */
+  async function atomsServedAtOnce(
+    plugin: PluginOption,
+    afterResponse: () => void = () => {},
+  ): Promise<string[]> {
     const app = makeUsedApp(appFiles(files))
     try {
-      const server = await startDev(devConfig(app.root, [slow('src/C.ts', 300), navePlugin()]))
+      const server = await startDev(devConfig(app.root, [plugin, navePlugin()]))
       try {
         // Only main.ts has been requested when the stylesheet is: the three modules below it are
         // read by the wait or by nothing.
         await server.transformRequest('/src/main.ts')
         const css = await server.transformRequest('/src/app.css')
+        afterResponse()
         const served: unknown = JSON.parse(
           /const __vite__css = ("(?:[^"\\]|\\.)*")/.exec(css!.code)![1]!,
         )
         return atomLayerAtoms(served as string)
       } finally {
+        afterResponse()
         await stopDev(server)
       }
     } finally {
@@ -482,14 +531,21 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
   }
 
   it('serves a stylesheet requested before the modules that name atoms with those atoms', async () => {
-    expect(await atomsServedAtOnce()).toEqual(atoms('flex', 'gap', 'grid'))
+    // The wait has to outlast a slow read of the last module, so the read is slowed.
+    expect(await atomsServedAtOnce(slow('src/C.ts', 300))).toEqual(atoms('flex', 'gap', 'grid'))
   }, 60_000)
 
   it('control: with the wait removed the stylesheet is served with what had been read', async () => {
     const saved = { ...devServing }
     devServing.hold = () => Promise.resolve()
+    // The last module is not read at all until the response is back, however fast the machine,
+    // so the response cannot hold its atom. A response that did wait for it would wait for the
+    // ceiling, and then hold it.
+    const gate = held('src/C.ts', 15_000)
     try {
-      expect(await atomsServedAtOnce()).not.toEqual(atoms('flex', 'gap', 'grid'))
+      expect(await atomsServedAtOnce(gate.plugin, gate.release)).not.toEqual(
+        atoms('flex', 'gap', 'grid'),
+      )
     } finally {
       Object.assign(devServing, saved)
     }
