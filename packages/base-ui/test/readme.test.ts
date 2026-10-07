@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import { COLOR_KEYWORDS } from './support/colors.ts'
 import { manifest } from './support/dist.ts'
 import {
   fencesOf,
@@ -67,13 +68,10 @@ describe('AC-base-ui-bridge-45: the README carries each item the release owes', 
     const commands = fences
       .filter(({ language }) => ['bash', 'sh', 'shell'].includes(language))
       .map(({ body }) => body)
-    expect(
-      commands.some((body) =>
-        ['@navecss/base-ui', '@navecss/tokens', '@base-ui/react', 'react-dom'].every((name) =>
-          body.includes(name),
-        ),
-      ),
-    ).toBe(true)
+    const peers = ['@navecss/base-ui', '@navecss/tokens', '@base-ui/react', 'react', 'react-dom']
+    expect(commands.some((body) => peers.every((name) => body.split(/\s+/).includes(name)))).toBe(
+      true,
+    )
   })
 
   it('shows the prefix swap with one example: the same component imported from both', () => {
@@ -130,6 +128,11 @@ describe('AC-base-ui-bridge-45: the README carries each item the release owes', 
     expect(prose).toMatch(/physical sides/i)
     expect(prose).toMatch(/range/i)
     expect(prose).toMatch(/scrim/i)
+    const flat = prose.replaceAll(/\s+/g, ' ')
+    expect(flat).toMatch(/\bno highlight on the hovered or arrowed item\b/)
+    expect(flat).toMatch(/\brecommends no value\b/)
+    expect(flat).toMatch(/\bno motion on popups, tooltips or the tab indicator\b/)
+    expect(flat).toMatch(/\bno fill on a slider's range\b/)
   })
 
   it("says the trigger's last child turns when it is an svg, and to wrap a leading icon", () => {
@@ -208,7 +211,21 @@ const remainder = (text: string): string =>
     text,
   )
 
-const COLOUR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i
+const COLOUR_LITERAL =
+  /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(/i
+
+/**
+Whether a fence names a colour by keyword in a declaration value: a named or system colour, or
+`transparent`. `var()` references are removed first, since token names contain such words.
+ */
+const hasColourKeyword = (css: string): boolean =>
+  css.matchAll(/[\w-]+\s*:\s*([^;{}]+)/g).some((match) =>
+    (match[1] ?? '')
+      .replaceAll(/var\([^()]*\)/g, '')
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .some((word) => word === 'transparent' || COLOR_KEYWORDS.has(word)),
+  )
 
 describe('AC-base-ui-bridge-47: no accessibility claim beyond the fixed wording', () => {
   it('contains none of the forbidden words once the fixed sentences are removed', () => {
@@ -235,6 +252,7 @@ describe('AC-base-ui-bridge-47: no accessibility claim beyond the fixed wording'
   it('has no colour literal and no opacity declaration in any fence', () => {
     for (const { body } of fences) {
       expect(body).not.toMatch(COLOUR_LITERAL)
+      expect(hasColourKeyword(body)).toBe(false)
       expect(body).not.toMatch(/\bopacity\s*:/)
     }
   })

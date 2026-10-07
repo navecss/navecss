@@ -79,7 +79,7 @@ describe('AC-base-ui-bridge-49: the ADRs this release owes', () => {
   })
 
   it('adds no atom-map row to ADR 0006', () => {
-    expect(adr('0006')).not.toMatch(/base-ui/i)
+    expect(adr('0006')).not.toMatch(/base[- ]?ui/i)
   })
 
   it('leaves the layer order and its names unchanged', () => {
@@ -108,7 +108,7 @@ describe('AC-base-ui-bridge-50: every sentence and config this release makes fal
 
   it('names the new package in the publishable-set docblock, not the bridge', () => {
     const script = read('scripts/check-publishable-set.mjs')
-    expect(script).not.toContain('`@navecss/bridge` publishes')
+    expect(script.replaceAll(/\n\s*\*\s*/g, ' ')).not.toMatch(/`@navecss\/bridge`\s+publishes/)
     expect(script).toContain('@navecss/base-ui')
   })
 
@@ -150,8 +150,17 @@ describe('AC-base-ui-bridge-50: every sentence and config this release makes fal
     'packages/core/README.md',
     'packages/tokens/README.md',
     'sonar-project.properties',
+    'README.md',
+    'docs/04-adr/index.md',
+    'packages/core/test/no-inlined-dependency.test.ts',
   ])('has no sentence about the retired bridge in %s', (file) => {
     expect(read(file)).not.toMatch(/@navecss\/bridge|packages\/bridge|\bbridges?\b/i)
+  })
+
+  it("dates ADR 0008's correction that the bridge was retired", () => {
+    expect(read('docs/04-adr/0008-test-placement.md').replaceAll(/\s+/g, ' ')).toMatch(
+      /\*\*Correction \(2026-10-\d\d\):\*\* `@navecss\/bridge` was retired before it published/,
+    )
   })
 
   it('describes the new package in the places a reader learns the packages', () => {

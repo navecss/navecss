@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -15,6 +15,7 @@ interface Manifest {
   files: string[]
   license: string
   name: string
+  optionalDependencies?: Record<string, string>
   peerDependencies: Record<string, string>
   peerDependenciesMeta?: Record<string, { optional?: boolean }>
   private?: boolean
@@ -57,11 +58,23 @@ const firstTokensVersionWithTheMark = (): string => {
   return `${major}.${minor + 1}.0`
 }
 
+/**
+The version the package's newest CHANGELOG section names, or undefined while it has never been
+released: the version pull request writes that section and the version together.
+ */
+const releasedVersion = (): string | undefined => {
+  const file = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
+  if (!existsSync(file)) {
+    return undefined
+  }
+  return /^## (\S+)$/m.exec(readFileSync(file, 'utf8'))?.[1] ?? ''
+}
+
 describe('AC-base-ui-bridge-38: the manifest', () => {
   it('is the published package, at its first version', () => {
     expect(manifest.name).toBe('@navecss/base-ui')
     expect(manifest.type).toBe('module')
-    expect(manifest.version).toBe('0.0.0')
+    expect(manifest.version).toBe(releasedVersion() ?? '0.0.0')
     expect(manifest.license).toBe('MIT')
     expect(manifest.private).toBeUndefined()
   })
@@ -96,7 +109,13 @@ describe('AC-base-ui-bridge-38: the manifest', () => {
   it('has core as a development dependency only, and no dependencies', () => {
     expect(manifest.devDependencies['@navecss/core']).toBeDefined()
     expect(Object.keys(manifest.dependencies ?? {})).toEqual([])
-    expect(Object.keys(manifest.peerDependencies)).not.toContain('@navecss/core')
+    for (const field of [
+      manifest.dependencies,
+      manifest.peerDependencies,
+      manifest.optionalDependencies,
+    ]) {
+      expect(Object.keys(field ?? {})).not.toContain('@navecss/core')
+    }
   })
 
   it('is in none of fixed, linked and ignore', () => {
