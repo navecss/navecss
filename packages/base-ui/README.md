@@ -177,7 +177,7 @@ export default function ShippingAccordion() {
 
 The Accordion and Collapsible panels set `overflow: hidden` so their height can animate, which also clips anything drawn outside the panel's box, focus rings included. Each panel insets its content by enough for Nave's focus ring: at both sides, above its first element and below its last. That inset reaches elements only, so a panel that starts or ends with bare text gets none there, and your own margins on those elements replace it. Keep at least the width plus the offset of your focus ring clear around any focusable element at the panel's edge.
 
-When nothing inside a popup can take focus, Base UI focuses the popup itself and the browser draws its focus ring around the panel. The bridge leaves that ring alone. Removing it with `outline: 0`, as Base UI's own demos do, leaves a keyboard user with no visible sign of where focus is.
+When nothing inside a popup can take focus, Base UI focuses the popup itself and the browser draws its focus ring around the panel. This package leaves that ring alone. Removing it with `outline: 0`, as Base UI's own demos do, leaves a keyboard user with no visible sign of where focus is.
 
 In Base UI 1.8.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.
 
