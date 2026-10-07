@@ -1,7 +1,7 @@
 /**
  * R29 (`AC-token-build-29`): any `dependencies`/`peerDependencies` entry
  * added to `@navecss/tokens`'s `package.json` is checked against the licence allow-list
- * (`scripts/check-license-allowlist.mjs`, cleared by the project's licensing steward), which
+ * (`scripts/check-license-allowlist.mjs`), which
  * fails closed on a licence not on it. This item adds no such entry (its whole runtime
  * surface stays first-party plus Node, R29's own text), so the second `Given` is the package
  * AS SHIPPED today; the first is CONSTRUCTED, since the gate's own repo-wide run has nothing

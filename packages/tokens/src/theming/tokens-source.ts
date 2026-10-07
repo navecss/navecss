@@ -9,7 +9,7 @@ import path from 'node:path'
 
 import { findPackageRoot } from '../package-root.ts'
 
-// Exported (raised during a review): the one canonical home for this path. A second
+// Exported: the one canonical home for this path. A second
 // file that wants "the shipped tokens.json's path" imports this rather than resolving its own
 // copy — a second copy is exactly the duplicate-that-can-drift shape this constant exists to
 // prevent.

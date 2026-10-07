@@ -39,7 +39,7 @@
  *    `a,\nbutton { … }` and `button,\na { … }` are the same rule and it answered differently.
  *
  * 3. Action: SURFACE only, never auto-block. This is the load-bearing constraint. Deciding
- *    which non-colour cue is sufficient is a human accessibility reviewer's call, not this
+ *    which non-colour cue is sufficient is a human review call, not this
  *    check's, and deliberately undecided here.
  *    Anchors styled without an underline are flagged whether or not anything else
  *    distinguishes them, because this check reads one fence's text and cannot see the rest
@@ -79,7 +79,7 @@
  *
  * Declined, not built here (record so nobody re-adds these as an oversight):
  *   - The converse assertion (every sample carries an adequate cue) — undecidable without
- *     a human accessibility reviewer's sufficiency call on what counts as adequate.
+ *     a human sufficiency call on what counts as adequate.
  *   - A narrow BLOCKING rule for the "obvious" case (an anchor coloured with content.link and
  *     stripped of decoration in the same fence) — declined because a fence may be a fragment
  *     whose cue lives elsewhere: a class, neighbouring markup, or surrounding prose the fence

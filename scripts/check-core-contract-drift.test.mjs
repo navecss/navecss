@@ -68,7 +68,7 @@ test('formatDrift returns no lines when there is no drift', () => {
   assert.deepEqual(formatDrift({ missing: [], added: [] }), [])
 })
 
-// A review finding: every test above exercises `diffContract` / `formatDrift` /
+// Every test above exercises `diffContract` / `formatDrift` /
 // `readRecordedContract` DIRECTLY, and nothing runs `main()`, so the gate's PASS LINE count
 // (`recorded.length`) is held by nothing at all. Measured 2026-09-12, one mutation at a time,
 // before this row existed: the whole `pnpm run scripts:test` suite stayed GREEN and the gate

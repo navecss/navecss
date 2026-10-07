@@ -10,8 +10,8 @@
  * The project's licensing policy independently requires the same shape in its own words: a text
  * that was signed off and then copied into an implementation artifact needs a mechanical equality
  * check against the source it was copied from, or the copy quietly becomes the operative wording.
- * And the maintainer's instruction was that this test may land here if this file is its
- * cleanest home, which it is. It asserts only the LANDED bytes: the README's `## License`
+ * This test lands here because this file is its
+ * cleanest home. It asserts only the LANDED bytes: the README's `## License`
  * block must fold-whitespace-match `MIT © Nave Contributors`. It mints no constant to compare
  * against: the README is the only place this repository carries that line, and a constant
  * typed here would be a second copy checked against nothing but itself.
@@ -84,7 +84,7 @@ function visible(text) {
  * SPLIT DELIBERATELY, AND THE SPLIT IS THE POINT. `occurrences` reads the SOURCE;
  * `visibleOccurrences` reads what a reader of the RENDERED README sees. Stripping HTML comments
  * is right for a PRESENCE check (a commented-out notice is not present to any reader, which is
- * the false green closed at round 2) and WRONG for every ABSENCE check
+ * the false green this closes) and WRONG for every ABSENCE check
  * in this file, because the harm those record is a SOURCE-level duplication:
  * the clearance's own ground is that "a second byte-identical copy
  * thirty lines apart is the shape a later editor harmonises", and commenting that copy out does
@@ -154,7 +154,7 @@ function rungBody(name) {
 const RETHEMING_RUNGS = ['1a', '1b', '2', '3', '4', '5']
 
 // A FLOOR AT EVERY RUNG, PLUS THE ONE EXACT COUNT THAT WAS ACTUALLY CLEARED.
-// `AC-theming-39` (round 22 of that review; settled round 23) counts RUNGS COVERED
+// `AC-theming-39` (round 22 of the theming spec; settled round 23) counts RUNGS COVERED
 // and never notice OCCURRENCES — "a rung with an act of its own needs its own instance" — and
 // round 22's own correction says in terms that on a DOCUMENTATION surface "any number of
 // BYTE-IDENTICAL occurrences of the one text the round-12 routing selects for that surface is
@@ -167,8 +167,8 @@ const RETHEMING_RUNGS = ['1a', '1b', '2', '3', '4', '5']
 // no colour") re-shows THE SAME command with a grey rather than performing a second act, and one
 // act is owed one instance. Its own words: "A second byte-identical copy thirty lines apart is
 // the shape a later editor harmonises. Do not add one." If rung `1b` ever grows a genuine second
-// ACT, this red is the correct behaviour rather than a defect: it returns the edit to the
-// project's steward, who ruled this rung by name.
+// ACT, this red is the correct behaviour rather than a defect: this rung's single instance was
+// settled by name, so the edit needs a review rather than a test fixup.
 test('the re-theming notice appears at every rung that performs a re-theming act', () => {
   for (const name of RETHEMING_RUNGS) {
     const count = visibleOccurrences(rungBody(name), RETHEMING_NOTICE)
@@ -207,7 +207,7 @@ test('rung 0 carries no re-theming notice, and no instance sits outside the ladd
   )
 })
 
-// Round 12 of that review: the "Neutral actions" worked example at rung 2 is
+// Round 12 of the theming spec: the "Neutral actions" worked example at rung 2 is
 // the one landing point where a reader transcribes values Nave chose rather than values they
 // set themselves, and it carries a separately cleared TRANSCRIPTION VARIANT instead of the
 // canonical notice. `copy-lint.ts` carries no constant for it (out of that package's scope),
@@ -250,8 +250,8 @@ test("the worked example's separately-cleared notice variant appears exactly onc
 
 test('the worked example carries no "tested against ..." caption', () => {
   // The caption slot is empty at 0.1.0: no sentence claims the worked-example values were
-  // tested against anything. Adding one is exactly the mutation a reviewer proposed, and which
-  // this guard exists to catch.
+  // tested against anything. Adding one is exactly the mutation this
+  // guard exists to catch.
   //
   // A LETTER-BOUNDED LOOKAROUND, NOT `\b`: markdown emphasis wraps a caption in `_..._`, and
   // `_` is a word character to regex, so `_Tested` has NO `\b` between them and `\btested\b`
@@ -469,7 +469,7 @@ const licenseBody = bodyOf(README_LINES, LICENSE_RANGE)
 // `~~MIT © Nave Contributors~~`, `Not MIT © Nave Contributors`, a negating clause in front of
 // the line and a `display: none` span around it were all GREEN, and the strikethrough is a
 // two-character edit that RENDERS as a retraction of signed licensing copy. Limb 2 reds all
-// four. The cleared unit (per the licensing steward's clearance, §6) is this line standing on
+// four. The cleared unit is this line standing on
 // its own, so holding the line is reading that clearance rather than widening it.
 //
 // LIMB 4 MAKES LIMBS 1 AND 2 HOLD WHAT THEY ALREADY SAY, and it exists because they did not.
@@ -506,9 +506,9 @@ const licenseBody = bodyOf(README_LINES, LICENSE_RANGE)
 //
 // A RED HERE IS A ROUTING ACT, NOT A FALSE RED, and it is rung 1b's shape above. Bolding the
 // line, wrapping part of it in a link, appending a clause to it or splitting it across two lines
-// all red, and every one of those is a byte change to signed copy that costs a clearance turn on
-// its own account: the red returns the edit to the project's licensing steward, who cleared this
-// line by name. Limb 4's
+// all red, and every one of those is a byte change to signed copy that needs a clearance of
+// its own: this line was cleared by name, so the red sends the edit to review as a
+// licence-text change. Limb 4's
 // OVER-INCLUSION is that same act, and its extent is measured rather than asserted: it reds an
 // `<a name>` anchor or a `<sub>` note added to this block, and it also reds the two ANGLE-BRACKET
 // AUTOLINKS, `<https://...>` and `<mail@...>`, which are markdown rather than HTML and share only
@@ -522,8 +522,8 @@ const licenseBody = bodyOf(README_LINES, LICENSE_RANGE)
 // OWN LINE, at the top level of this block's own prose. It does not, and no presence-shaped
 // guard can, hold that the prose AROUND the line does not negate it: a retraction in the
 // neighbouring sentence passes all four limbs, measured. Closing that would mean pinning the
-// whole `## License` block, whose surrounding prose is not cleared copy and is not the
-// project's licensing steward's to freeze, or minting a vocabulary of negations. A FENCED
+// whole `## License` block, whose surrounding prose is not cleared copy and was never frozen
+// by a licensing review, or minting a vocabulary of negations. A FENCED
 // instance stays green for the reason
 // `visible()` gives above (a reader sees it), and so do the line moved under a sub-heading
 // inside the block (it is still under `## License`) and a four-space-indented instance (the

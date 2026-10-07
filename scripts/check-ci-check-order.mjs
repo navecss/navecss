@@ -5,8 +5,8 @@
  * `.github/CONTRIBUTING.md`'s "`ci:check` runs these steps:" section is a hand transcription of
  * the step list in `scripts/run-ci-check.mjs` (`STEPS`): one numbered item per step, each
  * opening with a bold code span naming one `pnpm run <script>` step. It has decayed twice already, on two
- * different axes, both caught only by a person reading it against the manifest during a
- * review that happened to run a merged-with-`main` certification (commit
+ * different axes, both caught only by a person reading it against the manifest while running a
+ * merged-with-`main` certification (commit
  * `a6555fd`): once on MEMBERSHIP (the `scripts:check` item's own inner enumeration missed
  * a ninth gate for one pull request) and once on ORDER (items 5 and 6 transposed against the
  * chain, false for days). Nothing re-checked either until a person happened to look.

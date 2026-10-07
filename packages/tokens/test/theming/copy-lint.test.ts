@@ -111,9 +111,9 @@ describe('AC-theming-40 covers: R34', () => {
     // The notice text passed here is RETHEMING_NOTICE itself, byte-identical and clean —
     // only the STEM prefixing it in the composed CSS carries the violation. Before this fix
     // landed, this passed (assertNoticeIsClean only ever reads the notice constant, never the
-    // emitted line), which is exactly the gap the accessibility steward named: "the
-    // prefix is an unlinted byte adjacent to a linted constant... my clearance is currently
-    // the whole fence."
+    // emitted line), which is exactly the gap: the prefix is unlinted text sitting next to a
+    // linted constant, so nothing but a human review of it kept framing out of the composed
+    // line.
     const css = `:root {\n  /* WCAG AA Tint seed: ${RETHEMING_NOTICE} */\n}`
     expect(() => assertNoticeIsEmitted(css, RETHEMING_NOTICE, 'Retheming notice')).toThrow(
       /Retheming notice violation.*a comment line carrying the notice.*contains the word "WCAG"/,
@@ -180,10 +180,10 @@ describe('AC-theming-40 covers: R34', () => {
   })
 
   it("a carrying line holding a SECOND, self-contained comment beside the notice's own is ACCEPTED, and the composed-line lint reads that sibling comment too", () => {
-    // The accessibility steward's applied-path requirement: "the text this check lints must never
-    // be a SUBSET of what a reader sees around the notice, and where it cannot be equal it
-    // must refuse" — a superset is acceptable, because it can only raise a false alarm a
-    // human resolves. This line is that superset: the predicate accepts it AND
+    // The requirement: the text this check lints must never be a SUBSET of what a reader sees
+    // around the notice, and where it cannot be equal it must refuse. A superset is acceptable,
+    // because it can only raise a false alarm a human resolves. This line is that superset:
+    // the predicate accepts it AND
     // findConformanceFraming reads the whole trimmed line, so the sibling comment is linted.
     // The second assertion is the load-bearing one — without it this test would document the
     // accepted case while proving nothing about the read that makes accepting it safe.
@@ -197,7 +197,7 @@ describe('AC-theming-40 covers: R34', () => {
   })
 
   it('a carrying line that BEGINS inside a comment opened further up refuses, even though it opens and closes a comment of its own — the subset case, and the live route to it is a dropped delimiter in emit.ts', () => {
-    // The shape the accessibility steward's requirement forbids outright: CSS comments do not nest,
+    // The shape the no-subset requirement forbids outright: CSS comments do not nest,
     // so a reader reaching this line is inside the comment that opened above it, while the check
     // reads the carrying line alone. Before the comment-state scan this passed silently. The live
     // route is not hypothetical: emit.ts builds a two-line color-scheme note three lines above the
@@ -228,8 +228,8 @@ describe('AC-theming-40 covers: R34', () => {
     // The refusal tests above anchor on the widened clause ("or sits inside a comment opened on
     // an earlier line"), but a
     // widened anchor alone tolerates two separately-worded consts that happen to share that clause
-    // — it says nothing about whether site 1 and site 2 throw the SAME string. The accessibility
-    // steward ruled they must ("one shared const stands"). `${rest}` is the one clause the two
+    // — it says nothing about whether site 1 and site 2 throw the SAME string. Both sites must
+    // throw it from one shared const. `${rest}` is the one clause the two
     // sites are SUPPOSED to differ on (it names the offending line's own content, which differs by
     // fixture); sanitizing it out and comparing what remains is what actually pins "one shared
     // const" rather than "two consts worded alike".
@@ -247,10 +247,10 @@ describe('AC-theming-40 covers: R34', () => {
     expect(site1Message).toBe(site2Message)
   })
 
-  it('the comment-state scan is quote-aware, so a declaration VALUE carrying an opening comment delimiter inside a string does not over-refuse — closing the one false alarm the accessibility steward recorded and left open', () => {
-    // The accessibility steward: the over-refusal was the safe side of
-    // the requirement and was explicitly left open as "a legitimate later improvement, not a
-    // defect being deferred" — on the condition that fixing it cannot touch the subset case
+  it('the comment-state scan is quote-aware, so a declaration VALUE carrying an opening comment delimiter inside a string does not over-refuse — closing the one false alarm recorded and left open', () => {
+    // The over-refusal was the safe side of the requirement and was left open as a legitimate
+    // later improvement rather than a deferred defect, on the condition that fixing it cannot
+    // touch the subset case
     // this guard exists to catch (the test above) or refuse less than the rest of that
     // requirement demands. The
     // scan now tracks whether it is inside a quoted string while outside a comment and skips
@@ -495,9 +495,9 @@ describe('AC-theming-40 covers: R34', () => {
 
 describe('the two comment stems are cleared bytes with no anchor of their own', () => {
   it('TINT_SEED_COMMENT_STEM and FEEDBACK_TOKENS_COMMENT_STEM match their cleared, hardcoded literals exactly', () => {
-    // The accessibility steward's applied-path ruling: both stems are cleared as EXACT
-    // bytes. "Changing either stem is a change to cleared text and returns here." Before this
-    // test, the quality reviewer measured that neither constant had a byte anchor of its own:
+    // Both stems are cleared as EXACT bytes, so changing either stem is a change to cleared
+    // text and needs review as one. Before this
+    // test, it was measured that neither constant had a byte anchor of its own:
     // mutating either one's VALUE at its definition left every test THIS package's own
     // theming suite runs green, caught only by test/theming/remaining-ac.test.ts (AC-theming-39)
     // and test/theming/emit-r20-notice.test.ts, both anchored on their own deliberately RETYPED
@@ -536,7 +536,7 @@ describe('AC-theming-22 covers: R20 obligation 1: the feedback shared-identity n
     )
   })
 
-  it('says "-foreground", not "foreground roles" — the hyphen is load-bearing (per the accessibility steward)', () => {
+  it('says "-foreground", not "foreground roles" — the hyphen is load-bearing', () => {
     // on-feedback-danger is byte-identical to on-feedback-warning/success/info, so a
     // paraphrase reading "foreground roles" as covering on-feedback-* would make "only
     // danger differs" false. Pinning the exact substring guards against that paraphrase.
@@ -628,7 +628,7 @@ describe('AC-theming-22 covers: R20 obligation 1: the feedback shared-identity n
   })
 
   it('the Feedback-notice analogue of the Retheming shared-const identity pin — captureNoticeViolation reached for the way a future caller naturally would, now parameterized over the notice constant and its label', () => {
-    // The quality reviewer found that captureNoticeViolation was hoisted to module scope
+    // captureNoticeViolation was hoisted to module scope
     // but its body was hardcoded to RETHEMING_NOTICE/'Retheming notice', despite its name and
     // position reading as general-purpose. Red-first evidence for this test: before
     // parameterization, calling the helper over Feedback fixtures the way a future caller naturally
@@ -729,7 +729,7 @@ describe('AC-theming-42 covers: R36', () => {
     ).toThrow(/fall below the floor this build applies/)
   })
 
-  // Flagged by the accessibility steward: four more build-thrown messages state an accessibility
+  // Four more build-thrown messages state an accessibility
   // position and were unread by this check — three of the four landed in one week with
   // nothing checking them. The four `it`s below prove each real message is what the widened
   // check now reads (mirroring the R21/R38 pattern above), and the mutation test after them
@@ -746,7 +746,7 @@ describe('AC-theming-42 covers: R36', () => {
   })
 
   it('the real floor-provenance mismatch message is what gets checked (a floor triple that disagrees with the frozen citation)', () => {
-    // This steward-cleared change rewrites this
+    // This cleared change rewrites this
     // message's prefix from "R38 violation:" to "Contrast floors:" as a tier-1 identifier
     // removal (the frozen record's finding/ledger ids relocate into FLOOR_PROVENANCE's own
     // docblock and stop being interpolated into the printed message).
@@ -756,11 +756,11 @@ describe('AC-theming-42 covers: R36', () => {
   })
 
   it('the real neutral chroma-ceiling margin message is what gets checked (a ceiling far past the fixed margin)', () => {
-    // This steward-cleared change (site 2) rewrites this message's prefix from
+    // This cleared change (site 2) rewrites this message's prefix from
     // "R9/T7 violation:" to "Neutral chroma ceiling:" as a tier-1 identifier removal, on a
     // branch that (like this one) is based on origin/main and unmerged. Matched on the stem
     // both wordings share instead, so this stays true across the merge order of a concurrent
-    // steward-cleared string sweep and the neutral-ceiling change rather than being coupled
+    // cleared string sweep and the neutral-ceiling change rather than being coupled
     // to whichever one lands second (the same shape a prior finding named).
     expect(() => assertNeutralChromaCeilingWithinMargin(1)).toThrow(
       /produces a worst-case hue-band spread of/,
@@ -857,8 +857,8 @@ describe('AC-theming-42 covers: R36', () => {
 
     // Proves the SEVENTH probe (the same-step lint's REAL 'fail'
     // violation output, distinct from the widening's fail-closed probe above) is actually
-    // wired, not vacuously green — the exact shape the quality reviewer found missing for the
-    // first four widened probes in that change's own review.
+    // wired, not vacuously green — the exact shape that was missing for the
+    // first four widened probes.
     it("a conformance word injected into assertNoSameStepViolations's message fails assertHarnessFramingIsClean", async () => {
       vi.resetModules()
       vi.doMock('../../src/theming/contrast.ts', async () => {
@@ -878,7 +878,7 @@ describe('AC-theming-42 covers: R36', () => {
       )
     })
 
-    // One of the three guards a quality reviewer used to demonstrate this gap. Before this
+    // One of the three guards that demonstrated this gap. Before this
     // probe existed, injecting this exact poisoned wording into the real assertCoverageFloor
     // left assertHarnessFramingIsClean() green.
     it('a conformance word injected into assertCoverageFloor fails assertHarnessFramingIsClean', async () => {
@@ -940,7 +940,7 @@ describe('AC-theming-42 covers: R36', () => {
   })
 })
 
-describe('assertDescriptionsAreClean (a quality-review finding, F4): aggregation across every map it is given', () => {
+describe('assertDescriptionsAreClean: aggregation across every map it is given', () => {
   // Its own docblock claims "all violations in one throw rather than the first"; before this
   // block, no test called it directly, and every existing caller keeps one map clean and
   // dirties only the other, so a short-circuit-at-the-first-map bug would have shipped clean.

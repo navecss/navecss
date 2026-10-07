@@ -5,7 +5,7 @@
  * compile step so `scripts/check-bundling-guard-coverage.mjs`
  * stays green the instant either arms the tripwire — R28's own text: "`bin: navecss-tokens`
  * arms the tripwire by itself, and R8's compile step arms it a second time independently."
- * Cédric's 2026-08-15 instruction stands verbatim and is this item's: expect the guard to
+ * The 2026-08-15 instruction stands verbatim and is this item's: expect the guard to
  * trip once R1/R8 land, and do not narrow the criterion or exempt the package to quiet it.
  *
  * A GENERATOR-shaped property, not a bundler-shaped one — R28's own warning: this package has
@@ -31,9 +31,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import {
+  CONSUMER_ARTIFACTS,
   findThirdPartyResidue,
   findUnattributedHeader,
-  R6_CONSUMER_ARTIFACTS,
 } from '../src/theming/third-party-provenance.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -122,13 +122,13 @@ const distText = listFiles(DIST_DIR, ['.js'])
 
 describe('AC-token-build-28 covers: R28 (generator half — no R6 artifact traces to a third party)', () => {
   it('found the built R6 artifact set on disk (run `pnpm run build` first if this fails)', () => {
-    for (const name of R6_CONSUMER_ARTIFACTS) {
+    for (const name of CONSUMER_ARTIFACTS) {
       expect(existsSync(path.join(DIST_DIR, name)), `missing dist/${name}`).toBe(true)
     }
   })
 
   it('no R6 artifact contains the one concretely-known historical residue (style-dictionary)', () => {
-    const artifacts = R6_CONSUMER_ARTIFACTS.map((name) => ({
+    const artifacts = CONSUMER_ARTIFACTS.map((name) => ({
       path: name,
       content: readFileSync(path.join(DIST_DIR, name), 'utf8'),
     }))
@@ -143,13 +143,13 @@ describe('AC-token-build-28 covers: R28 (generator half — no R6 artifact trace
     // This floor alone cannot distinguish "walked dist/lib" from "did
     // not", since dist/lib's own file count already clears it; the discriminating assertion
     // is the dedicated dist/lib comment-stripping test below.
-    expect(everyDistFile.length).toBeGreaterThanOrEqual(R6_CONSUMER_ARTIFACTS.length)
+    expect(everyDistFile.length).toBeGreaterThanOrEqual(CONSUMER_ARTIFACTS.length)
     expect(everyDistFile.some((file) => file.path.startsWith(`lib${path.sep}`))).toBe(true)
     expect(findThirdPartyResidue(everyDistFile)).toEqual([])
   })
 
   it('every header-bearing R6 artifact (.css, .js, .d.ts) attributes generation to Nave alone', () => {
-    const artifacts = R6_CONSUMER_ARTIFACTS.filter(
+    const artifacts = CONSUMER_ARTIFACTS.filter(
       (name) => name.endsWith('.css') || name.endsWith('.js') || name.endsWith('.d.ts'),
     ).map((name) => ({ path: name, content: readFileSync(path.join(DIST_DIR, name), 'utf8') }))
     expect(findUnattributedHeader(artifacts)).toEqual([])
@@ -162,7 +162,7 @@ describe('AC-token-build-28 covers: R28 (compiled-JS half — external specifier
     // in src/, this fails with "expected 0 to be 1", which is the signal that the it.each
     // below has real work to do.
     //
-    // A review found this title used to read "no bundler, no bin, no compile step
+    // This title used to read "no bundler, no bin, no compile step
     // yet — R1/R8 both untouched", and this same PR falsified it: R1's `bin: navecss-tokens`
     // and R8's `tsc` step both landed here. None of those three was ever the premise the
     // assertion measures, which is only that `src/` names no external specifier, so the

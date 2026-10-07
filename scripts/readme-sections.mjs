@@ -1,9 +1,9 @@
 /**
  * Fence-aware markdown section parsing shared by the scripts that assert against the
  * repository-root `README.md`'s rendered text. Extracted from `readme-theming-ladder.test.mjs`
- * (round 4 of that review) when a second and third script needed the same parsing
- * rather than re-deriving it: the review that hardened this parsing
- * spent three rounds getting it right, and shipping a second fence parser was named there as a
+ * when a second and third script needed the same parsing
+ * rather than re-deriving it: hardening this parsing took three passes,
+ * and shipping a second fence parser is a
  * defect class this repo has already hit twice.
  *
  * ONE CODE-BLOCK KIND IS RECOGNISED: THE BACKTICK FENCE (see the docblock in

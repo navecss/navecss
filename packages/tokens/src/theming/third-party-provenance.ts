@@ -2,9 +2,9 @@
  * R28 and R30 (the token-build specification), and the shared instrument they both need.
  *
  * R30, paraphrased rather than quoted because the spec's own sentence names an internal
- * reviewer: every artifact this entry point emits onto a consumer's disk is FIRST-PARTY TEXT,
- * and any third-party-derived emitted text returns to the project's licensing steward before
- * publication. R30 records that this is the predicate the item CREATES and the one with no
+ * party: every artifact this entry point emits onto a consumer's disk is FIRST-PARTY TEXT,
+ * and any third-party-derived emitted text needs a licensing review before publication. R30
+ * records that this is the predicate the item CREATES and the one with no
  * instrument, and that what must not happen is that it rides as prose, since prose is exactly
  * what the other two licensing predicates have instruments instead of. This module is that
  * instrument.
@@ -26,13 +26,12 @@
  * two fence tests cannot drift apart from each other.
  *
  * `core-contract.json` still ships in the published tarball (`exports['./core-contract']`) and
- * is scanned by nothing in this module — deliberate scope (the project's licensing steward's
- * completeness property is over R6's set BY NAME), not an oversight, recorded so the absence
- * does not later read as a clearance. R8 grows the tarball's unscanned remainder further
- * (compiled library JS outside this set); widening the scan past R6 is a licensing-scope call
- * for the project's licensing steward to make, not this module's.
+ * is scanned by nothing in this module — deliberate scope (the scan's completeness is defined
+ * over R6's set BY NAME), not an oversight, recorded so the absence does not later read as a
+ * clearance. R8 grows the tarball's unscanned remainder further (compiled library JS outside
+ * this set); widening the scan past R6 is a licensing-scope call, not this module's to make.
  */
-export const R6_CONSUMER_ARTIFACTS = [
+export const CONSUMER_ARTIFACTS = [
   'tokens.css',
   'tokens.js',
   'tokens.d.ts',
@@ -53,8 +52,8 @@ export interface ProvenanceArtifact {
  * in favour of the first-party DTCG reader — named in full there rather
  * than here, since this module IS the residue scanner and spelling the two words out adjacently
  * would match its own pattern below the day this docblock ships as compiled `dist/` JS (R8) or
- * the scan widens from R6's set to `dist/**` (a licensing-scope call for the project's
- * licensing steward to make). A regression here
+ * the scan widens from R6's set to `dist/**` (a licensing-scope call, not this module's to
+ * make). A regression here
  * — the name reappearing in a generated-file header, a comment, or a copied banner — is exactly
  * the class of silent third-party reintroduction R30 exists to catch.
  */
@@ -132,7 +131,7 @@ export function findUnattributedHeader(artifacts: readonly ProvenanceArtifact[])
  * R30's routing obligation, recorded as a checkable fact rather than left in the spec's prose
  * alone. Three shapes named AS EXAMPLES, never as an enumeration (R30's own text: "a
  * prohibition written as a list defaults to permitted"). This constant asserts the obligation
- * EXISTS; it clears no instance and is not the licensing steward's cleared text (unlike R27's, this
+ * EXISTS; it clears no instance and is not cleared text (unlike R27's, this
  * is engineering policy prose, not a safety-critical conformance claim, and carries no
  * byte-identity requirement).
  */

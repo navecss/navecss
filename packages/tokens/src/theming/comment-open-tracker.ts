@@ -1,8 +1,8 @@
 /**
  * A single-purpose leaf: given the lines of some emitted CSS, which of them BEGIN while a CSS
  * comment opened on an earlier line is still open. Split out of `copy-lint.ts` rather than
- * added inline there, on the project's principal engineer's ruling in round 3 of its review,
- * for three grounds recorded here rather than left to the commit message alone:
+ * added inline there, for three grounds recorded here rather than left to the commit
+ * message alone:
  *
  * 1. This PR's own recorded design for a file that grows is to give the growing half its own
  *    file rather than raise `copy-lint.ts`'s `max-lines` override a third time —
@@ -12,14 +12,14 @@
  *    sentence anyone adds to that file reopens the override question its own headline claims
  *    to have closed. Moving this helper out buys real headroom, not an arithmetic footnote.
  * 3. A module with no imports from the theming graph is a LEAF, and that is not incidental:
- *    That same review also records that this repository's `import-x/no-cycle` lint is
+ *    Also, this repository's `import-x/no-cycle` lint is
  *    currently NOT firing on a real 3-node cycle in this same directory
  *    (`copy-lint.ts` -> `guard-message-probes.ts` -> `emit.ts` -> `copy-lint.ts`, benign
  *    out-of-process but unchecked by the configured guard). Adding a new edge into that graph
  *    would go unchecked by the same silently-non-functioning lint; keeping this helper a leaf
  *    means it adds none.
  *
- * The project's accessibility and licensing reviewer's bound (applied path):
+ * The bound on this module:
  * whatever tracks comment state may only ever ADD a refusal, never change WHICH text a caller
  * lints. This module only ANSWERS "does line N begin inside an unclosed comment?" — it does
  * not decide what happens next, so it cannot by itself narrow or widen what its caller reads.
@@ -30,9 +30,9 @@
  * string that CLOSES on its own line is skipped whole before that scan resumes, matching
  * one piece of real CSS tokenization this module models: a closed string is consumed as a
  * single token before the tokenizer ever looks for a comment start again, so an opening or
- * closing comment delimiter inside one is ordinary string content, never a delimiter (the
- * project's accessibility and licensing reviewer's S12, applied path — closes the false alarm
- * S12 recorded for exactly that closed-string shape). A string that does NOT close on its line
+ * closing comment delimiter inside one is ordinary string content, never a delimiter. This
+ * closes a false alarm once recorded for exactly that closed-string shape. A string that does
+ * NOT close on its line
  * has no single reading, so this module does not pick one. Where an unescaped line break cuts
  * it off, CSS consumes it as a bad-string token running to the end of the line, which makes a
  * comment opener after the quote string content to a parser, while a reader can take the quote

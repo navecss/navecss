@@ -18,7 +18,7 @@ export const SLOT_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
     // (R3(a); content.link aliases content.primary there), where "colour" is not this
     // token's own colour but the one it resolves to — the instruction does not depend on
     // which. Says nothing about consumer stylesheets (R34) and names no specific non-colour
-    // cue (the project's accessibility and licensing reviewer's call, not this file's).
+    // cue (which cue suffices is a human review call, not this file's).
     'content.link',
     "Do not distinguish a link by colour alone. Nave's own examples keep a non-colour distinction wherever this token is shown.",
   ],

@@ -30,7 +30,7 @@ const byName = (a: string, b: string): number => a.localeCompare(b)
 /**
  * R23's purity predicate, named once so the guard below and the row that proves the guard's
  * comment stripper does not swallow real code bind to the same two subjects rather than to two
- * spellings of them (row R3-01 of the quality review).
+ * spellings of them.
  */
 const PURITY_RE =
   /\bfrom\s+['"](node:)?fs['"]|writeFileSync|readFileSync|appendFileSync|process\.exit|process\.stdout|process\.stderr|console\./
@@ -341,8 +341,7 @@ describe('AC-token-build-21 covers: R21', () => {
     expect(refusalFor('env(safe-area-inset-top)').refusalClass).toBe('context-dependent-form')
   })
 
-  // Quality-review findings F1/F1b (extended to F5/F6 in the same
-  // round): R21's fifth class reached at the channel-value act (`badChannelValue`'s "one or
+  // R21's fifth class reached at the channel-value act (`badChannelValue`'s "one or
   // more of its channel values could not be read as a number"). `Number('')` is `0`, not
   // `NaN`, so a bare `%` (no digits
   // before the sign) silently read as channel value 0 instead of refusing, in every channel
@@ -387,7 +386,7 @@ describe('AC-token-build-21 covers: R21', () => {
     },
   )
 
-  // A quality-review finding, F6: `parseHueDeg` strips a trailing `deg` and read the remainder
+  // `parseHueDeg` strips a trailing `deg` and read the remainder
   // the same unguarded way, so a bare `deg` token (no digits before the unit) hit the identical
   // `Number('')` gap. Reaches
   // the hue channel of oklch(), lch() and hsl().
@@ -404,7 +403,7 @@ describe('AC-token-build-21 covers: R21', () => {
     },
   )
 
-  it('a genuinely valid percentage or `deg` unit in every one of those same positions still converts exactly as before the quality-review F1/F1b/F5/F6 fixes', () => {
+  it('a genuinely valid percentage or `deg` unit in every one of those same positions still converts exactly as it did before a bare `%` or `deg` was refused', () => {
     expect(ingestSeed('lab(50% 40 59.5)')).toEqual(ingestSeed('lab(50 40 59.5)'))
     expect(ingestSeed('lch(50% 100% 0)')).toEqual(ingestSeed('lch(50 150 0)'))
     expect(ingestSeed('color(srgb 100% 0 0)')).toEqual(ingestSeed('color(srgb 1 0 0)'))
@@ -416,7 +415,7 @@ describe('AC-token-build-21 covers: R21', () => {
     expect(ingestSeed('hsl(120deg 100% 50%)')).toEqual(ingestSeed('hsl(120 100% 50%)'))
   })
 
-  // Quality-review finding B, elected for fix by Cédric at GATE 2. The
+  // The
   // tokeniser split and trimmed on JavaScript's `\s`, which is WIDER than CSS's own
   // `<whitespace-token>` set: it also matches U+00A0 and the other Unicode space separators. So an
   // invisible non-CSS space acted as a channel separator, and `lab(50<NBSP>20 30)` was silently
@@ -459,8 +458,7 @@ describe('AC-token-build-21 covers: R21', () => {
     expect(ingestSeed('rgb(0 0 0 / 1)')).toEqual(ingestSeed('rgb(0 0 0)'))
   })
 
-  // Carve-out from that review, found during final quality-review
-  // verification: `readNumericToken` converted with JavaScript's `Number()`, whose numeral grammar
+  // `readNumericToken` converted with JavaScript's `Number()`, whose numeral grammar
   // is a superset of CSS's <number>. A hex-integer literal is not a valid CSS <number> outside the
   // hex COLOUR forms (which never reach this function), so `lab(0x10 20 30)` silently read as L=16
   // instead of refusing. Covers every channel and hue position across all seven accepted forms,
@@ -514,7 +512,7 @@ describe('AC-token-build-21 covers: R21', () => {
     expect(refusal.message).toMatch(/alpha channel could not be read as a number/)
   })
 
-  // A later review round's adversarial pass found that the corpus above is entirely
+  // The corpus above is entirely
   // `0x`/`0X`, so it pins "a hex literal refuses" and not the CSS `<number>` grammar the fix
   // actually installs. Measured: replacing the `CSS_NUMBER` test with a hex-only blacklist
   // (`/^[+-]?0[xX]/`) leaves every `0x`/`0X` assertion above green while re-opening every shape
@@ -831,10 +829,10 @@ describe('AC-token-build-23 covers: R23', () => {
   })
 
   /**
-   * ROW `R3-01` (Phase 3 verifier-gated tail). This guard carried its
-   * OWN copy of the block-comment stripper that an earlier review diagnosed and round 2 fixed
-   * six lines over, in `consumer-build.test.ts`; both copies have since been hoisted into the
-   * shared `code-only.ts`, which is still-open row 1 and Cédric's GATE-2 decision. Unanchored, the
+   * This guard carried its
+   * OWN copy of the block-comment stripper that was also fixed, six lines over, in
+   * `consumer-build.test.ts`; both copies have since been hoisted into the
+   * shared `code-only.ts`. Unanchored, the
    * block-comment pattern treats a `/*` opened inside a STRING LITERAL as a comment opener and
    * deletes everything up to the next closer, code included — so a guard can be blind to the very
    * constructs it exists to forbid.
@@ -847,7 +845,7 @@ describe('AC-token-build-23 covers: R23', () => {
    * is 🟡 and why the row exercises the STRIPPER — the subject of that diagnosis — rather than
    * claiming a live hole this guard does not have.
    */
-  it('row R3-01: the purity guard strips COMMENTS, never code following a /* opened inside a string literal', () => {
+  it('the purity guard strips COMMENTS, never code following a /* opened inside a string literal', () => {
     const tracker = readFileSync(
       path.resolve(import.meta.dirname, '../../src/theming/comment-open-tracker.ts'),
       'utf8',

@@ -5,9 +5,9 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 /**
- * A prior review round (finding 2): `no-regex-spaces`, `unicorn/prefer-string-repeat`,
+ * `no-regex-spaces`, `unicorn/prefer-string-repeat`,
  * `unicorn/no-array-from-fill` and `unicorn/no-duplicate-loops` used to be `'off'` for the whole
- * `scripts/**\/*.mjs` directory, even though every real violation that review found for all four
+ * `scripts/**\/*.mjs` directory, even though every real violation found for all four
  * sits inside a `.test.mjs` fixture, never in a gate. They are now scoped to
  * `scripts/**\/*.test.mjs` only, which means a GATE module (a non-`.test.mjs` file under
  * `scripts/`) carrying the same defect must be reported, not silently passed the way it was
@@ -25,9 +25,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 // One minimal fixture per narrowed rule, each the smallest self-contained source that trips it.
 //
-// A later review round (terminal read, finding 3): this was a single fixture for
-// `no-regex-spaces` while the docblock above claimed all four. That review measured what that
-// cost by moving each rule back to the directory-wide block one at a time — `no-regex-spaces`
+// This was once a single fixture for
+// `no-regex-spaces` while the docblock above claimed all four. Measured by moving each rule
+// back to the directory-wide block one at a time: `no-regex-spaces`
 // went RED, and the other three stayed GREEN, so three of the four relaxations could silently
 // revert with nothing to catch them. An instrument narrower than the sentence it backs is a known
 // anti-pattern. The table is the fix: adding a rule to the narrowing means adding a row here.

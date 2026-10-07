@@ -40,8 +40,8 @@ const aliasRef = (slot: string): StepRef => ({ alias: slot })
 /**
  * R23's worked mapping, the CHROMATIC column: what ships for every seed with chroma
  * (the shipped default among them). Values transcribed verbatim from the accepted
- * theming specification, R23 (write-backs 1-5); floors and margins are the project's
- * accessibility and licensing reviewer's and are not restated here
+ * theming specification, R23 (write-backs 1-5); floors and margins live in `contrast.ts`
+ * (`TEXT_FLOOR`, `NON_TEXT_FLOOR`, `MARGIN`) and are not restated here
  * (one canonical home per fact) — this module carries only the step assignments.
  */
 export const CHROMATIC_MAPPING: Record<string, SlotMapping> = {
@@ -65,14 +65,15 @@ export const CHROMATIC_MAPPING: Record<string, SlotMapping> = {
   // Round 19 (write-back 8): dark moves 400 -> 500 and the slot becomes
   // scheme-invariant. Row 8's quantifier ("every surface.* a control sits on") reaches
   // surface.inverse, which sits inside the OTHER scheme's lightness cluster, so the slot's
-  // scope crosses schemes and its value does too; the project's accessibility and licensing
-  // reviewer's window has exactly one member per scheme and light already sat on it. No contrast
+  // scope crosses schemes and its value does too; exactly one step per scheme clears the
+  // non-text floor with its margin (`contrast.ts`) against all five shipped surfaces, and
+  // light already sat on it. No contrast
   // conclusion is drawn here (one canonical home per fact); this module transcribes the settled value.
   'border.control': { light: ref('neutral', 500), dark: ref('neutral', 500) },
   'border.disabled': { light: ref('neutral', 150), dark: ref('neutral', 800) },
   // Round 15 (write-back 7): border.focus diverges from R16's coupled step
-  // to a scheme-invariant primary-500 — the project's accessibility and licensing reviewer's
-  // window, and the design lead's pick. The prior value, primary-600/primary-300,
+  // to a scheme-invariant primary-500, which clears the non-text floor with its margin
+  // (`contrast.ts`). The prior value, primary-600/primary-300,
   // failed row 9 against surface.inverse in both schemes; primary-500 is the unique
   // step clearing all five shipped surfaces in both schemes. No contrast conclusion is
   // drawn here (one canonical home per fact); this module transcribes the settled value.
@@ -138,7 +139,7 @@ export const ACHROMATIC_MAPPING: Record<string, SlotMapping> = {
 export const ACTION_SECONDARY_FOREGROUND = 'content.primary'
 
 /**
- * `action.secondary`'s companion identifying border under Cédric's ruling (round 9):
+ * `action.secondary`'s companion identifying border (round 9):
  * `border.control` (500/500 both schemes as of round 19), never a surface
  * differential (T3).
  */

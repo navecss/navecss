@@ -58,10 +58,10 @@ const SCRIPT_PATH = path.join(ROOT, 'scripts', SCRIPT_NAME)
 const ROOT_LICENSE = Buffer.from('MIT License\n\nCopyright (c) 2026 Nave Contributors\n')
 const VALID_WORKSPACE_YAML = "packages:\n  - 'packages/*'\n"
 
-// The third-party attribution section, cleared by the project's licensing steward,
-// packages/tokens/LICENSE carries after the root text, read here from the shipped file's own
-// bytes (never retyped) so the pinning test below compares against a literal that cannot drift
-// from what this repository actually ships.
+// The third-party attribution section packages/tokens/LICENSE carries after the root text,
+// typed out here by hand as an independent copy of the bytes that file must ship (it is not
+// read from the file). The pinning test below compares the shipped file against this copy, so
+// a change to either one without the same change to the other turns that test red.
 //
 // The block is WIDENED by one paragraph per clearance, never rewritten. The third paragraph
 // credits the two token-format specifications this package implements: their own licence makes
@@ -104,11 +104,12 @@ diagnostics and everything around them are this package's own, and everything in
 this package is offered under the MIT licence above.
 `
 
-// The third-party attribution section, cleared by the project's licensing steward,
-// packages/core/LICENSE carries after the root text, read here from the shipped file's own
-// bytes (never retyped) so the pinning test below compares against a literal that cannot drift
-// from what this repository actually ships. Changing this literal is a review change landing
-// a re-cleared block, never a test fixup for a row that started failing.
+// The third-party attribution section packages/core/LICENSE carries after the root text,
+// typed out here by hand as an independent copy of the bytes that file must ship (it is not
+// read from the file). The pinning test below compares the shipped file against this copy, so
+// a change to either one without the same change to the other turns that test red. Changing
+// this literal is a review change landing a re-cleared block, never a test fixup for a row
+// that started failing.
 const CORE_THIRD_PARTY_SECTION = `
 THIRD-PARTY MATERIAL
 
@@ -129,6 +130,22 @@ code point), the order of the steps of the tokenization algorithms, and the
 rule that tells a declaration from a qualified rule. The code implementing them
 is this package's own, and everything in this package is offered under the MIT
 licence above.
+
+This package also includes material copied from or derived from ECMA-426,
+Source map format specification (spec.emu in the tc39/ecma426 repository, at
+commit c724f0f494b44b21b651fdbd6412d3437eef0e72, and
+https://tc39.es/ecma426/#sec-base64-vlq). Copyright (c) Ecma International.
+That specification is published under Ecma's alternative copyright notice
+(https://ecma-international.org/policies/by-ipr/ecma-text-copyright-policy/).
+The base64 digits it uses are those of RFC 4648, The Base16, Base32, and
+Base64 Data Encodings (https://www.rfc-editor.org/rfc/rfc4648). Copyright (C)
+The Internet Society (2006).
+
+What is copied is implemented in src/directive/source-map.ts, built into the
+JavaScript under dist/: the member names of a version 3 source map, the
+layout of its mappings string, the base64 VLQ encoding of each field in it,
+and the base64 alphabet. The code implementing them is this package's own, and
+everything in this package is offered under the MIT licence above.
 `
 
 /**
@@ -215,7 +232,7 @@ function zeroScopeVerdict(scanned, skippedPrivate, skippedNoManifest) {
  * carries, so a counter wired to the wrong branch is visible on the passing path too and not
  * only on the empty one.
  *
- * A follow-up fix round: the fixtures this
+ * The fixtures this
  * helper serves (`licensed` packages written as byte-identical root copies, never a third-party
  * section) always resolve to every matched package being exact and none carrying a section, so
  * `matched` doubles as the exact count and the third-party count is always 0 here. That is a
@@ -233,7 +250,7 @@ function passVerdict(matched, scanned, skippedPrivate, skippedNoManifest) {
 }
 
 test('end to end: a workspace with zero non-private packages says the run compared NOTHING, never a reassuring zero', () => {
-  // Per a follow-up remedy and the published `licensing` overview §4-§5's own rider: a run
+  // Per a follow-up remedy, and a rule the licensing gates here follow: a run
   // that compared nothing must not read as a run that compared and passed. Exit stays 0: a
   // package that publishes no tarball breaches nothing, and the defect this wording fixes is
   // the explanation, never the exit.
@@ -349,8 +366,7 @@ test('end to end: the ordinary pass line counts the packages it compared, distin
   }
 })
 
-// Cleared by the project's licensing steward:
-// the pass line's own vocabulary fixes "match" as verbatim equality (this file's failure header
+// The pass line's own vocabulary fixes "match" as verbatim equality (this file's failure header
 // reads "do not match the root LICENSE"), so it went false the moment packages/tokens/LICENSE
 // started carrying a cleared third-party section after the root text and was never compared for
 // equality at all. This drives the real main(scratchRoot) over a scratch workspace reproducing
@@ -410,7 +426,7 @@ test('main(): the pass line names both the byte-identical count and the third-pa
  * `/* … *\/` comment or an UNBROKEN run of `//` lines; a blank line or any code line closes a run,
  * so two runs with something between them are two blocks.
  *
- * What this exists for (a review's finding B4). `normalizedDocblockBefore`
+ * What this exists for: `normalizedDocblockBefore`
  * pins a cleared block's WORDING and its adjacency to the declaration below it, and nothing pinned
  * what sits ABOVE it: `lastIndexOf('/**', anchor)` takes the block nearest the declaration, so a
  * contradicting docblock inserted above the cleared one is outside what that helper reads. Measured
@@ -423,7 +439,7 @@ test('main(): the pass line names both the byte-identical count and the third-pa
  * and it is the only thing there".
  *
  * Deliberately a COUNT and not a second wording comparison. `normalizedDocblockBefore` owns the
- * wording (the licensing steward's discriminator, whose five mutations keep their
+ * wording (a discriminator whose five mutations keep their
  * verdicts across this change); a second comparison here would give one cleared literal two owners
  * and two places to update in the commit that must update neither.
  *
@@ -431,7 +447,7 @@ test('main(): the pass line names both the byte-identical count and the third-pa
  * - anything OUTSIDE the two anchors. A contradicting block placed elsewhere in the file (below the
  *   imports, after `isNonPrivate`) is in neither home region and stays green. The claim is about a
  *   cleared block's home, never about the whole file.
- * - A review finding (S6), a literal `/**` spliced into the cleared block's own content. It
+ * - A literal `/**` spliced into the cleared block's own content. It
  *   re-points `normalizedDocblockBefore`'s opener while leaving the compared tail identical, and it
  *   adds no second block here either, so it stays green. Cosmetic, visible in any diff, and not
  *   what this closes.
@@ -592,16 +608,16 @@ function normalizedLineCommentBlockBetween(source, startNeedle, stopNeedle) {
  * are built to let through.
  */
 const EXPECTED_HEADER_DOCBLOCK =
-  'Tripwire for the project\'s published licensing requirement. Condition 2 of the published `licensing` overview §2, signed off by the project\'s maintainer, requires each published tarball to carry its own licence text, and names its remedy in a preference order: "a copy, or a build step, or a verified-packing symlink, in that order of preference". The project took the first — `packages/{tokens,core,bridge,cli}/LICENSE` are copies of the root `LICENSE` — and nothing before this script asserted the copies actually still MATCH the root they were taken from. `pnpm check:pack` (`publint` + `attw`) asserts a `LICENSE` is PRESENT in each packed tarball, never that it agrees with the root. So the equality that makes Condition 2 true was held by whoever remembered to update all five files together, and it had already been exercised once by hand: an earlier review named `LICENSE` and the copyright line turned out to live in five files, caught by the developer-relations reviewer running the class rather than the list. This script converts "whoever remembers" into an assertion. The package set is every directory under `packages/` that carries a manifest, not a hand-listed set, so a new package added there is covered the day it is created. That is the whole workspace only while the workspace is defined as exactly `packages/*`. Scanning a directory cannot establish that, so `findWorkspaceGlobViolation` checks the definition itself before any package is scanned, and refuses rather than reporting a pass over a narrower set than the workspace actually holds. Widening the workspace is therefore a deliberate act that has to change this gate in the same commit. Only NON-PRIVATE packages are checked: a `private: true` package never produces a published tarball, so Condition 2 does not apply to it (mirrors the `!manifest.private` publishable test `scripts/check-publishable-set.mjs` uses for the same reason, on a different question). Source tree only, and deliberately so: a packed tarball\'s LICENSE presence is already asserted by `check:pack` (`publint`/`attw`), and a byte-copy of the source-tree file is exactly what npm packs (no build step touches `LICENSE`), so re-running this check against `npm pack` output would duplicate the source-tree check without covering anything new. This script decides no licensing question and never will: it is an instrument, in the shape `scripts/check-license-allowlist.mjs` and `scripts/check-bundling-guard-coverage.mjs` already use. Its only job is to make Condition 2\'s equality trip instead of drifting silently.'
+  'Tripwire for one of the project\'s licensing requirements. That requirement, signed off by the project\'s maintainer and called Condition 2 below, is that each published tarball carries its own licence text. It names its remedy in a preference order: "a copy, or a build step, or a verified-packing symlink, in that order of preference". The project took the first — `packages/{tokens,core,bridge,cli}/LICENSE` are copies of the root `LICENSE` — and nothing before this script asserted the copies actually still MATCH the root they were taken from. `pnpm check:pack` (`publint` + `attw`) asserts a `LICENSE` is PRESENT in each packed tarball, never that it agrees with the root. So the equality that makes Condition 2 true was held by whoever remembered to update all five files together, and it had already been exercised once by hand: an earlier review named `LICENSE` and the copyright line turned out to live in five files, caught by checking the whole class rather than the list. This script converts "whoever remembers" into an assertion. The package set is every directory under `packages/` that carries a manifest, not a hand-listed set, so a new package added there is covered the day it is created. That is the whole workspace only while the workspace is defined as exactly `packages/*`. Scanning a directory cannot establish that, so `findWorkspaceGlobViolation` checks the definition itself before any package is scanned, and refuses rather than reporting a pass over a narrower set than the workspace actually holds. Widening the workspace is therefore a deliberate act that has to change this gate in the same commit. Only NON-PRIVATE packages are checked: a `private: true` package never produces a published tarball, so Condition 2 does not apply to it (mirrors the `!manifest.private` publishable test `scripts/check-publishable-set.mjs` uses for the same reason, on a different question). Source tree only, and deliberately so: a packed tarball\'s LICENSE presence is already asserted by `check:pack` (`publint`/`attw`), and a byte-copy of the source-tree file is exactly what npm packs (no build step touches `LICENSE`), so re-running this check against `npm pack` output would duplicate the source-tree check without covering anything new. This script decides no licensing question and never will: it is an instrument, in the shape `scripts/check-license-allowlist.mjs` and `scripts/check-bundling-guard-coverage.mjs` already use. Its only job is to make Condition 2\'s equality trip instead of drifting silently.'
 
 const EXPECTED_IS_NON_PRIVATE_DOCBLOCK =
   "True if `manifest` would ship a published tarball (private packages never do, so Condition 2's per-tarball licence-text requirement does not apply to them). Reused by scripts/check-readme-export-coverage.mjs (a documentation gate) to scope which packages' READMEs it checks; that reuse does not make this predicate a documentation concern — it stays Condition 2's, and moves only for Condition 2 reasons."
 
-// Cleared by the project's licensing steward: the zero-scope verdict's own comment,
+// The zero-scope verdict's own comment,
 // stating what the branch covers (an empty non-private set) as distinct from why it is empty
 // (a discovery that legitimately found nothing, vs. one that skipped everything).
 const EXPECTED_ZERO_SCOPE_COMMENT =
-  "A run that compared nothing must not read as a run that compared and passed (published `licensing` overview §4/§5's rider). Two halves, both load-bearing. The closing clause names what the branch actually tested, an empty non-private set, and not why it is empty: a set emptied by directories carrying no package.json is not an all-private workspace. The census is what tells a legitimately empty set from one emptied by a discovery that skipped everything. The exit stays 0 in both cases, because a package that publishes no tarball breaches nothing; the defect this wording fixes is the explanation, never the exit."
+  'A run that compared nothing must not read as a run that compared and passed, a rule the licensing gates here follow. Two halves, both load-bearing. The closing clause names what the branch actually tested, an empty non-private set, and not why it is empty: a set emptied by directories carrying no package.json is not an all-private workspace. The census is what tells a legitimately empty set from one emptied by a discovery that skipped everything. The exit stays 0 in both cases, because a package that publishes no tarball breaches nothing; the defect this wording fixes is the explanation, never the exit.'
 
 test('source anchor: the reviewed docblocks in the shipped script are unchanged, word for word', () => {
   const source = readFileSync(SCRIPT_PATH, 'utf8')
@@ -1013,7 +1029,7 @@ test('findWorkspaceGlobViolation: a missing pnpm-workspace.yaml is a violation, 
 })
 
 test('findWorkspaceGlobViolation: an unrelated top-level key alongside the correct packages: block is NOT a violation', () => {
-  // The licensing steward's explicit correctness bar: this must key ONLY on the top-level
+  // The explicit correctness bar: this must key ONLY on the top-level
   // `packages:` key, ignoring every other key pnpm keeps in this file (onlyBuiltDependencies,
   // overrides, anything else). A gate that refused here would trip on every unrelated
   // pnpm-workspace.yaml edit, not only a genuine widening.
@@ -1036,12 +1052,11 @@ test('findWorkspaceGlobViolation: an inline (flow-style) packages: value cannot 
   }
 })
 
-// A fix round: a blank line or a whole-line comment inside the
+// A blank line or a whole-line comment inside the
 // packages: block sequence used to BREAK the scan early, reading only a PREFIX of the
 // sequence and reporting null (no violation) over a workspace that had actually widened past
-// packages/*. The licensing steward measured this against real pnpm (both shapes resolve to
-// one list) and drafted the fix: skip blank/comment lines in the sequence instead of stopping
-// on them.
+// packages/*. Measured against real pnpm, both shapes resolve to one list, so the fix is to
+// skip blank/comment lines in the sequence instead of stopping on them.
 test('findWorkspaceGlobViolation: a blank line inside the packages: block sequence does not truncate the read', () => {
   const dir = buildWorkspaceYamlFixture("packages:\n  - 'packages/*'\n\n  - 'tools/*'\n")
   try {
@@ -1077,8 +1092,8 @@ test('findWorkspaceGlobViolation: tab-indented block items cannot be confirmed (
 
 // A corpus-gated tail fix: the tab-refusal check above used to run BEFORE the blank/comment
 // skip, so a tab-indented comment or a tab-only blank line inside an otherwise-lawful packages:
-// block falsely refused a workspace real pnpm resolves fine. Measured against real pnpm by the
-// quality reviewer (PR comment 5602791504): pnpm fatally refuses a tab indenting an actual list
+// block falsely refused a workspace real pnpm resolves fine. Measured against real pnpm:
+// pnpm fatally refuses a tab indenting an actual list
 // item, but tolerates one indenting a comment or a blank line.
 test('findWorkspaceGlobViolation: a tab-indented comment line inside the packages: block sequence does not falsely refuse (pnpm resolves this file fine, verified by running it)', () => {
   const dir = buildWorkspaceYamlFixture("packages:\n  - 'packages/*'\n\t# comment\n")
@@ -1147,20 +1162,19 @@ test('composeLicenseUnreadableMessage and composeManifestInvalidJsonMessage comp
   )
 })
 
-// A prior review round (consulting the licensing steward, finding 5):
 // WORKSPACE_GLOB_VIOLATION_MESSAGE's own docblock says it is "Anchored byte-exact in
 // check-license-parity.test.mjs" — and until this test it was not. Every assertion on it in this
 // file and in check-publishable-set.test.mjs compares it to its own imported symbol, which pins
 // ROUTING (does this branch print THIS constant) and nothing about the bytes;
 // check-publishable-set.test.mjs:259-263 already says exactly that about its own copy, so two
-// artifacts disagreed and the source one was wrong. The licensing steward proved it by mutation: of
+// artifacts disagreed and the source one was wrong. A mutation run proved it: of
 // the nine constants whose docblocks claim a byte-exact anchor, eight red correctly when reworded
 // and this one alone stayed green.
 //
 // A claimed check that does not exist is worse than an absent one, because it stops the reader who
-// did the right thing. These are bytes cleared by the project's licensing steward, transcribed and
+// did the right thing. These are cleared bytes, transcribed and
 // never re-worded: if this assertion ever fails, the fix is to restore the message, NOT to update
-// the expectation. A reword is a fresh clearance and returns to the licensing steward.
+// the expectation. A reword is a change to cleared copy and needs review as one.
 test('WORKSPACE_GLOB_VIOLATION_MESSAGE is anchored byte-exact, as its docblock claims', () => {
   assert.equal(
     WORKSPACE_GLOB_VIOLATION_MESSAGE,
@@ -1271,10 +1285,10 @@ test('composePackageLicenseUnreadableMessage and composeManifestNotAnObjectMessa
   )
 })
 
-// A fix round (finding B): main()'s per-package LICENSE read (`content: exists ?
+// main()'s per-package LICENSE read (`content: exists ?
 // readFileSync(licensePath) : null`) sat two lines below the guarded root LICENSE read and
 // raw-crashed on a directory or an unreadable file, the exact "raw Node stack trace instead of a
-// designed message" class this fix exists to close. A reviewer's consult landed these two rows
+// designed message" class this fix exists to close. These two rows were landed
 // without saving/restoring console.error/process.exitCode; every sibling guard test in this file
 // does (see guard1/guard2 above). Without it, main()'s designed `process.exitCode = 1` return
 // leaks past the test into the file's overall run and the printed message goes to the real stderr
@@ -1335,11 +1349,10 @@ test('main(): a package LICENSE that is unreadable (EACCES) refuses, never an un
   }
 })
 
-// A fix round (finding C), widened per the licensing steward's determination
-// (consult 2 section 3): a manifest that parses to `null`, an array, or a string is not a
-// usable manifest object. `null` alone raw-crashes; the other shapes raise no exception at all
-// and instead ship a printed FALSE PASS over a directory never established to be a package,
-// which is worse in kind. The guard is keyed on "not a usable object", not on `null` alone.
+// A manifest that parses to `null`, an array, or a string is not
+// a usable manifest object. `null` alone raw-crashes; the other shapes raise no exception at all
+// and instead ship a printed FALSE PASS over a directory never established to be a package, which
+// is worse in kind. The guard is keyed on "not a usable object", not on `null` alone.
 test('main(): a package manifest that is valid JSON but not a usable object refuses, never an uncaught exception or a silent false pass', () => {
   const shapes = [
     { json: 'null', parsedAs: 'null' },
@@ -1398,7 +1411,8 @@ test('packages/tokens/LICENSE is the root LICENSE text verbatim followed by the 
 })
 
 // Same rationale as the tokens row above, for packages/core/LICENSE's own cleared block
-// (the CSS Syntax Level 3 credit for the directive tokenizer).
+// (the CSS Syntax Level 3 credit for the directive tokenizer, then the ECMA-426 and RFC 4648
+// credit for the source-map encoder).
 test('packages/core/LICENSE is the root LICENSE text verbatim followed by the cleared third-party section, byte for byte', () => {
   const rootLicense = readFileSync(path.join(ROOT, 'LICENSE'))
   const coreLicense = readFileSync(path.join(ROOT, 'packages', 'core', 'LICENSE'))
@@ -1407,5 +1421,5 @@ test('packages/core/LICENSE is the root LICENSE text verbatim followed by the cl
     'packages/core/LICENSE must begin with the root LICENSE text, byte for byte',
   )
   assert.equal(coreLicense.subarray(rootLicense.length).toString('utf8'), CORE_THIRD_PARTY_SECTION)
-  assert.equal(coreLicense.length, rootLicense.length + 1145)
+  assert.equal(coreLicense.length, rootLicense.length + 2130)
 })

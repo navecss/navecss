@@ -11,8 +11,7 @@
  *    R28's compiled-JS half).
  * 2. The ROUTING OBLIGATION exists as a checkable fact, not only as spec prose — the AC's own
  *    words: "this scenario asserts the ROUTING obligation exists, not that any instance has
- *    been cleared." Nothing here clears an instance; nothing here is the accessibility/licensing
- *    steward's to clear.
+ *    been cleared." Nothing here clears an instance, and nothing in this file is cleared copy.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -20,9 +19,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import {
+  CONSUMER_ARTIFACTS,
   findThirdPartyResidue,
   findUnattributedHeader,
-  R6_CONSUMER_ARTIFACTS,
   THIRD_PARTY_TEXT_ROUTING_POLICY,
 } from '../../src/theming/third-party-provenance.ts'
 
@@ -31,7 +30,7 @@ const DIST_DIR = path.resolve(HERE, '../../dist')
 
 describe('AC-token-build-30 covers: R30 (provenance — every R6 artifact traces to first-party source)', () => {
   it('no R6 artifact carries a byte traceable to a third-party source (style-dictionary residue, or an unattributed generated-file header)', () => {
-    const artifacts = R6_CONSUMER_ARTIFACTS.map((name) => ({
+    const artifacts = CONSUMER_ARTIFACTS.map((name) => ({
       path: name,
       content: readFileSync(path.join(DIST_DIR, name), 'utf8'),
     }))
@@ -54,7 +53,7 @@ describe('AC-token-build-30 covers: R30 (provenance — every R6 artifact traces
 describe('AC-token-build-30 covers: R30 (the routing obligation exists as a checkable fact)', () => {
   it('names the licence-review route, "before publication", and the three named shapes — as examples, never an enumeration', () => {
     const policy = THIRD_PARTY_TEXT_ROUTING_POLICY
-    // The persona name this constant used to carry (a reviewer's role label) compiled
+    // An internal name this constant used to carry compiled
     // into a published tarball under R8 (dist/lib preserving comments AND runtime string
     // literals), which no reader outside the project can resolve. Replaced with a
     // self-sufficient description of the same routing obligation.

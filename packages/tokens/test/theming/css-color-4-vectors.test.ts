@@ -8,8 +8,8 @@
  * recalled, derived here, or read back out of the implementation. The four primary rows are
  * WPT computed-value and reftest vectors (the CSS Color 4 test suite), fetched as exact bytes
  * at pinned commits and reproduced against the specification's own sample code
- * (`css-color-4/conversions.js`) on 2026-09-04, as part of the architecture reviewer's
- * handover; the digests and the reproduction script are recorded separately. The corroborating
+ * (`css-color-4/conversions.js`) on 2026-09-04; the digests and the reproduction
+ * script are recorded separately. The corroborating
  * rows are the Editor's Draft's own example blocks, printed at four significant figures, so
  * they are held to a looser bound and are NOT the fixture the criterion rests on.
  *
@@ -49,8 +49,7 @@ registerScratchCleanup()
  * and compares that reproduction to itself, a tighter, apples-to-apples comparison with no
  * browser variance to absorb. Confirmed exercisable rather than a bound nothing can hit:
  * perturbing one untested transcribed constant produces residuals of roughly 1e-3 to 1.4e-3,
- * an order of magnitude past `1e-4` (round-review mutation test, architecture and quality
- * review, 2026-09-04).
+ * an order of magnitude past `1e-4` (mutation test, 2026-09-04).
  *
  * Row 4's expectation (`color(display-p3 0 1 0)`) is sourced from a REFTEST's authored comment
  * (`oklch-008.html`, `rel=match`), not from a machine-checked computed-value assertion the way
@@ -200,7 +199,7 @@ describe('AC-token-build-19 covers: R19', () => {
     // pass this test outright. What actually discharges "transcribed, never hand-derived" is the
     // PRIMARY_ROWS/CORROBORATING_ROWS vector tests above: perturbing a single untested digit in
     // this module fails 6 of the 11 tests in this file, off by an order of magnitude past their
-    // tolerance (round-review mutation test, quality review, 2026-09-04). This test only pins the
+    // tolerance (mutation test, 2026-09-04). This test only pins the
     // citation, the digest, and two literals as a discoverability aid for a reader auditing
     // provenance by eye.
     const source = readFileSync(

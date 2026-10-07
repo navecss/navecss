@@ -186,8 +186,8 @@ test('the scan is BOUNDED to the heading’s own section, not to end of file', (
   assert.equal(runMain(fixtureRoot(restructured), BASELINE_CHAIN).code, 1)
 })
 
-// Phase 3 round-3 pinning rows. All three pin
-// properties of the round-2 extractor that nothing else in this file holds; the third is the
+// Pinning rows. All three pin
+// properties of the extractor that nothing else in this file holds; the third is the
 // VERIFIER for the malformed-item repair and was RED before it.
 
 test('the heading is anchored to a whole LINE, never matched inside a prose sentence', () => {
