@@ -90,7 +90,7 @@ export function materializeAdjacency(source: unknown): Adjacency[] {
 }
 
 /**
- * R22's minimum declaration set (the coverage list Cédric's ruling names as the
+ * R22's minimum declaration set (the coverage list the signed ruling names as the
  * signed table's referenced minimum, C5) — a representative, non-exhaustive instance of
  * every required category rather than the full slot cross-product, per N1. Materialized
  * from `tokens.json` at module load, not hand-typed.
@@ -103,7 +103,7 @@ export const ADJACENCY: readonly Adjacency[] = materializeAdjacency(loadShippedT
  * `assertNoOrphanedSemanticSlot` below would otherwise flag as undeclared. Every entry here
  * is a SETTLED position citing the clause it rests on. `content.disabled` and
  * `border.disabled` are the two exclusions the project's accessibility record declares for
- * itself (that record is reviewed and signed off by the project's accessibility steward) —
+ * itself (that record is reviewed and signed off) —
  * the home is that record, not R22, which only names exclusion CLASSES. **The two rest on different
  * exceptions and neither is unconditional**: both are worded over a component that is INACTIVE, and
  * an accessibility review established that `pointer-events: none` blocks pointer activation and
@@ -144,11 +144,10 @@ export const ADJACENCY_EXCLUSIONS: Readonly<Record<string, string>> = {
  *
  * `border.strong`: row 13 of the project's accessibility contrast-threshold table (part of
  * the reviewed and signed-off accessibility record) records the classification
- * itself as unmade — the accessibility steward's and Cédric's to make, not decided here or
- * by this list.
+ * itself as unmade, and it is not decided here or by this list.
  * `feedback.warning/success/info.foreground`: whether these families gain a standalone
  * foreground role paralleling `feedback.danger.foreground`'s R18c split is unresolved
- * (the project's token record lists it as open under that section, routed to the design lead).
+ * (the project's token record lists it as open under that section).
  */
 export const ADJACENCY_OPEN: Readonly<Record<string, string>> = {
   'border.strong':
@@ -182,7 +181,7 @@ export type MeasuredOpenSlots = readonly string[] & { readonly [measuredOpenSlot
  * open state disappearing into a silent pass.
  *
  * `excluded`: the same "visible count" property `open` already has, given to the exclusions
- * channel too, on the accessibility steward's own direction. Both escapes vanish into
+ * channel too. Both escapes vanish into
  * `continue` in the loop below without it, and the function's own docblock names that as the
  * standard for `open`; the exclusions channel has no reason to be held to a lower one. A key
  * added to `ADJACENCY_EXCLUSIONS` changes this list, so a caller that reports it turns a
@@ -264,11 +263,11 @@ export function assertNoOrphanedSemanticSlot(
       openSlots.push(slot)
       continue
     }
-    // Cleared by the project's accessibility steward after review. The prior text
-    // named ADJACENCY_EXCLUSIONS as an escape "with a citable reason" in the same breath as
-    // declaring and marking open, which reads as three equally-weighted options — and adding
-    // an exclusion is the one that silently drops a slot from R22's coverage. This wording
-    // describes both escape records without inviting a reader to take either.
+    // An earlier wording of this message named ADJACENCY_EXCLUSIONS as an escape "with a
+    // citable reason" in the same breath as declaring and marking open, which reads as three
+    // equally-weighted options — and adding an exclusion is the one that silently drops a slot
+    // from R22's coverage. This wording describes both escape records without inviting a reader
+    // to take either.
     throw new Error(
       `Adjacency coverage: the semantic slot "${slot}" carries no adjacency declaration, so ` +
         'no contrast pair in this build touches it at all. Declare its legal partners in ' +

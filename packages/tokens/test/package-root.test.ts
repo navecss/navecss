@@ -1,7 +1,7 @@
 /**
  * R8/R9: direct coverage for `src/package-root.ts`.
  *
- * A review found that `findPackageRoot` had no test in either direction. Its
+ * `findPackageRoot` had no test in either direction. Its
  * correctness across the two depths was demonstrated only transitively (`facade.test.ts`
  * exercises it from `src/`, `bin.test.ts` from `dist/lib/`), which does establish the
  * property the docblock's "no depth assumption baked in either way" claim needs — but the
@@ -61,7 +61,7 @@ describe('findPackageRoot resolves both real depths (AC-token-build-08 covers: R
 })
 
 describe('findPackageRoot walks past a package.json that is not this package', () => {
-  // A review probed this on a real scratch install: with a nearest-ancestor walk,
+  // Probed on a real scratch install: with a nearest-ancestor walk,
   // planting `dist/package.json` or `dist/lib/package.json` (the standard dual-publish
   // `{"type":"module"}` marker, which nothing in this repo forbids a later slice from adding)
   // took the compiled bin to exit 1 with a raw `ENOENT` for `<root>/dist/tokens.json` and a

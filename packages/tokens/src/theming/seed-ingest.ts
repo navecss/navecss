@@ -17,7 +17,7 @@
  * source-text guard in the test), so a refusal can never itself have produced or printed
  * anything; `composeConsumerBuildFromRawSeeds` ingests both colour seeds BEFORE calling
  * `composeConsumerBuild`, the same ordering discipline `facade.ts`'s `build` applies to R16's
- * manifest check (from an earlier review round: this sentence used to say it
+ * manifest check (this sentence used to say it
  * mirrored `consumer-build.ts`'s own "validate before generate" ordering, and the commit that
  * moved the manifest check to `facade.build` deleted exactly that mechanism —
  * `consumer-build.ts`'s header now says in terms that it does NOT validate against the
@@ -60,7 +60,7 @@ function isContextDependentForm(input: string): boolean {
   // A reference resolves at browser time wherever it sits in the input, so these match
   // ANYWHERE and not only in the leading position: `rgb(var(--r) 0 0)` is as
   // context-dependent as `var(--brand)`. Anchoring them let a nested reference fall
-  // through to the numeric parsers as NaN (caught in an earlier review round).
+  // through to the numeric parsers as NaN.
   if (/\bcurrentcolor\b/i.test(input)) return true
   if (/\bvar\(/i.test(input)) return true
   // Relative colour syntax: `<function>(from ...)`, in any accepted or unaccepted function.
@@ -96,7 +96,7 @@ function contextDependentDetail(input: string): string {
  * Hex-shaped input (leading `#`) that isn't one of the four accepted digit counts, or whose
  * digits aren't hex at all. Hex IS one of R5's accepted forms, so this is a `channel-value`
  * refusal, never `form-acceptance` — mirroring the function forms' own bad-channel handling,
- * which the round-2 act fix reached but this hex branch did not.
+ * which the earlier act fix reached but this hex branch did not.
  */
 function badHexRefusal(raw: string, input: string): SeedIngestRefusal {
   const body = input.slice(1)
@@ -202,7 +202,7 @@ export interface RawConsumerBuildOptions extends Omit<
  * check, which is where that check now lives (`consumer-build.ts` no
  * longer validates against the manifest at all, so this docblock no longer points there).
  *
- * NO PRODUCTION CALLER (raised in an earlier review round). This sentence used to
+ * NO PRODUCTION CALLER. This sentence used to
  * read "R1's eventual façade calls this or something shaped like it", in the future tense.
  * The façade exists: `facade.ts`'s `build` calls `parseSeed` and `composeConsumerBuild`
  * directly rather than going through this wrapper, so the only remaining exercisers are the

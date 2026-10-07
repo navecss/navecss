@@ -18,8 +18,8 @@
  * writes doc comments into a consumer's generated `tokens.d.ts`, e.g. "The DTCG token set as
  * a typed const object"), which a blanket dist-tree scan cannot distinguish from a real
  * source comment surviving compilation; (2) `dist/lib` ALSO carries pre-existing,
- * separately-tracked runtime-string-literal brain-id residuals still awaiting the project's
- * licensing steward's review (e.g. `adjacency.ts`'s `SHIPPED_SURFACE_PROVENANCE`),
+ * separately-tracked runtime-string-literal brain-id residuals still awaiting a licensing
+ * review (e.g. `adjacency.ts`'s `SHIPPED_SURFACE_PROVENANCE`),
  * which are a DIFFERENT vector `removeComments` was never meant to close and would make this
  * test permanently red for a reason unrelated to what it exists to pin. A synthetic,
  * self-contained probe has neither confound.

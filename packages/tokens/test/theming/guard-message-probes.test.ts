@@ -1,5 +1,5 @@
 /**
- * Review blue row 2: `assertNoticeIsEmitted`'s messages were absent
+ * `assertNoticeIsEmitted`'s messages were absent
  * from `ACCESSIBILITY_GUARD_MESSAGE_PROBES`, and the reason SPLIT. Three were merely unadded.
  * The fourth is structurally excluded — it interpolates `findConformanceFraming`'s own reason,
  * which always quotes the forbidden phrase, so probing it reports an R36 violation against the
@@ -36,8 +36,8 @@ const NOTICE_PROBES: readonly { label: string; opening: string }[] = [
   },
   {
     label: "the emitted-notice guard's not-a-self-contained-comment refusal",
-    // Widened through the disjunct the accessibility steward's
-    // clearance added ("or sits inside a comment opened on an earlier line") — a bare
+    // Widened through the disjunct the cleared wording
+    // added ("or sits inside a comment opened on an earlier line") — a bare
     // `the`→`a` article fix here would turn this anchor green while pinning nothing about
     // that clause, since the old anchor stopped at the comma right before it.
     opening:
@@ -89,7 +89,7 @@ describe('AC-theming-42 covers: R36 — the structural exclusion is measured, no
   })
 
   it("the carve-out entry's composed comment line pins the exact substring TINT_SEED_COMMENT_STEM.slice(3) produces, not merely something that trips the lint", () => {
-    // A prior quality review (round 1 §8): TINT_SEED_COMMENT_STEM.slice(3) was an untested magic
+    // TINT_SEED_COMMENT_STEM.slice(3) was an untested magic
     // number. Changing the stem's shape at its own definition (e.g. losing one character of its
     // opening delimiter) silently corrupts this composed substring, and the two tests above stay
     // green regardless, because findConformanceFraming only needs to find "meets" somewhere on the

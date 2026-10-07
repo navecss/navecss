@@ -143,7 +143,7 @@ describe('AC-token-build-02 covers: R2', () => {
   })
 
   it("the compiled facade.d.ts's TokensBuildOptions interface declares EXACTLY R3's members — no 'env', no 'distDir', and no unanticipated sixth field either", () => {
-    // A review found this was two negative matches (`env`, `distDir`) plus four
+    // This was two negative matches (`env`, `distDir`) plus four
     // presence checks, which is a denylist wearing a whitelist's words. R2/R3's criterion is
     // "exactly the members this spec's R3 enumerates", and a denylist passes every member
     // nobody thought to name in advance. The member set is parsed and compared as a SET
@@ -160,7 +160,7 @@ describe('AC-token-build-02 covers: R2', () => {
     expect(declaredMembersOf('TokensValidateOptions')).toEqual(['source'])
   })
 
-  // A review round found `formatVersionSkewFact` re-exported here with no test pinning the
+  // `formatVersionSkewFact` was re-exported here with no test pinning the
   // module's runtime export set — an incidental public export could slip in (or a real one
   // drop out) with nothing here to catch it. Read directly from `../src/facade.ts` (rather
   // than `dist/lib/facade.js`) so the pin holds before a build step runs, matching this
@@ -319,8 +319,8 @@ describe('AC-token-build-16 covers: R16', () => {
     expect((caught as InstanceType<typeof MissingContractTokensError>).missing).toEqual([
       '--nave-spacing-content-md',
     ])
-    // A review round (finding F13a) found that the `not.toMatch(/Slot not found for
-    // contrast check/)` assertion that used to sit here is removed. That string is thrown
+    // The `not.toMatch(/Slot not found for contrast check/)` assertion that used to sit here
+    // is removed. That string is thrown
     // only by `findSlot` in `theming/contrast.ts`, which looks up the theming pipeline's own
     // resolved slots — a pure function of the seeds, never of the consumer's source — so
     // after the relocation to `facade.build` no source this test can construct reaches it.
@@ -342,12 +342,11 @@ describe('AC-token-build-16 covers: R16', () => {
   })
 
   /**
-   * A review round (tracked as F8) found that a prior ask said "computing the union first is
-   * what preserves R16's ordering clause rather than trading it away — nothing generates before
-   * the answer is known", and nothing held it: moving the whole validation block to sit AFTER
-   * both compositions was measured 522/522 green. The R23 half (nothing
-   * left on disk) IS held, by `expect(existsSync(outDir)).toBe(false)` above; "before either
-   * half composes" is a strictly stronger, separate property and needs its own assertion.
+   * Computing the union first is what preserves R16's ordering clause rather than trading it
+   * away (nothing generates before the answer is known), and nothing held it: moving the whole
+   * validation block to sit AFTER both compositions was measured 522/522 green. The R23 half
+   * (nothing left on disk) IS held, by `expect(existsSync(outDir)).toBe(false)` above; "before
+   * either half composes" is a strictly stronger, separate property and needs its own assertion.
    *
    * Both directions live in ONE test on purpose. The refusal case alone would pass just as
    * happily against a spy that never records anything, so the same spies are driven through
@@ -721,11 +720,11 @@ describe('AC-token-build-14 covers: R14 (facade wiring — the named gap slice 1
   })
 
   /**
-   * The quality reviewer refuted the structural test's own argument ("no PARAMETER could
-   * ever name a consumer directory") with a mutation using no parameter at all —
+   * The structural test's own argument ("no PARAMETER could ever name a consumer directory")
+   * does not hold against a mutation that uses no parameter at all:
    * `readManifest()` preferring `path.join(process.cwd(), 'out', 'core-contract.json')` when
-   * present — and the suite stayed 454/454 green. This is the behavioural test that mutation
-   * demanded: a decoy manifest sitting exactly where that mutation would read it, with a
+   * present left the suite 454/454 green. This is the behavioural test that mutation
+   * demands: a decoy manifest sitting exactly where that mutation would read it, with a
    * declared format version this build does not understand, so ANY read of it is loudly
    * visible in the report.
    */
@@ -760,7 +759,7 @@ describe('AC-token-build-14 covers: R14 (facade wiring — the named gap slice 1
 })
 
 describe('AC-token-build-35 covers: R35 (in-process: resolvedSeed is the RESOLVED value the pipeline built from)', () => {
-  // A review found that `resolvedSeed` returned `options.seed` verbatim, so it was the
+  // `resolvedSeed` used to return `options.seed` verbatim, so it was the
   // raw input under a name (and a `bin.ts` docblock) that both promise the resolved one. The
   // property asserted here is the one the raw input cannot satisfy: two DIFFERENT spellings
   // of the SAME colour resolve to the SAME value. Deliberately not `formatOklch(ingestSeed(x))`
@@ -933,14 +932,13 @@ describe("a colour on its own space's neutral axis selects the achromatic branch
 })
 
 /**
- * A quality review (finding 3, a PINNING test — green at HEAD by design) noted that
- * `facade.ts` carries its own module-private `const CONSUMER_LAYER = 'tokens.presets'` for
- * the DTCG-reader half (`composeDtcgOutputs`) rather than importing `consumer-build.ts`'s
- * exported one, while `composeDtcgOutputs`'s own docblock says both halves target the SAME
- * R10 layer. They agree today — nothing pins it. facade.ts's own constant is not exported, so
- * there is no binding to import and compare directly; this reads the REAL merged tokens.css
- * `build()` writes and asserts every `@layer` block it contains — one from each half — names
- * the SAME layer as the exported `CONSUMER_LAYER`.
+ * This is a PINNING test (green at HEAD by design). `facade.ts` carries its own module-private
+ * `const CONSUMER_LAYER = 'tokens.presets'` for the DTCG-reader half (`composeDtcgOutputs`) rather
+ * than importing `consumer-build.ts`'s exported one, while `composeDtcgOutputs`'s own docblock says
+ * both halves target the SAME R10 layer. They agree today — nothing pins it. facade.ts's own
+ * constant is not exported, so there is no binding to import and compare directly; this reads the
+ * REAL merged tokens.css `build()` writes and asserts every `@layer` block it contains — one from
+ * each half — names the SAME layer as the exported `CONSUMER_LAYER`.
  */
 describe('facade.ts and consumer-build.ts agree on the R10 consumer layer', () => {
   it("every @layer block in the merged tokens.css — the DTCG half's and the theming half's — names the exported CONSUMER_LAYER, not merely a literal that happens to match it today", async () => {

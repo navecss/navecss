@@ -2,8 +2,8 @@
  * Regression guard: the reset formerly removed the
  * user-agent focus indicator document-wide (`:focus { outline: none }`),
  * unconditionally, while only elements carrying the opt-in `focusRing` atom
- * got a `:focus-visible` replacement. Cédric ruled the rule deleted outright
- * with no replacement shipped — the reset falls back to user-agent focus
+ * got a `:focus-visible` replacement. The rule was deleted outright
+ * with no replacement shipped: the reset falls back to user-agent focus
  * indicators.
  *
  * This defect was invisible for the life of the project and was found by
@@ -16,8 +16,8 @@
  * ruling ("no rule strips outline"); the other half is "and nothing
  * replaces it". A global `:focus-visible { outline: ...; outline-offset: ...
  * }` fallback shipped in reset.css despite never removing anything, so the
- * two tests above both passed while the ruling's second half did not hold,
- * caught by the project's accessibility steward. A ruling whose content is "and we ship nothing
+ * two tests above both passed while the ruling's second half did not hold.
+ * A ruling whose content is "and we ship nothing
  * here" needs an assertion of ABSENCE, not just of non-removal — the third
  * test below is that assertion, against the class of author-styled
  * document-scope focus indicators, not the one instance found.
@@ -66,7 +66,7 @@ function tokensOf(text: string): string[] {
  * The value with every function call's arguments removed, to a fixed point. Without this a
  * zero CHANNEL of modern space-separated colour syntax reads as a zero outline WIDTH, so
  * `outline: 2px solid rgb(0 0 0)` and the house `light-dark(oklch(...), oklch(...))` idiom are
- * fully visible outlines classified as removals (found in review).
+ * fully visible outlines classified as removals.
  */
 function topLevel(value: string): string {
   let out = value

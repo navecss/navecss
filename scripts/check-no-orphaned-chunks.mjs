@@ -151,9 +151,9 @@ import { execFileSync } from 'node:child_process'
  * home -- wiring this gate differently there is a change to the root manifest, outside the scope
  * this was fixed under. So the entry half stays open, and this is why.
  *
- * AND THE DISPOSITION IS A RULING, NOT THIS FILE'S ENGINEERING CALL. Everything above is
- * measurement, which is what the decision RESTS ON rather than what made it: the maintainer,
- * reviewing the change that produced this gate, ruled that the entry half stays open. A reader
+ * AND THE DISPOSITION IS A DECISION, NOT THIS FILE'S ENGINEERING CALL. Everything above is
+ * measurement, which is what the decision RESTS ON rather than what made it: the decision is
+ * that the entry half stays open. A reader
  * who finds the reasoning above unpersuasive is therefore not looking at an argument still in
  * progress and should not reopen it here.
  */

@@ -2,7 +2,7 @@
  * G1 theming pipeline build step — colour is generated, not hand-authored, so it runs
  * outside the DTCG reader's alias resolution (R9, R11, R37). Composes the semantic colour
  * layer onto the CSS the reader already built and composes the generated artifacts beside
- * it. Kept out of `build.ts`, at an architecture reviewer's request, so that file stays a
+ * it. Kept out of `build.ts` so that file stays a
  * thin caller.
  *
  * Two properties this file owns, and both are structural rather than incidental.
@@ -121,7 +121,7 @@ function runSourceGuards(tokensSourcePaths: readonly string[]): OrphanCheckResul
   // Both description surfaces, not just the narrower one: SLOT_DESCRIPTIONS is the resolved
   // semantic-slot layer, and tokens.json is the DTCG source itself, read fresh from disk
   // (mirroring CORE_SOURCE_PATHS's own R27 scan).
-  // One map per source path (a quality-review finding, F3): merging would let a later file
+  // One map per source path: merging would let a later file
   // silently overwrite an earlier file's entry at a colliding dotted path, hiding that file's
   // own violation.
   assertDescriptionsAreClean(
@@ -203,12 +203,10 @@ export function composeThemingOutputs(options: ThemingBuildOptions = {}): Themin
 
   const { css } = emitCss(result)
 
-  // R20/R34: the presence guarantee assertNoticeIsClean does not provide (reviewed and
-  // cleared by the project's accessibility steward) — each notice must actually reach the
-  // composed CSS, not only pass the source-level framing check above. R34's notice (also
-  // reviewed and cleared by the accessibility steward) had the identical gap: a build that
-  // imported it and forgot to emit it, or emitted a truncated copy, would have passed
-  // runSourceGuards() cleanly.
+  // R20/R34: the presence guarantee assertNoticeIsClean does not provide. Each notice must
+  // actually reach the composed CSS, not only pass the source-level framing check above. R34's
+  // notice had the identical gap: a build that imported it and forgot to emit it, or emitted a
+  // truncated copy, would have passed runSourceGuards() cleanly.
   assertNoticeIsEmitted(css, FEEDBACK_SHARED_IDENTITY_NOTICE, 'Feedback notice')
   assertNoticeIsEmitted(css, RETHEMING_NOTICE, 'Retheming notice')
 

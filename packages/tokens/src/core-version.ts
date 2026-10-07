@@ -22,7 +22,7 @@ import { checkManifestVersionSkew } from './theming/core-contract.ts'
  * example), so its version cannot be read via the mandated route at all. `unreadable` — the
  * installation itself is broken: the export resolved but the file could not be read or
  * parsed or carries no `version` field, OR the resolver found `@navecss/core` and could not
- * use it at all (found in quality review; R14's precision 3 sends a broken installation to
+ * use it at all (R14's precision 3 sends a broken installation to
  * exit `2`, and that is the status which carries it).
  */
 export type CoreVersionProbe =
@@ -60,7 +60,7 @@ async function resolveInstalledCoreVersion(): Promise<CoreVersionProbe> {
   try {
     resolved = import.meta.resolve('@navecss/core/package.json')
   } catch (error) {
-    // A later quality-review pass found that this used to sniff ONE code and drop every other
+    // This used to sniff ONE code and drop every other
     // resolver failure into `not-installed` — the one state R14's precision 1 sends to exit
     // `0` with the printed sentence "No installed @navecss/core was found". Node throws at
     // least two further codes for a core that IS installed and IS broken

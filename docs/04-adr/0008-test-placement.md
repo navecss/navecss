@@ -85,6 +85,8 @@ separates them. The Node-environment Vitest configuration excludes
 `**/*.browser.test.ts` by that suffix, so a browser test can never run under
 Node wherever it sits, and the browser configuration includes the same suffix.
 
+- **Correction (2026-10-04):** browser tests that start a Vite dev server or preview in Node and drive Chromium from there (`packages/core/test/browser/driven/`) keep the suffix and run under their own configuration, `vitest.chromium.config.ts`; the in-page browser configuration excludes that directory. Both run under `test:browser`.
+
 **4. Fixtures never live in `src/`.** A unit test builds its data inline where
 it can. Fixture files go under `test/fixtures/` (and browser fixtures under
 `test/browser/fixtures/`). Generated fixtures stay under

@@ -5,7 +5,7 @@
 import type { ExtendSource } from './vite-extend.ts'
 import type { ResolvedUsedOptions } from './vite-options.ts'
 import type { RootState } from './vite-state.ts'
-import type { ResolvedConfigLike } from './vite-types.ts'
+import type { LoggerLike, ResolvedConfigLike } from './vite-types.ts'
 
 import { keptAtoms } from './vite-options.ts'
 import { stateFor } from './vite-state.ts'
@@ -33,6 +33,14 @@ export interface UsedContext {
    * build has no other invocation to hand its atoms to or take them from.
    */
   inProcess: boolean
+  /**
+   * Whether the build is a library build (`build.lib`), whose pages are its users'.
+   */
+  isLibrary: boolean
+  /**
+   * Vite's logger, which the dev server's messages go through.
+   */
+  logger: LoggerLike | undefined
   state: RootState
 }
 
@@ -50,6 +58,8 @@ export function createUsedContext(options: ResolvedUsedOptions, extend: ExtendSo
     cacheDir: '',
     buildSourcemap: false,
     inProcess: false,
+    isLibrary: false,
+    logger: undefined,
     state: stateFor('', {}),
   }
 }
@@ -63,6 +73,8 @@ export function configureUsed(context: UsedContext, config: ResolvedConfigLike):
   context.cacheDir = config.cacheDir ?? ''
   context.buildSourcemap = Boolean(config.build?.sourcemap)
   context.inProcess = config.builder !== undefined
+  context.isLibrary = Boolean(config.build?.lib)
+  context.logger = config.logger
   context.state = stateFor(config.root, config)
 }
 

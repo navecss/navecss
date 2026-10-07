@@ -16,15 +16,15 @@ function seeds(): { danger: typeof DANGER; declaredTintHue: number; primary: typ
 describe('AC-theming-22 covers: R20 obligation 1: the feedback shared-identity notice ships as an emitted comment', () => {
   it('the exact cleared notice text appears in the emitted CSS', () => {
     const emitted = emitCss(runPipeline(seeds()))
-    // This literal is a DELIBERATE independent transcription of the accessibility
-    // steward-cleared FEEDBACK_SHARED_IDENTITY_NOTICE, typed here by hand rather
+    // This literal is a DELIBERATE independent transcription of the
+    // cleared FEEDBACK_SHARED_IDENTITY_NOTICE, typed here by hand rather
     // than imported. Do not replace it with `import { FEEDBACK_SHARED_IDENTITY_NOTICE }` —
     // that would make this assertion compare the constant to itself, a content tautology
     // that deletes the only guard against an unreviewed reword: `assertNoticeIsEmitted`
     // and `emit.ts` both read the same binding, so a reworded constant passes them
-    // together. A red here means the constant was reworded; the fix is to return the
-    // reworded constant to that steward per its clearance condition 2 — never to update this
-    // literal to match.
+    // together. A red here means the constant was reworded; the fix is to restore the
+    // constant's wording, or to put the new wording through review as a change to cleared
+    // copy and update this literal only once it is cleared, never just to make it match.
     expect(emitted.css).toContain(
       'warning, success and info, and their -foreground variants, resolve to one shared ' +
         'value here; only danger differs. Colour alone therefore cannot tell those three ' +

@@ -85,7 +85,7 @@ export {
 // `TokensBuildResult.seedNormalization` is typed `SeedNormalization`; a consumer needs the
 // type exported to name it, the same reasoning `PerStepOverrides` is exported for.
 export type { SeedNormalization } from './theming/color-math.ts'
-// Ruled by an architecture review: `overrides` had no importable type before this — a
+// `overrides` had no importable type before this: a
 // TypeScript consumer could not `satisfies` their own override file against anything.
 export type { PerStepOverrides } from './theming/pipeline.ts'
 export { SeedIngestRefusal } from './theming/seed-ingest.ts'

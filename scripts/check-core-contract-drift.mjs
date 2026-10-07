@@ -9,7 +9,7 @@
  * it against anything: the machinery was unit-tested against synthetic
  * inputs only, so a token added to or removed from core's real usage
  * without the recorded contract being regenerated would ship uncaught.
- * A quality-review read of the AC: this is a genuine build/CI gap,
+ * Read against the AC: this is a genuine build/CI gap,
  * not only a wiring one — the drift check must be symmetric (added OR
  * removed), which is why this script uses `diffContract`, not
  * `validateAgainstManifest` (R28's deliberately one-directional

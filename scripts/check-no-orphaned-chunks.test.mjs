@@ -588,7 +588,7 @@ test('main(rootDir): a package with no dist/ at all is skipped, not an error', (
   }
 })
 
-// ROW (F4): the measured nested-entry tree from the round-1 review. Two entry files under
+// ROW (F4): the measured nested-entry tree. Two entry files under
 // `dist/theming/` both import one chunk in `dist/`. A non-recursive read cannot see the entries
 // and a `./`-only specifier pattern cannot express the edge, so the check reds on a build that is
 // entirely lawful, and its own printed remedy ("delete dist/ and rebuild") reproduces it exactly.
@@ -799,7 +799,7 @@ test('main(rootDir): CONTROL, a real orphan beside an imports root is still repo
 })
 
 // ---------------------------------------------------------------------------------------------
-// ROWS (from a terminal read). WHERE NODE SUBSTITUTES `*`, AND WHERE IT DOES NOT.
+// ROWS. WHERE NODE SUBSTITUTES `*`, AND WHERE IT DOES NOT.
 // All three shapes below are fail-OPEN: the gate manufactured a root out of a subpath that does
 // not resolve, the root certified a real orphan as reachable, and the check exited 0 over a
 // tarball still carrying the stale byte. Each claim about the resolver was measured against Node
@@ -887,7 +887,7 @@ test('main(rootDir): a `*` in main is a literal filename character, not a wildca
   }
 })
 
-// ROW (🔵, a review finding tracked in the principal engineer's table): pinned as CORRECT, not a
+// Pinned as CORRECT, not a
 // defect. A `main` field shaped like `"./dist/x.js/."` now normalizes to `dist/x.js` and roots
 // it, which it did not before roots were derived from declared entries at all (any non-chunk
 // `.js` on disk was already a root, so the manifest's exact shape never mattered). Measured

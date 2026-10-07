@@ -12,4 +12,4 @@
 - **The CLI registry** — the component-registry format and the `navecss add` flow.
 - **CI/CD and release topology** — the Turborepo graph, Changesets, and the publish flow.
 
-A higher-level architecture map lives outside this repo, in the project's own internal reference; these pages hold the detail and are its canonical reference targets.
+Where a subsystem's design rests on an architectural decision, the reasoning is in that decision's [ADR](../04-adr/index.md), and the page here links it rather than restating it.

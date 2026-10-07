@@ -127,7 +127,7 @@ function recordedProducerOf(manifest: CoreContractManifest): string {
  * actually checked once a name can opt out of the failable set as SUPPLIED. Where that checkable
  * set is EMPTY, the line says so in terms rather than printing a number that reads as a check
  * that passed. A `.css` source always has an empty `supplied` set (`splitMissingBySupply`), so
- * this reduces to the earlier behaviour there unchanged. A later product-review follow-up: the
+ * this reduces to the earlier behaviour there unchanged. The
  * empty-case sentence also carries the SUPPLIED premise in the same sentence (mirroring
  * `formatSuppliedLines`'s own parenthetical), because the reader who reaches this exact line
  * without using `navecss-tokens build` gets the wrong impression from the naming alone —
@@ -164,14 +164,13 @@ function formatSuccessLine(
  * name plus provenance. Split out of `formatValidateReport` to keep that function's own
  * complexity within this file's lint budget.
  *
- * A later quality-review pass, product-reviewed 2026-09-14 (R17 property 3's SECOND dated
- * precision): R14's precision 1 constrains the PROVENANCE SENTENCE, and that constraint
- * binds EVERY outcome of the run rather than the one branch beside which it was measured —
- * property 3 has read "on SUCCESS as well as on failure" since the day it was written. This
- * line used to print a bare `Checked against @navecss/core@0.1.0 (manifest format 1).` on a
- * machine with no `@navecss/core` at all: the stronger claim of the two, in the ACTIVE VOICE,
- * beside a list its reader is about to ACT on by authoring the named tokens. In R14's state 1
- * it now states the recorded producer AS RECORDED and carries the success line's own
+ * R17 property 3's SECOND dated precision (2026-09-14): R14's precision 1 constrains the PROVENANCE
+ * SENTENCE, and that constraint binds EVERY outcome of the run rather than the one branch beside
+ * which it was measured — property 3 has read "on SUCCESS as well as on failure" since the day it
+ * was written. This line used to print a bare `Checked against @navecss/core@0.1.0 (manifest format
+ * 1).` on a machine with no `@navecss/core` at all: the stronger claim of the two, in the ACTIVE
+ * VOICE, beside a list its reader is about to ACT on by authoring the named tokens. In R14's state
+ * 1 it now states the recorded producer AS RECORDED and carries the success line's own
  * disclaimer, transcribed rather than re-worded (both come from the shared constants above,
  * so one fact cannot acquire two voices here). States 2 and 3 never reach this function —
  * each returns a single named refusal INSTEAD of a name-set answer — and the `resolved` state

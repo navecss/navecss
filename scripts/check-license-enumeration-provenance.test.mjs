@@ -126,9 +126,9 @@ test('the real license-policy.json entries no longer carry signedBy/finding', ()
 })
 
 // The three prose strings in license-policy.json are CLEARED BYTES, transcribed verbatim from
-// the project's licensing steward's clearance turn taken on this branch, not
-// drafted here. A re-wording of any of them is a fresh clearance turn; a re-wrapping of the
-// same bytes is not. Nothing anchored these byte-exact before, so a later tidy could re-word a
+// the clearance taken on this branch, not drafted here. A re-wording of any of them needs a
+// fresh clearance; a re-wrapping of the same bytes does not. Nothing anchored these byte-exact
+// before, so a later tidy could re-word a
 // cleared licensing-position string with every gate still green — this is that anchor, and it
 // is deliberately an equality check rather than a pattern match.
 test('the real license-policy.json prose strings equal the cleared bytes', () => {
@@ -177,7 +177,7 @@ test('an entry with no "id" key at all is a violation (RED)', () => {
   assert.match(violations[0].reason, /missing or empty "id"/)
 })
 
-// Per the licensing steward's ruling: `id` gets no SPDX-shape check, deliberately — the one
+// `id` gets no SPDX-shape check, deliberately — the one
 // warranted check is that `id` equals its own trimmed form, since classifyBucketB
 // (check-license-allowlist.mjs) matches it with no trimming on the entry side. Unaffected by
 // the later reshaping that removed signedBy/finding, never this check.
@@ -267,8 +267,8 @@ test('the duplicate message identifies both entries by POSITION (RED)', () => {
   assert.match(violations[0].reason, /index 1/)
 })
 
-// A prior review round (consulting the licensing steward) named this reason as one whose
-// docblock made no byte-exact claim, without measuring it. Measured here: every prior assertion
+// This reason's docblock made no byte-exact claim, and none was
+// measured. Measured here: every prior assertion
 // on this reason matched only a FRAGMENT (/duplicate "id"/, /index 0/, /index 1/), which is
 // what let the STATIC words around those fragments drift with the whole suite staying green —
 // rewording "each id must appear at most once in prodPermissive" to a paraphrase left every
@@ -322,10 +322,10 @@ test('an array entry gets the designed "not an object" message, not the missing-
   assert.doesNotMatch(violations[0].reason, /missing or empty/)
 })
 
-// --- The printed strings, anchored byte-exact (cleared by the project's licensing steward) ---
+// --- The printed strings, anchored byte-exact (cleared bytes) ---
 
 // Three of the four strings this gate can print were rewritten by that reshape, and the
-// clearance turn returned cleared bytes for all three. Nothing anchored them,
+// clearance supplied cleared bytes for all three. Nothing anchored them,
 // so a later re-wording would have shipped green and silent; these are equality checks, not
 // pattern matches, for exactly that reason. The header and the guidance are read from the
 // exported constants rather than captured off a red run: a red run proves the composition,
@@ -342,11 +342,11 @@ test('the exported header and guidance constants equal the cleared bytes', () =>
 })
 
 // Neither sentence of this guidance is pre-existing branch text: the text that reshape
-// replaced named per-entry provenance fields and routed to a named persona, and both sentences that
-// stand here were drafted in a clearance turn rather than written at the call site. The SECOND
-// is the one drafted in the clearance turn cited above, unchanged since. The FIRST was drafted
-// at an earlier review turn, which cleared the branch's own wording on the licensing axis and
-// then replaced it: "untrimmed-safe" was a coinage that did not state the rule it was enforcing.
+// replaced named per-entry provenance fields, and both sentences that
+// stand here were drafted during a clearance rather than written at the call site. The SECOND
+// is the one drafted in the clearance cited above, unchanged since. The FIRST was drafted
+// earlier, when the branch's own wording was cleared and then replaced: "untrimmed-safe" was a
+// coinage that did not state the rule it was enforcing.
 // Anchored separately so the boundary stays visible to whoever reads this next, and so a
 // re-wording of either half cannot hide inside a full-string diff of the whole constant.
 test('the guidance ends with the cleared second sentence, byte-exact', () => {
@@ -376,8 +376,8 @@ test('the non-object entry reason equals the cleared bytes', () => {
 // is in the source text, so that is what this reads: each cleared string must appear exactly
 // once in the module, at its own definition.
 //
-// The phrase counted below is searched for in a SPLICED copy of the source, not the raw text
-// (found during a round-2 verification read): a cleared constant's own literal can be
+// The phrase counted below is searched for in a SPLICED copy of the source, not the raw text:
+// a cleared constant's own literal can be
 // re-wrapped across a `+` boundary that happens to split the very phrase this test counts,
 // which would report zero copies of a phrase that still runs byte-identical — a false red on a
 // faithful re-wrap, not a real duplicate. Splicing every `'...' + '...'`/`"..." + "..."` join
@@ -402,8 +402,8 @@ test('the gate module carries exactly one copy of each cleared printed string', 
   assert.equal(source.includes('PROVENANCE_FAILURE_GUIDANCE'), true)
 })
 
-// The invalid-JSON path's second sentence is cleared bytes too, cleared by the project's
-// licensing steward. It is the same public route cleared for the two sibling sites in the
+// The invalid-JSON path's second sentence is cleared bytes too. It is the same public route
+// cleared for the two sibling sites in the
 // allow-list gate, so four copies of one sentence converge instead of diverging — which holds
 // only for as long as nothing re-words one of them, and that is what this anchors.
 test('the exported invalid-JSON guidance equals the cleared bytes', () => {
@@ -575,8 +575,8 @@ for (const entryIds of [['a'], ['a', 'b', 'c', 'd', 'e']]) {
       // This pins the licensing gate's cleared pass-line sentence at a SECOND test site: `:488`
       // above anchors the suffix only (pre-existing), this one anchors the full sentence
       // including its count. A future cleared rewording of that sentence now updates both. This
-      // test asserts an existing string and rewords nothing, so no clearance turn is owed by it
-      // (row 1's own note, this file's docblock above).
+      // test asserts an existing string and rewords nothing, so it needs no fresh clearance
+      // (see this file's docblock above).
       assert.ok(
         (result.stdout ?? '').includes(
           `License enumeration provenance gate: ${entryIds.length} prodPermissive entr(y/ies), all carry a well-formed id.`,

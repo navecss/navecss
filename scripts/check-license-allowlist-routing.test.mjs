@@ -3,8 +3,7 @@
  * unit tests (`check-license-allowlist.test.mjs`, `packages/tokens/test/
  * license-allowlist-gate.test.ts`) assert the classifier's verdicts on constructed licence
  * STRINGS. Neither asserts that `pnpm licenses list --prod` actually ROUTES a real prod
- * dependency's licence into that classifier — the property the licensing steward and the
- * quality reviewer each proved
+ * dependency's licence into that classifier — the property two separate reviews each proved
  * by hand by adding a real
  * dependency to this workspace and observing the gate fail closed, then reverting.
  *

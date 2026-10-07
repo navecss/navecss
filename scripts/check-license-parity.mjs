@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Tripwire for the project's published licensing requirement.
+ * Tripwire for one of the project's licensing requirements.
  *
- * Condition 2 of the published `licensing` overview §2, signed off by the
- * project's maintainer, requires each published tarball to carry its own
- * licence text, and names its remedy in a preference order: "a copy, or a
- * build step, or a verified-packing symlink, in that order of preference".
+ * That requirement, signed off by the project's maintainer and called
+ * Condition 2 below, is that each published tarball carries its own licence
+ * text. It names its remedy in a preference order: "a copy, or a build step,
+ * or a verified-packing symlink, in that order of preference".
  * The project took the first — `packages/{tokens,core,bridge,cli}/LICENSE`
  * are copies of the root `LICENSE` — and nothing before this script asserted
  * the copies actually still MATCH the root they were taken from.
@@ -15,8 +15,8 @@
  * that makes Condition 2 true was held by whoever remembered to update all
  * five files together, and it had already been exercised once by hand: an
  * earlier review named `LICENSE` and the copyright line turned out to
- * live in five files, caught by the developer-relations reviewer running the
- * class rather than the list. This script converts "whoever remembers" into
+ * live in five files, caught by checking the whole class rather than the
+ * list. This script converts "whoever remembers" into
  * an assertion.
  *
  * The package set is every directory under `packages/` that carries a
@@ -65,15 +65,15 @@ export function isNonPrivate(manifest) {
 
 /**
  * Package directory names cleared to carry a third-party attribution section AFTER the
- * root licence text, per the licensing steward's ruling: "The
- * exception is per-package and named, not a general relaxation. A blanket startsWith
- * over all four packages would let any package append anything for ever with the gate
- * green, which trades a real assertion for a convenience." `tokens` carries that ruling's
- * block, appended to packages/tokens/LICENSE after the MIT
- * text. Adding a package here is a review change landing a block cleared by the licensing
- * steward, never a test fixup for a gate that started failing. `core` carries the same
- * ruling's block for the CSS Syntax Level 3 material in its directive tokenizer, appended
- * to packages/core/LICENSE after the MIT text.
+ * root licence text. The exception is per-package and named, not a general relaxation: a
+ * blanket startsWith over every package would let any package append anything for ever with
+ * the gate green, which trades a real assertion for a convenience. Adding a package here is a
+ * review change that lands that package's attribution block with it, its wording reviewed as
+ * licence text, never a test fixup for a gate that started failing. `tokens` carries one such
+ * block, appended to packages/tokens/LICENSE after the MIT text. `core` carries two such
+ * blocks, appended to packages/core/LICENSE after the MIT text: one for the CSS Syntax Level 3
+ * material in its directive tokenizer, and one for the ECMA-426 and RFC 4648 material in its
+ * source-map encoder.
  */
 export const THIRD_PARTY_SECTION_ALLOWLIST = new Set(['core', 'tokens'])
 
@@ -86,7 +86,7 @@ export function mayCarryThirdPartySection(dir) {
 }
 
 /**
- * The reason string, cleared by the project's licensing steward, for a
+ * The cleared reason string for a
  * THIRD_PARTY_SECTION_ALLOWLIST package whose LICENSE does not even begin with the root licence
  * text. Condition 2 is not weakened by the allowlist above: an allowlisted package still must
  * carry the root text verbatim, as a prefix; only what may follow it changes. Anchored
@@ -146,7 +146,7 @@ function listPackageDirs(packagesDir) {
 }
 
 /**
- * The refusal, cleared by the project's licensing steward, this gate prints when
+ * The cleared refusal this gate prints when
  * `pnpm-workspace.yaml` cannot confirm the
  * `packages/*` assumption `findWorkspaceGlobViolation` below exists to check.
  * Transcribed, not re-worded. Anchored byte-exact in
@@ -238,11 +238,11 @@ export function findWorkspaceGlobViolation(rootDir = ROOT) {
 }
 
 /**
- * The two strings a red run prints, verbatim as cleared by the project's licensing steward.
- * Transcribed, not re-worded: a re-wording is a fresh
- * clearance turn, a re-wrapping of the same bytes is not. The requirement sentence stays
+ * The two strings a red run prints, verbatim as cleared.
+ * Transcribed, not re-worded: a re-wording needs a fresh
+ * clearance, a re-wrapping of the same bytes does not. The requirement sentence stays
  * because it is this file's own encoded position, but it was restated rather than kept
- * verbatim: the citations and the persona went, the subject moved from the published
+ * verbatim: the citations and the internal name went, the subject moved from the published
  * tarball to the published package, the modality from "Condition 2 requires" to a bare
  * "must", and the closing sentence now forbids changing the licence text in a pull request
  * rather than only forbidding silencing the check. The published position is unchanged;
@@ -253,7 +253,7 @@ export const PARITY_FAILURE_HEADER =
   'License parity gate: package LICENSE files do not match the root LICENSE:\n'
 
 /**
- * The sentence, cleared by the project's licensing steward, acknowledging
+ * The cleared sentence acknowledging
  * THIRD_PARTY_SECTION_ALLOWLIST, appended to
  * PARITY_FAILURE_GUIDANCE after its existing last sentence, nothing else in the guidance
  * moving. Anchored byte-exact,
@@ -291,7 +291,7 @@ export function reportLicenseParityViolations(violations) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when the repository root
+ * The cleared message printed when the repository root
  * LICENSE cannot be read at all, before any package is compared. `reason` is `error.code ??
  * error.message` from the caught read error — the same idiom `check-license-allowlist.mjs`'s
  * `readLicensePolicy` already uses for its own ENOENT branch. Extracted into its own function
@@ -311,7 +311,7 @@ export function composeLicenseUnreadableMessage(licensePath, reason) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when a package manifest
+ * The cleared message printed when a package manifest
  * is not valid JSON, refusing on the FIRST bad manifest rather than skipping it and
  * scanning past it: a skipped-and-continued package is a worse defect than a crash, per this
  * file's own "a run that compared nothing must not read as a run that compared and passed"
@@ -328,7 +328,7 @@ export function composeManifestInvalidJsonMessage(manifestPath, errorMessage) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when a non-private
+ * The cleared message printed when a non-private
  * package's own LICENSE cannot be read
  * at all, after the workspace and root-LICENSE guards above it have
  * already passed. `reason` is `error.code ?? error.message` from the caught read error, the
@@ -346,7 +346,7 @@ export function composePackageLicenseUnreadableMessage(licensePath, reason) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when the `packages/`
+ * The cleared message printed when the `packages/`
  * directory itself cannot be
  * listed — a missing `packages/` directory, or an entry under it that cannot be `stat`-ed
  * (a dangling symlink, or a readdir/stat race) — before any package is examined (the same
@@ -366,7 +366,7 @@ export function composePackageListUnreadableMessage(packagesDir, reason) {
 }
 
 /**
- * The message, cleared by the project's licensing steward, printed when a package manifest
+ * The cleared message printed when a package manifest
  * parses as valid JSON but is not a usable manifest object: `null`, an array, a string, a
  * number, or a boolean. Keyed on "not a usable manifest object" rather than on `null` alone,
  * because every other non-object shape raises no exception at all and instead produces a
@@ -520,8 +520,8 @@ export function main(rootDir = ROOT) {
   }
 
   if (packages.length === 0) {
-    // A run that compared nothing must not read as a run that compared and passed (published
-    // `licensing` overview §4/§5's rider). Two halves, both load-bearing. The closing clause
+    // A run that compared nothing must not read as a run that compared and passed, a rule the
+    // licensing gates here follow. Two halves, both load-bearing. The closing clause
     // names what the branch actually tested, an empty non-private set, and not why it is empty:
     // a set emptied by directories carrying no package.json is not an all-private workspace.
     // The census is what tells a legitimately empty set from one emptied by a discovery that

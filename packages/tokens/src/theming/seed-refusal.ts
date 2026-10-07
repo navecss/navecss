@@ -117,7 +117,7 @@ export function badChannelValue(input: string, form: string, detail: string): Se
  *
  * This is now a THIRD call site (with `badChannelValue`) sharing the tracked
  * `refusalClass: 'unrecognised-form'` mislabel for a channel-value refusal; the discriminant
- * fix rides on remaining follow-up work (R21, flagged in a round-3 quality-review note),
+ * fix rides on remaining follow-up work (R21),
  * not reopened here.
  */
 export function unsupportedColourSpace(input: string, space: string): SeedIngestRefusal {

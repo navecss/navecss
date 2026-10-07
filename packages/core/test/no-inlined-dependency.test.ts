@@ -1,5 +1,5 @@
 /**
- * A guard promised at architecture review: no build inlines a third-party
+ * Guard: no build inlines a third-party
  * dependency.
  *
  * Verified once by hand: postcss stays an external

@@ -192,10 +192,10 @@ const sum = (counts: Map<string, number>): number =>
 const byName = (a: string, b: string): number => a.localeCompare(b)
 
 /**
- * PINNING ROW for `AC-token-build-10` (R11), added during this project's Phase 3 review
- * (a coverage gap found by an off-line measurement is PINNED, not filed).
- * The project's quality reviewer measured this property in round 1 and the measurement lived
- * only in an issue comment; nothing in the repo checked it. This is that measurement, committed.
+ * PINNING ROW for `AC-token-build-10` (R11): a coverage gap found by an off-line
+ * measurement is PINNED, not filed.
+ * The measurement of this property lived only off-line; nothing in the repo checked it. This is
+ * that measurement, committed.
  *
  * The consumer half here is a REAL `build` artifact (`scripts/generate-consumer-theming-
  * fixtures.ts` runs the façade and copies its `tokens.css`), not the theming-half fixtures the

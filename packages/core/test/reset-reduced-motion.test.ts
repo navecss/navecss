@@ -12,7 +12,7 @@
  * declares its cache inputs from `packages/tokens/` alone, so with `packages/core/src/reset.css`
  * edited it is replayed FROM CACHE, on the exact edit this check exists to catch: an unforced
  * local `turbo run test --filter=@navecss/tokens` returns FULL TURBO and exit 0. CI is
- * unaffected (no turbo remote cache) and the Phase 3 review gate forces `TURBO_FORCE=1`, so the
+ * unaffected (no turbo remote cache) and a run that sets `TURBO_FORCE=1` bypasses the cache, so the
  * exposure is the local run, which is the first signal the next person sees. `@navecss/core#test`
  * has `src/reset.css` in its own input set and depends on `@navecss/tokens`, so it invalidates
  * on BOTH sides. (An `inputs` entry on `tokens#test` was weighed and rejected: turbo inputs are
@@ -197,8 +197,10 @@ describe('reduced motion: packages/core/src/reset.css', () => {
   })
 
   /**
-   * Per the project's accessibility steward, Cap 2's obligation is RETENTION
-   * of the four `!important` flags, which neither existing instrument guards. A lint forbidding
+   * The reduced-motion block is a deliberate exception to Nave's otherwise-overridable
+   * defaults: its `!important` flags beat a consumer's own `!important` in any later layer, which
+   * is what lets the collapse reach third-party and consumer motion. The obligation here is
+   * RETENTION of the four flags, which neither existing instrument guards. A lint forbidding
    * a NEW `!important` in reset.css does not assert retention (a contributor who deletes all
    * four flags also deletes their disables and the build stays green); `reducedMotionDeclarations`
    * strips the flag before this file's other assertions ever see it, which is the exact
@@ -211,7 +213,7 @@ describe('reduced motion: packages/core/src/reset.css', () => {
    * `property: value;` directly (rather than splitting) is what keeps this to real declarations
    * only, verified against a real injected removal before trusting it.
    */
-  it('every declaration inside every reduced-motion block carries !important (Cap 2 retention)', () => {
+  it('every declaration in every reduced-motion block keeps its !important', () => {
     const DECLARATION_PATTERN = /([\w-]+)\s*:\s*([^;{}]+);/g
     let checked = 0
     for (const block of reducedMotionBlocks(resetCss)) {

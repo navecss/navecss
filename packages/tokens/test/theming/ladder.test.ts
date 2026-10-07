@@ -19,8 +19,8 @@ import { assertLadderOrder, LADDER } from '../../src/theming/ladder.ts'
 // certify what a reader of the README sees. See scripts/readme-ac-theming-34-36.test.mjs for
 // the published-side half.
 //
-// Deliberately not fixed by exporting LADDER: product's ruling names that as the trap, since it
-// "would make the criterion pass while still not checking the thing it names" (the
+// Deliberately not fixed by exporting LADDER: that is the trap, since it would make the
+// criterion pass while still not checking the thing it names (the
 // proxy-assertion class this note was raised for). LADDER stays internal; these tests stay as
 // correct checks of the data structure, marked so the grep gate does not overstate them.
 describe('AC-theming-34 covers: R29, R33', () => {

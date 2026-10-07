@@ -15,8 +15,8 @@ import { clamp01 } from './seed-refusal.ts'
  * feed), which is strictly NARROWER than JavaScript's `\s`. `\s` also matches U+00A0 and the
  * other Unicode space separators, so tokenising with it lets an invisible non-CSS space act as
  * a channel separator: `lab(50<NBSP>20 30)` split on `\s` yields three well-formed tokens and
- * was silently accepted as `lab(50 20 30)` (a quality reviewer's
- * finding B, elected for fix by Cédric at GATE 2). Every trimming and splitting step below uses
+ * was silently accepted as `lab(50 20 30)` (fixed here).
+ * Every trimming and splitting step below uses
  * this set, so an NBSP stays INSIDE the token it was typed in, where `readNumericToken` refuses it.
  */
 const CSS_WHITESPACE_CHARS = ' \t\n\r\f'
@@ -66,17 +66,16 @@ const CSS_NUMBER = /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/
  *
  * First, text that is empty or whitespace-only: `Number('')` is `0`, not `NaN`, which is the one
  * gap `Number.isFinite` alone cannot see afterwards, and it let a bare `%` (no digits before the
- * sign) read as channel value `0` instead of refusing (quality-review
- * findings F1/F1b, and the same gap in `oklch()`'s inline percentage parsing and in
- * `parseHueDeg`'s `deg`-stripping, quality-review findings F5/F6). Callers pass the text AFTER
- * stripping a percentage sign or a `deg` unit, since that is exactly where the text can turn up
- * empty.
+ * sign) read as channel value `0` instead of refusing (and the same gap existed in
+ * `oklch()`'s inline percentage parsing and in `parseHueDeg`'s `deg`-stripping). Callers pass the
+ * text AFTER stripping a percentage sign or a `deg` unit, since that is exactly where the text can
+ * turn up empty.
  *
  * Second, text still carrying whitespace of ANY kind once the tokeniser has run. The tokeniser
  * splits on CSS whitespace alone, so a token reaching here can only still contain a space
  * character CSS does not tokenise on (an NBSP, say). `Number` trims those before converting, so
  * `Number` of an NBSP followed by `5` is `5`; refusing instead keeps an invisible character from being
- * read as part of a value (a quality reviewer's finding B). No valid input reaches here with
+ * read as part of a value. No valid input reaches here with
  * whitespace in it.
  *
  * Third, text that is not a CSS `<number>` at all but IS a JavaScript numeral `Number` accepts:

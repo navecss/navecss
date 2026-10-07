@@ -24,7 +24,7 @@ const LAYER_ORDER_STATEMENT =
  * R26 [blocking]: every custom property Nave emits is prefixed `--nave-`. Applied HERE,
  * at the emitter, never by requiring the token SOURCE to nest under a `nave` group — the
  * latter would silently bind the theming specification's R29 rung-5 "bring your own DTCG
- * source" to Nave's own prefix shape, flagged in architecture review. Mirrors
+ * source" to Nave's own prefix shape. Mirrors
  * `theming/emit.ts`'s own `--nave-color-` constant for the semantic colour layer, which
  * already conformed.
  */

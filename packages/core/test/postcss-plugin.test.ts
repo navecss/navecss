@@ -1,9 +1,8 @@
 /**
  * Regression tests for the @nave PostCSS plugin.
  *
- * Traceability: these tests reference the correctness-finding IDs from an
- * architecture review. G0 is a correctness batch,
- * not a spec, so the C- finding ID plays the role the AC- ID plays in a spec.
+ * Traceability: these tests reference correctness IDs (C-). G0 is a correctness batch,
+ * not a spec, so a C- ID plays the role the AC- ID plays in a spec.
  */
 import type { AtRule } from 'postcss'
 

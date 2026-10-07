@@ -3,21 +3,21 @@
  * "as published" half — carved out of an earlier change.
  *
  * Both criteria are asserted today only against `packages/tokens/src/theming/ladder.ts`'s
- * `LADDER` constant (`packages/tokens/test/theming/ladder.test.ts`). The product lead's
- * ruling states that is not what "as published" ranges over: it means
+ * `LADDER` constant (`packages/tokens/test/theming/ladder.test.ts`). That is not what
+ * "as published" ranges over: it means
  * `README.md`'s theming section at 0.1.0, landed in an earlier change.
  * `scripts/readme-theming-ladder.test.mjs`, added by that same carrier, implements
  * `AC-token-build-33`/`-34` instead — a different spec's criteria, asserting the five things
  * R33 adds on top of these two and nothing about what these two range over. This file is the
  * README-side coverage that gap names.
  *
- * `LADDER` STAYS INTERNAL. The product lead's ruling names exporting it as the trap: doing so
- * "would make the criterion pass while still not checking the thing it names" (the
+ * `LADDER` STAYS INTERNAL. Exporting it is the trap: doing so would make the
+ * criterion pass while still not checking the thing it names (the
  * proxy-assertion class an earlier issue was raised for). This file imports nothing from
  * `packages/tokens/src`; it reads the rendered `## Theming` section only.
  *
  * Fence-aware section parsing reused from `readme-sections.mjs` (extracted from
- * `readme-theming-ladder.test.mjs` at round 4 of an earlier review for this file and
+ * `readme-theming-ladder.test.mjs` for this file and
  * `readme-cleared-copy.test.mjs`) rather than re-derived.
  */
 import assert from 'node:assert/strict'
@@ -65,9 +65,9 @@ function rungBody(name) {
 // to the end of `## Theming` and absorbs the ladder's closing paragraph. That over-range costs
 // in both directions, both measured on this PR rather than reasoned about: a false GREEN, where
 // rung 5's posture text migrates into the closing paragraph and a body-wide `assert.match`
-// still finds it (a reviewer's item M4); and a latent false RED, where the closing paragraph
+// still finds it; and a latent false RED, where the closing paragraph
 // may never carry the words this file forbids a rung to be documented with. The
-// developer-relations reviewer ruled the closing paragraph stays exactly where it is, so the
+// closing paragraph stays exactly where it is, so the
 // bound belongs in the instrument: an assertion ABOUT a rung's posture reads that rung's own
 // bullet.
 //
@@ -137,7 +137,7 @@ test('AC-theming-34: rung 0 is documented reserved, with zero presets shipped at
   assert.match(rung0, /ships no presets/i, 'rung 0 must state that 0.1.0 ships no presets')
 })
 
-// PINNING ROW (round-3 terminal read; free under a later ruling).
+// PINNING ROW.
 // The posture assertions in this file range over rungs 1a/1b, 3, and 4/5, so rungs 0 and 2 are
 // the two `AC-theming-34`'s "each rung records its 0.x posture" clause covers that no row read.
 // MEASURED, not assumed: deleting rung 0's `**Across 0.x:**` bullet, and deleting rung 2's, each
@@ -195,7 +195,7 @@ test('AC-theming-36: rungs 1b, 3, 4 and 5 are each documented as reached through
 // clause is not about the posture. `AC-theming-36` ranges over how the RUNG IS DOCUMENTED, so
 // a rung called unavailable in its lead prose violates the criterion exactly as much as one
 // called unavailable in its bullet, and bullet-scoping here was MEASURED to lose that catch
-// (round 2, probe P4b: RED at the wider range, GREEN at the narrower).
+// (RED at the wider range, GREEN at the narrower).
 // The cost accepted in exchange is a latent false red: markdown has no end-of-section token, so
 // the ladder's closing paragraph falls inside the last rung's body and a coda that ever says
 // "not available" reds this test. That construction is absent from HEAD, and under
@@ -321,7 +321,7 @@ test("AC-theming-36: rung 0's reservation is a SCOPE decision, never attributed 
 // spelling, so re-spelling rung 3's bullet the lawful second way (the way rungs 4 and 5 already
 // ship, content byte-identical) RED this file at `5ec1816` with `rung 3 must carry an "Across
 // 0.x" bullet` — a message that is false about the artifact it is reading. Measured, not argued
-// from tidiness; it is the same "points its reader at the wrong thing" defect the review
+// from tidiness; it is the same "points its reader at the wrong thing" defect
 // already fixed once in the sibling guard.
 test("AC-theming-36: rung 3's 0.x posture is R33's, a re-derivation that may fight the pins this rung creates", () => {
   const bullet = acrossBullet('3')

@@ -63,9 +63,8 @@ function wallClockLike(value: unknown, at: string): string[] {
 /**
  * Stands in for the CLI's future consumer-invocable validator entry point
  * (core-contract.ts's own docstring: "validateAgainstManifest ... is the CLI's
- * validator's core check"). An earlier request from the quality reviewer left the
- * sequencing question of whether the CLI's real implementation lands now or later
- * explicitly to engineering; building the full consumer-invocable token build is out of
+ * validator's core check"). Whether the CLI's real implementation lands now or later is
+ * not decided by this test; building the full consumer-invocable token build is out of
  * scope here (a separate, much larger item). This wraps the same core check in the shape
  * an entry point actually has — an exit code plus reported names — without
  * pre-building the CLI itself.
@@ -139,7 +138,7 @@ describe('AC-theming-32 covers: R27', () => {
   })
 
   /**
-   * A prior review round (item F5): `recursive: true` in `discoverSourceFiles`
+   * `recursive: true` in `discoverSourceFiles`
    * was held by nothing — deleting it was measured 522/522 green and the drift check exit 0
    * EVEN with a real `var(--nave-…)` reference sitting in a `packages/core/src/sub/` file,
    * because `packages/core/src` is flat today and no fixture ever gave the recursion
@@ -166,7 +165,7 @@ describe('AC-theming-32 covers: R27', () => {
   })
 
   /**
-   * A prior review round (item F4): scope item 2 is "the scanned set is a
+   * Scope item 2 is "the scanned set is a
    * RULE, not a file list... do not implement this as a hardcoded include/exclude list", and
    * reverting the production caller to the exact forbidden two-file census was measured
    * 522/522 green with a byte-identical shipped manifest — because today's tree has no
@@ -543,7 +542,7 @@ describe('AC-token-build-31 covers: R31', () => {
   })
 
   /**
-   * A prior review round (findings F2/F3/F14): the three cases above are two direct
+   * The three cases above are two direct
    * calls to `assertContractPreconditions` with hand-built arrays plus one
    * `.not.toThrow()`, and none of them can see the SEAM — whether the production entry point
    * (`buildCoreContractManifest`) actually calls the guard at all. `.not.toThrow()` cannot,

@@ -2,17 +2,17 @@
  * AC-token-build-27 covers: R27.
  *
  * R27's cleared paragraph states this entry point's contrast-threshold posture to a consumer.
- * The surface is `packages/tokens/README.md`, ruled by product on the
- * criterion's own words: the criterion ranges over "the shipped documentation surface where
- * THIS ENTRY POINT's contrast-threshold posture is stated to a consumer", and the paragraph's
- * own subject is this entry point's FLAGS, which are documented to a consumer here and nowhere
- * else. The repository-root README's accessibility section was refused BY NAME in that same
- * ruling, on the ground that placement can convert an artifact fact into a conformance-adjacent
- * claim: R27 is about an absent INPUT, the accessibility non-promises about an absent VERDICT.
- * That refusal is pinned below, because it is a ruling a later well-meaning edit could undo.
+ * The surface is `packages/tokens/README.md`, on the criterion's own words: the criterion
+ * ranges over "the shipped documentation surface where THIS ENTRY POINT's contrast-threshold
+ * posture is stated to a consumer", and the paragraph's own subject is this entry point's
+ * FLAGS, which are documented to a consumer here and nowhere else. The repository-root README's
+ * accessibility section is refused BY NAME, because placement can convert an artifact fact into
+ * a conformance-adjacent claim: R27 is about an absent INPUT, the accessibility non-promises
+ * about an absent VERDICT. That refusal is pinned below, because a later well-meaning edit could
+ * undo it.
  *
- * The paragraph carries a NEW last sentence, re-cleared by the project's accessibility/licensing
- * steward on 2026-09-07 (applied path). The old one named an internal tracking id, which no
+ * The paragraph carries a NEW last sentence, re-cleared on 2026-09-07. The old one named an
+ * internal tracking id, which no
  * reader of the published package can resolve, and it could not be repaired by qualifying it:
  * putting the repository name in front of the number clears the rule against BARE references,
  * which fences qualified spellings out by construction, and lands squarely on the separate rule
@@ -91,15 +91,15 @@ const SHIPPED_READMES = [
  *
  * A plain `indexOf('\n## ')` is fooled by a `## ` line inside a fence in BOTH directions:
  * forwards it ends the section early, backwards it moves the section's start past prose that is
- * really in it. The quality reviewer measured the backwards half on this very file,
- * where a `bash` fence between a conformance-framing sentence and the paragraph left the suite
+ * really in it. Measured on this very file for the backwards half:
+ * a `bash` fence between a conformance-framing sentence and the paragraph left the suite
  * green. The fence tracking that closes that lives in `markdown-headings.ts`, shared with
  * `remaining-ac.test.ts`, and its own docblock carries the tracker's
  * reasoning and its measured residuals.
  *
  * THE LEVEL SCOPE IS DELIBERATELY 1 AND 2, and it is stated because widening it silently was a
  * regression here. These are SECTION boundaries: `#{1,2}` restores
- * exactly what the pre-round-2 `## ` anchor bounded, and `# ` joins it because a level-1 heading
+ * exactly what the earlier `## ` anchor bounded, and `# ` joins it because a level-1 heading
  * certainly ends a section. A SUB-heading does NOT bound a section: a `### ` lawfully added
  * between a conformance-framing sentence and the paragraph leaves that sentence inside the
  * section the paragraph is in, and the suite must still red on it. That is the property this
@@ -136,12 +136,11 @@ function containingSection(markdown: string, needle: string): string {
  * What the number is worth is entirely its provenance, so this states that rather than the
  * stronger thing it is tempting to state. It is NOT a check against the spec, which CI cannot
  * read. The digest was first set to bytes four parties computed independently from R27's
- * source spec on 2026-09-07 (engineering, quality, architecture and accessibility/licensing
- * review), each stripping exactly those two markers and each reading 481 characters, zero
- * non-ASCII, straight apostrophes. It has moved once since, in the commit that carried a
- * re-clearance replacing the one sentence about checks run over a consumer's values. The value
- * below is that paragraph's: 493 bytes, zero non-ASCII, computed from the previous constant
- * with only that sentence replaced, and reproduced independently before it landed.
+ * source spec on 2026-09-07, each stripping exactly those two markers and each reading 481
+ * characters, zero non-ASCII, straight apostrophes. It has moved once since, in the commit that
+ * carried a re-clearance replacing the one sentence about checks run over a consumer's values.
+ * The value below is that paragraph's: 493 bytes, zero non-ASCII, computed from the previous
+ * constant with only that sentence replaced, and reproduced independently before it landed.
  */
 const CLEARED_PARAGRAPH_SHA256 = '1bf60330f686f5558888c574d017200fdcad7bcc14de3dd722ea3a051dc13092'
 
@@ -190,9 +189,8 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
   })
 
   it('opens on the sentence AC-token-build-27 pins it by, so the criterions parenthetical stays live', () => {
-    // Product's fence 1: the criterion pins the paragraph by its opening in a parenthetical, so a
-    // variant that moves the opening makes that parenthetical stale and owes a quality-review
-    // delta.
+    // The criterion pins the paragraph by its opening in a parenthetical, so a
+    // variant that moves the opening makes that parenthetical stale, and it then needs updating.
     expect(
       NO_CONSUMER_CONTRAST_THRESHOLD_INPUT.startsWith(
         '0.1.0 ships no consumer contrast-threshold input.',
@@ -219,7 +217,7 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
     expect(holding[0]?.replaceAll(/^\n+|\n+$/g, '')).toBe(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT)
   })
 
-  it('does not reach the repository-root README, the one surface product refused BY NAME', () => {
+  it('does not reach the repository-root README, the one surface refused BY NAME', () => {
     expect(REPO_ROOT_README).not.toContain(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT)
     // Not the whole paragraph and not a partial transcription of it either: the opening sentence
     // is what the criterion pins, so a fragment landing at the refused surface is caught too.
@@ -228,7 +226,7 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
 
   it('is never independently authored at a second site: of every README this repository ships, only packages/tokens carries it', () => {
     // The criterion's clause quantifies over every surface a consumer reads, so the check has
-    // to as well: one assertion above pins the surface product refused BY NAME, and this one pins
+    // to as well: one assertion above pins the surface refused BY NAME, and this one pins
     // the COUNT across the whole set, which is what the word "never" actually claims. Checked
     // against the OPENING SENTENCE rather than the whole paragraph, because a second site that
     // copies only the opening is the same defect and the cheaper one to write by accident.
@@ -251,7 +249,7 @@ describe('AC-token-build-27 covers: R27 (packages/tokens/README.md)', () => {
     // the messages they throw and must be able to. Both wordings R27 excludes BY NAME pass this
     // predicate, and inside the paragraph it is the digest pin above, not this, that holds them
     // out. For the prose AROUND the paragraph nothing mechanical holds them, by decision and not
-    // by oversight (an explicit call by the accessibility/licensing steward): that is caught by the
+    // by oversight: that is caught by the
     // first-publish sweep over the whole packed set, and widening this lint to reach it would red
     // the shipped guard messages the same function checks.
     expect(findConformanceFraming(NO_CONSUMER_CONTRAST_THRESHOLD_INPUT)).toBeUndefined()

@@ -1,6 +1,6 @@
 # NaveCSS — Claude Code Context
 
-Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo publishing `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `base-ui` (Nave-styled Base UI components: wrappers plus one built stylesheet), `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
+Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo of `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `stylelint-config` and `eslint-plugin` (rules for a consumer's project), all four published; `base-ui` (Base UI's components styled with Nave's tokens), publishable, its first release pending; and, not yet published, `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
 
 ## Principles
 
@@ -38,13 +38,13 @@ For multi-step tasks, state a brief plan with a verify step per item before exec
 ```
 packages/tokens/   → DTCG token source (tokens.json) + first-party DTCG reader (build.ts); emits CSS custom properties + JS/TS
 packages/core/     → reset.css, @layer stack (index.css), generated atomic utilities, cx()/atoms, implements @nave (PostCSS is one adapter)
-packages/base-ui/  → @navecss/base-ui: Base UI's components, wrapped and pre-styled (static classes + one stylesheet in `components.nave`, built from core's atoms); peer on tokens
+packages/base-ui/  → Base UI's components styled with Nave's tokens: one React wrapper subpath per component that adds Nave's classes to the Base UI parts it styles, plus one stylesheet (dist/styles.css) of role atoms built through @nave; builds on core; peers on tokens, @base-ui/react and react
 packages/cli/      → navecss CLI (component registry: `navecss add ...`); thin registry client
 packages/stylelint-config/ → published stylelint rules for a consumer's project (`@nave` known, `var()`-or-keyword values on listed properties, the outline guard, declared `--nave-*` names); peer on tokens
 packages/eslint-plugin/   → published ESLint rules for a consumer's project (a declared/atom class channel in JSX, a reasoned `cx.raw()` escape, its count, tokenized `style` values); peer on core
 ```
 
-Dependency direction: `core` -> `tokens`; `base-ui` -> `tokens` (peer), `core` (dev only). `cli` orchestrates, owns no styles. Public-API and token-contract changes are deliberate, versioned events (Changesets), not incidental.
+Dependency direction: `core` -> `tokens`; `base-ui` -> `tokens` (peer), `core` (at build time). `cli` orchestrates, owns no styles. Public-API and token-contract changes are deliberate, versioned events (Changesets), not incidental.
 
 ## Before You Start
 

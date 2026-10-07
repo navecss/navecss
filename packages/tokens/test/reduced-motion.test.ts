@@ -12,7 +12,7 @@
  * `packages/core/test/reset-reduced-motion.test.ts`, not here. This package's
  * `test` task takes its cache inputs from `packages/tokens/` alone, so a run of
  * it is replayed from cache on an edit to `packages/core/src/reset.css`, which
- * is the one edit that half exists to catch (found in a Phase 3 review).
+ * is the one edit that half exists to catch.
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'

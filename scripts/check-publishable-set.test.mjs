@@ -228,7 +228,7 @@ test("composePackageListUnreadableMessage composes this gate's own bytes, never 
       're-run.',
   )
   assert.ok(!message.includes('License parity gate'))
-  // A review fix, mirroring a sibling guard row that holds this gate's three OTHER
+  // This mirrors a sibling guard row that holds this gate's three OTHER
   // printed messages to the same rule on `main`. The predicate rides here, inside this
   // message's own byte pin, rather than in a second copy of that row: that sibling row's array
   // is hand-enumerated, so a fourth printed message added on a branch that predates it passes
@@ -266,7 +266,6 @@ test("main(): a missing packages/ directory refuses with this gate's own message
   }
 })
 
-// A defect found by a reviewer in a terminal verification read.
 // Every other brain-ref-freedom row in this file works by NAMING composers one at a
 // time, so the print sites composed inline in main() -- the mismatch report's header, its
 // per-package lines, its closing guidance, and the success line -- belong to no composer and
@@ -304,13 +303,13 @@ test('nothing this gate prints down ANY path names a tracker a reader cannot ope
   }
 })
 
-// A prior review round (consulting the licensing steward) named this report as one whose
-// docblock made no byte-exact claim, without measuring it. Measured here: the row above (and
+// This report's docblock made no byte-exact claim, and none was
+// measured. Measured here: the row above (and
 // every other test in this file that touches the mismatch path) checks SHAPE and OPACITY, never
 // the bytes. The header, the two per-package line templates and the closing guidance are
 // composed inline in main() and had no byte-exact anchor anywhere — a paraphrase of any of them
 // would pass every existing test in this file. This is the byte-exact backstop, not the gate:
-// the primary control is a reviewer reading main()'s own source. CHANGING THIS LITERAL IS A
+// the primary control is review of main()'s own source. CHANGING THIS LITERAL IS A
 // WORDING CHANGE TO A CHECK'S OWN OUTPUT, NOT A TEST FIXUP — if this goes red because the
 // source message was reworded, restore the wording or get it decided, never edit the literal
 // to match. Exercises both per-package line shapes (unexpectedly publishable AND unexpectedly
@@ -370,9 +369,9 @@ test("composeChangesetConfigUnusableMessage composes this gate's own bytes, neve
   assert.ok(!message.includes('License parity gate'))
 })
 
-// A fix round: this gate's own JSON.parse(readFileSync(...)) was
+// This gate's own JSON.parse(readFileSync(...)) was
 // unguarded and raw-crashed on a malformed manifest, the same defect class closed in the
-// sibling gate. This file states no licensing position (per a licensing-steward consult), so its
+// sibling gate. This file states no licensing position, so its
 // message is ordinary mechanism prose and must not borrow the license-parity gate's cleared
 // bytes.
 test("main(): a malformed package manifest under a confirmed workspace refuses with this gate's own message, never an uncaught exception", () => {
@@ -421,9 +420,8 @@ test("composeManifestNotAnObjectMessage composes this gate's own bytes, never th
 // A corpus-gated tail fix: this gate's manifest guard
 // only covered SYNTAX errors (JSON.parse throwing), while the sibling gate's identical-shaped
 // guard also covers a manifest that parses fine but is not a usable object. A `null` manifest
-// raw-crashed main() with an uncaught TypeError reading `.private` off null (measured by the
-// quality reviewer, PR comment 5602791504); mirrors the sibling gate's
-// composeManifestNotAnObjectMessage guard.
+// raw-crashed main() with an uncaught TypeError reading `.private` off null (measured); mirrors the
+// sibling gate's composeManifestNotAnObjectMessage guard.
 test("main(): a package manifest that is valid JSON but not a usable object refuses, never an uncaught exception (mirrors the sibling gate's guard)", () => {
   const dir = buildFixture(VALID_WORKSPACE_YAML, {})
   const manifestPath = path.join(dir, 'packages', 'broken', 'package.json')
@@ -440,7 +438,7 @@ test("main(): a package manifest that is valid JSON but not a usable object refu
   }
 })
 
-// A review pinning row. Three PRINTED
+// Pinning row. Three PRINTED
 // strings moved off an internal issue number; two are pinned byte-exact elsewhere in this file
 // and the third (WORKSPACE_GLOB_VIOLATION_MESSAGE) was asserted only by IDENTITY against the
 // imported constant, which pins ROUTING and nothing about the bytes: reverting it, or emptying

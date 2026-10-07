@@ -209,7 +209,7 @@ describe('AC-theming-44 covers: R3, R8', () => {
     expect(record2.sLightness).toBe(S_BAND.lo)
   })
 
-  it("a clamped pastel seed's s stays below 1 (the round-1 hazard this clamp exists to prevent)", () => {
+  it("a clamped pastel seed's s stays below 1 (the hazard this clamp exists to prevent)", () => {
     const pastel = { l: 0.985, c: 0.02, h: 90 } // ordinary chroma, extreme lightness
     const record = decomposeSeed(pastel)
     expect(record.s).toBeLessThan(1)

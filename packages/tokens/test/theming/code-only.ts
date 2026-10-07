@@ -10,7 +10,7 @@
  * unanchored form is not reintroduced as a simplification. Unanchored, it treats a `/*`
  * opened inside a STRING LITERAL as a comment opener and deletes everything up to the next
  * closer, code included — and `formats.ts`'s generated-artifact header is exactly that, a CSS
- * comment held in a template literal. A quality reviewer's measured mutation (a `new
+ * comment held in a template literal. A measured mutation (a `new
  * Date().toISOString()` interpolated into that header) was deleted by this function before the R7
  * scan ever saw it, so widening the scan's roots alone would have left it green on the one mutation
  * it was widened for. The premise the anchor rests on was measured across the 38 files of the
@@ -19,8 +19,8 @@
  *
  * THIS MODULE EXISTS BECAUSE THE PACKAGE FIXED THAT BUG TWICE. The stripper had two identical
  * copies — one here in `consumer-build.test.ts`, one inline in `seed-ingest.test.ts`'s purity
- * guard — so round 2 anchored the first and the verifier-gated tail, a round later, had to
- * anchor the second. Both were correct afterwards and there were still two of
+ * guard — so one was anchored first and the other had to be
+ * anchored later. Both were correct afterwards and there were still two of
  * them, which stayed tracked as still open until a later decision sent it
  * back to be fixed. It is not a test file and registers no tests, the same shape as
  * `cleared-copy.ts` and `markdown-headings.ts` beside it — the latter being this package's

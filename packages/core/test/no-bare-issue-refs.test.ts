@@ -1,5 +1,5 @@
 /**
- * Pinning row for the Phase 3 review round 2 cleanup: a bare `#<digits>` issue reference in
+ * Pinning row: a bare `#<digits>` issue reference in
  * this package's tracked sources resolves, on the public repository, against the PUBLIC repo's
  * own issue/PR tracker, not against the private brain issue the author meant. Only a reference
  * that genuinely names a public `temp-navecss` PR may be written bare; every other bare number

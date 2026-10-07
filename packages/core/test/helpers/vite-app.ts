@@ -75,7 +75,10 @@ export function makeApp(files: Readonly<Record<string, string>>): ScratchApp {
     mkdirSync(path.dirname(file), { recursive: true })
     writeFileSync(file, text)
   }
-  return { root, dispose: () => rmSync(root, { force: true, recursive: true }) }
+  return {
+    root,
+    dispose: () => rmSync(root, { force: true, maxRetries: 5, recursive: true, retryDelay: 100 }),
+  }
 }
 
 /**

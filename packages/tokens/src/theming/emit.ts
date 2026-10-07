@@ -34,12 +34,11 @@ export const TINT_PROPERTY = '--nave-color-tint'
  * dirtying either stem here left both green while their names said "the real shipped one" —
  * the defect this export closes.
  *
- * BOTH STEMS ARE CLEARED COPY, cleared as EXACT BYTES. The project's accessibility and
- * licensing reviewer cleared these words (applied path) as the prefix that gives each notice an
- * antecedent in the emitted CSS, on the stated condition that they stay exact: changing either
- * stem, including shortening it, is a change to cleared text and returns to that reviewer.
+ * BOTH STEMS ARE CLEARED COPY, cleared as EXACT BYTES. These words are the prefix that
+ * gives each notice an antecedent in the emitted CSS, and they must stay exact: changing either
+ * stem, including shortening it, is a change to cleared text and needs review as one.
  * Re-wrapping the same bytes, or moving them between an inline literal and a named constant as
- * this edit does, is not a change and needs no turn.
+ * this edit does, is not a change and needs no fresh review.
  *
  * The composed-line lint is not that fence and must not be credited as one. It refuses
  * conformance framing on the line carrying a notice, so it catches a stem that starts claiming
@@ -151,8 +150,7 @@ export function emitCss(result: PipelineResult, layer = 'tokens.defaults'): Emit
   const feedbackWarningName = slotCssName('feedback.warning')
   for (const [name, value] of props) {
     // R20: obligation 1 — the shared-identity notice lands immediately above
-    // --nave-color-feedback-warning (the tightest reading per the project's accessibility and
-    // licensing reviewer; the sentence is
+    // --nave-color-feedback-warning (the tightest reading; the sentence is
     // self-locating and would also be correct above feedback-danger, which SEMANTIC_SLOTS
     // order emits first).
     if (name === feedbackWarningName) {

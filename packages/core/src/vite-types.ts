@@ -22,7 +22,7 @@ export interface ResolvedConfigLike {
    */
   readonly builder?: unknown
   readonly css?: { readonly devSourcemap?: boolean; readonly transformer?: string }
-  readonly build?: { readonly sourcemap?: unknown }
+  readonly build?: { readonly lib?: unknown; readonly sourcemap?: unknown }
   readonly logger: LoggerLike
   /**
    * The plugins of the build, Vite's own among them.
@@ -37,6 +37,69 @@ export interface ResolvedConfigLike {
 export interface PluginLike {
   readonly name: string
   readonly transform?: unknown
+}
+
+/**
+ * A module of a dev server's module graph: its id and URL, the modules that import it and the
+ * ones it imports (static and dynamic alike).
+ */
+export interface GraphModuleLike {
+  readonly id: string | null
+  readonly url: string
+  readonly importers: ReadonlySet<GraphModuleLike>
+  readonly importedModules: ReadonlySet<GraphModuleLike>
+}
+
+/**
+ * The part of a dev environment the dev server's serving of the atomic layer uses: its module
+ * graph, the request that transforms a module, and the reload of one.
+ */
+export interface DevEnvironmentLike {
+  readonly moduleGraph: {
+    getModuleById(id: string): GraphModuleLike | undefined
+    readonly idToModuleMap: ReadonlyMap<string, GraphModuleLike>
+    invalidateModule(module: GraphModuleLike): void
+  }
+  readonly pluginContainer: {
+    resolveId(url: string): Promise<{ readonly id: string } | null>
+  }
+  readonly config: { readonly dev: { readonly warmup: readonly string[] } }
+  transformRequest(url: string): Promise<unknown>
+  reloadModule(module: GraphModuleLike): Promise<void>
+  /**
+   * Resolves once the static imports the first request set off are processed; from a hook, the
+   * module the hook runs for is passed so it does not wait on itself.
+   */
+  waitForRequestsIdle(ignoredId?: string): Promise<void>
+}
+
+/**
+ * The builder `buildApp` is given: its environments by name, and whether each has been built.
+ */
+export interface BuilderLike {
+  readonly environments: Readonly<Record<string, { readonly isBuilt: boolean }>>
+}
+
+/**
+ * A request as a dev server's middleware is given it.
+ */
+export interface RequestLike {
+  readonly url?: string
+}
+
+/**
+ * The part of a dev server the plugin touches when it starts: where its middleware goes, its base,
+ * and the client environment.
+ */
+export interface DevServerLike {
+  close: () => Promise<void>
+  readonly config: { readonly base: string }
+  readonly environments: { readonly client: DevEnvironmentLike }
+  readonly middlewares: {
+    use(
+      handler: (request: RequestLike, response: unknown, next: () => void) => Promise<void> | void,
+    ): unknown
+  }
 }
 
 /**
@@ -112,6 +175,10 @@ export interface TransformContext {
  */
 export interface HotUpdateOptions {
   readonly file: string
+  /**
+   * The modules the changed file belongs to, which the update is about to reload.
+   */
+  readonly modules?: readonly GraphModuleLike[]
 }
 
 /**
@@ -119,13 +186,18 @@ export interface HotUpdateOptions {
  */
 export interface HotUpdateContext {
   readonly environment: {
-    readonly config?: { readonly command?: string; readonly inlineConfig?: object }
+    readonly config?: {
+      readonly command?: string
+      readonly consumer?: string
+      readonly inlineConfig?: object
+    }
     readonly hot: { send(payload: { type: 'full-reload' }): void }
     readonly moduleGraph: {
       getModuleById(id: string): unknown
       invalidateModule(module: never): void
     }
     readonly name: string
+    transformRequest?(url: string): Promise<unknown>
   }
 }
 

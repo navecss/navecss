@@ -9,7 +9,7 @@ async function scratchDir(): Promise<string> {
   return await mkdtemp(path.join(tmpdir(), 'nave-dtcg-descriptions-'))
 }
 
-// A review found that `dtcg-descriptions.ts` had no dedicated test file, only indirect
+// `dtcg-descriptions.ts` had no dedicated test file, only indirect
 // coverage via copy-lint.test.ts's own real-corpus check. These cases cover the walk's edges
 // directly: a root-level description, a malformed root, an empty tree, `$`-key exclusion, and
 // the file-reading half's own failure modes.

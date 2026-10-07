@@ -12,8 +12,10 @@ import type { UsedContext } from './vite-used.ts'
 import { isMentioningAtoms, recordModule } from './vite-collect-module.ts'
 import { isStylesheetId } from './vite-css-id.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
+import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
+import { judgeAfterLastEnvironment } from './vite-markup.ts'
 import { isNaveOwn } from './vite-module-kind.ts'
 import { assertOptions } from './vite-options.ts'
 import { checkEnvironmentOrder } from './vite-order.ts'
@@ -101,6 +103,8 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
     enforce: 'post',
 
     async buildStart() {
+      // The resolutions of one build are all made before any environment starts.
+      context.state.started = true
       // The names of the consumer's own atoms are known once the `extend` module has loaded, so a
       // list that names one is judged now. A rebuild in watch mode fixes its emitted set again.
       assertOptions(context.options, await ownAtomNames(context))
@@ -111,7 +115,9 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
 
     async transform(code, id, meta) {
       if (!isReadable(context, id)) return
+      if (this.environment?.config.consumer === 'server') context.state.serverTransformed = true
       const record = await recordModule(context, this, { code, id, moduleType: meta?.moduleType })
+      if (context.command === 'serve') devServing.noteGrowth(context)
       if (!record || context.command !== 'serve' || record.pkg !== undefined) return
       const problems = problemsOf(record, context)
       if (problems.length > 0) failModule(this, id, problems)
@@ -120,8 +126,11 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
     transformIndexHtml: {
       order: 'pre',
       handler(html, { filename }) {
-        if (filename === undefined || !isUsed(context) || !isMentioningAtoms(html)) return
+        if (!isUsed(context)) return
+        context.state.htmlRead = true
+        if (filename === undefined || !isMentioningAtoms(html)) return
         context.state.pages.set(filename, atomsWrittenIn(html))
+        if (context.command === 'serve') devServing.notePages(context)
       },
     },
 
@@ -139,6 +148,7 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
       } else {
         noteClientEnded(this, context)
       }
+      judgeAfterLastEnvironment(context, this.environment, (message) => this.warn(message))
     },
   }
   return plugin

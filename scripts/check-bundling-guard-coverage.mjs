@@ -9,7 +9,7 @@
  * nothing asserts the property that makes the comment true. So the set of
  * packages that can bundle a third-party dependency into shipped output is
  * free to grow while the guard stays green — the identical failure shape
- * the licensing steward named in tsup's own `noExternal` default, one
+ * found in tsup's own `noExternal` default, one
  * level up: an answer resting on a fact that flips without looking like a
  * licensing change to whoever flips it.
  *
@@ -39,8 +39,8 @@
  * never a judgement call this script makes.
  *
  * This script decides no licensing question and never will: it is an
- * instrument ("both checks are instruments; the
- * answers they surface are the licensing steward's"). Its only job is to make the
+ * instrument, and the answers it surfaces are settled in a licensing review,
+ * never here. Its only job is to make the
  * coverage premise trip instead of rot silently.
  */
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'

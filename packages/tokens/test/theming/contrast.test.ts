@@ -330,7 +330,7 @@ describe('AC-theming-25 covers: R22', () => {
     // threshold table (tagged there as R18a), not R22 itself. R22's own coverage list reads
     // the weaker, unquantified "border.control against the surfaces a control sits on". That
     // prior fix describes row 8's quantifier as the same CLASS of quantifier as row 9's, not
-    // identical to it. A declaration set short of the recorded minimum is a Phase 2 gap
+    // identical to it. A declaration set short of the recorded minimum is a gap
     // against an approved [blocking] requirement, not a widening (the same fix's argument,
     // applied to the row above).
     // See the border.focus enumeration above for why this reads the one
@@ -414,7 +414,7 @@ describe('AC-theming-26 covers: R22', () => {
   // that is INACTIVE (per the project's reviewed and signed-off accessibility record);
   // border.default
   // rests on R22's decorative-dividers class and carries no such condition, so it is out of
-  // scope here. A PRESENCE check, never equality (the accessibility steward's own ruling):
+  // scope here. A PRESENCE check, never equality:
   // strengthening the reason stays green, only dropping the token goes red.
   it('the two disabled exclusions retain their INACTIVE condition token (case-sensitive)', () => {
     for (const slot of ['content.disabled', 'border.disabled']) {
@@ -470,7 +470,7 @@ describe('AC-theming-26 covers: R22', () => {
     )
   })
 
-  // Flagged by the accessibility steward: the exclusions channel gets the same "visible count" the
+  // The exclusions channel gets the same "visible count" the
   // open channel already had, so an added ADJACENCY_EXCLUSIONS key changes reportable output
   // rather than disappearing into a silent `continue`.
 
@@ -705,8 +705,8 @@ describe('AC-theming-51 covers: R22', () => {
     // it by 4x — which is exactly the verdict the criterion forbids it to state, on the
     // half where the criterion also warns a reader not to conclude a failure. Both are
     // replaced by the undeclaredness assertions the criterion does state. The arithmetic
-    // behind either half is the accessibility steward's, lives in the cited findings, and is not
-    // restated here (one canonical home per fact).
+    // behind either half is not restated here, since the criterion quoted above rules out any
+    // ratio, margin or verdict in this test.
     for (const fillSlot of ['action.primary', 'feedback.danger', 'action.secondary']) {
       // Undeclared: nothing in the adjacency declaration set pairs this fill with the
       // inverted surface, on either side.
@@ -851,7 +851,7 @@ describe('AC-theming-53 covers: R22', () => {
 // These three assertions pin the FULL thrown message, independently typed rather than
 // imported from the source constant, so a copy edit to the constant makes the hardcoded
 // string here mismatch and this test go red, closing the gap the anchors leave open.
-describe('full-content pins for the three steward-cleared adjacency.ts messages', () => {
+describe('full-content pins for the three cleared adjacency.ts messages', () => {
   it('assertCoverageFloor: the full message for a missing category', () => {
     const withoutBorderControl = ADJACENCY.filter((a) => a.subject !== 'border.control')
     let message = ''

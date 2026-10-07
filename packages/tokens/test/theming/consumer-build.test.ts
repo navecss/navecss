@@ -22,7 +22,7 @@ const CONSUMER_BUILD_SOURCE = path.resolve(
 )
 
 /**
- * Row `F3` (round 2): the OTHER half of the consumer-invocable build path.
+ * The OTHER half of the consumer-invocable build path.
  * `AC-token-build-06`'s second clause scopes its scan to "the consumer-invocable build path",
  * which is `facade.build` — and `facade.build` reaches `builder.ts`, `formats.ts`, `reader.ts`
  * and `overrides.ts` as well as this file's theming half. `formats.ts` writes FIVE of R7's
@@ -34,7 +34,7 @@ const FACADE_SOURCE = path.resolve(import.meta.dirname, '../../src/facade.ts')
 const FORMATS_SOURCE = path.resolve(import.meta.dirname, '../../src/formats.ts')
 
 /**
- * Row `R3-02` (verifier-gated tail): the consumer-invocable build path's own ENTRY POINT —
+ * The consumer-invocable build path's own ENTRY POINT:
  * what `bin: navecss-tokens` resolves to. Nothing imports it, so it is unreachable from the
  * other two roots and has to be a root itself. It constructs the options object every artifact
  * is composed from, so a `process.env`-derived default here would vary a COMMITTED artifact
@@ -130,8 +130,8 @@ function movedDeclarations(overrides: PerStepOverrides): [string, string, string
  *
  * Everything below observes CALLS. Nothing here asserts, computes, restates or implies any
  * contrast ratio, floor, threshold, category, verdict or conformance outcome, and nothing
- * here characterises what any input reaches: none of that is this test's, or this
- * persona's, to say.
+ * here characterises what any input reaches: none of that is this test's
+ * to say.
  */
 async function observeContrastUse(): Promise<{ invoked: string[]; sameStepSources: unknown[] }> {
   const invoked: string[] = []
@@ -214,19 +214,19 @@ describe('AC-token-build-06 covers: R7', () => {
   })
 
   /**
-   * ROW `F3` (Phase 3 round 2). `AC-token-build-06`'s second clause
+   * `AC-token-build-06`'s second clause
    * scopes its scan to "the consumer-invocable build path", and that path is `facade.build`,
    * not the theming half alone. Two conjuncts, because either one alone is satisfiable by an
    * instrument that proves nothing: (a) the scan's own roots reach `formats.ts` — the file
    * that writes five of R7's seven COMMITTED artifacts — and (b) the scan's own predicate
-   * bites on exactly the mutation the quality reviewer measured, which at the narrow roots left the
+   * bites on exactly the mutation that was measured, which at the narrow roots left the
    * whole 707-test suite green while two builds 1.2s apart differed on line 1 of `tokens.css`,
    * `tokens.d.ts`, `breakpoints.d.ts` and `breakpoints.js`.
    *
    * The mutation is applied to a COPY of the source in memory and never to the file: a test
    * that edits its own subject on disk is a test that can leave the tree dirty on a failure.
    */
-  it('row F3: the scan covers the DTCG half of the consumer-invocable build path, and reds on a wall-clock timestamp spliced into formats.ts', () => {
+  it('the scan covers the DTCG half of the consumer-invocable build path, and reds on a wall-clock timestamp spliced into formats.ts', () => {
     const sources = reachableSources(...SCAN_ROOTS)
     const reached = new Set(sources.keys().map((f) => path.basename(f)))
 
@@ -237,8 +237,8 @@ describe('AC-token-build-06 covers: R7', () => {
     }
     expect(sources.keys().toArray()).toContain(FORMATS_SOURCE)
 
-    // (b) BITE: the identical predicate, applied to formats.ts's real bytes with the quality
-    // reviewer's own mutation spliced into the generated-header constant.
+    // (b) BITE: the identical predicate, applied to formats.ts's real bytes with the measured
+    // mutation spliced into the generated-header constant.
     const real = readFileSync(FORMATS_SOURCE, 'utf8')
     const mutated = real.replace(
       "const HEADER = '/* Nave Design System — generated, do not edit */'",
@@ -253,7 +253,7 @@ describe('AC-token-build-06 covers: R7', () => {
   })
 
   /**
-   * ROW `R3-02` (Phase 3 verifier-gated tail). Round 2 widened the walk
+   * The walk was widened
    * to `facade.ts` and stopped one level below the phrase the criterion actually uses:
    * `AC-token-build-06`'s clause scopes the scan to "the consumer-invocable build path", and
    * `bin.ts` IS that path's entry point. Nothing imports it, so no widening of the other two
@@ -261,7 +261,7 @@ describe('AC-token-build-06 covers: R7', () => {
    * same reason: coverage alone, or bite alone, is satisfiable by an instrument that proves
    * nothing.
    */
-  it('row R3-02: the scan reaches bin.ts, the consumer-invocable entry point itself, and reds on a process.env default planted there', () => {
+  it('the scan reaches bin.ts, the consumer-invocable entry point itself, and reds on a process.env default planted there', () => {
     const sources = reachableSources(...SCAN_ROOTS)
     const reached = new Set(sources.keys().map((f) => path.basename(f)))
 
@@ -282,11 +282,9 @@ describe('AC-token-build-06 covers: R7', () => {
   })
 
   /**
-   * ROW `G1` (still-open row 1, fixed on Cédric's GATE-2 decision).
-   * The stripper above was fixed TWICE, one round apart, because it existed in two copies:
-   * round 2 anchored the copy in this file and the verifier-gated tail then anchored the
-   * identical inline copy in `seed-ingest.test.ts`. Both are correct today, and the finding
-   * is that the NEXT fix will again reach only one of them.
+   * The stripper above was fixed TWICE because it existed in two copies: first the copy in
+   * this file was anchored, then the identical inline copy in `seed-ingest.test.ts`. Both are
+   * correct today, and the risk is that the NEXT fix will again reach only one of them.
    *
    * The package has met this exact class before and named the remedy: `markdown-headings.ts`
    * consolidated two diverged copies of a fence-aware heading scan and
@@ -295,7 +293,7 @@ describe('AC-token-build-06 covers: R7', () => {
    * rather than asserting the hoist happened: a second copy is the defect whenever it appears,
    * not only on the day it was introduced.
    */
-  it('row 1: the comment stripper has exactly ONE definition in this package test tree', () => {
+  it('the comment stripper has exactly ONE definition in this package test tree', () => {
     // Assembled from fragments rather than written as one literal, because this file would
     // otherwise contain the needle it searches for and the count could never reach one.
     const stripperPattern = [
