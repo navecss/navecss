@@ -14,6 +14,12 @@ import type { UsedContext } from './vite-used.ts'
 
 import { CX_SOURCE, readModule } from './vite-collect.ts'
 import { filePathOf } from './vite-css-id.ts'
+import {
+  type DeclaredModules,
+  declaredModulesFor,
+  declaredReadingOf,
+  isAboutListed,
+} from './vite-cx-modules.ts'
 import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
 import { setupExposuresFor } from './vite-setup-link.ts'
 import { combinedMapOf, placerFor } from './vite-source-map.ts'
@@ -198,6 +204,10 @@ interface Parsed {
   readonly id: string
   readonly pkg: string | undefined
   readonly program: AstNode
+  /**
+   * The modules `cxModules` lists, when it lists any.
+   */
+  readonly declared: DeclaredModules | undefined
 }
 
 /**
@@ -209,9 +219,15 @@ async function recordParsed(
   input: Parsed,
   key: string,
 ): Promise<ModuleRecord> {
-  const { code, id, pkg, program } = input
+  const { code, id, pkg, program, declared } = input
+  const { declaredSources, isDeclared } = await declaredReadingOf(context, ctx, declared, {
+    environment: ctx.environment?.name ?? 'client',
+    module: { code, id, program },
+  })
   const reading = readOrUndefined(code, program, {
-    cxSources: new Set([CX_SOURCE]),
+    cxSources: new Set([CX_SOURCE, ...declaredSources]),
+    declaredSources,
+    isDeclared,
     ownAtoms: await ownAtomNames(context, (file) => {
       ctx.addWatchFile(file)
     }),
@@ -243,8 +259,10 @@ export async function recordModule(
   module: { readonly code: string; readonly id: string; readonly moduleType?: string | undefined },
 ): Promise<ModuleRecord | undefined> {
   const { code, id, moduleType } = module
-  const key = moduleKey(ctx.environment?.name ?? 'client', id)
-  if (!isMentioningAtoms(code)) {
+  const environment = ctx.environment?.name ?? 'client'
+  const key = moduleKey(environment, id)
+  const declared = await declaredModulesFor(context, ctx, environment)
+  if (!isMentioningAtoms(code) && !isAboutListed({ code, id }, declared)) {
     // A module that no longer mentions atoms leaves nothing of its last read.
     context.state.modules.delete(key)
     return undefined
@@ -259,7 +277,7 @@ export async function recordModule(
   }
   const program = parseOrUndefined(ctx, code, moduleType)
   const record = program
-    ? await recordParsed(context, ctx, { code, id, pkg, program }, key)
+    ? await recordParsed(context, ctx, { code, id, pkg, program, declared }, key)
     : unreadableRecord(context, { code, id, pkg }, NOT_PARSED)
   if (!program) context.state.exposures.delete(key)
   context.state.modules.set(key, record)

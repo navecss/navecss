@@ -45,7 +45,11 @@ const REMEDIES: Readonly<Record<ProblemKind, readonly string[]>> = {
   reference: [
     'Call cx() where the classes are applied, with the atom names as its arguments: the build reads calls, not a cx that is assigned, passed or spread.',
   ],
-  reexport: ["Import cx from '@navecss/core/cx' directly in the module that calls it."],
+  // Printed by `reexportRemedy`, which names the modules a `cxModules` entry would clear.
+  reexport: [],
+  declared: [
+    'Re-export cx from @navecss/core/cx in that module unchanged, or remove it from cxModules and import cx from @navecss/core/cx where it is called.',
+  ],
   concatenation: [
     'Write cx() with the atom name, or cx.dynamic() with keep for a name chosen at run time.',
   ],
@@ -72,10 +76,57 @@ function problemLine(problem: LocatedProblem): string {
 }
 
 /**
- * The remedy lines for a dependency's problems, one sentence per package.
+ * Whether the problem is a re-export that listing the module in `cxModules` would clear.
  */
-function packageLine(pkg: string, problems: readonly LocatedProblem[]): string {
+function isListableReexport(problem: LocatedProblem): boolean {
+  return problem.kind === 'reexport' && problem.isListable !== false
+}
+
+/**
+ * The lines for an application's undeclared re-exports: the `cxModules` array that names every
+ * module a listing would clear, pasteable whole, then the direct import.
+ */
+function reexportRemedy(problems: readonly LocatedProblem[]): string[] {
+  const modules = problems
+    .filter((problem) => isListableReexport(problem))
+    .map((problem) => (problem.file.startsWith('.') ? problem.file : `./${problem.file}`))
+  const listable = [...new Set(modules)].toSorted(compareText)
+  const lines =
+    listable.length === 0
+      ? []
+      : [
+          `To keep a module that re-exports cx, list it in navePlugin() as you import it: cxModules: [${listable.map((file) => `'${file}'`).join(', ')}]. Files that import cx from it are then read as if they imported it from @navecss/core/cx. Or import cx from @navecss/core/cx directly where it is called.`,
+        ]
+  if (problems.some((problem) => problem.kind === 'reexport' && !isListableReexport(problem))) {
+    lines.push(
+      'Import cx where it is called, from @navecss/core/cx or from a module listed in cxModules, instead of re-exporting a listed module.',
+    )
+  }
+  return lines
+}
+
+/**
+ * The remedy lines for a dependency's problems: one sentence per package for its calls, and one
+ * for a re-export, which a `cxModules` entry clears.
+ */
+function packageLines(pkg: string, problems: readonly LocatedProblem[]): string[] {
   const keepFor = `keepFor: { '${pkg}': ['<atom>'] }`
+  const reexports = problems.filter((problem) => isListableReexport(problem))
+  const rest = problems.filter((problem) => !isListableReexport(problem))
+  const lines: string[] = []
+  if (rest.length > 0) lines.push(callsLine(pkg, rest, keepFor))
+  if (reexports.length > 0) {
+    lines.push(
+      `${pkg} re-exports cx. List the module you import cx from in navePlugin(): cxModules: ['${pkg}'].`,
+    )
+  }
+  return lines
+}
+
+/**
+ * The remedy sentence for a dependency's calls and uses of `cx`.
+ */
+function callsLine(pkg: string, problems: readonly LocatedProblem[], keepFor: string): string {
   if (problems.every((problem) => problem.kind === 'own')) {
     return `${pkg} names atoms of your own, which have no class, so a keepFor entry cannot make its calls produce a Nave class. The fix is the package's: it must name atoms Nave ships.`
   }
@@ -84,10 +135,6 @@ function packageLine(pkg: string, problems: readonly LocatedProblem[]): string {
     const count = problems.length
     const places = count === 1 ? '1 place' : `${count} places`
     return `${pkg} calls cx.dynamic() in ${places} and lists no atoms in keepFor, so none of them applies a class. List the atoms those calls can take, from its documentation, under its name in navePlugin(): ${keepFor}.`
-  }
-  const isReexportOnly = problems.every((problem) => problem.kind === 'reexport')
-  if (isReexportOnly) {
-    return `${pkg} re-exports cx. Import cx from '@navecss/core/cx' directly where it is called, or list the atoms its calls can produce under its name in navePlugin(): ${keepFor}.`
   }
   return `${pkg} is a dependency, so its code is not yours to change. List the atoms its calls can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: names chosen at run time go through cx.dynamic().`
 }
@@ -100,7 +147,8 @@ function remedyBlock(problems: readonly LocatedProblem[]): string[] {
   const application = problems.filter((problem) => problem.pkg === undefined)
   const lines: string[] = []
   for (const kind of PROBLEM_KINDS) {
-    if (application.some((problem) => problem.kind === kind)) lines.push(...REMEDIES[kind])
+    if (application.every((problem) => problem.kind !== kind)) continue
+    lines.push(...(kind === 'reexport' ? reexportRemedy(application) : REMEDIES[kind]))
   }
   const byPackage = new Map<string, LocatedProblem[]>()
   for (const problem of problems) {
@@ -108,7 +156,7 @@ function remedyBlock(problems: readonly LocatedProblem[]): string[] {
       byPackage.set(problem.pkg, [...(byPackage.get(problem.pkg) ?? []), problem])
   }
   for (const pkg of byPackage.keys().toArray().toSorted(compareText)) {
-    lines.push(packageLine(pkg, byPackage.get(pkg)!))
+    lines.push(...packageLines(pkg, byPackage.get(pkg)!))
   }
   if (application.some((problem) => problem.needsAvailable)) lines.push(availableLine())
   return lines

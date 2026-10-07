@@ -4,15 +4,17 @@
  * host (the post-order plugin) decides where the findings go.
  */
 import type { AstNode } from './vite-ast.ts'
+import type { ModuleReading, ReadOptions } from './vite-collect-types.ts'
 import type { CxUse } from './vite-cx-reference.ts'
 import type { Problem } from './vite-problems.ts'
-import type { SetupExposure, SetupExposures } from './vite-setup-member.ts'
 
-import { childrenOf, nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'
+import { nodesAt } from './vite-ast.ts'
 import { judgeAtom } from './vite-atom-check.ts'
 import { resolveArgument } from './vite-cx-args.ts'
 import { cxBindingsOf, isImportingCx } from './vite-cx-bindings.ts'
 import { useOf, useOfExpression } from './vite-cx-reference.ts'
+import { sourceFormProblems } from './vite-cx-source-forms.ts'
+import { declaredExportProblems } from './vite-declared-exports.ts'
 import {
   atomsInEscapedStrings,
   atomsWrittenIn,
@@ -24,53 +26,7 @@ import { cxReadsOnSetup, stringExposures } from './vite-vue-setup.ts'
 
 export const CX_SOURCE = '@navecss/core/cx'
 
-export interface ReadOptions {
-  /**
-   * The import specifiers that bind Nave's `cx`.
-   */
-  readonly cxSources: ReadonlySet<string>
-  /**
-   * The names of the consumer's own atoms, which have no class.
-   */
-  readonly ownAtoms: ReadonlySet<string>
-  /**
-   * Whether this module belongs to a dependency, where a Nave class built from pieces is only
-   * refused if the module also imports `cx`.
-   */
-  readonly isDependency: boolean
-  /**
-   * For a compiled Vue template: what its component's script exposes to it.
-   */
-  readonly setup?: SetupExposures | undefined
-  /**
-   * Whether the module is a compiled Vue component's `<script setup>`.
-   */
-  readonly isVueScript?: boolean
-}
-
-export interface ModuleReading {
-  /**
-   * Built-in atoms named by a readable `cx()` call.
-   */
-  readonly atoms: Set<string>
-  /**
-   * Built-in atoms whose class is written whole in the module.
-   */
-  readonly classes: Set<string>
-  readonly problems: Problem[]
-  /**
-   * Where `cx.dynamic()` is called, and the call as the plugin reads it.
-   */
-  readonly dynamicCalls: { readonly construct: string; readonly offset: number }[]
-  /**
-   * For a compiled Vue `<script setup>`: what it exposes to its template.
-   */
-  readonly exposes: Map<string, SetupExposure>
-  /**
-   * Whether the module imports from a `cx` source, whether or not it uses the import.
-   */
-  readonly usesCx: boolean
-}
+export type { ModuleReading, ReadOptions } from './vite-collect-types.ts'
 
 interface Reading {
   readonly code: string
@@ -182,6 +138,21 @@ function readCall(reading: Reading, use: CxUse, analysis: ReturnType<typeof anal
 }
 
 /**
+ * The problem a refused use makes. A listed module's exports of `cx` are judged whole by
+ * `declaredExportProblems`, so a refused re-export there makes none.
+ */
+function refusedProblem(reading: Reading, use: CxUse): Problem | undefined {
+  if (use.isReexport && reading.options.isDeclared === true) return undefined
+  return {
+    kind: use.isReexport ? 'reexport' : 'reference',
+    offset: use.node.start,
+    construct: '',
+    text: `${use.phrase ?? ''}.`,
+    ...(use.isReexport && { isListable: use.isListable }),
+  }
+}
+
+/**
  * Reads one use of the binding.
  */
 function readUse(reading: Reading, use: CxUse, analysis: ReturnType<typeof analyze>): void {
@@ -204,12 +175,8 @@ function readUse(reading: Reading, use: CxUse, analysis: ReturnType<typeof analy
       break
     }
     case 'refused': {
-      report(reading, {
-        kind: use.isReexport ? 'reexport' : 'reference',
-        offset: use.node.start,
-        construct: '',
-        text: `${use.phrase ?? ''}.`,
-      })
+      const problem = refusedProblem(reading, use)
+      if (problem) report(reading, problem)
 
       break
     }
@@ -218,46 +185,22 @@ function readUse(reading: Reading, use: CxUse, analysis: ReturnType<typeof analy
 }
 
 /**
- * The problem a node that names a `cx` source makes, if it makes one: a re-export from it, or a
- * dynamic import of it.
- */
-function sourceFormProblem(reading: Reading, node: AstNode): Problem | undefined {
-  const source = staticStringOf(nodeAt(node, 'source'))
-  if (source === undefined || !reading.options.cxSources.has(source)) return undefined
-  const construct = reading.code.slice(node.start, node.end)
-  if (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') {
-    const text =
-      'a re-export of cx, which the build follows only from a module listed in cxModules.'
-    return { kind: 'reexport', offset: node.start, construct, text }
-  }
-  if (node.type !== 'ImportExpression') return undefined
-  const text =
-    'a dynamic import of cx, which the build cannot follow. Import it at the top of the module.'
-  return { kind: 'reference', offset: node.start, construct, text }
-}
-
-/**
- * Re-exports straight from a `cx` source, and dynamic imports of one.
- */
-function readSourceForms(reading: Reading, program: AstNode): void {
-  const stack: AstNode[] = [program]
-  while (stack.length > 0) {
-    const node = stack.pop()!
-    const problem = sourceFormProblem(reading, node)
-    if (problem) report(reading, problem)
-    stack.push(...childrenOf(node))
-  }
-}
-
-/**
  * Reads every use of a `cx` binding in the module, and, in a compiled Vue template, every read of
  * one off `$setup`.
  */
-function readUses(reading: Reading, program: AstNode): ScopeAnalysis {
+function readUses(
+  reading: Reading,
+  program: AstNode,
+): { analysis: ScopeAnalysis; bindings: ReturnType<typeof cxBindingsOf> } {
   const { code, options, result } = reading
   const analysis = analyze(program)
   const bindings = cxBindingsOf(analysis, options.cxSources)
-  const frame = { analysis, code, allowsExposure: options.isVueScript === true }
+  const frame = {
+    analysis,
+    code,
+    allowsExposure: options.isVueScript === true,
+    declaredSources: options.declaredSources,
+  }
   for (const reference of analysis.references) {
     const cx = reference.binding && bindings.get(reference.binding)
     const use = cx && useOf(frame, reference, cx)
@@ -270,7 +213,7 @@ function readUses(reading: Reading, program: AstNode): ScopeAnalysis {
   for (const member of members) {
     readUse(withSetup, useOfExpression(frame, member, setupMemberName(member) ?? 'cx'), analysis)
   }
-  return analysis
+  return { analysis, bindings }
 }
 
 /**
@@ -286,8 +229,20 @@ export function readModule(code: string, program: AstNode, options: ReadOptions)
     usesCx: isImportingCx(program, options.cxSources),
   }
   const reading: Reading = { code, options, result, seen: new Set() }
-  const analysis = readUses(reading, program)
-  readSourceForms(reading, program)
+  const { analysis, bindings } = readUses(reading, program)
+  const listed =
+    options.isDeclared === true
+      ? declaredExportProblems({
+          program,
+          analysis,
+          bindings,
+          cxSources: options.cxSources,
+          declaredSources: options.declaredSources ?? new Set(),
+        })
+      : []
+  for (const problem of [...sourceFormProblems(code, program, options), ...listed]) {
+    report(reading, problem)
+  }
   for (const atom of atomsWrittenIn(code)) result.classes.add(atom)
   for (const atom of atomsInEscapedStrings(program)) result.classes.add(atom)
   if (result.usesCx || !options.isDependency) {

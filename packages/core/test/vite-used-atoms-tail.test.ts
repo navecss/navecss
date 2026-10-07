@@ -256,7 +256,7 @@ describe('AC-used-atoms-03: an expression nested deeper than a call stack is rea
   }, 120_000)
 })
 
-describe('AC-used-atoms-47: a specifier is judged from the module that writes it', () => {
+describe('a specifier is judged from the module that writes it', () => {
   const core = '{"private":true,"type":"module","imports":{"#cx":"@navecss/core/cx"}}'
   const dep = {
     'package.json': JSON.stringify({

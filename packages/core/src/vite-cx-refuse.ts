@@ -14,6 +14,10 @@ export interface Reading {
    * the binding exposes it to the template instead of using it.
    */
   readonly allowsExposure?: boolean
+  /**
+   * The import specifiers that name a module listed in `cxModules`, as opposed to Nave's own `cx`.
+   */
+  readonly declaredSources?: ReadonlySet<string> | undefined
 }
 
 type Phrase = (reading: Reading, parent: AstNode, local: string) => string

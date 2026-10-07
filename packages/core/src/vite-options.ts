@@ -31,12 +31,23 @@ export interface UsedAtomOptions {
    * code, not a dependency.
    */
   keepFor?: Readonly<Record<string, readonly AtomName[]>>
+
+  /**
+   * Modules of yours that re-export `cx` from `@navecss/core/cx` unchanged, as
+   * `export { cx } from '@navecss/core/cx'`: a file that imports `cx` from one is read as if it
+   * imported it from `@navecss/core/cx`. Write each entry as you import it: a path from the
+   * project root (Vite's `root`), an alias, or a package name. The build follows a listed module
+   * one step; an entry that names no module of this build is ignored. The same setting, with the
+   * same entries, as `@navecss/eslint-plugin`'s `cxModules`.
+   */
+  cxModules?: readonly string[]
 }
 
 export interface ResolvedUsedOptions {
   readonly atomic: 'all' | 'used'
   readonly keep: readonly string[]
   readonly keepFor: Readonly<Record<string, readonly string[]>>
+  readonly cxModules: readonly string[]
 }
 
 /**
@@ -101,6 +112,21 @@ function problemsInKeepFor(keepFor: unknown, own: ReadonlySet<string> | undefine
 }
 
 /**
+ * Every problem in `cxModules`, which holds no atom names and so needs no atom set.
+ */
+function problemsInCxModules(cxModules: unknown): string[] {
+  if (!Array.isArray(cxModules)) {
+    return ['navePlugin(): cxModules must be an array of module paths or specifiers.']
+  }
+  // `Array.from` reads a hole as `undefined`, so a sparse list is refused like any other bad entry.
+  return Array.from(cxModules as unknown[], (entry, index) =>
+    typeof entry === 'string'
+      ? []
+      : `navePlugin(): cxModules[${index}] must be a string: a module path or a specifier.`,
+  ).flat()
+}
+
+/**
  * The problems in the options, with `own` the names of the consumer's own atoms (`undefined`
  * while an `extend` module has not been read: a name that is no built-in atom is then judged
  * later, and every other problem now).
@@ -110,12 +136,13 @@ function problemsInOptions(
   own: ReadonlySet<string> | undefined,
 ): string[] {
   const problems: string[] = []
-  const { atomic, keep, keepFor } = options as Record<string, unknown>
+  const { atomic, keep, keepFor, cxModules } = options as Record<string, unknown>
   if (atomic !== undefined && atomic !== 'all' && atomic !== 'used') {
     problems.push("navePlugin(): atomic must be 'used' or 'all'.")
   }
   if (keep !== undefined) problems.push(...problemsInList('keep', keep, own))
   if (keepFor !== undefined) problems.push(...problemsInKeepFor(keepFor, own))
+  if (cxModules !== undefined) problems.push(...problemsInCxModules(cxModules))
   return problems
 }
 
@@ -140,6 +167,7 @@ export function resolveUsedOptions(options: UsedAtomOptions): ResolvedUsedOption
     keepFor: Object.fromEntries(
       Object.entries(options.keepFor ?? {}).map(([pkg, list]) => [pkg, [...list]]),
     ),
+    cxModules: [...(options.cxModules ?? [])],
   }
 }
 

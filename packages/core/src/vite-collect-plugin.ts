@@ -12,6 +12,8 @@ import type { UsedContext } from './vite-used.ts'
 import { isMentioningAtoms, recordModule } from './vite-collect-module.ts'
 import { isStylesheetId } from './vite-css-id.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
+import { declaredImporterError } from './vite-cx-module-importers.ts'
+import { forgetDeclared } from './vite-cx-modules.ts'
 import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
@@ -108,6 +110,7 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
       // The names of the consumer's own atoms are known once the `extend` module has loaded, so a
       // list that names one is judged now. A rebuild in watch mode fixes its emitted set again.
       assertOptions(context.options, await ownAtomNames(context))
+      forgetDeclared(context.state, this.environment.name)
       if (this.environment.config.consumer !== 'client') return
       context.state.emitted = undefined
       context.state.clientEnded = false
@@ -139,7 +142,12 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
       const problems = recordsOf(context.state, this.environment.name).flatMap((record) =>
         problemsOf(record, context),
       )
-      if (problems.length > 0) this.error(buildReport(problems))
+      // The report and the check of the listed modules' importers print in one failure.
+      const failures = [
+        problems.length > 0 ? buildReport(problems) : undefined,
+        await declaredImporterError(this, context),
+      ].filter((failure) => failure !== undefined)
+      if (failures.length > 0) this.error(failures.join('\n\n'))
       await checkCxImporters(this, context)
       checkEnvironmentOrder(this, context)
       if (this.environment.config.consumer === 'server') {

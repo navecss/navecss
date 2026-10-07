@@ -32,6 +32,11 @@ export interface CxUse {
    */
   readonly isReexport?: boolean
   /**
+   * For a refused re-export: whether listing the module in `cxModules` would clear it, which it
+   * does not when the binding comes from a module that is already listed (a second hop).
+   */
+  readonly isListable?: boolean
+  /**
    * For an exposure: the name a compiled Vue component's setup return gives the binding.
    */
   readonly exposedAs?: string
@@ -204,7 +209,12 @@ export function useOfExpression(reading: Reading, start: AstNode, local: string)
 export function useOf(reading: Reading, reference: Reference, cx: CxBinding): CxUse {
   const local = cx.binding.name
   const expression = reference.node
-  if (!cx.isNamespace) return useOfExpression(reading, expression, local)
+  if (!cx.isNamespace) {
+    const use = useOfExpression(reading, expression, local)
+    if (!use.isReexport) return use
+    const isDeclaredSource = reading.declaredSources?.has(cx.binding.source ?? '') === true
+    return { ...use, isListable: !isDeclaredSource }
+  }
   const member = reading.analysis.parentOf.get(expression)
   const isCx =
     member?.type === 'MemberExpression' &&

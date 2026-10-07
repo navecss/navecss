@@ -11,6 +11,7 @@ export const PROBLEM_KINDS = [
   'argument',
   'reference',
   'reexport',
+  'declared',
   'concatenation',
   'dynamic',
   'unknown',
@@ -35,6 +36,11 @@ export interface Problem {
    * For an unknown atom with no near candidate: the report closes with `Available:`.
    */
   readonly needsAvailable?: boolean
+  /**
+   * For a re-export: whether listing the module in `cxModules` would clear it, which it does not
+   * when the module re-exports the `cx` of a module that is already listed (a second hop).
+   */
+  readonly isListable?: boolean
 }
 
 /**

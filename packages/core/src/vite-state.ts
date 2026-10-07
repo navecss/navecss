@@ -6,6 +6,7 @@
  * share; a build that has begun reading closes its state, so the next build of the same root,
  * even from the same config object, starts a fresh one.
  */
+import type { DeclaredModules } from './vite-cx-modules.ts'
 import type { SetupExposures } from './vite-setup-member.ts'
 import type { DevEnvironmentLike } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
@@ -77,6 +78,15 @@ export interface RootState {
    * The names of the packages with a module that some environment transformed.
    */
   readonly packages: Set<string>
+  /**
+   * The modules `cxModules` lists, resolved once for each environment, by environment name.
+   */
+  readonly declared: Map<string, Promise<DeclaredModules>>
+  /**
+   * The imports of a listed module that were recognised, as `<environment>\0<file>\0<importer>`,
+   * for the build-end check against the module graph.
+   */
+  readonly recognised: Set<string>
   /**
    * The text of each stylesheet holding the atomic layer, by `<environment>\0<id>`.
    */
@@ -186,6 +196,8 @@ function freshState(): RootState {
     exposures: new Map(),
     templateLinks: new Map(),
     packages: new Set(),
+    declared: new Map(),
+    recognised: new Set(),
     sheets: new Map(),
     pages: new Map(),
     emitted: undefined,

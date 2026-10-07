@@ -19,7 +19,7 @@ import { filePathOf } from './vite-css-id.ts'
 import { isDependencyId, isNaveOwn, moduleLabel, packageNameOf } from './vite-module-kind.ts'
 import { compareText } from './vite-problems.ts'
 
-interface Importer {
+export interface Importer {
   readonly id: string
   readonly code: string
 }
@@ -27,7 +27,7 @@ interface Importer {
 /**
  * The ids of the modules that import `cxId`, statically or dynamically.
  */
-function importerIdsOf(ctx: RenderContext, cxId: string): string[] {
+export function importerIdsOf(ctx: RenderContext, cxId: string): string[] {
   const info = ctx.getModuleInfo?.(cxId)
   return [...new Set([...(info?.importers ?? []), ...(info?.dynamicImporters ?? [])])]
 }
@@ -44,7 +44,7 @@ async function isStoodInFor(context: UsedContext, id: string): Promise<boolean> 
 /**
  * The importer `id` with its text, unless it is Nave's own or in a package `keepFor` stands in for.
  */
-async function candidateOf(
+export async function candidateOf(
   ctx: RenderContext,
   context: UsedContext,
   id: string,
@@ -57,7 +57,7 @@ async function candidateOf(
 /**
  * Every module specifier written in `program`: imports, re-exports and dynamic imports.
  */
-function specifiersIn(program: AstNode): string[] {
+export function specifiersIn(program: AstNode): string[] {
   const found = new Set<string>()
   const stack: AstNode[] = [program]
   while (stack.length > 0) {
@@ -72,7 +72,7 @@ function specifiersIn(program: AstNode): string[] {
 /**
  * Every specifier `importer` writes, or `undefined` when its text cannot be read.
  */
-function specifiersOf(ctx: RenderContext, importer: Importer): string[] | undefined {
+export function specifiersOf(ctx: RenderContext, importer: Importer): string[] | undefined {
   try {
     return specifiersIn(ctx.parse?.(importer.code) as AstNode)
   } catch {
@@ -86,7 +86,7 @@ function specifiersOf(ctx: RenderContext, importer: Importer): string[] | undefi
  * text can name different files from different importers. A relative specifier is asked too, since
  * it can name the installed file.
  */
-async function isResolvingToCx(
+export async function isResolvingToCx(
   ctx: RenderContext,
   specifier: string,
   importer: Importer,
