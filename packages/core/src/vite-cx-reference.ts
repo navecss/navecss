@@ -213,19 +213,33 @@ function isOtherKey(property: AstNode): boolean {
 }
 
 /**
+ * Whether `node` assigns to a pattern in a way that leaves no value behind: a parameter's default,
+ * or an assignment that is a whole statement. An assignment evaluates to its right side, which here
+ * is the namespace itself, so one whose value is used hands the namespace on.
+ */
+function isPatternAssignment(reading: Reading, node: AstNode | undefined): node is AstNode {
+  if (node?.type === 'AssignmentPattern') return true
+  return (
+    node?.type === 'AssignmentExpression' &&
+    node.operator === '=' &&
+    reading.analysis.parentOf.get(node)?.type === 'ExpressionStatement'
+  )
+}
+
+/**
  * The pattern `expression` is destructured by, when it is the whole initialiser of a declaration
- * (`const { a } = ns`), the right side of an assignment (`({ a } = ns)`) or a parameter's default
- * (`({ a } = ns) => a`).
+ * (`const { a } = ns`), the right side of an assignment statement (`({ a } = ns)`) or a
+ * parameter's default (`({ a } = ns) => a`). An assignment whose value is used, as in
+ * `const r = ({ a } = ns)`, hands the namespace on, so it is not one.
  */
 function patternDestructuring(reading: Reading, expression: AstNode): AstNode | undefined {
   const parent = reading.analysis.parentOf.get(expression)
   if (parent?.type === 'VariableDeclarator' && nodeAt(parent, 'init') === expression) {
     return nodeAt(parent, 'id')
   }
-  const isAssignment =
-    (parent?.type === 'AssignmentExpression' && parent.operator === '=') ||
-    parent?.type === 'AssignmentPattern'
-  return isAssignment && nodeAt(parent, 'right') === expression ? nodeAt(parent, 'left') : undefined
+  return isPatternAssignment(reading, parent) && nodeAt(parent, 'right') === expression
+    ? nodeAt(parent, 'left')
+    : undefined
 }
 
 /**

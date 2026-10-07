@@ -36,14 +36,16 @@ export interface UsedAtomOptions {
    * Modules that re-export `cx` from `@navecss/core/cx` unchanged, as
    * `export { cx } from '@navecss/core/cx'`, in your code or in a dependency: a file that imports
    * `cx` from one is read as if it imported it from `@navecss/core/cx`. The build follows a listed
-   * module one step. A relative entry (`'./src/ui/index.ts'`) is a path from Vite's `root`. Any
-   * other entry (a package name or subpath, an alias, a `#` import, an absolute path) matches an
-   * import written the same way. Every entry also matches an import that resolves to its file
-   * through a specifier naming that file or, for an `index` file, its directory; in your code, an
-   * import that reaches the file through any other specifier fails the build instead. A relative
-   * entry that resolves to no file is ignored, and so is an entry naming `@navecss/core/cx`, which
-   * the build always reads. The same setting, with the same entries, as `@navecss/eslint-plugin`'s
-   * `cxModules`, which reads a relative entry from the working directory instead of Vite's `root`.
+   * module one step. A relative entry (`'./src/ui/index.ts'`) is a path from Vite's `root`. A
+   * package name or subpath, an alias or an absolute path matches an import written the same way.
+   * A `#` entry matches an import written the same way only where that import resolves to a listed
+   * file, since a `#` import resolves through the `package.json` nearest the file that writes it.
+   * Every entry also matches an import that resolves to its file through a specifier naming that
+   * file or, for an `index` file, its directory; in your code, an import that reaches the file
+   * through any other specifier fails the build instead. A relative entry that resolves to no file
+   * is ignored, and so is an entry naming `@navecss/core/cx`, which the build always reads. The
+   * same setting, with the same entries, as `@navecss/eslint-plugin`'s `cxModules`, which reads a
+   * relative entry from the working directory instead of Vite's `root`.
    */
   cxModules?: readonly string[]
 }

@@ -4,6 +4,7 @@
  * collector reading a declared module and its importers, the post-order half's text test that
  * decides which modules are parsed and which sources are resolved, and the option's validation.
  */
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { parseAst } from 'vite'
 import { describe, expect, it } from 'vitest'
@@ -147,6 +148,18 @@ describe('AC-used-atoms-47 - a namespace import of a declared module is read for
       `${NS}let r\n;({ ...r } = U)\nexport const p = r`,
     ],
     ['assigned to a plain name', `${NS}let w\nw = U\nexport const q = w`],
+    [
+      'destructured by an assignment whose value is kept',
+      `${NS}let B\nconst r = ({ Button: B } = U)\nexport const h = [B, r.cx('grid')]`,
+    ],
+    [
+      'destructured by an assignment whose value is exported',
+      `${NS}let B\nexport const r = ({ Button: B } = U)\nexport const h = B`,
+    ],
+    [
+      'destructured by an assignment whose value is returned',
+      `${NS}let B\nexport const pick = () => ({ Button: B } = U)\nexport const h = B`,
+    ],
   ]
 
   it.each(refused)('%s is one problem in the importer', (_name, code) => {
@@ -637,7 +650,11 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
       const code = make(n)
       return fastest(() => isAboutListed({ code, id: `${ROOT}/src/m.ts` }, declared))
     }
-    return time(8000) / time(4000)
+    // One stall of the scheduler can lengthen either time of a measurement by a whole factor, as a
+    // pattern that takes a fraction of a millisecond is easily outlasted by it. A stall only ever
+    // adds time, and a quadratic pattern is about 4 in every measurement, so the least of three
+    // measurements still tells the two apart.
+    return Math.min(...Array.from({ length: 3 }, () => time(8000) / time(4000)))
   }
 
   const MOST = 3
@@ -718,6 +735,26 @@ describe('cxModules validation (round-6 decision 10)', () => {
     )
     expect(() => navePlugin({ extend: './atoms.mjs', cxModules: 'x' as never })).toThrow(
       'cxModules must be an array',
+    )
+  })
+})
+
+describe('the cxModules option’s documentation', () => {
+  const source = readFileSync(new URL('../src/vite-options.ts', import.meta.url), 'utf8')
+  const docblock = source
+    .slice(source.indexOf('Modules that re-export'), source.indexOf('cxModules?:'))
+    .replaceAll(/\s*\n\s*\*\s?/g, ' ')
+
+  it('lists no # import among the entries that match an import written the same way', () => {
+    expect(docblock).not.toContain('an alias, a `#` import')
+    expect(docblock).toContain(
+      'A package name or subpath, an alias or an absolute path matches an import written the same way.',
+    )
+  })
+
+  it('says a # entry matches only where the import resolves to a listed file', () => {
+    expect(docblock).toContain(
+      'A `#` entry matches an import written the same way only where that import resolves to a listed file',
     )
   })
 })

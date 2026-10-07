@@ -261,7 +261,7 @@ const EXPORT_PROBLEMS: Readonly<
 export function declaredExportProblems(input: DeclaredExportsInput): Problem[] {
   const body = nodesAt(input.program, 'body')
   const hasNaveCx = body.some((node) => isNaveCxExport(node, input))
-  return [
+  const problems = [
     ...body.flatMap((node) =>
       node.type === 'ExportAllDeclaration'
         ? starExportProblems(node, input, hasNaveCx)
@@ -269,4 +269,5 @@ export function declaredExportProblems(input: DeclaredExportsInput): Problem[] {
     ),
     ...unfollowedStarProblems(body, input),
   ]
+  return hasNaveCx ? problems.map((found) => ({ ...found, hasNaveCx })) : problems
 }

@@ -131,8 +131,8 @@ export function importerErrorOf(
   const count = new Set(found.map((item) => item.importer)).size
   const first =
     count === 1
-      ? '1 file imports a module listed in cxModules through a specifier the build does not recognise, so the build did not read that file for cx() calls.'
-      : `${count} files import a module listed in cxModules through a specifier the build does not recognise, so the build did not read those files for cx() calls.`
+      ? '1 file imports a module listed in cxModules through a specifier the build does not recognise, so the build did not read the cx() calls made through it.'
+      : `${count} files import a module listed in cxModules through a specifier the build does not recognise, so the build did not read the cx() calls made through those specifiers.`
   const lines = application.map((item) => applicationLinesOf(item))
   const byPackage = Map.groupBy(dependencies, (item) => item.pkg!)
   const packages = byPackage.keys().toArray().toSorted(compareText)

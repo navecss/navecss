@@ -41,6 +41,12 @@ export interface Problem {
    * when the module re-exports the `cx` of a module that is already listed (a second hop).
    */
   readonly isListable?: boolean
+  /**
+   * For a problem in a module listed in `cxModules`: whether the module also exports Nave's own
+   * `cx`. An importer's `cx` is then Nave's, so what the build says of its calls is not an echo of
+   * this problem and stays when the problem is reported.
+   */
+  readonly hasNaveCx?: boolean
 }
 
 /**

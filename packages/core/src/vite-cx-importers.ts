@@ -55,18 +55,22 @@ export async function candidateOf(
 }
 
 /**
- * Every module specifier written in `program`: imports, re-exports and dynamic imports.
+ * Every module specifier written in `program`: imports, re-exports and dynamic imports, each once,
+ * in the order it is first written.
  */
 export function specifiersIn(program: AstNode): string[] {
-  const found = new Set<string>()
+  const found = new Map<string, number>()
   const stack: AstNode[] = [program]
   while (stack.length > 0) {
     const node = stack.pop()!
-    const source = staticStringOf(nodeAt(node, 'source'))
-    if (source !== undefined) found.add(source)
+    const where = nodeAt(node, 'source')
+    const source = staticStringOf(where)
+    if (where !== undefined && source !== undefined) {
+      found.set(source, Math.min(found.get(source) ?? Infinity, where.start))
+    }
     stack.push(...childrenOf(node))
   }
-  return [...found]
+  return [...found].toSorted(([, a], [, b]) => a - b).map(([source]) => source)
 }
 
 /**

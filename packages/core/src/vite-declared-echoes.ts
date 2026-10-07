@@ -4,7 +4,8 @@
  * Nave's, so what it says of those calls (an atom it does not know, a name it cannot read) is the
  * listed module's own problem seen from the other side: it stops being true once that module is
  * fixed or taken off the list. Only the listed module's problem is reported, so the reader sees the
- * cause and not its echo.
+ * cause and not its echo. A listed module that also exports Nave's own `cx` leaves its importers a
+ * `cx` that is Nave's, so what the build says of their calls is their own problem and stays.
  */
 import type { ProblemKind } from './vite-problems.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
@@ -37,7 +38,7 @@ export function withoutEchoes(modules: readonly ModuleProblems[]): LocatedProble
   const broken = new Set(
     modules.flatMap((module) =>
       module.problems.flatMap((problem) =>
-        problem.kind === 'declared' && problem.moduleId !== undefined
+        problem.kind === 'declared' && problem.moduleId !== undefined && !problem.hasNaveCx
           ? [fileOf(problem.moduleId)]
           : [],
       ),

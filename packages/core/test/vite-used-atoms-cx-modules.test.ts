@@ -589,6 +589,20 @@ describe('AC-used-atoms-48 - a foreign cx reaching an importer through a star is
 
     expect(built.error).toContain('src/a.ts:')
   }, 60_000)
+
+  it('control: a listed module whose problem leaves Nave’s cx exported does not hide a call it cannot read', async () => {
+    const built = await build(
+      {
+        'src/ui/index.ts': `${BARREL}export { cx as cn } from '@navecss/core/cx'\n`,
+        'src/a.ts': "import { cx } from './ui'\nexport const a = (v: string) => cx(v)\n",
+      },
+      { options },
+    )
+
+    expect(built.error).toMatch(/^2 problems in 2 files/)
+    expect(built.error).toContain('src/ui/index.ts:')
+    expect(built.error).toContain('src/a.ts:')
+  }, 60_000)
 })
 
 describe('AC-used-atoms-47 - a directory specifier with more than one dot segment, and a namespace taken apart by assignment', () => {
@@ -645,6 +659,27 @@ describe('AC-used-atoms-47 - a directory specifier with more than one dot segmen
     expect(built.error).toMatch(/^1 problem in 1 file/)
     expect(built.error).toContain('src/h.ts:')
   }, 60_000)
+
+  it.each([
+    [
+      'its value kept in a constant',
+      `${NS}let B\nconst r = ({ Button: B } = U)\nexport const h = [B, U.cx('flex'), r.cx('grid')]\n`,
+    ],
+    [
+      'its value returned from a function',
+      `${NS}let B\nconst pick = () => ({ Button: B } = U)\nexport const h = [B, U.cx('flex'), pick().cx('grid')]\n`,
+    ],
+  ])(
+    'control: an assignment whose value is used is one problem in the importer, %s',
+    async (_name, text) => {
+      const built = await build({ 'src/ui/index.ts': BUTTON_BARREL, 'src/h.ts': text }, { options })
+
+      expect(built.error).toMatch(/^1 problem in 1 file/)
+      expect(built.error).toContain('src/h.ts:')
+      expect(built.error).toContain('U is used other than as U.cx.')
+    },
+    60_000,
+  )
 })
 
 describe('AC-used-atoms-49 - a specifier the text test reads is recognised in a build', () => {
@@ -732,7 +767,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
     expect(built.error).toBe(
       [
-        '2 files import a module listed in cxModules through a specifier the build does not recognise, so the build did not read those files for cx() calls.',
+        '2 files import a module listed in cxModules through a specifier the build does not recognise, so the build did not read the cx() calls made through those specifiers.',
         "src/pages/Orders.tsx: imports './src/ui/index.ts' as '#ds'.",
         "src/pages/Users.tsx: imports './src/ui/index.ts' as '#ds'.",
         "Add the specifier, as written, to cxModules in navePlugin(): cxModules: ['./src/ui/index.ts', '#ds'].",
@@ -797,7 +832,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
       'src/pages/Reports.tsx': `import { cx } from '${specifier}'\nexport const r = cx('flex')\n`,
     })
     const FIRST =
-      '1 file imports a module listed in cxModules through a specifier the build does not recognise, so the build did not read that file for cx() calls.'
+      '1 file imports a module listed in cxModules through a specifier the build does not recognise, so the build did not read the cx() calls made through it.'
     const RELATIVE_REMEDY =
       'Adding a relative specifier to cxModules would not clear this: a relative entry is read from the project root. Instead of the rewrite its line gives, the file can import the module through an alias for it, added to cxModules.'
 
@@ -841,7 +876,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
       expect(first.error).toBe(
         [
-          '2 files import a module listed in cxModules through a specifier the build does not recognise, so the build did not read those files for cx() calls.',
+          '2 files import a module listed in cxModules through a specifier the build does not recognise, so the build did not read the cx() calls made through those specifiers.',
           "src/pages/Orders.tsx: imports './src/ui/index.ts' as '#ds'.",
           "src/pages/Reports.tsx: imports './src/ui/index.ts' as '../shell'. Write '../ui/index' in its place.",
           RELATIVE_REMEDY,
@@ -904,6 +939,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
           ['./src/ui/index.ts'],
         )
 
+        expect(first.error!.split('\n', 1)[0]).toBe(FIRST)
         expect(first.error).toContain("src/a.ts: imports './src/ui/index.ts' as '#ds'.")
         expect(list).toEqual(['./src/ui/index.ts', '#ds'])
         expect(pasted?.error).toBeUndefined()
@@ -998,7 +1034,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
     describe('an importer inside a dependency', () => {
       const TWO =
-        '2 files import a module listed in cxModules through a specifier the build does not recognise, so the build did not read those files for cx() calls.'
+        '2 files import a module listed in cxModules through a specifier the build does not recognise, so the build did not read the cx() calls made through those specifiers.'
       const DEPENDENCY_LINE =
         "node_modules/@acme/ui/dist/button.js: imports '@acme/ui' as '../shell'. The file is in @acme/ui, a dependency, so it is not yours to change."
       const APP_LINE =
@@ -1040,6 +1076,27 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
         expect(built.error).toBe([FIRST, DEPENDENCY_LINE, PACKAGE_LINE].join('\n'))
       }, 60_000)
+
+      it.each([
+        ['../shell', '#k'],
+        ['#k', '../shell'],
+      ])(
+        'names the specifiers of one file in the order it writes them: %s, then %s',
+        async (first, second) => {
+          const pkg = {
+            ...button(),
+            'package.json':
+              '{ "name": "@acme/ui", "version": "1.0.0", "type": "module", "main": "./index.js", "imports": { "#k": "./index.js" } }\n',
+            'dist/button.js': `import { cx } from '${first}'\nimport { cx as k } from '${second}'\nexport const B = [cx('flex'), k('flex')]\n`,
+          }
+          const built = await run(pkg, { options: { cxModules: ['@acme/ui'] } })
+
+          expect(built.error).toContain(
+            `node_modules/@acme/ui/dist/button.js: imports '@acme/ui' as '${first}', '${second}'. The file is in @acme/ui`,
+          )
+        },
+        60_000,
+      )
 
       it('is green once the package is listed in keepFor, shipping its atom', async () => {
         const built = await run(button(), {
