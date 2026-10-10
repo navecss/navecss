@@ -171,6 +171,52 @@ describe('AC-10: how a cxModules entry matches an import', () => {
     }
   })
 
+  describe('a # import through an imports map given only under the import condition is matched as written', () => {
+    // The plugin resolves as Node's `require()` does, which reads no `import` condition, so these
+    // two maps resolve to nothing for it and the entry falls back to the text `#ds`.
+    const root = project({
+      'src/package.json': '{ "imports": { "#ds": { "import": "./ui/index.js" } } }\n',
+      'src/ui/index.js': BARREL,
+      'src/feature/package.json': '{ "imports": { "#ds": { "import": "./join.js" } } }\n',
+      'src/feature/join.js': JOIN,
+      'src/feature/b.js': '',
+    })
+    useCwd(root)
+    for (const rule of RULES) {
+      ruleTester.run('raw', rule, {
+        valid: [],
+        invalid: [
+          {
+            code: call('#ds'),
+            languageOptions,
+            settings: settingsOf(['./src/ui/index.js', '#ds']),
+            filename: path.join(root, 'src/feature/b.js'),
+            errors: 1,
+          },
+        ],
+      })
+    }
+  })
+
+  describe('a relative entry no file answers to matches nothing, even an import written the same way', () => {
+    const root = project({ 'src/feature/b.js': '' })
+    useCwd(root)
+    for (const rule of RULES) {
+      ruleTester.run('raw', rule, {
+        valid: [
+          {
+            // Neither `./gen/cx` from the working directory nor from `src/feature` is a file.
+            code: call('./gen/cx'),
+            languageOptions,
+            settings: settingsOf(['./gen/cx']),
+            filename: path.join(root, 'src/feature/b.js'),
+          },
+        ],
+        invalid: [],
+      })
+    }
+  })
+
   describe('a # alias this plugin cannot resolve is matched as written; a # entry mapped only in a nested package.json is not', () => {
     const bare = project({ 'src/c.js': '' })
     const nested = project({

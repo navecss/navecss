@@ -26,11 +26,11 @@ export interface UsedAtomOptions {
 
   /**
    * By package name: the atoms a dependency's own `cx()` calls can produce, for a package whose
-   * calls the build cannot read. They ship as if they were in `keep`. The package's calls are not
-   * changed, so any other atom they apply has no rule. An empty list is accepted: it says the
-   * package's calls produce no atom, so none ships for it, and a `cx.dynamic()` call in the
-   * package still fails the build, as it does with no entry. A package in your own workspace is
-   * your code, not a dependency.
+   * calls the build cannot read. They ship as if they were in `keep`, beside the atoms of the
+   * package's calls the build does read. The calls it cannot read are not changed, so any other
+   * atom they apply has no rule. An empty list is accepted: it says those calls produce no atom,
+   * so the list adds none, and a `cx.dynamic()` call in the package still fails the build, as it
+   * does with no entry. A package in your own workspace is your code, not a dependency.
    */
   keepFor?: Readonly<Record<string, readonly AtomName[]>>
 

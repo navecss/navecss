@@ -2,7 +2,7 @@
  * AC-used-atoms-52 covers: R17, R19, as amended for `keepFor` (a real `vite build` of a scratch
  * app and a dependency): `keepFor` stands in for a package's own calls and never clears a problem
  * the consumer's own `cxModules` can, each printed remedy is followed and the app rebuilt, and an
- * empty `keepFor` list says a package's calls produce no atom.
+ * empty `keepFor` list says the calls the build cannot read produce no atom.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -219,6 +219,23 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
       expect(first.error).not.toMatch(/cxModules: \[/)
     }, 60_000)
 
+    it('beside a re-export only the package imports, the renamed line comes last and points at the keepFor entry above', async () => {
+      const modules = {
+        'index.js': "export { Menu } from './menu.js'\n",
+        'menu.js': "import './utils/cx.js'\nimport './cn.js'\nexport const Menu = 'm'\n",
+        'utils/cx.js': BARREL,
+        'cn.js': "export { cx as cn } from '@navecss/core/cx'\n",
+      }
+      const first = await run(NAVE_APP, modules)
+      const lines = first.error!.split('\n')
+
+      expect(first.error).toMatch(/^2 problems in 2 files/)
+      expect(lines.at(-2)).toContain(
+        '@acme/ui re-exports cx in a file that only the package itself imports, so your code has no specifier for it to list in cxModules',
+      )
+      expect(lines.at(-1)).toBe(ALSO)
+    }, 60_000)
+
     it('control: listing the renamed module, as the old line said, only turns the problem into the one that says to remove the entry', async () => {
       const modules = withMenu('cn.js', "export { cx as cn } from '@navecss/core/cx'\n")
       const built = await run(CN_APP, modules, { cxModules: ['@acme/ui/cn.js'] })
@@ -252,7 +269,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
   })
 })
 
-describe('AC-used-atoms-52 - an empty keepFor list says the package’s calls produce no atom', () => {
+describe('AC-used-atoms-52 - an empty keepFor list says the calls the build cannot read produce no atom', () => {
   const quiet = {
     'index.js': "export { Button } from './button.js'\n",
     'button.js': "import './utils/cx.js'\nexport const Button = 'b'\n",
@@ -272,6 +289,22 @@ describe('AC-used-atoms-52 - an empty keepFor list says the package’s calls pr
     expect(listed.error).toBeUndefined()
     expect((listed.warnings ?? []).filter((message) => message.includes('nave'))).toEqual([])
     expect(atomLayerAtoms(listed.css)).toEqual([])
+  }, 120_000)
+
+  it('ships the atoms of the calls the build does read, as it does with no list', async () => {
+    const reading = {
+      'index.js': "export { Menu } from './menu.js'\n",
+      'menu.js': `${IMPORT}import './utils/cx.js'\nexport const Menu = [cx('grid'), cx('flex')]\n`,
+      'utils/cx.js': BARREL,
+    }
+    const code = "import { Menu } from '@acme/ui'\nexport const A = Menu\n"
+    const first = await run(code, reading)
+
+    expect(first.error).toMatch(/^1 problem in 1 file/)
+    const listed = await run(code, reading, { keepFor: { '@acme/ui': [] } })
+
+    expect(listed.error).toBeUndefined()
+    expect(atomLayerAtoms(listed.css)).toEqual(atoms('flex', 'grid'))
   }, 120_000)
 
   it('is green under both values of atomic', async () => {

@@ -28,6 +28,11 @@ const FIXTURES = path.join(
   'fixtures/generated/minified-dependencies',
 )
 
+const VITE_DECLARATION = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../dist/vite.d.ts',
+)
+
 /**
  * An app importing the packages `names` (each for its effect), and calling `flex` itself.
  */
@@ -408,7 +413,7 @@ describe('AC-used-atoms-45 — keepFor entries are validated as keep is, under b
     }
   })
 
-  it('accepts an empty list, which says the package’s calls produce no atom: green under both values, with no plugin message', async () => {
+  it('accepts an empty list, which says the calls the build cannot read produce no atom: green under both values, with no plugin message', async () => {
     const app = appUsing([])
     try {
       for (const atomic of ['used', 'all'] as const) {
@@ -421,6 +426,19 @@ describe('AC-used-atoms-45 — keepFor entries are validated as keep is, under b
       app.dispose()
     }
   }, 60_000)
+
+  it('documents an empty list as adding no atom, not as shipping none for the package', () => {
+    const declaration = readFileSync(VITE_DECLARATION, 'utf8')
+    const start = declaration.indexOf('keepFor?:')
+    const docblock = declaration
+      .slice(declaration.lastIndexOf('/**', start), start)
+      .replaceAll(/\n\s*\*\s?/gu, ' ')
+      .replaceAll(/\s+/gu, ' ')
+
+    expect(start).toBeGreaterThan(0)
+    expect(docblock).not.toContain('none ships for it')
+    expect(docblock).toContain('so the list adds none')
+  })
 
   it('a key alone never fails', async () => {
     const app = appUsing([])
