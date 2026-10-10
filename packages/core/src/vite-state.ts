@@ -258,6 +258,24 @@ export function collectedAtoms(state: RootState, kept: readonly string[]): Set<s
 }
 
 /**
+ * `atoms` with the atoms added that restore what an atom in it removes: `srOnlyFocusable` shows
+ * again on focus what `srOnly` hides, so a set that holds `srOnly` holds it too. This adds to the
+ * emitted set only, not to `keep` or to what `cx.dynamic()` accepts.
+ */
+export function withRestorers(atoms: Set<string>): Set<string> {
+  if (atoms.has('srOnly')) atoms.add('srOnlyFocusable')
+  return atoms
+}
+
+/**
+ * The atoms the dev server serves: what the build would emit as far as the dev server has read,
+ * closed under the same pair.
+ */
+export function servedAtoms(state: RootState, kept: readonly string[]): Set<string> {
+  return withRestorers(collectedAtoms(state, kept))
+}
+
+/**
  * The records of one environment.
  */
 export function recordsOf(state: RootState, environment: string): ModuleRecord[] {
