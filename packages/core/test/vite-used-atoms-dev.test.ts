@@ -793,16 +793,31 @@ describe('AC-used-atoms-42 — what dev shows as the build will, and the diverge
 })
 
 /**
- * What the dependency optimizer is given to settle, for each time a row waits for it. The wait
- * ends when the optimizer has committed, so this only bounds an optimizer that never does.
+ * How long a row has, from its start, for the dependency optimizer to commit. Every wait of the
+ * row ends at this one deadline, so the number of waits a row makes does not change when it ends.
  */
-const OPTIMIZER_CEILING_MS = 60_000
+const OPTIMIZER_DEADLINE_MS = 240_000
 
 /**
- * The time a row that waits for the optimizer `settles` times is allowed: each wait's ceiling, and
- * room for the server starts and reads around them.
+ * The room a row has beyond its deadline: one server start or read that is under way when the
+ * deadline passes.
  */
-const optimizerBudget = (settles: number): number => OPTIMIZER_CEILING_MS * (settles + 1)
+const OPTIMIZER_MARGIN_MS = 60_000
+
+/**
+ * The vitest timeout of a row whose optimizer waits end at a deadline `deadlineMs` after it
+ * starts. It is later than the deadline, so a hung optimizer ends the row on the error that names
+ * it, however many waits the row makes.
+ */
+const optimizerRowTimeout = (deadlineMs: number = OPTIMIZER_DEADLINE_MS): number =>
+  deadlineMs + OPTIMIZER_MARGIN_MS
+
+/**
+ * The time, as `Date.now()` reads it, by which a row that starts now must have its optimizer
+ * committed.
+ */
+const optimizerDeadline = (deadlineMs: number = OPTIMIZER_DEADLINE_MS): number =>
+  Date.now() + deadlineMs
 
 /**
  * The dependencies of the client environment that the optimizer has found and not yet committed.
@@ -819,16 +834,20 @@ function uncommitted(server: DevServer): Promise<void>[] {
  * crawl of the static imports has ended, the scan has ended, and every dependency either found
  * has been written to the cache with its metadata. A server that is closed before this, and an app
  * whose directory is removed, leave an optimizer run that fails on the missing files, which Vite
- * reports as an unhandled rejection after the row has ended.
+ * reports as an unhandled rejection after the row has ended. The wait ends at `deadline` at the
+ * latest, with an error that names the optimizer.
  */
-async function optimizerSettled(server: DevServer): Promise<void> {
+async function optimizerSettled(server: DevServer, deadline: number): Promise<void> {
   const { depsOptimizer } = server.environments.client
   if (!depsOptimizer) return
   let timer: NodeJS.Timeout | undefined
   const ceiling = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error('the dependency optimizer did not commit'))
-    }, OPTIMIZER_CEILING_MS)
+    timer = setTimeout(
+      () => {
+        reject(new Error('the dependency optimizer did not commit'))
+      },
+      Math.max(0, deadline - Date.now()),
+    )
   })
   const committed = (async (): Promise<void> => {
     await server.waitForRequestsIdle()
@@ -846,11 +865,53 @@ async function optimizerSettled(server: DevServer): Promise<void> {
 }
 
 /**
+ * A dev server whose dependency optimizer never commits: its scan does not end.
+ */
+function neverCommits(): DevServer {
+  const depsOptimizer = {
+    scanProcessing: new Promise<void>(() => {}),
+    metadata: { discovered: {} },
+  }
+  return {
+    waitForRequestsIdle: () => Promise.resolve(),
+    environments: { client: { depsOptimizer } },
+  } as unknown as DevServer
+}
+
+describe('the wait for the dependency optimizer', () => {
+  it(
+    'ends at the row’s deadline with the error that names the optimizer, however many waits the row makes',
+    async () => {
+      const deadlineMs = 300
+      const deadline = optimizerDeadline(deadlineMs)
+      const server = neverCommits()
+      const started = Date.now()
+
+      const errors: unknown[] = []
+      for (let waits = 0; waits < 6; waits += 1) {
+        try {
+          await optimizerSettled(server, deadline)
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+
+      expect(errors.map(String)).toEqual(
+        Array.from({ length: 6 }, () => 'Error: the dependency optimizer did not commit'),
+      )
+      // Six waits that each had the deadline's length to themselves would take six times as long.
+      expect(Date.now() - started).toBeLessThan(deadlineMs * 3)
+    },
+    optimizerRowTimeout(300),
+  )
+})
+
+/**
  * Closes a dev server whose optimizer may be running, once the optimizer has committed.
  */
-async function stopOptimized(server: DevServer): Promise<void> {
+async function stopOptimized(server: DevServer, deadline: number): Promise<void> {
   try {
-    await optimizerSettled(server)
+    await optimizerSettled(server, deadline)
   } finally {
     await stopDev(server)
   }
@@ -1025,6 +1086,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
   it(
     'dyn-lib’s prebundled chunk keeps core’s import and holds no keep map',
     async () => {
+      const deadline = optimizerDeadline()
       const app = makeFixture()
       try {
         const server = await startDev(
@@ -1032,7 +1094,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
         )
         try {
           await server.transformRequest('/src/main.ts')
-          await optimizerSettled(server)
+          await optimizerSettled(server, deadline)
           const chunk = readFileSync(
             path.join(app.root, 'node_modules', '.vite', 'deps', 'dyn-lib.js'),
             'utf8',
@@ -1049,24 +1111,25 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
             expect(chunk).not.toContain(absent)
           }
         } finally {
-          await stopOptimized(server)
+          await stopOptimized(server, deadline)
         }
       } finally {
         app.dispose()
       }
     },
-    optimizerBudget(1),
+    optimizerRowTimeout(),
   )
 
   it(
     'the resolved define has exactly one key more than under all, and the optimizer’s hash does not change with keep',
     async () => {
+      const deadline = optimizerDeadline()
       const app = makeFixture()
       const hashWith = async (keep: readonly string[]): Promise<string> => {
         const server = await startDev(devConfig(app.root, [navePlugin({ keep: keep as never })]))
         try {
           await server.transformRequest('/src/main.ts')
-          await optimizerSettled(server)
+          await optimizerSettled(server, deadline)
           const metadata = readFileSync(
             path.join(app.root, 'node_modules', '.vite', 'deps', '_metadata.json'),
             'utf8',
@@ -1078,11 +1141,11 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
                 Object.keys(all.config.define ?? {}).length,
             ).toBe(1)
           } finally {
-            await stopOptimized(all)
+            await stopOptimized(all, deadline)
           }
           return (JSON.parse(metadata) as { hash: string }).hash
         } finally {
-          await stopOptimized(server)
+          await stopOptimized(server, deadline)
         }
       }
       try {
@@ -1092,6 +1155,6 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
         app.dispose()
       }
     },
-    optimizerBudget(4),
+    optimizerRowTimeout(),
   )
 })
