@@ -24,6 +24,11 @@ export interface Taken {
    * The `cx` exports the importer takes by name; none when it takes the module whole.
    */
   readonly names: readonly string[]
+  /**
+   * Whether the importer only passes on what it takes: a named re-export, or an import that it
+   * then exports.
+   */
+  readonly isPassedOn?: boolean
 }
 
 export interface Take extends Taken {
@@ -86,6 +91,22 @@ interface Scan {
 }
 
 /**
+ * Whether the module exports the binding that the import specifier declares.
+ */
+function isExported(analysis: ScopeAnalysis, source: string, specifier: AstNode): boolean {
+  const local = exportNameOf(nodeAt(specifier, 'local'))
+  return analysis.references.some(({ binding, node }) => {
+    const parent = analysis.parentOf.get(node)
+    return (
+      binding?.kind === 'import' &&
+      binding.source === source &&
+      binding.name === local &&
+      (parent?.type === 'ExportSpecifier' || parent?.type === 'ExportDefaultDeclaration')
+    )
+  })
+}
+
+/**
  * What an `import` declaration takes.
  */
 function importTakes(node: AstNode, source: string, scan: Scan): Taken[] {
@@ -102,7 +123,8 @@ function importTakes(node: AstNode, source: string, scan: Scan): Taken[] {
         ? 'default'
         : exportNameOf(nodeAt(specifier, 'imported'))
     if (imported !== undefined && isCxName(scan.names, imported)) {
-      found.push({ shape: 'names', names: [imported] })
+      const isPassedOn = isExported(scan.analysis(), source, specifier)
+      found.push({ shape: 'names', names: [imported], ...(isPassedOn && { isPassedOn }) })
     }
   }
   return found
@@ -122,7 +144,7 @@ function exportTakes(node: AstNode, scan: Scan): Taken[] {
   const re = nodesAt(node, 'specifiers')
     .map((specifier) => exportNameOf(nodeAt(specifier, 'local')))
     .filter((name): name is string => name !== undefined && isCxName(scan.names, name))
-  return re.length === 0 ? [] : [{ shape: 'names', names: re }]
+  return re.length === 0 ? [] : [{ shape: 'names', names: re, isPassedOn: true }]
 }
 
 /**

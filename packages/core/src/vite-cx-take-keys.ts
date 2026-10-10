@@ -132,6 +132,49 @@ function parameterTakes(
 }
 
 /**
+ * The `cx` exports taken through the variable that holds the module `init` evaluates to: every
+ * reference to it is read, and a variable that is reassigned or exported takes the whole module.
+ */
+function variableTakes(
+  analysis: ScopeAnalysis,
+  init: AstNode,
+  names: CxNames,
+): string[] | undefined {
+  const declarator = analysis.parentOf.get(init)
+  const declaration = declarator && analysis.parentOf.get(declarator)
+  if (declaration && analysis.parentOf.get(declaration)?.type === 'ExportNamedDeclaration') {
+    return undefined
+  }
+  const found: string[] = []
+  for (const { binding, node } of analysis.references) {
+    if (binding?.init !== init) continue
+    const taken = binding.writes === 0 ? referenceTakes(analysis, node, names) : undefined
+    if (taken === undefined) return undefined
+    found.push(...taken)
+  }
+  return found
+}
+
+/**
+ * The `cx` exports the awaited result of an `import()` takes: by a member read or a destructuring
+ * of it, or through the variable it is the whole initialiser of.
+ */
+function awaitedKeys(
+  analysis: ScopeAnalysis,
+  awaited: AstNode,
+  names: CxNames,
+): string[] | undefined {
+  const declarator = analysis.parentOf.get(awaited)
+  const isVariable =
+    declarator?.type === 'VariableDeclarator' &&
+    nodeAt(declarator, 'init') === awaited &&
+    nodeAt(declarator, 'id')?.type === 'Identifier'
+  return isVariable
+    ? variableTakes(analysis, awaited, names)
+    : referenceTakes(analysis, awaited, names)
+}
+
+/**
  * The `cx` exports an `import()` takes: those of its awaited result, or of the parameter of an
  * inline `.then` callback, read by static keys; `undefined` for any other use of it.
  */
@@ -142,7 +185,7 @@ export function dynamicKeys(
 ): string[] | undefined {
   const awaited = analysis.parentOf.get(node)
   if (awaited?.type === 'AwaitExpression') {
-    return referenceTakes(analysis, outermost(analysis, awaited), names)
+    return awaitedKeys(analysis, outermost(analysis, awaited), names)
   }
   const callback = thenCallback(analysis, node)
   return callback && parameterTakes(analysis, callback, names)

@@ -1,21 +1,29 @@
 /**
  * The re-exports of `cx` in packages `keepFor` lists that `keepFor` does not stand in for: those
- * through which a module the consumer can change takes a `cx` export. A module's `cx` exports are
- * followed through the package's own re-exports of them, so a module that takes one from another
- * module of the package, one hop away or more, takes it from this one. `keepFor` stands in for the
- * package's own calls, which the consumer cannot make the build read, and never for a route of the
- * consumer's own, so in the module graph the build reads, a module that gives `cx` out stays an
+ * through which a module the consumer can change takes a `cx` export. A module that gives Nave's
+ * `cx` out has its `cx` exports followed through every forward of them: a module, of the package or
+ * of another dependency, that only re-exports one (under any name, by `export *` when it is not the
+ * default, by `export * as`, or by importing it and exporting it unchanged), through any number of
+ * hops, so a module that takes one from a forward takes it from this one. `keepFor` stands in for
+ * the package's own calls, which the consumer cannot make the build read, and never for a route of
+ * the consumer's own, so in the module graph the build reads, a module that gives `cx` out stays an
  * error while some module outside the package takes one of its `cx` exports by a route the consumer
  * can change, and `keepFor` clears it otherwise. A server build that leaves the package external
  * holds none of its modules, so a take there is not seen.
  *
- * Two routes, one per remedy. A module with a clearing specifier (a specifier outside the package
- * that resolves to it, an alias or a tsconfig path included, while every `cx` export of the module
- * is under the name `cx`) is cleared by a `cxModules` entry, so any module outside the package,
- * application or dependency, taking one keeps it. A module without one has no entry that clears it,
- * so only an application module taking one keeps it, with a line that tells that module to import
- * `cx` from Nave instead. A dependency that takes a `cx` export of a module without one is counted
- * with the package's own calls, which `keepFor` stands in for.
+ * Two routes, one per remedy, decided take by take. A take is on the `cxModules` route when it is
+ * made straight of the module, not of a forward, the module has a clearing specifier (a specifier
+ * outside the package that resolves to it from Vite's root, an alias or a tsconfig path included,
+ * while every `cx` export of the module is under the name `cx`), and, for an application module,
+ * the build can read the take: the problem keeps its `cxModules` line, whether an application or a
+ * dependency takes it. Every other take an application module makes is on the other route, and
+ * keeps a line that tells that module to import `cx` from Nave instead and says why no `cxModules`
+ * entry is printed. A dependency's take off the `cxModules` route that is not a forward (a call, an
+ * assignment, a wrapper, or a take the build cannot read) ends the walk and is the package's own
+ * call, which `keepFor` stands in for; a module that both calls and forwards counts on both sides,
+ * and listing a package that only forwards in `keepFor` changes nothing, since a forward is not a
+ * call. A module with takes on both routes prints its `cxModules` line first, and the other line
+ * once that one is followed.
  */
 import type { Take, Taken } from './vite-cx-takes.ts'
 import type { RenderContext } from './vite-types.ts'
@@ -26,7 +34,12 @@ import { filePathOf } from './vite-css-id.ts'
 import { fileOf } from './vite-cx-modules.ts'
 import { takesIn, UNREADABLE } from './vite-cx-takes.ts'
 import { importersOf, withClearingSpecifiers } from './vite-dependency-reexports.ts'
-import { type Holder, holdersOf, reachingSpecifiers } from './vite-listed-holders.ts'
+import {
+  type Holder,
+  holdersOf,
+  reachingSpecifiers,
+  type Resolutions,
+} from './vite-listed-holders.ts'
 import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
 import { compareText } from './vite-problems.ts'
 
@@ -37,15 +50,20 @@ import { compareText } from './vite-problems.ts'
  */
 async function takenBy(
   ctx: RenderContext,
-  input: { readonly file: string; readonly id: string; readonly names: ReadonlySet<string> },
+  input: {
+    readonly file: string
+    readonly id: string
+    readonly names: ReadonlySet<string>
+    readonly resolutions: Resolutions
+  },
 ): Promise<Taken[]> {
-  const { file, id, names } = input
+  const { file, id, names, resolutions } = input
   const code = ctx.getModuleInfo?.(id)?.code
   try {
     const read =
       code === null || code === undefined
         ? undefined
-        : await reachingSpecifiers(ctx, { code, file, id })
+        : await reachingSpecifiers(ctx, { code, file, id, resolutions })
     if (!read || read.reaches.size === 0) return [UNREADABLE]
     return takesIn(read.program, { names, reaches: read.reaches })
   } catch {
@@ -63,7 +81,8 @@ function merged(takes: readonly Take[]): Take[] {
     const known = byKey.get(key)
     const names = new Set([...(known?.names ?? []), ...take.names])
     const isReached = take.isReached || known?.isReached === true
-    byKey.set(key, { ...take, isReached, names: [...names].toSorted(compareText) })
+    const isPassedOn = take.isPassedOn === true || known?.isPassedOn === true
+    byKey.set(key, { ...take, isPassedOn, isReached, names: [...names].toSorted(compareText) })
   }
   return byKey.values().toArray()
 }
@@ -93,12 +112,22 @@ async function isCounted(
 async function routesOf(
   ctx: RenderContext,
   context: UsedContext,
-  input: { readonly holder: Holder; readonly importer: string; readonly isEntry: boolean },
+  input: {
+    readonly holder: Holder
+    readonly importer: string
+    readonly isEntry: boolean
+    readonly resolutions: Resolutions
+  },
 ): Promise<Routes> {
-  const { holder, importer, isEntry } = input
+  const { holder, importer, isEntry, resolutions } = input
   const isDependency = isDependencyId(importer)
   const taker = moduleLabel(context.root, importer)
-  const taken = await takenBy(ctx, { file: fileOf(holder.id), id: importer, names: holder.names })
+  const taken = await takenBy(ctx, {
+    file: fileOf(holder.id),
+    id: importer,
+    names: holder.names,
+    resolutions,
+  })
   const takes = taken.map((take) => ({ ...take, taker, isReached: holder.isReached }))
   const isCleared = (take: Take): boolean =>
     isEntry && (isDependency || take.shape !== 'unreadable')
@@ -119,9 +148,14 @@ async function routesOf(
 async function takesFrom(
   ctx: RenderContext,
   context: UsedContext,
-  input: { readonly holder: Holder; readonly isEntry: boolean; readonly pkg: string },
+  input: {
+    readonly holder: Holder
+    readonly isEntry: boolean
+    readonly pkg: string
+    readonly resolutions: Resolutions
+  },
 ): Promise<Routes> {
-  const { holder, isEntry, pkg } = input
+  const { holder, isEntry, pkg, resolutions } = input
   const importers = importersOf(ctx, holder.id)
   const entry: Take[] = []
   const told: Take[] = []
@@ -130,7 +164,7 @@ async function takesFrom(
       continue
     }
 
-    const routes = await routesOf(ctx, context, { holder, importer, isEntry })
+    const routes = await routesOf(ctx, context, { holder, importer, isEntry, resolutions })
     entry.push(...routes.entry)
     told.push(...routes.told)
   }
@@ -138,27 +172,29 @@ async function takesFrom(
 }
 
 /**
- * The problems of `module`, a module of a listed package, that stay errors: its re-exports with the
- * specifier that clears them when a module outside the package takes one of its `cx` exports, or
- * one the package's other modules re-export from it, and, for the takes only an application module
- * can end, all of its problems with those takes.
+ * The problems of one module of a listed package that stay errors: its re-exports with the
+ * specifier that clears them when a module outside the package takes one of its `cx` exports, and,
+ * for the takes only an application module can end (of the module, or of a forward of it), all of
+ * its problems with those takes.
  */
 async function keptOf(
   ctx: RenderContext,
   context: UsedContext,
-  problems: readonly LocatedProblem[],
+  input: { readonly problems: readonly LocatedProblem[]; readonly resolutions: Resolutions },
 ): Promise<LocatedProblem[]> {
+  const { problems, resolutions } = input
   const first = problems[0]!
-  const { pkg } = first
+  const pkg = first.pkg!
   const names = new Set(problems.flatMap((problem) => problem.exportedAs ?? []))
   const clearable = problems.filter((problem) => problem.specifier !== undefined)
-  const holders = await holdersOf(ctx, context, { id: first.moduleId!, names, pkg: pkg! })
+  const holders = await holdersOf(ctx, { id: first.moduleId!, names, resolutions })
   const routed = await Promise.all(
     holders.map((holder) =>
       takesFrom(ctx, context, {
         holder,
         isEntry: clearable.length > 0 && !holder.isReached,
-        pkg: pkg!,
+        pkg,
+        resolutions,
       }),
     ),
   )
@@ -183,8 +219,9 @@ export async function takenReexports(
     if (problem.moduleId === undefined || problem.pkg === undefined) continue
     byModule.set(problem.moduleId, [...(byModule.get(problem.moduleId) ?? []), problem])
   }
+  const resolutions: Resolutions = new Map()
   const kept = await Promise.all(
-    byModule.values().map((problems) => keptOf(ctx, context, problems)),
+    byModule.values().map((problems) => keptOf(ctx, context, { problems, resolutions })),
   )
   return kept.flat()
 }

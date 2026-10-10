@@ -137,13 +137,15 @@ function takeWhat(take: Take): string {
 }
 
 /**
- * The line for a listed package's modules that give `cx` out with no clearing specifier while an
- * application module takes one of their `cx` exports, under any name, directly or through another
- * module of the package: the package's `keepFor` entry stands in only for the package's own calls,
- * so each taking file is told to import `cx` from Nave instead. No `cxModules` entry clears these,
- * and the package is already listed, so neither is offered. `hasPackageFix` is whether a module
- * behind the takes gives `cx` out under another name or is reached through another module of the
- * package, the cases where the package has a lasting fix to make.
+ * The line for the takes of a listed package's `cx` exports that only an application module can
+ * end, by importing `cx` from Nave instead: a take through a forward (a module of the package or of
+ * another dependency that only re-exports the export), a take of a module with no clearing
+ * specifier (it gives `cx` out under another name, or no specifier resolving from Vite's root
+ * reaches it), and a take the build cannot read. The package's `keepFor` entry stands in only for
+ * the package's own calls, and the package is already listed, so the line offers neither that entry
+ * nor a `cxModules` one, and says why it prints no `cxModules` entry. `hasPackageFix` is whether a
+ * module behind the takes gives `cx` out under another name or is reached through a forward, the
+ * cases where a module upstream has a lasting fix to make.
  */
 function takenLine(pkg: string, takes: readonly Take[], hasPackageFix: boolean): string {
   const entries = takes
@@ -159,13 +161,17 @@ function takenLine(pkg: string, takes: readonly Take[], hasPackageFix: boolean):
       ? 'in that file'
       : 'in each of those files'
   const isWhole = entries.some((entry) => entry.shape !== 'names')
-  const whole = isWhole
-    ? '; where a file takes a module of the package whole (a namespace import, export *, import() or an import the build cannot read), import by name what it uses from the package, and cx from @navecss/core/cx'
+  const wholeClause = isWhole
+    ? '; where a file takes a module whole (a namespace import, export *, import() or an import the build cannot read), import by name what it uses from that module, and cx from @navecss/core/cx'
     : ''
+  const passedOn = takes.some((take) => take.isPassedOn === true)
+    ? '; where a file re-exports what it takes, import cx from @navecss/core/cx in the files that call it, call cx there in its place, and drop the re-export'
+    : ''
+  const whole = `${wholeClause}${passedOn}`
   const fix = hasPackageFix
-    ? " The lasting fix is the package's: import cx from @navecss/core/cx where it is called, and re-export it from there, only under the name cx, in each module that gives it out."
+    ? ' The lasting fix is upstream: import cx from @navecss/core/cx where it is called, and re-export it from there, only under the name cx, in each module that gives it out.'
     : ''
-  return `${pkg} re-exports cx, and your code takes it from the package in ${listed}. The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}. No cxModules entry clears this: the build reads cx through a listed module only where your code takes it, by an import the build can read, from a module that re-exports it from @navecss/core/cx itself and only under the name cx, and none of these takes is one. Once your code makes none of these takes, the keepFor entry clears this.${fix}`
+  return `${pkg} re-exports cx, and your code takes that cx, from the package or through another package that re-exports it, in ${listed}. The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}. The build prints no cxModules entry for this, since it found none of these takes made, by an import it can read and a specifier that resolves from Vite's root, from a module that re-exports cx from @navecss/core/cx itself and only under the name cx. Once your code makes none of these takes, the keepFor entry clears this.${fix}`
 }
 
 /**
