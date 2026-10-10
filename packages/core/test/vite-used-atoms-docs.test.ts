@@ -10,10 +10,11 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { REPORT_CAUSE } from '../src/vite-used-report.ts'
 import { extractFences, type Fence } from './doc-fences.ts'
+import { appFiles, buildUsed, makeUsedApp } from './helpers/used-atoms-app.ts'
 import { VITE_APIS } from './helpers/vite-app.ts'
 
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -57,15 +58,69 @@ const slug = (heading: string): string =>
 const SECTION_HEADING = '#### Which atoms the build ships'
 
 /**
- * The text from `heading` to the next heading of the same or a shallower level.
+ * The words that mark copy as an accessibility claim. Such copy is cleared one unit at a time, so
+ * a scan for these words guards everything outside the cleared units.
+ */
+const ACCESSIBILITY_WORDS =
+  /screen.?reader|accessib|assistive|a11y|visually.?hidden|keyboard|focus/i
+
+/**
+ * The phrases the used-atoms copy no longer says. A phrase can wrap onto the next line, so each
+ * gap is any run of whitespace.
+ */
+const RETIRED = /now\s+defaults\s+to|opt[-\s]+in|previously/i
+
+/**
+ * The report's lines with each position dropped. The README's fence shows no source, so the line
+ * and column it prints are illustrative: they are the one part not compared.
+ */
+const withoutPositions = (text: string): string[] =>
+  text
+    .trim()
+    .split('\n')
+    .map((line) => line.replace(/:\d+:\d+: /, ': '))
+
+/**
+ * The SHA-256 of `text`, in hex.
+ */
+const digest = (text: string): string => createHash('sha256').update(text).digest('hex')
+
+/**
+ * The failure message of a cleared unit whose digest no longer matches.
+ */
+const changed = (unit: string): string =>
+  `the cleared accessibility copy "${unit}" changed: a changed word needs the same accessibility review the words had, so do not recompute this digest`
+
+/**
+ * The code fence still open after `line`, given the one open before it: a line of three or more
+ * backticks or tildes opens a fence, and a line of the same character, at least as long and
+ * followed by nothing, closes it.
+ */
+function fenceAfter(open: string | undefined, line: string): string | undefined {
+  const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1]
+  if (open === undefined) return marker
+  const isClosing = marker?.startsWith(open) === true && line.slice(marker.length).trim() === ''
+  return isClosing ? undefined : open
+}
+
+/**
+ * The text from `heading` to the next heading of the same or a shallower level. A line inside a
+ * fenced code block is never a heading, whatever it starts with: a shell comment is a `#` line.
  */
 function section(markdown: string, heading: string): string {
   const level = /^#+/.exec(heading)![0].length
   const start = markdown.indexOf(`\n${heading}\n`)
   expect(start, `no "${heading}" heading`).toBeGreaterThanOrEqual(0)
   const rest = markdown.slice(start + heading.length + 2)
-  const next = new RegExp(String.raw`\n#{1,${level}} `).exec(rest)
-  return next ? rest.slice(0, next.index) : rest
+  const ends = new RegExp(`^#{1,${level}} `)
+  let open: string | undefined
+  let offset = 0
+  for (const line of rest.split('\n')) {
+    if (open === undefined && ends.test(line)) return rest.slice(0, Math.max(offset - 1, 0))
+    open = fenceAfter(open, line)
+    offset += line.length + 1
+  }
+  return rest
 }
 
 /**
@@ -245,6 +300,80 @@ describe('AC-used-atoms-36 — the section, the cx() section and the docblocks',
   })
 })
 
+describe('AC-used-atoms-36 — the README’s sample report is the build’s own report', () => {
+  let report = ''
+
+  beforeAll(async () => {
+    const importCx = "import { cx } from '@navecss/core/cx'"
+    const app = makeUsedApp(
+      appFiles({
+        'src/Card.tsx': `${importCx}\nexport function Card(variant: never) {\n  return cx(variant)\n}\n`,
+        'src/List.tsx': `${importCx}\nexport const names = ['flex'].map(cx)\n`,
+      }),
+    )
+    try {
+      const built = await buildUsed(app)
+      report = built.error ?? ''
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('prints the same count, problem lines and remedy lines as a build that fails on those two uses', () => {
+    expect(report, 'the fixture build did not fail').toContain(REPORT_CAUSE)
+    expect(withoutPositions(fenceHolding(REPORT_CAUSE).body)).toEqual(withoutPositions(report))
+  })
+
+  it('control: a reworded remedy line is not equal', () => {
+    const reworded = report.split('\n').with(3, 'Name atoms at the call.').join('\n')
+
+    expect(reworded).not.toBe(report)
+    expect(withoutPositions(fenceHolding(REPORT_CAUSE).body)).not.toEqual(
+      withoutPositions(reworded),
+    )
+  })
+})
+
+describe('section() — a fenced line is not a heading', () => {
+  const FENCE = '```'
+  const markdown = [
+    '# Title',
+    '',
+    '#### The section',
+    '',
+    'Before the fence.',
+    '',
+    `${FENCE}sh`,
+    '# see the report',
+    'npx vite build',
+    FENCE,
+    '',
+    'After the fence.',
+    '',
+    '#### The next section',
+    '',
+    'Not in the section.',
+  ].join('\n')
+
+  it('returns the whole section through a fence that holds a "#" line', () => {
+    const found = section(markdown, '#### The section')
+
+    expect(found).toContain('npx vite build')
+    expect(found).toContain('After the fence.')
+    expect(found).not.toContain('Not in the section.')
+  })
+
+  it('control: the same "#" line outside a fence ends the section', () => {
+    const found = section(
+      markdown.replace(`${FENCE}sh\n`, '').replace(`\n${FENCE}\n`, '\n'),
+      '#### The section',
+    )
+
+    expect(found).not.toContain('npx vite build')
+    expect(found).toContain('Before the fence.')
+  })
+})
+
 describe('AC-used-atoms-36 — the cleared copy is the cleared copy', () => {
   /*
    * Each unit below was supplied or cleared as one piece. The digests are of the whitespace-folded
@@ -269,14 +398,10 @@ describe('AC-used-atoms-36 — the cleared copy is the cleared copy', () => {
     const middle = paragraph.slice(middleStart + 1, endStart)
 
     expect(middleStart).toBeGreaterThan(0)
-    expect(createHash('sha256').update(paragraph.slice(0, middleStart)).digest('hex')).toBe(
+    expect(digest(paragraph.slice(0, middleStart)), changed('paragraphStart')).toBe(
       PINS.paragraphStart,
     )
-    expect(
-      createHash('sha256')
-        .update(paragraph.slice(endStart + 1))
-        .digest('hex'),
-    ).toBe(PINS.paragraphEnd)
+    expect(digest(paragraph.slice(endStart + 1)), changed('paragraphEnd')).toBe(PINS.paragraphEnd)
     // The middle is the one part written apart from the cleared ends. It claims dev parity, keeps
     // a difference standing, ends on the sentence the production check depends on, and names
     // neither focus, keyboard, screen readers nor accessibility.
@@ -286,7 +411,7 @@ describe('AC-used-atoms-36 — the cleared copy is the cleared copy', () => {
     expect(
       middle.endsWith('so a page can still look and behave differently in dev than in the build.'),
     ).toBe(true)
-    expect(middle).not.toMatch(/focus|keyboard|screen.?reader|accessib/i)
+    expect(middle).not.toMatch(ACCESSIBILITY_WORDS)
   })
 
   it('holds the sentence beside the setup’s first fence, the author line and the server-rendered clause as cleared', () => {
@@ -307,10 +432,10 @@ describe('AC-used-atoms-36 — the cleared copy is the cleared copy', () => {
       rendered.indexOf("client's render.", clauseStart) + "client's render.".length,
     )
 
-    expect(createHash('sha256').update(fenceSentence).digest('hex')).toBe(PINS.fenceSentence)
-    expect(createHash('sha256').update(authorLine).digest('hex')).toBe(PINS.authorLine)
+    expect(digest(fenceSentence), changed('fenceSentence')).toBe(PINS.fenceSentence)
+    expect(digest(authorLine), changed('authorLine')).toBe(PINS.authorLine)
     expect(clauseStart).toBeGreaterThan(0)
-    expect(createHash('sha256').update(clause).digest('hex')).toBe(PINS.renderedByServer)
+    expect(digest(clause), changed('renderedByServer')).toBe(PINS.renderedByServer)
   })
 
   it('names focus, screen readers or accessibility in the setup and the section only inside those units', () => {
@@ -325,9 +450,14 @@ describe('AC-used-atoms-36 — the cleared copy is the cleared copy', () => {
     )
 
     // Atom names in code spans (`srOnlyFocusable`) are names, not claims about focus.
-    expect(leftover.replaceAll(/`[^`]*`/g, '')).not.toMatch(
-      /screen.?reader|accessib|keyboard|focus/i,
-    )
+    expect(leftover.replaceAll(/`[^`]*`/g, '')).not.toMatch(ACCESSIBILITY_WORDS)
+  })
+
+  it('control: the accessibility scan catches the words, assistive technology included', () => {
+    expect('This keeps the focus order.').toMatch(ACCESSIBILITY_WORDS)
+    expect('Hidden content stays hidden from assistive technology.').toMatch(ACCESSIBILITY_WORDS)
+    expect('This is an a11y fix.').toMatch(ACCESSIBILITY_WORDS)
+    expect('Text that is visually hidden stays in the page.').toMatch(ACCESSIBILITY_WORDS)
   })
 })
 
@@ -406,16 +536,16 @@ describe('AC-used-atoms-56 — the Vite setup and the root README carry the defa
       rootReadme.indexOf('The plugin also chooses which of Nave') + 300,
     ),
   }
-  const RETIRED = /now defaults to|opt[- ]in|previously/i
-
   for (const [name, text] of Object.entries(SURFACES)) {
     it(`does not say "now defaults to", "opt in" or "previously" in ${name}`, () => {
       expect(text).not.toMatch(RETIRED)
     })
   }
 
-  it('control: the scan catches the words', () => {
+  it('control: the scan catches the words, wrapped onto the next line or not', () => {
     expect('moving previously meant').toMatch(RETIRED)
+    expect('Projects that opt\nin keep it.').toMatch(RETIRED)
+    expect('The default now\ndefaults to used.').toMatch(RETIRED)
   })
 })
 
@@ -476,9 +606,7 @@ describe('AC-used-atoms-58 — the two pending changesets read as one release', 
   })
 
   it('says neither "now defaults to", "opt in" nor "previously"', () => {
-    expect(`${usedChangeset}\n${pluginChangeset}`).not.toMatch(
-      /now defaults to|opt[- ]in|previously/i,
-    )
+    expect(`${usedChangeset}\n${pluginChangeset}`).not.toMatch(RETIRED)
   })
 
   it('does not move the core version between the plugin’s merge and this delivery', () => {

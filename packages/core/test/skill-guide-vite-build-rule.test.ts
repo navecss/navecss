@@ -27,19 +27,24 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1
 }
 
+/**
+ * What every row below asks of a text: it holds the paragraph exactly once.
+ */
+const hasParagraph = (text: string): boolean => countOccurrences(text, PARAGRAPH) === 1
+
 describe('AC-used-atoms-57: the guide carries the build’s rule', () => {
   it('the committed guide holds the paragraph byte-exact, once, inside its cx() section', () => {
     const start = committed.indexOf('## `cx()`\n')
     const end = committed.indexOf('\n## ', start + 1)
 
-    expect(countOccurrences(committed, PARAGRAPH)).toBe(1)
+    expect(hasParagraph(committed)).toBe(true)
     expect(committed.slice(start, end)).toContain(PARAGRAPH)
   })
 
   it('a freshly generated guide holds it too, and equals the committed file', async () => {
     const fresh = await generate()
 
-    expect(countOccurrences(fresh, PARAGRAPH)).toBe(1)
+    expect(hasParagraph(fresh)).toBe(true)
     expect(fresh).toBe(committed)
   })
 
@@ -49,9 +54,10 @@ describe('AC-used-atoms-57: the guide carries the build’s rule', () => {
 
     expect(lines.filter((line) => line === PARAGRAPH)).toHaveLength(1)
     expect(fresh).toContain(lines.join('\n'))
+    expect(hasParagraph(lines.join('\n'))).toBe(true)
     expect(
-      lines.filter((line) => line !== PARAGRAPH).join('\n'),
-      'a cx() section without the paragraph does not hold it',
-    ).not.toContain(PARAGRAPH)
+      hasParagraph(lines.filter((line) => line !== PARAGRAPH).join('\n')),
+      'a cx() section without the paragraph line does not hold the paragraph',
+    ).toBe(false)
   })
 })
