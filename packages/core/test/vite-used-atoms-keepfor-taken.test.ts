@@ -6,70 +6,21 @@
  */
 import { describe, expect, it } from 'vitest'
 
+import { atomLayerAtoms, atoms } from './helpers/used-atoms-app.ts'
 import {
-  addPackage,
-  appFiles,
-  atomLayerAtoms,
-  atoms,
-  type BuildOptions,
-  buildUsed,
-  type Built,
-  makeUsedApp,
-} from './helpers/used-atoms-app.ts'
+  KEEP_FLEX,
+  KEEP_NONE,
+  NAVE_APP,
+  run,
+  takenLine,
+  WHOLE,
+  withMenu,
+} from './helpers/used-atoms-keepfor.ts'
 import { IMPORT } from './helpers/used-atoms-rows.ts'
 
-const KEEP_FLEX = { '@acme/ui': ['flex'] } as const
-const KEEP_NONE = { '@acme/ui': [] } as const
-const FORM = 'other than under the name cx (renamed, as a default or inside a namespace)'
-const FIX =
-  'import cx from @navecss/core/cx where it is called, and re-export it only under the name cx.'
-const WHOLE =
-  '; where a file takes such a module whole (a namespace import, export * or import()), import by name what it uses from the package, and cx from @navecss/core/cx'
-
-/**
- * The remedy line for a listed package whose renamed re-export the application takes: `takes` is
- * the list of takers and what each takes, `files` the clause that points at them.
- */
-function takenLine(takes: string, files = 'in that file', whole = ''): string {
-  return `@acme/ui re-exports cx ${FORM}, and your code takes cx from a module that does, in ${takes}. The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}. No cxModules entry clears this, since listing a module that gives cx out under another name fails the build; once no file of yours takes cx from there, the keepFor entry clears the re-export. The lasting fix is the package's: ${FIX}`
-}
-
-/**
- * Builds an app of `code` (`src/App.ts`, with more `app` files beside it) over the packages of
- * `packages`, `@acme/ui` among them.
- */
-async function run(
-  code: string,
-  packages: Record<string, Record<string, string>>,
-  options: BuildOptions['options'] = {},
-  app: Record<string, string> = {},
-): Promise<Built> {
-  const scratch = makeUsedApp(appFiles({ 'src/App.ts': code, ...app }))
-  for (const [name, files] of Object.entries(packages)) addPackage(scratch, name, files)
-  try {
-    return await buildUsed(scratch, { options })
-  } finally {
-    scratch.dispose()
-  }
-}
-
-/**
- * A package whose entry exports `Menu`, which calls `cx('flex', v)` and imports `file`, holding
- * `text`, for its effect.
- */
-function withMenu(file: string, text: string): Record<string, string> {
-  return {
-    'index.js': "export { Menu } from './menu.js'\n",
-    'menu.js': `${IMPORT}import './${file}'\nexport const Menu = (v) => cx('flex', v)\n`,
-    [file]: text,
-  }
-}
-
-const NAVE_APP =
-  "import { cx } from '@navecss/core/cx'\nimport { Menu } from '@acme/ui'\nexport const A = [Menu, cx('block')]\n"
 const MENU_ONLY = "import { Menu } from '@acme/ui'\nexport const A = Menu\n"
 
-describe('AC-used-atoms-52 - keepFor does not clear a renamed export of cx the application takes', () => {
+describe('AC-used-atoms-52 - keepFor does not clear a cx export the application takes', () => {
   const forms = [
     {
       name: 'renamed at the export',
@@ -163,17 +114,6 @@ describe('AC-used-atoms-52 - keepFor does not clear a renamed export of cx the a
       120_000,
     )
   })
-
-  it('prints the worked line for a renamed export the application takes, word for word', async () => {
-    const modules = withMenu('cn.js', "export { cx as cn } from '@navecss/core/cx'\n")
-    const app =
-      "import { cn } from '@acme/ui/cn.js'\nimport { Menu } from '@acme/ui'\nexport const A = [Menu, cn('block')]\n"
-    const built = await run(app, { '@acme/ui': modules }, { keepFor: KEEP_FLEX })
-
-    expect(built.error!.split('\n').at(-1)).toBe(
-      "@acme/ui re-exports cx other than under the name cx (renamed, as a default or inside a namespace), and your code takes cx from a module that does, in src/App.ts (cn). The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: in that file, import cx from @navecss/core/cx instead and call cx in its place. No cxModules entry clears this, since listing a module that gives cx out under another name fails the build; once no file of yours takes cx from there, the keepFor entry clears the re-export. The lasting fix is the package's: import cx from @navecss/core/cx where it is called, and re-export it only under the name cx.",
-    )
-  }, 60_000)
 
   it('row 4 with only the keepFor line pasted and the import unchanged fails with the line that names the file', async () => {
     const modules = withMenu('cn.js', "export { cx as cn } from '@navecss/core/cx'\n")

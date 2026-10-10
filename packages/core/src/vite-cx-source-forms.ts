@@ -82,7 +82,7 @@ function reexportProblem(code: string, node: AstNode, isListed: boolean): Proble
     text: isListed ? SECOND_HOP_TEXT : REEXPORT_TEXT,
     isListable: !isListed,
     ...(!isListed && isExportingRenamed(node) && { isRenamed: true }),
-    ...(!isListed && { exportedAs: exportedNamesOf(node) }),
+    exportedAs: exportedNamesOf(node),
   }
 }
 

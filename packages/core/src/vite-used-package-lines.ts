@@ -2,8 +2,9 @@
  * The remedy lines for a dependency's problems: one sentence per package for its calls and uses of
  * `cx`, for a re-export of `cx` the line that clears it (a `cxModules` entry when the consumer has
  * a specifier that resolves to the re-exporting file and the file exports it under the name `cx`,
- * else the package's `keepFor` line), and for a listed module whose `cx` the build does not follow
- * the line that tells the consumer to remove the entry.
+ * else the package's `keepFor` line, and, in a package `keepFor` already lists, the line that tells
+ * each file of the consumer's that takes it to import `cx` from Nave), and for a listed module whose
+ * `cx` the build does not follow the line that tells the consumer to remove the entry.
  */
 import type { Take } from './vite-cx-takes.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
@@ -15,6 +16,14 @@ import { compareText, cxModulesArray } from './vite-problems.ts'
  */
 export function isListableReexport(problem: LocatedProblem): boolean {
   return problem.kind === 'reexport' && problem.isListable !== false
+}
+
+/**
+ * Whether the problem's module gives `cx` out under another name, or re-exports the `cx` of
+ * another module listed in `cxModules`: the cases where the package has a lasting fix to make.
+ */
+function isRenamedOrReached(problem: LocatedProblem): boolean {
+  return problem.isRenamed === true || (problem.kind === 'reexport' && !isListableReexport(problem))
 }
 
 /**
@@ -75,11 +84,11 @@ const RENAMED_FORM = 'other than under the name cx (renamed, as a default or ins
 /**
  * The line for the re-exports of `cx` in a module that gives `cx` out other than under the name
  * `cx` (renamed, as a default or inside a namespace), its plain `export { cx }` included: `count`
- * counts them all. The build does not follow an export under another name even from a module
- * listed in `cxModules`, so listing the module fails the build, no entry clears any of them, and
- * the package's `keepFor` line does. Unlike the internal line it does not say who imports the
- * file, since the consumer's code may. `hasKeepFor` is whether a line above already printed that
- * `keepFor` line, which clears these too, so it is printed once.
+ * counts them all. The build does not follow an export under another name even from a module listed
+ * in `cxModules`, so listing the module fails the build, no entry clears any of them, and the
+ * package's `keepFor` line does while no application module takes one. Unlike the internal line it
+ * does not say who imports the file, since the consumer's code may. `hasKeepFor` is whether a line
+ * above already printed that `keepFor` line, which clears these too, so it is printed once.
  */
 function renamedLine(pkg: string, count: number, keepFor: string, hasKeepFor: boolean): string {
   const [those, them, its] =
@@ -91,13 +100,16 @@ function renamedLine(pkg: string, count: number, keepFor: string, hasKeepFor: bo
   return `${pkg} re-exports cx ${RENAMED_FORM}, which the build does not follow even from a module listed in cxModules. Listing a module that does fails the build, so no entry there clears an export of cx from it, under the name cx or another, and the build does not read calls made through ${those}. Where your code imports ${those} from ${pkg} or one of its subpaths, ${act}. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: ${RENAMED_FIX}`
 }
 
+const IDENTIFIER = /^[$\p{ID_Start}_][$\p{ID_Continue}]*$/u
+
 /**
- * A name an importer takes as the line writes it: `default` as the default export, a name that is
- * no identifier quoted.
+ * A name an importer takes as the line writes it: `default` as the default export, an identifier
+ * as it is, any other name in single quotes with the backslash and the quote escaped.
  */
 function takenName(name: string): string {
   if (name === 'default') return 'the default export'
-  return /^[$A-Z_a-z][\w$]*$/.test(name) ? name : `'${name}'`
+  if (IDENTIFIER.test(name)) return name
+  return `'${name.replaceAll('\\', String.raw`\\`).replaceAll("'", String.raw`\'`)}'`
 }
 
 /**
@@ -118,16 +130,22 @@ function takeWhat(take: Take): string {
     case 'star': {
       return 'export *'
     }
+    case 'unreadable': {
+      return 'a require() or other import the build cannot read'
+    }
   }
 }
 
 /**
- * The line for a listed package's modules that give `cx` out under another name while the
- * application takes one of those exports: the package's `keepFor` entry stands in only for the
- * package's own calls, so each taking file is told to import `cx` from Nave instead. No
- * `cxModules` entry clears these, and the package is already listed, so neither is offered.
+ * The line for a listed package's modules that give `cx` out with no clearing specifier while an
+ * application module takes one of their `cx` exports, under any name, directly or through another
+ * module of the package: the package's `keepFor` entry stands in only for the package's own calls,
+ * so each taking file is told to import `cx` from Nave instead. No `cxModules` entry clears these,
+ * and the package is already listed, so neither is offered. `hasPackageFix` is whether a module
+ * behind the takes gives `cx` out under another name or is reached through another module of the
+ * package, the cases where the package has a lasting fix to make.
  */
-function takenLine(pkg: string, takes: readonly Take[]): string {
+function takenLine(pkg: string, takes: readonly Take[], hasPackageFix: boolean): string {
   const entries = takes
     .map((take) => ({
       taker: take.taker,
@@ -142,9 +160,12 @@ function takenLine(pkg: string, takes: readonly Take[]): string {
       : 'in each of those files'
   const isWhole = entries.some((entry) => entry.shape !== 'names')
   const whole = isWhole
-    ? '; where a file takes such a module whole (a namespace import, export * or import()), import by name what it uses from the package, and cx from @navecss/core/cx'
+    ? '; where a file takes a module of the package whole (a namespace import, export *, import() or an import the build cannot read), import by name what it uses from the package, and cx from @navecss/core/cx'
     : ''
-  return `${pkg} re-exports cx ${RENAMED_FORM}, and your code takes cx from a module that does, in ${listed}. The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}. No cxModules entry clears this, since listing a module that gives cx out under another name fails the build; once no file of yours takes cx from there, the keepFor entry clears the re-export. The lasting fix is the package's: ${RENAMED_FIX}`
+  const fix = hasPackageFix
+    ? " The lasting fix is the package's: import cx from @navecss/core/cx where it is called, and re-export it from there, only under the name cx, in each module that gives it out."
+    : ''
+  return `${pkg} re-exports cx, and your code takes it from the package in ${listed}. The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}. No cxModules entry clears this: the build reads cx through a listed module only where your code takes it, by an import the build can read, from a module that re-exports it from @navecss/core/cx itself and only under the name cx, and none of these takes is one. Once your code makes none of these takes, the keepFor entry clears this.${fix}`
 }
 
 /**
@@ -219,7 +240,12 @@ export function packageLines(
     const hasKeepFor = rest.some((problem) => problem.kind !== 'own') || internal.length > 0
     lines.push(renamedLine(pkg, renamed.length, keepFor, hasKeepFor))
   }
-  const takes = all.filter((problem) => isTaken(problem)).flatMap((problem) => problem.takes!)
-  if (takes.length > 0) lines.push(takenLine(pkg, takes))
+  const taken = all.filter((problem) => isTaken(problem))
+  const takes = taken.flatMap((problem) => problem.takes!)
+  if (takes.length > 0) {
+    const hasPackageFix =
+      taken.some((problem) => isRenamedOrReached(problem)) || takes.some((take) => take.isReached)
+    lines.push(takenLine(pkg, takes, hasPackageFix))
+  }
   return lines
 }

@@ -1,11 +1,12 @@
 /**
  * What a consumer can write in `cxModules` to clear a dependency's re-export of `cx`: a specifier
  * that resolves, from the project root, to the file that holds it, for a re-export under the name
- * `cx`. The package's name when its entry is that file, else a package subpath through which a
- * module outside the package imports it. A file only the package itself imports has none, and
- * neither has a re-export under another name, as a default or inside a namespace, which a listed
- * module may not hold: the package's `keepFor` line clears each instead. A deep path to an
- * internal file is not the package's public surface, and an `exports` map may forbid it.
+ * `cx`. The package's name when its entry is that file, else a specifier through which a module
+ * outside the package imports it: a package subpath, or an alias or a tsconfig path that names the
+ * file. A file only the package itself imports has none, and neither has a re-export under another
+ * name, as a default or inside a namespace, which a listed module may not hold: the package's
+ * `keepFor` line clears each instead. A deep path to an internal file is not the package's public
+ * surface, and an `exports` map may forbid it.
  */
 import path from 'node:path'
 
@@ -47,29 +48,27 @@ export function importersOf(ctx: RenderContext, id: string): string[] {
 }
 
 /**
- * The subpaths of `pkg` that the module `importer`, written outside it, uses to import `file`.
+ * The specifiers the module `importer`, written outside the package, uses to import `file`.
  */
-async function subpathsWritten(
+async function specifiersWritten(
   ctx: RenderContext,
-  input: { readonly file: string; readonly importer: string; readonly pkg: string },
+  input: { readonly file: string; readonly importer: string },
 ): Promise<string[]> {
-  const { file, importer, pkg } = input
+  const { file, importer } = input
   const code = ctx.getModuleInfo?.(importer)?.code
   if (code === null || code === undefined) return []
   const written = specifiersOf(ctx, { id: importer, code }) ?? []
   const found: string[] = []
-  const subpaths = written.filter((text) => text.startsWith(`${pkg}/`))
-  for (const specifier of subpaths) {
+  for (const specifier of written) {
     if (await isResolvingTo(ctx, { file, from: importer, specifier })) found.push(specifier)
   }
   return found
 }
 
 /**
- * The package subpaths through which a module outside `pkg` imports the module `id`, in
- * code-unit order.
+ * The specifiers through which a module outside `pkg` imports the module `id`, in code-unit order.
  */
-async function subpathsInto(
+async function specifiersInto(
   ctx: RenderContext,
   context: UsedContext,
   input: { readonly id: string; readonly pkg: string },
@@ -80,7 +79,7 @@ async function subpathsInto(
       ? await packageNameOf(filePathOf(importer), context.packageNames)
       : undefined
     if (owner === input.pkg) continue
-    const written = await subpathsWritten(ctx, { file: fileOf(input.id), importer, pkg: input.pkg })
+    const written = await specifiersWritten(ctx, { file: fileOf(input.id), importer })
     for (const specifier of written) found.add(specifier)
   }
   return found.values().toArray().toSorted(compareText)
@@ -97,8 +96,8 @@ async function clearingSpecifier(
   const from = path.join(context.root, 'index.html')
   const file = fileOf(input.id)
   if (await isResolvingTo(ctx, { file, from, specifier: input.pkg })) return input.pkg
-  const subpaths = await subpathsInto(ctx, context, input)
-  for (const specifier of subpaths) {
+  const specifiers = await specifiersInto(ctx, context, input)
+  for (const specifier of specifiers) {
     if (await isResolvingTo(ctx, { file, from, specifier })) return specifier
   }
   return undefined

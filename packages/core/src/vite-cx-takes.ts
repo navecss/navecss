@@ -3,26 +3,20 @@
  * imports, re-exports or reads off a namespace. The test is by name, not by file: an importer that
  * takes only `Button` from a module which also exports `cx` as `cn` takes no `cx` from it, so
  * nothing of its own routes calls through `cn`. A take the parse cannot tell apart (a namespace
- * passed on, a computed key, a rest element, an `import()` used any other way) counts as taken.
+ * passed on, a computed key, a rest element, an `import()` used any other way) counts as taken, and
+ * so does an importer whose text names the module in no way the build reads (a `require()`).
  */
 import type { AstNode } from './vite-ast.ts'
 
-import {
-  childrenOf,
-  exportNameOf,
-  nodeAt,
-  nodesAt,
-  propertyNameOf,
-  staticStringOf,
-} from './vite-ast.ts'
-import { memberReadOf, patternDestructuring } from './vite-cx-reference.ts'
+import { childrenOf, exportNameOf, nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'
+import { type CxNames, dynamicKeys, isCxName, referenceTakes } from './vite-cx-take-keys.ts'
 import { analyze, type Reference, type ScopeAnalysis } from './vite-scope.ts'
 
 /**
  * How an importer takes the module: by the names it imports or re-exports, as a namespace, as
- * `export *`, or as an `import()`.
+ * `export *`, as an `import()`, or in a way the build cannot read.
  */
-type TakeShape = 'dynamic-import' | 'names' | 'namespace' | 'star'
+type TakeShape = 'dynamic-import' | 'names' | 'namespace' | 'star' | 'unreadable'
 
 export interface Taken {
   readonly shape: TakeShape
@@ -37,54 +31,17 @@ export interface Take extends Taken {
    * The importer's path, relative to the project root, with forward slashes.
    */
   readonly taker: string
+  /**
+   * Whether the module taken from is reached through another module of its package, which
+   * re-exports the `cx` it gives out.
+   */
+  readonly isReached: boolean
 }
 
 /**
- * The `cx` exports of the module; `undefined` when they are not known, which counts every name.
+ * The take of an importer the build cannot read: it takes the module whole.
  */
-export type CxNames = ReadonlySet<string> | undefined
-
-/**
- * Whether `name` is one of the `cx` exports.
- */
-function isCxName(names: CxNames, name: string): boolean {
-  return names === undefined || names.has(name)
-}
-
-/**
- * The `cx` exports an object pattern takes by static keys, or `undefined` when it takes the whole
- * object: a rest element, or a key that is computed.
- */
-function patternKeys(pattern: AstNode, names: CxNames): string[] | undefined {
-  const taken: string[] = []
-  for (const property of nodesAt(pattern, 'properties')) {
-    const key =
-      property.type === 'Property'
-        ? propertyNameOf(nodeAt(property, 'key'), property.computed === true)
-        : undefined
-    if (key === undefined) return undefined
-    if (isCxName(names, key)) taken.push(key)
-  }
-  return taken
-}
-
-/**
- * The names one reference to a namespace takes: a member read by a static key, or a destructuring
- * by static keys, take the keys that are `cx` exports; anything else takes the whole namespace.
- */
-function referenceTakes(
-  analysis: ScopeAnalysis,
-  node: AstNode,
-  names: CxNames,
-): string[] | undefined {
-  const read = memberReadOf({ analysis }, node)
-  if (read) {
-    if (read.key === undefined) return undefined
-    return isCxName(names, read.key) ? [read.key] : []
-  }
-  const pattern = patternDestructuring({ analysis }, node)
-  return pattern?.type === 'ObjectPattern' ? patternKeys(pattern, names) : undefined
-}
+export const UNREADABLE: Taken = { shape: 'unreadable', names: [] }
 
 /**
  * What the references to a namespace import take.
@@ -169,16 +126,12 @@ function exportTakes(node: AstNode, scan: Scan): Taken[] {
 }
 
 /**
- * What an `import()` takes: the `cx` exports of a destructuring of its awaited result by static
- * keys, none for a destructuring of other keys, and the whole module for any other use.
+ * What an `import()` takes: the `cx` exports its awaited result, or the parameter of its inline
+ * `.then` callback, reads by static keys (none when it reads other keys), and the whole module for
+ * any other use.
  */
 function dynamicTakes(node: AstNode, scan: Scan): Taken[] {
-  const awaited = scan.analysis().parentOf.get(node)
-  const pattern =
-    awaited?.type === 'AwaitExpression'
-      ? patternDestructuring({ analysis: scan.analysis() }, awaited)
-      : undefined
-  const keys = pattern?.type === 'ObjectPattern' ? patternKeys(pattern, scan.names) : undefined
+  const keys = dynamicKeys(scan.analysis(), node, scan.names)
   if (keys === undefined) return [{ shape: 'dynamic-import', names: [] }]
   return keys.length === 0 ? [] : [{ shape: 'dynamic-import', names: keys }]
 }
