@@ -13,13 +13,12 @@ becomes text in the JavaScript, which the plugin does not filter: if it holds th
 atom in it ships and the client build warns, naming the file. A `cx()` call whose atoms the build
 cannot read fails the build: `vite build` lists every such use once, at the end, naming the file
 each one is in, then says how to fix them. A Nave class built from pieces (`'nave-' + tone`) fails
-the build the same way. Next.js, webpack and the PostCSS plugin ship every atom.
+the build the same way. The PostCSS plugin ships every atom, on Next.js and webpack alike.
 
 The dev server serves the same set as far as it has read: it filters the atom layer of each
 stylesheet to the atoms of the modules it has transformed, so a class the build cannot see has no
 rule in dev either. The first stylesheet response waits until every module reachable from the page's
-entries has been read, and the stylesheet reloads when an edit adds an atom. `@navecss/core` is left
-out of the dependency pre-bundle so a dependency's `cx()` calls are read, and a build or dev server
+entries has been read, and the stylesheet reloads when an edit adds an atom. A build or dev server
 that read no use and no markup (a backend rendering its own templates) warns once.
 
 New: `cx.dynamic(name)` on `@navecss/core/cx`, for a name known only at run time. In the dev server
@@ -35,6 +34,11 @@ the modules that re-export `cx` from `@navecss/core/cx`, in your code or in a de
 that imports `cx` from one is read as if it imported it from `@navecss/core/cx` (the same setting
 as `@navecss/eslint-plugin`'s); and `atomic: 'all'`, which reads no `cx()` call and ships every
 atom.
+
+Unless `atomic` is `'all'`, the plugin also sets two Vite options for `@navecss/core` itself: it
+adds it to `optimizeDeps.exclude`, so the dev server can read your dependencies' `cx()` calls, and
+to every server environment's `resolve.noExternal`, so `cx.dynamic()` resolves through `keep` and
+`keepFor` in a server build too.
 
 A file of yours that imports a module listed in `cxModules` through a specifier the build does not
 recognise fails `vite build`, which names the file and says how to fix it.

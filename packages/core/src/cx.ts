@@ -41,6 +41,12 @@
  *   An atom name held in a variable needs a literal type. `const n = 'flex'`
  *   is one; a let binding, an array element or an object property widens to
  *   string, so annotate it with the exported AtomName type (or `as const`).
+ *   Under the Vite plugin the build reads the value as well as the type, and
+ *   only a binding in the same file that is bound to a literal, or to a
+ *   condition over literals, and never assigned again (a const, say) builds:
+ *   an array element or an object property fails the build whatever its
+ *   type. To choose by a value, call cx() once per case and pick between the
+ *   results: ({ row: cx('flex'), grid: cx('grid') })[variant].
  *
  * Why cx.raw() never maps:
  *   cx() resolves an atom name to that atom's global class, so cx('container')

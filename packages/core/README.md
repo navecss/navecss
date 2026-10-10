@@ -124,6 +124,9 @@ import styles from './button.module.css'
 ```
 
 Use this if you cannot or do not want to add a Vite or PostCSS plugin to your build.
+With the Vite plugin, the build reads every `cx()` call to choose which atoms ship, and fails on one
+whose atoms it cannot read, so a name chosen at run time goes through `cx.dynamic()`: see
+[Which atoms the build ships](#which-atoms-the-build-ships).
 
 A `cx()` class is a default, not an override: it sits in the `atomic` layer,
 below your component CSS, so your own rule wins wherever the two set the same
@@ -153,8 +156,9 @@ What that buys you, and what it does not:
   _emits_ is `nave-sr-only`; neither spelling is the key), and any class that is
   not a Nave atom. **TypeScript only:
   a JavaScript consumer gets none of it.** For a build-level check that does not
-  depend on types, use the `@nave` directive with `navePlugin()` — it fails the
-  build on an unknown atom by default.
+  depend on types, use the Vite plugin, which by default fails the build on an
+  unknown atom in a `cx()` call, or the `@nave` directive, whose build steps all
+  fail on an unknown atom by default.
 - **`cx.raw()` cannot shadow one of your classes.** It never consults the atom
   map, so `cx.raw('container')` is the literal `container`. Inside `cx()` an
   atom name still resolves to that atom's global class — `cx('container')` is
@@ -208,14 +212,18 @@ export default defineConfig({
 })
 ```
 
-`navePlugin()` is one entry in `plugins`, with the same `extend` and `onUnknown` options as the
-PostCSS plugin ([Options](#options)). It is a plain Vite plugin object with no dependency and
-no peer. It expands `@nave` after Vite's own CSS step has run, so a stylesheet reached only
+`navePlugin()` takes the same `extend` and `onUnknown` options as the PostCSS plugin
+([Options](#options)) and returns two Vite plugins in an array, which `plugins` takes as one entry.
+It has no dependency and no peer. It expands `@nave` after Vite's own CSS step has run, so a stylesheet reached only
 through `@import`, a Sass file (including a `@mixin` that holds a directive), a CSS Module, an
 `?inline` or `?url` import, a Vue or Svelte style block and a `.css` inside `node_modules` are all
 read as the CSS they compile to, in `vite build` and in the dev server, under either
 `css.transformer`. A `?raw` import returns the file's text as it is. Astro is not covered: it was
 not measured at this release, and no fixture of it runs.
+
+**It also chooses which atoms ship.** A `cx()` call in your code whose atoms the build cannot read,
+such as `cx(variant)` with a prop, is an error in the dev server and fails `vite build`.
+By default only the atoms Nave can read a use for are served, in the dev server as in the build. A `nave-*` class neither can see, such as one in a server template or in CMS text, or one a package listed in `keepFor` applies at run time, has no rule unless its atom is listed in `keep` or in a `keepFor` entry. Run your checks, keyboard, screen-reader and automated accessibility checks included, against a production build as well as in dev, because the two can still differ; [Which atoms the build ships](#which-atoms-the-build-ships) says what the build reads and where dev differs.
 
 `build.cssTarget` is the browser floor, in Vite's terms. Vite's default targets
 older browsers, and building for them gains you nothing, because the output
@@ -227,7 +235,10 @@ needs the same key.
 
 **Migrating from the PostCSS plugin.** Move `navePlugin()` from `css.postcss` or
 `postcss.config.js` to `plugins`, importing it from `@navecss/core/vite`. Leaving both is
-harmless, because whichever pass runs second finds no directive left.
+harmless, because whichever pass runs second finds no directive left. Moving also changes which
+atoms ship: the PostCSS plugin ships every atom, and this one chooses them from the uses it can
+read, in the dev server too, so after the move a `cx()` call it cannot read fails the build, and a
+Nave class it cannot see has no rule unless its atom is listed in `keep`.
 
 **Under `css.transformer: 'lightningcss'`** the plugin expands exactly as it does under the default
 transformer once both floor keys below are set. At Vite's default targets, which sit below the
@@ -293,6 +304,232 @@ watch.
 
 The supported Vite range is measured, not declared: the fixtures run on Vite 8.2.1 and on the
 newest 8.x at the time of each release.
+
+#### Which atoms the build ships
+
+The Vite plugin also chooses which of Nave's atoms reach your stylesheet. It reads the `cx()` calls
+in the code the build compiles, dependencies included, and ships the rules for the atoms those calls
+name, for the atom of each Nave class written as text (`nave-grid` in `index.html` or in a string in
+your code, say), and for the atoms you list in `keep` and `keepFor`; `srOnlyFocusable` also ships
+whenever `srOnly` does. The dev server serves the same atoms, from the code it has read. This is
+what `navePlugin()` does with no options. On the CSS-first path, where `@nave` copies an atom's
+declarations into your own rule, a project that never calls `cx()` and writes no Nave class ships no
+rule from the atom layer.
+
+So that nothing is dropped on a guess, a `cx()` call whose atoms the build cannot read fails the
+build. `vite build` reads every module first and fails once, at the end, with a report that lists
+each such use with its file, and its line and column when the source maps lead back to them, then
+says how to fix them:
+
+```text
+2 problems in 2 files: the build cannot tell which atoms these apply, and it ships only the atoms it can read.
+src/Card.tsx:7:26: cx(variant): the argument is not a literal atom name.
+src/List.tsx:12:26: cx is passed to map() as a value instead of being called.
+Name the atoms at the call: a string literal, a const in the same file, or a condition choosing between them, as in cx(on ? 'flex' : 'grid').
+To choose by a value, call cx() once per case and pick between the results: ({ row: cx('flex'), grid: cx('grid') })[variant].
+If the name comes from data the build never sees, write cx.dynamic(name) and list every atom it can take in keep in navePlugin().
+Call cx() where the classes are applied, with the atom names as its arguments: the build reads calls, not a cx that is assigned, passed or spread.
+```
+
+The dev server reports the problems in your own code one module at a time. It reads your
+dependencies' `cx()` calls as well, so their atoms are served in dev as in the build, but their
+problems show in `vite build` only: in dev, Vite pre-bundles dependencies into files that can mix
+several packages, so a problem there cannot be traced to one package. To read those calls, the
+plugin keeps `@navecss/core` itself out of Vite's dependency pre-bundling (`optimizeDeps.exclude`),
+so in dev the browser loads it as a few separate modules.
+
+A stylesheet you import with `?inline` or `?raw` becomes text in your JavaScript, which the plugin
+does not filter: if it holds Nave's atom layer, every atom in that layer ships, and `vite build`
+warns, naming the file. Import it without the query to have the layer filtered.
+
+**What the build can read.** An argument whose possible values the build can list: a string
+literal; `null`, `undefined`, `false` or `''`; a condition choosing between those
+(`on && 'flex'`, `on ? 'flex' : 'grid'`, `a || b`, `a ?? b`); or a variable in the same file
+bound to one of them and never assigned again, such as a `const`. A prop, a parameter, a variable
+that is assigned again, an import from another file, an array element, an object property and a
+spread are not, and `cx` itself must be called, never passed on (`list.map(cx)` fails). Types do
+not count: a value typed `AtomName` is still a value the build cannot list, and a cast is gone
+before the build reads the call. A string holding two names (`cx('flex gap')`) fails too: pass
+each name as its own argument.
+
+To choose by a value, such as a `variant` prop, call `cx()` once per case and pick between the
+results:
+
+```tsx
+import { cx } from '@navecss/core/cx'
+
+const layouts = { row: cx('flex'), grid: cx('grid') }
+
+export function List({ variant }: { variant: keyof typeof layouts }) {
+  return <ul className={layouts[variant]} />
+}
+```
+
+**Names chosen at run time.** When a name is known only at run time, because it comes from data,
+pass it to `cx.dynamic()` and list every atom it can take in `keep`:
+
+```tsx
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { navePlugin } from '@navecss/core/vite'
+
+export default defineConfig({
+  plugins: [navePlugin({ keep: ['flex', 'grid'] })],
+})
+
+// Block.tsx, whose layout comes from your CMS
+import { cx, type AtomName } from '@navecss/core/cx'
+
+export const Block = ({ layout }: { layout: AtomName }) => <div className={cx.dynamic(layout)} />
+```
+
+`cx.dynamic()` takes one name. A name listed in `keep` (or in a `keepFor` list) gets its atom's
+class, in dev and in the build; any other value gets none (`''`), and in dev the console names the
+value and says why. Every atom in `keep` ships, used or not. A `cx.dynamic()` call in your code with
+`keep` empty is an error, in the dev server as in `vite build`, since every such call would apply
+nothing. The plugin hands `cx.dynamic()` the atoms of `keep` and `keepFor` as static data, and
+adds `@navecss/core` to every server environment's `resolve.noExternal`, so `cx.dynamic()` in a
+server build reads them too.
+
+**Code you import.** A module that re-exports `cx`, such as a design system's `index.ts` holding
+`export { cx } from '@navecss/core/cx'`, is a build error until you list it in `cxModules`. The
+build then reads a file that imports `cx` from it as if that file imported `cx` from
+`@navecss/core/cx`. It follows a listed module one step: the listed module must re-export Nave's
+`cx` from `@navecss/core/cx` itself, under the name `cx`. Write an entry as a path from Vite's
+`root`, an alias your config defines, or a package name, which is how you list a published package
+that re-exports `cx`. An import of a listed module through a spelling the build does not recognise
+fails `vite build`, which names the file and says what to write instead.
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { navePlugin } from '@navecss/core/vite'
+
+export default defineConfig({
+  plugins: [navePlugin({ cxModules: ['./src/ui/index.ts'] })],
+})
+```
+
+`@navecss/eslint-plugin` has a `cxModules` setting with the same name and the same entries, so one
+list can serve both, with two differences. The lint reads a relative entry from the directory it
+runs in, and the build from Vite's `root`: where those differ, as in a monorepo, write the entries
+as aliases or package names. And the lint resolves an import as Node's `require()` does, where the
+build uses Vite's resolver: the build recognises spellings the lint cannot resolve, such as an alias
+set only in your Vite config, and where the lint cannot resolve a `#` import it matches a `#` entry
+written the same way, which the build never does.
+
+A dependency whose `cx()` calls the build cannot read fails the build with the package named,
+because its code is not yours to change. List the package in `keepFor`, under its name, with the
+atoms its calls can produce, which its documentation should give you:
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite'
+import { navePlugin } from '@navecss/core/vite'
+
+export default defineConfig({
+  plugins: [navePlugin({ keepFor: { '@acme/ui': ['flex', 'inlineFlex', 'itemsCenter'] } })],
+})
+```
+
+Those atoms ship as if they were in `keep`, beside the atoms of the package's calls the build does
+read. The calls it cannot read are not changed: one that produces any other atom still puts that
+atom's class on the element, and the class has no rule, in dev as in the build, unless the atom
+ships for another reason. An empty list, `keepFor: { '@acme/ui': [] }`, says that the calls the
+build cannot read produce no atom. A `cx.dynamic()` call in the package needs its atoms in the
+list: with an empty list, or none, it fails the build. Each client build records, in the
+`nave-used-atoms.json` file described below, the atoms it read from each listed package's calls,
+where the calls it could not read are, and any `keepFor` key that names no package the build read.
+
+`keepFor` stands in for the package's own calls, never for a call your code makes, so three
+problems in a listed package still fail the build. A module of the package that re-exports `cx`
+under the name `cx` still fails when your code, or another dependency, imports `cx` from it, and the
+report gives the `cxModules` entry that lets the build read those calls. A module that gives `cx`
+out under another name, as a default or inside a namespace, still fails when your code takes that
+export, and the report names each file of yours that does: import `cx` from `@navecss/core/cx`
+there instead. And a module of the package that you list in `cxModules` but that does not re-export
+Nave's `cx` under that name still fails: remove it from `cxModules`.
+
+A package inside your own workspace is your code, not a dependency: Vite resolves it by its real
+path, outside `node_modules`, so its calls are reported as yours, in the dev server too, and
+`keepFor` does not cover it.
+
+**What the build cannot see.**
+
+A class the build does not read (in a server template or CMS text, assembled where the build cannot see it, or applied at run time by a package listed in `keepFor`) has no rule in the production stylesheet unless its atom is listed in `keep` or in a `keepFor` entry (`nave-sr-only-focusable` also has its rule whenever `nave-sr-only` has one). An element carrying such a class renders as if the class were absent: a `nave-sr-only` or `nave-sr-only-focusable` element is shown, a `nave-hidden` or `nave-hide-*` element is displayed, and a `nave-focus-ring` element falls back to the browser's default focus indicator. A `nave-hidden` or `nave-hide-*` element that other styles also keep out of sight (moved off-screen, made transparent or clipped) stays out of sight but can take keyboard focus and is exposed to screen readers. The dev server serves the atoms the build would ship, chosen from the code it has read, so a class the build does not read has no rule in dev either. The dev server can still keep a rule the build drops, for code it read and the build does not (such as a module that only a server render inside the dev server loaded, or one the page stopped importing while the dev server ran), and lack one the build keeps, for a class rendered only on a server that runs outside the dev server's process, so a page can still look and behave differently in dev than in the build. Before you ship, run your checks, keyboard, screen-reader and automated accessibility checks included, against the production build: `vite build` then `vite preview` for a client-rendered app, or your production server for a server-rendered one.
+
+A class your code takes at run time from `@navecss/core/atoms` (`atomClassMap[variant]`,
+`toClassName('grid')`) is one the build does not read: it neither reads nor refuses it, so list its
+atom in `keep`.
+
+If your pages are rendered outside the build, by a backend that serves its own templates and uses
+Vite for its assets only, the build reads none of their classes. While `keep` is empty, the plugin
+warns when it has read no HTML page, no server render and no use of Nave at all: no `cx()` call, no
+Nave class and no `@nave` directive. A backend whose scripts call `cx()`, or whose CSS uses `@nave`,
+gets no warning, and the classes in its templates have no rule all the same. List the atoms your
+templates use in `keep`, or, if they are many, ship every atom (below).
+
+The PostCSS plugin and the Lightning CSS adapter read no `cx()` call and leave every atom in the
+layer, on Next.js and webpack alike; so does a page with no bundler, which links the standalone
+stylesheet.
+
+A server build leaves packages in `node_modules` external by default, so it does not read their
+code. For such a package that depends on `@navecss/core`, the build warns, naming it, unless it is
+listed in `keepFor`. On the server, its `cx.dynamic()` calls also map through every atom rather than
+through `keep`, so the class such a call renders can be an atom outside the set the build ships,
+its emitted set. Where the build ships no rule for that atom, the element renders as if the class
+were absent;
+where another use put that atom in the emitted set, the server-rendered element carries the atom's styling, and can keep it after the page hydrates: React, for one, does not guarantee to correct an attribute that differs between the server's markup and the client's render.
+Add such a package to `ssr.noExternal` in your Vite config: the build then reads it, and its
+`cx.dynamic()` calls on the server read `keep` too. Listing it in `keepFor` instead stops the
+warning and ships its listed atoms, but its `cx.dynamic()` calls on the server still map through
+every atom.
+
+If you build the client and the server in two commands, build the server first: `vite build --ssr`,
+then `vite build`. The two share a file in Vite's cache directory, so the client build also ships
+the atoms the server build read. Built the other way round, a server atom the client's CSS lacks
+fails the server build, which records the atom for the next client build, and the report says how
+to clear it. A server build that finds the client's list already used cannot check the CSS, so it
+warns instead, naming each atom the last client build did not ship, and records them the same way.
+
+That file is `nave-used-atoms.json` in Vite's cache directory (`node_modules/.vite/` unless you set
+`cacheDir`). Each `vite build` writes its atoms there, sorted, as the `emitted` list; after a client
+build, that list is the set of atoms its CSS holds, so you can diff it between builds.
+
+**Shipping every atom.** `navePlugin({ atomic: 'all' })` reads no `cx()` call and ships every atom,
+as the PostCSS plugin does. It suits a project whose Nave classes are mostly written where no build
+reads them, such as a backend's own templates or HTML from a CMS, where listing them in `keep` is
+not practical. It gives up what this section describes: no `cx()` call is read or checked, a name
+that is no atom passes through `cx()` as text, as it does without the plugin, and `cx.dynamic()`
+maps through every atom. The dev server serves every atom too, the plugin sets neither
+`optimizeDeps.exclude` nor `resolve.noExternal`, no build writes `nave-used-atoms.json`, and
+`keep`, `keepFor` and `cxModules` are still checked for well-formed values and otherwise do nothing.
+It is also the way out that the plugin's own check names when a build's atom layer does not hold
+exactly the atoms the build chose: removing the others relies on a part of Vite's CSS step that is
+not a public Vite API, measured on Vite 8.2.1 and the newest 8.x at the time of each release, and on
+a Vite where it does not take, every build fails that check until the plugin supports that version.
+
+**If you publish components that call `cx()`.** Your users' builds read your published code. Write
+every name your components choose at run time through `cx.dynamic()`, and every other call so the
+build can read it. Then export the atoms those calls can take, so a user lists them in one line that
+moves with your version:
+
+```ts
+// in your package, published as @acme/ui/nave-atoms
+import type { AtomName } from '@navecss/core/cx'
+
+export const naveAtoms = ['flex', 'grid', 'itemsCenter'] as const satisfies readonly AtomName[]
+
+// in your user's vite.config.ts
+// import { naveAtoms } from '@acme/ui/nave-atoms'
+// navePlugin({ keepFor: { '@acme/ui': naveAtoms } })
+```
+
+A user whose app sits in the same repository as your package, as a workspace package, passes the
+list to `keep` instead (`navePlugin({ keep: naveAtoms })`): the build reads a workspace package as
+their own code, and `keepFor` does not reach it.
+
+List every atom your components can apply at run time, `focusRing`, `srOnly`, `srOnlyFocusable`, `hidden` and the `hide*` atoms included where you use them: a consumer passes them to `keepFor` under your package's name, and one left out renders as if the class were absent in their production build.
 
 ### PostCSS plugin setup
 

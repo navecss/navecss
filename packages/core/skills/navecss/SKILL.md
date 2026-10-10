@@ -58,6 +58,8 @@ built-in atom it names, and `cx()` takes built-in atoms and nothing else.
 Its type check is TypeScript only: a JavaScript consumer gets none of it. A type error from
 `cx()` means the name is wrong: it is never a reason to reach for `cx.raw()` or a cast.
 
+In a project whose Vite config uses `navePlugin()` from `@navecss/core/vite`, the build reads every `cx()` call and fails on one whose atoms it cannot list. Pass names it can read (a literal, a condition between literals, a `const` in the same file); to choose by a value, call `cx()` once per case and pick between the results; pass a name known only at run time to `cx.dynamic()`, with its atoms in `keep`. The build's report names its remedies, most preferred first: take the first one that fits. Never set `atomic: 'all'`, never build a `nave-` class from pieces, and never apply a class taken from `@navecss/core/atoms`, to make a report go away. The dev server serves the atoms the build would ship, chosen from the code it has read, so a `nave-*` class with no rule in dev is written where the build cannot see it: move it into code the build reads, or list its atom in `keep`.
+
 ## `cx.raw()`
 
 `cx.raw()` is for a class from outside any system Nave sees, the project’s own classes
