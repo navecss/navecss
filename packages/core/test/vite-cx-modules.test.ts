@@ -17,6 +17,7 @@ import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.t
 import {
   declaredModulesFor,
   isAboutListed,
+  isNamingListed,
   isRelative,
   recognisedKey,
 } from '../src/vite-cx-modules.ts'
@@ -685,6 +686,36 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
 
     expect(await growth((n) => `${typical}\n`.repeat(n / 4))).toBeLessThan(MOST)
   }, 60_000)
+
+  it.each([
+    ['a run of slashes, then a name', (n: number) => `./ui${'/'.repeat(n)}x`],
+    ['a run of slashes at the end', (n: number) => `./ui${'/'.repeat(n)}`],
+  ])(
+    'reads the last segment of a specifier with %s in time proportional to the run',
+    async (_name, make) => {
+      const declared = (await listing())!
+      const time = (n: number): number => {
+        const specifier = make(n)
+        return fastest(() => isNamingListed(specifier, declared))
+      }
+
+      // Twice the slashes: about 2 when the cost is linear, about 4 when it is quadratic.
+      expect(Math.min(...Array.from({ length: 3 }, () => time(16_000) / time(8000)))).toBeLessThan(
+        MOST,
+      )
+    },
+    60_000,
+  )
+
+  it('drops trailing slashes from the last segment, whatever their number', async () => {
+    const declared = (await listing())!
+
+    expect(isNamingListed('./ui//', declared)).toBe(true)
+    expect(isNamingListed(`.${'/'.repeat(50)}`, declared)).toBe(true)
+    expect(isNamingListed(`./ui${'/'.repeat(50)}?v=1`, declared)).toBe(true)
+    expect(isNamingListed(`./uix${'/'.repeat(50)}`, declared)).toBe(false)
+    expect(isNamingListed(`./ui${'/'.repeat(50)}x`, declared)).toBe(false)
+  })
 
   const spellings: [string, boolean][] = [
     ["import { cx } from './ui'", true],

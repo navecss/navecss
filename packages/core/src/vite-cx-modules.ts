@@ -161,13 +161,24 @@ export function forgetDeclared(state: RootState, environment: string): void {
 }
 
 /**
+ * `text` without its trailing `/`s. A loop, not a pattern: a pattern for a run of slashes at the
+ * end retries from every slash of a run that is followed by something, which costs the square of
+ * its length.
+ */
+function withoutTrailingSlashes(text: string): string {
+  let end = text.length
+  while (end > 0 && text[end - 1] === '/') end -= 1
+  return text.slice(0, end)
+}
+
+/**
  * The last path segment of a specifier, as the text test reads it: without a `?query` or a
  * `#hash` (a leading `#` begins a Node subpath import and is part of the specifier), without a
  * trailing `/`, and `index` for a directory specifier that writes no name.
  */
 function lastSegmentOf(specifier: string): string {
   const cut = specifier.slice(1).search(/[#?]/)
-  const bare = (cut === -1 ? specifier : specifier.slice(0, cut + 1)).replace(/\/+$/, '')
+  const bare = withoutTrailingSlashes(cut === -1 ? specifier : specifier.slice(0, cut + 1))
   const segment = bare.slice(bare.lastIndexOf('/') + 1)
   return segment === '.' || segment === '..' ? 'index' : segment
 }

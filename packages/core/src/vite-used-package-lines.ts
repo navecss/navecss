@@ -1,8 +1,8 @@
 /**
  * The remedy lines for a dependency's problems: one sentence per package for its calls and uses of
  * `cx`, for a re-export of `cx` the line that clears it (a `cxModules` entry when the consumer has
- * a specifier that resolves to the re-exporting file, the package's `keepFor` line when only the
- * package itself imports that file), and for a listed module whose `cx` the build does not follow
+ * a specifier that resolves to the re-exporting file and the file exports it under the name `cx`,
+ * else the package's `keepFor` line), and for a listed module whose `cx` the build does not follow
  * the line that tells the consumer to remove the entry.
  */
 import type { LocatedProblem } from './vite-used-report.ts'
@@ -27,7 +27,7 @@ function callsLine(pkg: string, problems: readonly LocatedProblem[], keepFor: st
   if (isOnlyDynamic) {
     const count = problems.length
     const places = count === 1 ? '1 place' : `${count} places`
-    return `${pkg} calls cx.dynamic() in ${places} and lists no atoms in keepFor, so none of them applies a class. List the atoms those calls can take, from its documentation, under its name in navePlugin(): ${keepFor}.`
+    return `${pkg} calls cx.dynamic() in ${places}, and keepFor lists no atoms for it, so none of them applies a class. List the atoms those calls can take, from its documentation, under its name in navePlugin(): ${keepFor}.`
   }
   return `${pkg} is a dependency, so its code is not yours to change. List the atoms its calls can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: names chosen at run time go through cx.dynamic().`
 }
@@ -65,6 +65,27 @@ function internalLine(pkg: string, count: number, keepFor: string, hasKeepFor: b
   }
   const [file, them] = count === 1 ? ['a file that only', 'it'] : ['files that only', 'them']
   return `${pkg} re-exports cx in ${file} the package itself imports, so your code has no specifier for ${them} to list in cxModules, and the build does not read calls made through that cx. Where your code imports cx from ${pkg} or one of its subpaths, import it from @navecss/core/cx instead. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): ${keepFor}. ${LASTING_FIX}`
+}
+
+const RENAMED_FIX =
+  'import cx from @navecss/core/cx where it is called, and re-export it only under the name cx.'
+
+/**
+ * The line for a re-export of `cx` other than under the name `cx` (renamed, as a default or inside
+ * a namespace). The build does not follow one even from a module listed in `cxModules`, so no
+ * entry clears it and the package's `keepFor` line does. Unlike the internal line it does not say
+ * who imports the file, since the consumer's code may. `hasKeepFor` is whether a line above
+ * already printed that `keepFor` line, which clears this too, so it is printed once.
+ */
+function renamedLine(pkg: string, count: number, keepFor: string, hasKeepFor: boolean): string {
+  const [those, them, its] =
+    count === 1 ? ['that export', 'it', 'its'] : ['those exports', 'them', 'their']
+  const form = 'other than under the name cx (renamed, as a default or inside a namespace)'
+  const act = `import cx from @navecss/core/cx instead and call cx in ${its} place`
+  if (hasKeepFor) {
+    return `${pkg} also re-exports cx ${form}; the keepFor entry above clears that too. The build does not read calls made through ${those}: where your code imports ${them} from ${pkg} or one of its subpaths, ${act}. The lasting fix there is the package's: ${RENAMED_FIX}`
+  }
+  return `${pkg} re-exports cx ${form}, which the build does not follow even from a module listed in cxModules, so no entry there clears ${them} and the build does not read calls made through ${those}. Where your code imports ${those} from ${pkg} or one of its subpaths, ${act}. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: ${RENAMED_FIX}`
 }
 
 /**
@@ -109,7 +130,10 @@ export function packageLines(
 ): string[] {
   const keepFor = `keepFor: { '${pkg}': ['<atom>'] }`
   const reexports = problems.filter((problem) => isListableReexport(problem))
-  const internal = reexports.filter((problem) => problem.specifier === undefined)
+  const internal = reexports.filter(
+    (problem) => problem.specifier === undefined && problem.isRenamed !== true,
+  )
+  const renamed = reexports.filter((problem) => problem.isRenamed === true)
   const declared = problems.filter((problem) => problem.kind === 'declared')
   const rest = problems.filter(
     (problem) => !isListableReexport(problem) && problem.kind !== 'declared',
@@ -129,6 +153,10 @@ export function packageLines(
     const files = new Set(internal.map((problem) => problem.file)).size
     const hasKeepFor = rest.some((problem) => problem.kind !== 'own')
     lines.push(internalLine(pkg, files, keepFor, hasKeepFor))
+  }
+  if (renamed.length > 0) {
+    const hasKeepFor = rest.some((problem) => problem.kind !== 'own') || internal.length > 0
+    lines.push(renamedLine(pkg, renamed.length, keepFor, hasKeepFor))
   }
   return lines
 }

@@ -63,12 +63,15 @@ function dependencyLineOf(item: ListedImporter): string {
 
 const RELATIVE_REMEDY =
   'Adding a relative specifier to cxModules would not clear this: a relative entry is read from the project root. Instead of the rewrite'
+const TYPESCRIPT_CONDITION =
+  'Where a rewrite ends in .ts, .tsx, .mts or .cts, TypeScript accepts it only if your tsconfig sets allowImportingTsExtensions or rewriteRelativeImportExtensions; if it sets neither, use the alias the line above describes instead.'
 const NO_SPECIFIER_REMEDY =
   "Where the build could not find the specifier, import the module there by a specifier ending in the listed file's name, or by an alias or package name added to cxModules."
 
 /**
  * The remedy lines for the application's importers, in the order they are read: what a relative
- * specifier cannot do, what to do when no specifier was found, and last the array to paste.
+ * specifier cannot do, the TypeScript condition on a rewrite that ends in a TypeScript extension,
+ * what to do when no specifier was found, and last the array to paste.
  */
 function applicationRemedyOf(
   items: readonly ListedImporter[],
@@ -86,6 +89,12 @@ function applicationRemedyOf(
       `${RELATIVE_REMEDY} each line gives, a file can import the module through an alias for it, added to cxModules.`,
     )
   }
+  const hasTypeScriptRewrite = items.some(
+    (item) =>
+      item.specifiers.some((specifier) => isRelative(specifier)) &&
+      /\.(?:ts|tsx|mts|cts)$/.test(item.replacement),
+  )
+  if (hasTypeScriptRewrite) remedy.push(TYPESCRIPT_CONDITION)
   if (lines.some((line) => line.none.length > 0)) remedy.push(NO_SPECIFIER_REMEDY)
   const added = [
     ...new Set(

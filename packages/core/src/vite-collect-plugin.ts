@@ -15,7 +15,7 @@ import { checkCxImporters } from './vite-cx-importers.ts'
 import { declaredImporterError } from './vite-cx-module-importers.ts'
 import { forgetDeclared } from './vite-cx-modules.ts'
 import { withoutEchoes } from './vite-declared-echoes.ts'
-import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
+import { clearableReexports, withClearingSpecifiers } from './vite-dependency-reexports.ts'
 import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
@@ -49,14 +49,22 @@ export interface NaveCollectPlugin {
 }
 
 /**
+ * The atoms that can make a `cx.dynamic()` call of the record apply a class: `keep` in the
+ * application, the package's `keepFor` list in a dependency (none without an entry).
+ */
+function listedAtomsOf(record: ModuleRecord, context: UsedContext): readonly string[] {
+  if (record.pkg === undefined) return context.options.keep
+  const { keepFor } = context.options
+  return Object.hasOwn(keepFor, record.pkg) ? keepFor[record.pkg]! : []
+}
+
+/**
  * The `cx.dynamic()` calls a record holds that apply no class: in the application when `keep`
- * is empty, in a dependency when no `keepFor` entry names it.
+ * is empty, in a dependency when its `keepFor` entry is absent or empty. An empty list maps
+ * nothing, so it is no entry, as an empty `keep` is none.
  */
 function dynamicProblems(record: ModuleRecord, context: UsedContext): LocatedProblem[] {
-  const isCovered =
-    record.pkg === undefined
-      ? context.options.keep.length > 0
-      : Object.hasOwn(context.options.keepFor, record.pkg)
+  const isCovered = listedAtomsOf(record, context).length > 0
   if (isCovered) return []
   return record.dynamicCalls.map((call) => ({
     kind: 'dynamic',
@@ -105,20 +113,39 @@ export function isReadable(context: UsedContext, id: string): boolean {
 }
 
 /**
+ * The problems the build fails with. Those of a package `keepFor` lists are only the ones its
+ * listing does not stand in for: a listed module of the package that exports a `cx` the build does
+ * not follow, and a re-export of `cx` that a `cxModules` entry of the consumer's own clears. The
+ * clearing specifier is known at build end, so the suppressed re-exports are judged here.
+ */
+async function problemsOfBuild(
+  ctx: RenderContext,
+  context: UsedContext,
+): Promise<LocatedProblem[]> {
+  const records = recordsOf(context.state, ctx.environment.name)
+  const kept = await withClearingSpecifiers(
+    ctx,
+    context,
+    withoutEchoes(
+      records.map((record) => ({
+        onlyVia: record.onlyVia,
+        problems: [
+          ...problemsOf(record, context),
+          ...record.suppressed.filter((problem) => problem.kind === 'declared'),
+        ],
+      })),
+    ),
+  )
+  const standingIn = records.flatMap((record) => record.suppressed)
+  return [...kept, ...(await clearableReexports(ctx, context, standingIn))]
+}
+
+/**
  * What the build fails with at its end: the report of what it cannot read, then the check of the
  * listed modules' importers, which tells apart what the report already says, in one failure.
  */
 async function failuresOf(ctx: RenderContext, context: UsedContext): Promise<string[]> {
-  const problems = await withClearingSpecifiers(
-    ctx,
-    context,
-    withoutEchoes(
-      recordsOf(context.state, ctx.environment.name).map((record) => ({
-        onlyVia: record.onlyVia,
-        problems: problemsOf(record, context),
-      })),
-    ),
-  )
+  const problems = await problemsOfBuild(ctx, context)
   const report = problems.length > 0 ? buildReport(problems, context.options.cxModules) : undefined
   const importers = await declaredImporterError(ctx, context, {
     configured: withoutRemoved(problems, context.options.cxModules),

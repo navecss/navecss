@@ -1,5 +1,5 @@
 /**
- * The used-atoms criteria for dependency code and the escapes (AC-used-atoms-08, -16, -19, -43 to
+ * The used-atoms criteria for dependency code and the escapes (AC-used-atoms-08, -16, -19, -38, -43 to
  * -46, -55): a problem in a package under `node_modules` names the package and prints the
  * consumer's `keepFor` line, listing a package stands in for reading it, and the remedy block is
  * split by owner.
@@ -230,7 +230,7 @@ describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split
       const all = await buildUsed(app, { options: { atomic: 'all' } })
 
       expect(keepOnly.error).toMatch(
-        /dyn-lib calls cx\.dynamic\(\) in 1 place and lists no atoms in keepFor/,
+        /dyn-lib calls cx\.dynamic\(\) in 1 place, and keepFor lists no atoms for it, so none of them applies a class\./,
       )
       expect(keepOnly.error).not.toContain('lasting fix')
       expect(keepOnly.error).not.toContain('in your code')
@@ -238,6 +238,23 @@ describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split
       expect(keepForOnly.error).not.toContain('dyn-lib calls')
       expect(both.error).toBeUndefined()
       expect(all.error).toBeUndefined()
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('reads an empty keepFor list as no entry: the dependency problem stays, and the application’s is cleared by keep', async () => {
+    const app = dynamicApp()
+    try {
+      const withoutEntry = await buildUsed(app, { options: { keep: ['flex'] } })
+      const emptyList = await buildUsed(app, {
+        options: { keep: ['flex'], keepFor: { 'dyn-lib': [] } },
+      })
+
+      expect(emptyList.error).toMatch(/^1 problem in 1 file/)
+      expect(emptyList.error).toBe(withoutEntry.error)
+      expect(emptyList.error).toMatch(/dyn-lib calls cx\.dynamic\(\) in 1 place/)
+      expect(emptyList.error).not.toContain('in your code')
     } finally {
       app.dispose()
     }
@@ -359,10 +376,18 @@ describe('AC-used-atoms-44 — keepFor reaches packages under node_modules only'
   }, 60_000)
 })
 
+describe('AC-used-atoms-38 - keepFor is still validated under all', () => {
+  it('refuses an unknown atom in a list, and accepts an empty list', () => {
+    expect(() => navePlugin({ atomic: 'all', keepFor: { 'a-lib': ['sr-only' as never] } })).toThrow(
+      'navePlugin(): keepFor["a-lib"] names an unknown atom "sr-only". Did you mean "srOnly"? Atom names are camelCase; "nave-sr-only" is its class.',
+    )
+    expect(() => navePlugin({ atomic: 'all', keepFor: { 'a-lib': [] } })).not.toThrow()
+  })
+})
+
 describe('AC-used-atoms-45 — keepFor entries are validated as keep is, under both values', () => {
   const extend = { brandBox: { declarations: { color: 'red' } } }
   const rows: [string, string[], string][] = [
-    ['lists no atoms', [], 'keepFor["@acme/ui"] lists no atoms'],
     [
       'names an unknown atom',
       ['sr-only'],
@@ -382,6 +407,20 @@ describe('AC-used-atoms-45 — keepFor entries are validated as keep is, under b
       )
     }
   })
+
+  it('accepts an empty list, which says the package’s calls produce no atom: green under both values, with no plugin message', async () => {
+    const app = appUsing([])
+    try {
+      for (const atomic of ['used', 'all'] as const) {
+        const built = await buildUsed(app, { options: { atomic, keepFor: { '@acme/ui': [] } } })
+
+        expect(built.error).toBeUndefined()
+        expect((built.warnings ?? []).filter((message) => message.includes('nave'))).toEqual([])
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
 
   it('a key alone never fails', async () => {
     const app = appUsing([])

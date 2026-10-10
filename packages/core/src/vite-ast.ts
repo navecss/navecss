@@ -74,6 +74,14 @@ export function staticStringOf(node: AstNode | undefined): string | undefined {
 }
 
 /**
+ * The name an export specifier's side spells: an identifier, or a string (`export { x as 'a-b' }`).
+ */
+export function exportNameOf(node: AstNode | undefined): string | undefined {
+  if (!node) return undefined
+  return node.type === 'Identifier' ? stringAt(node, 'name') : staticStringOf(node)
+}
+
+/**
  * The name a property key spells when it is not computed: `a` in `o.a` and `{ a: 1 }`, or the
  * string of `{ 'a': 1 }`; with `isComputed` set, only a string literal counts (`o['a']`).
  */

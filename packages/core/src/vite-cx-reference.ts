@@ -5,50 +5,12 @@
  * `let` of the same name in an inner scope is not a use.
  */
 import type { AstNode } from './vite-ast.ts'
-import type { Binding, Reference } from './vite-scope.ts'
+import type { CxBinding, CxUse } from './vite-cx-use.ts'
+import type { Reference } from './vite-scope.ts'
 
 import { nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
-import { isReexportOf, phraseFor, type Reading } from './vite-cx-refuse.ts'
+import { isReexportOf, isRenamedReexportOf, phraseFor, type Reading } from './vite-cx-refuse.ts'
 import { isSetupReturn } from './vite-setup-member.ts'
-
-type UseKind = 'call' | 'dynamic' | 'exposure' | 'raw' | 'refused'
-
-export interface CxUse {
-  readonly kind: UseKind
-  /**
-   * For a call, the call; for a refused use, the construct that refuses (where its error points).
-   */
-  readonly node: AstNode
-  /**
-   * The name the module gives the binding (`cx`, or an alias).
-   */
-  readonly local: string
-  /**
-   * For a refused use: what it does with the binding, as the report words it.
-   */
-  readonly phrase?: string
-  /**
-   * Whether the refused use is a re-export of the binding, which `cxModules` declares away.
-   */
-  readonly isReexport?: boolean
-  /**
-   * For a refused re-export: whether listing the module in `cxModules` would clear it, which it
-   * does not when the binding comes from a module that is already listed (a second hop).
-   */
-  readonly isListable?: boolean
-  /**
-   * For an exposure: the name a compiled Vue component's setup return gives the binding.
-   */
-  readonly exposedAs?: string
-}
-
-/**
- * What a binding stands for in the module: Nave's `cx` itself, or the namespace holding it.
- */
-export interface CxBinding {
-  readonly binding: Binding
-  readonly isNamespace: boolean
-}
 
 /**
  * Whether `node` is the callee of the call `parent`.
@@ -200,7 +162,9 @@ export function useOfExpression(reading: Reading, start: AstNode, local: string)
   const exposedAs = exposureName(reading, expression)
   if (exposedAs !== undefined) return { kind: 'exposure', node: expression, local, exposedAs }
   const phrase = phraseFor(reading, expression, local)
-  return { ...refused(expression, local, phrase), isReexport: isReexportOf(reading, expression) }
+  const isReexport = isReexportOf(reading, expression)
+  const isRenamed = isReexport && isRenamedReexportOf(reading, expression)
+  return { ...refused(expression, local, phrase), isReexport, ...(isRenamed && { isRenamed }) }
 }
 
 /**

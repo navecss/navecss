@@ -9,11 +9,11 @@
  * and two stars that give `cx` one binding are not ambiguous.
  */
 import type { AstNode } from './vite-ast.ts'
-import type { CxBinding } from './vite-cx-reference.ts'
+import type { CxBinding } from './vite-cx-use.ts'
 import type { Problem } from './vite-problems.ts'
 import type { Binding, ScopeAnalysis } from './vite-scope.ts'
 
-import { nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
+import { exportNameOf, nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
 
 const DECLARED_TEXT =
   "listed in cxModules, but this export can give it a cx the build does not follow: the build follows a listed module one step, to Nave's cx re-exported from @navecss/core/cx under the name cx."
@@ -30,14 +30,6 @@ export interface DeclaredExportsInput {
    * The specifiers that name a listed module.
    */
   readonly declaredSources: ReadonlySet<string>
-}
-
-/**
- * The name an export specifier's side spells: an identifier, or a string (`export { x as 'a-b' }`).
- */
-function exportNameOf(node: AstNode | undefined): string | undefined {
-  if (!node) return undefined
-  return node.type === 'Identifier' ? stringAt(node, 'name') : staticStringOf(node)
 }
 
 /**

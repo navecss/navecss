@@ -5,7 +5,7 @@
  */
 import type { AstNode } from './vite-ast.ts'
 import type { ModuleReading, ReadOptions } from './vite-collect-types.ts'
-import type { CxUse } from './vite-cx-reference.ts'
+import type { CxUse } from './vite-cx-use.ts'
 import type { Problem } from './vite-problems.ts'
 
 import { nodesAt } from './vite-ast.ts'
@@ -149,6 +149,7 @@ function refusedProblem(reading: Reading, use: CxUse): Problem | undefined {
     construct: '',
     text: `${use.phrase ?? ''}.`,
     ...(use.isReexport && { isListable: use.isListable }),
+    ...(use.isRenamed === true && { isRenamed: true }),
   }
 }
 

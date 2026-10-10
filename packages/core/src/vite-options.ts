@@ -25,10 +25,12 @@ export interface UsedAtomOptions {
   keep?: readonly AtomName[]
 
   /**
-   * By package name: the atoms a dependency's `cx()` calls can produce, for a package whose calls
-   * the build cannot read. They ship as if they were in `keep`. The package's calls are not
-   * changed, so any other atom they apply has no rule. A package in your own workspace is your
-   * code, not a dependency.
+   * By package name: the atoms a dependency's own `cx()` calls can produce, for a package whose
+   * calls the build cannot read. They ship as if they were in `keep`. The package's calls are not
+   * changed, so any other atom they apply has no rule. An empty list is accepted: it says the
+   * package's calls produce no atom, so none ships for it, and a `cx.dynamic()` call in the
+   * package still fails the build, as it does with no entry. A package in your own workspace is
+   * your code, not a dependency.
    */
   keepFor?: Readonly<Record<string, readonly AtomName[]>>
 
@@ -106,14 +108,7 @@ function problemsInKeepFor(keepFor: unknown, own: ReadonlySet<string> | undefine
   }
   const problems: string[] = []
   for (const [pkg, list] of Object.entries(keepFor)) {
-    const where = `keepFor["${pkg}"]`
-    if (Array.isArray(list) && list.length === 0) {
-      problems.push(
-        `navePlugin(): ${where} lists no atoms. List the atoms its calls can produce, or remove the entry.`,
-      )
-    } else {
-      problems.push(...problemsInList(where, list, own))
-    }
+    problems.push(...problemsInList(`keepFor["${pkg}"]`, list, own))
   }
   return problems
 }

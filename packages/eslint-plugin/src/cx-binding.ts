@@ -94,22 +94,29 @@ function resolveSpecifier(fromDir: string, specifier: string): string | undefine
 
 /**
  * True when `source` (an import specifier written in the linted file) names one of the
- * plugin's recognised `cx` modules: `@navecss/core/cx` always, or a `cxModules` entry, matched
- * either by string equality or by both resolving (from the working directory for the entry,
- * from the linted file's directory for the import) to the same real path.
+ * plugin's recognised `cx` modules: `@navecss/core/cx` always, or a `cxModules` entry. An entry
+ * matches when it and the import resolve, the entry from the working directory and the import
+ * from the linted file's directory, to the same real path. A package name, subpath, alias or
+ * absolute path also matches by string equality. A relative entry never does, since the same text
+ * names another file in another directory, and a `#` entry does only when the import does not
+ * resolve, since a `#` import resolves through the `package.json` nearest the file that writes it.
  */
 function isRecognisedCxModule(source: string, cxModules: string[], filename: string): boolean {
   if (source === CORE_CX_SPECIFIER) return true
-  const fileDir = path.dirname(filename)
+  if (cxModules.some((entry) => entry === source && !isScopedEntry(entry))) return true
+  const importPath =
+    cxModules.length === 0 ? undefined : resolveSpecifier(path.dirname(filename), source)
+  if (importPath === undefined) return source.startsWith('#') && cxModules.includes(source)
   const cwd = process.cwd()
-  for (const entry of cxModules) {
-    if (entry === source) return true
-    const entryPath = resolveSpecifier(cwd, entry)
-    if (!entryPath) continue
-    const importPath = resolveSpecifier(fileDir, source)
-    if (importPath && importPath === entryPath) return true
-  }
-  return false
+  return cxModules.some((entry) => resolveSpecifier(cwd, entry) === importPath)
+}
+
+/**
+ * Whether an entry names a file relative to the file that writes it (it begins `./` or `../`, or
+ * is `.` or `..`) or in that file's package scope (it begins `#`), so its text alone names nothing.
+ */
+function isScopedEntry(entry: string): boolean {
+  return entry.startsWith('#') || /^\.\.?(?:\/|$)/.test(entry)
 }
 
 /**

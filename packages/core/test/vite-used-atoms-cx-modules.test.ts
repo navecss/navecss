@@ -754,7 +754,14 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
     try {
       return await buildUsed(app, {
         nave: [nave, collect],
-        config: { resolve: { alias: { '#ds': path.join(app.root, 'src/ui/index.ts') } } },
+        config: {
+          resolve: {
+            alias: {
+              '#ds': path.join(app.root, 'src/ui/index.ts'),
+              '#kit': path.join(app.root, 'src/ui/index.ts'),
+            },
+          },
+        },
       })
     } finally {
       app.dispose()
@@ -921,27 +928,27 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
         expect(atomLayerAtoms(fixed.css)).toEqual(atoms('flex', 'grid'))
       }, 120_000)
 
-      it('prints an array that adds an alias spelling, and pasting it builds green with both atoms', async () => {
+      it('prints an array that adds an alias spelling (R5b), and pasting it builds green with both atoms', async () => {
         const { first, list, pasted } = await pasteAndRebuild(
-          (cxModules) => run(shell('#ds'), cxModules),
+          (cxModules) => run(shell('#kit'), cxModules),
           ['./src/ui/index.ts'],
         )
 
-        expect(first.error).toContain("src/a.ts: imports './src/ui/index.ts' as '#ds'.")
-        expect(list).toEqual(['./src/ui/index.ts', '#ds'])
+        expect(first.error).toContain("src/a.ts: imports './src/ui/index.ts' as '#kit'.")
+        expect(list).toEqual(['./src/ui/index.ts', '#kit'])
         expect(pasted?.error).toBeUndefined()
         expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('flex', 'grid'))
       }, 120_000)
 
       it('control: the alias spelling alone fails the same way, and pasting its array builds green', async () => {
         const { first, list, pasted } = await pasteAndRebuild(
-          (cxModules) => run(shell('#ds', true), cxModules),
+          (cxModules) => run(shell('#kit', true), cxModules),
           ['./src/ui/index.ts'],
         )
 
         expect(first.error!.split('\n', 1)[0]).toBe(FIRST)
-        expect(first.error).toContain("src/a.ts: imports './src/ui/index.ts' as '#ds'.")
-        expect(list).toEqual(['./src/ui/index.ts', '#ds'])
+        expect(first.error).toContain("src/a.ts: imports './src/ui/index.ts' as '#kit'.")
+        expect(list).toEqual(['./src/ui/index.ts', '#kit'])
         expect(pasted?.error).toBeUndefined()
         expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('grid'))
       }, 120_000)
@@ -973,6 +980,87 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
         expect(fixed.error).toBeUndefined()
         expect(atomLayerAtoms(fixed.css)).toEqual(atoms('flex'))
       }, 120_000)
+
+      describe('the TypeScript condition beside a replacement that ends in a TypeScript extension', () => {
+        const CONDITION =
+          'Where a rewrite ends in .ts, .tsx, .mts or .cts, TypeScript accepts it only if your tsconfig sets allowImportingTsExtensions or rewriteRelativeImportExtensions; if it sets neither, use the alias the line above describes instead.'
+        const reportsOf = (...names: string[]): Record<string, string> =>
+          Object.fromEntries(
+            names.map((name) => [
+              `src/pages/${name}.tsx`,
+              `import { cx } from '../shell'\nexport const r = cx('flex')\n`,
+            ]),
+          )
+        const beside = (
+          extension: string,
+          pages: Record<string, string>,
+        ): Record<string, string> => ({
+          'src/shell/package.json': `{ "main": "../ui/index.${extension}" }\n`,
+          [`src/ui/index.${extension}`]: BARREL,
+          'src/ui/index.js': "export const cx = (...a) => a.filter(Boolean).join(' ')\n",
+          ...pages,
+        })
+
+        it.each(['ts', 'tsx', 'mts', 'cts'])(
+          'prints the condition once, last, for a replacement ending .%s, and rewritten as printed the build is green',
+          async (extension) => {
+            const modules = beside(extension, reportsOf('Reports'))
+            const entry = `./src/ui/index.${extension}`
+            const first = await buildAliased(modules, [entry], [], ['src/pages/Reports.tsx'])
+
+            expect(first.error).toBe(
+              [
+                FIRST,
+                `src/pages/Reports.tsx: imports '${entry}' as '../shell'. Write '../ui/index.${extension}' in its place.`,
+                RELATIVE_REMEDY,
+                CONDITION,
+              ].join('\n'),
+            )
+            expect(first.error).toContain('allowImportingTsExtensions')
+            expect(first.error).not.toMatch(/\b(?:turn|enable)\b/)
+            const fixed = await buildAliased(
+              {
+                ...modules,
+                'src/pages/Reports.tsx': `import { cx } from '../ui/index.${extension}'\nexport const r = cx('flex')\n`,
+              },
+              [entry],
+              [],
+              ['src/pages/Reports.tsx'],
+            )
+
+            expect(fixed.error).toBeUndefined()
+            expect(atomLayerAtoms(fixed.css)).toEqual(atoms('flex'))
+          },
+          120_000,
+        )
+
+        it('prints it once for the error however many replacements end in one', async () => {
+          const modules = beside('ts', reportsOf('Reports', 'Orders'))
+          const first = await buildAliased(
+            modules,
+            ['./src/ui/index.ts'],
+            [],
+            ['src/pages/Orders.tsx', 'src/pages/Reports.tsx'],
+          )
+
+          expect(first.error!.match(/Write '\.\.\/ui\/index\.ts' in its place/g)).toHaveLength(2)
+          expect(first.error!.match(/allowImportingTsExtensions/g)).toHaveLength(1)
+          expect(first.error!.split('\n').at(-1)).toBe(CONDITION)
+        }, 60_000)
+
+        it('prints none for a declared .jsx file, which needs no TypeScript setting', async () => {
+          const modules = beside('jsx', reportsOf('Reports'))
+          const first = await buildAliased(
+            modules,
+            ['./src/ui/index.jsx'],
+            [],
+            ['src/pages/Reports.tsx'],
+          )
+
+          expect(first.error).toContain("Write '../ui/index.jsx' in its place.")
+          expect(first.error).not.toContain('allowImportingTsExtensions')
+        }, 60_000)
+      })
 
       it('keeps the short spelling when it lands on the file: the same directory, another name, an .mts file', async () => {
         const rows: [string, Record<string, string>, string, string][] = [

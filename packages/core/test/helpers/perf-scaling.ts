@@ -13,11 +13,11 @@ export interface ScalingMeasurement {
    */
   n: number
   /**
-   * Median elapsed time, in milliseconds, across 3 runs at `n`.
+   * Least elapsed time, in milliseconds, across 3 runs at `n`.
    */
   nMs: number
   /**
-   * Median elapsed time, in milliseconds, across 3 runs at `4 * n`.
+   * Least elapsed time, in milliseconds, across 3 runs at `4 * n`.
    */
   fourNMs: number
   /**
@@ -27,17 +27,18 @@ export interface ScalingMeasurement {
 }
 
 /**
- * The middle sample of a trio, which shrugs off one slow or fast outlier run.
+ * The least sample of a trio. Background load only ever adds time to a run, so the fastest run is
+ * the one that says what the subject costs; a median lets two slowed runs of three through.
  */
-function median(samples: readonly number[]): number {
-  const sorted = samples.toSorted((a, b) => a - b)
-  return sorted[1]!
+function fastest(samples: readonly number[]): number {
+  return Math.min(...samples)
 }
 
 const RATIO_BUDGET = 8
 
 /**
- * One pass: one throwaway warm-up run at `n`, then 3 measured runs at each of `n` and `4 * n` (median taken of each trio).
+ * One pass: one throwaway warm-up run at `n`, then 3 measured runs at each of `n` and `4 * n` (the
+ * least taken of each trio).
  */
 async function measureOnce(
   timeAt: (size: number) => number | Promise<number>,
@@ -51,19 +52,19 @@ async function measureOnce(
   const fourNSamples: number[] = []
   for (let i = 0; i < 3; i++) fourNSamples.push(await timeAt(4 * n))
 
-  const nMs = median(nSamples)
-  const fourNMs = median(fourNSamples)
+  const nMs = fastest(nSamples)
+  const fourNMs = fastest(fourNSamples)
   return { n, nMs, fourNMs, ratio: fourNMs / nMs }
 }
 
 const MAX_ATTEMPTS = 3
 
 /**
- * Times `timeAt(n)` and `timeAt(4 * n)` (see `measureOnce`) and asserts the two medians' ratio
- * stays below 8 — comfortably above the ~4 a linear subject produces, comfortably below the ~16
- * a quadratic one does. `timeAt` builds and measures its own input at the given size and returns
- * the elapsed milliseconds; keep the size small enough that the `4 * n` run finishes in well
- * under a second locally, since this function runs it 3 times.
+ * Times `timeAt(n)` and `timeAt(4 * n)` (see `measureOnce`) and asserts the ratio of the two
+ * fastest runs stays below 8, comfortably above the ~4 a linear subject produces and comfortably
+ * below the ~16 a quadratic one does. `timeAt` builds and measures its own input at the given
+ * size and returns the elapsed milliseconds; keep the size small enough that the `4 * n` run
+ * finishes in well under a second locally, since this function runs it 3 times.
  *
  * Up to two retries (a fresh full pass each, warm-up included) run before failing: a lone
  * scheduler stall on a shared machine — several unrelated processes' work landing on the same

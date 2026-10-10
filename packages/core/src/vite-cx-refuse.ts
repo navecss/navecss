@@ -4,7 +4,7 @@
 import type { AstNode } from './vite-ast.ts'
 import type { ScopeAnalysis } from './vite-scope.ts'
 
-import { nodeAt, stringAt } from './vite-ast.ts'
+import { exportNameOf, nodeAt, stringAt } from './vite-ast.ts'
 
 export interface Reading {
   readonly analysis: ScopeAnalysis
@@ -76,4 +76,14 @@ export function phraseFor(reading: Reading, expression: AstNode, local: string):
 export function isReexportOf(reading: Reading, expression: AstNode): boolean {
   const parent = reading.analysis.parentOf.get(expression)
   return parent?.type === 'ExportSpecifier' || parent?.type === 'ExportDefaultDeclaration'
+}
+
+/**
+ * Whether the re-export of the binding gives it out under a name other than `cx`: as the default
+ * export, or in `export { cx as other }`.
+ */
+export function isRenamedReexportOf(reading: Reading, expression: AstNode): boolean {
+  const parent = reading.analysis.parentOf.get(expression)
+  if (parent?.type === 'ExportDefaultDeclaration') return true
+  return parent?.type === 'ExportSpecifier' && exportNameOf(nodeAt(parent, 'exported')) !== 'cx'
 }

@@ -42,6 +42,12 @@ export interface Problem {
    */
   readonly isListable?: boolean
   /**
+   * For a re-export of Nave's `cx`: whether it gives `cx` under a name other than `cx`, as a default
+   * or inside a namespace. A listed module may not do that, so listing the module would only turn
+   * this problem into another one: no `cxModules` entry clears it.
+   */
+  readonly isRenamed?: boolean
+  /**
    * For a problem in a module listed in `cxModules`: whether the module also exports Nave's own
    * `cx`. An importer's `cx` is then Nave's, so what the build says of its calls is not an echo of
    * this problem and stays when the problem is reported.

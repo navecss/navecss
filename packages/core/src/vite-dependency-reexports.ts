@@ -1,10 +1,11 @@
 /**
  * What a consumer can write in `cxModules` to clear a dependency's re-export of `cx`: a specifier
- * that resolves, from the project root, to the file that holds it. The package's name when its
- * entry is that file, else a package subpath through which a module outside the package imports
- * it. A file only the package itself imports has none, and its problem is cleared by the
- * package's `keepFor` line instead: a deep path to it is not the package's public surface, and an
- * `exports` map may forbid it.
+ * that resolves, from the project root, to the file that holds it, for a re-export under the name
+ * `cx`. The package's name when its entry is that file, else a package subpath through which a
+ * module outside the package imports it. A file only the package itself imports has none, and
+ * neither has a re-export under another name, as a default or inside a namespace, which a listed
+ * module may not hold: the package's `keepFor` line clears each instead. A deep path to an
+ * internal file is not the package's public surface, and an `exports` map may forbid it.
  */
 import path from 'node:path'
 
@@ -107,7 +108,9 @@ async function clearingSpecifier(
  * The problems with each dependency re-export of `cx` given the specifier that clears it, when it
  * has one (the report prints a `cxModules` line for those and the package's `keepFor` line for the
  * others), and each dependency's listed module that exports a `cx` the build does not follow given
- * the entries that name it, which the report tells the consumer to remove.
+ * the entries that name it, which the report tells the consumer to remove. A module that gives
+ * `cx` out under another name anywhere has no clearing specifier for any of its re-exports, since
+ * listing the module would make it a problem of the listed kind instead.
  */
 export async function withClearingSpecifiers(
   ctx: RenderContext,
@@ -126,14 +129,37 @@ export async function withClearingSpecifiers(
     const declared = await declaredModulesFor(context, ctx, ctx.environment.name)
     return declared ? entriesNaming(declared, id) : []
   }
+  const renamed = new Set(
+    problems.flatMap((problem) =>
+      problem.isRenamed === true && problem.moduleId !== undefined ? [problem.moduleId] : [],
+    ),
+  )
   return await Promise.all(
     problems.map(async (problem) => {
       const { moduleId, pkg } = problem
       if (pkg === undefined || moduleId === undefined) return problem
       if (problem.kind === 'declared') return { ...problem, entries: await entriesOf(moduleId) }
       if (!isListableReexport(problem)) return problem
+      if (renamed.has(moduleId)) return { ...problem, isRenamed: true }
       const specifier = await clearing(pkg, moduleId)
       return specifier === undefined ? problem : { ...problem, specifier }
     }),
   )
+}
+
+/**
+ * The re-exports of `cx` in packages `keepFor` lists that `keepFor` does not stand in for: those a
+ * `cxModules` entry of the consumer's own clears. `keepFor` stands in for the package's own calls,
+ * which the consumer cannot make the build read, and never for a route of the consumer's own. A
+ * re-export with no clearing specifier (one only the package itself imports, or one under another
+ * name) stays cleared by the listing.
+ */
+export async function clearableReexports(
+  ctx: RenderContext,
+  context: UsedContext,
+  standingIn: readonly LocatedProblem[],
+): Promise<LocatedProblem[]> {
+  const reexports = standingIn.filter((problem) => isListableReexport(problem))
+  const located = await withClearingSpecifiers(ctx, context, reexports)
+  return located.filter((problem) => problem.specifier !== undefined)
 }

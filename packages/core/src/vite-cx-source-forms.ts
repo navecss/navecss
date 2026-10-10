@@ -7,7 +7,7 @@
 import type { AstNode } from './vite-ast.ts'
 import type { Problem } from './vite-problems.ts'
 
-import { childrenOf, nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
+import { childrenOf, exportNameOf, nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
 
 export interface SourceFormOptions {
   /**
@@ -44,6 +44,19 @@ function isExportingCx(node: AstNode): boolean {
 }
 
 /**
+ * Whether an export-from statement gives `cx` out under a name other than `cx`: a namespace
+ * (`export * as n`), or a specifier that takes `cx` and exports it under another name.
+ */
+function isExportingRenamed(node: AstNode): boolean {
+  if (node.type === 'ExportAllDeclaration') return nodeAt(node, 'exported') !== undefined
+  return nodesAt(node, 'specifiers').some(
+    (specifier) =>
+      exportNameOf(nodeAt(specifier, 'local')) === 'cx' &&
+      exportNameOf(nodeAt(specifier, 'exported')) !== 'cx',
+  )
+}
+
+/**
  * The problem a re-export from a `cx` source makes, if it makes one.
  */
 function reexportProblem(code: string, node: AstNode, isListed: boolean): Problem | undefined {
@@ -54,6 +67,7 @@ function reexportProblem(code: string, node: AstNode, isListed: boolean): Proble
     construct: code.slice(node.start, node.end),
     text: isListed ? SECOND_HOP_TEXT : REEXPORT_TEXT,
     isListable: !isListed,
+    ...(!isListed && isExportingRenamed(node) && { isRenamed: true }),
   }
 }
 
