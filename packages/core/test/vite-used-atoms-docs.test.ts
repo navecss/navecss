@@ -66,10 +66,10 @@ const ACCESSIBILITY_WORDS =
 
 /**
  * The phrases the used-atoms copy no longer says. A phrase can wrap onto the next line, so each
- * gap is any run of whitespace; "opt in" is matched as whole words, so "adopt incrementally" is not
- * it.
+ * gap is any run of whitespace; "opt in" (and "opt into", "opt-ins") starts at a word boundary,
+ * so "adopt incrementally" is not it.
  */
-const RETIRED = /now\s+defaults\s+to|\bopt[-\s]+in\b|previously/i
+const RETIRED = /now\s+defaults\s+to|\bopt[-\s]+in(?:to|s)?\b|previously/i
 
 /**
  * The report's lines with each position dropped. The README's fence shows no source, so the line
@@ -98,9 +98,10 @@ const changed = (unit: string): string =>
  * followed by nothing, closes it.
  */
 function fenceAfter(open: string | undefined, line: string): string | undefined {
-  const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1]
+  const match = /^ {0,3}(`{3,}|~{3,})/.exec(line)
+  const marker = match?.[1]
   if (open === undefined) return marker
-  const isClosing = marker?.startsWith(open) === true && line.slice(marker.length).trim() === ''
+  const isClosing = marker?.startsWith(open) === true && line.slice(match![0].length).trim() === ''
   return isClosing ? undefined : open
 }
 
@@ -373,6 +374,30 @@ describe('section() — a fenced line is not a heading', () => {
     expect(found).not.toContain('npx vite build')
     expect(found).toContain('Before the fence.')
   })
+
+  it('closes a fence indented by up to three spaces, as inside a list item', () => {
+    const found = section(
+      [
+        '# Title',
+        '',
+        '#### The section',
+        '',
+        `  ${FENCE}sh`,
+        '  # c',
+        `  ${FENCE}`,
+        '',
+        'After.',
+        '',
+        '#### Next',
+        '',
+        'NOT-IN',
+      ].join('\n'),
+      '#### The section',
+    )
+
+    expect(found).toContain('After.')
+    expect(found).not.toContain('NOT-IN')
+  })
 })
 
 describe('AC-used-atoms-36 — the cleared copy is the cleared copy', () => {
@@ -548,6 +573,8 @@ describe('AC-used-atoms-56 — the Vite setup and the root README carry the defa
     expect('Projects that opt\nin keep it.').toMatch(RETIRED)
     expect('The default now\ndefaults to used.').toMatch(RETIRED)
     expect('Teams adopt incrementally.').not.toMatch(RETIRED)
+    expect('Projects opt into the default.').toMatch(RETIRED)
+    expect('The opt-ins stay.').toMatch(RETIRED)
   })
 })
 
