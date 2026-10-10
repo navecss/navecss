@@ -320,8 +320,8 @@ test('ZERO: no bare issue reference under packages/core/', () => {
   assert.deepEqual(bareIssueRefSites('packages/core/'), [], QUALIFY)
 })
 
-test('ZERO: no bare issue reference under packages/bridge/', () => {
-  assert.deepEqual(bareIssueRefSites('packages/bridge/'), [], QUALIFY)
+test('ZERO: no bare issue reference under packages/base-ui/', () => {
+  assert.deepEqual(bareIssueRefSites('packages/base-ui/'), [], QUALIFY)
 })
 
 test('ZERO: no bare issue reference under packages/cli/', () => {

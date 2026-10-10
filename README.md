@@ -10,7 +10,7 @@
 Nave is a standards-first CSS design system library for teams that treat
 CSS as a first-class engineering concern.
 
-Built on web standards. Zero runtime.
+Built on web standards, with zero-runtime styling.
 
 On this page:
 
@@ -28,8 +28,8 @@ On this page:
 ## Philosophy
 
 Most CSS libraries make a tradeoff: utility classes in markup (Tailwind),
-styles written in JavaScript (StyleX), or a component library that owns
-your styles (MUI, Chakra).
+styles written in JavaScript (StyleX), or a component library whose own
+styles you end up overriding (MUI, Chakra).
 
 Nave takes a different path:
 
@@ -39,7 +39,10 @@ Nave takes a different path:
   ([why, and where your CSS goes](docs/04-adr/0003-layer-cascade-contract.md))
 - **`@nave` directives** apply atomic utilities inside CSS files, not in markup
 - **Headless components** (Base UI, Radix, or your own) handle behaviour, and Nave handles
-  style. Nave ships no integration with Base UI or Radix today.
+  style. [`@navecss/base-ui`](packages/base-ui#readme) is Base UI's own components, styled with
+  Nave's tokens and reached by changing an import path; Radix has no Nave package yet.
+- **Components that do not own your styles.** The styling `@navecss/base-ui` adds sits in a
+  layer your CSS always wins over, so there is nothing to fight and nothing to configure.
 
 Markup stays semantic. CSS stays in CSS files.
 Design tokens are the single source of truth from Figma to production.
@@ -51,20 +54,23 @@ without claiming conformance, certification or endorsement.
 
 ## Packages
 
-| Package                                                         | Description                                                                                                                                    |
-| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                                                         |
-| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, Vite plugin, PostCSS plugin, Lightning CSS adapter, `navecss-core` command                        |
-| [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check, declared `--nave-*` names |
-| [`@navecss/eslint-plugin`](packages/eslint-plugin#readme)       | A literal class in `className` unless declared, or a literal value on a tokenized `style` property, reported                                   |
+| Package                                                         | Description                                                                                                                                              |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@navecss/tokens`                                               | DTCG 2025.10 token source + first-party build pipeline                                                                                                   |
+| `@navecss/core`                                                 | Layer architecture, reset, atomic utilities, Vite plugin, PostCSS plugin, Lightning CSS adapter, `navecss-core` command                                  |
+| [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check, declared `--nave-*` names           |
+| [`@navecss/eslint-plugin`](packages/eslint-plugin#readme)       | A literal class in `className` unless declared, or a literal value on a tokenized `style` property, reported                                             |
+| [`@navecss/base-ui`](packages/base-ui#readme)                   | Base UI's components wrapped and styled with Nave's tokens: the same parts, props and behaviour, plus one stylesheet and `variant` and `size` on buttons |
 
 ## Who this is for
 
 Nave is built for senior engineers building serious design systems —
-teams that want a principled foundation, not a component library to configure.
+teams that want a principled foundation. The components Nave styles are Base
+UI's own, and your CSS wins over them by layer, so there is nothing to
+configure.
 
-If you want hundreds of ready-made components, this is not that.
-If you want the best possible base layer for your own system, read on.
+Nave styles the 23 components that `@navecss/base-ui` wraps and builds none of
+its own. If you want the best possible base layer for your own system, read on.
 
 ## Quick start
 
@@ -715,8 +721,9 @@ accessibility audit, this is the part you can act on.
    rule of the form "any step N against any step N plus M clears a given ratio".
 4. **Keyboard, focus-order and ARIA behaviour of bridged upstream components.**
    Their behaviour is theirs. Nave promises its values, not their semantics.
-5. **Anything about the component registry**, until components exist and have
-   been reviewed one by one.
+5. **A 44 by 44 CSS pixel pointer target on the components `@navecss/base-ui`
+   styles.** Nave does not adopt the enhanced target size of SC 2.5.5 (Level
+   AAA) for them, so meeting it is yours.
 6. **That applying atoms produces an accessible interface.** Atoms are visual
    utilities and carry no semantics of their own. A clipped, ellipsised
    `truncate` in particular leaves the full text in the accessibility tree, so
@@ -733,7 +740,9 @@ Nave is at 0.x. Before 1.0, a breaking change ships in a minor release (0.1 to
 0.2) and its release notes say what breaks; a patch release carries fixes. Pin
 an exact version if you need nothing to move, and read the release notes before
 you upgrade. `@navecss/core` and `@navecss/tokens` are released together, always
-at the same version number, so upgrade them together.
+at the same version number, so upgrade them together. `@navecss/base-ui` versions
+on its own: a change to how a component looks is a minor release, and so, before
+1.0, is a breaking one.
 
 The `@layer` order is the contract your own CSS is written against: seven layer
 names in a fixed order

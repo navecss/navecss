@@ -1092,7 +1092,7 @@ test('README.md: the "## Accessibility" section', () => {
   assertClearedText(
     'README.md ## Accessibility',
     wholeSectionText(README_DOC.lines, range),
-    '9770aa4a4323ccdcaa5d3e24c078efac87dd000587ab99ca3da5c542bd1333c8',
+    '9382a3904e9e9998398c6ae9b7216a58373d7bdd2c2c67ded711f7700a675bf9',
   )
 })
 

@@ -27,7 +27,7 @@ const COMMITLINT_RULES = {
     'style',
     'revert',
   ],
-  scopeEnum: ['tokens', 'core', 'bridge', 'cli', 'repo', 'deps', 'release'],
+  scopeEnum: ['tokens', 'core', 'base-ui', 'cli', 'repo', 'deps', 'release'],
 }
 
 const TYPES_BLOCK = `          types: |
@@ -47,7 +47,7 @@ const TYPES_BLOCK = `          types: |
 const SCOPES_BLOCK = `          scopes: |
             tokens
             core
-            bridge
+            base-ui
             cli
             repo
             deps
