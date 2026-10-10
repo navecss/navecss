@@ -79,6 +79,16 @@ export function isReexportOf(reading: Reading, expression: AstNode): boolean {
 }
 
 /**
+ * The name the re-export of the binding gives it out under: `default`, or the name an export
+ * specifier spells.
+ */
+export function reexportNameOf(reading: Reading, expression: AstNode): string | undefined {
+  const parent = reading.analysis.parentOf.get(expression)
+  if (parent?.type === 'ExportDefaultDeclaration') return 'default'
+  return parent?.type === 'ExportSpecifier' ? exportNameOf(nodeAt(parent, 'exported')) : undefined
+}
+
+/**
  * Whether the re-export of the binding gives it out under a name other than `cx`: as the default
  * export, or in `export { cx as other }`.
  */

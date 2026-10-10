@@ -9,7 +9,13 @@ import type { CxBinding, CxUse } from './vite-cx-use.ts'
 import type { Reference } from './vite-scope.ts'
 
 import { nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
-import { isReexportOf, isRenamedReexportOf, phraseFor, type Reading } from './vite-cx-refuse.ts'
+import {
+  isReexportOf,
+  isRenamedReexportOf,
+  phraseFor,
+  type Reading,
+  reexportNameOf,
+} from './vite-cx-refuse.ts'
 import { isSetupReturn } from './vite-setup-member.ts'
 
 /**
@@ -164,7 +170,24 @@ export function useOfExpression(reading: Reading, start: AstNode, local: string)
   const phrase = phraseFor(reading, expression, local)
   const isReexport = isReexportOf(reading, expression)
   const isRenamed = isReexport && isRenamedReexportOf(reading, expression)
-  return { ...refused(expression, local, phrase), isReexport, ...(isRenamed && { isRenamed }) }
+  const exportedAs = reexportedAs(reading, expression)
+  return {
+    ...refused(expression, local, phrase),
+    isReexport,
+    ...(isRenamed && { isRenamed }),
+    ...exportedAs,
+  }
+}
+
+/**
+ * The name a re-export of the binding gives it out under, as the field a use carries.
+ */
+function reexportedAs(
+  reading: Reading,
+  expression: AstNode,
+): { readonly exportedAs: readonly string[] } | undefined {
+  const name = reexportNameOf(reading, expression)
+  return name === undefined ? undefined : { exportedAs: [name] }
 }
 
 /**
@@ -181,7 +204,10 @@ function isOtherKey(property: AstNode): boolean {
  * or an assignment that is a whole statement. An assignment evaluates to its right side, which here
  * is the namespace itself, so one whose value is used hands the namespace on.
  */
-function isPatternAssignment(reading: Reading, node: AstNode | undefined): node is AstNode {
+function isPatternAssignment(
+  reading: Pick<Reading, 'analysis'>,
+  node: AstNode | undefined,
+): node is AstNode {
   if (node?.type === 'AssignmentPattern') return true
   return (
     node?.type === 'AssignmentExpression' &&
@@ -196,7 +222,10 @@ function isPatternAssignment(reading: Reading, node: AstNode | undefined): node 
  * parameter's default (`({ a } = ns) => a`). An assignment whose value is used, as in
  * `const r = ({ a } = ns)`, hands the namespace on, so it is not one.
  */
-function patternDestructuring(reading: Reading, expression: AstNode): AstNode | undefined {
+export function patternDestructuring(
+  reading: Pick<Reading, 'analysis'>,
+  expression: AstNode,
+): AstNode | undefined {
   const parent = reading.analysis.parentOf.get(expression)
   if (parent?.type === 'VariableDeclarator' && nodeAt(parent, 'init') === expression) {
     return nodeAt(parent, 'id')
@@ -221,8 +250,8 @@ function isOtherKeysDestructuring(reading: Reading, expression: AstNode): boolea
  * The member read `expression.key` that `expression` is the object of, with the static key it
  * reads (`undefined` when the key is computed from anything but a string).
  */
-function memberReadOf(
-  reading: Reading,
+export function memberReadOf(
+  reading: Pick<Reading, 'analysis'>,
   expression: AstNode,
 ): { key: string | undefined; member: AstNode } | undefined {
   const member = reading.analysis.parentOf.get(expression)
@@ -247,7 +276,11 @@ function namespaceUse(reading: Reading, expression: AstNode, cx: CxBinding): CxU
     ? read.key !== undefined
     : isOtherKeysDestructuring(reading, expression)
   if (isListed && isOtherExport) return undefined
-  return refused(expression, local, `${local} is used other than as ${local}.cx`)
+  const use = refused(expression, local, `${local} is used other than as ${local}.cx`)
+  // A namespace holding `cx` that the module exports is a `cx` export under another name than `cx`:
+  // an importer reads it as `ns.cx`, which no `cxModules` entry follows.
+  const exportedAs = reexportedAs(reading, expression)
+  return exportedAs ? { ...use, ...exportedAs, isRenamed: true } : use
 }
 
 /**

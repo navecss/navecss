@@ -57,6 +57,20 @@ function isExportingRenamed(node: AstNode): boolean {
 }
 
 /**
+ * The names an export-from statement gives Nave's `cx` out under: `cx` for a star re-export
+ * (which the module of `cx` exports under that name), the namespace's name for `export * as`, and
+ * for a named one each name a specifier that takes `cx` exports it as.
+ */
+function exportedNamesOf(node: AstNode): string[] {
+  if (node.type === 'ExportAllDeclaration') {
+    return [exportNameOf(nodeAt(node, 'exported')) ?? 'cx']
+  }
+  return nodesAt(node, 'specifiers')
+    .filter((specifier) => exportNameOf(nodeAt(specifier, 'local')) === 'cx')
+    .flatMap((specifier) => exportNameOf(nodeAt(specifier, 'exported')) ?? [])
+}
+
+/**
  * The problem a re-export from a `cx` source makes, if it makes one.
  */
 function reexportProblem(code: string, node: AstNode, isListed: boolean): Problem | undefined {
@@ -68,6 +82,7 @@ function reexportProblem(code: string, node: AstNode, isListed: boolean): Proble
     text: isListed ? SECOND_HOP_TEXT : REEXPORT_TEXT,
     isListable: !isListed,
     ...(!isListed && isExportingRenamed(node) && { isRenamed: true }),
+    ...(!isListed && { exportedAs: exportedNamesOf(node) }),
   }
 }
 

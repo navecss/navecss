@@ -15,9 +15,10 @@ import { checkCxImporters } from './vite-cx-importers.ts'
 import { declaredImporterError } from './vite-cx-module-importers.ts'
 import { forgetDeclared } from './vite-cx-modules.ts'
 import { withoutEchoes } from './vite-declared-echoes.ts'
-import { clearableReexports, withClearingSpecifiers } from './vite-dependency-reexports.ts'
+import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
 import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
+import { takenReexports } from './vite-listed-takes.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
 import { judgeAfterLastEnvironment } from './vite-markup.ts'
 import { isNaveOwn } from './vite-module-kind.ts'
@@ -115,8 +116,8 @@ export function isReadable(context: UsedContext, id: string): boolean {
 /**
  * The problems the build fails with. Those of a package `keepFor` lists are only the ones its
  * listing does not stand in for: a listed module of the package that exports a `cx` the build does
- * not follow, and a re-export of `cx` that a `cxModules` entry of the consumer's own clears. The
- * clearing specifier is known at build end, so the suppressed re-exports are judged here.
+ * not follow, and a `cx` export that a module the consumer can change takes (`vite-listed-takes.ts`).
+ * What importers take is known at build end, so the suppressed re-exports are judged here.
  */
 async function problemsOfBuild(
   ctx: RenderContext,
@@ -137,7 +138,7 @@ async function problemsOfBuild(
     ),
   )
   const standingIn = records.flatMap((record) => record.suppressed)
-  return [...kept, ...(await clearableReexports(ctx, context, standingIn))]
+  return [...kept, ...(await takenReexports(ctx, context, standingIn))]
 }
 
 /**

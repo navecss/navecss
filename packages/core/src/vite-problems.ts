@@ -48,6 +48,12 @@ export interface Problem {
    */
   readonly isRenamed?: boolean
   /**
+   * For a problem that gives Nave's `cx` out of its module, or a namespace holding it: the names
+   * it is exported under (`default` for the default export), so a build-end check can tell
+   * whether an importer takes it.
+   */
+  readonly exportedAs?: readonly string[]
+  /**
    * For a problem in a module listed in `cxModules`: whether the module also exports Nave's own
    * `cx`. An importer's `cx` is then Nave's, so what the build says of its calls is not an echo of
    * this problem and stays when the problem is reported.

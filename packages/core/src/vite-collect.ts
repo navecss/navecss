@@ -150,6 +150,7 @@ function refusedProblem(reading: Reading, use: CxUse): Problem | undefined {
     text: `${use.phrase ?? ''}.`,
     ...(use.isReexport && { isListable: use.isListable }),
     ...(use.isRenamed === true && { isRenamed: true }),
+    ...(use.exportedAs && { exportedAs: use.exportedAs }),
   }
 }
 
