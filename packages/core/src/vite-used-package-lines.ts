@@ -71,11 +71,13 @@ const RENAMED_FIX =
   'import cx from @navecss/core/cx where it is called, and re-export it only under the name cx.'
 
 /**
- * The line for a re-export of `cx` other than under the name `cx` (renamed, as a default or inside
- * a namespace). The build does not follow one even from a module listed in `cxModules`, so no
- * entry clears it and the package's `keepFor` line does. Unlike the internal line it does not say
- * who imports the file, since the consumer's code may. `hasKeepFor` is whether a line above
- * already printed that `keepFor` line, which clears this too, so it is printed once.
+ * The line for the re-exports of `cx` in a module that gives `cx` out other than under the name
+ * `cx` (renamed, as a default or inside a namespace), its plain `export { cx }` included: `count`
+ * counts them all. The build does not follow an export under another name even from a module
+ * listed in `cxModules`, so listing the module fails the build, no entry clears any of them, and
+ * the package's `keepFor` line does. Unlike the internal line it does not say who imports the
+ * file, since the consumer's code may. `hasKeepFor` is whether a line above already printed that
+ * `keepFor` line, which clears these too, so it is printed once.
  */
 function renamedLine(pkg: string, count: number, keepFor: string, hasKeepFor: boolean): string {
   const [those, them, its] =
@@ -83,9 +85,9 @@ function renamedLine(pkg: string, count: number, keepFor: string, hasKeepFor: bo
   const form = 'other than under the name cx (renamed, as a default or inside a namespace)'
   const act = `import cx from @navecss/core/cx instead and call cx in ${its} place`
   if (hasKeepFor) {
-    return `${pkg} also re-exports cx ${form}; the keepFor entry above clears that too. The build does not read calls made through ${those}: where your code imports ${them} from ${pkg} or one of its subpaths, ${act}. The lasting fix there is the package's: ${RENAMED_FIX}`
+    return `${pkg} also re-exports cx ${form}, and no cxModules entry clears an export of cx from a module that does, under the name cx or another; the keepFor entry above clears ${those} too. The build does not read calls made through ${them}: where your code imports ${them} from ${pkg} or one of its subpaths, ${act}. The lasting fix there is the package's: ${RENAMED_FIX}`
   }
-  return `${pkg} re-exports cx ${form}, which the build does not follow even from a module listed in cxModules, so no entry there clears ${them} and the build does not read calls made through ${those}. Where your code imports ${those} from ${pkg} or one of its subpaths, ${act}. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: ${RENAMED_FIX}`
+  return `${pkg} re-exports cx ${form}, which the build does not follow even from a module listed in cxModules. Listing a module that does fails the build, so no entry there clears an export of cx from it, under the name cx or another, and the build does not read calls made through ${those}. Where your code imports ${those} from ${pkg} or one of its subpaths, ${act}. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: ${RENAMED_FIX}`
 }
 
 /**

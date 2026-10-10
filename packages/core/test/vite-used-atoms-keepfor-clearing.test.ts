@@ -138,12 +138,15 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
 
   describe('case 4: a re-export of cx under another name', () => {
     const RENAMED =
-      "@acme/ui re-exports cx other than under the name cx (renamed, as a default or inside a namespace), which the build does not follow even from a module listed in cxModules, so no entry there clears it and the build does not read calls made through that export. Where your code imports that export from @acme/ui or one of its subpaths, import cx from @navecss/core/cx instead and call cx in its place. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): keepFor: { '@acme/ui': ['<atom>'] }. The lasting fix is the package's: import cx from @navecss/core/cx where it is called, and re-export it only under the name cx."
+      "@acme/ui re-exports cx other than under the name cx (renamed, as a default or inside a namespace), which the build does not follow even from a module listed in cxModules. Listing a module that does fails the build, so no entry there clears an export of cx from it, under the name cx or another, and the build does not read calls made through that export. Where your code imports that export from @acme/ui or one of its subpaths, import cx from @navecss/core/cx instead and call cx in its place. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): keepFor: { '@acme/ui': ['<atom>'] }. The lasting fix is the package's: import cx from @navecss/core/cx where it is called, and re-export it only under the name cx."
     // The same line for two re-exports in one file, which the line counts as exports.
     const RENAMED_TWO =
-      "@acme/ui re-exports cx other than under the name cx (renamed, as a default or inside a namespace), which the build does not follow even from a module listed in cxModules, so no entry there clears them and the build does not read calls made through those exports. Where your code imports those exports from @acme/ui or one of its subpaths, import cx from @navecss/core/cx instead and call cx in their place. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): keepFor: { '@acme/ui': ['<atom>'] }. The lasting fix is the package's: import cx from @navecss/core/cx where it is called, and re-export it only under the name cx."
+      "@acme/ui re-exports cx other than under the name cx (renamed, as a default or inside a namespace), which the build does not follow even from a module listed in cxModules. Listing a module that does fails the build, so no entry there clears an export of cx from it, under the name cx or another, and the build does not read calls made through those exports. Where your code imports those exports from @acme/ui or one of its subpaths, import cx from @navecss/core/cx instead and call cx in their place. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): keepFor: { '@acme/ui': ['<atom>'] }. The lasting fix is the package's: import cx from @navecss/core/cx where it is called, and re-export it only under the name cx."
     const ALSO =
-      "@acme/ui also re-exports cx other than under the name cx (renamed, as a default or inside a namespace); the keepFor entry above clears that too. The build does not read calls made through that export: where your code imports it from @acme/ui or one of its subpaths, import cx from @navecss/core/cx instead and call cx in its place. The lasting fix there is the package's: import cx from @navecss/core/cx where it is called, and re-export it only under the name cx."
+      "@acme/ui also re-exports cx other than under the name cx (renamed, as a default or inside a namespace), and no cxModules entry clears an export of cx from a module that does, under the name cx or another; the keepFor entry above clears that export too. The build does not read calls made through it: where your code imports it from @acme/ui or one of its subpaths, import cx from @navecss/core/cx instead and call cx in its place. The lasting fix there is the package's: import cx from @navecss/core/cx where it is called, and re-export it only under the name cx."
+    // The same line when the file holds a plain re-export and a renamed one, which it counts as two.
+    const ALSO_TWO =
+      "@acme/ui also re-exports cx other than under the name cx (renamed, as a default or inside a namespace), and no cxModules entry clears an export of cx from a module that does, under the name cx or another; the keepFor entry above clears those exports too. The build does not read calls made through them: where your code imports them from @acme/ui or one of its subpaths, import cx from @navecss/core/cx instead and call cx in their place. The lasting fix there is the package's: import cx from @navecss/core/cx where it is called, and re-export it only under the name cx."
     const CALLS =
       "@acme/ui is a dependency, so its code is not yours to change. List the atoms its calls can produce, from its documentation, under its name in navePlugin(): keepFor: { '@acme/ui': ['<atom>'] }. The lasting fix is the package's: names chosen at run time go through cx.dynamic()."
     const CN_APP =
@@ -217,6 +220,22 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
       expect(first.error).toMatch(/^2 problems in 2 files/)
       expect(lines.slice(lines.indexOf(CALLS))).toEqual([CALLS, ALSO])
       expect(first.error).not.toMatch(/cxModules: \[/)
+    }, 60_000)
+
+    it('beside a package that also makes an unreadable call, a file with a plain and a renamed re-export gets the plural line', async () => {
+      const modules = {
+        ...withMenu(
+          'cn.js',
+          "export { cx } from '@navecss/core/cx'\nexport { cx as cn } from '@navecss/core/cx'\n",
+        ),
+        'bar.js': `${IMPORT}export const bar = (v) => cx('grid', v)\n`,
+        'index.js': "export { Menu } from './menu.js'\nexport { bar } from './bar.js'\n",
+      }
+      const first = await run(NAVE_APP, modules)
+      const lines = first.error!.split('\n')
+
+      expect(first.error).toMatch(/^3 problems in 2 files/)
+      expect(lines.at(-1)).toBe(ALSO_TWO)
     }, 60_000)
 
     it('beside a re-export only the package imports, the renamed line comes last and points at the keepFor entry above', async () => {
