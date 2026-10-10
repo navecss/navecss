@@ -26,7 +26,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const COMMITLINT_RULES = {
   typeEnum: ['feat', 'fix', 'chore', 'docs', 'test', 'refactor', 'perf', 'ci', 'build', 'style'],
-  scopeEnum: ['tokens', 'core', 'bridge', 'cli', 'repo', 'deps', 'release'],
+  scopeEnum: ['tokens', 'core', 'base-ui', 'cli', 'repo', 'deps', 'release'],
 }
 
 const BASELINE_YAML = `version: 2

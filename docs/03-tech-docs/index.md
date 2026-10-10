@@ -8,7 +8,7 @@
 - **The DTCG 2025.10 token pipeline** — `tokens.json` (DTCG 2025.10, a Final Community Group Report; a community specification, not a standards-track one) through the first-party reader (`build.ts`) into CSS custom properties and JS/TS; the three-tier token hierarchy; theming and modes.
 - **The `@nave` directive** — the host-free directive core (resolution, CSS placement) that inlines atomic utilities at build time, and its adapters (PostCSS today); the zero-runtime guarantee.
 - **`cx()` and consumer atoms** — static atom mapping and the consumer-atoms story.
-- **The bridges** — how `@navecss/bridge` maps tokens onto Base UI and Radix primitives, and what the bridge does NOT redistribute.
+- **The Base UI package** — how `@navecss/base-ui` wraps Base UI's components and builds its one stylesheet from Nave's tokens, and what it does NOT redistribute.
 - **The CLI registry** — the component-registry format and the `navecss add` flow.
 - **CI/CD and release topology** — the Turborepo graph, Changesets, and the publish flow.
 
