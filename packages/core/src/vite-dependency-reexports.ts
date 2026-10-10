@@ -41,7 +41,7 @@ export async function isResolvingTo(ctx: RenderContext, input: Resolution): Prom
 /**
  * The ids of the modules that import the module `id`, statically or dynamically.
  */
-function importersOf(ctx: RenderContext, id: string): string[] {
+export function importersOf(ctx: RenderContext, id: string): string[] {
   const info = ctx.getModuleInfo?.(id)
   return [...new Set([...(info?.importers ?? []), ...(info?.dynamicImporters ?? [])])]
 }
@@ -145,21 +145,4 @@ export async function withClearingSpecifiers(
       return specifier === undefined ? problem : { ...problem, specifier }
     }),
   )
-}
-
-/**
- * The re-exports of `cx` in packages `keepFor` lists that `keepFor` does not stand in for: those a
- * `cxModules` entry of the consumer's own clears. `keepFor` stands in for the package's own calls,
- * which the consumer cannot make the build read, and never for a route of the consumer's own. A
- * re-export with no clearing specifier (one only the package itself imports, or one under another
- * name) stays cleared by the listing.
- */
-export async function clearableReexports(
-  ctx: RenderContext,
-  context: UsedContext,
-  standingIn: readonly LocatedProblem[],
-): Promise<LocatedProblem[]> {
-  const reexports = standingIn.filter((problem) => isListableReexport(problem))
-  const located = await withClearingSpecifiers(ctx, context, reexports)
-  return located.filter((problem) => problem.specifier !== undefined)
 }

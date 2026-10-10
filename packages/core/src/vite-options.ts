@@ -30,7 +30,11 @@ export interface UsedAtomOptions {
    * package's calls the build does read. The calls it cannot read are not changed, so any other
    * atom they apply has no rule. An empty list is accepted: it says those calls produce no atom,
    * so the list adds none, and a `cx.dynamic()` call in the package still fails the build, as it
-   * does with no entry. A package in your own workspace is your code, not a dependency.
+   * does with no entry. A package in your own workspace is your code, not a dependency. The entry
+   * stands in for the package's own calls only: a re-export of `cx` in the package that a module
+   * of yours takes (imports, re-exports or reads off a namespace) still fails the build, because
+   * the calls your module makes through it would ship with no rule, and the message says how to
+   * clear it.
    */
   keepFor?: Readonly<Record<string, readonly AtomName[]>>
 
