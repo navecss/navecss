@@ -77,6 +77,15 @@ it refuses seed inputs that only resolve where an element renders (such as
 That is the pattern for every future case: a refusal on runtime grounds names
 the ground, rather than a surface quietly not supporting a lawful CSS form.
 
+**7. A component package's contribution is chosen, never computed.** What
+`@navecss/base-ui` adds to a part is chosen from a static table by props the
+consumer passed: the part's own class and, only for a non-default `variant` or
+`size`, a `data-nave-*` attribute. It is never computed from state, layout or
+measurement: state paint lives in the stylesheet, where the browser's style
+engine resolves it (decision 5). Base UI's own runtime (inline styles,
+positioning) is the peer's, not Nave's: this decision covers what Nave ships,
+and a consumer who installs Base UI has installed that behaviour with it.
+
 ## Consequences
 
 - "Zero runtime" can be checked: take a change, ask whether any shipped

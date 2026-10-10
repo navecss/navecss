@@ -78,3 +78,22 @@ name passed to `cx()`, so it takes a required peer dependency on `@navecss/core`
 `>=0.1.0 <1.0.0` (a range, never `fixed`) from its first release, alongside a required peer on
 `eslint` at `^9.24.0 || ^10.0.0`. Its build is `tsc` to `dist/`, the same shape as
 `@navecss/stylelint-config`'s own plain-JavaScript package, no bundler either.
+
+## Update: `@navecss/base-ui` joins, versioning independently
+
+A fifth published package, `@navecss/base-ui`, ships Base UI's components wrapped and styled with
+Nave's tokens ([ADR 0010](0010-wrapper-package-per-headless-library.md)). It **versions
+independently**, for the same reasoning as the packages above: its contract is with Base UI and
+with the one stylesheet it builds, not with the token or component contract `tokens` and `core`
+share, so it is not added to the `fixed` group, is not `linked`, and is not `ignore`d. It
+replaces `@navecss/bridge`, the private placeholder this record's Context names, which was
+retired without publishing; `@navecss/cli` is the one package that still keeps `"private": true`.
+
+It takes required peers on `@base-ui/react` (`^1.3.0`; a Base UI major is a major of this
+package), on `react` and `react-dom` (`^18 || ^19`), and on `@navecss/tokens` at a range that
+starts at the first release declaring the glyph-stroke width its check marks draw with and ends
+below `1.0.0`: a range, never `fixed`, per this record's own reasoning. `@navecss/core` is a
+development dependency only, because the stylesheet is built from core's atoms when the package
+is built and nothing of core is loaded at the consumer's runtime. Its build is `tsc` to `dist/`,
+one module per source file, no bundler, so each part's `'use client'` directive survives. A
+visual change to the stylesheet is a `minor`, since a consumer's page looks different.

@@ -59,26 +59,20 @@ Chromium against the shipped bytes.
 
 **1. The contract is the seven names, in this order, and each has one owner.**
 
-| Layer                 | Holds                                                                                | Written by                           |
-| --------------------- | ------------------------------------------------------------------------------------ | ------------------------------------ |
-| `tokens.defaults`     | Nave's shipped token values (CSS custom properties)                                  | `@navecss/tokens`, `@navecss/bridge` |
-| `tokens.presets`      | Token values generated for a project (`navecss-tokens build`), and any future preset | the token build                      |
-| `reset`               | Cross-browser normalisation                                                          | `@navecss/core`                      |
-| `atomic`              | The global atom classes (`.nave-flex`, …) that `cx()` names                          | `@navecss/core`                      |
-| `components.nave`     | Components Nave publishes                                                            | Nave's component source              |
-| `components.consumer` | The consumer's own component CSS                                                     | the consumer                         |
-| `overrides`           | The consumer's deliberate exceptions to everything above                             | the consumer                         |
+| Layer                 | Holds                                                                                | Written by         |
+| --------------------- | ------------------------------------------------------------------------------------ | ------------------ |
+| `tokens.defaults`     | Nave's shipped token values (CSS custom properties)                                  | `@navecss/tokens`  |
+| `tokens.presets`      | Token values generated for a project (`navecss-tokens build`), and any future preset | the token build    |
+| `reset`               | Cross-browser normalisation                                                          | `@navecss/core`    |
+| `atomic`              | The global atom classes (`.nave-flex`, …) that `cx()` names                          | `@navecss/core`    |
+| `components.nave`     | Components Nave publishes                                                            | `@navecss/base-ui` |
+| `components.consumer` | The consumer's own component CSS                                                     | the consumer       |
+| `overrides`           | The consumer's deliberate exceptions to everything above                             | the consumer       |
 
-`tokens.defaults` is the one layer written by two packages, both Nave's, over
-names that never overlap. `@navecss/tokens` writes the `--nave-*` properties.
-`@navecss/bridge` maps third-party variable names (Base UI's, Radix's) onto
-them, each mapping reading its value through `var(--nave-*)`, and never writes
-a `--nave-*` name itself. The mappings are Nave's shipped defaults for those
-names, so they sit with the other shipped defaults: a project's generated
-tokens and every consumer layer outrank them by layer order, whatever order
-the files are imported in, and a preset that changes a Nave token reaches the
-mapped name through the reference. Because the two writers never set the same
-property, the order between them inside the layer decides nothing.
+`tokens.defaults` has one writer, `@navecss/tokens`, which writes the `--nave-*`
+properties. `components.nave` has one writer, `@navecss/base-ui`, whose single
+stylesheet carries only rules inside that layer, restates the order statement,
+declares no custom property and sets no `z-index`.
 
 The top-level order is `tokens`, `reset`, `atomic`, `components`, `overrides`;
 the sublayers order within their parent as listed. Renaming, reordering,
@@ -170,6 +164,17 @@ consumer's that declares a layer.
   Decision 1's table named `@navecss/tokens` as the only writer of
   `tokens.defaults` and did not mention the bridge; it now names the bridge as
   that layer's second writer, with the reason beneath the table.
+- **Correction (2026-10-06):** the bridge was retired before it published, and
+  decision 1's table no longer names it. Base UI reads no custom property a
+  consumer sets (every variable it documents is one it writes), so a map of
+  Nave's tokens onto Base UI's names had nothing to land on. The table now
+  names `@navecss/base-ui` as `components.nave`'s writer, and `tokens.defaults`
+  has `@navecss/tokens` alone; the paragraph beneath the table says so. The
+  reasoning about two writers over disjoint names, and the third alternative
+  below, record the plan as it stood and are kept as history. This is a change
+  to who writes a layer and to nothing else: no layer is renamed, reordered,
+  removed or inserted, and the seven names and their order are as before.
+  [ADR 0010](0010-wrapper-package-per-headless-library.md) records the package.
 
 ## Consequences
 

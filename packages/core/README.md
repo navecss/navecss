@@ -172,7 +172,7 @@ What that buys you, and what it does not:
 
 ### Tokens only
 
-For library authors or teams building on top of Base UI or Radix UI.
+For library authors or teams building on top of Radix UI or another headless library. On Base UI, [`@navecss/base-ui`](https://github.com/navecss/navecss/tree/main/packages/base-ui#readme) styles its components with these same tokens.
 CSS custom properties are always available — no atomic layer required.
 
 ```css

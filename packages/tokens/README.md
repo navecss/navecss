@@ -22,7 +22,7 @@ pnpm add @navecss/tokens
 @import url('@navecss/tokens/css');
 ```
 
-This emits the token layer's custom properties (`--nave-*`) inside `@layer tokens.defaults`. Keep the `/css`: unlike `@navecss/core`, whose bare package name is its stylesheet, the bare `@navecss/tokens` is the JavaScript entry point. `@navecss/core` imports this automatically; install `@navecss/tokens` on its own only if you are building without `@navecss/core` (for example, on top of Base UI or Radix UI directly).
+This emits the token layer's custom properties (`--nave-*`) inside `@layer tokens.defaults`. Keep the `/css`: unlike `@navecss/core`, whose bare package name is its stylesheet, the bare `@navecss/tokens` is the JavaScript entry point. `@navecss/core` imports this automatically; install `@navecss/tokens` on its own only if you are building without `@navecss/core` (for example, with Radix UI, or with [`@navecss/base-ui`](https://github.com/navecss/navecss/tree/main/packages/base-ui#readme), which styles Base UI's components from these tokens and does not need core).
 
 ## What ships
 

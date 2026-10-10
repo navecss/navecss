@@ -1,6 +1,6 @@
 # Releasing
 
-How a new version of `@navecss/tokens` and `@navecss/core` gets to npm. These two packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`); `@navecss/bridge` and `@navecss/cli` are not published yet.
+How a new version of `@navecss/tokens` and `@navecss/core` gets to npm. These two packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of that pair ([ADR 0009](../04-adr/0009-release-topology.md)), and `@navecss/cli` is not published yet.
 
 You need publish rights on both packages on npmjs.com, with two-factor authentication on your npm account.
 
@@ -20,7 +20,9 @@ Every pull request that changes a published package adds a changeset file under 
 pnpm changeset version
 ```
 
-This consumes every pending changeset, bumps both packages to the new version, and writes the new section of each package's `CHANGELOG.md`. Read the changelogs, commit, open a pull request (for example `chore/version-packages`) and merge it.
+This consumes every pending changeset, bumps each package a changeset names to its new version (`tokens` and `core` always move together), and writes the new section of each bumped package's `CHANGELOG.md`. Read the changelogs, commit, open a pull request (for example `chore/version-packages`) and merge it.
+
+`.changeset/config.json` sets `onlyUpdatePeerDependentsWhenOutOfRange` so that this step never rewrites a peer range on its own. `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` each declare a peer range on `tokens` or `core` that states the oldest version they are known to work with, and a new release of `tokens` or `core` is not a reason to raise it. Without the option, Changesets moves that range to the new version on every release; with it, a peer range moves only when a release leaves it, for example when `core` reaches `1.0.0`. The option sits under an `experimental` key that Changesets validates loosely: if an upgrade renames or drops it, the key is ignored without an error. What catches that is the tests that pin the declared peer ranges, in `packages/stylelint-config` and `packages/eslint-plugin`. They fail on the version pull request when a range has been rewritten, so fix the range and the config key there, before merging.
 
 This step cannot be skipped: the release refuses to run while any changeset is still pending, and fails if there is no new version to stage.
 
@@ -79,7 +81,7 @@ Trusted publishing cannot create a package: every credential-free path npm offer
 
 A new publishable package's first version goes live by hand, the same way the first version (`0.1.0`) of `@navecss/tokens` and `@navecss/core` did:
 
-1. Merge the pull request that adds the package, as usual: with its changeset, and with the package added to `PUBLISHABLE_SET` in `scripts/check-publishable-set.mjs` (the full check fails until it is). If the package already exists in the workspace as a private package (as `@navecss/bridge` and `@navecss/cli` do today), the same pull request also removes `"private": true` from its `package.json` and removes it from `ignore` in `.changeset/config.json`: Changesets never versions a package on that list, and the same full check fails while a publishable package is still on it.
+1. Merge the pull request that adds the package, as usual: with its changeset, and with the package added to `PUBLISHABLE_SET` in `scripts/check-publishable-set.mjs` (the full check fails until it is). If the package already exists in the workspace as a private package (as `@navecss/cli` does today), the same pull request also removes `"private": true` from its `package.json` and removes it from `ignore` in `.changeset/config.json`: Changesets never versions a package on that list, and the same full check fails while a publishable package is still on it.
 2. Version it as in "1. Version the packages" above, and merge the version pull request.
 3. From that commit, with a clean working tree, build, then pack and publish the package by hand under two-factor authentication. `dist` is not committed, so packing without building first would publish a package with nothing in it, and a published version can never be replaced:
    ```sh

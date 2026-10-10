@@ -19,6 +19,7 @@ import { build } from 'vite'
 import { describe, expect, it } from 'vitest'
 
 import { extractFences } from './doc-fences.ts'
+import { changelogEntries } from './helpers/released-changeset.ts'
 
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const REPO_ROOT = path.resolve(CORE_ROOT, '../..')
@@ -166,19 +167,40 @@ describe('the Vite plugin’s README section says what the criteria require it t
   })
 })
 
-describe('the changeset carries the migration instruction (AC-38)', () => {
-  it('says to move navePlugin() to plugins from @navecss/core/vite, and that leaving both is harmless', () => {
-    const dir = path.join(REPO_ROOT, '.changeset')
-    const pending = readdirSync(dir)
-      .filter((name) => name.endsWith('.md') && name !== 'README.md')
-      .map((name) => flat(readFileSync(path.join(dir, name), 'utf8')))
-      .find((text) => text.includes('@navecss/core/vite'))
+/**
+ * The release note that introduced the Vite plugin, whitespace-flattened, and the bump it asked
+ * for: the pending changeset while one exists, and the CHANGELOG entry the release wrote from it
+ * afterwards. Other notes in the same release may name `@navecss/core/vite` too, so the note is
+ * the one that opens with the plugin's introduction.
+ */
+function viteReleaseNote(): { bump: string | undefined; text: string } {
+  const introduction = 'New: `@navecss/core/vite`'
+  const dir = path.join(REPO_ROOT, '.changeset')
+  const pending = readdirSync(dir)
+    .filter((name) => name.endsWith('.md') && name !== 'README.md')
+    .map((name) => readFileSync(path.join(dir, name), 'utf8'))
+    .find((text) => flat(text).includes(introduction))
+  if (pending !== undefined) {
+    return { bump: /^'@navecss\/core':\s*(\w+)$/m.exec(pending)?.[1], text: flat(pending) }
+  }
+  const released = changelogEntries(
+    readFileSync(path.join(CORE_ROOT, 'CHANGELOG.md'), 'utf8'),
+  ).find((entry) => entry.text.startsWith(introduction))
+  expect(
+    released,
+    `no pending changeset, and no CHANGELOG entry, opens with "${introduction}"`,
+  ).toBeDefined()
+  return { bump: released!.kind.split(' ', 1)[0]?.toLowerCase(), text: flat(released!.text) }
+}
 
-    expect(pending, 'no pending changeset names @navecss/core/vite').toBeDefined()
-    expect(pending).toMatch(/css\.postcss/)
-    expect(pending).toMatch(/postcss\.config\.js/)
-    expect(pending).toMatch(/leaving both is harmless/i)
-    expect(pending).toMatch(/'@navecss\/core': minor/)
+describe('the release note carries the migration instruction (AC-38)', () => {
+  it('says to move navePlugin() to plugins from @navecss/core/vite, and that leaving both is harmless', () => {
+    const { bump, text } = viteReleaseNote()
+
+    expect(text).toMatch(/css\.postcss/)
+    expect(text).toMatch(/postcss\.config\.js/)
+    expect(text).toMatch(/leaving both is harmless/i)
+    expect(bump).toBe('minor')
   })
 })
 

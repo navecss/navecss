@@ -17,8 +17,9 @@
  * third-party dependency today: it is the only one with both a real
  * bundler step and a third-party dependency (postcss, peer) or runtime
  * dependency (@navecss/tokens) to potentially absorb. cli imports
- * nothing and bridge ships src/ unbuilt, so neither has a bundler step
- * to guard here yet. tokens has its own guard instead
+ * nothing and base-ui compiles each file with tsc instead of bundling
+ * (it has its own guard, packages/base-ui/test/package-shape.test.ts), so
+ * neither has a bundler step to guard here. tokens has its own guard instead
  * (packages/tokens/test/no-inlined-dependency.test.ts): a
  * generator-shaped check, not this bundler-shaped one, because tokens'
  * build.ts writes generated output directly rather than bundling — this

@@ -1,10 +1,34 @@
+import type * as FsPromises from 'node:fs/promises'
+
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { check } from '../../src/directive/check.ts'
 import { assertScalesLinearly } from '../helpers/perf-scaling.ts'
+
+// Counts the directory walk's own calls into the filesystem (the mesh row below reads them).
+// Every call still reaches the real function.
+const { counted, fsCalls } = vi.hoisted(() => {
+  const calls = { readdir: 0, realpath: 0, stat: 0 }
+  const count = <F extends (...args: never[]) => unknown>(name: keyof typeof calls, fn: F): F =>
+    ((...args: Parameters<F>) => {
+      calls[name]++
+      return fn(...args)
+    }) as F
+  return { counted: count, fsCalls: calls }
+})
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    readdir: counted('readdir', actual.readdir),
+    realpath: counted('realpath', actual.realpath),
+    stat: counted('stat', actual.stat),
+  }
+})
 
 const ctx = { dir: '' }
 
@@ -21,6 +45,61 @@ async function writeCss(name: string, content: string): Promise<string> {
   await mkdir(path.join(filePath, '..'), { recursive: true })
   await writeFile(filePath, content)
   return filePath
+}
+
+/**
+ * Directory entries in one cluster of the mesh: each of its `width` directories holds its own
+ * stylesheet and a link to every other directory of the cluster, and the mesh's root holds the
+ * directory itself.
+ */
+function entriesPerCluster(width: number): number {
+  return width * (width + 1)
+}
+
+/**
+ * A mesh of `clusters` clusters of `MESH_CLUSTER_WIDTH` directories under `root`: every directory
+ * is a real directory in `root`, holds one stylesheet, and links to every other directory of its
+ * own cluster. Returns `root`.
+ */
+async function buildMesh(root: string, clusters: number): Promise<string> {
+  await mkdir(root)
+  const members: string[][] = []
+  for (let cluster = 0; cluster < clusters; cluster++) {
+    const names = Array.from({ length: MESH_CLUSTER_WIDTH }, (_, i) => `c${cluster}d${i}`)
+    members.push(names)
+    for (const name of names) {
+      await mkdir(path.join(root, name))
+      await writeFile(path.join(root, name, `${name}.css`), '.x{}')
+    }
+  }
+  for (const names of members) await linkEachToTheOthers(root, names)
+  return root
+}
+
+/**
+ * Links, inside each of the directories `names` names under `root`, to every other one of them.
+ */
+async function linkEachToTheOthers(root: string, names: readonly string[]): Promise<void> {
+  for (const name of names) {
+    const others = names.filter((other) => other !== name)
+    for (const other of others) await symlink(path.join(root, other), path.join(root, name, other))
+  }
+}
+
+/**
+ * The filesystem calls a walk of `buildMesh(_, clusters)` makes when it lists every directory once
+ * and resolves every entry once. The walk lists the root and each real directory (`readdir`),
+ * statting each link to learn it is a directory (`stat`, plus one for the root), and resolves the
+ * root, each real directory in the root, each link and each stylesheet (`realpath`).
+ */
+function expectedMeshCalls(clusters: number): { readdir: number; realpath: number; stat: number } {
+  const directories = clusters * MESH_CLUSTER_WIDTH
+  const links = directories * (MESH_CLUSTER_WIDTH - 1)
+  return {
+    readdir: 1 + directories,
+    realpath: 1 + directories + links + directories,
+    stat: 1 + links,
+  }
 }
 
 describe('AC-directive-core-23 — what the check counts as a surviving directive', () => {
@@ -163,6 +242,22 @@ describe('AC-directive-core-22 — navecss-core check, the exit contract', () =>
 // assertion inside it is what actually decides pass or fail.
 const SCALING_ROW_TIMEOUT = 45_000
 
+// The mesh row's smaller size, in directory entries, and how many times each size's mesh is walked.
+// The size is chosen so that extra computation per entry, which grows with the square of the
+// entries, is a large enough share of the larger walk to move the ratio past its bound.
+// The row's own timeout is longer than the others': the meshes are large, and a walk that is
+// quadratic in the entries takes the whole of three attempts to be called one, and the row
+// should fail on the ratio, which names the problem, not on the clock.
+const MESH_ENTRIES = 2304
+const MESH_WALKS = 2
+const MESH_ROW_TIMEOUT = 300_000
+
+// The mesh is built from clusters of this many directories, each linked to every other one in its
+// cluster. A cluster is small, so a chain of links followed in one path stays short, far under
+// the operating system's limit on links followed in one path; growing the mesh adds clusters,
+// never a longer chain.
+const MESH_CLUSTER_WIDTH = 4
+
 describe('check() stays roughly linear, not quadratic, and stack-safe on a large stylesheet', () => {
   it(
     'stays roughly linear reporting survivors in a single file',
@@ -295,40 +390,63 @@ describe('a directory --source follows symlinks, loop-safe', () => {
   })
 
   it(
-    'stays roughly linear walking a mesh of sibling directories, each linked to every other',
+    'walks a mesh of sibling directories, each linked to every other, in time linear in its entries',
     async () => {
-      // The mesh's own edge count is quadratic in its width (every directory links to every
-      // other), so the scaling assertion is driven off the total directory-entry count rather
-      // than the mesh width directly: doubling the width quadruples the entries, matching the
-      // n-vs-4n comparison `assertScalesLinearly` makes.
+      // What this protects: a walk lists every real directory once however the links between
+      // directories interconnect, so the work it does, and the time that takes, grows in step
+      // with the number of entries it is given.
+      //
+      // Two things are asserted. The calls the walk makes into the filesystem are counted and
+      // compared with what listing every directory once and resolving every entry once makes,
+      // exactly, at both sizes: that is exact, so it does not move with the machine's load, and it
+      // fails on a walk that lists or resolves anything twice. It also fails if the larger mesh is
+      // cut short, which a walk of one long chain of links is (the operating system stops
+      // following links past a fixed number in one path) and which would leave the larger mesh
+      // with fewer entries than its size says, hiding growth in the time. Then the time is held
+      // to a linear ratio between the two sizes, for work the counts cannot see (extra
+      // computation per entry that makes no filesystem call).
+      //
+      // The time is the process's CPU time over the walk, not the clock: a walk waits on the
+      // filesystem and, on a busy machine, on other processes, and none of that waiting is work
+      // the walk does. Each size is the fastest of several walks of the same mesh, since a stall
+      // only ever adds time. A walk that is quadratic in the entries is slower by the same factor
+      // in every walk, so the fastest of them still shows it.
+      const meshes = new Map<number, string>()
+
       await assertScalesLinearly(async (totalEntries) => {
-        const width = Math.max(2, Math.round(Math.sqrt(totalEntries)))
-        const dir = await mkdtemp(path.join(tmpdir(), 'nave-check-mesh-'))
-        const names = Array.from({ length: width }, (_, i) => `d${i}`)
-        for (const name of names) {
-          await mkdir(path.join(dir, name))
-          await writeFile(path.join(dir, name, `${name}.css`), '.x{}')
+        const clusters = Math.max(
+          1,
+          Math.round(totalEntries / entriesPerCluster(MESH_CLUSTER_WIDTH)),
+        )
+        let dir = meshes.get(clusters)
+        if (dir === undefined) {
+          dir = await buildMesh(path.join(ctx.dir, `mesh-${clusters}`), clusters)
+          meshes.set(clusters, dir)
         }
-        for (const name of names) {
-          const others = names.filter((other) => other !== name)
-          for (const other of others) {
-            await symlink(path.join(dir, other), path.join(dir, name, other))
-          }
+        const expected = expectedMeshCalls(clusters)
+
+        let fastest = Infinity
+        for (let walk = 0; walk < MESH_WALKS; walk++) {
+          fsCalls.readdir = 0
+          fsCalls.realpath = 0
+          fsCalls.stat = 0
+
+          const start = process.cpuUsage()
+          const result = await check({ source: [dir] })
+          const used = process.cpuUsage(start)
+          const elapsed = (used.user + used.system) / 1000
+
+          expect(result.status).toBe(0)
+          expect(result.stylesheetsRead).toBe(clusters * MESH_CLUSTER_WIDTH)
+          expect(fsCalls).toEqual(expected)
+
+          fastest = Math.min(fastest, elapsed)
         }
 
-        const start = performance.now()
-        const result = await check({ source: [dir] })
-        const elapsed = performance.now() - start
-
-        expect(result.status).toBe(0)
-        expect(result.stylesheetsRead).toBe(width)
-
-        await rm(dir, { recursive: true, force: true })
-
-        return elapsed
-      }, 196)
+        return fastest
+      }, MESH_ENTRIES)
     },
-    SCALING_ROW_TIMEOUT,
+    MESH_ROW_TIMEOUT,
   )
 })
 

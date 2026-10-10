@@ -86,7 +86,7 @@ test('the release-wide check:pack step bypasses turbo cache', () => {
 })
 
 test('every package still runs check:pack from its own prepublishOnly', () => {
-  for (const pkg of ['core', 'tokens', 'cli', 'bridge']) {
+  for (const pkg of ['core', 'tokens', 'cli', 'base-ui']) {
     const scripts = packageScripts(pkg)
     const tokens = scripts.prepublishOnly.split(' && ').map((token) => token.trim())
     assert.ok(
@@ -98,7 +98,7 @@ test('every package still runs check:pack from its own prepublishOnly', () => {
 })
 
 test('prepublishOnly still runs the orphaned-chunks backstop', () => {
-  for (const pkg of ['core', 'tokens', 'cli', 'bridge']) {
+  for (const pkg of ['core', 'tokens', 'cli', 'base-ui']) {
     const scripts = packageScripts(pkg)
     assert.match(
       scripts.prepublishOnly,
@@ -109,7 +109,7 @@ test('prepublishOnly still runs the orphaned-chunks backstop', () => {
 })
 
 test('each package still carries a check:pack script that runs publint through the dry-run wrapper', () => {
-  for (const pkg of ['core', 'tokens', 'cli', 'bridge']) {
+  for (const pkg of ['core', 'tokens', 'cli', 'base-ui']) {
     const scripts = packageScripts(pkg)
     assert.match(
       scripts['check:pack'],
