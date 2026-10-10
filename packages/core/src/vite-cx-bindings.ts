@@ -3,7 +3,7 @@
  * import of the module that holds it.
  */
 import type { AstNode } from './vite-ast.ts'
-import type { CxBinding } from './vite-cx-reference.ts'
+import type { CxBinding } from './vite-cx-use.ts'
 import type { Binding, ScopeAnalysis } from './vite-scope.ts'
 
 import { nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'

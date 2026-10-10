@@ -11,6 +11,7 @@ export const PROBLEM_KINDS = [
   'argument',
   'reference',
   'reexport',
+  'declared',
   'concatenation',
   'dynamic',
   'unknown',
@@ -35,6 +36,23 @@ export interface Problem {
    * For an unknown atom with no near candidate: the report closes with `Available:`.
    */
   readonly needsAvailable?: boolean
+  /**
+   * For a re-export: whether listing the module in `cxModules` would clear it, which it does not
+   * when the module re-exports the `cx` of a module that is already listed (a second hop).
+   */
+  readonly isListable?: boolean
+  /**
+   * For a re-export of Nave's `cx`: whether it gives `cx` under a name other than `cx`, as a default
+   * or inside a namespace. A listed module may not do that, so listing the module would only turn
+   * this problem into another one: no `cxModules` entry clears it.
+   */
+  readonly isRenamed?: boolean
+  /**
+   * For a problem in a module listed in `cxModules`: whether the module also exports Nave's own
+   * `cx`. An importer's `cx` is then Nave's, so what the build says of its calls is not an echo of
+   * this problem and stays when the problem is reported.
+   */
+  readonly hasNaveCx?: boolean
 }
 
 /**
@@ -43,6 +61,22 @@ export interface Problem {
 export function compareText(a: string, b: string): number {
   if (a === b) return 0
   return a < b ? -1 : 1
+}
+
+/**
+ * The `cxModules` array a remedy prints: the entries already configured, as written and in their
+ * order, then each module to add once, in code-unit order. `undefined` when there is nothing to
+ * add, since an array equal to the configured list is no remedy.
+ */
+export function cxModulesArray(
+  configured: readonly string[],
+  added: Iterable<string>,
+): string | undefined {
+  const extra = [...new Set(added)]
+    .filter((entry) => !configured.includes(entry))
+    .toSorted(compareText)
+  if (extra.length === 0) return undefined
+  return `[${[...configured, ...extra].map((entry) => `'${entry}'`).join(', ')}]`
 }
 
 /**

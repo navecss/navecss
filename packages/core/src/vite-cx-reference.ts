@@ -5,45 +5,12 @@
  * `let` of the same name in an inner scope is not a use.
  */
 import type { AstNode } from './vite-ast.ts'
-import type { Binding, Reference } from './vite-scope.ts'
+import type { CxBinding, CxUse } from './vite-cx-use.ts'
+import type { Reference } from './vite-scope.ts'
 
 import { nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
-import { isReexportOf, phraseFor, type Reading } from './vite-cx-refuse.ts'
+import { isReexportOf, isRenamedReexportOf, phraseFor, type Reading } from './vite-cx-refuse.ts'
 import { isSetupReturn } from './vite-setup-member.ts'
-
-type UseKind = 'call' | 'dynamic' | 'exposure' | 'raw' | 'refused'
-
-export interface CxUse {
-  readonly kind: UseKind
-  /**
-   * For a call, the call; for a refused use, the construct that refuses (where its error points).
-   */
-  readonly node: AstNode
-  /**
-   * The name the module gives the binding (`cx`, or an alias).
-   */
-  readonly local: string
-  /**
-   * For a refused use: what it does with the binding, as the report words it.
-   */
-  readonly phrase?: string
-  /**
-   * Whether the refused use is a re-export of the binding, which `cxModules` declares away.
-   */
-  readonly isReexport?: boolean
-  /**
-   * For an exposure: the name a compiled Vue component's setup return gives the binding.
-   */
-  readonly exposedAs?: string
-}
-
-/**
- * What a binding stands for in the module: Nave's `cx` itself, or the namespace holding it.
- */
-export interface CxBinding {
-  readonly binding: Binding
-  readonly isNamespace: boolean
-}
 
 /**
  * Whether `node` is the callee of the call `parent`.
@@ -195,21 +162,102 @@ export function useOfExpression(reading: Reading, start: AstNode, local: string)
   const exposedAs = exposureName(reading, expression)
   if (exposedAs !== undefined) return { kind: 'exposure', node: expression, local, exposedAs }
   const phrase = phraseFor(reading, expression, local)
-  return { ...refused(expression, local, phrase), isReexport: isReexportOf(reading, expression) }
+  const isReexport = isReexportOf(reading, expression)
+  const isRenamed = isReexport && isRenamedReexportOf(reading, expression)
+  return { ...refused(expression, local, phrase), isReexport, ...(isRenamed && { isRenamed }) }
 }
 
 /**
- * The use one reference to a cx binding makes.
+ * Whether the property is a destructured key that is static and is not `cx`.
  */
-export function useOf(reading: Reading, reference: Reference, cx: CxBinding): CxUse {
-  const local = cx.binding.name
-  const expression = reference.node
-  if (!cx.isNamespace) return useOfExpression(reading, expression, local)
+function isOtherKey(property: AstNode): boolean {
+  if (property.type !== 'Property') return false
+  const name = propertyNameOf(nodeAt(property, 'key'), property.computed === true)
+  return name !== undefined && name !== 'cx'
+}
+
+/**
+ * Whether `node` assigns to a pattern in a way that leaves no value behind: a parameter's default,
+ * or an assignment that is a whole statement. An assignment evaluates to its right side, which here
+ * is the namespace itself, so one whose value is used hands the namespace on.
+ */
+function isPatternAssignment(reading: Reading, node: AstNode | undefined): node is AstNode {
+  if (node?.type === 'AssignmentPattern') return true
+  return (
+    node?.type === 'AssignmentExpression' &&
+    node.operator === '=' &&
+    reading.analysis.parentOf.get(node)?.type === 'ExpressionStatement'
+  )
+}
+
+/**
+ * The pattern `expression` is destructured by, when it is the whole initialiser of a declaration
+ * (`const { a } = ns`), the right side of an assignment statement (`({ a } = ns)`) or a
+ * parameter's default (`({ a } = ns) => a`). An assignment whose value is used, as in
+ * `const r = ({ a } = ns)`, hands the namespace on, so it is not one.
+ */
+function patternDestructuring(reading: Reading, expression: AstNode): AstNode | undefined {
+  const parent = reading.analysis.parentOf.get(expression)
+  if (parent?.type === 'VariableDeclarator' && nodeAt(parent, 'init') === expression) {
+    return nodeAt(parent, 'id')
+  }
+  return isPatternAssignment(reading, parent) && nodeAt(parent, 'right') === expression
+    ? nodeAt(parent, 'left')
+    : undefined
+}
+
+/**
+ * Whether `expression` is the whole source of an object destructuring that takes static keys other
+ * than `cx` and nothing else: no rest element, no computed key.
+ */
+function isOtherKeysDestructuring(reading: Reading, expression: AstNode): boolean {
+  const pattern = patternDestructuring(reading, expression)
+  return (
+    pattern?.type === 'ObjectPattern' && nodesAt(pattern, 'properties').every((p) => isOtherKey(p))
+  )
+}
+
+/**
+ * The member read `expression.key` that `expression` is the object of, with the static key it
+ * reads (`undefined` when the key is computed from anything but a string).
+ */
+function memberReadOf(
+  reading: Reading,
+  expression: AstNode,
+): { key: string | undefined; member: AstNode } | undefined {
   const member = reading.analysis.parentOf.get(expression)
-  const isCx =
-    member?.type === 'MemberExpression' &&
-    nodeAt(member, 'object') === expression &&
-    propertyNameOf(nodeAt(member, 'property'), member.computed === true) === 'cx'
-  if (!isCx) return refused(expression, local, `${local} is used other than as ${local}.cx`)
-  return useOfExpression(reading, member, `${local}.cx`)
+  if (member?.type !== 'MemberExpression' || nodeAt(member, 'object') !== expression) {
+    return undefined
+  }
+  return { member, key: propertyNameOf(nodeAt(member, 'property'), member.computed === true) }
+}
+
+/**
+ * The use one reference to a namespace import makes, or `undefined` when it makes none of `cx`.
+ * `ns.cx` is Nave's `cx`. For a namespace of a listed module, which exports more than `cx`, a
+ * member read by a static key other than `cx`, and a destructuring of such keys, read another
+ * export. Everything else may carry `cx` where the build cannot follow it.
+ */
+function namespaceUse(reading: Reading, expression: AstNode, cx: CxBinding): CxUse | undefined {
+  const local = cx.binding.name
+  const read = memberReadOf(reading, expression)
+  if (read?.key === 'cx') return useOfExpression(reading, read.member, `${local}.cx`)
+  const isListed = reading.declaredSources?.has(cx.binding.source ?? '') === true
+  const isOtherExport = read
+    ? read.key !== undefined
+    : isOtherKeysDestructuring(reading, expression)
+  if (isListed && isOtherExport) return undefined
+  return refused(expression, local, `${local} is used other than as ${local}.cx`)
+}
+
+/**
+ * The use one reference to a cx binding makes, or `undefined` when it makes none of `cx`.
+ */
+export function useOf(reading: Reading, reference: Reference, cx: CxBinding): CxUse | undefined {
+  if (cx.isNamespace) return namespaceUse(reading, reference.node, cx)
+  const local = cx.binding.name
+  const use = useOfExpression(reading, reference.node, local)
+  if (!use.isReexport) return use
+  const isDeclaredSource = reading.declaredSources?.has(cx.binding.source ?? '') === true
+  return { ...use, isListable: !isDeclaredSource }
 }

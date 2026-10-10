@@ -14,6 +14,8 @@ import type { UsedContext } from './vite-used.ts'
 
 import { CX_SOURCE, readModule } from './vite-collect.ts'
 import { filePathOf } from './vite-css-id.ts'
+import { type DeclaredModules, declaredModulesFor, isAboutListed } from './vite-cx-modules.ts'
+import { declaredReadingOf } from './vite-cx-reading.ts'
 import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
 import { setupExposuresFor } from './vite-setup-link.ts'
 import { combinedMapOf, placerFor } from './vite-source-map.ts'
@@ -53,6 +55,7 @@ export function isMentioningAtoms(code: string): boolean {
 
 interface Placing {
   readonly code: string
+  readonly id: string
   readonly file: string
   readonly pkg: string | undefined
   readonly place: (offset: number) => { column: number; line: number } | undefined
@@ -93,7 +96,7 @@ function locate(problems: readonly Problem[], placing: Placing): LocatedProblem[
   return problems.map((problem) => {
     const place = placing.place(problem.offset)
     const where = place ?? { ...NO_PLACE, unknownLine: placing.unknownLine }
-    return { ...problem, file: placing.file, pkg: placing.pkg, ...where }
+    return { ...problem, file: placing.file, pkg: placing.pkg, moduleId: placing.id, ...where }
   })
 }
 
@@ -160,6 +163,7 @@ async function recordOf(
   const authored = map ? await authoredTextOf(id) : undefined
   const placing: Placing = {
     code,
+    id,
     file: moduleLabel(context.root, id),
     pkg,
     place: placerFor(code, map, authored),
@@ -198,6 +202,10 @@ interface Parsed {
   readonly id: string
   readonly pkg: string | undefined
   readonly program: AstNode
+  /**
+   * The modules `cxModules` lists, when it lists any.
+   */
+  readonly declared: DeclaredModules | undefined
 }
 
 /**
@@ -209,9 +217,15 @@ async function recordParsed(
   input: Parsed,
   key: string,
 ): Promise<ModuleRecord> {
-  const { code, id, pkg, program } = input
+  const { code, id, pkg, program, declared } = input
+  const { declaredSources, isDeclared, onlyVia } = await declaredReadingOf(context, ctx, declared, {
+    environment: ctx.environment?.name ?? 'client',
+    module: { code, id, program },
+  })
   const reading = readOrUndefined(code, program, {
-    cxSources: new Set([CX_SOURCE]),
+    cxSources: new Set([CX_SOURCE, ...declaredSources]),
+    declaredSources,
+    isDeclared,
     ownAtoms: await ownAtomNames(context, (file) => {
       ctx.addWatchFile(file)
     }),
@@ -227,7 +241,8 @@ async function recordParsed(
   if (reading.exposes.size > 0) context.state.exposures.set(key, reading.exposes)
   else context.state.exposures.delete(key)
   if (pkg !== undefined && reading.usesCx) context.state.packages.add(pkg)
-  return await recordOf(context, ctx, { code, id, pkg }, reading)
+  const record = await recordOf(context, ctx, { code, id, pkg }, reading)
+  return onlyVia === undefined ? record : { ...record, onlyVia }
 }
 
 /**
@@ -243,8 +258,10 @@ export async function recordModule(
   module: { readonly code: string; readonly id: string; readonly moduleType?: string | undefined },
 ): Promise<ModuleRecord | undefined> {
   const { code, id, moduleType } = module
-  const key = moduleKey(ctx.environment?.name ?? 'client', id)
-  if (!isMentioningAtoms(code)) {
+  const environment = ctx.environment?.name ?? 'client'
+  const key = moduleKey(environment, id)
+  const declared = await declaredModulesFor(context, ctx, environment)
+  if (!isMentioningAtoms(code) && !isAboutListed({ code, id }, declared)) {
     // A module that no longer mentions atoms leaves nothing of its last read.
     context.state.modules.delete(key)
     return undefined
@@ -259,7 +276,7 @@ export async function recordModule(
   }
   const program = parseOrUndefined(ctx, code, moduleType)
   const record = program
-    ? await recordParsed(context, ctx, { code, id, pkg, program }, key)
+    ? await recordParsed(context, ctx, { code, id, pkg, program, declared }, key)
     : unreadableRecord(context, { code, id, pkg }, NOT_PARSED)
   if (!program) context.state.exposures.delete(key)
   context.state.modules.set(key, record)

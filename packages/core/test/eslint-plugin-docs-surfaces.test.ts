@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { packCoreTarball, type PackedCoreTarball } from './helpers/pack-core.ts'
-import { changelogEntries } from './helpers/released-changeset.ts'
+import { changelogEntries, shippedChangesetProse } from './helpers/released-changeset.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../../..')
@@ -147,4 +147,27 @@ describe('AC-eslint-plugin-23: the Packages table and CLAUDE.md name the new pac
       true,
     )
   })
+})
+
+describe('AC-eslint-plugin-10: the cxModules docs name how an import is resolved, and what it cannot read', () => {
+  const PLUGIN_DIR = path.join(ROOT, 'packages/eslint-plugin')
+  const changeset = foldWhitespace(
+    shippedChangesetProse(
+      path.join(ROOT, '.changeset/eslint-plugin-cx-modules-match-by-file.md'),
+      path.join(PLUGIN_DIR, 'CHANGELOG.md'),
+      'A relative `cxModules` entry',
+    ),
+  )
+  const readme = foldWhitespace(readFileSync(path.join(PLUGIN_DIR, 'README.md'), 'utf8'))
+
+  it.each([
+    ['the changeset', changeset],
+    ['the README', readme],
+  ])(
+    '%s says imports resolve as Node’s require() does, and names an imports map it cannot read',
+    (_name, text) => {
+      expect(text).toContain("Node's `require()`")
+      expect(text).toContain('`imports`')
+    },
+  )
 })

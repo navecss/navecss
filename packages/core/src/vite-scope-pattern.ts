@@ -77,7 +77,9 @@ export function declarePattern(
 const DECLARE: Readonly<Record<string, PatternReader<BindingSpec>>> = {
   AssignmentPattern: (pattern, spec, scope, walker) => {
     declarePattern(nodeAt(pattern, 'left'), spec, scope, walker)
-    walker.visit(nodeAt(pattern, 'right'), scope)
+    const right = nodeAt(pattern, 'right')
+    if (right) walker.parentOf.set(right, pattern)
+    walker.visit(right, scope)
   },
   RestElement: (pattern, spec, scope, walker) => {
     declarePattern(nodeAt(pattern, 'argument'), spec, scope, walker)

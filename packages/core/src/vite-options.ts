@@ -25,18 +25,38 @@ export interface UsedAtomOptions {
   keep?: readonly AtomName[]
 
   /**
-   * By package name: the atoms a dependency's `cx()` calls can produce, for a package whose calls
-   * the build cannot read. They ship as if they were in `keep`. The package's calls are not
-   * changed, so any other atom they apply has no rule. A package in your own workspace is your
-   * code, not a dependency.
+   * By package name: the atoms a dependency's own `cx()` calls can produce, for a package whose
+   * calls the build cannot read. They ship as if they were in `keep`, beside the atoms of the
+   * package's calls the build does read. The calls it cannot read are not changed, so any other
+   * atom they apply has no rule. An empty list is accepted: it says those calls produce no atom,
+   * so the list adds none, and a `cx.dynamic()` call in the package still fails the build, as it
+   * does with no entry. A package in your own workspace is your code, not a dependency.
    */
   keepFor?: Readonly<Record<string, readonly AtomName[]>>
+
+  /**
+   * Modules that re-export `cx` from `@navecss/core/cx` unchanged, as
+   * `export { cx } from '@navecss/core/cx'`, in your code or in a dependency: a file that imports
+   * `cx` from one is read as if it imported it from `@navecss/core/cx`. The build follows a listed
+   * module one step. A relative entry (`'./src/ui/index.ts'`) is a path from Vite's `root`. A
+   * package name or subpath, an alias or an absolute path matches an import written the same way.
+   * A `#` entry matches an import written the same way only where that import resolves to a listed
+   * file, since a `#` import resolves through the `package.json` nearest the file that writes it.
+   * Every entry also matches an import that resolves to its file through a specifier naming that
+   * file or, for an `index` file, its directory; in your code, an import that reaches the file
+   * through any other specifier fails the build instead. A relative entry that resolves to no file
+   * is ignored, and so is an entry naming `@navecss/core/cx`, which the build always reads. The
+   * same setting, with the same entries, as `@navecss/eslint-plugin`'s `cxModules`, which reads a
+   * relative entry from the working directory instead of Vite's `root`.
+   */
+  cxModules?: readonly string[]
 }
 
 export interface ResolvedUsedOptions {
   readonly atomic: 'all' | 'used'
   readonly keep: readonly string[]
   readonly keepFor: Readonly<Record<string, readonly string[]>>
+  readonly cxModules: readonly string[]
 }
 
 /**
@@ -88,16 +108,24 @@ function problemsInKeepFor(keepFor: unknown, own: ReadonlySet<string> | undefine
   }
   const problems: string[] = []
   for (const [pkg, list] of Object.entries(keepFor)) {
-    const where = `keepFor["${pkg}"]`
-    if (Array.isArray(list) && list.length === 0) {
-      problems.push(
-        `navePlugin(): ${where} lists no atoms. List the atoms its calls can produce, or remove the entry.`,
-      )
-    } else {
-      problems.push(...problemsInList(where, list, own))
-    }
+    problems.push(...problemsInList(`keepFor["${pkg}"]`, list, own))
   }
   return problems
+}
+
+/**
+ * Every problem in `cxModules`, which holds no atom names and so needs no atom set.
+ */
+function problemsInCxModules(cxModules: unknown): string[] {
+  if (!Array.isArray(cxModules)) {
+    return ['navePlugin(): cxModules must be an array of module paths or specifiers.']
+  }
+  // `Array.from` reads a hole as `undefined`, so a sparse list is refused like any other bad entry.
+  return Array.from(cxModules as unknown[], (entry, index) =>
+    typeof entry === 'string'
+      ? []
+      : `navePlugin(): cxModules[${index}] must be a string: a module path or a specifier.`,
+  ).flat()
 }
 
 /**
@@ -110,12 +138,13 @@ function problemsInOptions(
   own: ReadonlySet<string> | undefined,
 ): string[] {
   const problems: string[] = []
-  const { atomic, keep, keepFor } = options as Record<string, unknown>
+  const { atomic, keep, keepFor, cxModules } = options as Record<string, unknown>
   if (atomic !== undefined && atomic !== 'all' && atomic !== 'used') {
     problems.push("navePlugin(): atomic must be 'used' or 'all'.")
   }
   if (keep !== undefined) problems.push(...problemsInList('keep', keep, own))
   if (keepFor !== undefined) problems.push(...problemsInKeepFor(keepFor, own))
+  if (cxModules !== undefined) problems.push(...problemsInCxModules(cxModules))
   return problems
 }
 
@@ -140,6 +169,7 @@ export function resolveUsedOptions(options: UsedAtomOptions): ResolvedUsedOption
     keepFor: Object.fromEntries(
       Object.entries(options.keepFor ?? {}).map(([pkg, list]) => [pkg, [...list]]),
     ),
+    cxModules: [...(options.cxModules ?? [])],
   }
 }
 

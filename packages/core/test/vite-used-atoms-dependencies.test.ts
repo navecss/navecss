@@ -1,5 +1,5 @@
 /**
- * The used-atoms criteria for dependency code and the escapes (AC-used-atoms-08, -16, -19, -43 to
+ * The used-atoms criteria for dependency code and the escapes (AC-used-atoms-08, -16, -19, -38, -43 to
  * -46, -55): a problem in a package under `node_modules` names the package and prints the
  * consumer's `keepFor` line, listing a package stands in for reading it, and the remedy block is
  * split by owner.
@@ -26,6 +26,11 @@ const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 const FIXTURES = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   'fixtures/generated/minified-dependencies',
+)
+
+const VITE_DECLARATION = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../dist/vite.d.ts',
 )
 
 /**
@@ -230,7 +235,7 @@ describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split
       const all = await buildUsed(app, { options: { atomic: 'all' } })
 
       expect(keepOnly.error).toMatch(
-        /dyn-lib calls cx\.dynamic\(\) in 1 place and lists no atoms in keepFor/,
+        /dyn-lib calls cx\.dynamic\(\) in 1 place, and keepFor lists no atoms for it, so none of them applies a class\./,
       )
       expect(keepOnly.error).not.toContain('lasting fix')
       expect(keepOnly.error).not.toContain('in your code')
@@ -238,6 +243,23 @@ describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split
       expect(keepForOnly.error).not.toContain('dyn-lib calls')
       expect(both.error).toBeUndefined()
       expect(all.error).toBeUndefined()
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('reads an empty keepFor list as no entry: the dependency problem stays, and the application’s is cleared by keep', async () => {
+    const app = dynamicApp()
+    try {
+      const withoutEntry = await buildUsed(app, { options: { keep: ['flex'] } })
+      const emptyList = await buildUsed(app, {
+        options: { keep: ['flex'], keepFor: { 'dyn-lib': [] } },
+      })
+
+      expect(emptyList.error).toMatch(/^1 problem in 1 file/)
+      expect(emptyList.error).toBe(withoutEntry.error)
+      expect(emptyList.error).toMatch(/dyn-lib calls cx\.dynamic\(\) in 1 place/)
+      expect(emptyList.error).not.toContain('in your code')
     } finally {
       app.dispose()
     }
@@ -267,6 +289,10 @@ describe('AC-used-atoms-43 — what listing a package in keepFor covers, and wha
 
       expect(without.error).toMatch(/^6 problems in 6 files/)
       expect(without.error).toContain('wide-lib')
+      // The re-export in `dist/cx.js` is reached only from inside the package: no cxModules line
+      // could clear it, and the package's keepFor line, printed once, does.
+      expect(without.error).not.toMatch(/cxModules: \[/)
+      expect(without.error!.match(/keepFor: \{ 'wide-lib'/g)).toHaveLength(1)
       expect(listed.error).toBeUndefined()
       expect(atomLayerAtoms(listed.css)).toEqual(atoms('flex', 'block', 'gap', 'truncate'))
     } finally {
@@ -355,10 +381,18 @@ describe('AC-used-atoms-44 — keepFor reaches packages under node_modules only'
   }, 60_000)
 })
 
+describe('AC-used-atoms-38 - keepFor is still validated under all', () => {
+  it('refuses an unknown atom in a list, and accepts an empty list', () => {
+    expect(() => navePlugin({ atomic: 'all', keepFor: { 'a-lib': ['sr-only' as never] } })).toThrow(
+      'navePlugin(): keepFor["a-lib"] names an unknown atom "sr-only". Did you mean "srOnly"? Atom names are camelCase; "nave-sr-only" is its class.',
+    )
+    expect(() => navePlugin({ atomic: 'all', keepFor: { 'a-lib': [] } })).not.toThrow()
+  })
+})
+
 describe('AC-used-atoms-45 — keepFor entries are validated as keep is, under both values', () => {
   const extend = { brandBox: { declarations: { color: 'red' } } }
   const rows: [string, string[], string][] = [
-    ['lists no atoms', [], 'keepFor["@acme/ui"] lists no atoms'],
     [
       'names an unknown atom',
       ['sr-only'],
@@ -377,6 +411,33 @@ describe('AC-used-atoms-45 — keepFor entries are validated as keep is, under b
         `navePlugin(): ${text}`,
       )
     }
+  })
+
+  it('accepts an empty list, which says the calls the build cannot read produce no atom: green under both values, with no plugin message', async () => {
+    const app = appUsing([])
+    try {
+      for (const atomic of ['used', 'all'] as const) {
+        const built = await buildUsed(app, { options: { atomic, keepFor: { '@acme/ui': [] } } })
+
+        expect(built.error).toBeUndefined()
+        expect((built.warnings ?? []).filter((message) => message.includes('nave'))).toEqual([])
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('documents an empty list as adding no atom, not as shipping none for the package', () => {
+    const declaration = readFileSync(VITE_DECLARATION, 'utf8')
+    const start = declaration.indexOf('keepFor?:')
+    const docblock = declaration
+      .slice(declaration.lastIndexOf('/**', start), start)
+      .replaceAll(/\n\s*\*\s?/gu, ' ')
+      .replaceAll(/\s+/gu, ' ')
+
+    expect(start).toBeGreaterThan(0)
+    expect(docblock).not.toContain('none ships for it')
+    expect(docblock).toContain('so the list adds none')
   })
 
   it('a key alone never fails', async () => {
@@ -447,6 +508,9 @@ describe('AC-used-atoms-55 — the remedy block is split by owner', () => {
       expect(owners.indexOf('aa-lib')).toBeLessThan(owners.indexOf('zz-lib'))
       expect(remedies.at(-1)).toMatch(/^Available: /)
       expect(remedies.slice(0, 3).join('\n')).not.toContain('keepFor')
+      expect(remedies.find((line) => line.startsWith('@acme/ds'))).toBe(
+        "@acme/ds re-exports cx in '@acme/ds'. List it in navePlugin(): cxModules: ['@acme/ds'].",
+      )
     } finally {
       app.dispose()
     }

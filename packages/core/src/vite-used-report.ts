@@ -8,7 +8,8 @@
 import type { Problem, ProblemKind } from './vite-problems.ts'
 
 import { availableLine } from './vite-atom-check.ts'
-import { compareText, cut, PROBLEM_KINDS } from './vite-problems.ts'
+import { compareText, cut, cxModulesArray, PROBLEM_KINDS } from './vite-problems.ts'
+import { isListableReexport, packageLines, withoutRemoved } from './vite-used-package-lines.ts'
 
 export interface LocatedProblem extends Problem {
   /**
@@ -26,6 +27,21 @@ export interface LocatedProblem extends Problem {
    * The package name when the module lies under `node_modules`.
    */
   readonly pkg?: string | undefined
+  /**
+   * The id of the module the problem is in, for a problem the build-end check looks into the
+   * module graph for.
+   */
+  readonly moduleId?: string | undefined
+  /**
+   * For a dependency's re-export of `cx`: the specifier that resolves from the project root to the
+   * module that holds it, when a `cxModules` entry can name it.
+   */
+  readonly specifier?: string | undefined
+  /**
+   * For a dependency's listed module that exports a `cx` the build does not follow: the
+   * `cxModules` entries, as written, that name it.
+   */
+  readonly entries?: readonly string[] | undefined
 }
 
 export const LINE_UNKNOWN_WITHOUT_MAP =
@@ -45,7 +61,11 @@ const REMEDIES: Readonly<Record<ProblemKind, readonly string[]>> = {
   reference: [
     'Call cx() where the classes are applied, with the atom names as its arguments: the build reads calls, not a cx that is assigned, passed or spread.',
   ],
-  reexport: ["Import cx from '@navecss/core/cx' directly in the module that calls it."],
+  // Printed by `reexportRemedy`, which names the modules a `cxModules` entry would clear.
+  reexport: [],
+  declared: [
+    "In a module listed in cxModules, make export { cx } from '@navecss/core/cx' its only export of cx, or remove the module from cxModules and import cx from @navecss/core/cx where it is called.",
+  ],
   concatenation: [
     'Write cx() with the atom name, or cx.dynamic() with keep for a name chosen at run time.',
   ],
@@ -72,35 +92,42 @@ function problemLine(problem: LocatedProblem): string {
 }
 
 /**
- * The remedy lines for a dependency's problems, one sentence per package.
+ * The lines for an application's undeclared re-exports: the `cxModules` array that names every
+ * module a listing would clear, pasteable whole, then the direct import.
  */
-function packageLine(pkg: string, problems: readonly LocatedProblem[]): string {
-  const keepFor = `keepFor: { '${pkg}': ['<atom>'] }`
-  if (problems.every((problem) => problem.kind === 'own')) {
-    return `${pkg} names atoms of your own, which have no class, so a keepFor entry cannot make its calls produce a Nave class. The fix is the package's: it must name atoms Nave ships.`
+function reexportRemedy(
+  problems: readonly LocatedProblem[],
+  configured: readonly string[],
+): string[] {
+  const modules = problems
+    .filter((problem) => isListableReexport(problem))
+    .map((problem) => (problem.file.startsWith('.') ? problem.file : `./${problem.file}`))
+  const array = cxModulesArray(configured, modules)
+  const lines =
+    array === undefined
+      ? []
+      : [
+          `To keep a module that re-exports cx, list it in navePlugin() by its path from the project root: cxModules: ${array}. Files that import cx from it are then read as if they imported it from @navecss/core/cx. Or import cx from @navecss/core/cx directly where it is called.`,
+        ]
+  if (problems.some((problem) => problem.kind === 'reexport' && !isListableReexport(problem))) {
+    lines.push(
+      'Import cx where it is called, from @navecss/core/cx or from a module listed in cxModules, instead of re-exporting the cx of a listed module.',
+    )
   }
-  const isOnlyDynamic = problems.every((problem) => problem.kind === 'dynamic')
-  if (isOnlyDynamic) {
-    const count = problems.length
-    const places = count === 1 ? '1 place' : `${count} places`
-    return `${pkg} calls cx.dynamic() in ${places} and lists no atoms in keepFor, so none of them applies a class. List the atoms those calls can take, from its documentation, under its name in navePlugin(): ${keepFor}.`
-  }
-  const isReexportOnly = problems.every((problem) => problem.kind === 'reexport')
-  if (isReexportOnly) {
-    return `${pkg} re-exports cx. Import cx from '@navecss/core/cx' directly where it is called, or list the atoms its calls can produce under its name in navePlugin(): ${keepFor}.`
-  }
-  return `${pkg} is a dependency, so its code is not yours to change. List the atoms its calls can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: names chosen at run time go through cx.dynamic().`
+  return lines
 }
 
 /**
  * The remedy block: the application's lines in the fixed order of the kinds present, then each
  * dependency's line sorted by package name, then `Available:` when a unknown name had no hint.
  */
-function remedyBlock(problems: readonly LocatedProblem[]): string[] {
+function remedyBlock(problems: readonly LocatedProblem[], listed: readonly string[]): string[] {
+  const configured = withoutRemoved(problems, listed)
   const application = problems.filter((problem) => problem.pkg === undefined)
   const lines: string[] = []
   for (const kind of PROBLEM_KINDS) {
-    if (application.some((problem) => problem.kind === kind)) lines.push(...REMEDIES[kind])
+    if (application.every((problem) => problem.kind !== kind)) continue
+    lines.push(...(kind === 'reexport' ? reexportRemedy(application, configured) : REMEDIES[kind]))
   }
   const byPackage = new Map<string, LocatedProblem[]>()
   for (const problem of problems) {
@@ -108,7 +135,7 @@ function remedyBlock(problems: readonly LocatedProblem[]): string[] {
       byPackage.set(problem.pkg, [...(byPackage.get(problem.pkg) ?? []), problem])
   }
   for (const pkg of byPackage.keys().toArray().toSorted(compareText)) {
-    lines.push(packageLine(pkg, byPackage.get(pkg)!))
+    lines.push(...packageLines(pkg, byPackage.get(pkg)!, configured))
   }
   if (application.some((problem) => problem.needsAvailable)) lines.push(availableLine())
   return lines
@@ -162,17 +189,24 @@ function noun(count: number, word: string): string {
 }
 
 /**
- * The build report for every problem of an environment.
+ * The build report for every problem of an environment. `configured` is the `cxModules` list the
+ * remedies that print one extend.
  */
-export function buildReport(problems: readonly LocatedProblem[]): string {
+export function buildReport(
+  problems: readonly LocatedProblem[],
+  configured: readonly string[] = [],
+): string {
   const files = new Set(problems.map((problem) => problem.file)).size
   const first = `${noun(problems.length, 'problem')} in ${noun(files, 'file')}: ${REPORT_CAUSE}`
-  return [first, ...problemLines(problems), ...remedyBlock(problems)].join('\n')
+  return [first, ...problemLines(problems), ...remedyBlock(problems, configured)].join('\n')
 }
 
 /**
  * The dev server's error for one module: its problem lines and the same remedy block.
  */
-export function moduleReport(problems: readonly LocatedProblem[]): string {
-  return [...problemLines(problems), ...remedyBlock(problems)].join('\n')
+export function moduleReport(
+  problems: readonly LocatedProblem[],
+  configured: readonly string[] = [],
+): string {
+  return [...problemLines(problems), ...remedyBlock(problems, configured)].join('\n')
 }

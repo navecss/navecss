@@ -214,48 +214,66 @@ describe('AC-token-build-03 covers: R3', () => {
   // file neither is ever asked to look in. `test/bin.test.ts`'s "a plausible config file
   // sitting at the invoking cwd itself" test is the one that actually plants the file where
   // real discovery would look first.
-  it('build succeeds identically across two scratch output directories regardless of an unrelated sibling config file', async () => {
-    const withConfig = scratchDir()
-    writeFileSync(
-      path.join(withConfig, 'navecss.config.json'),
-      JSON.stringify({ seed: 'oklch(0.1 0.3 10)' }),
-    )
-    const outWithConfig = path.join(withConfig, 'out')
-    const withoutConfig = scratchDir()
-    const outWithoutConfig = path.join(withoutConfig, 'out')
-
-    const seed = 'oklch(0.55 0.18 250)'
-    const resultA = await build({ seed, outDir: outWithConfig })
-    const resultB = await build({ seed, outDir: outWithoutConfig })
-
-    expect(resultA.files).toEqual(resultB.files)
-    for (const file of resultA.files) {
-      expect(readFileSync(path.join(outWithConfig, file), 'utf8')).toBe(
-        readFileSync(path.join(outWithoutConfig, file), 'utf8'),
+  it(
+    'build succeeds identically across two scratch output directories regardless of an unrelated sibling config file',
+    { timeout: buildBudget(2) },
+    async () => {
+      const withConfig = scratchDir()
+      writeFileSync(
+        path.join(withConfig, 'navecss.config.json'),
+        JSON.stringify({ seed: 'oklch(0.1 0.3 10)' }),
       )
-    }
-  })
+      const outWithConfig = path.join(withConfig, 'out')
+      const withoutConfig = scratchDir()
+      const outWithoutConfig = path.join(withoutConfig, 'out')
 
-  it('every R6 artifact and no other file lands in the output directory', async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    const result = await build({ seed: 'oklch(0.55 0.18 250)', outDir })
-    expect(result.files).toEqual(R6_ARTIFACTS)
-    expect(readdirSync(outDir).toSorted((a, b) => a.localeCompare(b))).toEqual(R6_ARTIFACTS)
-  })
+      const seed = 'oklch(0.55 0.18 250)'
+      const resultA = await build({ seed, outDir: outWithConfig })
+      const resultB = await build({ seed, outDir: outWithoutConfig })
+
+      expect(resultA.files).toEqual(resultB.files)
+      for (const file of resultA.files) {
+        expect(readFileSync(path.join(outWithConfig, file), 'utf8')).toBe(
+          readFileSync(path.join(outWithoutConfig, file), 'utf8'),
+        )
+      }
+    },
+  )
+
+  it(
+    'every R6 artifact and no other file lands in the output directory',
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      const result = await build({ seed: 'oklch(0.55 0.18 250)', outDir })
+      expect(result.files).toEqual(R6_ARTIFACTS)
+      expect(readdirSync(outDir).toSorted((a, b) => a.localeCompare(b))).toEqual(R6_ARTIFACTS)
+    },
+  )
 })
 
 describe('AC-token-build-04 covers: R4 (in-process: which error TYPE each failure surfaces as)', () => {
-  it("an unparsable seed throws SeedIngestRefusal — bin.ts maps this to exit 2, R4's own worked example", async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    await expect(build({ seed: 'not-a-colour', outDir })).rejects.toBeInstanceOf(SeedIngestRefusal)
-  })
+  it(
+    "an unparsable seed throws SeedIngestRefusal — bin.ts maps this to exit 2, R4's own worked example",
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      await expect(build({ seed: 'not-a-colour', outDir })).rejects.toBeInstanceOf(
+        SeedIngestRefusal,
+      )
+    },
+  )
 
-  it('a color() seed in a colour space this build does not convert (rec2020) throws SeedIngestRefusal too, never a silent misread as srgb', async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    await expect(build({ seed: 'color(rec2020 0 1 0)', outDir })).rejects.toBeInstanceOf(
-      SeedIngestRefusal,
-    )
-  })
+  it(
+    'a color() seed in a colour space this build does not convert (rec2020) throws SeedIngestRefusal too, never a silent misread as srgb',
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      await expect(build({ seed: 'color(rec2020 0 1 0)', outDir })).rejects.toBeInstanceOf(
+        SeedIngestRefusal,
+      )
+    },
+  )
 
   it('validate against a source missing contract tokens exits 1', async () => {
     const source = path.join(scratchDir(), 'consumer.css')
@@ -264,7 +282,7 @@ describe('AC-token-build-04 covers: R4 (in-process: which error TYPE each failur
     expect(result.exitCode).toBe(1)
   })
 
-  it('validate against a satisfying source exits 0', async () => {
+  it('validate against a satisfying source exits 0', { timeout: buildBudget(1) }, async () => {
     const outDir = path.join(scratchDir(), 'out')
     await build({ seed: 'oklch(0.55 0.18 250)', outDir })
     const result = await validate({ source: path.join(outDir, 'tokens.css') })
@@ -301,46 +319,58 @@ describe('AC-token-build-04 covers: R4 (in-process: which error TYPE each failur
  * no consumer source could ever trip this check — measured directly, not assumed.
  */
 describe('AC-token-build-16 covers: R16', () => {
-  it('a consumer source missing one or more contract tokens fails with the validator missing-list error naming exactly the omitted name', async () => {
-    const scratch = scratchDir()
-    const source = path.join(scratch, 'source.json')
-    // The full non-colour fixture MINUS one required name (spacing.content.md), so the
-    // Given is instantiated by an actual omission in the consumer's own source, never by
-    // mutating the manifest.
-    const { spacing: _omitted, ...rest } = NON_COLOUR_CONTRACT_FIXTURE
-    writeFileSync(source, JSON.stringify(rest))
-    const outDir = path.join(scratch, 'out')
-    let caught: unknown
-    try {
-      await build({ seed: 'oklch(0.55 0.18 250)', outDir, source })
-    } catch (error) {
-      caught = error
-    }
-    expect(caught).toBeInstanceOf(MissingContractTokensError)
-    expect((caught as InstanceType<typeof MissingContractTokensError>).missing).toEqual([
-      '--nave-spacing-content-md',
-    ])
-    // The `not.toMatch(/Slot not found for contrast check/)` assertion that used to sit here
-    // is removed. That string is thrown
-    // only by `findSlot` in `theming/contrast.ts`, which looks up the theming pipeline's own
-    // resolved slots — a pure function of the seeds, never of the consumer's source — so
-    // after the relocation to `facade.build` no source this test can construct reaches it.
-    // It was meaningful in the OLD siting, where the consumer's names fed that lookup.
-    expect(existsSync(outDir)).toBe(false)
-  })
+  it(
+    'a consumer source missing one or more contract tokens fails with the validator missing-list error naming exactly the omitted name',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const source = path.join(scratch, 'source.json')
+      // The full non-colour fixture MINUS one required name (spacing.content.md), so the
+      // Given is instantiated by an actual omission in the consumer's own source, never by
+      // mutating the manifest.
+      const { spacing: _omitted, ...rest } = NON_COLOUR_CONTRACT_FIXTURE
+      writeFileSync(source, JSON.stringify(rest))
+      const outDir = path.join(scratch, 'out')
+      let caught: unknown
+      try {
+        await build({ seed: 'oklch(0.55 0.18 250)', outDir, source })
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBeInstanceOf(MissingContractTokensError)
+      expect((caught as InstanceType<typeof MissingContractTokensError>).missing).toEqual([
+        '--nave-spacing-content-md',
+      ])
+      // The `not.toMatch(/Slot not found for contrast check/)` assertion that used to sit here
+      // is removed. That string is thrown
+      // only by `findSlot` in `theming/contrast.ts`, which looks up the theming pipeline's own
+      // resolved slots — a pure function of the seeds, never of the consumer's source — so
+      // after the relocation to `facade.build` no source this test can construct reaches it.
+      // It was meaningful in the OLD siting, where the consumer's names fed that lookup.
+      expect(existsSync(outDir)).toBe(false)
+    },
+  )
 
-  it('a consumer source satisfying the full contract (the real, current manifest, not a fixture) builds to completion with no missing-token error', async () => {
-    const scratch = scratchDir()
-    const source = path.join(scratch, 'source.json')
-    writeFileSync(source, JSON.stringify(NON_COLOUR_CONTRACT_FIXTURE))
-    const outDir = path.join(scratch, 'out')
-    await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir, source })).resolves.toBeDefined()
-  })
+  it(
+    'a consumer source satisfying the full contract (the real, current manifest, not a fixture) builds to completion with no missing-token error',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const source = path.join(scratch, 'source.json')
+      writeFileSync(source, JSON.stringify(NON_COLOUR_CONTRACT_FIXTURE))
+      const outDir = path.join(scratch, 'out')
+      await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir, source })).resolves.toBeDefined()
+    },
+  )
 
-  it('the bundled default source (no --source given) also satisfies the full contract: the DTCG half supplies the fifteen non-colour names and the theming half supplies the six colour ones', async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir })).resolves.toBeDefined()
-  })
+  it(
+    'the bundled default source (no --source given) also satisfies the full contract: the DTCG half supplies the fifteen non-colour names and the theming half supplies the six colour ones',
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir })).resolves.toBeDefined()
+    },
+  )
 
   /**
    * Computing the union first is what preserves R16's ordering clause rather than trading it
@@ -354,204 +384,224 @@ describe('AC-token-build-16 covers: R16', () => {
    * a COMPLETE source first and asserted to have been called — a positive control that turns
    * "the spy wiring silently stopped observing" into a named failure instead of a green.
    */
-  it('AC-token-build-16: nothing generates before the answer is known — when the union check refuses, neither composeConsumerBuild nor the DTCG composition is ever invoked (the same spies fire on a complete source, as the positive control)', async () => {
-    const scratch = scratchDir()
-    const incompleteSource = path.join(scratch, 'incomplete.json')
-    const { spacing: _omitted, ...rest } = NON_COLOUR_CONTRACT_FIXTURE
-    writeFileSync(incompleteSource, JSON.stringify(rest))
-    const completeSourcePath = path.join(scratch, 'complete.json')
-    writeFileSync(completeSourcePath, JSON.stringify(NON_COLOUR_CONTRACT_FIXTURE))
+  it(
+    'AC-token-build-16: nothing generates before the answer is known — when the union check refuses, neither composeConsumerBuild nor the DTCG composition is ever invoked (the same spies fire on a complete source, as the positive control)',
+    { timeout: buildBudget(2) },
+    async () => {
+      const scratch = scratchDir()
+      const incompleteSource = path.join(scratch, 'incomplete.json')
+      const { spacing: _omitted, ...rest } = NON_COLOUR_CONTRACT_FIXTURE
+      writeFileSync(incompleteSource, JSON.stringify(rest))
+      const completeSourcePath = path.join(scratch, 'complete.json')
+      writeFileSync(completeSourcePath, JSON.stringify(NON_COLOUR_CONTRACT_FIXTURE))
 
-    const themingCalls = vi.fn()
-    const dtcgCalls = vi.fn()
-    vi.resetModules()
-    try {
-      vi.doMock('../src/theming/consumer-build.ts', async () => {
-        const actual = await vi.importActual<typeof ConsumerBuildModule>(
-          '../src/theming/consumer-build.ts',
-        )
-        return {
-          ...actual,
-          composeConsumerBuild: (...args: Parameters<typeof actual.composeConsumerBuild>) => {
-            themingCalls()
-            return actual.composeConsumerBuild(...args)
-          },
-        }
-      })
-      vi.doMock('../src/builder.ts', async () => {
-        const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
-        return {
-          ...actual,
-          composeBuild: (...args: Parameters<typeof actual.composeBuild>) => {
-            dtcgCalls()
-            return actual.composeBuild(...args)
-          },
-        }
-      })
-      const facade = await import('../src/facade.ts')
-
-      // Positive control FIRST: on a complete source both compositions really do run, so a
-      // spy that observes nothing cannot masquerade as the property under test.
-      await facade.build({
-        seed: 'oklch(0.55 0.18 250)',
-        outDir: path.join(scratch, 'out-complete'),
-        source: completeSourcePath,
-      })
-      expect(themingCalls, 'the theming spy never observed a real call').toHaveBeenCalled()
-      expect(dtcgCalls, 'the DTCG spy never observed a real call').toHaveBeenCalled()
-
-      themingCalls.mockClear()
-      dtcgCalls.mockClear()
-
-      let caught: unknown
+      const themingCalls = vi.fn()
+      const dtcgCalls = vi.fn()
+      vi.resetModules()
       try {
+        vi.doMock('../src/theming/consumer-build.ts', async () => {
+          const actual = await vi.importActual<typeof ConsumerBuildModule>(
+            '../src/theming/consumer-build.ts',
+          )
+          return {
+            ...actual,
+            composeConsumerBuild: (...args: Parameters<typeof actual.composeConsumerBuild>) => {
+              themingCalls()
+              return actual.composeConsumerBuild(...args)
+            },
+          }
+        })
+        vi.doMock('../src/builder.ts', async () => {
+          const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
+          return {
+            ...actual,
+            composeBuild: (...args: Parameters<typeof actual.composeBuild>) => {
+              dtcgCalls()
+              return actual.composeBuild(...args)
+            },
+          }
+        })
+        const facade = await import('../src/facade.ts')
+
+        // Positive control FIRST: on a complete source both compositions really do run, so a
+        // spy that observes nothing cannot masquerade as the property under test.
         await facade.build({
           seed: 'oklch(0.55 0.18 250)',
-          outDir: path.join(scratch, 'out-incomplete'),
-          source: incompleteSource,
+          outDir: path.join(scratch, 'out-complete'),
+          source: completeSourcePath,
         })
-      } catch (error) {
-        caught = error
+        expect(themingCalls, 'the theming spy never observed a real call').toHaveBeenCalled()
+        expect(dtcgCalls, 'the DTCG spy never observed a real call').toHaveBeenCalled()
+
+        themingCalls.mockClear()
+        dtcgCalls.mockClear()
+
+        let caught: unknown
+        try {
+          await facade.build({
+            seed: 'oklch(0.55 0.18 250)',
+            outDir: path.join(scratch, 'out-incomplete'),
+            source: incompleteSource,
+          })
+        } catch (error) {
+          caught = error
+        }
+        expect(caught).toBeInstanceOf(facade.MissingContractTokensError)
+        expect(
+          themingCalls,
+          'composeConsumerBuild ran before the union check refused',
+        ).not.toHaveBeenCalled()
+        expect(
+          dtcgCalls,
+          'the DTCG composition ran before the union check refused',
+        ).not.toHaveBeenCalled()
+      } finally {
+        vi.doUnmock('../src/theming/consumer-build.ts')
+        vi.doUnmock('../src/builder.ts')
+        vi.resetModules()
       }
-      expect(caught).toBeInstanceOf(facade.MissingContractTokensError)
-      expect(
-        themingCalls,
-        'composeConsumerBuild ran before the union check refused',
-      ).not.toHaveBeenCalled()
-      expect(
-        dtcgCalls,
-        'the DTCG composition ran before the union check refused',
-      ).not.toHaveBeenCalled()
-    } finally {
-      vi.doUnmock('../src/theming/consumer-build.ts')
-      vi.doUnmock('../src/builder.ts')
-      vi.resetModules()
-    }
-  })
+    },
+  )
 })
 
 describe('build() narrows the writeOutputs catch to a genuine --out path conflict', () => {
-  it('a write failure unrelated to --out (ENOSPC) rejects with that error, not a UsageError', async () => {
-    const scratch = scratchDir()
-    const outDir = path.join(scratch, 'out')
-    const diskFullError = Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
+  it(
+    'a write failure unrelated to --out (ENOSPC) rejects with that error, not a UsageError',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const outDir = path.join(scratch, 'out')
+      const diskFullError = Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
 
-    vi.resetModules()
-    try {
-      vi.doMock('../src/builder.ts', async () => {
-        const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
-        return {
-          ...actual,
-          writeOutputs: () => Promise.reject(diskFullError),
-        }
-      })
-      const facade = await import('../src/facade.ts')
-
-      let caught: unknown
-      try {
-        await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
-      } catch (error) {
-        caught = error
-      }
-      expect(caught).toBe(diskFullError)
-      expect(caught).not.toBeInstanceOf(facade.UsageError)
-    } finally {
-      vi.doUnmock('../src/builder.ts')
       vi.resetModules()
-    }
-  })
-
-  it('a write failure that IS an --out path conflict (EEXIST) rejects with a UsageError naming --out', async () => {
-    const scratch = scratchDir()
-    const outDir = path.join(scratch, 'out')
-    const pathConflict = Object.assign(new Error('file already exists'), { code: 'EEXIST' })
-
-    vi.resetModules()
-    try {
-      vi.doMock('../src/builder.ts', async () => {
-        const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
-        return {
-          ...actual,
-          writeOutputs: () => Promise.reject(pathConflict),
-        }
-      })
-      const facade = await import('../src/facade.ts')
-
-      let caught: unknown
       try {
-        await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
-      } catch (error) {
-        caught = error
-      }
-      expect(caught).toBeInstanceOf(facade.UsageError)
-      expect((caught as Error).message).toMatch(/--out/)
-    } finally {
-      vi.doUnmock('../src/builder.ts')
-      vi.resetModules()
-    }
-  })
+        vi.doMock('../src/builder.ts', async () => {
+          const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
+          return {
+            ...actual,
+            writeOutputs: () => Promise.reject(diskFullError),
+          }
+        })
+        const facade = await import('../src/facade.ts')
 
-  it('a write failure that IS an --out path conflict (EISDIR) rejects with a UsageError naming --out', async () => {
-    const scratch = scratchDir()
-    const outDir = path.join(scratch, 'out')
-    const pathConflict = Object.assign(new Error('illegal operation on a directory'), {
-      code: 'EISDIR',
-    })
-
-    vi.resetModules()
-    try {
-      vi.doMock('../src/builder.ts', async () => {
-        const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
-        return {
-          ...actual,
-          writeOutputs: () => Promise.reject(pathConflict),
+        let caught: unknown
+        try {
+          await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
+        } catch (error) {
+          caught = error
         }
-      })
-      const facade = await import('../src/facade.ts')
-
-      let caught: unknown
-      try {
-        await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
-      } catch (error) {
-        caught = error
+        expect(caught).toBe(diskFullError)
+        expect(caught).not.toBeInstanceOf(facade.UsageError)
+      } finally {
+        vi.doUnmock('../src/builder.ts')
+        vi.resetModules()
       }
-      expect(caught).toBeInstanceOf(facade.UsageError)
-      expect((caught as Error).message).toMatch(/--out/)
-    } finally {
-      vi.doUnmock('../src/builder.ts')
+    },
+  )
+
+  it(
+    'a write failure that IS an --out path conflict (EEXIST) rejects with a UsageError naming --out',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const outDir = path.join(scratch, 'out')
+      const pathConflict = Object.assign(new Error('file already exists'), { code: 'EEXIST' })
+
       vi.resetModules()
-    }
-  })
+      try {
+        vi.doMock('../src/builder.ts', async () => {
+          const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
+          return {
+            ...actual,
+            writeOutputs: () => Promise.reject(pathConflict),
+          }
+        })
+        const facade = await import('../src/facade.ts')
 
-  it('a write failure that IS an --out path conflict (ENOTDIR) rejects with a UsageError naming --out', async () => {
-    const scratch = scratchDir()
-    const outDir = path.join(scratch, 'out')
-    const pathConflict = Object.assign(new Error('not a directory'), { code: 'ENOTDIR' })
-
-    vi.resetModules()
-    try {
-      vi.doMock('../src/builder.ts', async () => {
-        const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
-        return {
-          ...actual,
-          writeOutputs: () => Promise.reject(pathConflict),
+        let caught: unknown
+        try {
+          await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
+        } catch (error) {
+          caught = error
         }
-      })
-      const facade = await import('../src/facade.ts')
-
-      let caught: unknown
-      try {
-        await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
-      } catch (error) {
-        caught = error
+        expect(caught).toBeInstanceOf(facade.UsageError)
+        expect((caught as Error).message).toMatch(/--out/)
+      } finally {
+        vi.doUnmock('../src/builder.ts')
+        vi.resetModules()
       }
-      expect(caught).toBeInstanceOf(facade.UsageError)
-      expect((caught as Error).message).toMatch(/--out/)
-    } finally {
-      vi.doUnmock('../src/builder.ts')
+    },
+  )
+
+  it(
+    'a write failure that IS an --out path conflict (EISDIR) rejects with a UsageError naming --out',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const outDir = path.join(scratch, 'out')
+      const pathConflict = Object.assign(new Error('illegal operation on a directory'), {
+        code: 'EISDIR',
+      })
+
       vi.resetModules()
-    }
-  })
+      try {
+        vi.doMock('../src/builder.ts', async () => {
+          const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
+          return {
+            ...actual,
+            writeOutputs: () => Promise.reject(pathConflict),
+          }
+        })
+        const facade = await import('../src/facade.ts')
+
+        let caught: unknown
+        try {
+          await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
+        } catch (error) {
+          caught = error
+        }
+        expect(caught).toBeInstanceOf(facade.UsageError)
+        expect((caught as Error).message).toMatch(/--out/)
+      } finally {
+        vi.doUnmock('../src/builder.ts')
+        vi.resetModules()
+      }
+    },
+  )
+
+  it(
+    'a write failure that IS an --out path conflict (ENOTDIR) rejects with a UsageError naming --out',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const outDir = path.join(scratch, 'out')
+      const pathConflict = Object.assign(new Error('not a directory'), { code: 'ENOTDIR' })
+
+      vi.resetModules()
+      try {
+        vi.doMock('../src/builder.ts', async () => {
+          const actual = await vi.importActual<typeof BuilderModule>('../src/builder.ts')
+          return {
+            ...actual,
+            writeOutputs: () => Promise.reject(pathConflict),
+          }
+        })
+        const facade = await import('../src/facade.ts')
+
+        let caught: unknown
+        try {
+          await facade.build({ seed: 'oklch(0.55 0.18 250)', outDir })
+        } catch (error) {
+          caught = error
+        }
+        expect(caught).toBeInstanceOf(facade.UsageError)
+        expect((caught as Error).message).toMatch(/--out/)
+      } finally {
+        vi.doUnmock('../src/builder.ts')
+        vi.resetModules()
+      }
+    },
+  )
 })
 
 /**
@@ -564,52 +614,64 @@ describe('build() narrows the writeOutputs catch to a genuine --out path conflic
  * silently letting the generated declaration win by merge order.
  */
 describe('build() refuses when a name is declared by both the consumer source and the generated theming layer', () => {
-  it('a consumer source declaring a contract name is refused, names the collision, and writes nothing', async () => {
-    const scratch = scratchDir()
-    const source = path.join(scratch, 'source.json')
-    writeFileSync(
-      source,
-      JSON.stringify(
-        completeSource({
-          color: {
-            surface: { base: { $type: 'color', $value: '#ffffff' } }, // a real R14 contract name
-            brand: { $type: 'color', $value: '#3355ff' }, // not a contract name
-          },
-        }),
-      ),
-    )
-    const outDir = path.join(scratch, 'out')
-    let caught: unknown
-    try {
-      await build({ seed: 'oklch(0.55 0.18 250)', outDir, source })
-    } catch (error) {
-      caught = error
-    }
-    expect(caught).toBeInstanceOf(TokenCollisionRefusal)
-    expect((caught as Error).message).toContain('--nave-color-surface-base')
-    expect(existsSync(outDir)).toBe(false)
-  })
+  it(
+    'a consumer source declaring a contract name is refused, names the collision, and writes nothing',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const source = path.join(scratch, 'source.json')
+      writeFileSync(
+        source,
+        JSON.stringify(
+          completeSource({
+            color: {
+              surface: { base: { $type: 'color', $value: '#ffffff' } }, // a real R14 contract name
+              brand: { $type: 'color', $value: '#3355ff' }, // not a contract name
+            },
+          }),
+        ),
+      )
+      const outDir = path.join(scratch, 'out')
+      let caught: unknown
+      try {
+        await build({ seed: 'oklch(0.55 0.18 250)', outDir, source })
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBeInstanceOf(TokenCollisionRefusal)
+      expect((caught as Error).message).toContain('--nave-color-surface-base')
+      expect(existsSync(outDir)).toBe(false)
+    },
+  )
 
-  it("the refusal names the act available instead of the wrong 'rename it' advice", async () => {
-    const scratch = scratchDir()
-    const source = path.join(scratch, 'source.json')
-    writeFileSync(
-      source,
-      JSON.stringify(
-        completeSource({ color: { surface: { base: { $type: 'color', $value: '#ffffff' } } } }),
-      ),
-    )
-    const outDir = path.join(scratch, 'out')
-    await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir, source })).rejects.toThrow(
-      /@layer overrides/,
-    )
-  })
+  it(
+    "the refusal names the act available instead of the wrong 'rename it' advice",
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const source = path.join(scratch, 'source.json')
+      writeFileSync(
+        source,
+        JSON.stringify(
+          completeSource({ color: { surface: { base: { $type: 'color', $value: '#ffffff' } } } }),
+        ),
+      )
+      const outDir = path.join(scratch, 'out')
+      await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir, source })).rejects.toThrow(
+        /@layer overrides/,
+      )
+    },
+  )
 
-  it('the bundled default source (no --source given) declares nothing that collides and builds cleanly', async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    const result = await build({ seed: 'oklch(0.55 0.18 250)', outDir })
-    expect(result.collidingNames).toEqual([])
-  })
+  it(
+    'the bundled default source (no --source given) declares nothing that collides and builds cleanly',
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      const result = await build({ seed: 'oklch(0.55 0.18 250)', outDir })
+      expect(result.collidingNames).toEqual([])
+    },
+  )
 })
 
 /**
@@ -620,84 +682,106 @@ describe('build() refuses when a name is declared by both the consumer source an
  * dropping the first-declared value and registering `@property` twice.
  */
 describe('build() refuses when two paths in one token source resolve to the same emitted name', () => {
-  it('a nave-wrapped path and its unwrapped sibling collide, are refused, name both paths, and write nothing', async () => {
-    const scratch = scratchDir()
-    const source = path.join(scratch, 'source.json')
-    writeFileSync(
-      source,
-      JSON.stringify(
-        completeSource({
-          nave: { brand: { x: { $type: 'color', $value: '#ff0000' } } },
-          brand: { x: { $type: 'color', $value: '#00ff00' } },
-        }),
-      ),
-    )
-    const outDir = path.join(scratch, 'out')
-    let caught: unknown
-    try {
-      await build({ seed: 'oklch(0.55 0.18 250)', outDir, source })
-    } catch (error) {
-      caught = error
-    }
-    expect(caught).toBeInstanceOf(DuplicateTokenNameRefusal)
-    // 'nave.brand.x' contains 'brand.x' as a substring, so three
-    // independent toContain calls cannot distinguish a message naming both colliding paths
-    // from one naming only 'nave.brand.x'. Assert the composed detail (both paths, in order)
-    // as one sequence instead, which the title's "name both paths" claim actually requires.
-    expect((caught as Error).message).toMatch(/--nave-brand-x \(from brand\.x and nave\.brand\.x\)/)
-    expect(existsSync(outDir)).toBe(false)
-  })
+  it(
+    'a nave-wrapped path and its unwrapped sibling collide, are refused, name both paths, and write nothing',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const source = path.join(scratch, 'source.json')
+      writeFileSync(
+        source,
+        JSON.stringify(
+          completeSource({
+            nave: { brand: { x: { $type: 'color', $value: '#ff0000' } } },
+            brand: { x: { $type: 'color', $value: '#00ff00' } },
+          }),
+        ),
+      )
+      const outDir = path.join(scratch, 'out')
+      let caught: unknown
+      try {
+        await build({ seed: 'oklch(0.55 0.18 250)', outDir, source })
+      } catch (error) {
+        caught = error
+      }
+      expect(caught).toBeInstanceOf(DuplicateTokenNameRefusal)
+      // 'nave.brand.x' contains 'brand.x' as a substring, so three
+      // independent toContain calls cannot distinguish a message naming both colliding paths
+      // from one naming only 'nave.brand.x'. Assert the composed detail (both paths, in order)
+      // as one sequence instead, which the title's "name both paths" claim actually requires.
+      expect((caught as Error).message).toMatch(
+        /--nave-brand-x \(from brand\.x and nave\.brand\.x\)/,
+      )
+      expect(existsSync(outDir)).toBe(false)
+    },
+  )
 
-  it('an ordinary camelCase pair collides with no `nave` involved (a pre-existing class, not newly created)', async () => {
-    const scratch = scratchDir()
-    const source = path.join(scratch, 'source.json')
-    writeFileSync(
-      source,
-      JSON.stringify(
-        completeSource({
-          fontSize: { md: { $type: 'dimension', $value: { value: 1, unit: 'rem' } } },
-          font: { size: { md: { $type: 'dimension', $value: { value: 2, unit: 'rem' } } } },
-        }),
-      ),
-    )
-    const outDir = path.join(scratch, 'out')
-    await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir, source })).rejects.toBeInstanceOf(
-      DuplicateTokenNameRefusal,
-    )
-  })
+  it(
+    'an ordinary camelCase pair collides with no `nave` involved (a pre-existing class, not newly created)',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const source = path.join(scratch, 'source.json')
+      writeFileSync(
+        source,
+        JSON.stringify(
+          completeSource({
+            fontSize: { md: { $type: 'dimension', $value: { value: 1, unit: 'rem' } } },
+            font: { size: { md: { $type: 'dimension', $value: { value: 2, unit: 'rem' } } } },
+          }),
+        ),
+      )
+      const outDir = path.join(scratch, 'out')
+      await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir, source })).rejects.toBeInstanceOf(
+        DuplicateTokenNameRefusal,
+      )
+    },
+  )
 
-  it('the refusal names renaming a colliding path as the remedy, not the cross-half `@layer overrides` advice', async () => {
-    const scratch = scratchDir()
-    const source = path.join(scratch, 'source.json')
-    writeFileSync(
-      source,
-      JSON.stringify(
-        completeSource({
-          nave: { brand: { x: { $type: 'color', $value: '#ff0000' } } },
-          brand: { x: { $type: 'color', $value: '#00ff00' } },
-        }),
-      ),
-    )
-    const outDir = path.join(scratch, 'out')
-    await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir, source })).rejects.toThrow(
-      /rename one of the colliding paths/i,
-    )
-  })
+  it(
+    'the refusal names renaming a colliding path as the remedy, not the cross-half `@layer overrides` advice',
+    { timeout: buildBudget(1) },
+    async () => {
+      const scratch = scratchDir()
+      const source = path.join(scratch, 'source.json')
+      writeFileSync(
+        source,
+        JSON.stringify(
+          completeSource({
+            nave: { brand: { x: { $type: 'color', $value: '#ff0000' } } },
+            brand: { x: { $type: 'color', $value: '#00ff00' } },
+          }),
+        ),
+      )
+      const outDir = path.join(scratch, 'out')
+      await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir, source })).rejects.toThrow(
+        /rename one of the colliding paths/i,
+      )
+    },
+  )
 
-  it('the bundled default source (no --source given) declares no such pair and builds cleanly', async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir })).resolves.toBeDefined()
-  })
+  it(
+    'the bundled default source (no --source given) declares no such pair and builds cleanly',
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      await expect(build({ seed: 'oklch(0.55 0.18 250)', outDir })).resolves.toBeDefined()
+    },
+  )
 })
 
 describe('AC-token-build-23 covers: R23 (in-process third clause: a refusal leaves no output on disk)', () => {
-  it('a refused build writes nothing to the output directory at all', async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    expect(existsSync(outDir)).toBe(false)
-    await expect(build({ seed: 'not-a-colour', outDir })).rejects.toThrow()
-    // Never created at all — not created-then-emptied, never created.
-    expect(existsSync(outDir)).toBe(false)
-  })
+  it(
+    'a refused build writes nothing to the output directory at all',
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      expect(existsSync(outDir)).toBe(false)
+      await expect(build({ seed: 'not-a-colour', outDir })).rejects.toThrow()
+      // Never created at all — not created-then-emptied, never created.
+      expect(existsSync(outDir)).toBe(false)
+    },
+  )
 })
 
 describe('AC-token-build-14 covers: R14 (facade wiring — the named gap slice 1 left open)', () => {
@@ -765,94 +849,126 @@ describe('AC-token-build-35 covers: R35 (in-process: resolvedSeed is the RESOLVE
   // property asserted here is the one the raw input cannot satisfy: two DIFFERENT spellings
   // of the SAME colour resolve to the SAME value. Deliberately not `formatOklch(ingestSeed(x))`
   // recomputed here, which would pass against any implementation including the broken one.
-  it('two spellings of the same colour produce one identical resolvedSeed, and neither is the input string', async () => {
-    const hexOut = path.join(scratchDir(), 'out')
-    const rgbOut = path.join(scratchDir(), 'out')
+  it(
+    'two spellings of the same colour produce one identical resolvedSeed, and neither is the input string',
+    { timeout: buildBudget(2) },
+    async () => {
+      const hexOut = path.join(scratchDir(), 'out')
+      const rgbOut = path.join(scratchDir(), 'out')
 
-    const fromHex = await build({ seed: '#3366ff', outDir: hexOut })
-    const fromRgb = await build({ seed: 'rgb(51 102 255)', outDir: rgbOut })
+      const fromHex = await build({ seed: '#3366ff', outDir: hexOut })
+      const fromRgb = await build({ seed: 'rgb(51 102 255)', outDir: rgbOut })
 
-    expect(fromHex.resolvedSeed).toBe(fromRgb.resolvedSeed)
-    expect(fromHex.resolvedSeed).not.toBe('#3366ff')
-    expect(fromHex.resolvedSeed).not.toBe('rgb(51 102 255)')
-    expect(fromHex.resolvedSeed).toMatch(/^oklch\([\d.]+ [\d.]+ [\d.]+\)$/)
-  })
+      expect(fromHex.resolvedSeed).toBe(fromRgb.resolvedSeed)
+      expect(fromHex.resolvedSeed).not.toBe('#3366ff')
+      expect(fromHex.resolvedSeed).not.toBe('rgb(51 102 255)')
+      expect(fromHex.resolvedSeed).toMatch(/^oklch\([\d.]+ [\d.]+ [\d.]+\)$/)
+    },
+  )
 
   // `resolvedSeed` used to return the pre-normalisation INGEST value (`formatOklch(primary.value)`),
   // which is what `parseSeed` produced before R5's gamut mapping ever ran — identical to the
   // ingested value for an in-gamut seed like the two above, so neither exposes this. An
   // out-of-gamut seed does: the pipeline actually builds from the chroma-reduced value.
-  it('an out-of-gamut seed reports the GAMUT-MAPPED value the pipeline actually built from, not the pre-normalisation ingest value', async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    // L=0.5, C=0.5 is far outside sRGB at any hue; normalizeSeed must reduce chroma.
-    const result = await build({ seed: 'oklch(0.5 0.5 200)', outDir })
+  it(
+    'an out-of-gamut seed reports the GAMUT-MAPPED value the pipeline actually built from, not the pre-normalisation ingest value',
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      // L=0.5, C=0.5 is far outside sRGB at any hue; normalizeSeed must reduce chroma.
+      const result = await build({ seed: 'oklch(0.5 0.5 200)', outDir })
 
-    expect(result.resolvedSeed).not.toBe('oklch(0.5 0.5 200)')
-    const match = /^oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)$/.exec(result.resolvedSeed)
-    expect(match).not.toBeNull()
-    const [, l, c, h] = match!
-    expect(Number(l)).toBeCloseTo(0.5, 1)
-    expect(Number(c)).toBeLessThan(0.5)
-    expect(Number(h)).toBeCloseTo(200, 0)
+      expect(result.resolvedSeed).not.toBe('oklch(0.5 0.5 200)')
+      const match = /^oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)$/.exec(result.resolvedSeed)
+      expect(match).not.toBeNull()
+      const [, l, c, h] = match!
+      expect(Number(l)).toBeCloseTo(0.5, 1)
+      expect(Number(c)).toBeLessThan(0.5)
+      expect(Number(h)).toBeCloseTo(200, 0)
 
-    // Cross-checked against the SAME artifact a consumer would read, so the stdout-facing
-    // value and the on-disk record can never silently disagree.
-    const buildRecord = JSON.parse(
-      readFileSync(path.join(outDir, 'build-record.json'), 'utf8'),
-    ) as { seeds: { primary: { resolved: { c: number } } } }
-    expect(Number(c)).toBeCloseTo(buildRecord.seeds.primary.resolved.c, 3)
-  })
+      // Cross-checked against the SAME artifact a consumer would read, so the stdout-facing
+      // value and the on-disk record can never silently disagree.
+      const buildRecord = JSON.parse(
+        readFileSync(path.join(outDir, 'build-record.json'), 'utf8'),
+      ) as { seeds: { primary: { resolved: { c: number } } } }
+      expect(Number(c)).toBeCloseTo(buildRecord.seeds.primary.resolved.c, 3)
+    },
+  )
 
-  it("seedNormalization is 'chroma-reduced' when gamut normalisation moved the primary seed's chroma to fit sRGB", async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    // L=0.5, C=0.5 is far outside sRGB at any hue; normalizeSeed must reduce chroma.
-    const result = await build({ seed: 'oklch(0.5 0.5 200)', outDir })
-    expect(result.seedNormalization).toBe('chroma-reduced')
-  })
+  it(
+    "seedNormalization is 'chroma-reduced' when gamut normalisation moved the primary seed's chroma to fit sRGB",
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      // L=0.5, C=0.5 is far outside sRGB at any hue; normalizeSeed must reduce chroma.
+      const result = await build({ seed: 'oklch(0.5 0.5 200)', outDir })
+      expect(result.seedNormalization).toBe('chroma-reduced')
+    },
+  )
 
-  it("seedNormalization is 'none' for a seed already in gamut (used exactly as given)", async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    const result = await build({ seed: '#3366ff', outDir })
-    expect(result.seedNormalization).toBe('none')
-  })
+  it(
+    "seedNormalization is 'none' for a seed already in gamut (used exactly as given)",
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      const result = await build({ seed: '#3366ff', outDir })
+      expect(result.seedNormalization).toBe('none')
+    },
+  )
 
-  it("seedNormalization is 'none' for a seed that only hits the lightness band clamp — that clamp leaves the seed, its hue and every ramp lightness untouched, which is not a moved seed", async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    const result = await build({ seed: 'oklch(0.95 0.03 90)', outDir })
-    expect(result.seedNormalization).toBe('none')
-  })
+  it(
+    "seedNormalization is 'none' for a seed that only hits the lightness band clamp — that clamp leaves the seed, its hue and every ramp lightness untouched, which is not a moved seed",
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      const result = await build({ seed: 'oklch(0.95 0.03 90)', outDir })
+      expect(result.seedNormalization).toBe('none')
+    },
+  )
 
-  it("a seed whose OKLCH lightness is at or above 1 maps to exactly white: resolvedSeed is 'oklch(1 0 0)', seedNormalization is 'mapped-to-white', and the build record names the mapping", async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    const result = await build({ seed: 'color(srgb 1.2 1.2 1.2)', outDir })
-    expect(result.resolvedSeed).toBe('oklch(1 0 0)')
-    expect(result.seedNormalization).toBe('mapped-to-white')
-    const buildRecord = JSON.parse(
-      readFileSync(path.join(outDir, 'build-record.json'), 'utf8'),
-    ) as { seeds: { primary: { substitutions: { normalized: { reason?: string } } } } }
-    expect(buildRecord.seeds.primary.substitutions.normalized.reason).toBe(
-      'seed lightness is at or above 1, where no sRGB colour has any chroma, so it was mapped to white, once, at ingest, as CSS Color 4 gamut mapping does',
-    )
-  })
+  it(
+    "a seed whose OKLCH lightness is at or above 1 maps to exactly white: resolvedSeed is 'oklch(1 0 0)', seedNormalization is 'mapped-to-white', and the build record names the mapping",
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      const result = await build({ seed: 'color(srgb 1.2 1.2 1.2)', outDir })
+      expect(result.resolvedSeed).toBe('oklch(1 0 0)')
+      expect(result.seedNormalization).toBe('mapped-to-white')
+      const buildRecord = JSON.parse(
+        readFileSync(path.join(outDir, 'build-record.json'), 'utf8'),
+      ) as { seeds: { primary: { substitutions: { normalized: { reason?: string } } } } }
+      expect(buildRecord.seeds.primary.substitutions.normalized.reason).toBe(
+        'seed lightness is at or above 1, where no sRGB colour has any chroma, so it was mapped to white, once, at ingest, as CSS Color 4 gamut mapping does',
+      )
+    },
+  )
 
-  it("a seed whose OKLCH lightness is at or below 0 maps to exactly black: resolvedSeed is 'oklch(0 0 0)', seedNormalization is 'mapped-to-black', and the build record names the mapping", async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    const result = await build({ seed: 'color(srgb -0.2 -0.1 0)', outDir })
-    expect(result.resolvedSeed).toBe('oklch(0 0 0)')
-    expect(result.seedNormalization).toBe('mapped-to-black')
-    const buildRecord = JSON.parse(
-      readFileSync(path.join(outDir, 'build-record.json'), 'utf8'),
-    ) as { seeds: { primary: { substitutions: { normalized: { reason?: string } } } } }
-    expect(buildRecord.seeds.primary.substitutions.normalized.reason).toBe(
-      'seed lightness is at or below 0, where no sRGB colour has any chroma, so it was mapped to black, once, at ingest, as CSS Color 4 gamut mapping does',
-    )
-  })
+  it(
+    "a seed whose OKLCH lightness is at or below 0 maps to exactly black: resolvedSeed is 'oklch(0 0 0)', seedNormalization is 'mapped-to-black', and the build record names the mapping",
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      const result = await build({ seed: 'color(srgb -0.2 -0.1 0)', outDir })
+      expect(result.resolvedSeed).toBe('oklch(0 0 0)')
+      expect(result.seedNormalization).toBe('mapped-to-black')
+      const buildRecord = JSON.parse(
+        readFileSync(path.join(outDir, 'build-record.json'), 'utf8'),
+      ) as { seeds: { primary: { substitutions: { normalized: { reason?: string } } } } }
+      expect(buildRecord.seeds.primary.substitutions.normalized.reason).toBe(
+        'seed lightness is at or below 0, where no sRGB colour has any chroma, so it was mapped to black, once, at ingest, as CSS Color 4 gamut mapping does',
+      )
+    },
+  )
 
-  it("seedNormalization is 'none' for a seed already exactly white (the endpoint itself, not something mapped to it)", async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    const result = await build({ seed: '#ffffff', outDir })
-    expect(result.seedNormalization).toBe('none')
-  })
+  it(
+    "seedNormalization is 'none' for a seed already exactly white (the endpoint itself, not something mapped to it)",
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      const result = await build({ seed: '#ffffff', outDir })
+      expect(result.seedNormalization).toBe('none')
+    },
+  )
 
   // `TokensBuildResult.seedNormalization` is typed `SeedNormalization`, but `./build` did not
   // export that type, so a consumer could not name it (`import type { SeedNormalization }` had
@@ -894,36 +1010,48 @@ describe('AC-theming-06 covers: R5 (endpoint clause: a seed mapped to white or b
     },
   )
 
-  it('a seed already exactly black inside sRGB is not normalized', async () => {
-    const result = await build({ seed: '#000000', outDir: path.join(scratchDir(), 'out') })
-    expect(result.seedNormalization).toBe('none')
-  })
+  it(
+    'a seed already exactly black inside sRGB is not normalized',
+    { timeout: buildBudget(1) },
+    async () => {
+      const result = await build({ seed: '#000000', outDir: path.join(scratchDir(), 'out') })
+      expect(result.seedNormalization).toBe('none')
+    },
+  )
 })
 
 describe("a colour on its own space's neutral axis selects the achromatic branch through the full build, not only at ingest", () => {
-  it('a seed written as lch(50 0 0) selects the achromatic branch (build-record.json)', async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    await build({ seed: 'lch(50 0 0)', outDir })
-    const record = JSON.parse(readFileSync(path.join(outDir, 'build-record.json'), 'utf8')) as {
-      achromaticBranch: { selected: boolean }
-    }
-    expect(record.achromaticBranch.selected).toBe(true)
-  })
+  it(
+    'a seed written as lch(50 0 0) selects the achromatic branch (build-record.json)',
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      await build({ seed: 'lch(50 0 0)', outDir })
+      const record = JSON.parse(readFileSync(path.join(outDir, 'build-record.json'), 'utf8')) as {
+        achromaticBranch: { selected: boolean }
+      }
+      expect(record.achromaticBranch.selected).toBe(true)
+    },
+  )
 
   // Pinning: two exact-zero seeds of different FORM and different LIGHTNESS select the same
   // Nave-authored achromatic column — a hex grey and an oklch grey written directly.
   // Byte-identical tokens.css makes the shared-column claim mechanical rather than argued.
-  it('#808080 and oklch(0.3 0 0) — different form, different lightness, both exactly achromatic — emit byte-identical tokens.css', async () => {
-    const hexOut = path.join(scratchDir(), 'out')
-    const oklchOut = path.join(scratchDir(), 'out')
-    await build({ seed: '#808080', outDir: hexOut })
-    await build({ seed: 'oklch(0.3 0 0)', outDir: oklchOut })
-    expect(readFileSync(path.join(hexOut, 'tokens.css'), 'utf8')).toBe(
-      readFileSync(path.join(oklchOut, 'tokens.css'), 'utf8'),
-    )
-  })
+  it(
+    '#808080 and oklch(0.3 0 0) — different form, different lightness, both exactly achromatic — emit byte-identical tokens.css',
+    { timeout: buildBudget(2) },
+    async () => {
+      const hexOut = path.join(scratchDir(), 'out')
+      const oklchOut = path.join(scratchDir(), 'out')
+      await build({ seed: '#808080', outDir: hexOut })
+      await build({ seed: 'oklch(0.3 0 0)', outDir: oklchOut })
+      expect(readFileSync(path.join(hexOut, 'tokens.css'), 'utf8')).toBe(
+        readFileSync(path.join(oklchOut, 'tokens.css'), 'utf8'),
+      )
+    },
+  )
 
-  it('#808080 selects the achromatic branch', async () => {
+  it('#808080 selects the achromatic branch', { timeout: buildBudget(1) }, async () => {
     const outDir = path.join(scratchDir(), 'out')
     await build({ seed: '#808080', outDir })
     const record = JSON.parse(readFileSync(path.join(outDir, 'build-record.json'), 'utf8')) as {
@@ -943,19 +1071,23 @@ describe("a colour on its own space's neutral axis selects the achromatic branch
  * each half — names the SAME layer as the exported `CONSUMER_LAYER`.
  */
 describe('facade.ts and consumer-build.ts agree on the R10 consumer layer', () => {
-  it("every @layer block in the merged tokens.css — the DTCG half's and the theming half's — names the exported CONSUMER_LAYER, not merely a literal that happens to match it today", async () => {
-    const outDir = path.join(scratchDir(), 'out')
-    await build({ seed: 'oklch(0.55 0.18 250)', outDir })
-    const css = readFileSync(path.join(outDir, 'tokens.css'), 'utf8')
-    const layers = css
-      .matchAll(/@layer ([\w.]+) \{/g)
-      .map((match) => match[1])
-      .toArray()
-    // Both halves actually emitted a layer block — otherwise an empty match set would pass
-    // the loop below vacuously, which is not evidence of the two constants agreeing.
-    expect(layers.length).toBeGreaterThan(1)
-    for (const layer of layers) {
-      expect(layer).toBe(CONSUMER_LAYER)
-    }
-  })
+  it(
+    "every @layer block in the merged tokens.css — the DTCG half's and the theming half's — names the exported CONSUMER_LAYER, not merely a literal that happens to match it today",
+    { timeout: buildBudget(1) },
+    async () => {
+      const outDir = path.join(scratchDir(), 'out')
+      await build({ seed: 'oklch(0.55 0.18 250)', outDir })
+      const css = readFileSync(path.join(outDir, 'tokens.css'), 'utf8')
+      const layers = css
+        .matchAll(/@layer ([\w.]+) \{/g)
+        .map((match) => match[1])
+        .toArray()
+      // Both halves actually emitted a layer block — otherwise an empty match set would pass
+      // the loop below vacuously, which is not evidence of the two constants agreeing.
+      expect(layers.length).toBeGreaterThan(1)
+      for (const layer of layers) {
+        expect(layer).toBe(CONSUMER_LAYER)
+      }
+    },
+  )
 })

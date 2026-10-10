@@ -61,7 +61,7 @@ const SNIPPETS = {
       declare const isBuild: boolean
       const e = navePlugin({ atomic: isBuild ? 'used' : 'all' })
       const k = ['flex'] as const satisfies readonly AtomName[]
-      const f = navePlugin({ keep: k, keepFor: { '@acme/ui': k } })
+      const f = navePlugin({ keep: k, keepFor: { '@acme/ui': k }, cxModules: ['./src/ui/index.ts'] })
       const ps: Plugin[] = navePlugin()
       defineConfig({ plugins: [a, d, e] })
       assertTrue<Equal<typeof a, typeof c>>()
@@ -190,8 +190,13 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
     ['atomic: used', { atomic: 'used' }],
     ['atomic: all', { atomic: 'all' }],
     [
-      'all with keep and keepFor',
-      { atomic: 'all', keep: ['grid'], keepFor: { 'x-lib': ['block'] } },
+      'all with keep, keepFor and cxModules',
+      {
+        atomic: 'all',
+        keep: ['grid'],
+        keepFor: { 'x-lib': ['block'] },
+        cxModules: ['./src/ui/index.ts'],
+      },
     ],
   ]
 
@@ -234,6 +239,7 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
           atomic: 'all',
           keep: ['grid'],
           keepFor: { 'x-lib': ['block'] },
+          cxModules: ['./src/ui/index.ts'],
         })
         // The directive half alone is the plugin as it was before the atoms were chosen.
         const directiveHalf = JSON.stringify(

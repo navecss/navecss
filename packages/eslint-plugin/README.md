@@ -74,7 +74,12 @@ Two more keys of the same object:
 
 - `cxModules`: modules of your own that re-export Nave's `cx`, so the class-channel rule
   recognises them the same way it recognises `@navecss/core/cx` (which is always recognised,
-  whether or not you list a wrapper).
+  whether or not you list a wrapper). A relative or `#` entry matches an import that resolves to
+  the same file, the entry read from the working directory; a package name, subpath, other alias
+  or absolute path also matches an import written the same way. Imports resolve as Node's
+  `require()` resolves them, and a `#` import that does not resolve (an alias set only in
+  TypeScript's `paths` or your bundler, or an `imports` target given only under conditions
+  `require()` does not read, such as `import`) matches a `#` entry written the same way.
 - `helpers`: names of class-composition helpers (`clsx`, `classnames`, `cn` and any `cx` not
   bound to Nave's are the default) to check through their arguments rather than pass or flag
   outright.

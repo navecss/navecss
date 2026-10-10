@@ -9,6 +9,7 @@
  *   navePlugin({ extend: './my-atoms.mjs' })                 // the same, from a module Vite watches
  *   navePlugin({ onUnknown: 'warn' })                        // report a problem and skip it
  *   navePlugin({ keep: ['grid'] })                           // atoms a cx.dynamic() call can take
+ *   navePlugin({ cxModules: ['./src/ui/index.ts'] })         // modules that re-export cx
  *   navePlugin({ atomic: 'all' })                            // ship every atom, read no cx() call
  *
  * `navePlugin()` returns two plain Vite plugin objects with no dependency and no peer, in an array
