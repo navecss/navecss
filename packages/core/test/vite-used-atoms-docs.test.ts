@@ -66,9 +66,10 @@ const ACCESSIBILITY_WORDS =
 
 /**
  * The phrases the used-atoms copy no longer says. A phrase can wrap onto the next line, so each
- * gap is any run of whitespace.
+ * gap is any run of whitespace; "opt in" is matched as whole words, so "adopt incrementally" is not
+ * it.
  */
-const RETIRED = /now\s+defaults\s+to|opt[-\s]+in|previously/i
+const RETIRED = /now\s+defaults\s+to|\bopt[-\s]+in\b|previously/i
 
 /**
  * The report's lines with each position dropped. The README's fence shows no source, so the line
@@ -546,6 +547,7 @@ describe('AC-used-atoms-56 — the Vite setup and the root README carry the defa
     expect('moving previously meant').toMatch(RETIRED)
     expect('Projects that opt\nin keep it.').toMatch(RETIRED)
     expect('The default now\ndefaults to used.').toMatch(RETIRED)
+    expect('Teams adopt incrementally.').not.toMatch(RETIRED)
   })
 })
 
