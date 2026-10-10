@@ -42,9 +42,11 @@
  *   is one; a let binding, an array element or an object property widens to
  *   string, so annotate it with the exported AtomName type (or `as const`).
  *   Under the Vite plugin the build reads the value as well as the type, and
- *   only a binding in the same file that is bound to a literal, or to a
- *   condition over literals, and never assigned again (a const, say) builds:
- *   an array element or an object property fails the build whatever its
+ *   only a value it can list builds. It can list a string literal, null,
+ *   undefined and false; a condition choosing between values it can list;
+ *   and a binding in the same file that is never assigned again (a const,
+ *   say) and is bound to a value it can list, another such binding included.
+ *   An array element or an object property fails the build whatever its
  *   type. To choose by a value, call cx() once per case and pick between the
  *   results: ({ row: cx('flex'), grid: cx('grid') })[variant].
  *

@@ -16,10 +16,11 @@ each one is in, then says how to fix them. A Nave class built from pieces (`'nav
 the build the same way. The PostCSS plugin ships every atom, on Next.js and webpack alike.
 
 The dev server serves the same set as far as it has read: it filters the atom layer of each
-stylesheet to the atoms of the modules it has transformed, so a class the build cannot see has no
-rule in dev either. The first stylesheet response waits until every module reachable from the page's
-entries has been read, and the stylesheet reloads when an edit adds an atom. A build or dev server
-that read no use and no markup (a backend rendering its own templates) warns once.
+stylesheet as the build does, from the code and the pages it has read so far, so a class the build
+cannot see has no rule in dev either. The first stylesheet response waits until every module
+reachable from the page's entries has been read, and the stylesheet reloads when an edit adds an
+atom. A build or dev server that read no use and no markup (a backend rendering its own templates)
+warns once.
 
 New: `cx.dynamic(name)` on `@navecss/core/cx`, for a name known only at run time. In the dev server
 and in code that `vite build` bundles under the Vite plugin, it returns a class only for an atom

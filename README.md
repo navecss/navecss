@@ -188,8 +188,8 @@ leaving both is harmless. The
 Lightning CSS and what the build checks at the end.
 
 The plugin also chooses which of Nave's atoms ship, from the uses its build can
-read, and the dev server serves the same atoms; a `cx()` call it cannot read
-fails the build:
+read, and fails the build on a `cx()` call it cannot read. The dev server serves
+the atoms the build would ship, chosen from the code it has read:
 [which atoms the build ships](packages/core/README.md#which-atoms-the-build-ships).
 
 ```css
