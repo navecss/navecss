@@ -76,7 +76,7 @@ test('check:pack still succeeds with no dry-run flag set (the ordinary, unaffect
 })
 
 test('every publishable package wraps both publint and attw in the without-dry-run helper', () => {
-  for (const pkg of ['core', 'tokens', 'cli', 'bridge']) {
+  for (const pkg of ['core', 'tokens', 'cli', 'base-ui']) {
     const manifest = JSON.parse(
       readFileSync(path.join(ROOT, 'packages', pkg, 'package.json'), 'utf8'),
     )

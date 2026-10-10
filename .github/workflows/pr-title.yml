@@ -37,7 +37,6 @@ jobs:
           scopes: |
             tokens
             core
-            bridge
             base-ui
             cli
             stylelint-config

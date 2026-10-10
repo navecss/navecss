@@ -21,6 +21,7 @@ import {
   validate,
 } from '../src/facade.ts'
 import { CONSUMER_LAYER } from '../src/theming/consumer-build.ts'
+import { buildBudget } from './helpers/build-budget.ts'
 import { scratchDir as makeScratchDir, registerScratchCleanup } from './helpers/scratch-dir.ts'
 
 registerScratchCleanup()
@@ -879,6 +880,7 @@ describe('AC-theming-06 covers: R5 (endpoint clause: a seed mapped to white or b
     ['color(srgb -0.2 -0.1 0)', 'mapped-to-black'],
   ])(
     '%s is mapped once; building again from the recorded value normalizes nothing',
+    { timeout: buildBudget(2) },
     async (seed, mapping) => {
       const first = await build({ seed, outDir: path.join(scratchDir(), 'out') })
       expect(first.seedNormalization).toBe(mapping)

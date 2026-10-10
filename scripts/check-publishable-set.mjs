@@ -9,14 +9,15 @@
  * and nothing before this script asserted that the set of non-private
  * packages matched the publishing scope decided for this release.
  *
- * Exactly `@navecss/tokens`, `@navecss/core`, `@navecss/stylelint-config` and
- * `@navecss/eslint-plugin` are meant to publish (`@navecss/bridge` publishes
- * the first time it ships non-empty content; `@navecss/cli` stays unpublished
- * until the component registry exists). `@navecss/stylelint-config` and
- * `@navecss/eslint-plugin` both version independently of the `tokens`/`core`
- * pair: neither shares that pair's token/component contract (`stylelint-config`'s
- * is with Stylelint and the `@nave` grammar; `eslint-plugin`'s is with ESLint
- * and a peer range on `@navecss/core`, never a `fixed` group). This script
+ * Exactly `@navecss/tokens`, `@navecss/core`, `@navecss/stylelint-config`,
+ * `@navecss/eslint-plugin` and `@navecss/base-ui` are meant to publish
+ * (`@navecss/cli` stays unpublished until the component registry exists).
+ * `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` all
+ * version independently of the `tokens`/`core` pair: none shares that pair's
+ * token/component contract (`stylelint-config`'s is with Stylelint and the `@nave`
+ * grammar; `eslint-plugin`'s is with ESLint and a peer range on `@navecss/core`;
+ * `base-ui`'s is with Base UI and a peer range on `@navecss/tokens`; none is ever
+ * in a `fixed` group). This script
  * fails the moment a
  * workspace package's `private` field stops matching that set — in either
  * direction, so a package that SHOULD stay private losing that field is
@@ -54,6 +55,7 @@ export const PUBLISHABLE_SET = new Set([
   '@navecss/core',
   '@navecss/stylelint-config',
   '@navecss/eslint-plugin',
+  '@navecss/base-ui',
 ])
 
 // A plain npm package name, scoped or not; anything else (a glob, a negation, an empty string) is

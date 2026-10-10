@@ -6,8 +6,8 @@
  * Condition 2 below, is that each published tarball carries its own licence
  * text. It names its remedy in a preference order: "a copy, or a build step,
  * or a verified-packing symlink, in that order of preference".
- * The project took the first — `packages/{tokens,core,bridge,cli}/LICENSE`
- * are copies of the root `LICENSE` — and nothing before this script asserted
+ * The project took the first — each package's `LICENSE`
+ * is a copy of the root `LICENSE` — and nothing before this script asserted
  * the copies actually still MATCH the root they were taken from.
  *
  * `pnpm check:pack` (`publint` + `attw`) asserts a `LICENSE` is PRESENT in

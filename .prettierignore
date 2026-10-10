@@ -5,3 +5,6 @@ pnpm-lock.yaml
 .claude/worktrees/
 **/test/fixtures/generated/
 .github/assets/*.svg
+# Tarballs that `check:pack` packs into a package directory and deletes again. Prettier lists a
+# file it does not know and then reads it, so one deleted in between fails the whole check.
+*.tgz
