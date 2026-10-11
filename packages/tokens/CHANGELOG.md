@@ -1,5 +1,36 @@
 # @navecss/tokens
 
+## 0.3.0
+
+### Minor Changes
+
+- 7eb53f5: Adds `--nave-border-width-mark` (2px), a stroke width for glyphs drawn in CSS such as check
+  marks and indeterminate bars, so they can use their own width rather than the focus ring's. Nothing
+  in Nave draws such a glyph yet, so no existing output changes. The documented colour pairs also
+  grow to cover text and controls on the raised and overlay surfaces: `content.primary`,
+  `content.secondary`, `content.tertiary` and `content.link` as text, the
+  `feedback.danger.foreground` text pair on the base, raised and overlay surfaces, and
+  `action.primary` and `feedback.danger` as non-text against the raised and overlay surfaces.
+
+  Nave's own build, the one that produces the stylesheet this package ships, now checks a contrast
+  floor for each of those pairs on Nave's default colours. The build you run yourself
+  (`navecss-tokens build`, and `build()` from `@navecss/tokens/build`) is unchanged: it checks no
+  contrast for a palette built from your own seed, and checking that palette is still yours.
+
+  `--nave-radius-control`'s description now says it also covers popovers, menus and select lists
+  anchored to a control.
+
+### Patch Changes
+
+- 5f01e71: The README no longer says a check run in a consumer's build "reports" its findings. The consumer build
+  runs one contrast check and discards its result. The sentence now says that no contrast check this
+  entry point runs over a consumer's values can fail the build, and that none prints or returns a
+  result. No behaviour changes.
+- fef6ecf: The comment at the head of the generated theming block now names the package whose README it points
+  at: `See the @navecss/tokens README ("Theming").` It used to say "this package's README", which was
+  true in `@navecss/tokens/css` and wrong where the same text now ships, inside `@navecss/core`'s
+  single-file stylesheet. No rule, property or value changes.
+
 ## 0.2.0
 
 ### Minor Changes
