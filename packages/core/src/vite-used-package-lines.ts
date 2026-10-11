@@ -2,18 +2,36 @@
  * The remedy lines for a dependency's problems: one sentence per package for its calls and uses of
  * `cx`, for a re-export of `cx` the line that clears it (a `cxModules` entry when the consumer has
  * a specifier that resolves to the re-exporting file and the file exports it under the name `cx`,
- * else the package's `keepFor` line), and for a listed module whose `cx` the build does not follow
- * the line that tells the consumer to remove the entry.
+ * else the package's `keepFor` line, and, in a package `keepFor` already lists, the line that tells
+ * each file of the consumer's that takes it to import `cx` from Nave), and for a listed module whose
+ * `cx` the build does not follow the line that tells the consumer to remove the entry.
  */
 import type { LocatedProblem } from './vite-used-report.ts'
 
 import { compareText, cxModulesArray } from './vite-problems.ts'
+import { callsThroughLine, forwardLine, takenLine } from './vite-used-take-lines.ts'
 
 /**
  * Whether the problem is a re-export that listing the module in `cxModules` would clear.
  */
 export function isListableReexport(problem: LocatedProblem): boolean {
   return problem.kind === 'reexport' && problem.isListable !== false
+}
+
+/**
+ * Whether the problem's module gives `cx` out under another name, or re-exports the `cx` of
+ * another module listed in `cxModules`: the cases where the package has a lasting fix to make.
+ */
+function isRenamedOrReached(problem: LocatedProblem): boolean {
+  return problem.isRenamed === true || (problem.kind === 'reexport' && !isListableReexport(problem))
+}
+
+/**
+ * Whether the problem is a dependency module's re-export of the `cx` of a module `cxModules`
+ * lists, which the build follows one step only.
+ */
+export function isSecondHop(problem: LocatedProblem): boolean {
+  return problem.kind === 'reexport' && problem.isListable === false && problem.pkg !== undefined
 }
 
 /**
@@ -69,25 +87,25 @@ function internalLine(pkg: string, count: number, keepFor: string, hasKeepFor: b
 
 const RENAMED_FIX =
   'import cx from @navecss/core/cx where it is called, and re-export it only under the name cx.'
+const RENAMED_FORM = 'other than under the name cx (renamed, as a default or inside a namespace)'
 
 /**
  * The line for the re-exports of `cx` in a module that gives `cx` out other than under the name
  * `cx` (renamed, as a default or inside a namespace), its plain `export { cx }` included: `count`
- * counts them all. The build does not follow an export under another name even from a module
- * listed in `cxModules`, so listing the module fails the build, no entry clears any of them, and
- * the package's `keepFor` line does. Unlike the internal line it does not say who imports the
- * file, since the consumer's code may. `hasKeepFor` is whether a line above already printed that
- * `keepFor` line, which clears these too, so it is printed once.
+ * counts them all. The build does not follow an export under another name even from a module listed
+ * in `cxModules`, so listing the module fails the build, no entry clears any of them, and the
+ * package's `keepFor` line does while no application module takes one. Unlike the internal line it
+ * does not say who imports the file, since the consumer's code may. `hasKeepFor` is whether a line
+ * above already printed that `keepFor` line, which clears these too, so it is printed once.
  */
 function renamedLine(pkg: string, count: number, keepFor: string, hasKeepFor: boolean): string {
   const [those, them, its] =
     count === 1 ? ['that export', 'it', 'its'] : ['those exports', 'them', 'their']
-  const form = 'other than under the name cx (renamed, as a default or inside a namespace)'
   const act = `import cx from @navecss/core/cx instead and call cx in ${its} place`
   if (hasKeepFor) {
-    return `${pkg} also re-exports cx ${form}, and no cxModules entry clears an export of cx from a module that does, under the name cx or another; the keepFor entry above clears ${those} too. The build does not read calls made through ${them}: where your code imports ${them} from ${pkg} or one of its subpaths, ${act}. The lasting fix there is the package's: ${RENAMED_FIX}`
+    return `${pkg} also re-exports cx ${RENAMED_FORM}, and no cxModules entry clears an export of cx from a module that does, under the name cx or another; the keepFor entry above clears ${those} too. The build does not read calls made through ${them}: where your code imports ${them} from ${pkg} or one of its subpaths, ${act}. The lasting fix there is the package's: ${RENAMED_FIX}`
   }
-  return `${pkg} re-exports cx ${form}, which the build does not follow even from a module listed in cxModules. Listing a module that does fails the build, so no entry there clears an export of cx from it, under the name cx or another, and the build does not read calls made through ${those}. Where your code imports ${those} from ${pkg} or one of its subpaths, ${act}. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: ${RENAMED_FIX}`
+  return `${pkg} re-exports cx ${RENAMED_FORM}, which the build does not follow even from a module listed in cxModules. Listing a module that does fails the build, so no entry there clears an export of cx from it, under the name cx or another, and the build does not read calls made through ${those}. Where your code imports ${those} from ${pkg} or one of its subpaths, ${act}. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: ${RENAMED_FIX}`
 }
 
 /**
@@ -122,14 +140,45 @@ export function withoutRemoved(
 }
 
 /**
+ * The lines for the takes of a module the consumer can change, and for the calls other
+ * dependencies make through a dependency's re-export of a listed module's `cx`.
+ */
+function takeLines(pkg: string, all: readonly LocatedProblem[]): string[] {
+  const isTaken = (problem: LocatedProblem): boolean => (problem.takes?.length ?? 0) > 0
+  const taken = all.filter((problem) => isTaken(problem))
+  const plain = taken.filter((problem) => !isSecondHop(problem))
+  const hops = taken.filter((problem) => isSecondHop(problem))
+  const takes = plain.flatMap((problem) => problem.takes!)
+  const lines: string[] = []
+  if (takes.length > 0) {
+    const hasPackageFix =
+      plain.some((problem) => isRenamedOrReached(problem)) || takes.some((take) => take.isReached)
+    lines.push(takenLine(pkg, takes, hasPackageFix))
+  }
+  if (hops.length > 0)
+    lines.push(
+      forwardLine(
+        pkg,
+        hops.flatMap((problem) => problem.takes!),
+      ),
+    )
+  const callers = all.flatMap((problem) => problem.callers ?? [])
+  if (callers.length > 0)
+    lines.push(callsThroughLine(pkg, [...new Set(callers)].toSorted(compareText)))
+  return lines
+}
+
+/**
  * The remedy lines for a dependency's problems, `configured` being the `cxModules` list a line
  * that prints one extends.
  */
 export function packageLines(
   pkg: string,
-  problems: readonly LocatedProblem[],
+  all: readonly LocatedProblem[],
   configured: readonly string[],
 ): string[] {
+  const isTaken = (problem: LocatedProblem): boolean => (problem.takes?.length ?? 0) > 0
+  const problems = all.filter((problem) => !isTaken(problem) && problem.callers === undefined)
   const keepFor = `keepFor: { '${pkg}': ['<atom>'] }`
   const reexports = problems.filter((problem) => isListableReexport(problem))
   const internal = reexports.filter(
@@ -160,5 +209,6 @@ export function packageLines(
     const hasKeepFor = rest.some((problem) => problem.kind !== 'own') || internal.length > 0
     lines.push(renamedLine(pkg, renamed.length, keepFor, hasKeepFor))
   }
+  lines.push(...takeLines(pkg, all))
   return lines
 }

@@ -15,7 +15,7 @@ const PACKAGE_NAME = /^(@[^/]+\/[^/]+|[^./@][^/]*)/
 /**
  * The package a bare specifier names, or `undefined` for a built-in, a path or a virtual id.
  */
-function packageOfSpecifier(specifier: string): string | undefined {
+export function packageOfSpecifier(specifier: string): string | undefined {
   if (specifier.startsWith('node:') || specifier.startsWith('\0')) return undefined
   return PACKAGE_NAME.exec(specifier)?.[1]
 }

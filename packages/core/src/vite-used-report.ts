@@ -5,6 +5,7 @@
  * line never names it, and no remedy printed for application code is `atomic: 'all'`: an agent
  * takes the first remedy that clears the error, and that one always does.
  */
+import type { Take } from './vite-cx-takes.ts'
 import type { Problem, ProblemKind } from './vite-problems.ts'
 
 import { availableLine } from './vite-atom-check.ts'
@@ -42,6 +43,17 @@ export interface LocatedProblem extends Problem {
    * `cxModules` entries, as written, that name it.
    */
   readonly entries?: readonly string[] | undefined
+  /**
+   * For a module of a package `keepFor` lists that gives `cx` out under another name: the
+   * application modules that take one of its `cx` exports, which `keepFor` does not clear.
+   */
+  readonly takes?: readonly Take[] | undefined
+  /**
+   * For a dependency module that re-exports the `cx` of a module `cxModules` lists: the modules of
+   * other dependencies that call through it, root-relative, which only the package's `keepFor`
+   * entry can stand in for.
+   */
+  readonly callers?: readonly string[] | undefined
 }
 
 export const LINE_UNKNOWN_WITHOUT_MAP =

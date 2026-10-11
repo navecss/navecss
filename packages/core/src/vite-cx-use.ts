@@ -35,6 +35,10 @@ export interface CxUse {
    */
   readonly isRenamed?: boolean
   /**
+   * For a refused re-export: the name it gives the binding out under.
+   */
+  readonly exportedAs?: readonly string[]
+  /**
    * For an exposure: the name a compiled Vue component's setup return gives the binding.
    */
   readonly exposedAs?: string
