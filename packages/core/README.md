@@ -482,27 +482,30 @@ code. For such a package that depends on `@navecss/core`, the build warns, namin
 listed in `keepFor`. A listed package is still checked where a server file of yours imports from it:
 taking a `cx` export the client build found in that module fails the build (with two commands, the
 next client build) with the report the client would give, and where the build cannot tell what your
-file takes, because no environment read that module or your file uses `require()`, it warns, naming
-your file and the module. On the server, its `cx.dynamic()` calls also map through every atom rather
-than through `keep`, so the class such a call renders can be an atom outside the set the build
-ships, its emitted set. Where the build ships no rule for that atom, the element renders as if the
-class were absent; where another use put that atom in the emitted set, the server-rendered element
-carries the atom's styling, and can keep it after the page hydrates: React, for one, does not
-guarantee to correct an attribute that differs between the server's markup and the client's render.
-Add such a package to `ssr.noExternal` in your Vite config: the build then reads it, and its
-`cx.dynamic()` calls on the server read `keep` too. Listing it in `keepFor` instead stops that
-warning and ships its listed atoms, but its `cx.dynamic()` calls on the server still map through
-every atom, and your server files that import from it are still checked as above.
+file takes, because no environment read the file the server loads or your file reaches the package
+in a way the build cannot read (a `require()`, say, or a `#` import), it warns, naming your file and
+the module. On the server, its `cx.dynamic()` calls also map through every atom rather than through
+`keep`, so the class such a call renders can be an atom outside the set the build ships, its emitted
+set. Where the build ships no rule for that atom, the element renders as if the class were absent;
+where another use put that atom in the emitted set, the server-rendered element carries the atom's
+styling, and can keep it after the page hydrates: React, for one, does not guarantee to correct an
+attribute that differs between the server's markup and the client's render. Add such a package to
+`ssr.noExternal` in your Vite config: the build then reads it, and its `cx.dynamic()` calls on the
+server read `keep` too. Listing it in `keepFor` instead stops that warning and ships its listed
+atoms, but its `cx.dynamic()` calls on the server still map through every atom, and your server
+files that import from it are still checked as above.
 
 If you build the client and the server in two commands, build the server first: `vite build --ssr`,
 then `vite build`. The two share a file in Vite's cache directory, so the client build also ships
 the atoms the server build read. The client build also checks what each server build recorded there
 of your server files' imports from packages listed in `keepFor`, so after you change server code,
-build the server again before the client. Built the other way round, a server atom the client's CSS
-lacks fails the server build, which records the atom for the next client build, and the report says
-how to clear it. A server build that finds the client's list already used cannot check the CSS, so
-it warns instead, naming each atom the last client build did not ship, and records them the same
-way.
+build the server again before the client. A record whose server file no longer exists is dropped;
+one from a server build you no longer run stays until you delete `nave-used-server-takes.json` from
+Vite's cache directory and run each server build you do. Built the other way round, a server atom
+the client's CSS lacks fails the server build, which records the atom for the next client build, and
+the report says how to clear it. A server build that finds the client's list already used cannot
+check the CSS, so it warns instead, naming each atom the last client build did not ship, and records
+them the same way.
 
 That file is `nave-used-atoms.json` in Vite's cache directory (`node_modules/.vite/` unless you set
 `cacheDir`). Each `vite build` writes its atoms there, sorted, as the `emitted` list; after a client

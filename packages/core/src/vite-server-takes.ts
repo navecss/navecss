@@ -8,7 +8,7 @@
  * separate client and server commands each server command keeps its own entry in `cacheDir`, and
  * the client command judges all of them.
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 import type { AstNode } from './vite-ast.ts'
@@ -67,13 +67,9 @@ function parsed(ctx: RenderContext, id: string): AstNode | undefined {
 }
 
 /**
- * The conditions the server loads an external package under.
+ * The conditions a built server loads an external package under: Node's own for an `import`.
  */
-function conditionsOf(ctx: RenderContext): string[] {
-  const resolve = (ctx.environment.config as { resolve?: { externalConditions?: string[] } })
-    .resolve
-  return ['node', 'import', ...(resolve?.externalConditions ?? []), 'default']
-}
+const CONDITIONS = ['node', 'import', 'module-sync', 'default']
 
 /**
  * The imports the module `id` makes of the packages in `externals`: those its parse names, with
@@ -86,7 +82,6 @@ function importsOf(
   const { externals, id, root } = input
   const program = parsed(ctx, id)
   const taker = path.relative(root, filePathOf(id)).replaceAll('\\', '/')
-  const conditions = conditionsOf(ctx)
   const named = program ? specifiersIn(program).filter((one) => externals.has(one)) : []
   const info = ctx.getModuleInfo?.(id)
   const shown = [...(info?.importedIds ?? []), ...(info?.dynamicallyImportedIds ?? [])]
@@ -106,7 +101,11 @@ function importsOf(
     })),
   ]
   return imports.map((found) => {
-    const file = serverFileOf({ conditions, from: filePathOf(id), specifier: found.specifier })
+    const file = serverFileOf({
+      conditions: CONDITIONS,
+      from: filePathOf(id),
+      specifier: found.specifier,
+    })
     return { ...found, ...(file !== undefined && { file }) }
   })
 }
@@ -186,6 +185,7 @@ export function readServerImports(context: UsedContext): ServerImport[] {
   if (context.cacheDir === '') return []
   return Object.values(readEntries(context))
     .flat()
+    .filter((found) => existsSync(path.join(context.root, found.taker)))
     .map((found) => ({ ...found, isRecorded: true }))
 }
 
@@ -225,8 +225,8 @@ export function recordedSentence(takers: readonly string[]): string | undefined 
   const named = [...new Set(takers)].toSorted(compareText).join(', ')
   if (named === '') return undefined
   return new Set(takers).size === 1
-    ? `${named} was read by an earlier server build, not by this one, so what this message says of its imports comes from the record that build left in Vite's cache directory; if the file has changed since, run that server build again to refresh the record.`
-    : `${named} were read by earlier server builds, not by this one, so what this message says of their imports comes from the records those builds left in Vite's cache directory; if one of those files has changed since, run the server build that read it again to refresh its record.`
+    ? `${named} was read by an earlier server build, not by this one, so what this message says of its imports comes from the record that build left in Vite's cache directory; if the file has changed since, run that server build again to refresh the record, or, if you no longer run that build, delete nave-used-server-takes.json there and run each server build you do.`
+    : `${named} were read by earlier server builds, not by this one, so what this message says of their imports comes from the records those builds left in Vite's cache directory; if one of those files has changed since, run the server build that read it again to refresh its record, or, if you no longer run that build, delete nave-used-server-takes.json there and run each server build you do.`
 }
 
 /**
@@ -240,13 +240,16 @@ function recordedTakers(imports: readonly ServerImport[]): string[] {
  * The words of the warning for the listed package `pkg`, whose server imports the build cannot
  * judge.
  */
-function warningFor(pkg: string, found: readonly ServerImport[]): string {
+function warningFor(pkg: string, input: { found: readonly ServerImport[]; root: string }): string {
+  const { found, root } = input
   const listed = found
     .map((one) => {
-      if (one.isUnreadable === true) {
-        return `${one.taker} takes '${one.specifier}' by a require() or other import the build cannot read`
-      }
-      return `${one.taker} imports '${one.specifier}', which no environment of this build transforms`
+      if (one.isUnreadable === true)
+        return `${one.taker} loads '${one.specifier}' in a way the build cannot read as a take, such as a require() or a # import`
+      if (one.file === undefined)
+        return `${one.taker} imports '${one.specifier}', and the build cannot tell which file the server loads for it`
+      const file = path.relative(root, one.file).replaceAll('\\', '/')
+      return `${one.taker} imports '${one.specifier}', which the server loads as ${file}, a file no environment of this build transforms`
     })
     .toSorted(compareText)
     .join('; ')
@@ -271,6 +274,6 @@ export function warnUnknown(
   }
   for (const [pkg, imports] of byPackage) {
     context.state.warned.add(pkg)
-    ctx.warn(warningFor(pkg, imports))
+    ctx.warn(warningFor(pkg, { found: imports, root: context.root }))
   }
 }

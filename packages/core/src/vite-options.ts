@@ -43,8 +43,10 @@ export interface UsedAtomOptions {
    * does not read it, so a take only your server code makes is judged by what the client build
    * read: it fails the build as above when the client build read the re-export it takes and the
    * build can read the take, and gets a warning naming `ssr.noExternal` when the build cannot tell,
-   * because no environment read that module or your file uses `require()`; with separate client and
-   * server commands, the next client command judges what the last build of each server recorded.
+   * because no environment read the file the server loads, or your file reaches the package in a
+   * way the build cannot read as a take (a `require()`, say, or a `#` import); with separate client
+   * and server commands, the next client command judges what the last build of each server recorded
+   * of server files that still exist.
    */
   keepFor?: Readonly<Record<string, readonly AtomName[]>>
 

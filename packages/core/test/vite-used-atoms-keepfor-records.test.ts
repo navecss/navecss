@@ -4,7 +4,7 @@
  * with the server's conditions, and the warning that never appears for a server that takes nothing
  * (a real `vite build` of a scratch app and a dependency).
  */
-import { writeFileSync } from 'node:fs'
+import { unlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -30,9 +30,13 @@ const TAKES_CN = "import { cn } from '@acme/ui'\nexport const render = cn('block
 const BUILD_SERVER = { ssr: 'src/entry-server.ts', outDir: 'dist-ssr', cssMinify: false }
 const REPEATS = 100
 const RECORDED =
-  "src/entry-server.ts was read by an earlier server build, not by this one, so what this message says of its imports comes from the record that build left in Vite's cache directory; if the file has changed since, run that server build again to refresh the record."
+  "src/entry-server.ts was read by an earlier server build, not by this one, so what this message says of its imports comes from the record that build left in Vite's cache directory; if the file has changed since, run that server build again to refresh the record, or, if you no longer run that build, delete nave-used-server-takes.json there and run each server build you do."
 const X3_WARNING =
-  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/r.cjs takes '@acme/ui' by a require() or other import the build cannot read. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
+  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/r.cjs loads '@acme/ui' in a way the build cannot read as a take, such as a require() or a # import. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
+const HASH_WARNING =
+  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/entry-server.ts loads '@acme/ui' in a way the build cannot read as a take, such as a require() or a # import. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
+const X2_WARNING =
+  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/entry-server.ts imports '@acme/ui', which the server loads as node_modules/@acme/ui/node.js, a file no environment of this build transforms. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
 
 /**
  * The package `@acme/ui`: an entry that exports `Menu` and then `extra`, with `files` beside it.
@@ -109,6 +113,26 @@ describe('AC-used-atoms-53 - what each server build recorded', () => {
     }
   }, 180_000)
 
+  it('drops a record whose server file no longer exists', async () => {
+    const app = serverApp({ 'src/entry-server.ts': TAKES_CN }, KNOWN)
+    try {
+      const options = { keepFor: KEEP_FLEX }
+      await buildUsed(app, { options, build: BUILD_SERVER })
+      unlinkSync(path.join(app.root, 'src/entry-server.ts'))
+      writeFileSync(path.join(app.root, 'src/entry-b.ts'), MENU_ONLY)
+      const renamed = await buildUsed(app, {
+        options,
+        build: { ssr: 'src/entry-b.ts', outDir: 'dist-ssr-b', cssMinify: false },
+      })
+      const client = await buildUsed(app, { options })
+
+      expect(renamed.error).toBeUndefined()
+      expect(client.error).toBeUndefined()
+    } finally {
+      app.dispose()
+    }
+  }, 180_000)
+
   it('does not say it for a take a server build of the same process produced', async () => {
     const app = serverApp({ 'src/entry-server.ts': TAKES_CN }, KNOWN)
     try {
@@ -167,11 +191,67 @@ describe('AC-used-atoms-53 - a server import resolved with the server conditions
       const built = await buildEnvironments(app, { options: { keepFor: KEEP_FLEX } })
 
       expect(built.error).toBeUndefined()
+      expect(pluginWarnings(built.warnings)).toEqual([expect.stringContaining(X2_WARNING)])
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+})
+
+describe('AC-used-atoms-53 - the file the server loads, not the file the client does', () => {
+  it('ignores a condition only the dev module runner of a server reads', async () => {
+    const ui = {
+      ...acme(''),
+      'index.js': "export { Menu } from './menu.js'\n",
+      'c.js': "export { Menu } from './menu.js'\n",
+      'd.js': "export { Menu } from './menu.js'\n",
+      'n.js': "export { Menu } from './menu.js'\nexport * from './f.js'\n",
+      'f.js': CN,
+      'package.json': JSON.stringify({
+        name: '@acme/ui',
+        version: '1.0.0',
+        type: 'module',
+        exports: { '.': { custom: './c.js', node: './n.js', default: './d.js' } },
+      }),
+    }
+    const app = serverApp({ 'src/entry-server.ts': TAKES_CN }, ui)
+    try {
+      const built = await buildEnvironments(app, {
+        options: { keepFor: KEEP_FLEX },
+        config: {
+          resolve: { conditions: ['custom', 'browser', 'import'] },
+          ssr: { resolve: { externalConditions: ['custom'] } },
+        },
+      })
+
+      expect(built.error).toBeUndefined()
       expect(pluginWarnings(built.warnings)).toEqual([
         expect.stringContaining(
-          "src/entry-server.ts imports '@acme/ui', which no environment of this build transforms",
+          "imports '@acme/ui', which the server loads as node_modules/@acme/ui/n.js, a file no environment of this build transforms",
         ),
       ])
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('warns, with words that fit, for a package reached through a # import', async () => {
+    const app = serverApp(
+      {
+        'package.json': JSON.stringify({
+          private: true,
+          type: 'module',
+          imports: { '#cn': '@acme/ui' },
+        }),
+        'src/entry-server.ts': "import { cn } from '#cn'\nexport const render = cn('block')\n",
+      },
+      KNOWN,
+    )
+    try {
+      const built = await buildEnvironments(app, { options: { keepFor: KEEP_FLEX } })
+
+      expect(built.error).toBeUndefined()
+      expect(pluginWarnings(built.warnings)).toEqual([expect.stringContaining(HASH_WARNING)])
     } finally {
       app.dispose()
     }

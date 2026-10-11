@@ -60,7 +60,7 @@ function exportsEntry(
   if (Object.hasOwn(map, subpath)) return { match: '', target: map[subpath] }
   const patterns = Object.keys(map)
     .filter((key) => key.includes('*') && subpath.startsWith(key.slice(0, key.indexOf('*'))))
-    .toSorted((a, b) => b.length - a.length)
+    .toSorted((a, b) => b.indexOf('*') - a.indexOf('*') || b.length - a.length)
   const pattern = patterns.find((key) => subpath.endsWith(key.slice(key.indexOf('*') + 1)))
   if (pattern === undefined) return undefined
   const [head, tail] = pattern.split('*') as [string, string]

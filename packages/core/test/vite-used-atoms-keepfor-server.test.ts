@@ -29,9 +29,11 @@ const CN = "export { cx as cn } from '@navecss/core/cx'\n"
 const MENU_JS = `${IMPORT}export const Menu = (v) => cx('flex', v)\n`
 const CLIENT = "import { Menu } from '@acme/ui'\nexport const A = Menu\n"
 const WARNING_ONE =
-  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/entry-server.ts imports '@acme/ui/f.js', which no environment of this build transforms. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
+  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/entry-server.ts imports '@acme/ui/f.js', which the server loads as node_modules/@acme/ui/f.js, a file no environment of this build transforms. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
 const WARNING_TWO =
-  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/entry-server.ts imports '@acme/ui/f.js', which no environment of this build transforms; src/render.ts imports '@acme/ui/g.js', which no environment of this build transforms. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
+  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/entry-server.ts imports '@acme/ui/f.js', which the server loads as node_modules/@acme/ui/f.js, a file no environment of this build transforms; src/render.ts imports '@acme/ui/g.js', which the server loads as node_modules/@acme/ui/g.js, a file no environment of this build transforms. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
+const NO_FILE_WARNING =
+  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/entry-server.ts imports '@acme/ui/g.js', and the build cannot tell which file the server loads for it. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
 const ORDERS = [
   ['the client first', ['client', 'ssr']],
   ['the server first', ['ssr', 'client']],
@@ -241,12 +243,38 @@ describe('AC-used-atoms-53 - the warning for a listed package no environment tra
         printed.push(message)
       },
     } as unknown as RenderContext
-    const context = { state: { warned: new Set<string>() } } as unknown as UsedContext
-    const unknown = [{ specifier: '@acme/ui/f.js', takes: [], taker: 'src/entry-server.ts' }]
+    const context = {
+      root: '/project',
+      state: { warned: new Set<string>() },
+    } as unknown as UsedContext
+    const unknown = [
+      {
+        file: '/project/node_modules/@acme/ui/f.js',
+        specifier: '@acme/ui/f.js',
+        takes: [],
+        taker: 'src/entry-server.ts',
+      },
+    ]
 
     warnUnknown(ctx, context, unknown)
     warnUnknown(ctx, context, unknown)
 
     expect(printed).toEqual([expect.stringContaining(WARNING_ONE)])
+  })
+
+  it('says the build cannot tell which file the server loads when the specifier resolves to none', () => {
+    const printed: string[] = []
+    const ctx = {
+      warn: (message: string) => {
+        printed.push(message)
+      },
+    } as unknown as RenderContext
+    const context = { state: { warned: new Set<string>() } } as unknown as UsedContext
+
+    warnUnknown(ctx, context, [
+      { specifier: '@acme/ui/g.js', takes: [], taker: 'src/entry-server.ts' },
+    ])
+
+    expect(printed).toEqual([NO_FILE_WARNING])
   })
 })
