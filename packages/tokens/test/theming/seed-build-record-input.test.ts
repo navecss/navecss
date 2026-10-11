@@ -113,8 +113,12 @@ describe('AC-token-build-20 covers: R20', () => {
     ])
   })
 
-  it("a seed authored as an OKLCH triple (the shipped danger default) is recorded as `{ form: 'oklch', value }` with no `raw`, because the triple IS what was given", async () => {
-    const { danger } = await buildRecordFor('#27d4c6')
-    expect(danger.input).toEqual({ form: 'oklch', value: SHIPPED_SEEDS.danger })
-  })
+  it(
+    "a seed authored as an OKLCH triple (the shipped danger default) is recorded as `{ form: 'oklch', value }` with no `raw`, because the triple IS what was given",
+    { timeout: buildBudget(1) },
+    async () => {
+      const { danger } = await buildRecordFor('#27d4c6')
+      expect(danger.input).toEqual({ form: 'oklch', value: SHIPPED_SEEDS.danger })
+    },
+  )
 })
