@@ -30,6 +30,7 @@ import type { Oklch } from '../../src/theming/color-math.ts'
 
 import { build } from '../../src/facade.ts'
 import { ingestSeed } from '../../src/theming/seed-ingest.ts'
+import { buildBudget } from '../helpers/build-budget.ts'
 import { scratchDir as makeScratchDir, registerScratchCleanup } from '../helpers/scratch-dir.ts'
 
 registerScratchCleanup()
@@ -173,6 +174,7 @@ describe('AC-token-build-19 covers: R19', () => {
       expect(delta.c).toBeLessThan(LC_TOLERANCE)
       expect(delta.h).toBeLessThan(HUE_TOLERANCE_DEG)
     },
+    buildBudget(1),
   )
 
   it.each(CORROBORATING_ROWS)(
