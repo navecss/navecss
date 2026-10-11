@@ -67,9 +67,27 @@ function parsed(ctx: RenderContext, id: string): AstNode | undefined {
 }
 
 /**
- * The conditions a built server loads an external package under: Node's own for an `import`.
+ * The output format of a server environment's bundle: `cjs` loads an external package with
+ * `require`, anything else with `import`.
  */
-const CONDITIONS = ['node', 'import', 'module-sync', 'default']
+function formatOf(ctx: RenderContext): unknown {
+  const build = (
+    ctx.environment.config as {
+      build?: { rolldownOptions?: { output?: unknown }; rollupOptions?: { output?: unknown } }
+    }
+  ).build
+  const output = build?.rolldownOptions?.output ?? build?.rollupOptions?.output
+  const first = Array.isArray(output) ? (output[0] as unknown) : output
+  return (first as { format?: unknown } | undefined)?.format
+}
+
+/**
+ * The conditions a built server loads an external package under: Node's own, for a `require` when
+ * the bundle is in the CommonJS format and for an `import` otherwise.
+ */
+export function conditionsOf(ctx: RenderContext): string[] {
+  return ['node', formatOf(ctx) === 'cjs' ? 'require' : 'import', 'module-sync', 'default']
+}
 
 /**
  * The imports the module `id` makes of the packages in `externals`: those its parse names, with
@@ -82,6 +100,7 @@ function importsOf(
   const { externals, id, root } = input
   const program = parsed(ctx, id)
   const taker = path.relative(root, filePathOf(id)).replaceAll('\\', '/')
+  const conditions = conditionsOf(ctx)
   const named = program ? specifiersIn(program).filter((one) => externals.has(one)) : []
   const info = ctx.getModuleInfo?.(id)
   const shown = [...(info?.importedIds ?? []), ...(info?.dynamicallyImportedIds ?? [])]
@@ -102,7 +121,7 @@ function importsOf(
   ]
   return imports.map((found) => {
     const file = serverFileOf({
-      conditions: CONDITIONS,
+      conditions,
       from: filePathOf(id),
       specifier: found.specifier,
     })

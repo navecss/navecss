@@ -8,7 +8,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { RenderContext } from '../src/vite-types.ts'
+
 import { serverFileOf } from '../src/vite-server-resolve.ts'
+import { conditionsOf } from '../src/vite-server-takes.ts'
 
 const CONDITIONS = ['node', 'import', 'module-sync', 'default']
 const made: string[] = []
@@ -49,6 +52,24 @@ function resolved(
   return file === undefined
     ? undefined
     : path.relative(path.join(found.root, 'node_modules/@acme/ui'), file)
+}
+
+/**
+ * The conditions a server whose bundle is in `format` loads a package under.
+ */
+function serverConditions(format?: string): string[] {
+  return conditionsOf(server(format))
+}
+
+/**
+ * A server environment whose bundle is in `format`.
+ */
+function server(format?: string): RenderContext {
+  return {
+    environment: {
+      config: { build: { rolldownOptions: { output: format === undefined ? {} : { format } } } },
+    },
+  } as unknown as RenderContext
 }
 
 afterEach(() => {
@@ -124,5 +145,41 @@ describe('AC-used-atoms-53 - the file a server loads for a package it leaves ext
     const found = project({ exports: { '.': './index.js' } }, ['index.js', 'other.js'])
 
     expect(resolved(found, '@acme/ui/other.js')).toBeUndefined()
+  })
+
+  it('ranks the longer key first when two patterns share a prefix', () => {
+    const found = project({ exports: { './a/*': './x/*', './a/*.js': './y/*.js' } }, [
+      'x/f.js',
+      'y/f.js',
+    ])
+
+    expect(resolved(found, '@acme/ui/a/f.js')).toBe(path.join('y', 'f.js'))
+  })
+
+  it('names no file for a subpath that does not begin with the prefix of a pattern key', () => {
+    const found = project({ exports: { './a/*': './x/*' } }, ['x/f.js'])
+
+    expect(resolved(found, '@acme/ui/b/f.js')).toBeUndefined()
+  })
+})
+
+describe('AC-used-atoms-53 - the conditions a built server loads a package under', () => {
+  it('holds module-sync, which Node loads before default', () => {
+    const found = project({ exports: { '.': { 'module-sync': './ms.mjs', default: './d.js' } } }, [
+      'ms.mjs',
+      'd.js',
+    ])
+
+    expect(resolved(found, '@acme/ui', serverConditions())).toBe('ms.mjs')
+  })
+
+  it('holds import for an ES module server build and require for a CommonJS one', () => {
+    const found = project(
+      { exports: { '.': { import: './i.js', require: './r.cjs', default: './d.js' } } },
+      ['i.js', 'r.cjs', 'd.js'],
+    )
+
+    expect(resolved(found, '@acme/ui', serverConditions())).toBe('i.js')
+    expect(resolved(found, '@acme/ui', serverConditions('cjs'))).toBe('r.cjs')
   })
 })

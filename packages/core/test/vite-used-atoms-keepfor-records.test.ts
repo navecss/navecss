@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ScratchApp } from './helpers/vite-app.ts'
 
+import { recordedSentence } from '../src/vite-server-takes.ts'
 import {
   addPackage,
   appFiles,
@@ -31,6 +32,8 @@ const BUILD_SERVER = { ssr: 'src/entry-server.ts', outDir: 'dist-ssr', cssMinify
 const REPEATS = 100
 const RECORDED =
   "src/entry-server.ts was read by an earlier server build, not by this one, so what this message says of its imports comes from the record that build left in Vite's cache directory; if the file has changed since, run that server build again to refresh the record, or, if you no longer run that build, delete nave-used-server-takes.json there and run each server build you do."
+const RECORDED_TWO =
+  "src/entry-server.ts, src/render.ts were read by earlier server builds, not by this one, so what this message says of their imports comes from the records those builds left in Vite's cache directory; if one of those files has changed since, run the server build that read it again to refresh its record, or, if you no longer run that build, delete nave-used-server-takes.json there and run each server build you do."
 const X3_WARNING =
   "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/r.cjs loads '@acme/ui' in a way the build cannot read as a take, such as a require() or a # import. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
 const HASH_WARNING =
@@ -235,6 +238,51 @@ describe('AC-used-atoms-53 - the file the server loads, not the file the client 
     }
   }, 120_000)
 
+  it('resolves with the require conditions for a server bundle in the CommonJS format', async () => {
+    const ui = {
+      ...acme(''),
+      'index.js': "export { Menu } from './menu.js'\n",
+      'esm.js': "export { Menu } from './menu.js'\n",
+      'cjs.cjs':
+        "const { cx } = require('@navecss/core/cx')\nexports.Menu = () => 1\nexports.cn = cx\n",
+      'package.json': JSON.stringify({
+        name: '@acme/ui',
+        version: '1.0.0',
+        type: 'module',
+        exports: { '.': { import: './esm.js', require: './cjs.cjs', default: './esm.js' } },
+      }),
+    }
+    const app = serverApp({ 'src/entry-server.ts': TAKES_CN }, ui)
+    try {
+      const built = await buildEnvironments(app, {
+        options: { keepFor: KEEP_FLEX },
+        config: {
+          environments: {
+            ssr: {
+              build: {
+                outDir: 'dist-ssr',
+                write: false,
+                rolldownOptions: {
+                  input: 'src/entry-server.ts',
+                  output: { format: 'cjs' },
+                },
+              },
+            },
+          },
+        },
+      })
+
+      expect(built.error).toBeUndefined()
+      expect(pluginWarnings(built.warnings)).toEqual([
+        expect.stringContaining(
+          "imports '@acme/ui', which the server loads as node_modules/@acme/ui/cjs.cjs, a file no environment of this build transforms",
+        ),
+      ])
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
   it('warns, with words that fit, for a package reached through a # import', async () => {
     const app = serverApp(
       {
@@ -312,4 +360,10 @@ describe('AC-used-atoms-53 - a server that takes nothing prints nothing', () => 
       app.dispose()
     }
   }, 120_000)
+})
+
+describe('AC-used-atoms-53 - the sentence for several recorded takers', () => {
+  it('speaks of earlier server builds and of the records those builds left', () => {
+    expect(recordedSentence(['src/render.ts', 'src/entry-server.ts'])).toBe(RECORDED_TWO)
+  })
 })
