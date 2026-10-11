@@ -31,20 +31,20 @@ export interface UsedAtomOptions {
    * calls the build cannot read. They ship as if they were in `keep`, beside the atoms of the
    * package's calls the build does read. The calls it cannot read are not changed, so any other
    * atom they apply has no rule unless the build ships it for another reason. An empty list is
-   * accepted: it says those calls produce no atom, so the list adds none, and a `cx.dynamic()`
-   * call in the package still fails the build, as it does with no entry. A package in your own
-   * workspace is your code, not a dependency. The entry stands in for the package's own calls
-   * only: a re-export of `cx` in the package that the build reads and a module of yours takes
-   * (imports, re-exports or reads off a namespace, directly or through re-exports of it that the
-   * build reads, as `export ... from` or an import exported unchanged, in this package or another)
-   * still fails the build, because the calls your module makes through it would ship with no rule,
-   * and the message says how to clear it. Listing here a package that only re-exports it does not
-   * clear a take of yours, since a re-export is not a call. A server build that leaves the package
-   * external does not read it, so a take only your server code makes is judged by what the client
-   * build read: it fails the build as above when the client build read the re-export it takes, and
-   * an import from a module of the package that no environment read gets a warning naming
-   * `ssr.noExternal`; with separate client and server commands, the next client command judges
-   * them.
+   * accepted: it says those calls produce no atom, so the list adds none, and a `cx.dynamic()` call
+   * in the package still fails the build, as it does with no entry. A package in your own workspace
+   * is your code, not a dependency. The entry stands in for the package's own calls only: a
+   * re-export of `cx` in the package that the build reads and a module of yours takes (imports,
+   * re-exports or reads off a namespace, directly or through re-exports of it that the build reads,
+   * as `export ... from` or an import exported unchanged, in this package or another) still fails
+   * the build, because the calls your module makes through it would ship with no rule, and the
+   * message says how to clear it. Listing here a package that only re-exports it does not clear a
+   * take of yours, since a re-export is not a call. A server build that leaves the package external
+   * does not read it, so a take only your server code makes is judged by what the client build
+   * read: it fails the build as above when the client build read the re-export it takes and the
+   * build can read the take, and gets a warning naming `ssr.noExternal` when the build cannot tell,
+   * because no environment read that module or your file uses `require()`; with separate client and
+   * server commands, the next client command judges what the last build of each server recorded.
    */
   keepFor?: Readonly<Record<string, readonly AtomName[]>>
 

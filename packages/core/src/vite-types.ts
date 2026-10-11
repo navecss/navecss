@@ -214,6 +214,11 @@ interface ModuleInfoLike {
   readonly code: string | null
   readonly importers: readonly string[]
   readonly dynamicImporters: readonly string[]
+  /**
+   * The ids the module imports, statically and dynamically, externals included.
+   */
+  readonly importedIds?: readonly string[]
+  readonly dynamicallyImportedIds?: readonly string[]
 }
 
 /**

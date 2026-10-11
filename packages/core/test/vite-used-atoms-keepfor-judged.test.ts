@@ -160,4 +160,24 @@ describe('AC-used-atoms-52 - a dependency that re-exports the cx of a module cxM
     expect(listed.error).toBeUndefined()
     expect(atomLayerAtoms(listed.css)).toEqual(atoms('block', 'flex', 'grid'))
   }, 120_000)
+
+  it('prints the position of a forward once when it has an application take and a calling dependency', async () => {
+    const withCaller = {
+      ...packages,
+      '@third/ui': {
+        'index.js': "import { cx } from '@other/ui'\nexport const Chip = cx('grid')\n",
+      },
+    }
+    const code =
+      "import { Menu, cx as k } from '@acme/ui'\nimport { cx } from '@other/ui'\nimport { Chip } from '@third/ui'\nexport const A = [Menu, Chip, k('block'), cx('grid')]\n"
+    const built = await run(code, withCaller, options)
+    const lines = built.error!.split('\n')
+
+    expect(lines[0]).toMatch(/^1 problem in 1 file/)
+    expect(
+      lines.filter((line) => line.startsWith('node_modules/@other/ui/index.js:')),
+    ).toHaveLength(1)
+    expect(lines).toContain(forwardLine('@other/ui', { listed: 'src/App.ts (cx)' }))
+    expect(lines).toContain(callsThroughLine('@other/ui', ['node_modules/@third/ui/index.js']))
+  }, 60_000)
 })

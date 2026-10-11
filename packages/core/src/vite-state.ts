@@ -7,9 +7,10 @@
  * even from the same config object, starts a fresh one.
  */
 import type { DeclaredModules } from './vite-cx-modules.ts'
+import type { Prepared } from './vite-listed-takes.ts'
 import type { ServerImport } from './vite-server-takes.ts'
 import type { SetupExposures } from './vite-setup-member.ts'
-import type { DevEnvironmentLike, RenderContext } from './vite-types.ts'
+import type { DevEnvironmentLike } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
 
 /**
@@ -120,10 +121,12 @@ export interface RootState {
    */
   readonly serverImports: ServerImport[]
   /**
-   * The client environment once it has ended: its context, which still resolves and reads its
-   * graph, and its name, for a server environment that ends after it.
+   * The client environment once it has ended: the files of its graph, and what it read of the
+   * takes of the modules that give out `cx`, for a server environment that ends after it. It holds
+   * no context, which the host may release once the environment has ended.
    */
-  client: { readonly ctx: RenderContext; readonly environment: string } | undefined
+  client:
+    { readonly graph: ReadonlySet<string>; readonly prepared: readonly Prepared[] } | undefined
   /**
    * The environments the builder was going to build when it reached its last stage, and the ones
    * whose modules have been read since: the markup warning is judged when the second holds the

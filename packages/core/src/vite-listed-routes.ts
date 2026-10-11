@@ -140,7 +140,13 @@ function serverTakesOf(found: ResolvedServerImport, holder: Holder): Take[] {
     const isTaken = taken.shape === 'star' ? hasNamed : isWhole || names.length > 0
     if (isTaken) {
       const kept = isWhole ? taken.names : names
-      takes.push({ ...taken, names: kept, taker: found.taker, isReached: holder.isReached })
+      takes.push({
+        ...taken,
+        names: kept,
+        taker: found.taker,
+        isReached: holder.isReached,
+        ...(found.isRecorded === true && { isRecorded: true }),
+      })
     }
   }
   return takes
@@ -154,7 +160,6 @@ function serverTakesOf(found: ResolvedServerImport, holder: Holder): Take[] {
  * `cx` from Nave instead, and, for a module that has a clearing specifier, the application's takes
  * the build cannot read, since an entry would not make them readable. A dependency's takes that
  * only re-export are followed, not counted; its other takes are `calls` when `wantCalls` is set.
- * The imports a server environment makes of the module are takes of an application module.
  */
 export async function takesFrom(
   ctx: RenderContext,
@@ -164,11 +169,10 @@ export async function takesFrom(
     readonly isEntry: boolean
     readonly pkg: string
     readonly resolutions: Resolutions
-    readonly serverImports: readonly ResolvedServerImport[]
     readonly wantCalls: boolean
   },
 ): Promise<Routes> {
-  const { holder, isEntry, pkg, resolutions, serverImports, wantCalls } = input
+  const { holder, isEntry, pkg, resolutions, wantCalls } = input
   const importers = importersOf(ctx, holder.id)
   const entry: Take[] = []
   const told: Take[] = []
@@ -189,12 +193,23 @@ export async function takesFrom(
     told.push(...routes.told)
     calls.push(...routes.calls)
   }
-  const file = fileOf(holder.id)
-  const fromServer = serverImports.filter((one) => one.file === file)
-  for (const found of fromServer) {
-    const takes = serverTakesOf(found, holder)
-    entry.push(...takes.filter((take) => isEntry && take.shape !== 'unreadable'))
-    told.push(...takes.filter((take) => !isEntry || take.shape === 'unreadable'))
-  }
   return { entry: merged(entry), told: merged(told), calls: merged(calls) }
+}
+
+/**
+ * What the imports a server environment makes of the module `holder` take: takes of an
+ * application module, on the `cxModules` route when `isEntry` and the take can be read.
+ */
+export function serverRoutes(
+  holder: Holder,
+  input: { readonly isEntry: boolean; readonly serverImports: readonly ResolvedServerImport[] },
+): { entry: Take[]; told: Take[] } {
+  const file = fileOf(holder.id)
+  const fromServer = input.serverImports.filter((one) => one.file === file)
+  const takes = fromServer.flatMap((found) => serverTakesOf(found, holder))
+  const isCleared = (take: Take): boolean => input.isEntry && take.shape !== 'unreadable'
+  return {
+    entry: takes.filter((take) => isCleared(take)),
+    told: takes.filter((take) => !isCleared(take)),
+  }
 }

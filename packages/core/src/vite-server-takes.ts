@@ -2,10 +2,11 @@
  * What a server environment takes from a package `keepFor` lists that it leaves external. The
  * server transforms the consumer's own modules, so its imports of the package are readable even
  * though the package's modules are not part of its graph. Each is recorded name-agnostic (every
- * name counts as a `cx` export), and judged where the `cx` exports of the package are known: the
- * client graph. A take of a module no environment transformed gets the untransformed-dependency
- * warning, worded for that case. With separate client and server commands the server's imports
- * wait in `cacheDir`, and the client command judges them.
+ * name counts as a `cx` export) with the file the server loads for it, and judged where the `cx`
+ * exports of the package are known: the client graph. A module no environment transformed, and an
+ * import the build cannot read, get the untransformed-dependency warning, worded for each. With
+ * separate client and server commands each server command keeps its own entry in `cacheDir`, and
+ * the client command judges all of them.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -18,25 +19,36 @@ import type { UsedContext } from './vite-used.ts'
 import { filePathOf } from './vite-css-id.ts'
 import { specifiersIn } from './vite-cx-importers.ts'
 import { fileOf } from './vite-cx-modules.ts'
-import { takesIn } from './vite-cx-takes.ts'
+import { takesIn, UNREADABLE } from './vite-cx-takes.ts'
 import { isDependencyId, isNaveOwn } from './vite-module-kind.ts'
 import { compareText } from './vite-problems.ts'
+import { serverFileOf } from './vite-server-resolve.ts'
 import { packageOfSpecifier } from './vite-untransformed.ts'
 
 const SERVER_TAKES_FILE = 'nave-used-server-takes.json'
 
 /**
  * One import a server module of the consumer's makes of a listed package: the module, root
- * relative, the specifier it writes, and what it takes from it, any name counting as a `cx` export.
+ * relative, the specifier it writes, what it takes from it (any name counting as a `cx` export),
+ * and the file the server loads for it when that is known.
  */
 export interface ServerImport {
+  readonly file?: string
+  /**
+   * Whether the module imports the package in a way the build cannot read, such as `require()`.
+   */
+  readonly isUnreadable?: boolean
+  /**
+   * Whether an earlier server command recorded it, not a server environment of this process.
+   */
+  readonly isRecorded?: boolean
   readonly specifier: string
   readonly takes: readonly Taken[]
   readonly taker: string
 }
 
 /**
- * A server import whose target the client graph read: the file it resolves to there.
+ * A server import whose target the client graph holds: the file it resolves to.
  */
 export interface ResolvedServerImport extends ServerImport {
   readonly file: string
@@ -55,7 +67,17 @@ function parsed(ctx: RenderContext, id: string): AstNode | undefined {
 }
 
 /**
- * What the module `id` takes by each specifier it writes that is in `externals`.
+ * The conditions the server loads an external package under.
+ */
+function conditionsOf(ctx: RenderContext): string[] {
+  const resolve = (ctx.environment.config as { resolve?: { externalConditions?: string[] } })
+    .resolve
+  return ['node', 'import', ...(resolve?.externalConditions ?? []), 'default']
+}
+
+/**
+ * The imports the module `id` makes of the packages in `externals`: those its parse names, with
+ * what they take, and those the module graph shows that the parse does not name.
  */
 function importsOf(
   ctx: RenderContext,
@@ -63,16 +85,30 @@ function importsOf(
 ): ServerImport[] {
   const { externals, id, root } = input
   const program = parsed(ctx, id)
-  if (!program) return []
   const taker = path.relative(root, filePathOf(id)).replaceAll('\\', '/')
-  return specifiersIn(program)
-    .filter((specifier) => externals.has(specifier))
-    .map((specifier) => ({
+  const conditions = conditionsOf(ctx)
+  const named = program ? specifiersIn(program).filter((one) => externals.has(one)) : []
+  const info = ctx.getModuleInfo?.(id)
+  const shown = [...(info?.importedIds ?? []), ...(info?.dynamicallyImportedIds ?? [])]
+  const unread = shown.filter((one) => externals.has(one) && !named.includes(one))
+  const read = named.map((specifier) => ({
+    specifier,
+    takes: program ? takesIn(program, { names: undefined, reaches: new Set([specifier]) }) : [],
+    taker,
+  }))
+  const imports = [
+    ...read.filter((found) => found.takes.length > 0),
+    ...unread.map((specifier) => ({
+      isUnreadable: true,
       specifier,
-      takes: takesIn(program, { names: undefined, reaches: new Set([specifier]) }),
+      takes: [UNREADABLE],
       taker,
-    }))
-    .filter((found) => found.takes.length > 0)
+    })),
+  ]
+  return imports.map((found) => {
+    const file = serverFileOf({ conditions, from: filePathOf(id), specifier: found.specifier })
+    return { ...found, ...(file !== undefined && { file }) }
+  })
 }
 
 /**
@@ -93,7 +129,36 @@ export function serverImportsOf(ctx: RenderContext, context: UsedContext): Serve
 }
 
 /**
- * Leaves a server invocation's imports for the client invocation that judges them.
+ * What names a server build in the file: its environment and its entries.
+ */
+function buildKeyOf(ctx: RenderContext): string {
+  const build = (
+    ctx.environment.config as {
+      build?: { rolldownOptions?: { input?: unknown }; ssr?: unknown }
+    }
+  ).build
+  return `${ctx.environment.name}\0${JSON.stringify(build?.rolldownOptions?.input ?? build?.ssr ?? '')}`
+}
+
+/**
+ * The entries an earlier server command left, by server build.
+ */
+function readEntries(context: UsedContext): Record<string, ServerImport[]> {
+  try {
+    const parsedFile: unknown = JSON.parse(
+      readFileSync(path.join(context.cacheDir, SERVER_TAKES_FILE), 'utf8'),
+    )
+    const isEntries =
+      typeof parsedFile === 'object' && parsedFile !== null && !Array.isArray(parsedFile)
+    return isEntries ? (parsedFile as Record<string, ServerImport[]>) : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Leaves a server command's imports for the client command that judges them, replacing only the
+ * entry of this server build.
  */
 export function writeServerImports(
   ctx: RenderContext,
@@ -104,7 +169,8 @@ export function writeServerImports(
   const file = path.join(context.cacheDir, SERVER_TAKES_FILE)
   try {
     mkdirSync(context.cacheDir, { recursive: true })
-    writeFileSync(file, `${JSON.stringify(imports, undefined, 2)}\n`)
+    const entries = { ...readEntries(context), [buildKeyOf(ctx)]: imports }
+    writeFileSync(file, `${JSON.stringify(entries, undefined, 2)}\n`)
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     ctx.warn(
@@ -114,73 +180,83 @@ export function writeServerImports(
 }
 
 /**
- * The imports an earlier server invocation left, or none.
+ * The imports earlier server commands left, or none.
  */
 export function readServerImports(context: UsedContext): ServerImport[] {
   if (context.cacheDir === '') return []
-  try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(path.join(context.cacheDir, SERVER_TAKES_FILE), 'utf8'),
-    )
-    return Array.isArray(parsed) ? (parsed as ServerImport[]) : []
-  } catch {
-    return []
-  }
+  return Object.values(readEntries(context))
+    .flat()
+    .map((found) => ({ ...found, isRecorded: true }))
 }
 
 /**
- * The id `specifier` resolves to from `from`, or `undefined` when it does not resolve.
+ * The files of every module the client environment holds.
  */
-async function resolvedOrNone(
-  ctx: RenderContext,
-  specifier: string,
-  from: string,
-): Promise<string | undefined> {
-  try {
-    const resolved = await ctx.resolve?.(specifier, from)
-    return resolved?.id
-  } catch {
-    return undefined
-  }
+export function graphOf(ctx: RenderContext): Set<string> {
+  return new Set([...(ctx.getModuleIds?.() ?? [])].map((id) => fileOf(id)))
 }
 
 /**
- * Splits the imports into those whose target the client graph holds, with the file, and those no
- * environment transformed, which the build cannot judge.
+ * Splits the imports into those whose target the client graph holds and the build can read, with
+ * the file, and those it cannot judge: a module no environment transformed, and an import the
+ * build cannot read.
  */
-export async function judgeable(
-  ctx: RenderContext,
-  context: UsedContext,
+export function judgeable(
+  graph: ReadonlySet<string>,
   imports: readonly ServerImport[],
-): Promise<{ known: ResolvedServerImport[]; unknown: ServerImport[] }> {
+): { known: ResolvedServerImport[]; unknown: ServerImport[] } {
   const known: ResolvedServerImport[] = []
   const unknown: ServerImport[] = []
   for (const found of imports) {
-    const from = path.join(context.root, found.taker)
-    const resolved = await resolvedOrNone(ctx, found.specifier, from)
-    const isRead = resolved !== undefined && Boolean(ctx.getModuleInfo?.(resolved))
-    if (resolved !== undefined && isRead) known.push({ ...found, file: fileOf(resolved) })
-    else unknown.push(found)
+    const { file } = found
+    if (file !== undefined && found.isUnreadable !== true && graph.has(fileOf(file))) {
+      known.push({ ...found, file })
+    } else {
+      unknown.push(found)
+    }
   }
   return { known, unknown }
 }
 
 /**
- * The words of the warning for the listed package `pkg`, whose modules the server imports and no
- * environment transforms.
+ * The sentence that says the imports of `takers` come from a record an earlier server build left.
  */
-function warningFor(pkg: string, found: readonly ServerImport[]): string {
-  const isOne = new Set(found.map((one) => one.specifier)).size === 1
-  const [modules, them, it] = isOne ? ['a module', 'it', 'it'] : ['modules', 'them', 'one']
-  const imports = found
-    .map((one) => `${one.taker} imports '${one.specifier}'`)
-    .toSorted(compareText)
-    .join(', ')
-  return `${pkg}, which keepFor lists, has ${modules} no environment of this build transforms, so the build cannot tell whether your server code takes cx from ${them}: ${imports}. Add ${pkg} to ssr.noExternal in your Vite config so the build reads ${them} and checks what your server code takes; where a file takes cx from ${it}, import cx from @navecss/core/cx there instead.`
+export function recordedSentence(takers: readonly string[]): string | undefined {
+  const named = [...new Set(takers)].toSorted(compareText).join(', ')
+  if (named === '') return undefined
+  return new Set(takers).size === 1
+    ? `${named} was read by an earlier server build, not by this one, so what this message says of its imports comes from the record that build left in Vite's cache directory; if the file has changed since, run that server build again to refresh the record.`
+    : `${named} were read by earlier server builds, not by this one, so what this message says of their imports comes from the records those builds left in Vite's cache directory; if one of those files has changed since, run the server build that read it again to refresh its record.`
 }
 
 /**
- * Warns, once for each package, about the imports whose target no environment transformed.
+ * The takers of the imports an earlier server build recorded, among `imports`.
+ */
+function recordedTakers(imports: readonly ServerImport[]): string[] {
+  return imports.filter((found) => found.isRecorded === true).map((found) => found.taker)
+}
+
+/**
+ * The words of the warning for the listed package `pkg`, whose server imports the build cannot
+ * judge.
+ */
+function warningFor(pkg: string, found: readonly ServerImport[]): string {
+  const listed = found
+    .map((one) => {
+      if (one.isUnreadable === true) {
+        return `${one.taker} takes '${one.specifier}' by a require() or other import the build cannot read`
+      }
+      return `${one.taker} imports '${one.specifier}', which no environment of this build transforms`
+    })
+    .toSorted(compareText)
+    .join('; ')
+  const note = recordedSentence(recordedTakers(found))
+  const warning = `${pkg}, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: ${listed}. Add ${pkg} to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead.`
+  return note === undefined ? warning : `${warning} ${note}`
+}
+
+/**
+ * Warns, once for each package, about the imports the build cannot judge.
  */
 export function warnUnknown(
   ctx: RenderContext,

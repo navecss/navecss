@@ -29,9 +29,9 @@ const CN = "export { cx as cn } from '@navecss/core/cx'\n"
 const MENU_JS = `${IMPORT}export const Menu = (v) => cx('flex', v)\n`
 const CLIENT = "import { Menu } from '@acme/ui'\nexport const A = Menu\n"
 const WARNING_ONE =
-  "@acme/ui, which keepFor lists, has a module no environment of this build transforms, so the build cannot tell whether your server code takes cx from it: src/entry-server.ts imports '@acme/ui/f.js'. Add @acme/ui to ssr.noExternal in your Vite config so the build reads it and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
+  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/entry-server.ts imports '@acme/ui/f.js', which no environment of this build transforms. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
 const WARNING_TWO =
-  "@acme/ui, which keepFor lists, has modules no environment of this build transforms, so the build cannot tell whether your server code takes cx from them: src/entry-server.ts imports '@acme/ui/f.js', src/render.ts imports '@acme/ui/g.js'. Add @acme/ui to ssr.noExternal in your Vite config so the build reads them and checks what your server code takes; where a file takes cx from one, import cx from @navecss/core/cx there instead."
+  "@acme/ui, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/entry-server.ts imports '@acme/ui/f.js', which no environment of this build transforms; src/render.ts imports '@acme/ui/g.js', which no environment of this build transforms. Add @acme/ui to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead."
 const ORDERS = [
   ['the client first', ['client', 'ssr']],
   ['the server first', ['ssr', 'client']],

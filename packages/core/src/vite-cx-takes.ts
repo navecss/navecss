@@ -35,6 +35,10 @@ export interface Taken {
    * take on the `cxModules` route.
    */
   readonly isForward?: boolean
+  /**
+   * Whether the take comes from what an earlier server command left in the cache directory.
+   */
+  readonly isRecorded?: boolean
 }
 
 export interface Take extends Taken {

@@ -42,103 +42,117 @@ import type { UsedContext } from './vite-used.ts'
 
 import { fileOf } from './vite-cx-modules.ts'
 import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
-import { holdersOf } from './vite-listed-holders.ts'
-import { merged, takesFrom } from './vite-listed-routes.ts'
+import { type Holder, holdersOf } from './vite-listed-holders.ts'
+import { merged, type Routes, serverRoutes, takesFrom } from './vite-listed-routes.ts'
 import { compareText } from './vite-problems.ts'
 import { isSecondHop } from './vite-used-package-lines.ts'
 
 interface Walk {
   readonly cxExports: CxExports
   readonly resolutions: Resolutions
-  readonly serverImports: readonly ResolvedServerImport[]
 }
 
 /**
- * The problems of one module of a listed package that stay errors: its re-exports with the
- * specifier that clears them when a module outside the package takes one of its `cx` exports, and,
- * for the takes only an application module can end (of the module, or of a forward of it), all of
- * its problems with those takes.
+ * One module that gives out `cx` with what the build read of its takes: the holders of its `cx`
+ * exports and the takes the importers of the build make of each. The imports a server environment
+ * makes are added when they are known, which can be after the environment that read the rest has
+ * ended.
  */
-async function keptOf(
-  ctx: RenderContext,
-  context: UsedContext,
-  input: { readonly problems: readonly LocatedProblem[]; readonly walk: Walk },
-): Promise<LocatedProblem[]> {
-  const { problems, walk } = input
-  const first = problems[0]!
-  const pkg = first.pkg!
-  const names = new Set(problems.flatMap((problem) => problem.exportedAs ?? []))
-  const clearable = problems.filter((problem) => problem.specifier !== undefined)
-  const holders = await holdersOf(ctx, { ...walk, id: first.moduleId!, names })
-  const routed = await Promise.all(
-    holders.map((holder) =>
-      takesFrom(ctx, context, {
-        holder,
-        isEntry: clearable.length > 0 && !holder.isReached,
-        pkg,
-        resolutions: walk.resolutions,
-        serverImports: walk.serverImports,
-        wantCalls: false,
-      }),
-    ),
-  )
-  if (routed.some(({ entry }) => entry.length > 0)) return clearable
-  const told = merged(routed.flatMap((route) => route.told))
-  return told.length === 0 ? [] : problems.map((problem) => ({ ...problem, takes: told }))
+export interface Prepared {
+  readonly holders: readonly Holder[]
+  readonly isHop: boolean
+  readonly isListed: boolean
+  /**
+   * Whether the module has a clearing specifier: a take of the module itself by an application
+   * module or a calling dependency is then on the `cxModules` route.
+   */
+  readonly hasEntry: boolean
+  readonly problems: readonly LocatedProblem[]
+  readonly routed: readonly Routes[]
 }
 
 /**
- * The problems of one dependency module that re-exports the `cx` of a listed module, judged by
- * what takes the re-export: the application modules that do, whatever the package, and the
- * dependencies that call through it, which the package's `keepFor` entry stands in for.
+ * Reads what the importers of the build take of one module that gives out `cx`.
  */
-async function keptHop(
-  ctx: RenderContext,
-  context: UsedContext,
-  input: { readonly problems: readonly LocatedProblem[]; readonly walk: Walk },
-): Promise<LocatedProblem[]> {
-  const { problems, walk } = input
-  const first = problems[0]!
-  const pkg = first.pkg!
-  const names = new Set(problems.flatMap((problem) => problem.exportedAs ?? []))
-  const holders = await holdersOf(ctx, { ...walk, id: first.moduleId!, names })
-  const routed = await Promise.all(
-    holders.map((holder) =>
-      takesFrom(ctx, context, {
-        holder,
-        isEntry: false,
-        pkg,
-        resolutions: walk.resolutions,
-        serverImports: walk.serverImports,
-        wantCalls: true,
-      }),
-    ),
-  )
-  const told = merged(routed.flatMap((route) => route.told))
-  const callers = [...new Set(routed.flatMap((route) => route.calls.map((call) => call.taker)))]
-  const isListed = Object.hasOwn(context.options.keepFor, pkg)
-  return [
-    ...(told.length === 0 ? [] : problems.map((problem) => ({ ...problem, takes: told }))),
-    ...(isListed || callers.length === 0
-      ? []
-      : problems.map((problem) => ({ ...problem, callers: callers.toSorted(compareText) }))),
-  ]
-}
-
-/**
- * The problems of the packages that give `cx` out and that `keepFor` does not clear, given the
- * problems their listing suppressed and the dependency re-exports of a listed module's `cx`, with
- * the imports a server environment makes of a listed package.
- */
-export async function takenReexports(
+async function prepareOne(
   ctx: RenderContext,
   context: UsedContext,
   input: {
-    readonly serverImports?: readonly ResolvedServerImport[]
-    readonly standingIn: readonly LocatedProblem[]
+    readonly isHop: boolean
+    readonly problems: readonly LocatedProblem[]
+    readonly walk: Walk
   },
-): Promise<LocatedProblem[]> {
-  const exporting = input.standingIn.filter((problem) => problem.exportedAs !== undefined)
+): Promise<Prepared> {
+  const { isHop, problems, walk } = input
+  const first = problems[0]!
+  const pkg = first.pkg!
+  const names = new Set(problems.flatMap((problem) => problem.exportedAs ?? []))
+  const hasEntry = !isHop && problems.some((problem) => problem.specifier !== undefined)
+  const holders = await holdersOf(ctx, { ...walk, id: first.moduleId!, names })
+  const routed = await Promise.all(
+    holders.map((holder) =>
+      takesFrom(ctx, context, {
+        holder,
+        isEntry: hasEntry && !holder.isReached,
+        pkg,
+        resolutions: walk.resolutions,
+        wantCalls: isHop,
+      }),
+    ),
+  )
+  const isListed = Object.hasOwn(context.options.keepFor, pkg)
+  return { hasEntry, holders, isHop, isListed, problems, routed }
+}
+
+/**
+ * The problems of a module that gives out `cx` that stay errors, given the takes of the build and
+ * of the server environments: for the takes only an application module can end (of the module, or
+ * of a forward of it), the problems with those takes; a take a `cxModules` entry clears keeps only
+ * the problems that have the specifier; a dependency module that re-exports a listed module's `cx`
+ * also keeps the callers whose calls only the package's `keepFor` entry stands in for.
+ */
+function decideOne(
+  prepared: Prepared,
+  serverImports: readonly ResolvedServerImport[],
+): LocatedProblem[] {
+  const { hasEntry, holders, isHop, isListed, problems, routed } = prepared
+  const fromServer = holders.map((holder) =>
+    serverRoutes(holder, { isEntry: hasEntry && !holder.isReached, serverImports }),
+  )
+  const entry = [...routed.flatMap((route) => route.entry), ...fromServer.flatMap((r) => r.entry)]
+  if (entry.length > 0) return problems.filter((problem) => problem.specifier !== undefined)
+  const told = merged([
+    ...routed.flatMap((route) => route.told),
+    ...fromServer.flatMap((route) => route.told),
+  ])
+  const callers = isHop && !isListed ? callersOf(routed) : []
+  if (told.length === 0 && callers.length === 0) return []
+  return problems.map((problem) => ({
+    ...problem,
+    ...(told.length > 0 && { takes: told }),
+    ...(callers.length > 0 && { callers }),
+  }))
+}
+
+/**
+ * The modules, root-relative, of other dependencies whose takes of a re-export do more than
+ * re-export it, in code-unit order.
+ */
+function callersOf(routed: readonly Routes[]): string[] {
+  const callers = new Set(routed.flatMap((route) => route.calls.map((call) => call.taker)))
+  return [...callers].toSorted(compareText)
+}
+
+/**
+ * Reads what the importers of the build take of the modules of the problems that give `cx` out:
+ * the problems their listing suppressed and the dependency re-exports of a listed module's `cx`.
+ */
+export async function prepareReexports(
+  ctx: RenderContext,
+  context: UsedContext,
+  standingIn: readonly LocatedProblem[],
+): Promise<Prepared[]> {
+  const exporting = standingIn.filter((problem) => problem.exportedAs !== undefined)
   const located = await withClearingSpecifiers(ctx, context, exporting)
   const byModule = new Map<string, LocatedProblem[]>()
   const hops = new Map<string, LocatedProblem[]>()
@@ -153,10 +167,22 @@ export async function takenReexports(
       new Set(problems.flatMap((problem) => problem.exportedAs ?? [])),
     ]),
   )
-  const walk: Walk = { cxExports, resolutions: new Map(), serverImports: input.serverImports ?? [] }
-  const kept = await Promise.all([
-    ...byModule.values().map((problems) => keptOf(ctx, context, { problems, walk })),
-    ...hops.values().map((problems) => keptHop(ctx, context, { problems, walk })),
+  const walk: Walk = { cxExports, resolutions: new Map() }
+  return await Promise.all([
+    ...byModule
+      .values()
+      .map((problems) => prepareOne(ctx, context, { isHop: false, problems, walk })),
+    ...hops.values().map((problems) => prepareOne(ctx, context, { isHop: true, problems, walk })),
   ])
-  return kept.flat()
+}
+
+/**
+ * The problems that give `cx` out and that `keepFor` does not clear, given what the build read of
+ * their takes and the imports a server environment makes of a listed package.
+ */
+export function decideReexports(
+  prepared: readonly Prepared[],
+  serverImports: readonly ResolvedServerImport[],
+): LocatedProblem[] {
+  return prepared.flatMap((one) => decideOne(one, serverImports))
 }

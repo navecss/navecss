@@ -19,15 +19,17 @@ import { withoutEchoes } from './vite-declared-echoes.ts'
 import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
 import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
-import { takenReexports } from './vite-listed-takes.ts'
+import { decideReexports, type Prepared, prepareReexports } from './vite-listed-takes.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
 import { judgeAfterLastEnvironment } from './vite-markup.ts'
 import { isNaveOwn } from './vite-module-kind.ts'
 import { assertOptions } from './vite-options.ts'
 import { checkEnvironmentOrder } from './vite-order.ts'
 import {
+  graphOf,
   judgeable,
   readServerImports,
+  recordedSentence,
   serverImportsOf,
   warnUnknown,
   writeServerImports,
@@ -131,7 +133,7 @@ async function problemsOfBuild(
   ctx: RenderContext,
   context: UsedContext,
   serverImports: readonly ResolvedServerImport[],
-): Promise<LocatedProblem[]> {
+): Promise<{ prepared: Prepared[]; problems: LocatedProblem[] }> {
   const records = recordsOf(context.state, ctx.environment.name)
   const kept = await withClearingSpecifiers(
     ctx,
@@ -152,7 +154,22 @@ async function problemsOfBuild(
     ...kept.filter((problem) => isSecondHop(problem)),
   ]
   const rest = kept.filter((problem) => !isSecondHop(problem))
-  return [...rest, ...(await takenReexports(ctx, context, { standingIn, serverImports }))]
+  const prepared = await prepareReexports(ctx, context, standingIn)
+  return { problems: [...rest, ...decideReexports(prepared, serverImports)], prepared }
+}
+
+/**
+ * The report of the problems, ending with the sentence that says so when a take in it comes from
+ * what an earlier server build recorded.
+ */
+function reportOf(context: UsedContext, problems: readonly LocatedProblem[]): string {
+  const report = buildReport(problems, context.options.cxModules)
+  const recorded = problems
+    .flatMap((problem) => problem.takes ?? [])
+    .filter((take) => take.isRecorded === true)
+    .map((take) => take.taker)
+  const note = recordedSentence(recorded)
+  return note === undefined ? report : `${report}\n${note}`
 }
 
 /**
@@ -163,27 +180,28 @@ async function failuresOf(
   ctx: RenderContext,
   context: UsedContext,
   serverImports: readonly ResolvedServerImport[],
-): Promise<string[]> {
-  const problems = await problemsOfBuild(ctx, context, serverImports)
-  const report = problems.length > 0 ? buildReport(problems, context.options.cxModules) : undefined
+): Promise<{ failures: string[]; prepared: Prepared[] }> {
+  const { problems, prepared } = await problemsOfBuild(ctx, context, serverImports)
+  const report = problems.length > 0 ? reportOf(context, problems) : undefined
   const importers = await declaredImporterError(ctx, context, {
     configured: withoutRemoved(problems, context.options.cxModules),
     report,
   })
-  return [report, importers].filter((failure) => failure !== undefined)
+  return { failures: [report, importers].filter((failure) => failure !== undefined), prepared }
 }
 
 /**
  * The imports server environments made of a listed package they leave external, which the client
- * environment judges at its end: those of this process, or those a server invocation left.
+ * environment judges at its end: those of this process, or those server commands left.
  */
-async function serverImportsForClient(
+function serverImportsForClient(
   ctx: RenderContext,
   context: UsedContext,
-): Promise<{ known: ResolvedServerImport[]; unknown: ServerImport[] }> {
+  graph: ReadonlySet<string>,
+): { known: ResolvedServerImport[]; unknown: ServerImport[] } {
   if (ctx.environment.config.consumer !== 'client') return { known: [], unknown: [] }
   const imports = context.inProcess ? context.state.serverImports : readServerImports(context)
-  return await judgeable(ctx, context, imports)
+  return judgeable(graph, imports)
 }
 
 /**
@@ -191,7 +209,7 @@ async function serverImportsForClient(
  * In one process the client judges them when it ends, or, if it has ended, they are judged now
  * against its graph; with separate commands the next client command judges them.
  */
-async function noteServerImports(ctx: RenderContext, context: UsedContext): Promise<void> {
+function noteServerImports(ctx: RenderContext, context: UsedContext): void {
   const imports = serverImportsOf(ctx, context)
   if (!context.inProcess) {
     writeServerImports(ctx, context, imports)
@@ -200,17 +218,9 @@ async function noteServerImports(ctx: RenderContext, context: UsedContext): Prom
   context.state.serverImports.push(...imports)
   const { client } = context.state
   if (client === undefined || imports.length === 0) return
-  const { known, unknown } = await judgeable(client.ctx, context, imports)
-  const records = recordsOf(context.state, client.environment)
-  const standingIn = [
-    ...records.flatMap((record) => record.suppressed),
-    ...records.flatMap((record) => problemsOf(record, context)).filter((p) => isSecondHop(p)),
-  ]
-  const problems =
-    known.length === 0
-      ? []
-      : await takenReexports(client.ctx, context, { standingIn, serverImports: known })
-  if (problems.length > 0) ctx.error(buildReport(problems, context.options.cxModules))
+  const { known, unknown } = judgeable(client.graph, imports)
+  const problems = decideReexports(client.prepared, known)
+  if (problems.length > 0) ctx.error(reportOf(context, problems))
   warnUnknown(ctx, context, unknown)
 }
 
@@ -257,19 +267,20 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
 
     async buildEnd(error) {
       if (error || !isUsed(context) || context.command !== 'build') return
-      const server = await serverImportsForClient(this, context)
-      const failures = await failuresOf(this, context, server.known)
+      const graph = graphOf(this)
+      const server = serverImportsForClient(this, context, graph)
+      const { failures, prepared } = await failuresOf(this, context, server.known)
       if (failures.length > 0) this.error(failures.join('\n\n'))
       await checkCxImporters(this, context)
       checkEnvironmentOrder(this, context)
       if (this.environment.config.consumer === 'server') {
         checkServerInvocation(this, context)
         noteServerExternals(this, context)
-        await noteServerImports(this, context)
+        noteServerImports(this, context)
       } else {
         noteClientEnded(this, context)
         warnUnknown(this, context, server.unknown)
-        context.state.client = { ctx: this, environment: this.environment.name }
+        context.state.client = { graph, prepared }
       }
       judgeAfterLastEnvironment(context, this.environment, (message) => this.warn(message))
     },
