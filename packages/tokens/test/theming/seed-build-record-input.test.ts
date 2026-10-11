@@ -17,6 +17,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import { build } from '../../src/facade.ts'
 import { SHIPPED_SEEDS } from '../../src/theming/shipped-seeds.ts'
+import { buildBudget } from '../helpers/build-budget.ts'
 import { registerScratchCleanup, scratchDir } from '../helpers/scratch-dir.ts'
 
 registerScratchCleanup()
@@ -84,11 +85,12 @@ describe('AC-token-build-20 covers: R20', () => {
       expect(primary.input.value).toEqual(AN_OKLCH_TRIPLE)
       expect(primary.resolved).toEqual(AN_OKLCH_TRIPLE)
     },
+    buildBudget(1),
   )
 
   // Eleven real builds run back to back — comfortably under a second quiet, but close enough
-  // to vitest's 5s default under load to run once here, in `beforeAll` with an explicit
-  // timeout, rather than inside the assertion's own `it()`.
+  // to vitest's 5s default under load to run once here, in `beforeAll`, rather than inside the
+  // assertion's own `it()`. Its budget scales with the builds it runs (`buildBudget`).
   let forms: Set<string>
 
   beforeAll(async () => {
@@ -97,7 +99,7 @@ describe('AC-token-build-20 covers: R20', () => {
       const { primary } = await buildRecordFor(input)
       forms.add(primary.input.form)
     }
-  }, 20_000)
+  }, buildBudget(ACCEPTED_FORMS.length))
 
   it('across the eleven inputs the recorded forms are the seven R5 names, never one shape standing in for everything', () => {
     expect([...forms].toSorted((a, b) => a.localeCompare(b))).toEqual([
@@ -111,8 +113,12 @@ describe('AC-token-build-20 covers: R20', () => {
     ])
   })
 
-  it("a seed authored as an OKLCH triple (the shipped danger default) is recorded as `{ form: 'oklch', value }` with no `raw`, because the triple IS what was given", async () => {
-    const { danger } = await buildRecordFor('#27d4c6')
-    expect(danger.input).toEqual({ form: 'oklch', value: SHIPPED_SEEDS.danger })
-  })
+  it(
+    "a seed authored as an OKLCH triple (the shipped danger default) is recorded as `{ form: 'oklch', value }` with no `raw`, because the triple IS what was given",
+    { timeout: buildBudget(1) },
+    async () => {
+      const { danger } = await buildRecordFor('#27d4c6')
+      expect(danger.input).toEqual({ form: 'oklch', value: SHIPPED_SEEDS.danger })
+    },
+  )
 })

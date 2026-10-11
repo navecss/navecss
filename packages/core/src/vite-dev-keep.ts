@@ -43,7 +43,7 @@ function devKeepMap(
         // eslint-disable-next-line no-console -- this function's source runs in the page, where the console is the channel
         console.error(
           atoms.includes(key)
-            ? `[nave] cx.dynamic(${quoted}) applied no class: ${quoted} is not kept, so the build does not ship it either. Add ${quoted} to keep in navePlugin(), or, when a dependency makes the call, to its list in keepFor.`
+            ? `[nave] cx.dynamic(${quoted}) applied no class: ${quoted} is not in keep or in a keepFor list, and navePlugin() gives cx.dynamic() only the atoms in those lists, in a build as in dev. Add ${quoted} to keep in navePlugin(), or, when a dependency makes the call, to its list in keepFor.`
             : `[nave] cx.dynamic(${quoted}) applied no class: ${quoted} is not a Nave atom.`,
         )
       }

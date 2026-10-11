@@ -25,8 +25,8 @@ dev server serves the new value with no restart, and `vite build --watch` rebuil
 To migrate a project that already runs the PostCSS plugin on Vite: move `navePlugin()` from
 `css.postcss` or `postcss.config.js` to `plugins`, importing it from `@navecss/core/vite`. Leaving
 both is harmless, because whichever pass runs second finds no directive left. Moving also changes
-which atoms ship, as another entry in this release describes. Next.js, webpack and any other
-pipeline that runs PostCSS plugins keep using `@navecss/core/postcss`. The plugin sets no browser
+which atoms ship, as another entry in this release describes. Webpack and any other pipeline that
+runs PostCSS plugins keep using `@navecss/core/postcss`, and so can Next.js. The plugin sets no browser
 floor of its own: `build.cssTarget` (and, under Lightning CSS, `css.lightningcss.targets`) stay
 yours, and the package README shows both at the floor.
 

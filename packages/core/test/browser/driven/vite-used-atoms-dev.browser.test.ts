@@ -271,7 +271,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
 
 describe('AC-used-atoms-20 (a) and (b) — the same class strings in dev and in the build', () => {
   const GRID_LINE =
-    '[nave] cx.dynamic("grid") applied no class: "grid" is not kept, so the build does not ship it either. Add "grid" to keep in navePlugin(), or, when a dependency makes the call, to its list in keepFor.'
+    '[nave] cx.dynamic("grid") applied no class: "grid" is not in keep or in a keepFor list, and navePlugin() gives cx.dynamic() only the atoms in those lists, in a build as in dev. Add "grid" to keep in navePlugin(), or, when a dependency makes the call, to its list in keepFor.'
   const LEGACY_LINE =
     '[nave] cx.dynamic("legacy-card") applied no class: "legacy-card" is not a Nave atom.'
   const OPTIONS: NaveViteOptions = { keep: ['flex'], keepFor: { 'dyn-lib': ['block'] } }

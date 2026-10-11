@@ -10,7 +10,7 @@ import type { UsedContext } from './vite-used.ts'
 
 import { handshakePath, readHandshake, writeHandshake } from './vite-handshake.ts'
 import { compareText } from './vite-problems.ts'
-import { collectedAtoms, recordsOf } from './vite-state.ts'
+import { collectedAtoms, recordsOf, withRestorers } from './vite-state.ts'
 
 /**
  * Where a call the build could not read is: `path:line:column`, or the path alone when no source
@@ -45,16 +45,6 @@ function packageRecords(context: UsedContext): Record<string, PackageRecord> {
 function unmatchedKeys(context: UsedContext): string[] {
   const transformed = new Set(context.state.modules.values().map((record) => record.pkg))
   return Object.keys(context.options.keepFor).filter((pkg) => !transformed.has(pkg))
-}
-
-/**
- * `atoms` with the atoms added that restore what an atom in it removes: `srOnlyFocusable` shows
- * again on focus what `srOnly` hides, so a set that holds `srOnly` holds it too. This adds to the
- * emitted set only, not to `keep` or to what `cx.dynamic()` accepts.
- */
-function withRestorers(atoms: Set<string>): Set<string> {
-  if (atoms.has('srOnly')) atoms.add('srOnlyFocusable')
-  return atoms
 }
 
 /**
