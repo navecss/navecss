@@ -204,7 +204,7 @@ export function readServerImports(context: UsedContext): ServerImport[] {
   if (context.cacheDir === '') return []
   return Object.values(readEntries(context))
     .flat()
-    .filter((found) => existsSync(path.join(context.root, found.taker)))
+    .filter((found) => existsSync(path.resolve(context.root, found.taker)))
     .map((found) => ({ ...found, isRecorded: true }))
 }
 

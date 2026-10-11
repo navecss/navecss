@@ -4,7 +4,7 @@
  * with the server's conditions, and the warning that never appears for a server that takes nothing
  * (a real `vite build` of a scratch app and a dependency).
  */
-import { unlinkSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -131,6 +131,30 @@ describe('AC-used-atoms-53 - what each server build recorded', () => {
 
       expect(renamed.error).toBeUndefined()
       expect(client.error).toBeUndefined()
+    } finally {
+      app.dispose()
+    }
+  }, 180_000)
+
+  it('keeps a record whose server file is named by an absolute path, as on another drive', async () => {
+    const app = serverApp({ 'src/entry-server.ts': TAKES_CN }, KNOWN)
+    try {
+      const options = { keepFor: KEEP_FLEX }
+      await buildUsed(app, { options, build: BUILD_SERVER })
+      const record = readdirSync(app.root, { recursive: true, encoding: 'utf8' }).find(
+        (file) => path.basename(file) === 'nave-used-server-takes.json',
+      )!
+      const absolute = path.join(app.root, 'src/entry-server.ts')
+      const recordPath = path.join(app.root, record)
+      const text = readFileSync(recordPath, 'utf8').replaceAll(
+        '"taker": "src/entry-server.ts"',
+        () => `"taker": ${JSON.stringify(absolute)}`,
+      )
+      expect(text).toContain(JSON.stringify(absolute))
+      writeFileSync(recordPath, text)
+      const client = await buildUsed(app, { options })
+
+      expect(client.error!.split('\n')).toContain(takenLine(`${absolute} (cn)`))
     } finally {
       app.dispose()
     }
