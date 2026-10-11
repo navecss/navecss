@@ -2,18 +2,19 @@ import { execFileSync } from 'node:child_process'
 /**
  * What the documentation says about the atoms the Vite plugin ships (AC-used-atoms-36, -56 and
  * -58): the README section, the Vite setup paragraphs, the pointer in the `cx()` section, the
- * docblocks, and the two pending changesets. The copy that names focus, screen readers or
+ * docblocks, and the two changesets, pending or released. The copy that names focus, screen readers or
  * accessibility was cleared one unit at a time; it is pinned here by digest, never by a second
  * copy of its words, so a changed word fails and a re-wrapped line does not.
  */
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { REPORT_CAUSE } from '../src/vite-used-report.ts'
 import { extractFences, type Fence } from './doc-fences.ts'
+import { changelogEntries, shippedChangesetProse } from './helpers/released-changeset.ts'
 import { appFiles, buildUsed, makeUsedApp } from './helpers/used-atoms-app.ts'
 import { VITE_APIS } from './helpers/vite-app.ts'
 
@@ -24,14 +25,25 @@ const coreReadme = readFileSync(path.join(CORE_ROOT, 'README.md'), 'utf8')
 const rootReadme = readFileSync(path.join(REPO_ROOT, 'README.md'), 'utf8')
 const cxSource = readFileSync(path.join(CORE_ROOT, 'src/cx.ts'), 'utf8')
 const optionsSource = readFileSync(path.join(CORE_ROOT, 'src/vite-options.ts'), 'utf8')
-const usedChangeset = readFileSync(
-  path.join(REPO_ROOT, '.changeset/vite-plugin-ships-only-read-atoms.md'),
-  'utf8',
-)
-const pluginChangeset = readFileSync(
-  path.join(REPO_ROOT, '.changeset/vite-plugin-for-nave-directive.md'),
-  'utf8',
-)
+const CHANGELOG_PATH = path.join(CORE_ROOT, 'CHANGELOG.md')
+const USED_CHANGESET = {
+  path: path.join(REPO_ROOT, '.changeset/vite-plugin-ships-only-read-atoms.md'),
+  entryStart: 'The Vite plugin ships only the atoms its build can read a use for',
+}
+const PLUGIN_CHANGESET = {
+  path: path.join(REPO_ROOT, '.changeset/vite-plugin-for-nave-directive.md'),
+  entryStart: 'New: `@navecss/core/vite`',
+}
+
+/**
+ * The prose of one of the two changesets: the pending file, or the `CHANGELOG.md` entry the release
+ * wrote in its place.
+ */
+const proseOf = (changeset: typeof USED_CHANGESET): string =>
+  shippedChangesetProse(changeset.path, CHANGELOG_PATH, changeset.entryStart)
+
+const usedChangeset = proseOf(USED_CHANGESET)
+const pluginChangeset = proseOf(PLUGIN_CHANGESET)
 
 /**
  * A run of whitespace is one space: the README re-wraps its prose, and re-wrapping is not a
@@ -599,12 +611,26 @@ function manifestAtPluginMerge(): string | undefined {
   }
 }
 
-describe('AC-used-atoms-58 — the two pending changesets read as one release', () => {
+/**
+ * Whether the changeset is a `minor` on `@navecss/core`: its front matter while it is pending, the
+ * `Minor Changes` heading its entry sits under in `packages/core/CHANGELOG.md` once released.
+ */
+function isMinorOnCore(changeset: typeof USED_CHANGESET): boolean {
+  if (existsSync(changeset.path)) {
+    return readFileSync(changeset.path, 'utf8').startsWith("---\n'@navecss/core': minor\n---\n")
+  }
+  const entry = changelogEntries(readFileSync(CHANGELOG_PATH, 'utf8')).find((candidate) =>
+    candidate.text.startsWith(changeset.entryStart),
+  )
+  return entry?.kind === 'Minor Changes'
+}
+
+describe('AC-used-atoms-58 — the two changesets read as one release', () => {
   const flatUsed = fold(usedChangeset)
   const flatPlugin = fold(pluginChangeset)
 
   it('has a minor on @navecss/core that opens with the scoped headline', () => {
-    expect(usedChangeset).toMatch(/^---\n'@navecss\/core': minor\n---\n/)
+    expect(isMinorOnCore(USED_CHANGESET)).toBe(true)
     expect(flatUsed).toContain('The Vite plugin ships only the atoms its build can read a use for')
   })
 
@@ -623,8 +649,8 @@ describe('AC-used-atoms-58 — the two pending changesets read as one release', 
     expect(flatUsed).toContain('`resolve.noExternal`')
   })
 
-  it('leaves the plugin changeset pending, with two plugins in an array, no code added to the bundle, and the atoms sentence', () => {
-    expect(pluginChangeset).toMatch(/^---\n'@navecss\/core': minor\n---\n/)
+  it('keeps the plugin changeset a minor, with two plugins in an array, no code added to the bundle, and the atoms sentence', () => {
+    expect(isMinorOnCore(PLUGIN_CHANGESET)).toBe(true)
     expect(flatPlugin).not.toContain('plain Vite plugin')
     expect(flatPlugin).not.toContain('adds nothing to the browser bundle')
     expect(flatPlugin).toContain('returns two Vite plugins in an array')
@@ -639,6 +665,9 @@ describe('AC-used-atoms-58 — the two pending changesets read as one release', 
   })
 
   it('does not move the core version between the plugin’s merge and this delivery', () => {
+    // The release that consumes the changesets is what moves the version, so this clause holds only
+    // while one is pending; the test below reads the released form.
+    if (!existsSync(USED_CHANGESET.path) && !existsSync(PLUGIN_CHANGESET.path)) return
     const atMerge = manifestAtPluginMerge()
     // A checkout without that commit cannot say; review checks it then.
     if (atMerge === undefined) return
@@ -646,5 +675,17 @@ describe('AC-used-atoms-58 — the two pending changesets read as one release', 
     const now = versionOf(readFileSync(path.join(CORE_ROOT, 'package.json'), 'utf8'))
 
     expect(now).toBe(versionOf(atMerge))
+  })
+
+  it('once released, has both entries under the version core declares', () => {
+    if (existsSync(USED_CHANGESET.path) || existsSync(PLUGIN_CHANGESET.path)) return
+
+    const now = versionOf(readFileSync(path.join(CORE_ROOT, 'package.json'), 'utf8'))
+    const section = readFileSync(CHANGELOG_PATH, 'utf8')
+      .split(/^## /m)
+      .find((candidate) => candidate.startsWith(`${now}\n`))
+
+    expect(section).toContain(USED_CHANGESET.entryStart)
+    expect(section).toContain(PLUGIN_CHANGESET.entryStart)
   })
 })
