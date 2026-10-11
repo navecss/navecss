@@ -48,6 +48,12 @@ export interface LocatedProblem extends Problem {
    * application modules that take one of its `cx` exports, which `keepFor` does not clear.
    */
   readonly takes?: readonly Take[] | undefined
+  /**
+   * For a dependency module that re-exports the `cx` of a module `cxModules` lists: the modules of
+   * other dependencies that call through it, root-relative, which only the package's `keepFor`
+   * entry can stand in for.
+   */
+  readonly callers?: readonly string[] | undefined
 }
 
 export const LINE_UNKNOWN_WITHOUT_MAP =

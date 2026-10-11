@@ -4,6 +4,7 @@
  * once, at build end, on anything it cannot read; and reads the HTML entries. It never changes
  * a module: it returns nothing from `transform`.
  */
+import type { ResolvedServerImport, ServerImport } from './vite-server-takes.ts'
 import type { ModuleRecord } from './vite-state.ts'
 import type { PluginLog, RenderContext, TransformContext, TransformMeta } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
@@ -24,9 +25,16 @@ import { judgeAfterLastEnvironment } from './vite-markup.ts'
 import { isNaveOwn } from './vite-module-kind.ts'
 import { assertOptions } from './vite-options.ts'
 import { checkEnvironmentOrder } from './vite-order.ts'
+import {
+  judgeable,
+  readServerImports,
+  serverImportsOf,
+  warnUnknown,
+  writeServerImports,
+} from './vite-server-takes.ts'
 import { recordsOf } from './vite-state.ts'
 import { noteClientEnded, noteServerExternals } from './vite-untransformed.ts'
-import { withoutRemoved } from './vite-used-package-lines.ts'
+import { isSecondHop, withoutRemoved } from './vite-used-package-lines.ts'
 import { buildReport, moduleReport } from './vite-used-report.ts'
 import { isUsed, ownAtomNames } from './vite-used.ts'
 
@@ -122,6 +130,7 @@ export function isReadable(context: UsedContext, id: string): boolean {
 async function problemsOfBuild(
   ctx: RenderContext,
   context: UsedContext,
+  serverImports: readonly ResolvedServerImport[],
 ): Promise<LocatedProblem[]> {
   const records = recordsOf(context.state, ctx.environment.name)
   const kept = await withClearingSpecifiers(
@@ -137,22 +146,72 @@ async function problemsOfBuild(
       })),
     ),
   )
-  const standingIn = records.flatMap((record) => record.suppressed)
-  return [...kept, ...(await takenReexports(ctx, context, standingIn))]
+  // A dependency's re-export of a listed module's `cx` is judged by what takes it, listed or not.
+  const standingIn = [
+    ...records.flatMap((record) => record.suppressed),
+    ...kept.filter((problem) => isSecondHop(problem)),
+  ]
+  const rest = kept.filter((problem) => !isSecondHop(problem))
+  return [...rest, ...(await takenReexports(ctx, context, { standingIn, serverImports }))]
 }
 
 /**
  * What the build fails with at its end: the report of what it cannot read, then the check of the
  * listed modules' importers, which tells apart what the report already says, in one failure.
  */
-async function failuresOf(ctx: RenderContext, context: UsedContext): Promise<string[]> {
-  const problems = await problemsOfBuild(ctx, context)
+async function failuresOf(
+  ctx: RenderContext,
+  context: UsedContext,
+  serverImports: readonly ResolvedServerImport[],
+): Promise<string[]> {
+  const problems = await problemsOfBuild(ctx, context, serverImports)
   const report = problems.length > 0 ? buildReport(problems, context.options.cxModules) : undefined
   const importers = await declaredImporterError(ctx, context, {
     configured: withoutRemoved(problems, context.options.cxModules),
     report,
   })
   return [report, importers].filter((failure) => failure !== undefined)
+}
+
+/**
+ * The imports server environments made of a listed package they leave external, which the client
+ * environment judges at its end: those of this process, or those a server invocation left.
+ */
+async function serverImportsForClient(
+  ctx: RenderContext,
+  context: UsedContext,
+): Promise<{ known: ResolvedServerImport[]; unknown: ServerImport[] }> {
+  if (ctx.environment.config.consumer !== 'client') return { known: [], unknown: [] }
+  const imports = context.inProcess ? context.state.serverImports : readServerImports(context)
+  return await judgeable(ctx, context, imports)
+}
+
+/**
+ * At a server environment's build end: records its imports of a listed package it leaves external.
+ * In one process the client judges them when it ends, or, if it has ended, they are judged now
+ * against its graph; with separate commands the next client command judges them.
+ */
+async function noteServerImports(ctx: RenderContext, context: UsedContext): Promise<void> {
+  const imports = serverImportsOf(ctx, context)
+  if (!context.inProcess) {
+    writeServerImports(ctx, context, imports)
+    return
+  }
+  context.state.serverImports.push(...imports)
+  const { client } = context.state
+  if (client === undefined || imports.length === 0) return
+  const { known, unknown } = await judgeable(client.ctx, context, imports)
+  const records = recordsOf(context.state, client.environment)
+  const standingIn = [
+    ...records.flatMap((record) => record.suppressed),
+    ...records.flatMap((record) => problemsOf(record, context)).filter((p) => isSecondHop(p)),
+  ]
+  const problems =
+    known.length === 0
+      ? []
+      : await takenReexports(client.ctx, context, { standingIn, serverImports: known })
+  if (problems.length > 0) ctx.error(buildReport(problems, context.options.cxModules))
+  warnUnknown(ctx, context, unknown)
 }
 
 /**
@@ -198,15 +257,19 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
 
     async buildEnd(error) {
       if (error || !isUsed(context) || context.command !== 'build') return
-      const failures = await failuresOf(this, context)
+      const server = await serverImportsForClient(this, context)
+      const failures = await failuresOf(this, context, server.known)
       if (failures.length > 0) this.error(failures.join('\n\n'))
       await checkCxImporters(this, context)
       checkEnvironmentOrder(this, context)
       if (this.environment.config.consumer === 'server') {
         checkServerInvocation(this, context)
         noteServerExternals(this, context)
+        await noteServerImports(this, context)
       } else {
         noteClientEnded(this, context)
+        warnUnknown(this, context, server.unknown)
+        context.state.client = { ctx: this, environment: this.environment.name }
       }
       judgeAfterLastEnvironment(context, this.environment, (message) => this.warn(message))
     },

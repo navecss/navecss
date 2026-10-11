@@ -441,14 +441,18 @@ list: with an empty list, or none, it fails the build. Each client build records
 `nave-used-atoms.json` file described below, the atoms it read from each listed package's calls,
 where the calls it could not read are, and any `keepFor` key that names no package the build read.
 
-`keepFor` stands in for the package's own calls, never for a call your code makes, so three
-problems in a listed package still fail the build. A module of the package that re-exports `cx`
-under the name `cx` still fails when your code, or another dependency, imports `cx` from it, and the
-report gives the `cxModules` entry that lets the build read those calls. A module that gives `cx`
-out under another name, as a default or inside a namespace, still fails when your code takes that
-export, and the report names each file of yours that does: import `cx` from `@navecss/core/cx`
-there instead. And a module of the package that you list in `cxModules` but that does not re-export
-Nave's `cx` under that name still fails: remove it from `cxModules`.
+`keepFor` stands in for the package's own calls, never for a call your code makes, so three problems
+in a listed package still fail the build. A module of the package that re-exports `cx` under the
+name `cx` still fails when a file of yours imports `cx` from that module itself, in an `import` or
+`export ... from` statement, or a dependency that does more than re-export it imports it from there,
+and the report gives the `cxModules` entry that lets the build read those calls. Through a module
+that only re-exports it, such as the package's own entry file or another package, a listed module
+would be two steps away, so there the report names each file of yours that takes it: import `cx`
+from `@navecss/core/cx` there instead. A module that gives `cx` out under another name, as a default
+or inside a namespace, still fails when your code takes that export, and the report names each file
+of yours that does: import `cx` from `@navecss/core/cx` there instead. And a module of the package
+that you list in `cxModules` but that does not re-export Nave's `cx` under that name still fails:
+remove it from `cxModules`.
 
 A package inside your own workspace is your code, not a dependency: Vite resolves it by its real
 path, outside `node_modules`, so its calls are reported as yours, in the dev server too, and
@@ -475,15 +479,19 @@ stylesheet.
 
 A server build leaves packages in `node_modules` external by default, so it does not read their
 code. For such a package that depends on `@navecss/core`, the build warns, naming it, unless it is
-listed in `keepFor`. On the server, its `cx.dynamic()` calls also map through every atom rather than
-through `keep`, so the class such a call renders can be an atom outside the set the build ships,
-its emitted set. Where the build ships no rule for that atom, the element renders as if the class
-were absent;
-where another use put that atom in the emitted set, the server-rendered element carries the atom's styling, and can keep it after the page hydrates: React, for one, does not guarantee to correct an attribute that differs between the server's markup and the client's render.
-Add such a package to `ssr.noExternal` in your Vite config: the build then reads it, and its
-`cx.dynamic()` calls on the server read `keep` too. Listing it in `keepFor` instead stops the
-warning and ships its listed atoms, but its `cx.dynamic()` calls on the server still map through
-every atom.
+listed in `keepFor`. A listed package is still checked where a server file of yours imports from it:
+taking a `cx` export the client build found in that module fails the build (with two commands, the
+next client build) with the report the client would give, and importing a module that no environment
+read gets a warning naming your file and the module. On the server, its `cx.dynamic()` calls also
+map through every atom rather than through `keep`, so the class such a call renders can be an atom
+outside the set the build ships, its emitted set. Where the build ships no rule for that atom, the
+element renders as if the class were absent; where another use put that atom in the emitted set, the
+server-rendered element carries the atom's styling, and can keep it after the page hydrates: React,
+for one, does not guarantee to correct an attribute that differs between the server's markup and the
+client's render. Add such a package to `ssr.noExternal` in your Vite config: the build then reads
+it, and its `cx.dynamic()` calls on the server read `keep` too. Listing it in `keepFor` instead
+stops that warning and ships its listed atoms, but its `cx.dynamic()` calls on the server still map
+through every atom, and your server files that import from it are still checked as above.
 
 If you build the client and the server in two commands, build the server first: `vite build --ssr`,
 then `vite build`. The two share a file in Vite's cache directory, so the client build also ships

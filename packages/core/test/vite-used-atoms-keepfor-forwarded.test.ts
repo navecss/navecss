@@ -14,6 +14,7 @@ import type { RenderContext } from '../src/vite-types.ts'
 import { holdersOf } from '../src/vite-listed-holders.ts'
 import { atomLayerAtoms, atoms } from './helpers/used-atoms-app.ts'
 import {
+  forwardLine,
   KEEP_FLEX,
   NAVE_APP,
   PASSED_ON,
@@ -483,7 +484,9 @@ describe('AC-used-atoms-52 - the walk ends, and the routes a take can be on', ()
         cxModules: ['@acme/ui/f.js'],
       })
 
-      expect(pasted.error!.split('\n')).toContain(takenLine('src/App.ts (cx)'))
+      expect(pasted.error!.split('\n')).toContain(
+        forwardLine('@acme/ui', { listed: 'src/App.ts (cx)' }),
+      )
       const followed = await run(
         "import { cx } from '@navecss/core/cx'\nimport { Menu } from '@acme/ui'\nimport { x } from '@other/x'\nexport const A = [Menu, x, cx('block')]\n",
         packages,

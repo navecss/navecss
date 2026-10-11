@@ -6,10 +6,10 @@
  * each file of the consumer's that takes it to import `cx` from Nave), and for a listed module whose
  * `cx` the build does not follow the line that tells the consumer to remove the entry.
  */
-import type { Take } from './vite-cx-takes.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
 
 import { compareText, cxModulesArray } from './vite-problems.ts'
+import { callsThroughLine, forwardLine, takenLine } from './vite-used-take-lines.ts'
 
 /**
  * Whether the problem is a re-export that listing the module in `cxModules` would clear.
@@ -24,6 +24,14 @@ export function isListableReexport(problem: LocatedProblem): boolean {
  */
 function isRenamedOrReached(problem: LocatedProblem): boolean {
   return problem.isRenamed === true || (problem.kind === 'reexport' && !isListableReexport(problem))
+}
+
+/**
+ * Whether the problem is a dependency module's re-export of the `cx` of a module `cxModules`
+ * lists, which the build follows one step only.
+ */
+export function isSecondHop(problem: LocatedProblem): boolean {
+  return problem.kind === 'reexport' && problem.isListable === false && problem.pkg !== undefined
 }
 
 /**
@@ -100,80 +108,6 @@ function renamedLine(pkg: string, count: number, keepFor: string, hasKeepFor: bo
   return `${pkg} re-exports cx ${RENAMED_FORM}, which the build does not follow even from a module listed in cxModules. Listing a module that does fails the build, so no entry there clears an export of cx from it, under the name cx or another, and the build does not read calls made through ${those}. Where your code imports ${those} from ${pkg} or one of its subpaths, ${act}. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): ${keepFor}. The lasting fix is the package's: ${RENAMED_FIX}`
 }
 
-const IDENTIFIER = /^[$\p{ID_Start}_][$\p{ID_Continue}]*$/u
-
-/**
- * A name an importer takes as the line writes it: `default` as the default export, an identifier
- * as it is, any other name in single quotes with the backslash and the quote escaped.
- */
-function takenName(name: string): string {
-  if (name === 'default') return 'the default export'
-  if (IDENTIFIER.test(name)) return name
-  return `'${name.replaceAll('\\', String.raw`\\`).replaceAll("'", String.raw`\'`)}'`
-}
-
-/**
- * What one take is, in the words the line puts in parentheses.
- */
-function takeWhat(take: Take): string {
-  const names = take.names.map((name) => takenName(name)).join(', ')
-  switch (take.shape) {
-    case 'dynamic-import': {
-      return names === '' ? 'import()' : `import() reading ${names}`
-    }
-    case 'names': {
-      return names
-    }
-    case 'namespace': {
-      return names === '' ? 'a namespace import' : `a namespace import reading ${names}`
-    }
-    case 'star': {
-      return 'export *'
-    }
-    case 'unreadable': {
-      return 'a require() or other import the build cannot read'
-    }
-  }
-}
-
-/**
- * The line for the takes of a listed package's `cx` exports that only an application module can
- * end, by importing `cx` from Nave instead: a take through a forward (a module of the package or of
- * another dependency that only re-exports the export), a take of a module with no clearing
- * specifier (it gives `cx` out under another name, or no specifier resolving from Vite's root
- * reaches it), and a take the build cannot read. The package's `keepFor` entry stands in only for
- * the package's own calls, and the package is already listed, so the line offers neither that entry
- * nor a `cxModules` one, and says why it prints no `cxModules` entry. `hasPackageFix` is whether a
- * module behind the takes gives `cx` out under another name or is reached through a forward, the
- * cases where a module upstream has a lasting fix to make.
- */
-function takenLine(pkg: string, takes: readonly Take[], hasPackageFix: boolean): string {
-  const entries = takes
-    .map((take) => ({
-      taker: take.taker,
-      text: `${take.taker} (${takeWhat(take)})`,
-      shape: take.shape,
-    }))
-    .toSorted((a, b) => compareText(a.taker, b.taker) || compareText(a.text, b.text))
-  const listed = [...new Set(entries.map((entry) => entry.text))].join(', ')
-  const files =
-    new Set(entries.map((entry) => entry.taker)).size === 1
-      ? 'in that file'
-      : 'in each of those files'
-  const isWhole = entries.some((entry) => entry.shape !== 'names')
-  const wholeClause = isWhole
-    ? '; where a file takes a module whole (a namespace import, export *, import() or an import the build cannot read), import by name what it uses from that module, and cx from @navecss/core/cx'
-    : ''
-  const passedOn = takes.some((take) => take.isPassedOn === true)
-    ? '; where a file re-exports what it takes, import cx from @navecss/core/cx in the files that call it, call cx there in its place, and drop the re-export'
-    : ''
-  const whole = `${wholeClause}${passedOn}`
-  const fix = hasPackageFix
-    ? ' The lasting fix is upstream: import cx from @navecss/core/cx where it is called, and re-export it from there, only under the name cx, in each module that gives it out.'
-    : ''
-  return `${pkg} re-exports cx, and your code takes that cx, from the package or through another package that re-exports it, in ${listed}. The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}. The build prints no cxModules entry for this, since it found none of these takes made, by an import it can read and a specifier that resolves from Vite's root, from a module that re-exports cx from @navecss/core/cx itself and only under the name cx. Once your code makes none of these takes, the keepFor entry clears this.${fix}`
-}
-
 /**
  * The line for modules of a dependency listed in `cxModules` that export a `cx` the build does not
  * follow. When the package also prints its internal re-export line, that line carries the act for
@@ -206,6 +140,35 @@ export function withoutRemoved(
 }
 
 /**
+ * The lines for the takes of a module the consumer can change, and for the calls other
+ * dependencies make through a dependency's re-export of a listed module's `cx`.
+ */
+function takeLines(pkg: string, all: readonly LocatedProblem[]): string[] {
+  const isTaken = (problem: LocatedProblem): boolean => (problem.takes?.length ?? 0) > 0
+  const taken = all.filter((problem) => isTaken(problem))
+  const plain = taken.filter((problem) => !isSecondHop(problem))
+  const hops = taken.filter((problem) => isSecondHop(problem))
+  const takes = plain.flatMap((problem) => problem.takes!)
+  const lines: string[] = []
+  if (takes.length > 0) {
+    const hasPackageFix =
+      plain.some((problem) => isRenamedOrReached(problem)) || takes.some((take) => take.isReached)
+    lines.push(takenLine(pkg, takes, hasPackageFix))
+  }
+  if (hops.length > 0)
+    lines.push(
+      forwardLine(
+        pkg,
+        hops.flatMap((problem) => problem.takes!),
+      ),
+    )
+  const callers = all.flatMap((problem) => problem.callers ?? [])
+  if (callers.length > 0)
+    lines.push(callsThroughLine(pkg, [...new Set(callers)].toSorted(compareText)))
+  return lines
+}
+
+/**
  * The remedy lines for a dependency's problems, `configured` being the `cxModules` list a line
  * that prints one extends.
  */
@@ -215,7 +178,7 @@ export function packageLines(
   configured: readonly string[],
 ): string[] {
   const isTaken = (problem: LocatedProblem): boolean => (problem.takes?.length ?? 0) > 0
-  const problems = all.filter((problem) => !isTaken(problem))
+  const problems = all.filter((problem) => !isTaken(problem) && problem.callers === undefined)
   const keepFor = `keepFor: { '${pkg}': ['<atom>'] }`
   const reexports = problems.filter((problem) => isListableReexport(problem))
   const internal = reexports.filter(
@@ -246,12 +209,6 @@ export function packageLines(
     const hasKeepFor = rest.some((problem) => problem.kind !== 'own') || internal.length > 0
     lines.push(renamedLine(pkg, renamed.length, keepFor, hasKeepFor))
   }
-  const taken = all.filter((problem) => isTaken(problem))
-  const takes = taken.flatMap((problem) => problem.takes!)
-  if (takes.length > 0) {
-    const hasPackageFix =
-      taken.some((problem) => isRenamedOrReached(problem)) || takes.some((take) => take.isReached)
-    lines.push(takenLine(pkg, takes, hasPackageFix))
-  }
+  lines.push(...takeLines(pkg, all))
   return lines
 }

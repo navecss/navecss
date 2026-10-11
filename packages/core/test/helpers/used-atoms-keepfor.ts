@@ -32,6 +32,28 @@ export function takenLine(listed: string, files = 'in that file', whole = '', fi
   return `${pkg} re-exports cx, and your code takes that cx, from the package or through another package that re-exports it, in ${listed}. The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}. The build prints no cxModules entry for this, since it found none of these takes made, by an import it can read and a specifier that resolves from Vite's root, from a module that re-exports cx from @navecss/core/cx itself and only under the name cx. Once your code makes none of these takes, the keepFor entry clears this.${fix}`
 }
 
+/**
+ * The line for a dependency module that re-exports the `cx` of a module `cxModules` lists, when
+ * your code takes it: `pkg` is the forwarding package.
+ */
+export function forwardLine(
+  pkg: string,
+  input: { readonly files?: string; readonly listed: string; readonly whole?: string },
+): string {
+  const { listed, files = 'in that file', whole = '' } = input
+  return `${pkg} re-exports the cx of a module listed in cxModules, and your code takes that cx, from ${pkg} or through another package that re-exports it, in ${listed}. The build follows a listed module one step, so it does not read calls made through what your code takes there: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}.${FIX}`
+}
+
+/**
+ * The line for a dependency module that re-exports the `cx` of a module `cxModules` lists, when
+ * other dependencies' code calls through it: `callers` are their modules, joined.
+ */
+export function callsThroughLine(pkg: string, callers: readonly string[]): string {
+  const [make, owner, its] =
+    callers.length === 1 ? ['makes', "a dependency's", 'its'] : ['make', "dependencies'", 'their']
+  return `${pkg} re-exports the cx of a module listed in cxModules, and the build follows a listed module one step, so it does not read the calls that ${callers.join(', ')} ${make} through that re-export. That code is ${owner}, not yours to change: list the atoms those calls can produce, from ${its} documentation, under the name of ${pkg}, which holds the re-export, in navePlugin(): keepFor: { '${pkg}': ['<atom>'] }. The lasting fix is upstream: ${pkg} can re-export cx from @navecss/core/cx itself, or the code that calls through it can import cx from there.`
+}
+
 export interface Scenario {
   readonly app: Record<string, string>
   readonly code: string

@@ -17,6 +17,7 @@ import { takenReexports } from '../src/vite-listed-takes.ts'
 import { packageLines } from '../src/vite-used-package-lines.ts'
 import { atomLayerAtoms, atoms } from './helpers/used-atoms-app.ts'
 import {
+  forwardLine,
   KEEP_FLEX,
   KEEP_NONE,
   NAVE_APP,
@@ -183,7 +184,9 @@ describe('AC-used-atoms-52 - a cx export the package gives out through its own r
     const app = "import { Menu, cx } from '@acme/ui'\nexport const A = [Menu, cx('block')]\n"
     const listed = await run(app, packages, { keepFor: KEEP_FLEX, cxModules: ['@acme/ui/f.js'] })
 
-    expect(listed.error!.split('\n')).toContain(takenLine('src/App.ts (cx)'))
+    expect(listed.error!.split('\n')).toContain(
+      forwardLine('@acme/ui', { listed: 'src/App.ts (cx)' }),
+    )
     const followed = await run(NAVE_APP, packages, {
       keepFor: KEEP_FLEX,
       cxModules: ['@acme/ui/f.js'],
@@ -363,7 +366,7 @@ describe('AC-used-atoms-52 - a take the build cannot read counts as taking the m
         },
       ],
     ] as const)('when the importer %s', async (_, code, parse) => {
-      const kept = await takenReexports(over(code, parse), context, [problem])
+      const kept = await takenReexports(over(code, parse), context, { standingIn: [problem] })
       const lines = packageLines('@acme/ui', kept, [])
 
       expect(lines).toHaveLength(1)

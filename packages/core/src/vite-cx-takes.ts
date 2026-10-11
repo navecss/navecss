@@ -29,6 +29,12 @@ export interface Taken {
    * then exports.
    */
   readonly isPassedOn?: boolean
+  /**
+   * Whether the importer does nothing with what it takes but re-export it: `export ... from`, or an
+   * import that every use of is an export. A forward is followed to what takes it; it is not a
+   * take on the `cxModules` route.
+   */
+  readonly isForward?: boolean
 }
 
 export interface Take extends Taken {
@@ -91,19 +97,39 @@ interface Scan {
 }
 
 /**
- * Whether the module exports the binding that the import specifier declares.
+ * The references to the binding that the import specifier of `source` declares.
  */
-function isExported(analysis: ScopeAnalysis, source: string, specifier: AstNode): boolean {
+function usesOf(analysis: ScopeAnalysis, source: string, specifier: AstNode): readonly Reference[] {
   const local = exportNameOf(nodeAt(specifier, 'local'))
-  return analysis.references.some(({ binding, node }) => {
-    const parent = analysis.parentOf.get(node)
-    return (
-      binding?.kind === 'import' &&
-      binding.source === source &&
-      binding.name === local &&
-      (parent?.type === 'ExportSpecifier' || parent?.type === 'ExportDefaultDeclaration')
-    )
-  })
+  return analysis.references.filter(
+    ({ binding }) =>
+      binding?.kind === 'import' && binding.source === source && binding.name === local,
+  )
+}
+
+/**
+ * Whether a reference is what an export statement exports.
+ */
+function isExportOf(analysis: ScopeAnalysis, reference: Reference): boolean {
+  const parent = analysis.parentOf.get(reference.node)
+  return parent?.type === 'ExportSpecifier' || parent?.type === 'ExportDefaultDeclaration'
+}
+
+/**
+ * How the module passes on what the import specifier declares: `isPassedOn` when it exports it,
+ * `isForward` when it does nothing else with it.
+ */
+function passingOf(
+  analysis: ScopeAnalysis,
+  source: string,
+  specifier: AstNode,
+): { isForward?: true; isPassedOn?: true } {
+  const uses = usesOf(analysis, source, specifier)
+  const exported = uses.filter((use) => isExportOf(analysis, use))
+  if (exported.length === 0) return {}
+  return exported.length === uses.length
+    ? { isForward: true, isPassedOn: true }
+    : { isPassedOn: true }
 }
 
 /**
@@ -115,7 +141,8 @@ function importTakes(node: AstNode, source: string, scan: Scan): Taken[] {
     if (specifier.type === 'ImportNamespaceSpecifier') {
       const references = referencesTo(scan.analysis(), source, specifier)
       const taken = namespaceTakes(scan.analysis(), references, scan.names)
-      if (taken) found.push(taken)
+      const isForward = passingOf(scan.analysis(), source, specifier).isForward
+      if (taken) found.push({ ...taken, ...(isForward && { isForward }) })
       continue
     }
     const imported =
@@ -123,8 +150,8 @@ function importTakes(node: AstNode, source: string, scan: Scan): Taken[] {
         ? 'default'
         : exportNameOf(nodeAt(specifier, 'imported'))
     if (imported !== undefined && isCxName(scan.names, imported)) {
-      const isPassedOn = isExported(scan.analysis(), source, specifier)
-      found.push({ shape: 'names', names: [imported], ...(isPassedOn && { isPassedOn }) })
+      const passing = passingOf(scan.analysis(), source, specifier)
+      found.push({ shape: 'names', names: [imported], ...passing })
     }
   }
   return found
@@ -136,15 +163,17 @@ function importTakes(node: AstNode, source: string, scan: Scan): Taken[] {
  */
 function exportTakes(node: AstNode, scan: Scan): Taken[] {
   if (node.type === 'ExportAllDeclaration') {
-    if (nodeAt(node, 'exported') !== undefined) return [{ shape: 'namespace', names: [] }]
+    if (nodeAt(node, 'exported') !== undefined) {
+      return [{ shape: 'namespace', names: [], isForward: true }]
+    }
     const hasNamed =
       scan.names === undefined || scan.names.keys().some((name) => name !== 'default')
-    return hasNamed ? [{ shape: 'star', names: [] }] : []
+    return hasNamed ? [{ shape: 'star', names: [], isForward: true }] : []
   }
   const re = nodesAt(node, 'specifiers')
     .map((specifier) => exportNameOf(nodeAt(specifier, 'local')))
     .filter((name): name is string => name !== undefined && isCxName(scan.names, name))
-  return re.length === 0 ? [] : [{ shape: 'names', names: re, isPassedOn: true }]
+  return re.length === 0 ? [] : [{ shape: 'names', names: re, isPassedOn: true, isForward: true }]
 }
 
 /**

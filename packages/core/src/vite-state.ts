@@ -7,8 +7,9 @@
  * even from the same config object, starts a fresh one.
  */
 import type { DeclaredModules } from './vite-cx-modules.ts'
+import type { ServerImport } from './vite-server-takes.ts'
 import type { SetupExposures } from './vite-setup-member.ts'
-import type { DevEnvironmentLike } from './vite-types.ts'
+import type { DevEnvironmentLike, RenderContext } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
 
 /**
@@ -114,6 +115,16 @@ export interface RootState {
    */
   clientEnded: boolean
   /**
+   * The imports the server environments of this process made of a listed package they leave
+   * external, judged once the client has ended.
+   */
+  readonly serverImports: ServerImport[]
+  /**
+   * The client environment once it has ended: its context, which still resolves and reads its
+   * graph, and its name, for a server environment that ends after it.
+   */
+  client: { readonly ctx: RenderContext; readonly environment: string } | undefined
+  /**
    * The environments the builder was going to build when it reached its last stage, and the ones
    * whose modules have been read since: the markup warning is judged when the second holds the
    * first.
@@ -208,6 +219,8 @@ function freshState(): RootState {
     emitted: undefined,
     externals: new Set(),
     clientEnded: false,
+    serverImports: [],
+    client: undefined,
     expectedEnvironments: undefined,
     builtEnvironments: new Set(),
     warned: new Set(),
