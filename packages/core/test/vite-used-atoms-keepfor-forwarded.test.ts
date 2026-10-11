@@ -168,6 +168,16 @@ describe('AC-used-atoms-52 - a namespace held in a variable', () => {
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
   }, 60_000)
 
+  it('takes the module whole when the variable that holds it is exported', async () => {
+    const built = await run("export const ns = await import('@acme/ui')\n", packages, {
+      keepFor: KEEP_FLEX,
+    })
+
+    expect(built.error!.split('\n')).toContain(
+      takenLine('src/App.ts (import())', 'in that file', WHOLE),
+    )
+  }, 60_000)
+
   it('takes the cx export it reads, and the module whole for any other use', async () => {
     const read = await run(lazy("return [ns.Menu, ns.cn('block')]"), packages, {
       keepFor: KEEP_FLEX,
@@ -256,6 +266,65 @@ describe('AC-used-atoms-52 - a name the module exports itself in place of a star
     },
     60_000,
   )
+
+  it('is not a cx export when a namespace export of the same name wins over the star', async () => {
+    const files = acme("export * from './f.js'\nexport * as cn from './g.js'\n", {
+      'f.js': CN,
+      'g.js': 'export const x = 1\n',
+    })
+    const built = await run(
+      "import { Menu, cn } from '@acme/ui'\nexport const A = [Menu, cn.x]\n",
+      { '@acme/ui': files },
+      { keepFor: KEEP_FLEX },
+    )
+
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
+  }, 60_000)
+
+  it('is a cx export of neither star when two stars export a name with different bindings', async () => {
+    const files = acme("export * from './f.js'\nexport * from './g.js'\n", {
+      'f.js': CN,
+      'g.js': 'export const cn = (x) => x\n',
+    })
+    const built = await run(
+      "export * from '@acme/ui'\n",
+      { '@acme/ui': files },
+      { keepFor: KEEP_FLEX },
+      { 'src/B.ts': "import { Menu } from './App.ts'\nexport const B = Menu\n" },
+    )
+
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
+  }, 60_000)
+
+  it('stays a cx export when two stars export the same binding of cx', async () => {
+    const files = acme("export * from './f.js'\nexport * from './g.js'\n", {
+      'f.js': CN,
+      'g.js': CN,
+    })
+    const built = await run(
+      "import { Menu, cn } from '@acme/ui'\nexport const A = [Menu, cn('block')]\n",
+      { '@acme/ui': files },
+      { keepFor: KEEP_FLEX },
+    )
+
+    expect(built.error!.split('\n')).toContain(takenLine('src/App.ts (cn)'))
+  }, 60_000)
+
+  it('is not a cx export when a name declared by an array pattern wins over the star', async () => {
+    const files = acme("export * from './f.js'\nexport const [, cn] = [0, (x) => x]\n", {
+      'f.js': CN,
+    })
+    const built = await run(
+      "import { Menu, cn } from '@acme/ui'\nexport const A = [Menu, cn('block')]\n",
+      { '@acme/ui': files },
+      { keepFor: KEEP_FLEX },
+    )
+
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
+  }, 60_000)
 
   it('keeps the default export of a star-exported module out of the star', async () => {
     const files = acme("export * from './f.js'\nexport default function K(x) { return x }\n", {
@@ -369,6 +438,7 @@ describe('AC-used-atoms-52 - the walk ends, and the routes a take can be on', ()
       resolve: (specifier: string) => Promise.resolve({ id: `${DIR}${specifier.slice(2)}` }),
     } as unknown as RenderContext
     const holders = await holdersOf(ctx, {
+      cxExports: new Map(),
       id: `${DIR}f.js`,
       names: new Set(['cn']),
       resolutions: new Map(),

@@ -11,6 +11,7 @@ import type { RenderContext } from './vite-types.ts'
 import { specifiersIn } from './vite-cx-importers.ts'
 import { fileOf } from './vite-cx-modules.ts'
 import { reexportedNames } from './vite-cx-reexported.ts'
+import { type CxExports, type Resolutions, resolvedFile, rivalsOf } from './vite-cx-star-exports.ts'
 import { importersOf } from './vite-dependency-reexports.ts'
 import { isDependencyId } from './vite-module-kind.ts'
 
@@ -22,35 +23,6 @@ export interface Holder {
   readonly id: string
   readonly names: ReadonlySet<string>
   readonly isReached: boolean
-}
-
-/**
- * The file each specifier resolves to from each importer, asked once: a barrel's specifiers are
- * resolved once however many modules of it give `cx` out.
- */
-export type Resolutions = Map<string, Promise<string | undefined>>
-
-/**
- * The file `specifier` resolves to from the importer `id`.
- */
-function resolvedFile(
-  ctx: RenderContext,
-  resolutions: Resolutions,
-  input: { readonly id: string; readonly specifier: string },
-): Promise<string | undefined> {
-  const key = `${input.id}\0${input.specifier}`
-  const known = resolutions.get(key)
-  if (known) return known
-  const asked = (async (): Promise<string | undefined> => {
-    try {
-      const resolved = await ctx.resolve?.(input.specifier, input.id)
-      return resolved ? fileOf(resolved.id) : undefined
-    } catch {
-      return undefined
-    }
-  })()
-  resolutions.set(key, asked)
-  return asked
 }
 
 /**
@@ -81,6 +53,7 @@ export async function reachingSpecifiers(
 async function reexportedBy(
   ctx: RenderContext,
   input: {
+    readonly cxExports: CxExports
     readonly file: string
     readonly id: string
     readonly names: ReadonlySet<string>
@@ -91,9 +64,10 @@ async function reexportedBy(
   if (code === null || code === undefined) return []
   try {
     const read = await reachingSpecifiers(ctx, { ...input, code })
-    return read && read.reaches.size > 0
-      ? reexportedNames(read.program, { names: input.names, reaches: read.reaches })
-      : []
+    if (!read || read.reaches.size === 0) return []
+    const { program, reaches } = read
+    const rivals = await rivalsOf(ctx, { ...input, program, reaches })
+    return reexportedNames(program, { names: input.names, reaches, rivals })
   } catch {
     return []
   }
@@ -106,6 +80,7 @@ async function reexportedBy(
 async function reexportsOf(
   ctx: RenderContext,
   input: {
+    readonly cxExports: CxExports
     readonly id: string
     readonly names: ReadonlySet<string>
     readonly resolutions: Resolutions
@@ -128,6 +103,7 @@ async function reexportsOf(
 export async function holdersOf(
   ctx: RenderContext,
   origin: {
+    readonly cxExports: CxExports
     readonly id: string
     readonly names: ReadonlySet<string>
     readonly resolutions: Resolutions
@@ -138,6 +114,7 @@ export async function holdersOf(
   while (queue.length > 0) {
     const id = queue.shift()!
     const reexports = await reexportsOf(ctx, {
+      cxExports: origin.cxExports,
       id,
       names: held.get(id)!,
       resolutions: origin.resolutions,

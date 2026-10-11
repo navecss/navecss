@@ -19,6 +19,11 @@ interface Source {
    * The specifiers the re-exporting module writes that resolve to that module.
    */
   readonly reaches: ReadonlySet<string>
+  /**
+   * The names another star of the re-exporting module exports with a binding of its own, which
+   * leaves them exported by neither star.
+   */
+  readonly rivals: ReadonlySet<string>
 }
 
 /**
@@ -44,12 +49,17 @@ function declaredNames(pattern: AstNode | undefined): string[] {
 }
 
 /**
- * The names the module exports itself, by a declaration or an export list: they win over the
- * same name exported by a star.
+ * The names the module exports itself, by a declaration, an export list or `export * as`: they win
+ * over the same name exported by a star.
  */
-function ownExports(program: AstNode): Set<string> {
+export function ownExports(program: AstNode): Set<string> {
   const found = new Set<string>()
   for (const statement of nodesAt(program, 'body')) {
+    const namespace =
+      statement.type === 'ExportAllDeclaration'
+        ? exportNameOf(nodeAt(statement, 'exported'))
+        : undefined
+    if (namespace !== undefined) found.add(namespace)
     if (statement.type !== 'ExportNamedDeclaration') continue
     const declaration = nodeAt(statement, 'declaration')
     const declared = nodesAt(declaration ?? statement, 'declarations').flatMap((declarator) =>
@@ -77,7 +87,7 @@ function exportedBy(node: AstNode, source: Source, own: ReadonlySet<string>): st
     if (namespace !== undefined) return [namespace]
     return source.names
       .values()
-      .filter((name) => name !== 'default' && !own.has(name))
+      .filter((name) => name !== 'default' && !own.has(name) && !source.rivals.has(name))
       .toArray()
   }
   return nodesAt(node, 'specifiers').flatMap((specifier) => {
@@ -105,6 +115,17 @@ function exportedAs(analysis: ScopeAnalysis, reference: Reference): string | und
   const parent = analysis.parentOf.get(reference.node)
   if (parent?.type === 'ExportDefaultDeclaration') return 'default'
   return parent?.type === 'ExportSpecifier' ? exportNameOf(nodeAt(parent, 'exported')) : undefined
+}
+
+/**
+ * The specifiers of the `export * from` statements of the module.
+ */
+export function starSources(program: AstNode): string[] {
+  return nodesAt(program, 'body').flatMap((statement) => {
+    const source = staticStringOf(nodeAt(statement, 'source'))
+    const isStar = statement.type === 'ExportAllDeclaration' && !nodeAt(statement, 'exported')
+    return isStar && source !== undefined ? [source] : []
+  })
 }
 
 /**

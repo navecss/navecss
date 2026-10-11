@@ -22,9 +22,11 @@
  * assignment, a wrapper, or a take the build cannot read) ends the walk and is the package's own
  * call, which `keepFor` stands in for; a module that both calls and forwards counts on both sides,
  * and listing a package that only forwards in `keepFor` changes nothing, since a forward is not a
- * call. A module with takes on both routes prints its `cxModules` line first, and the other line
- * once that one is followed.
+ * call. A module with takes on both routes prints only its `cxModules` line, and the other line not
+ * until a later build, after that one is followed; a further line may come first, such as the one a
+ * dependency that re-exports from the module gets once the module is listed.
  */
+import type { CxExports, Resolutions } from './vite-cx-star-exports.ts'
 import type { Take, Taken } from './vite-cx-takes.ts'
 import type { RenderContext } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
@@ -34,12 +36,7 @@ import { filePathOf } from './vite-css-id.ts'
 import { fileOf } from './vite-cx-modules.ts'
 import { takesIn, UNREADABLE } from './vite-cx-takes.ts'
 import { importersOf, withClearingSpecifiers } from './vite-dependency-reexports.ts'
-import {
-  type Holder,
-  holdersOf,
-  reachingSpecifiers,
-  type Resolutions,
-} from './vite-listed-holders.ts'
+import { type Holder, holdersOf, reachingSpecifiers } from './vite-listed-holders.ts'
 import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
 import { compareText } from './vite-problems.ts'
 
@@ -180,14 +177,18 @@ async function takesFrom(
 async function keptOf(
   ctx: RenderContext,
   context: UsedContext,
-  input: { readonly problems: readonly LocatedProblem[]; readonly resolutions: Resolutions },
+  input: {
+    readonly cxExports: CxExports
+    readonly problems: readonly LocatedProblem[]
+    readonly resolutions: Resolutions
+  },
 ): Promise<LocatedProblem[]> {
-  const { problems, resolutions } = input
+  const { cxExports, problems, resolutions } = input
   const first = problems[0]!
   const pkg = first.pkg!
   const names = new Set(problems.flatMap((problem) => problem.exportedAs ?? []))
   const clearable = problems.filter((problem) => problem.specifier !== undefined)
-  const holders = await holdersOf(ctx, { id: first.moduleId!, names, resolutions })
+  const holders = await holdersOf(ctx, { cxExports, id: first.moduleId!, names, resolutions })
   const routed = await Promise.all(
     holders.map((holder) =>
       takesFrom(ctx, context, {
@@ -220,8 +221,16 @@ export async function takenReexports(
     byModule.set(problem.moduleId, [...(byModule.get(problem.moduleId) ?? []), problem])
   }
   const resolutions: Resolutions = new Map()
+  const cxExports: CxExports = new Map(
+    byModule
+      .values()
+      .map((problems) => [
+        fileOf(problems[0]!.moduleId!),
+        new Set(problems.flatMap((problem) => problem.exportedAs ?? [])),
+      ]),
+  )
   const kept = await Promise.all(
-    byModule.values().map((problems) => keptOf(ctx, context, { problems, resolutions })),
+    byModule.values().map((problems) => keptOf(ctx, context, { cxExports, problems, resolutions })),
   )
   return kept.flat()
 }
