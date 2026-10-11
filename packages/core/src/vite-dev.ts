@@ -22,7 +22,7 @@ import { isServedAsStylesheet, judgeWhenServed } from './vite-dev-judge.ts'
 import { graphRoots, transformReachable } from './vite-dev-read.ts'
 import { modulesWithGrownStylesheets } from './vite-dev-update.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from './vite-prune.ts'
-import { collectedAtoms } from './vite-state.ts'
+import { servedAtoms } from './vite-state.ts'
 
 /**
  * How long a reload that the page has not answered by asking for the stylesheet again holds back
@@ -122,7 +122,7 @@ export const devServing: DevServing = {
 
   notePages(context) {
     const { state } = context
-    const atoms = collectedAtoms(state, context.kept)
+    const atoms = servedAtoms(state, context.kept)
     for (const sheet of state.served) {
       const [id, { atoms: served, environment }] = sheet
       if (atoms.isSubsetOf(served)) continue
@@ -135,7 +135,7 @@ export const devServing: DevServing = {
   noteGrowth(context) {
     const { state } = context
     if (state.served.size === 0) return
-    const atoms = collectedAtoms(state, context.kept)
+    const atoms = servedAtoms(state, context.kept)
     for (const [id, sheet] of state.served) {
       if (!atoms.isSubsetOf(sheet.atoms) && !isReloading(context, id)) state.stale.add(id)
     }
@@ -169,7 +169,7 @@ export async function serveStylesheet(
   if (environment.config.consumer === 'client') await devServing.hold(dev, id)
   judgeWhenServed(context, id)
   if (environment.config.consumer !== 'client') return undefined
-  const atoms = collectedAtoms(context.state, context.kept)
+  const atoms = servedAtoms(context.state, context.kept)
   context.state.served.set(id, { environment: dev, atoms })
   context.state.reloading.delete(id)
   return { code: pruneAtomicLayer(css, atoms), map: NO_MAP }

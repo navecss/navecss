@@ -33,10 +33,18 @@ import {
   buildUsed,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
+import { appConfig, devCss, startDev, stopDev } from './helpers/vite-app.ts'
 
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
+
+/**
+ * The line the dev server prints when `cx.dynamic()` is given an atom that is in neither `keep`
+ * nor a `keepFor` list.
+ */
+const notInKeepLine = (name: string): string =>
+  `[nave] cx.dynamic("${name}") applied no class: "${name}" is not in keep or in a keepFor list, and navePlugin() gives cx.dynamic() only the atoms in those lists, in a build as in dev. Add "${name}" to keep in navePlugin(), or, when a dependency makes the call, to its list in keepFor.`
 
 const EQUAL = `
     type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
@@ -569,9 +577,52 @@ describe('AC-used-atoms-20 — the dev define, from the built package', { timeou
     expect(logged).toEqual([])
     expect(Object.hasOwn(map, 'grid')).toBe(false)
     expect(logged).toEqual([
-      '[nave] cx.dynamic("grid") applied no class: "grid" is not kept, so the build does not ship it either. Add "grid" to keep in navePlugin(), or, when a dependency makes the call, to its list in keepFor.',
+      '[nave] cx.dynamic("grid") applied no class: "grid" is not in keep or in a keepFor list, and navePlugin() gives cx.dynamic() only the atoms in those lists, in a build as in dev. Add "grid" to keep in navePlugin(), or, when a dependency makes the call, to its list in keepFor.',
     ])
   })
+
+  it('does not claim what the build ships when a name outside keep is an atom that ships for another reason', async () => {
+    const app = makeUsedApp(
+      appFiles(
+        {
+          'src/App.ts': `${IMPORT}export const a = cx('flex')\n`,
+          'src/render.ts': `${IMPORT}export default [cx.dynamic('srOnly'), cx.dynamic('srOnlyFocusable'), cx.dynamic('flex'), cx.dynamic('grid')].join('|')\n`,
+        },
+        ['src/App.ts'],
+      ),
+    )
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const server = await startDev({
+        ...appConfig(app.root, 'postcss', [navePlugin({ keep: ['srOnly'] })]),
+        cacheDir: path.join(app.root, 'node_modules', '.vite'),
+        optimizeDeps: { noDiscovery: true },
+      })
+      try {
+        await server.transformIndexHtml(
+          '/index.html',
+          readFileSync(path.join(app.root, 'index.html'), 'utf8'),
+        )
+        const served = await devCss(server, '/src/main.ts')
+        const layer = Object.entries(served).find(([url]) => url.startsWith('/src/app.css'))?.[1]
+        const rendered = (await server.ssrLoadModule('/src/render.ts')) as { default: string }
+
+        expect(atomLayerAtoms(layer ?? '')).toEqual(atoms('flex', 'srOnly', 'srOnlyFocusable'))
+        expect(rendered.default).toBe('nave-sr-only|||')
+        expect(logged.mock.calls.map((call) => call.join(' '))).toEqual([
+          notInKeepLine('srOnlyFocusable'),
+          notInKeepLine('flex'),
+          notInKeepLine('grid'),
+        ])
+        expect(logged.mock.calls.join('\n')).not.toContain('does not ship')
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      logged.mockRestore()
+      app.dispose()
+    }
+  }, 120_000)
 })
 
 describe('AC-used-atoms-23 — the post-order half never changes a module', () => {

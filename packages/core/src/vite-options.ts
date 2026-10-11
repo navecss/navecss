@@ -20,7 +20,9 @@ export interface UsedAtomOptions {
   atomic?: 'all' | 'used'
 
   /**
-   * Atoms always shipped: every atom your own `cx.dynamic()` calls can take.
+   * Atoms always shipped, whether or not the build reads a use of them: every atom your own
+   * `cx.dynamic()` calls can take, and the atom of each Nave class written where the build cannot
+   * read it, such as in a server template or in CMS text.
    */
   keep?: readonly AtomName[]
 
@@ -28,16 +30,21 @@ export interface UsedAtomOptions {
    * By package name: the atoms a dependency's own `cx()` calls can produce, for a package whose
    * calls the build cannot read. They ship as if they were in `keep`, beside the atoms of the
    * package's calls the build does read. The calls it cannot read are not changed, so any other
-   * atom they apply has no rule. An empty list is accepted: it says those calls produce no atom,
-   * so the list adds none, and a `cx.dynamic()` call in the package still fails the build, as it
-   * does with no entry. A package in your own workspace is your code, not a dependency. The entry
-   * stands in for the package's own calls only: a re-export of `cx` in the package that a module of
-   * yours takes (imports, re-exports or reads off a namespace, directly or through re-exports of it
-   * that the build reads, as `export ... from` or an import exported unchanged, in this package or
-   * another) still fails the build, because the calls your module makes through it would ship with
-   * no rule, and the message says how to clear it. Listing here a package that only re-exports it
-   * changes nothing, since a re-export is not a call. A server build that leaves the package
-   * external does not read it, so a take that only server code makes fails nothing.
+   * atom they apply has no rule unless the build ships it for another reason. An empty list is
+   * accepted: it says those calls produce no atom, so the list adds none, and a `cx.dynamic()`
+   * call in the package still fails the build, as it does with no entry. A package in your own
+   * workspace is your code, not a dependency. The entry stands in for the package's own calls
+   * only: a re-export of `cx` in the package that the build reads and a module of yours takes
+   * (imports, re-exports or reads off a namespace, directly or through re-exports of it that the
+   * build reads, as `export ... from` or an import exported unchanged, in this package or another)
+   * still fails the build, because the calls your module makes through it would ship with no rule,
+   * and the message says how to clear it. Listing here a package that only re-exports it does not
+   * clear a take of yours, since a re-export is not a call. A server build that leaves the package
+   * external does not read it, so a take only your server code makes is judged by what the client
+   * build read: it fails the build as above when the client build read the re-export it takes, and
+   * an import from a module of the package that no environment read gets a warning naming
+   * `ssr.noExternal`; with separate client and server commands, the next client command judges
+   * them.
    */
   keepFor?: Readonly<Record<string, readonly AtomName[]>>
 

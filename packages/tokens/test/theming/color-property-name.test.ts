@@ -29,6 +29,7 @@ import {
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { build } from '../../src/facade.ts'
+import { buildBudget } from '../helpers/build-budget.ts'
 import { scratchDir as makeScratchDir, registerScratchCleanup } from '../helpers/scratch-dir.ts'
 
 registerScratchCleanup()
@@ -123,7 +124,7 @@ describe('AC-theming-56 covers: R26a (shipped artifact, both builds)', () => {
     consumerCss = readFileSync(path.join(outDir, 'tokens.css'), 'utf8')
     consumerDts = readFileSync(path.join(outDir, 'tokens.d.ts'), 'utf8')
     consumerJs = readFileSync(path.join(outDir, 'tokens.js'), 'utf8')
-  })
+  }, buildBudget(1))
 
   it("Nave's own build: ColorPropertyName's members equal the defined (declared or @property-registered) --nave-color-* names, tint included, no ramp step", () => {
     const declared = definedColorProperties(naveCss)
