@@ -11,7 +11,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, symlinkSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { KEEP_CONSTANT } from '../src/vite-config-hooks.ts'
 import { packCoreTarball } from './helpers/pack-core.ts'
@@ -120,4 +120,35 @@ describe('AC-nextjs-used-atoms-21 — Vite folds the map as an object literal, n
     }
     expect(await builtJs([asText])).toContain(MAP_TEXT)
   }, 60_000)
+})
+
+/**
+ * The source module's `cx.dynamic`, evaluated afresh with the constant set to `constant`.
+ */
+async function dynamicWith(constant: object | string): Promise<(name: 'interactive') => string> {
+  vi.resetModules()
+  vi.stubGlobal(KEEP_CONSTANT, constant)
+  const { cx } = await import('../src/cx.ts')
+  return cx.dynamic
+}
+
+describe('AC-nextjs-used-atoms-21 — the source module, in this process', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  it('reads the object as it is', async () => {
+    expect((await dynamicWith(KEPT))('interactive')).toBe('nave-interactive')
+  })
+
+  it('reads the JSON text, and decodes it once however often it is read', async () => {
+    const parse = vi.spyOn(JSON, 'parse')
+    const dynamic = await dynamicWith(JSON.stringify(KEPT))
+    for (let call = 0; call < CALLS; call += 1) {
+      expect(dynamic('interactive')).toBe('nave-interactive')
+    }
+    expect(parse).toHaveBeenCalledTimes(1)
+    parse.mockRestore()
+  })
 })
