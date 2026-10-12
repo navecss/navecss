@@ -8,7 +8,7 @@
  */
 
 import { type Adjacency, ADJACENCY } from './adjacency-source.ts'
-import { SEMANTIC_SLOTS } from './semantics.ts'
+import { CHROMATIC_MAPPING, SEMANTIC_SLOTS, type SlotMapping, type StepRef } from './semantics.ts'
 
 export type { Adjacency, MeasuredOpenSlots, OrphanCheckResult } from './adjacency-source.ts'
 export {
@@ -306,6 +306,60 @@ export function assertNoFocusableAdjacentToActionFill(
         `Adjacency rule violation: the focusable slot "${focusable}" is declared adjacent ` +
           `to the action fill "${fill}". ${FOCUSABLE_ADJACENT_TO_ACTION_FILL_REASON}`,
       )
+    }
+  }
+}
+
+/**
+ * The reason clause below, promoted to a named constant for the same review-diff-visibility
+ * reason as the ones above (cleared copy, extraction only). Any re-wording, including
+ * shortening, is a change to cleared copy and needs review as one; re-wrapping the same
+ * words does not.
+ */
+const TRANSLUCENT_SLOT_IN_PAIR_REASON =
+  'The contrast harness reads opaque colours only, and a translucent slot renders as a ' +
+  'blend with whatever lies beneath it, which no pair can describe. A translucent slot is ' +
+  'listed in ADJACENCY_EXCLUSIONS instead. This rule records a decision about which ' +
+  'colour pairs this design system will declare and test; it is not a check to silence or ' +
+  'narrow to make a build pass. Remove the declaration, or, if you need this pair, open ' +
+  'an issue describing it and why, and leave it out of the pull request until that issue ' +
+  'is answered.'
+
+/**
+ * Whether a step reference carries an `alpha` below 1.
+ */
+const isTranslucent = (ref: StepRef): boolean =>
+  'alpha' in ref && ref.alpha !== undefined && ref.alpha < 1
+
+/**
+ * The slots whose mapping carries an `alpha` below 1 in either scheme.
+ */
+function translucentSlots(mapping: Readonly<Record<string, SlotMapping>>): ReadonlySet<string> {
+  return new Set(
+    Object.entries(mapping)
+      .filter(([, { light, dark }]) => isTranslucent(light) || isTranslucent(dark))
+      .map(([slot]) => slot),
+  )
+}
+
+/**
+ * Fails naming the slot the moment a pair declares a translucent slot as its subject or its
+ * partner. Parameterised so the failing direction is reachable from a constructed set, not
+ * only the shipped one.
+ */
+export function assertNoTranslucentSlotInDeclaredPair(
+  adjacency: readonly Adjacency[] = ADJACENCY,
+  mapping: Readonly<Record<string, SlotMapping>> = CHROMATIC_MAPPING,
+): void {
+  const translucent = translucentSlots(mapping)
+  for (const pair of adjacency) {
+    for (const slot of [pair.subject, pair.against]) {
+      if (translucent.has(slot)) {
+        throw new Error(
+          `Adjacency rule violation: the translucent slot "${slot}" is declared in the pair ` +
+            `(${pair.subject}, ${pair.against}). ${TRANSLUCENT_SLOT_IN_PAIR_REASON}`,
+        )
+      }
     }
   }
 }

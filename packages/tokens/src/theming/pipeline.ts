@@ -64,13 +64,23 @@ interface PipelineRecords {
   tintHue: number
 }
 
+/**
+ * A slot's scale and step after any alias chain, with the `alpha` literal when the mapping
+ * gave one (absent means opaque).
+ */
+interface ResolvedStep {
+  scale: 'danger' | 'neutral' | 'primary'
+  step: number
+  alpha?: number
+}
+
 export interface ResolvedSlot {
   slot: string
   branch: 'dark' | 'light'
   /**
   The scale + step this slot resolves to after following any alias chain.
    */
-  resolved: { scale: 'danger' | 'neutral' | 'primary'; step: number }
+  resolved: ResolvedStep
   /**
    * The concrete OKLCH colour this slot resolves to under the pipeline's own tint hue
    * (for `neutral`-derived slots, the value reconstructed exactly per R10 — real for the
@@ -120,7 +130,7 @@ function resolveStepRef(
   ref: StepRef,
   branch: 'dark' | 'light',
   isAchromaticBranch: boolean,
-): { scale: 'danger' | 'neutral' | 'primary'; step: number } {
+): ResolvedStep {
   let current = ref
   for (let depth = 0; depth < 10; depth++) {
     if (!('alias' in current)) return current
@@ -134,12 +144,20 @@ function resolveStepRef(
  *
  */
 function cssForResolved(
-  resolved: { scale: 'danger' | 'neutral' | 'primary'; step: number },
+  resolved: ResolvedStep,
   ctx: GenerationContext,
 ): { css: string; literal: Oklch } {
   if (resolved.scale === 'neutral') {
     const colour = resolveNeutralStep(resolved.step, ctx.tintHue, ctx.neutralLiterals)
-    return { css: neutralRcsFormula(resolved.step, ctx.neutralLiterals), literal: colour }
+    return {
+      css: neutralRcsFormula(resolved.step, ctx.neutralLiterals, resolved.alpha),
+      literal: colour,
+    }
+  }
+  if (resolved.alpha !== undefined) {
+    throw new Error(
+      `The ${resolved.scale} scale has no translucent form: alpha is written on neutral steps only.`,
+    )
   }
   const ramp = resolved.scale === 'primary' ? ctx.primaryRamp : ctx.dangerRamp
   const colour = rampStep(ramp, resolved.step)

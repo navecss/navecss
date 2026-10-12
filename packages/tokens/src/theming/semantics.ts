@@ -4,7 +4,11 @@
  * (R16/R17), the R18a-d taxonomy additions, and R19's danger/feedback aliasing.
  *
  * A `StepRef` names a scale and a step (`{ scale: 'primary', step: 600 }`) or aliases
- * another slot outright (`{ alias: 'content.primary' }`, R18d/R19's alias precedent).
+ * another slot outright (`{ alias: 'content.primary' }`, R18d/R19's alias precedent). A step
+ * on the `neutral` scale may also carry an `alpha` below 1, written into the emitted colour as
+ * a literal: that is how the one translucent slot (`backdrop.modal`) is made. The contrast
+ * harness reads opaque literals only, so `assertNoTranslucentSlotInDeclaredPair`
+ * (`./adjacency.ts`) keeps such a slot out of every declared pair.
  *
  * R18e's `on-*` anchor derivation and its shape guard live in `./on-star.ts`, split out on
  * file-budget grounds along the boundary this doc already draws: this module is the VALUE
@@ -14,7 +18,7 @@
 
 type Scale = 'neutral' | 'primary' | 'danger'
 
-export type StepRef = { scale: Scale; step: number } | { alias: string }
+export type StepRef = { alpha?: number; scale: Scale; step: number } | { alias: string }
 
 export interface SlotMapping {
   light: StepRef
@@ -35,6 +39,11 @@ export const ACHROMATIC_BRANCH_SLOTS = [
 ] as const
 
 const ref = (scale: Scale, step: number): StepRef => ({ scale, step })
+const translucentRef = (step: number, alpha: number): StepRef => ({
+  scale: 'neutral',
+  step,
+  alpha,
+})
 const aliasRef = (slot: string): StepRef => ({ alias: slot })
 
 /**
@@ -89,6 +98,11 @@ export const CHROMATIC_MAPPING: Record<string, SlotMapping> = {
   // per R23/R18a round 9, a settled ruling's write-back.
   'action.secondary': { light: ref('neutral', 100), dark: ref('neutral', 800) },
 
+  // A transient fill for a control under the pointer, the keyboard or a press (a highlighted
+  // list item, a ghost button). It sits in the action family because a focus ring is drawn
+  // offset outside the control it belongs to and never lands on the control's own fill.
+  'action.highlight': { light: ref('neutral', 100), dark: ref('neutral', 700) },
+
   // R18c: split foreground/solid-background roles, danger family (seed-derived).
   'feedback.danger': { light: ref('danger', 600), dark: ref('danger', 300) },
   'feedback.danger.foreground': { light: ref('danger', 600), dark: ref('danger', 300) },
@@ -113,6 +127,10 @@ export const CHROMATIC_MAPPING: Record<string, SlotMapping> = {
     dark: aliasRef('feedback.warning.foreground'),
   },
   'on-feedback.info': { light: ref('neutral', 0), dark: ref('neutral', 900) },
+
+  // The scrim behind a modal panel: the one translucent slot. Outside `surface.*` so the
+  // frozen surface count and the two quantifiers that range over it stay as they were.
+  'backdrop.modal': { light: translucentRef(950, 0.3), dark: translucentRef(950, 0.6) },
 }
 
 /**

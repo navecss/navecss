@@ -167,6 +167,7 @@ non-colour value is exactly what its name says.
 | `--nave-color-action-primary-active`       | no                          |
 | `--nave-color-on-action-primary`           | yes                         |
 | `--nave-color-action-secondary`            | yes                         |
+| `--nave-color-action-highlight`            | yes                         |
 | `--nave-color-feedback-danger`             | no                          |
 | `--nave-color-feedback-danger-foreground`  | no                          |
 | `--nave-color-on-feedback-danger`          | yes                         |
@@ -179,3 +180,4 @@ non-colour value is exactly what its name says.
 | `--nave-color-feedback-info`               | yes                         |
 | `--nave-color-feedback-info-foreground`    | yes                         |
 | `--nave-color-on-feedback-info`            | yes                         |
+| `--nave-color-backdrop-modal`              | yes                         |

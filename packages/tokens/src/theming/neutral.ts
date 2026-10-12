@@ -174,12 +174,17 @@ export function resolveNeutralStep(
  * `from` the tint custom property and nothing else (R10). The alpha component is pinned to
  * `1` explicitly — an omitted alpha in `oklch(from …)` inherits the ORIGIN's own alpha, so a
  * consumer who sets `--nave-color-tint` to a semi-transparent colour would otherwise make
- * every derived neutral surface semi-transparent too, silently.
+ * every derived neutral surface semi-transparent too, silently. A slot that is translucent on
+ * purpose passes its own `alpha` literal instead.
  */
-export function neutralRcsFormula(step: number, literals: readonly NeutralStep[]): string {
+export function neutralRcsFormula(
+  step: number,
+  literals: readonly NeutralStep[],
+  alpha = 1,
+): string {
   const found = literals.find((s) => s.step === step)
   if (!found) throw new Error(`Neutral step ${step} is not in the shared step table.`)
-  return `oklch(from var(--nave-color-tint) ${roundTo(found.l, 4)} ${roundTo(found.c, 4)} h / 1)`
+  return `oklch(from var(--nave-color-tint) ${roundTo(found.l, 4)} ${roundTo(found.c, 4)} h / ${alpha})`
 }
 
 /**
