@@ -125,17 +125,19 @@ describe('AC-base-ui-overlay-completion-07: the class set is Table P for the sig
   })
 
   it('reds on the class of an unsigned draft left in its state, and not on the state itself (control)', () => {
-    const state = deriveState(allSigned, ['2uuv'])
+    const state = deriveState(allSigned, ['highlight-fill'])
     const kept = `${state}\n.nave-base-ui-item-highlight { }`
 
-    expect(classesOf(state)).toEqual(tablePClassesFor(['2uuv']))
-    expect(classesOf(kept)).not.toEqual(tablePClassesFor(['2uuv']))
+    expect(classesOf(state)).toEqual(tablePClassesFor(['highlight-fill']))
+    expect(classesOf(kept)).not.toEqual(tablePClassesFor(['highlight-fill']))
   })
 
   it('reds on an unsigned draft whose class no table row removes (control)', () => {
-    const state = deriveState(allSigned, ['pdy1'])
+    const state = deriveState(allSigned, ['combobox'])
 
-    expect(classesOf(`${state}\n.nave-base-ui-chip { }`)).not.toEqual(tablePClassesFor(['pdy1']))
+    expect(classesOf(`${state}\n.nave-base-ui-chip { }`)).not.toEqual(
+      tablePClassesFor(['combobox']),
+    )
   })
 })
 
@@ -161,16 +163,16 @@ describe('AC-base-ui-overlay-completion-48: what stays deferred is absent, and w
     expect(popupOpen(css)).toEqual([])
   })
 
-  it('has the backdrop class only if qglc is signed', async () => {
+  it('has the backdrop class only if scrim is signed', async () => {
     expect(classesOf(css).has(`${PREFIX}backdrop`)).toBe(true)
-    expect(classesOf(await buildStyles({ unsigned: ['qglc'] })).has(`${PREFIX}backdrop`)).toBe(
+    expect(classesOf(await buildStyles({ unsigned: ['scrim'] })).has(`${PREFIX}backdrop`)).toBe(
       false,
     )
   })
 
-  it('sets background-color under [data-highlighted] only in item-highlight, and only if 2uuv is signed', async () => {
+  it('sets background-color under [data-highlighted] only in item-highlight, and only if highlight-fill is signed', async () => {
     expect(new Set(highlightOwners(css))).toEqual(new Set([`${PREFIX}item-highlight`]))
-    expect(highlightOwners(await buildStyles({ unsigned: ['2uuv'] }))).toEqual([])
+    expect(highlightOwners(await buildStyles({ unsigned: ['highlight-fill'] }))).toEqual([])
   })
 
   it('sets no transition-* on a popup or the tab indicator themselves', () => {
@@ -223,9 +225,9 @@ describe('AC-base-ui-overlay-completion-48: what stays deferred is absent, and w
     ).toHaveLength(1)
   })
 
-  it('would see a highlight background outside item-highlight, and one in a state without 2uuv (control)', () => {
+  it('would see a highlight background outside item-highlight, and one in a state without highlight-fill (control)', () => {
     const outside = planted('.nave-base-ui-item[data-highlighted] { background-color: red }')
-    const withoutSignature = deriveState(allSigned, ['2uuv'])
+    const withoutSignature = deriveState(allSigned, ['highlight-fill'])
 
     expect(highlightOwners(outside)).toContain(`${PREFIX}item`)
     expect(highlightOwners(withoutSignature)).toEqual([])

@@ -11,7 +11,14 @@ import { flatten } from './stylesheet.ts'
 /**
 The six signature drafts. An unsigned draft takes its classes, and the rows that need them, out of the stylesheet and Table P.
  */
-export const DRAFTS = ['pdy1', '2uuv', 'abv1', 'qok6', 'd8l7', 'qglc'] as const
+export const DRAFTS = [
+  'combobox',
+  'highlight-fill',
+  'open-ghost',
+  'popup-fade',
+  'tooltip-fade',
+  'scrim',
+] as const
 
 export type Draft = (typeof DRAFTS)[number]
 
@@ -20,7 +27,7 @@ export type Draft = (typeof DRAFTS)[number]
  * draft is signed.
  */
 export const DRAFT_CLASSES: Readonly<Record<Draft, readonly string[]>> = {
-  pdy1: [
+  combobox: [
     'active-option',
     'input-group',
     'combobox-trigger',
@@ -29,18 +36,18 @@ export const DRAFT_CLASSES: Readonly<Record<Draft, readonly string[]>> = {
     'chip-remove',
     'list-empty',
   ].map((name) => `nave-base-ui-${name}`),
-  '2uuv': ['nave-base-ui-item-highlight'],
-  abv1: [],
-  qok6: ['nave-base-ui-popup-motion', 'nave-base-ui-popup-fade'],
-  d8l7: ['nave-base-ui-tooltip-motion'],
-  qglc: ['nave-base-ui-backdrop'],
+  'highlight-fill': ['nave-base-ui-item-highlight'],
+  'open-ghost': [],
+  'popup-fade': ['nave-base-ui-popup-motion', 'nave-base-ui-popup-fade'],
+  'tooltip-fade': ['nave-base-ui-tooltip-motion'],
+  scrim: ['nave-base-ui-backdrop'],
 }
 
 const RULE_START = /^ {2}\.(nave-base-ui-[\w-]+) /
 
 /**
  * The line of `nave-base-ui-button` that sets the open ghost trigger, from its leading `}` to its
- * newline. Unsigned `abv1` takes it out.
+ * newline. Unsigned `open-ghost` takes it out.
  */
 export const OPEN_GHOST_KEY = '    } &[data-nave-variant="ghost"][aria-expanded="true"]'
 
@@ -99,7 +106,7 @@ const withoutLinesStartingWith = (css: string, prefix: string): string =>
     .join('\n')
 
 /**
- * The all-signed stylesheet with the open ghost key out: what unsigned `abv1` leaves.
+ * The all-signed stylesheet with the open ghost key out: what unsigned `open-ghost` leaves.
  */
 export const withoutOpenGhost = (css: string): string =>
   withoutLinesStartingWith(css, OPEN_GHOST_KEY)
@@ -112,7 +119,7 @@ export const deriveState = (allSigned: string, unsigned: readonly Draft[]): stri
     allSigned,
     unsigned.flatMap((draft) => DRAFT_CLASSES[draft]),
   )
-  return unsigned.includes('abv1') ? withoutOpenGhost(rules) : rules
+  return unsigned.includes('open-ghost') ? withoutOpenGhost(rules) : rules
 }
 
 /**

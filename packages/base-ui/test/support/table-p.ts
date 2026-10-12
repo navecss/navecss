@@ -9,7 +9,7 @@ import type { Draft } from './draft-states.ts'
 const BASE = 'nave-base-ui-'
 
 /**
- * Where the scrim class goes when `qglc` is signed: at scope (i) on `AlertDialog.Backdrop` alone,
+ * Where the scrim class goes when `scrim` is signed: at scope (i) on `AlertDialog.Backdrop` alone,
  * at scope (ii) on `Dialog.Backdrop` too.
  */
 export type BackdropScope = 'i' | 'ii'
@@ -71,11 +71,11 @@ const CONTEXT_MENU_ITEMS = [
 ]
 
 const rows: readonly Row[] = [
-  row(['Menu.Popup'], always('list-popup'), signedWith('qok6', 'popup-motion')),
-  row(['Select.Popup'], always('list-popup'), signedWith('qok6', 'popup-fade')),
-  row(['Popover.Popup'], always('popover-popup'), signedWith('qok6', 'popup-motion')),
-  row(['Dialog.Popup'], always('dialog-popup'), signedWith('qok6', 'popup-fade')),
-  row(['Tooltip.Popup'], always('tooltip-popup'), signedWith('d8l7', 'tooltip-motion')),
+  row(['Menu.Popup'], always('list-popup'), signedWith('popup-fade', 'popup-motion')),
+  row(['Select.Popup'], always('list-popup'), signedWith('popup-fade', 'popup-fade')),
+  row(['Popover.Popup'], always('popover-popup'), signedWith('popup-fade', 'popup-motion')),
+  row(['Dialog.Popup'], always('dialog-popup'), signedWith('popup-fade', 'popup-fade')),
+  row(['Tooltip.Popup'], always('tooltip-popup'), signedWith('tooltip-fade', 'tooltip-motion')),
   row(
     ['Popover.Arrow', 'Menu.Arrow', 'Select.Arrow', 'Tooltip.Arrow'],
     always('arrow'),
@@ -83,7 +83,11 @@ const rows: readonly Row[] = [
   ),
   row(['Dialog.Title', 'Popover.Title'], always('title')),
   row(['Dialog.Description', 'Popover.Description'], always('description')),
-  row([...MENU_ITEMS, 'Select.Item'], always('item'), signedWith('2uuv', 'item-highlight')),
+  row(
+    [...MENU_ITEMS, 'Select.Item'],
+    always('item'),
+    signedWith('highlight-fill', 'item-highlight'),
+  ),
   row(['Menu.Separator', 'Select.Separator'], always('separator')),
   row(['Menu.GroupLabel', 'Select.GroupLabel'], always('group-label')),
   row(
@@ -143,56 +147,56 @@ const rows: readonly Row[] = [
   row(['Slider.Thumb'], always('slider-thumb')),
   row(['Slider.Value'], always('slider-value')),
   // The scrim: `Dialog.Backdrop` takes it only at scope (ii); `AlertDialog.Backdrop` at either.
-  { parts: ['Dialog.Backdrop'], classes: [always('backdrop')], draft: 'qglc', scope: 'ii' },
-  rowWith('qglc', ['AlertDialog.Backdrop'], always('backdrop')),
+  { parts: ['Dialog.Backdrop'], classes: [always('backdrop')], draft: 'scrim', scope: 'ii' },
+  rowWith('scrim', ['AlertDialog.Backdrop'], always('backdrop')),
   // Alert Dialog.
   row(['AlertDialog.Trigger', 'AlertDialog.Close'], always('button')),
-  row(['AlertDialog.Popup'], always('dialog-popup'), signedWith('qok6', 'popup-fade')),
+  row(['AlertDialog.Popup'], always('dialog-popup'), signedWith('popup-fade', 'popup-fade')),
   row(['AlertDialog.Title'], always('title')),
   row(['AlertDialog.Description'], always('description')),
   // Context Menu.
-  row(['ContextMenu.Popup'], always('list-popup'), signedWith('qok6', 'popup-motion')),
+  row(['ContextMenu.Popup'], always('list-popup'), signedWith('popup-fade', 'popup-motion')),
   row(['ContextMenu.Arrow'], always('arrow'), always('arrow-inline')),
-  row(CONTEXT_MENU_ITEMS, always('item'), signedWith('2uuv', 'item-highlight')),
+  row(CONTEXT_MENU_ITEMS, always('item'), signedWith('highlight-fill', 'item-highlight')),
   row(['ContextMenu.GroupLabel'], always('group-label')),
   row(['ContextMenu.Separator'], always('separator')),
   // Menubar.
   row(['Menubar'], always('toolbar')),
   // Preview Card.
-  row(['PreviewCard.Popup'], always('popover-popup'), signedWith('qok6', 'popup-fade')),
+  row(['PreviewCard.Popup'], always('popover-popup'), signedWith('popup-fade', 'popup-fade')),
   row(['PreviewCard.Arrow'], always('arrow'), always('arrow-inline')),
-  // Combobox and Autocomplete: they ship with `pdy1`.
-  rowWith('pdy1', ['Combobox.InputGroup', 'Autocomplete.InputGroup'], always('input-group')),
-  rowWith('pdy1', ['Combobox.Input', 'Autocomplete.Input'], always('number-field-input')),
-  rowWith('pdy1', ['Combobox.Trigger', 'Autocomplete.Trigger'], always('combobox-trigger')),
-  rowWith('pdy1', ['Combobox.Clear', 'Autocomplete.Clear'], always('number-field-stepper')),
-  rowWith('pdy1', ['Combobox.Icon', 'Autocomplete.Icon'], always('select-icon')),
-  rowWith('pdy1', ['Combobox.Label'], always('label')),
-  rowWith('pdy1', ['Combobox.Chips'], always('chips')),
-  rowWith('pdy1', ['Combobox.Chip'], always('chip')),
-  rowWith('pdy1', ['Combobox.ChipRemove'], always('chip-remove')),
+  // Combobox and Autocomplete: they ship with `combobox`.
+  rowWith('combobox', ['Combobox.InputGroup', 'Autocomplete.InputGroup'], always('input-group')),
+  rowWith('combobox', ['Combobox.Input', 'Autocomplete.Input'], always('number-field-input')),
+  rowWith('combobox', ['Combobox.Trigger', 'Autocomplete.Trigger'], always('combobox-trigger')),
+  rowWith('combobox', ['Combobox.Clear', 'Autocomplete.Clear'], always('number-field-stepper')),
+  rowWith('combobox', ['Combobox.Icon', 'Autocomplete.Icon'], always('select-icon')),
+  rowWith('combobox', ['Combobox.Label'], always('label')),
+  rowWith('combobox', ['Combobox.Chips'], always('chips')),
+  rowWith('combobox', ['Combobox.Chip'], always('chip')),
+  rowWith('combobox', ['Combobox.ChipRemove'], always('chip-remove')),
   rowWith(
-    'pdy1',
+    'combobox',
     ['Combobox.Popup', 'Autocomplete.Popup'],
     always('list-popup'),
-    signedWith('qok6', 'popup-fade'),
+    signedWith('popup-fade', 'popup-fade'),
   ),
   rowWith(
-    'pdy1',
+    'combobox',
     ['Combobox.Arrow', 'Autocomplete.Arrow'],
     always('arrow'),
     always('arrow-inline'),
   ),
   rowWith(
-    'pdy1',
+    'combobox',
     ['Combobox.Item', 'Autocomplete.Item'],
     always('item'),
-    signedWith('2uuv', 'item-highlight'),
+    signedWith('highlight-fill', 'item-highlight'),
     always('active-option'),
   ),
-  rowWith('pdy1', ['Combobox.GroupLabel', 'Autocomplete.GroupLabel'], always('group-label')),
-  rowWith('pdy1', ['Combobox.Separator', 'Autocomplete.Separator'], always('separator')),
-  rowWith('pdy1', ['Combobox.Empty', 'Autocomplete.Empty'], always('list-empty')),
+  rowWith('combobox', ['Combobox.GroupLabel', 'Autocomplete.GroupLabel'], always('group-label')),
+  rowWith('combobox', ['Combobox.Separator', 'Autocomplete.Separator'], always('separator')),
+  rowWith('combobox', ['Combobox.Empty', 'Autocomplete.Empty'], always('list-empty')),
 ]
 
 const isSigned = (draft: Draft | undefined, unsigned: readonly Draft[]): boolean =>
@@ -200,7 +204,7 @@ const isSigned = (draft: Draft | undefined, unsigned: readonly Draft[]): boolean
 
 /**
  * The part-to-classes map of a signature state: `unsigned` names the drafts not signed (none is
- * the shipping state), `scope` is the scope `qglc` is signed at. The v1 class stays first in a row.
+ * the shipping state), `scope` is the scope `scrim` is signed at. The v1 class stays first in a row.
  */
 export const tablePFor = (
   unsigned: readonly Draft[] = [],
@@ -227,7 +231,7 @@ export const tablePClassesFor = (
 
 /**
 Part (as `Namespace.Part`, or the bare component) to its class names, in the shipping state:
-every draft signed, `qglc` at scope (i).
+every draft signed, `scrim` at scope (i).
  */
 export const tableP: ReadonlyMap<string, readonly string[]> = tablePFor()
 
@@ -249,7 +253,7 @@ export const sliderClasses: readonly string[] = [
 /**
  * Table T2: the focusable parts that take `focusRing`, for a signature state. The Slider thumb, the
  * four popups when they take focus themselves and the number field's steppers are excluded by
- * name; the chip and the combobox trigger are in only while `pdy1` is signed.
+ * name; the chip and the combobox trigger are in only while `combobox` is signed.
  */
 export const focusRingClassesFor = (unsigned: readonly Draft[] = []): readonly string[] =>
   [
@@ -265,8 +269,8 @@ export const focusRingClassesFor = (unsigned: readonly Draft[] = []): readonly s
     always('disclosure-trigger'),
     always('item'),
     always('toolbar-link'),
-    signedWith('pdy1', 'chip'),
-    signedWith('pdy1', 'combobox-trigger'),
+    signedWith('combobox', 'chip'),
+    signedWith('combobox', 'combobox-trigger'),
   ]
     .filter((entry) => isSigned(entry.draft, unsigned))
     .map((entry) => entry.name)

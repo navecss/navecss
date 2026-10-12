@@ -36,7 +36,14 @@ const rows = JSON.parse(fixture('draft-states.json')) as Record<string, StateRow
 const states = allStates().map((unsigned) => [stateKey(unsigned), unsigned] as const)
 
 // What each draft alone takes out of the all-signed stylesheet, in bytes.
-const REMOVED_BYTES = { pdy1: 3736, '2uuv': 182, abv1: 151, qok6: 1057, d8l7: 572, qglc: 564 }
+const REMOVED_BYTES = {
+  combobox: 3736,
+  'highlight-fill': 182,
+  'open-ghost': 151,
+  'popup-fade': 1057,
+  'tooltip-fade': 572,
+  scrim: 564,
+}
 
 const lines = (css: string): string[] => css.split('\n')
 
@@ -70,7 +77,10 @@ describe('AC-base-ui-overlay-completion-06: the expected stylesheet of every sig
   it('holds the anchors: 30,401 bytes and 65 classes all signed, 24,139 and 53 none signed', () => {
     expect(rows.none).toMatchObject({ bytes: 30_401, classes: 65 })
     expect(rows.none?.sha256.slice(0, 16)).toBe('e9b54cd0a877debe')
-    expect(rows['pdy1+2uuv+abv1+qok6+d8l7+qglc']).toMatchObject({ bytes: 24_139, classes: 53 })
+    expect(rows['combobox+highlight-fill+open-ghost+popup-fade+tooltip-fade+scrim']).toMatchObject({
+      bytes: 24_139,
+      classes: 53,
+    })
   })
 
   it.each(states)(
@@ -106,10 +116,10 @@ describe('AC-base-ui-overlay-completion-37: each signature removes exactly its o
     expect(isSubsequence(lines(derived), lines(allSigned))).toBe(true)
   })
 
-  it('differs, with abv1 unsigned, by exactly the open ghost key of 151 bytes in the button', async () => {
+  it('differs, with open-ghost unsigned, by exactly the open ghost key of 151 bytes in the button', async () => {
     const [signed, unsigned] = await Promise.all([
       buildStyles(),
-      buildStyles({ unsigned: ['abv1'] }),
+      buildStyles({ unsigned: ['open-ghost'] }),
     ])
     const key = lines(signed).find((line) => line.startsWith(OPEN_GHOST_KEY)) ?? ''
 
@@ -118,10 +128,10 @@ describe('AC-base-ui-overlay-completion-37: each signature removes exactly its o
     expect(lines(signed).length - lines(unsigned).length).toBe(1)
   })
 
-  it('leaves every other class of the state with pdy1 unsigned as it is when all are signed', async () => {
+  it('leaves every other class of the state with combobox unsigned as it is when all are signed', async () => {
     const [signed, unsigned] = await Promise.all([
       buildStyles(),
-      buildStyles({ unsigned: ['pdy1'] }),
+      buildStyles({ unsigned: ['combobox'] }),
     ])
     const kept = declarationsByClass(unsigned)
     const all = declarationsByClass(signed)
@@ -133,17 +143,17 @@ describe('AC-base-ui-overlay-completion-37: each signature removes exactly its o
     expect(changed.toArray()).toEqual([])
   })
 
-  it('reds a pdy1-unsigned build that keeps the six Combobox-only rules, in bytes and in classes (control)', () => {
-    const kept = withoutRules(allSigned, DRAFT_CLASSES.pdy1.slice(0, 1))
+  it('reds a combobox-unsigned build that keeps the six Combobox-only rules, in bytes and in classes (control)', () => {
+    const kept = withoutRules(allSigned, DRAFT_CLASSES.combobox.slice(0, 1))
 
     expect(Buffer.byteLength(kept)).toBe(29_974)
     expect(classesOf(kept).size).toBe(64)
-    expect(sha256(kept)).not.toBe(rows.pdy1?.sha256)
-    expect(classesOf(kept)).not.toEqual(tablePClassesFor(['pdy1']))
-    expect(listDifference(kept, deriveState(allSigned, ['pdy1']))).toBeDefined()
+    expect(sha256(kept)).not.toBe(rows.combobox?.sha256)
+    expect(classesOf(kept)).not.toEqual(tablePClassesFor(['combobox']))
+    expect(listDifference(kept, deriveState(allSigned, ['combobox']))).toBeDefined()
   })
 
-  it.each(DRAFTS.filter((draft) => draft !== 'abv1'))(
+  it.each(DRAFTS.filter((draft) => draft !== 'open-ghost'))(
     'tells the all-signed list from the state without %s (control)',
     (draft) => {
       expect(listDifference(allSigned, deriveState(allSigned, [draft]))).toBeDefined()
