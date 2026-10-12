@@ -1,4 +1,4 @@
-import { createElement, type ReactElement } from 'react'
+import { createElement, type ElementType, type ReactElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Props, Source } from '../support/scenes.ts'
@@ -13,7 +13,8 @@ import { openProps } from '../support/states.ts'
 const nave: Source = await loadNave()
 afterEach(cleanup)
 
-type Act = 'arrow-right' | 'arrow-up' | 'click' | 'enter' | 'space'
+type Act =
+  'arrow-enter' | 'arrow-right' | 'arrow-up' | 'backspace' | 'click' | 'delete' | 'enter' | 'space'
 type Spy = ReturnType<typeof vi.fn>
 
 interface Row {
@@ -24,6 +25,10 @@ interface Row {
    */
   readonly attrs: {
     readonly aria: boolean
+    /**
+    Whether the disabled part carries `data-disabled`, for the rows that name it.
+     */
+    readonly data?: boolean
     readonly native: boolean
     readonly tabindex?: string
   }
@@ -47,6 +52,11 @@ interface Row {
   readonly state: (target: HTMLElement) => string
   readonly subpath: string
   /**
+  The element the keys of the acts are delivered to, when it is not the part itself: a combobox
+  option is highlighted and committed from the input, not focused.
+   */
+  readonly keyTarget?: () => HTMLElement
+  /**
   The element the act is delivered to, when it is inside the marked part (the Slider's input).
    */
   readonly target?: (marked: HTMLElement) => HTMLElement
@@ -62,6 +72,8 @@ const attribute =
     target.getAttribute(name) ?? ''
 const countOf = (marker: string) => (): string => String(partsNamed(marker).length)
 const value = (target: HTMLElement): string => (target as HTMLInputElement).value
+
+const firstOf = (marker: string) => (): HTMLElement => partsNamed(marker)[0]!
 
 const ROWS: readonly Row[] = [
   {
@@ -316,6 +328,171 @@ const ROWS: readonly Row[] = [
   },
 ]
 
+const CONTEXT_MENU_ROWS: readonly Row[] = [
+  {
+    marker: 'ContextMenu.Item',
+    name: 'ContextMenu.Item',
+    attrs: { aria: true, native: false },
+    props: (d, s) => ({ ...openProps(), 'ContextMenu.Item': { disabled: d, onClick: s } }),
+    state: countOf('ContextMenu.Popup'),
+    subpath: 'context-menu',
+  },
+  {
+    marker: 'ContextMenu.CheckboxItem',
+    name: 'ContextMenu.CheckboxItem',
+    attrs: { aria: true, native: false },
+    props: (d, s) => ({
+      ...openProps(),
+      'ContextMenu.CheckboxItem': { defaultChecked: false, disabled: d, onCheckedChange: s },
+    }),
+    state: attribute('aria-checked'),
+    subpath: 'context-menu',
+  },
+  {
+    marker: 'ContextMenu.RadioItem',
+    name: 'ContextMenu.RadioItem',
+    attrs: { aria: true, native: false },
+    props: (d, s) => ({
+      ...openProps(),
+      'ContextMenu.RadioGroup': { defaultValue: 'b', onValueChange: s },
+      'ContextMenu.RadioItem': { disabled: d },
+    }),
+    state: attribute('aria-checked'),
+    subpath: 'context-menu',
+  },
+  {
+    acts: ['click', 'enter', 'space'],
+    marker: 'ContextMenu.SubmenuTrigger',
+    name: 'ContextMenu.SubmenuTrigger',
+    attrs: { aria: true, native: false },
+    props: (d, s) => ({
+      ...openProps(),
+      'ContextMenu.SubmenuRoot': { onOpenChange: s },
+      'ContextMenu.SubmenuTrigger': { disabled: d },
+    }),
+    state: countOf('ContextMenu.Popup'),
+    subpath: 'context-menu',
+  },
+]
+
+/**
+ * The Combobox and Autocomplete rows, one set each: the Root names differ in the prop that reports
+ * the typed text (`onInputValueChange`, `onValueChange`).
+ */
+const comboboxRows = (
+  subpath: 'autocomplete' | 'combobox',
+  namespace: 'Autocomplete' | 'Combobox',
+): readonly Row[] => {
+  const root = `${namespace}.Root`
+  const typedText = namespace === 'Combobox' ? 'onInputValueChange' : 'onValueChange'
+  return [
+    {
+      acts: ['arrow-enter', 'click'],
+      attrs: { aria: true, data: true, native: false },
+      keyTarget: firstOf(`${namespace}.Input`),
+      marker: `${namespace}.Item`,
+      name: `${namespace}.Item`,
+      props: (d, s) => ({
+        [root]: {
+          onValueChange: s,
+          open: true,
+          // The scene's Combobox holds chips; a single one is committed by an option.
+          // eslint-disable-next-line unicorn/no-null -- null is the Combobox's empty single value, which undefined would leave uncontrolled
+          ...(namespace === 'Combobox' && { defaultValue: null, multiple: false }),
+        },
+        [`${namespace}.Item`]: { disabled: d },
+      }),
+      state: () => value(firstOf(`${namespace}.Input`)()),
+      subpath,
+    },
+    {
+      acts: ['click'],
+      attrs: { aria: false, native: true },
+      marker: `${namespace}.Input`,
+      name: `${namespace}.Input`,
+      props: (d, s) => ({ [root]: { disabled: d, [typedText]: s } }),
+      state: value,
+      subpath,
+      typing: true,
+    },
+    {
+      acts: ['click'],
+      attrs: { aria: false, native: true },
+      marker: `${namespace}.Trigger`,
+      name: `${namespace}.Trigger`,
+      props: (d, s) => ({ [root]: { disabled: d, onOpenChange: s } }),
+      state: attribute('aria-expanded'),
+      subpath,
+    },
+  ]
+}
+
+const CHIP_ROWS: readonly Row[] = [
+  {
+    acts: ['backspace', 'delete'],
+    attrs: { aria: true, data: true, native: false },
+    marker: 'Combobox.Chip',
+    name: 'Combobox.Chip (Root disabled)',
+    props: (d, s) => ({ 'Combobox.Root': { disabled: d, onValueChange: s } }),
+    state: countOf('Combobox.Chip'),
+    subpath: 'combobox',
+  },
+  {
+    acts: ['click'],
+    // Base UI 1.3.0 and later set no native `disabled` on a disabled chip's remove button.
+    attrs: { aria: true, data: true, native: false },
+    marker: 'Combobox.ChipRemove',
+    name: 'Combobox.ChipRemove (Root disabled)',
+    props: (d, s) => ({ 'Combobox.Root': { disabled: d, onValueChange: s } }),
+    state: countOf('Combobox.Chip'),
+    subpath: 'combobox',
+  },
+]
+
+const NEW_ROWS: readonly Row[] = [
+  {
+    marker: 'AlertDialog.Trigger',
+    name: 'AlertDialog.Trigger',
+    attrs: { aria: false, native: true },
+    props: (d, s) => ({
+      'AlertDialog.Root': { onOpenChange: s },
+      'AlertDialog.Trigger': { disabled: d },
+    }),
+    state: attribute('aria-expanded'),
+    subpath: 'alert-dialog',
+  },
+  {
+    // The second of two menus is the one disabled: the first holds the bar's roving tab stop, which
+    // a disabled trigger does not take.
+    attrs: { aria: true, data: true, native: true, tabindex: '-1' },
+    element: (source, isDisabled, spy) => {
+      const menu = (label: string, props: Props): ReactElement => {
+        const trigger = createElement(
+          partOf(source, 'menu', 'Trigger'),
+          { 'data-part': 'Menu.Trigger' },
+          label,
+        )
+        return createElement(partOf(source, 'menu', 'Root'), props, trigger)
+      }
+      return createElement(
+        source('menubar') as unknown as ElementType,
+        { 'data-part': 'Menubar' },
+        menu('File', {}),
+        menu('Edit', { disabled: isDisabled, onOpenChange: spy }),
+      )
+    },
+    index: 1,
+    marker: 'Menu.Trigger',
+    name: 'Menu.Trigger inside Menubar (its Menu.Root disabled)',
+    state: attribute('aria-expanded'),
+    subpath: 'menubar',
+  },
+  ...CONTEXT_MENU_ROWS,
+  ...comboboxRows('combobox', 'Combobox'),
+  ...comboboxRows('autocomplete', 'Autocomplete'),
+  ...CHIP_ROWS,
+]
+
 /**
  * Waits for what an act sets going: Base UI opens a trigger's popup a moment after the press, so a
  * check made straight away would read a part as inactive that was only slow.
@@ -328,19 +505,45 @@ const settle = (): Promise<void> =>
 const KEYS = {
   'arrow-right': '{ArrowRight}',
   'arrow-up': '{ArrowUp}',
+  backspace: '{Backspace}',
+  delete: '{Delete}',
   enter: '{Enter}',
   space: ' ',
 } as const
 
-const deliver = async (target: HTMLElement, act: Act, isTyping: boolean): Promise<void> => {
+/**
+ * Moves the highlight onto the row's option with ArrowDown, from the input, a key at a time until
+ * one carries `data-highlighted`, then commits it with Enter. A disabled option is highlighted
+ * too, so the Enter lands on it.
+ */
+const arrowToThenEnter = async (row: Row, keyTarget: HTMLElement): Promise<void> => {
+  const session = user()
+  await act_(() => keyTarget.focus())
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (partsNamed(row.marker).some((option) => option.dataset.highlighted !== undefined)) {
+      break
+    }
+    await session.keyboard('{ArrowDown}')
+  }
+  await session.keyboard('{Enter}')
+}
+
+const deliver = async (
+  row: Row,
+  target: HTMLElement,
+  keyTarget: HTMLElement,
+  act: Act,
+): Promise<void> => {
   const session = user()
   if (act === 'click') {
     await session.click(target)
-    if (isTyping) {
+    if (row.typing === true) {
       await session.keyboard('abc')
     }
+  } else if (act === 'arrow-enter') {
+    await arrowToThenEnter(row, keyTarget)
   } else {
-    await act_(() => target.focus())
+    await act_(() => keyTarget.focus())
     await session.keyboard(KEYS[act])
   }
   await settle()
@@ -359,7 +562,7 @@ const renderRow = async (
   row: Row,
   isDisabled: boolean,
   spy: Spy,
-): Promise<{ read: () => string; target: HTMLElement }> => {
+): Promise<{ keyTarget: HTMLElement; read: () => string; target: HTMLElement }> => {
   if (row.element === undefined) {
     await renderScene(nave, row.subpath, row.props?.(isDisabled, spy) ?? {})
   } else {
@@ -371,7 +574,11 @@ const renderRow = async (
     throw new Error(`${row.name}: ${row.marker} did not render`)
   }
   const target = row.target?.(found) ?? found
-  return { read: () => row.state(row.target?.(marked() ?? found) ?? marked() ?? found), target }
+  return {
+    keyTarget: row.keyTarget?.() ?? target,
+    read: () => row.state(row.target?.(marked() ?? found) ?? marked() ?? found),
+    target,
+  }
 }
 
 /**
@@ -384,14 +591,14 @@ const attempt = async (
   actName: Act,
 ): Promise<{ after: string; before: string; called: boolean }> => {
   const spy = vi.fn()
-  const { read, target } = await renderRow(row, isDisabled, spy)
+  const { keyTarget, read, target } = await renderRow(row, isDisabled, spy)
   const before = read()
-  await deliver(target, actName, row.typing === true)
+  await deliver(row, target, keyTarget, actName)
   return { after: read(), before, called: spy.mock.calls.length > 0 }
 }
 
-describe('AC-base-ui-bridge-26: condition D, every disabled part is inactive, and each act is proven able to activate', () => {
-  for (const row of ROWS) {
+const defineConditionD = (rows: readonly Row[]): void => {
+  for (const row of rows) {
     // eslint-disable-next-line vitest/valid-title -- each row's own name is the title, a plain string
     it(row.name, async () => {
       const acts = row.acts ?? (['click', 'enter', 'space'] as const)
@@ -414,19 +621,41 @@ describe('AC-base-ui-bridge-26: condition D, every disabled part is inactive, an
       }
     })
   }
-})
+}
 
-describe('AC-base-ui-bridge-26: the disabled part carries the attributes its row names', () => {
-  for (const row of ROWS) {
+const defineAttributes = (rows: readonly Row[]): void => {
+  for (const row of rows) {
     // eslint-disable-next-line vitest/valid-title -- each row's own name is the title, a plain string
     it(row.name, async () => {
       const { target } = await renderRow(row, true, vi.fn())
-      const { aria, native, tabindex } = row.attrs
+      const { aria, data, native, tabindex } = row.attrs
       expect({
         aria: target.getAttribute('aria-disabled') === 'true',
+        ...(data !== undefined && { data: target.dataset.disabled !== undefined }),
         native: target.hasAttribute('disabled'),
         ...(tabindex !== undefined && { tabindex: target.getAttribute('tabindex') }),
-      }).toEqual({ aria, native, ...(tabindex !== undefined && { tabindex }) })
+      }).toEqual({
+        aria,
+        ...(data !== undefined && { data }),
+        native,
+        ...(tabindex !== undefined && { tabindex }),
+      })
     })
   }
+}
+
+describe('AC-base-ui-bridge-26: condition D, every disabled part is inactive, and each act is proven able to activate', () => {
+  defineConditionD(ROWS)
+})
+
+describe('AC-base-ui-bridge-26: the disabled part carries the attributes its row names', () => {
+  defineAttributes(ROWS)
+})
+
+describe('AC-base-ui-overlay-completion-44: condition D for the new disabled parts, each act proven able to activate', () => {
+  defineConditionD(NEW_ROWS)
+})
+
+describe('AC-base-ui-overlay-completion-44: the new disabled parts carry the attributes their row names', () => {
+  defineAttributes(NEW_ROWS)
 })

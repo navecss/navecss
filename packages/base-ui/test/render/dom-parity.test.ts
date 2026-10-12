@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { ElementRecord } from '../support/dom.ts'
@@ -5,7 +6,7 @@ import type { Props } from '../support/scenes.ts'
 
 import { describeDocument, marked, parityViolations, partsNamed } from '../support/dom.ts'
 import { act, cleanup, render, user } from '../support/react.ts'
-import { scenes } from '../support/scenes.ts'
+import { partOf, scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
 import { isOverlay, openProps } from '../support/states.ts'
 import { SUBPATHS, topName } from '../support/subpaths.ts'
@@ -25,16 +26,28 @@ const VARIANT_PARTS = [
   'Popover.Close',
   'Menu.Trigger',
   'Tooltip.Trigger',
+  'AlertDialog.Trigger',
+  'AlertDialog.Close',
 ]
 
 const HIGHLIGHT_ATTRIBUTE = '[data-highlighted]'
 
-const VARIANT_PROPS: Record<string, Props> = {
-  ...Object.fromEntries(
-    VARIANT_PARTS.map((part) => [part, { size: 'sm', variant: 'primary' }] as const),
-  ),
+/**
+ * The variant props the Button family is given in the comparison: the primary variant with the small
+ * size, and the ghost variant with the small size. The Toggle takes the size only.
+ */
+const variantProps = (variant: 'ghost' | 'primary'): Record<string, Props> => ({
+  ...Object.fromEntries(VARIANT_PARTS.map((part) => [part, { size: 'sm', variant }] as const)),
   Toggle: { size: 'sm' },
-}
+})
+
+const VARIANT_PROPS = variantProps('primary')
+
+const VARIANT_SETS = [
+  { label: '', props: {} },
+  { label: ', with variant and size', props: VARIANT_PROPS },
+  { label: ', with variant ghost and size', props: variantProps('ghost') },
+] as const
 
 const TRANSITION_ATTRIBUTES = ['data-starting-style', 'data-ending-style']
 
@@ -82,9 +95,18 @@ const describeAtRest = async (): Promise<ElementRecord[]> => {
   )
 }
 
+/**
+ * The `data-nave-*` attributes an element carries, as one string.
+ */
+const dataNaveNames = (element: Element): string =>
+  element
+    .getAttributeNames()
+    .filter((name) => name.startsWith('data-nave-'))
+    .join(' ')
+
 const VARIANT_PART_NAMES: ReadonlySet<string> = new Set(Object.keys(VARIANT_PROPS))
 
-describe("AC-base-ui-bridge-12: a wrapper renders exactly the bare part's DOM, plus its class and data-nave-*", () => {
+describe("AC-base-ui-bridge-12, extended to the six by AC-base-ui-overlay-completion-43: a wrapper renders exactly the bare part's DOM, plus its class and data-nave-*", () => {
   for (const subpath of SUBPATHS) {
     const states: { label: string; props: Record<string, Props> }[] = isOverlay(subpath)
       ? [
@@ -93,41 +115,42 @@ describe("AC-base-ui-bridge-12: a wrapper renders exactly the bare part's DOM, p
         ]
       : [{ label: 'rendered', props: {} }]
     for (const { label, props } of states) {
-      for (const isVariants of [false, true]) {
-        it(`${subpath}, ${label}${isVariants ? ', with variant and size' : ''}`, async () => {
+      for (const { label: variantLabel, props: variantSet } of VARIANT_SETS) {
+        it(`${subpath}, ${label}${variantLabel}`, async () => {
           const scene = scenes[subpath]
           if (scene === undefined) {
             throw new Error(`no scene for ${subpath}`)
           }
           await render(scene.render(bare, { props }))
           const expected = await describeAtRest()
-          await render(
-            scene.render(nave, { props: { ...props, ...(isVariants && VARIANT_PROPS) } }),
-          )
+          await render(scene.render(nave, { props: { ...props, ...variantSet } }))
           expect(parityViolations(expected, await describeAtRest())).toEqual([])
         })
       }
     }
   }
 
-  it('gives a data-nave-* attribute to no part but the ones AC-14 names', async () => {
-    const offenders: string[] = []
+  it('gives a data-nave-* attribute to no part but the ones AC-base-ui-overlay-completion-04 names', async () => {
+    const carriers = new Map<string, string>()
     for (const subpath of SUBPATHS) {
-      await render(
-        scenes[subpath]?.render(nave, { props: { ...openProps(), ...VARIANT_PROPS } }) as never,
-      )
-      for (const { element, part } of marked()) {
-        const names = element
-          .getAttributeNames()
-          .filter((name) => name.startsWith('data-nave-'))
-          .join(' ')
-        if (names !== '' && !VARIANT_PART_NAMES.has(part)) {
-          offenders.push(`${part}: ${names}`)
+      for (const variants of [VARIANT_PROPS, variantProps('ghost')]) {
+        await render(
+          scenes[subpath]?.render(nave, { props: { ...openProps(), ...variants } }) as never,
+        )
+        for (const { element, part } of marked()) {
+          carriers.set(part, dataNaveNames(element) || (carriers.get(part) ?? ''))
         }
+        await cleanup()
       }
-      await cleanup()
     }
+    const offenders = carriers
+      .entries()
+      .filter(([part, names]) => names !== '' && !VARIANT_PART_NAMES.has(part))
+      .map(([part, names]) => `${part}: ${names}`)
+      .toArray()
     expect(offenders).toEqual([])
+    // The positive control: every part the criterion names did carry one, so the check looked at them.
+    expect([...VARIANT_PART_NAMES].filter((part) => (carriers.get(part) ?? '') === '')).toEqual([])
   })
 
   it('names the elements still in a transition when a document never comes to rest', async () => {
@@ -218,6 +241,32 @@ const STATES: Readonly<
   toggle: { clicks: ['Toggle'], configs: [{}, { Toggle: { disabled: true } }] },
   'toggle-group': { configs: [{}, { ToggleGroup: { orientation: 'vertical' } }] },
   toolbar: { configs: [{}, { 'Toolbar.Root': { disabled: true, orientation: 'vertical' } }] },
+  // The six overlays are also driven open (every overlay is), and through the states the criterion
+  // adds: disabled, empty (a list with no items) and expanded (a trigger clicked).
+  'alert-dialog': {
+    clicks: ['AlertDialog.Trigger'],
+    configs: [{ 'AlertDialog.Trigger': { disabled: true } }],
+  },
+  autocomplete: {
+    clicks: ['Autocomplete.Trigger'],
+    configs: [
+      { 'Autocomplete.Root': { disabled: true } },
+      { 'Autocomplete.Root': { items: [], open: true } },
+    ],
+  },
+  combobox: {
+    clicks: ['Combobox.Trigger'],
+    configs: [
+      { 'Combobox.Root': { disabled: true } },
+      { 'Combobox.Root': { items: [], open: true } },
+    ],
+  },
+  'context-menu': { configs: [{ 'ContextMenu.Root': { disabled: true } }] },
+  menubar: {
+    clicks: ['Menu.Trigger'],
+    configs: [{ Menubar: { disabled: true } }, { Menubar: { orientation: 'vertical' } }],
+  },
+  'preview-card': { clicks: ['PreviewCard.Trigger'], configs: [{}] },
 }
 
 type Scene = NonNullable<(typeof scenes)[string]>
@@ -234,11 +283,20 @@ const highlighted = (): string[] => {
   })
 }
 
-const styledPartsOf = (subpath: string): string[] =>
-  tableP
+// The Menubar's scene holds Menu parts, which the Menu's own subpath styles.
+const SCENE_NAMESPACES: Readonly<Record<string, readonly string[]>> = {
+  menubar: ['Menubar', 'Menu'],
+}
+
+const styledPartsOf = (subpath: string): string[] => {
+  const namespaces = SCENE_NAMESPACES[subpath] ?? [topName(subpath)]
+  return tableP
     .keys()
-    .filter((part) => part === topName(subpath) || part.startsWith(`${topName(subpath)}.`))
+    .filter((part) =>
+      namespaces.some((namespace) => part === namespace || part.startsWith(`${namespace}.`)),
+    )
     .toArray()
+}
 
 const mergeProps = (
   consumer: Record<string, Props>,
@@ -283,7 +341,7 @@ const snapshotsAcross = async (
   return snapshots
 }
 
-describe("AC-base-ui-bridge-37: Nave's contribution is chosen by the consumer's props, never by state", () => {
+describe("AC-base-ui-bridge-37, extended to the six by AC-base-ui-overlay-completion-43: Nave's contribution is chosen by the consumer's props, never by state", () => {
   for (const subpath of SUBPATHS) {
     it(`${subpath}: the class and data-nave-* are identical in every state`, async () => {
       const scene = scenes[subpath]
@@ -292,7 +350,9 @@ describe("AC-base-ui-bridge-37: Nave's contribution is chosen by the consumer's 
       }
       const styled = styledPartsOf(subpath)
       const consumer = Object.fromEntries(styled.map((part) => [part, { className: 'consumer' }]))
-      const configs = isOverlay(subpath) ? [{}, openProps()] : (STATES[subpath]?.configs ?? [{}])
+      const configs = isOverlay(subpath)
+        ? [{}, openProps(), ...(STATES[subpath]?.configs ?? [])]
+        : (STATES[subpath]?.configs ?? [{}])
       const snapshots = await snapshotsAcross(scene, subpath, consumer, configs)
       const [first, ...rest] = snapshots
       const differing = rest.flatMap((snapshot) =>
@@ -309,6 +369,10 @@ describe("AC-base-ui-bridge-37: Nave's contribution is chosen by the consumer's 
   describe.each([
     ['menu', 'Menu.Item'],
     ['select', 'Select.Item'],
+    ['context-menu', 'ContextMenu.Item'],
+    ['menubar', 'Menu.Item'],
+    ['combobox', 'Combobox.Item'],
+    ['autocomplete', 'Autocomplete.Item'],
   ] as const)('%s: moving the highlight', (subpath, item) => {
     it(`leaves the class and data-nave-* of every part alone`, async () => {
       const scene = scenes[subpath]
@@ -330,6 +394,35 @@ describe("AC-base-ui-bridge-37: Nave's contribution is chosen by the consumer's 
     })
   })
 
+  describe.each(['combobox', 'autocomplete'] as const)('%s: an invalid Field', (subpath) => {
+    it('leaves the class and data-nave-* of every part alone', async () => {
+      const scene = scenes[subpath]
+      if (scene === undefined) {
+        throw new Error(`no scene for ${subpath}`)
+      }
+      const consumer = Object.fromEntries(
+        styledPartsOf(subpath).map((part) => [part, { className: 'consumer' }]),
+      )
+      const props = mergeProps(consumer, openProps())
+      await render(scene.render(nave, { props }))
+      const valid = ownAttributes()
+      await render(
+        createElement(
+          partOf(nave, 'field', 'Root'),
+          { invalid: true },
+          scene.render(nave, { props }),
+        ),
+      )
+      const invalid = ownAttributes()
+      // The control: the Field did flip the state, so the comparison is between two states.
+      expect(partsNamed(`${topName(subpath)}.InputGroup`)[0]?.hasAttribute('data-invalid')).toBe(
+        true,
+      )
+      expect(valid.size).toBeGreaterThan(0)
+      expect([...invalid]).toEqual([...valid])
+    })
+  })
+
   it('changes only when variant, size or className change', async () => {
     const scene = scenes.button
     if (scene === undefined) {
@@ -341,6 +434,10 @@ describe("AC-base-ui-bridge-37: Nave's contribution is chosen by the consumer's 
     }
     const rest = await attributes({})
     expect(await attributes({ variant: 'primary' })).not.toBe(rest)
+    expect(await attributes({ variant: 'ghost' })).not.toBe(rest)
+    expect(await attributes({ variant: 'ghost' })).not.toBe(
+      await attributes({ variant: 'primary' }),
+    )
     expect(await attributes({ size: 'sm' })).not.toBe(rest)
     expect(await attributes({ className: 'mine' })).not.toBe(rest)
   })
