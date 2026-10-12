@@ -12,7 +12,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { atomClassMap } from '../src/atoms.ts'
-import { devServing } from '../src/vite-dev.ts'
+import { type DevServing, devServing } from '../src/vite-dev.ts'
 import { navePlugin } from '../src/vite.ts'
 import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
 import {
@@ -666,7 +666,87 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     }
   }, 60_000)
 
-  it('a stylesheet no module imports is answered at once, with the atoms of the pages read so far', async () => {
+  /**
+   * The atoms in the CSS served for `src/app.css` when it is requested as a module while
+   * `src/main.ts`, which imports it, is still being transformed. `main.ts` is not let through its
+   * transform, so its imports are not in the module graph, until the stylesheet's wait has begun
+   * (never a delay): the order a warm-up of the stylesheet reaches under load. `hold`, when given,
+   * stands in for the real wait.
+   */
+  async function atomsServedBeforeImporter(hold?: DevServing['hold']): Promise<string[]> {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
+    const gate = held('src/main.ts', 15_000)
+    const saved = { ...devServing }
+    const realHold = devServing.hold.bind(devServing)
+    devServing.hold = (environment, id) => {
+      const waited = (hold ?? realHold)(environment, id)
+      gate.release()
+      return waited
+    }
+    try {
+      const server = await startDev(devConfig(app.root, [gate.plugin, navePlugin()]))
+      try {
+        void server.transformRequest('/src/main.ts').catch(() => {})
+        const css = await server.transformRequest('/src/app.css')
+        const served: unknown = JSON.parse(
+          /const __vite__css = ("(?:[^"\\]|\\.)*")/.exec(css!.code)![1]!,
+        )
+        return atomLayerAtoms(served as string)
+      } finally {
+        gate.release()
+        await stopDev(server)
+      }
+    } finally {
+      Object.assign(devServing, saved)
+      app.dispose()
+    }
+  }
+
+  it('holds a stylesheet requested before the module that imports it has registered the import', async () => {
+    expect(await atomsServedBeforeImporter()).toEqual(atoms('flex'))
+  }, 60_000)
+
+  it('control: a hold that returns at once when no importer is registered serves that stylesheet with what had been read', async () => {
+    const atOnceWithoutImporter: DevServing['hold'] = async (environment, id) => {
+      if (environment.moduleGraph.getModuleById(id)?.importers.size === 0) return
+      await devServing.hold(environment, id)
+    }
+
+    expect(await atomsServedBeforeImporter(atOnceWithoutImporter)).toEqual([])
+  }, 60_000)
+
+  it('waits for the graph for a stylesheet requested as a module that no module imports', async () => {
+    const app = makeUsedApp({
+      'index.html': '<!doctype html><p class="nave-hidden"></p>',
+      'src/orphan.css': APP_CSS,
+    })
+    try {
+      const server = await startDev(devConfig(app.root, [navePlugin()]))
+      try {
+        const waits: string[] = []
+        const { client } = server.environments
+        const wait = client.waitForRequestsIdle.bind(client)
+        client.waitForRequestsIdle = (id?: string) => {
+          waits.push(id ?? '')
+          return wait(id)
+        }
+        await server.transformIndexHtml(
+          '/index.html',
+          readFileSync(path.join(app.root, 'index.html'), 'utf8'),
+        )
+        const css = await server.transformRequest('/src/orphan.css')
+
+        expect(waits).toHaveLength(1)
+        expect(css?.code).toContain('__vite__css')
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('a stylesheet a page links, requested as `?direct`, is answered at once, with the atoms of the pages read so far', async () => {
     const app = makeUsedApp({
       'index.html':
         '<!doctype html><link rel="stylesheet" href="/src/linked.css"><p class="nave-hidden"></p>',

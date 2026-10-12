@@ -36,10 +36,17 @@ const RELOAD_ANSWER_MS = 2000
  */
 const NO_MAP = JSON.stringify({ mappings: '' })
 
+/**
+ * The query Vite adds to a request for a stylesheet that a page links: the CSS itself, not a
+ * module that a script imports.
+ */
+const DIRECT = /[?&]direct\b/
+
 export interface DevServing {
   /**
    * Waits until the modules reachable from the roots of the module graph have been transformed,
-   * for a stylesheet `id` that a module imports; one that nothing imports is answered at once.
+   * for a stylesheet `id` that a script imports, whether or not the import is in the graph yet; a
+   * stylesheet a page links, which nothing imports, is answered at once.
    */
   hold(environment: DevEnvironmentLike, id: string): Promise<void>
   /**
@@ -111,8 +118,11 @@ export const devServing: DevServing = {
   async hold(environment, id) {
     const module = environment.moduleGraph.getModuleById(id)
     if (!module) return
-    // A stylesheet no module imports (a `<link>` names it) is answered at once.
-    if (module.importers.size === 0) return
+    // A stylesheet no module imports (a `<link>` names it, and Vite asks for it as `?direct`) is
+    // answered at once. One asked for as a module is not: its importer may still be in the middle
+    // of its own transform, which is where the graph registers the import, so no importer yet is
+    // no reason to answer.
+    if (module.importers.size === 0 && DIRECT.test(id)) return
     // The dependency optimizer holds its first result until the first static imports are done,
     // and the stylesheet being served is one of them. Saying it is not waited on lets the
     // optimizer finish, which the transform of a prebundled dependency below waits for.
