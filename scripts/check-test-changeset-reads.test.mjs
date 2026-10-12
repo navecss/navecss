@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -13,8 +22,10 @@ import { fileURLToPath } from 'node:url'
  *
  * `packages/core/test/helpers/released-changeset.ts` is the remedy: its `shippedChangesetProse`
  * reads the pending file while it exists and the changelog entry afterwards. This test sweeps every
- * test under `packages/<name>/test` (a star-slash in a docblock would close it) and every script
- * under `scripts/` for a file that names a changeset and does not import that helper.
+ * test under `packages/<name>/test` (a star-slash in a docblock would close it), every test or spec
+ * file under `packages/<name>/src` (ADR 0008, "A test lives beside the one source file it tests",
+ * moves single-module tests there) and every script under `scripts/` for a file that names a
+ * changeset and does not import that helper. A plain source file under `src` is not read.
  *
  * WHAT IT CAN AND CANNOT SEE. The unit is the FILE: one that names a fragment must import the
  * helper (a static `import` or a dynamic `import()`; `import type` is erased and does not count),
@@ -32,7 +43,11 @@ import { fileURLToPath } from 'node:url'
  * or a string counts, and so does an `import()` type annotation. `import { type A } from` the
  * helper counts although it reads nothing. A comment inside a helper import's own clause that holds
  * `from` and a quote (`// from 'x'`) ends the clause there, so a file that imports the helper that
- * way is reported and has to word the comment differently.
+ * way is reported and has to word the comment differently. A comment between `typeof` and
+ * `import(` hides the `typeof`, so that type position counts too.
+ *
+ * The reach control asks git which files are tracked, so it needs a checkout with its `.git`: a
+ * copy made with `git archive` fails it.
  */
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -49,15 +64,16 @@ const NAMED_FRAGMENT =
 /**
  * An import of the helper: a static `import ... from '<path>/released-changeset'` or a dynamic
  * `import('<path>/released-changeset')` (a backtick specifier counts there), with or without the
- * `.ts`. The last path segment is the helper's own name, so `not-released-changeset.ts` is not it,
- * `import type` does not count, and neither does `typeof import(...)`. A static clause runs to the
+ * `.ts`. The closing quote is the opening one. The last path segment is the helper's own name, so
+ * `not-released-changeset.ts` is not it, `import type` does not count, and neither does
+ * `typeof import(...)` or a method call such as `loader.import(...)`. A static clause runs to the
  * first `from` that is followed by a quote, which is its own specifier, and stops at the next
  * `import` line, so text after it that mentions the helper cannot stand in for the import, and an
  * apostrophe in a comment inside the clause does not end it. Each span ends before the next one
  * begins, so the cost grows with the length of the source.
  */
 const HELPER_IMPORT =
-  /(?:^import\b(?!\s+type\b)(?:(?!^import\b|\bfrom\s*['"])[\s\S])*\bfrom\s*['"]|(?<!\btypeof\s+)\bimport\s*\(\s*['"`])[^'"`\n]*\/released-changeset(?:\.ts)?['"`]/m
+  /(?:^import\b(?!\s+type\b)(?:(?!^import\b|\bfrom\s*['"])[\s\S])*\bfrom\s*|(?<!\btypeof\s+)(?<!\.)\bimport\s*\(\s*)(['"]|(?<=\(\s*)`)[^'"`\n]*\/released-changeset(?:\.ts)?\1/m
 
 /**
  * Files that name a fragment without reading the repository's own, each with the reason. A file
@@ -102,18 +118,29 @@ function sourceFiles(dir) {
   return found
 }
 
-function swept() {
-  const dirs = [path.join(ROOT, 'scripts')]
-  for (const name of readdirSync(path.join(ROOT, 'packages'))) {
-    const testDir = path.join(ROOT, 'packages', name, 'test')
+const TEST_OR_SPEC = /\.(?:test|spec)\.[cm]?[jt]sx?$/
+
+/**
+ * The files under `root` the sweep reads, with the fragments each names and whether it imports the
+ * helper: everything under `scripts/` and under each `packages/<name>/test`, and the test and spec
+ * files under each `packages/<name>/src`.
+ */
+function swept(root = ROOT) {
+  const dirs = [path.join(root, 'scripts')]
+  const inSource = []
+  for (const name of readdirSync(path.join(root, 'packages'))) {
+    const testDir = path.join(root, 'packages', name, 'test')
     if (existsSync(testDir)) dirs.push(testDir)
+    const sourceDir = path.join(root, 'packages', name, 'src')
+    if (existsSync(sourceDir)) {
+      inSource.push(...sourceFiles(sourceDir).filter((full) => TEST_OR_SPEC.test(full)))
+    }
   }
-  return dirs
-    .flatMap(sourceFiles)
-    .map((full) => path.relative(ROOT, full).split(path.sep).join('/'))
+  return [...dirs.flatMap(sourceFiles), ...inSource]
+    .map((full) => path.relative(root, full).split(path.sep).join('/'))
     .filter((file) => file !== 'scripts/check-test-changeset-reads.test.mjs')
     .map((file) => {
-      const source = readFileSync(path.join(ROOT, file), 'utf8')
+      const source = readFileSync(path.join(root, file), 'utf8')
       return { file, fragments: namedFragments(source), helper: importsHelper(source) }
     })
 }
@@ -157,6 +184,7 @@ test('control: the stated limits hold, so a change to one is a decision', () => 
   assert.ok(importsHelper(`let x: import(${helper}).ChangelogEntry\n`))
   assert.ok(importsHelper(`import { type ChangelogEntry } from ${helper}\n`))
   assert.ok(!importsHelper(`import {\n  // from 'x'\n  shippedChangesetProse,\n} from ${helper}\n`))
+  assert.ok(importsHelper(`type H = typeof /* c */ import(${helper})`))
 })
 
 test('control: a static import of the helper counts, and one of another module does not', () => {
@@ -223,6 +251,21 @@ test('control: the specifier ends in the helper itself, and a type-only import d
       "import type { A } from './a.ts'\nimport { shippedChangesetProse } from './helpers/released-changeset.ts'\n",
     ),
   )
+})
+
+test('control: the closing quote is the opening one, and a method call is not an import', () => {
+  const helper = './helpers/released-changeset.ts'
+
+  assert.ok(!importsHelper(`import x from '${helper}\``))
+  assert.ok(!importsHelper(`import x from "${helper}'`))
+  assert.ok(!importsHelper(`import('${helper}\`)`))
+  assert.ok(!importsHelper(`import x from \`${helper}\``))
+  assert.ok(importsHelper(`import x from "${helper}"`))
+  assert.ok(importsHelper(`await import("${helper}")`))
+  assert.ok(importsHelper(`await import(\`${helper}\`)`))
+  assert.ok(!importsHelper(`loader.import('${helper}')`))
+  assert.ok(!importsHelper(`await loader?.import('${helper}')`))
+  assert.ok(importsHelper(`const m = await import('${helper}')`))
 })
 
 test('control: an apostrophe in a comment inside the import clause does not end it', () => {
@@ -326,17 +369,38 @@ for (const [shape, make] of Object.entries(NAMED_SHAPES)) {
 }
 
 /**
- * Every source file git tracks under a package's `test` directory or under `scripts/`, listed by
- * git with the extensions written out here, so that what the sweep skips and which extensions it
- * takes cannot also hide a file from this list.
+ * A file the sweep is meant to read, by path and with the extensions written out here, so that what
+ * the sweep skips and which extensions it takes cannot also hide a file from the reach control.
  */
-function trackedSourceFiles() {
-  const listed = execFileSync('git', ['ls-files', '-z', '--', 'packages/*/test/**', 'scripts/**'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  })
-  return listed.split('\0').filter((file) => /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(file))
+const IN_SCOPE =
+  /^(?:(?:scripts\/|packages\/[^/]+\/test\/).*|packages\/[^/]+\/src\/.*\.(?:test|spec))\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/
+
+/**
+ * The environment without the variables that point git at another repository or index, which a
+ * hook or a wrapper may set.
+ */
+function environmentWithoutGit(environment = process.env) {
+  return Object.fromEntries(Object.entries(environment).filter(([key]) => !key.startsWith('GIT_')))
+}
+
+/**
+ * Every file git tracks under `root` that is in scope, and still on disk: a file deleted in the
+ * working tree and not yet staged is still listed, and cannot be read.
+ */
+function trackedSourceFiles(root = ROOT, environment = process.env) {
+  const listed = execFileSync(
+    'git',
+    ['ls-files', '-z', '--', 'packages/*/test/**', 'packages/*/src/**', 'scripts/**'],
+    {
+      cwd: root,
+      env: environmentWithoutGit(environment),
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  )
+  return listed
+    .split('\0')
+    .filter((file) => IN_SCOPE.test(file) && existsSync(path.join(root, file)))
 }
 
 /**
@@ -350,7 +414,7 @@ const NOT_SWEPT = new Map([
   ],
 ])
 
-test('the sweep reaches every tracked source file under a package test directory or scripts/, and the helper itself', () => {
+test('the sweep reaches every tracked test, spec and script file, and the helper itself', () => {
   const sweptFiles = new Set(swept().map((entry) => entry.file))
   const tracked = trackedSourceFiles()
 
@@ -363,11 +427,85 @@ test('the sweep reaches every tracked source file under a package test directory
   assert.ok([...sweptFiles].some((file) => file.startsWith('scripts/')))
 })
 
-test('every file that names a changeset reads it through the helper', () => {
-  const offenders = swept()
+/**
+ * A scratch repository holding `files` (path to text), all staged, in a directory that is removed
+ * after `check` runs.
+ */
+function inScratchRepository(files, check) {
+  const root = mkdtempSync(path.join(tmpdir(), 'nave-reads-'))
+  try {
+    for (const [file, text] of Object.entries(files)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
+      writeFileSync(path.join(root, file), text)
+    }
+    const options = { cwd: root, env: environmentWithoutGit(), stdio: 'ignore' }
+    execFileSync('git', ['init', '-q'], options)
+    execFileSync('git', ['add', '-A'], options)
+    check(root)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}
+
+const SCRATCH_FILES = {
+  'scripts/s.mjs': 'export {}\n',
+  'packages/core/test/a.test.ts': 'export {}\n',
+  'packages/core/test/b.test.ts': 'export {}\n',
+  'packages/core/src/x.test.ts': "read('.changeset/some-fragment.md')\n",
+  'packages/core/src/y.spec.ts': 'export {}\n',
+  'packages/core/src/x.ts': "read('.changeset/some-fragment.md')\n",
+  'packages/core/README.md': 'text\n',
+}
+
+test('the reach control lists a tracked file only while it is still on disk', () => {
+  inScratchRepository(SCRATCH_FILES, (root) => {
+    rmSync(path.join(root, 'packages/core/test/b.test.ts'))
+
+    assert.deepEqual(trackedSourceFiles(root).toSorted(), [
+      'packages/core/src/x.test.ts',
+      'packages/core/src/y.spec.ts',
+      'packages/core/test/a.test.ts',
+      'scripts/s.mjs',
+    ])
+  })
+})
+
+test('the reach control is not redirected by variables that point git elsewhere', () => {
+  inScratchRepository(SCRATCH_FILES, (root) => {
+    const junk = path.join(root, 'junk-index')
+    writeFileSync(junk, 'not an index')
+    const environment = { ...process.env, GIT_DIR: '/nonexistent', GIT_INDEX_FILE: junk }
+
+    assert.equal(trackedSourceFiles(root, environment).length, 5)
+  })
+})
+
+test('the sweep reads a test or spec file beside its source, and not a plain source file', () => {
+  inScratchRepository(SCRATCH_FILES, (root) => {
+    const files = new Set(swept(root).map((entry) => entry.file))
+
+    assert.ok(files.has('packages/core/src/x.test.ts'))
+    assert.ok(files.has('packages/core/src/y.spec.ts'))
+    assert.ok(!files.has('packages/core/src/x.ts'))
+    assert.deepEqual(offendersIn(swept(root)), [
+      'packages/core/src/x.test.ts opens .changeset/some-fragment.md',
+    ])
+  })
+})
+
+/**
+ * The files among `entries` that name a fragment without importing the helper, described for the
+ * failure message.
+ */
+function offendersIn(entries) {
+  return entries
     .filter((entry) => entry.fragments.length > 0 && !entry.helper)
     .filter((entry) => !FIXTURE_ONLY.has(entry.file))
     .map((entry) => `${entry.file} opens ${[...new Set(entry.fragments)].join(', ')}`)
+}
+
+test('every file that names a changeset reads it through the helper', () => {
+  const offenders = offendersIn(swept())
 
   assert.deepEqual(
     offenders,

@@ -54,14 +54,16 @@ export function changelogEntries(changelog: string): ChangelogEntry[] {
 /**
  * What a changeset says after its front matter: the first block only, so a later `---` rule in the
  * text stays. A file without front matter is all text. Windows line endings, a byte order mark and
- * blank lines before the front matter are read past, and the front matter may be empty.
+ * blank lines before the front matter are read past, and the front matter may be empty. The
+ * delimiter lines are read as Changesets reads them: an opening `---` or a closing one may be
+ * followed by spaces or tabs, and the closing one may be indented.
  */
 function bodyOf(changeset: string): string {
   return changeset
     .replace(/^\u{FEFF}/u, '')
     .replaceAll('\r\n', '\n')
     .trimStart()
-    .replace(/^---\n(?:[\s\S]*?\n)??---(?:\n|$)/u, '')
+    .replace(/^---[ \t]*\n(?:[\s\S]*?\n)??[ \t]*---[ \t]*(?:\n|$)/u, '')
     .trimStart()
 }
 

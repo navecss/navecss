@@ -84,6 +84,24 @@ describe('shippedChangesetProse', () => {
     )
   })
 
+  it('returns the changelog entry once the changeset file is gone', () => {
+    expect(shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toBe(
+      'Second entry.',
+    )
+  })
+
+  it('throws when the changeset is gone and no entry starts with the given text', () => {
+    expect(() => shippedChangesetProse(changesetPath(), changelogPath(), 'No such entry')).toThrow(
+      /no entry starting "No such entry"/u,
+    )
+  })
+
+  it('does not return an entry that only contains the given text', () => {
+    expect(() => shippedChangesetProse(changesetPath(), changelogPath(), 'econd entry')).toThrow(
+      /no entry starting "econd entry"/u,
+    )
+  })
+
   it('throws while the changeset is pending and its text does not open with the given text', () => {
     writeFileSync(
       changesetPath(),
@@ -119,11 +137,29 @@ describe('shippedChangesetProse', () => {
     'empty front matter': '---\n---\n\nSecond entry.\n',
     'empty front matter and a later rule': '---\n---\n\nSecond entry.\n\n---\n\nMore.\n',
     'a rule later in the text': `${FRONT_MATTER}\nSecond entry.\n\n---\n\nMore.\n`,
+    'a closing rule followed by a space': "---\n'@navecss/core': minor\n--- \n\nSecond entry.\n",
+    'a closing rule followed by a tab': "---\n'@navecss/core': minor\n---\t\n\nSecond entry.\n",
+    'an indented closing rule': "---\n'@navecss/core': minor\n  ---\n\nSecond entry.\n",
+    'a tab-indented closing rule': "---\n'@navecss/core': minor\n\t---\n\nSecond entry.\n",
+    'an opening rule followed by a space': "--- \n'@navecss/core': minor\n---\n\nSecond entry.\n",
   }
   for (const [shape, text] of Object.entries(accepted)) {
     it(`accepts a pending changeset with ${shape}`, () => {
       writeFileSync(changesetPath(), text)
       expect(shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toBe(text)
+    })
+  }
+
+  const notClosed: Record<string, string> = {
+    'a closing rule of four dashes': "---\n'@navecss/core': minor\n----\n\nSecond entry.\n",
+    'text after the closing rule on its line': "---\n'@navecss/core': minor\n--- Second entry.\n",
+  }
+  for (const [shape, text] of Object.entries(notClosed)) {
+    it(`does not read front matter as the opening of a changeset with ${shape}`, () => {
+      writeFileSync(changesetPath(), text)
+      expect(() => shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toThrow(
+        /does not open with "Second entry"/u,
+      )
     })
   }
 
