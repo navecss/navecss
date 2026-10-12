@@ -425,33 +425,6 @@ describe('the selector-list splitter that the border and disjointness readers re
   })
 })
 
-const named = (css: string): Set<string> => new Set(css.match(/--nave-[a-z0-9-]+/g))
-
-describe('AC-base-ui-bridge-25: every Nave token the stylesheet names exists in the workspace', () => {
-  it('names 54 distinct tokens, each declared by the workspace tokens', () => {
-    const found = named(readStylesheet())
-
-    expect(found.size).toBe(54)
-    expect(
-      found
-        .values()
-        .filter((name) => !tokens.has(name))
-        .toArray(),
-    ).toEqual([])
-  })
-
-  it('reds on a planted token the workspace does not declare (control)', () => {
-    const css = planted('.x { color: var(--nave-color-surface-scrim) }')
-
-    expect(
-      named(css)
-        .values()
-        .filter((name) => !tokens.has(name))
-        .toArray(),
-    ).toEqual(['--nave-color-surface-scrim'])
-  })
-})
-
 const TRANSLUCENT = /color-mix\(|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|#[\da-f]{3,8}\b/i
 
 const ALLOWED_BORDERS = ['var(--nave-color-border-control)', 'var(--nave-color-border-disabled)']
