@@ -92,12 +92,32 @@ interface Cx {
   dynamic: (name: AtomName | Falsy) => string
 }
 
+type KeepMap = Readonly<Record<string, string>>
+
 /**
  * The atoms the Vite plugin ships for `cx.dynamic()`: the plugin hands the map of the atoms in
  * `keep` and in every `keepFor` list to the bundler as a constant, static data folded into the
- * bundle. Undefined without the plugin, and under `atomic: 'all'`.
+ * bundle. The constant holds the map as an object (Vite) or as its JSON text (a host whose
+ * define folds only strings, such as Next.js's `compiler.define`). Undefined without the plugin,
+ * and under `atomic: 'all'`.
  */
-declare const __NAVE_KEEP_CLASSES__: Readonly<Record<string, string>> | undefined
+declare const __NAVE_KEEP_CLASSES__: KeepMap | string | undefined
+
+const decodedKeep = new Map<string, KeepMap>()
+
+/**
+ * The map the constant holds: the object itself, or the object its JSON text decodes to, decoded
+ * on first use and kept, so a later call reads the map the first one made.
+ */
+function keptMap(constant: KeepMap | string): KeepMap {
+  if (typeof constant !== 'string') return constant
+  let map = decodedKeep.get(constant)
+  if (!map) {
+    map = JSON.parse(constant) as KeepMap
+    decodedKeep.set(constant, map)
+  }
+  return map
+}
 
 export const cx: Cx = (...args: (AtomName | Falsy)[]): string =>
   args
@@ -118,6 +138,7 @@ cx.dynamic = (name: AtomName | Falsy): string => {
   // `typeof`, not a comparison: without the plugin the constant is not declared at all, and
   // reading an undeclared name throws where `typeof` does not.
   // eslint-disable-next-line unicorn/no-typeof-undefined
-  const map = typeof __NAVE_KEEP_CLASSES__ === 'undefined' ? atomClassMap : __NAVE_KEEP_CLASSES__
+  const kept = typeof __NAVE_KEEP_CLASSES__ === 'undefined' ? undefined : __NAVE_KEEP_CLASSES__
+  const map = kept === undefined ? atomClassMap : keptMap(kept)
   return Object.hasOwn(map, name) ? map[name] : ''
 }
