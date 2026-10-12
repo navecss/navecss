@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { test } from 'node:test'
@@ -24,11 +25,14 @@ import { fileURLToPath } from 'node:url'
  * ENOENT, but an assertion that the listing is non-empty can still fail on the version commit.
  * `README.md` and `config.json` are never consumed and are not fragments.
  *
- * Three more limits, each left alone because seeing past comments takes a comment stripper, a
- * larger hazard than the defects. A fragment named only in a comment counts as named, so a file
- * that mentions one must import the helper or not name it. A comment between the two path arguments
- * of `'.changeset', 'name.md'` hides the name. An `import` line inside a block comment counts as
- * an import.
+ * More limits, each left alone because seeing past comments and strings takes a lexer, a larger
+ * hazard than the defects. A fragment named only in a comment counts as named, so a file that
+ * mentions one must import the helper or not name it. A comment between the two path arguments of
+ * `'.changeset', 'name.md'` hides the name. An `import` line, or an `import()`, inside a comment
+ * or a string counts, and so does an `import()` type annotation. `import { type A } from` the
+ * helper counts although it reads nothing. A comment inside a helper import's own clause that holds
+ * `from` and a quote (`// from 'x'`) ends the clause there, so a file that imports the helper that
+ * way is reported and has to word the comment differently.
  */
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -44,14 +48,16 @@ const NAMED_FRAGMENT =
 
 /**
  * An import of the helper: a static `import ... from '<path>/released-changeset'` or a dynamic
- * `import('<path>/released-changeset')`, with or without the `.ts`. The last path segment is the
- * helper's own name, so `not-released-changeset.ts` is not it, and `import type` does not count.
- * A static clause runs to its `from` and stops at the next `import` line, so it cannot reach a
- * later import's specifier, and an apostrophe in a comment inside the clause does not end it. Each
- * span ends before the next one begins, so the cost grows with the length of the source.
+ * `import('<path>/released-changeset')` (a backtick specifier counts there), with or without the
+ * `.ts`. The last path segment is the helper's own name, so `not-released-changeset.ts` is not it,
+ * `import type` does not count, and neither does `typeof import(...)`. A static clause runs to the
+ * first `from` that is followed by a quote, which is its own specifier, and stops at the next
+ * `import` line, so text after it that mentions the helper cannot stand in for the import, and an
+ * apostrophe in a comment inside the clause does not end it. Each span ends before the next one
+ * begins, so the cost grows with the length of the source.
  */
 const HELPER_IMPORT =
-  /(?:^import\b(?!\s+type\b)(?:(?!^import\b)[\s\S])*?\bfrom\s*|\bimport\s*\(\s*)['"][^'"\n]*\/released-changeset(?:\.ts)?['"]/m
+  /(?:^import\b(?!\s+type\b)(?:(?!^import\b|\bfrom\s*['"])[\s\S])*\bfrom\s*['"]|(?<!\btypeof\s+)\bimport\s*\(\s*['"`])[^'"`\n]*\/released-changeset(?:\.ts)?['"`]/m
 
 /**
  * Files that name a fragment without reading the repository's own, each with the reason. A file
@@ -139,14 +145,21 @@ test('control: a name with dots and a directory argument with a trailing slash a
 })
 
 test('control: the stated limits hold, so a change to one is a decision', () => {
+  const helper = "'./helpers/released-changeset.ts'"
+
   assert.deepEqual(namedFragments('// see .changeset/some-fragment.md for history'), [
     '.changeset/some-fragment.md',
   ])
   assert.deepEqual(namedFragments("path.join(ROOT, '.changeset', /* x */ 'x.md')"), [])
-  assert.ok(importsHelper("/*\nimport { a } from './helpers/released-changeset.ts'\n*/\n"))
+  assert.ok(importsHelper(`/*\nimport { a } from ${helper}\n*/\n`))
+  assert.ok(importsHelper(`import { a } from './a.ts'\n// await import(${helper})\n`))
+  assert.ok(importsHelper(`const s = "import(${helper})"\n`))
+  assert.ok(importsHelper(`let x: import(${helper}).ChangelogEntry\n`))
+  assert.ok(importsHelper(`import { type ChangelogEntry } from ${helper}\n`))
+  assert.ok(!importsHelper(`import {\n  // from 'x'\n  shippedChangesetProse,\n} from ${helper}\n`))
 })
 
-test('control: only an import whose own specifier is the helper counts', () => {
+test('control: a static import of the helper counts, and one of another module does not', () => {
   assert.ok(
     importsHelper("import { shippedChangesetProse } from './helpers/released-changeset.ts'\n"),
   )
@@ -161,6 +174,20 @@ test('control: only an import whose own specifier is the helper counts', () => {
   assert.ok(!importsHelper("const x = 'released-changeset'\n"))
 })
 
+test('control: text after the last import cannot stand in for an import of the helper', () => {
+  const helper = "'./helpers/released-changeset.ts'"
+  const after = (text) => `import { a } from './a.ts'\n${text}\n`
+
+  assert.ok(!importsHelper(after(`const note = "from ${helper}"`)))
+  assert.ok(!importsHelper(after(`// from ${helper}`)))
+  assert.ok(!importsHelper(after(`/** shippedChangesetProse imported from ${helper} */`)))
+  assert.ok(!importsHelper(after(`export { x } from ${helper}`)))
+  assert.ok(
+    !importsHelper(`import {\n  x,\n} from './a.ts'\nconst y = 1\nconst n = 'from ${helper}'\n`),
+  )
+  assert.ok(importsHelper(`import { a } from './a.ts'\nimport { b } from ${helper}\n`))
+})
+
 test('control: a dynamic import of the helper counts, at the start of a line or not', () => {
   assert.ok(
     importsHelper(
@@ -169,8 +196,15 @@ test('control: a dynamic import of the helper counts, at the start of a line or 
   )
   assert.ok(importsHelper("import('./helpers/released-changeset.ts').then((m) => m.x)\n"))
   assert.ok(importsHelper("  const m = await import( './helpers/released-changeset' )\n"))
+  assert.ok(importsHelper('const m = await import(`./helpers/released-changeset.ts`)\n'))
   assert.ok(!importsHelper("await import('./helpers/not-released-changeset.ts')\n"))
   assert.ok(!importsHelper("await import('./a.ts')\n// released-changeset\n"))
+})
+
+test('control: a type position that only names the helper does not count', () => {
+  assert.ok(!importsHelper("type H = typeof import('./helpers/released-changeset.ts')\n"))
+  assert.ok(!importsHelper("type H = typeof  import('./helpers/released-changeset.ts')\n"))
+  assert.ok(!importsHelper('type H = typeof import(`./helpers/released-changeset.ts`)\n'))
 })
 
 test('control: the specifier ends in the helper itself, and a type-only import does not count', () => {
@@ -206,22 +240,28 @@ test('control: an apostrophe in a comment inside the import clause does not end 
 })
 
 /**
- * Scaling, never a wall-clock budget: a pattern that rescans its input costs about 100 times as
- * much on ten times the text, one that does not about 10 times, and a ratio between two sizes of
- * the same subject holds on a slow runner where a millisecond figure would not. The fastest of
- * three runs is taken, since load only ever adds time, and a pass is retried because a lone stall
- * can push one over the budget where a real rescan fails every pass.
+ * Scaling, never a time budget: a pattern that rescans its input costs about 100 times as much on
+ * ten times the text, one that does not about 10 times. The clock is the CPU time the process
+ * spends (user plus system), not the wall clock: a busy machine preempts a long sample more than
+ * a short one and so inflates a wall-clock ratio, where CPU time stops counting while the process
+ * waits for a core. The fastest of three runs is taken, and a pass is retried, because a lone
+ * stall can still push one over the budget where a real rescan fails every pass.
  */
 const SMALL = 20_000
 const LARGE = 200_000
 const RATIO_BUDGET = 30
 const ATTEMPTS = 3
-const SAMPLE_NS = 2_000_000
+const SAMPLE_MICROSECONDS = 2000
+
+function cpuMicroseconds() {
+  const { user, system } = process.cpuUsage()
+  return user + system
+}
 
 function timeRuns(run, input, runs) {
-  const start = process.hrtime.bigint()
+  const start = cpuMicroseconds()
   for (let i = 0; i < runs; i++) run(input)
-  return Number(process.hrtime.bigint() - start)
+  return cpuMicroseconds() - start
 }
 
 function fastest(run, input, runs) {
@@ -241,7 +281,7 @@ function growth(run, make) {
   const small = make(SMALL)
   const large = make(LARGE)
   run(small)
-  const runs = Math.max(1, Math.ceil(SAMPLE_NS / fastest(run, small, 1)))
+  const runs = Math.max(1, Math.ceil(SAMPLE_MICROSECONDS / Math.max(1, fastest(run, small, 1))))
   return fastest(run, large, runs) / fastest(run, small, runs)
 }
 
@@ -286,40 +326,41 @@ for (const [shape, make] of Object.entries(NAMED_SHAPES)) {
 }
 
 /**
- * The names of the packages whose `test` directory holds a source file, listed with a recursive
- * `readdirSync` of each directory and none of `swept()`'s own walk.
+ * Every source file git tracks under a package's `test` directory or under `scripts/`, listed by
+ * git with the extensions written out here, so that what the sweep skips and which extensions it
+ * takes cannot also hide a file from this list.
  */
-function packagesWithTests() {
-  const packagesDir = path.join(ROOT, 'packages')
-  return readdirSync(packagesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => {
-      const testDir = path.join(packagesDir, name, 'test')
-      return (
-        existsSync(testDir) &&
-        readdirSync(testDir, { recursive: true }).some(
-          (relative) =>
-            SOURCE_FILE.test(relative) &&
-            relative.split(path.sep).every((segment) => !NOT_SOURCE.has(segment)),
-        )
-      )
-    })
+function trackedSourceFiles() {
+  const listed = execFileSync('git', ['ls-files', '-z', '--', 'packages/*/test/**', 'scripts/**'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  return listed.split('\0').filter((file) => /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(file))
 }
 
-test('the sweep reaches every package that has tests, the scripts, and the helper itself', () => {
-  const files = swept().map((entry) => entry.file)
-  const packages = packagesWithTests()
+/**
+ * Tracked source files the sweep leaves out on purpose, each with the reason: the sweep itself,
+ * which names fragments only to test the patterns above.
+ */
+const NOT_SWEPT = new Map([
+  [
+    'scripts/check-test-changeset-reads.test.mjs',
+    'this file: its controls name invented fragments',
+  ],
+])
 
-  assert.ok(packages.includes('core'), 'the listing does not find packages/core/test')
-  for (const name of packages) {
-    assert.ok(
-      files.some((file) => file.startsWith(`packages/${name}/test/`)),
-      `no file under packages/${name}/test is swept`,
-    )
-  }
-  assert.ok(files.some((file) => file.startsWith('scripts/')))
-  assert.ok(files.includes('packages/core/test/helpers/released-changeset.ts'))
+test('the sweep reaches every tracked source file under a package test directory or scripts/, and the helper itself', () => {
+  const sweptFiles = new Set(swept().map((entry) => entry.file))
+  const tracked = trackedSourceFiles()
+
+  assert.ok(tracked.length > 100, `git lists only ${tracked.length} files`)
+  assert.ok(tracked.some((file) => file.startsWith('scripts/')))
+  assert.ok(tracked.some((file) => file.startsWith('packages/core/test/')))
+  const missed = tracked.filter((file) => !sweptFiles.has(file) && !NOT_SWEPT.has(file))
+  assert.deepEqual(missed, [], 'tracked files the sweep does not read')
+  assert.ok(sweptFiles.has('packages/core/test/helpers/released-changeset.ts'))
+  assert.ok([...sweptFiles].some((file) => file.startsWith('scripts/')))
 })
 
 test('every file that names a changeset reads it through the helper', () => {

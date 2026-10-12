@@ -632,25 +632,32 @@ const hasEntryStarting = (section: string, entryStart: string): boolean =>
   changelogEntries(section).some((entry) => entry.text.startsWith(entryStart))
 
 /**
+ * The version a `## ` section of a changelog is headed with.
+ */
+const headingOf = (section: string): string => section.split('\n', 1)[0]!.trim()
+
+/**
  * The version heading of the `## ` section of `changelog` that holds both entries, whichever
- * version that is: the two changesets read as one release when one release wrote them. Throws,
- * naming the entry, when either is absent or when they sit in different sections.
+ * version that is: the two changesets read as one release when one release wrote them. Every
+ * section that holds the first entry is tried, since a newer one may repeat its opening. Throws,
+ * naming the entry, when either is absent, or, naming the first section that holds the first
+ * entry, when no such section holds the second.
  */
 function sectionHoldingBoth(changelog: string, first: string, second: string): string {
   const withFirst = changelog
     .split(/^## /m)
     .slice(1)
-    .find((section) => hasEntryStarting(section, first))
-  if (withFirst === undefined) {
+    .filter((section) => hasEntryStarting(section, first))
+  if (withFirst.length === 0) {
     throw new Error(`no section of the changelog has an entry starting "${first}"`)
   }
-  const heading = withFirst.split('\n', 1)[0]!.trim()
-  if (!hasEntryStarting(withFirst, second)) {
+  const withBoth = withFirst.find((section) => hasEntryStarting(section, second))
+  if (withBoth === undefined) {
     throw new Error(
-      `the section "## ${heading}" has the entry starting "${first}" but none starting "${second}"`,
+      `the section "## ${headingOf(withFirst[0]!)}" has the entry starting "${first}" but none starting "${second}"`,
     )
   }
-  return heading
+  return headingOf(withBoth)
 }
 
 const fakeEntry = (hash: string, text: string): string => `- ${hash}: ${text}\n`
@@ -678,6 +685,17 @@ describe('sectionHoldingBoth', () => {
     const newer = fakeSection('0.4.0', fakeEntry('ccccccc', 'Something newer.'))
 
     expect(sectionHoldingBoth(fakeChangelog(newer, both), 'First entry', 'Second')).toBe('0.3.0')
+  })
+
+  it('names the older section that holds both when a newer one repeats the first entry', () => {
+    const both = fakeSection(
+      '0.3.0',
+      fakeEntry('aaaaaaa', 'First entry.'),
+      fakeEntry('bbbbbbb', 'Second.'),
+    )
+    const repeats = fakeSection('0.3.1', fakeEntry('ccccccc', 'First entry, again.'))
+
+    expect(sectionHoldingBoth(fakeChangelog(repeats, both), 'First entry', 'Second')).toBe('0.3.0')
   })
 
   it('throws when the two entries sit in different sections, naming the one that is missing', () => {
