@@ -642,13 +642,15 @@ export default defineConfig([
     },
   },
 
-  // ── Two suites that simulate a build mode by assigning NODE_ENV themselves and restoring it
+  // ── Four suites that simulate a build mode by assigning NODE_ENV themselves and restoring it
   // afterwards; the variable is a value the test sets, not an input the build reads from the
   // environment, so turbo has nothing to hash for it ───────────────────────────────────────────
   {
     files: [
+      'packages/core/test/browser/driven/vite-used-atoms-inline.browser.test.ts',
       'packages/core/test/vite-used-atoms-collect-reach.test.ts',
       'packages/core/test/vite-used-atoms-frameworks.test.ts',
+      'packages/core/test/vite-used-atoms-inline.test.ts',
     ],
     rules: {
       'turbo/no-undeclared-env-vars': 'off',

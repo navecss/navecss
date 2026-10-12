@@ -316,6 +316,17 @@ what `navePlugin()` does with no options. On the CSS-first path, where `@nave` c
 declarations into your own rule, a project that never calls `cx()` and writes no Nave class ships no
 rule from the atom layer.
 
+In a build, the plugin also turns each `cx()` call it read into the class string the call returns, so
+the map from atom names to classes does not ship: `cx('flex', 'grid')` becomes `"nave-flex nave-grid"`,
+and `cx('flex', on && 'grid')` becomes `["nave-flex", on && "nave-grid"].filter(Boolean).join(" ")`,
+with each argument evaluated once, in the order you wrote it. A direct `cx.raw()` call becomes the
+same join, and a direct `cx.dynamic()` call a lookup in a map of the atoms in `keep` and `keepFor`.
+The dev server keeps the run-time functions, which return the same strings. A bundle holds neither
+the name map nor the atoms' declarations when every use of `cx` in it is one of those direct calls.
+Two forms keep the map, since the build cannot follow the alias: `const r = cx.raw` and
+`const { raw } = cx`. So does a package listed in `keepFor` whose calls the build cannot read,
+because those calls stay calls to the run-time `cx()`.
+
 So that nothing is dropped on a guess, a `cx()` call whose atoms the build cannot read fails the
 build. `vite build` reads every module first and fails once, at the end, with a report that lists
 each such use with its file, and its line and column when the source maps lead back to them, then
@@ -514,9 +525,10 @@ build, that list is the set of atoms its CSS holds, so you can diff it between b
 **Shipping every atom.** `navePlugin({ atomic: 'all' })` reads no `cx()` call and ships every atom,
 as the PostCSS plugin does. It suits a project whose Nave classes are mostly written where no build
 reads them, such as a backend's own templates or HTML from a CMS, where listing them in `keep` is
-not practical. It gives up what this section describes: no `cx()` call is read or checked, a name
-that is no atom passes through `cx()` as text, as it does without the plugin, and `cx.dynamic()`
-maps through every atom. The dev server serves every atom too, the plugin sets neither
+not practical. It gives up what this section describes: no `cx()` call is read, checked or turned
+into its class string, so the name map ships, a name that is no atom passes through `cx()` as text,
+as it does without the plugin, and `cx.dynamic()` maps through every atom. The dev server serves
+every atom too, the plugin sets neither
 `optimizeDeps.exclude` nor `resolve.noExternal`, no build writes `nave-used-atoms.json`, and
 `keep`, `keepFor` and `cxModules` are still checked for well-formed values and otherwise do nothing.
 It is also the way out that the plugin's own check names when a build's atom layer does not hold

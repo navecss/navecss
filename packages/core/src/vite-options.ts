@@ -14,8 +14,9 @@ export interface UsedAtomOptions {
    * filters the atomic layer of every stylesheet it can reach, and the dev server serves the same
    * set as far as it has read; a stylesheet imported with `?inline` or `?raw` ships every atom
    * with a warning; a `cx()` call whose atoms the build cannot read fails the build, and is an
-   * error in the dev server.
-   * `'all'`: every atom, and no `cx()` call is read, as with the PostCSS plugin.
+   * error in the dev server. In a build, each `cx()` call the plugin read also becomes the class
+   * string it returns.
+   * `'all'`: every atom, and no `cx()` call is read or rewritten, as with the PostCSS plugin.
    */
   atomic?: 'all' | 'used'
 

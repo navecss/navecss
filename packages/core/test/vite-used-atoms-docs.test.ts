@@ -267,11 +267,8 @@ describe('AC-used-atoms-36 — the section, the cx() section and the docblocks',
     )
   })
 
-  it('makes no claim that a cx() call becomes its class string, and none that Nave ships only what the app uses', () => {
-    const text = fold(atoms)
-
-    expect(text).not.toMatch(/becomes (?:its|the) class string|replaced by (?:its|the) class/i)
-    expect(text).not.toMatch(/Nave ships only/i)
+  it('makes no claim that Nave ships only what the app uses', () => {
+    expect(fold(atoms)).not.toMatch(/Nave ships only/i)
   })
 
   it('points to the section from the cx() section, and names the Vite plugin in the build-level-check sentence', () => {
@@ -624,6 +621,55 @@ function isMinorOnCore(changeset: typeof USED_CHANGESET): boolean {
   )
   return entry?.kind === 'Minor Changes'
 }
+
+const INLINE_CHANGESET = {
+  path: path.join(REPO_ROOT, '.changeset/vite-plugin-inlines-cx-calls.md'),
+  entryStart: 'In a build, the Vite plugin turns each `cx()` call it read',
+}
+
+/**
+ * The prose of the changeset that names the inlining: the pending file, or its changelog entry.
+ */
+const inlinedChangeset = (): string =>
+  shippedChangesetProse(INLINE_CHANGESET.path, CHANGELOG_PATH, INLINE_CHANGESET.entryStart)
+
+describe('AC-used-atoms-37 — the documentation the inlining makes true', () => {
+  const text = fold(atoms)
+
+  it('says in the section that each cx() call becomes its class string in the build', () => {
+    expect(text).toMatch(/turns each `cx\(\)` call it read into the class string the call returns/)
+    expect(text).toContain("`cx('flex', 'grid')` becomes `\"nave-flex nave-grid\"`")
+  })
+
+  it('says the dev server keeps the run-time functions', () => {
+    expect(text).toMatch(/dev server keeps the run-time functions/)
+  })
+
+  it('says the two aliased cx.raw forms keep the name map, and so does a keepFor package whose calls the build cannot read', () => {
+    expect(text).toContain('`const r = cx.raw`')
+    expect(text).toContain('`const { raw } = cx`')
+    expect(text).toMatch(/keep the map/)
+    expect(text).toMatch(/package listed in `keepFor` whose calls the build cannot read/)
+  })
+
+  it('has a minor on @navecss/core that names the inlining', () => {
+    expect(inlinedChangeset()).toMatch(/class string/)
+    expect(inlinedChangeset()).toMatch(/map from atom names to classes/)
+  })
+
+  it('keeps the pending changeset a minor on @navecss/core', () => {
+    const pending = existsSync(INLINE_CHANGESET.path)
+      ? readFileSync(INLINE_CHANGESET.path, 'utf8')
+      : "---\n'@navecss/core': minor\n---\n"
+
+    expect(pending).toMatch(/^---\n'@navecss\/core': minor\n---\n/)
+  })
+
+  it('says neither "now defaults to", "opt in" nor "previously" in the lines it adds', () => {
+    expect(text).not.toMatch(RETIRED)
+    expect(inlinedChangeset()).not.toMatch(RETIRED)
+  })
+})
 
 describe('AC-used-atoms-58 — the two changesets read as one release', () => {
   const flatUsed = fold(usedChangeset)

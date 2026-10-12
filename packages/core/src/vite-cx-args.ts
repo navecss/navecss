@@ -160,20 +160,26 @@ function planOfName(node: AstNode, context: Context): Plan {
 }
 
 /**
- * The plan for `a && X`, `a || X` and `a ?? X`: `a && X` is `X` or something `cx()` filters out;
- * the others are either side. A literal left operand can decide the call alone, and then the
- * other side is never read.
+ * The operands of `a && X`, `a || X` and `a ?? X` that can decide what the call gets: `a && X` is
+ * `X` or something `cx()` filters out; the others are either side. A literal left operand can
+ * decide the call alone, and then the other side is never read.
  */
-function planOfLogical(node: AstNode): Plan {
+export function operandsRead(node: AstNode): readonly AstNode[] {
   const left = nodeAt(node, 'left')
   const right = nodeAt(node, 'right')
   const operand = operandOf(left)
-  if (node.operator === '&&') {
-    return operand?.isFalsy ? leaf([]) : { deps: [right], combine: first }
-  }
+  if (node.operator === '&&') return operand?.isFalsy ? [] : [right!]
   const isDecided = node.operator === '||' ? operand?.isFalsy : operand?.isNullish
-  if (isDecided === false) return { deps: [left], combine: first }
-  return { deps: [left, right], combine: unionOf }
+  return isDecided === false ? [left!] : [left!, right!]
+}
+
+/**
+ * The plan for `a && X`, `a || X` and `a ?? X`, over the operands that can decide the call.
+ */
+function planOfLogical(node: AstNode): Plan {
+  const read = operandsRead(node)
+  if (read.length === 0) return leaf([])
+  return { deps: read, combine: read.length === 1 ? first : unionOf }
 }
 
 /**
@@ -243,6 +249,37 @@ function possibles(root: AstNode | undefined, context: Context): Resolved {
     stack.at(-1)?.done.push(result)
   }
   return result
+}
+
+/**
+ * Whether `node` is a value `cx()` filters out whatever it is read as: `null`, `false`, `!1`,
+ * `void 0`, or an `undefined` no declaration binds.
+ */
+function isFilteredOut(node: AstNode, analysis: ScopeAnalysis): boolean {
+  switch (node.type) {
+    case 'Identifier': {
+      return stringAt(node, 'name') === 'undefined' && !analysis.referenceOf(node)?.binding
+    }
+    case 'Literal': {
+      return literalValue(node) !== undefined
+    }
+    case 'UnaryExpression': {
+      return unaryValue(node) !== undefined
+    }
+    default: {
+      return false
+    }
+  }
+}
+
+/**
+ * The text of an argument that reads the same whenever it is evaluated: a string, or a value
+ * `cx()` filters out, which is `''`. `undefined` for an argument that depends on anything.
+ */
+export function constantOf(node: AstNode, analysis: ScopeAnalysis): string | undefined {
+  const text = staticStringOf(node)
+  if (text !== undefined) return text
+  return isFilteredOut(node, analysis) ? '' : undefined
 }
 
 /**

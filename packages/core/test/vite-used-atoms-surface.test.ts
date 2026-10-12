@@ -625,8 +625,8 @@ describe('AC-used-atoms-20 — the dev define, from the built package', { timeou
   }, 120_000)
 })
 
-describe('AC-used-atoms-23 — the post-order half never changes a module', () => {
-  it('returns every module unchanged and adds no module to the build', async () => {
+describe('AC-used-atoms-23 — the post-order half changes only the calls it reads, and adds no module', () => {
+  it('returns the rewrite of the module that calls cx, nothing for any other, and adds no module to the build', async () => {
     const app = makeUsedApp(
       appFiles({
         'src/App.ts': `${IMPORT}console.log(cx('flex'), 'nave-grid')\nvoid import('./Lazy.ts')\n`,
@@ -664,8 +664,15 @@ describe('AC-used-atoms-23 — the post-order half never changes a module', () =
       expect(used.error).toBeUndefined()
       expect(all.error).toBeUndefined()
       expect(results.length).toBeGreaterThan(0)
-      expect(results.every((result) => result === undefined)).toBe(true)
-      expect(modules.get('used')).toEqual(modules.get('all'))
+      const returned = results.filter((result) => result !== undefined)
+      expect(returned).toHaveLength(1)
+      expect((returned[0] as { code: string }).code).toContain('"nave-flex"')
+      // The build that inlines the call has no use left for core's `cx` module, but holds no
+      // module the 'all' build does not.
+      const wholeBuild = modules.get('all')!
+      const inlinedBuild = modules.get('used')!
+      expect(inlinedBuild.filter((id) => !wholeBuild.includes(id))).toEqual([])
+      expect(inlinedBuild.length).toBeLessThan(wholeBuild.length)
       expect(pathToFileURL(app.root).href).toBeTruthy()
       expect(Object.keys(atomClassMap).length).toBeGreaterThan(0)
     } finally {
