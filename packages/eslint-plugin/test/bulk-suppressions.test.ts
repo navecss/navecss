@@ -165,6 +165,38 @@ describe('AC-18: ESLint bulk suppressions hold the escape count', () => {
     }
   })
 
+  it('counts cx.dynamic() calls beside cx.raw(): two calls and one raw write 3, one more exits 1, one fewer exits 2', () => {
+    const source = [
+      "import { cx } from '@navecss/core/cx'",
+      'const a = <div className={cx.dynamic(tone)} />',
+      "const b = <div className={cx.dynamic('flex')} />",
+      "const c = <div className={cx.raw('legacy-card')} />",
+    ].join('\n')
+    const dir = scratchProject('error')
+    try {
+      writeFileSync(path.join(dir, 'src/a.jsx'), source)
+      expect(runEslint(dir, ['--suppress-rule', '@navecss/count-escapes']).status).toBe(0)
+      expect(suppressionsFile(dir)['src/a.jsx']!['@navecss/count-escapes']!.count).toBe(3)
+      expect(runEslint(dir, []).status).toBe(0)
+
+      writeFileSync(path.join(dir, 'src/a.jsx'), `${source}\nconst d = cx.dynamic(tone)`)
+      expect(runEslint(dir, []).status).toBe(1)
+
+      writeFileSync(
+        path.join(dir, 'src/a.jsx'),
+        source
+          .split('\n')
+          .filter((line) => !line.includes("cx.dynamic('flex')"))
+          .join('\n'),
+      )
+      const removed = runEslint(dir, [])
+      expect(removed.status).toBe(2)
+      expect(removed.stderr).toContain('--prune-suppressions')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('at warn: --suppress-rule records no entry for the rule', () => {
     const dir = scratchProject('warn')
     try {

@@ -91,7 +91,7 @@ this one as it was.
 ## Count your escapes
 
 `@navecss/count-escapes` is `off` in `recommended`. Turn it on to hold the number of `cx.raw()`
-escapes as a CI number, using ESLint's own bulk-suppressions file:
+escapes and `cx.dynamic()` calls as a CI number, using ESLint's own bulk-suppressions file:
 
 ```js
 { rules: { '@navecss/count-escapes': 'error' } }
@@ -109,6 +109,12 @@ suppression is never recorded for a `warn`. As a fallback that needs no cache fi
 rule's. A file-wide or block `eslint-disable` comment with no rule list silences every rule
 after it in that file, this one included, so a file that opens with a bare `/* eslint-disable */`
 is never in the count at all.
+
+Every call to Nave's `cx.dynamic()` is counted, whatever its argument (an atom name, `null` and no
+argument included), beside the `cx.raw()` calls above. `cx.dynamic()` takes a name chosen at run
+time, so the call itself is the escape and no reason comment applies to it. It is counted inside
+a `className` or not, `.ts` files included. A reference that is never called is not counted, and
+`cx.raw(cx.dynamic(tone))` is one count, at the inner call.
 
 Three more limits come from how ESLint itself applies directives and records suppressions, which
 no rule can see past:
@@ -151,7 +157,8 @@ Stated as rules, not as gaps to be filled later:
   `cx` under another name, or as its default export, is not seen as Nave's `cx`.
 - `cx.raw` is recognised as `cx.raw`, `cx['raw']`, ``cx[`raw`]``, a namespace import's
   `c.cx.raw`, or one `const` alias: a call reached any other way, such as `(0, cx.raw)(...)` or
-  `cx.raw.call(...)`, is not seen by either rule.
+  `cx.raw.call(...)`, is not seen by either rule. `cx.dynamic` is recognised in the same forms,
+  and by the class channel and the counting rule alone.
 - A camelCase string passed to `cx()` passes only if it names a real atom of the **installed**
   `@navecss/core` — a name registered through `navePlugin({ extend })` is not in `cx()`'s map and
   is reported.
@@ -161,8 +168,8 @@ Stated as rules, not as gaps to be filled later:
   `border` and its sides, `font`, `transition`, `animation`, and any other) is not checked, even
   though `@navecss/stylelint-config`'s own config reports it by expanding the shorthand into the
   longhands it sets.
-- The counting rule's denominator is exactly what `@navecss/raw-reason` counts in the linted
-  files — see above for what that excludes.
+- The counting rule's denominator is what `@navecss/raw-reason` counts in the linted files, plus
+  every call to `cx.dynamic()` — see above for what that excludes.
 
 ## Rules
 
@@ -181,7 +188,8 @@ call is read through its arguments; a `cx.raw()` call is left to the next rule. 
 `class` value that is itself an inline function of component state, as Base UI parts accept
 (`className={(state) => (state.open ? 'is-open' : undefined)}`), is read through the values it
 returns: its expression body, or each `return` of its block body, but not the returns of a
-function nested inside it.
+function nested inside it. A string passed to `cx.dynamic()` is read the way one passed to `cx()`
+is: a class that is no atom is reported, whatever your project declares.
 
 ### Rule 2: the `cx.raw()` reason
 

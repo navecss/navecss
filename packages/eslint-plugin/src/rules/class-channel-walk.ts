@@ -15,12 +15,16 @@
  * `!`, an optional chain); and calls. A call to Nave's `cx()` has each argument read as one atom
  * name, whole (the way `cx()` maps it at run time), and an array or object literal there is reported whatever it holds, since cx() maps each argument whole and stringifies an array or object first; a call to a class-composition
  * helper, or to a `cx` that is not Nave's, has each argument read as class text, arrays and object
- * keys included; `cx.raw()` and any other call contribute nothing.
+ * keys included; `cx.raw()` and any other call contribute nothing. A call to Nave's `cx.dynamic()`
+ * is read exactly as one to `cx()`, except inside the arguments of a `cx.raw()`, where it
+ * contributes nothing: there it is composition, and the counting rule counts it once at the call.
  */
 import type { TSESTree } from '@typescript-eslint/types'
 import type { Scope, SourceCode } from 'eslint'
 
-import { type CxBindings, resolveCxCallee } from '../cx-binding.ts'
+import type { CxBindings } from '../cx-binding.ts'
+
+import { resolveCxCallee } from '../cx-callee.ts'
 import { inlineFunction, returnedValues } from '../function-returns.ts'
 import {
   collectConcatPieces,
@@ -35,6 +39,7 @@ import {
   type ClassHit,
   classHits,
   containerAtomPiece,
+  objectKeyHit,
   partAtomPiece,
   wholeAtomPiece,
 } from './class-hits.ts'
@@ -44,6 +49,10 @@ type AnyNode = TSESTree.Node
 export interface WalkContext {
   bindings: CxBindings
   helpers: string[]
+  /**
+  True while reading the arguments of a `cx.raw()` call, where `cx.dynamic()` is composition.
+   */
+  insideRaw?: true
   sourceCode: SourceCode
 }
 
@@ -148,20 +157,6 @@ function atomConcatHits(
 }
 
 /**
-The key of a helper's object-map argument (`{ 'is-open': open }`) is itself a literal class.
- */
-function objectKeyHit(property: TSESTree.ObjectLiteralElement): ClassHit[] {
-  if (property.type !== 'Property' || property.computed) return []
-  if (property.key.type === 'Identifier') {
-    return [{ kind: 'class', node: property.key, text: property.key.name, truncated: false }]
-  }
-  if (isStringLiteral(property.key)) {
-    return [{ kind: 'class', node: property.key, text: property.key.value, truncated: false }]
-  }
-  return []
-}
-
-/**
 A helper-call argument: the class-position grammar, widened with arrays and object keys.
  */
 function helperArgumentHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope): ClassHit[] {
@@ -177,16 +172,19 @@ function helperArgumentHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope)
 }
 
 /**
- * A call in a class position: Nave's `cx()` (each argument one atom name), `cx.raw()` (rule 2's
- * territory, nothing here), a helper (each argument class text), or any other call (opaque).
+ * A call in a class position: Nave's `cx()` or `cx.dynamic()` (each argument one atom name),
+ * `cx.raw()` (rule 2's territory, nothing here), a helper (each argument class text), or any
+ * other call (opaque).
  */
 function callHits(ctx: WalkContext, node: TSESTree.CallExpression, scope: Scope.Scope): ClassHit[] {
   const args = node.arguments.filter((argument) => argument.type !== 'SpreadElement')
   const resolved = resolveCxCallee(node.callee, ctx.bindings, scope)
-  if (resolved === 'cx') {
+  if (resolved === 'cx' || (resolved === 'dynamic' && !ctx.insideRaw)) {
     return args.flatMap((argument) => positionHits(ctx, argument, scope, node.callee))
   }
-  if (resolved === 'raw' || !isHelperCall(node.callee, ctx.helpers)) return []
+  if (resolved === 'raw' || resolved === 'dynamic' || !isHelperCall(node.callee, ctx.helpers)) {
+    return []
+  }
   return args.flatMap((argument) => helperArgumentHits(ctx, argument, scope))
 }
 
@@ -288,12 +286,13 @@ export function collectValueHits(ctx: WalkContext, node: AnyNode, scope: Scope.S
 
 /**
  * Every hit in one argument of a `cx.raw()` call, read exactly as rule 1 reads a class
- * position (an `&&` here is an argument, not a slot, so it is composition).
+ * position (an `&&` here is an argument, not a slot, so it is composition), except that a
+ * `cx.dynamic()` call inside is composition too.
  */
 export function collectArgumentHits(
   ctx: WalkContext,
   node: AnyNode,
   scope: Scope.Scope,
 ): ClassHit[] {
-  return positionHits(ctx, node, scope, undefined)
+  return positionHits({ ...ctx, insideRaw: true }, node, scope, undefined)
 }

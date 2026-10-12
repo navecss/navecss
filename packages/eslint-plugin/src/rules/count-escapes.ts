@@ -1,13 +1,15 @@
 /**
  * The counting rule, `off` in `recommended`. Reports, at `error`, every `cx.raw()` call
- * rule 2 counts (with or without a reason — a reason does not leave the count) and every disable
- * comment that names one of this plugin's rules, or names no rule at all. ESLint's own bulk
+ * rule 2 counts (with or without a reason — a reason does not leave the count), every call to
+ * Nave's `cx.dynamic()` whatever its argument, and every disable comment that names one of this
+ * plugin's rules, or names no rule at all. ESLint's own bulk
  * suppressions (`eslint --suppress-rule`) turn that report into a project's held escape count.
  */
 import type { TSESTree } from '@typescript-eslint/types'
 import type { Rule } from 'eslint'
 
-import { collectCxBindings, NO_CX_BINDINGS, resolveCxCallee } from '../cx-binding.ts'
+import { collectCxBindings, NO_CX_BINDINGS } from '../cx-binding.ts'
+import { resolveCxCallee } from '../cx-callee.ts'
 import { reportablePiecesInCall } from '../raw-admission.ts'
 import { compileAllow, getNaveSettings } from '../settings.ts'
 
@@ -56,6 +58,8 @@ export const countEscapesRule: Rule.RuleModule = {
     messages: {
       escape:
         'This {{callee}}() call carries class text that needs a reason: counted as an escape.',
+      dynamicEscape:
+        'This {{callee}}() call chooses its class by name at run time: counted as an escape.',
       disableComment: 'This disable comment can hide an escape from the count.',
     },
     schema: [],
@@ -92,15 +96,17 @@ export const countEscapesRule: Rule.RuleModule = {
       CallExpression(node) {
         const call = node as unknown as TSESTree.CallExpression
         const scope = context.sourceCode.getScope(node)
-        if (resolveCxCallee(call.callee, bindings, scope) !== 'raw') return
+        const resolved = resolveCxCallee(call.callee, bindings, scope)
         const ctx = { bindings, helpers: settings.helpers, sourceCode: context.sourceCode }
-        if (reportablePiecesInCall(ctx, call, scope, allowEntries).length > 0) {
-          context.report({
-            node,
-            messageId: 'escape',
-            data: { callee: context.sourceCode.getText(call.callee as never) },
-          })
-        }
+        const isEscape =
+          resolved === 'dynamic' ||
+          (resolved === 'raw' && reportablePiecesInCall(ctx, call, scope, allowEntries).length > 0)
+        if (!isEscape) return
+        context.report({
+          node,
+          messageId: resolved === 'dynamic' ? 'dynamicEscape' : 'escape',
+          data: { callee: context.sourceCode.getText(call.callee as never) },
+        })
       },
     }
   },

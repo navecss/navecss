@@ -270,6 +270,24 @@ describe('AC-19: the counting rule denominator, stated and fixtured', () => {
     expect(lint(code)).toEqual([])
   })
 
+  it('states that every cx.dynamic() call is counted, whatever its argument, and the fixtures hold', () => {
+    const collapsed = README.replaceAll(/\s+/g, ' ')
+    expect(collapsed).toContain(
+      "Every call to Nave's `cx.dynamic()` is counted, whatever its argument (an atom name, `null` and no argument included), beside the `cx.raw()` calls above.",
+    )
+    const PRELUDE = "import { cx } from '@navecss/core/cx'\n"
+    for (const call of [
+      'cx.dynamic(tone)',
+      "cx.dynamic('flex')",
+      'cx.dynamic(null)',
+      'cx.dynamic()',
+    ]) {
+      expect(lint(`${PRELUDE}const k = ${call}`), call).toEqual(['@navecss/count-escapes'])
+    }
+    expect(lint(`${PRELUDE}const k = cx.raw(cx.dynamic(tone))`)).toEqual(['@navecss/count-escapes'])
+    expect(lint(`${PRELUDE}const f = cx.dynamic`)).toEqual([])
+  })
+
   it("states the three limits ESLint's own directive and suppressions handling sets", () => {
     const collapsed = README.replaceAll(/\s+/g, ' ')
     for (const statement of [

@@ -12,7 +12,8 @@ import type { JSSyntaxElement, Rule } from 'eslint'
 import type { ClassHit } from './class-hits.ts'
 
 import { atomNameForClass } from '../atoms.ts'
-import { collectCxBindings, type CxBindings, NO_CX_BINDINGS, rawCalleeText } from '../cx-binding.ts'
+import { collectCxBindings, type CxBindings, NO_CX_BINDINGS } from '../cx-binding.ts'
+import { rawCalleeText } from '../cx-callee.ts'
 import {
   cxAtomMessage,
   cxContainerMessage,

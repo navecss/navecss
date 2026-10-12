@@ -5,7 +5,7 @@
  */
 import type { TSESTree } from '@typescript-eslint/types'
 
-import type { LiteralPiece } from '../literal-pieces.ts'
+import { isStringLiteral, type LiteralPiece } from '../literal-pieces.ts'
 
 type AnyNode = TSESTree.Node
 
@@ -102,4 +102,18 @@ export function containerAtomPiece(
     isWhole: false,
     truncated: false,
   }
+}
+
+/**
+The key of a helper's object-map argument (`{ 'is-open': open }`) is itself a literal class.
+ */
+export function objectKeyHit(property: TSESTree.ObjectLiteralElement): ClassHit[] {
+  if (property.type !== 'Property' || property.computed) return []
+  if (property.key.type === 'Identifier') {
+    return [{ kind: 'class', node: property.key, text: property.key.name, truncated: false }]
+  }
+  if (isStringLiteral(property.key)) {
+    return [{ kind: 'class', node: property.key, text: property.key.value, truncated: false }]
+  }
+  return []
 }
