@@ -879,3 +879,4 @@ Consumers of `@navecss/tokens` alone get no guide: it ships only in this package
 | `@navecss/core/standalone`   | The whole stylesheet in one file, with no `@import`, for projects with no bundler                     |
 | `@navecss/core/postcss`      | PostCSS plugin — `navePlugin()`                                                                       |
 | `@navecss/core/check`        | The survival check as a function — `check({ source })`                                                |
+| `@navecss/core/collect`      | Reads which atoms a module uses, for build tools; not meant for application code                      |

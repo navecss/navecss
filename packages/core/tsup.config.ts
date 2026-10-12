@@ -6,6 +6,7 @@ export default defineConfig({
     atoms: 'src/atoms.ts',
     bin: 'src/bin.ts',
     check: 'src/directive/check.ts',
+    collect: 'src/collect.ts',
     cx: 'src/cx.ts',
     lightningcss: 'src/lightningcss.ts',
     postcss: 'src/postcss.ts',
