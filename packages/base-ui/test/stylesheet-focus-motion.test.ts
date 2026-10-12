@@ -5,15 +5,17 @@ import { describe, expect, it } from 'vitest'
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
 import {
+  focusRingClasses,
   isFocusRingBase,
   isFocusRingDeclaration,
   isThumbRingDeclaration,
+  NEW_CLASSES,
   ringBlock,
   THUMB,
   THUMB_RING,
 } from './support/focus.ts'
-import { flatten, readStylesheet } from './support/stylesheet.ts'
-import { focusRingClasses } from './support/table-p.ts'
+import { attributeReads, selectorNodes } from './support/selector.ts'
+import { flatten, flattenRules, readStylesheet } from './support/stylesheet.ts'
 
 const PREFIX = 'nave-base-ui-'
 const GUARD_QUERY = '@media (prefers-reduced-motion: reduce)'
@@ -78,16 +80,23 @@ const ringCompleteness = (found: FlatDeclaration[]): string[] => {
 }
 
 /**
- * What AC-27 asserts, as the list of what is wrong.
+ * Where outline and focus selectors may sit: what AC-27 asserts about placement.
  */
-const focusViolations = (css: string): string[] => {
+const placementViolations = (css: string): string[] => {
   const found = flatten(css)
   return [
     ...found.flatMap((item) => outlineProblems(item)),
     ...found.flatMap((item) => focusKeyProblems(item)),
-    ...ringCompleteness(found),
   ]
 }
+
+/**
+ * What AC-27 asserts, as the list of what is wrong.
+ */
+const focusViolations = (css: string): string[] => [
+  ...placementViolations(css),
+  ...ringCompleteness(flatten(css)),
+]
 
 /**
  * `outline` in a pseudo block as a shorthand with a var(): the form that computes to none as a whole.
@@ -95,7 +104,27 @@ const focusViolations = (css: string): string[] => {
 const isShorthandWithVar = (pseudos: Record<string, Record<string, string>>): boolean =>
   Object.values(pseudos).some((block) => (block.outline ?? '').includes('var('))
 
-describe('AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures admit', () => {
+/**
+ * The declarations of the fourteen new classes that touch focus on their own: an `outline*`, a
+ * `box-shadow`, or a rule keyed on `:focus`, `:focus-visible` or `:focus-within`, other than what
+ * `focusRing` contributes to the two new classes in Table T2.
+ */
+const ownFocusViolations = (css: string): string[] =>
+  flatten(css)
+    .filter((item) => NEW_CLASSES.includes(item.owner))
+    .filter(
+      (item) =>
+        (item.property.startsWith('outline') ||
+          item.property === 'box-shadow' ||
+          isFocusKeyed(item)) &&
+        !isFocusRingDeclaration(item),
+    )
+    .map((item) => `${item.owner} ${item.selectors.join(' ')} sets ${item.property}`)
+
+const stylesheetOwners = (css: string): Set<string> =>
+  new Set(flattenRules(css).map((item) => item.owner))
+
+describe('AC-base-ui-overlay-completion-46 and AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures admit, with Table T2 amended', () => {
   it('has outline only as focusRing on Table T2 and the thumb rule byte for byte, and no other focus selector', () => {
     expect(focusViolations(readStylesheet())).toEqual([])
   })
@@ -120,7 +149,7 @@ describe('AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures
   })
 
   it('reds on a planted outline (control)', () => {
-    expect(focusViolations(planted(`.${PREFIX}title { outline: 1px solid red }`))).toEqual([
+    expect(placementViolations(planted(`.${PREFIX}title { outline: 1px solid red }`))).toEqual([
       expect.stringContaining('sets outline'),
     ])
   })
@@ -128,13 +157,13 @@ describe('AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures
   it('reds on a planted :focus rule (control)', () => {
     const css = planted(`.${PREFIX}title { &:focus { color: red } }`)
 
-    expect(focusViolations(css)).toEqual([expect.stringContaining('keys on focus')])
+    expect(placementViolations(css)).toEqual([expect.stringContaining('keys on focus')])
   })
 
   it('reds on a :has(:focus-visible) rule outside the Slider thumb (control)', () => {
     const css = planted(`.${PREFIX}title { &:has(:focus-visible) { color: red } }`)
 
-    expect(focusViolations(css)).toEqual([expect.stringContaining('keys on focus')])
+    expect(placementViolations(css)).toEqual([expect.stringContaining('keys on focus')])
   })
 
   it('reds on an outline under a hover-qualified root, even beside the four ring longhands (control)', () => {
@@ -145,7 +174,7 @@ describe('AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures
       `.${PREFIX}button:hover { outline: none; &:focus-visible { ${longhands} } }`,
     )
 
-    expect(focusViolations(css)).toEqual(
+    expect(placementViolations(css)).toEqual(
       expect.arrayContaining([expect.stringContaining('sets outline')]),
     )
   })
@@ -153,7 +182,7 @@ describe('AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures
   it('reds on a focus-keyed box-shadow (control)', () => {
     const css = planted(`.${PREFIX}title { &:focus-visible { box-shadow: 0 0 0 1px red } }`)
 
-    expect(focusViolations(css)).toEqual(
+    expect(placementViolations(css)).toEqual(
       expect.arrayContaining([expect.stringContaining('focus-keyed box-shadow')]),
     )
   })
@@ -168,7 +197,7 @@ describe('AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures
       }
     })
 
-    expect(focusViolations(root.toString())).toEqual([`${PREFIX}tab lacks focusRing`])
+    expect(focusViolations(root.toString())).toContain(`${PREFIX}tab lacks focusRing`)
   })
 
   it('reds on a Table T2 class that loses its ring (control)', () => {
@@ -177,7 +206,58 @@ describe('AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures
       if (rule.parent?.type === 'rule' && rule.parent.selector === `.${PREFIX}tab`) rule.remove()
     })
 
-    expect(focusViolations(root.toString())).toEqual([`${PREFIX}tab lacks focusRing`])
+    expect(focusViolations(root.toString())).toContain(`${PREFIX}tab lacks focusRing`)
+  })
+
+  it('has the base outline declaration of focusRing only on Table T2 classes, the twelve and the chip and combobox trigger (cross-check)', () => {
+    const owners = flatten(readStylesheet())
+      .filter((item) => isFocusRingBase(item))
+      .map((item) => item.owner)
+
+    expect(new Set(owners)).toEqual(new Set(focusRingClasses))
+    expect(focusRingClasses).toHaveLength(14)
+  })
+
+  it('gives each of the 14 new classes no outline, box-shadow or focus selector of its own', () => {
+    expect(NEW_CLASSES.filter((name) => !stylesheetOwners(readStylesheet()).has(name))).toEqual([])
+    expect(ownFocusViolations(readStylesheet())).toEqual([])
+  })
+
+  it('keys the active option only on [data-highlighted], on its ::before and itself', () => {
+    const selectors = flattenRules(readStylesheet())
+      .filter((item) => item.owner === `${PREFIX}active-option`)
+      .flatMap((item) => item.selectors)
+    const nodes = selectors.flatMap((selector) => selectorNodes(selector))
+
+    expect(selectors).toContain(`.${PREFIX}active-option[data-highlighted]::before`)
+    expect(
+      selectors.flatMap((selector) => attributeReads(selector).map((read) => read.name)),
+    ).toEqual(['data-highlighted'])
+    expect(
+      nodes.filter(({ node }) => node.type === 'pseudo').map(({ node }) => node.toString()),
+    ).toEqual(['::before'])
+  })
+
+  it('reds on a planted &:focus-visible rule in the chip outside focusRing (control)', () => {
+    const css = planted(`.${PREFIX}chip { &:focus-visible { color: red } }`)
+
+    expect(placementViolations(css)).toEqual([expect.stringContaining('keys on focus')])
+    expect(ownFocusViolations(css)).toEqual([expect.stringContaining('sets color')])
+  })
+
+  it.each(['outline-offset: 0', 'box-shadow: 0 0 0 1px red'])(
+    'reds on a planted %s in a new class (control)',
+    (declaration) => {
+      const css = planted(`.${PREFIX}item-highlight { ${declaration} }`)
+
+      expect(ownFocusViolations(css)).toEqual([expect.stringContaining(`${PREFIX}item-highlight`)])
+    },
+  )
+
+  it('reds on a planted focus key in the active option (control)', () => {
+    const css = planted(`.${PREFIX}active-option { &:focus-visible { color: red } }`)
+
+    expect(ownFocusViolations(css)).toEqual([expect.stringContaining('active-option')])
   })
 })
 
@@ -211,7 +291,7 @@ const motionProblems = (item: FlatDeclaration): string[] => {
   return problems
 }
 
-describe('AC-base-ui-bridge-28: B2 and motion', () => {
+describe('AC-base-ui-overlay-completion-20 and AC-base-ui-bridge-28: B2 and motion', () => {
   it('has no !important, no motion shorthand and no raw time, and every motion value one token or the guard', () => {
     expect(flatten(readStylesheet()).flatMap((item) => motionProblems(item))).toEqual([])
   })
@@ -274,15 +354,22 @@ const ADMITTED_GROUP_FORMING = [
   `${PREFIX}arrow|&[data-side="bottom"]|rotate: 225deg`,
   `${PREFIX}arrow|&[data-side="left"]|rotate: -45deg`,
   `${PREFIX}arrow|&[data-side="right"]|rotate: 135deg`,
+  `${PREFIX}arrow-inline|&[data-side="inline-start"]|rotate: -45deg`,
+  `${PREFIX}arrow-inline|&[data-side="inline-end"]|rotate: 135deg`,
+  `${PREFIX}arrow-inline|&[data-side="inline-start"]:dir(rtl)|rotate: 135deg`,
+  `${PREFIX}arrow-inline|&[data-side="inline-end"]:dir(rtl)|rotate: -45deg`,
   `${PREFIX}disclosure-icon|&[aria-expanded="true"] > svg:last-child|rotate: 180deg`,
   `${PREFIX}checkbox-indicator||rotate: 45deg`,
   `${PREFIX}checkbox-indicator|[aria-checked="mixed"] > &|rotate: 0deg`,
   `${PREFIX}input|&::placeholder|opacity: 1`,
   `${PREFIX}number-field-input|&::placeholder|opacity: 1`,
+  ...['backdrop', 'popup-motion', 'popup-fade', 'tooltip-motion'].map(
+    (name) => `${PREFIX}${name}|&[data-starting-style], &[data-ending-style]|opacity: 0`,
+  ),
 ]
 
-describe('AC-base-ui-bridge-29: B3, group-forming properties only where they are admitted', () => {
-  it('has rotate on the arrow, the disclosure icon svg and the check mark, and opacity: 1 on ::placeholder only', () => {
+describe('AC-base-ui-overlay-completion-32 and AC-base-ui-bridge-29: B3, group-forming properties only where they are admitted', () => {
+  it('has rotate on the arrows, the disclosure icon svg and the check mark, opacity: 1 on ::placeholder, and opacity: 0 in the transient rule of the four fades only', () => {
     expect(groupForming(readStylesheet()).toSorted(byText)).toEqual(
       ADMITTED_GROUP_FORMING.toSorted(byText),
     )
@@ -310,6 +397,34 @@ describe('AC-base-ui-bridge-29: B3, group-forming properties only where they are
       )
     },
   )
+
+  it.each([
+    [
+      'an opacity: 0.5 in the transient rule of popup-fade',
+      `.${PREFIX}popup-fade { &[data-starting-style], &[data-ending-style] { opacity: 0.5 } }`,
+      `${PREFIX}popup-fade|&[data-starting-style], &[data-ending-style]|opacity: 0.5`,
+    ],
+    [
+      'an opacity: 0 at rest in popup-motion',
+      `.${PREFIX}popup-motion { opacity: 0 }`,
+      `${PREFIX}popup-motion||opacity: 0`,
+    ],
+    [
+      'a scale: 0.95 under the starting key of popup-fade',
+      `.${PREFIX}popup-fade { &[data-starting-style] { scale: 0.95 } }`,
+      `${PREFIX}popup-fade|&[data-starting-style]|scale: 0.95`,
+    ],
+    [
+      'a rotate in a fifth rule of arrow-inline',
+      `.${PREFIX}arrow-inline { &[data-side="inline-end"][data-orientation="vertical"] { rotate: 90deg } }`,
+      `${PREFIX}arrow-inline|&[data-side="inline-end"][data-orientation="vertical"]|rotate: 90deg`,
+    ],
+  ])('reds on %s, which the admitted list does not hold (control)', (_name, rule, entry) => {
+    const found = groupForming(planted(rule))
+
+    expect(found).toContain(entry)
+    expect(ADMITTED_GROUP_FORMING).not.toContain(entry)
+  })
 
   it('reds on a planted opacity under a starting-style key (control)', () => {
     const css = planted(`.${PREFIX}accordion-panel { &[data-starting-style] { opacity: 0 } }`)

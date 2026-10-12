@@ -1,10 +1,11 @@
+import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
 import { COLOR_KEYWORDS } from './support/colors.ts'
 import { isFocusRingDeclaration, isThumbBarInset, isThumbRingDeclaration } from './support/focus.ts'
-import { requiresInvalid } from './support/selector.ts'
+import { requiresInvalid, requiresInvalidGroup } from './support/selector.ts'
 import {
   flatten,
   flattenRules,
@@ -29,6 +30,9 @@ const CONTROLS = new Set(
     'switch',
     'number-field-group',
     'slider-track',
+    'input-group',
+    'combobox-trigger',
+    'chip',
   ].map((name) => `${PREFIX}${name}`),
 )
 
@@ -60,12 +64,23 @@ const fallbacksIn = (item: FlatDeclaration): string[] =>
     .toArray()
 
 /**
+ * Whether a declaration sits in the active option's band: the `::before` of a highlighted option.
+ */
+const isActiveOptionBand = (item: FlatDeclaration): boolean =>
+  item.owner === `${PREFIX}active-option` &&
+  item.selectors.length === 2 &&
+  item.selectors[1] === '&[data-highlighted]::before'
+
+/**
  * Whether a declaration sits in a rule that owns the focus fallbacks: the ring on a Table T2 class,
- * the Slider thumb's focus rule, and the two insets of the thumb's focus bar. Admitted by the rule,
+ * the Slider thumb's focus rule, the two insets of the thumb's focus bar, and the active option's band. Admitted by the rule,
  * not by the class that holds it, so the same fallback elsewhere on those classes still reds.
  */
 const isFallbackHome = (item: FlatDeclaration): boolean =>
-  isFocusRingDeclaration(item) || isThumbRingDeclaration(item) || isThumbBarInset(item)
+  isFocusRingDeclaration(item) ||
+  isThumbRingDeclaration(item) ||
+  isThumbBarInset(item) ||
+  isActiveOptionBand(item)
 
 /**
  * The `var()` fallbacks outside the admitted two, and the admitted two outside their parts.
@@ -80,14 +95,21 @@ const fallbackViolations = (css: string): string[] =>
 
 /**
  * Whether the declaration's whole nesting chain, resolved into full selectors, keys on the invalid
- * state in every alternative: one alternative without it, a key only inside `:not()`, or a key on
+ * state in every alternative (on the input group, `[data-invalid]` with `:not([data-disabled])` is that
+ * state): one alternative without it, a key only inside `:not()`, or a key on
  * an outer rule whose inner rule styles another element would let the paint reach a valid control.
  */
 const isInvalidKey = (item: FlatDeclaration): boolean => {
   const [outermost = '', ...inner] = item.selectors
   let resolved = splitSelectorList(outermost)
   for (const list of inner) resolved = resolveAgainst(resolved, list)
-  return resolved.length > 0 && resolved.every((selector) => requiresInvalid(selector))
+  const isGroup = item.owner === `${PREFIX}input-group`
+  return (
+    resolved.length > 0 &&
+    resolved.every(
+      (selector) => requiresInvalid(selector) || (isGroup && requiresInvalidGroup(selector)),
+    )
+  )
 }
 
 /**
@@ -129,6 +151,37 @@ const borderColourViolations = (css: string, allowed: readonly string[]): string
         .map((colour) => `${item.owner} ${item.property}: ${colour}`),
     )
 
+const DANGER = 'var(--nave-color-feedback-danger)'
+
+/**
+ * `feedback.danger` anywhere but a control's `border*`: the colour marks an invalid control's
+ * boundary and nothing else.
+ */
+const dangerElsewhere = (css: string): string[] =>
+  flatten(css)
+    .filter((item) => item.value.includes(DANGER) && !isBorderOf(item))
+    .map((item) => `${item.owner} ${item.property} names feedback.danger outside a control border`)
+
+/**
+ * The literal `2px` outside a `var()` fallback, where it is not one of the places that own it: the
+ * outline offset of `focusRing` and of the Slider rule, the Slider bar's two insets, and the active
+ * option's `inset` and `border-radius` calculations.
+ */
+const literalTwoPixelViolations = (css: string): string[] =>
+  flatten(css)
+    .filter((item) => /(?<![\w.-])2px\b/.test(item.value.replaceAll(/var\([^(),]*,[^()]*\)/g, ' ')))
+    .filter((item) => {
+      const isOffset =
+        item.property === 'outline-offset' &&
+        (isFocusRingDeclaration(item) || isThumbRingDeclaration(item))
+      const isBandCalc =
+        isActiveOptionBand(item) &&
+        ['border-radius', 'inset'].includes(item.property) &&
+        item.value.startsWith('calc(')
+      return !isOffset && !isThumbBarInset(item) && !isBandCalc
+    })
+    .map((item) => `${item.owner} ${item.property}: ${item.value}`)
+
 const PLANTED_VALUES = [
   '#fff',
   'red',
@@ -137,7 +190,7 @@ const PLANTED_VALUES = [
   'calc(100% - 13px)',
 ]
 
-describe('AC-base-ui-bridge-24: every declared value is one of the admitted forms', () => {
+describe('AC-base-ui-overlay-completion-30 and AC-base-ui-bridge-24: every declared value is one of the admitted forms, with the overlay completion admissions', () => {
   it('classifies every value of the stylesheet', () => {
     expect(unacceptedValues(readStylesheet())).toEqual([])
   })
@@ -247,6 +300,120 @@ describe('AC-base-ui-bridge-24: every declared value is one of the admitted form
 
     expect(unacceptedValues(css)).toEqual([`${PREFIX}title color: windowtext`])
   })
+
+  it('carries the literal 2px outside a fallback only where the criterion admits it', () => {
+    expect(literalTwoPixelViolations(readStylesheet())).toEqual([])
+  })
+
+  it('carries var() fallbacks in the active option band, and its 2px offsets, as the shipped bytes', () => {
+    const band = flatten(readStylesheet()).filter((item) => isActiveOptionBand(item))
+
+    expect(band.map((item) => item.property)).toEqual([
+      'content',
+      'position',
+      'inset',
+      'border-style',
+      'border-width',
+      'border-color',
+      'border-radius',
+      'pointer-events',
+    ])
+    expect(band.flatMap((item) => fallbacksIn(item))).toEqual([
+      'var(--nave-border-width-focus, 2px)',
+      'var(--nave-border-width-focus, 2px)',
+      'var(--nave-color-border-focus, currentColor)',
+      'var(--nave-border-width-focus, 2px)',
+    ])
+  })
+
+  it('sets feedback.danger on the border of the input group, the combobox trigger and nowhere else but an invalid control border', () => {
+    const owners = flatten(readStylesheet())
+      .filter((item) => item.value.includes(DANGER))
+      .map((item) => item.owner.replace(PREFIX, ''))
+
+    expect(new Set(owners)).toEqual(
+      new Set([
+        'checkbox',
+        'combobox-trigger',
+        'input',
+        'input-group',
+        'number-field-group',
+        'radio',
+        'select-trigger',
+        'switch',
+      ]),
+    )
+    expect(dangerElsewhere(readStylesheet())).toEqual([])
+    expect(borderColourViolations(readStylesheet(), BORDER_TOKENS)).toEqual([])
+  })
+
+  it('reds on a planted var(--nave-color-border-focus, red) in the active option (control)', () => {
+    const css = planted(
+      `.${PREFIX}active-option { &[data-highlighted]::before { border-color: var(--nave-color-border-focus, red) } }`,
+    )
+
+    expect(fallbackViolations(css)).toEqual([
+      `${PREFIX}active-option var(--nave-color-border-focus, red)`,
+    ])
+  })
+
+  it('reds on the admitted focus fallbacks planted in the active option outside its band (control)', () => {
+    const css = planted(
+      `.${PREFIX}active-option { border-width: var(--nave-border-width-focus, 2px) }`,
+    )
+
+    expect(fallbackViolations(css)).toEqual([
+      `${PREFIX}active-option var(--nave-border-width-focus, 2px) outside its parts`,
+    ])
+  })
+
+  it('reds on a literal 2px planted outside the places that own it (control)', () => {
+    const css = planted(`.${PREFIX}active-option { top: 2px }`)
+
+    expect(literalTwoPixelViolations(css)).toEqual([`${PREFIX}active-option top: 2px`])
+  })
+
+  it('reds on a danger border under [data-invalid] in the chip (control)', () => {
+    const css = planted(
+      `.${PREFIX}chip { &[data-invalid] { border-color: var(--nave-color-feedback-danger) } }`,
+    )
+
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([
+      `${PREFIX}chip border-color: var(--nave-color-feedback-danger)`,
+    ])
+  })
+
+  it('reds on a danger border under a bare [data-invalid] in the input group, without its :not([data-disabled]) (control)', () => {
+    const css = planted(
+      `.${PREFIX}input-group { &[data-invalid] { border-color: var(--nave-color-feedback-danger) } }`,
+    )
+
+    expect(borderColourViolations(css, BORDER_TOKENS)).toEqual([
+      `${PREFIX}input-group border-color: var(--nave-color-feedback-danger)`,
+    ])
+  })
+
+  it('admits a danger border under [data-invalid]:not([data-disabled]) in the input group only', () => {
+    const group = planted(
+      `.${PREFIX}input-group { &[data-invalid]:not([data-disabled]) { border-color: var(--nave-color-feedback-danger) } }`,
+    )
+    const chip = planted(
+      `.${PREFIX}chip { &[data-invalid]:not([data-disabled]) { border-color: var(--nave-color-feedback-danger) } }`,
+    )
+
+    expect(borderColourViolations(group, BORDER_TOKENS)).toEqual([])
+    expect(borderColourViolations(chip, BORDER_TOKENS)).toEqual([
+      `${PREFIX}chip border-color: var(--nave-color-feedback-danger)`,
+    ])
+  })
+
+  it('reds on feedback.danger set as a text colour (control)', () => {
+    const css = planted(`.${PREFIX}title { color: var(--nave-color-feedback-danger) }`)
+
+    expect(dangerElsewhere(css)).toEqual([
+      `${PREFIX}title color names feedback.danger outside a control border`,
+    ])
+  })
 })
 
 describe('the selector-list splitter that the border and disjointness readers rely on', () => {
@@ -287,24 +454,99 @@ describe('AC-base-ui-bridge-25: every Nave token the stylesheet names exists in 
 
 const TRANSLUCENT = /color-mix\(|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|#[\da-f]{3,8}\b/i
 
-describe('AC-base-ui-bridge-32: no translucent surface behind text, and control boundaries are what they say', () => {
+const ALLOWED_BORDERS = ['var(--nave-color-border-control)', 'var(--nave-color-border-disabled)']
+
+/**
+ * The `--nave-color-*` names a tokens stylesheet declares, in any block, whose value carries an
+ * alpha below 1 (a `/ a` after the channels, in a number or a percentage) or is `transparent`.
+ */
+const translucentColours = (css: string): string[] => {
+  const found: string[] = []
+  postcss.parse(css).walkDecls(/^--nave-color-/, (decl) => {
+    const alphas = decl.value
+      .matchAll(/\/\s*([\d.]+)(%?)\s*\)/g)
+      .map((match) => Number(match[1]) / (match[2] === '%' ? 100 : 1))
+    if (/\btransparent\b/i.test(decl.value) || alphas.some((alpha) => alpha < 1)) {
+      found.push(decl.prop)
+    }
+  })
+  return [...new Set(found)]
+}
+
+/**
+ * The classes whose declarations name a token.
+ */
+const usersOf = (css: string, token: string): string[] => [
+  ...new Set(
+    flatten(css)
+      .filter((item) => item.value.includes(token))
+      .map((item) => item.owner),
+  ),
+]
+
+describe('AC-base-ui-overlay-completion-34 and AC-base-ui-bridge-32: the scrim is the one translucent fill, and control boundaries are what they say', () => {
   it('has no color-mix(, no colour function and no hex colour in any value', () => {
     expect(flatten(readStylesheet()).filter((item) => TRANSLUCENT.test(item.value))).toEqual([])
   })
 
   it('sets a control border colour only to border.control, border.disabled, transparent, currentColor or, invalid only, danger', () => {
-    expect(
-      borderColourViolations(readStylesheet(), [
-        'var(--nave-color-border-control)',
-        'var(--nave-color-border-disabled)',
-      ]),
-    ).toEqual([])
+    expect(borderColourViolations(readStylesheet(), ALLOWED_BORDERS)).toEqual([])
   })
 
   it('reds on a planted translucent value (control)', () => {
     const css = planted('.x { background-color: color-mix(in srgb, red 50%, transparent) }')
 
     expect(flatten(css).some((item) => TRANSLUCENT.test(item.value))).toBe(true)
+  })
+
+  it('gives the input group, the combobox trigger and the chip a border colour from the list only', () => {
+    const borders = new Set(
+      flatten(readStylesheet())
+        .filter((item) => isBorderOf(item))
+        .map((item) => item.owner.replace(PREFIX, '')),
+    )
+
+    expect(
+      ['input-group', 'combobox-trigger', 'chip'].filter((name) => !borders.has(name)),
+    ).toEqual([])
+    expect(borderColourViolations(readStylesheet(), ALLOWED_BORDERS)).toEqual([])
+  })
+
+  it('makes the scrim the one --nave-color-* of the built tokens with an alpha below 1', () => {
+    expect(translucentColours(workspaceTokensCss())).toEqual(['--nave-color-backdrop-modal'])
+  })
+
+  it('names the scrim in the stylesheet only in the backdrop class', () => {
+    expect(usersOf(readStylesheet(), '--nave-color-backdrop-modal')).toEqual([`${PREFIX}backdrop`])
+  })
+
+  it('reds on the scrim planted in the dialog popup (control)', () => {
+    const css = planted(
+      `.${PREFIX}dialog-popup { background-color: var(--nave-color-backdrop-modal) }`,
+    )
+
+    expect(usersOf(css, '--nave-color-backdrop-modal')).toEqual(
+      expect.arrayContaining([`${PREFIX}dialog-popup`]),
+    )
+    expect(usersOf(css, '--nave-color-backdrop-modal')).not.toEqual([`${PREFIX}backdrop`])
+  })
+
+  it('reds on a tokens copy giving surface.overlay an alpha of 0.9 (control)', () => {
+    const css = workspaceTokensCss()
+    const copy = css.replace(/(--nave-color-surface-overlay: [^\n]*?) \/ 1\)/, '$1 / 0.9)')
+
+    expect(copy).not.toBe(css)
+    expect(translucentColours(copy)).toEqual([
+      '--nave-color-surface-overlay',
+      '--nave-color-backdrop-modal',
+    ])
+  })
+
+  it('reads transparent and a percentage alpha as translucent too (control)', () => {
+    const css =
+      ':root { --nave-color-a: transparent; --nave-color-b: oklch(0.5 0 0 / 50%); --nave-color-c: oklch(0.5 0 0 / 1) }'
+
+    expect(translucentColours(css)).toEqual(['--nave-color-a', '--nave-color-b'])
   })
 })
 

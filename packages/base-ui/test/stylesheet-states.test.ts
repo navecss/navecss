@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
 import { ringBlock } from './support/focus.ts'
-import { requiresDisabled, requiresInvalidState } from './support/selector.ts'
+import { requiresDisabled, requiresInvalidGroup, requiresInvalidState } from './support/selector.ts'
 import { flatten, readStylesheet } from './support/stylesheet.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
 
@@ -38,8 +38,16 @@ const disabledPaintProblems = (item: FlatDeclaration): string[] => {
   return problems
 }
 
+/**
+ * Whether a declaration sits under an invalid key: `[aria-invalid="true"]`, or, on the input group
+ * only, `[data-invalid]` with `:not([data-disabled])`.
+ */
 const isInvalidKey = (item: FlatDeclaration): boolean =>
-  item.selectors.some((selector) => requiresInvalidState(selector))
+  item.selectors.some(
+    (selector) =>
+      requiresInvalidState(selector) ||
+      (item.owner === `${PREFIX}input-group` && requiresInvalidGroup(selector)),
+  )
 
 const orderProblems = (found: FlatDeclaration[]): string[] =>
   [...new Set(found.map((item) => item.owner))].flatMap((owner) => {
@@ -61,7 +69,7 @@ const disabledViolations = (css: string): string[] => {
   return [...found.flatMap((item) => disabledPaintProblems(item)), ...orderProblems(found)]
 }
 
-describe('AC-base-ui-bridge-30: B4, disabled paint is tokens, never opacity', () => {
+describe('AC-base-ui-overlay-completion-33 and AC-base-ui-bridge-30: B4, disabled paint is tokens, never opacity', () => {
   it('sets only content.disabled, border.disabled, not-allowed and a transparent fill on a disabled key', () => {
     expect(disabledViolations(readStylesheet())).toEqual([])
   })
@@ -111,6 +119,131 @@ describe('AC-base-ui-bridge-30: B4, disabled paint is tokens, never opacity', ()
     expect(disabledViolations(css)).toEqual([
       expect.stringContaining('invalid rule after its disabled'),
     ])
+  })
+
+  it('has an invalid rule and a disabled rule in the input group and the combobox trigger, the invalid one first', () => {
+    const found = flatten(readStylesheet())
+    const both = [...new Set(found.map((item) => item.owner))].filter((owner) => {
+      const own = found.filter((item) => item.owner === owner)
+      return (
+        own.some((item) => isInvalidKey(item)) &&
+        own.some((item) => item.selectors.some((selector) => requiresDisabled(selector)))
+      )
+    })
+
+    expect(both).toEqual(
+      expect.arrayContaining([`${PREFIX}input-group`, `${PREFIX}combobox-trigger`]),
+    )
+    expect(disabledViolations(readStylesheet())).toEqual([])
+  })
+
+  it('does not read a disabled attribute inside :not() on the input group invalid key as a disabled key', () => {
+    const css = `@layer components.nave { .${PREFIX}input-group { &[data-invalid]:not([data-disabled]) { border-color: var(--nave-color-feedback-danger) } &[data-disabled] { border-color: var(--nave-color-border-disabled) } } }`
+
+    expect(disabledViolations(css)).toEqual([])
+  })
+
+  it('reds on the input group disabled rule moved before its invalid rule (control)', () => {
+    const css = `@layer components.nave { .${PREFIX}input-group { &[data-disabled] { border-color: var(--nave-color-border-disabled) } &[data-invalid]:not([data-disabled]) { border-color: var(--nave-color-feedback-danger) } } }`
+
+    expect(disabledViolations(css)).toEqual([
+      `${PREFIX}input-group has its invalid rule after its disabled rule`,
+    ])
+  })
+
+  it('reds on the highlight fill planted in the chip disabled rule (control)', () => {
+    const css = planted(
+      `.${PREFIX}chip { &[aria-disabled="true"] { background-color: var(--nave-color-action-highlight) } }`,
+    )
+
+    expect(disabledViolations(css)).toEqual([
+      `${PREFIX}chip background-color: var(--nave-color-action-highlight)`,
+    ])
+  })
+
+  it('reds on a fill planted in the input group disabled rule (control)', () => {
+    const css = planted(
+      `.${PREFIX}input-group { &[data-disabled] { background-color: var(--nave-color-action-highlight) } }`,
+    )
+
+    expect(disabledViolations(css)).toEqual([
+      `${PREFIX}input-group background-color: var(--nave-color-action-highlight)`,
+    ])
+  })
+
+  it('leaves the ghost, open ghost, primary and highlight rules outside its scope, their disabled state being inside :not()', () => {
+    const css = `@layer components.nave { .${PREFIX}button { &[data-nave-variant="ghost"]:hover:not(:disabled, [aria-disabled="true"]) { background-color: var(--nave-color-action-highlight) } } .${PREFIX}item-highlight { &[data-highlighted]:not([aria-disabled="true"]) { background-color: var(--nave-color-action-highlight) } } }`
+
+    expect(disabledViolations(css)).toEqual([])
+  })
+})
+
+/**
+ * What AC-14's stylesheet clause asserts, as the list of what is wrong: the highlight class sets
+ * its radius at rest and its fill under the one key, and nothing else, no `color` among it.
+ */
+const highlightViolations = (css: string): string[] => {
+  const own = flatten(css).filter((item) => item.owner === `${PREFIX}item-highlight`)
+  const key = '&[data-highlighted]:not([aria-disabled="true"])'
+  const expected = [
+    {
+      selectors: [`.${PREFIX}item-highlight`],
+      property: 'border-radius',
+      value: 'var(--nave-radius-sm)',
+    },
+    {
+      selectors: [`.${PREFIX}item-highlight`, key],
+      property: 'background-color',
+      value: 'var(--nave-color-action-highlight)',
+    },
+  ]
+  const problems = own
+    .filter((item) => item.property === 'color')
+    .map((item) => `${item.selectors.join(' ')} sets color`)
+  const stray = own
+    .filter((item) =>
+      expected.every(
+        (rule) =>
+          !(
+            rule.property === item.property &&
+            rule.value === item.value &&
+            rule.selectors.join(' ') === item.selectors.join(' ')
+          ),
+      ),
+    )
+    .map((item) => `${item.selectors.join(' ')} sets ${item.property}: ${item.value}`)
+  const missing = expected
+    .filter((rule) =>
+      own.every(
+        (item) =>
+          !(
+            item.property === rule.property && item.selectors.join(' ') === rule.selectors.join(' ')
+          ),
+      ),
+    )
+    .map((rule) => `${rule.selectors.join(' ')} lacks ${rule.property}`)
+  return [...missing, ...stray, ...problems]
+}
+
+describe('AC-base-ui-overlay-completion-14: the highlight fill reaches every list item and keys only what the requirement says', () => {
+  it('sets only the radius at rest and only the fill under the highlighted, enabled key, and no color', () => {
+    expect(highlightViolations(readStylesheet())).toEqual([])
+  })
+
+  it.each([
+    [
+      'a color under the highlighted key',
+      '&[data-highlighted]:not([aria-disabled="true"]) { color: red }',
+    ],
+    [
+      'a fill under the bare highlighted key',
+      '&[data-highlighted] { background-color: var(--nave-color-action-highlight) }',
+    ],
+    ['a fill on hover', '&:hover { background-color: var(--nave-color-action-highlight) }'],
+  ])('reds on %s planted in the highlight class (control)', (_name, rule) => {
+    const css = planted(`.${PREFIX}item-highlight { ${rule} }`)
+
+    expect(highlightViolations(css)).not.toEqual([])
   })
 })
 

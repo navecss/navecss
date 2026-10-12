@@ -1,4 +1,5 @@
 import type { AtRule, ChildNode, Root, Rule } from 'postcss'
+import type { Attribute } from 'postcss-selector-parser'
 
 import postcss from 'postcss'
 import selectorParser from 'postcss-selector-parser'
@@ -6,13 +7,14 @@ import { describe, expect, it } from 'vitest'
 
 import type { SelectorNode } from './support/selector.ts'
 
-import { isFocusRingBase, THUMB } from './support/focus.ts'
-import { selectorNodes } from './support/selector.ts'
-import { flatten, flattenRules, readStylesheet } from './support/stylesheet.ts'
-import { focusRingClasses } from './support/table-p.ts'
+import { focusRingClasses, THUMB } from './support/focus.ts'
+import { attributeReads, selectorNodes } from './support/selector.ts'
+import { flatten, flattenRules, readStylesheet, splitSelectorList } from './support/stylesheet.ts'
 import { firstOrderStatement, workspaceTokensCss } from './support/tokens.ts'
 
 const PREFIX = 'nave-base-ui-'
+
+const byText = (a: string, b: string): number => a.localeCompare(b)
 const GUARD_QUERY = '(prefers-reduced-motion: reduce)'
 const GUARD_VALUE = 'calc(0 * var(--nave-motion-duration-fast))'
 
@@ -74,7 +76,7 @@ const componentsOnlyViolations = (css: string): string[] => {
   return [...orderViolations(first), ...stray, ...forbiddenViolations(root)]
 }
 
-describe('AC-base-ui-bridge-18: the stylesheet is components-only, and its order statement is live and first', () => {
+describe('AC-base-ui-overlay-completion-20 and AC-base-ui-bridge-18: the stylesheet is components-only, and its order statement is live and first', () => {
   it('has nothing in it but the order statement and components.nave blocks, and no forbidden construct', () => {
     expect(componentsOnlyViolations(readStylesheet())).toEqual([])
   })
@@ -135,11 +137,22 @@ const nestedAtRules = (root: Root): Nested[] => {
   return found
 }
 
+const MOTION_GUARD_SELECTOR = '&, &[data-instant]'
+
+/**
+ * The classes that carry the guard, each with the selector of the one rule inside it: the first
+ * release's four transitioning classes, and the five motion classes of the overlay completion.
+ */
 const GUARDED: ReadonlyMap<string, string> = new Map([
   [`.${PREFIX}accordion-panel`, '&'],
+  [`.${PREFIX}backdrop`, MOTION_GUARD_SELECTOR],
   [`.${PREFIX}collapsible-panel`, '&'],
   [`.${PREFIX}disclosure-icon`, '& > svg:last-child'],
+  [`.${PREFIX}popup-fade`, MOTION_GUARD_SELECTOR],
+  [`.${PREFIX}popup-motion`, MOTION_GUARD_SELECTOR],
   [`.${PREFIX}switch-thumb`, '&'],
+  [`.${PREFIX}tab-indicator-motion`, MOTION_GUARD_SELECTOR],
+  [`.${PREFIX}tooltip-motion`, MOTION_GUARD_SELECTOR],
 ])
 
 const strayAtRules = (nested: Nested[]): string[] =>
@@ -184,20 +197,26 @@ const guardShapes = (nested: Nested[]): string[] =>
     .toArray()
 
 /**
- * Every transition-duration outside a guard needs its twin selector in its own class's guard.
+ * Every transition-duration outside a guard needs each of its selectors in the selector list of its
+ * own class's guard.
  */
 const unguardedDurations = (root: Root): string[] => {
   const twins = new Map<string, Set<string>>()
   for (const { at, owner } of nestedAtRules(root)) {
     const selectors = twins.get(owner) ?? new Set<string>()
     at.walkRules((rule) => {
-      selectors.add(rule.selector)
+      for (const selector of splitSelectorList(rule.selector)) selectors.add(selector)
     })
     twins.set(owner, selectors)
   }
   return flatten(root.toString())
     .filter((item) => item.property === 'transition-duration' && item.atRules.length === 1)
-    .map((item) => ({ own: `.${item.owner}`, relative: item.selectors[1] ?? '&' }))
+    .flatMap((item) =>
+      splitSelectorList(item.selectors[1] ?? '&').map((relative) => ({
+        own: `.${item.owner}`,
+        relative,
+      })),
+    )
     .filter(({ own, relative }) => !twins.get(own)?.has(relative))
     .map(({ own, relative }) => `${own} ${relative} has no guard twin`)
 }
@@ -211,9 +230,31 @@ const guardViolations = (css: string): string[] => {
   return [...strayAtRules(nested), ...guardShapes(nested), ...unguardedDurations(root)]
 }
 
-describe('AC-base-ui-bridge-18: the only nested at-rule is the reduced-motion guard, in its duration form', () => {
-  it('is exactly one guard in each of the four transitioning classes, and every duration has its twin', () => {
+describe('AC-base-ui-overlay-completion-20 and AC-base-ui-bridge-18: the only nested at-rule is the reduced-motion guard, in its duration form', () => {
+  it('is exactly one guard in each of the nine guarded classes, and every duration has its twin', () => {
     expect(guardViolations(readStylesheet())).toEqual([])
+  })
+
+  it('has nine nested at-rules, the four of the first release and the five motion classes', () => {
+    const nested = nestedAtRules(postcss.parse(readStylesheet()))
+
+    expect(nested.map((item) => item.owner).toSorted(byText)).toEqual(
+      GUARDED.keys().toArray().toSorted(byText),
+    )
+  })
+
+  it('writes each motion class guard as one rule, `&, &[data-instant]`, holding the one declaration', () => {
+    const nested = nestedAtRules(postcss.parse(readStylesheet()))
+    const motion = nested.filter(
+      (item) => item.owner !== '' && GUARDED.get(item.owner) === MOTION_GUARD_SELECTOR,
+    )
+
+    expect(motion).toHaveLength(5)
+    expect(
+      motion.map((item) =>
+        item.at.nodes?.map((node) => (node.type === 'rule' ? node.selector : '')),
+      ),
+    ).toEqual(motion.map(() => [MOTION_GUARD_SELECTOR]))
   })
 
   it('reds on the property form of a guard (control)', () => {
@@ -277,8 +318,58 @@ describe('AC-base-ui-bridge-18: the only nested at-rule is the reduced-motion gu
       expect.arrayContaining([expect.stringContaining('switch-thumb')]),
     )
   })
+
+  it('reds on a nested @media (min-width: 1px) planted in popup-fade (control)', () => {
+    const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}popup-fade { @media (min-width: 1px) { color: red } } }`
+
+    expect(guardViolations(css)).toEqual(
+      expect.arrayContaining([expect.stringContaining('@media (min-width: 1px)')]),
+    )
+  })
+
+  it('reds on a transition-property: none planted inside a guard (control)', () => {
+    const css = mutate((root) => {
+      classRule(root, 'switch-thumb').walkAtRules('media', (at) => {
+        at.walkRules((rule) => {
+          rule.append({ prop: 'transition-property', value: 'none' })
+        })
+      })
+    })
+
+    expect(guardViolations(css)).toEqual(
+      expect.arrayContaining([expect.stringContaining('switch-thumb')]),
+    )
+  })
+
+  it('reds when the &[data-instant] half is deleted from the popup-motion guard (control)', () => {
+    const css = mutate((root) => {
+      classRule(root, 'popup-motion').walkAtRules('media', (at) => {
+        at.walkRules((rule) => {
+          rule.selector = '&'
+        })
+      })
+    })
+
+    expect(guardViolations(css)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('popup-motion'),
+        `.${PREFIX}popup-motion &[data-instant] has no guard twin`,
+      ]),
+    )
+  })
+
+  it('reds when a duration planted on &[data-instant] has no twin in its guard (control)', () => {
+    const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}switch-thumb { &[data-instant] { transition-duration: var(--nave-motion-duration-instant) } } }`
+
+    expect(guardViolations(css)).toEqual(
+      expect.arrayContaining([`.${PREFIX}switch-thumb &[data-instant] has no guard twin`]),
+    )
+  })
 })
 
+/**
+ * The fourteen attribute names of the first release, admitted wherever a rule keys on them.
+ */
 const ATTRIBUTES = new Set([
   'aria-checked',
   'aria-disabled',
@@ -294,6 +385,50 @@ const ATTRIBUTES = new Set([
   'data-placeholder',
   'data-side',
   'data-starting-style',
+])
+
+const MOTION_CLASSES = [
+  'backdrop',
+  'popup-motion',
+  'popup-fade',
+  'tooltip-motion',
+  'tab-indicator-motion',
+]
+
+/**
+ * What a rule needs to know about where a selector sits to judge the attributes the overlay
+ * completion adds: whose rule it is, the selector as resolved, and whether it is inside the guard.
+ */
+interface Place {
+  readonly owner: string
+  readonly selector: string
+  readonly isInGuard: boolean
+}
+
+const isInstantAdmitted = ({ owner, isInGuard }: Place): boolean =>
+  [`${PREFIX}popup-motion`, `${PREFIX}tooltip-motion`].includes(owner) ||
+  (isInGuard && MOTION_CLASSES.some((name) => owner === `${PREFIX}${name}`))
+
+/**
+ * The attributes beyond the fourteen, each with where it may appear.
+ */
+const SCOPED_ATTRIBUTES: ReadonlyMap<string, (place: Place, node: Attribute) => boolean> = new Map([
+  [
+    'aria-haspopup',
+    ({ owner }, node) =>
+      owner === `${PREFIX}combobox-trigger` && node.operator === '=' && node.value === 'dialog',
+  ],
+  [
+    'data-empty',
+    ({ owner, selector }) =>
+      owner === `${PREFIX}list-empty` && selector === `[data-empty] > .${owner}`,
+  ],
+  [
+    'data-highlighted',
+    ({ owner }) => [`${PREFIX}active-option`, `${PREFIX}item-highlight`].includes(owner),
+  ],
+  ['data-instant', (place) => isInstantAdmitted(place)],
+  ['data-invalid', ({ owner }) => owner === `${PREFIX}input-group`],
 ])
 const PSEUDO_CLASSES = new Set([
   ':active',
@@ -327,22 +462,23 @@ const isTypeAdmitted = (value: string, inside: readonly string[], owner: string)
 /**
  * Whether one node of a resolved selector is outside the vocabulary, as the text to report.
  */
-const isNodeOutside = ({ node, inside }: SelectorNode, owner: string): boolean => {
+const isNodeOutside = ({ node, inside }: SelectorNode, place: Place): boolean => {
   switch (node.type) {
     case 'attribute': {
-      return !ATTRIBUTES.has(node.attribute)
+      const scoped = SCOPED_ATTRIBUTES.get(node.attribute)
+      return scoped === undefined ? !ATTRIBUTES.has(node.attribute) : !scoped(place, node)
     }
     case 'class': {
-      return node.value !== owner
+      return node.value !== place.owner
     }
     case 'combinator': {
       return node.value !== '>'
     }
     case 'pseudo': {
-      return isPseudoOutside(node.value, inside, owner)
+      return isPseudoOutside(node.value, inside, place.owner)
     }
     case 'tag': {
-      return !isTypeAdmitted(node.value, inside, owner)
+      return !isTypeAdmitted(node.value, inside, place.owner)
     }
     default: {
       return ['id', 'nesting', 'string', 'universal'].includes(node.type)
@@ -370,22 +506,54 @@ const unadmittedHasArguments = (selector: string, owner: string): string[] => {
   return found
 }
 
+const OPEN_GHOST_KEY = `.${PREFIX}button[data-nave-variant="ghost"][aria-expanded="true"]:not(:disabled, [aria-disabled="true"])`
+
 /**
- * What AC-20 asserts, as the list of what is wrong.
+ * `aria-expanded` on the button, outside the one open-ghost key, and with any value but `true`.
+ */
+const buttonExpandedViolations = (owner: string, selector: string): string[] =>
+  selector !== OPEN_GHOST_KEY &&
+  owner === `${PREFIX}button` &&
+  attributeReads(selector).some((read) => read.name === 'aria-expanded')
+    ? [`aria-expanded in ${selector}`]
+    : []
+
+/**
+ * What AC-27 asserts, as the list of what is wrong.
  */
 const vocabularyViolations = (css: string): string[] =>
   flattenRules(css).flatMap((item) =>
-    item.selectors.flatMap((selector) => [
-      ...selectorNodes(selector)
-        .filter((entry) => isNodeOutside(entry, item.owner))
-        .map((entry) => `${entry.node.toString().trim()} in ${selector}`),
-      ...unadmittedHasArguments(selector, item.owner),
-    ]),
+    item.selectors.flatMap((selector) => {
+      const place: Place = {
+        owner: item.owner,
+        selector,
+        isInGuard: item.atRules.some((rule) => rule.startsWith(`@media ${GUARD_QUERY}`)),
+      }
+      return [
+        ...selectorNodes(selector)
+          .filter((entry) => isNodeOutside(entry, place))
+          .map((entry) => `${entry.node.toString().trim()} in ${selector}`),
+        ...unadmittedHasArguments(selector, item.owner),
+        ...buttonExpandedViolations(item.owner, selector),
+      ]
+    }),
   )
+
+/**
+ * The classes with a rule keyed on an attribute, without the prefix.
+ */
+const ownersKeyedOn = (name: string): string[] =>
+  flattenRules(readStylesheet())
+    .filter((item) =>
+      item.selectors.some((selector) =>
+        attributeReads(selector).some((read) => read.name === name),
+      ),
+    )
+    .map((item) => item.owner.replace(PREFIX, ''))
 
 const PLANTED_KEYS = ['[role="menuitem"]', '[dir="rtl"]', '.other']
 
-describe('AC-base-ui-bridge-20: selectors use only the vocabulary', () => {
+describe('AC-base-ui-overlay-completion-27 and AC-base-ui-bridge-20: selectors use only the vocabulary, as the overlay completion extends it', () => {
   it('uses only the rule own class, the declared attributes, the admitted pseudo-classes and elements, and the child combinator', () => {
     expect(vocabularyViolations(readStylesheet())).toEqual([])
   })
@@ -423,11 +591,68 @@ describe('AC-base-ui-bridge-20: selectors use only the vocabulary', () => {
     expect(vocabularyViolations(css)).toEqual([`span in .${PREFIX}tab-indicator:dir(span)`])
   })
 
-  it('has the base outline declaration of focusRing only on Table T2 classes (cross-check)', () => {
-    const owners = flatten(readStylesheet())
-      .filter((item) => isFocusRingBase(item))
-      .map((item) => item.owner)
+  it('keys on data-highlighted, data-instant, data-empty, data-invalid and aria-haspopup only where the criterion admits them', () => {
+    expect(new Set(ownersKeyedOn('data-highlighted'))).toEqual(
+      new Set(['active-option', 'item-highlight']),
+    )
+    expect(new Set(ownersKeyedOn('data-instant'))).toEqual(
+      new Set(['popup-motion', 'tooltip-motion', ...MOTION_CLASSES]),
+    )
+    expect(new Set(ownersKeyedOn('data-empty'))).toEqual(new Set(['list-empty']))
+    expect(new Set(ownersKeyedOn('data-invalid'))).toEqual(new Set(['input-group']))
+    expect(new Set(ownersKeyedOn('aria-haspopup'))).toEqual(new Set(['combobox-trigger']))
+  })
 
-    expect(new Set(owners)).toEqual(new Set(focusRingClasses))
+  it('keys data-instant outside the guard only in popup-motion and tooltip-motion', () => {
+    const outside = flattenRules(readStylesheet())
+      .filter((item) => item.atRules.every((rule) => !rule.startsWith('@media')))
+      .filter((item) =>
+        item.selectors.some((selector) =>
+          attributeReads(selector).some((read) => read.name === 'data-instant'),
+        ),
+      )
+      .map((item) => item.owner.replace(PREFIX, ''))
+
+    expect(new Set(outside)).toEqual(new Set(['popup-motion', 'tooltip-motion']))
+  })
+
+  it('keys aria-expanded in the button only in the open ghost key, with the value true', () => {
+    const keys = flattenRules(readStylesheet())
+      .filter((item) => item.owner === `${PREFIX}button`)
+      .flatMap((item) => item.selectors)
+      .filter((selector) => attributeReads(selector).some((read) => read.name === 'aria-expanded'))
+
+    expect(keys).toEqual([OPEN_GHOST_KEY])
+  })
+
+  it('names data-popup-open in no selector', () => {
+    const named = flattenRules(readStylesheet()).filter((item) =>
+      item.selectors.some((selector) => selector.includes('data-popup-open')),
+    )
+
+    expect(named).toEqual([])
+  })
+
+  it.each([
+    ['item-highlight', '[data-popup-open]'],
+    ['title', '[data-highlighted]'],
+    ['item', '[data-highlighted]'],
+    ['popup-fade', '[data-instant]'],
+    ['chip', '[data-invalid]'],
+    ['combobox-trigger', '[aria-haspopup="menu"]'],
+    ['input-group', '[aria-haspopup="dialog"]'],
+    ['list-empty', '[data-empty]'],
+    ['button', '[aria-expanded="false"]'],
+    ['button', '[data-nave-variant="primary"][aria-expanded="true"]'],
+  ])('reds on a planted %s%s key (control)', (name, key) => {
+    const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}${name} { &${key} { color: red } } }`
+
+    expect(vocabularyViolations(css)).not.toEqual([])
+  })
+
+  it('admits data-instant inside the guard of a motion class, and data-empty as an ancestor key (control)', () => {
+    const css = `${readStylesheet()}\n@layer components.nave { .${PREFIX}backdrop { @media (prefers-reduced-motion: reduce) { &[data-instant] { color: red } } } .${PREFIX}list-empty { [data-empty] > & { color: red } } }`
+
+    expect(vocabularyViolations(css)).toEqual([])
   })
 })

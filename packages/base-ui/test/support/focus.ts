@@ -6,9 +6,53 @@ import { atoms as coreAtoms } from '@navecss/core/atoms'
 
 import type { FlatDeclaration } from './stylesheet.ts'
 
-import { focusRingClasses } from './table-p.ts'
-
 export const THUMB = 'nave-base-ui-slider-thumb'
+
+const T2_NAMES = [
+  'button',
+  'input',
+  'select-trigger',
+  'number-field-input',
+  'checkbox',
+  'radio',
+  'switch',
+  'toggle',
+  'tab',
+  'disclosure-trigger',
+  'item',
+  'toolbar-link',
+  // The two focusable parts the overlay completion adds: a chip takes DOM focus, and so does the
+  // combobox trigger. `-active-option` is not here: its options never take DOM focus.
+  'chip',
+  'combobox-trigger',
+]
+
+/**
+ * Table T2: the focusable parts that take `focusRing`, the twelve of the first release and the two
+ * the overlay completion adds. The Slider thumb, the four popups when they take focus themselves
+ * and the number field's steppers are excluded by name.
+ */
+export const focusRingClasses: readonly string[] = T2_NAMES.map((name) => `nave-base-ui-${name}`)
+
+/**
+ * The classes the overlay completion adds, each a new part with its own rules.
+ */
+export const NEW_CLASSES: readonly string[] = [
+  'item-highlight',
+  'active-option',
+  'backdrop',
+  'popup-motion',
+  'popup-fade',
+  'tooltip-motion',
+  'tab-indicator-motion',
+  'arrow-inline',
+  'input-group',
+  'combobox-trigger',
+  'chips',
+  'chip',
+  'chip-remove',
+  'list-empty',
+].map((name) => `nave-base-ui-${name}`)
 
 /**
  * The Slider thumb's focus rule: the four longhands with their fallbacks, as the signature fixes them.
