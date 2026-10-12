@@ -76,6 +76,19 @@ export const controlAtoms: Record<string, AtomDefinition> = {
         'background-color': V('color-action-primary-active'),
       },
       '&:disabled, &[aria-disabled="true"]': buttonDisabled,
+      '&[data-nave-variant="ghost"]': {
+        'background-color': 'transparent',
+        'border-color': 'transparent',
+      },
+      '&[data-nave-variant="ghost"]:hover:not(:disabled, [aria-disabled="true"])': {
+        'background-color': V('color-action-highlight'),
+      },
+      '&[data-nave-variant="ghost"]:active:not(:disabled, [aria-disabled="true"])': {
+        'background-color': V('color-action-highlight'),
+      },
+      '&[data-nave-variant="ghost"][aria-expanded="true"]:not(:disabled, [aria-disabled="true"])': {
+        'background-color': V('color-action-highlight'),
+      },
     },
   },
   baseUiToggle: {

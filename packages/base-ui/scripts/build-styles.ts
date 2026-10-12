@@ -17,7 +17,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import postcss from 'postcss'
 
-import { atoms, focusRingAtoms } from '../styles/atoms.ts'
+import type { Draft } from '../styles/drafts.ts'
+
+import { atomsFor, focusRingAtoms } from '../styles/atoms.ts'
 
 const OUTPUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist/styles.css')
 
@@ -47,10 +49,18 @@ const readOrderStatement = (): string => {
 const directive = (name: string): string =>
   focusRingAtoms.includes(name) ? `${name} focusRing` : name
 
+export interface BuildOptions {
+  /**
+  The drafts left unsigned. Nothing is: the shipping build leaves this out.
+   */
+  readonly unsigned?: readonly Draft[]
+}
+
 /**
 The built stylesheet, as the string `dist/styles.css` holds.
  */
-export const buildStyles = async (): Promise<string> => {
+export const buildStyles = async ({ unsigned = [] }: BuildOptions = {}): Promise<string> => {
+  const atoms = atomsFor(unsigned)
   // `toClassName` is typed for core's own atom names; it is a plain camelCase-to-kebab mapping
   // with the `nave-` prefix, which is exactly the class an extend atom's name resolves to.
   const rules = Object.keys(atoms).map(

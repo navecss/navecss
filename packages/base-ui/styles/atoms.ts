@@ -10,14 +10,17 @@
  */
 import type { AtomDefinition } from '@navecss/core/atoms'
 
+import { comboboxAtoms } from './combobox-atoms.ts'
+import { completionAtoms } from './completion-atoms.ts'
 import { controlAtoms } from './control-atoms.ts'
 import { disclosureAtoms } from './disclosure-atoms.ts'
+import { type Draft, draftAtoms, openGhostKey } from './drafts.ts'
 import { fieldAtoms } from './field-atoms.ts'
 import { overlayAtoms } from './overlay-atoms.ts'
 import { toolbarSliderAtoms } from './toolbar-slider-atoms.ts'
 
 /**
-The v1 role atoms, in the order their rules ship.
+The role atoms, in the order their rules ship: the first release's, then the overlay completion's.
  */
 export const atoms: Record<string, AtomDefinition> = {
   ...overlayAtoms,
@@ -25,7 +28,30 @@ export const atoms: Record<string, AtomDefinition> = {
   ...controlAtoms,
   ...fieldAtoms,
   ...toolbarSliderAtoms,
+  ...completionAtoms,
+  ...comboboxAtoms,
 }
+
+/**
+ * The role atoms of a build with the given drafts unsigned: each draft's atoms are left out, and
+ * `baseUiButton` loses the key an unsigned `open-ghost` owns. Nothing else changes.
+ */
+export const atomsFor = (unsigned: readonly Draft[]): Record<string, AtomDefinition> => {
+  const removed = new Set(unsigned.flatMap((draft) => draftAtoms[draft]))
+  const kept = Object.entries(atoms).filter(([name]) => !removed.has(name))
+  return Object.fromEntries(
+    kept.map(([name, atom]) =>
+      name === 'baseUiButton' && unsigned.includes('open-ghost')
+        ? [name, { ...atom, pseudos: withoutOpenGhost(atom.pseudos) }]
+        : [name, atom],
+    ),
+  )
+}
+
+const withoutOpenGhost = (
+  pseudos: AtomDefinition['pseudos'],
+): NonNullable<AtomDefinition['pseudos']> =>
+  Object.fromEntries(Object.entries(pseudos ?? {}).filter(([key]) => key !== openGhostKey))
 
 /**
 The atoms whose rule also carries core's `focusRing`: the focusable parts (Table T2).
@@ -43,4 +69,6 @@ export const focusRingAtoms: readonly string[] = [
   'baseUiSwitch',
   'baseUiNumberFieldInput',
   'baseUiToolbarLink',
+  'baseUiChip',
+  'baseUiComboboxTrigger',
 ]
