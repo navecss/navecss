@@ -1,8 +1,9 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { PACKAGE_DIR } from './support/stylesheet.ts'
+import { firstTokensVersionWithTheHighlight } from './support/w3-tokens-floor.ts'
 
 const ROOT = path.join(PACKAGE_DIR, '../..')
 const readJson = <T>(...segments: string[]): T =>
@@ -25,38 +26,11 @@ interface Manifest {
 }
 
 const manifest = readJson<Manifest>('packages/base-ui/package.json')
-const tokens = readJson<{ version: string }>('packages/tokens/package.json')
 const changesetConfig = readJson<{ fixed: string[][]; ignore: string[]; linked: string[][] }>(
   '.changeset/config.json',
 )
 
 const byName = (a: string, b: string): number => a.localeCompare(b)
-
-const TOKEN_NAME = '--nave-border-width-mark'
-
-/**
-The version of `@navecss/tokens` the stylesheet's peer floor must be: the first release that
-declares the glyph-stroke width a checked Checkbox draws its mark with. Once a release has written
-its CHANGELOG section, that section names it; until then the pending changeset that adds it names
-the bump, and the release is that bump of the version the workspace carries now.
- */
-const firstTokensVersionWithTheMark = (): string => {
-  const changelog = readFileSync(path.join(ROOT, 'packages/tokens/CHANGELOG.md'), 'utf8')
-  const section = changelog
-    .split(/^## /m)
-    .slice(1)
-    .find((candidate) => candidate.includes(TOKEN_NAME))
-  if (section !== undefined) {
-    return section.split('\n', 1)[0]?.trim() ?? ''
-  }
-  const pending = readdirSync(path.join(ROOT, '.changeset'))
-    .filter((file) => file.endsWith('.md') && file !== 'README.md')
-    .map((file) => readFileSync(path.join(ROOT, '.changeset', file), 'utf8'))
-    .find((text) => text.includes(TOKEN_NAME) && text.includes("'@navecss/tokens': minor"))
-  expect(pending, 'no release and no pending changeset adds the mark token').toBeDefined()
-  const [major = 0, minor = 0] = tokens.version.split('.').map(Number)
-  return `${major}.${minor + 1}.0`
-}
 
 /**
 The version the package's newest CHANGELOG section names, or undefined while it has never been
@@ -100,12 +74,6 @@ describe('AC-base-ui-bridge-38: the manifest', () => {
     expect(optional).toEqual([])
   })
 
-  it('floors the tokens peer at the release that declares the mark width, below 1.0.0', () => {
-    expect(manifest.peerDependencies['@navecss/tokens']).toBe(
-      `>=${firstTokensVersionWithTheMark()} <1.0.0`,
-    )
-  })
-
   it('has core as a development dependency only, and no dependencies', () => {
     expect(manifest.devDependencies['@navecss/core']).toBeDefined()
     expect(Object.keys(manifest.dependencies ?? {})).toEqual([])
@@ -127,8 +95,16 @@ describe('AC-base-ui-bridge-38: the manifest', () => {
       expect(list).not.toContain('@navecss/base-ui')
     }
   })
+})
 
-  it('control: a peer floor one release too low is not the expected range', () => {
-    expect(`>=0.2.0 <1.0.0`).not.toBe(`>=${firstTokensVersionWithTheMark()} <1.0.0`)
+describe('AC-base-ui-overlay-completion-31: the manifest floors the tokens peer at the release that ships the highlight fill', () => {
+  it('floors the tokens peer at the release that declares the highlight fill, below 1.0.0', () => {
+    expect(manifest.peerDependencies['@navecss/tokens']).toBe(
+      `>=${firstTokensVersionWithTheHighlight()} <1.0.0`,
+    )
+  })
+
+  it('control: the previous floor, the release that declared the mark width, is not the expected range', () => {
+    expect(`>=0.3.0 <1.0.0`).not.toBe(`>=${firstTokensVersionWithTheHighlight()} <1.0.0`)
   })
 })

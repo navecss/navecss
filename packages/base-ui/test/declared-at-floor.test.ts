@@ -9,10 +9,23 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, type TestContext } from 'vitest'
 
 import { attributeReads } from './support/selector.ts'
 import { flatten, PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
+import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
+import {
+  baseUiRootAt,
+  installHint,
+  isDeclared,
+  itemsMissingFrom,
+} from './support/w3-base-ui-versions.ts'
+import {
+  firstTokensVersionWithTheHighlight,
+  namedTokens,
+  publishedTokens,
+  undeclaredIn,
+} from './support/w3-tokens-floor.ts'
 
 const FLOOR = path.join(PACKAGE_DIR, 'node_modules/base-ui-react-floor/esm')
 
@@ -118,6 +131,105 @@ const rows: readonly {
   },
 ]
 
+/**
+ * The rows for the parts and attributes the overlay components add, each read as text from the
+ * declaration files (`.d.ts`) of the minor the row names: the part's first minor, not the floor.
+ */
+interface VersionedRow {
+  readonly files: readonly string[]
+  readonly items: readonly string[]
+  readonly version: string
+}
+
+const POPUP_FILES = [
+  'menu/popup/MenuPopupDataAttributes.d.ts',
+  'popover/popup/PopoverPopupDataAttributes.d.ts',
+  'tooltip/popup/TooltipPopupDataAttributes.d.ts',
+  'select/popup/SelectPopupDataAttributes.d.ts',
+  'dialog/popup/DialogPopupDataAttributes.d.ts',
+  'preview-card/popup/PreviewCardPopupDataAttributes.d.ts',
+  'combobox/popup/ComboboxPopupDataAttributes.d.ts',
+]
+
+const versionedRows: readonly VersionedRow[] = [
+  {
+    files: ['combobox/item/ComboboxtemDataAttributes.d.ts'],
+    items: ['data-highlighted'],
+    version: '1.0.0',
+  },
+  {
+    files: [
+      'menu/item/MenuItemDataAttributes.d.ts',
+      'menu/checkbox-item/MenuCheckboxItemDataAttributes.d.ts',
+      'menu/radio-item/MenuRadioItemDataAttributes.d.ts',
+      'menu/submenu-trigger/MenuSubmenuTriggerDataAttributes.d.ts',
+    ],
+    items: ['data-highlighted'],
+    version: '1.0.0',
+  },
+  {
+    files: ['menu/link-item/MenuLinkItemDataAttributes.d.ts'],
+    items: ['data-highlighted'],
+    version: '1.2.0',
+  },
+  {
+    files: ['select/item/SelectItemDataAttributes.d.ts'],
+    items: ['data-highlighted'],
+    version: '1.0.0',
+  },
+  {
+    files: [
+      'menu/popup/MenuPopupDataAttributes.d.ts',
+      'popover/popup/PopoverPopupDataAttributes.d.ts',
+      'tooltip/popup/TooltipPopupDataAttributes.d.ts',
+    ],
+    items: ['data-instant'],
+    version: '1.0.0',
+  },
+  {
+    files: [...POPUP_FILES, 'dialog/backdrop/DialogBackdropDataAttributes.d.ts'],
+    items: ['data-starting-style', 'data-ending-style'],
+    version: '1.0.0',
+  },
+  {
+    files: [
+      'menu/arrow/MenuArrowDataAttributes.d.ts',
+      'popover/arrow/PopoverArrowDataAttributes.d.ts',
+      'select/arrow/SelectArrowDataAttributes.d.ts',
+      'tooltip/arrow/TooltipArrowDataAttributes.d.ts',
+      'preview-card/arrow/PreviewCardArrowDataAttributes.d.ts',
+      'combobox/arrow/ComboboxArrowDataAttributes.d.ts',
+    ],
+    items: ['data-side', 'inline-start', 'inline-end'],
+    version: '1.0.0',
+  },
+  {
+    files: ['combobox/popup/ComboboxPopupDataAttributes.d.ts'],
+    items: ['data-empty'],
+    version: '1.0.0',
+  },
+  {
+    files: ['combobox/input-group/ComboboxInputGroupDataAttributes.d.ts'],
+    items: ['data-invalid', 'data-disabled'],
+    version: '1.3.0',
+  },
+]
+
+const byVersion = (a: string, b: string): number => a.localeCompare(b, 'en', { numeric: true })
+
+const VERSIONS = [...new Set(versionedRows.map(({ version }) => version))].toSorted(byVersion)
+
+/**
+ * The package's modules at a minor, or an error that names the alias to install.
+ */
+const rootAtOrThrow = (version: string): string => {
+  const root = baseUiRootAt(version)
+  if (root === undefined) {
+    throw new Error(installHint(version))
+  }
+  return root
+}
+
 const isMissingFrom = (file: string, item: string, root: string = FLOOR): boolean =>
   !readFileSync(path.join(root, file), 'utf8').includes(item)
 
@@ -179,7 +291,7 @@ const copyOfFloor = (name: string, files: readonly string[]): string => {
 
 const ARROW = 'popover/arrow/PopoverArrowDataAttributes.js'
 
-describe('AC-base-ui-bridge-21: every attribute and variable the stylesheet keys on is declared at the floor', () => {
+describe('AC-base-ui-overlay-completion-28: every attribute and variable the stylesheet keys on is declared at the floor, and at the first minor of a part younger than it', () => {
   it('finds the floor package installed through its alias', () => {
     expect(existsSync(FLOOR)).toBe(true)
   })
@@ -238,12 +350,113 @@ describe('AC-base-ui-bridge-21: every attribute and variable the stylesheet keys
     expect(isSharedItemDeclared(ARROW, DATA_SIDE, root)).toBe(false)
   })
 
+  for (const version of VERSIONS) {
+    it(`finds @base-ui/react@${version} installed through its alias`, () => {
+      expect(baseUiRootAt(version), installHint(version)).toBeDefined()
+    })
+  }
+
+  for (const { files, items, version } of versionedRows) {
+    for (const file of files) {
+      it(`${file} declares ${items.join(', ')} at ${version}`, () => {
+        expect(itemsMissingFrom(rootAtOrThrow(version), file, items)).toEqual([])
+      })
+    }
+  }
+
+  it('control: a planted row (data-instant, select/popup/SelectPopupDataAttributes.d.ts, 1.0.0) is reported missing', () => {
+    expect(
+      itemsMissingFrom(rootAtOrThrow('1.0.0'), 'select/popup/SelectPopupDataAttributes.d.ts', [
+        'data-instant',
+      ]),
+    ).toEqual(['data-instant'])
+  })
+
+  it('control: the same planted row is reported missing in the package at the floor alias', () => {
+    expect(
+      itemsMissingFrom(rootAtOrThrow('1.3.0'), 'select/popup/SelectPopupDataAttributes.d.ts', [
+        'data-instant',
+      ]),
+    ).toEqual(['data-instant'])
+  })
+
+  it('control: an item named only in a doc comment does not count as declared', () => {
+    const commentOnly = ['/**', ' * Present with data-highlighted.', ' */', 'enum E {}'].join('\n')
+    expect(isDeclared(commentOnly, 'data-highlighted')).toBe(false)
+    expect(isDeclared('highlighted = "data-highlighted",', 'data-highlighted')).toBe(true)
+  })
+
   it('has a row for every Base UI attribute and variable the stylesheet uses', () => {
     const css = readStylesheet()
     const keyed = new Set([...keyedAttributes(css), ...keyedVariables(css)])
-    const covered = new Set(
-      rows.flatMap(({ items, shared = [] }) => [...items, ...shared.map(({ item }) => item)]),
-    )
+    const covered = new Set([
+      ...rows.flatMap(({ items, shared = [] }) => [...items, ...shared.map(({ item }) => item)]),
+      ...versionedRows.flatMap(({ items }) => items),
+    ])
     expect([...keyed].filter((name) => !covered.has(name))).toEqual([])
+  })
+})
+
+/**
+ * The published tokens release, or a skip that says what unskips the test.
+ */
+const publishedOrSkip = (
+  context: TestContext,
+): { declared: ReadonlySet<string>; version: string } => {
+  const published = publishedTokens()
+  if ('reason' in published) {
+    return context.skip(published.reason)
+  }
+  return published
+}
+
+const withdrawn = (name: string): string => `.x { color: var(${name}) }`
+
+const tokensDeclaredByWorkspace = (): Set<string> =>
+  new Set(declaredTokens(workspaceTokensCss()).keys())
+
+const NEW_TOKENS = [
+  '--nave-color-action-highlight',
+  '--nave-color-backdrop-modal',
+  '--nave-motion-duration-instant',
+  '--nave-motion-easing-decelerate',
+  '--nave-motion-easing-accelerate',
+]
+
+describe('AC-base-ui-overlay-completion-31: every Nave token the stylesheet names exists in the workspace and at the new tokens floor', () => {
+  it('names 59 distinct tokens, among them the five this work adds', () => {
+    const named = namedTokens(readStylesheet())
+    expect(named.size).toBe(59)
+    expect(NEW_TOKENS.filter((name) => !named.has(name))).toEqual([])
+  })
+
+  it('names only tokens the workspace declares', () => {
+    expect(undeclaredIn(readStylesheet(), tokensDeclaredByWorkspace())).toEqual([])
+  })
+
+  it('names only tokens the published tokens release declares', (context) => {
+    const published = publishedOrSkip(context)
+    expect(published.version).toBe(firstTokensVersionWithTheHighlight())
+    expect(undeclaredIn(readStylesheet(), published.declared)).toEqual([])
+  })
+
+  it('control: a planted var(--nave-color-surface-scrim) and var(--nave-color-surface-highlight) are each reported against the workspace', () => {
+    const declared = tokensDeclaredByWorkspace()
+    expect(undeclaredIn(withdrawn('--nave-color-surface-scrim'), declared)).toEqual([
+      '--nave-color-surface-scrim',
+    ])
+    expect(undeclaredIn(withdrawn('--nave-color-surface-highlight'), declared)).toEqual([
+      '--nave-color-surface-highlight',
+    ])
+  })
+
+  it('control: the same two planted names are each reported against the published release', (context) => {
+    const published = publishedOrSkip(context)
+    expect(undeclaredIn(withdrawn('--nave-color-surface-scrim'), published.declared)).toEqual([
+      '--nave-color-surface-scrim',
+    ])
+    expect(undeclaredIn(withdrawn('--nave-color-surface-highlight'), published.declared)).toEqual([
+      '--nave-color-surface-highlight',
+    ])
   })
 })
