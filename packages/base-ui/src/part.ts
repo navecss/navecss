@@ -19,8 +19,16 @@ import {
 
 export interface VariantProps {
   size?: 'md' | 'sm'
-  variant?: 'primary' | 'secondary'
+  variant?: 'ghost' | 'primary' | 'secondary'
 }
+
+/**
+ * A part of a Base UI component, or `never` where the installed Base UI has no such part (one
+ * younger than the peer floor).
+ */
+export type PartOf<Namespace, Key extends string> = Key extends keyof Namespace
+  ? Namespace[Key]
+  : never
 
 export interface SizeProps {
   size?: 'md' | 'sm'
@@ -55,7 +63,8 @@ const variantAttributes = (props: Props, variants: 'size' | 'variant'): Props =>
   const { size, variant, ...rest } = props
   return {
     ...rest,
-    ...(variants === 'variant' && variant === 'primary' && { 'data-nave-variant': 'primary' }),
+    ...(variants === 'variant' &&
+      (variant === 'primary' || variant === 'ghost') && { 'data-nave-variant': variant }),
     ...(size === 'sm' && { 'data-nave-size': 'sm' }),
   }
 }

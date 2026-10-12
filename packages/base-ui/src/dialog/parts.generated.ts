@@ -20,7 +20,7 @@ export declare namespace Description {
   export type Props = Base.Description.Props
   export type State = Base.Description.State
 }
-export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-dialog-popup'))()
+export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-dialog-popup nave-base-ui-popup-fade'))()
 export declare namespace Popup {
   export type Props = Base.Popup.Props
   export type State = Base.Popup.State

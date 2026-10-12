@@ -5,7 +5,7 @@ import { Menu as Base } from '@base-ui/react/menu'
 
 import { wrapPart, wrapVariantPart, type VariantProps } from '../part.ts'
 
-export const Arrow: typeof Base.Arrow = /*#__PURE__*/ (() => wrapPart(Base.Arrow, 'nave-base-ui-arrow'))()
+export const Arrow: typeof Base.Arrow = /*#__PURE__*/ (() => wrapPart(Base.Arrow, 'nave-base-ui-arrow nave-base-ui-arrow-inline'))()
 export declare namespace Arrow {
   export type State = Base.Arrow.State
   export type Props = Base.Arrow.Props
@@ -15,7 +15,7 @@ export declare namespace Backdrop {
   export type State = Base.Backdrop.State
   export type Props = Base.Backdrop.Props
 }
-export const CheckboxItem: typeof Base.CheckboxItem = /*#__PURE__*/ (() => wrapPart(Base.CheckboxItem, 'nave-base-ui-item'))()
+export const CheckboxItem: typeof Base.CheckboxItem = /*#__PURE__*/ (() => wrapPart(Base.CheckboxItem, 'nave-base-ui-item nave-base-ui-item-highlight'))()
 export declare namespace CheckboxItem {
   export type State = Base.CheckboxItem.State
   export type Props = Base.CheckboxItem.Props
@@ -37,17 +37,17 @@ export declare namespace GroupLabel {
   export type Props = Base.GroupLabel.Props
   export type State = Base.GroupLabel.State
 }
-export const Item: typeof Base.Item = /*#__PURE__*/ (() => wrapPart(Base.Item, 'nave-base-ui-item'))()
+export const Item: typeof Base.Item = /*#__PURE__*/ (() => wrapPart(Base.Item, 'nave-base-ui-item nave-base-ui-item-highlight'))()
 export declare namespace Item {
   export type State = Base.Item.State
   export type Props = Base.Item.Props
 }
-export const LinkItem: typeof Base.LinkItem = /*#__PURE__*/ (() => wrapPart(Base.LinkItem, 'nave-base-ui-item'))()
+export const LinkItem: typeof Base.LinkItem = /*#__PURE__*/ (() => wrapPart(Base.LinkItem, 'nave-base-ui-item nave-base-ui-item-highlight'))()
 export declare namespace LinkItem {
   export type State = Base.LinkItem.State
   export type Props = Base.LinkItem.Props
 }
-export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-list-popup'))()
+export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-list-popup nave-base-ui-popup-motion'))()
 export declare namespace Popup {
   export type Props = Base.Popup.Props
   export type State = Base.Popup.State
@@ -69,7 +69,7 @@ export declare namespace RadioGroup {
   export type ChangeEventReason = Base.RadioGroup.ChangeEventReason
   export type ChangeEventDetails = Base.RadioGroup.ChangeEventDetails
 }
-export const RadioItem: typeof Base.RadioItem = /*#__PURE__*/ (() => wrapPart(Base.RadioItem, 'nave-base-ui-item'))()
+export const RadioItem: typeof Base.RadioItem = /*#__PURE__*/ (() => wrapPart(Base.RadioItem, 'nave-base-ui-item nave-base-ui-item-highlight'))()
 export declare namespace RadioItem {
   export type State = Base.RadioItem.State
   export type Props = Base.RadioItem.Props
@@ -110,7 +110,7 @@ export declare namespace Separator {
   export type Props = Base.Separator.Props
   export type State = Base.Separator.State
 }
-export const SubmenuTrigger: typeof Base.SubmenuTrigger = /*#__PURE__*/ (() => wrapPart(Base.SubmenuTrigger, 'nave-base-ui-item'))()
+export const SubmenuTrigger: typeof Base.SubmenuTrigger = /*#__PURE__*/ (() => wrapPart(Base.SubmenuTrigger, 'nave-base-ui-item nave-base-ui-item-highlight'))()
 export declare namespace SubmenuTrigger {
   export type Props = Base.SubmenuTrigger.Props
   export type State = Base.SubmenuTrigger.State

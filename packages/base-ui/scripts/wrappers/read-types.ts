@@ -47,6 +47,10 @@ export interface PartTypes {
   The element the part's `ref` is typed with (`HTMLButtonElement`), when it declares one.
    */
   readonly refElement: string | undefined
+  /**
+  Set where the part is younger than the floor Base UI: it is declared, not read.
+   */
+  readonly young?: boolean
 }
 
 export interface SubpathTypes {

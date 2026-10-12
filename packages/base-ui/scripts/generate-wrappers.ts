@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url'
 import type { PartTypes, SubpathTypes } from './wrappers/read-types.ts'
 import type { StyledPart } from './wrappers/roster.ts'
 
-import { readBaseUiTypes } from './wrappers/read-types.ts'
+import { readSharedTypes } from './wrappers/floor.ts'
 import { styledParts } from './wrappers/roster.ts'
 import { SINGLE_COMPONENT, SUBPATHS, topName } from './wrappers/subpaths.ts'
 
@@ -59,6 +59,9 @@ const valueOf = (
   styled: StyledPart | undefined,
   part: PartTypes,
 ): string => {
+  if (part.young === true) {
+    return `export const ${name}: PartOf<typeof Base, '${part.name}'> = /*#__PURE__*/ (() => ${reference})()`
+  }
   if (styled === undefined) {
     return `export const ${name}: typeof ${reference} = /*#__PURE__*/ (() => ${reference})()`
   }
@@ -149,8 +152,10 @@ const partBlock = (
 const helpersUsed = (body: string): string[] =>
   ['wrapPart', 'wrapSizePart', 'wrapVariantPart'].filter((helper) => body.includes(`${helper}(`))
 
-const typesUsed = (body: string): string[] =>
-  ['SizeProps', 'VariantProps'].filter((type) => body.includes(`& ${type}`))
+const typesUsed = (body: string): string[] => [
+  ...['SizeProps', 'VariantProps'].filter((type) => body.includes(`& ${type}`)),
+  ...(body.includes('PartOf<') ? ['PartOf'] : []),
+]
 
 const imports = (subpath: string, body: string): string => {
   const names = [...helpersUsed(body), ...typesUsed(body).map((type) => `type ${type}`)].join(', ')
@@ -193,7 +198,7 @@ const rootModule = (): string =>
 export const generateWrappers = (): Map<string, string> => {
   const used = new Set<string>()
   const files = new Map<string, string>()
-  for (const types of readBaseUiTypes('current')) {
+  for (const types of readSharedTypes()) {
     for (const [file, text] of generateSubpath(types, used)) {
       files.set(file, text)
     }

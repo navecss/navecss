@@ -28,12 +28,12 @@ export declare namespace Positioner {
   export type State = Base.Positioner.State
   export type Props = Base.Positioner.Props
 }
-export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-popover-popup'))()
+export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-popover-popup nave-base-ui-popup-motion'))()
 export declare namespace Popup {
   export type State = Base.Popup.State
   export type Props = Base.Popup.Props
 }
-export const Arrow: typeof Base.Arrow = /*#__PURE__*/ (() => wrapPart(Base.Arrow, 'nave-base-ui-arrow'))()
+export const Arrow: typeof Base.Arrow = /*#__PURE__*/ (() => wrapPart(Base.Arrow, 'nave-base-ui-arrow nave-base-ui-arrow-inline'))()
 export declare namespace Arrow {
   export type State = Base.Arrow.State
   export type Props = Base.Arrow.Props

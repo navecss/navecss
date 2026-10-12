@@ -22,7 +22,7 @@ export declare namespace Tab {
   export type State = Base.Tab.State
   export type Props = Base.Tab.Props
 }
-export const Indicator: typeof Base.Indicator = /*#__PURE__*/ (() => wrapPart(Base.Indicator, 'nave-base-ui-tab-indicator'))()
+export const Indicator: typeof Base.Indicator = /*#__PURE__*/ (() => wrapPart(Base.Indicator, 'nave-base-ui-tab-indicator nave-base-ui-tab-indicator-motion'))()
 export declare namespace Indicator {
   export type State = Base.Indicator.State
   export type Props = Base.Indicator.Props
