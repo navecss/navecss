@@ -1,5 +1,210 @@
 # @navecss/core
 
+## 0.3.0
+
+### Minor Changes
+
+- ea55128: The `@nave` directive's resolution and placement logic now lives in a host-free core, with the
+  PostCSS plugin as one adapter over it. This lays the ground for other build tools to support
+  `@nave` the same way. It also changes what the PostCSS plugin accepts and what it prints, so a
+  stylesheet that built before can now fail, and an error message you match on can read
+  differently:
+
+  - The directive name now matches case-insensitively on its unescaped value (`@NAVE`, `@n\61ve`
+    are directives, and now expand where they used to reach your CSS unchanged; a spelling like
+    `@navex` or `@nave-flex` still passes through unchanged).
+  - The directive's argument list is now read as CSS component values instead of split on
+    whitespace. A name glued to punctuation used to be reported as one unknown atom (`flex, block`
+    as `unknown atom "flex,"`), and under `onUnknown: 'warn'` or `'ignore'` only `block` expanded.
+    Now the comma itself is reported (`separate atom names with spaces`), and under those two
+    modes both names expand. A comment between two names now separates them (`flex/**/block`
+    expands both), where it used to make one unknown name.
+  - The directive name now ends where CSS tokenization ends it, so `@nave` followed directly by
+    `,`, `.` or `:` (`@nave,flex;`, `@nave.flex;`, `@nave:flex;`) is now a directive, where it used
+    to reach your CSS unchanged. That character is reported (for the first, `unexpected ","`), so
+    under the default `'error'` a stylesheet holding one now fails the build; under `'warn'` or
+    `'ignore'` the names after it expand. Put a space after `@nave`.
+  - A directive with a `{}` block (`@nave flex { color: red }`) is now reported through
+    `onUnknown` instead of its block being dropped with no message, so under the default
+    `'error'` a stylesheet holding one now fails the build. Write the block's declarations in the
+    rule itself.
+  - Under the default `'error'`, every problem in one stylesheet is now reported in one error
+    instead of only the first one found: the first problem's message, then
+    `N more in this stylesheet:` and one `line:column:` line for each of the others. The report
+    covers one stylesheet, so a bundler that stops at the first failing file reports one file per
+    build.
+  - An unknown atom is now reported at the column of its name instead of the column of the `@`:
+    for `@nave nope;` indented by two spaces, column 9, where it used to be column 3.
+  - The unknown-atom message now suggests the nearest atom name when one is close
+    (`unknown atom "flx". Did you mean "flex"?`). Only when none is close does it list the
+    available atoms, on a line of their own after
+    `If it is an atom of your own, pass it in the extend option.`; it used to append
+    `Available: ...` to the same line every time.
+  - A directive placed directly inside a group rule nested in a style rule
+    (`.card { @media (...) { @nave flex; } }`) keeps its message, which now adds a sentence naming
+    the `& { @nave ...; }` workaround.
+  - `extend` can now be a path to a module instead of only an inline object. The plugin declares
+    that file to PostCSS as a dependency of every stylesheet, so a host with a persistent build
+    cache can see it and invalidate when the file changes; an object has no such visibility. The
+    path is resolved from the directory the build runs in, the module's default export is the
+    atoms object, and with a path the plugin is async: call `process(css).then(cb)`, not the sync
+    `.css` getter. The file's atoms are validated the same way as an inline object's, but when a
+    stylesheet is processed rather than when the plugin is created. See CONSUMER-ATOMS.md.
+  - `@navecss/core/postcss` now also has a default export, for tools that load it that way.
+  - New: `navecss-core check` (also `@navecss/core/check`), a command that scans built CSS for a
+    `@nave` directive that never got resolved (for example because a build tool's PostCSS step
+    was bypassed) and fails instead of shipping a page missing the declarations it needed. See
+    the package README.
+
+- fef6ecf: `@nave` now has two more routes, for hosts that run Lightning CSS directly and for projects with no
+  bundler, and Nave ships its whole stylesheet as one file. Nothing that built before changes: the
+  export map only grows, and `@navecss/core` gains no dependency and no new peer.
+
+  - New `@navecss/core/lightningcss`: `navePlugin()` returns `{ expand, resolver }`. `expand(code,
+filename)` expands the directives in a stylesheet's text and returns `{ code, map }` to pass to
+    Lightning CSS's `transform()` as `code` and `inputSourceMap`; `resolver.read` does the same for
+    each file `bundleAsync()` asks for, so a file reached through `@import` is covered. Lightning CSS
+    never sees a directive, so it prints no `Unknown at rule` warning and cannot fail on a malformed
+    one; Nave's own messages name the real file, line and column. The adapter imports nothing from
+    `lightningcss` and declares no peer: bring your own copy, version 1.24.1 or later. Earlier
+    releases can drop the message of an error a resolver throws during `bundleAsync()`, so a malformed
+    directive could fail a build with an empty error, and 1.20 and 1.21 cannot parse the nested rules
+    the adapter writes. It takes `extend` (an object) and `onUnknown`, as the other plugins do. It is
+    for a host that runs Lightning CSS itself, not for Vite: on Vite, keep using the Vite plugin.
+  - New `navecss-core expand --source=<file> --out=<file>`, with `--extend=<module>` and `--watch`:
+    expands every `@nave` in each source and writes it, reporting every problem across every file in
+    one run. `--source` and `--out` repeat as pairs, matched by order. Exit `0` when every file was
+    written; `1` when a stylesheet had a problem, and then nothing is written; `2` when the run could
+    not be done as asked: a usage error, an `--extend` module that could not be used, a source that
+    could not be read, or an output that could not be written (files written before it stay
+    written). It does not resolve or inline `@import`; an import of a package
+    (`@import url('@navecss/core')`) is reported as an error, because a browser cannot load it.
+  - New `@navecss/core/standalone`, the file `dist/standalone.css`: the layer order statement, then
+    the token layer, the reset and the atoms, each in its own layer as before, with no `@import` in
+    it. A page with no bundler links it instead of importing Nave from its CSS, by path or from a CDN,
+    before the stylesheet `navecss-core expand` wrote. Both names are fixed from this release: a
+    `link` element pointing into `node_modules` bypasses `exports`, so the file path is as much part of
+    the public surface as the subpath.
+  - `@navecss/core/lightningcss` also has a default export, as the PostCSS and Vite plugins do. The named
+    `navePlugin` is the documented form.
+
+  See "Without a bundler" in the repository README and the Lightning CSS adapter and `navecss-core
+expand` sections of the package README.
+
+- 304eee4: New: `@navecss/core/vite`, a Vite plugin for the `@nave` directive. Add `navePlugin()` from it to
+  `plugins`, with the same `extend` and `onUnknown` options as the PostCSS plugin. It returns two Vite plugins in
+  an array, which `plugins` takes as one entry. It has no dependency and no peer, it needs no PostCSS,
+  and it adds no code to the browser bundle. It expands `@nave` after Vite's own CSS step has run, so a stylesheet reached only through
+  `@import`, a Sass file (a `@mixin` that holds a directive included), a CSS Module, an `?inline` or
+  `?url` import, and a Vue or Svelte style block are all covered, in `vite build` and in the dev
+  server, under either `css.transformer`. Under `css.transformer: 'lightningcss'` it also drops
+  Lightning CSS's `Unknown at rule: @nave` warning, and only that warning, by wrapping the logger
+  Vite resolved.
+
+  The build is checked at its end. The plugin reads the CSS files the build wrote and fails the build
+  if a `@nave` directive is left in one, printing the lines `navecss-core check` prints for the same
+  content. There is no option to turn that off. The dev server serves no bundle, so dev has no scan;
+  CSS that ends inside a JavaScript string (`?inline`), files copied from `public/`, and a CSS file
+  another plugin adds after the scan (from a post-ordered `generateBundle` in a plugin listed after
+  `navePlugin()`, or from `writeBundle`) are not scanned.
+
+  Passing `extend` as a path to a module now works with Vite's own watching: edit the module and the
+  dev server serves the new value with no restart, and `vite build --watch` rebuilds.
+
+  To migrate a project that already runs the PostCSS plugin on Vite: move `navePlugin()` from
+  `css.postcss` or `postcss.config.js` to `plugins`, importing it from `@navecss/core/vite`. Leaving
+  both is harmless, because whichever pass runs second finds no directive left. Moving also changes
+  which atoms ship, as another entry in this release describes. Webpack and any other pipeline that
+  runs PostCSS plugins keep using `@navecss/core/postcss`, and so can Next.js. The plugin sets no browser
+  floor of its own: `build.cssTarget` (and, under Lightning CSS, `css.lightningcss.targets`) stay
+  yours, and the package README shows both at the floor.
+
+  `@navecss/core/vite` also has a default export, for tools that load it that way.
+
+- 1e83194: The Vite plugin ships only the atoms its build can read a use for, in the CSS files of a client
+  build. `navePlugin()` from `@navecss/core/vite` reads the `cx()` calls in the code the build
+  compiles, dependencies included, and in those files the atom layer keeps the rules for the atoms the
+  calls name, for the atom of each Nave class written as text (in a module or in `index.html`) and for
+  the atoms in `keep` and `keepFor`. It keeps no others, with two exceptions: `srOnlyFocusable` is
+  kept whenever `srOnly` is, and the client build also keeps the atoms that a separate server build
+  (`vite build --ssr`) recorded in the cache directory. A stylesheet imported with `?inline` or `?raw`
+  becomes text in the JavaScript, which the plugin does not filter: if it holds the atom layer, every
+  atom in it ships and the client build warns, naming the file. A `cx()` call whose atoms the build
+  cannot read fails the build: `vite build` lists every such use once, at the end, naming the file
+  each one is in, then says how to fix them. A Nave class built from pieces (`'nave-' + tone`) fails
+  the build the same way. The PostCSS plugin ships every atom, on Next.js and webpack alike.
+
+  The dev server serves the same set as far as it has read: it filters the atom layer of each
+  stylesheet as the build does, from the code and the pages it has read so far, so a class the build
+  cannot see has no rule in dev either. The first stylesheet response waits until every module
+  reachable from the page's entries has been read, and the stylesheet reloads when an edit adds an
+  atom. A build or dev server that read no use and no markup (a backend rendering its own templates)
+  warns once.
+
+  New: `cx.dynamic(name)` on `@navecss/core/cx`, for a name known only at run time. In the dev server
+  and in code that `vite build` bundles under the Vite plugin, it returns a class only for an atom
+  listed in `keep` or in a `keepFor` list, unless `atomic` is `'all'`; in dev a name outside the list
+  also prints a line to the console. Under `atomic: 'all'`, and without the plugin, it
+  maps like `cx()`, except that a name that is no atom returns `''` where `cx()` returns it
+  unchanged.
+
+  New Vite plugin options: `keep`, the atoms always shipped; `keepFor`, by package name, the atoms a
+  dependency's own calls can produce, for a package whose calls the build cannot read; `cxModules`,
+  the modules that re-export `cx` from `@navecss/core/cx`, in your code or in a dependency, so a file
+  that imports `cx` from one is read as if it imported it from `@navecss/core/cx` (the same setting
+  as `@navecss/eslint-plugin`'s); and `atomic: 'all'`, which reads no `cx()` call and ships every
+  atom.
+
+  Unless `atomic` is `'all'`, the plugin also sets two Vite options for `@navecss/core` itself: it
+  adds it to `optimizeDeps.exclude`, so the dev server can read your dependencies' `cx()` calls, and
+  to every server environment's `resolve.noExternal`, so `cx.dynamic()` resolves through `keep` and
+  `keepFor` in a server build too.
+
+  A file of yours that imports a module listed in `cxModules` through a specifier the build does not
+  recognise fails `vite build`, which names the file and says how to fix it.
+
+### Patch Changes
+
+- 2cfc317: The `LICENSE` shipped in the `@navecss/core` package now credits the material its directive tokenizer takes from CSS Syntax Level 3 and the material its source-map encoder takes from ECMA-426 (the source map format specification) and RFC 4648 (the base64 alphabet). Only the licence text changes; no code or behaviour does.
+- 304eee4: The PostCSS plugin (`@navecss/core/postcss`) now refuses three kinds of `extend` value it did not
+  check in 0.2.0, so an `extend` map that built on 0.2.0 can now fail the build, with an error naming
+  the atom. `extend` is trusted, consumer-authored config, not sanitised input: these are correctness
+  fixes, closing three ways a value reached the CSS without being checked. If your build now fails
+  here, write the value the error names as a plain object (`{ ... }`).
+
+  - A `pseudos`, `media` or `container` value that is a function, an array, a non-empty string, a
+    non-zero number, `true` or a boxed primitive such as `new String('x')`, or a declarations map
+    inside one that is any of these, is now refused; a falsy one is skipped and emits nothing. 0.2.0
+    did not check them: `pseudos: { ':hover': ['a; } body { display: none'] }` emitted
+    `body { display: none }` outside the rule, a string or a `String` object where a declarations
+    map belongs emitted one numbered declaration per character (`0: a; 1: b`), and a `media` or
+    `container` value that was itself a string or an array was dropped with no message. It skipped
+    most falsy values too, but `false`, `0` or `''` as a pseudo's declarations emitted an empty rule
+    (`&:hover {}`), and `null` or `undefined` there, or as a `media` or `container` block, failed
+    the build with a `TypeError` naming neither Nave nor the atom.
+  - An atom that is a function, an array, a non-empty string, a non-zero number, `true` or a boxed
+    primitive such as `new String('x')` is now refused, even if no `@nave` directive uses it. 0.2.0
+    built with such an atom as long as no directive used it. A directive that used an array, a
+    non-empty string, a non-zero number, `true` or a boxed primitive failed the build, whatever
+    `onUnknown` said, and a function with a `declarations` property was accepted: its
+    `declarations` were read once to check them and again to write them, so a value that changed
+    between the two reads reached the CSS unchecked. A falsy atom (`false`, `0`, `''`, `null`,
+    `undefined`) is unchanged: it is skipped, and a directive that uses it reports an unknown atom
+    through `onUnknown`, so `brandBox: isBrand && { declarations: { ... } }` keeps working.
+  - An atom's own `declarations` that is a function, an array, a non-empty string, a non-zero
+    number, `true` or a boxed primitive is now refused too, even if no `@nave` directive uses the
+    atom. 0.2.0 built with it as long as no directive used the atom, and a directive that used it
+    failed the build, except that a `String` object emitted one numbered declaration per character
+    (`0: a; 1: b`) and any other boxed primitive added nothing. A missing or falsy `declarations` is
+    unchanged: it fails the build only at a directive that uses the atom.
+
+- 1d89ba5: The `focusRing` atom now draws a ring on keyboard focus even when its focus tokens are missing. It used to restore its outline with a single `outline` shorthand that read `--nave-border-width-focus` and `--nave-color-border-focus` without fallbacks, so when the token stylesheet did not load, or when your own token layer (`@navecss/core/no-tokens`) left those properties out, the shorthand was invalid as a whole and computed to `none`: the default outline was removed and nothing replaced it. A value of the wrong type in one of them could do the same. The ring is now `outline-style: solid` with separate `outline-width` and `outline-color` declarations, which fall back to `2px` and the element's own text colour (`currentColor`) when the properties are not defined. A value of the wrong type now affects only the declaration that reads it, so the ring still draws. With valid tokens, the ring is the same as before. The `@navecss/core/no-tokens` header comment no longer cites the focus outline as its example of a lost property.
+- 526c829: `@navecss/core/postcss` now loads through `require()` as well as `import`, so a CommonJS `postcss.config.js` can use the plugin. It also loads when a host reads the plugin by its package name, which is the form Next.js's webpack pipeline accepts: `plugins: { '@navecss/core/postcss': {} }`. Before, both failed (`ERR_PACKAGE_PATH_NOT_EXPORTED`, or `An unknown PostCSS plugin was provided`), so the README's PostCSS setup did not work for Next.js on webpack. `require('@navecss/core/postcss')` returns the plugin function itself and is the same function `import` gives you, with its own CommonJS type declarations. `@navecss/core/cx` and `@navecss/core/atoms` still load through `import` only. The README now has the Next.js setup and its browser floor.
+- Updated dependencies [7eb53f5]
+- Updated dependencies [5f01e71]
+- Updated dependencies [fef6ecf]
+  - @navecss/tokens@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
