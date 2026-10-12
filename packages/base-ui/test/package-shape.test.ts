@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import { DIST_DIR, filesUnder, manifest, readDist, SRC_DIR } from './support/dist.ts'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
-import { SUBPATHS } from './support/subpaths.ts'
+import { COMPLETION_SUBPATHS, SINGLE_COMPONENT, SUBPATHS } from './support/subpaths.ts'
 
 const byName = (a: string, b: string): number => a.localeCompare(b)
 
@@ -23,7 +23,7 @@ const hasDirective = (code: string): boolean => {
   return /^(['"])use client\1/.test(rest)
 }
 
-describe("AC-base-ui-bridge-13: 'use client' survives, per file", () => {
+describe("AC-base-ui-bridge-13 and AC-base-ui-overlay-completion-43: 'use client' survives, per file", () => {
   const sources = filesUnder(SRC_DIR, ['.ts', '.tsx'])
   const built = filesUnder(DIST_DIR, ['.js'])
 
@@ -35,6 +35,22 @@ describe("AC-base-ui-bridge-13: 'use client' survives, per file", () => {
 
   it('begins every built module with the directive', () => {
     expect(built.filter((file) => !hasDirective(readDist(file)))).toEqual([])
+  })
+
+  it('has a source module and a built module with the directive for the index and the parts of each of the six', () => {
+    const modules = COMPLETION_SUBPATHS.flatMap((subpath) => [
+      `${subpath}/index`,
+      `${subpath}/parts.generated`,
+    ])
+    expect(modules.filter((module) => !sources.includes(`${module}.ts`))).toEqual([])
+    expect(modules.filter((module) => !built.includes(`${module}.js`))).toEqual([])
+    expect(
+      modules.filter((module) => {
+        const file = `${module}.js`
+        return built.includes(file) && !hasDirective(readDist(file))
+      }),
+    ).toEqual([])
+    expect(SINGLE_COMPONENT.has('menubar')).toBe(true)
   })
 
   it('control: the same source bundled with esbuild loses the directive', async () => {

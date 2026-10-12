@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { readBaseUiTypes } from '../scripts/wrappers/read-types.ts'
 import { DIST_DIR } from './support/dist.ts'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
-import { SINGLE_COMPONENT, topName } from './support/subpaths.ts'
+import { COMPLETION_SUBPATHS, SINGLE_COMPONENT, topName } from './support/subpaths.ts'
 import { tableP } from './support/table-p.ts'
 
 const WORK = path.join(PACKAGE_DIR, 'node_modules/.cache/bundle-tests')
@@ -33,6 +33,14 @@ const entry = (specifier: string, top: string, parts: readonly string[]): string
   `import { ${top} } from '${specifier}'\nconsole.log(${parts.map((part) => `${top}.${part}`).join(', ')})\n`
 
 /**
+ * An entry for `Menubar`, which is one component with no parts: it is used with a menu's trigger,
+ * and `extra` names more parts of `Menu`.
+ */
+const menubarEntry = (specifier: string, extra: readonly string[]): string =>
+  `import { Menubar } from '${specifier}/menubar'\nimport { Menu } from '${specifier}/menu'\n` +
+  `console.log(${['Menubar', 'Menu.Trigger', ...extra.map((part) => `Menu.${part}`)].join(', ')})\n`
+
+/**
  * What the wrapper helper costs a bundle on its own: the built `part.js`, minified, with React
  * external. Any wrapped part pays it once.
  */
@@ -51,12 +59,20 @@ const HELPER_CEILING = 1024
 const SLACK = 120
 
 /**
- * The pair a component is measured with: its Root plus its Popup (or, without one, its first
- * styled part), and every other part of its namespace.
+ * What a component is measured with: the parts outside its pair, and the consumer entry that uses
+ * its pair and, besides, some more parts, from Base UI (`bare`) or from this package (`wrapped`).
  */
-const partsOf = async (
-  subpath: string,
-): Promise<{ others: string[]; pair: string[]; top: string } | undefined> => {
+interface Subject {
+  readonly entry: (side: 'bare' | 'wrapped', extra: readonly string[]) => string
+  readonly label: string
+  readonly others: readonly string[]
+}
+
+/**
+ * The subject of a component with a namespace of parts: its pair is its Root plus its Popup (or,
+ * without one, its first styled part), and every other part of its namespace is left unused.
+ */
+const subjectOf = async (subpath: string): Promise<Subject | undefined> => {
   const top = topName(subpath)
   const keys = Object.keys(
     ((await import(/* @vite-ignore */ `@base-ui/react/${subpath}`)) as Record<string, object>)[
@@ -70,7 +86,29 @@ const partsOf = async (
     return undefined
   }
   const pair = ['Root', styled]
-  return { others: keys.filter((key) => !pair.includes(key)), pair, top }
+  return {
+    entry: (side, extra) =>
+      entry(side === 'bare' ? `@base-ui/react/${subpath}` : `@navecss/base-ui/${subpath}`, top, [
+        ...pair,
+        ...extra,
+      ]),
+    label: subpath,
+    others: keys.filter((key) => !pair.includes(key)),
+  }
+}
+
+/**
+ * The subject of `Menubar`: its pair is `Menubar` and `Menu.Trigger`, and the other parts of `Menu`
+ * are left unused.
+ */
+const menubarSubject = async (): Promise<Subject> => {
+  const menu = ((await import('@base-ui/react/menu')) as { Menu: Record<string, unknown> }).Menu
+  return {
+    entry: (side, extra) =>
+      menubarEntry(side === 'bare' ? '@base-ui/react' : '@navecss/base-ui', extra),
+    label: 'menubar',
+    others: Object.keys(menu).filter((key) => key !== 'Trigger'),
+  }
 }
 
 /**
@@ -82,27 +120,25 @@ const partsOf = async (
  * large one.
  */
 const bundleProblems = async (
-  subpath: string,
+  subject: Subject | undefined,
   helper: number,
   dist: string,
   name: string,
 ): Promise<{ second: string[]; third: string[] }> => {
-  const parts = await partsOf(subpath)
-  if (parts === undefined) {
-    return { second: [`${subpath}: no Root and styled part to measure`], third: [] }
+  if (subject === undefined) {
+    return { second: [`${name}: no Root and styled part to measure`], third: [] }
   }
-  const { others, pair, top } = parts
-  const [bare, wrapped] = [`@base-ui/react/${subpath}`, `@navecss/base-ui/${subpath}`]
-  const a = await sizeOf(`${name}-a`, entry(bare, top, pair), dist)
-  const c = await sizeOf(`${name}-c`, entry(wrapped, top, pair), dist)
+  const { label, others } = subject
+  const a = await sizeOf(`${name}-a`, subject.entry('bare', []), dist)
+  const c = await sizeOf(`${name}-c`, subject.entry('wrapped', []), dist)
   const second =
-    c - a > helper + SLACK ? [`${subpath}: c-a ${c - a} > helper ${helper} + ${SLACK}`] : []
+    c - a > helper + SLACK ? [`${label}: c-a ${c - a} > helper ${helper} + ${SLACK}`] : []
   const third: string[] = []
   for (const part of others) {
-    const b = await sizeOf(`${name}-b`, entry(bare, top, [...pair, part]), dist)
-    const d = await sizeOf(`${name}-d`, entry(wrapped, top, [...pair, part]), dist)
+    const b = await sizeOf(`${name}-b`, subject.entry('bare', [part]), dist)
+    const d = await sizeOf(`${name}-d`, subject.entry('wrapped', [part]), dist)
     if (d - c < (b - a) / 2) {
-      third.push(`${subpath}.${part}: d-c ${d - c} < (b-a)/2 ${(b - a) / 2}`)
+      third.push(`${label}.${part}: d-c ${d - c} < (b-a)/2 ${(b - a) / 2}`)
     }
   }
   return { second, third }
@@ -120,14 +156,14 @@ const scratchDist = (name: string, subpath: string): string => {
   return copy
 }
 
-describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bundler", () => {
+describe("AC-base-ui-bridge-39 and AC-base-ui-overlay-completion-43: an unused part is dropped by the consumer's bundler", () => {
   // Components with a Root, a styled part and a part to leave unused: the ones of three or more
   // parts. A component of two has no part left over to drop.
   const subpaths = readBaseUiTypes('current')
     .filter(({ parts, subpath }) => !SINGLE_COMPONENT.has(subpath) && parts.length >= 3)
     .map(({ subpath }) => subpath)
 
-  it('covers the components that have a part to leave unused', () => {
+  it('covers the components that have a part to leave unused, one pair for each of the six but Menubar', () => {
     expect(subpaths).toEqual([
       'dialog',
       'popover',
@@ -141,6 +177,14 @@ describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bund
       'field',
       'slider',
       'toolbar',
+      'alert-dialog',
+      'context-menu',
+      'preview-card',
+      'combobox',
+      'autocomplete',
+    ])
+    expect(COMPLETION_SUBPATHS.filter((subpath) => !subpaths.includes(subpath))).toEqual([
+      'menubar',
     ])
   })
 
@@ -154,11 +198,29 @@ describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bund
       { timeout: 300_000 },
       async () => {
         const helper = await helperCost(DIST_DIR, subpath)
-        const { second, third } = await bundleProblems(subpath, helper, DIST_DIR, subpath)
+        const { second, third } = await bundleProblems(
+          await subjectOf(subpath),
+          helper,
+          DIST_DIR,
+          subpath,
+        )
         expect([...second, ...third]).toEqual([])
       },
     )
   }
+
+  it(
+    'menubar: the pair is Menubar and Menu.Trigger, and the wrapper adds the helper and its own calls and drops every other part of Menu',
+    { timeout: 300_000 },
+    async () => {
+      const subject = await menubarSubject()
+      expect(subject.others.length).toBeGreaterThan(0)
+      expect(subject.entry('wrapped', [])).toContain('@navecss/base-ui/menubar')
+      const helper = await helperCost(DIST_DIR, 'menubar')
+      const { second, third } = await bundleProblems(subject, helper, DIST_DIR, 'menubar')
+      expect([...second, ...third]).toEqual([])
+    },
+  )
 
   it(
     'control: a helper that keeps a whole component at module scope is reported, by its size and for every other part of the component',
@@ -172,9 +234,9 @@ describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bund
       )
       const helper = await helperCost(dist, 'retaining')
       expect(helper).toBeGreaterThan(HELPER_CEILING)
-      const { third } = await bundleProblems('dialog', helper, dist, 'retaining')
-      const parts = await partsOf('dialog')
-      const kept = parts?.others.map((part) => `dialog.${part}`)
+      const subject = await subjectOf('dialog')
+      const { third } = await bundleProblems(subject, helper, dist, 'retaining')
+      const kept = subject?.others.map((part) => `dialog.${part}`)
       expect(third.map((problem) => problem.split(':', 1)[0])).toEqual(kept)
     },
   )
@@ -193,7 +255,7 @@ describe("AC-base-ui-bridge-39: an unused part is dropped by the consumer's bund
         ),
       )
       const helper = await helperCost(dist, 'plain')
-      const { second } = await bundleProblems('popover', helper, dist, 'plain')
+      const { second } = await bundleProblems(await subjectOf('popover'), helper, dist, 'plain')
       expect(second).toHaveLength(1)
     },
   )

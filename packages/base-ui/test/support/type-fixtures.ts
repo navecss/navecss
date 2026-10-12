@@ -1,8 +1,9 @@
 /**
  * The TypeScript the type instruments compile, written from what the installed Base UI declares
  * and run through `tsc` against the built package: a fixture that names, for every subpath, every
- * type Base UI exports and every part's type namespace (AC-02), and the assertions about the
- * wrapped parts' types (AC-15).
+ * type Base UI exports and every part's type namespace (AC-02), the assertions about the wrapped
+ * parts' types (AC-15 and the overlay completion's -03 and -05), and the generic roots and the
+ * rejected props of the six components the overlay completion adds.
  */
 import { execFile } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -15,11 +16,12 @@ import { PACKAGE_DIR } from './stylesheet.ts'
 
 const run = promisify(execFile)
 
-const BASE = '@base-ui/react'
-const NAVE = '@navecss/base-ui'
+export const BASE = '@base-ui/react'
+export const NAVE = '@navecss/base-ui'
 
 /**
-The parts whose props gain `variant` and `size` (R4), by subpath and part (`.` for the component).
+The parts whose props gain `variant` and `size` (R4, and the Alert Dialog's two from the overlay
+completion), by subpath and part (`.` for the component).
  */
 export const VARIANT_PARTS: readonly { kind: 'size' | 'variant'; part: string; subpath: string }[] =
   [
@@ -27,6 +29,8 @@ export const VARIANT_PARTS: readonly { kind: 'size' | 'variant'; part: string; s
     { kind: 'variant', part: 'Button', subpath: 'toolbar' },
     { kind: 'variant', part: 'Trigger', subpath: 'dialog' },
     { kind: 'variant', part: 'Close', subpath: 'dialog' },
+    { kind: 'variant', part: 'Trigger', subpath: 'alert-dialog' },
+    { kind: 'variant', part: 'Close', subpath: 'alert-dialog' },
     { kind: 'variant', part: 'Trigger', subpath: 'popover' },
     { kind: 'variant', part: 'Close', subpath: 'popover' },
     { kind: 'variant', part: 'Trigger', subpath: 'menu' },
@@ -37,7 +41,7 @@ export const VARIANT_PARTS: readonly { kind: 'size' | 'variant'; part: string; s
 const isVariantPart = (subpath: string, part: string): boolean =>
   VARIANT_PARTS.some((entry) => entry.subpath === subpath && entry.part === part)
 
-const identifier = (subpath: string): string => subpath.replaceAll('-', '_')
+export const identifier = (subpath: string): string => subpath.replaceAll('-', '_')
 const topName = (subpath: string): string =>
   subpath
     .split('-')
@@ -70,15 +74,16 @@ export const referenceFixture = (
     ])
     .join('\n')
 
-const EQUAL =
+export const EQUAL =
   'type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false\n' +
   'type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false\n' +
   'type Assert<T extends true> = T\n' +
-  "type Variants = { variant?: 'secondary' | 'primary'; size?: 'md' | 'sm' }\n" +
+  "type Variants = { variant?: 'secondary' | 'primary' | 'ghost'; size?: 'md' | 'sm' }\n" +
   "type Sizes = { size?: 'md' | 'sm' }\n"
 
 const GENERIC_ARGUMENT: Readonly<Record<string, string>> = {
   'accordion.Root': "'a' | 'b'",
+  'combobox.Root': 'string',
   'radio-group..': "'a' | 'b'",
   'slider.Root': 'number',
   'toggle-group..': "'a' | 'b'",
@@ -90,7 +95,7 @@ const importsFor = (subpaths: readonly SubpathTypes[]): string[] =>
     `import * as B_${identifier(subpath)} from '${BASE}/${subpath}'`,
   ])
 
-const typeOf = (side: 'B' | 'N', subpath: string, part: string): string =>
+export const typeOf = (side: 'B' | 'N', subpath: string, part: string): string =>
   `typeof ${side}_${identifier(subpath)}.${accessor(subpath, part)}`
 
 const variantAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
@@ -157,16 +162,33 @@ const genericAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
   })
 
 /**
-AC-15's assertions about the wrapped parts' types, for the Base UI the subpaths were read from.
+AC-base-ui-overlay-completion-03's assertions: every part outside the Button family is typed as the Base UI part, read from its
+own namespace, and a generic root keeps its type parameters.
  */
-export const assertionFixture = (subpaths: readonly SubpathTypes[]): string =>
+export const equalityFixture = (subpaths: readonly SubpathTypes[]): string =>
   [
     ...importsFor(subpaths),
     EQUAL,
     ...equalityAssertions(subpaths),
-    ...variantAssertions(subpaths),
     ...genericAssertions(subpaths),
+    ...menubarAssertions(),
   ].join('\n')
+
+/**
+AC-base-ui-overlay-completion-05's assertions: each Button-family part's props are the Base UI part's props plus exactly the
+variant and size props it gains, and Base UI's own props name neither.
+ */
+export const variantFixture = (subpaths: readonly SubpathTypes[]): string =>
+  [...importsFor(subpaths), EQUAL, ...variantAssertions(subpaths)].join('\n')
+
+/**
+The `Menubar` component is one export, and its `Props` and `State` resolve through the wrapper as
+they do through Base UI.
+ */
+const menubarAssertions = (): string[] => [
+  'export type M_Props = Assert<Equal<N_menubar.Menubar.Props, B_menubar.Menubar.Props>>',
+  'export type M_State = Assert<Equal<N_menubar.Menubar.State, B_menubar.Menubar.State>>',
+]
 
 /**
 Every Button-family part renders a button, so each one's props must accept a ref to a button.
@@ -175,24 +197,6 @@ export const refFixture = (subpaths: readonly SubpathTypes[]): string =>
   ["import { createRef } from 'react'", ...importsFor(subpaths), ...refAssertions(subpaths)].join(
     '\n',
   )
-
-/**
-The three type errors AC-15 requires, as source: a size and a variant outside the unions, and a
-`variant` on a Toggle. They are compiled against both Base UI versions.
- */
-export const REJECTED_PROPS = `
-import * as Button from '${NAVE}/button'
-import * as Toggle from '${NAVE}/toggle'
-type ButtonProps = Parameters<typeof Button.Button>[0]
-type ToggleProps = Parameters<typeof Toggle.Toggle>[0]
-// @ts-expect-error size lg is not a size
-export const lg: ButtonProps = { size: 'lg' }
-// @ts-expect-error variant ghost is not a variant
-export const ghost: ButtonProps = { variant: 'ghost' }
-// @ts-expect-error a Toggle takes a size only
-export const toggleVariant: ToggleProps = { variant: 'primary' }
-export const accepted: ButtonProps = { variant: 'primary', size: 'sm' }
-`
 
 export interface TscResult {
   readonly code: number
