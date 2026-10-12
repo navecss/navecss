@@ -217,7 +217,21 @@ const versionedRows: readonly VersionedRow[] = [
 
 const byVersion = (a: string, b: string): number => a.localeCompare(b, 'en', { numeric: true })
 
-const VERSIONS = [...new Set(versionedRows.map(({ version }) => version))].toSorted(byVersion)
+/**
+ * The package's peer floor, read from the installed floor alias. A row names the part's first
+ * minor, but the package supports nothing older than the floor, so a row whose first minor is
+ * older than the floor is read at the floor.
+ */
+const FLOOR_VERSION = (
+  JSON.parse(readFileSync(path.join(FLOOR, '../package.json'), 'utf8')) as { version: string }
+).version
+
+const readAt = (version: string): string =>
+  byVersion(version, FLOOR_VERSION) >= 0 ? version : FLOOR_VERSION
+
+const VERSIONS = [...new Set(versionedRows.map(({ version }) => readAt(version)))].toSorted(
+  byVersion,
+)
 
 /**
  * The package's modules at a minor, or an error that names the alias to install.
@@ -357,26 +371,22 @@ describe('AC-base-ui-overlay-completion-28: every attribute and variable the sty
   }
 
   for (const { files, items, version } of versionedRows) {
+    const at = readAt(version)
     for (const file of files) {
-      it(`${file} declares ${items.join(', ')} at ${version}`, () => {
-        expect(itemsMissingFrom(rootAtOrThrow(version), file, items)).toEqual([])
+      it(`${file} declares ${items.join(', ')} at ${at}`, () => {
+        const root = rootAtOrThrow(at)
+        expect(itemsMissingFrom(root, file, items)).toEqual([])
       })
     }
   }
 
-  it('control: a planted row (data-instant, select/popup/SelectPopupDataAttributes.d.ts, 1.0.0) is reported missing', () => {
+  it('control: a planted row (data-instant, select/popup/SelectPopupDataAttributes.d.ts, read at the floor) is reported missing', () => {
     expect(
-      itemsMissingFrom(rootAtOrThrow('1.0.0'), 'select/popup/SelectPopupDataAttributes.d.ts', [
-        'data-instant',
-      ]),
-    ).toEqual(['data-instant'])
-  })
-
-  it('control: the same planted row is reported missing in the package at the floor alias', () => {
-    expect(
-      itemsMissingFrom(rootAtOrThrow('1.3.0'), 'select/popup/SelectPopupDataAttributes.d.ts', [
-        'data-instant',
-      ]),
+      itemsMissingFrom(
+        rootAtOrThrow(FLOOR_VERSION),
+        'select/popup/SelectPopupDataAttributes.d.ts',
+        ['data-instant'],
+      ),
     ).toEqual(['data-instant'])
   })
 
