@@ -75,9 +75,39 @@ describe('shippedChangesetProse', () => {
   })
 
   it('returns the pending changeset while its file exists, ignoring the changelog', () => {
-    writeFileSync(changesetPath(), "---\n'@navecss/core': minor\n---\n\nPending text.\n")
+    writeFileSync(
+      changesetPath(),
+      "---\n'@navecss/core': minor\n---\n\nSecond entry, still pending.\n",
+    )
     expect(shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toContain(
-      'Pending text.',
+      'still pending.',
+    )
+  })
+
+  it('throws while the changeset is pending and its text does not open with the given text', () => {
+    writeFileSync(
+      changesetPath(),
+      "---\n'@navecss/core': minor\n---\n\nA reworded opening, so the released entry would differ.\n",
+    )
+    expect(() => shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toThrow(
+      new RegExp(`${changesetPath()} .* "Second entry"`, 'u'),
+    )
+  })
+
+  it('reads the opening after the front matter, not the front matter itself', () => {
+    writeFileSync(
+      changesetPath(),
+      "---\n'@navecss/core': minor\n---\nSecond entry, no blank line.\n",
+    )
+    expect(shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toContain(
+      'no blank line.',
+    )
+  })
+
+  it('treats a pending file with no front matter as all text', () => {
+    writeFileSync(changesetPath(), 'Second entry, no front matter.\n')
+    expect(shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toContain(
+      'no front matter.',
     )
   })
 

@@ -52,16 +52,34 @@ export function changelogEntries(changelog: string): ChangelogEntry[] {
 }
 
 /**
+ * What a changeset says after its front matter. A file without front matter is all text.
+ */
+function bodyOf(changeset: string): string {
+  return changeset.replace(/^---\n[\s\S]*?\n---\n/u, '').trimStart()
+}
+
+/**
  * The text of one shipped change: the pending changeset at `changesetPath` while it exists,
  * otherwise the `changelogPath` entry that begins with `entryStart`. Throws when neither is there,
- * so a scan over the result can never pass by reading nothing.
+ * so a scan over the result can never pass by reading nothing. A pending changeset must open with
+ * `entryStart` too: the released entry is found by that opening, so a reworded one would pass
+ * here and fail on the version commit.
  */
 export function shippedChangesetProse(
   changesetPath: string,
   changelogPath: string,
   entryStart: string,
 ): string {
-  if (existsSync(changesetPath)) return readFileSync(changesetPath, 'utf8')
+  if (existsSync(changesetPath)) {
+    const pending = readFileSync(changesetPath, 'utf8')
+    if (!bodyOf(pending).startsWith(entryStart)) {
+      throw new Error(
+        `${changesetPath} is pending and its text does not open with "${entryStart}", ` +
+          'which is how its changelog entry is found once it is released',
+      )
+    }
+    return pending
+  }
   const entry = changelogEntries(readFileSync(changelogPath, 'utf8')).find((candidate) =>
     candidate.text.startsWith(entryStart),
   )
