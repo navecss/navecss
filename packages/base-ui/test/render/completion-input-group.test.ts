@@ -12,14 +12,7 @@ import { flattenRules, readStylesheet } from '../support/stylesheet.ts'
 import { topName } from '../support/subpaths.ts'
 import { INPUT_GROUP_PAIRS, pair } from '../support/vocabulary-pairs.ts'
 import { FRUITS, type Kind, KINDS } from '../support/w6-combobox.ts'
-import {
-  installHint,
-  isInstalled,
-  loadNaveOver,
-  type Minor,
-  MINORS,
-  runMinor,
-} from '../support/w6-minors.ts'
+import { isInstalled, loadNaveOver, type Minor, MINORS, runMinor } from '../support/w6-minors.ts'
 import { el, need } from '../support/w6-render.ts'
 
 const run: Source = await loadNave()
@@ -205,9 +198,7 @@ const shouldPaint = (observed: Observed): boolean =>
 const minorsOfRun = (): readonly Minor[] =>
   runMinor().version === '1.3.0'
     ? [runMinor()]
-    : MINORS.filter(({ version }) => ['1.5.0', '1.6.0', '1.8.0'].includes(version))
-
-const NOT_INSTALLED = MINORS.filter((item) => !isInstalled(item))
+    : MINORS.filter(({ version }) => version !== '1.3.0')
 
 const sourceFor = async (minor: Minor): Promise<Source> =>
   minor.version === runMinor().version ? run : loadNaveOver(minor.alias)
@@ -290,12 +281,6 @@ describe('AC-base-ui-overlay-completion-23: the group paints invalid exactly whe
     ])
     expect(minorsOfRun().every(isInstalled)).toBe(true)
   })
-
-  for (const minor of NOT_INSTALLED) {
-    it.todo(
-      `${minor.version}: not run, no alias is installed; add ${installHint(minor)} to the devDependencies and install it, then list the minor in minorsOfRun`,
-    )
-  }
 })
 
 describe('AC-base-ui-overlay-completion-29: the group carries no ARIA counterpart of its data attributes', () => {

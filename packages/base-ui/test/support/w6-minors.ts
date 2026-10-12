@@ -37,12 +37,6 @@ export type Minor = (typeof MINORS)[number]
 export const isInstalled = (minor: Minor): boolean =>
   existsSync(path.join(PACKAGE_DIR, 'node_modules', minor.alias, 'package.json'))
 
-/**
-The line to add to `devDependencies` for a minor with no installed alias.
- */
-export const installHint = (minor: Minor): string =>
-  `"${minor.alias}": "npm:@base-ui/react@${minor.version}"`
-
 type Wrapped = 'autocomplete' | 'combobox' | 'field'
 
 type Loaders = Readonly<Record<Wrapped, () => Promise<Record<string, unknown>>>>
@@ -53,6 +47,13 @@ specifier so the bundler sees it.
  */
 const loadersOf = (alias: string): Loaders => {
   switch (alias) {
+    case 'base-ui-react-1.4.0': {
+      return {
+        autocomplete: () => import('base-ui-react-1.4.0/autocomplete'),
+        combobox: () => import('base-ui-react-1.4.0/combobox'),
+        field: () => import('base-ui-react-1.4.0/field'),
+      }
+    }
     case 'base-ui-react-1.5.0': {
       return {
         autocomplete: () => import('base-ui-react-1.5.0/autocomplete'),
@@ -65,6 +66,13 @@ const loadersOf = (alias: string): Loaders => {
         autocomplete: () => import('base-ui-react-1.6.0/autocomplete'),
         combobox: () => import('base-ui-react-1.6.0/combobox'),
         field: () => import('base-ui-react-1.6.0/field'),
+      }
+    }
+    case 'base-ui-react-1.7.0': {
+      return {
+        autocomplete: () => import('base-ui-react-1.7.0/autocomplete'),
+        combobox: () => import('base-ui-react-1.7.0/combobox'),
+        field: () => import('base-ui-react-1.7.0/field'),
       }
     }
     default: {

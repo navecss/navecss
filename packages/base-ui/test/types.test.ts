@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { BaseUiVersion } from '../scripts/wrappers/read-types.ts'
 
+import { readSharedTypes } from '../scripts/wrappers/floor.ts'
 import { readBaseUiTypes } from '../scripts/wrappers/read-types.ts'
 import {
   compile,
@@ -30,6 +31,9 @@ const MISSING_ARGUMENTS =
 
 describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
   const subpaths = readBaseUiTypes(version)
+  // The wrappers declare each part's type namespace with the members the floor Base UI also has, so
+  // that their declarations hold at both versions; the rewritten fixture names those.
+  const declared = version === 'current' ? readSharedTypes() : subpaths
 
   describe('AC-base-ui-overlay-completion-02 (supersedes AC-base-ui-bridge-02): the import swap is the whole migration for types as well as values', () => {
     it(
@@ -52,7 +56,7 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
       async () => {
         const result = await compile(
           `02-${version}`,
-          { 'fixture.ts': referenceFixture(subpaths, '@navecss/base-ui') },
+          { 'fixture.ts': referenceFixture(declared, '@navecss/base-ui') },
           version,
         )
         expect(result.output).toBe('')
