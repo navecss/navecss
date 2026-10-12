@@ -41,6 +41,15 @@ function specifiersOf(source: string): string[] {
 }
 
 /**
+ * The file a relative import names. A declaration file spells the import of a sibling declaration
+ * file with the `.js` ending TypeScript requires, so that import is followed to the `.d.ts`.
+ */
+function resolveRelative(from: string, specifier: string): string {
+  const target = path.resolve(path.dirname(from), specifier)
+  return from.endsWith('.d.ts') && target.endsWith('.js') ? `${target.slice(0, -3)}.d.ts` : target
+}
+
+/**
  * Every file reachable from `entry` (a name in `dist/`) by relative import, with the bare
  * specifiers each of them names.
  */
@@ -56,7 +65,7 @@ function reachableFromDist(entry: string): { bare: Set<string>; files: string[] 
     files.push(file)
     const specifiers = specifiersOf(readFileSync(file, 'utf8'))
     for (const specifier of specifiers) {
-      if (specifier.startsWith('.')) queue.push(path.resolve(path.dirname(file), specifier))
+      if (specifier.startsWith('.')) queue.push(resolveRelative(file, specifier))
       else bare.add(specifier)
     }
   }
