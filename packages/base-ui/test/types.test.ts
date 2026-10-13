@@ -1,9 +1,15 @@
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import type { BaseUiVersion } from '../scripts/wrappers/read-types.ts'
 
 import { readSharedTypes } from '../scripts/wrappers/floor.ts'
 import { readBaseUiTypes } from '../scripts/wrappers/read-types.ts'
+import {
+  fullArityFixture,
+  fullArityReferences,
+  type Reference,
+} from './support/full-arity-fixture.ts'
 import {
   compile,
   equalityFixture,
@@ -227,6 +233,103 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
       },
     )
   })
+})
+
+// The type spellings of the current Base UI that this package leaves out, because a part's own types
+// are declared from the floor Base UI so that the package's declarations compile there. Each one
+// has a flat name that reaches the same type from the same subpath (`ContextMenuRootActions`,
+// `ComboboxRootProps`). A change of the floor or of the installed Base UI that moves this list
+// moves it here, in the same change as the README and the changeset sentence that name it.
+const EXPECTED_DROPS = [
+  // The floor's Root has no `Actions`.
+  'ContextMenu.Root.Actions TS2694',
+  // The floor's `Root.Props` takes two type parameters, the current one three.
+  'Combobox.Root.Props<any, any, any> TS2707',
+]
+
+const byName = (a: string, b: string): number => a.localeCompare(b)
+
+const ERROR = /(?:^|\n)(?:(\S+)\((\d+),\d+\): )?error (TS\d+): /g
+
+/**
+Each error of a `tsc` run as `<spelling> <code>`, the spelling being the reference the fixture's own
+line makes. An error that is on no reference of the fixture is named by its place, so it is never
+mistaken for a listed one.
+ */
+const errorsOf = (output: string, fixture: string, references: readonly Reference[]): string[] => {
+  const lines = fixture.split('\n')
+  return output
+    .matchAll(ERROR)
+    .map(([, file, line, code]) => {
+      const spelling =
+        file === undefined || path.basename(file) !== 'fixture.ts'
+          ? undefined
+          : references.find((reference) => reference.line === lines[Number(line) - 1])?.spelling
+      return `${spelling ?? `(${file ?? 'no position'}:${line ?? ''})`} ${code}`
+    })
+    .toArray()
+}
+
+describe('AC-base-ui-overlay-completion-02: what the package leaves out of the current Base UI', () => {
+  const current = readBaseUiTypes('current')
+  const references = fullArityReferences(current)
+
+  it(
+    'control: every namespace member, each generic with all its type parameters, compiles from Base UI itself',
+    { timeout: MINUTES },
+    async () => {
+      const result = await compile(
+        '02-full-arity-control',
+        { 'fixture.ts': fullArityFixture(current, '@base-ui/react') },
+        'current',
+      )
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    },
+  )
+
+  it(
+    'fails through this package on exactly the expected-drop list, and on nothing else',
+    { timeout: MINUTES },
+    async () => {
+      const fixture = fullArityFixture(current, '@navecss/base-ui')
+      const result = await compile('02-full-arity', { 'fixture.ts': fixture }, 'current')
+      expect(errorsOf(result.output, fixture, references).toSorted(byName)).toEqual(
+        EXPECTED_DROPS.toSorted(byName),
+      )
+      expect(result.code).not.toBe(0)
+    },
+  )
+
+  it('names every expected drop as a line of the fixture, so a listed line cannot be missing from it', () => {
+    const spellings = new Set(references.map(({ spelling }) => spelling))
+    expect(
+      EXPECTED_DROPS.map((drop) => drop.slice(0, drop.lastIndexOf(' '))).filter(
+        (spelling) => !spellings.has(spelling),
+      ),
+    ).toEqual([])
+  })
+
+  it(
+    'reaches both dropped types through their flat names, from the same subpath',
+    { timeout: MINUTES },
+    async () => {
+      const result = await compile(
+        '02-flat-names',
+        {
+          'fixture.ts': [
+            "import type { ContextMenuRootActions } from '@navecss/base-ui/context-menu'",
+            "import type { ComboboxRootProps } from '@navecss/base-ui/combobox'",
+            'export type Actions = ContextMenuRootActions',
+            'export type Props = ComboboxRootProps<string, false, { id: string }>',
+          ].join('\n'),
+        },
+        'current',
+      )
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    },
+  )
 })
 
 describe('AC-base-ui-overlay-completion-03: the control for a part typed from the wrong namespace', () => {

@@ -10,7 +10,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import type { BaseUiVersion, SubpathTypes } from '../../scripts/wrappers/read-types.ts'
+import type { BaseUiVersion, PartTypes, SubpathTypes } from '../../scripts/wrappers/read-types.ts'
 
 import { PACKAGE_DIR } from './stylesheet.ts'
 
@@ -48,12 +48,33 @@ const topName = (subpath: string): string =>
     .map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`)
     .join('')
 
-const accessor = (subpath: string, part: string): string =>
+export const accessor = (subpath: string, part: string): string =>
   part === '.' ? topName(subpath) : `${topName(subpath)}.${part}`
+
+const memberReference = (subpath: string, part: PartTypes, member: string, args: string): string =>
+  `C_${identifier(subpath)}${part.name === '.' ? '' : `.${part.name}`}.${member}${args}`
+
+export const referenceLine = (
+  subpath: string,
+  part: PartTypes,
+  member: string,
+  args: string,
+): string =>
+  `export type R_${identifier(subpath)}_${part.name === '.' ? 'self' : part.name}_${member} = ${memberReference(subpath, part, member, args)}`
+
+export const importLines = (
+  subpath: string,
+  flatTypes: readonly string[],
+  from: string,
+): string[] => [
+  `export type { ${flatTypes.join(', ')} } from '${from}/${subpath}'`,
+  `import { ${topName(subpath)} as C_${identifier(subpath)} } from '${from}/${subpath}'`,
+]
 
 /**
 AC-02's fixture: imports every type-only export of every subpath and references every part's
-namespace members, importing from `from` (Base UI's own specifier, or this package's).
+namespace members, importing from `from` (Base UI's own specifier, or this package's). A generic
+member is given the type arguments it requires and none of those it defaults.
  */
 export const referenceFixture = (
   subpaths: readonly SubpathTypes[],
@@ -61,14 +82,13 @@ export const referenceFixture = (
 ): string =>
   subpaths
     .flatMap(({ flatTypes, parts, subpath }) => [
-      `export type { ${flatTypes.join(', ')} } from '${from}/${subpath}'`,
-      `import { ${topName(subpath)} as C_${identifier(subpath)} } from '${from}/${subpath}'`,
+      ...importLines(subpath, flatTypes, from),
       ...parts.flatMap((part) =>
         part.members.map(({ name: member, parameters }) => {
           const arity = parameters.filter((parameter) => !parameter.includes('=')).length
           const args =
             arity === 0 ? '' : `<${Array.from({ length: arity }, () => 'any').join(', ')}>`
-          return `export type R_${identifier(subpath)}_${part.name === '.' ? 'self' : part.name}_${member} = C_${identifier(subpath)}${part.name === '.' ? '' : `.${part.name}`}.${member}${args}`
+          return referenceLine(subpath, part, member, args)
         }),
       ),
     ])
