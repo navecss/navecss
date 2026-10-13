@@ -163,4 +163,11 @@ describe('AC-nextjs-used-atoms-21 — the source module, in this process', () =>
     }
     expect(parse).toHaveBeenCalledTimes(1)
   })
+
+  it('reads the JSON text by its own keys only, so an inherited name gives no class', async () => {
+    const dynamic = (await dynamicWith(JSON.stringify(KEPT))) as (name: string) => string
+    for (const name of ['toString', 'constructor', '__proto__']) {
+      expect(dynamic(name)).toBe('')
+    }
+  })
 })
