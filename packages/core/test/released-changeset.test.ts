@@ -75,9 +75,12 @@ describe('shippedChangesetProse', () => {
   })
 
   it('returns the pending changeset while its file exists, ignoring the changelog', () => {
-    writeFileSync(changesetPath(), "---\n'@navecss/core': minor\n---\n\nPending text.\n")
+    writeFileSync(
+      changesetPath(),
+      "---\n'@navecss/core': minor\n---\n\nSecond entry, still pending.\n",
+    )
     expect(shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toContain(
-      'Pending text.',
+      'still pending.',
     )
   })
 
@@ -91,5 +94,95 @@ describe('shippedChangesetProse', () => {
     expect(() => shippedChangesetProse(changesetPath(), changelogPath(), 'No such entry')).toThrow(
       /no entry starting "No such entry"/u,
     )
+  })
+
+  it('does not return an entry that only contains the given text', () => {
+    expect(() => shippedChangesetProse(changesetPath(), changelogPath(), 'econd entry')).toThrow(
+      /no entry starting "econd entry"/u,
+    )
+  })
+
+  it('throws while the changeset is pending and its text does not open with the given text', () => {
+    writeFileSync(
+      changesetPath(),
+      "---\n'@navecss/core': minor\n---\n\nA reworded opening, so the released entry would differ.\n",
+    )
+    expect(() => shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toThrow(
+      new RegExp(`${changesetPath()} .* "Second entry"`, 'u'),
+    )
+  })
+
+  it('reads the opening after the front matter, not the front matter itself', () => {
+    writeFileSync(
+      changesetPath(),
+      "---\n'@navecss/core': minor\n---\nSecond entry, no blank line.\n",
+    )
+    expect(shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toContain(
+      'no blank line.',
+    )
+  })
+
+  it('treats a pending file with no front matter as all text', () => {
+    writeFileSync(changesetPath(), 'Second entry, no front matter.\n')
+    expect(shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toContain(
+      'no front matter.',
+    )
+  })
+
+  const FRONT_MATTER = "---\n'@navecss/core': minor\n---\n"
+  const accepted: Record<string, string> = {
+    'Windows line endings': `${FRONT_MATTER.replaceAll('\n', '\r\n')}\r\nSecond entry.\r\n`,
+    'a byte order mark': `\u{FEFF}${FRONT_MATTER}\nSecond entry.\n`,
+    'blank lines before the front matter': `\n\n${FRONT_MATTER}\nSecond entry.\n`,
+    'empty front matter': '---\n---\n\nSecond entry.\n',
+    'empty front matter and a later rule': '---\n---\n\nSecond entry.\n\n---\n\nMore.\n',
+    'a rule later in the text': `${FRONT_MATTER}\nSecond entry.\n\n---\n\nMore.\n`,
+    'a closing rule followed by a space': "---\n'@navecss/core': minor\n--- \n\nSecond entry.\n",
+    'a closing rule followed by a tab': "---\n'@navecss/core': minor\n---\t\n\nSecond entry.\n",
+    'an indented closing rule': "---\n'@navecss/core': minor\n  ---\n\nSecond entry.\n",
+    'a tab-indented closing rule': "---\n'@navecss/core': minor\n\t---\n\nSecond entry.\n",
+    'an opening rule followed by a space': "--- \n'@navecss/core': minor\n---\n\nSecond entry.\n",
+  }
+  for (const [shape, text] of Object.entries(accepted)) {
+    it(`accepts a pending changeset with ${shape}`, () => {
+      writeFileSync(changesetPath(), text)
+      expect(shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toBe(text)
+    })
+  }
+
+  const notClosed: Record<string, string> = {
+    'a closing rule of four dashes': "---\n'@navecss/core': minor\n----\n\nSecond entry.\n",
+    'text after the closing rule on its line': "---\n'@navecss/core': minor\n--- Second entry.\n",
+  }
+  for (const [shape, text] of Object.entries(notClosed)) {
+    it(`does not read front matter as the opening of a changeset with ${shape}`, () => {
+      writeFileSync(changesetPath(), text)
+      expect(() => shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry')).toThrow(
+        /does not open with "Second entry"/u,
+      )
+    })
+  }
+
+  it('does not read a later rule as the end of empty front matter', () => {
+    writeFileSync(changesetPath(), '---\n---\n\nSecond entry.\n\n---\n\nMore.\n')
+    expect(() => shippedChangesetProse(changesetPath(), changelogPath(), 'More.')).toThrow(
+      /does not open with "More\."/u,
+    )
+  })
+
+  it('throws, naming the problem, when the entry start holds a line break', () => {
+    writeFileSync(changesetPath(), `${FRONT_MATTER}\nSecond entry\ncontinues here.\n`)
+    expect(() =>
+      shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry\ncontinues'),
+    ).toThrow(/holds a line break/u)
+    expect(() =>
+      shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry\r\ncontinues'),
+    ).toThrow(/holds a line break/u)
+  })
+
+  it('throws for an entry start with a line break once the changeset is gone too', () => {
+    expect(() =>
+      shippedChangesetProse(changesetPath(), changelogPath(), 'Second entry\ncontinues'),
+    ).toThrow(/holds a line break/u)
   })
 })
