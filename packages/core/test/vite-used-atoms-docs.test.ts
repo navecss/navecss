@@ -652,6 +652,20 @@ describe('AC-used-atoms-37 — the documentation the inlining makes true', () =>
     expect(text).toMatch(/package listed in `keepFor` whose calls the build cannot read/)
   })
 
+  it('says the guarantee holds only when no module that imports cx calls eval directly', () => {
+    for (const prose of [text, fold(inlinedChangeset())]) {
+      expect(prose).toContain('no module that imports `cx` calls `eval` directly')
+      expect(prose).toContain('A module that calls `eval` directly keeps its import of `cx`')
+    }
+  })
+
+  it('says an indirect eval call does not keep the import', () => {
+    for (const prose of [text, fold(inlinedChangeset())]) {
+      expect(prose).toContain('`(0, eval)(text)` or `globalThis.eval(text)`')
+      expect(prose).toMatch(/where `cx` is not visible, and does not keep the import/)
+    }
+  })
+
   it('has a minor on @navecss/core that names the inlining', () => {
     expect(inlinedChangeset()).toMatch(/class string/)
     expect(inlinedChangeset()).toMatch(/map from atom names to classes/)

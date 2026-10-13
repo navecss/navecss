@@ -60,11 +60,19 @@ const PHRASES: Readonly<Record<string, Phrase>> = {
 }
 
 /**
+ * Whether `expression` is what an assignment writes to, not what it assigns: `cx = 1` writes to
+ * the binding, and the binding is assigned to something only on the right of `=`.
+ */
+function isWrittenTo(parent: AstNode, expression: AstNode): boolean {
+  return parent.type === 'AssignmentExpression' && nodeAt(parent, 'right') !== expression
+}
+
+/**
  * The phrase for a use that is none of the readable shapes, from where the binding sits.
  */
 export function phraseFor(reading: Reading, expression: AstNode, local: string): string {
   const parent = reading.analysis.parentOf.get(expression)
-  const phrase = parent && PHRASES[parent.type]
+  const phrase = parent && !isWrittenTo(parent, expression) && PHRASES[parent.type]
   return phrase && parent
     ? phrase(reading, parent, local)
     : `${local} is used as a value instead of being called`
