@@ -73,6 +73,7 @@ describe('AC-nextjs-used-atoms-21 — cx.dynamic() reads its map as an object or
     const report = runPacked(undefined)
     expect(report.joined).toBe('nave-focus-ring|nave-interactive|')
     expect(report.falsy).toEqual(['', '', ''])
+    expect(report.parses).toBe(0)
   })
 
   it('(b) with the object, reads it and decodes nothing', () => {
@@ -86,6 +87,12 @@ describe('AC-nextjs-used-atoms-21 — cx.dynamic() reads its map as an object or
     const report = runPacked(JSON.stringify(KEPT))
     expect(report.joined).toBe('|nave-interactive|')
     expect(report.falsy).toEqual(['', '', ''])
+    expect(report.parses).toBe(1)
+  })
+
+  it('(d) with JSON text that decodes to a falsy value, decodes it once, not on every call', () => {
+    const report = runPacked('0')
+    expect(report.joined).toBe('||')
     expect(report.parses).toBe(1)
   })
 })
@@ -109,6 +116,7 @@ describe('AC-nextjs-used-atoms-21 — Vite folds the map as an object literal, n
     const js = await builtJs()
     expect(js).toContain('{flex:`nave-flex`}')
     expect(js).not.toContain(MAP_TEXT)
+    expect(js).not.toContain('JSON.parse')
   }, 60_000)
 
   it('control: a define that hands over the map as JSON text puts that text in the JS', async () => {
@@ -118,7 +126,9 @@ describe('AC-nextjs-used-atoms-21 — Vite folds the map as an object literal, n
         define: { [KEEP_CONSTANT]: JSON.stringify(JSON.stringify({ flex: 'nave-flex' })) },
       }),
     }
-    expect(await builtJs([asText])).toContain(MAP_TEXT)
+    const js = await builtJs([asText])
+    expect(js).toContain(MAP_TEXT)
+    expect(js).toContain('JSON.parse')
   }, 60_000)
 })
 
@@ -134,12 +144,15 @@ async function dynamicWith(constant: object | string): Promise<(name: 'interacti
 
 describe('AC-nextjs-used-atoms-21 — the source module, in this process', () => {
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     vi.resetModules()
   })
 
-  it('reads the object as it is', async () => {
+  it('reads the object as it is, and decodes nothing', async () => {
+    const parse = vi.spyOn(JSON, 'parse')
     expect((await dynamicWith(KEPT))('interactive')).toBe('nave-interactive')
+    expect(parse).not.toHaveBeenCalled()
   })
 
   it('reads the JSON text, and decodes it once however often it is read', async () => {
@@ -149,6 +162,5 @@ describe('AC-nextjs-used-atoms-21 — the source module, in this process', () =>
       expect(dynamic('interactive')).toBe('nave-interactive')
     }
     expect(parse).toHaveBeenCalledTimes(1)
-    parse.mockRestore()
   })
 })

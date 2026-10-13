@@ -106,15 +106,14 @@ declare const __NAVE_KEEP_CLASSES__: KeepMap | string | undefined
 const decodedKeep = new Map<string, KeepMap>()
 
 /**
- * The map the constant holds: the object itself, or the object its JSON text decodes to, decoded
- * on first use and kept, so a later call reads the map the first one made.
+ * The map the constant's JSON text decodes to, decoded on first use and kept, so a later call
+ * reads the map the first one made.
  */
-function keptMap(constant: KeepMap | string): KeepMap {
-  if (typeof constant !== 'string') return constant
-  let map = decodedKeep.get(constant)
-  if (!map) {
-    map = JSON.parse(constant) as KeepMap
-    decodedKeep.set(constant, map)
+function decodedMap(text: string): KeepMap {
+  let map = decodedKeep.get(text)
+  if (map === undefined) {
+    map = JSON.parse(text) as KeepMap
+    decodedKeep.set(text, map)
   }
   return map
 }
@@ -135,10 +134,15 @@ cx.raw = (...args: (Falsy | string)[]): string => args.filter(Boolean).join(' ')
 
 cx.dynamic = (name: AtomName | Falsy): string => {
   if (!name) return ''
+  // The text case is a test of its own, before the object's line, so a bundler that folds the map
+  // in as an object drops this branch and the decoder with it.
+  if (typeof __NAVE_KEEP_CLASSES__ === 'string') {
+    const decoded = decodedMap(__NAVE_KEEP_CLASSES__)
+    return Object.hasOwn(decoded, name) ? (decoded[name] ?? '') : ''
+  }
   // `typeof`, not a comparison: without the plugin the constant is not declared at all, and
   // reading an undeclared name throws where `typeof` does not.
   // eslint-disable-next-line unicorn/no-typeof-undefined
-  const kept = typeof __NAVE_KEEP_CLASSES__ === 'undefined' ? undefined : __NAVE_KEEP_CLASSES__
-  const map = kept === undefined ? atomClassMap : keptMap(kept)
+  const map = typeof __NAVE_KEEP_CLASSES__ === 'undefined' ? atomClassMap : __NAVE_KEEP_CLASSES__
   return Object.hasOwn(map, name) ? map[name] : ''
 }
