@@ -83,6 +83,15 @@ function alphaEnd(value: string, from: number): number {
 }
 
 /**
+ * The function a `(` at `at` opens: its name, or, for a bare bracketed group, the function
+ * it sits in, so a division inside `calc((l / 0.9))` still counts as math.
+ */
+function openedFunction(value: string, at: number, openFunctions: readonly string[]): string {
+  const name = /([\w-]*)\s*$/.exec(value.slice(0, at))?.[1]?.toLowerCase() ?? ''
+  return name === '' ? (openFunctions.at(-1) ?? '') : name
+}
+
+/**
  * Every alpha in a value: the text after each `/` that is not a division inside a math
  * function.
  */
@@ -91,7 +100,7 @@ function alphasOf(value: string): string[] {
   const openFunctions: string[] = []
   for (let at = 0; at < value.length; at++) {
     if (value[at] === '(') {
-      openFunctions.push(/([\w-]*)\s*$/.exec(value.slice(0, at))?.[1]?.toLowerCase() ?? '')
+      openFunctions.push(openedFunction(value, at, openFunctions))
     } else if (value[at] === ')') {
       openFunctions.pop()
     } else if (value[at] === '/' && !MATH_FUNCTION.test(openFunctions.at(-1) ?? '')) {
@@ -115,7 +124,10 @@ function isOpaqueAlpha(alpha: string): boolean {
  * case, or any alpha that is not provably opaque.
  */
 function isTranslucentValue(value: string): boolean {
-  return /transparent/i.test(value) || alphasOf(value).some((alpha) => !isOpaqueAlpha(alpha))
+  return (
+    /(?<![\w-])transparent(?![\w-])/i.test(value) ||
+    alphasOf(value).some((alpha) => !isOpaqueAlpha(alpha))
+  )
 }
 
 /**
@@ -378,6 +390,18 @@ describe('AC-base-ui-overlay-completion-34 covers: R10, R16 (the scrim is the on
     ['no alpha at all', 'oklch(0.5 0 0)'],
     ['an alpha of 1.0', 'oklch(from var(--nave-color-tint) 0.5 0 h / 1.0)'],
     ['a comment that mentions a smaller alpha', 'oklch(0.5 0 0 / 1) /* was / 0.3) */'],
+    [
+      'a custom property whose name contains transparent',
+      'oklch(from var(--nave-color-transparent-base) 0.5 0 h / 1)',
+    ],
+    [
+      'a division inside a bracketed group in calc()',
+      'oklch(from var(--nave-color-tint) calc((l / 0.9)) 0 h / 1)',
+    ],
+    [
+      'a division nested in calc()',
+      'oklch(from var(--nave-color-tint) calc(l * (1 / 0.9)) 0 h / 1)',
+    ],
     [
       'a division inside a channel and an alpha of 1',
       'oklch(from var(--nave-color-tint) calc(l / 0.9) 0 h / 1)',
