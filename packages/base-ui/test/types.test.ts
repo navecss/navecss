@@ -100,6 +100,9 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
         expect(errorsOf(result.output, fixture, references).toSorted(byName)).toEqual(
           EXPECTED_ERRORS[version].toSorted(byName),
         )
+        // A run with no expected error must exit 0, and any other run must not: an empty error list
+        // from a compiler that crashed is never a pass.
+        expect(result.code === 0).toBe(EXPECTED_ERRORS[version].length === 0)
       },
     )
 
