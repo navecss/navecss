@@ -1,0 +1,5 @@
+2 files import a module listed in cxModules through a specifier the build does not recognise, so the build did not read the cx() calls made through those specifiers.
+src/page.ts: imports './src/cx.ts' as '@/cx'.
+node_modules/acme-ui/dist/button.js: imports './src/cx.ts' as '../cx.js'. The file is in acme-ui, a dependency, so it is not yours to change.
+Add the specifier, as written, to cxModules in navePlugin(): cxModules: ['./src/cx.ts', '@/cx'].
+For acme-ui, list the atoms its calls can produce, from its documentation, under its name in navePlugin(): keepFor: { 'acme-ui': ['<atom>'] }. Once the package is listed, its files no longer fail the build here, and the atoms you list stand in for the calls the build did not read. The lasting fix is the package's: import the module by a specifier ending in the listed file's name.

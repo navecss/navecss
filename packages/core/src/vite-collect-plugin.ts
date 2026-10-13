@@ -190,6 +190,7 @@ async function failuresOf(
   const report = problems.length > 0 ? reportOf(context, problems) : undefined
   const importers = await declaredImporterError(ctx, context, {
     configured: withoutRemoved(problems, context.options.cxModules),
+    home: OPTIONS_HOME,
     report,
   })
   return { failures: [report, importers].filter((failure) => failure !== undefined), prepared }
