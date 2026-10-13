@@ -2,7 +2,8 @@
  * The edits that turn a call the plugin read into the value it returns: `cx()` into its class
  * string (a literal when every argument is constant, otherwise the arguments in their places,
  * joined as `cx.raw()` joins), `cx.raw()` into the join, and `cx.dynamic()` into a lookup in a
- * map of the atoms the plugin ships for it. The rewrite adds no import and no function.
+ * map of the atoms the plugin ships for it, written out at the call. The rewrite adds no import
+ * and no function.
  */
 import type { AstNode } from './vite-ast.ts'
 import type { ArgumentFrame } from './vite-rewrite-class.ts'
@@ -11,21 +12,9 @@ import type { Edit } from './vite-rewrite-edit.ts'
 import { nodeAt, nodesAt } from './vite-ast.ts'
 import { constantOf } from './vite-cx-args.ts'
 import { classEdits, classOf } from './vite-rewrite-class.ts'
+import { afterComment } from './vite-rewrite-edit.ts'
 
 const JOIN = '].filter(Boolean).join(" ")'
-
-/**
- * The offset just past the comment that starts at `at`, or `undefined` when none does.
- */
-function afterComment(code: string, at: number): number | undefined {
-  if (code.startsWith('/*', at)) {
-    const end = code.indexOf('*/', at + 2)
-    return end === -1 ? code.length : end + 2
-  }
-  if (!code.startsWith('//', at)) return undefined
-  const end = code.slice(at).search(/[\n\r\u{2028}\u{2029}]/u)
-  return end === -1 ? code.length : at + end + 1
-}
 
 /**
  * The offset just past the `(` that opens the arguments of `call`: what stands between the end of
@@ -47,17 +36,33 @@ function argumentsStart(code: string, call: AstNode): number | undefined {
 }
 
 /**
- * Whether the call is the first thing a statement says, where a line before it that was left
- * unfinished would otherwise take what the call becomes (`[`) for an index into it.
+ * The nodes that hold a list of statements, in which a statement follows another.
+ */
+const STATEMENT_LISTS: ReadonlySet<string> = new Set([
+  'BlockStatement',
+  'Program',
+  'StaticBlock',
+  'SwitchCase',
+])
+
+/**
+ * Whether the call is the first thing a statement of a statement list says, where a line before
+ * it that was left unfinished would otherwise take what the call becomes (`[` or `(`) for an
+ * index or a call on it. The statement may start with more than the call (`cx(...).length`,
+ * `cx(...) + x`, `cx(...), x`), so the walk up goes through every node that starts where the call
+ * does. A statement that is the body of an `if`, a loop or a label is no list: nothing before it
+ * can continue into it, and a `;` there would be its body, leaving the rest to run every time.
  */
 function isStatementStart(call: AstNode, frame: ArgumentFrame): boolean {
+  const { parentOf } = frame.analysis
   let node = call
-  let parent = frame.analysis.parentOf.get(node)
-  if (parent?.type === 'ChainExpression') {
+  for (let parent = parentOf.get(node); parent?.start === call.start; parent = parentOf.get(node)) {
     node = parent
-    parent = frame.analysis.parentOf.get(node)
   }
-  return parent?.type === 'ExpressionStatement' && parent.start === node.start
+  const holder = parentOf.get(node)
+  return (
+    node.type === 'ExpressionStatement' && holder !== undefined && STATEMENT_LISTS.has(holder.type)
+  )
 }
 
 /**
@@ -160,9 +165,11 @@ function trailingComma(code: string, argument: AstNode, call: AstNode): number |
 }
 
 /**
- * The edits for a `cx.dynamic(name)` call: a lookup of the one argument in the map named `map`,
- * which a name outside it, or a falsy one, leaves at `''`. A call with any other number of
- * arguments, or a spread, is left to the run-time function.
+ * The edits for a `cx.dynamic(...)` call: a lookup of its first argument in `map`, the text of a
+ * map of the atoms the plugin ships, which a name outside it, or a falsy one, leaves at `''`. The
+ * one plain argument is looked up where it stands. Any other arguments (none, several, a spread)
+ * are gathered in a list first, which evaluates each once, in order, and the first of the list is
+ * looked up: what the run-time function does with them.
  */
 export function dynamicCallEdits(
   call: AstNode,
@@ -171,14 +178,20 @@ export function dynamicCallEdits(
 ): Edit[] | undefined {
   const args = nodesAt(call, 'arguments')
   const open = argumentsStart(frame.code, call)
+  if (open === undefined) return undefined
   const [argument] = args
-  if (open === undefined || args.length !== 1 || argument!.type === 'SpreadElement') {
-    return undefined
+  const head = `${lead(call, frame)}(${map}[`
+  const end = { start: call.end - 1, end: call.end }
+  if (args.length !== 1 || argument!.type === 'SpreadElement') {
+    return [
+      { start: call.start, end: open, text: `${head}[` },
+      { ...end, text: '][0]] || "")' },
+    ]
   }
   const comma = trailingComma(frame.code, argument!, call)
   return [
-    { start: call.start, end: open, text: `${lead(call, frame)}(${map}[` },
+    { start: call.start, end: open, text: head },
     ...(comma === undefined ? [] : [{ start: comma, end: comma + 1, text: '' }]),
-    { start: call.end - 1, end: call.end, text: '] || "")' },
+    { ...end, text: '] || "")' },
   ]
 }

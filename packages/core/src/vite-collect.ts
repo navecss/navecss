@@ -253,7 +253,11 @@ export function readModule(code: string, program: AstNode, options: ReadOptions)
   }
   const reading: Reading = { code, options, result, seen: new Set(), rewriting: newRewriting() }
   const { analysis, bindings } = readUses(reading, program)
-  finishRewrite(reading, program, { bindings, source: CX_SOURCE })
+  finishRewrite(reading, program, {
+    bindings,
+    hasDirectEval: analysis.hasDirectEval,
+    source: CX_SOURCE,
+  })
   const listed =
     options.isDeclared === true
       ? declaredExportProblems({

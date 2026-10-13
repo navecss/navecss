@@ -1,6 +1,7 @@
 /**
  * A text edit, and the module text with a list of them applied, with the source map from the
- * result back to the text it came from.
+ * result back to the text it came from; and the scan past white space and comments that the edits
+ * around a statement need.
  */
 import { MappingsBuilder } from './directive/source-map.ts'
 import { positionIn } from './vite-source-map.ts'
@@ -20,6 +21,34 @@ export interface Rewritten {
    * The version 3 source map from the rewritten text to the module's own text, as JSON.
    */
   readonly map: string
+}
+
+/**
+ * The offset just past the comment that starts at `at`, or `undefined` when none does.
+ */
+export function afterComment(code: string, at: number): number | undefined {
+  if (code.startsWith('/*', at)) {
+    const end = code.indexOf('*/', at + 2)
+    return end === -1 ? code.length : end + 2
+  }
+  if (!code.startsWith('//', at)) return undefined
+  const end = code.slice(at).search(/[\n\r\u{2028}\u{2029}]/u)
+  return end === -1 ? code.length : at + end + 1
+}
+
+/**
+ * The offset of the first character from `from` on that is neither white space nor part of a
+ * comment.
+ */
+export function startOfNext(code: string, from: number): number {
+  let at = from
+  while (at < code.length) {
+    const comment = afterComment(code, at)
+    if (comment !== undefined) at = comment
+    else if (/\s/.test(code[at]!)) at += 1
+    else break
+  }
+  return at
 }
 
 /**

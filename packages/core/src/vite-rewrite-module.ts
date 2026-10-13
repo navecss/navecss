@@ -1,7 +1,7 @@
 /**
  * What the reading of one module hands the rewrite: which uses of the `cx` binding were turned
- * into edits, the map a `cx.dynamic()` call looks a name up in, and the import of `cx` that the
- * module no longer needs once every use of its binding is gone.
+ * into edits, and the import of `cx` that the module no longer needs once every use of its
+ * binding is gone.
  */
 import type { AstNode } from './vite-ast.ts'
 import type { ModuleReading, ReadOptions } from './vite-collect-types.ts'
@@ -12,6 +12,7 @@ import type { Binding, ScopeAnalysis } from './vite-scope.ts'
 
 import { nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
 import { cxCallEdits, dynamicCallEdits, rawCallEdits, rawCallOf } from './vite-rewrite-call.ts'
+import { startOfNext } from './vite-rewrite-edit.ts'
 
 /**
  * What the rewrite keeps while a module is read.
@@ -30,17 +31,13 @@ export interface Rewriting {
    * The bindings of `cx` that have a use left in the module.
    */
   readonly kept: Set<Binding>
-  /**
-   * The name the module gives its map of atoms for `cx.dynamic()`, once a call needs it.
-   */
-  mapName: string | undefined
 }
 
 /**
  * A fresh state for the reading of one module.
  */
 export function newRewriting(): Rewriting {
-  return { attempts: 0, done: new Set(), kept: new Set(), mapName: undefined }
+  return { attempts: 0, done: new Set(), kept: new Set() }
 }
 
 /**
@@ -104,51 +101,6 @@ export function rewriteRaw(
 }
 
 /**
- * The name for the map: one no identifier of the module spells.
- */
-function uniqueName(code: string): string {
-  let name = '__naveKeep'
-  for (let n = 1; code.includes(name); n += 1) name = `__naveKeep${n}`
-  return name
-}
-
-/**
- * Rewrites a `cx.dynamic(name)` call into a lookup in the module's map.
- */
-export function rewriteDynamic(
-  subject: RewriteSubject,
-  call: AstNode,
-  analysis: ScopeAnalysis,
-): void {
-  addEdits(subject, [call], () => {
-    const name = subject.rewriting.mapName ?? uniqueName(subject.code)
-    const edits = dynamicCallEdits(call, frameOf(subject, analysis), name)
-    if (edits) subject.rewriting.mapName = name
-    return edits
-  })
-}
-
-/**
- * Notes that the binding `cx` has a use the rewrite did not turn into edits.
- */
-export function noteUse(rewriting: Rewriting, cx: CxBinding | undefined, use?: CxUse): void {
-  if (cx && !(use && rewriting.done.has(use.node))) rewriting.kept.add(cx.binding)
-}
-
-/**
- * The offset of the first statement that is neither an import nor a directive, where a declaration
- * may go: after the imports, which are hoisted anyway, and before any code that could call.
- */
-function declarationStart(program: AstNode): number {
-  const statement = nodesAt(program, 'body').find(
-    (node) =>
-      node.type !== 'ImportDeclaration' &&
-      (node.type !== 'ExpressionStatement' || typeof node.directive !== 'string'),
-  )
-  return statement?.start ?? program.end
-}
-
-/**
  * The map of the atoms in `keep` to their classes, as an object that holds those keys and nothing
  * inherited, so a name such as `toString` is outside it as it is outside `keep`.
  */
@@ -160,14 +112,27 @@ function mapLiteral(keep: Readonly<Record<string, string>>): string {
 }
 
 /**
- * Declares the map the module's `cx.dynamic()` calls look names up in.
+ * Rewrites a `cx.dynamic(...)` call into a lookup in the map of atoms, written out at the call.
+ * The module declares no map: a declaration is not set until the module's body has run, and a
+ * module that a cycle of imports reaches early can call a function of this one before then.
  */
-function declareMap(subject: RewriteSubject, program: AstNode): void {
-  const { options, result, rewriting } = subject
-  if (rewriting.mapName === undefined || !options.rewrite) return
-  const at = declarationStart(program)
-  const text = `const ${rewriting.mapName}=${mapLiteral(options.rewrite.keep)};`
-  result.edits.push({ start: at, end: at, text })
+export function rewriteDynamic(
+  subject: RewriteSubject,
+  call: AstNode,
+  analysis: ScopeAnalysis,
+): void {
+  const keep = subject.options.rewrite?.keep
+  if (!keep) return
+  addEdits(subject, [call], () =>
+    dynamicCallEdits(call, frameOf(subject, analysis), mapLiteral(keep)),
+  )
+}
+
+/**
+ * Notes that the binding `cx` has a use the rewrite did not turn into edits.
+ */
+export function noteUse(rewriting: Rewriting, cx: CxBinding | undefined, use?: CxUse): void {
+  if (cx && !(use && rewriting.done.has(use.node))) rewriting.kept.add(cx.binding)
 }
 
 /**
@@ -181,19 +146,39 @@ function localNamesOf(declaration: AstNode): string[] {
 }
 
 /**
- * Removes each import of `source` whose bindings have no use left.
+ * The import of `cx` that the end of a rewrite may remove.
  */
-function removeUnusedImports(
-  subject: RewriteSubject,
-  program: AstNode,
-  bound: { readonly bindings: ReadonlyMap<Binding, CxBinding>; readonly source: string },
-): void {
+export interface CxImport {
+  readonly bindings: ReadonlyMap<Binding, CxBinding>
+  /**
+   * Whether the module calls `eval` directly, which reads any name it can see from text the
+   * reading cannot see.
+   */
+  readonly hasDirectEval: boolean
+  readonly source: string
+}
+
+/**
+ * The characters a statement can start with that also continue an expression written before it:
+ * `(` calls it, `[` indexes it, a backtick tags it, `+` and `-` add to it and `/` divides it.
+ */
+const CONTINUING = /[([`+\-/]/
+
+/**
+ * Removes each import of `source` whose bindings have no use left, and the line it stood on. A
+ * `;` takes its place where the statement after it would otherwise continue the one before: that
+ * one may have been left without a `;`, or be a directive (`'use client'` followed by a line that
+ * begins with `(` is a call of the string).
+ */
+function removeUnusedImports(subject: RewriteSubject, program: AstNode, bound: CxImport): void {
+  if (bound.hasDirectEval) return
   const unused = new Set(
     bound.bindings
       .keys()
       .filter((binding) => !subject.rewriting.kept.has(binding))
       .map((binding) => binding.name),
   )
+  const { code } = subject
   for (const declaration of nodesAt(program, 'body')) {
     const names =
       declaration.type === 'ImportDeclaration' &&
@@ -201,22 +186,18 @@ function removeUnusedImports(
         ? localNamesOf(declaration)
         : []
     if (names.length === 0 || names.some((name) => !unused.has(name))) continue
-    const line = /^\r?\n/.exec(subject.code.slice(declaration.end))
+    const line = /^\r?\n/.exec(code.slice(declaration.end))
     const end = declaration.end + (line?.[0].length ?? 0)
-    subject.result.edits.push({ start: declaration.start, end, text: '' })
+    const text = CONTINUING.test(code.charAt(startOfNext(code, end))) ? ';' : ''
+    subject.result.edits.push({ start: declaration.start, end, text })
   }
 }
 
 /**
- * Ends the rewrite of a module: declares the map its `cx.dynamic()` calls look names up in, and
- * removes the import of `cx` from `source` when no use of its bindings is left.
+ * Ends the rewrite of a module: removes the import of `cx` from `source` when no use of its
+ * bindings is left.
  */
-export function finishRewrite(
-  subject: RewriteSubject,
-  program: AstNode,
-  bound: { readonly bindings: ReadonlyMap<Binding, CxBinding>; readonly source: string },
-): void {
+export function finishRewrite(subject: RewriteSubject, program: AstNode, bound: CxImport): void {
   if (!subject.options.rewrite || subject.result.edits.length === 0) return
-  declareMap(subject, program)
   removeUnusedImports(subject, program, bound)
 }

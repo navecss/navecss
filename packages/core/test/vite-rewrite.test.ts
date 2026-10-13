@@ -1,4 +1,3 @@
-import { runInNewContext } from 'node:vm'
 /**
  * The rewrite on its own, over module text: what the build turns each `cx()`, `cx.raw()` and
  * `cx.dynamic()` call into (AC-used-atoms-21, -22 and -23). The build-level fixtures in
@@ -9,56 +8,13 @@ import { parseAst } from 'vite'
 import { describe, expect, it } from 'vitest'
 
 import type { AstNode } from '../src/vite-ast.ts'
+import type { SetupExposure } from '../src/vite-setup-member.ts'
 
 import { cx as runtimeCx } from '../src/cx.ts'
-import { CX_SOURCE, readModule, type ReadOptions } from '../src/vite-collect.ts'
-import { applyEdits } from '../src/vite-rewrite-edit.ts'
+import { CX_SOURCE, readModule } from '../src/vite-collect.ts'
+import { evaluate, IMPORT, importsOf, rewrite } from './helpers/vite-rewrite.ts'
 
 /* eslint-disable unicorn/no-null -- null is one of the falsy values cx() drops, so the equivalence has to be measured over it */
-const IMPORT = `import { cx } from '${CX_SOURCE}'\n`
-
-interface Rewritten {
-  readonly code: string
-  readonly map: string
-  readonly problems: number
-}
-
-/**
- * `code` rewritten the way the build rewrites it, `keep` being the map a `cx.dynamic()` call
- * looks a name up in.
- */
-function rewrite(
-  code: string,
-  keep: Readonly<Record<string, string>> = {},
-  options: Partial<ReadOptions> = {},
-): Rewritten {
-  const reading = readModule(code, parseAst(code) as unknown as AstNode, {
-    cxSources: new Set([CX_SOURCE]),
-    ownAtoms: new Set(),
-    isDependency: false,
-    rewrite: { keep },
-    ...options,
-  })
-  return { ...applyEdits(code, 'module.js', reading.edits), problems: reading.problems.length }
-}
-
-/**
- * What the module text `text` exports as its default, run with `cx` as the one binding it reads
- * (its import of `cx` taken away, since the rewrite may have taken it already).
- */
-function evaluate<T>(text: string, cx: unknown): T {
-  const body = text.replaceAll(/^import .*\n/gm, '').replace('export default', 'return')
-  return runInNewContext(`(() => {\n${body}\n})()`, { cx }) as T
-}
-
-/**
- * The imports a module text declares, as the specifiers it names.
- */
-function importsOf(code: string): string[] {
-  return (parseAst(code).body as unknown as AstNode[])
-    .filter((node) => node.type === 'ImportDeclaration')
-    .map((node) => (node.source as { value: string }).value)
-}
 
 /**
  * Every list of `length` values of `domain`.
@@ -112,6 +68,51 @@ function runsOf(
  */
 const reordered: Conditions = (a, b, c) =>
   [b() ? 'nave-grid' : c() && 'nave-block', a() && 'nave-flex'].filter(Boolean).join(' ')
+
+/**
+ * The same calls folded into nested ternaries that test the first condition to choose a branch
+ * and then read it again for its value.
+ */
+const refolded: Conditions = (a, b, c) => {
+  const second = (): unknown => (b() ? 'nave-grid' : c() && 'nave-block')
+  return (a() ? [a() && 'nave-flex', second()] : [second()]).filter(Boolean).join(' ')
+}
+
+/**
+ * What each form returns for a name, and what it logs.
+ */
+function runsOfForms(text: string, cx: unknown): { logs: string[]; values: string[] } {
+  const functions = evaluate<((t: unknown, f: () => unknown, xs: unknown[]) => string)[]>(text, cx)
+  const logs: string[] = []
+  const values: string[] = []
+  for (const name of ['grid', 'flex', '', undefined, 'toString']) {
+    for (const call of functions) {
+      const log: string[] = []
+      const f = (): string => {
+        log.push('f')
+        return 'grid'
+      }
+      values.push(call(name, f, [name, f]))
+      logs.push(log.join(','))
+    }
+  }
+  return { logs, values }
+}
+
+/**
+ * The text the edits insert, less the string literals, the original argument text in
+ * `originals` and the join, with the white space closed up.
+ */
+function bareInsertions(out: { edits: readonly { text: string }[] }, originals: string[]): string {
+  let text = out.edits
+    .map((edit) => edit.text)
+    .join('')
+    .replaceAll(/"(?:[^"\\]|\\.)*"/g, '')
+    .replaceAll('.filter(Boolean).join()', '')
+  const longestFirst = originals.toSorted((a, b) => b.length - a.length)
+  for (const original of longestFirst) text = text.replaceAll(original, '')
+  return text.replaceAll(/\s/g, '')
+}
 
 describe('AC-used-atoms-21 — a call becomes the string cx() returns', () => {
   it('turns an all-literal call into one string literal', () => {
@@ -279,6 +280,13 @@ describe('AC-used-atoms-21 — a call becomes the string cx() returns', () => {
     it('control: a fold that reads the conditions in another order reds the comparison', () => {
       expect(runsOf(reordered, DOMAIN).logs).not.toEqual(expected.logs)
     })
+
+    it('control: a fold into nested ternaries that reads the first condition again reds the comparison', () => {
+      const folded = runsOf(refolded, DOMAIN)
+
+      expect(folded.values).toEqual(expected.values)
+      expect(folded.logs).not.toEqual(expected.logs)
+    })
   })
 
   describe('the source map of a rewritten module', () => {
@@ -329,7 +337,7 @@ describe('AC-used-atoms-22 — cx.raw and cx.dynamic calls, and the import that 
     expect(c!()).toBe('')
   })
 
-  it('looks a cx.dynamic name up in one static map per module, equal to what keep and keepFor give', () => {
+  it('looks a cx.dynamic name up in a static map inlined at each call, equal to what keep and keepFor give', () => {
     const keep = { grid: 'nave-grid', block: 'nave-block' }
     const out = rewrite(
       `${IMPORT}export default [(t) => cx.dynamic(t), (t) => cx.dynamic(t) + cx.dynamic('grid')]\n`,
@@ -337,7 +345,7 @@ describe('AC-used-atoms-22 — cx.raw and cx.dynamic calls, and the import that 
     )
 
     expect(out.code).not.toMatch(/\bcx\b/)
-    expect(out.code.match(/__proto__/g)).toHaveLength(1)
+    expect(out.code.match(/__proto__/g)).toHaveLength(3)
     const [one, two] = evaluate<((name: unknown) => string)[]>(out.code, undefined)
     // What `cx.dynamic()` returns for a name when `keep` is the map it reads (R7).
     const expected = (name: unknown): string =>
@@ -361,16 +369,58 @@ describe('AC-used-atoms-22 — cx.raw and cx.dynamic calls, and the import that 
     expect(two!('block')).toBe('nave-blocknave-grid')
   })
 
-  it('leaves a cx.dynamic call without exactly one plain argument to the run-time function', () => {
+  it('declares no map at the top level of the module, so no import cycle can reach one before it is set', () => {
     const out = rewrite(
-      `${IMPORT}export const a = (t) => cx.dynamic(t, 1)\nexport const b = () => cx.dynamic()\nexport const c = (l) => cx.dynamic(...l)\n`,
+      `${IMPORT}export function a(t) { return cx.dynamic(t) }\nexport const b = (t) => cx.dynamic(t)\n`,
       { grid: 'nave-grid' },
     )
 
-    expect(out.code).toContain('cx.dynamic(t, 1)')
-    expect(out.code).toContain('cx.dynamic()')
-    expect(out.code).toContain('cx.dynamic(...l)')
-    expect(out.code).toContain(`import { cx } from '${CX_SOURCE}'`)
+    expect(out.code.match(/\{__proto__:null,"grid":"nave-grid"\}/g)).toHaveLength(2)
+    const body = parseAst(out.code).body as unknown as AstNode[]
+    expect(body.map((node) => node.type)).toEqual([
+      'ExportNamedDeclaration',
+      'ExportNamedDeclaration',
+    ])
+    expect(out.code).not.toMatch(/^const /m)
+  })
+
+  describe('a cx.dynamic call with other than one plain argument', () => {
+    const keep = { grid: 'nave-grid' }
+    const FORMS = [
+      'cx.dynamic()',
+      'cx.dynamic(t, f())',
+      'cx.dynamic(f(), t)',
+      'cx.dynamic(...xs)',
+      'cx.dynamic(t,)',
+      'cx.dynamic((t),)',
+      'cx.dynamic(t /* a, b */ , // z\n)',
+      'cx.dynamic(t, f(),)',
+      'cx.dynamic(/* none */)',
+    ]
+    const source = `${IMPORT}export default [\n${FORMS.map((call) => `(t, f, xs) => ${call}`).join(',\n')},\n]\n`
+    const atRunTime = {
+      dynamic: (name: unknown): string =>
+        name && Object.hasOwn(keep, name as string) ? keep[name as keyof typeof keep] : '',
+    }
+
+    it('gives what the run-time call gives and evaluates each argument once, and leaves no call to cx', () => {
+      const out = rewrite(source, keep)
+
+      expect(out.problems).toBe(0)
+      expect(out.code).not.toMatch(/\bcx\b/)
+      expect(runsOfForms(out.code, undefined)).toEqual(
+        runsOfForms(source, { dynamic: atRunTime.dynamic }),
+      )
+    })
+
+    it('looks up the first argument and evaluates the others for their effect, as the call does', () => {
+      const out = rewrite(`${IMPORT}export default (t, f) => cx.dynamic(t, f())\n`, keep)
+      let calls = 0
+      const run = evaluate<(t: unknown, f: () => unknown) => string>(out.code, undefined)
+
+      expect(run('grid', () => (calls += 1))).toBe('nave-grid')
+      expect(calls).toBe(1)
+    })
   })
 
   it.each([
@@ -447,19 +497,14 @@ describe('AC-used-atoms-21 and -22 — the shapes a build meets besides a plain 
     expect([f!(true), f!(false)]).toEqual(['nave-flex nave-grid', 'nave-grid'])
   })
 
-  it('keeps a directive first and declares the map after the imports, under a name nothing else spells', () => {
+  it('keeps a directive first, and touches no name the module spells itself', () => {
     const source = `'use strict'\nimport { ref } from 'vue'\n${IMPORT}const __naveKeep = ref\nexport const f = (t) => cx.dynamic(t)\n`
     const out = rewrite(source, { grid: 'nave-grid' })
 
     const body = parseAst(out.code).body as unknown as AstNode[]
     expect(body[0]).toMatchObject({ directive: 'use strict' })
-    expect(out.code).toContain('const __naveKeep1={__proto__:null,"grid":"nave-grid"};')
-    expect(out.code.indexOf('const __naveKeep1')).toBeGreaterThan(
-      out.code.indexOf("import { ref } from 'vue'"),
-    )
-    expect(out.code.indexOf('const __naveKeep1')).toBeLessThan(
-      out.code.indexOf('const __naveKeep ='),
-    )
+    expect(out.code).toContain('const __naveKeep = ref\n')
+    expect(out.code.match(/__naveKeep/g)).toHaveLength(1)
   })
 
   it('rewrites a call of a module listed in cxModules and keeps that import', () => {
@@ -483,6 +528,84 @@ describe('AC-used-atoms-21 and -22 — the shapes a build meets besides a plain 
     const f = evaluate<(didHit: () => boolean) => string>(out.code, undefined)
     expect(f(() => (hits += 1) > 0)).toBe('nave-flex nave-grid')
     expect(hits).toBe(1)
+  })
+
+  it('reads a line comment between the callee and the parenthesis', () => {
+    const out = rewrite(`${IMPORT}export default (on) => cx // (\n('flex', on && 'grid')\n`)
+
+    expect(out.problems).toBe(0)
+    expect(out.code).not.toMatch(/\bcx\b/)
+    const f = evaluate<(isOn: boolean) => string>(out.code, undefined)
+    expect([f(true), f(false)]).toEqual(['nave-flex nave-grid', 'nave-flex'])
+  })
+
+  it('rewrites an optional cx.raw call, an optional member and a spread argument to the run-time value', () => {
+    const calls = [
+      "cx.raw?.('a', on && 'b')",
+      "cx?.raw('a', on && 'b')",
+      'cx.raw(...xs)',
+      "cx.raw('a', ...xs, on && 'b')",
+    ]
+    const source = `${IMPORT}export default [\n${calls.map((call) => `(on, xs) => ${call}`).join(',\n')},\n]\n`
+    const out = rewrite(source)
+
+    expect(out.problems).toBe(0)
+    expect(out.code).not.toMatch(/\bcx\b/)
+    const original = evaluate<((on: unknown, xs: unknown[]) => string)[]>(source, runtimeCx)
+    const rewritten = evaluate<((on: unknown, xs: unknown[]) => string)[]>(out.code, undefined)
+    for (const on of [true, false, 0, 'x']) {
+      for (const xs of [[], ['m'], ['m', undefined, 'n'], [false]]) {
+        expect(rewritten.map((call) => call(on, xs))).toEqual(original.map((call) => call(on, xs)))
+      }
+    }
+  })
+
+  it('rewrites a cx call inside the argument of a cx.dynamic call', () => {
+    const keep = { grid: 'nave-grid' }
+    const out = rewrite(
+      `${IMPORT}export default (on, t) => cx.dynamic(cx(on && 'flex') && t)\n`,
+      keep,
+    )
+
+    expect(out.problems).toBe(0)
+    expect(out.code).not.toMatch(/\bcx\b/)
+    const f = evaluate<(isOn: boolean, name: string) => string>(out.code, undefined)
+    expect([f(true, 'grid'), f(false, 'grid'), f(true, 'flex')]).toEqual(['nave-grid', '', ''])
+  })
+
+  it('reads a name a compiled Vue template takes off $setup, as the atoms its values can be', () => {
+    const source = `${IMPORT}export default (_ctx, _cache, $props, $setup) => $setup.cx('block', $setup.v)\n`
+    const setup = new Map<string, SetupExposure>([
+      ['cx', { kind: 'cx' }],
+      ['v', { kind: 'values', values: ['flex', 'grid'] }],
+    ])
+    const out = rewrite(source, {}, { setup })
+
+    expect(out.problems).toBe(0)
+    expect(out.code).not.toContain('$setup.cx')
+    const render = evaluate<(...parts: unknown[]) => string>(out.code, undefined)
+    const original = evaluate<(...parts: unknown[]) => string>(source, undefined)
+    for (const v of ['flex', 'grid']) {
+      expect(render({}, {}, {}, { v })).toBe(original({}, {}, {}, { cx: runtimeCx, v }))
+    }
+    expect(render({}, {}, {}, { v: 'grid' })).toBe('nave-block nave-grid')
+  })
+
+  it('keeps the import while a direct eval call can read the binding', () => {
+    const out = rewrite(
+      `${IMPORT}export const a = cx('flex')\nexport const b = eval("cx('grid')")\n`,
+    )
+
+    expect(out.code).toContain(`import { cx } from '${CX_SOURCE}'`)
+    expect(out.code).toContain('export const a = "nave-flex"')
+  })
+
+  it('removes the import when only a local named eval is called', () => {
+    const out = rewrite(
+      `${IMPORT}export const a = cx('flex')\nexport const b = ((eval) => eval('x'))((x) => x)\n`,
+    )
+
+    expect(out.code).not.toContain(CX_SOURCE)
   })
 
   it('maps a module with CRLF line ends to where each token is written', async () => {
@@ -510,6 +633,41 @@ describe('AC-used-atoms-23 — the rewrite adds no import and no runtime', () =>
     expect(importsOf(out.code)).toEqual(importsOf(source).filter((name) => name !== CX_SOURCE))
     expect(out.code).not.toMatch(/\b(?:require|function|import\()/)
     expect(out.code.match(/=>/g)).toHaveLength(source.match(/=>/g)!.length)
+  })
+
+  describe('what the rewrite inserts, once string literals and the original text are taken away', () => {
+    it('is === ? : ( ) [ ] and , around a name argument bound to atoms', () => {
+      const out = rewrite(
+        `${IMPORT}export const f = (on, other) => {\n  const n = on ? 'flex' : 'grid'\n  return [cx(n), cx('block', n), cx(on && n, other ? 'flexCol' : '')]\n}\n`,
+      )
+
+      const bare = bareInsertions(out, ['n', 'on', 'other'])
+
+      expect(out.problems).toBe(0)
+      expect(out.code).toContain('n === "flex" ? "nave-flex" : n === "grid" ? "nave-grid" : n')
+      expect(bare).toMatch(/^(?:===|[?:()[\],])+$/)
+    })
+
+    it('control: an insertion of any other token kind is outside that set', () => {
+      expect(bareInsertions({ edits: [{ text: '(n.toUpperCase() + 1)' }] }, ['n'])).not.toMatch(
+        /^(?:===|[?:()[\],])+$/,
+      )
+    })
+
+    it('is the map literal, [ ] || "" and parentheses around a cx.dynamic call', () => {
+      const keep = { grid: 'nave-grid', block: 'nave-block' }
+      const out = rewrite(`${IMPORT}export const f = (t) => cx.dynamic(t)\n`, keep)
+      const literal = '{__proto__:null,"grid":"nave-grid","block":"nave-block"}'
+
+      const bare = out.edits
+        .map((edit) => edit.text)
+        .join('')
+        .replace(literal, '')
+        .replaceAll(/\s/g, '')
+
+      expect(out.code).toContain(`(${literal}[t] || "")`)
+      expect(bare).toMatch(/^(?:\|\||""|[()[\]])+$/)
+    })
   })
 
   it('keeps the input imports as they are when a use of the binding stays', () => {
