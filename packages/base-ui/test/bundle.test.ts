@@ -236,9 +236,10 @@ describe("AC-base-ui-bridge-39 and AC-base-ui-overlay-completion-43: an unused p
         'young-used-wrapped',
         `import { Combobox } from '@navecss/base-ui/combobox'\n${use}`,
       )
-      // The helper's bound and the part's own call, as for every other part. A part read by a key
-      // instead of by name keeps every part of the component, tens of thousands of bytes more.
-      expect(wrapped - direct).toBeLessThanOrEqual(HELPER_CEILING + SLACK)
+      // The helper's measured size and the part's own call, as for every other part. A part read by
+      // a key instead of by name keeps every part of the component, tens of thousands of bytes more.
+      const helper = await helperCost(DIST_DIR, 'young-used')
+      expect(wrapped - direct).toBeLessThanOrEqual(helper + SLACK)
     },
   )
 
