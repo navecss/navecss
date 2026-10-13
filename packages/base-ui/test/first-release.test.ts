@@ -71,3 +71,62 @@ describe('AC-base-ui-bridge-44: the first release', () => {
     })
   })
 })
+
+const TOKENS = '@navecss/tokens'
+
+const allChangesets = (): Record<string, string>[] =>
+  readdirSync(path.join(ROOT, '.changeset'))
+    .filter((file) => file.endsWith('.md') && file !== 'README.md')
+    .map((file) => releasesOf(readFileSync(path.join(ROOT, '.changeset', file), 'utf8')))
+
+/**
+The CHANGELOG section of the release after the first, if there is one.
+ */
+const secondReleaseSection = (): string | undefined => {
+  const sections = readFileSync(CHANGELOG, 'utf8').split(/^## /m).slice(1)
+  return sections.length > 1 ? sections.at(-2) : undefined
+}
+
+describe('AC-base-ui-overlay-completion-38: the release that adds the six components', () => {
+  const pending = pendingForThisPackage()
+
+  it.runIf(pending.length > 0)(
+    'has exactly one changeset naming @navecss/base-ui, and it names it alone with bump minor',
+    () => {
+      expect(pending).toEqual([{ [NAME]: 'minor' }])
+    },
+  )
+
+  it.runIf(pending.length === 0)(
+    'was released as 0.2.0 from exactly one minor changeset, once the changeset is spent',
+    () => {
+      const section = secondReleaseSection()
+      expect(
+        section,
+        'no changeset names @navecss/base-ui and no release follows 0.1.0',
+      ).toBeDefined()
+      expect(section?.split('\n', 1)[0]?.trim()).toBe('0.2.0')
+      expect(section).toContain('### Minor Changes')
+      expect(section).not.toContain('### Major Changes')
+      expect(section?.match(/^- [\da-f]{7,}: /gm) ?? []).toHaveLength(1)
+    },
+  )
+
+  it('has no changeset that names @navecss/base-ui together with @navecss/tokens', () => {
+    const together = allChangesets().filter(
+      (releases) => Object.hasOwn(releases, NAME) && Object.hasOwn(releases, TOKENS),
+    )
+    expect(together).toEqual([])
+  })
+
+  it('control: a changeset naming both packages, or the package with a patch or a major, is not the release', () => {
+    const both = releasesOf("---\n'@navecss/base-ui': minor\n'@navecss/tokens': minor\n---\n\nx")
+    expect(Object.hasOwn(both, NAME) && Object.hasOwn(both, TOKENS)).toBe(true)
+    for (const bump of ['patch', 'major']) {
+      expect(releasesOf(`---\n'@navecss/base-ui': ${bump}\n---\n\nx`)).not.toEqual({
+        [NAME]: 'minor',
+      })
+    }
+    expect(releasesOf("---\n'@navecss/tokens': minor\n---\n\nx")).not.toHaveProperty(NAME)
+  })
+})

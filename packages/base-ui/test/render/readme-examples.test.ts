@@ -53,7 +53,25 @@ const missingClasses = (body: string, root: ParentNode): string[] =>
       .map((name) => `${tag} -> ${name}`),
   )
 
-describe('AC-base-ui-bridge-48: the README examples render, and each styled part has its class', () => {
+/**
+A Menubar with one menu whose trigger takes the props written.
+ */
+const plantedMenubar = (props: string): string =>
+  [
+    "import { Menu } from '@navecss/base-ui/menu'",
+    "import { Menubar } from '@navecss/base-ui/menubar'",
+    'export default function Planted() {',
+    '  return (',
+    '    <Menubar>',
+    '      <Menu.Root>',
+    `        <Menu.Trigger${props}>File</Menu.Trigger>`,
+    '      </Menu.Root>',
+    '    </Menubar>',
+    '  )',
+    '}',
+  ].join('\n')
+
+describe('AC-base-ui-overlay-completion-42: the README examples render, and each styled part has its class (extends AC-base-ui-bridge-48)', () => {
   it('has TSX examples', () => {
     expect(components.length).toBeGreaterThan(0)
   })
@@ -83,5 +101,44 @@ describe('AC-base-ui-bridge-48: the README examples render, and each styled part
     const Example = await load('planted', body)
     await render(createElement(Example))
     expect(missingClasses(body, document.body)).toEqual(['Button -> nave-base-ui-button'])
+  })
+
+  it('control: a Menubar trigger renders a ghost Button with the variant and a plain one without', async () => {
+    const ghosts = async (name: string, props: string): Promise<number> => {
+      const Example = await load(name, plantedMenubar(props))
+      await render(createElement(Example))
+      expect(document.body.querySelectorAll('.nave-base-ui-button')).toHaveLength(1)
+      return document.body.querySelectorAll('.nave-base-ui-button[data-nave-variant="ghost"]')
+        .length
+    }
+    expect(await ghosts('planted-menubar-plain', '')).toBe(0)
+    expect(await ghosts('planted-menubar-ghost', ' variant="ghost"')).toBe(1)
+  })
+
+  it('renders the Menubar example with every trigger a ghost Button', async () => {
+    const menubars = components.filter(({ body }) => /<Menubar[\s>]/.test(body))
+    expect(menubars.length).toBeGreaterThan(0)
+    for (const [index, { body }] of menubars.entries()) {
+      const Example = await load(`menubar-${index}`, body)
+      await render(createElement(Example))
+      const written = body.matchAll(/<Menu\.Trigger\b/g).toArray().length
+      const ghosts = document.body.querySelectorAll(
+        '.nave-base-ui-button[data-nave-variant="ghost"]',
+      )
+      expect(written).toBeGreaterThan(0)
+      expect(ghosts).toHaveLength(written)
+      expect(document.body.querySelectorAll('.nave-base-ui-toolbar')).toHaveLength(1)
+    }
+  })
+
+  it('renders the Combobox example with its InputGroup carrying the input group class around the input', async () => {
+    const comboboxes = components.filter(({ body }) => /<Combobox\.Root[\s>]/.test(body))
+    expect(comboboxes).toHaveLength(1)
+    const Example = await load('combobox', comboboxes[0]?.body ?? '')
+    await render(createElement(Example))
+    const group = document.body.querySelector('.nave-base-ui-input-group')
+    expect(group).not.toBeNull()
+    expect(group?.querySelector('input.nave-base-ui-number-field-input')).not.toBeNull()
+    expect(document.body.querySelectorAll('.nave-base-ui-number-field-input')).toHaveLength(1)
   })
 })
