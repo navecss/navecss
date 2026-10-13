@@ -445,6 +445,17 @@ grandchild.stdout.once('data', () => {
 setInterval(() => {}, 1000)
 `
 
+/**
+ * Preloaded into the runner, so that the runner is measured but the fake steps it starts are not.
+ * Node reads `NODE_V8_COVERAGE` once, at start-up, and writes the coverage file when the process
+ * exits; removing it afterwards keeps the runner's own file and hands none of it on. The steps
+ * are stopped on purpose, so one that is stopped while it is writing its file leaves a truncated
+ * one, and the test runner then refuses the whole coverage report ("Unexpected end of JSON
+ * input") and exits 1 with every test passing. No line of the report comes from their files:
+ * they live in a temporary directory, outside `scripts/*.mjs`.
+ */
+const KEEP_COVERAGE_TO_THE_RUNNER = 'data:text/javascript,delete process.env.NODE_V8_COVERAGE'
+
 const isAlive = (pid) => {
   try {
     process.kill(pid, 0)
@@ -504,7 +515,7 @@ async function withRunningSlowStep({ closableOutput = false, trapTerm = false },
     const writer = openSync(fifo, 'w')
     stdio = ['ignore', writer, writer]
   }
-  const child = spawn(process.execPath, [runner], {
+  const child = spawn(process.execPath, [`--import=${KEEP_COVERAGE_TO_THE_RUNNER}`, runner], {
     detached: true,
     env: {
       ...env,
