@@ -41,6 +41,11 @@ export interface PartTypes {
   The type parameters of a class, as written.
    */
   readonly classParameters: readonly string[]
+  /**
+  Whether the part's export is also a type, as a `Trigger` that is both a component and the
+  interface of one. A class is a type of its own and is not counted here.
+   */
+  readonly isAlsoType: boolean
   readonly members: readonly MemberTypes[]
   readonly name: string
   /**
@@ -71,7 +76,7 @@ const NODE_MODULES = path.join(PACKAGE_DIR, 'node_modules')
 /**
 Where an installed Base UI keeps a subpath's declaration entry.
  */
-const declarationEntry = (version: BaseUiVersion, subpath: string): string =>
+export const declarationEntry = (version: BaseUiVersion, subpath: string): string =>
   version === 'current'
     ? path.join(NODE_MODULES, '@base-ui/react', subpath, 'index.d.mts')
     : path.join(NODE_MODULES, 'base-ui-react-floor/esm', subpath, 'index.d.ts')
@@ -155,6 +160,7 @@ const partTypes = (
     callTypeParameters: signature?.typeParameters?.map((parameter) => parameter.symbol.name) ?? [],
     classParameters:
       kind === 'class' ? typeParametersOf(symbol).map((parameter) => parameter.getText()) : [],
+    isAlsoType: kind !== 'class' && hasFlag(symbol, ts.SymbolFlags.Type),
     kind,
     members: names.map((member) => memberTypes(symbol, member)),
     name,

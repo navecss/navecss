@@ -20,6 +20,7 @@ export declare namespace Value {
   export type Props = Base.Value.Props
 }
 export const Trigger: typeof Base.Trigger = /*#__PURE__*/ (() => wrapPart(Base.Trigger, 'nave-base-ui-combobox-trigger'))()
+export type Trigger = typeof Trigger
 export declare namespace Trigger {
   export type State = Base.Trigger.State
   export type Props = Base.Trigger.Props
@@ -30,6 +31,7 @@ export declare namespace Input {
   export type Props = Base.Input.Props
 }
 export const InputGroup: typeof Base.InputGroup = /*#__PURE__*/ (() => wrapPart(Base.InputGroup, 'nave-base-ui-input-group'))()
+export type InputGroup = typeof InputGroup
 export declare namespace InputGroup {
   export type State = Base.InputGroup.State
   export type Props = Base.InputGroup.Props
@@ -90,6 +92,7 @@ export declare namespace GroupLabel {
   export type Props = Base.GroupLabel.Props
 }
 export const Item: typeof Base.Item = /*#__PURE__*/ (() => wrapPart(Base.Item, 'nave-base-ui-item nave-base-ui-item-highlight nave-base-ui-active-option'))()
+export type Item = typeof Item
 export declare namespace Item {
   export type State = Base.Item.State
   export type Props = Base.Item.Props

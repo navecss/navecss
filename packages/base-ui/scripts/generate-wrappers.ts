@@ -116,6 +116,15 @@ const namespaceOf = (
   return [`export declare namespace ${name} {`, ...members, '}']
 }
 
+/**
+ * The type a part is also exported as. Base UI exports some parts as both a value and a type (a
+ * trigger is a component and the interface of one), and a type position (`Dialog.Trigger` in an
+ * annotation) reads the type. It is the type of the exported value, so it follows the value
+ * wherever the value is wrapped, and it is valid at every Base UI version.
+ */
+const alsoTypeOf = (name: string, part: PartTypes): string[] =>
+  part.isAlsoType && part.young !== true ? [`export type ${name} = typeof ${name}`] : []
+
 const classOf = (name: string, reference: string, part: PartTypes): string[] =>
   part.kind === 'class'
     ? [
@@ -139,6 +148,7 @@ const partBlock = (
   const lines = (local: string): string[] => [
     valueOf(local, reference, styled, part),
     ...classOf(local, reference, part),
+    ...alsoTypeOf(local, part),
     ...namespaceOf(local, reference, part, styled),
   ]
   if (!GLOBAL_NAMES.has(name)) {

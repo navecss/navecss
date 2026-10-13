@@ -96,6 +96,7 @@ export declare namespace SubmenuRoot {
   export type ChangeEventDetails = Base.SubmenuRoot.ChangeEventDetails
 }
 export const Trigger: <Payload>(props: Omit<Base.Trigger.Props<Payload>, 'ref'> & RefAttributes<HTMLElement> & VariantProps) => ReactElement = /*#__PURE__*/ (() => wrapVariantPart(Base.Trigger, 'nave-base-ui-button'))()
+export type Trigger = typeof Trigger
 export declare namespace Trigger {
   export type Props<Payload = unknown> = Base.Trigger.Props<Payload> & VariantProps
   export type State = Base.Trigger.State

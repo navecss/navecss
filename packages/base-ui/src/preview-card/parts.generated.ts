@@ -18,6 +18,7 @@ export declare namespace Portal {
   export type Props = Base.Portal.Props
 }
 export const Trigger: typeof Base.Trigger = /*#__PURE__*/ (() => Base.Trigger)()
+export type Trigger = typeof Trigger
 export declare namespace Trigger {
   export type State = Base.Trigger.State
   export type Props<Payload = unknown> = Base.Trigger.Props<Payload>
