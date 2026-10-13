@@ -4,6 +4,7 @@
  * reaches them through the same built module. Reads `dist/`, so it needs a build.
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { builtinModules } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -11,35 +12,75 @@ import { describe, expect, it } from 'vitest'
 const ROOT = path.join(import.meta.dirname, '..')
 const DIST = path.join(ROOT, 'dist')
 
-const FORBIDDEN_IMPORT =
-  /^(?:node:|vite(?:\/|$)|rollup(?:\/|$)|rolldown(?:\/|$)|oxc-parser|oxc-resolver)/
+/**
+ * Every Node built-in under both spellings. The build strips the `node:` prefix (`dist/vite.js`
+ * imports from 'fs'), so the bare name has to count as much as the prefixed one. Subpaths such as
+ * `fs/promises` are listed by `builtinModules` themselves; a name that only exists with the
+ * prefix (`node:test`) stays prefixed.
+ */
+const NODE_BUILTINS = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]))
 
 /**
- * Every static import specifier of a built file: `from '...'` and a bare `import '...'`.
+ * Hosts and parsers the reader must not reach, with any subpath of them.
  */
-function specifiersOf(file: string): string[] {
-  const text = readFileSync(path.join(DIST, file), 'utf8')
+const FORBIDDEN_PACKAGE = /^(?:vite|rollup|rolldown|oxc-parser|oxc-resolver)(?:\/|$)/u
+
+function isForbidden(specifier: string): boolean {
+  return (
+    specifier.startsWith('node:') ||
+    NODE_BUILTINS.has(specifier) ||
+    FORBIDDEN_PACKAGE.test(specifier)
+  )
+}
+
+/**
+ * Every module specifier a built file names: `from '...'` (an import or an `export ... from`), a
+ * bare `import '...'` and a dynamic `import('...')`.
+ */
+function specifiersIn(text: string): string[] {
   return text
-    .matchAll(/(?:\bfrom|\bimport)\s*["']([^"']+)["']/g)
+    .matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/gu)
     .map((match) => match[1]!)
     .toArray()
 }
 
 /**
- * The built files `entry` reaches through relative imports, itself included.
+ * The file a relative specifier names. A declaration file spells a sibling declaration file with
+ * the `.js` ending TypeScript requires, so that import is followed to the `.d.ts`.
  */
-function moduleGraph(entry: string): Set<string> {
-  const seen = new Set<string>()
-  const queue = [entry]
+function resolveRelative(from: string, specifier: string): string {
+  const target = path.resolve(path.dirname(from), specifier)
+  return from.endsWith('.d.ts') && target.endsWith('.js') ? `${target.slice(0, -3)}.d.ts` : target
+}
+
+/**
+ * The built files `entry` (a name in `dist/`) reaches through relative imports, itself included,
+ * each with the specifiers it names. A relative specifier whose file is missing throws.
+ */
+function moduleGraph(entry: string): Map<string, string[]> {
+  const graph = new Map<string, string[]>()
+  const queue = [path.join(DIST, entry)]
   while (queue.length > 0) {
     const file = queue.pop()!
-    if (seen.has(file)) continue
-    seen.add(file)
-    for (const specifier of specifiersOf(file)) {
-      if (specifier.startsWith('./')) queue.push(specifier.slice(2))
+    if (graph.has(file)) continue
+    const specifiers = specifiersIn(readFileSync(file, 'utf8'))
+    graph.set(file, specifiers)
+    for (const specifier of specifiers) {
+      if (specifier.startsWith('.')) queue.push(resolveRelative(file, specifier))
     }
   }
-  return seen
+  return graph
+}
+
+/**
+ * The forbidden specifiers anywhere in a graph, each as `<file>: <specifier>`.
+ */
+function forbiddenIn(graph: Map<string, string[]>): string[] {
+  return [...graph].flatMap(([file, specifiers]) =>
+    specifiers
+      .filter((specifier) => isForbidden(specifier))
+      .map((specifier) => `${path.basename(file)}: ${specifier}`),
+  )
 }
 
 function manifest(): Record<string, unknown> {
@@ -72,18 +113,72 @@ describe('AC-nextjs-used-atoms-08 — the reader is one public, parser-free subp
     expect(collect.resolveUsedOptions).toBeTypeOf('function')
   })
 
-  it('reaches no vite, rollup, rolldown, oxc-parser, oxc-resolver or node: module', () => {
-    const graph = moduleGraph('collect.js')
-    expect(graph.size).toBeGreaterThan(1)
-    for (const file of graph) {
-      expect(specifiersOf(file).filter((specifier) => FORBIDDEN_IMPORT.test(specifier))).toEqual([])
-    }
+  it('exports exactly the reader, the report, its cause, the option validation and the helpers they share', async () => {
+    const collect = (await import(pathToFileURL(path.join(DIST, 'collect.js')).href)) as Record<
+      string,
+      unknown
+    >
+    expect(Object.keys(collect).toSorted((a, b) => Number(a > b) - Number(a < b))).toEqual([
+      'CX_SOURCE',
+      'REPORT_CAUSE',
+      'assertOptions',
+      'buildReport',
+      'keptAtoms',
+      'readModule',
+      'resolveUsedOptions',
+    ])
+  })
+
+  it('reaches no vite, rollup, rolldown, oxc-parser, oxc-resolver or Node built-in module, in code or in types', () => {
+    const code = moduleGraph('collect.js')
+    const types = moduleGraph('collect.d.ts')
+    expect(code.size).toBeGreaterThan(1)
+    expect(types.size).toBeGreaterThan(1)
+    expect(forbiddenIn(code)).toEqual([])
+    expect(forbiddenIn(types)).toEqual([])
+  })
+
+  it('control: the same scan finds the built-ins vite.js imports', () => {
+    const imported = forbiddenIn(moduleGraph('vite.js')).map((hit) => hit.split(': ', 2)[1])
+    for (const builtin of ['fs', 'path', 'crypto']) expect(imported).toContain(builtin)
+  })
+
+  it('control: the declaration walk follows a .js specifier in collect.d.ts to the shared .d.ts files', () => {
+    const files = moduleGraph('collect.d.ts')
+      .keys()
+      .map((file) => path.basename(file))
+      .toArray()
+    expect(files).toContain('atoms.d.ts')
+    expect(files.some((file) => /^vite-options-.+\.d\.ts$/u.test(file))).toBe(true)
+  })
+
+  it('control: the scan reads a static, bare, re-export and dynamic import, and judges each spelling', () => {
+    const text = [
+      "import { a } from 'node:fs'",
+      "import 'path'",
+      "export * from 'fs/promises'",
+      "export {\n  b,\n} from 'vite/client'",
+      "const c = await import('crypto')",
+      'import("rollup")',
+    ].join('\n')
+    const specifiers = specifiersIn(text)
+    expect(specifiers).toEqual([
+      'node:fs',
+      'path',
+      'fs/promises',
+      'vite/client',
+      'crypto',
+      'rollup',
+    ])
+    expect(specifiers.every((specifier) => isForbidden(specifier))).toBe(true)
+    expect(['./chunk.js', '@navecss/tokens/breakpoints'].some((s) => isForbidden(s))).toBe(false)
   })
 
   it('is reached by the Vite plugin through the one built module that holds the reader', () => {
-    const holders = [...moduleGraph('vite.js')].filter((file) =>
-      readFileSync(path.join(DIST, file), 'utf8').includes('function readModule('),
-    )
+    const holders = moduleGraph('vite.js')
+      .keys()
+      .filter((file) => readFileSync(file, 'utf8').includes('function readModule('))
+      .toArray()
     expect(holders).toHaveLength(1)
     expect(moduleGraph('collect.js').has(holders[0]!)).toBe(true)
   })
