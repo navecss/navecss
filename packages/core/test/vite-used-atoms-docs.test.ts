@@ -677,15 +677,16 @@ describe('AC-used-atoms-58 — the two changesets read as one release', () => {
     expect(now).toBe(versionOf(atMerge))
   })
 
-  it('once released, has both entries under the version core declares', () => {
+  it('once released, has both entries in the same release', () => {
     if (existsSync(USED_CHANGESET.path) || existsSync(PLUGIN_CHANGESET.path)) return
 
-    const now = versionOf(readFileSync(path.join(CORE_ROOT, 'package.json'), 'utf8'))
+    // The release that held them is found by its entry, not by the version core declares now,
+    // which every later release moves.
     const section = readFileSync(CHANGELOG_PATH, 'utf8')
       .split(/^## /m)
-      .find((candidate) => candidate.startsWith(`${now}\n`))
+      .find((candidate) => candidate.includes(USED_CHANGESET.entryStart))
 
-    expect(section).toContain(USED_CHANGESET.entryStart)
+    expect(section).toBeDefined()
     expect(section).toContain(PLUGIN_CHANGESET.entryStart)
   })
 })
