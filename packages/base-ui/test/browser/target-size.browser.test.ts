@@ -4,6 +4,10 @@
  * it has one) its invalid state. Checkbox, Radio and Switch reach it through the hit areas their roots
  * carry; the Slider's target is its Control, not its Thumb.
  *
+ * AC-base-ui-overlay-completion-47 extends it to the parts the overlay completion adds, by the
+ * same method: the Alert Dialog's trigger and close button, a ghost Menu trigger in a Menubar at
+ * both sizes, and the Combobox's trigger (in both layouts), clear button, chip and chip remove.
+ *
  * Measured in a real engine with the built tokens and stylesheet, through the built wrappers, by
  * `elementFromPoint` along each part's centre row and column (`support/hit-extent.ts`): jsdom has
  * no layout, and a size read from a style declaration says nothing about what a pointer hits.
@@ -14,13 +18,16 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { Accordion } from '../../dist/accordion/index.js'
+import { AlertDialog } from '../../dist/alert-dialog/index.js'
 import { Button } from '../../dist/button/index.js'
 import { Checkbox } from '../../dist/checkbox/index.js'
 import { Collapsible } from '../../dist/collapsible/index.js'
+import { Combobox } from '../../dist/combobox/index.js'
 import { Dialog } from '../../dist/dialog/index.js'
 import { Field } from '../../dist/field/index.js'
 import { Input } from '../../dist/input/index.js'
 import { Menu } from '../../dist/menu/index.js'
+import { Menubar } from '../../dist/menubar/index.js'
 import { NumberField } from '../../dist/number-field/index.js'
 import { Popover } from '../../dist/popover/index.js'
 import { RadioGroup } from '../../dist/radio-group/index.js'
@@ -338,6 +345,170 @@ const rows: readonly Row[] = [
   },
 ]
 
+interface Measure {
+  readonly height: number
+  readonly isInvalid: boolean
+  readonly width: number
+}
+
+/**
+Measures the part a scene renders, alone in a padded box so no neighbour covers part of its hit
+area: whether it is in an invalid state, and how far a pointer reaches it.
+ */
+const measureRow = async (
+  mountScene: (scene: ReactNode) => void,
+  scene: () => ReactNode,
+): Promise<Measure> => {
+  mountScene(h('div', { style: { padding: 48 } }, scene()))
+  const element = await settled(() => byTestId('subject'))
+  const isInvalid = element.matches('[aria-invalid="true"], :has(> [aria-invalid="true"])')
+  const { height, width } = hitExtent(element)
+  return { height, isInvalid, width }
+}
+
+const comboboxItems = (): ReactNode =>
+  h(
+    Combobox.Portal,
+    {},
+    h(
+      Combobox.Positioner,
+      {},
+      h(
+        Combobox.Popup,
+        {},
+        h(Combobox.List, {}, ((item: string) =>
+          h(Combobox.Item, { key: item, value: item }, item)) as never),
+      ),
+    ),
+  )
+
+const withFieldState = (state: Record<string, unknown>, children: ReactNode): ReactNode =>
+  h(Field.Root, state, children)
+
+const standardCombobox = (part: 'clear' | 'trigger', state: Record<string, unknown>): ReactNode =>
+  withFieldState(
+    state,
+    h(
+      Combobox.Root,
+      { defaultValue: 'apple', items: ['apple', 'banana'] },
+      h(
+        Combobox.InputGroup,
+        {},
+        h(Combobox.Input, { 'aria-label': 'Fruit' }),
+        h(Combobox.Clear, { 'aria-label': 'Clear', ...(part === 'clear' && subject) }, 'x'),
+        h(Combobox.Trigger, { 'aria-label': 'Open', ...(part === 'trigger' && subject) }, 'v'),
+      ),
+      comboboxItems(),
+    ),
+  )
+
+const chipCombobox = (part: 'chip' | 'remove'): ReactNode =>
+  h(
+    'div',
+    { style: { width: 360 } },
+    h(
+      Combobox.Root,
+      { defaultValue: ['apple'], items: ['apple', 'banana'], multiple: true },
+      h(
+        Combobox.Chips,
+        {},
+        h(Combobox.Value, {}, ((values: string[]) =>
+          values.map((value) =>
+            h(
+              Combobox.Chip,
+              { 'aria-label': value, key: value, ...(part === 'chip' && subject) },
+              value,
+              h(Combobox.ChipRemove, {
+                'aria-label': `Remove ${value}`,
+                ...(part === 'remove' && subject),
+              }),
+            ),
+          )) as never),
+        h(Combobox.Input, { 'aria-label': 'Fruit' }),
+      ),
+      comboboxItems(),
+    ),
+  )
+
+const ghostTrigger = (size: 'md' | 'sm'): ReactNode =>
+  h(
+    Menubar,
+    {},
+    h(
+      Menu.Root,
+      {},
+      h(
+        Menu.Trigger,
+        { ...subject, variant: 'ghost', ...(size === 'sm' && { size: 'sm' }) },
+        'File',
+      ),
+      h(Menu.Portal, {}, h(Menu.Positioner, {}, h(Menu.Popup, {}, h(Menu.Item, {}, 'New')))),
+    ),
+  )
+
+const overlayRows: readonly Row[] = [
+  {
+    part: 'AlertDialog.Trigger',
+    scene: () => h(AlertDialog.Root, {}, h(AlertDialog.Trigger, { ...subject }, 'Open')),
+    state: 'default',
+  },
+  {
+    part: 'AlertDialog.Close',
+    scene: () =>
+      h(
+        AlertDialog.Root,
+        { defaultOpen: true },
+        h(
+          AlertDialog.Portal,
+          {},
+          h(AlertDialog.Popup, {}, h(AlertDialog.Close, { ...subject }, 'Cancel')),
+        ),
+      ),
+    state: 'default',
+  },
+  {
+    part: 'Menu.Trigger in a Menubar (ghost, md)',
+    scene: () => ghostTrigger('md'),
+    state: 'default',
+  },
+  {
+    part: 'Menu.Trigger in a Menubar (ghost, sm)',
+    scene: () => ghostTrigger('sm'),
+    state: 'default',
+  },
+  {
+    part: 'Combobox.Trigger (standard layout)',
+    scene: () => standardCombobox('trigger', {}),
+    state: 'default',
+  },
+  {
+    part: 'Combobox.Trigger (standard layout)',
+    scene: () => standardCombobox('trigger', { invalid: true }),
+    state: 'invalid',
+  },
+  {
+    part: 'Combobox.Trigger (input-inside-popup layout)',
+    scene: () =>
+      withFieldState(
+        {},
+        h(Combobox.Root, { items: ['apple'] }, h(Combobox.Trigger, { ...subject }, 'Choose')),
+      ),
+    state: 'default',
+  },
+  {
+    part: 'Combobox.Trigger (input-inside-popup layout)',
+    scene: () =>
+      withFieldState(
+        { invalid: true },
+        h(Combobox.Root, { items: ['apple'] }, h(Combobox.Trigger, { ...subject }, 'Choose')),
+      ),
+    state: 'invalid',
+  },
+  { part: 'Combobox.Clear', scene: () => standardCombobox('clear', {}), state: 'default' },
+  { part: 'Combobox.Chip', scene: () => chipCombobox('chip'), state: 'default' },
+  { part: 'Combobox.ChipRemove', scene: () => chipCombobox('remove'), state: 'default' },
+]
+
 describe('AC-base-ui-bridge-35: every interactive styled part is at least 24 by 24 CSS px', () => {
   let page: Page | undefined
   let removeSheets: (() => void) | undefined
@@ -374,12 +545,37 @@ describe('AC-base-ui-bridge-35: every interactive styled part is at least 24 by 
   it.each(rows)(
     'AC-base-ui-bridge-35: $part ($state) is hit across at least 24 by 24',
     async ({ scene, state }) => {
-      // A part is measured alone, in a padded box, so no neighbour covers part of its hit area.
-      page = mount(h('div', { style: { padding: 48 } }, scene()))
-      const element = await settled(() => byTestId('subject'))
-      const isInvalid = element.matches('[aria-invalid="true"], :has(> [aria-invalid="true"])')
+      const { height, isInvalid, width } = await measureRow((mounted) => {
+        page = mount(mounted)
+      }, scene)
       expect(isInvalid, 'the part is in the state the row names').toBe(state === 'invalid')
-      const { height, width } = hitExtent(element)
+      expect(width, 'hittable width').toBeGreaterThanOrEqual(MINIMUM - TOLERANCE)
+      expect(height, 'hittable height').toBeGreaterThanOrEqual(MINIMUM - TOLERANCE)
+    },
+  )
+})
+
+describe('AC-base-ui-overlay-completion-47: the interactive parts the overlay completion adds are at least 24 by 24 CSS px', () => {
+  let page: Page | undefined
+  let removeSheets: (() => void) | undefined
+
+  beforeEach(() => {
+    removeSheets = useSheets(tokens, stylesheet)
+  })
+
+  afterEach(() => {
+    page?.dispose()
+    removeSheets?.()
+    page = undefined
+  })
+
+  it.each(overlayRows)(
+    'AC-base-ui-overlay-completion-47: $part ($state) is hit across at least 24 by 24',
+    async ({ scene, state }) => {
+      const { height, isInvalid, width } = await measureRow((mounted) => {
+        page = mount(mounted)
+      }, scene)
+      expect(isInvalid, 'the part is in the state the row names').toBe(state === 'invalid')
       expect(width, 'hittable width').toBeGreaterThanOrEqual(MINIMUM - TOLERANCE)
       expect(height, 'hittable height').toBeGreaterThanOrEqual(MINIMUM - TOLERANCE)
     },
