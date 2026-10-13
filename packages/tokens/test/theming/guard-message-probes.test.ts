@@ -63,6 +63,24 @@ describe('AC-theming-42 covers: R36 — assertNoticeIsEmitted in the probe regis
   })
 })
 
+describe('the translucent-slot guard is in the probe registry', () => {
+  const label = 'the translucent-slot-in-a-declared-pair output'
+
+  it('registers the guard, and its fixture reaches the translucent-slot refusal', () => {
+    const probe = ACCESSIBILITY_GUARD_MESSAGE_PROBES.find((p) => p.label === label)
+    expect(probe, `${label} is not in ACCESSIBILITY_GUARD_MESSAGE_PROBES`).toBeDefined()
+    expect(probe?.capture()).toContain(
+      'the translucent slot "backdrop.modal" is declared in the pair',
+    )
+  })
+
+  it('carries no conformance framing of its own', () => {
+    const probe = ACCESSIBILITY_GUARD_MESSAGE_PROBES.find((p) => p.label === label)
+    expect(probe, `${label} is not in ACCESSIBILITY_GUARD_MESSAGE_PROBES`).toBeDefined()
+    expect(findConformanceFraming(probe?.capture() ?? '')).toBeUndefined()
+  })
+})
+
 describe('AC-theming-42 covers: R36 — the structural exclusion is measured, not asserted', () => {
   it('the composed-comment-line refusal is the only recorded exclusion', () => {
     expect(STRUCTURALLY_UNPROBEABLE_GUARD_MESSAGES.map((m) => m.label)).toEqual([

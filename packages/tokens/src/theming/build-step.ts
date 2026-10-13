@@ -28,6 +28,7 @@ import {
   assertNoFocusableAdjacentToActionFill,
   assertNoForbiddenAdjacency,
   assertNoOrphanedSemanticSlot,
+  assertNoTranslucentSlotInDeclaredPair,
   assertShippedSurfaceCountProvenance,
   type OrphanCheckResult,
 } from './adjacency.ts'
@@ -96,6 +97,7 @@ export interface ThemingBuildOptions {
 function runSourceGuards(tokensSourcePaths: readonly string[]): OrphanCheckResult {
   assertNoForbiddenAdjacency()
   assertNoFocusableAdjacentToActionFill()
+  assertNoTranslucentSlotInDeclaredPair()
   assertCoverageFloor()
   // A slot resolving through the OPEN channel (neither declared nor a
   // settled exclusion) does not fail this build, and does not pass silently either — its

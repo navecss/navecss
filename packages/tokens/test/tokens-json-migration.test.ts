@@ -128,6 +128,19 @@ function withoutBorderWidthMark(text: string, ...fragments: string[]): string {
 }
 
 /**
+ * The two overlay colour slots were added AFTER this migration too, for reasons that have
+ * nothing to do with it: `action.highlight`, the fill under a highlighted control, and
+ * `backdrop.modal`, the scrim behind a modal panel. Each adds one custom property to the
+ * semantic colour layer of `tokens.css`. Both lines are lifted out after asserting each occurs
+ * EXACTLY ONCE, before the alpha-pinning fold-back below (the highlight line carries the
+ * pinned `/ 1`, and the scrim's is a deliberate `/ 0.3` and `/ 0.6`).
+ */
+const OVERLAY_SLOT_CSS_DECLARATIONS = [
+  '    --nave-color-action-highlight: light-dark(oklch(from var(--nave-color-tint) 0.965 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.37 0.0067 h / 1));\n',
+  '    --nave-color-backdrop-modal: light-dark(oklch(from var(--nave-color-tint) 0.12 0.0067 h / 0.3), oklch(from var(--nave-color-tint) 0.12 0.0067 h / 0.6));\n',
+]
+
+/**
  * The theming block's header comment names the package whose README it points at, AFTER this
  * migration too, for reasons that have nothing to do with it: the line also ships inside
  * `@navecss/core`'s own stylesheet, where "this package's README" meant a README without a
@@ -147,7 +160,9 @@ function withoutNamedThemingPointer(text: string): string {
  * rendering, so the exhaustive delta check below stays about the migration alone.
  */
 function builtTokensCssBeforeLaterAdditions(): string {
-  const withAdditions = withoutNamedThemingPointer(built('tokens.css'))
+  const withAdditions = withoutNamedThemingPointer(
+    withoutBorderWidthMark(built('tokens.css'), ...OVERLAY_SLOT_CSS_DECLARATIONS),
+  )
   return withoutBorderWidthMark(
     withoutZIndexSyntaxNarrowing(withoutAlphaPinningSuffix(withAdditions)),
     MARK_CSS_PROPERTY,
@@ -229,14 +244,17 @@ function adjacencyTriples(block: Record<string, AdjacencyPair[] | string>): stri
  * The pairs the Base UI package's parts paint, declared AFTER this migration: the surfaces a
  * popup, a raised panel and a form control sit on were not part of the set the migration moved.
  * Lifted out of the migrated set before it is compared with the frozen one, after asserting
- * each is present, so the comparison stays about the migration alone.
+ * each is present, so the comparison stays about the migration alone. The two `action.highlight` triples
+ * are the text pairs the highlight fill is painted under.
  */
 const POST_MIGRATION_ADJACENCY_TRIPLES = new Set([
   'action.primary|surface.overlay|non-text',
   'action.primary|surface.raised|non-text',
   'content.link|surface.overlay|text',
   'content.link|surface.raised|text',
+  'content.primary|action.highlight|text',
   'content.primary|surface.overlay|text',
+  'content.secondary|action.highlight|text',
   'content.secondary|surface.overlay|text',
   'content.secondary|surface.raised|text',
   'content.tertiary|surface.overlay|text',
