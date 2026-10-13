@@ -189,7 +189,16 @@ export function neutralRcsFormula(
       `The alpha for neutral step ${step} must be a finite number from 0 to 1, got ${alpha}.`,
     )
   }
-  return `oklch(from var(--nave-color-tint) ${roundTo(found.l, 4)} ${roundTo(found.c, 4)} h / ${roundTo(alpha, 4)})`
+  return `oklch(from var(--nave-color-tint) ${roundTo(found.l, 4)} ${roundTo(found.c, 4)} h / ${roundedAlpha(alpha)})`
+}
+
+/**
+ * An `alpha` as the build writes it into the emitted colour: rounded to four places, like the
+ * other components. Whatever judges whether a slot is translucent reads this, not the raw
+ * value, so it judges the byte that ships.
+ */
+export function roundedAlpha(alpha: number): number {
+  return roundTo(alpha, 4)
 }
 
 /**

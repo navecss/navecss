@@ -8,6 +8,7 @@
  */
 
 import { type Adjacency, ADJACENCY } from './adjacency-source.ts'
+import { roundedAlpha } from './neutral.ts'
 import {
   ACHROMATIC_MAPPING,
   CHROMATIC_MAPPING,
@@ -346,7 +347,7 @@ function isTranslucentWhenResolved(
 ): boolean {
   let current = ref
   for (let depth = 0; depth < MAX_ALIAS_DEPTH; depth++) {
-    if (!('alias' in current)) return current.alpha !== undefined && current.alpha < 1
+    if (!('alias' in current)) return current.alpha !== undefined && roundedAlpha(current.alpha) < 1
     current = lookup(current.alias)[scheme]
   }
   throw new Error('Alias chain too deep — likely a cycle in the semantic mapping.')

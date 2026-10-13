@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Adjacency } from '../../src/theming/adjacency-source.ts'
 
@@ -61,24 +61,72 @@ const lineAfter = (anchor: string): string | undefined =>
   cssLines[cssLines.findIndex((line) => line.startsWith(`    ${anchor}:`)) + 1]
 
 /**
- * Whether a declaration's value carries an alpha below 1: a `/ <number>` or `/ <percent>`
- * component under 1 (or 100%), or the keyword `transparent`.
+ * The math functions whose `/` is a division inside a channel, not the alpha separator.
  */
-function hasAlphaBelowOne(value: string): boolean {
-  if (/\btransparent\b/.test(value)) return true
-  return value
-    .matchAll(/\/\s*([+-]?(?:\d+\.?\d*|\.\d+))(%?)/g)
-    .some(([, amount, percent]) => Number(amount) / (percent ? 100 : 1) < 1)
+const MATH_FUNCTION =
+  /^(?:abs|a?(?:cos|sin|tan)|atan2|calc|clamp|exp|hypot|log|max|min|mod|pow|rem|round|sign|sqrt)$/
+
+/**
+ * Where the alpha that starts at `from` ends: its colour function's closing parenthesis, or
+ * the end of the value.
+ */
+function alphaEnd(value: string, from: number): number {
+  let depth = 0
+  for (let at = from; at < value.length; at++) {
+    if (value[at] === '(') depth++
+    else if (value[at] === ')') {
+      if (depth === 0) return at
+      depth--
+    }
+  }
+  return value.length
+}
+
+/**
+ * Every alpha in a value: the text after each `/` that is not a division inside a math
+ * function.
+ */
+function alphasOf(value: string): string[] {
+  const alphas: string[] = []
+  const openFunctions: string[] = []
+  for (let at = 0; at < value.length; at++) {
+    if (value[at] === '(') {
+      openFunctions.push(/([\w-]*)\s*$/.exec(value.slice(0, at))?.[1]?.toLowerCase() ?? '')
+    } else if (value[at] === ')') {
+      openFunctions.pop()
+    } else if (value[at] === '/' && !MATH_FUNCTION.test(openFunctions.at(-1) ?? '')) {
+      alphas.push(value.slice(at + 1, alphaEnd(value, at + 1)).trim())
+    }
+  }
+  return alphas
+}
+
+/**
+ * Whether an alpha is a plain number of at least 1, or a percentage of at least 100%. Anything
+ * else (a smaller number, `none`, `calc()`, `var()`) counts as not opaque.
+ */
+function isOpaqueAlpha(alpha: string): boolean {
+  const match = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(%?)$/i.exec(alpha)
+  return match !== null && Number(match[1]) / (match[2] ? 100 : 1) >= 1
+}
+
+/**
+ * Whether a declaration's value is, or may be, translucent: the keyword `transparent` in any
+ * case, or any alpha that is not provably opaque.
+ */
+function isTranslucentValue(value: string): boolean {
+  return /transparent/i.test(value) || alphasOf(value).some((alpha) => !isOpaqueAlpha(alpha))
 }
 
 /**
  * The names of the `--nave-color-*` declarations in `css`, at any indent, whose value is
- * translucent.
+ * translucent. Comments are ignored; a value runs to its `;` or to the closing `}`.
  */
 function translucentColorProperties(css: string): string[] {
   return css
-    .matchAll(/(--nave-color-[\w-]+)\s*:([^;]*);/g)
-    .filter((match) => hasAlphaBelowOne(match[2] ?? ''))
+    .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+    .matchAll(/(--nave-color-[\w-]+)\s*:([^;}]*)/g)
+    .filter((match) => isTranslucentValue(match[2] ?? ''))
     .map((match) => match[1] ?? '')
     .toArray()
 }
@@ -88,6 +136,14 @@ const declaredAgainstContent = (slot: string): Adjacency[] => [
 ]
 
 const isSurface = (slot: string): boolean => slot.startsWith('surface.')
+
+const surfaceOverlayWithAlpha = (alpha: number): Record<string, SlotMapping> => ({
+  ...CHROMATIC_MAPPING,
+  'surface.overlay': {
+    light: { scale: 'neutral', step: 0, alpha },
+    dark: { scale: 'neutral', step: 800 },
+  },
+})
 
 describe('AC-base-ui-overlay-completion-35 covers: R16 (the tokens release)', () => {
   it('maps action.highlight to neutral 100 light and neutral 700 dark, directly after action.secondary', () => {
@@ -184,6 +240,47 @@ describe('AC-base-ui-overlay-completion-35 covers: R16 (the tokens release)', ()
     expect(() => assertNoTranslucentSlotInDeclaredPair(ADJACENCY)).not.toThrow()
   })
 
+  describe('the build refuses a translucent slot that is declared in pairs and not excluded', () => {
+    afterEach(() => {
+      vi.doUnmock('../../src/theming/semantics.ts')
+    })
+
+    it('a copy giving surface.overlay an alpha of 0.9 fails the build naming surface.overlay', async () => {
+      vi.resetModules()
+      vi.doMock('../../src/theming/semantics.ts', async () => {
+        const actual: Record<string, unknown> = await vi.importActual(
+          '../../src/theming/semantics.ts',
+        )
+        return {
+          ...actual,
+          CHROMATIC_MAPPING: {
+            ...CHROMATIC_MAPPING,
+            'surface.overlay': {
+              light: { scale: 'neutral', step: 0, alpha: 0.9 },
+              dark: CHROMATIC_MAPPING['surface.overlay']?.dark,
+            },
+          },
+        }
+      })
+      const step = await import('../../src/theming/build-step.ts')
+      expect(() => step.composeThemingOutputs()).toThrow(/translucent slot "surface\.overlay"/)
+    })
+  })
+
+  describe('the guard judges the alpha the build writes, which is rounded to four places', () => {
+    it('does not refuse an alpha that is written as 1', () => {
+      expect(() =>
+        assertNoTranslucentSlotInDeclaredPair(ADJACENCY, surfaceOverlayWithAlpha(0.99996)),
+      ).not.toThrow()
+    })
+
+    it('refuses an alpha that is still below 1 once rounded', () => {
+      expect(() =>
+        assertNoTranslucentSlotInDeclaredPair(ADJACENCY, surfaceOverlayWithAlpha(0.9999)),
+      ).toThrow(/translucent slot "surface\.overlay"/)
+    })
+  })
+
   describe('the guard judges the step the build emits, not the entry as written', () => {
     it('refuses a new slot that aliases the scrim, naming it', () => {
       const aliased: Record<string, SlotMapping> = {
@@ -248,6 +345,13 @@ describe('AC-base-ui-overlay-completion-34 covers: R10, R16 (the scrim is the on
     ['a percentage below 100', 'oklch(from var(--nave-color-tint) 0.5 0 h / 30%)'],
     ['an alpha written without a leading zero', 'oklch(from var(--nave-color-tint) 0.5 0 h / .5)'],
     ['the keyword transparent', 'transparent'],
+    ['the keyword transparent in capitals', 'TRANSPARENT'],
+    ['an alpha in scientific notation', 'oklch(from var(--nave-color-tint) 0.5 0 h / 1e-1)'],
+    ['an alpha of none', 'oklch(from var(--nave-color-tint) 0.5 0 h / none)'],
+    [
+      'an alpha that is a calc() expression',
+      'oklch(from var(--nave-color-tint) 0.5 0 h / calc(0.5))',
+    ],
     [
       'an alpha of 0.9 in the dark value only',
       'light-dark(oklch(0.5 0 0 / 1), oklch(0.5 0 0 / 0.9))',
@@ -256,6 +360,11 @@ describe('AC-base-ui-overlay-completion-34 covers: R10, R16 (the scrim is the on
     expect(translucentColorProperties(`:root {\n    --nave-color-veil: ${value};\n  }`)).toEqual([
       '--nave-color-veil',
     ])
+  })
+
+  it('reports a last declaration that has no semicolon before the closing brace', () => {
+    const unterminated = ':root {\n    --nave-color-veil: oklch(0.5 0 0 / 0.5)\n}'
+    expect(translucentColorProperties(unterminated)).toEqual(['--nave-color-veil'])
   })
 
   it('reports a declaration nested six spaces deep', () => {
@@ -267,6 +376,12 @@ describe('AC-base-ui-overlay-completion-34 covers: R10, R16 (the scrim is the on
     ['an alpha of 1', 'oklch(from var(--nave-color-tint) 0.5 0 h / 1)'],
     ['an alpha of 100%', 'oklch(from var(--nave-color-tint) 0.5 0 h / 100%)'],
     ['no alpha at all', 'oklch(0.5 0 0)'],
+    ['an alpha of 1.0', 'oklch(from var(--nave-color-tint) 0.5 0 h / 1.0)'],
+    ['a comment that mentions a smaller alpha', 'oklch(0.5 0 0 / 1) /* was / 0.3) */'],
+    [
+      'a division inside a channel and an alpha of 1',
+      'oklch(from var(--nave-color-tint) calc(l / 0.9) 0 h / 1)',
+    ],
   ])('does not report a declaration with %s', (_label, value) => {
     expect(translucentColorProperties(`:root {\n    --nave-color-solid: ${value};\n  }`)).toEqual(
       [],

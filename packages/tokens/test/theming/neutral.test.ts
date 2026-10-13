@@ -120,6 +120,10 @@ describe('neutralRcsFormula: the alpha it writes', () => {
     expect(alphaOf(0.6)).toMatch(/ h \/ 0\.6\)$/)
   })
 
+  it('writes an alpha that rounds to 1 as 1', () => {
+    expect(alphaOf(0.99996)).toMatch(/ h \/ 1\)$/)
+  })
+
   it('writes an opaque step with an alpha of 1 when none is given', () => {
     expect(neutralRcsFormula(950, literals)).toMatch(/ h \/ 1\)$/)
   })
