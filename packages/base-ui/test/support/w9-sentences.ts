@@ -58,9 +58,9 @@ export const SENTENCE_5_MENUBAR_BARE_POPUP: Literal = {
   text: "In a Menubar, moving to the next menu with the arrow keys puts focus on that menu's panel before any item, so the browser's ring around the panel shows where you are until the next arrow key reaches an item.",
 }
 export const SENTENCE_6_COMBOBOX_FIELD: Literal = {
-  bytes: 350,
-  prefix: 'a624581cd96f16c0',
-  text: "Nave draws the Combobox and Autocomplete field's border on `InputGroup`, not on the input. Base UI added `InputGroup` in 1.3.0: on an earlier version, or wherever you place the input outside an `InputGroup` (inside the popup, for example), wrap it in an element with a visible border of your own, or the field has no visible edge until it is focused.",
+  bytes: 249,
+  prefix: '4793b4c589c161f6',
+  text: "Nave draws the Combobox and Autocomplete field's border on `InputGroup`, not on the input. If you place the input outside an `InputGroup`, wrap it in an element with a visible border of your own, or the field has no visible edge until it is focused.",
 }
 export const SENTENCE_7_DIALOG_BACKDROP: Literal = {
   bytes: 267,
@@ -154,6 +154,15 @@ export const EARLIER_REDUCED_MOTION: Literal = {
   bytes: 275,
   prefix: 'bdfef4e7a2de79a6',
   text: "When the reader's system asks for reduced motion, Nave turns off its own transitions (popups fading in and out, the tooltip's fade, the backdrop's fade and the tab indicator's slide), even if you have changed the motion tokens. Motion you add yourself is yours to switch off.",
+}
+/**
+The Combobox field sentence that sentence 6 replaces: it advised on a Base UI older than the
+package supports and named the popup as a place to put the input.
+ */
+export const EARLIER_COMBOBOX_FIELD: Literal = {
+  bytes: 350,
+  prefix: 'a624581cd96f16c0',
+  text: "Nave draws the Combobox and Autocomplete field's border on `InputGroup`, not on the input. Base UI added `InputGroup` in 1.3.0: on an earlier version, or wherever you place the input outside an `InputGroup` (inside the popup, for example), wrap it in an element with a visible border of your own, or the field has no visible edge until it is focused.",
 }
 /**
 An earlier template for sentence 4, and its eight forms, which sentence 4 replaces.

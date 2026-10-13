@@ -6,6 +6,7 @@ import type { Draft } from './draft-states.ts'
 import type { Literal, NamedLiteral, SignatureState } from './w9-sentences.ts'
 
 import {
+  EARLIER_COMBOBOX_FIELD,
   EARLIER_FORMS,
   EARLIER_REDUCED_MOTION,
   EARLIER_TEMPLATE,
@@ -98,6 +99,7 @@ The superseded texts: never in the combined package's README, in any state.
 export const SUPERSEDED: readonly NamedLiteral[] = [
   named("the parent's reduced-motion sentence", PARENT_REDUCED_MOTION),
   named('the earlier reduced-motion text', EARLIER_REDUCED_MOTION),
+  named('the earlier Combobox field sentence', EARLIER_COMBOBOX_FIELD),
   ...Object.entries(EARLIER_FORMS).map(([code, form]) =>
     named(`the earlier form ${code.split('').join(' ')}`, form),
   ),

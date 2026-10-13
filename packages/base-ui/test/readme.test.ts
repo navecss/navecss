@@ -396,7 +396,7 @@ describe('AC-base-ui-overlay-completion-39: the README carries each item R19 lis
       'no backdrop colour behind a Dialog',
       "no fill on the Slider's range",
       'Button sizes md and sm only',
-      'recommends no scrim value',
+      'recommends no other scrim value',
     ])
     expect(notPaintedIn(prose)).toEqual(notPaintedFor(SHIPPING))
   })

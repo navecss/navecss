@@ -4,7 +4,7 @@ NaveCSS styles Base UI's components with Nave's tokens: the same parts, the same
 
 This package is not affiliated with, endorsed by or sponsored by MUI or the Base UI project.
 
-`@base-ui/react` is a separately installed peer, built and maintained by its own maintainers; this package does not include it. You change `@base-ui/react/<component>` to `@navecss/base-ui/<component>` in your imports, add one stylesheet, and every part keeps Base UI's props, types, refs and behaviour while gaining Nave's styling. The styling is zero-runtime styling: static classes and one static stylesheet, with all behaviour still Base UI's.
+`@base-ui/react` is a separately installed peer, built and maintained by its own maintainers; this package does not include it. You change `@base-ui/react/<component>` to `@navecss/base-ui/<component>` in your imports, add one stylesheet, and every part keeps Base UI's props, refs and behaviour while gaining Nave's styling. The styling is zero-runtime styling: static classes and one static stylesheet, with all behaviour still Base UI's.
 
 On this page: [Install](#install) · [Use it](#use-it) · [The stylesheet](#the-stylesheet) · [Variants](#variants) · [Overriding](#overriding) · [What is styled](#what-is-styled) · [Things to know](#things-to-know) · [License](#license)
 
@@ -48,7 +48,7 @@ export default function RenameDialog() {
 }
 ```
 
-Every subpath of Base UI that this package wraps is listed under [What is styled](#what-is-styled). Each one also re-exports every type Base UI exports there, so type imports change the same way. The package root, `@navecss/base-ui`, re-exports the same components.
+Every subpath of Base UI that this package wraps is listed under [What is styled](#what-is-styled). Each one also re-exports the types Base UI exports there, so type imports change the same way, except the two type spellings named at the end of [What is styled](#what-is-styled). The package root, `@navecss/base-ui`, re-exports the same components.
 
 ## The stylesheet
 
@@ -142,7 +142,7 @@ Behaviour is Base UI's. Parts Nave does not style, such as `Portal`, `Positioner
 | Disclosure | `@navecss/base-ui/accordion`, `@navecss/base-ui/collapsible`, `@navecss/base-ui/tabs`                                                                                                                                                                                                                                                                                                                                                        |
 | Controls   | `@navecss/base-ui/button`, `@navecss/base-ui/input`, `@navecss/base-ui/number-field`, `@navecss/base-ui/field`, `@navecss/base-ui/fieldset`, `@navecss/base-ui/form`, `@navecss/base-ui/checkbox`, `@navecss/base-ui/checkbox-group`, `@navecss/base-ui/radio`, `@navecss/base-ui/radio-group`, `@navecss/base-ui/switch`, `@navecss/base-ui/slider`, `@navecss/base-ui/toggle`, `@navecss/base-ui/toggle-group`, `@navecss/base-ui/toolbar` |
 
-What this package does not paint: no backdrop colour behind a Dialog, no fill on the Slider's range, and Button sizes `md` and `sm` only. It recommends no scrim value. What it leaves out you can add with a class of your own, as above.
+What this package does not paint: no backdrop colour behind a Dialog, no fill on the Slider's range, and Button sizes `md` and `sm` only. It paints an Alert Dialog's backdrop as a scrim and recommends no other scrim value. What it leaves out you can add with a class of your own, as above.
 
 Menubar's menus come from `@navecss/base-ui/menu`: the same `Menu` as anywhere else, and the triggers take `variant="ghost"`.
 
@@ -210,11 +210,11 @@ export default function FruitCombobox() {
 }
 ```
 
-A right-to-left app needs both `dir="rtl"` on `<html>` (or on the Portal's container) and `DirectionProvider` with the same direction.
+A right-to-left app needs both `dir="rtl"` on `<html>` (or on the element you pass as a Portal's `container`) and Base UI's `DirectionProvider`, imported from `@base-ui/react/direction-provider`, with the same direction. With only one of them, a popup that opens on the `inline-start` or `inline-end` side shows its arrow pointing away from what opened it.
 
 Context Menu's trigger area is your own element, and Nave paints nothing on it.
 
-Parts that Base UI added after 1.3 are exported as whatever your installed version provides.
+Parts that Base UI added after 1.3 are exported as whatever your installed version provides. A part's own types, such as `Menu.Item.Props`, take their names and type parameters from Base UI 1.3, so two spellings that Base UI 1.8.0 accepts do not compile through this package: `ContextMenu.Root.Actions`, and `Combobox.Root.Props` with its third type parameter, `Item`. Import `ContextMenuRootActions` from `@navecss/base-ui/context-menu` and `ComboboxRootProps<Value, Multiple, Item>` from `@navecss/base-ui/combobox` instead.
 
 ## Things to know
 
@@ -253,7 +253,7 @@ When nothing inside a popup can take focus, Base UI focuses the popup itself and
 
 In Combobox and Autocomplete, keyboard focus stays in the text field while the arrow keys move through the list, so Nave marks the option that Enter will choose with the same ring it draws around a focused control. Hovering an option makes it the one Enter chooses, so the ring follows the pointer too. The ring is drawn on the option's `::before`; a rule of yours that sets `::before` on options replaces it.
 
-Nave draws the Combobox and Autocomplete field's border on `InputGroup`, not on the input. Base UI added `InputGroup` in 1.3.0: on an earlier version, or wherever you place the input outside an `InputGroup` (inside the popup, for example), wrap it in an element with a visible border of your own, or the field has no visible edge until it is focused.
+Nave draws the Combobox and Autocomplete field's border on `InputGroup`, not on the input. If you place the input outside an `InputGroup`, wrap it in an element with a visible border of your own, or the field has no visible edge until it is focused.
 
 In Chromium, opening a Context Menu with a right-click shows focus rings: the browser's own ring around the menu, then a focus ring on whichever item the pointer is over. Chromium decides when a focus ring shows; Nave does not hide it, and other browsers may show it differently.
 

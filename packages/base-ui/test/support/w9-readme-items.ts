@@ -42,7 +42,8 @@ export interface NotPaintedItem {
 
 /**
 The list of what the package does not paint: each item and the condition that lists it. The first
-five are the ones that depend on the signature; the last three are listed whatever is signed.
+five and the last two depend on the signature; the two between them are listed whatever is signed.
+Of the last two, the first is listed while the scrim is unsigned and the second once it is signed.
  */
 export const NOT_PAINTED: readonly NotPaintedItem[] = [
   {
@@ -81,9 +82,14 @@ export const NOT_PAINTED: readonly NotPaintedItem[] = [
     pattern: /\bbutton sizes `md` and `sm` only\b/i,
   },
   {
-    listed: () => true,
+    listed: (state) => !isSigned(state, 'scrim'),
     name: 'recommends no scrim value',
     pattern: /\brecommends no scrim value\b/i,
+  },
+  {
+    listed: (state) => isSigned(state, 'scrim'),
+    name: 'recommends no other scrim value',
+    pattern: /\brecommends no other scrim value\b/i,
   },
 ]
 
