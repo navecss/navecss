@@ -76,12 +76,12 @@ Tokens are CSS custom properties. If you scope a token yourself, set it on the p
 
 The Button family takes two optional props.
 
-| Prop      | Values                     | Default       |
-| --------- | -------------------------- | ------------- |
-| `variant` | `'secondary'`, `'primary'` | `'secondary'` |
-| `size`    | `'md'`, `'sm'`             | `'md'`        |
+| Prop      | Values                                | Default       |
+| --------- | ------------------------------------- | ------------- |
+| `variant` | `'secondary'`, `'primary'`, `'ghost'` | `'secondary'` |
+| `size`    | `'md'`, `'sm'`                        | `'md'`        |
 
-They are accepted by `Button`, `Toolbar.Button`, and the trigger and close parts of Dialog and Popover, `Menu.Trigger` and `Tooltip.Trigger`. `Toggle` takes `size` only. Both are typed as those unions and neither reaches the DOM as a prop.
+They are accepted by `Button`, `Toolbar.Button`, and the trigger and close parts of Dialog, Alert Dialog and Popover, `Menu.Trigger` and `Tooltip.Trigger`. `ghost` is a button with no fill or border at rest that fills under the pointer and while the menu it opens is showing: it is the look of a Menubar's triggers. `Toggle` takes `size` only. Both are typed as those unions and neither reaches the DOM as a prop.
 
 ```tsx
 import { Button } from '@navecss/base-ui/button'
@@ -138,11 +138,83 @@ Behaviour is Base UI's. Parts Nave does not style, such as `Portal`, `Positioner
 
 | Group      | Subpaths                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Overlays   | `@navecss/base-ui/dialog`, `@navecss/base-ui/popover`, `@navecss/base-ui/menu`, `@navecss/base-ui/select`, `@navecss/base-ui/tooltip`                                                                                                                                                                                                                                                                                                        |
+| Overlays   | `@navecss/base-ui/dialog`, `@navecss/base-ui/popover`, `@navecss/base-ui/menu`, `@navecss/base-ui/select`, `@navecss/base-ui/tooltip`, `@navecss/base-ui/alert-dialog`, `@navecss/base-ui/context-menu`, `@navecss/base-ui/menubar`, `@navecss/base-ui/preview-card`, `@navecss/base-ui/combobox`, `@navecss/base-ui/autocomplete`                                                                                                           |
 | Disclosure | `@navecss/base-ui/accordion`, `@navecss/base-ui/collapsible`, `@navecss/base-ui/tabs`                                                                                                                                                                                                                                                                                                                                                        |
 | Controls   | `@navecss/base-ui/button`, `@navecss/base-ui/input`, `@navecss/base-ui/number-field`, `@navecss/base-ui/field`, `@navecss/base-ui/fieldset`, `@navecss/base-ui/form`, `@navecss/base-ui/checkbox`, `@navecss/base-ui/checkbox-group`, `@navecss/base-ui/radio`, `@navecss/base-ui/radio-group`, `@navecss/base-ui/switch`, `@navecss/base-ui/slider`, `@navecss/base-ui/toggle`, `@navecss/base-ui/toggle-group`, `@navecss/base-ui/toolbar` |
 
-Version 1 does not paint everything. It has no highlight on the hovered or arrowed item of a menu or select, no scrim colour behind a dialog (its backdrop has no paint, and this package recommends no value for one), no motion on popups, tooltips or the tab indicator, an arrow that sits on physical sides only (top, bottom, left and right, not the logical start and end), and no fill on a slider's range. Button comes in `secondary` and `primary`, in sizes `md` and `sm`, and no other. What it leaves out you can add with a class of your own, as above.
+What this package does not paint: no backdrop colour behind a Dialog, no fill on the Slider's range, and Button sizes `md` and `sm` only. It recommends no scrim value. What it leaves out you can add with a class of your own, as above.
+
+Menubar's menus come from `@navecss/base-ui/menu`: the same `Menu` as anywhere else, and the triggers take `variant="ghost"`.
+
+```tsx
+import { Menu } from '@navecss/base-ui/menu'
+import { Menubar } from '@navecss/base-ui/menubar'
+
+export default function AppMenubar() {
+  return (
+    <Menubar>
+      <Menu.Root>
+        <Menu.Trigger variant="ghost">File</Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Positioner>
+            <Menu.Popup>
+              <Menu.Item>New</Menu.Item>
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
+      <Menu.Root>
+        <Menu.Trigger variant="ghost">Edit</Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Positioner>
+            <Menu.Popup>
+              <Menu.Item>Undo</Menu.Item>
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
+    </Menubar>
+  )
+}
+```
+
+A Combobox puts its input inside an `InputGroup`:
+
+```tsx
+import { Combobox } from '@navecss/base-ui/combobox'
+
+export default function FruitCombobox() {
+  return (
+    <Combobox.Root items={['apple', 'banana']}>
+      <Combobox.InputGroup>
+        <Combobox.Input />
+        <Combobox.Trigger>
+          <Combobox.Icon />
+        </Combobox.Trigger>
+      </Combobox.InputGroup>
+      <Combobox.Portal>
+        <Combobox.Positioner>
+          <Combobox.Popup>
+            <Combobox.List>
+              {(item: string) => (
+                <Combobox.Item key={item} value={item}>
+                  {item}
+                </Combobox.Item>
+              )}
+            </Combobox.List>
+          </Combobox.Popup>
+        </Combobox.Positioner>
+      </Combobox.Portal>
+    </Combobox.Root>
+  )
+}
+```
+
+A right-to-left app needs both `dir="rtl"` on `<html>` (or on the Portal's container) and `DirectionProvider` with the same direction.
+
+Context Menu's trigger area is your own element, and Nave paints nothing on it.
+
+Parts that Base UI added after 1.3 are exported as whatever your installed version provides.
 
 ## Things to know
 
@@ -179,9 +251,19 @@ The Accordion and Collapsible panels set `overflow: hidden` so their height can 
 
 When nothing inside a popup can take focus, Base UI focuses the popup itself and the browser draws its focus ring around the panel. This package leaves that ring alone. Removing it with `outline: 0`, as Base UI's own demos do, leaves a keyboard user with no visible sign of where focus is.
 
+In Combobox and Autocomplete, keyboard focus stays in the text field while the arrow keys move through the list, so Nave marks the option that Enter will choose with the same ring it draws around a focused control. Hovering an option makes it the one Enter chooses, so the ring follows the pointer too. The ring is drawn on the option's `::before`; a rule of yours that sets `::before` on options replaces it.
+
+Nave draws the Combobox and Autocomplete field's border on `InputGroup`, not on the input. Base UI added `InputGroup` in 1.3.0: on an earlier version, or wherever you place the input outside an `InputGroup` (inside the popup, for example), wrap it in an element with a visible border of your own, or the field has no visible edge until it is focused.
+
+In Chromium, opening a Context Menu with a right-click shows focus rings: the browser's own ring around the menu, then a focus ring on whichever item the pointer is over. Chromium decides when a focus ring shows; Nave does not hide it, and other browsers may show it differently.
+
+A Preview Card opens when its link is hovered or focused, but its contents are not reachable with Tab: the next Tab moves past the card and closes it. Keep anything a reader must act on, such as a link or a button, out of the card, or offer it on the page as well.
+
+In a Menubar, moving to the next menu with the arrow keys puts focus on that menu's panel before any item, so the browser's ring around the panel shows where you are until the next arrow key reaches an item.
+
 In Base UI 1.8.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.
 
-When the reader's system asks for reduced motion, this package turns off the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.
+When the reader's system asks for reduced motion, this package turns off the popups' fade, the tooltip's fade, the backdrop's fade, the tab indicator's slide, the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.
 
 ## License
 
