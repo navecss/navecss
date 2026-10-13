@@ -8,7 +8,14 @@
  */
 
 import { type Adjacency, ADJACENCY } from './adjacency-source.ts'
-import { CHROMATIC_MAPPING, SEMANTIC_SLOTS, type SlotMapping, type StepRef } from './semantics.ts'
+import { roundedAlpha } from './neutral.ts'
+import {
+  ACHROMATIC_MAPPING,
+  CHROMATIC_MAPPING,
+  SEMANTIC_SLOTS,
+  type SlotMapping,
+  type StepRef,
+} from './semantics.ts'
 
 export type { Adjacency, MeasuredOpenSlots, OrphanCheckResult } from './adjacency-source.ts'
 export {
@@ -311,47 +318,82 @@ export function assertNoFocusableAdjacentToActionFill(
 }
 
 /**
- * The reason clause below, promoted to a named constant for the same review-diff-visibility
- * reason as the ones above (cleared copy, extraction only). Any re-wording, including
- * shortening, is a change to cleared copy and needs review as one; re-wrapping the same
- * words does not.
+ * The reason clause below, held in a named constant for the same review-diff-visibility
+ * reason as the ones above. Cleared bytes. Any re-wording, including shortening, is a change
+ * to cleared copy and needs review as one; re-wrapping the same words does not.
  */
 const TRANSLUCENT_SLOT_IN_PAIR_REASON =
   'The contrast harness reads opaque colours only, and a translucent slot renders as a ' +
-  'blend with whatever lies beneath it, which no pair can describe. A translucent slot is ' +
-  'listed in ADJACENCY_EXCLUSIONS instead. This rule records a decision about which ' +
-  'colour pairs this design system will declare and test; it is not a check to silence or ' +
-  'narrow to make a build pass. Remove the declaration, or, if you need this pair, open ' +
-  'an issue describing it and why, and leave it out of the pull request until that issue ' +
-  'is answered.'
+  'blend with whatever lies beneath it, which no pair can describe. This rule records a ' +
+  'decision about which colour pairs this design system will declare and test; it is not ' +
+  'a check to silence or narrow to make a build pass. Remove the declaration, or, if you ' +
+  'need this pair, open an issue describing it and why, and leave it out of the pull ' +
+  'request until that issue is answered.'
 
 /**
- * Whether a step reference carries an `alpha` below 1.
+ * The longest alias chain the build follows (the same bound as the pipeline's own resolver):
+ * a longer one is a cycle in the mapping, which is a defect rather than a case to handle.
  */
-const isTranslucent = (ref: StepRef): boolean =>
-  'alpha' in ref && ref.alpha !== undefined && ref.alpha < 1
+const MAX_ALIAS_DEPTH = 10
 
 /**
- * The slots whose mapping carries an `alpha` below 1 in either scheme.
+ * Whether the step a reference RESOLVES to carries an `alpha` below 1, following alias chains
+ * through the same lookup the build uses.
  */
-function translucentSlots(mapping: Readonly<Record<string, SlotMapping>>): ReadonlySet<string> {
+function isTranslucentWhenResolved(
+  ref: StepRef,
+  scheme: keyof SlotMapping,
+  lookup: (slot: string) => SlotMapping,
+): boolean {
+  let current = ref
+  for (let depth = 0; depth < MAX_ALIAS_DEPTH; depth++) {
+    if (!('alias' in current)) return current.alpha !== undefined && roundedAlpha(current.alpha) < 1
+    current = lookup(current.alias)[scheme]
+  }
+  throw new Error('Alias chain too deep — likely a cycle in the semantic mapping.')
+}
+
+/**
+ * The slots that emit a colour with an `alpha` below 1 in either scheme, under either column
+ * of the mapping: the chromatic one, and the achromatic one, whose overrides replace the
+ * chromatic entry for the slots it lists exactly as `resolveSlotMapping` does.
+ */
+function translucentSlots(
+  mapping: Readonly<Record<string, SlotMapping>>,
+  achromaticMapping: Readonly<Record<string, SlotMapping>>,
+): ReadonlySet<string> {
+  const lookup = (isAchromaticBranch: boolean) => (slot: string) => {
+    const resolved = (isAchromaticBranch ? achromaticMapping[slot] : undefined) ?? mapping[slot]
+    if (!resolved) throw new Error(`Unknown semantic slot: ${slot}`)
+    return resolved
+  }
   return new Set(
-    Object.entries(mapping)
-      .filter(([, { light, dark }]) => isTranslucent(light) || isTranslucent(dark))
-      .map(([slot]) => slot),
+    Object.keys(mapping).filter((slot) =>
+      [false, true].some((isAchromaticBranch) =>
+        (['light', 'dark'] as const).some((scheme) =>
+          isTranslucentWhenResolved(
+            lookup(isAchromaticBranch)(slot)[scheme],
+            scheme,
+            lookup(isAchromaticBranch),
+          ),
+        ),
+      ),
+    ),
   )
 }
 
 /**
  * Fails naming the slot the moment a pair declares a translucent slot as its subject or its
- * partner. Parameterised so the failing direction is reachable from a constructed set, not
- * only the shipped one.
+ * partner. A slot counts as translucent by the step it resolves to, so an alias of the scrim
+ * and an achromatic override are caught as well as a direct `alpha`. Parameterised so the
+ * failing direction is reachable from a constructed set, not only the shipped one.
  */
 export function assertNoTranslucentSlotInDeclaredPair(
   adjacency: readonly Adjacency[] = ADJACENCY,
   mapping: Readonly<Record<string, SlotMapping>> = CHROMATIC_MAPPING,
+  achromaticMapping: Readonly<Record<string, SlotMapping>> = ACHROMATIC_MAPPING,
 ): void {
-  const translucent = translucentSlots(mapping)
+  const translucent = translucentSlots(mapping, achromaticMapping)
   for (const pair of adjacency) {
     for (const slot of [pair.subject, pair.against]) {
       if (translucent.has(slot)) {

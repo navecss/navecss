@@ -99,8 +99,10 @@ export const CHROMATIC_MAPPING: Record<string, SlotMapping> = {
   'action.secondary': { light: ref('neutral', 100), dark: ref('neutral', 800) },
 
   // A transient fill for a control under the pointer, the keyboard or a press (a highlighted
-  // list item, a ghost button). It sits in the action family because a focus ring is drawn
-  // offset outside the control it belongs to and never lands on the control's own fill.
+  // list item, a ghost button). It sits in the action family because a control's own focus ring
+  // is drawn offset outside that control, not on its fill. That says nothing about a
+  // neighbouring control's ring, which can still land on this fill where the two sit close
+  // together; do not paint it where one can.
   'action.highlight': { light: ref('neutral', 100), dark: ref('neutral', 700) },
 
   // R18c: split foreground/solid-background roles, danger family (seed-derived).

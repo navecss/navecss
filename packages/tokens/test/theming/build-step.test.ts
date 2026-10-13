@@ -188,6 +188,7 @@ describe('every guard whose binding surface exists at build time is WIRED', () =
   const THROWING_GUARDS: readonly [string, string][] = [
     ['../../src/theming/adjacency.ts', 'assertNoForbiddenAdjacency'],
     ['../../src/theming/adjacency.ts', 'assertNoFocusableAdjacentToActionFill'],
+    ['../../src/theming/adjacency.ts', 'assertNoTranslucentSlotInDeclaredPair'],
     ['../../src/theming/adjacency.ts', 'assertCoverageFloor'],
     // The three guards this round wired into runSourceGuards. A
     // guard added to that function and not to this list is exactly the case this test suite
