@@ -1,5 +1,6 @@
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 import { rolldown } from 'rolldown'
 import { describe, expect, it } from 'vitest'
 
@@ -12,21 +13,46 @@ import { tableP } from './support/table-p.ts'
 const WORK = path.join(PACKAGE_DIR, 'node_modules/.cache/bundle-tests')
 
 /**
- * The minified size of a consumer entry bundled by rolldown, with React left external. `dist` is
- * the built package `@navecss/base-ui` resolves to.
+ * A consumer entry bundled by rolldown, minified, with React left external: the bundle's code and
+ * the warnings the bundler gave. `dist` is the built package `@navecss/base-ui` resolves to, and
+ * `baseUi` is what `@base-ui/react` resolves to (the installed version unless a run names another).
  */
-const sizeOf = async (name: string, source: string, dist: string = DIST_DIR): Promise<number> => {
+const bundleOf = async (
+  name: string,
+  source: string,
+  dist: string = DIST_DIR,
+  baseUi?: string,
+): Promise<{ code: string; warnings: string[] }> => {
   mkdirSync(WORK, { recursive: true })
   const entry = path.join(WORK, `${name}.js`)
   writeFileSync(entry, source)
+  const warnings: string[] = []
   const bundle = await rolldown({
     external: /^react(?:-dom)?(?:\/|$)/,
     input: entry,
-    logLevel: 'silent',
-    resolve: { alias: { '@navecss/base-ui': dist } },
+    logLevel: 'warn',
+    onLog: (level, log) => {
+      if (level === 'warn') {
+        warnings.push(`${log.code ?? 'WARNING'}: ${stripVTControlCharacters(log.message)}`)
+      }
+    },
+    resolve: {
+      alias: {
+        '@navecss/base-ui': dist,
+        ...(baseUi !== undefined && { '@base-ui/react': baseUi }),
+      },
+    },
   })
   const { output } = await bundle.generate({ format: 'esm', minify: true })
-  return output[0].code.length
+  return { code: output[0].code, warnings }
+}
+
+/**
+ * The minified size of a consumer entry bundled by rolldown, with React left external.
+ */
+const sizeOf = async (name: string, source: string, dist: string = DIST_DIR): Promise<number> => {
+  const { code } = await bundleOf(name, source, dist)
+  return code.length
 }
 
 const entry = (specifier: string, top: string, parts: readonly string[]): string =>
@@ -257,6 +283,57 @@ describe("AC-base-ui-bridge-39 and AC-base-ui-overlay-completion-43: an unused p
       const helper = await helperCost(dist, 'plain')
       const { second } = await bundleProblems(await subjectOf('popover'), helper, dist, 'plain')
       expect(second).toHaveLength(1)
+    },
+  )
+})
+
+describe('a part younger than the floor: a consumer bundle against the floor Base UI', () => {
+  // `base-ui-react-floor` is the floor Base UI (1.3.0) installed beside the current one. Combobox's
+  // `createItems` is younger than that, so the floor's Combobox has no such export.
+  const FLOOR = 'base-ui-react-floor'
+  const MISSING_EXPORT = /IMPORT_IS_UNDEFINED|no matching export/
+
+  const missingExports = async (name: string, source: string): Promise<string[]> => {
+    const { warnings } = await bundleOf(name, source, DIST_DIR, FLOOR)
+    return warnings.filter((warning) => MISSING_EXPORT.test(warning))
+  }
+
+  it(
+    'control: naming a part the floor Base UI does not export makes the bundler warn about the missing export',
+    { timeout: 120_000 },
+    async () => {
+      const warnings = await missingExports(
+        'young-control',
+        "import { Combobox } from '@base-ui/react/combobox'\nconsole.log(Combobox.createItems)\n",
+      )
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]).toContain('createItems')
+    },
+  )
+
+  it(
+    'builds an app that imports only Button from the package root without a missing-export warning',
+    { timeout: 120_000 },
+    async () => {
+      expect(
+        await missingExports(
+          'young-root',
+          "import { Button } from '@navecss/base-ui'\nconsole.log(Button)\n",
+        ),
+      ).toEqual([])
+    },
+  )
+
+  it(
+    'builds an app that imports the Combobox without a missing-export warning',
+    { timeout: 120_000 },
+    async () => {
+      expect(
+        await missingExports(
+          'young-combobox',
+          "import { Combobox } from '@navecss/base-ui/combobox'\nconsole.log(Combobox.Root, Combobox.Input)\n",
+        ),
+      ).toEqual([])
     },
   )
 })

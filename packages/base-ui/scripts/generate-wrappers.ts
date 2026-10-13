@@ -51,7 +51,11 @@ const generics = (names: readonly string[]): string =>
  * The value a part is exported as: wrapped where the roster styles it, or Base UI's own. Either way
  * it is a pure call of a function that reads the part inside it, so a bundler drops it when nothing
  * uses it: a plain property, or an argument read outside the call, would count as a side effect
- * and keep the part.
+ * and keep the part. A part younger than the floor is read with `Reflect.get`: a bundler checks
+ * `Base.part` against the exports of the Base UI it resolves, and where the part is missing it
+ * warns that the import is always undefined, for every consumer of the subpath whether they use
+ * the part or not. Reading it by a key leaves nothing for the bundler to check, and the part is
+ * still `undefined` where Base UI lacks it.
  */
 const valueOf = (
   name: string,
@@ -60,7 +64,7 @@ const valueOf = (
   part: PartTypes,
 ): string => {
   if (part.young === true) {
-    return `export const ${name}: PartOf<typeof Base, '${part.name}'> = /*#__PURE__*/ (() => ${reference})()`
+    return `export const ${name}: PartOf<typeof Base, '${part.name}'> = /*#__PURE__*/ (() => Reflect.get(Base, '${part.name}'))()`
   }
   if (styled === undefined) {
     return `export const ${name}: typeof ${reference} = /*#__PURE__*/ (() => ${reference})()`
