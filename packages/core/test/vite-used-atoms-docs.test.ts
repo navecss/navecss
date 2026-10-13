@@ -625,6 +625,10 @@ function isMinorOnCore(changeset: typeof USED_CHANGESET): boolean {
   return entry?.kind === 'Minor Changes'
 }
 
+function hasEntryStartingWith(section: string, entryStart: string): boolean {
+  return changelogEntries(section).some((entry) => entry.text.startsWith(entryStart))
+}
+
 describe('AC-used-atoms-58 — the two changesets read as one release', () => {
   const flatUsed = fold(usedChangeset)
   const flatPlugin = fold(pluginChangeset)
@@ -684,9 +688,9 @@ describe('AC-used-atoms-58 — the two changesets read as one release', () => {
     // which every later release moves.
     const section = readFileSync(CHANGELOG_PATH, 'utf8')
       .split(/^## /m)
-      .find((candidate) => candidate.includes(USED_CHANGESET.entryStart))
+      .find((candidate) => hasEntryStartingWith(candidate, USED_CHANGESET.entryStart))
 
     expect(section).toBeDefined()
-    expect(section).toContain(PLUGIN_CHANGESET.entryStart)
+    expect(hasEntryStartingWith(section!, PLUGIN_CHANGESET.entryStart)).toBe(true)
   })
 })

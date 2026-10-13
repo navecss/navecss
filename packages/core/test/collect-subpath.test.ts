@@ -28,6 +28,7 @@ const FORBIDDEN_PACKAGE = /^(?:vite|rollup|rolldown|oxc-parser|oxc-resolver)(?:\
 function isForbidden(specifier: string): boolean {
   return (
     specifier.startsWith('node:') ||
+    specifier === 'node' ||
     NODE_BUILTINS.has(specifier) ||
     FORBIDDEN_PACKAGE.test(specifier)
   )
@@ -35,13 +36,12 @@ function isForbidden(specifier: string): boolean {
 
 /**
  * Every module specifier a built file names: `from '...'` (an import or an `export ... from`), a
- * bare `import '...'` and a dynamic `import('...')`.
+ * bare `import '...'`, a dynamic `import('...')` and a `/// <reference types="..." />` line.
  */
 function specifiersIn(text: string): string[] {
-  return text
-    .matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/gu)
-    .map((match) => match[1]!)
-    .toArray()
+  const imports = text.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/gu)
+  const references = text.matchAll(/^\/\/\/\s*<reference\s+types=["']([^"']+)["']/gmu)
+  return [...imports, ...references].map((match) => match[1]!)
 }
 
 /**
@@ -138,9 +138,9 @@ describe('AC-nextjs-used-atoms-08 — the reader is one public, parser-free subp
     expect(forbiddenIn(types)).toEqual([])
   })
 
-  it('control: the same scan finds the built-ins vite.js imports', () => {
-    const imported = forbiddenIn(moduleGraph('vite.js')).map((hit) => hit.split(': ', 2)[1])
-    for (const builtin of ['fs', 'path', 'crypto']) expect(imported).toContain(builtin)
+  it('control: the same scan finds a Node built-in that vite.js imports', () => {
+    const imported = forbiddenIn(moduleGraph('vite.js')).map((hit) => hit.split(': ', 2)[1]!)
+    expect(imported.filter((specifier) => NODE_BUILTINS.has(specifier))).not.toEqual([])
   })
 
   it('control: the declaration walk follows a .js specifier in collect.d.ts to the shared .d.ts files', () => {
