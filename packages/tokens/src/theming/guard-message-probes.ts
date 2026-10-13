@@ -137,8 +137,9 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * It sits outside the eight above, so probing it widened the registry without shrinking that
  * residual.
  *
- * **What remains unprobed of the eight above: five messages**, the eight less the three guards named two paragraphs up. The
- * permanently excluded refusal above sits outside that eight and stays unprobed as well.
+ * **What remains unprobed of the eight above: five messages**, the eight less the three
+ * guards named two paragraphs up. The permanently excluded refusal above sits outside that
+ * eight and stays unprobed as well.
  * - Two cannot be probed by this check at all: `assertDescriptionsAreClean`'s message and
  *   `assertNoticeIsClean`'s framing refusal both quote the phrase they caught, so any input
  *   that makes them throw also makes their message fail this check. `copy-lint.test.ts` pins
