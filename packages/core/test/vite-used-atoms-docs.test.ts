@@ -625,6 +625,115 @@ function isMinorOnCore(changeset: typeof USED_CHANGESET): boolean {
   return entry?.kind === 'Minor Changes'
 }
 
+/**
+ * Whether `section` of a changelog has an entry that opens with `entryStart`.
+ */
+const hasEntryStarting = (section: string, entryStart: string): boolean =>
+  changelogEntries(section).some((entry) => entry.text.startsWith(entryStart))
+
+/**
+ * The version a `## ` section of a changelog is headed with.
+ */
+const headingOf = (section: string): string => section.split('\n', 1)[0]!.trim()
+
+/**
+ * The version heading of the `## ` section of `changelog` that holds both entries, whichever
+ * version that is: the two changesets read as one release when one release wrote them. Every
+ * section that holds the first entry is tried, since a newer one may repeat its opening. Throws,
+ * naming the entry, when either is absent, or, naming the first section that holds the first
+ * entry, when no such section holds the second.
+ */
+function sectionHoldingBoth(changelog: string, first: string, second: string): string {
+  const withFirst = changelog
+    .split(/^## /m)
+    .slice(1)
+    .filter((section) => hasEntryStarting(section, first))
+  if (withFirst.length === 0) {
+    throw new Error(`no section of the changelog has an entry starting "${first}"`)
+  }
+  const withBoth = withFirst.find((section) => hasEntryStarting(section, second))
+  if (withBoth === undefined) {
+    throw new Error(
+      `the section "## ${headingOf(withFirst[0]!)}" has the entry starting "${first}" but none starting "${second}"`,
+    )
+  }
+  return headingOf(withBoth)
+}
+
+const fakeEntry = (hash: string, text: string): string => `- ${hash}: ${text}\n`
+const fakeSection = (heading: string, ...entries: string[]): string =>
+  `## ${heading}\n\n### Minor Changes\n\n${entries.join('\n')}\n`
+const fakeChangelog = (...sections: string[]): string => `# @navecss/core\n\n${sections.join('\n')}`
+
+describe('sectionHoldingBoth', () => {
+  it('names the section that holds both', () => {
+    const both = fakeSection(
+      '0.3.0',
+      fakeEntry('aaaaaaa', 'First entry.'),
+      fakeEntry('bbbbbbb', 'Second.'),
+    )
+
+    expect(sectionHoldingBoth(fakeChangelog(both), 'First entry', 'Second')).toBe('0.3.0')
+  })
+
+  it('still finds them once a newer section with other entries sits above', () => {
+    const both = fakeSection(
+      '0.3.0',
+      fakeEntry('aaaaaaa', 'First entry.'),
+      fakeEntry('bbbbbbb', 'Second.'),
+    )
+    const newer = fakeSection('0.4.0', fakeEntry('ccccccc', 'Something newer.'))
+
+    expect(sectionHoldingBoth(fakeChangelog(newer, both), 'First entry', 'Second')).toBe('0.3.0')
+  })
+
+  it('names the older section that holds both when a newer one repeats the first entry', () => {
+    const both = fakeSection(
+      '0.3.0',
+      fakeEntry('aaaaaaa', 'First entry.'),
+      fakeEntry('bbbbbbb', 'Second.'),
+    )
+    const repeats = fakeSection('0.3.1', fakeEntry('ccccccc', 'First entry, again.'))
+
+    expect(sectionHoldingBoth(fakeChangelog(repeats, both), 'First entry', 'Second')).toBe('0.3.0')
+  })
+
+  it('throws when the two entries sit in different sections, naming the one that is missing', () => {
+    const split = fakeChangelog(
+      fakeSection('0.3.0', fakeEntry('aaaaaaa', 'First entry.')),
+      fakeSection('0.2.9', fakeEntry('bbbbbbb', 'Second.')),
+    )
+
+    expect(() => sectionHoldingBoth(split, 'First entry', 'Second')).toThrow(
+      /"## 0\.3\.0" has the entry starting "First entry" but none starting "Second"/u,
+    )
+  })
+
+  it('throws, naming the entry, when either entry is in no section', () => {
+    const onlyFirst = fakeChangelog(fakeSection('0.3.0', fakeEntry('aaaaaaa', 'First entry.')))
+    const onlySecond = fakeChangelog(fakeSection('0.3.0', fakeEntry('bbbbbbb', 'Second.')))
+
+    expect(() => sectionHoldingBoth(onlyFirst, 'First entry', 'Second')).toThrow(
+      /none starting "Second"/u,
+    )
+    expect(() => sectionHoldingBoth(onlySecond, 'First entry', 'Second')).toThrow(
+      /no section of the changelog has an entry starting "First entry"/u,
+    )
+  })
+
+  it('counts an entry only by how it opens, not by a mention inside another entry', () => {
+    const mention = fakeChangelog(
+      fakeSection(
+        '0.3.0',
+        fakeEntry('aaaaaaa', 'First entry.'),
+        fakeEntry('bbbbbbb', 'Mentions Second here.'),
+      ),
+    )
+
+    expect(() => sectionHoldingBoth(mention, 'First entry', 'Second')).toThrow(/none starting/u)
+  })
+})
+
 describe('AC-used-atoms-58 — the two changesets read as one release', () => {
   const flatUsed = fold(usedChangeset)
   const flatPlugin = fold(pluginChangeset)
@@ -664,28 +773,33 @@ describe('AC-used-atoms-58 — the two changesets read as one release', () => {
     expect(`${usedChangeset}\n${pluginChangeset}`).not.toMatch(RETIRED)
   })
 
-  it('does not move the core version between the plugin’s merge and this delivery', () => {
-    // The release that consumes the changesets is what moves the version, so this clause holds only
-    // while one is pending; the test below reads the released form.
-    if (!existsSync(USED_CHANGESET.path) && !existsSync(PLUGIN_CHANGESET.path)) return
-    const atMerge = manifestAtPluginMerge()
-    // A checkout without that commit cannot say; review checks it then.
-    if (atMerge === undefined) return
+  // The release that consumes the changesets is what moves the version, so the clause below holds
+  // only while one is pending; the row after it reads the released form.
+  const hasPendingChangeset = existsSync(USED_CHANGESET.path) || existsSync(PLUGIN_CHANGESET.path)
 
-    const now = versionOf(readFileSync(path.join(CORE_ROOT, 'package.json'), 'utf8'))
+  it.runIf(hasPendingChangeset)(
+    'does not move the core version between the plugin’s merge and this delivery',
+    () => {
+      const atMerge = manifestAtPluginMerge()
+      // A checkout without that commit cannot say; review checks it then.
+      if (atMerge === undefined) return
 
-    expect(now).toBe(versionOf(atMerge))
-  })
+      const now = versionOf(readFileSync(path.join(CORE_ROOT, 'package.json'), 'utf8'))
 
-  it('once released, has both entries under the version core declares', () => {
-    if (existsSync(USED_CHANGESET.path) || existsSync(PLUGIN_CHANGESET.path)) return
+      expect(now).toBe(versionOf(atMerge))
+    },
+  )
 
-    const now = versionOf(readFileSync(path.join(CORE_ROOT, 'package.json'), 'utf8'))
-    const section = readFileSync(CHANGELOG_PATH, 'utf8')
-      .split(/^## /m)
-      .find((candidate) => candidate.startsWith(`${now}\n`))
+  it.runIf(!hasPendingChangeset)(
+    'once released, has both entries under one version heading',
+    () => {
+      const heading = sectionHoldingBoth(
+        readFileSync(CHANGELOG_PATH, 'utf8'),
+        USED_CHANGESET.entryStart,
+        PLUGIN_CHANGESET.entryStart,
+      )
 
-    expect(section).toContain(USED_CHANGESET.entryStart)
-    expect(section).toContain(PLUGIN_CHANGESET.entryStart)
-  })
+      expect(heading).toMatch(/^\d+\.\d+\.\d+/u)
+    },
+  )
 })
