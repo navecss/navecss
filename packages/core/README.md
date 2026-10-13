@@ -21,7 +21,7 @@ pnpm add @navecss/core
   included, is reachable only through the package's `exports` map: there is no
   `main` field to fall back on.
 - **ES modules.** `@navecss/core/cx`, `@navecss/core/atoms`,
-  `@navecss/core/vite`, `@navecss/core/lightningcss` and `@navecss/core/check` load through `import` only. A `require()` of any of
+  `@navecss/core/vite`, `@navecss/core/lightningcss`, `@navecss/core/check` and `@navecss/core/collect` load through `import` only. A `require()` of any of
   them fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`, which reads as though the
   entry point did not exist. In TypeScript, set `moduleResolution` to `bundler`,
   `node16` or `nodenext`; under `node10` their types are not found. A CommonJS

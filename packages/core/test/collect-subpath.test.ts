@@ -204,3 +204,45 @@ describe('AC-nextjs-used-atoms-08 — the reader is one public, parser-free subp
     expect(row).toContain('not meant for application code')
   })
 })
+
+/**
+ * The README sentence that names the entry points loading through `import` only, up to the
+ * sentence about `require()`.
+ */
+function importOnlySentence(): string {
+  const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
+  const start = readme.indexOf('- **ES modules.**')
+  expect(start).toBeGreaterThanOrEqual(0)
+  const bullet = readme.slice(start).split(/\n- \*\*/u, 1)[0]!
+  return bullet.split('A `require()`', 1)[0]!.replaceAll(/\s+/gu, ' ')
+}
+
+/**
+ * The export keys whose map is exactly `{ types, import }`: the subpaths a `require()` cannot
+ * reach.
+ */
+function importOnlyKeys(): string[] {
+  const exports = manifest().exports as Record<string, unknown>
+  return Object.entries(exports)
+    .filter(([, value]) => {
+      if (typeof value !== 'object' || value === null) return false
+      const keys = new Set(Object.keys(value))
+      return keys.size === 2 && keys.has('import') && keys.has('types')
+    })
+    .map(([key]) => key)
+}
+
+describe('AC-nextjs-used-atoms-08: the README lists every import-only subpath', () => {
+  it('names @navecss/core/<key> for every export key whose map is exactly { types, import }', () => {
+    const keys = importOnlyKeys()
+    expect(keys).toContain('./collect')
+    expect(keys).toContain('./lightningcss')
+    const sentence = importOnlySentence()
+    expect(sentence).toContain('load through `import` only')
+    for (const key of keys) {
+      expect(sentence, `README does not name @navecss/core/${key.slice(2)}`).toContain(
+        `\`@navecss/core/${key.slice(2)}\``,
+      )
+    }
+  })
+})
