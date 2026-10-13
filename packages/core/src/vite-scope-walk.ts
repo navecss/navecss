@@ -182,6 +182,15 @@ function isDirectEval(node: AstNode): boolean {
 }
 
 /**
+ * Records the write that `node` makes to the target held under `key`, and the target's parent.
+ */
+function writeTarget(node: AstNode, key: string, scope: Scope, walker: Walker): void {
+  const target = nodeAt(node, key)
+  if (target) walker.parentOf.set(target, node)
+  writeTargets(target, scope, walker)
+}
+
+/**
  * A chain of binary or logical operators written left to right (`a + b + c`) is as deep as it is
  * long, so it is walked along its left spine instead of by recursion, in source order.
  */
@@ -228,11 +237,11 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   BinaryExpression: visitChain,
   LogicalExpression: visitChain,
   AssignmentExpression: (node, scope, walker) => {
-    writeTargets(nodeAt(node, 'left'), scope, walker)
+    writeTarget(node, 'left', scope, walker)
     visitKeys(node, ['right'], scope, walker)
   },
   UpdateExpression: (node, scope, walker) => {
-    writeTargets(nodeAt(node, 'argument'), scope, walker)
+    writeTarget(node, 'argument', scope, walker)
   },
   ImportDeclaration: (node, scope) => {
     declareImport(node, scope)

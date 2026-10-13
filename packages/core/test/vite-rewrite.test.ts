@@ -636,6 +636,24 @@ describe('AC-used-atoms-23 — the rewrite adds no import and no runtime', () =>
   })
 
   describe('what the rewrite inserts, once string literals and the original text are taken away', () => {
+    const NAMES = /^(?:===|[?:()[\],])+$/
+    const NAMES_AT_START = /^(?:===|[;?:()[\],])+$/
+    const LITERAL = '{__proto__:null,"grid":"nave-grid","block":"nave-block"}'
+    const KEEP = { grid: 'nave-grid', block: 'nave-block' }
+    const MAP_PARTS = /^(?:\|\||""|[;()[\]]|\[0\])+$/
+
+    /**
+     * The text the edits of a `cx.dynamic()` source insert, less the map literal each call
+     * gets, with the white space closed up.
+     */
+    function bareLookups(source: string): string {
+      return rewrite(source, KEEP)
+        .edits.map((edit) => edit.text)
+        .join('')
+        .replaceAll(LITERAL, '')
+        .replaceAll(/\s/g, '')
+    }
+
     it('is === ? : ( ) [ ] and , around a name argument bound to atoms', () => {
       const out = rewrite(
         `${IMPORT}export const f = (on, other) => {\n  const n = on ? 'flex' : 'grid'\n  return [cx(n), cx('block', n), cx(on && n, other ? 'flexCol' : '')]\n}\n`,
@@ -645,28 +663,51 @@ describe('AC-used-atoms-23 — the rewrite adds no import and no runtime', () =>
 
       expect(out.problems).toBe(0)
       expect(out.code).toContain('n === "flex" ? "nave-flex" : n === "grid" ? "nave-grid" : n')
-      expect(bare).toMatch(/^(?:===|[?:()[\],])+$/)
+      expect(bare).toMatch(NAMES)
+    })
+
+    it('adds one ; before a call that starts a statement, and nothing else', () => {
+      const out = rewrite(
+        `${IMPORT}export default (foo, on) => {\n  const n = on ? 'flex' : 'grid'\n  let s = foo()\n  cx(n)\n  return s\n}\n`,
+      )
+
+      const bare = bareInsertions(out, ['n', 'on', 'foo'])
+
+      expect(out.problems).toBe(0)
+      expect(bare).toMatch(NAMES_AT_START)
+      expect(bare.match(/;/g)).toHaveLength(1)
     })
 
     it('control: an insertion of any other token kind is outside that set', () => {
       expect(bareInsertions({ edits: [{ text: '(n.toUpperCase() + 1)' }] }, ['n'])).not.toMatch(
-        /^(?:===|[?:()[\],])+$/,
+        NAMES,
       )
     })
 
     it('is the map literal, [ ] || "" and parentheses around a cx.dynamic call', () => {
-      const keep = { grid: 'nave-grid', block: 'nave-block' }
-      const out = rewrite(`${IMPORT}export const f = (t) => cx.dynamic(t)\n`, keep)
-      const literal = '{__proto__:null,"grid":"nave-grid","block":"nave-block"}'
+      const out = rewrite(`${IMPORT}export const f = (t) => cx.dynamic(t)\n`, KEEP)
 
-      const bare = out.edits
-        .map((edit) => edit.text)
-        .join('')
-        .replace(literal, '')
-        .replaceAll(/\s/g, '')
+      expect(out.code).toContain(`(${LITERAL}[t] || "")`)
+      expect(bareLookups(`${IMPORT}export const f = (t) => cx.dynamic(t)\n`)).toMatch(MAP_PARTS)
+    })
 
-      expect(out.code).toContain(`(${literal}[t] || "")`)
-      expect(bare).toMatch(/^(?:\|\||""|[()[\]])+$/)
+    it.each(['cx.dynamic()', 'cx.dynamic(t, f())', 'cx.dynamic(...xs)', 'cx.dynamic(t, f(),)'])(
+      'is the list brackets and [0] around the arguments of %s',
+      (call) => {
+        const bare = bareLookups(`${IMPORT}export const f = (t, f, xs) => ${call}\n`)
+
+        expect(bare).toBe('([[][0]]||"")')
+        expect(bare).toMatch(MAP_PARTS)
+      },
+    )
+
+    it('adds one ; before a cx.dynamic call that starts a statement, and nothing else', () => {
+      const bare = bareLookups(
+        `${IMPORT}export default (foo, t) => {\n  let s = foo()\n  cx.dynamic(t).length\n  return s\n}\n`,
+      )
+
+      expect(bare).toMatch(MAP_PARTS)
+      expect(bare.match(/;/g)).toHaveLength(1)
     })
   })
 

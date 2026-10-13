@@ -322,10 +322,14 @@ and `cx('flex', on && 'grid')` becomes `["nave-flex", on && "nave-grid"].filter(
 with each argument evaluated once, in the order you wrote it. A direct `cx.raw()` call becomes the
 same join, and a direct `cx.dynamic()` call a lookup in a map of the atoms in `keep` and `keepFor`.
 The dev server keeps the run-time functions, which return the same strings. A bundle holds neither
-the name map nor the atoms' declarations when every use of `cx` in it is one of those direct calls.
-Two forms keep the map, since the build cannot follow the alias: `const r = cx.raw` and
-`const { raw } = cx`. So does a package listed in `keepFor` whose calls the build cannot read,
-because those calls stay calls to the run-time `cx()`.
+the name map nor the atoms' declarations when every use of `cx` in it is one of those direct calls
+and no module that imports `cx` calls `eval` directly. Two forms keep the map, since the build
+cannot follow the alias: `const r = cx.raw` and `const { raw } = cx`. So does a package listed in
+`keepFor` whose calls the build cannot read, because those calls stay calls to the run-time `cx()`.
+A module that calls `eval` directly keeps its import of `cx`, and with it the map, whatever text it
+runs (`eval('1')` too), because that text can read the module's names and the build cannot read the
+text. An indirect call, `(0, eval)(text)` or `globalThis.eval(text)`, runs its text in the global
+scope, where `cx` is not visible, and does not keep the import.
 
 So that nothing is dropped on a guess, a `cx()` call whose atoms the build cannot read fails the
 build. `vite build` reads every module first and fails once, at the end, with a report that lists

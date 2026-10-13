@@ -104,6 +104,8 @@ describe('AC-used-atoms-21 and -22 — a call that begins a statement', () => {
       `switch (1) { case 1: ${call}; break }`,
       `switch (1) { default: ${call} }`,
       `class K { static { ${call} } }`,
+      `switch (1) { case 1: foo()\n  ${call} }`,
+      `class K { static { foo()\n  ${call} } }`,
     ])('does what the run-time call does in %j', (body) => {
       const source = `${IMPORT}export default (foo, f, g, on, t, xs) => {\n  let n = foo()\n  ${body}\n  return n\n}\n`
       const out = rewrite(source, KEEP)
@@ -135,6 +137,11 @@ describe('AC-used-atoms-21 and -22 — a call that begins a statement', () => {
       'cx?.dynamic(t)',
       "cx('flex').length",
       "cx.raw('a').length",
+      "cx(on && 'flex').x = 1",
+      "cx(on && 'flex')[0] ??= 1",
+      "cx(on && 'flex').x++",
+      "cx.raw('a', on && 'b').x += 1",
+      'cx.dynamic(t).x &&= 1',
     ]
 
     it.each(FOLLOWED)('does what the run-time call does for %j', (statement) => {
@@ -148,6 +155,16 @@ describe('AC-used-atoms-21 and -22 — a call that begins a statement', () => {
       expect(original.error).toBeUndefined()
       expect(run(evaluate<Body>(out.code, undefined))).toEqual(original)
     })
+  })
+
+  it('leads a call that starts a statement of the program itself', () => {
+    const out = rewrite(`${IMPORT}const a = [1]\ncx('flex', on && 'grid')\nexport const b = 1\n`)
+
+    expect(statementsOf(out.code).map((node) => node.type)).toEqual([
+      'VariableDeclaration',
+      'ExpressionStatement',
+      'ExportNamedDeclaration',
+    ])
   })
 
   it('does not lead a call that is not the start of its statement', () => {
@@ -165,6 +182,8 @@ describe('AC-used-atoms-23 — the import that is taken away leaves the lines ar
     ['a bracket', "[1].forEach(() => { globalThis.ran = 1 })\nexport const a = cx('flex')"],
     ['a template literal', "`x`.length\nexport const a = cx('flex')"],
     ['a plus sign', "+1\nexport const a = cx('flex')"],
+    ['a minus sign', "-1\nexport const a = cx('flex')"],
+    ['a regular expression', "/x/.test('x')\nexport const a = cx('flex')"],
   ])('keeps the directive a directive when %s follows the import', (_name, rest) => {
     for (const directive of ["'use client'", "'use strict'"]) {
       const source = `${directive}\n${IMPORT}${rest}\n`
@@ -201,6 +220,14 @@ describe('AC-used-atoms-23 — the import that is taken away leaves the lines ar
 
     expect(statementsOf(out.code)[0]).toMatchObject({ directive: 'use client' })
     expect(statementsOf(out.code)).toHaveLength(3)
+  })
+
+  it('skips a comment to the statement after it, and writes no semicolon before one that cannot continue', () => {
+    const out = rewrite(
+      `'use client'\n${IMPORT.trimEnd()} // the classes\n/* then */\nexport const a = cx('flex')\n`,
+    )
+
+    expect(out.code).not.toContain(';')
   })
 
   it('leaves no stray semicolon where the next statement cannot continue the one before', () => {
