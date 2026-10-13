@@ -99,7 +99,11 @@ describe('AC-nextjs-used-atoms-21 — cx.dynamic() reads its map as an object or
 
 describe('AC-nextjs-used-atoms-21 — Vite folds the map as an object literal, never as its text', () => {
   const MAP_TEXT = '"flex":"nave-flex"'
-  const ENTRY = "import { cx } from '@navecss/core/cx'\nglobalThis.__r = cx.dynamic('flex')\n"
+  // `cx.raw` read through an alias is a use the build does not rewrite, so `cx`'s module, and the
+  // map folded into it, stay in the bundle even where the plugin turns direct calls into their
+  // values.
+  const ENTRY =
+    "import { cx } from '@navecss/core/cx'\nconst { raw } = cx\nglobalThis.__r = [raw('x'), cx.dynamic('flex')]\n"
 
   async function builtJs(plugins: Plugin[] = []): Promise<string> {
     const app = makeUsedApp(appFiles({ 'src/App.ts': ENTRY }))
