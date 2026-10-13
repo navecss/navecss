@@ -26,7 +26,7 @@ This emits the token layer's custom properties (`--nave-*`) inside `@layer token
 
 ## What ships
 
-- **Colour** — the semantic colours consumers use (`action`, `content`, `surface`, `border`, `feedback`, and foregrounds for the primary action and the feedback roles), each with a light and a dark value through `light-dark()`. The `neutral`, `primary` and `danger` scales they are derived from stay inside the build: no step of them is emitted as a custom property. The neutral colours re-hue live from one custom property, under Theming below.
+- **Colour** — the semantic colours consumers use (`action`, `content`, `surface`, `border`, `feedback`, a scrim for behind a modal panel (`backdrop`), and foregrounds for the primary action and the feedback roles), each with a light and a dark value through `light-dark()`. The `neutral`, `primary` and `danger` scales they are derived from stay inside the build: no step of them is emitted as a custom property. The neutral colours re-hue live from one custom property, under Theming below.
 - **Typography, spacing, size, shape, shadow, motion, z-index, opacity** — the rest of the token taxonomy, authored once in `tokens.json` and compiled by the first-party DTCG 2025.10 reader.
 - **Breakpoints** — a JS-only export (`@navecss/tokens/breakpoints`): custom properties cannot hold media-query ranges, so these ship as typed constants and prebuilt Level 4 media-query strings instead.
 

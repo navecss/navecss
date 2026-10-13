@@ -189,10 +189,12 @@ renders nothing.
 - `--nave-border-width-mark`: Strokes of glyphs drawn in CSS: check marks, indeterminate bars
 - `--nave-border-width-none`
 - `--nave-border-width-sm`: Default border / divider
+- `--nave-color-action-highlight`: Fill for a control under the pointer, the keyboard or a press: a highlighted list or menu item, or a ghost button. Never the only cue for focus or for a state such as selected, checked, open or current, and not for disabled controls.
 - `--nave-color-action-primary`
 - `--nave-color-action-primary-active`
 - `--nave-color-action-primary-hover`
 - `--nave-color-action-secondary`
+- `--nave-color-backdrop-modal`: Translucent layer between a modal panel and the page, which it recedes. Only behind a fully modal panel; never under text, a control or a focus indicator the reader can reach.
 - `--nave-color-border-control`: Identifying boundary for a control (inputs, form boundaries, and the secondary action control).
 - `--nave-color-border-default`: Decorative dividers and card edges.
 - `--nave-color-border-disabled`
