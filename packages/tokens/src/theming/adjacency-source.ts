@@ -131,6 +131,12 @@ export const ADJACENCY_EXCLUSIONS: Readonly<Record<string, string>> = {
   'border.default':
     'decorative divider: excluded as a decorative divider or card edge, and the ' +
     'exclusion is void the moment such a border is applied to a control.',
+  'backdrop.modal':
+    'scrim: excluded from the checked pair set because it is translucent, so the colour ' +
+    'it renders is a blend with whatever the page shows beneath it, which no pair in this ' +
+    'list can describe. The exclusion holds only while the scrim is painted behind a fully ' +
+    'modal panel, over a page the reader cannot reach; it is void the moment text, a ' +
+    'control or a focus indicator the reader can reach is drawn on it.',
 }
 
 /**

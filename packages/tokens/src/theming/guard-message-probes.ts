@@ -24,6 +24,7 @@ import {
   assertNoFocusableAdjacentToActionFill,
   assertNoForbiddenAdjacency,
   assertNoOrphanedSemanticSlot,
+  assertNoTranslucentSlotInDeclaredPair,
 } from './adjacency.ts'
 import {
   assertContrastFloors,
@@ -132,8 +133,13 @@ const NOTICE_PROBE_LABEL = 'Retheming notice'
  * `assertHarnessFramingIsClean()` with the test suite green, because none of the three was in
  * this registry; with these probes, the same edit fails it.
  *
- * **What remains unprobed of the eight above: five messages**, the eight less these three. The
- * permanently excluded refusal above sits outside that eight and stays unprobed as well.
+ * One more after that: `assertNoTranslucentSlotInDeclaredPair`, added with the scrim colour.
+ * It sits outside the eight above, so probing it widened the registry without shrinking that
+ * residual.
+ *
+ * **What remains unprobed of the eight above: five messages**, the eight less the three
+ * guards named two paragraphs up. The permanently excluded refusal above sits outside that
+ * eight and stays unprobed as well.
  * - Two cannot be probed by this check at all: `assertDescriptionsAreClean`'s message and
  *   `assertNoticeIsClean`'s framing refusal both quote the phrase they caught, so any input
  *   that makes them throw also makes their message fail this check. `copy-lint.test.ts` pins
@@ -230,6 +236,19 @@ export const ACCESSIBILITY_GUARD_MESSAGE_PROBES: readonly GuardMessageProbe[] = 
         assertNoFocusableAdjacentToActionFill([
           ...ADJACENCY,
           { subject: 'border.focus', against: 'action.primary', class: 'non-text' },
+        ] satisfies Adjacency[]),
+      ),
+  },
+  {
+    label: 'the translucent-slot-in-a-declared-pair output',
+    // The scrim (backdrop.modal) is the one translucent slot; declaring it against body text is
+    // this guard's own failing direction, called directly so the escape-record guard is not
+    // the one that answers.
+    capture: () =>
+      capturedFailureMessage(() =>
+        assertNoTranslucentSlotInDeclaredPair([
+          ...ADJACENCY,
+          { subject: 'content.primary', against: 'backdrop.modal', class: 'text' },
         ] satisfies Adjacency[]),
       ),
   },

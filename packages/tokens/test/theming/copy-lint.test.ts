@@ -937,6 +937,25 @@ describe('AC-theming-42 covers: R36', () => {
         /Copy-check violation: the focusable-adjacent-to-action-fill output/,
       )
     })
+
+    it('a conformance word injected into assertNoTranslucentSlotInDeclaredPair fails assertHarnessFramingIsClean', async () => {
+      vi.resetModules()
+      vi.doMock('../../src/theming/adjacency.ts', async () => {
+        const actual: Record<string, unknown> = await vi.importActual(
+          '../../src/theming/adjacency.ts',
+        )
+        return {
+          ...actual,
+          assertNoTranslucentSlotInDeclaredPair: () => {
+            throw new Error('This slot is WCAG AA compliant at 4.5:1.')
+          },
+        }
+      })
+      const copyLint = await import('../../src/theming/copy-lint.ts')
+      expect(() => copyLint.assertHarnessFramingIsClean()).toThrow(
+        /Copy-check violation: the translucent-slot-in-a-declared-pair output/,
+      )
+    })
   })
 })
 

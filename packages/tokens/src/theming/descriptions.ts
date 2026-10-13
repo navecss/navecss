@@ -6,6 +6,14 @@
  */
 export const SLOT_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
   [
+    'action.highlight',
+    'Fill for a control under the pointer, the keyboard or a press: a highlighted list or menu item, or a ghost button. Never the only cue for focus or for a state such as selected, checked, open or current, and not for disabled controls.',
+  ],
+  [
+    'backdrop.modal',
+    'Translucent layer between a modal panel and the page, which it recedes. Only behind a fully modal panel; never under text, a control or a focus indicator the reader can reach.',
+  ],
+  [
     'border.control',
     'Identifying boundary for a control (inputs, form boundaries, and the secondary action control).',
   ],
