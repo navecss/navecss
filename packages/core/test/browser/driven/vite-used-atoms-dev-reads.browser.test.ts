@@ -401,6 +401,72 @@ function hasModule(server: ViteDevServer | undefined, file: string): boolean {
   return [...ids].some((id) => id.endsWith(file))
 }
 
+/**
+ * The app of the `<link>` rows: `index.html` names `src/linked.css` in a `<link>` (no module
+ * imports it) and carries `nave-hidden`, and `src/main.ts` appends an element carrying
+ * `cx('flex')`.
+ */
+const LINKED_APP = {
+  'package.json': '{"private":true,"type":"module"}',
+  'index.html':
+    '<!doctype html><html><head><link rel="stylesheet" href="/src/linked.css"></head><body><p class="nave-hidden">h</p><script type="module" src="/src/main.ts"></script></body></html>',
+  'src/linked.css': APP_CSS,
+  'src/main.ts': appends('f', 'flex'),
+}
+
+/**
+ * Waits until `isDone` is true, and fails naming `what` after 30 s.
+ */
+async function untilServer(isDone: () => boolean, what: string): Promise<void> {
+  const deadline = Date.now() + 30_000
+  while (!isDone()) {
+    if (Date.now() > deadline) throw new Error(`the dev server never reached ${what}`)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
+/**
+ * A scratch plugin that lets the dev server read the module `script` only once the stylesheet
+ * `file` has been answered, so the answer cannot hold what the script adds, whichever request
+ * the browser sends first. `answer()` is the text of that first answer. List it after
+ * `navePlugin()`, so the text it keeps is the one the page is given.
+ */
+function answeredBeforeScript(
+  file: string,
+  script: string,
+): { answer: () => string | undefined; plugin: PluginOption } {
+  let answer: string | undefined
+  return {
+    answer: () => answer,
+    plugin: [
+      {
+        name: 'script-after-stylesheet',
+        enforce: 'pre',
+        async transform(_code: string, id: string) {
+          if (id.endsWith(script))
+            await untilServer(() => answer !== undefined, `the ${file} answer`)
+        },
+      },
+      {
+        name: 'stylesheet-answer',
+        enforce: 'post',
+        transform(code: string, id: string) {
+          if (answer === undefined && id.split('?', 1)[0]?.endsWith(file)) answer = code
+        },
+      },
+    ],
+  }
+}
+
+/**
+ * Whether the stylesheet text `css` holds a rule for each of `names`.
+ */
+function rulesIn(css: string | undefined, names: readonly string[]): Record<string, boolean> {
+  return Object.fromEntries(
+    names.map((name) => [name, new RegExp(String.raw`\.${name}(?![\w-])`).test(css ?? '')]),
+  )
+}
+
 describe('AC-used-atoms-40 — what the first stylesheet response has read', () => {
   it('a second script of the page, which the stylesheet’s own graph does not hold, has had its lazy module read', async () => {
     const app = makeUsedApp(
@@ -438,29 +504,22 @@ describe('AC-used-atoms-40 — what the first stylesheet response has read', () 
     }
   }, 120_000)
 
-  it('a stylesheet a link names, which no module imports, is answered with the classes of the page at once, and the class a script adds follows', async () => {
-    const app = makeUsedApp({
-      'package.json': '{"private":true,"type":"module"}',
-      'index.html':
-        '<!doctype html><html><head><link rel="stylesheet" href="/src/linked.css"></head><body><p class="nave-hidden">h</p><script type="module" src="/src/main.ts"></script></body></html>',
-      'src/linked.css': APP_CSS,
-      'src/main.ts': appends('f', 'flex'),
-    })
+  it('a stylesheet a link names, which no module imports, is answered at once with the classes of the page', async () => {
+    const app = makeUsedApp(LINKED_APP)
+    const order = answeredBeforeScript('src/linked.css', 'src/main.ts')
     try {
-      const { server, url } = await listenDev(devConfig(app.root, [navePlugin()]))
+      const { server, url } = await listenDev(devConfig(app.root, [navePlugin(), order.plugin]))
       try {
         const page = await browser.newPage()
-        await recordFrames(page, ['nave-hidden', 'nave-flex'])
+        await recordFrames(page, ['nave-hidden'])
         await page.goto(url)
-        await until(
-          page,
-          async () => Object.hasOwn(await framesOf(page), 'nave-flex'),
-          'the script’s element',
-        )
-        await page.waitForTimeout(3000)
+        await until(page, () => hasElement(page, '#f'), 'the script’s element')
 
-        expect(await framesOf(page)).toEqual({ 'nave-hidden': true, 'nave-flex': true })
-        expect(await hasRuleNow(page, 'nave-flex')).toBe(true)
+        expect(await framesOf(page)).toEqual({ 'nave-hidden': true })
+        expect(rulesIn(order.answer(), ['nave-hidden', 'nave-flex'])).toEqual({
+          'nave-hidden': true,
+          'nave-flex': false,
+        })
         await page.close()
       } finally {
         await stopDev(server)
