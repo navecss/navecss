@@ -6,13 +6,16 @@ Six more components, and the pieces the first release left unpainted.
 
 `@navecss/base-ui/alert-dialog`, `/context-menu`, `/menubar`, `/preview-card`, `/combobox` and
 `/autocomplete` each re-export every part of their Base UI subpath, with Nave's classes on the parts
-the package styles, and the types Base UI exports beside them. A part's own types, such as
+the package styles, and the types Base UI exports beside them. The types under a part, such as
 `Menu.Item.Props`, take their names and type parameters from Base UI 1.3, the oldest version the
-package supports, so two spellings that Base UI 1.8.0 accepts do not compile through this package:
-`ContextMenu.Root.Actions`, and `Combobox.Root.Props` with its third type parameter, `Item`. Import
+package supports, so two that Base UI added up to 1.8.0 do not come through:
+`ContextMenu.Root.Actions`, and the third type parameter of `Combobox.Root.Props`, `Item`. Import
 `ContextMenuRootActions` and `ComboboxRootProps<Value, Multiple, Item>` from the same subpath
-instead. The package now wraps 29 components. Alert Dialog's trigger and close join the Button
-family, and a Menubar's menus come from `@navecss/base-ui/menu`.
+instead. A part that Base UI also exports as a type, such as `Dialog.Trigger`, now works as a type
+through this package too. On Base UI 1.3 to 1.7, Combobox's `createItems` is `undefined`, as it is
+in Base UI, and a build that imports the package root or `@navecss/base-ui/combobox` may print a
+harmless bundler warning about it. The package now wraps 29 components. Alert Dialog's trigger and
+close join the Button family, and a Menubar's menus come from `@navecss/base-ui/menu`.
 
 Button, Toolbar.Button and the other members of the family take a third variant, `ghost`: no fill
 or border at rest, the new highlight fill under the pointer and while its menu is showing.

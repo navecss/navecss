@@ -48,7 +48,7 @@ export default function RenameDialog() {
 }
 ```
 
-Every subpath of Base UI that this package wraps is listed under [What is styled](#what-is-styled). Each one also re-exports the types Base UI exports there, so type imports change the same way, except the two type spellings named at the end of [What is styled](#what-is-styled). The package root, `@navecss/base-ui`, re-exports the same components.
+Every subpath of Base UI that this package wraps is listed under [What is styled](#what-is-styled). Each one also re-exports every flat type name Base UI exports there, such as `DialogRootProps`, so those imports change the same way. Base UI's dotted type names, such as `Dialog.Root.Props`, come through as well, but not all of them: where one does not compile through this package, import Base UI's flat name for the same type from the same subpath. The end of [What is styled](#what-is-styled) names the ones left out by design. The package root, `@navecss/base-ui`, re-exports the same components.
 
 ## The stylesheet
 
@@ -214,7 +214,9 @@ A right-to-left app needs both `dir="rtl"` on `<html>` (or on the element you pa
 
 Context Menu's trigger area is your own element, and Nave paints nothing on it.
 
-Parts that Base UI added after 1.3 are exported as whatever your installed version provides. A part's own types, such as `Menu.Item.Props`, take their names and type parameters from Base UI 1.3, so two spellings that Base UI 1.8.0 accepts do not compile through this package: `ContextMenu.Root.Actions`, and `Combobox.Root.Props` with its third type parameter, `Item`. Import `ContextMenuRootActions` from `@navecss/base-ui/context-menu` and `ComboboxRootProps<Value, Multiple, Item>` from `@navecss/base-ui/combobox` instead.
+Parts that Base UI added after 1.3 are exported as whatever your installed version provides. In this release the only such part is Combobox's `createItems`, added in Base UI 1.8.0. On 1.3 to 1.7 it is `undefined`, as it is in Base UI itself, and building an app that imports `@navecss/base-ui` or `@navecss/base-ui/combobox` may print a bundler warning that `createItems` has no matching export in Base UI's combobox module, even if the app never uses it. Vite prints it as `IMPORT_IS_UNDEFINED`. The warning is harmless and stops on Base UI 1.8.0. The package keeps it because avoiding it would make every app that uses `createItems` bundle all of Combobox.
+
+The types under a part, such as `Menu.Item.Props`, take their names and type parameters from Base UI 1.3, so two that Base UI added up to 1.8.0 do not come through: `ContextMenu.Root.Actions`, and the third type parameter of `Combobox.Root.Props`, `Item`. Import `ContextMenuRootActions` from `@navecss/base-ui/context-menu` and `ComboboxRootProps<Value, Multiple, Item>` from `@navecss/base-ui/combobox` instead.
 
 ## Things to know
 
