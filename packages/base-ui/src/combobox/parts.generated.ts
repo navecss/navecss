@@ -141,4 +141,4 @@ export declare namespace Separator {
 }
 export const useFilter: typeof Base.useFilter = /*#__PURE__*/ (() => Base.useFilter)()
 export const useFilteredItems: typeof Base.useFilteredItems = /*#__PURE__*/ (() => Base.useFilteredItems)()
-export const createItems: PartOf<typeof Base, 'createItems'> = /*#__PURE__*/ (() => Reflect.get(Base, 'createItems'))()
+export const createItems: PartOf<typeof Base, 'createItems'> = /*#__PURE__*/ (() => Base.createItems)()
