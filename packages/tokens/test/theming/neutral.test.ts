@@ -94,6 +94,37 @@ describe('AC-theming-12 covers: R10', () => {
   })
 })
 
+describe('neutralRcsFormula: the alpha it writes', () => {
+  const literals = generateNeutralRampLiterals()
+  const alphaOf = (alpha: number): string => neutralRcsFormula(950, literals, alpha)
+
+  it.each([30, NaN, -0.5, 1.5, Infinity])(
+    'refuses an alpha of %s, naming the step and the value',
+    (alpha) => {
+      expect(() => alphaOf(alpha)).toThrow(
+        `The alpha for neutral step 950 must be a finite number from 0 to 1, got ${String(alpha)}.`,
+      )
+    },
+  )
+
+  it('rounds the alpha like the other components, so 0.1 + 0.2 is written as 0.3', () => {
+    expect(alphaOf(0.1 + 0.2)).toMatch(/ h \/ 0\.3\)$/)
+  })
+
+  it.each([0, 1])('accepts an alpha of %s at the ends of the range', (alpha) => {
+    expect(alphaOf(alpha)).toMatch(new RegExp(String.raw` h / ${alpha}\)$`))
+  })
+
+  it('writes the shipped scrim alphas unchanged', () => {
+    expect(alphaOf(0.3)).toMatch(/ h \/ 0\.3\)$/)
+    expect(alphaOf(0.6)).toMatch(/ h \/ 0\.6\)$/)
+  })
+
+  it('writes an opaque step with an alpha of 1 when none is given', () => {
+    expect(neutralRcsFormula(950, literals)).toMatch(/ h \/ 1\)$/)
+  })
+})
+
 // Pins the FULL cleared thrown message, independently typed rather than
 // imported from the source constant, so a copy edit to NEUTRAL_CHROMA_CEILING_MARGIN_REASON
 // makes this hardcoded string mismatch and this test go red — closing the gap the existing
