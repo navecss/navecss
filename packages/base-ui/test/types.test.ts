@@ -67,7 +67,7 @@ const errorsOf = (output: string, fixture: string, references: readonly Referenc
 describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
   const subpaths = readBaseUiTypes(version)
 
-  describe('AC-base-ui-overlay-completion-02 (supersedes AC-base-ui-bridge-02): the import swap is the whole migration for types as well as values', () => {
+  describe('AC-base-ui-feedback-navigation-02 and AC-base-ui-overlay-completion-02 (supersede AC-base-ui-bridge-02): the import swap is the whole migration for types as well as values', () => {
     const references = typeWalkReferences(version)
 
     it(
@@ -177,7 +177,7 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
     )
   })
 
-  describe('AC-base-ui-overlay-completion-03 (extends AC-base-ui-bridge-15): each export is typed from its own namespace', () => {
+  describe('AC-base-ui-feedback-navigation-03 and AC-base-ui-overlay-completion-03 (extend AC-base-ui-bridge-15): each export is typed from its own namespace', () => {
     it(
       'keeps every part outside the Button family typed as the Base UI part of its own namespace, the six included',
       { timeout: MINUTES },
@@ -221,7 +221,7 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
     )
   })
 
-  describe('AC-base-ui-overlay-completion-05 (supersedes the variant clauses of AC-base-ui-bridge-15): the variant types', () => {
+  describe('AC-base-ui-feedback-navigation-05 and AC-base-ui-overlay-completion-05 (supersede the variant clauses of AC-base-ui-bridge-15): the variant types', () => {
     it(
       'gives every Button-family part Base UI props plus exactly variant secondary, primary or ghost and size md or sm, and Base UI declares neither',
       { timeout: MINUTES },

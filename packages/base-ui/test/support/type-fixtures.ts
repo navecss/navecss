@@ -20,8 +20,9 @@ export const BASE = '@base-ui/react'
 export const NAVE = '@navecss/base-ui'
 
 /**
-The parts whose props gain `variant` and `size` (R4, and the Alert Dialog's two from the overlay
-completion), by subpath and part (`.` for the component).
+The parts whose props gain `variant` and `size` (R4, the Alert Dialog's two from the overlay
+completion, and the Toast's two from the feedback and navigation release), by subpath and part
+(`.` for the component).
  */
 export const VARIANT_PARTS: readonly { kind: 'size' | 'variant'; part: string; subpath: string }[] =
   [
@@ -33,6 +34,8 @@ export const VARIANT_PARTS: readonly { kind: 'size' | 'variant'; part: string; s
     { kind: 'variant', part: 'Close', subpath: 'alert-dialog' },
     { kind: 'variant', part: 'Trigger', subpath: 'popover' },
     { kind: 'variant', part: 'Close', subpath: 'popover' },
+    { kind: 'variant', part: 'Action', subpath: 'toast' },
+    { kind: 'variant', part: 'Close', subpath: 'toast' },
     { kind: 'variant', part: 'Trigger', subpath: 'menu' },
     { kind: 'variant', part: 'Trigger', subpath: 'tooltip' },
     { kind: 'size', part: '.', subpath: 'toggle' },
@@ -40,6 +43,13 @@ export const VARIANT_PARTS: readonly { kind: 'size' | 'variant'; part: string; s
 
 const isVariantPart = (subpath: string, part: string): boolean =>
   VARIANT_PARTS.some((entry) => entry.subpath === subpath && entry.part === part)
+
+/**
+Whether a part is typed apart from Base UI's: the Button family and `Toggle`, and `Avatar.Root`,
+whose props gain `size` of `'sm' | 'md' | 'lg'` (the feedback and navigation criterion -05 holds it).
+ */
+const isTypedApart = (subpath: string, part: string): boolean =>
+  isVariantPart(subpath, part) || (subpath === 'avatar' && part === 'Root')
 
 export const identifier = (subpath: string): string => subpath.replaceAll('-', '_')
 const topName = (subpath: string): string =>
@@ -61,6 +71,7 @@ export const EQUAL =
 const GENERIC_ARGUMENT: Readonly<Record<string, string>> = {
   'accordion.Root': "'a' | 'b'",
   'combobox.Root': 'string',
+  'navigation-menu.Root': 'string',
   'radio-group..': "'a' | 'b'",
   'slider.Root': 'number',
   'toggle-group..': "'a' | 'b'",
@@ -115,7 +126,7 @@ const refAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
 const equalityAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
   subpaths.flatMap(({ parts, subpath }) =>
     parts
-      .filter((part) => !isVariantPart(subpath, part.name))
+      .filter((part) => !isTypedApart(subpath, part.name))
       .map(
         (part) =>
           `export type E_${identifier(subpath)}_${part.name === '.' ? 'self' : part.name} = Assert<Equal<${typeOf('N', subpath, part.name)}, ${typeOf('B', subpath, part.name)}>>`,
