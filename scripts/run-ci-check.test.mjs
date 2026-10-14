@@ -487,15 +487,18 @@ async function within(promise, ms, fallback) {
  * end: a process killed while it writes leaves an empty or cut-off file, which fails the whole
  * report (`Unexpected end of JSON input`, exit code 1) even though every test passed. The
  * processes started here are killed part-way on purpose, so they write into a scratch directory
- * and only the runner's own file, the one that measures run-ci-check.mjs, comes back.
+ * and only the runner's own file, the one that measures run-ci-check.mjs, comes back. A runner
+ * file that does not parse is reported through `warn`, so a shrink in that file's coverage leaves a
+ * line in the log.
  */
-function keepRunnerCoverage(scratch, destination, pid) {
+function keepRunnerCoverage(scratch, destination, pid, warn = console.warn) {
   for (const file of readdirSync(scratch)) {
     if (!file.startsWith(`coverage-${pid}-`)) continue
     const text = readFileSync(path.join(scratch, file), 'utf8')
     try {
       JSON.parse(text)
     } catch {
+      warn(`scripts:test: left out the runner's coverage file ${file}, which does not parse`)
       continue
     }
     writeFileSync(path.join(destination, file), text)
@@ -594,13 +597,18 @@ test('keepRunnerCoverage brings back only the runner’s own whole coverage file
     writeFileSync(path.join(scratch, 'coverage-100-1700000000002-2.json'), '{"result":[{"scr')
     writeFileSync(path.join(scratch, 'coverage-200-1700000000000-0.json'), whole)
 
-    keepRunnerCoverage(scratch, destination, 100)
+    const warnings = []
+    keepRunnerCoverage(scratch, destination, 100, (line) => warnings.push(line))
 
     assert.deepEqual(readdirSync(destination), ['coverage-100-1700000000000-0.json'])
     assert.equal(
       readFileSync(path.join(destination, 'coverage-100-1700000000000-0.json'), 'utf8'),
       whole,
     )
+    assert.deepEqual(warnings.toSorted(), [
+      "scripts:test: left out the runner's coverage file coverage-100-1700000000001-1.json, which does not parse",
+      "scripts:test: left out the runner's coverage file coverage-100-1700000000002-2.json, which does not parse",
+    ])
   } finally {
     rmSync(dir, { force: true, recursive: true })
   }
