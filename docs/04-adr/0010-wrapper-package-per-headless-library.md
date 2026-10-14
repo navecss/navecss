@@ -49,9 +49,11 @@ measured.
 - **Correction (2026-10-13):** a part's own types are declared from the oldest Base UI the
   package supports (1.3.0 when this was written), so that the package's declarations compile
   there. A type member or type parameter Base UI added later is not on the wrapper's part:
-  against Base UI 1.8.0 that is `ContextMenu.Root.Actions` and the third type parameter of
-  `Combobox.Root.Props`. Each subpath also re-exports Base UI's flat type names, which reach
-  them (`ContextMenuRootActions`, `ComboboxRootProps`).
+  against Base UI 1.8.0 that is `ContextMenu.Root.Actions`, the third type parameter of
+  `Combobox.Root.Props`, and the type parameter of `NavigationMenu.Root.Props` with
+  `NavigationMenu.Root.Value`. Each subpath also re-exports Base UI's flat type names, which reach
+  them (`ContextMenuRootActions`, `ComboboxRootProps`, `NavigationMenuRootProps`,
+  `NavigationMenuRoot.Value`).
 
 **2. The styling is one stylesheet in `components.nave`, built when the package is built.**
 `@navecss/base-ui/styles.css` is made by expanding Nave's own atoms through the `@nave`

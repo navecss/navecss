@@ -15,7 +15,9 @@ a quieter look of its own, its panel fades in, and the link for the current page
 `aria-current="page"`, gets a thicker underline. Scroll Area paints its scrollbars as a 24px strip
 and always shows them, because Base UI hides the browser's own. Meter and Progress share one bar:
 an outlined track with a solid fill, and only the track for an indeterminate Progress. `Avatar.Root`
-takes a `size` of `'sm'`, `'md'` or `'lg'`. `Separator` is the separator the Toolbar already uses.
+takes a `size` of `'sm'`, `'md'` or `'lg'`. `Separator` is the separator the Toolbar already uses. As for the earlier components, a type
+parameter Base UI added after 1.3 is not on the dotted name: use `NavigationMenuRootProps<Value>` and
+`NavigationMenuRoot.Value<Value>` from `@navecss/base-ui/navigation-menu`.
 
 The stylesheet now sets one `z-index`, on the toast area, from `--nave-layer-toast`. All the new
 motion is switched off under `prefers-reduced-motion`, even when you have changed Nave's motion
