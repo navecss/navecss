@@ -12,9 +12,9 @@ import {
   exportNameOf,
   isTypeOnly,
   nodeAt,
-  nodesAt,
   staticStringOf,
   stringAt,
+  valueSpecifiersOf,
 } from './vite-ast.ts'
 
 export interface SourceFormOptions {
@@ -45,7 +45,7 @@ const DYNAMIC_IMPORT_TEXT =
  */
 function isExportingCx(node: AstNode): boolean {
   if (node.type === 'ExportAllDeclaration') return true
-  return nodesAt(node, 'specifiers').some((specifier) => {
+  return valueSpecifiersOf(node).some((specifier) => {
     const local = nodeAt(specifier, 'local')
     return (local?.type === 'Identifier' ? stringAt(local, 'name') : staticStringOf(local)) === 'cx'
   })
@@ -57,7 +57,7 @@ function isExportingCx(node: AstNode): boolean {
  */
 function isExportingRenamed(node: AstNode): boolean {
   if (node.type === 'ExportAllDeclaration') return nodeAt(node, 'exported') !== undefined
-  return nodesAt(node, 'specifiers').some(
+  return valueSpecifiersOf(node).some(
     (specifier) =>
       exportNameOf(nodeAt(specifier, 'local')) === 'cx' &&
       exportNameOf(nodeAt(specifier, 'exported')) !== 'cx',
@@ -73,7 +73,7 @@ function exportedNamesOf(node: AstNode): string[] {
   if (node.type === 'ExportAllDeclaration') {
     return [exportNameOf(nodeAt(node, 'exported')) ?? 'cx']
   }
-  return nodesAt(node, 'specifiers')
+  return valueSpecifiersOf(node)
     .filter((specifier) => exportNameOf(nodeAt(specifier, 'local')) === 'cx')
     .flatMap((specifier) => exportNameOf(nodeAt(specifier, 'exported')) ?? [])
 }

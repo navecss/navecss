@@ -16,6 +16,7 @@ import { cxBindingsOf, isImportingCx } from './vite-cx-bindings.ts'
 import { useOf, useOfExpression } from './vite-cx-reference.ts'
 import { sourceFormProblems } from './vite-cx-source-forms.ts'
 import { declaredExportProblems } from './vite-declared-exports.ts'
+import { refuseKeptParentheses } from './vite-kept-parentheses.ts'
 import {
   atomsInEscapedStrings,
   atomsWrittenIn,
@@ -241,6 +242,7 @@ function readUses(
  * Reads `program`, the parse of `code`.
  */
 export function readModule(code: string, program: AstNode, options: ReadOptions): ModuleReading {
+  refuseKeptParentheses(program)
   const result: ModuleReading = {
     atoms: new Set(),
     classes: new Set(),

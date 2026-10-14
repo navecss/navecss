@@ -543,6 +543,41 @@ describe('AC-nextjs-used-atoms-09: a module listed in cxModules', () => {
   )
 })
 
+describe('AC-nextjs-used-atoms-09: a type-only specifier exports no value from a cx source', () => {
+  const listed: ReadOptions = { ...OPTIONS, isDeclared: true }
+  const application: ReadOptions = {
+    ...OPTIONS,
+    cxSources: new Set(['./ui', CX_SOURCE]),
+    declaredSources: new Set(['./ui']),
+  }
+
+  it.each([
+    [
+      'a listed module: cx beside a type in one statement',
+      listed,
+      `export { cx, type AtomName } from '${CX_SOURCE}'`,
+    ],
+    [
+      'a listed module: a type in a statement of its own',
+      listed,
+      `export { cx } from '${CX_SOURCE}'\nexport { type AtomName } from '${CX_SOURCE}'`,
+    ],
+    [
+      'an application module: cx of a listed module, type-only',
+      application,
+      "export { type cx } from './ui'\nimport { cx } from './ui'\nexport const a = cx('flex')",
+    ],
+    [
+      'an application module: cx of a listed module, type-only, beside another name',
+      application,
+      "export { type cx, other } from './ui'\nimport { cx } from './ui'\nexport const a = cx('flex')",
+    ],
+  ])('reads %s as no problem', (_name, options, code) => {
+    expect(read(code, 'ts', options).problems).toEqual([])
+    expect(read(stripCode(code), 'js', options).problems).toEqual([])
+  })
+})
+
 describe('AC-nextjs-used-atoms-09 — what the list also settles', () => {
   it('does not let a type named cx shadow the import', () => {
     const code = `${IMPORT}export function f() {\n  type cx = string\n  return 'a' as cx\n}\nexport const b = cx('block')`
@@ -626,14 +661,20 @@ describe('AC-nextjs-used-atoms-09: a tree that keeps a node for a pair of parent
   const REFUSAL =
     "readModule reads a syntax tree with no node for a pair of parentheses, as Vite's parser returns it. This tree keeps one (a ParenthesizedExpression): parse with the parentheses dropped, for example oxc-parser with preserveParens: false."
 
-  it.each(["('nave-' as string) + tone", "('nave-') + tone"])(
-    'throws on %s, a piece in parentheses, and reads the tree without them',
-    (joined) => {
-      const code = `${IMPORT}declare const tone: string\nexport const a = ${joined}`
-      const kept = parseAst(code, { lang: 'ts', preserveParens: true }) as unknown as AstNode
-      expect(hasNode(code, ofType('ParenthesizedExpression'))).toBe(false)
-      expect(() => readTree(code, kept)).toThrow(new TypeError(REFUSAL))
-      expect(authoredVerdict(code)).toEqual({ atoms: [], problems: ['concatenation'] })
-    },
-  )
+  it.each([
+    ['a piece under as, in parentheses', "export const a = ('nave-' as string) + tone"],
+    ['a piece in parentheses', "export const a = ('nave-') + tone"],
+    ['a piece in a class decorator', "@dec(('nave-') + tone)\nexport class A {}"],
+    ['a piece in a method decorator', "export class A {\n  @dec(('nave-') + tone) m() {}\n}"],
+    [
+      'a piece in a parameter decorator',
+      "export class A {\n  constructor(@dec(('nave-') + tone) public c: string) {}\n}",
+    ],
+  ])('throws on %s, and reads the tree without the parentheses', (_name, body) => {
+    const code = `${IMPORT}declare function dec(x: unknown): any\ndeclare const tone: string\n${body}`
+    const kept = parseAst(code, { lang: 'ts', preserveParens: true }) as unknown as AstNode
+    expect(hasNode(code, ofType('ParenthesizedExpression'))).toBe(false)
+    expect(() => readTree(code, kept)).toThrow(new TypeError(REFUSAL))
+    expect(authoredVerdict(code)).toEqual({ atoms: [], problems: ['concatenation'] })
+  })
 })

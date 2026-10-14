@@ -156,17 +156,6 @@ function leaf(): void {
   // binding here.
 }
 
-const PARENTHESES_KEPT =
-  "readModule reads a syntax tree with no node for a pair of parentheses, as Vite's parser returns it. This tree keeps one (a ParenthesizedExpression): parse with the parentheses dropped, for example oxc-parser with preserveParens: false."
-
-/**
- * The reader takes the tree Vite's parser returns, which keeps no node for a pair of parentheses; a
- * tree that keeps them would read a class built from pieces as whole, so it is refused.
- */
-function refuseParentheses(): never {
-  throw new TypeError(PARENTHESES_KEPT)
-}
-
 /**
  * Whether `node` calls `eval` by name, which runs its text in the calling scope. A parenthesised
  * `eval` is still direct; `(0, eval)` and a member are not.
@@ -226,7 +215,6 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   ContinueStatement: leaf,
   MetaProperty: leaf,
   ExportAllDeclaration: leaf,
-  ParenthesizedExpression: refuseParentheses,
   TSInterfaceDeclaration: leaf,
   TSTypeAliasDeclaration: leaf,
   TSDeclareFunction: leaf,

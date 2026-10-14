@@ -93,6 +93,14 @@ export function isTypeOnly(node: AstNode): boolean {
 }
 
 /**
+ * The specifiers of an import or export statement that bind or export a value: those a
+ * types-stripped copy keeps (`type` ones are dropped).
+ */
+export function valueSpecifiersOf(node: AstNode): AstNode[] {
+  return nodesAt(node, 'specifiers').filter((specifier) => !isTypeOnly(specifier))
+}
+
+/**
  * The text a string-valued node stands for: a string literal, or a template literal with no
  * substitutions. `undefined` for anything else.
  */
