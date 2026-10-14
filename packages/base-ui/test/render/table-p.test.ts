@@ -3,11 +3,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Source } from '../support/scenes.ts'
 
 import { marked, partsNamed } from '../support/dom.ts'
+import { EARLIER_SUBPATHS, isFeedbackPart } from '../support/feedback.ts'
 import { cleanup, render } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
-import { SUBPATHS, topName } from '../support/subpaths.ts'
+import { topName } from '../support/subpaths.ts'
 import { tableP, tablePClasses, tablePClassesFor, tablePFor } from '../support/table-p.ts'
 import { isInT0 } from '../support/table-t0.ts'
 
@@ -63,7 +64,7 @@ const observe = async (
 ): Promise<Observation> => {
   const parts: Observed[] = []
   const anywhere = new Set<string>()
-  for (const subpath of SUBPATHS) {
+  for (const subpath of EARLIER_SUBPATHS) {
     const scene = scenes[subpath]
     if (scene === undefined) {
       throw new Error(`no scene for ${subpath}`)
@@ -121,6 +122,17 @@ const problemsAgainst = (observation: Observation, expected: Expected): string[]
   ]
 }
 
+/**
+ * The classes of the parts of the v1 package and the overlay completion: Table P without the
+ * seven, whose scenes the files of their own render.
+ */
+const earlierClasses: ReadonlySet<string> = new Set(
+  tableP
+    .entries()
+    .filter(([part]) => !isFeedbackPart(part))
+    .flatMap(([, names]) => names),
+)
+
 const shipping = new Map<'render', Promise<Observation>>()
 
 /**
@@ -138,7 +150,7 @@ const observeShipping = (): Promise<Observation> => {
  */
 const unrendered = (observation: Observation): string[] => {
   const seen = new Set(observation.parts.map(({ part }) => part))
-  const present = new Set(SUBPATHS.flatMap((subpath) => keysAt(bare, subpath)))
+  const present = new Set(EARLIER_SUBPATHS.flatMap((subpath) => keysAt(bare, subpath)))
   return tableP
     .keys()
     .filter((part) => present.has(part) && !seen.has(part))
@@ -149,11 +161,13 @@ const unrendered = (observation: Observation): string[] => {
  * Every Backdrop key of every component, as `Namespace.Backdrop`.
  */
 const backdropKeys = (): string[] =>
-  SUBPATHS.flatMap((subpath) => keysAt(bare, subpath)).filter((part) => part.endsWith('.Backdrop'))
+  EARLIER_SUBPATHS.flatMap((subpath) => keysAt(bare, subpath)).filter((part) =>
+    part.endsWith('.Backdrop'),
+  )
 
 describe('AC-base-ui-overlay-completion-08: every part of every subpath is either styled or deliberately not', () => {
   it('places every key of Base UI at this run in exactly one of the two tables', () => {
-    expect(SUBPATHS.flatMap((subpath) => unplaced(keysAt(bare, subpath)))).toEqual([])
+    expect(EARLIER_SUBPATHS.flatMap((subpath) => unplaced(keysAt(bare, subpath)))).toEqual([])
   })
 
   it('control: a part added to a namespace and absent from both tables is reported', () => {
@@ -267,7 +281,7 @@ describe('AC-base-ui-overlay-completion-07: the rendered classes are Table P, fo
     const { anywhere } = await observeShipping()
     expect(anywhere.difference(tablePClasses).size).toBe(0)
     // Every class the table names is on some rendered element, so none passes unlooked at.
-    expect(tablePClasses.difference(anywhere).size).toBe(0)
+    expect(earlierClasses.difference(anywhere).size).toBe(0)
   })
 
   it('carries no class of an unsigned draft: the shipping render has each draft signed, none else', async () => {

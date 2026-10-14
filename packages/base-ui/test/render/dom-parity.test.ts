@@ -5,11 +5,12 @@ import type { ElementRecord } from '../support/dom.ts'
 import type { Props } from '../support/scenes.ts'
 
 import { describeDocument, marked, parityViolations, partsNamed } from '../support/dom.ts'
+import { EARLIER_SUBPATHS } from '../support/feedback.ts'
 import { act, cleanup, render, user } from '../support/react.ts'
 import { partOf, scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
 import { isOverlay, openProps } from '../support/states.ts'
-import { SUBPATHS, topName } from '../support/subpaths.ts'
+import { topName } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 
 const bare = await loadBare()
@@ -107,7 +108,7 @@ const dataNaveNames = (element: Element): string =>
 const VARIANT_PART_NAMES: ReadonlySet<string> = new Set(Object.keys(VARIANT_PROPS))
 
 describe("AC-base-ui-bridge-12, extended to the six by AC-base-ui-overlay-completion-43: a wrapper renders exactly the bare part's DOM, plus its class and data-nave-*", () => {
-  for (const subpath of SUBPATHS) {
+  for (const subpath of EARLIER_SUBPATHS) {
     const states: { label: string; props: Record<string, Props> }[] = isOverlay(subpath)
       ? [
           { label: 'closed', props: {} },
@@ -132,7 +133,7 @@ describe("AC-base-ui-bridge-12, extended to the six by AC-base-ui-overlay-comple
 
   it('gives a data-nave-* attribute to no part but the ones AC-base-ui-overlay-completion-04 names', async () => {
     const carriers = new Map<string, string>()
-    for (const subpath of SUBPATHS) {
+    for (const subpath of EARLIER_SUBPATHS) {
       for (const variants of [VARIANT_PROPS, variantProps('ghost')]) {
         await render(
           scenes[subpath]?.render(nave, { props: { ...openProps(), ...variants } }) as never,
@@ -342,7 +343,7 @@ const snapshotsAcross = async (
 }
 
 describe("AC-base-ui-bridge-37, extended to the six by AC-base-ui-overlay-completion-43: Nave's contribution is chosen by the consumer's props, never by state", () => {
-  for (const subpath of SUBPATHS) {
+  for (const subpath of EARLIER_SUBPATHS) {
     it(`${subpath}: the class and data-nave-* are identical in every state`, async () => {
       const scene = scenes[subpath]
       if (scene === undefined) {

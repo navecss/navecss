@@ -9,6 +9,8 @@ The ids `useId` generates: `_r_1a_` on React 19, `:r1a:` on React 18.
  */
 const GENERATED_ID = /^(?:_r_[\da-z]+_|:r[\da-z]+:)$/
 
+const EMBEDDED_ID = /_r_[\da-z]+_|:r[\da-z]+:/g
+
 export interface ElementRecord {
   readonly attributes: ReadonlyMap<string, string>
   readonly tag: string
@@ -28,12 +30,19 @@ export const describeDocument = (root: ParentNode = document.body): ElementRecor
       ordinals.set(id, `#${ordinals.size + 1}`)
     }
   }
+  const canonicalEmbedded = (id: string): string => {
+    if (!ordinals.has(id)) {
+      ordinals.set(id, `#${ordinals.size + 1}`)
+    }
+    return ordinals.get(id) ?? id
+  }
   const canonical = (token: string): string => {
     if (!ordinals.has(token) && GENERATED_ID.test(token)) {
       // An id React generated that no element carries (Base UI's `data-rootownerid` names one).
       ordinals.set(token, `#${ordinals.size + 1}`)
     }
-    return ordinals.get(token) ?? token
+    // A generated id inside a longer token (Base UI's `data-id="base-ui-:r7t:-viewport"`).
+    return ordinals.get(token) ?? token.replaceAll(EMBEDDED_ID, (id) => canonicalEmbedded(id))
   }
   // Every attribute is read as a list of tokens, so the IDREF attributes (`aria-labelledby`,
   // `aria-describedby`, `aria-controls`, `aria-owns`, `for`) and the ones Base UI adds
@@ -87,7 +96,9 @@ export const parityViolations = (
 /**
 The part markers, in tree order, with each marked element.
  */
-export const marked = (root: ParentNode = document.body): { element: Element; part: string }[] =>
+export const marked = (
+  root: ParentNode = document.body,
+): { element: HTMLElement; part: string }[] =>
   [...root.querySelectorAll<HTMLElement>('[data-part]')].map((element) => ({
     element,
     part: element.dataset.part ?? '',
