@@ -13,7 +13,7 @@ import type { CxBinding } from './vite-cx-use.ts'
 import type { Problem } from './vite-problems.ts'
 import type { Binding, ScopeAnalysis } from './vite-scope.ts'
 
-import { exportNameOf, nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
+import { exportNameOf, isTypeOnly, nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
 
 const DECLARED_TEXT =
   "listed in cxModules, but this export can give it a cx the build does not follow: the build follows a listed module one step, to Nave's cx re-exported from @navecss/core/cx under the name cx."
@@ -251,7 +251,9 @@ const EXPORT_PROBLEMS: Readonly<
  * The problems in the exports of a module listed in `cxModules`.
  */
 export function declaredExportProblems(input: DeclaredExportsInput): Problem[] {
-  const body = nodesAt(input.program, 'body')
+  // A type-only export exports no value, so it can neither give the module a `cx` nor give it a
+  // wrong one.
+  const body = nodesAt(input.program, 'body').filter((node) => !isTypeOnly(node))
   const hasNaveCx = body.some((node) => isNaveCxExport(node, input))
   const problems = [
     ...body.flatMap((node) =>

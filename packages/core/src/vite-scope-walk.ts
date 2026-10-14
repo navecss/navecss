@@ -7,6 +7,7 @@ import type { AstNode } from './vite-ast.ts'
 import type { Scope, Walker } from './vite-scope-types.ts'
 
 import { childrenOf, isNode, isTypeOnly, nodeAt, nodesAt, stringAt } from './vite-ast.ts'
+import { declareImport } from './vite-scope-imports.ts'
 import { declarePattern, writeTargets } from './vite-scope-pattern.ts'
 import { declare, newScope, reference } from './vite-scope-types.ts'
 
@@ -114,31 +115,6 @@ function visitClass(node: AstNode, scope: Scope, walker: Walker): void {
 }
 
 /**
- * The imported name an import specifier takes.
- */
-function importedName(specifier: AstNode): string {
-  if (specifier.type === 'ImportNamespaceSpecifier') return '*'
-  if (specifier.type !== 'ImportSpecifier') return 'default'
-  const imported = nodeAt(specifier, 'imported')
-  return stringAt(imported ?? specifier, 'name') ?? String(imported?.value)
-}
-
-/**
- * Declares what an import declaration binds.
- */
-function declareImport(node: AstNode, scope: Scope): void {
-  if (isTypeOnly(node)) return
-  const source = String(nodeAt(node, 'source')?.value)
-  for (const specifier of nodesAt(node, 'specifiers')) {
-    if (isTypeOnly(specifier)) continue
-    const local = stringAt(nodeAt(specifier, 'local') ?? specifier, 'name')
-    if (local === undefined) continue
-    const imported = importedName(specifier)
-    scope.bindings.set(local, { name: local, kind: 'import', writes: 0, source, imported })
-  }
-}
-
-/**
  * `var`, `let` and `const` declarations: each declarator binds its pattern, and a plain
  * `name = init` records its initialiser.
  */
@@ -178,6 +154,17 @@ function visitExport(node: AstNode, scope: Scope, walker: Walker): void {
 function leaf(): void {
   // A label, a meta property, a re-export from another module or a type declaration names no
   // binding here.
+}
+
+const PARENTHESES_KEPT =
+  "readModule reads a syntax tree with no node for a pair of parentheses, as Vite's parser returns it. This tree keeps one (a ParenthesizedExpression): parse with the parentheses dropped, for example oxc-parser with preserveParens: false."
+
+/**
+ * The reader takes the tree Vite's parser returns, which keeps no node for a pair of parentheses; a
+ * tree that keeps them would read a class built from pieces as whole, so it is refused.
+ */
+function refuseParentheses(): never {
+  throw new TypeError(PARENTHESES_KEPT)
 }
 
 /**
@@ -239,8 +226,18 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   ContinueStatement: leaf,
   MetaProperty: leaf,
   ExportAllDeclaration: leaf,
+  ParenthesizedExpression: refuseParentheses,
   TSInterfaceDeclaration: leaf,
   TSTypeAliasDeclaration: leaf,
+  TSDeclareFunction: leaf,
+  TSEmptyBodyFunctionExpression: leaf,
+  TSAbstractMethodDefinition: leaf,
+  TSAbstractPropertyDefinition: leaf,
+  TSAbstractAccessorProperty: leaf,
+  TSIndexSignature: leaf,
+  TSModuleDeclaration: (node, scope, walker) => {
+    visitKeys(node, ['body'], newScope(scope, true), walker)
+  },
   CallExpression: (node, scope, walker) => {
     if (isDirectEval(node)) walker.evalScopes.push(scope)
     visitChildren(node, scope, walker)

@@ -7,7 +7,15 @@
 import type { AstNode } from './vite-ast.ts'
 import type { Problem } from './vite-problems.ts'
 
-import { childrenOf, exportNameOf, nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
+import {
+  childrenOf,
+  exportNameOf,
+  isTypeOnly,
+  nodeAt,
+  nodesAt,
+  staticStringOf,
+  stringAt,
+} from './vite-ast.ts'
 
 export interface SourceFormOptions {
   /**
@@ -97,8 +105,9 @@ function sourceFormProblem(
   const source = staticStringOf(nodeAt(node, 'source'))
   if (source === undefined || !options.cxSources.has(source)) return undefined
   if (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') {
-    // A listed module's exports are judged whole by `declaredExportProblems`.
-    if (options.isDeclared === true) return undefined
+    // A type-only re-export exports no value, and a listed module's exports are judged whole by
+    // `declaredExportProblems`.
+    if (isTypeOnly(node) || options.isDeclared === true) return undefined
     return reexportProblem(code, node, options.declaredSources?.has(source) === true)
   }
   if (node.type !== 'ImportExpression') return undefined

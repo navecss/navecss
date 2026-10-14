@@ -8,7 +8,7 @@
 import type { AstNode } from './vite-ast.ts'
 import type { ScopeAnalysis } from './vite-scope.ts'
 
-import { nodeAt, staticStringOf } from './vite-ast.ts'
+import { nodeAt, staticStringOf, wrappedBy } from './vite-ast.ts'
 import { soleInitialiserBinding } from './vite-cx-args.ts'
 
 type Values = string[] | undefined
@@ -72,6 +72,8 @@ function planOfName(node: AstNode, analysis: ScopeAnalysis): Plan {
 function planOf(node: AstNode, analysis: ScopeAnalysis): Plan {
   const text = staticStringOf(node)
   if (text !== undefined) return leaf([text])
+  const inner = wrappedBy(node)
+  if (inner) return { deps: () => [inner], combine: ([only]) => only }
   switch (node.type) {
     case 'ConditionalExpression': {
       const parts = [nodeAt(node, 'consequent'), nodeAt(node, 'alternate')]
@@ -82,10 +84,6 @@ function planOf(node: AstNode, analysis: ScopeAnalysis): Plan {
     }
     case 'LogicalExpression': {
       return node.operator === '&&' ? leaf(undefined) : planOfFallback(node)
-    }
-    case 'ParenthesizedExpression': {
-      const inner = nodeAt(node, 'expression')
-      return { deps: () => [inner], combine: ([only]) => only }
     }
     default: {
       return leaf(undefined)

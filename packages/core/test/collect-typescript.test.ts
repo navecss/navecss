@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import type { AstNode } from '../src/vite-ast.ts'
 
 import { childrenOf } from '../src/vite-ast.ts'
-import { CX_SOURCE, type ModuleReading, readModule } from '../src/vite-collect.ts'
+import { CX_SOURCE, type ModuleReading, readModule, type ReadOptions } from '../src/vite-collect.ts'
 
 const IMPORT = `import { cx } from '${CX_SOURCE}'\nimport type { AtomName } from '@navecss/core/atoms'\n`
 
@@ -22,15 +22,24 @@ interface Verdict {
   readonly problems: readonly string[]
 }
 
+const OPTIONS: ReadOptions = {
+  cxSources: new Set([CX_SOURCE]),
+  ownAtoms: new Set(),
+  isDependency: false,
+}
+
+/**
+ * Reads `code` through `tree`, its parse.
+ */
+function readTree(code: string, tree: AstNode, options: ReadOptions = OPTIONS): ModuleReading {
+  return readModule(code, tree, options)
+}
+
 /**
  * Reads `code` as the language `lang` names.
  */
-function read(code: string, lang: 'js' | 'ts'): ModuleReading {
-  return readModule(code, parseAst(code, { lang }) as unknown as AstNode, {
-    cxSources: new Set([CX_SOURCE]),
-    ownAtoms: new Set(),
-    isDependency: false,
-  })
+function read(code: string, lang: 'js' | 'ts', options: ReadOptions = OPTIONS): ModuleReading {
+  return readTree(code, parseAst(code, { lang }) as unknown as AstNode, options)
 }
 
 /**
@@ -88,6 +97,7 @@ function hasNode(code: string, isWanted: (node: AstNode) => boolean): boolean {
 const none: Verdict = { atoms: [], problems: [] }
 const flex: Verdict = { atoms: ['flex'], problems: [] }
 const grid: Verdict = { atoms: ['grid'], problems: [] }
+const argument: Verdict = { atoms: [], problems: ['argument'] }
 
 interface Row {
   readonly form: string
@@ -246,6 +256,26 @@ describe('AC-nextjs-used-atoms-09 — the closed TypeScript list: each correct f
     ],
     ['cx(props.v!), props a parameter', 'props: { v: string }', 'props.v!', 'cx(props.v)'],
     ['cx(x satisfies AtomName), x a parameter', 'x: string', 'x satisfies AtomName', 'cx(x)'],
+    [
+      'cx((prefix + v) as AtomName), a parenthesised sum',
+      'prefix: string, v: string',
+      '(prefix + v) as AtomName',
+      'cx((prefix + v))',
+    ],
+    ['cx((v as AtomName)!), a cast inside parentheses', 'v: string', '(v as AtomName)!', 'cx((v))'],
+    ['cx(<AtomName>(v)), a parenthesised operand', 'v: string', '<AtomName>(v)', 'cx((v))'],
+    [
+      "cx((on ? v : 'flex') as AtomName), a parenthesised conditional",
+      'on: boolean, v: string',
+      "(on ? v : 'flex') as AtomName",
+      "cx((on ? v : 'flex'))",
+    ],
+    [
+      'cx((v /* note */) as AtomName), a comment before the closing parenthesis',
+      'v: string',
+      '(v /* note */) as AtomName',
+      'cx((v /* note */))',
+    ],
   ])(
     '%s is one argument problem, quoted without the assertion',
     (_name, parameter, argument, quote) => {
@@ -276,6 +306,241 @@ describe('AC-nextjs-used-atoms-09 — the closed TypeScript list: each correct f
     expect(reading.atoms.size).toBe(0)
     expect(reading.problems.map((problem) => problem.kind)).toEqual(['unknown'])
   })
+})
+
+/**
+ * A module whose function `pick` makes `statement` and whose arrow calls `cx(v)` on the `let` the
+ * statement writes: a write the reader misses leaves `cx(v)` reading the initialiser.
+ */
+function writeModule(parameter: string, statement: string): string {
+  return `${IMPORT}let v: AtomName = 'flex'\nexport function pick(${parameter}) {\n  ${statement}\n}\nexport const a = () => cx(v)`
+}
+
+/**
+ * A module that joins the `nave-flex` class to a separator and to `x`, with `declaration` before.
+ */
+function joinedModule(declaration: string, joined: string): string {
+  return `${IMPORT}declare const x: string\n${declaration}export const a = ${joined}`
+}
+
+const isTypeExportFrom = (node: AstNode): boolean =>
+  (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') &&
+  node.exportKind === 'type'
+
+const WALKED_ROWS: readonly Row[] = [
+  {
+    form: 'a separator under as const, in a class joined from pieces',
+    code: joinedModule("const SEP = ' ' as const\n", "'nave-flex' + SEP + x"),
+    reaches: ofType('TSAsExpression'),
+    column: flex,
+  },
+  {
+    form: 'a separator under satisfies, in a class joined from pieces',
+    code: joinedModule("const SEP = ' ' satisfies string\n", "'nave-flex' + SEP + x"),
+    reaches: ofType('TSSatisfiesExpression'),
+    column: flex,
+  },
+  {
+    form: 'a separator under the non-null assertion, in a class joined from pieces',
+    code: joinedModule("const SEP = ' '\n", "'nave-flex' + SEP! + x"),
+    reaches: ofType('TSNonNullExpression'),
+    column: flex,
+  },
+  {
+    form: 'a separator under as inside parentheses, in a class joined from pieces',
+    code: joinedModule('', "'nave-flex' + (' ' as string) + x"),
+    reaches: ofType('TSAsExpression'),
+    column: flex,
+  },
+  {
+    form: 'a sum under as inside parentheses, in a class joined from pieces',
+    code: joinedModule('', "'nave-flex' + ((' ' + x) as string)"),
+    reaches: ofType('TSAsExpression'),
+    column: flex,
+  },
+  {
+    form: 'a parenthesised sum under the non-null assertion, in a class joined from pieces',
+    code: joinedModule('', "'nave-flex' + (' ' + x)!"),
+    reaches: ofType('TSNonNullExpression'),
+    column: flex,
+  },
+  {
+    form: 'a write through a non-null assertion',
+    code: writeModule('n: AtomName', 'v! = n'),
+    reaches: ofType('TSNonNullExpression'),
+    column: argument,
+  },
+  {
+    form: 'a write through an as assertion',
+    code: writeModule('n: AtomName', '(v as AtomName) = n'),
+    reaches: ofType('TSAsExpression'),
+    column: argument,
+  },
+  {
+    form: 'a write through an angle-bracket assertion',
+    code: writeModule('n: AtomName', '(<AtomName>v) = n'),
+    reaches: ofType('TSTypeAssertion'),
+    column: argument,
+  },
+  {
+    form: 'a write through satisfies',
+    code: writeModule('n: AtomName', '(v satisfies AtomName) = n'),
+    reaches: ofType('TSSatisfiesExpression'),
+    column: argument,
+  },
+  {
+    form: 'a write to an array pattern element under the non-null assertion',
+    code: writeModule('n: AtomName', '[v!] = [n]'),
+    reaches: ofType('TSNonNullExpression'),
+    column: argument,
+  },
+  {
+    form: 'a write to an object pattern value under the non-null assertion',
+    code: writeModule('o: { k: AtomName }', '({ k: v! } = o)'),
+    reaches: ofType('TSNonNullExpression'),
+    column: argument,
+  },
+  {
+    form: 'a for-of head that writes under the non-null assertion',
+    code: writeModule('xs: AtomName[]', 'for (v! of xs) {}'),
+    reaches: ofType('TSNonNullExpression'),
+    column: argument,
+  },
+  {
+    form: 'a constructor parameter property whose default is a literal call',
+    code: `${IMPORT}export class K {\n  constructor(public c = cx('flex')) {}\n}`,
+    reaches: ofType('TSParameterProperty'),
+    column: flex,
+  },
+  {
+    form: 'a constructor parameter property whose default calls cx on a parameter',
+    code: `${IMPORT}export class K {\n  constructor(t: AtomName, public c = cx(t)) {}\n}`,
+    reaches: ofType('TSParameterProperty'),
+    column: argument,
+  },
+  {
+    form: 'a private readonly parameter property with a typed default',
+    code: `${IMPORT}export class K {\n  constructor(private readonly c: string = cx('grid')) {}\n}`,
+    reaches: ofType('TSParameterProperty'),
+    column: grid,
+  },
+  {
+    form: 'a namespace constant named like a global, read outside the namespace',
+    code: `${IMPORT}namespace N {\n  export const origin = 'flex'\n}\nexport const a = cx(origin as AtomName)`,
+    reaches: ofType('TSModuleDeclaration'),
+    column: argument,
+  },
+  {
+    form: 'a namespace let that shadows nothing outside it',
+    code: `${IMPORT}let v: AtomName = 'flex'\nnamespace N {\n  let v = 'x'\n}\nexport const a = cx(v)`,
+    reaches: ofType('TSModuleDeclaration'),
+    column: flex,
+  },
+  {
+    form: 'a declare function with a type parameter constrained by typeof cx',
+    code: `${IMPORT}declare function h<T extends typeof cx>(): void\nexport const a = cx('flex')`,
+    reaches: ofType('TSDeclareFunction'),
+    column: flex,
+  },
+  {
+    form: 'a function overload with a type parameter constrained by typeof cx',
+    code: `${IMPORT}export function g<T extends typeof cx>(): void\nexport function g() {}\nexport const a = cx('flex')`,
+    reaches: ofType('TSDeclareFunction'),
+    column: flex,
+  },
+  {
+    form: 'a function overload with a parameter named cx',
+    code: `${IMPORT}export function circle(cx: number, cy: number): string\nexport function circle(x: number, y: number) {\n  return \`\${x},\${y}\`\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSDeclareFunction'),
+    column: flex,
+  },
+  {
+    form: 'a method overload with a parameter named cx',
+    code: `${IMPORT}export class A {\n  m(cx: number): void\n  m(x: number) {}\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSEmptyBodyFunctionExpression'),
+    column: flex,
+  },
+  {
+    form: 'a constructor overload with a parameter named cx',
+    code: `${IMPORT}export class A {\n  constructor(cx: number)\n  constructor(x: number) {}\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSEmptyBodyFunctionExpression'),
+    column: flex,
+  },
+  {
+    form: 'an abstract method with a parameter named cx',
+    code: `${IMPORT}export abstract class A {\n  abstract m(cx: string): void\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSAbstractMethodDefinition'),
+    column: flex,
+  },
+  {
+    form: 'an abstract property named cx',
+    code: `${IMPORT}export abstract class A {\n  abstract cx: string\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSAbstractPropertyDefinition'),
+    column: flex,
+  },
+  {
+    form: 'an abstract accessor named cx',
+    code: `${IMPORT}export abstract class A {\n  abstract accessor cx: string\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSAbstractAccessorProperty'),
+    column: flex,
+  },
+  {
+    form: 'an index signature with a parameter named cx',
+    code: `${IMPORT}export class A {\n  [cx: string]: unknown\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSIndexSignature'),
+    column: flex,
+  },
+  {
+    form: 'a type-only re-export of a type from the cx source',
+    code: `${IMPORT}export type { AtomName as N } from '${CX_SOURCE}'\nexport const a = cx('flex')`,
+    reaches: isTypeExportFrom,
+    column: flex,
+  },
+  {
+    form: 'a type-only re-export of cx from the cx source',
+    code: `${IMPORT}export type { cx } from '${CX_SOURCE}'\nexport const a = cx('flex')`,
+    reaches: isTypeExportFrom,
+    column: flex,
+  },
+  {
+    form: 'a type-only star re-export of the cx source',
+    code: `${IMPORT}export type * from '${CX_SOURCE}'\nexport const a = cx('flex')`,
+    reaches: isTypeExportFrom,
+    column: flex,
+  },
+  {
+    form: 'a type-only namespace re-export of the cx source',
+    code: `${IMPORT}export type * as T from '${CX_SOURCE}'\nexport const a = cx('flex')`,
+    reaches: isTypeExportFrom,
+    column: flex,
+  },
+  {
+    // A type named cx in the function that calls cx declares no value there.
+    form: 'a type alias named cx beside a cx call in the same function',
+    code: `${IMPORT}export function f() {\n  type cx = string\n  const s: cx = 'a'\n  return cx('flex') + s\n}`,
+    reaches: ofType('TSTypeAliasDeclaration'),
+    column: flex,
+  },
+]
+
+describe('AC-nextjs-used-atoms-09: beyond the list, each form reads as its types-stripped copy', () => {
+  it.each(WALKED_ROWS)('$form', ({ code, column, reaches }) => {
+    expect(hasNode(code, reaches)).toBe(true)
+    expect(strippedVerdict(code)).toEqual(column)
+    expect(authoredVerdict(code)).toEqual(column)
+  })
+})
+
+describe('AC-nextjs-used-atoms-09: a module listed in cxModules', () => {
+  it.each(['export type { AtomName } from', 'export type * as T from'])(
+    'reads %s the cx source as no export of cx, beside the re-export of cx',
+    (statement) => {
+      const listed: ReadOptions = { ...OPTIONS, isDeclared: true }
+      const code = `export { cx } from '${CX_SOURCE}'\n${statement} '${CX_SOURCE}'`
+      expect(read(code, 'ts', listed).problems).toEqual([])
+      expect(read(stripCode(code), 'js', listed).problems).toEqual([])
+    },
+  )
 })
 
 describe('AC-nextjs-used-atoms-09 — what the list also settles', () => {
@@ -355,4 +620,20 @@ describe('AC-nextjs-used-atoms-09 — what the list also settles', () => {
       expect(read(code, 'ts').problems.map((problem) => problem.kind)).toEqual(['reference'])
     }
   })
+})
+
+describe('AC-nextjs-used-atoms-09: a tree that keeps a node for a pair of parentheses is refused', () => {
+  const REFUSAL =
+    "readModule reads a syntax tree with no node for a pair of parentheses, as Vite's parser returns it. This tree keeps one (a ParenthesizedExpression): parse with the parentheses dropped, for example oxc-parser with preserveParens: false."
+
+  it.each(["('nave-' as string) + tone", "('nave-') + tone"])(
+    'throws on %s, a piece in parentheses, and reads the tree without them',
+    (joined) => {
+      const code = `${IMPORT}declare const tone: string\nexport const a = ${joined}`
+      const kept = parseAst(code, { lang: 'ts', preserveParens: true }) as unknown as AstNode
+      expect(hasNode(code, ofType('ParenthesizedExpression'))).toBe(false)
+      expect(() => readTree(code, kept)).toThrow(new TypeError(REFUSAL))
+      expect(authoredVerdict(code)).toEqual({ atoms: [], problems: ['concatenation'] })
+    },
+  )
 })

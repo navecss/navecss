@@ -6,7 +6,7 @@
 import type { AstNode } from './vite-ast.ts'
 import type { Binding, BindingKind, Scope, Walker } from './vite-scope-types.ts'
 
-import { nodeAt, nodesAt, stringAt } from './vite-ast.ts'
+import { assertedBy, nodeAt, nodesAt, stringAt } from './vite-ast.ts'
 import { declare, functionScopeOf, reference } from './vite-scope-types.ts'
 
 export interface BindingSpec {
@@ -75,6 +75,9 @@ export function declarePattern(
 }
 
 const DECLARE: Readonly<Record<string, PatternReader<BindingSpec>>> = {
+  TSParameterProperty: (pattern, spec, scope, walker) => {
+    declarePattern(nodeAt(pattern, 'parameter'), spec, scope, walker)
+  },
   AssignmentPattern: (pattern, spec, scope, walker) => {
     declarePattern(nodeAt(pattern, 'left'), spec, scope, walker)
     const right = nodeAt(pattern, 'right')
@@ -96,10 +99,17 @@ const DECLARE: Readonly<Record<string, PatternReader<BindingSpec>>> = {
 }
 
 /**
- * Marks every identifier an assignment target writes, walking member targets as expressions.
+ * Marks every identifier an assignment target writes, walking member targets as expressions. A
+ * target under a type assertion is a write to what it asserts.
  */
 export function writeTargets(target: AstNode | undefined, scope: Scope, walker: Walker): void {
   if (!target) return
+  const inner = assertedBy(target)
+  if (inner) {
+    walker.parentOf.set(inner, target)
+    writeTargets(inner, scope, walker)
+    return
+  }
   if (target.type === 'Identifier') {
     reference(walker, target, scope, true)
     return
