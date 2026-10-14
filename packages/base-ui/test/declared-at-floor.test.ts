@@ -133,12 +133,11 @@ const rows: readonly {
 
 /**
  * The rows for the parts and attributes the overlay components add, each read as text from the
- * declaration files (`.d.ts`) of the minor the row names: the part's first minor, not the floor.
+ * declaration files (`.d.ts`) of the floor package, the oldest Base UI the package supports.
  */
-interface VersionedRow {
+interface OverlayRow {
   readonly files: readonly string[]
   readonly items: readonly string[]
-  readonly version: string
 }
 
 const POPUP_FILES = [
@@ -151,11 +150,10 @@ const POPUP_FILES = [
   'combobox/popup/ComboboxPopupDataAttributes.d.ts',
 ]
 
-const versionedRows: readonly VersionedRow[] = [
+const overlayRows: readonly OverlayRow[] = [
   {
     files: ['combobox/item/ComboboxtemDataAttributes.d.ts'],
     items: ['data-highlighted'],
-    version: '1.0.0',
   },
   {
     files: [
@@ -165,17 +163,14 @@ const versionedRows: readonly VersionedRow[] = [
       'menu/submenu-trigger/MenuSubmenuTriggerDataAttributes.d.ts',
     ],
     items: ['data-highlighted'],
-    version: '1.0.0',
   },
   {
     files: ['menu/link-item/MenuLinkItemDataAttributes.d.ts'],
     items: ['data-highlighted'],
-    version: '1.2.0',
   },
   {
     files: ['select/item/SelectItemDataAttributes.d.ts'],
     items: ['data-highlighted'],
-    version: '1.0.0',
   },
   {
     files: [
@@ -184,12 +179,10 @@ const versionedRows: readonly VersionedRow[] = [
       'tooltip/popup/TooltipPopupDataAttributes.d.ts',
     ],
     items: ['data-instant'],
-    version: '1.0.0',
   },
   {
     files: [...POPUP_FILES, 'dialog/backdrop/DialogBackdropDataAttributes.d.ts'],
     items: ['data-starting-style', 'data-ending-style'],
-    version: '1.0.0',
   },
   {
     files: [
@@ -201,37 +194,23 @@ const versionedRows: readonly VersionedRow[] = [
       'combobox/arrow/ComboboxArrowDataAttributes.d.ts',
     ],
     items: ['data-side', 'inline-start', 'inline-end'],
-    version: '1.0.0',
   },
   {
     files: ['combobox/popup/ComboboxPopupDataAttributes.d.ts'],
     items: ['data-empty'],
-    version: '1.0.0',
   },
   {
     files: ['combobox/input-group/ComboboxInputGroupDataAttributes.d.ts'],
     items: ['data-invalid', 'data-disabled'],
-    version: '1.3.0',
   },
 ]
 
-const byVersion = (a: string, b: string): number => a.localeCompare(b, 'en', { numeric: true })
-
 /**
- * The package's peer floor, read from the installed floor alias. A row names the part's first
- * minor, but the package supports nothing older than the floor, so a row whose first minor is
- * older than the floor is read at the floor.
+ * The package's peer floor, read from the installed floor alias.
  */
 const FLOOR_VERSION = (
   JSON.parse(readFileSync(path.join(FLOOR, '../package.json'), 'utf8')) as { version: string }
 ).version
-
-const readAt = (version: string): string =>
-  byVersion(version, FLOOR_VERSION) >= 0 ? version : FLOOR_VERSION
-
-const VERSIONS = [...new Set(versionedRows.map(({ version }) => readAt(version)))].toSorted(
-  byVersion,
-)
 
 /**
  * The package's modules at a minor, or an error that names the alias to install.
@@ -364,17 +343,14 @@ describe('AC-base-ui-overlay-completion-28: every attribute and variable the sty
     expect(isSharedItemDeclared(ARROW, DATA_SIDE, root)).toBe(false)
   })
 
-  for (const version of VERSIONS) {
-    it(`finds @base-ui/react@${version} installed through its alias`, () => {
-      expect(baseUiRootAt(version), installHint(version)).toBeDefined()
-    })
-  }
+  it(`finds @base-ui/react@${FLOOR_VERSION} installed through its alias`, () => {
+    expect(baseUiRootAt(FLOOR_VERSION), installHint(FLOOR_VERSION)).toBeDefined()
+  })
 
-  for (const { files, items, version } of versionedRows) {
-    const at = readAt(version)
+  for (const { files, items } of overlayRows) {
     for (const file of files) {
-      it(`${file} declares ${items.join(', ')} at ${at}`, () => {
-        const root = rootAtOrThrow(at)
+      it(`${file} declares ${items.join(', ')} at ${FLOOR_VERSION}`, () => {
+        const root = rootAtOrThrow(FLOOR_VERSION)
         expect(itemsMissingFrom(root, file, items)).toEqual([])
       })
     }
@@ -401,7 +377,7 @@ describe('AC-base-ui-overlay-completion-28: every attribute and variable the sty
     const keyed = new Set([...keyedAttributes(css), ...keyedVariables(css)])
     const covered = new Set([
       ...rows.flatMap(({ items, shared = [] }) => [...items, ...shared.map(({ item }) => item)]),
-      ...versionedRows.flatMap(({ items }) => items),
+      ...overlayRows.flatMap(({ items }) => items),
     ])
     expect([...keyed].filter((name) => !covered.has(name))).toEqual([])
   })
