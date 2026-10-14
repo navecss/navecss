@@ -114,3 +114,32 @@ export const zIndexProblems = (
       : []),
   ]
 }
+
+export const SEVEN_COMPONENTS = [
+  'Toast',
+  'Navigation Menu',
+  'Scroll Area',
+  'Meter',
+  'Progress',
+  'Avatar',
+  'Separator',
+]
+
+/**
+Whether a changeset's text names all seven components of the release.
+ */
+export const hasTheSeven = (text: string): boolean =>
+  SEVEN_COMPONENTS.every((component) => new RegExp(component, 'i').test(text))
+
+/**
+What is wrong with the pending changesets that name a package: each must name it alone with bump
+`minor`, and exactly one of them, the pull request's own, must name the seven components.
+ */
+export const changesetProblems = (pending: readonly Changeset[], name: string): string[] => [
+  ...pending
+    .filter(({ releases }) => Object.keys(releases).length !== 1 || releases[name] !== 'minor')
+    .map(({ file }) => `${file} does not name ${name} alone with bump minor`),
+  ...(pending.filter(({ text }) => hasTheSeven(text)).length === 1
+    ? []
+    : ['not exactly one pending changeset names the seven components']),
+]

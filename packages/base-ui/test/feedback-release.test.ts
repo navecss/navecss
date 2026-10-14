@@ -11,7 +11,15 @@ import {
   publishedTokens,
   undeclaredIn,
 } from './support/w3-tokens-floor.ts'
-import { changesetsNaming, releasesOf, ROOT } from './support/w12-release.ts'
+import {
+  type Changeset,
+  changesetProblems,
+  changesetsNaming,
+  hasTheSeven,
+  releasesOf,
+  ROOT,
+  SEVEN_COMPONENTS,
+} from './support/w12-release.ts'
 
 const NAME = '@navecss/base-ui'
 
@@ -33,16 +41,6 @@ const NEW_TO_THE_PACKAGE = [
   '--nave-size-avatar-lg',
 ]
 
-const SEVEN_COMPONENTS = [
-  'Toast',
-  'Navigation Menu',
-  'Scroll Area',
-  'Meter',
-  'Progress',
-  'Avatar',
-  'Separator',
-]
-
 /**
 The stylesheet with the placement's rule out: what the build leaves while that draft is unsigned.
  */
@@ -61,6 +59,12 @@ const publishedOrSkip = (
   return published
 }
 
+const make = (file: string, frontmatter: string, text: string): Changeset => ({
+  file,
+  releases: releasesOf(`---\n${frontmatter}\n---\n\n${text}`),
+  text,
+})
+
 const planted = '.x { color: var(--nave-layer-notification) }'
 
 describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tokens floor (supersedes AC-base-ui-overlay-completion-31 and -38 for the combined package)', () => {
@@ -68,22 +72,14 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
     const pending = changesetsNaming(NAME)
     const changelog = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
 
-    it.runIf(pending.length > 0)(
-      'has exactly one changeset naming @navecss/base-ui, and it names it alone with bump minor',
-      () => {
-        expect(pending.map(({ releases }) => releases)).toEqual([{ [NAME]: 'minor' }])
-      },
-    )
+    it('has every pending changeset that names @navecss/base-ui name it alone with bump minor, and exactly one of them name the seven components', () => {
+      expect(changesetProblems(pending, NAME)).toEqual([])
+    })
 
-    it.runIf(pending.length > 0)(
-      'has that changeset say what the release adds: the seven components, each named',
-      () => {
-        const text = pending.map((changeset) => changeset.text).join('\n')
-        expect(
-          SEVEN_COMPONENTS.filter((component) => !new RegExp(component, 'i').test(text)),
-        ).toEqual([])
-      },
-    )
+    it("has the changeset that names the seven be a file of this pull request, not #787's", () => {
+      const own = pending.filter(({ text }) => hasTheSeven(text))
+      expect(own.map(({ file }) => file)).not.toContain('base-ui-overlay-components.md')
+    })
 
     it.runIf(pending.length === 0 && existsSync(changelog))(
       'was released as a minor from exactly one changeset that names the seven components, once the changeset is spent',
@@ -93,17 +89,33 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
         expect(newest).toContain('### Minor Changes')
         expect(newest).not.toContain('### Major Changes')
         expect(newest.match(/^- [\da-f]{7,}: /gm) ?? []).toHaveLength(1)
-        expect(
-          SEVEN_COMPONENTS.filter((component) => !new RegExp(component, 'i').test(newest)),
-        ).toEqual([])
+        expect(hasTheSeven(newest)).toBe(true)
       },
     )
 
-    it('names no other package beside @navecss/base-ui in any changeset that names it', () => {
-      const together = changesetsNaming(NAME).filter(
-        ({ releases }) => Object.keys(releases).length !== 1,
-      )
-      expect(together).toEqual([])
+    it('control: a second changeset for the seven, a second package or another bump is reported', () => {
+      const seven = SEVEN_COMPONENTS.join(', ')
+      const own = make('own.md', "'@navecss/base-ui': minor", seven)
+      const earlier = make('earlier.md', "'@navecss/base-ui': minor", 'Six components.')
+      expect(changesetProblems([earlier, own], NAME)).toEqual([])
+      expect(changesetProblems([earlier], NAME)).toEqual([
+        'not exactly one pending changeset names the seven components',
+      ])
+      expect(
+        changesetProblems(
+          [earlier, own, make('twice.md', "'@navecss/base-ui': minor", seven)],
+          NAME,
+        ),
+      ).toEqual(['not exactly one pending changeset names the seven components'])
+      expect(
+        changesetProblems(
+          [make('both.md', "'@navecss/base-ui': minor\n'@navecss/tokens': minor", seven)],
+          NAME,
+        ),
+      ).toEqual(['both.md does not name @navecss/base-ui alone with bump minor'])
+      expect(
+        changesetProblems([earlier, make('patch.md', "'@navecss/base-ui': patch", seven)], NAME),
+      ).toEqual(['patch.md does not name @navecss/base-ui alone with bump minor'])
     })
 
     it('control: a second changeset, a second package or another bump is not the release', () => {
