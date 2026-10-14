@@ -9,7 +9,13 @@
 import type { TSESTree } from '@typescript-eslint/types'
 import type { JSSyntaxElement, Rule, SourceCode } from 'eslint'
 
-import type { AtomPieceHit, ClassHit, DynamicBuiltHit, DynamicExtraHit } from './class-hits.ts'
+import type {
+  AtomPieceHit,
+  ClassHit,
+  DynamicBuiltHit,
+  DynamicExtraHit,
+  DynamicSpreadHit,
+} from './class-hits.ts'
 
 import { atomNameForClass, isAtomName } from '../atoms.ts'
 import { collectCxBindings, type CxBindings, NO_CX_BINDINGS } from '../cx-binding.ts'
@@ -22,6 +28,7 @@ import {
   dynamicExtraMessage,
   dynamicNameBesideMessage,
   dynamicNameMessage,
+  dynamicSpreadMessage,
   isNaveOutputLike,
   literalClassMessage,
   naveOutputMessage,
@@ -93,19 +100,27 @@ function atomMessage(hit: AtomPieceHit, sourceCode: SourceCode, wording: Wording
     : cxContainerMessage(callee, hit.rendered, declared, rawCallee)
 }
 
+type DynamicCallHit = DynamicBuiltHit | DynamicExtraHit | DynamicSpreadHit
+
+const isDynamicCallHit = (hit: ClassHit): hit is DynamicCallHit =>
+  ['dynamic-built', 'dynamic-extra', 'dynamic-spread'].includes(hit.kind)
+
 /**
- * The message for an argument after the first of `cx.dynamic()`, or for a name built at run time
- * that no atom name fits.
+ * The message for an argument of `cx.dynamic()` the call's shape decides: one after the first, the
+ * first after only spreads, or a name built at run time that no atom name fits.
  */
 function dynamicCallMessage(
-  hit: DynamicBuiltHit | DynamicExtraHit,
+  hit: DynamicCallHit,
   sourceCode: SourceCode,
   { declared, rawCallee }: Wording,
 ): string {
   const callee = sourceCode.getText(hit.callee as never)
-  return hit.kind === 'dynamic-extra'
-    ? dynamicExtraMessage(callee, hit.rendered, declared, rawCallee)
-    : dynamicBuiltMessage(callee, hit.rendered, declared, rawCallee)
+  const messages = {
+    'dynamic-built': dynamicBuiltMessage,
+    'dynamic-extra': dynamicExtraMessage,
+    'dynamic-spread': dynamicSpreadMessage,
+  }
+  return messages[hit.kind](callee, hit.rendered, declared, rawCallee)
 }
 
 /**
@@ -120,7 +135,7 @@ function hitMessage(
   if (hit.kind === 'slot-and') {
     return slotAndMessage(sourceCode.getText(hit.node as never), hit.isWhole, rawCallee)
   }
-  if (hit.kind === 'dynamic-extra' || hit.kind === 'dynamic-built') {
+  if (isDynamicCallHit(hit)) {
     return dynamicCallMessage(hit, sourceCode, { allowEntries, declared, rawCallee })
   }
   if (hit.kind === 'atom' && isWrittenName(hit)) return writtenNameMessage(hit, sourceCode)

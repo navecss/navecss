@@ -599,12 +599,102 @@ describe.each(PARSERS)(
         },
       )
 
-      it("a leading spread leaves the call unread: cx.dynamic(...a, 'legacy-card') passes", () => {
-        expect(rule1Reports("cx.dynamic(...a, 'legacy-card')", parser)).toEqual([])
+      it.each([
+        ['cx.dynamic(tone, ...rest)', ['...rest']],
+        ['cx.dynamic(tone, ...rest, x)', ['...rest', 'x']],
+      ])('%s: an argument after a non-spread one is reported, a spread included', (value, args) => {
+        const reports = rule1Reports(value, parser)
+        expect(reports).toHaveLength(args.length)
+        const line = `const el = <div className={${value}} />`
+        expect(reports.map(({ column }) => column)).toEqual(
+          args.map((argument) => line.lastIndexOf(argument) + 1),
+        )
+        for (const [index, argument] of args.entries()) {
+          expect(reports[index]!.message).toContain(`ignores ${argument}, so it applies no class`)
+        }
       })
 
-      it('a spread argument is not read', () => {
-        expect(rule1Reports('cx.dynamic(tone, ...rest)', parser)).toEqual([])
+      it.each(['cx.dynamic(...a)', 'cx.dynamic(...a, ...b)'])(
+        '%s passes: a spread that comes first or follows only spreads is not read',
+        (value) => {
+          expect(rule1Reports(value, parser)).toEqual([])
+        },
+      )
+    })
+
+    describe('the first argument written after only spreads is reported conditionally', () => {
+      const conditional = [
+        {
+          value: "cx.dynamic(...a, 'legacy-card')",
+          callee: 'cx.dynamic',
+          argument: "'legacy-card'",
+        },
+        {
+          value: "ncx.dynamic(...a, 'legacy-card')",
+          callee: 'ncx.dynamic',
+          argument: "'legacy-card'",
+        },
+        { value: 'cx.dynamic(...a, ...b, x)', callee: 'cx.dynamic', argument: 'x' },
+        { value: "cx.dynamic(...a, 'flex')", callee: 'cx.dynamic', argument: "'flex'" },
+        { value: "cx.dynamic(...a, 'nave-flex')", callee: 'cx.dynamic', argument: "'nave-flex'" },
+        {
+          value: 'cx.dynamic(...a, `legacy-${x}`)',
+          callee: 'cx.dynamic',
+          argument: '`legacy-${x}`',
+        },
+        { value: "cx.dynamic(...a, ['flex'])", callee: 'cx.dynamic', argument: "['flex']" },
+      ]
+
+      it.each(conditional)('$value gets one report on $argument and no other', (row) => {
+        const { value, callee, argument } = row
+        const reports = rule1Reports(value, parser)
+        expect(reports).toHaveLength(1)
+        const { column, message } = reports[0]!
+        const line = `const el = <div className={${value}} />`
+        expect(column).toBe(line.lastIndexOf(argument) + 1)
+        expect(message).toContain(`The argument ${argument} follows a spread`)
+        expect(message).toContain(`${callee}() takes the first of them and ignores ${argument}`)
+        expect(message).toContain(`${argument} is the name`)
+        expect(message).toContain('spread')
+        expect(message).toContain(`${callee}(name)`)
+        expect(message).toContain('cx()')
+        expect(message).toContain('declared: prefix app-')
+        expectRemediesInOrder(message)
+        for (const word of [
+          'never',
+          'applies no class',
+          'renders no class',
+          'writes the atom',
+          'builds a name',
+          'is not a Nave atom',
+          "Nave's own build outputs",
+        ]) {
+          expect(message, word).not.toContain(word)
+        }
+        // The quoted argument may hold a comma itself, so the check reads the text after it.
+        const after = message.slice(message.indexOf(argument) + argument.length)
+        expect(after).not.toMatch(/cx\.dynamic\([^)]*,/u)
+      })
+
+      it('says the same whatever the spread holds', () => {
+        const texts = [
+          "cx.dynamic(...a, 'legacy-card')",
+          "cx.dynamic(...[], 'legacy-card')",
+          "cx.dynamic(...['flex'], 'legacy-card')",
+        ].map((value) => rule1Reports(value, parser)[0]!.message)
+        expect(new Set(texts).size).toBe(1)
+      })
+
+      it('cx.dynamic(...a, x, y) reports x conditionally and y as an argument after the first', () => {
+        const reports = rule1Reports('cx.dynamic(...a, x, y)', parser)
+        expect(reports).toHaveLength(2)
+        const line = 'const el = <div className={cx.dynamic(...a, x, y)} />'
+        expect(reports.map(({ column }) => column)).toEqual([
+          line.indexOf('x, y') + 1,
+          line.indexOf('y)') + 1,
+        ])
+        expect(reports[0]!.message).toContain('follows a spread')
+        expect(reports[1]!.message).toContain('ignores y, so it applies no class')
       })
     })
 
@@ -663,6 +753,12 @@ describe.each(PARSERS)(
     describe('none of the three applies where the call is composition or outside a class value', () => {
       it('inside cx.raw(): no rule 1 and no rule 2 report, and one count', () => {
         const code = `${preludeFor(parser)}\nconst el = <div className={cx.raw(cx.dynamic('flex', \`legacy-\${x}\`))} />`
+        const reports = lint(code, { parser })
+        expect(reports.map(({ ruleId }) => ruleId)).toEqual(['@navecss/count-escapes'])
+      })
+
+      it('inside cx.raw(): a call with a spread is not reported either', () => {
+        const code = `${preludeFor(parser)}\nconst el = <div className={cx.raw(cx.dynamic(...a, 'legacy-card'))} />`
         const reports = lint(code, { parser })
         expect(reports.map(({ ruleId }) => ruleId)).toEqual(['@navecss/count-escapes'])
       })

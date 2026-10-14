@@ -161,8 +161,8 @@ Stated as rules, not as gaps to be filled later:
   and by the class channel and the counting rule alone.
 - A name built at run time inside `cx.dynamic()` that an atom name fits (`` `text${align}` `` fits
   `textLeft`) is not read further: it renders nothing when its run-time value is no atom or, under
-  the Vite plugin, is not listed in `keep`, as an identifier's value can. A spread argument to
-  `cx.dynamic()` is not read, and neither is anything after a leading spread.
+  the Vite plugin, is not listed in `keep`, as an identifier's value can. A spread that comes
+  first in `cx.dynamic()`, or follows only spreads, is not read.
 - A camelCase string passed to `cx()` passes only if it names a real atom of the **installed**
   `@navecss/core` — a name registered through `navePlugin({ extend })` is not in `cx()`'s map and
   is reported.
@@ -192,14 +192,16 @@ call is read through its arguments; a `cx.raw()` call is left to the next rule. 
 `class` value that is itself an inline function of component state, as Base UI parts accept
 (`className={(state) => (state.open ? 'is-open' : undefined)}`), is read through the values it
 returns: its expression body, or each `return` of its block body, but not the returns of a
-function nested inside it. A string passed to `cx.dynamic()` is read the way one passed to `cx()` is, with three
-differences. A literal that names an atom is reported, with `cx()` as the fix: a name written in
-the source is a name the build can read, so `cx.dynamic('flex')` becomes `cx('flex')`; `''`,
-`null`, `undefined` and `false` pass. Every argument after the first is reported, whatever it
-holds, because `cx.dynamic()` takes one name and ignores the rest. A name built at run time (a
-template literal with a slot beside static text or another slot, a `+` chain with an operand that
-is not literal text) passes unless no atom name fits the text written around its slots, in which
-case it is reported.
+function nested inside it. A string passed to `cx.dynamic()` is read the way one passed to `cx()` is, with three differences.
+A literal that names an atom is reported, with `cx()` as the fix: a name written in the source is
+a name the build can read, so `cx.dynamic('flex')` becomes `cx('flex')`; `''`, `null`, `undefined`
+and `false` pass. Every argument after a non-spread argument, a spread included, is reported,
+whatever it holds, because `cx.dynamic()` takes one name and ignores the rest. The first argument
+written after only spreads is reported too, because whether it is used depends on the spread
+before it: when the spread has items the call takes the first of them, and when it is empty this
+argument is the name. A name built at run time (a template literal with a slot beside static text
+or another slot, a `+` chain with an operand that is not literal text) passes unless no atom name
+fits the text written around its slots, in which case it is reported.
 
 ### Rule 2: the `cx.raw()` reason
 

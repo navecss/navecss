@@ -115,6 +115,20 @@ export function dynamicExtraMessage(
 }
 
 /**
+ * The first non-spread argument of Nave's `cx.dynamic()` when only spreads come before it. It
+ * says what is true either way, whatever the spread holds: with items the call takes the first of
+ * them and ignores this argument, and empty this argument is the name.
+ */
+export function dynamicSpreadMessage(
+  callee: string,
+  rendered: string,
+  declared: string,
+  rawCallee: string,
+): string {
+  return `The argument ${rendered} follows a spread: when the spread has items, ${callee}() takes the first of them and ignores ${rendered}, and when the spread is empty, ${rendered} is the name. Pass one name as the only argument, ${callee}(name), and write names given in the source through cx(). ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
+}
+
+/**
  * A name built at run time inside Nave's `cx.dynamic()` that no atom name fits the text written
  * around the slots of: no value of the slots can make it an atom. Names no atom as a near match.
  */

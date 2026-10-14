@@ -74,7 +74,20 @@ export interface DynamicBuiltHit {
   rendered: string
 }
 
-export type ClassHit = AtomPieceHit | ClassPieceHit | DynamicBuiltHit | DynamicExtraHit | SlotAndHit
+/**
+ * The first non-spread argument of Nave's `cx.dynamic()` when only spreads come before it:
+ * whether it is the name depends on what the spread holds, so it is reported whatever it holds
+ * and its contents are not read.
+ */
+export interface DynamicSpreadHit {
+  callee: AnyNode
+  kind: 'dynamic-spread'
+  node: AnyNode
+  rendered: string
+}
+
+export type ClassHit =
+  AtomPieceHit | ClassPieceHit | DynamicBuiltHit | DynamicExtraHit | DynamicSpreadHit | SlotAndHit
 
 /**
 Literal pieces read as class text.

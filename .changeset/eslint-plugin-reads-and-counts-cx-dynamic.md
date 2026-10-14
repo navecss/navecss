@@ -10,8 +10,10 @@ Before, a call to `cx.dynamic('legacy-card')` passed unreported.
 It makes three more reports inside `cx.dynamic()`. A literal that names an atom is reported, with
 `cx()` as the fix, since a name written in the source is a name the build can read: a project with
 `cx.dynamic('flex')` in a `className` now gets a report, and the fix is to write `cx('flex')` (a
-call with no argument, `null`, `undefined`, `false` and `''` still pass). Every argument after the
-first is reported, whatever it holds, because `cx.dynamic()` takes one name and ignores the rest.
+call with no argument, `null`, `undefined`, `false` and `''` still pass). Every argument after a
+non-spread argument, a spread included, is reported, whatever it holds, because `cx.dynamic()` takes
+one name and ignores the rest, and the first argument written after only spreads is reported too,
+because whether it is used depends on what the spread holds.
 A name built at run time (a template literal with a slot beside static text or another slot, or a
 `+` chain with an operand that is not literal text) is read only to check that some atom name fits
 the text written around its slots: it is reported when none does (`` `legacy-${x}` ``) and passes

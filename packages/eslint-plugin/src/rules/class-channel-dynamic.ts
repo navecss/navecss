@@ -14,24 +14,33 @@ import { isFitByAtom, isRunTimeValue } from '../dynamic-name.ts'
 type AnyNode = TSESTree.Node
 
 /**
- * The hits of a `cx.dynamic()` call: its first argument, read by `read`, and one report for each
- * later argument, whatever it holds. A call whose first argument is a spread is not read, since
- * which argument is first is unknown, and a spread after the first is not read either.
+ * The hits of a `cx.dynamic()` call. At run time the name is the first value once every spread is
+ * expanded, so what an argument gets depends on what is written before it. A spread that comes
+ * first, or follows only spreads, is not read. The first non-spread argument is read as the name
+ * when nothing precedes it, and otherwise gets one report of its own, its contents unread, since
+ * whether it is the name depends on the spread before it. Every argument after a non-spread
+ * argument, a spread included, can never be the name and gets one report, whatever it holds.
  */
 export function dynamicCallHits(
   call: TSESTree.CallExpression,
   sourceCode: SourceCode,
   read: (argument: AnyNode, callee: AtomCallee) => ClassHit[],
 ): ClassHit[] {
-  const [first, ...rest] = call.arguments
-  if (!first || first.type === 'SpreadElement') return []
-  const extras = rest
-    .filter((argument) => argument.type !== 'SpreadElement')
-    .map((argument): ClassHit => {
-      const rendered = sourceCode.getText(argument as never)
-      return { kind: 'dynamic-extra', node: argument, rendered, callee: call.callee }
-    })
-  return [...read(first, { node: call.callee, isDynamic: true }), ...extras]
+  const firstIndex = call.arguments.findIndex((argument) => argument.type !== 'SpreadElement')
+  if (firstIndex === -1) return []
+  const reported = (kind: 'dynamic-extra' | 'dynamic-spread', argument: AnyNode): ClassHit => {
+    const rendered = sourceCode.getText(argument as never)
+    return { kind, node: argument, rendered, callee: call.callee }
+  }
+  const first = call.arguments[firstIndex]!
+  const name =
+    firstIndex === 0
+      ? read(first, { node: call.callee, isDynamic: true })
+      : [reported('dynamic-spread', first)]
+  const extras = call.arguments
+    .slice(firstIndex + 1)
+    .map((argument) => reported('dynamic-extra', argument))
+  return [...name, ...extras]
 }
 
 /**

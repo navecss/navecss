@@ -86,6 +86,7 @@ const FIXTURES: { code: string; settings?: Record<string, unknown> }[] = [
   { code: `${PRELUDE}const el = <div className={cx.dynamic('flex')} />` },
   { code: `${PRELUDE}const el = <div className={cx.dynamic(on ? 'flex' : tone)} />` },
   { code: `${PRELUDE}const el = <div className={cx.dynamic(tone, x)} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(...a, x)} />` },
   { code: `${PRELUDE}const el = <div className={cx.dynamic(\`legacy-\${x}\`)} />` },
 ]
 
