@@ -7,7 +7,23 @@ import { describe, expect, it } from 'vitest'
 
 import { buildStyles } from '../scripts/build-styles.ts'
 import { atoms } from '../styles/atoms.ts'
-import { deriveState, DRAFT_CLASSES, DRAFTS, stateKey } from './support/draft-states.ts'
+import {
+  deriveState,
+  DRAFT_CLASSES,
+  DRAFTS,
+  stateKey,
+  withoutRules,
+} from './support/draft-states.ts'
+import { buildState } from './support/feedback-build.ts'
+import {
+  allStates789,
+  DRAFT_CLASSES_789,
+  DRAFTS_789,
+  expectedSheet,
+  NEW_CLASSES_789,
+  readOracle,
+  stateKey789,
+} from './support/feedback-states.ts'
 import { attributeReads, selectorNodes } from './support/selector.ts'
 import {
   classesOf,
@@ -29,6 +45,15 @@ const allSigned = readFileSync(
 )
 
 const planted = (css: string): string => `${readStylesheet()}\n${css}`
+
+// The two expected sets AC-35 names: the attribute forms alone (the check inside the deferred and
+// shipped-with-signature criterion), and the same forms with the class that owns each.
+const DATA_NAVE_FORMS = new Set([
+  '[data-nave-size="lg"]',
+  '[data-nave-size="sm"]',
+  '[data-nave-variant="ghost"]',
+  '[data-nave-variant="primary"]',
+])
 
 /**
  * The `data-nave-*` attribute selectors of a stylesheet, each with the class that owns it.
@@ -75,14 +100,33 @@ const deferredClasses = (css: string): string[] =>
     .filter((name) => DEFERRED.test(name))
     .toArray()
 
-describe('AC-base-ui-overlay-completion-07: the class set is Table P for the signature state (stylesheet half)', () => {
-  it("is the set Table P names: 65 classes with every draft signed, 53 with none, the Slider's four included", () => {
+interface StateRow {
+  readonly bytes: number
+  readonly sha256: string
+  readonly classes: number
+}
+
+// Appendix C.4: the class count of each of the 16 #789 states, at #787 all signed.
+const feedbackRows = JSON.parse(readOracle('feedback-states.json')) as {
+  states: Record<string, StateRow>
+}
+
+const pascal = (name: string): string =>
+  name
+    .split('-')
+    .map((word) => `${word[0]?.toUpperCase()}${word.slice(1)}`)
+    .join('')
+
+const states789 = allStates789().map((unsigned) => [stateKey789(unsigned), unsigned] as const)
+
+describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07: the class set is Table P for the signature state (stylesheet half)', () => {
+  it("is the set Table P names: 86 classes with every draft signed, the Slider's four included", () => {
     const built = classesOf(readStylesheet())
 
     expect(built).toEqual(tablePClasses)
-    expect(built.size).toBe(65)
-    expect(tablePClassesFor([...DRAFTS]).size).toBe(53)
-    expect(tablePClasses.difference(new Set(sliderClasses)).size).toBe(61)
+    expect(built.size).toBe(86)
+    expect(tablePClasses.difference(new Set(sliderClasses)).size).toBe(82)
+    expect(tablePClasses.difference(new Set(sliderClasses)).size).toBe(built.size - 4)
   })
 
   it('is, for each class, toClassName of one role atom', () => {
@@ -92,17 +136,51 @@ describe('AC-base-ui-overlay-completion-07: the class set is Table P for the sig
     expect(fromAtoms).toHaveLength(tablePClasses.size)
   })
 
+  it('names each of the 21 new classes as toClassName of the atom baseUi plus its name, and the atoms hold all 21', () => {
+    const fromAtoms = new Set(Object.keys(atoms).map((name) => toClassName(name as AtomName)))
+    const named = NEW_CLASSES_789.map((name) => `baseUi${pascal(name.slice(PREFIX.length))}`)
+
+    expect(NEW_CLASSES_789).toHaveLength(21)
+    expect(named.map((name) => toClassName(name as AtomName))).toEqual(NEW_CLASSES_789)
+    expect(NEW_CLASSES_789.filter((name) => !fromAtoms.has(name))).toEqual([])
+    expect(Object.keys(atoms).filter((name) => named.includes(name))).toHaveLength(21)
+  })
+
+  it('holds the table anchors: 86 classes all signed, 82 with the four drafts unsigned, from Appendix C.4', () => {
+    expect(feedbackRows.states.none?.classes).toBe(86)
+    expect(
+      feedbackRows.states['toast-placement+toast-fade+toast-limit+navigation-menu-fade'],
+    ).toMatchObject({
+      classes: 82,
+    })
+    expect(classesOf(expectedSheet()).size).toBe(86)
+    expect(classesOf(expectedSheet([], [...DRAFTS_789])).size).toBe(82)
+  })
+
   it.each(
     [...DRAFTS.map((draft) => [draft]), [...DRAFTS]].map(
       (unsigned) => [stateKey(unsigned), unsigned] as const,
     ),
   )(
-    'is Table P for the state with %s unsigned, and has no class of an unsigned draft',
+    'is Table P for the state with %s unsigned (the #789 drafts signed), and has no class of an unsigned draft',
     async (_key, unsigned) => {
       const built = classesOf(await buildStyles({ unsigned }))
       const unsignedClasses = unsigned.flatMap((draft) => DRAFT_CLASSES[draft])
 
       expect(built).toEqual(tablePClassesFor(unsigned))
+      expect(built).toEqual(classesOf(expectedSheet(unsigned)))
+      expect(unsignedClasses.filter((name) => built.has(name))).toEqual([])
+    },
+  )
+
+  it.each(states789)(
+    'is the set Appendix C.4 counts for the state with %s unsigned, and has no class of an unsigned #789 draft',
+    async (key, unsigned) => {
+      const built = classesOf(await buildState(unsigned))
+      const unsignedClasses = unsigned.flatMap((draft) => DRAFT_CLASSES_789[draft])
+
+      expect(built.size).toBe(feedbackRows.states[key]?.classes)
+      expect(built).toEqual(classesOf(expectedSheet([], unsigned)))
       expect(unsignedClasses.filter((name) => built.has(name))).toEqual([])
     },
   )
@@ -138,6 +216,30 @@ describe('AC-base-ui-overlay-completion-07: the class set is Table P for the sig
     expect(classesOf(`${state}\n.nave-base-ui-chip { }`)).not.toEqual(
       tablePClassesFor(['combobox']),
     )
+  })
+
+  it.each(DRAFTS_789)(
+    'reds on the class of %s left in the state that leaves it unsigned, and not on the state itself (control)',
+    (draft) => {
+      const state = expectedSheet([], [draft])
+      const [name = ''] = DRAFT_CLASSES_789[draft]
+      const kept = `${state}\n  .${name} { }`
+      const expected = classesOf(expectedSheet([], [draft]))
+
+      expect(expected.has(name)).toBe(false)
+      expect(classesOf(state)).toEqual(expected)
+      expect(classesOf(kept)).not.toEqual(expected)
+      expect(classesOf(kept).size).toBe((feedbackRows.states[draft]?.classes ?? 0) + 1)
+    },
+  )
+
+  it('reds on a class of the block missing from the all-signed state, and on one the block does not hold (control)', () => {
+    const sheet = expectedSheet()
+    const missing = withoutRules(sheet, [`${PREFIX}avatar-fallback`])
+
+    expect(classesOf(missing)).not.toEqual(classesOf(sheet))
+    expect(classesOf(missing).size).toBe(85)
+    expect(classesOf(`${sheet}\n  .${PREFIX}toast-deck { }`)).not.toEqual(classesOf(sheet))
   })
 })
 
@@ -198,16 +300,10 @@ describe('AC-base-ui-overlay-completion-48: what stays deferred is absent, and w
     },
   )
 
-  it('has data-nave-variant only as primary and ghost, and data-nave-size only as sm', () => {
+  it('has data-nave-variant only as primary and ghost, and data-nave-size only as sm and lg (the first set of AC-35)', () => {
     const attributes = dataNaveSelectors(css).map((entry) => entry.split(' ', 2)[1])
 
-    expect(new Set(attributes)).toEqual(
-      new Set([
-        '[data-nave-size="sm"]',
-        '[data-nave-variant="ghost"]',
-        '[data-nave-variant="primary"]',
-      ]),
-    )
+    expect(new Set(attributes)).toEqual(DATA_NAVE_FORMS)
   })
 
   it('would see a slider-indicator or item-expanded class if one were added (control)', () => {
@@ -235,7 +331,7 @@ describe('AC-base-ui-overlay-completion-48: what stays deferred is absent, and w
   })
 })
 
-describe('AC-base-ui-overlay-completion-49: data-nave-* is variants only', () => {
+describe('AC-base-ui-feedback-navigation-35 and AC-base-ui-overlay-completion-49: data-nave-* is variants and sizes only', () => {
   const STATES = [
     'open',
     'checked',
@@ -245,19 +341,34 @@ describe('AC-base-ui-overlay-completion-49: data-nave-* is variants only', () =>
     'expanded',
     'selected',
     'highlighted',
+    'limited',
+    'current',
+    'indeterminate',
   ]
 
-  it('is exactly size sm on the button and toggle, and variant primary and ghost on the button', () => {
+  // The second set of AC-35, "these": size sm on the button, the toggle and the avatar, size lg on
+  // the avatar only, variant primary and ghost on the button.
+  const EXPECTED = new Set([
+    `${PREFIX}avatar [data-nave-size="lg"]`,
+    `${PREFIX}avatar [data-nave-size="sm"]`,
+    `${PREFIX}button [data-nave-size="sm"]`,
+    `${PREFIX}button [data-nave-variant="ghost"]`,
+    `${PREFIX}button [data-nave-variant="primary"]`,
+    `${PREFIX}toggle [data-nave-size="sm"]`,
+  ])
+
+  it('is exactly size sm on the button, the toggle and the avatar, size lg on the avatar only, and variant primary and ghost on the button', () => {
     const found = new Set(dataNaveSelectors(readStylesheet()))
 
-    expect(found).toEqual(
-      new Set([
-        `${PREFIX}button [data-nave-size="sm"]`,
-        `${PREFIX}button [data-nave-variant="ghost"]`,
-        `${PREFIX}button [data-nave-variant="primary"]`,
-        `${PREFIX}toggle [data-nave-size="sm"]`,
-      ]),
+    expect(found).toEqual(EXPECTED)
+  })
+
+  it('has the lg size on no class but the avatar', () => {
+    const large = dataNaveSelectors(readStylesheet()).filter((entry) =>
+      entry.endsWith('[data-nave-size="lg"]'),
     )
+
+    expect(large).toEqual([`${PREFIX}avatar [data-nave-size="lg"]`])
   })
 
   it('names no state', () => {
@@ -268,10 +379,29 @@ describe('AC-base-ui-overlay-completion-49: data-nave-* is variants only', () =>
     expect(named).toEqual([])
   })
 
+  it("keeps the file's two expected sets equal: the forms alone are the forms of the owned entries", () => {
+    const forms = new Set([...EXPECTED].map((entry) => entry.split(' ', 2)[1]))
+
+    expect(forms).toEqual(DATA_NAVE_FORMS)
+    expect(DATA_NAVE_FORMS.size).toBe(4)
+  })
+
   it('reds on a data-nave attribute that names a state (control)', () => {
     const css = planted('.nave-base-ui-button[data-nave-open] { color: red }')
 
     expect(dataNaveSelectors(css).some((entry) => entry.includes('data-nave-open'))).toBe(true)
+  })
+
+  it('reds on a planted [data-nave-size="lg"] key in the button, which is not in the set (control)', () => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}button { &[data-nave-size="lg"] { min-block-size: 3rem } } }`
+    const found = new Set(dataNaveSelectors(css))
+
+    const extra = found.difference(EXPECTED)
+
+    const oracle = new Set(dataNaveSelectors(expectedSheet()))
+
+    expect(extra).toEqual(new Set([`${PREFIX}button [data-nave-size="lg"]`]))
+    expect(oracle).toEqual(EXPECTED)
   })
 })
 

@@ -11,14 +11,17 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterAll, describe, expect, it, type TestContext } from 'vitest'
 
+import { expectedSheet } from './support/feedback-states.ts'
 import { attributeReads } from './support/selector.ts'
 import { flatten, PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
 import {
   baseUiRootAt,
+  dataAttributeFilesIn,
   installHint,
   isDeclared,
   itemsMissingFrom,
+  rowProblems,
 } from './support/w3-base-ui-versions.ts'
 import {
   firstTokensVersionWithTheHighlight,
@@ -206,6 +209,44 @@ const overlayRows: readonly OverlayRow[] = [
 ]
 
 /**
+ * The rows the feedback and navigation spec adds (AC-38), read as text at the floor from the
+ * declaration file each names: the data attributes the new classes key on, with the parts they
+ * cover. `Meter.Indicator` has no row: it declares `data-indeterminate` in no file at any minor.
+ */
+const feedbackRows: readonly OverlayRow[] = [
+  {
+    files: ['toast/root/ToastRootDataAttributes.d.ts'],
+    items: ['data-limited', 'data-swipe-direction', 'data-starting-style', 'data-ending-style'],
+  },
+  {
+    files: ['navigation-menu/popup/NavigationMenuPopupDataAttributes.d.ts'],
+    items: ['data-starting-style', 'data-ending-style'],
+  },
+  {
+    files: ['scroll-area/viewport/ScrollAreaViewportDataAttributes.d.ts'],
+    items: ['data-has-overflow-x', 'data-has-overflow-y'],
+  },
+  {
+    files: [
+      'scroll-area/scrollbar/ScrollAreaScrollbarDataAttributes.d.ts',
+      'scroll-area/thumb/ScrollAreaThumbDataAttributes.d.ts',
+    ],
+    items: ['data-orientation'],
+  },
+  {
+    files: ['progress/indicator/ProgressIndicatorDataAttributes.d.ts'],
+    items: ['data-indeterminate'],
+  },
+  {
+    files: [
+      'toast/arrow/ToastArrowDataAttributes.d.ts',
+      'navigation-menu/arrow/NavigationMenuArrowDataAttributes.d.ts',
+    ],
+    items: ['data-side', 'inline-start', 'inline-end'],
+  },
+]
+
+/**
  * The package's peer floor, read from the installed floor alias.
  */
 const FLOOR_VERSION = (
@@ -284,7 +325,7 @@ const copyOfFloor = (name: string, files: readonly string[]): string => {
 
 const ARROW = 'popover/arrow/PopoverArrowDataAttributes.js'
 
-describe('AC-base-ui-overlay-completion-28: every attribute and variable the stylesheet keys on is declared at the floor, and at the first minor of a part younger than it', () => {
+describe('AC-base-ui-feedback-navigation-38 and AC-base-ui-overlay-completion-28: every attribute and variable the stylesheet keys on is declared at the floor, and at the first minor of a part younger than it', () => {
   it('finds the floor package installed through its alias', () => {
     expect(existsSync(FLOOR)).toBe(true)
   })
@@ -356,6 +397,50 @@ describe('AC-base-ui-overlay-completion-28: every attribute and variable the sty
     }
   }
 
+  for (const { files, items } of feedbackRows) {
+    for (const file of files) {
+      it(`${file} declares ${items.join(', ')} at ${FLOOR_VERSION}`, () => {
+        const root = rootAtOrThrow(FLOOR_VERSION)
+        expect(rowProblems(root, file, items)).toEqual([])
+      })
+    }
+  }
+
+  it('has no *DataAttributes.d.ts in meter/indicator at the floor or at the devDependency version, so data-indeterminate on Meter.Indicator is the one exempt (class, part) pair', () => {
+    const roots = [
+      rootAtOrThrow(FLOOR_VERSION),
+      path.join(PACKAGE_DIR, 'node_modules/@base-ui/react'),
+    ]
+
+    expect(roots.map((root) => dataAttributeFilesIn(root, 'meter/indicator'))).toEqual([[], []])
+    expect(dataAttributeFilesIn(roots[0] ?? '', 'progress/indicator')).toEqual([
+      'ProgressIndicatorDataAttributes.d.ts',
+    ])
+    expect(dataAttributeFilesIn(roots[1] ?? '', 'progress/indicator')).toEqual([
+      'ProgressIndicatorDataAttributes.d.ts',
+    ])
+  })
+
+  it('control: a planted row (data-indeterminate, meter/indicator/MeterIndicatorDataAttributes.d.ts, read at the floor) is reported missing', () => {
+    expect(
+      rowProblems(
+        rootAtOrThrow(FLOOR_VERSION),
+        'meter/indicator/MeterIndicatorDataAttributes.d.ts',
+        ['data-indeterminate'],
+      ),
+    ).toEqual(['meter/indicator/MeterIndicatorDataAttributes.d.ts is not in the package'])
+  })
+
+  it('control: an item the new rows name but the file does not declare is reported (data-limited in the Navigation Menu popup file)', () => {
+    expect(
+      rowProblems(
+        rootAtOrThrow(FLOOR_VERSION),
+        'navigation-menu/popup/NavigationMenuPopupDataAttributes.d.ts',
+        ['data-limited'],
+      ),
+    ).toEqual(['data-limited'])
+  })
+
   it('control: a planted row (data-instant, select/popup/SelectPopupDataAttributes.d.ts, read at the floor) is reported missing', () => {
     expect(
       itemsMissingFrom(
@@ -378,7 +463,29 @@ describe('AC-base-ui-overlay-completion-28: every attribute and variable the sty
     const covered = new Set([
       ...rows.flatMap(({ items, shared = [] }) => [...items, ...shared.map(({ item }) => item)]),
       ...overlayRows.flatMap(({ items }) => items),
+      ...feedbackRows.flatMap(({ items }) => items),
     ])
+    expect([...keyed].filter((name) => !covered.has(name))).toEqual([])
+  })
+
+  it('has a row for every attribute the expected sheet keys on (positive control for the check above)', () => {
+    const css = expectedSheet()
+    const keyed = new Set([...keyedAttributes(css), ...keyedVariables(css)])
+    const covered = new Set([
+      ...rows.flatMap(({ items, shared = [] }) => [...items, ...shared.map(({ item }) => item)]),
+      ...overlayRows.flatMap(({ items }) => items),
+      ...feedbackRows.flatMap(({ items }) => items),
+    ])
+
+    expect(
+      [
+        'data-limited',
+        'data-swipe-direction',
+        'data-has-overflow-x',
+        'data-has-overflow-y',
+        'data-indeterminate',
+      ].filter((name) => !keyed.has(name)),
+    ).toEqual([])
     expect([...keyed].filter((name) => !covered.has(name))).toEqual([])
   })
 })
@@ -409,11 +516,32 @@ const NEW_TOKENS = [
   '--nave-motion-easing-accelerate',
 ]
 
+// The eight names the feedback and navigation block brings to the package (AC-48): the stylesheet
+// names 67 distinct tokens with every draft signed.
+const FEEDBACK_TOKENS = [
+  '--nave-color-surface-sunken',
+  '--nave-font-size-xl',
+  '--nave-layer-toast',
+  '--nave-line-height-none',
+  '--nave-radius-card',
+  '--nave-size-avatar-sm',
+  '--nave-size-avatar-md',
+  '--nave-size-avatar-lg',
+]
+
 describe('AC-base-ui-overlay-completion-31: every Nave token the stylesheet names exists in the workspace and at the new tokens floor', () => {
-  it('names 59 distinct tokens, among them the five this work adds', () => {
+  it('names 67 distinct tokens, among them the five this work adds and the eight of the feedback and navigation block', () => {
     const named = namedTokens(readStylesheet())
-    expect(named.size).toBe(59)
+    expect(named.size).toBe(67)
     expect(NEW_TOKENS.filter((name) => !named.has(name))).toEqual([])
+    expect(FEEDBACK_TOKENS.filter((name) => !named.has(name))).toEqual([])
+  })
+
+  it('names the same 67 in the expected sheet, and the eight are the ones the 59 of the #787 sheet lack (positive control)', () => {
+    const oracle = namedTokens(expectedSheet())
+
+    expect(oracle.size).toBe(67)
+    expect(FEEDBACK_TOKENS.filter((name) => !oracle.has(name))).toEqual([])
   })
 
   it('names only tokens the workspace declares', () => {
