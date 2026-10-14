@@ -35,15 +35,19 @@ const markedParts = (node: Element): Map<string, readonly string[]> => {
   const parts = new Map<string, readonly string[]>()
   const candidates: Element[] = [node, ...node.querySelectorAll('[data-part]')]
   for (const candidate of candidates) {
-    const marker = candidate.getAttribute('data-part')
-    if (marker !== null) {
+    const marker = (candidate as HTMLElement).dataset.part
+    if (marker !== undefined) {
       parts.set(marker, candidate.getAttributeNames())
     }
   }
   return parts
 }
 
-const entry = (kind: Mutation['kind'], target: Element, extra: Partial<Mutation> = {}): Mutation => ({
+const entry = (
+  kind: Mutation['kind'],
+  target: Element,
+  extra: Partial<Mutation> = {},
+): Mutation => ({
   activeElement: document.activeElement,
   insertedParts: new Map(),
   isActiveInsideTarget: false,
@@ -58,14 +62,21 @@ const recordsOf = (record: MutationRecord): Mutation[] => {
   if (record.type === 'attributes') {
     const name = record.attributeName ?? ''
     return record.oldValue === null && target.hasAttribute(name)
-      ? [entry('attribute-added', target, { isActiveInsideTarget: target.contains(document.activeElement), name })]
+      ? [
+          entry('attribute-added', target, {
+            isActiveInsideTarget: target.contains(document.activeElement),
+            name,
+          }),
+        ]
       : []
   }
   return [
     ...[...record.addedNodes]
       .filter((node) => node instanceof Element)
       .map((node) => entry('inserted', node, { insertedParts: markedParts(node) })),
-    ...[...record.removedNodes].filter((node) => node instanceof Element).map((node) => entry('removed', node)),
+    ...[...record.removedNodes]
+      .filter((node) => node instanceof Element)
+      .map((node) => entry('removed', node)),
   ]
 }
 

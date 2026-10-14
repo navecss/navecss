@@ -40,13 +40,14 @@ const link = (menu: Ns, name: string, isActive: boolean): ReactElement =>
     name,
   )
 
-const itemWithTrigger = (
-  menu: Ns,
-  kind: 'disabled' | 'enabled',
-  label: string,
-  icon: ReactElement,
-  links: ReactElement[],
-): ReactElement => {
+interface TriggerItem {
+  readonly icon: ReactElement
+  readonly kind: 'disabled' | 'enabled'
+  readonly label: string
+  readonly links: ReactElement[]
+}
+
+const itemWithTrigger = (menu: Ns, { icon, kind, label, links }: TriggerItem): ReactElement => {
   const trigger = part(
     menu,
     'Trigger',
@@ -86,17 +87,18 @@ export const navigationMenuElement = (
   const icon = part(menu, 'Icon', { 'data-part': 'NavigationMenu.Icon' }, 'v')
   const firstIcon =
     options.wrapIcon === true ? createElement('span', { 'data-part': 'IconWrapper' }, icon) : icon
-  const guides = itemWithTrigger(menu, 'enabled', 'Guides', firstIcon, [
-    link(menu, 'panel-active', options.activeLink === 'panel'),
-    link(menu, 'panel', false),
-  ])
-  const reference = itemWithTrigger(
-    menu,
-    'disabled',
-    'Reference',
-    part(menu, 'Icon', { 'data-part': 'NavigationMenu.Icon' }, 'v'),
-    [link(menu, 'reference', false)],
-  )
+  const guides = itemWithTrigger(menu, {
+    icon: firstIcon,
+    kind: 'enabled',
+    label: 'Guides',
+    links: [link(menu, 'panel-active', options.activeLink === 'panel'), link(menu, 'panel', false)],
+  })
+  const reference = itemWithTrigger(menu, {
+    icon: part(menu, 'Icon', { 'data-part': 'NavigationMenu.Icon' }, 'v'),
+    kind: 'disabled',
+    label: 'Reference',
+    links: [link(menu, 'reference', false)],
+  })
   const top = part(menu, 'Item', {}, link(menu, 'top', options.activeLink === 'top'))
   const items = [guides, ...(options.disabledTrigger === true ? [reference] : []), top]
   const list = part(menu, 'List', { 'data-part': 'NavigationMenu.List' }, ...items)
