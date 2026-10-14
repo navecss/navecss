@@ -33,10 +33,15 @@ const OWNER_FILE = 'owner.json'
 export const defaultLockPath = () => path.join(tmpdir(), LOCK_NAME)
 
 /**
- * The command line of the process `pid`, or `undefined` when `ps` cannot say.
+ * The command line of the process `pid`, or `undefined` when `ps` cannot say. `ps` is run by its
+ * absolute path, where macOS and Linux both install it, so no directory on the caller's `PATH` can
+ * stand in for it; where it is somewhere else, or missing, the liveness check falls back to the
+ * signal alone.
  */
 function commandOfProcess(pid) {
-  const result = spawnSync('ps', ['-ww', '-o', 'command=', '-p', String(pid)], { encoding: 'utf8' })
+  const result = spawnSync('/bin/ps', ['-ww', '-o', 'command=', '-p', String(pid)], {
+    encoding: 'utf8',
+  })
   return result.error || result.status !== 0 ? undefined : result.stdout
 }
 
