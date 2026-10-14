@@ -12,6 +12,7 @@ import { userEvent } from 'vitest/browser'
 
 import { AlertDialog } from '../../dist/alert-dialog/index.js'
 import { Dialog } from '../../dist/dialog/index.js'
+import { framesLater, isReachedWithin } from './support/frames.ts'
 import {
   byTestId,
   el as h,
@@ -24,7 +25,6 @@ import {
 } from './support/page.ts'
 import { colorOf, type Scheme, SCHEMES, useScheme } from './support/w7-css.ts'
 import { required } from './support/w7-lists.ts'
-import { sleep } from './support/wait.ts'
 
 /**
 The scrim's colour at the default tint, as the engine serialises it.
@@ -47,6 +47,12 @@ const pageContent = (): ReactNode =>
     },
     'Page',
   )
+
+/**
+The frames a close is given to show after an outside click: the control must close within them, and
+the Alert Dialog is watched for as many.
+ */
+const CLOSE_FRAMES = 60
 
 const alertDialog = (): ReactNode =>
   h(
@@ -192,16 +198,25 @@ describe('AC-base-ui-overlay-completion-16: the Alert Dialog scrim', () => {
 
     it('AC-base-ui-overlay-completion-16: an outside click leaves the Alert Dialog open', async () => {
       await open(scheme, alertDialog)
+      const popup = required('popup')
       await clickInTheCorner()
-      await sleep(300)
-      expect(byTestId('popup'), 'the Alert Dialog after the outside click').not.toBeUndefined()
+      // The click has been delivered and handled when it returns. A close that the click began
+      // would show as an ending style at once and as an unmounted popup within CLOSE_FRAMES, the
+      // frames in which the control below is seen to close.
+      await framesLater(CLOSE_FRAMES)
+      expect(popup.isConnected, 'the Alert Dialog after the outside click').toBe(true)
+      expect(Object.hasOwn(popup.dataset, 'endingStyle'), 'a close that began').toBe(false)
     })
 
     it('AC-base-ui-overlay-completion-16: the same outside click closes a modal Dialog (control)', async () => {
       await open(scheme, modalDialog)
+      const popup = required('popup')
       await clickInTheCorner()
-      await sleep(300)
-      expect(byTestId('popup'), 'the modal Dialog after the outside click').toBeUndefined()
+      const isClosed = await isReachedWithin(() => !popup.isConnected, CLOSE_FRAMES)
+      expect(
+        isClosed,
+        `the modal Dialog after the outside click, within ${CLOSE_FRAMES} frames`,
+      ).toBe(true)
     })
   })
 })
