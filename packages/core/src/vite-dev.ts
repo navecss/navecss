@@ -4,10 +4,11 @@
  * the first response waits until every module reachable from the roots of the module graph has
  * been transformed (so the set is complete for what the pages load, whichever script each page
  * starts from), and a set that grows afterwards reloads the stylesheets already served, batched,
- * through Vite's own module reload, and, when a page's classes grew it, drops their cached text so
- * the next request filters again. Vite drops a reload sent while no page is connected, so when a
- * page connects the reloads sent and not yet answered are forgotten and the check runs again.
- * `devServing` is an object, so a test can stand a scratch copy of one step in its place.
+ * through Vite's own module reload (the page, for one inlined in its HTML), and, when a page's
+ * classes grew it, drops their cached text so the next request filters again. Vite drops a reload
+ * sent while no page is connected, so when a page connects the reloads sent and not yet answered
+ * are forgotten and the check runs again. `devServing` is an object, so a test can stand a scratch
+ * copy of one step in its place.
  */
 import type {
   DevEnvironmentLike,
@@ -73,14 +74,28 @@ export interface DevServing {
 }
 
 /**
- * Asks `environment` to reload `module`. A page that is gone has nothing to reload.
+ * Whether `module` is a `<style>` inlined in an HTML file, which Vite serves as `<file>.html` plus
+ * `?html-proxy&...`. Its text is written into the HTML the page was given, so there is no
+ * stylesheet for the page to swap.
+ */
+function isInlinedInHtml(module: GraphModuleLike): boolean {
+  return module.id !== null && /[?&]html-proxy\b/.test(module.id)
+}
+
+/**
+ * Asks `environment` to reload `module`; for a style inlined in an HTML file, which is part of the
+ * page, to reload the page. Vite's own reload of that module names the HTML file by its
+ * file-system path, and the client ignores a reload of an `.html` path that is not the page's
+ * URL. `*` is what Vite sends for a change to a stylesheet that file imports, and is always
+ * heeded. A page that is gone has nothing to reload.
  */
 async function reloadQuietly(
   environment: DevEnvironmentLike,
   module: GraphModuleLike,
 ): Promise<void> {
   try {
-    await environment.reloadModule(module)
+    if (isInlinedInHtml(module)) environment.hot.send({ type: 'full-reload', path: '*' })
+    else await environment.reloadModule(module)
   } catch {
     // No client is listening.
   }

@@ -52,7 +52,7 @@ export interface GraphModuleLike {
 
 /**
  * The part of a dev environment the dev server's serving of the atomic layer uses: its module
- * graph, the request that transforms a module, and the reload of one.
+ * graph, the request that transforms a module, the reload of one and the channel to its pages.
  */
 export interface DevEnvironmentLike {
   readonly moduleGraph: {
@@ -66,6 +66,10 @@ export interface DevEnvironmentLike {
   readonly config: { readonly dev: { readonly warmup: readonly string[] } }
   transformRequest(url: string): Promise<unknown>
   reloadModule(module: GraphModuleLike): Promise<void>
+  /**
+   * The channel to the environment's pages, which a page reload goes out on.
+   */
+  readonly hot: { send(payload: { readonly path: string; readonly type: 'full-reload' }): void }
   /**
    * Resolves once the static imports the first request set off are processed; from a hook, the
    * module the hook runs for is passed so it does not wait on itself.
@@ -92,7 +96,7 @@ export interface RequestLike {
  * `vite:client:connect` is emitted for each page that opens a connection.
  */
 interface ClientEnvironmentLike extends DevEnvironmentLike {
-  readonly hot: {
+  readonly hot: DevEnvironmentLike['hot'] & {
     off(event: 'vite:client:connect', listener: () => void): void
     on(event: 'vite:client:connect', listener: () => void): void
   }

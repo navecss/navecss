@@ -267,6 +267,7 @@ describe('AC-used-atoms-39 — a dependency’s calls are read in dev, on a cold
 
 interface Update {
   readonly type: string
+  readonly path?: string
   readonly updates?: readonly { readonly path: string }[]
 }
 
@@ -618,6 +619,59 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
         await new Promise((resolve) => setTimeout(resolve, 300))
 
         expect(updates.sent).toHaveLength(1)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+})
+
+/**
+ * Resolves with the page reloads `updates` has recorded once one has been sent, or with none
+ * after `ms`.
+ */
+async function pageReloadsSent(updates: Recording, ms: number): Promise<Update[]> {
+  const deadline = Date.now() + ms
+  const reloads = (): Update[] => updates.sent.filter((update) => update.type === 'full-reload')
+  while (reloads().length === 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return reloads()
+}
+
+describe('AC-used-atoms-41 — a stylesheet inlined in index.html, after the set grew', () => {
+  const INLINE_PAGE = `<!doctype html><html><head><style>${APP_CSS}</style></head><body><script type="module" src="/src/main.ts"></script></body></html>`
+
+  it('is answered by a reload of the page, named in the way the client heeds', async () => {
+    const app = makeUsedApp(
+      appFiles({
+        'index.html': INLINE_PAGE,
+        'src/App.ts': `${IMPORT}export const a = cx('flex')\n`,
+        'src/main.ts': "import './App.ts'\n",
+      }),
+    )
+    try {
+      // Not a middleware-mode server: Vite names every page there with `*`, and the reload that
+      // went wrong is the one it sends for a server that serves a single page's HTML.
+      const server = await startDev(
+        devConfig(app.root, [navePlugin()], { ...NO_WATCHER, middlewareMode: false }),
+      )
+      try {
+        await server.transformRequest('/src/main.ts')
+        await server.transformIndexHtml(
+          '/index.html',
+          readFileSync(path.join(app.root, 'index.html'), 'utf8'),
+        )
+        const updates = recordUpdates(server)
+
+        await edit(server, app.root, "cx('flex', 'block')")
+        const reloads = await pageReloadsSent(updates, UPDATE_CEILING_MS)
+
+        // Vite's client ignores a reload that names an `.html` path other than the page's URL,
+        // which is what a reload of the module asked for with its file-system path would send.
+        expect(reloads.map((reload) => reload.path)).toEqual(['*'])
       } finally {
         await stopDev(server)
       }

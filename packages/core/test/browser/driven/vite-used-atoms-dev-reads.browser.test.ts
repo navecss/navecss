@@ -15,7 +15,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { navePlugin, type NaveViteOptions } from '../../../src/vite.ts'
 import { APP_CSS, appFiles, makeUsedApp } from '../../helpers/used-atoms-app.ts'
 import { IMPORT } from '../../helpers/used-atoms-rows.ts'
-import { stopDev } from '../../helpers/vite-app.ts'
+import { stopDev, VITE_APIS, type ViteApi } from '../../helpers/vite-app.ts'
 import {
   devConfig,
   framesOf,
@@ -603,3 +603,100 @@ describe('AC-used-atoms-41 — a set that grew before the page was listening', (
     })
   }, 120_000)
 })
+
+/**
+ * The app of the inline rows: `index.html` holds the Quick start's imports in a `<style>` and
+ * carries `nave-hidden`, `src/main.ts` appends an element carrying `cx('flex')`, and
+ * `src/late.ts`, which no module imports, appends one carrying `cx('grid')`.
+ */
+const INLINE_APP = {
+  'package.json': '{"private":true,"type":"module"}',
+  'index.html': `<!doctype html><html><head><style>${APP_CSS}</style></head><body><p class="nave-hidden">h</p><script type="module" src="/src/main.ts"></script></body></html>`,
+  'src/main.ts': appends('f', 'flex'),
+  'src/late.ts': appends('g', 'grid'),
+}
+
+/**
+ * Whether a stylesheet of the page holds a rule for `name`; false while the page is navigating.
+ */
+async function isRuledNow(page: Page, name: string): Promise<boolean> {
+  try {
+    return await hasRuleNow(page, name)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Whether the page is no longer the one `dataset.mark` was written to: it is reloading or has.
+ */
+async function isReloaded(page: Page): Promise<boolean> {
+  try {
+    return await page.evaluate(() => document.documentElement.dataset.mark !== '1')
+  } catch {
+    return true
+  }
+}
+
+/**
+ * Whether the stylesheet of `INLINE_APP` gets the rule for `nave-grid` when the page, already
+ * listening for updates, imports `src/late.ts`, and whether the page is still the one first
+ * loaded. An inline stylesheet is part of the HTML, so the way to give it the rule is to reload
+ * the page, which is read again once it has.
+ */
+async function lateClassOfInlineStyle(
+  options: NaveViteOptions,
+  api: ViteApi,
+): Promise<{ isRuled: boolean; isSamePage: boolean }> {
+  const app = makeUsedApp(INLINE_APP)
+  try {
+    const { server, url } = await listenDev(devConfig(app.root, [navePlugin(options)]), api)
+    try {
+      const connected = new Promise<void>((resolve) => {
+        server.environments.client.hot.on('vite:client:connect', () => {
+          resolve()
+        })
+      })
+      const page = await browser.newPage()
+      await page.goto(url)
+      await until(page, () => hasElement(page, '#f'), 'the script’s element')
+      await connected
+      await page.evaluate(() => {
+        document.documentElement.dataset.mark = '1'
+      })
+      await page.addScriptTag({ type: 'module', content: "import '/src/late.ts'" })
+      // The element is on this page only if it is not reloaded before the module has run.
+      await until(
+        page,
+        async () => (await hasElement(page, '#g')) || (await isReloaded(page)),
+        'the late element or the reload',
+      )
+      await untilQuietly(page, () => isRuledNow(page, 'nave-grid'), 'the rule for nave-grid')
+      await page.waitForLoadState('load')
+      const isRuled = await isRuledNow(page, 'nave-grid')
+      const isSamePage = await page.evaluate(() => document.documentElement.dataset.mark === '1')
+      await page.close()
+      return { isRuled, isSamePage }
+    } finally {
+      await stopDev(server)
+    }
+  } finally {
+    app.dispose()
+  }
+}
+
+describe.each(Object.entries(VITE_APIS))(
+  'AC-used-atoms-41 — a stylesheet inlined in index.html, after the set grew (Vite %s)',
+  (_name, api) => {
+    it('the class a module adds once the page is listening gets its rule, the page having reloaded', async () => {
+      expect(await lateClassOfInlineStyle({}, api)).toEqual({ isRuled: true, isSamePage: false })
+    }, 120_000)
+
+    it('control: with the atom in keep it has one, and nothing reloads', async () => {
+      expect(await lateClassOfInlineStyle({ keep: ['grid'] }, api)).toEqual({
+        isRuled: true,
+        isSamePage: true,
+      })
+    }, 120_000)
+  },
+)
