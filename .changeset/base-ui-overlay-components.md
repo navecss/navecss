@@ -11,11 +11,10 @@ the package styles, and the types Base UI exports beside them. The types under a
 package supports, so two that Base UI added up to 1.8.0 do not come through:
 `ContextMenu.Root.Actions`, and the third type parameter of `Combobox.Root.Props`, `Item`. Import
 `ContextMenuRootActions` and `ComboboxRootProps<Value, Multiple, Item>` from the same subpath
-instead. A part that Base UI also exports as a type, such as `Dialog.Trigger`, now works as a type
-through this package too. On Base UI 1.3 to 1.7, Combobox's `createItems` is `undefined`, as it is
-in Base UI, and a build that imports the package root or `@navecss/base-ui/combobox` may print a
-harmless bundler warning about it. The package now wraps 29 components. Alert Dialog's trigger and
-close join the Button family, and a Menubar's menus come from `@navecss/base-ui/menu`.
+instead. On Base UI 1.3 to 1.7, Combobox's `createItems` is `undefined`, as it is in Base UI, and
+a build that imports the package root or `@navecss/base-ui/combobox` may print a harmless bundler
+warning about it. The package now wraps 29 components. Alert Dialog's trigger and close join the
+Button family, and a Menubar's menus come from `@navecss/base-ui/menu`.
 
 Button, Toolbar.Button and the other members of the family take a third variant, `ghost`: no fill
 or border at rest, the new highlight fill under the pointer and while its menu is showing.
@@ -26,6 +25,10 @@ stays in the text field. Alert Dialog's backdrop is painted with a scrim. Popups
 tooltips fade, and the tab indicator slides; all of it is switched off under
 `prefers-reduced-motion`, even when you have changed Nave's motion tokens. Motion you add or
 restyle yourself is yours to switch off. Arrows take the logical start and end sides.
+
+Two kinds of type the first release left out now resolve through the package as they do through
+Base UI: a part that Base UI also exports as a type, such as `Dialog.Trigger`, and the type names
+a component namespace exports only as types, `Field.ValidityData` and `Toolbar.Orientation`.
 
 It needs `@navecss/tokens` 0.4.0 or later (the release that adds `--nave-color-action-highlight` and
 `--nave-color-backdrop-modal`).
