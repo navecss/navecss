@@ -78,6 +78,19 @@ describe('C12 — the atom declarations are bundled once, and cx.js never reache
     expect(specifiers).toEqual(['./a.js', './b.js', './c.js', '../d.js'])
   })
 
+  it('holds the declaration data in one file of everything the entries reach', () => {
+    const manifest = readFileSync(path.join(DIST, '../package.json'), 'utf8')
+    const entries = new Set(manifest.matchAll(/"\.\/dist\/([\w-]+\.js)"/g).map(([, file]) => file!))
+    expect(entries).toContain('cx.js')
+    expect(entries).toContain('bin.js')
+    const holders = new Set(
+      [...entries]
+        .flatMap((entry) => [...reachableFiles(entry)])
+        .filter((file) => read(file).includes(ATOM_DECLARATION_MARKER)),
+    )
+    expect(holders.size).toBe(1)
+  })
+
   it('still exposes working entry points', () => {
     expect(read('cx.js')).toContain('cx')
     expect(read('postcss.js')).toContain('postcssPlugin')
