@@ -15,7 +15,17 @@ import { Tooltip } from '../../dist/tooltip/index.js'
 import { el as h, mount, type Page, stylesheet, tokens, useSheets } from './support/page.ts'
 import { required } from './support/w8-actions.ts'
 import { tokenEasing, tokenMilliseconds } from './support/w8-tokens.ts'
-import { appears, atRest, goneAt, MOUNT, type Watch, watchPopup } from './support/w8-watch.ts'
+import {
+  appears,
+  atRest,
+  FEW_FRAMES,
+  framesAfterFinish,
+  isReachedWithin,
+  MAX_FRAMES,
+  MOUNT,
+  type Watch,
+  watchPopup,
+} from './support/w8-watch.ts'
 
 const tip = (number: number): ReactNode =>
   h(
@@ -69,6 +79,7 @@ describe('AC-base-ui-overlay-completion-18: the tooltip fades, and is instant in
     await userEvent.hover(required('trigger-1'))
     await appears('popup-1')
     const popup = await atRest('popup-1')
+    const followed = first!.track(popup)
     const [opening] = first!.of('data-starting-style', false)
     expect(opening, 'data-starting-style was removed').toBeDefined()
     expect(opening?.instant, 'the first tooltip is not instant').toBeUndefined()
@@ -77,7 +88,11 @@ describe('AC-base-ui-overlay-completion-18: the tooltip fades, and is instant in
     const [closing] = first!.of('data-ending-style', true)
     expect(closing, 'data-ending-style was set').toBeDefined()
     expect(closing?.animations, 'closing').toEqual(opacity('--nave-motion-easing-accelerate', fast))
-    expect(await goneAt(popup, fast + 200), 'the popup left the page').toBeDefined()
+    await isReachedWithin(() => followed.goneFrame() !== undefined, MAX_FRAMES)
+    const after = framesAfterFinish(closing!, followed)
+    expect(after, 'the transition finished and the popup left the page').toBeDefined()
+    expect(after, 'not before the transition ended').toBeGreaterThanOrEqual(0)
+    expect(after, 'within a few frames of the transition ending').toBeLessThanOrEqual(FEW_FRAMES)
   })
 
   it('AC-base-ui-overlay-completion-18: the second, opened from the first inside the delay group, computes a transition-duration of 0s while data-instant is present', async () => {

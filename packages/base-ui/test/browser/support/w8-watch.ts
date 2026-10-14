@@ -15,9 +15,23 @@ export interface Seen {
   readonly property: string
 }
 
+/**
+An animation that was running, and the frame at which it finished.
+ */
+export interface Running {
+  /**
+  The frame at which the animation finished, or `undefined` while it has not, or if it was cancelled.
+   */
+  readonly finishedFrame: () => number | undefined
+}
+
 export interface Moment {
   readonly animations: readonly Seen[]
   readonly attribute: string
+  /**
+  The animations running at that moment, each to be asked at which frame it finished.
+   */
+  readonly running: readonly Running[]
   /**
   How many animation frames had passed since the watch began, so that a gap can be told in frames,
   which a slow machine does not stretch, as well as in milliseconds.
@@ -100,6 +114,18 @@ export interface Watch {
   readonly of: (attribute: string, isPresent: boolean) => Moment[]
 }
 
+const finishedAt = (animation: Animation, frames: () => number): Running => {
+  let finished: number | undefined
+  animation.addEventListener(
+    'finish',
+    () => {
+      finished = frames()
+    },
+    { once: true },
+  )
+  return { finishedFrame: () => finished }
+}
+
 /**
  * Counts animation frames from now on, and notes the frame at which each popup it is asked to
  * follow is first seen gone.
@@ -142,6 +168,7 @@ export const watchPopup = (testId = 'popup'): Watch => {
     moments.push({
       animations: target.getAnimations().map((animation) => describeAnimation(animation)),
       attribute,
+      running: target.getAnimations().map((animation) => finishedAt(animation, counter.frames)),
       frame: counter.frames(),
       duration: style.transitionDuration,
       easing: style.transitionTimingFunction,
@@ -196,6 +223,28 @@ const nextFrame = (): Promise<void> =>
   })
 
 /**
+With nothing to wait for, a popup is gone within this many frames of its close starting, or of the
+transition it waited for finishing.
+ */
+export const FEW_FRAMES = 4
+
+/**
+The most frames waited for something that should happen, which only something that does not happen
+runs out.
+ */
+export const MAX_FRAMES = 300
+
+/**
+ * How many frames after its first running transition finished a followed popup left the page: below
+ * zero if it left first, and `undefined` if the transition did not finish or the popup did not leave.
+ */
+export const framesAfterFinish = (closing: Moment, followed: Tracked): number | undefined => {
+  const left = followed.goneFrame()
+  const finished = closing.running[0]?.finishedFrame()
+  return left === undefined || finished === undefined ? undefined : left - finished
+}
+
+/**
  * Waits frame by frame until `isDone` holds, for at most `limit` frames, and says whether it held.
  * The limit is a count of frames and not a time, so a machine that is slow to draw is waited for
  * as long as it takes to draw that many frames.
@@ -208,33 +257,19 @@ export const isReachedWithin = async (isDone: () => boolean, limit: number): Pro
 }
 
 /**
- * Waits frame by frame until the popup is gone and returns the time that was seen, or `undefined`
- * after `limit` milliseconds.
- */
-export const goneAt = async (popup: Element, limit: number): Promise<number | undefined> => {
-  const deadline = performance.now() + limit
-  while (!isGone(popup)) {
-    if (performance.now() > deadline) {
-      return undefined
-    }
-    await nextFrame()
-  }
-  return performance.now()
-}
-
-/**
  * Waits for the popup of a scene to exist and to have no running animation or transition, so what is
  * read afterwards is the popup at rest.
  */
 export const atRest = async (testId = 'popup'): Promise<HTMLElement> => {
-  const deadline = performance.now() + 5000
   let popup = byTestId(testId)
-  while (
+  for (
+    let frame = 0;
     popup === undefined ||
     popup.getAnimations().length > 0 ||
-    Object.hasOwn(popup.dataset, 'startingStyle')
+    Object.hasOwn(popup.dataset, 'startingStyle');
+    frame += 1
   ) {
-    if (performance.now() > deadline) {
+    if (frame >= MAX_FRAMES) {
       throw new Error(`the popup ${testId} never came to rest`)
     }
     await nextFrame()
@@ -251,11 +286,10 @@ export const atRest = async (testId = 'popup'): Promise<HTMLElement> => {
  * Waits for an element the popup's scene opens, polling each frame, and returns it. A Preview Card
  * opens after a delay.
  */
-export const appears = async (testId = 'popup', limit = 3000): Promise<HTMLElement> => {
-  const deadline = performance.now() + limit
+export const appears = async (testId = 'popup'): Promise<HTMLElement> => {
   let popup = byTestId(testId)
-  while (popup === undefined) {
-    if (performance.now() > deadline) {
+  for (let frame = 0; popup === undefined; frame += 1) {
+    if (frame >= MAX_FRAMES) {
       throw new Error(`the element ${testId} never appeared`)
     }
     await nextFrame()

@@ -29,8 +29,10 @@ import { tokenEasing, tokenMilliseconds } from './support/w8-tokens.ts'
 import {
   appears,
   atRest,
-  goneAt,
+  FEW_FRAMES,
+  framesAfterFinish,
   isReachedWithin,
+  MAX_FRAMES,
   type Watch,
   watchPopup,
 } from './support/w8-watch.ts'
@@ -75,21 +77,6 @@ const withoutPopupFade = (): string => {
   return sheet
 }
 
-/**
-Frames are about 16ms: the margin by which a measured time may differ from a transition's length.
- */
-const FRAME = 20
-
-/**
-With nothing to wait for, an unmounting popup is gone within this many frames of its close starting.
- */
-const FEW_FRAMES = 4
-
-/**
-The most frames waited for a popup to leave the page, which only a popup that does not leave runs out.
- */
-const MAX_FRAMES = 120
-
 describe.each(popupCases)('AC-base-ui-overlay-completion-17: the $name popup', (popupCase) => {
   let page: Page | undefined
   let removeSheets: (() => void) | undefined
@@ -123,6 +110,7 @@ describe.each(popupCases)('AC-base-ui-overlay-completion-17: the $name popup', (
     const fast = tokenMilliseconds('--nave-motion-duration-fast')
     await open(popupCase.opening)
     const popup = await atRest()
+    const followed = seen.track(popup)
     await closeBy(popupCase.closes)
     const [ending] = seen.of('data-ending-style', true)
     expect(ending, 'data-ending-style was set').toBeDefined()
@@ -152,11 +140,11 @@ describe.each(popupCases)('AC-base-ui-overlay-completion-17: the $name popup', (
             },
           ],
     )
-    const gone = await goneAt(popup, fast + 200 + 1000)
-    expect(gone, 'the popup left the page').toBeDefined()
-    const elapsed = gone! - ending!.time
-    expect(elapsed, 'not before the transition ended').toBeGreaterThanOrEqual(fast - FRAME)
-    expect(elapsed, 'within its duration plus 200ms').toBeLessThanOrEqual(fast + 200)
+    await isReachedWithin(() => followed.goneFrame() !== undefined, MAX_FRAMES)
+    const after = framesAfterFinish(ending!, followed)
+    expect(after, 'the transition finished and the popup left the page').toBeDefined()
+    expect(after, 'not before the transition ended').toBeGreaterThanOrEqual(0)
+    expect(after, 'within a few frames of the transition ending').toBeLessThanOrEqual(FEW_FRAMES)
   })
 
   it.runIf(popupCase.motion === 'popup-motion')(
@@ -187,12 +175,18 @@ describe.each(popupCases)('AC-base-ui-overlay-completion-17: the $name popup', (
       const seen = start(stylesheet)
       await open(popupCase.opening)
       const popup = await atRest()
+      const followed = seen.track(popup)
       await userEvent.keyboard('{Escape}')
       const dismissed = seen.moments.find((moment) => moment.instant === 'dismiss')
       expect(dismissed, 'data-instant was set to dismiss').toBeDefined()
       expect(dismissed?.duration).toBe('0s')
       expect(dismissed?.animations, 'the close runs no transition').toEqual([])
-      expect(await goneAt(popup, 200), 'the popup left the page').toBeDefined()
+      await isReachedWithin(() => followed.goneFrame() !== undefined, MAX_FRAMES)
+      expect(followed.goneFrame(), 'the popup left the page').toBeDefined()
+      expect(
+        followed.goneFrame()! - dismissed!.frame,
+        'within a few frames of the dismiss',
+      ).toBeLessThanOrEqual(FEW_FRAMES)
     },
   )
 
