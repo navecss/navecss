@@ -12,6 +12,8 @@ import { execFileSync, spawn } from 'node:child_process'
 import {
   closeSync,
   constants,
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   openSync,
   readFileSync,
@@ -513,6 +515,9 @@ async function withRunningSlowStep({ closableOutput = false, trapTerm = false },
       FAKE_SLOW_STEP: 'build',
       ...(trapTerm && { FAKE_TRAP_TERM: '1' }),
       npm_execpath: entry,
+      // The runner's lock is under the temporary directory: a scratch one keeps this runner from
+      // waiting for the real `ci:check` that is running these tests.
+      TMPDIR: dir,
     },
     stdio,
   })
@@ -621,4 +626,106 @@ test('test:coverage is not a step: the test step already measures coverage', () 
     STEPS.some((step) => step.name === 'test:coverage'),
     false,
   )
+})
+
+/**
+ * A stand-in for pnpm that records, for each step, whether the runner's lock existed while the
+ * step ran, and fails the `lint` step.
+ */
+const FAKE_LOCK_PNPM = String.raw`
+import { appendFileSync, existsSync } from 'node:fs'
+const [, , , name] = process.argv
+appendFileSync(process.env.FAKE_SEEN_FILE, name + ' ' + existsSync(process.env.FAKE_LOCK_PATH) + '\n')
+process.exit(name === 'lint' ? 1 : 0)
+`
+
+/**
+ * Runs the real runner over the stand-in, with its lock in a scratch directory. `beforeStart(lockPath)`
+ * runs first, to leave a lock in place. Resolves to what the runner printed and how it exited, and
+ * to the steps it ran as `name boolean` lines.
+ */
+async function runWithFakeLockPnpm({ afterOutput, beforeStart = () => {} }) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ci-check-lock-run-'))
+  const lockPath = path.join(dir, 'navecss-ci-check.lock')
+  const seenFile = path.join(dir, 'seen.txt')
+  const entry = path.join(dir, 'fake-pnpm.mjs')
+  writeFileSync(entry, FAKE_LOCK_PNPM)
+  writeFileSync(seenFile, '')
+  const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), 'run-ci-check.mjs')
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key !== 'TURBO_FORCE'),
+  )
+  beforeStart(lockPath)
+  const child = spawn(process.execPath, [runner], {
+    env: {
+      ...env,
+      FAKE_LOCK_PATH: lockPath,
+      FAKE_SEEN_FILE: seenFile,
+      npm_execpath: entry,
+      TMPDIR: dir,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const chunks = []
+  child.stdout.on('data', (chunk) => chunks.push(chunk))
+  child.stderr.on('data', (chunk) => chunks.push(chunk))
+  const exited = new Promise((resolve) => child.on('close', (code) => resolve(code)))
+  try {
+    if (afterOutput)
+      await afterOutput({
+        child,
+        lockPath,
+        output: () => Buffer.concat(chunks).toString(),
+        seenFile,
+      })
+    const code = await within(exited, 60_000, 'timeout')
+    return {
+      code,
+      lockExistsAfter: existsSync(lockPath),
+      output: Buffer.concat(chunks).toString(),
+      seen: readFileSync(seenFile, 'utf8').trim().split('\n').filter(Boolean),
+    }
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+    rmSync(dir, { force: true, recursive: true })
+  }
+}
+
+test('the runner holds its lock while every step runs, and releases it when a step fails', async () => {
+  const run = await runWithFakeLockPnpm({})
+
+  assert.equal(run.code, 1)
+  assert.equal(run.seen.length, STEPS.length)
+  assert.ok(
+    run.seen.every((line) => line.endsWith(' true')),
+    run.seen.join('\n'),
+  )
+  assert.equal(run.lockExistsAfter, false)
+  assert.doesNotMatch(run.output, /starts when that one finishes/)
+})
+
+test('the runner starts no step while another ci:check holds the lock, and starts them when it lets go', async () => {
+  let waitingLine = false
+  let seenWhileWaiting
+  const run = await runWithFakeLockPnpm({
+    // This process holds the lock, so it is alive.
+    beforeStart: (lockPath) => {
+      mkdirSync(lockPath)
+      writeFileSync(
+        path.join(lockPath, 'owner.json'),
+        JSON.stringify({ cwd: '/work/other', pid: process.pid, startedAt: Date.now() }),
+      )
+    },
+    afterOutput: async ({ lockPath, output, seenFile }) => {
+      waitingLine = await until(() => /\/work\/other/.test(output()), 10_000)
+      seenWhileWaiting = readFileSync(seenFile, 'utf8')
+      rmSync(lockPath, { force: true, recursive: true })
+    },
+  })
+
+  assert.ok(waitingLine, 'the runner never said it was waiting')
+  assert.equal(seenWhileWaiting, '')
+  assert.equal(run.code, 1)
+  assert.equal(run.seen.length, STEPS.length)
+  assert.equal(run.lockExistsAfter, false)
 })

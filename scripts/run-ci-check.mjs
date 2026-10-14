@@ -37,6 +37,10 @@
  * - `scripts:test` waits for `check:pack`: one of its tests runs core's own `check:pack`, which
  *   packs a tarball inside the package directory, the same place the `check:pack` step packs.
  *
+ * Only one gate runs at a time on a machine. A second `ci:check` waits for the first
+ * (`ci-check-lock.mjs`) and starts when it finishes, because two at once make timing-sensitive
+ * tests fail on correct code.
+ *
  * `TURBO_FORCE=1 pnpm run ci:check` still runs everything uncached: see `stepEnvironment`.
  *
  * Output is kept per step: each step's combined stdout and stderr is printed as one block when
@@ -49,6 +53,8 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { acquireLock } from './ci-check-lock.mjs'
 
 export const STEPS = [
   { after: ['build'], name: 'typecheck', waitFor: ['test'] },
@@ -280,6 +286,10 @@ async function main(env = process.env) {
       if (error.code !== 'EPIPE') throw error
     })
   }
+  // Before any step starts, and before the signal handlers below: a signal that arrives while this
+  // run waits then stops it as usual, with nothing yet to release. The exit handler covers a throw.
+  const releaseLock = await acquireLock()
+  process.on('exit', releaseLock)
   const names = STEPS.map((step) => step.name)
   let freshCacheDir
   const stepEnv = {
@@ -334,6 +344,7 @@ async function main(env = process.env) {
     }
   } finally {
     if (freshCacheDir) rmSync(freshCacheDir, { force: true, recursive: true })
+    releaseLock()
   }
 }
 
