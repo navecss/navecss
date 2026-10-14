@@ -8,6 +8,7 @@ import type { ModuleReading, ReadOptions } from './vite-collect-types.ts'
 import type { CxUse } from './vite-cx-use.ts'
 import type { Problem } from './vite-problems.ts'
 
+import { textWithoutAssertions } from './vite-assertion-text.ts'
 import { nodesAt } from './vite-ast.ts'
 import { judgeAtom } from './vite-atom-check.ts'
 import { resolveArgument } from './vite-cx-args.ts'
@@ -70,9 +71,7 @@ function quoteCall(
   args: readonly AstNode[],
   callee = use.local,
 ): string {
-  const first = args[0]
-  const last = args.at(-1)
-  const inner = first && last ? reading.code.slice(first.start, last.end) : ''
+  const inner = args.length > 0 ? textWithoutAssertions(reading.code, args) : ''
   return `${callee}(${inner.replaceAll(COMPILER_PREFIX, '')})`
 }
 

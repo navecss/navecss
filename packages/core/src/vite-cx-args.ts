@@ -3,12 +3,13 @@
  * strings, or unreadable. A string literal, a template literal with no substitutions, `null`,
  * `undefined`, `false` (and the `!1` and `void 0` a minifier prints for those two), `cond && X`,
  * `cond ? X : Y`, `X || Y`, `X ?? Y`, and a name bound by a declaration whose initialiser
- * resolves and which nothing else in the module writes.
+ * resolves and which nothing else in the module writes. A type assertion (`X as T`,
+ * `X satisfies T`, `X!`, `<T>X`) is read as the `X` it wraps.
  */
 import type { AstNode } from './vite-ast.ts'
 import type { Binding, ScopeAnalysis } from './vite-scope.ts'
 
-import { nodeAt, staticStringOf, stringAt } from './vite-ast.ts'
+import { nodeAt, staticStringOf, stringAt, wrappedBy } from './vite-ast.ts'
 import { isSetupParameter, type SetupExposures, setupMemberName } from './vite-setup-member.ts'
 
 /**
@@ -189,6 +190,8 @@ function planOfLogical(node: AstNode): Plan {
 function planOf(node: AstNode, context: Context): Plan {
   const text = staticStringOf(node)
   if (text !== undefined) return leaf(text === '' ? [] : [{ value: text, node }])
+  const inner = wrappedBy(node)
+  if (inner) return { deps: [inner], combine: first }
   switch (node.type) {
     case 'ConditionalExpression': {
       return {
@@ -207,9 +210,6 @@ function planOf(node: AstNode, context: Context): Plan {
     }
     case 'MemberExpression': {
       return leaf(setupValue(node, context))
-    }
-    case 'ParenthesizedExpression': {
-      return { deps: [nodeAt(node, 'expression')], combine: first }
     }
     case 'UnaryExpression': {
       return leaf(unaryValue(node))

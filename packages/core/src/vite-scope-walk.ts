@@ -6,7 +6,7 @@
 import type { AstNode } from './vite-ast.ts'
 import type { Scope, Walker } from './vite-scope-types.ts'
 
-import { childrenOf, isNode, nodeAt, nodesAt, stringAt } from './vite-ast.ts'
+import { childrenOf, isNode, isTypeOnly, nodeAt, nodesAt, stringAt } from './vite-ast.ts'
 import { declarePattern, writeTargets } from './vite-scope-pattern.ts'
 import { declare, newScope, reference } from './vite-scope-types.ts'
 
@@ -23,10 +23,16 @@ export function visit(node: AstNode | undefined, scope: Scope, walker: Walker): 
 }
 
 /**
+ * The keys of a node that hold a type, in a tree that still has them (authored TypeScript): a name
+ * written there is no reference to a value, and a type declares no value.
+ */
+const TYPE_KEYS: ReadonlySet<string> = new Set(['typeAnnotation', 'typeArguments'])
+
+/**
  * Walks every child of `node` in `scope`, registering its parent.
  */
 function visitChildren(node: AstNode, scope: Scope, walker: Walker): void {
-  for (const child of childrenOf(node)) {
+  for (const child of childrenOf(node, TYPE_KEYS)) {
     walker.parentOf.set(child, node)
     visit(child, scope, walker)
   }
@@ -121,8 +127,10 @@ function importedName(specifier: AstNode): string {
  * Declares what an import declaration binds.
  */
 function declareImport(node: AstNode, scope: Scope): void {
+  if (isTypeOnly(node)) return
   const source = String(nodeAt(node, 'source')?.value)
   for (const specifier of nodesAt(node, 'specifiers')) {
+    if (isTypeOnly(specifier)) continue
     const local = stringAt(nodeAt(specifier, 'local') ?? specifier, 'name')
     if (local === undefined) continue
     const imported = importedName(specifier)
@@ -153,11 +161,11 @@ function visitDeclaration(node: AstNode, scope: Scope, walker: Walker): void {
  * `export { a as b }` of local names: each local name is a reference.
  */
 function visitExport(node: AstNode, scope: Scope, walker: Walker): void {
-  if (node.source) return
+  if (node.source || isTypeOnly(node)) return
   visitKeys(node, ['declaration'], scope, walker)
   for (const specifier of nodesAt(node, 'specifiers')) {
     const local = nodeAt(specifier, 'local')
-    if (!local) continue
+    if (!local || isTypeOnly(specifier)) continue
     walker.parentOf.set(specifier, node)
     walker.parentOf.set(local, specifier)
     reference(walker, local, scope)
@@ -168,7 +176,8 @@ function visitExport(node: AstNode, scope: Scope, walker: Walker): void {
  * A node whose identifiers are not references: nothing to walk.
  */
 function leaf(): void {
-  // A label, a meta property, or a re-export from another module names no binding here.
+  // A label, a meta property, a re-export from another module or a type declaration names no
+  // binding here.
 }
 
 /**
@@ -230,6 +239,8 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   ContinueStatement: leaf,
   MetaProperty: leaf,
   ExportAllDeclaration: leaf,
+  TSInterfaceDeclaration: leaf,
+  TSTypeAliasDeclaration: leaf,
   CallExpression: (node, scope, walker) => {
     if (isDirectEval(node)) walker.evalScopes.push(scope)
     visitChildren(node, scope, walker)

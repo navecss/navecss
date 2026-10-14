@@ -46,14 +46,50 @@ export function stringAt(node: AstNode, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+const NO_KEYS: ReadonlySet<string> = new Set()
+
 /**
- * Every direct child node of `node`, in source order of its keys.
+ * Every direct child node of `node`, in source order of its keys, except those under a key in
+ * `skipping`.
  */
-export function childrenOf(node: AstNode): AstNode[] {
-  return Object.values(node).flatMap((value) => {
+export function childrenOf(node: AstNode, skipping = NO_KEYS): AstNode[] {
+  return Object.entries(node).flatMap(([key, value]) => {
+    if (skipping.has(key)) return []
     if (Array.isArray(value)) return value.filter((item) => isNode(item))
     return isNode(value) ? [value] : []
   })
+}
+
+/**
+ * The expressions a type wraps, which a types-stripped copy of the module leaves out: `x as T`,
+ * `x satisfies T`, the non-null `x!` and the angle-bracket assertion `<T>x`.
+ */
+const ASSERTIONS: ReadonlySet<string> = new Set([
+  'TSAsExpression',
+  'TSNonNullExpression',
+  'TSSatisfiesExpression',
+  'TSTypeAssertion',
+])
+
+/**
+ * The expression `node` wraps when it is a type assertion; `undefined` for any other node.
+ */
+export function assertedBy(node: AstNode): AstNode | undefined {
+  return ASSERTIONS.has(node.type) ? nodeAt(node, 'expression') : undefined
+}
+
+/**
+ * The expression `node` wraps when it is a parenthesised expression or a type assertion.
+ */
+export function wrappedBy(node: AstNode): AstNode | undefined {
+  return node.type === 'ParenthesizedExpression' ? nodeAt(node, 'expression') : assertedBy(node)
+}
+
+/**
+ * Whether `node` is declared as a type only: `import type`, `export type`, `import { type x }`.
+ */
+export function isTypeOnly(node: AstNode): boolean {
+  return node.importKind === 'type' || node.exportKind === 'type'
 }
 
 /**

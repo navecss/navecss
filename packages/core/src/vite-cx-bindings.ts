@@ -6,7 +6,7 @@ import type { AstNode } from './vite-ast.ts'
 import type { CxBinding } from './vite-cx-use.ts'
 import type { Binding, ScopeAnalysis } from './vite-scope.ts'
 
-import { nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'
+import { isTypeOnly, nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'
 
 /**
  * The bindings in the module that stand for Nave's `cx`.
@@ -25,11 +25,13 @@ export function cxBindingsOf(
 }
 
 /**
- * Whether the module imports from a `cx` source at all, used or not.
+ * Whether the module imports from a `cx` source at all, used or not. An `import type` does not
+ * import anything.
  */
 export function isImportingCx(program: AstNode, sources: ReadonlySet<string>): boolean {
   return nodesAt(program, 'body').some((node) => {
     const source = staticStringOf(nodeAt(node, 'source'))
-    return node.type === 'ImportDeclaration' && source !== undefined && sources.has(source)
+    const isImport = node.type === 'ImportDeclaration' && !isTypeOnly(node)
+    return isImport && source !== undefined && sources.has(source)
   })
 }
