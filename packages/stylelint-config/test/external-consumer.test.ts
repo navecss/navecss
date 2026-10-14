@@ -65,10 +65,11 @@ beforeAll(() => {
   // The consumer's first stylelint run costs far more than any later one, and the cost is
   // waiting, not computing: it is the first read of files pnpm has just imported, which waits on
   // the host's disk and grows with its load, so a loaded machine pays most. Measured on macOS, a
-  // first lint in a fresh consumer took 4 to 17 seconds when pnpm cloned the files, and under 3
-  // seconds when it hardlinked them from the store the workspace install had already read (see
-  // `package-import-method` in the consumer's `.npmrc`). Pay what is left once here, under this
-  // hook's own budget, so the first timed test below does not carry it.
+  // first lint in a fresh consumer took 1.8 to 37.5 seconds when pnpm cloned the files, and 0.7
+  // to 3.1 seconds when it hardlinked them from the store the workspace install had already read,
+  // faster in every paired run (see `package-import-method` in the consumer's `.npmrc`). Pay what
+  // is left once here, under this hook's own budget, so the first timed test below does not
+  // carry it.
   writeFileSync(path.join(consumerDir, 'warm-up.css'), '')
   spawnSync(path.join(consumerDir, 'node_modules/.bin/stylelint'), ['warm-up.css'], {
     cwd: consumerDir,
@@ -284,6 +285,12 @@ describe("rule 3 (declared-custom-properties) busts stylelint's own --cache thro
     if (!match) throw new Error('the installed tokens.css declares no --nave- custom property')
     const [declarationLine, name] = [match[0], match[1]!]
 
+    // A second link to the installed file, outside node_modules: it shares the bytes pnpm's store
+    // holds whenever the install hardlinked them, so a write through the link would show here.
+    const sentinelPath = path.join(consumerDir, '.tokens-css-link')
+    rmSync(sentinelPath, { force: true })
+    linkSync(tokensCssPath, sentinelPath)
+
     const cachePath = path.join(consumerDir, '.cache-test.stylelintcache')
     const cssPath = path.join(consumerDir, 'cache-test.css')
     rmSync(cachePath, { force: true })
@@ -305,12 +312,14 @@ describe("rule 3 (declared-custom-properties) busts stylelint's own --cache thro
       // so only the default stylesheet's digest, baked into that config by this rule, can make
       // stylelint's cache see a different config and re-check this file.
       replaceInstalledFile(tokensCssPath, originalTokensCss.replace(declarationLine, ''))
+      expect(readFileSync(sentinelPath, 'utf8')).toBe(originalTokensCss)
 
       const warm = runCli()
       expect(warm.status).not.toBe(0)
       expect(warm.stdout + warm.stderr).toContain(name)
     } finally {
       replaceInstalledFile(tokensCssPath, originalTokensCss)
+      rmSync(sentinelPath, { force: true })
       rmSync(cachePath, { force: true })
       rmSync(cssPath, { force: true })
     }
