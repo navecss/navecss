@@ -37,9 +37,10 @@
  * - `scripts:test` waits for `check:pack`: one of its tests runs core's own `check:pack`, which
  *   packs a tarball inside the package directory, the same place the `check:pack` step packs.
  *
- * Only one gate runs at a time on a machine. A second `ci:check` waits for the first
+ * Only one gate runs at a time per user on a machine. A second `ci:check` waits for the first
  * (`ci-check-lock.mjs`) and starts when it finishes, because two at once make timing-sensitive
- * tests fail on correct code.
+ * tests fail on correct code. The lock lives in the user's temporary directory, so two users, or
+ * two sessions with different `TMPDIR`, do not wait on each other.
  *
  * `TURBO_FORCE=1 pnpm run ci:check` still runs everything uncached: see `stepEnvironment`.
  *

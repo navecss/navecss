@@ -6,16 +6,22 @@
  * atomic: whoever makes it holds it. It contains `owner.json` (the holder's pid, working
  * directory and start time), written by a rename so a reader never sees half of it.
  *
- * A lock whose holder is gone is stale and is taken over. Taking over is done under a second
+ * The lock is per user and per temporary directory: two users, or two sessions with different
+ * `TMPDIR`, do not wait on each other.
+ *
+ * A lock whose holder is gone is stale and is taken over. A holder is gone when its pid is not a
+ * process, or is one that is not a `ci:check` runner (the pid was reused), or is this process's own. Taking over is done under a second
  * directory, `<lock>.takeover`, because two waiters can both find the same lock stale: whoever
  * makes the guard checks again that the lock is still the one it judged stale, and only then
  * replaces it, so a waiter that was slow cannot remove a lock that a faster one has just taken.
  * A lock with no readable owner file is a holder between `mkdir` and the write, so it is judged
  * stale only after a grace.
  */
+import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { setTimeout as delay } from 'node:timers/promises'
 
 const LOCK_NAME = 'navecss-ci-check.lock'
@@ -27,16 +33,38 @@ const OWNER_FILE = 'owner.json'
 export const defaultLockPath = () => path.join(tmpdir(), LOCK_NAME)
 
 /**
- * Whether a process with `pid` exists. A process this user may not signal still exists.
+ * The command line of the process `pid`, or `undefined` when `ps` cannot say.
  */
-export function isAlive(pid) {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return error.code === 'EPERM'
+function commandOfProcess(pid) {
+  const result = spawnSync('ps', ['-ww', '-o', 'command=', '-p', String(pid)], { encoding: 'utf8' })
+  return result.error || result.status !== 0 ? undefined : result.stdout
+}
+
+/**
+ * A liveness check for the pid in a lock: the process exists (one this user may not signal still
+ * does) and its command line names the `ci:check` runner, so a pid that has been given to some
+ * other process since the holder died is not taken for the holder. When the command line cannot be
+ * read, the existence of the process decides.
+ */
+export function makeAlive({
+  commandOf = commandOfProcess,
+  kill = process.kill.bind(process),
+} = {}) {
+  return (pid) => {
+    try {
+      kill(pid, 0)
+    } catch (error) {
+      if (error.code !== 'EPERM') return false
+    }
+    const command = commandOf(pid)
+    return command === undefined || command.includes('run-ci-check')
   }
 }
+
+/**
+ * Whether the process `pid` is a running `ci:check`.
+ */
+export const isAlive = makeAlive()
 
 /**
  * The owner `lockPath` records, or `undefined` when the file is missing or says no pid.
@@ -88,11 +116,32 @@ function tryCreate(lockPath, owner) {
 }
 
 /**
+ * Whether `holder`, the owner a lock records, is a run that is still going: not this process
+ * itself (a lock of its own pid is a leftover), and alive.
+ */
+const isHolding = (holder, { alive, pid }) =>
+  holder !== undefined && holder.pid !== pid && alive(holder.pid)
+
+/**
+ * Removes `target` and what is in it, or throws an error that names it and says to delete it by
+ * hand: it is another user's, or locked down, and no raw system error helps whoever reads it.
+ */
+function removeOrExplain(target) {
+  try {
+    rmSync(target, { force: true, recursive: true })
+  } catch (error) {
+    throw new Error(`ci:check: cannot remove ${target} (${error.code}); delete it and run again.`, {
+      cause: error,
+    })
+  }
+}
+
+/**
  * Replaces the lock that `judged` (its fingerprint) described, when it is still that lock.
  * Returns true when `owner` now holds the lock.
  */
-function takeOver(lockPath, judged, owner, alive) {
-  const guard = `${lockPath}.takeover`
+function takeOver(config, judged, owner) {
+  const guard = `${config.lockPath}.takeover`
   try {
     mkdirSync(guard)
   } catch (error) {
@@ -100,9 +149,9 @@ function takeOver(lockPath, judged, owner, alive) {
     throw error
   }
   try {
-    const current = readOwner(lockPath)
-    if (fingerprintOf(lockPath) !== judged || (current && alive(current.pid))) return false
-    rmSync(lockPath, { force: true, recursive: true })
+    const { lockPath } = config
+    if (fingerprintOf(lockPath) !== judged || isHolding(readOwner(lockPath), config)) return false
+    removeOrExplain(lockPath)
     return tryCreate(lockPath, owner)
   } finally {
     rmSync(guard, { force: true, recursive: true })
@@ -125,23 +174,25 @@ const defaults = () => ({
   graceMs: 5000,
   lockPath: defaultLockPath(),
   log: console.log,
-  now: Date.now,
+  now: () => performance.now(),
   pid: process.pid,
   pollMs: 2000,
   reportMs: 60_000,
   sleep: delay,
   staleGuardMs: 30_000,
+  wallNow: Date.now,
 })
 
 /**
- * Prints the line that says this run is waiting, unless it said so within the last minute.
+ * Prints the line that says this run is waiting, unless it said so within the last minute. It
+ * names the lock, for the case that the run it waits for is gone and the lock was not.
  */
 function reportWaiting(config, wait, holder) {
   const { log, now, reportMs } = config
   if (wait.reportedAt !== undefined && now() - wait.reportedAt < reportMs) return
   wait.reportedAt = now()
   log(
-    `ci:check: another ci:check is running in ${holder.cwd} (pid ${holder.pid}); this run starts when that one finishes.`,
+    `ci:check: another ci:check is running in ${holder.cwd} (pid ${holder.pid}); this run starts when that one finishes. If that run is no longer running, delete ${config.lockPath}.`,
   )
 }
 
@@ -158,7 +209,7 @@ function breakOldGuard(config, wait) {
   }
   wait.guardSince ??= config.now()
   if (config.now() - wait.guardSince < config.staleGuardMs) return
-  rmSync(guard, { force: true, recursive: true })
+  removeOrExplain(guard)
   wait.guardSince = undefined
 }
 
@@ -182,8 +233,8 @@ function isStale(config, wait, holder) {
  */
 export async function acquireLock(options = {}) {
   const config = { ...defaults(), ...options }
-  const { alive, lockPath, pid } = config
-  const owner = { cwd: config.cwd, pid, startedAt: config.now() }
+  const { lockPath, pid } = config
+  const owner = { cwd: config.cwd, pid, startedAt: config.wallNow() }
   const release = () => releaseFor(lockPath, pid)
   const wait = { guardSince: undefined, invalidSince: undefined, reportedAt: undefined }
   for (;;) {
@@ -192,11 +243,12 @@ export async function acquireLock(options = {}) {
     const judged = fingerprintOf(lockPath)
     if (judged === undefined) continue
     const holder = readOwner(lockPath)
-    if (holder && alive(holder.pid)) {
+    if (isHolding(holder, config)) {
       wait.invalidSince = undefined
+      wait.guardSince = undefined
       reportWaiting(config, wait, holder)
     } else if (isStale(config, wait, holder)) {
-      if (takeOver(lockPath, judged, owner, alive)) return release
+      if (takeOver(config, judged, owner)) return release
       breakOldGuard(config, wait)
     }
     await config.sleep(config.pollMs)

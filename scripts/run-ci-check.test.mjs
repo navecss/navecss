@@ -542,6 +542,7 @@ async function withRunningSlowStep({ closableOutput = false, trapTerm = false },
       child,
       closeOutput: () => closeSync(reader),
       exited,
+      lockPath: path.join(dir, 'navecss-ci-check.lock'),
       output: () => Buffer.concat(chunks).toString(),
       pids,
     })
@@ -704,28 +705,138 @@ test('the runner holds its lock while every step runs, and releases it when a st
   assert.doesNotMatch(run.output, /starts when that one finishes/)
 })
 
+/**
+ * A process the runner takes for a running `ci:check`: its command line names the runner.
+ */
+function spawnRunnerShapedHolder() {
+  return spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'run-ci-check'], {
+    stdio: 'ignore',
+  })
+}
+
+/**
+ * Stops `holder` by its process id.
+ */
+async function stopHolder(holder) {
+  const gone = new Promise((resolve) => holder.on('close', resolve))
+  holder.kill('SIGKILL')
+  await gone
+}
+
 test('the runner starts no step while another ci:check holds the lock, and starts them when it lets go', async () => {
+  const holder = spawnRunnerShapedHolder()
   let waitingLine = false
   let seenWhileWaiting
-  const run = await runWithFakeLockPnpm({
-    // This process holds the lock, so it is alive.
-    beforeStart: (lockPath) => {
-      mkdirSync(lockPath)
-      writeFileSync(
-        path.join(lockPath, 'owner.json'),
-        JSON.stringify({ cwd: '/work/other', pid: process.pid, startedAt: Date.now() }),
-      )
-    },
-    afterOutput: async ({ lockPath, output, seenFile }) => {
-      waitingLine = await until(() => /\/work\/other/.test(output()), 10_000)
-      seenWhileWaiting = readFileSync(seenFile, 'utf8')
-      rmSync(lockPath, { force: true, recursive: true })
-    },
-  })
+  try {
+    const run = await runWithFakeLockPnpm({
+      beforeStart: (lockPath) => {
+        mkdirSync(lockPath)
+        writeFileSync(
+          path.join(lockPath, 'owner.json'),
+          JSON.stringify({ cwd: '/work/other', pid: holder.pid, startedAt: Date.now() }),
+        )
+      },
+      afterOutput: async ({ lockPath, output, seenFile }) => {
+        waitingLine = await until(() => /\/work\/other/.test(output()), 10_000)
+        seenWhileWaiting = readFileSync(seenFile, 'utf8')
+        rmSync(lockPath, { force: true, recursive: true })
+      },
+    })
 
-  assert.ok(waitingLine, 'the runner never said it was waiting')
-  assert.equal(seenWhileWaiting, '')
-  assert.equal(run.code, 1)
-  assert.equal(run.seen.length, STEPS.length)
-  assert.equal(run.lockExistsAfter, false)
+    assert.ok(waitingLine, 'the runner never said it was waiting')
+    assert.equal(seenWhileWaiting, '')
+    assert.equal(run.code, 1)
+    assert.equal(run.seen.length, STEPS.length)
+    assert.equal(run.lockExistsAfter, false)
+  } finally {
+    await stopHolder(holder)
+  }
+})
+
+test('a runner that is signalled while a step runs leaves no lock behind', async () => {
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    await withRunningSlowStep({}, async ({ child, exited, lockPath }) => {
+      assert.equal(existsSync(lockPath), true, 'the lock was not held while the step ran')
+
+      child.kill(signal)
+      await within(exited, 15_000, 'timeout')
+
+      assert.equal(existsSync(lockPath), false, `a lock was left after ${signal}`)
+    })
+  }
+})
+
+test('a runner that throws after taking the lock exits 1 and leaves no lock behind', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ci-check-throw-'))
+  const preload = path.join(dir, 'preload.mjs')
+  writeFileSync(
+    preload,
+    `import fs from 'node:fs'
+import { syncBuiltinESMExports } from 'node:module'
+fs.mkdtempSync = () => {
+  throw new Error('no scratch directory')
+}
+syncBuiltinESMExports()
+`,
+  )
+  const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), 'run-ci-check.mjs')
+  const child = spawn(process.execPath, [runner], {
+    env: {
+      ...process.env,
+      NODE_OPTIONS: `--import ${preload}`,
+      npm_execpath: path.join(dir, 'unused-pnpm.mjs'),
+      TMPDIR: dir,
+      TURBO_FORCE: '1',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const chunks = []
+  child.stderr.on('data', (chunk) => chunks.push(chunk))
+  child.stdout.on('data', () => {})
+  try {
+    const code = await within(
+      new Promise((resolve) => child.on('close', resolve)),
+      30_000,
+      'timeout',
+    )
+
+    assert.equal(code, 1)
+    assert.match(Buffer.concat(chunks).toString(), /no scratch directory/)
+    assert.equal(existsSync(path.join(dir, 'navecss-ci-check.lock')), false)
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+    rmSync(dir, { force: true, recursive: true })
+  }
+})
+
+test('a runner that is waiting for the lock exits on SIGTERM, and leaves the lock it waited for alone', async () => {
+  const holder = spawnRunnerShapedHolder()
+  try {
+    await runWithFakeLockPnpm({
+      beforeStart: (lockPath) => {
+        mkdirSync(lockPath)
+        writeFileSync(
+          path.join(lockPath, 'owner.json'),
+          JSON.stringify({ cwd: '/work/other', pid: holder.pid, startedAt: Date.now() }),
+        )
+      },
+      afterOutput: async ({ child, lockPath, output }) => {
+        assert.ok(await until(() => /\/work\/other/.test(output()), 10_000))
+        const closed = new Promise((resolve) =>
+          child.on('close', (code, signal) => resolve({ code, signal })),
+        )
+
+        child.kill('SIGTERM')
+        const result = await within(closed, 5000, 'timeout')
+
+        assert.deepEqual(result, { code: null, signal: 'SIGTERM' })
+        assert.equal(
+          JSON.parse(readFileSync(path.join(lockPath, 'owner.json'), 'utf8')).pid,
+          holder.pid,
+        )
+      },
+    })
+  } finally {
+    await stopHolder(holder)
+  }
 })
