@@ -85,11 +85,21 @@ const alias = (installedAs: string): { find: RegExp; replacement: string }[] => 
  * Base UI is pre-bundled by Vite on first use. Naming what the tests import up front keeps the
  * page from reloading in the middle of a run when the first import of one is found late.
  */
-const optimized = (base: string, subpaths: readonly string[]): string[] => [
-  'react',
-  'react-dom',
-  'react-dom/client',
+const optimized = (base: string, subpaths: readonly string[], react = ''): string[] => [
+  `react${react}`,
+  `react-dom${react}`,
+  `react-dom${react}/client`,
   ...subpaths.map((subpath) => `${base}/${subpath}`),
+]
+
+/**
+The React 18 copies, installed under their own names, substituted for `react` and `react-dom`.
+ */
+const REACT_18 = [
+  { find: /^react$/, replacement: 'react-18' },
+  { find: /^react\/(.*)$/, replacement: 'react-18/$1' },
+  { find: /^react-dom$/, replacement: 'react-dom-18' },
+  { find: /^react-dom\/(.*)$/, replacement: 'react-dom-18/$1' },
 ]
 
 /**
@@ -111,29 +121,49 @@ const MID_EXIT_SUBPATHS = [
 ]
 
 const MID_EXIT_FILE = 'test/browser/reduced-motion-mid-exit.browser.test.ts'
+const EXIT_FILE = 'test/browser/navigation-menu-exit.browser.test.ts'
+const STRIP_FILE = 'test/browser/scroll-area-strip.browser.test.ts'
+const TRIGGER_FILE = 'test/browser/navigation-menu-trigger.browser.test.ts'
+const TOAST_FLIP_FILE = 'test/browser/toast-reduced-motion.browser.test.ts'
 
 /**
-The Base UI minors the files below run against besides the devDependency, each by the name it is
-installed under (`base-ui-react-<name>`).
+ * The Base UI minors the files run against besides the devDependency, each by the name it is
+ * installed under (`base-ui-react-<name>`), with the files that run at it and the Base UI
+ * subpaths those files import. Every minor runs the Navigation Menu panel's exit and the Scroll
+ * Area strip as one target; the rest are the files whose criteria name that minor.
  */
 const MINORS = [
-  { installedAs: 'floor', version: '1.3.0' },
-  { installedAs: '1.4.0', version: '1.4.0' },
-  { installedAs: '1.5.0', version: '1.5.0' },
-  { installedAs: '1.6.0', version: '1.6.0' },
-  { installedAs: '1.7.0', version: '1.7.0' },
+  {
+    files: [EXIT_FILE, STRIP_FILE, TRIGGER_FILE],
+    installedAs: 'floor',
+    subpaths: ['navigation-menu', 'scroll-area'],
+    version: '1.3.0',
+  },
+  {
+    files: [EXIT_FILE, STRIP_FILE],
+    installedAs: '1.4.0',
+    subpaths: ['navigation-menu', 'scroll-area'],
+    version: '1.4.0',
+  },
+  {
+    files: [MID_EXIT_FILE, EXIT_FILE, STRIP_FILE],
+    installedAs: '1.5.0',
+    subpaths: ['navigation-menu', 'scroll-area', ...MID_EXIT_SUBPATHS],
+    version: '1.5.0',
+  },
+  {
+    files: [MID_EXIT_FILE, EXIT_FILE, STRIP_FILE, TOAST_FLIP_FILE],
+    installedAs: '1.6.0',
+    subpaths: ['navigation-menu', 'scroll-area', 'toast', ...MID_EXIT_SUBPATHS],
+    version: '1.6.0',
+  },
+  {
+    files: [EXIT_FILE, STRIP_FILE],
+    installedAs: '1.7.0',
+    subpaths: ['navigation-menu', 'scroll-area'],
+    version: '1.7.0',
+  },
 ] as const
-
-/**
-The files that run at every minor from the floor: the Navigation Menu panel's exit, and the Scroll
-Area strip as one target.
- */
-const MINOR_FILES = [
-  'test/browser/navigation-menu-exit.browser.test.ts',
-  'test/browser/scroll-area-strip.browser.test.ts',
-]
-
-const MINOR_SUBPATHS = ['navigation-menu', 'scroll-area']
 
 export default defineConfig({
   plugins: [serveFixturesAsTheyAre()],
@@ -152,21 +182,41 @@ export default defineConfig({
           browser: browser(),
         },
       },
-      ...MINORS.map(({ installedAs, version }) => ({
+      ...MINORS.map(({ files, installedAs, subpaths, version }) => ({
         extends: true,
         resolve: { alias: alias(installedAs) },
-        optimizeDeps: {
-          include: optimized(`base-ui-react-${installedAs}`, [
-            ...MINOR_SUBPATHS,
-            ...(version === '1.5.0' || version === '1.6.0' ? MID_EXIT_SUBPATHS : []),
-          ]),
-        },
+        optimizeDeps: { include: optimized(`base-ui-react-${installedAs}`, subpaths) },
         test: {
           name: `base-ui-${version}`,
-          include: [
-            ...(version === '1.5.0' || version === '1.6.0' ? [MID_EXIT_FILE] : []),
-            ...MINOR_FILES,
-          ],
+          include: [...files],
+          provide: { baseUi: version },
+          browser: browser(),
+        },
+      })),
+      // The Navigation Menu panel's exit is also read under React 18, at the devDependency and at
+      // every minor.
+      {
+        extends: true,
+        resolve: { alias: REACT_18 },
+        optimizeDeps: {
+          include: optimized('@base-ui/react', ['navigation-menu'], '-18'),
+        },
+        test: {
+          name: 'current-react-18',
+          include: [EXIT_FILE],
+          provide: { baseUi: installedVersion('@base-ui/react') },
+          browser: browser(),
+        },
+      },
+      ...MINORS.map(({ installedAs, version }) => ({
+        extends: true,
+        resolve: { alias: [...REACT_18, ...alias(installedAs)] },
+        optimizeDeps: {
+          include: optimized(`base-ui-react-${installedAs}`, ['navigation-menu'], '-18'),
+        },
+        test: {
+          name: `base-ui-${version}-react-18`,
+          include: [EXIT_FILE],
           provide: { baseUi: version },
           browser: browser(),
         },
