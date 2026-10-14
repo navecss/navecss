@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { PUBLISHABLE_SET } from '../../../scripts/check-publishable-set.mjs'
+import exportedConfig from '../index.js'
 import { pendingChangesetSurfaces } from './helpers/changesets.ts'
 import { packTarball } from './helpers/pack.ts'
 
@@ -140,9 +141,10 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
     expect(m.dependencies).toHaveProperty('postcss-value-parser')
   })
 
-  it('every plugins entry the exported config carries is an object, not a string (standing)', async () => {
-    const imported = await import('../index.js')
-    const plugins = pluginsOf(imported.default)
+  it('every plugins entry the exported config carries is an object, not a string (standing)', () => {
+    // The config is a static import: loading the plugin's module graph for the first time is the
+    // slow step on a loaded machine, and it belongs to loading this file, not to this row's budget.
+    const plugins = pluginsOf(exportedConfig)
     for (const plugin of plugins) {
       expect(typeof plugin).not.toBe('string')
       expect(typeof plugin).toBe('object')

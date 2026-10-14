@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import stylelint from 'stylelint'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import {
   collectDeclaredCustomProperties,
@@ -248,6 +248,13 @@ describe('AC-eslint-plugin-20 covers: R11', () => {
 })
 
 describe('AC-eslint-plugin-21 covers: R11, R12', () => {
+  // The README rows below read the packed tarball, and the first read runs `npm pack` and two
+  // `tar` children, far slower on a loaded machine than a row's default budget. Pay it once, under
+  // this hook's own budget, so the first of those rows does not carry it.
+  beforeAll(() => {
+    packTarball()
+  }, 120_000)
+
   it('by default reads @navecss/tokens/css, resolved from this package: a declared name passes, an undeclared one is reported', async () => {
     expect(await lintReportedNames(`.a { color: var(${aRealDeclaredName()}); }`)).toEqual([])
     expect(await lintReportedNames('.a { color: var(--nave-does-not-exist); }')).toContain(
