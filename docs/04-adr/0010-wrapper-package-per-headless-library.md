@@ -57,8 +57,10 @@ measured.
 `@navecss/base-ui/styles.css` is made by expanding Nave's own atoms through the `@nave`
 directive at build time, so the consumer needs no PostCSS plugin and no directive. It carries
 only rules inside `@layer components.nave`, restates the layer order statement, declares no
-custom property, and sets no `z-index` or `isolation`. The consumer imports Nave's tokens, then
-this file. ADR 0003's table now names this package as `components.nave`'s writer.
+custom property, and sets no `isolation`. It sets one `z-index`, `z-index: var(--nave-layer-toast)`
+on the toast area (`nave-base-ui-toast-placement`), admitted on one criterion: a portalled
+container that exists before the overlays it must sit above. No layer moves. The consumer imports
+Nave's tokens, then this file. ADR 0003's table now names this package as `components.nave`'s writer.
 
 **3. The override ladder is the cascade contract, not a configuration surface.** Tokens restyle
 every part; a `className` on any part is the consumer's, in `components.consumer`, and beats

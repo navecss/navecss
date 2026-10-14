@@ -6,7 +6,7 @@ This package is not affiliated with, endorsed by or sponsored by MUI or the Base
 
 `@base-ui/react` is a separately installed peer, built and maintained by its own maintainers; this package does not include it. You change `@base-ui/react/<component>` to `@navecss/base-ui/<component>` in your imports, add one stylesheet, and every part keeps Base UI's props, refs and behaviour while gaining Nave's styling. The styling is zero-runtime styling: static classes and one static stylesheet, with all behaviour still Base UI's.
 
-On this page: [Install](#install) · [Use it](#use-it) · [The stylesheet](#the-stylesheet) · [Variants](#variants) · [Overriding](#overriding) · [What is styled](#what-is-styled) · [Things to know](#things-to-know) · [License](#license)
+On this page: [Install](#install) · [Use it](#use-it) · [The stylesheet](#the-stylesheet) · [Variants](#variants) · [Overriding](#overriding) · [What is styled](#what-is-styled) · [Feedback and navigation](#feedback-and-navigation) · [Things to know](#things-to-know) · [License](#license)
 
 ## Install
 
@@ -60,7 +60,7 @@ Import Nave's tokens, then this package's stylesheet, before any stylesheet of y
 @import url('@navecss/base-ui/styles.css');
 ```
 
-Both files begin with Nave's `@layer` order statement, and the order holds only if that statement is the first `@layer` declaration your page sees. The stylesheet is already built: nothing in your build needs to know about Nave, so it takes no plugin and no directive. Every rule in it sits in `@layer components.nave`, it declares no custom property and sets no `z-index`.
+Both files begin with Nave's `@layer` order statement, and the order holds only if that statement is the first `@layer` declaration your page sees. The stylesheet is already built: nothing in your build needs to know about Nave, so it takes no plugin and no directive. Every rule in it sits in `@layer components.nave` and it declares no custom property. It sets one `z-index`, on the toast area, from `--nave-layer-toast`.
 
 Nave's colours need Chrome or Edge 125, Firefox 128 or Safari 18, and your CSS build has to target the same floor, or it rewrites the colours into a form that does not follow the page's colour scheme. In Vite:
 
@@ -82,6 +82,8 @@ The Button family takes two optional props.
 | `size`    | `'md'`, `'sm'`                        | `'md'`        |
 
 They are accepted by `Button`, `Toolbar.Button`, and the trigger and close parts of Dialog, Alert Dialog and Popover, `Menu.Trigger` and `Tooltip.Trigger`. `ghost` is a button with no fill or border at rest that fills under the pointer and while the menu it opens is showing: it is the look of a Menubar's triggers. `Toggle` takes `size` only. Both are typed as those unions and neither reaches the DOM as a prop.
+
+`Toast.Action` and `Toast.Close` take both props too. `NavigationMenu.Trigger` has a quieter look of its own and takes neither. `Avatar.Root` takes a `size` of its own: `'sm'`, `'md'` (the default) or `'lg'`.
 
 ```tsx
 import { Button } from '@navecss/base-ui/button'
@@ -141,8 +143,11 @@ Behaviour is Base UI's. Parts Nave does not style, such as `Portal`, `Positioner
 | Overlays   | `@navecss/base-ui/dialog`, `@navecss/base-ui/popover`, `@navecss/base-ui/menu`, `@navecss/base-ui/select`, `@navecss/base-ui/tooltip`, `@navecss/base-ui/alert-dialog`, `@navecss/base-ui/context-menu`, `@navecss/base-ui/menubar`, `@navecss/base-ui/preview-card`, `@navecss/base-ui/combobox`, `@navecss/base-ui/autocomplete`                                                                                                           |
 | Disclosure | `@navecss/base-ui/accordion`, `@navecss/base-ui/collapsible`, `@navecss/base-ui/tabs`                                                                                                                                                                                                                                                                                                                                                        |
 | Controls   | `@navecss/base-ui/button`, `@navecss/base-ui/input`, `@navecss/base-ui/number-field`, `@navecss/base-ui/field`, `@navecss/base-ui/fieldset`, `@navecss/base-ui/form`, `@navecss/base-ui/checkbox`, `@navecss/base-ui/checkbox-group`, `@navecss/base-ui/radio`, `@navecss/base-ui/radio-group`, `@navecss/base-ui/switch`, `@navecss/base-ui/slider`, `@navecss/base-ui/toggle`, `@navecss/base-ui/toggle-group`, `@navecss/base-ui/toolbar` |
+| Feedback   | `@navecss/base-ui/toast`, `@navecss/base-ui/progress`, `@navecss/base-ui/meter`                                                                                                                                                                                                                                                                                                                                                              |
+| Navigation | `@navecss/base-ui/navigation-menu`, `@navecss/base-ui/scroll-area`                                                                                                                                                                                                                                                                                                                                                                           |
+| Display    | `@navecss/base-ui/avatar`, `@navecss/base-ui/separator`                                                                                                                                                                                                                                                                                                                                                                                      |
 
-What this package does not paint: no backdrop colour behind a Dialog, no fill on the Slider's range, and Button sizes `md` and `sm` only. It paints an Alert Dialog's backdrop as a scrim and recommends no other scrim value. What it leaves out you can add with a class of your own, as above.
+What this package does not paint: no backdrop colour behind a Dialog, no fill on the Slider's range, and Button sizes `md` and `sm` only. Toasts form a plain list, not a stack of cards that fans out, and there is no motion when the Navigation Menu panel closes. It paints an Alert Dialog's backdrop as a scrim and recommends no other scrim value. What it leaves out you can add with a class of your own, as above.
 
 Menubar's menus come from `@navecss/base-ui/menu`: the same `Menu` as anywhere else, and the triggers take `variant="ghost"`.
 
@@ -218,6 +223,147 @@ Parts that Base UI added after 1.3 are exported as whatever your installed versi
 
 The types under a part, such as `Menu.Item.Props`, take their names and type parameters from Base UI 1.3, so two that Base UI added up to 1.8.0 do not come through: `ContextMenu.Root.Actions`, and the third type parameter of `Combobox.Root.Props`, `Item`. Import `ContextMenuRootActions` from `@navecss/base-ui/context-menu` and `ComboboxRootProps<Value, Multiple, Item>` from `@navecss/base-ui/combobox` instead.
 
+## Feedback and navigation
+
+Toast, Navigation Menu, Scroll Area, Meter, Progress, Avatar and Separator are imported with the same prefix swap as the rest: `@navecss/base-ui/toast`, `@navecss/base-ui/navigation-menu`, `@navecss/base-ui/scroll-area`, `@navecss/base-ui/meter`, `@navecss/base-ui/progress`, `@navecss/base-ui/avatar` and `@navecss/base-ui/separator`. `Separator` is the separator the Toolbar already uses and needs nothing more.
+
+### Toast
+
+Toast needs one `Toast.Provider` around both the code that raises toasts and the place they appear, and you render the toasts yourself: map the `toasts` from `Toast.useToastManager()` to one `Toast.Root` each, inside `Toast.Viewport`, inside `Toast.Portal`. To raise a toast from outside React, create a manager with `Toast.createToastManager()`, pass it to the provider's `toastManager` prop and call its `add` method.
+
+```tsx
+'use client'
+import type { ReactNode } from 'react'
+import { Toast } from '@navecss/base-ui/toast'
+
+export const toastManager = Toast.createToastManager()
+
+function Toasts() {
+  const { toasts } = Toast.useToastManager()
+  return (
+    <>
+      {toasts.map((toast) => (
+        <Toast.Root key={toast.id} toast={toast}>
+          <Toast.Title />
+          <Toast.Description />
+          <Toast.Close>Dismiss</Toast.Close>
+        </Toast.Root>
+      ))}
+    </>
+  )
+}
+
+export default function ToastArea({ children }: { children: ReactNode }) {
+  return (
+    <Toast.Provider toastManager={toastManager}>
+      {children}
+      <Toast.Portal>
+        <Toast.Viewport>
+          <Toasts />
+        </Toast.Viewport>
+      </Toast.Portal>
+    </Toast.Provider>
+  )
+}
+```
+
+`toastManager.add({ title: 'Saved', description: 'Your changes were saved.' })` then raises a toast from anywhere in your app.
+
+Call `Toast.createToastManager()` in a module that starts with `'use client'`, as in the example, and import the manager from that module: every subpath of this package is a client module.
+
+`Toast.Title` renders an `<h2>`. Pass `render` to use another element.
+
+While a toast is open, pressing F6 moves keyboard focus to the region that holds the toasts, and Tab moves on into them. This is Base UI's behaviour; Nave's styles add none.
+
+A toast closes on its own after its `timeout`, 5000 milliseconds unless you set another on the toast or on the provider. Base UI pauses that timer while the pointer is over the toasts, while keyboard focus is in them and while the window is in the background. A toast whose `timeout` is `0` stays until it is closed, which suits a toast that carries an action the reader needs.
+
+If a toast holds a control that opens a popover, menu or other popup, give that toast a `timeout` of `0`. When keyboard focus moves into a popup rendered outside the toast area, Base UI resumes the toast's timer, so the toast can close while the popup is open, and keyboard focus is then lost.
+
+When more toasts are open than the provider's `limit` (three unless you set it), Base UI keeps the oldest ones on the page but makes them inert, and Nave hides them. Each one comes back when a newer toast closes, unless its own timer runs out first, because a hidden toast's timer keeps running.
+
+Nave fixes the toasts to a bottom corner of the window, above Nave's dialogs and other popups, and an anchored toast, which Base UI places beside its anchor, sits at that same level. So a toast can cover part of your page, a popup or an open dialog, including the control that has keyboard focus. If your page, popups or dialogs can put controls where toasts appear, move the toasts with your own CSS, or move an anchored toast with the `side`, `align` and `sideOffset` of its `Toast.Positioner`.
+
+A popover, menu or tooltip opened from a toast opens under the other toasts where they overlap, unless you pass the toast viewport to its `Portal` as `container`. It then renders inside the region Base UI uses to announce toasts.
+
+Nave paints every toast alike, whatever its `type`. Say what kind of message it is in its title or description.
+
+Base UI moves a toast under the pointer while it is being swiped away, whatever Nave's styles and the reduced-motion setting say; `swipeDirection={[]}` on `Toast.Root` turns swiping off.
+
+### Navigation Menu
+
+A Navigation Menu is a `NavigationMenu.List` of `NavigationMenu.Item`s, each holding either a `NavigationMenu.Trigger` with its `NavigationMenu.Content`, or a single `NavigationMenu.Link`. The open item's content appears in one `NavigationMenu.Popup`, which you render once, after the list, through `NavigationMenu.Portal` and `NavigationMenu.Positioner`, with a `NavigationMenu.Viewport` inside it.
+
+```tsx
+import { NavigationMenu } from '@navecss/base-ui/navigation-menu'
+
+export default function SiteNav() {
+  return (
+    <NavigationMenu.Root>
+      <NavigationMenu.List>
+        <NavigationMenu.Item>
+          <NavigationMenu.Trigger>
+            Guides
+            <NavigationMenu.Icon>
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                <path d="M3 6l5 5 5-5" />
+              </svg>
+            </NavigationMenu.Icon>
+          </NavigationMenu.Trigger>
+          <NavigationMenu.Content>
+            <NavigationMenu.Link href="/guides/start" active>
+              Quick start
+            </NavigationMenu.Link>
+            <NavigationMenu.Link href="/guides/theming">Theming</NavigationMenu.Link>
+          </NavigationMenu.Content>
+        </NavigationMenu.Item>
+        <NavigationMenu.Item>
+          <NavigationMenu.Link href="/blog">Blog</NavigationMenu.Link>
+        </NavigationMenu.Item>
+      </NavigationMenu.List>
+      <NavigationMenu.Portal>
+        <NavigationMenu.Positioner>
+          <NavigationMenu.Popup>
+            <NavigationMenu.Viewport />
+          </NavigationMenu.Popup>
+        </NavigationMenu.Positioner>
+      </NavigationMenu.Portal>
+    </NavigationMenu.Root>
+  )
+}
+```
+
+`NavigationMenu.Icon` turns half a turn while its item is open, so put the arrow you want turned inside it.
+
+The panel takes the size of the open item's content, and changes size at once when you move to another item: Nave does not animate it.
+
+Pass `active` to the `NavigationMenu.Link` for the page the reader is on. Base UI then gives it `aria-current="page"`, which marks it as the current page for assistive technology, and Nave gives it a thicker underline than the other links.
+
+Nave removes the bullets from `NavigationMenu.List`. Safari still treats it as a list for screen readers because Base UI renders it inside a `nav` element; if you give the menu's root or popup another element through `render`, add `role="list"` to the list.
+
+Nave does not dim a disabled `NavigationMenu.Trigger` and only withholds its hover fill, because before Base UI 1.6 a disabled trigger still opens its menu on hover. If you disable one, style it yourself.
+
+### Scroll Area
+
+Give `ScrollArea.Root` a height in a class of your own, with `block-size` or `max-block-size`, and its viewport fills it. Render one `ScrollArea.Scrollbar` with a `ScrollArea.Thumb` for each direction that can scroll, and a `ScrollArea.Corner` when both can: Base UI hides the browser's own scrollbars, so a direction without them shows none. Base UI does that with a `<style>` element it renders, so under a Content Security Policy pass your nonce through Base UI's `CSPProvider`. Nave gives the scrollbar and the corner the page's base surface; on a raised panel, set the panel's `background-color` on both with a class of your own.
+
+While its content overflows, a Scroll Area's viewport is a Tab stop, so a keyboard can reach and scroll it. Nave leaves its focus ring to the browser and paints the scrollbars whenever there is something to scroll.
+
+If you pass `keepMounted` to a `ScrollArea.Scrollbar`, it stays on screen over the edge of the content even when there is nothing to scroll in its direction, but Nave makes room for a scrollbar only while its direction can scroll. Give the viewport that room yourself on that edge, as both `padding` and `scroll-padding`: `calc(var(--nave-size-control-xs) + var(--nave-spacing-control-xs))`.
+
+### Meter and Progress
+
+Meter and Progress draw their value as a bar inside an outlined track, in the text colour: set `color` on the `Indicator` to change it. Making the `Track` taller leaves the bar as thick as Nave draws it, centred in the track. To draw it thicker, set the `Indicator`'s `border-block-width` to half the thickness you want and its `max-block-size` to the whole of it, in a class of your own.
+
+Meter and Progress look alike in Nave, but Base UI gives Meter the `meter` role and Progress the `progressbar` role, so choose by meaning: Meter for a measurement within a known range, such as storage used, and Progress for how far a task has got.
+
+An indeterminate Progress (`value={null}`) shows only its empty track: Nave hides the bar, because a full bar would look like a finished task. If you restyle Progress, give the track its height, not the indicator, or an indeterminate bar will fill the track.
+
+### Avatar
+
+`Avatar.Fallback` takes Base UI's `delay` prop, which holds the fallback back for that many milliseconds, so an image that loads quickly does not flash it.
+
+Give `Avatar.Image` an `alt` that names the person, or `alt=""` when their name is written next to it. Until the image loads, or if it fails to load, Base UI shows the fallback in its place, and a screen reader reads the fallback's text instead.
+
 ## Things to know
 
 When a disclosure trigger's last child is an `svg`, that icon turns when the panel opens. A lone icon counts as the last child, so put a decorative leading icon inside an element of its own:
@@ -265,7 +411,7 @@ In a Menubar, moving to the next menu with the arrow keys puts focus on that men
 
 In Base UI 1.8.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.
 
-When the reader's system asks for reduced motion, this package turns off the popups' fade, the tooltip's fade, the backdrop's fade, the tab indicator's slide, the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.
+When the reader's system asks for reduced motion, this package turns off the popups' fade, the tooltip's fade, the backdrop's fade, the toasts' fade, the turn of the icon in Navigation Menu triggers, the tab indicator's slide, the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.
 
 ## License
 
