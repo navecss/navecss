@@ -28,6 +28,8 @@ This step cannot be skipped: the release refuses to run while any changeset is s
 
 ## 2. Stage the release
 
+If this release is the first to stage a package that went live by hand, create that package's trusted publisher on npmjs.com immediately before you start the run (see "A package's first release" below).
+
 From the **Actions** tab, open the **release** workflow and choose **Run workflow** on `main`, or:
 
 ```sh
@@ -37,8 +39,6 @@ gh workflow run release.yml --ref main
 The workflow rebuilds from clean, runs the packaging checks, packs each package and stages it: `@navecss/tokens` first, then `@navecss/core`. The end of its log lists what was staged and the order to approve it in. Nothing is installable yet.
 
 It only runs on `main`: started from any other branch, the job is skipped.
-
-If this run is the first to stage a package that went live by hand, create that package's trusted publisher on npmjs.com immediately before starting the run (see "A package's first release" below).
 
 ## 3. Approve
 
