@@ -9,6 +9,8 @@ import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import { commands } from 'vitest/browser'
 
+import { MAX_FRAMES, nextFrame } from './frames.ts'
+
 /**
 The built tokens' text and the built stylesheet's, as the packages ship them.
  */
@@ -71,22 +73,15 @@ export const mount = (scene: ReactNode): Page => {
   }
 }
 
-const nextFrame = (): Promise<void> =>
-  new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      resolve()
-    })
-  })
-
 /**
 Waits for an element to exist, then for its box to stop moving: a popup positions itself and
-animates in before it is where a person would see it.
+animates in before it is where a person would see it. Each wait gives up after a count of frames,
+not a time.
  */
 export const settled = async (find: () => Element | undefined, frames = 5): Promise<Element> => {
-  const deadline = performance.now() + 5000
   let element = find()
-  while (element === undefined) {
-    if (performance.now() > deadline) {
+  for (let waited = 0; element === undefined; waited += 1) {
+    if (waited >= MAX_FRAMES) {
       throw new Error('the element never appeared')
     }
     await nextFrame()
@@ -94,8 +89,8 @@ export const settled = async (find: () => Element | undefined, frames = 5): Prom
   }
   let previous = ''
   let stableFor = 0
-  while (stableFor < frames) {
-    if (performance.now() > deadline) {
+  for (let waited = 0; stableFor < frames; waited += 1) {
+    if (waited >= MAX_FRAMES) {
       throw new Error('the element never stopped moving')
     }
     await nextFrame()

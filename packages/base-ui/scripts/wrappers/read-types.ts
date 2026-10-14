@@ -18,7 +18,7 @@ export type BaseUiVersion = 'current' | 'floor'
 One member of a part's type namespace, with the type parameters it declares as written and the
 names to pass them on by.
  */
-interface MemberTypes {
+export interface MemberTypes {
   readonly arguments: readonly string[]
   /**
   The parameters without their defaults, as a function would declare them.
@@ -41,12 +41,21 @@ export interface PartTypes {
   The type parameters of a class, as written.
    */
   readonly classParameters: readonly string[]
+  /**
+  Whether the part's export is also a type, as a `Trigger` that is both a component and the
+  interface of one. A class is a type of its own and is not counted here.
+   */
+  readonly isAlsoType: boolean
   readonly members: readonly MemberTypes[]
   readonly name: string
   /**
   The element the part's `ref` is typed with (`HTMLButtonElement`), when it declares one.
    */
   readonly refElement: string | undefined
+  /**
+  Set where the part is younger than the floor Base UI: it is declared, not read.
+   */
+  readonly young?: boolean
 }
 
 export interface SubpathTypes {
@@ -59,6 +68,12 @@ export interface SubpathTypes {
    */
   readonly parts: readonly PartTypes[]
   readonly subpath: string
+  /**
+  Members of the component's namespace that are only a type, as `Field.ValidityData`: re-exported
+  under another name (`export type { X as Y }`) or with the `type` modifier (`export { type Y }`),
+  and so with no value to take them for a part. Empty for a component that is not a namespace.
+   */
+  readonly typeMembers: readonly MemberTypes[]
 }
 
 const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -67,7 +82,7 @@ const NODE_MODULES = path.join(PACKAGE_DIR, 'node_modules')
 /**
 Where an installed Base UI keeps a subpath's declaration entry.
  */
-const declarationEntry = (version: BaseUiVersion, subpath: string): string =>
+export const declarationEntry = (version: BaseUiVersion, subpath: string): string =>
   version === 'current'
     ? path.join(NODE_MODULES, '@base-ui/react', subpath, 'index.d.mts')
     : path.join(NODE_MODULES, 'base-ui-react-floor/esm', subpath, 'index.d.ts')
@@ -86,8 +101,8 @@ const typeParametersOf = (
     : []
 }
 
-const memberTypes = (symbol: ts.Symbol, name: string): MemberTypes => {
-  const parameters = typeParametersOf(symbol.exports?.get(name as ts.__String))
+const describeMember = (target: ts.Symbol | undefined, name: string): MemberTypes => {
+  const parameters = typeParametersOf(target)
   return {
     arguments: parameters.map((parameter) => parameter.name.text),
     bare: parameters.map((parameter) =>
@@ -99,6 +114,9 @@ const memberTypes = (symbol: ts.Symbol, name: string): MemberTypes => {
     parameters: parameters.map((parameter) => parameter.getText()),
   }
 }
+
+const memberTypes = (symbol: ts.Symbol, name: string): MemberTypes =>
+  describeMember(symbol.exports?.get(name as ts.__String), name)
 
 const kindOf = (symbol: ts.Symbol): PartTypes['kind'] => {
   if (hasFlag(symbol, ts.SymbolFlags.Class)) {
@@ -151,6 +169,7 @@ const partTypes = (
     callTypeParameters: signature?.typeParameters?.map((parameter) => parameter.symbol.name) ?? [],
     classParameters:
       kind === 'class' ? typeParametersOf(symbol).map((parameter) => parameter.getText()) : [],
+    isAlsoType: kind !== 'class' && hasFlag(symbol, ts.SymbolFlags.Type),
     kind,
     members: names.map((member) => memberTypes(symbol, member)),
     name,
@@ -191,16 +210,25 @@ export const readBaseUiTypes = (version: BaseUiVersion): SubpathTypes[] => {
     // A component is a namespace of parts when its exports are themselves components.
     const members = checker.getExportsOfModule(component)
     const isNamespace = members.length > 0 && !component.exports?.has('Props' as ts.__String)
+    const named = members.map((member) => ({ member, symbol: resolved(checker, member) }))
     const parts = isNamespace
-      ? members
-          .map((member) => ({ member, symbol: resolved(checker, member) }))
+      ? named
           .filter(({ symbol }) => hasFlag(symbol, ts.SymbolFlags.Value))
           .map(({ member, symbol }) => partTypes(checker, file, member.name, symbol))
       : [partTypes(checker, file, '.', component)]
+    const typeMembers = isNamespace
+      ? named
+          .filter(
+            ({ symbol }) =>
+              hasFlag(symbol, ts.SymbolFlags.Type) && !hasFlag(symbol, ts.SymbolFlags.Value),
+          )
+          .map(({ member, symbol }) => describeMember(symbol, member.name))
+      : []
     return {
       flatTypes: exports.map((symbol) => symbol.name).filter((name) => name !== topName(subpath)),
       parts,
       subpath,
+      typeMembers,
     }
   })
 }

@@ -8,6 +8,7 @@ import { recordCarried, recordRelated, unrecordedPairs } from '../support/row-pa
 import { hasClass, hasItem, part, renderScene } from '../support/rows.ts'
 import { loadNave } from '../support/sources.ts'
 import { topName } from '../support/subpaths.ts'
+import { tableP } from '../support/table-p.ts'
 import { CONTROL_PAIRS, pair } from '../support/vocabulary-pairs.ts'
 
 const nave: Source = await loadNave()
@@ -15,7 +16,7 @@ afterEach(cleanup)
 
 const C = 'nave-base-ui-'
 
-describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where its rule reaches (controls)', () => {
+describe('AC-base-ui-overlay-completion-29 and AC-base-ui-bridge-22: every item the stylesheet keys on appears where its rule reaches (controls)', () => {
   it('Toggle and Toggle in ToggleGroup carry aria-pressed when pressed, with the class', async () => {
     await renderScene(nave, 'toggle', { Toggle: { defaultPressed: true } })
     expect(hasItem(part('Toggle'), 'aria-pressed', 'true')).toBe(true)
@@ -298,7 +299,7 @@ const DISABLED: readonly {
   },
 ]
 
-describe('AC-base-ui-bridge-22: every disabled part carries the state the stylesheet keys on', () => {
+describe('AC-base-ui-overlay-completion-29 and AC-base-ui-bridge-22: every disabled part carries the state the stylesheet keys on', () => {
   for (const { aria, disable, marker, native, subpath } of DISABLED) {
     it(`${subpath}: ${marker} disabled carries ${aria ? 'aria-disabled' : 'no aria-disabled'} and ${native ? 'native disabled' : 'no native disabled'}`, async () => {
       await renderScene(nave, subpath, disable)
@@ -307,6 +308,9 @@ describe('AC-base-ui-bridge-22: every disabled part carries the state the styles
       expect(hasItem(element, 'aria-disabled', 'true')).toBe(aria)
       expect(element?.hasAttribute('disabled')).toBe(native)
       expect(element?.className).toContain(C)
+      // Every class Table P names for the part is on it, so the pairs recorded below are the
+      // rules' own: the highlight fill's `:not([aria-disabled="true"])` included.
+      expect((tableP.get(marker) ?? []).filter((name) => !hasClass(element, name))).toEqual([])
       recordCarried(element, 'aria-disabled', 'true')
     })
   }
@@ -353,7 +357,7 @@ describe('AC-base-ui-bridge-22: every disabled part carries the state the styles
   })
 })
 
-describe("AC-base-ui-bridge-22: the controls' render rows cover every pair they own", () => {
+describe("AC-base-ui-overlay-completion-29 and AC-base-ui-bridge-22: the controls' render rows cover every pair they own", () => {
   it('has recorded every pair of the controls table', () => {
     expect(unrecordedPairs(CONTROL_PAIRS)).toEqual([])
   })

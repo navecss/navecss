@@ -8,9 +8,10 @@ import { cleanup, render } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
-import { SUBPATHS } from '../support/subpaths.ts'
+import { COMPLETION_SUBPATHS, SUBPATHS, topName } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 import { isInT0 } from '../support/table-t0.ts'
+import { COMPLETION_PASS_THROUGHS } from '../support/w5-pass-throughs.ts'
 
 const bare = await loadBare()
 const nave = await loadNave()
@@ -36,6 +37,19 @@ const refAndElement = async (
 }
 
 /**
+ * One unstyled part of a subpath's scene: the first that renders, or the one named for the six.
+ */
+const passThroughsOf = (subpath: string, parts: readonly string[]): string[] => {
+  if (subpath === 'menubar') {
+    return []
+  }
+  const named = COMPLETION_PASS_THROUGHS[subpath]
+  return named === undefined
+    ? parts.filter((part) => isInT0(part)).slice(0, 1)
+    : parts.filter((part) => part === named)
+}
+
+/**
  * Where each part first renders: the subpath whose scene holds it. Every styled part, and for
  * each subpath the first unstyled part that renders an element.
  */
@@ -46,16 +60,13 @@ const subjects = async (): Promise<{ part: string; subpath: string }[]> => {
     const parts = [...new Set(marked().map(({ part }) => part))]
     found.push(
       ...parts.filter((part) => tableP.has(part)).map((part) => ({ part, subpath })),
-      ...parts
-        .filter((part) => isInT0(part))
-        .slice(0, 1)
-        .map((part) => ({ part, subpath })),
+      ...passThroughsOf(subpath, parts).map((part) => ({ part, subpath })),
     )
   }
   return found
 }
 
-describe('AC-base-ui-bridge-09: a wrapped part forwards its ref to the DOM', () => {
+describe('AC-base-ui-bridge-09, extended to the six by AC-base-ui-overlay-completion-43: a wrapped part forwards its ref to the DOM', () => {
   it('reaches the element Base UI renders, for every styled part and one pass-through per subpath', async () => {
     const problems: string[] = []
     const placed = await subjects()
@@ -73,6 +84,25 @@ describe('AC-base-ui-bridge-09: a wrapped part forwards its ref to the DOM', () 
       }
     }
     expect(problems).toEqual([])
+  })
+
+  it('checks every styled part of the six, one pass-through per subpath, and Menubar', async () => {
+    const placed = await subjects()
+    const isRendered = (subpath: string, part: string): boolean =>
+      placed.some((subject) => subject.subpath === subpath && subject.part === part)
+    const styled = COMPLETION_SUBPATHS.flatMap((subpath) =>
+      tableP
+        .keys()
+        .filter((part) => part === topName(subpath) || part.startsWith(`${topName(subpath)}.`))
+        .map((part) => [subpath, part] as const)
+        .toArray(),
+    )
+    const named = Object.entries(COMPLETION_PASS_THROUGHS)
+    // Every one of these exists at the floor, so every run looks at all of them.
+    expect([...styled, ...named].filter(([subpath, part]) => !isRendered(subpath, part))).toEqual(
+      [],
+    )
+    expect(styled.map(([, part]) => part)).toContain('Menubar')
   })
 
   it('control: a wrapper written as a plain function component leaves the ref null on React 18', async () => {

@@ -20,7 +20,7 @@ export declare namespace Description {
   export type Props = Base.Description.Props
   export type State = Base.Description.State
 }
-export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-dialog-popup'))()
+export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-dialog-popup nave-base-ui-popup-fade'))()
 export declare namespace Popup {
   export type Props = Base.Popup.Props
   export type State = Base.Popup.State
@@ -49,6 +49,7 @@ export declare namespace Title {
   export type State = Base.Title.State
 }
 export const Trigger: <Payload>(props: Omit<Base.Trigger.Props<Payload>, 'ref'> & RefAttributes<HTMLElement> & VariantProps) => ReactElement = /*#__PURE__*/ (() => wrapVariantPart(Base.Trigger, 'nave-base-ui-button'))()
+export type Trigger = typeof Trigger
 export declare namespace Trigger {
   export type Props<Payload = unknown> = Base.Trigger.Props<Payload> & VariantProps
   export type State = Base.Trigger.State

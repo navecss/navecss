@@ -9,10 +9,23 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, type TestContext } from 'vitest'
 
 import { attributeReads } from './support/selector.ts'
 import { flatten, PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
+import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
+import {
+  baseUiRootAt,
+  installHint,
+  isDeclared,
+  itemsMissingFrom,
+} from './support/w3-base-ui-versions.ts'
+import {
+  firstTokensVersionWithTheHighlight,
+  namedTokens,
+  publishedTokens,
+  undeclaredIn,
+} from './support/w3-tokens-floor.ts'
 
 const FLOOR = path.join(PACKAGE_DIR, 'node_modules/base-ui-react-floor/esm')
 
@@ -118,6 +131,98 @@ const rows: readonly {
   },
 ]
 
+/**
+ * The rows for the parts and attributes the overlay components add, each read as text from the
+ * declaration files (`.d.ts`) of the floor package, the oldest Base UI the package supports.
+ */
+interface OverlayRow {
+  readonly files: readonly string[]
+  readonly items: readonly string[]
+}
+
+const POPUP_FILES = [
+  'menu/popup/MenuPopupDataAttributes.d.ts',
+  'popover/popup/PopoverPopupDataAttributes.d.ts',
+  'tooltip/popup/TooltipPopupDataAttributes.d.ts',
+  'select/popup/SelectPopupDataAttributes.d.ts',
+  'dialog/popup/DialogPopupDataAttributes.d.ts',
+  'preview-card/popup/PreviewCardPopupDataAttributes.d.ts',
+  'combobox/popup/ComboboxPopupDataAttributes.d.ts',
+]
+
+const overlayRows: readonly OverlayRow[] = [
+  {
+    files: ['combobox/item/ComboboxtemDataAttributes.d.ts'],
+    items: ['data-highlighted'],
+  },
+  {
+    files: [
+      'menu/item/MenuItemDataAttributes.d.ts',
+      'menu/checkbox-item/MenuCheckboxItemDataAttributes.d.ts',
+      'menu/radio-item/MenuRadioItemDataAttributes.d.ts',
+      'menu/submenu-trigger/MenuSubmenuTriggerDataAttributes.d.ts',
+    ],
+    items: ['data-highlighted'],
+  },
+  {
+    files: ['menu/link-item/MenuLinkItemDataAttributes.d.ts'],
+    items: ['data-highlighted'],
+  },
+  {
+    files: ['select/item/SelectItemDataAttributes.d.ts'],
+    items: ['data-highlighted'],
+  },
+  {
+    files: [
+      'menu/popup/MenuPopupDataAttributes.d.ts',
+      'popover/popup/PopoverPopupDataAttributes.d.ts',
+      'tooltip/popup/TooltipPopupDataAttributes.d.ts',
+    ],
+    items: ['data-instant'],
+  },
+  {
+    files: [...POPUP_FILES, 'dialog/backdrop/DialogBackdropDataAttributes.d.ts'],
+    items: ['data-starting-style', 'data-ending-style'],
+  },
+  {
+    files: [
+      'menu/arrow/MenuArrowDataAttributes.d.ts',
+      'popover/arrow/PopoverArrowDataAttributes.d.ts',
+      'select/arrow/SelectArrowDataAttributes.d.ts',
+      'tooltip/arrow/TooltipArrowDataAttributes.d.ts',
+      'preview-card/arrow/PreviewCardArrowDataAttributes.d.ts',
+      'combobox/arrow/ComboboxArrowDataAttributes.d.ts',
+    ],
+    items: ['data-side', 'inline-start', 'inline-end'],
+  },
+  {
+    files: ['combobox/popup/ComboboxPopupDataAttributes.d.ts'],
+    items: ['data-empty'],
+  },
+  {
+    files: ['combobox/input-group/ComboboxInputGroupDataAttributes.d.ts'],
+    items: ['data-invalid', 'data-disabled'],
+  },
+]
+
+/**
+ * The package's peer floor, read from the installed floor alias.
+ */
+const FLOOR_VERSION = (
+  JSON.parse(readFileSync(path.join(FLOOR, '../package.json'), 'utf8')) as { version: string }
+).version
+
+/**
+ * The package's modules at a minor, or an error that names the alias to install.
+ */
+const rootAtOrThrow = (version: string): string => {
+  const root = baseUiRootAt(version)
+  if (root === undefined) {
+    throw new Error(installHint(version))
+  }
+  return root
+}
+
 const isMissingFrom = (file: string, item: string, root: string = FLOOR): boolean =>
   !readFileSync(path.join(root, file), 'utf8').includes(item)
 
@@ -179,7 +284,7 @@ const copyOfFloor = (name: string, files: readonly string[]): string => {
 
 const ARROW = 'popover/arrow/PopoverArrowDataAttributes.js'
 
-describe('AC-base-ui-bridge-21: every attribute and variable the stylesheet keys on is declared at the floor', () => {
+describe('AC-base-ui-overlay-completion-28: every attribute and variable the stylesheet keys on is declared at the floor, and at the first minor of a part younger than it', () => {
   it('finds the floor package installed through its alias', () => {
     expect(existsSync(FLOOR)).toBe(true)
   })
@@ -238,12 +343,106 @@ describe('AC-base-ui-bridge-21: every attribute and variable the stylesheet keys
     expect(isSharedItemDeclared(ARROW, DATA_SIDE, root)).toBe(false)
   })
 
+  it(`finds @base-ui/react@${FLOOR_VERSION} installed through its alias`, () => {
+    expect(baseUiRootAt(FLOOR_VERSION), installHint(FLOOR_VERSION)).toBeDefined()
+  })
+
+  for (const { files, items } of overlayRows) {
+    for (const file of files) {
+      it(`${file} declares ${items.join(', ')} at ${FLOOR_VERSION}`, () => {
+        const root = rootAtOrThrow(FLOOR_VERSION)
+        expect(itemsMissingFrom(root, file, items)).toEqual([])
+      })
+    }
+  }
+
+  it('control: a planted row (data-instant, select/popup/SelectPopupDataAttributes.d.ts, read at the floor) is reported missing', () => {
+    expect(
+      itemsMissingFrom(
+        rootAtOrThrow(FLOOR_VERSION),
+        'select/popup/SelectPopupDataAttributes.d.ts',
+        ['data-instant'],
+      ),
+    ).toEqual(['data-instant'])
+  })
+
+  it('control: an item named only in a doc comment does not count as declared', () => {
+    const commentOnly = ['/**', ' * Present with data-highlighted.', ' */', 'enum E {}'].join('\n')
+    expect(isDeclared(commentOnly, 'data-highlighted')).toBe(false)
+    expect(isDeclared('highlighted = "data-highlighted",', 'data-highlighted')).toBe(true)
+  })
+
   it('has a row for every Base UI attribute and variable the stylesheet uses', () => {
     const css = readStylesheet()
     const keyed = new Set([...keyedAttributes(css), ...keyedVariables(css)])
-    const covered = new Set(
-      rows.flatMap(({ items, shared = [] }) => [...items, ...shared.map(({ item }) => item)]),
-    )
+    const covered = new Set([
+      ...rows.flatMap(({ items, shared = [] }) => [...items, ...shared.map(({ item }) => item)]),
+      ...overlayRows.flatMap(({ items }) => items),
+    ])
     expect([...keyed].filter((name) => !covered.has(name))).toEqual([])
+  })
+})
+
+/**
+ * The published tokens release, or a skip that says what unskips the test.
+ */
+const publishedOrSkip = (
+  context: TestContext,
+): { declared: ReadonlySet<string>; version: string } => {
+  const published = publishedTokens()
+  if ('reason' in published) {
+    return context.skip(published.reason)
+  }
+  return published
+}
+
+const withdrawn = (name: string): string => `.x { color: var(${name}) }`
+
+const tokensDeclaredByWorkspace = (): Set<string> =>
+  new Set(declaredTokens(workspaceTokensCss()).keys())
+
+const NEW_TOKENS = [
+  '--nave-color-action-highlight',
+  '--nave-color-backdrop-modal',
+  '--nave-motion-duration-instant',
+  '--nave-motion-easing-decelerate',
+  '--nave-motion-easing-accelerate',
+]
+
+describe('AC-base-ui-overlay-completion-31: every Nave token the stylesheet names exists in the workspace and at the new tokens floor', () => {
+  it('names 59 distinct tokens, among them the five this work adds', () => {
+    const named = namedTokens(readStylesheet())
+    expect(named.size).toBe(59)
+    expect(NEW_TOKENS.filter((name) => !named.has(name))).toEqual([])
+  })
+
+  it('names only tokens the workspace declares', () => {
+    expect(undeclaredIn(readStylesheet(), tokensDeclaredByWorkspace())).toEqual([])
+  })
+
+  it('names only tokens the published tokens release declares', (context) => {
+    const published = publishedOrSkip(context)
+    expect(published.version).toBe(firstTokensVersionWithTheHighlight())
+    expect(undeclaredIn(readStylesheet(), published.declared)).toEqual([])
+  })
+
+  it('control: a planted var(--nave-color-surface-scrim) and var(--nave-color-surface-highlight) are each reported against the workspace', () => {
+    const declared = tokensDeclaredByWorkspace()
+    expect(undeclaredIn(withdrawn('--nave-color-surface-scrim'), declared)).toEqual([
+      '--nave-color-surface-scrim',
+    ])
+    expect(undeclaredIn(withdrawn('--nave-color-surface-highlight'), declared)).toEqual([
+      '--nave-color-surface-highlight',
+    ])
+  })
+
+  it('control: the same two planted names are each reported against the published release', (context) => {
+    const published = publishedOrSkip(context)
+    expect(undeclaredIn(withdrawn('--nave-color-surface-scrim'), published.declared)).toEqual([
+      '--nave-color-surface-scrim',
+    ])
+    expect(undeclaredIn(withdrawn('--nave-color-surface-highlight'), published.declared)).toEqual([
+      '--nave-color-surface-highlight',
+    ])
   })
 })

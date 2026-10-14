@@ -43,3 +43,4 @@ export declare namespace Item {
   export type State = Base.Item.State
   export type Props = Base.Item.Props
 }
+export type ValidityData = Base.ValidityData

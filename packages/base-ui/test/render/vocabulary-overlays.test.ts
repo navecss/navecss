@@ -108,7 +108,7 @@ const iconChild = (token: string): unknown => {
   return token
 }
 
-describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where its rule reaches (overlays)', () => {
+describe('AC-base-ui-overlay-completion-29 and AC-base-ui-bridge-22: every item the stylesheet keys on appears where its rule reaches (overlays)', () => {
   const CASES = [
     {
       cls: 'list-popup',
@@ -156,11 +156,12 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
   ] as const
   for (const [subpath, namespace] of ARROWS) {
     for (const side of SIDES) {
-      it(`${namespace}.Arrow carries data-side="${side}" with the class, for side="${side}"`, async () => {
+      it(`${namespace}.Arrow carries data-side="${side}" with both classes, for side="${side}"`, async () => {
         await renderScene(nave, subpath, { ...openProps(), [`${namespace}.Positioner`]: { side } })
         const arrow = part(`${namespace}.Arrow`)
         expect(hasItem(arrow, 'data-side', side)).toBe(true)
         expect(hasClass(arrow, 'nave-base-ui-arrow')).toBe(true)
+        expect(hasClass(arrow, 'nave-base-ui-arrow-inline')).toBe(true)
         recordCarried(arrow, 'data-side', side)
       })
     }
@@ -191,7 +192,7 @@ describe('AC-base-ui-bridge-22: every item the stylesheet keys on appears where 
   })
 })
 
-describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
+describe('AC-base-ui-overlay-completion-29 and AC-base-ui-bridge-22: disclosure and tabs', () => {
   for (const [subpath, namespace] of [
     ['accordion', 'Accordion'],
     ['collapsible', 'Collapsible'],
@@ -297,7 +298,7 @@ describe('AC-base-ui-bridge-22: disclosure and tabs', () => {
   })
 })
 
-describe("AC-base-ui-bridge-22: the overlays' render rows cover every pair they own", () => {
+describe("AC-base-ui-overlay-completion-29 and AC-base-ui-bridge-22: the overlays' render rows cover every pair they own", () => {
   it('has recorded every pair of the overlays table', () => {
     expect(unrecordedPairs(OVERLAY_PAIRS)).toEqual([])
   })

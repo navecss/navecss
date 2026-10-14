@@ -47,7 +47,9 @@ export interface FixedSentence {
 }
 
 /**
-The sentences the README carries as written, markdown source and no trailing newline.
+The sentences the README carries as written from the first release, markdown source and no
+trailing newline. The reduced-motion sentence is not among them: the combined package's README
+carries the one that lists its own transitions too (`w9-sentences.ts`).
  */
 export const FIXED_SENTENCES: readonly FixedSentence[] = [
   {
@@ -73,12 +75,6 @@ export const FIXED_SENTENCES: readonly FixedSentence[] = [
     name: 'Menu.LinkItem',
     prefix: '98a262547c17440c',
     text: 'In Base UI 1.8.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.',
-  },
-  {
-    bytes: 309,
-    name: 'reduced motion',
-    prefix: '830a8820a455e602',
-    text: "When the reader's system asks for reduced motion, this package turns off the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.",
   },
 ]
 

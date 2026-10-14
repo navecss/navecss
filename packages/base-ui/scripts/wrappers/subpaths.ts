@@ -1,8 +1,8 @@
 /**
- * "The v1 subpaths" of the spec's conventions: the 22 components the first release lists, plus the
- * Slider because its signature is given. Each is also a subpath of `@base-ui/react`.
+ * "The first release's subpaths": the 22 components it lists, plus the Slider because its signature is
+ * given. Each is also a subpath of `@base-ui/react`.
  */
-export const SUBPATHS = [
+export const FIRST_RELEASE_SUBPATHS = [
   'dialog',
   'popover',
   'menu',
@@ -28,6 +28,23 @@ export const SUBPATHS = [
   'toolbar',
 ] as const
 
+/**
+The six components the overlay completion adds.
+ */
+export const COMPLETION_SUBPATHS = [
+  'alert-dialog',
+  'context-menu',
+  'menubar',
+  'preview-card',
+  'combobox',
+  'autocomplete',
+] as const
+
+/**
+Every subpath the package ships.
+ */
+export const SUBPATHS = [...FIRST_RELEASE_SUBPATHS, ...COMPLETION_SUBPATHS] as const
+
 export type Subpath = (typeof SUBPATHS)[number]
 
 /**
@@ -47,6 +64,7 @@ export const SINGLE_COMPONENT: ReadonlySet<string> = new Set([
   'checkbox-group',
   'form',
   'input',
+  'menubar',
   'radio-group',
   'toggle',
   'toggle-group',

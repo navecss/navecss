@@ -14,6 +14,7 @@ import { loadBare, loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
 import { SUBPATHS } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
+import { COMPLETION_PASS_THROUGHS } from '../support/w5-pass-throughs.ts'
 
 const bare = await loadBare()
 const nave = await loadNave()
@@ -120,7 +121,7 @@ const problemsOf = async (
     if (element === undefined) {
       return [`${part} (${form.label}) did not render`]
     }
-    if (element.className.trim() !== expected) {
+    if (element.className.trim() !== expected.trim()) {
       return [`${part} (${form.label}): "${element.className}", expected "${expected}"`]
     }
     return form.tag !== undefined && element.tagName !== form.tag
@@ -145,7 +146,7 @@ const untilClass = async (marker: string, expected: string): Promise<void> => {
   }
 }
 
-describe('AC-base-ui-bridge-10: className composes in both forms, and render carries the class', () => {
+describe('AC-base-ui-bridge-10, extended to the six by AC-base-ui-overlay-completion-43: className composes in both forms, and render carries the class', () => {
   it('composes for every styled part in every form', async () => {
     const problems: string[] = []
     const styledParts = await renderedStyledParts()
@@ -163,6 +164,16 @@ describe('AC-base-ui-bridge-10: className composes in both forms, and render car
         .filter((part) => !looked.has(part))
         .toArray(),
     ).toEqual([])
+  })
+
+  it('passes className and render through on one unstyled part per subpath of the six, in every form', async () => {
+    const problems: string[] = []
+    for (const [subpath, part] of Object.entries(COMPLETION_PASS_THROUGHS)) {
+      for (const form of FORMS) {
+        problems.push(...(await problemsOf(subpath, [part], form)))
+      }
+    }
+    expect(problems).toEqual([])
   })
 
   it("hands a className function the part's state", async () => {

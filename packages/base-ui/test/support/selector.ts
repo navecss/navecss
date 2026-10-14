@@ -1,8 +1,8 @@
 /**
  * Selector-level readers for the instruments: the nodes of a resolved selector with where each sits,
- * a specificity, and the attribute states a selector's last compound requires or excludes.
+ * a specificity, and the states a selector requires of the control it lands on.
  */
-import type { Attribute, Node, Pseudo, Selector } from 'postcss-selector-parser'
+import type { Node, Pseudo, Selector } from 'postcss-selector-parser'
 
 import selectorParser from 'postcss-selector-parser'
 
@@ -151,6 +151,39 @@ export const requiresInvalid = (list: string): boolean => {
 export const requiresInvalidState = (selector: string): boolean =>
   requiresAttributeValue(selector, 'aria-invalid', 'true')
 
+const isGroupInvalidNodes = (nodes: readonly Node[]): boolean => {
+  const compound = subjectCompound(nodes)
+  const hasInvalid = compound.some(
+    (node) => node.type === 'attribute' && node.attribute === 'data-invalid',
+  )
+  const isDisabledExcluded = compound.some(
+    (node) =>
+      node.type === 'pseudo' &&
+      node.value === ':not' &&
+      node.nodes.some(
+        (argument) =>
+          argument.nodes.length === 1 &&
+          argument.first?.type === 'attribute' &&
+          argument.first.attribute === 'data-disabled',
+      ),
+  )
+  return hasInvalid && isDisabledExcluded
+}
+
+/**
+ * Whether every alternative of a selector list requires a field group to be invalid and not
+ * disabled: `[data-invalid]` with `:not([data-disabled])` in its own compound. The group reports
+ * invalid beside `aria-invalid` only while it is not disabled.
+ */
+export const requiresInvalidGroup = (list: string): boolean => {
+  let isKeyed = false
+  selectorParser((root) => {
+    isKeyed =
+      root.nodes.length > 0 && root.nodes.every((branch) => isGroupInvalidNodes(branch.nodes))
+  }).processSync(list)
+  return isKeyed
+}
+
 type Triple = readonly [number, number, number]
 
 const ZERO: Triple = [0, 0, 0]
@@ -194,59 +227,4 @@ export const selectorSpecificity = (selector: string): Triple => {
     total = root.first.nodes.reduce<Triple>((sum, node) => add(sum, nodeSpecificity(node)), ZERO)
   }).processSync(selector)
   return total
-}
-
-const lastCompound = (selector: string): Node[] => {
-  const compound: Node[] = []
-  selectorParser((root) => {
-    for (const node of root.first.nodes) {
-      if (node.type === 'combinator') compound.length = 0
-      else compound.push(node)
-    }
-  }).processSync(selector)
-  return compound
-}
-
-const attributeState = (node: Attribute): string => `${node.attribute}=${node.value ?? ''}`
-
-/**
- * The states a `:not()` rules out on its own: an argument that is a single attribute selector.
- * An argument made of several nodes (`:not([a][b])`) excludes no one attribute by itself.
- */
-const excludedStates = (pseudo: Pseudo): string[] =>
-  pseudo.nodes.flatMap((argument) => {
-    const [only, ...rest] = argument.nodes
-    return rest.length === 0 && only?.type === 'attribute' ? [attributeState(only)] : []
-  })
-
-interface Constraints {
-  readonly excluded: ReadonlySet<string>
-  readonly required: ReadonlySet<string>
-}
-
-/**
- * The attribute states the last compound of a selector requires, and those it excludes by `:not()`.
- */
-export const attributeConstraints = (selector: string): Constraints => {
-  const compound = lastCompound(selector)
-  const required = compound
-    .filter((node) => node.type === 'attribute')
-    .map((node) => attributeState(node))
-  const excluded = compound
-    .filter((node) => node.type === 'pseudo' && node.value === ':not')
-    .flatMap((node) => excludedStates(node as Pseudo))
-  return { excluded: new Set(excluded), required: new Set(required) }
-}
-
-/**
- * Whether two resolved selectors can never match one element, by an attribute state one needs and
- * the other excludes with `:not()`.
- */
-export const isMutuallyExclusive = (a: string, b: string): boolean => {
-  const left = attributeConstraints(a)
-  const right = attributeConstraints(b)
-  return (
-    left.required.values().some((state) => right.excluded.has(state)) ||
-    right.required.values().some((state) => left.excluded.has(state))
-  )
 }

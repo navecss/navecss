@@ -92,6 +92,24 @@ const optimized = (base: string, subpaths: readonly string[]): string[] => [
   ...subpaths.map((subpath) => `${base}/${subpath}`),
 ]
 
+/**
+What the mid-exit file imports through the wrappers: the panels' and the popups', whose scenes share a helper.
+ */
+const MID_EXIT_SUBPATHS = [
+  'accordion',
+  'alert-dialog',
+  'autocomplete',
+  'collapsible',
+  'combobox',
+  'context-menu',
+  'dialog',
+  'menu',
+  'menubar',
+  'popover',
+  'preview-card',
+  'select',
+]
+
 const MID_EXIT_FILE = 'test/browser/reduced-motion-mid-exit.browser.test.ts'
 
 export default defineConfig({
@@ -100,7 +118,9 @@ export default defineConfig({
     projects: [
       {
         extends: true,
-        optimizeDeps: { include: optimized('@base-ui/react', wrapperSubpaths) },
+        optimizeDeps: {
+          include: optimized('@base-ui/react', [...wrapperSubpaths, 'direction-provider']),
+        },
         test: {
           name: 'current',
           include: ['test/browser/**/*.browser.test.ts'],
@@ -113,7 +133,7 @@ export default defineConfig({
         extends: true,
         resolve: { alias: alias(version) },
         optimizeDeps: {
-          include: optimized(`base-ui-react-${version}`, ['accordion', 'collapsible']),
+          include: optimized(`base-ui-react-${version}`, MID_EXIT_SUBPATHS),
         },
         test: {
           name: `base-ui-${version}`,

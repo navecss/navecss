@@ -47,7 +47,7 @@ export declare namespace Positioner {
   export type State = Base.Positioner.State
   export type Props = Base.Positioner.Props
 }
-export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-list-popup'))()
+export const Popup: typeof Base.Popup = /*#__PURE__*/ (() => wrapPart(Base.Popup, 'nave-base-ui-list-popup nave-base-ui-popup-fade'))()
 export declare namespace Popup {
   export type Props = Base.Popup.Props
   export type State = Base.Popup.State
@@ -57,7 +57,7 @@ export declare namespace List {
   export type Props = Base.List.Props
   export type State = Base.List.State
 }
-export const Item: typeof Base.Item = /*#__PURE__*/ (() => wrapPart(Base.Item, 'nave-base-ui-item'))()
+export const Item: typeof Base.Item = /*#__PURE__*/ (() => wrapPart(Base.Item, 'nave-base-ui-item nave-base-ui-item-highlight'))()
 export declare namespace Item {
   export type State = Base.Item.State
   export type Props = Base.Item.Props
@@ -72,7 +72,7 @@ export declare namespace ItemText {
   export type State = Base.ItemText.State
   export type Props = Base.ItemText.Props
 }
-export const Arrow: typeof Base.Arrow = /*#__PURE__*/ (() => wrapPart(Base.Arrow, 'nave-base-ui-arrow'))()
+export const Arrow: typeof Base.Arrow = /*#__PURE__*/ (() => wrapPart(Base.Arrow, 'nave-base-ui-arrow nave-base-ui-arrow-inline'))()
 export declare namespace Arrow {
   export type State = Base.Arrow.State
   export type Props = Base.Arrow.Props

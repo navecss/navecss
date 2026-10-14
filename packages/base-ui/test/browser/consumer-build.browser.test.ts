@@ -5,7 +5,7 @@
  */
 import { describe, expect, inject, it } from 'vitest'
 
-import { sleep } from './support/wait.ts'
+import { isReachedWithin, MAX_FRAMES } from './support/frames.ts'
 
 const build = inject('consumerBuild')
 
@@ -28,14 +28,15 @@ const loadApp = async (url: string): Promise<{ frame: HTMLIFrameElement; window:
 }
 
 const until = async <Value>(find: () => Value | undefined): Promise<Value> => {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const found = find()
-    if (found !== undefined) {
-      return found
-    }
-    await sleep(50)
+  let found: Value | undefined
+  await isReachedWithin(() => {
+    found = find()
+    return found !== undefined
+  }, MAX_FRAMES)
+  if (found === undefined) {
+    throw new Error('the app never rendered what the test waits for')
   }
-  throw new Error('the app never rendered what the test waits for')
+  return found
 }
 
 describe('AC-base-ui-bridge-19: the consumer side needs no PostCSS', () => {

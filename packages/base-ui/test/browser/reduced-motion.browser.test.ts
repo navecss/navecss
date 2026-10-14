@@ -1,8 +1,11 @@
 /**
- * AC-base-ui-bridge-51, first scenario: under `prefers-reduced-motion: reduce` every transition the
+ * AC-base-ui-overlay-completion-19, first scenario (which carries parent AC-base-ui-bridge-51's
+ * first scenario for v1's parts): under `prefers-reduced-motion: reduce` every transition the
  * stylesheet declares runs for 0s, and still does when a consumer re-tunes the motion tokens in a
  * later layer. The tokens' own reduced-motion rule sets the duration TOKENS, which a re-tune
- * overrides; the stylesheet's guards set the duration property itself, which it does not.
+ * overrides; the stylesheet's guards set the duration property itself, which it does not. The page
+ * holds v1's guarded parts and one part for each motion class that ships, each with and without
+ * `data-instant`.
  *
  * Read in a real engine, since only one computes which declaration wins. The positive control
  * comes first in each pair of tests: the durations under no preference are the ones the tokens
@@ -52,10 +55,51 @@ const item = (value: string, placement: 'after' | 'before' | 'wrapped', id: stri
     h(Accordion.Panel, { 'data-testid': `panel-${value}` }, 'Panel'),
   )
 
+/**
+ * The motion classes the package ships, each as a part with and without `data-instant`, and what
+ * its duration reads under no preference with the tokens as shipped and with the re-tune: the
+ * fades are the fast duration and the indicator the base one, the re-tune sets both to 300ms, and
+ * `data-instant` on `-popup-motion` and `-tooltip-motion` is the instant duration, which the
+ * re-tune leaves alone.
+ */
+const MOTION_CLASSES = [
+  { instant: '0s', name: 'popup-motion', rest: '0.1s' },
+  { instant: '0.1s', name: 'popup-fade', rest: '0.1s' },
+  { instant: '0s', name: 'tooltip-motion', rest: '0.1s' },
+  { instant: '0.1s', name: 'backdrop', rest: '0.1s' },
+  { instant: '0.2s', name: 'tab-indicator-motion', rest: '0.2s' },
+] as const
+
+const motionPart = (name: string, isInstant: boolean): ReactNode =>
+  h('div', {
+    className: `nave-base-ui-${name}`,
+    'data-testid': `${name}${isInstant ? '-instant' : ''}`,
+    ...(isInstant && { 'data-instant': 'dismiss' }),
+  })
+
+const motionParts = (): ReactNode[] =>
+  MOTION_CLASSES.flatMap(({ name }) => [motionPart(name, false), motionPart(name, true)])
+
+/**
+The duration a motion part reads under no preference: the tokens' or the re-tune's.
+ */
+const motionDuration = (id: string, isRetuned: boolean): string | undefined => {
+  const part = MOTION_CLASSES.find(({ name }) => id === name || id === `${name}-instant`)
+  if (part === undefined) {
+    return undefined
+  }
+  const isInstant = id.endsWith('-instant')
+  if (isInstant) {
+    return isRetuned && part.instant !== '0s' ? '0.3s' : part.instant
+  }
+  return isRetuned ? '0.3s' : part.rest
+}
+
 const scene = (): ReactNode =>
   h(
     'div',
     {},
+    ...motionParts(),
     h(
       Accordion.Root,
       { defaultValue: ['open'] },
@@ -118,10 +162,14 @@ const reading = (testId: string): Reading => {
   return { duration, property: style.transitionProperty }
 }
 
-const readAll = (): Record<string, Reading> =>
-  Object.fromEntries([...Object.keys(TRANSITIONING), WRAPPED].map((id) => [id, reading(id)]))
+const MOTION_IDS = MOTION_CLASSES.flatMap(({ name }) => [name, `${name}-instant`])
 
-describe('AC-base-ui-bridge-51: reduced motion turns every transition off, against a late re-tune', () => {
+const readAll = (): Record<string, Reading> =>
+  Object.fromEntries(
+    [...Object.keys(TRANSITIONING), ...MOTION_IDS, WRAPPED].map((id) => [id, reading(id)]),
+  )
+
+describe('AC-base-ui-overlay-completion-19: reduced motion turns every Nave transition off, against a late re-tune', () => {
   let page: Page | undefined
   let removeSheets: (() => void) | undefined
 
@@ -139,21 +187,21 @@ describe('AC-base-ui-bridge-51: reduced motion turns every transition off, again
 
   describe.each([
     {
-      expected: (id: string) => TRANSITIONING[id],
+      expected: (id: string) => motionDuration(id, false) ?? TRANSITIONING[id],
       label: 'the tokens as shipped',
       sheets: [],
     },
     {
-      expected: () => '0.3s',
+      expected: (id: string) => motionDuration(id, true) ?? '0.3s',
       label: 'a consumer re-tune in the overrides layer',
       sheets: [RE_TUNE],
     },
   ])('with $label', ({ expected, sheets }) => {
-    it('AC-base-ui-bridge-51: under no-preference the durations are the tokens (positive control)', async () => {
+    it('AC-base-ui-overlay-completion-19: under no-preference the durations are the tokens (positive control)', async () => {
       open(...sheets)
       await emulateReducedMotion('no-preference')
       const readings = readAll()
-      for (const id of Object.keys(TRANSITIONING)) {
+      for (const id of [...Object.keys(TRANSITIONING), ...MOTION_IDS]) {
         expect(readings[id]?.duration, id).toBe(expected(id))
       }
       expect(readings[WRAPPED], 'the icon inside a wrapper').toEqual({
@@ -162,13 +210,13 @@ describe('AC-base-ui-bridge-51: reduced motion turns every transition off, again
       })
     })
 
-    it('AC-base-ui-bridge-51: under reduce every duration is 0s and every property is what no-preference reads', async () => {
+    it('AC-base-ui-overlay-completion-19: under reduce every duration is 0s and every property is what no-preference reads', async () => {
       open(...sheets)
       await emulateReducedMotion('no-preference')
       const motion = readAll()
       await emulateReducedMotion('reduce')
       const reduced = readAll()
-      for (const id of Object.keys(TRANSITIONING)) {
+      for (const id of [...Object.keys(TRANSITIONING), ...MOTION_IDS]) {
         expect(reduced[id]?.duration, `${id} duration`).toBe('0s')
         expect(reduced[id]?.property, `${id} property`).toBe(motion[id]?.property)
       }

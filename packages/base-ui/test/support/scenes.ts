@@ -38,7 +38,10 @@ export interface Scene {
 }
 
 export type Make = (part: string, props?: Props, ...children: ReactNode[]) => ReactNode
-type Other = (subpath: string) => Make
+/**
+The maker for another component's parts, for a scene that holds two components.
+ */
+export type Other = (subpath: string) => Make
 
 const maker =
   (ui: Ui, namespace: string, config: SceneConfig): Make =>

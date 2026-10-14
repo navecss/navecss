@@ -24,6 +24,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import { PUBLISHABLE_SET } from '../../../scripts/check-publishable-set.mjs'
 import { packTarball } from './helpers/pack.ts'
+import { spawnBudget } from './helpers/spawn-budget.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(HERE, '..')
@@ -354,7 +355,7 @@ const PRINT_RULES = 'console.log(Object.keys(plugin.rules).sort().join(","))'
 const PRINT_VERSION = 'console.log(`version=${plugin.meta.version}`)'
 const RULE_LIST = 'class-channel,count-escapes,raw-reason,style-values'
 
-describe('loading the installed package by name', () => {
+describe('loading the installed package by name', { timeout: spawnBudget(1) }, () => {
   it('require() loads it: an export-map default condition, and no top-level await in its module graph', () => {
     const dir = scratchConsumer()
     try {
@@ -410,57 +411,65 @@ describe('loading the installed package by name', () => {
   })
 })
 
-describe('loading the installed package with its @navecss/core peer missing', () => {
-  const PRINT_MESSAGE = 'console.log(`message=${error.message}`)'
+describe(
+  'loading the installed package with its @navecss/core peer missing',
+  { timeout: spawnBudget(1) },
+  () => {
+    const PRINT_MESSAGE = 'console.log(`message=${error.message}`)'
 
-  it.each([
-    [
-      'import()',
+    it.each([
       [
-        '--input-type=module',
-        '-e',
-        `try { await import('@navecss/eslint-plugin') } catch (error) { ${PRINT_MESSAGE} }`,
+        'import()',
+        [
+          '--input-type=module',
+          '-e',
+          `try { await import('@navecss/eslint-plugin') } catch (error) { ${PRINT_MESSAGE} }`,
+        ],
       ],
-    ],
-    [
-      'require()',
-      ['-e', `try { require('@navecss/eslint-plugin') } catch (error) { ${PRINT_MESSAGE} }`],
-    ],
-  ])(
-    '%s fails with an error naming the missing peer and its range, and no path inside the plugin',
-    (_form, args) => {
-      const { peerDependencies } = manifest() as { peerDependencies: Record<string, string> }
-      const dir = scratchConsumerWithoutCore()
+      [
+        'require()',
+        ['-e', `try { require('@navecss/eslint-plugin') } catch (error) { ${PRINT_MESSAGE} }`],
+      ],
+    ])(
+      '%s fails with an error naming the missing peer and its range, and no path inside the plugin',
+      (_form, args) => {
+        const { peerDependencies } = manifest() as { peerDependencies: Record<string, string> }
+        const dir = scratchConsumerWithoutCore()
+        try {
+          const run = runNode(dir, args)
+          const message = run.output.split('\n').find((line) => line.startsWith('message='))
+          expect(message).toBe(
+            `message=@navecss/eslint-plugin needs its peer dependency @navecss/core (${peerDependencies['@navecss/core']}) installed.`,
+          )
+        } finally {
+          rmSync(dir, { recursive: true, force: true })
+        }
+      },
+    )
+  },
+)
+
+describe('AC-02: meta.version is read from the manifest, never typed by hand', () => {
+  it(
+    'the installed package reports its packed manifest version, and a copy whose manifest version alone changed reports the changed one',
+    { timeout: spawnBudget(2) },
+    () => {
+      const dir = scratchConsumer()
       try {
-        const run = runNode(dir, args)
-        const message = run.output.split('\n').find((line) => line.startsWith('message='))
-        expect(message).toBe(
-          `message=@navecss/eslint-plugin needs its peer dependency @navecss/core (${peerDependencies['@navecss/core']}) installed.`,
-        )
+        const manifestPath = path.join(dir, 'node_modules/@navecss/eslint-plugin/package.json')
+        const packed = JSON.parse(readFileSync(manifestPath, 'utf8')) as { version: string }
+        const load = [
+          '--input-type=module',
+          '-e',
+          `const { default: plugin } = await import('@navecss/eslint-plugin'); ${PRINT_VERSION}`,
+        ]
+        expect(runNode(dir, load).output).toContain(`version=${packed.version}`)
+
+        writeFileSync(manifestPath, JSON.stringify({ ...packed, version: '9.8.7-changed' }))
+        expect(runNode(dir, load).output).toContain('version=9.8.7-changed')
       } finally {
         rmSync(dir, { recursive: true, force: true })
       }
     },
   )
-})
-
-describe('AC-02: meta.version is read from the manifest, never typed by hand', () => {
-  it('the installed package reports its packed manifest version, and a copy whose manifest version alone changed reports the changed one', () => {
-    const dir = scratchConsumer()
-    try {
-      const manifestPath = path.join(dir, 'node_modules/@navecss/eslint-plugin/package.json')
-      const packed = JSON.parse(readFileSync(manifestPath, 'utf8')) as { version: string }
-      const load = [
-        '--input-type=module',
-        '-e',
-        `const { default: plugin } = await import('@navecss/eslint-plugin'); ${PRINT_VERSION}`,
-      ]
-      expect(runNode(dir, load).output).toContain(`version=${packed.version}`)
-
-      writeFileSync(manifestPath, JSON.stringify({ ...packed, version: '9.8.7-changed' }))
-      expect(runNode(dir, load).output).toContain('version=9.8.7-changed')
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
 })

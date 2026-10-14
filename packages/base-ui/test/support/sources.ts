@@ -33,6 +33,12 @@ const bareLoaders: Loaders = {
   toggle: () => import('@base-ui/react/toggle'),
   'toggle-group': () => import('@base-ui/react/toggle-group'),
   toolbar: () => import('@base-ui/react/toolbar'),
+  'alert-dialog': () => import('@base-ui/react/alert-dialog'),
+  'context-menu': () => import('@base-ui/react/context-menu'),
+  menubar: () => import('@base-ui/react/menubar'),
+  'preview-card': () => import('@base-ui/react/preview-card'),
+  combobox: () => import('@base-ui/react/combobox'),
+  autocomplete: () => import('@base-ui/react/autocomplete'),
 }
 
 const naveLoaders: Loaders = {
@@ -59,6 +65,12 @@ const naveLoaders: Loaders = {
   toggle: () => import('../../src/toggle/index.ts'),
   'toggle-group': () => import('../../src/toggle-group/index.ts'),
   toolbar: () => import('../../src/toolbar/index.ts'),
+  'alert-dialog': () => import('../../src/alert-dialog/index.ts'),
+  'context-menu': () => import('../../src/context-menu/index.ts'),
+  menubar: () => import('../../src/menubar/index.ts'),
+  'preview-card': () => import('../../src/preview-card/index.ts'),
+  combobox: () => import('../../src/combobox/index.ts'),
+  autocomplete: () => import('../../src/autocomplete/index.ts'),
 }
 
 const load = async (loaders: Loaders): Promise<Source> => {

@@ -17,10 +17,10 @@ import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { PartTypes, SubpathTypes } from './wrappers/read-types.ts'
+import type { MemberTypes, PartTypes, SubpathTypes } from './wrappers/read-types.ts'
 import type { StyledPart } from './wrappers/roster.ts'
 
-import { readBaseUiTypes } from './wrappers/read-types.ts'
+import { readSharedTypes } from './wrappers/floor.ts'
 import { styledParts } from './wrappers/roster.ts'
 import { SINGLE_COMPONENT, SUBPATHS, topName } from './wrappers/subpaths.ts'
 
@@ -59,6 +59,13 @@ const valueOf = (
   styled: StyledPart | undefined,
   part: PartTypes,
 ): string => {
+  if (part.young === true) {
+    // Read as a static member, like every other part. Where the installed Base UI lacks the part, a
+    // bundler warns that the import is always undefined and the build is still correct. Reading it by
+    // a key instead would silence that warning and keep the whole namespace in any app that uses the
+    // part, so the warning is the lesser cost.
+    return `export const ${name}: PartOf<typeof Base, '${part.name}'> = /*#__PURE__*/ (() => ${reference})()`
+  }
   if (styled === undefined) {
     return `export const ${name}: typeof ${reference} = /*#__PURE__*/ (() => ${reference})()`
   }
@@ -109,6 +116,15 @@ const namespaceOf = (
   return [`export declare namespace ${name} {`, ...members, '}']
 }
 
+/**
+ * The type a part is also exported as. Base UI exports some parts as both a value and a type (a
+ * trigger is a component and the interface of one), and a type position (`Dialog.Trigger` in an
+ * annotation) reads the type. It is the type of the exported value, so it follows the value
+ * wherever the value is wrapped, and it is valid at every Base UI version.
+ */
+const alsoTypeOf = (name: string, part: PartTypes): string[] =>
+  part.isAlsoType && part.young !== true ? [`export type ${name} = typeof ${name}`] : []
+
 const classOf = (name: string, reference: string, part: PartTypes): string[] =>
   part.kind === 'class'
     ? [
@@ -132,6 +148,7 @@ const partBlock = (
   const lines = (local: string): string[] => [
     valueOf(local, reference, styled, part),
     ...classOf(local, reference, part),
+    ...alsoTypeOf(local, part),
     ...namespaceOf(local, reference, part, styled),
   ]
   if (!GLOBAL_NAMES.has(name)) {
@@ -149,8 +166,10 @@ const partBlock = (
 const helpersUsed = (body: string): string[] =>
   ['wrapPart', 'wrapSizePart', 'wrapVariantPart'].filter((helper) => body.includes(`${helper}(`))
 
-const typesUsed = (body: string): string[] =>
-  ['SizeProps', 'VariantProps'].filter((type) => body.includes(`& ${type}`))
+const typesUsed = (body: string): string[] => [
+  ...['SizeProps', 'VariantProps'].filter((type) => body.includes(`& ${type}`)),
+  ...(body.includes('PartOf<') ? ['PartOf'] : []),
+]
 
 const imports = (subpath: string, body: string): string => {
   const names = [...helpersUsed(body), ...typesUsed(body).map((type) => `type ${type}`)].join(', ')
@@ -163,10 +182,20 @@ const imports = (subpath: string, body: string): string => {
   ].join('\n')
 }
 
+/**
+ * The members of a component's namespace that are only a type (`Field.ValidityData`): each one is
+ * Base UI's own type under the same name, with the type parameters it declares.
+ */
+const typeMemberLine = ({ arguments: args, name, parameters }: MemberTypes): string =>
+  `export type ${name}${generics(parameters)} = Base.${name}${generics(args)}`
+
 const generateSubpath = (types: SubpathTypes, used: Set<string>): Map<string, string> => {
-  const { parts, subpath } = types
+  const { parts, subpath, typeMembers } = types
   const isSingle = SINGLE_COMPONENT.has(subpath)
-  const body = parts.flatMap((part) => partBlock(subpath, part, isSingle, used)).join('\n')
+  const body = [
+    ...parts.flatMap((part) => partBlock(subpath, part, isSingle, used)),
+    ...typeMembers.map((member) => typeMemberLine(member)),
+  ].join('\n')
   const reexport = `export type * from '@base-ui/react/${subpath}'`
   // A namespace of parts is exported as `Dialog`; a single component is exported by its own name,
   // which takes the place of the one the star re-export of Base UI's types would otherwise bring.
@@ -193,7 +222,7 @@ const rootModule = (): string =>
 export const generateWrappers = (): Map<string, string> => {
   const used = new Set<string>()
   const files = new Map<string, string>()
-  for (const types of readBaseUiTypes('current')) {
+  for (const types of readSharedTypes()) {
     for (const [file, text] of generateSubpath(types, used)) {
       files.set(file, text)
     }
