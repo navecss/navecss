@@ -48,6 +48,9 @@ import {
   SENTENCE_7_DIALOG_BACKDROP,
   SHIPPING,
 } from './support/w9-sentences.ts'
+import { clearedFor, FORBIDDEN } from './support/w12-feedback-rules.ts'
+import { RM_TOASTS_IN } from './support/w12-feedback-sentences.ts'
+import { SHIPPING_789 } from './support/w12-states.ts'
 
 const readme = readReadme()
 const prose = proseOf(readme)
@@ -205,27 +208,24 @@ describe('AC-base-ui-bridge-46: the fixed sentences are carried byte for byte', 
   })
 })
 
-const FORBIDDEN: readonly RegExp[] = [
-  /accessib/i,
-  /a11y/i,
-  /WCAG/i,
-  /success criterion/i,
-  /\bSC \d/i,
-  /conform/i,
-  /screen reader/i,
-  /focus ring/i,
-  /reduced motion/i,
-  /reduced-motion/i,
-  /prefers-reduced/i,
-]
+/**
+#787's cleared sentences that stand in the combined package's README: sentence 4 is not among them,
+because the toasts' form replaces it in place (AC-base-ui-feedback-navigation-50).
+ */
+const shipping787Sentences = sentencesPresentIn(SHIPPING).filter(
+  ({ name }) => !name.startsWith('sentence 4'),
+)
 
 /**
 The sentences removed before the claims are scanned for: the first release's that are still carried,
-the combined package's that are present in the shipping state, and the promise.
+#787's that are present in the shipping state (its reduced-motion form is replaced in place by
+STEWARD's, which `clearedFor` holds), STEWARD's cleared sentences of the combined package that are
+present in the shipping state, and the promise.
  */
 const CLEARED: readonly string[] = [
   ...FIXED_SENTENCES.map(({ text }) => text),
-  ...sentencesPresentIn(SHIPPING).map(({ text }) => text),
+  ...shipping787Sentences.map(({ text }) => text),
+  ...clearedFor(SHIPPING_789),
   PROMISE_SENTENCE,
 ]
 
@@ -248,7 +248,7 @@ const hasColourKeyword = (css: string): boolean =>
       .some((word) => word === 'transparent' || COLOR_KEYWORDS.has(word)),
   )
 
-describe('AC-base-ui-overlay-completion-41: no accessibility claim beyond the cleared copy (extends AC-base-ui-bridge-47)', () => {
+describe('AC-base-ui-overlay-completion-41, as AC-base-ui-feedback-navigation-51 supersedes it: no accessibility claim beyond the cleared copy (extends AC-base-ui-bridge-47)', () => {
   it('contains none of the forbidden words once the fixed sentences are removed', () => {
     const rest = remainder(readme)
     expect(FORBIDDEN.filter((pattern) => pattern.test(rest)).map(String)).toEqual([])
@@ -554,7 +554,7 @@ const readmeFor = (state: Parameters<typeof sentencesPresentIn>[0]): string =>
     .map(({ text }) => text)
     .join('\n\n')
 
-describe('AC-base-ui-overlay-completion-40: the cleared sentences are carried byte for byte, each in exactly its signature state', () => {
+describe('AC-base-ui-overlay-completion-40, as AC-base-ui-feedback-navigation-50 supersedes it for the combined package: the cleared sentences are carried byte for byte, each in exactly its signature state', () => {
   it.each(ALL_LITERALS)('holds $name at its length and hash', ({ bytes, prefix, text }) => {
     expect(Buffer.byteLength(text, 'utf8')).toBe(bytes)
     expect(sha256(text).startsWith(prefix)).toBe(true)
@@ -588,7 +588,7 @@ describe('AC-base-ui-overlay-completion-40: the cleared sentences are carried by
     expect(nested).toEqual([])
   })
 
-  it.each(sentencesPresentIn(SHIPPING))('contains $name', ({ text }) => {
+  it.each(shipping787Sentences)('contains $name', ({ text }) => {
     expect(readme).toContain(text)
   })
 
@@ -596,12 +596,13 @@ describe('AC-base-ui-overlay-completion-40: the cleared sentences are carried by
     expect(readme).not.toContain(text)
   })
 
-  it('contains exactly one of the eight forms of sentence 4, the one for the shipping state', () => {
+  it("contains none of the eight forms of sentence 4: the toasts' form (AC-base-ui-feedback-navigation-50) replaces #787's in place", () => {
     const contained = Object.entries(SENTENCE_4_FORMS)
       .filter(([, { text }]) => readme.includes(text))
       .map(([code]) => code)
-    expect(contained).toEqual(['SSS'])
+    expect(contained).toEqual([])
     expect(sentence4Code(SHIPPING)).toBe('SSS')
+    expect(readme).toContain(RM_TOASTS_IN.text)
   })
 
   it('still contains the first release sentences that stand, and none of the superseded texts', () => {
@@ -613,12 +614,13 @@ describe('AC-base-ui-overlay-completion-40: the cleared sentences are carried by
     ]) {
       expect(readme).toContain(FIXED_SENTENCES.find((sentence) => sentence.name === name)?.text)
     }
-    expect(sentenceProblems(readme, SHIPPING)).toEqual([])
+    // Sentence 4 is the combined package's RM sentence, which AC-base-ui-feedback-navigation-50 holds.
+    expect(sentenceProblems(readme, SHIPPING).filter((p) => !p.includes('sentence 4'))).toEqual([])
   })
 
-  it('has one reduced-motion item, sentence 4, where the first release sentence stood', () => {
-    expect(readme.match(/reduced[- ]motion/gi)).toHaveLength(1)
-    expect(readme.indexOf(SENTENCE_4_FORMS.SSS?.text ?? '')).toBeGreaterThan(
+  it("has one reduced-motion sentence, the toasts' form, where the first release sentence stood", () => {
+    expect(readme.match(/When the reader's system asks for reduced motion/g)).toHaveLength(1)
+    expect(readme.indexOf(RM_TOASTS_IN.text)).toBeGreaterThan(
       readme.indexOf(FIXED_SENTENCES.find((s) => s.name === 'Menu.LinkItem')?.text ?? ''),
     )
   })

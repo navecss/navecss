@@ -1,0 +1,188 @@
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it, type TestContext } from 'vitest'
+
+import { withoutRules } from './support/draft-states.ts'
+import { PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
+import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
+import {
+  firstTokensVersionWithTheHighlight,
+  namedTokens,
+  publishedTokens,
+  undeclaredIn,
+} from './support/w3-tokens-floor.ts'
+import { changesetsNaming, releasesOf, ROOT } from './support/w12-release.ts'
+
+const NAME = '@navecss/base-ui'
+
+const manifest = JSON.parse(readFileSync(path.join(PACKAGE_DIR, 'package.json'), 'utf8')) as {
+  peerDependencies: Record<string, string>
+}
+
+/**
+The eight names the stylesheet newly uses, from the spec: none of them is in the published package.
+ */
+const NEW_TO_THE_PACKAGE = [
+  '--nave-color-surface-sunken',
+  '--nave-font-size-xl',
+  '--nave-layer-toast',
+  '--nave-line-height-none',
+  '--nave-radius-card',
+  '--nave-size-avatar-sm',
+  '--nave-size-avatar-md',
+  '--nave-size-avatar-lg',
+]
+
+const SEVEN_COMPONENTS = [
+  'Toast',
+  'Navigation Menu',
+  'Scroll Area',
+  'Meter',
+  'Progress',
+  'Avatar',
+  'Separator',
+]
+
+/**
+The stylesheet with the placement's rule out: what the build leaves while that draft is unsigned.
+ */
+const withoutPlacement = (css: string): string =>
+  withoutRules(css, ['nave-base-ui-toast-placement'])
+
+const workspaceDeclared = (): Set<string> => new Set(declaredTokens(workspaceTokensCss()).keys())
+
+const publishedOrSkip = (
+  context: TestContext,
+): { declared: ReadonlySet<string>; version: string } => {
+  const published = publishedTokens()
+  if ('reason' in published) {
+    return context.skip(published.reason)
+  }
+  return published
+}
+
+const planted = '.x { color: var(--nave-layer-notification) }'
+
+describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tokens floor (supersedes AC-base-ui-overlay-completion-31 and -38 for the combined package)', () => {
+  describe('the changeset', () => {
+    const pending = changesetsNaming(NAME)
+    const changelog = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
+
+    it.runIf(pending.length > 0)(
+      'has exactly one changeset naming @navecss/base-ui, and it names it alone with bump minor',
+      () => {
+        expect(pending.map(({ releases }) => releases)).toEqual([{ [NAME]: 'minor' }])
+      },
+    )
+
+    it.runIf(pending.length > 0)(
+      'has that changeset say what the release adds: the seven components, each named',
+      () => {
+        const text = pending.map((changeset) => changeset.text).join('\n')
+        expect(
+          SEVEN_COMPONENTS.filter((component) => !new RegExp(component, 'i').test(text)),
+        ).toEqual([])
+      },
+    )
+
+    it.runIf(pending.length === 0 && existsSync(changelog))(
+      'was released as a minor from exactly one changeset that names the seven components, once the changeset is spent',
+      () => {
+        const sections = readFileSync(changelog, 'utf8').split(/^## /m).slice(1)
+        const newest = sections[0] ?? ''
+        expect(newest).toContain('### Minor Changes')
+        expect(newest).not.toContain('### Major Changes')
+        expect(newest.match(/^- [\da-f]{7,}: /gm) ?? []).toHaveLength(1)
+        expect(
+          SEVEN_COMPONENTS.filter((component) => !new RegExp(component, 'i').test(newest)),
+        ).toEqual([])
+      },
+    )
+
+    it('names no other package beside @navecss/base-ui in any changeset that names it', () => {
+      const together = changesetsNaming(NAME).filter(
+        ({ releases }) => Object.keys(releases).length !== 1,
+      )
+      expect(together).toEqual([])
+    })
+
+    it('control: a second changeset, a second package or another bump is not the release', () => {
+      expect(releasesOf("---\n'@navecss/base-ui': minor\n---\n\nx")).toEqual({ [NAME]: 'minor' })
+      expect(
+        releasesOf("---\n'@navecss/base-ui': minor\n'@navecss/tokens': minor\n---\n\nx"),
+      ).not.toEqual({ [NAME]: 'minor' })
+      expect(releasesOf("---\n'@navecss/base-ui': patch\n---\n\nx")).not.toEqual({
+        [NAME]: 'minor',
+      })
+      expect(releasesOf("---\n'@navecss/base-ui': major\n---\n\nx")).not.toEqual({
+        [NAME]: 'minor',
+      })
+    })
+  })
+
+  describe('every --nave-* name the stylesheet uses is declared', () => {
+    it('names 67 distinct tokens with every draft signed, among them the eight new to the package', () => {
+      const named = namedTokens(readStylesheet())
+      expect(named.size).toBe(67)
+      expect(NEW_TO_THE_PACKAGE.filter((name) => !named.has(name))).toEqual([])
+    })
+
+    it('names 66 with the placement unsigned: the one that goes is --nave-layer-toast', () => {
+      const all = namedTokens(readStylesheet())
+      const unsigned = namedTokens(withoutPlacement(readStylesheet()))
+      expect(unsigned.size).toBe(66)
+      expect([...all].filter((name) => !unsigned.has(name))).toEqual(['--nave-layer-toast'])
+    })
+
+    it('has the workspace declare each of the eight new names, and every name the stylesheet uses', () => {
+      const declared = workspaceDeclared()
+      expect(NEW_TO_THE_PACKAGE.filter((name) => !declared.has(name))).toEqual([])
+      expect(undeclaredIn(readStylesheet(), declared)).toEqual([])
+      const unsigned = withoutPlacement(readStylesheet())
+      expect(undeclaredIn(unsigned, declared)).toEqual([])
+    })
+
+    it('has the published tokens release, installed through an alias, declare the same', (context) => {
+      const published = publishedOrSkip(context)
+      expect(published.version).toBe(firstTokensVersionWithTheHighlight())
+      expect(NEW_TO_THE_PACKAGE.filter((name) => !published.declared.has(name))).toEqual([])
+      expect(undeclaredIn(readStylesheet(), published.declared)).toEqual([])
+    })
+
+    it('control: a planted var(--nave-layer-notification) is reported against the workspace', () => {
+      expect(undeclaredIn(planted, workspaceDeclared())).toEqual(['--nave-layer-notification'])
+      expect(undeclaredIn(`${readStylesheet()}\n${planted}`, workspaceDeclared())).toEqual([
+        '--nave-layer-notification',
+      ])
+    })
+
+    it('control: the same planted name is reported against the published release', (context) => {
+      const published = publishedOrSkip(context)
+      expect(undeclaredIn(planted, published.declared)).toEqual(['--nave-layer-notification'])
+    })
+
+    it('control: the stylesheet with --nave-layer-toast withdrawn is what the check reports', () => {
+      const css = `${readStylesheet()}\n.x { z-index: var(--nave-layer-toast) }`
+      const declared = workspaceDeclared()
+      declared.delete('--nave-layer-toast')
+      expect(undeclaredIn(css, declared)).toEqual(['--nave-layer-toast'])
+    })
+  })
+
+  describe('the tokens peer', () => {
+    it('is given as ">=<V> <1.0.0", V being the release that ships the highlight fill', () => {
+      expect(manifest.peerDependencies['@navecss/tokens']).toBe(
+        `>=${firstTokensVersionWithTheHighlight()} <1.0.0`,
+      )
+    })
+
+    it('control: the range that floored the tokens before the highlight fill is not the expected one', () => {
+      expect('>=0.3.0 <1.0.0').not.toBe(`>=${firstTokensVersionWithTheHighlight()} <1.0.0`)
+    })
+  })
+})
+
+// Review-checked, not tests: that #841 is merged first and alone and #787's slice is on `main` before
+// this branch opens, that this release follows #787's minor, that `pnpm run ci:check` exits 0 on the
+// head merged with `main`, and that the review carries STEWARD's re-clear of the new bytes at a named
+// commit from which the tarball is built.
