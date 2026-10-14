@@ -666,18 +666,66 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     }
   }, 60_000)
 
+  // Taken here, before any row replaces `devServing.hold`: a stand-in that called `devServing.hold`
+  // while a row's replacement is in place would reach the replacement, and so itself.
+  const realHold = devServing.hold.bind(devServing)
+
+  /**
+   * The hold as it was before the fix: a stylesheet with no importer in the module graph, or not
+   * in it at all, is answered at once; any other waits as the real hold does.
+   */
+  const atOnceWithoutImporter: DevServing['hold'] = async (environment, id) => {
+    const module = environment.moduleGraph.getModuleById(id)
+    if (!module || module.importers.size === 0) return
+    await realHold(environment, id)
+  }
+
+  /**
+   * An app whose `main.ts` imports `app.css` and `App.ts`, which names `flex`.
+   */
+  const NAMES_FLEX = appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` })
+
+  /**
+   * An app whose `main.ts` imports only `App.ts`, which imports `app.css` and names `flex`.
+   */
+  const IMPORTED_BY_APP = {
+    ...appFiles({ 'src/App.ts': `${IMPORT}import './app.css'\nexport const a = cx('flex')\n` }, []),
+    'src/main.ts': "import './App.ts'\n",
+  }
+
+  /**
+   * The atoms in the atomic layer of the CSS the module `code` serves.
+   */
+  function layerAtomsOf(code: string): string[] {
+    const served: unknown = JSON.parse(/const __vite__css = ("(?:[^"\\]|\\.)*")/.exec(code)![1]!)
+    return atomLayerAtoms(served as string)
+  }
+
+  interface StylesheetBeforeImporter {
+    files?: Readonly<Record<string, string>>
+    heldModule?: string
+    hold?: DevServing['hold']
+    idle?: () => Promise<void>
+  }
+
   /**
    * The atoms in the CSS served for `src/app.css` when it is requested as a module while
-   * `src/main.ts`, which imports it, is still being transformed. `main.ts` is not let through its
-   * transform, so its imports are not in the module graph, until the stylesheet's wait has begun
-   * (never a delay): the order a warm-up of the stylesheet reaches under load. `hold`, when given,
-   * stands in for the real wait.
+   * `heldModule`, a module of `files`, is still being transformed. That module is not let through
+   * its transform until the stylesheet's wait has begun (never a delay): when it is `src/main.ts`,
+   * which imports the stylesheet, the import is not in the module graph until then, the order a
+   * warm-up of the stylesheet reaches under load. Any other module is held after `main.ts` has been
+   * read in full. `hold` stands in for the real wait, and `idle` for the client's
+   * `waitForRequestsIdle`, as it is once the first crawl has ended.
    */
-  async function atomsServedBeforeImporter(hold?: DevServing['hold']): Promise<string[]> {
-    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
-    const gate = held('src/main.ts', 15_000)
+  async function atomsServedBeforeImporter({
+    files = NAMES_FLEX,
+    heldModule = 'src/main.ts',
+    hold,
+    idle,
+  }: StylesheetBeforeImporter = {}): Promise<string[]> {
+    const app = makeUsedApp(files)
+    const gate = held(heldModule, 15_000)
     const saved = { ...devServing }
-    const realHold = devServing.hold.bind(devServing)
     devServing.hold = (environment, id) => {
       const waited = (hold ?? realHold)(environment, id)
       gate.release()
@@ -686,12 +734,13 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     try {
       const server = await startDev(devConfig(app.root, [gate.plugin, navePlugin()]))
       try {
-        void server.transformRequest('/src/main.ts').catch(() => {})
+        if (idle) server.environments.client.waitForRequestsIdle = idle
+        // A held `main.ts` is not read before the stylesheet's wait begins: it cannot be waited for.
+        if (heldModule === 'src/main.ts')
+          void server.transformRequest('/src/main.ts').catch(() => {})
+        else await server.transformRequest('/src/main.ts')
         const css = await server.transformRequest('/src/app.css')
-        const served: unknown = JSON.parse(
-          /const __vite__css = ("(?:[^"\\]|\\.)*")/.exec(css!.code)![1]!,
-        )
-        return atomLayerAtoms(served as string)
+        return layerAtomsOf(css!.code)
       } finally {
         gate.release()
         await stopDev(server)
@@ -706,19 +755,40 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     expect(await atomsServedBeforeImporter()).toEqual(atoms('flex'))
   }, 60_000)
 
-  it('control: a hold that returns at once when no importer is registered serves that stylesheet with what had been read', async () => {
-    const atOnceWithoutImporter: DevServing['hold'] = async (environment, id) => {
-      if (environment.moduleGraph.getModuleById(id)?.importers.size === 0) return
-      await devServing.hold(environment, id)
-    }
-
-    expect(await atomsServedBeforeImporter(atOnceWithoutImporter)).toEqual([])
+  it('holds that stylesheet when the first crawl has already spent the wait for the client to be idle', async () => {
+    // The row above also passes for a hold that reads nothing: the first crawl's wait reads for it.
+    expect(await atomsServedBeforeImporter({ idle: () => Promise.resolve() })).toEqual(
+      atoms('flex'),
+    )
   }, 60_000)
 
-  it('waits for the graph for a stylesheet requested as a module that no module imports', async () => {
+  it('holds a stylesheet whose importer is not a root of the graph, while that importer is being read', async () => {
+    expect(
+      await atomsServedBeforeImporter({ files: IMPORTED_BY_APP, heldModule: 'src/App.ts' }),
+    ).toEqual(atoms('flex'))
+  }, 60_000)
+
+  it('control: a hold that returns at once when no importer is registered serves that stylesheet with what had been read', async () => {
+    expect(await atomsServedBeforeImporter({ hold: atOnceWithoutImporter })).toEqual([])
+  }, 60_000)
+
+  it('control: that hold waits as the real one does when the importer is registered by the time it is held', async () => {
+    expect(
+      await atomsServedBeforeImporter({ heldModule: 'src/App.ts', hold: atOnceWithoutImporter }),
+    ).toEqual(atoms('flex'))
+  }, 60_000)
+
+  /**
+   * Requests each of `urls` together, as modules, from an app whose page names `hidden` and whose
+   * only other files are those stylesheets, which nothing imports. Returns the code of each answer
+   * and the id of every wait the dev server made for the client to be idle.
+   */
+  async function requestedWithoutImporter(
+    urls: readonly string[],
+  ): Promise<{ codes: string[]; waits: string[] }> {
     const app = makeUsedApp({
       'index.html': '<!doctype html><p class="nave-hidden"></p>',
-      'src/orphan.css': APP_CSS,
+      ...Object.fromEntries(urls.map((url) => [url.slice(1), APP_CSS])),
     })
     try {
       const server = await startDev(devConfig(app.root, [navePlugin()]))
@@ -734,16 +804,29 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
           '/index.html',
           readFileSync(path.join(app.root, 'index.html'), 'utf8'),
         )
-        const css = await server.transformRequest('/src/orphan.css')
-
-        expect(waits).toHaveLength(1)
-        expect(css?.code).toContain('__vite__css')
+        const answers = await Promise.all(urls.map((url) => server.transformRequest(url)))
+        return { codes: answers.map((answer) => answer?.code ?? ''), waits }
       } finally {
         await stopDev(server)
       }
     } finally {
       app.dispose()
     }
+  }
+
+  it('waits for the graph for a stylesheet requested as a module that no module imports', async () => {
+    const { codes, waits } = await requestedWithoutImporter(['/src/orphan.css'])
+
+    expect(waits).toHaveLength(1)
+    expect(codes[0]).toContain('__vite__css')
+    expect(layerAtomsOf(codes[0]!)).toEqual(atoms('hidden'))
+  }, 60_000)
+
+  it('answers two stylesheets requested together as modules that no module imports, each with the atoms of the page', async () => {
+    const { codes, waits } = await requestedWithoutImporter(['/src/a.css', '/src/b.css'])
+
+    expect(waits).toHaveLength(2)
+    expect(codes.map((code) => layerAtomsOf(code))).toEqual([atoms('hidden'), atoms('hidden')])
   }, 60_000)
 
   it('a stylesheet a page links, requested as `?direct`, is answered at once, with the atoms of the pages read so far', async () => {
