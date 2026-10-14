@@ -15,7 +15,6 @@ import baseUiPackage from '@base-ui/react/package.json' with { type: 'json' }
 import { afterEach, beforeEach, describe, expect, inject, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
-import { Button } from '../../dist/button/index.js'
 import { framesLater, isReachedWithin, MAX_FRAMES } from './support/frames.ts'
 import {
   byTestId,
@@ -96,7 +95,12 @@ describe(`AC-base-ui-feedback-navigation-21, -22 and -25: the Navigation Menu tr
       expect(style.backgroundColor).toBe(TRANSPARENT)
       expect(border(style)).toEqual(SIDES.map(() => TRANSPARENT))
       expect(style.color).toBe(colorOf('var(--nave-color-content-primary)'))
-      const reference = mount(h(Button, { 'data-testid': 'secondary' }, 'Save'))
+      // A secondary medium Button is Base UI's button with this class and nothing else, so the
+      // reference is the plain element: no Base UI subpath beyond the Navigation Menu's is loaded
+      // at the minors this file runs at.
+      const reference = mount(
+        h('button', { className: 'nave-base-ui-button', 'data-testid': 'secondary' }, 'Save'),
+      )
       try {
         const secondary = required('secondary')
         expect(getComputedStyle(secondary).backgroundColor, 'the secondary fills').not.toBe(
