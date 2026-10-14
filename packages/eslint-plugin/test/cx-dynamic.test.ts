@@ -101,6 +101,9 @@ const PRELUDE = [
   "import clsx from 'clsx'",
   "const LEGACY = 'legacy-card'",
   "const ATOM = 'flex'",
+  'const NAME = `text${align}`',
+  'const NAME2 = `legacy-${x}`',
+  "const JOINED = 'legacy' + '-card'",
   'type AtomName = string',
 ].join('\n')
 
@@ -134,13 +137,11 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
     'cx.dynamic(tone)',
     'cx.dynamic(props.tone)',
     "`${cx('interactive')} ${cx.dynamic(tone)}`",
-    "cx.dynamic('flex')",
-    'cx.dynamic(ATOM)',
-    "cx.dynamic(on ? 'flex' : 'grid')",
-    "cx.dynamic(on && 'focusRing')",
     'cx.dynamic(null)',
     'cx.dynamic(undefined)',
     'cx.dynamic(false)',
+    "cx.dynamic('')",
+    'cx.dynamic()',
   ]
   it.each(pass)('%s passes', (value) => {
     expect(rule1Reports(value, parser)).toEqual([])
@@ -151,7 +152,6 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
     "ncx.dynamic('legacy-card')",
     "N.cx.dynamic('legacy-card')",
     "`${cx.dynamic('legacy-card')}`",
-    "cx.dynamic(on ? 'flex' : 'legacy-card')",
     "cx.dynamic(on && 'legacy-card')",
     'cx.dynamic(LEGACY)',
     "clsx(styles.root, cx.dynamic('legacy-card'))",
@@ -164,16 +164,19 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
     expect(reports[0]!.message).toContain('legacy-card')
   })
 
-  describe('a name built at run time passes, as an identifier does', () => {
+  describe('a name built at run time that an atom name fits passes, as an identifier does', () => {
     const built = [
       'cx.dynamic(`text${align}`)',
       'ncx.dynamic(`text${align}`)',
       'N.cx.dynamic(`text${align}`)',
-      'cx.dynamic(`legacy-${x}`)',
+      'cx.dynamic(`${x}Left`)',
+      'cx.dynamic(`text${a}Left`)',
       "cx.dynamic('gap' + size)",
-      "cx.dynamic('gap' + size + 'x')",
+      "cx.dynamic('gap' + 1)",
+      "cx.dynamic('a' + b)",
       "cx.dynamic(`${on ? 'text' : 'gap'}${size}`)",
       'cx.dynamic(`${a}${b}`)',
+      'cx.dynamic(a + b)',
     ]
     it.each(built)('%s passes', (value) => {
       expect(rule1Reports(value, parser)).toEqual([])
@@ -185,8 +188,7 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
       'cx.dynamic(NAME)',
     ]
     it.each(builtInPosition)('%s passes (one side, or one const hop)', (value) => {
-      const tail = `const NAME = \`text\${align}\`\nconst el = <div className={${value}} />`
-      expect(rule1After(tail, parser)).toEqual([])
+      expect(rule1Reports(value, parser)).toEqual([])
     })
 
     it.each([
@@ -199,19 +201,15 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
       expect(reports[0]!.message).not.toContain('align')
     })
 
-    it.each(['cx.dynamic(`legacy-card`)', "cx.dynamic(`${on ? 'flex' : 'legacy-card'}`)"])(
-      '%s is still read: an expression-free template is one name, a single slot is that slot',
-      (value) => {
-        const reports = rule1Reports(value, parser)
-        expect(reports).toHaveLength(1)
-        expect(reports[0]!.message).toContain('legacy-card')
-      },
-    )
+    it('cx.dynamic(`legacy-card`) is still read: an expression-free template is one name', () => {
+      const reports = rule1Reports('cx.dynamic(`legacy-card`)', parser)
+      expect(reports).toHaveLength(1)
+      expect(reports[0]!.message).toContain('legacy-card')
+    })
 
     it('a chain of string literals alone is still read, and quoted as written', () => {
       for (const value of ["cx.dynamic('legacy' + '-card')", 'cx.dynamic(JOINED)']) {
-        const tail = `const JOINED = 'legacy' + '-card'\nconst el = <div className={${value}} />`
-        const reports = rule1After(tail, parser)
+        const reports = rule1Reports(value, parser)
         expect(reports, value).toHaveLength(1)
         expect(reports[0]!.message).toContain('is not a Nave atom')
         expect(reports[0]!.message).toContain("'legacy' + '-card'")
@@ -241,7 +239,7 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
 
     it('a nested chain through a wrapper that holds a non-literal is still built and passes', () => {
       if (parser !== 'typescript') return
-      expect(rule1Reports("cx.dynamic('legacy' + (('-' + size) as string))", parser)).toEqual([])
+      expect(rule1Reports("cx.dynamic('gap' + (('-' + size) as string))", parser)).toEqual([])
     })
 
     it.each([
@@ -367,24 +365,20 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
 
   describe('cx.dynamic(<arg>) gets the reports cx(<arg>) gets, with the callee swapped', () => {
     const args = [
-      "'flex'",
       "'legacy-card'",
       "'card'",
       "'app-card'",
       "'toString'",
       "'constructor'",
-      "'flex', 'legacy-card'",
       'name',
       '`legacy-card`',
       "'nave-flex'",
       "'nave-banana-split'",
       "'flex' + 'x'",
-      "on ? 'flex' : 'legacy-card'",
       "on && 'legacy-card'",
       "on || 'legacy-card'",
       "'flex block'",
       'LEGACY',
-      'ATOM',
       "cx('legacy-card')",
       "clsx('flex')",
       "tone ?? 'legacy-card'",
@@ -422,12 +416,12 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
     )
 
     it.each(callees)(
-      '$plain() reports a name built at run time and $dynamic() does not',
+      '$plain() reports a name built at run time, and $dynamic() reports it only when no atom fits',
       (callee) => {
-        for (const arg of ['`flex ${x}`', "'a' + b"]) {
-          expect(rule1Reports(`${callee.plain}(${arg})`, parser).length, arg).toBeGreaterThan(0)
-          expect(rule1Reports(`${callee.dynamic}(${arg})`, parser), arg).toEqual([])
-        }
+        expect(rule1Reports(`${callee.plain}('a' + b)`, parser).length).toBeGreaterThan(0)
+        expect(rule1Reports(`${callee.dynamic}('a' + b)`, parser)).toEqual([])
+        expect(rule1Reports(`${callee.plain}(\`flex \${x}\`)`, parser).length).toBeGreaterThan(0)
+        expect(rule1Reports(`${callee.dynamic}(\`flex \${x}\`)`, parser)).toHaveLength(1)
       },
     )
 
@@ -439,6 +433,224 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
     })
   })
 })
+
+const R4B_ORDER = [
+  'CSS Module class',
+  'Nave atom through cx()',
+  'declares as its own',
+  'with a reason',
+]
+
+/**
+ * The remedies of R4(b) appear in order: each phrase is present, and later than the one before.
+ */
+function expectRemediesInOrder(message: string): void {
+  const positions = R4B_ORDER.map((phrase) => message.indexOf(phrase))
+  expect(positions.every((position) => position > -1)).toBe(true)
+  expect(positions).toEqual(positions.toSorted((a, b) => a - b))
+}
+
+describe.each(PARSERS)(
+  'AC-28: names inside cx.dynamic() that cannot work as written (%s)',
+  (parser) => {
+    const lone = [
+      { value: "cx.dynamic('flex')", callee: 'cx.dynamic', name: 'flex' },
+      { value: "ncx.dynamic('flex')", callee: 'ncx.dynamic', name: 'flex' },
+      { value: "N.cx.dynamic('flex')", callee: 'N.cx.dynamic', name: 'flex' },
+      { value: 'cx.dynamic(ATOM)', callee: 'cx.dynamic', name: 'flex' },
+      { value: 'cx.dynamic(`flex`)', callee: 'cx.dynamic', name: 'flex' },
+      { value: "cx.dynamic('fl' + 'ex')", callee: 'cx.dynamic', name: 'flex' },
+      { value: "cx.dynamic(on && 'focusRing')", callee: 'cx.dynamic', name: 'focusRing' },
+      { value: "clsx(cx.dynamic('flex'))", callee: 'cx.dynamic', name: 'flex' },
+    ]
+
+    describe('a literal atom name is reported, and cx() is the fix', () => {
+      it.each(lone)('$value is reported once, naming $name', ({ value, callee, name }) => {
+        const reports = rule1Reports(value, parser)
+        expect(reports).toHaveLength(1)
+        const { message } = reports[0]!
+        expect(message).toContain(name)
+        expect(message).toContain(`${callee}(`)
+        expect(message).toContain(
+          'a name written in the source goes through cx(), which the build reads',
+        )
+        expect(message).toContain(`${callee}() is for a name chosen at run time`)
+        expect(message).toContain(`cx('${name}')`)
+        for (const word of [
+          'keep',
+          'renders no class',
+          'renders nothing',
+          'CSS Module',
+          'declares as its own',
+          'declared:',
+          'cx.raw(',
+        ]) {
+          expect(message, word).not.toContain(word)
+        }
+      })
+
+      it("cx.dynamic('flex' as AtomName) is reported once, naming flex", () => {
+        if (parser === 'espree') return
+        const reports = rule1Reports("cx.dynamic('flex' as AtomName)", parser)
+        expect(reports).toHaveLength(1)
+        expect(reports[0]!.message).toContain("cx('flex')")
+      })
+
+      it("cx.dynamic(on ? 'flex' : 'grid') is reported twice, once per name", () => {
+        const reports = rule1Reports("cx.dynamic(on ? 'flex' : 'grid')", parser)
+        expect(reports).toHaveLength(2)
+        expect(reports[0]!.message).toContain("cx('flex')")
+        expect(reports[1]!.message).toContain("cx('grid')")
+        expect(reports[0]!.message).not.toContain('choose between')
+      })
+
+      it.each([
+        "cx.dynamic(on ? 'flex' : tone)",
+        "cx.dynamic(tone ?? 'flex')",
+        "cx.dynamic(tone || 'flex')",
+        "cx.dynamic(on ? 'flex' : `text${align}`)",
+      ])('%s is reported once, beside a run-time value, with its own message', (value) => {
+        const reports = rule1Reports(value, parser)
+        expect(reports).toHaveLength(1)
+        const { message } = reports[0]!
+        expect(message).toContain("cx('flex')")
+        expect(message).toContain('choose between two calls')
+        expect(message).toContain('cx.dynamic()')
+        for (const word of [' ? ', ' ?? ', ' || ', 'tone', 'keep', 'renders no class', 'cx.raw(']) {
+          expect(message, word).not.toContain(word)
+        }
+        expect(message).not.toBe(rule1Reports("cx.dynamic('flex')", parser)[0]!.message)
+      })
+
+      it.each([
+        "cx.dynamic(on ? 'flex' : 'legacy-card')",
+        "cx.dynamic(`${on ? 'flex' : 'legacy-card'}`)",
+      ])('%s reports flex as a name to write through cx(), and legacy-card as no atom', (value) => {
+        const messages = rule1Reports(value, parser).map((report) => report.message)
+        expect(messages).toHaveLength(2)
+        expect(messages.filter((message) => message.includes("cx('flex')"))).toHaveLength(1)
+        expect(
+          messages.filter((message) =>
+            message.includes("cx.dynamic('legacy-card') is not a Nave atom"),
+          ),
+        ).toHaveLength(1)
+      })
+
+      it("cx.dynamic('nave-flex') gets the nave- message and no report of this kind", () => {
+        const reports = rule1Reports("cx.dynamic('nave-flex')", parser)
+        expect(reports).toHaveLength(1)
+        expect(reports[0]!.message).toContain("Nave's own build outputs")
+        expect(reports[0]!.message).not.toContain('goes through cx()')
+      })
+    })
+
+    describe('an argument after the first is reported, whatever it holds', () => {
+      it.each([
+        ["cx.dynamic(tone, 'legacy-card')", "'legacy-card'"],
+        ['cx.dynamic(tone, x)', 'x'],
+        ['cx.dynamic(tone, `legacy-${x}`)', '`legacy-${x}`'],
+        ["cx.dynamic(tone, ['flex'])", "['flex']"],
+        ['ncx.dynamic(tone, x)', 'x'],
+      ])('%s is reported once, on %s alone', (value, argument) => {
+        const reports = rule1Reports(value, parser)
+        expect(reports).toHaveLength(1)
+        const { column, message } = reports[0]!
+        const callee = value.slice(0, value.indexOf('('))
+        const line = `const el = <div className={${value}} />`
+        expect(column).toBe(line.lastIndexOf(argument) + 1)
+        expect(message).toContain(argument)
+        expect(message).toContain(`${callee}() takes one name and ignores`)
+        expect(message).toContain('applies no class')
+        expect(message).toContain("cx('flex', on && 'block')")
+        expect(message).not.toContain('tone')
+        // The quoted argument may hold a comma itself, so the check reads the text after it.
+        const after = message.slice(message.indexOf(argument) + argument.length)
+        expect(after).not.toMatch(/cx\.dynamic\([^)]*,/u)
+        expect(message).toContain('declared: prefix app-')
+        expectRemediesInOrder(message)
+      })
+
+      it('cx.dynamic(tone, a, b) is reported twice, on a and on b', () => {
+        const reports = rule1Reports('cx.dynamic(tone, a, b)', parser)
+        expect(reports).toHaveLength(2)
+        const line = 'const el = <div className={cx.dynamic(tone, a, b)} />'
+        expect(reports.map(({ column }) => column)).toEqual([
+          line.indexOf('a, b') + 1,
+          line.indexOf('b)') + 1,
+        ])
+      })
+
+      it.each(["cx.dynamic('flex', 'block')", "cx.dynamic('flex', 'legacy-card')"])(
+        '%s reports the name written and the extra argument',
+        (value) => {
+          const messages = rule1Reports(value, parser).map((report) => report.message)
+          expect(messages).toHaveLength(2)
+          expect(messages.filter((message) => message.includes("cx('flex')"))).toHaveLength(1)
+          expect(messages.filter((message) => message.includes('applies no class'))).toHaveLength(1)
+        },
+      )
+
+      it('a spread argument is not read', () => {
+        expect(rule1Reports('cx.dynamic(tone, ...rest)', parser)).toEqual([])
+      })
+    })
+
+    describe('a built name that no atom name fits is reported', () => {
+      it.each([
+        ['cx.dynamic(`legacy-${x}`)', 'cx.dynamic'],
+        ['ncx.dynamic(`legacy-${x}`)', 'ncx.dynamic'],
+        ["cx.dynamic('gap' + size + 'x')", 'cx.dynamic'],
+        ['cx.dynamic(`flex ${x}`)', 'cx.dynamic'],
+        ['cx.dynamic(`Text${align}`)', 'cx.dynamic'],
+        ['cx.dynamic(`${x}zzz`)', 'cx.dynamic'],
+        ['cx.dynamic(NAME2)', 'cx.dynamic'],
+      ])('%s is reported once, quoting the shape', (value, callee) => {
+        const reports = rule1Reports(value, parser)
+        expect(reports).toHaveLength(1)
+        const { message } = reports[0]!
+        const shape =
+          value === 'cx.dynamic(NAME2)' ? '`legacy-${x}`' : value.slice(value.indexOf('(') + 1, -1)
+        expect(message).toContain(`${callee}(${shape})`)
+        expect(message).toContain('no Nave atom name fits the text written around its slots')
+        expect(message).toContain('renders no class')
+        expect(message).toContain('declared: prefix app-')
+        expect(message).not.toContain("cx('")
+        expect(message).not.toContain('@nave ')
+        expectRemediesInOrder(message)
+      })
+
+      it('cx.dynamic(on ? `legacy-${x}` : tone) is reported once, on the built side', () => {
+        const reports = rule1Reports('cx.dynamic(on ? `legacy-${x}` : tone)', parser)
+        expect(reports).toHaveLength(1)
+        const line = 'const el = <div className={cx.dynamic(on ? `legacy-${x}` : tone)} />'
+        expect(reports[0]!.column).toBe(line.indexOf('`legacy') + 1)
+      })
+
+      it.each([
+        "cx.dynamic(on ? `text${align}` : 'legacy-card')",
+        "cx.dynamic('legacy-card' || `text${align}`)",
+      ])('%s reports legacy-card alone: the built side fits textLeft', (value) => {
+        const reports = rule1Reports(value, parser)
+        expect(reports).toHaveLength(1)
+        expect(reports[0]!.message).toContain("cx.dynamic('legacy-card') is not a Nave atom")
+      })
+    })
+
+    describe('none of the three applies where the call is composition or outside a class value', () => {
+      it('inside cx.raw(): no rule 1 and no rule 2 report, and one count', () => {
+        const code = `${preludeFor(parser)}\nconst el = <div className={cx.raw(cx.dynamic('flex', \`legacy-\${x}\`))} />`
+        const reports = lint(code, { parser })
+        expect(reports.map(({ ruleId }) => ruleId)).toEqual(['@navecss/count-escapes'])
+      })
+
+      it('in a .ts file with no JSX: no rule 1 report, and one count', () => {
+        const code = `${preludeFor(parser)}\nexport const k = cx.dynamic('flex', x)`
+        const reports = lint(code, { parser, filename: 'file.ts' })
+        expect(reports.map(({ ruleId }) => ruleId)).toEqual(['@navecss/count-escapes'])
+      })
+    })
+  },
+)
 
 describe('AC-28: a cxModules wrapper re-exporting cx', () => {
   const scratch = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-dynamic-'))

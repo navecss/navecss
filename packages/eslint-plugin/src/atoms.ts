@@ -45,6 +45,15 @@ export function isAtomName(name: string): boolean {
   return Object.hasOwn(atomClassMap, name)
 }
 
+const atomNames = Object.keys(atomClassMap)
+
+/**
+True when `isMatch` holds for at least one of the installed core's own atom names.
+ */
+export function hasMatchingAtom(isMatch: (name: string) => boolean): boolean {
+  return atomNames.some((name) => isMatch(name))
+}
+
 const classToAtom = new Map(Object.entries(atomClassMap).map(([atom, cls]) => [cls, atom]))
 
 /**

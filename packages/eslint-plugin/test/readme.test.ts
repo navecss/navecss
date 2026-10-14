@@ -288,20 +288,27 @@ describe('AC-19: the counting rule denominator, stated and fixtured', () => {
     expect(lint(`${PRELUDE}const f = cx.dynamic`)).toEqual([])
   })
 
-  it('AC-eslint-plugin-28: states that a name built at run time inside cx.dynamic() passes, and what it does not check', () => {
+  it('AC-eslint-plugin-28: states what rule 1 reports inside cx.dynamic() and what it does not check, and the fixtures hold', () => {
     const collapsed = README.replaceAll(/\s+/g, ' ')
-    expect(collapsed).toContain(
-      'a name built at run time inside it (a template literal with a slot beside static text or another slot, a `+` chain with an operand that is not a string literal) passes.',
-    )
-    expect(collapsed).toContain(
-      "- A name built at run time inside `cx.dynamic()` (a template literal with a slot beside static text or another slot, a `+` chain with an operand that is not a string literal) is not read: it renders nothing when it is no atom, or, under the Vite plugin, is not listed in `keep`, as an identifier's value can.",
-    )
+    for (const statement of [
+      'A literal that names an atom is reported, with `cx()` as the fix',
+      'Every argument after the first is reported, whatever it holds',
+      'A name built at run time (a template literal with a slot beside static text or another slot, a `+` chain with an operand that is not literal text) passes unless no atom name fits the text written around its slots, in which case it is reported.',
+      "- A name built at run time inside `cx.dynamic()` that an atom name fits (`` `text${align}` `` fits `textLeft`) is not read further: it renders nothing when its run-time value is no atom or, under the Vite plugin, is not listed in `keep`, as an identifier's value can. A spread argument to `cx.dynamic()` is not read, and neither is anything after a leading spread.",
+    ]) {
+      expect(collapsed).toContain(statement)
+    }
     const PRELUDE = "import { cx } from '@navecss/core/cx'\n"
-    for (const value of ['cx.dynamic(`text${align}`)', "cx.dynamic('gap' + size)"]) {
+    const rules = (value: string): string[] =>
+      lint(`${PRELUDE}const el = <div className={${value}} />`)
+    const passes = ['cx.dynamic(`text${align}`)', "cx.dynamic('gap' + size)", "cx.dynamic('')"]
+    for (const value of passes) {
       // Rule 1 passes the name; the counting rule still counts the call.
-      expect(lint(`${PRELUDE}const el = <div className={${value}} />`), value).toEqual([
-        '@navecss/count-escapes',
-      ])
+      expect(rules(value), value).toEqual(['@navecss/count-escapes'])
+    }
+    const reported = ["cx.dynamic('flex')", 'cx.dynamic(tone, x)', 'cx.dynamic(`legacy-${x}`)']
+    for (const value of reported) {
+      expect(rules(value), value).toContain('@navecss/class-channel')
     }
   })
 

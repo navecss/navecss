@@ -83,6 +83,10 @@ const FIXTURES: { code: string; settings?: Record<string, unknown> }[] = [
   { code: `${PRELUDE}const el = <div className={cx.dynamic('nave-flex')} />` },
   { code: `${PRELUDE}const el = <div className={cx.dynamic(['flex'])} />` },
   { code: `${PRELUDE}const k = cx.dynamic(tone)` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic('flex')} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(on ? 'flex' : tone)} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(tone, x)} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(\`legacy-\${x}\`)} />` },
 ]
 
 const collected = FIXTURES.flatMap(({ code, settings }) => lint(code, settings))

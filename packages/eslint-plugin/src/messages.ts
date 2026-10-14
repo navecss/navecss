@@ -85,6 +85,48 @@ export function dynamicContainerMessage(
   return `${callee}(${rendered}) is not a Nave atom: ${callee}() takes one name, so an array or object is stringified into one name first: ['flex', 'block'] becomes "flex,block" and { flex: on } becomes "[object Object]", neither is an atom name, and the call renders no class. Write the atoms through cx(), each as its own argument with its own condition if it needs one: cx('flex', on && 'block'); pass ${callee}() one name chosen at run time: ${callee}(name). ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
 }
 
+/**
+ * A literal atom name given to Nave's `cx.dynamic()`. The name is already an atom, so the one
+ * remedy is writing it through `cx()`, which the build reads; no other remedy is a better write.
+ */
+export function dynamicNameMessage(callee: string, rendered: string, name: string): string {
+  return `${callee}(${rendered}) writes the atom ${name} in the source: a name written in the source goes through cx(), which the build reads, and ${callee}() is for a name chosen at run time. Write cx('${name}').`
+}
+
+/**
+ * The same, for a literal atom name that sits beside a value chosen at run time: two calls to
+ * choose between, with no rewrite of the whole argument.
+ */
+export function dynamicNameBesideMessage(callee: string, rendered: string, name: string): string {
+  return `${callee}(${rendered}) writes the atom ${name} in the source beside a value chosen at run time: a name written in the source goes through cx(), which the build reads, and ${callee}() is for a name chosen at run time, so choose between two calls, cx('${name}') for the written name and ${callee}() for the run-time value.`
+}
+
+/**
+ * An argument after the first of Nave's `cx.dynamic()`, which takes one name and ignores the
+ * rest. It does not say the first argument is wrong, and offers no call with several arguments.
+ */
+export function dynamicExtraMessage(
+  callee: string,
+  rendered: string,
+  declared: string,
+  rawCallee: string,
+): string {
+  return `${callee}() takes one name and ignores ${rendered}, so it applies no class. Pass one name per ${callee}() call, and write several names given in the source through cx(): cx('flex', on && 'block'). ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
+}
+
+/**
+ * A name built at run time inside Nave's `cx.dynamic()` that no atom name fits the text written
+ * around the slots of: no value of the slots can make it an atom. Names no atom as a near match.
+ */
+export function dynamicBuiltMessage(
+  callee: string,
+  rendered: string,
+  declared: string,
+  rawCallee: string,
+): string {
+  return `${callee}(${rendered}) builds a name that is not a Nave atom: no Nave atom name fits the text written around its slots, so the call renders no class. ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
+}
+
 const NAVE_PREFIX = 'nave-'
 
 /**

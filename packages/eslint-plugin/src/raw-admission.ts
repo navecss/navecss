@@ -42,6 +42,6 @@ export function reportablePiecesInCall(
     .flatMap((argument) => collectArgumentHits(ctx, argument, scope))
     .filter(
       (hit): hit is AtomPieceHit | ClassPieceHit =>
-        hit.kind !== 'slot-and' && isReportedPiece(hit, allowEntries),
+        (hit.kind === 'class' || hit.kind === 'atom') && isReportedPiece(hit, allowEntries),
     )
 }

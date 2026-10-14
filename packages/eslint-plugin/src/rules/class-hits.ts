@@ -33,6 +33,10 @@ export interface AtomCallee {
  */
 export interface AtomPieceHit extends LiteralPiece {
   callee: AnyNode
+  /**
+   * True for a literal name of `cx.dynamic()` that sits beside a value chosen at run time.
+   */
+  isBeside: boolean
   isContainer: boolean
   isDynamic: boolean
   isWhole: boolean
@@ -49,7 +53,28 @@ interface SlotAndHit {
   node: TSESTree.LogicalExpression
 }
 
-export type ClassHit = AtomPieceHit | ClassPieceHit | SlotAndHit
+/**
+ * An argument after the first of Nave's `cx.dynamic()`, which takes one name: reported whatever
+ * it holds, its contents unread.
+ */
+export interface DynamicExtraHit {
+  callee: AnyNode
+  kind: 'dynamic-extra'
+  node: AnyNode
+  rendered: string
+}
+
+/**
+ * A name built at run time inside `cx.dynamic()` that no atom name fits the static text of.
+ */
+export interface DynamicBuiltHit {
+  callee: AnyNode
+  kind: 'dynamic-built'
+  node: AnyNode
+  rendered: string
+}
+
+export type ClassHit = AtomPieceHit | ClassPieceHit | DynamicBuiltHit | DynamicExtraHit | SlotAndHit
 
 /**
 Literal pieces read as class text.
@@ -73,6 +98,7 @@ export function wholeAtomPiece(
     rendered,
     callee: callee.node,
     isDynamic: callee.isDynamic,
+    isBeside: false,
     isContainer: false,
     isWhole: true,
     truncated: false,
@@ -90,6 +116,7 @@ export function partAtomPiece(node: AnyNode, rendered: string, callee: AtomCalle
     rendered,
     callee: callee.node,
     isDynamic: callee.isDynamic,
+    isBeside: false,
     isContainer: false,
     isWhole: false,
     truncated: false,
@@ -111,6 +138,7 @@ export function containerAtomPiece(
     rendered,
     callee: callee.node,
     isDynamic: callee.isDynamic,
+    isBeside: false,
     isContainer: true,
     isWhole: false,
     truncated: false,

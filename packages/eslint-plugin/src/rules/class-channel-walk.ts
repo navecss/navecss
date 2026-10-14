@@ -6,22 +6,22 @@
  * three rules can never disagree about the same source.
  *
  * The grammar: a whole `className` value that is an inline function, read through the values it
- * returns (an expression body, or each `return` of a block body, nested functions excluded); a
- * string literal; a template literal's static text, and each `${}` slot read as a class position
- * of its own; both branches of a conditional; the right side of `&&` and both sides of `||`/`??`;
- * a string `+` chain, read like a template literal (its string literals the static text, every
- * other operand a slot); an identifier bound by a `const`, followed exactly one hop;
- * single-child wrappers (TypeScript's `as`, `satisfies`, `!`, an optional chain); and calls.
+ * returns (nested functions excluded); a string literal; a template literal's static text, and
+ * each `${}` slot as a class position of its own; both branches of a conditional; the right side
+ * of `&&` and both sides of `||`/`??`; a string `+` chain, read like a template literal; an
+ * identifier bound by a `const`, followed one hop; single-child wrappers (TypeScript's `as`,
+ * `satisfies`, `!`, an optional chain); and calls.
  *
  * A call to Nave's `cx()` has each argument read as one atom name, whole, and an array or object
- * literal there is reported whatever it holds. A call to Nave's `cx.dynamic()` is read the same
- * way, except that a name built at run time contributes nothing: a template literal with a slot
- * (unless it is a single slot and nothing else) and a string `+` chain with an operand that is
- * not a string literal, because `cx.dynamic()` exists for a name the build cannot read. Inside
- * the arguments of a `cx.raw()`, a `cx.dynamic()` call contributes nothing at all: it is
- * composition there, and the counting rule counts it once at the call. A call to a helper, or to
- * a `cx` that is not Nave's, has each argument read as class text, arrays and object keys
- * included; `cx.raw()` and any other call contribute nothing.
+ * literal there is reported whatever it holds. A call to Nave's `cx.dynamic()` reads its first
+ * argument the same way, with these differences (`class-channel-dynamic.ts`): a literal atom name
+ * is reported (written through `cx()` it is read by the build), every argument after the first is
+ * reported unread, and a name built at run time (a template literal with a slot, unless it is a
+ * single slot, and a string `+` chain with an operand that is not literal text) is reported only
+ * when no atom name fits the text written around its slots. Inside the arguments of a `cx.raw()`,
+ * a `cx.dynamic()` call contributes nothing: it is composition there, and the counting rule counts
+ * it once at the call. A call to a helper, or to a `cx` that is not Nave's, has each argument read
+ * as class text, arrays and object keys included; `cx.raw()` and any other call contribute nothing.
  */
 import type { TSESTree } from '@typescript-eslint/types'
 import type { Scope, SourceCode } from 'eslint'
@@ -40,6 +40,7 @@ import {
   splitWhitespace,
   TRANSPARENT_WRAPPER_TYPES,
 } from '../literal-pieces.ts'
+import { besideRunTime, builtNameHits, dynamicCallHits } from './class-channel-dynamic.ts'
 import {
   type AtomCallee,
   type ClassHit,
@@ -63,9 +64,8 @@ export interface WalkContext {
 }
 
 /**
- * A template passed to `cx()`: expression-free it is one name; with slots and no static text it
- * is a pass-through of what the slots hold; with static text beside a slot it is one runtime
- * string that is never exactly an atom name as written.
+ * A template passed to `cx()`: expression-free it is one name; slots alone pass through what they
+ * hold; static text beside a slot is a runtime string that is never exactly an atom name.
  */
 function atomTemplateHits(
   ctx: WalkContext,
@@ -170,27 +170,30 @@ function helperArgumentHits(ctx: WalkContext, node: AnyNode, scope: Scope.Scope)
 
 /**
  * A call in a class position: Nave's `cx()` or `cx.dynamic()` (each argument one atom name),
- * `cx.raw()` (rule 2's territory, nothing here), a helper (each argument class text), or any
- * other call (opaque).
+ * `cx.raw()` (rule 2's, nothing here), a helper (each argument class text), or any other (opaque).
  */
 function callHits(ctx: WalkContext, node: TSESTree.CallExpression, scope: Scope.Scope): ClassHit[] {
-  const args = node.arguments.filter((argument) => argument.type !== 'SpreadElement')
   const resolved = resolveCxCallee(node.callee, ctx.bindings, scope)
-  if (resolved === 'cx' || (resolved === 'dynamic' && !ctx.insideRaw)) {
-    const callee = { node: node.callee, isDynamic: resolved === 'dynamic' }
+  if (resolved === 'dynamic' && !ctx.insideRaw) {
+    return dynamicCallHits(node, ctx.sourceCode, (argument, callee) =>
+      positionHits(ctx, argument, scope, callee),
+    )
+  }
+  if (resolved === 'raw' || resolved === 'dynamic') return []
+  const args = node.arguments.filter((argument) => argument.type !== 'SpreadElement')
+  if (resolved === 'cx') {
+    const callee = { node: node.callee, isDynamic: false }
     return args.flatMap((argument) => positionHits(ctx, argument, scope, callee))
   }
-  if (resolved === 'raw' || resolved === 'dynamic' || !isHelperCall(node.callee, ctx.helpers)) {
-    return []
-  }
+  if (!isHelperCall(node.callee, ctx.helpers)) return []
   return args.flatMap((argument) => helperArgumentHits(ctx, argument, scope))
 }
 
 /**
- * Every hit reachable from `node` through the grammar in this file's docblock. `callee` is
- * set while reading an argument of Nave's `cx()` or `cx.dynamic()` (so a literal there is one atom name) and unset
- * in a plain class position. Unwraps the single-child productions in a loop, so only the
- * genuinely branching productions recurse.
+ * Every hit reachable from `node` through the grammar in this file's docblock. `callee` is set
+ * while reading an argument of Nave's `cx()` or `cx.dynamic()` (a literal there is one atom name)
+ * and unset in a plain class position. Single-child productions unwrap in a loop; only the
+ * branching ones recurse.
  *
  * One dispatch per grammar production; splitting it across files would scatter one grammar the
  * three calling rules must agree on.
@@ -207,7 +210,9 @@ function positionHits(
   let canHop = true
 
   while (true) {
-    if (callee?.isDynamic && isBuiltName(current)) return []
+    if (callee?.isDynamic && isBuiltName(current)) {
+      return builtNameHits(ctx.sourceCode, current, callee)
+    }
     if (isStringLiteral(current)) return stringHits(ctx, current, callee)
     if (current.type === 'TemplateLiteral') {
       return templateHits(ctx, current, currentScope, callee)
@@ -218,10 +223,9 @@ function positionHits(
     }
 
     if (current.type === 'ConditionalExpression') {
-      return [
-        ...positionHits(ctx, current.consequent, currentScope, callee),
-        ...positionHits(ctx, current.alternate, currentScope, callee),
-      ]
+      const branches = [current.consequent, current.alternate]
+      const groups = branches.map((branch) => positionHits(ctx, branch, currentScope, callee))
+      return besideRunTime(callee, branches, currentScope, groups)
     }
 
     if (current.type === 'LogicalExpression' && current.operator === '&&') {
@@ -237,10 +241,9 @@ function positionHits(
 
     if (current.type === 'LogicalExpression') {
       // '||' and '??': both sides are candidates for the value used.
-      return [
-        ...positionHits(ctx, current.left, currentScope, callee),
-        ...positionHits(ctx, current.right, currentScope, callee),
-      ]
+      const sides = [current.left, current.right]
+      const groups = sides.map((side) => positionHits(ctx, side, currentScope, callee))
+      return besideRunTime(callee, sides, currentScope, groups)
     }
 
     if (TRANSPARENT_WRAPPER_TYPES.has(current.type)) {

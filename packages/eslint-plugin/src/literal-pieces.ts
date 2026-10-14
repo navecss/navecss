@@ -104,7 +104,7 @@ export function concatOperands(node: Node): Node[] {
 /**
 Reads through `as`/`satisfies`/`!` to the node they wrap.
  */
-function unwrap(node: Node): Node {
+export function unwrap(node: Node): Node {
   let current = node
   while (TRANSPARENT_WRAPPER_TYPES.has(current.type)) {
     current = (current as TSESTree.TSAsExpression).expression
