@@ -177,7 +177,22 @@ describe(`AC-base-ui-feedback-navigation-21, -22 and -25: the Navigation Menu tr
       expect(getComputedStyle(enabled).backgroundColor, 'the enabled trigger on hover').toBe(
         colorOf('var(--nave-color-action-highlight)'),
       )
-      await parkPointer()
+      // The enabled trigger's hover may have opened its menu, and a hover-opened menu blocks pointer
+      // events on the page at some versions: the pointer leaves by force, and the next hover waits
+      // until the menu is gone and the page takes pointer events again.
+      await userEvent.hover(required('away'), { force: true })
+      await userEvent.keyboard('{Escape}')
+      const isQuiet = await isReachedWithin(
+        () =>
+          byTestId('popup') === undefined &&
+          getComputedStyle(document.body).pointerEvents !== 'none' &&
+          getComputedStyle(document.documentElement).pointerEvents !== 'none',
+        MAX_FRAMES,
+      )
+      expect(isQuiet, 'the menu is gone and the page takes pointer events').toBe(true)
+      expect(getComputedStyle(enabled).backgroundColor, 'the enabled trigger once away').toBe(
+        TRANSPARENT,
+      )
       await userEvent.hover(disabled)
       expect(disabled.matches(':hover'), 'the pointer is over the disabled trigger').toBe(true)
       expect(getComputedStyle(disabled).backgroundColor).toBe(TRANSPARENT)
