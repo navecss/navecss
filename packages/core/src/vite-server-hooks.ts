@@ -21,10 +21,10 @@ function warnThrough(ctx: { warn(message: string): void }): (message: string) =>
 /**
  * The hooks of the first plugin object that belong to the dev server and to a builder's process:
  * the map `cx.dynamic()` reads in a server render of this process, put on the global when the dev
- * server starts and taken off when it closes, the note of each page that connects (a reload sent
- * before any page was listening reached no one), and, for a builder's process, the note of which
- * environments are about to build, so the markup warning is judged once the last of them has
- * built (every module it was going to transform has been read).
+ * server starts and taken off when it closes, the note of each page that connects or disconnects
+ * (a module reload sent while no page was listening reached no one), and, for a builder's
+ * process, the note of which environments are about to build, so the markup warning is judged
+ * once the last of them has built (every module it was going to transform has been read).
  */
 export function serverHooks(context: UsedContext): {
   readonly buildApp: {
@@ -42,15 +42,21 @@ export function serverHooks(context: UsedContext): {
       // The map comes off when the server is told to close, not only when its environments finish
       // closing: Vite 8.2.1 skips the close hooks of an environment whose `buildEnd` throws.
       const close = devServer.close.bind(devServer)
-      // A reload sent while no page was connected is dropped by Vite, and the page that connects
-      // next has not been told, so each connection checks the stylesheets again.
+      // A module reload sent while no page was connected is dropped by Vite, and the page that
+      // connects next has not been told, so the pages listening are counted and a connection
+      // checks the stylesheets that were reloaded while none was.
       const noteConnect = (): void => {
         devServing.noteConnect(context)
       }
+      const noteDisconnect = (): void => {
+        devServing.noteDisconnect(context)
+      }
       owner.hot.on('vite:client:connect', noteConnect)
+      owner.hot.on('vite:client:disconnect', noteDisconnect)
       devServer.close = () => {
         removeServerKeepMap(owner)
         owner.hot.off('vite:client:connect', noteConnect)
+        owner.hot.off('vite:client:disconnect', noteDisconnect)
         return close()
       }
       noteStylesheetRequests(context, devServer)

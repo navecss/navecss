@@ -93,12 +93,13 @@ export interface RequestLike {
 
 /**
  * The client environment as the plugin listens to it: the channel its pages connect over, where
- * `vite:client:connect` is emitted for each page that opens a connection.
+ * `vite:client:connect` is emitted for each page that opens a connection and
+ * `vite:client:disconnect` for each that closes one.
  */
 interface ClientEnvironmentLike extends DevEnvironmentLike {
   readonly hot: DevEnvironmentLike['hot'] & {
-    off(event: 'vite:client:connect', listener: () => void): void
-    on(event: 'vite:client:connect', listener: () => void): void
+    off(event: 'vite:client:connect' | 'vite:client:disconnect', listener: () => void): void
+    on(event: 'vite:client:connect' | 'vite:client:disconnect', listener: () => void): void
   }
 }
 

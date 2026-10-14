@@ -5,10 +5,10 @@
  * been transformed (so the set is complete for what the pages load, whichever script each page
  * starts from), and a set that grows afterwards reloads the stylesheets already served, batched,
  * through Vite's own module reload (the page, for one inlined in its HTML), and, when a page's
- * classes grew it, drops their cached text so the next request filters again. Vite drops a reload
- * sent while no page is connected, so when a page connects the reloads sent and not yet answered
- * are forgotten and the check runs again. `devServing` is an object, so a test can stand a scratch
- * copy of one step in its place.
+ * classes grew it, drops their cached text so the next request filters again. Vite drops a module
+ * reload sent while no page is connected, so the stylesheets reloaded while none was listening are
+ * checked again when a page connects, and only those. `devServing` is an object, so a test can
+ * stand a scratch copy of one step in its place.
  */
 import type {
   DevEnvironmentLike,
@@ -22,6 +22,7 @@ import type { UsedContext } from './vite-used.ts'
 
 import { isServedAsStylesheet, judgeWhenServed } from './vite-dev-judge.ts'
 import { graphRoots, transformReachable } from './vite-dev-read.ts'
+import { noteReloadSent } from './vite-dev-reloads.ts'
 import { modulesWithGrownStylesheets } from './vite-dev-update.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from './vite-prune.ts'
 import { servedAtoms } from './vite-state.ts'
@@ -50,12 +51,17 @@ export interface DevServing {
    */
   noteGrowth(context: UsedContext): void
   /**
-   * Notes that a page connected to the dev server. The reloads sent and not yet answered by a
-   * request for the stylesheet may have gone to no one, because Vite drops an update sent while no
-   * page is connected, so they are forgotten and the served stylesheets the set has outgrown are
-   * reloaded now that a page can hear it.
+   * Notes that a page connected to the dev server. A module reload sent while no page was
+   * connected went to no one, because Vite drops it, so the stylesheets reloaded then are
+   * reloaded again if the set has outgrown them (a page reload sent then, which Vite keeps for
+   * this page, reaches it twice and reloads it once). A connection when no reload went unheard
+   * sends nothing.
    */
   noteConnect(context: UsedContext): void
+  /**
+   * Notes that a page disconnected from the dev server.
+   */
+  noteDisconnect(context: UsedContext): void
   /**
    * Notes that a page was read: the served stylesheets its classes outgrew are dropped from the
    * module graph's cache, so the request of a page that is loading filters them again, and the
@@ -113,7 +119,7 @@ function reloadStale(context: UsedContext): void {
     const sheet = state.served.get(id)
     const module = sheet?.environment.moduleGraph.getModuleById(id)
     if (!sheet || !module) continue
-    state.reloading.set(id, Date.now())
+    noteReloadSent(state, id)
     void reloadQuietly(sheet.environment, module)
   }
 }
@@ -126,6 +132,27 @@ function reloadStale(context: UsedContext): void {
 function isReloading(context: UsedContext, id: string): boolean {
   const sent = context.state.reloading.get(id)
   return sent !== undefined && Date.now() - sent < RELOAD_ANSWER_MS
+}
+
+/**
+ * Marks as stale the served stylesheets among `ids` that the set has outgrown and that no
+ * pending reload covers, and schedules the reload.
+ */
+function reloadOutgrown(context: UsedContext, ids: Iterable<string>): void {
+  const { state } = context
+  const atoms = servedAtoms(state, context.kept)
+  for (const id of ids) {
+    const sheet = state.served.get(id)
+    if (sheet && !atoms.isSubsetOf(sheet.atoms) && !isReloading(context, id)) state.stale.add(id)
+  }
+  // The next turn of the event loop, so the modules a burst transforms together send one reload
+  // and the reload goes out before the browser has had time to run what grew the set.
+  if (state.stale.size > 0 && state.reloadTimer === undefined && state.readAhead === 0) {
+    state.reloadTimer = setTimeout(() => {
+      reloadStale(context)
+    }, 0)
+    state.reloadTimer.unref()
+  }
 }
 
 export const devServing: DevServing = {
@@ -156,25 +183,23 @@ export const devServing: DevServing = {
   },
 
   noteConnect(context) {
-    context.state.reloading.clear()
-    devServing.noteGrowth(context)
+    const { state } = context
+    state.listening += 1
+    if (state.unheard.size === 0) return
+    const ids = [...state.unheard]
+    state.unheard.clear()
+    for (const id of ids) state.reloading.delete(id)
+    reloadOutgrown(context, ids)
+  },
+
+  noteDisconnect(context) {
+    const { state } = context
+    state.listening = Math.max(0, state.listening - 1)
   },
 
   noteGrowth(context) {
-    const { state } = context
-    if (state.served.size === 0) return
-    const atoms = servedAtoms(state, context.kept)
-    for (const [id, sheet] of state.served) {
-      if (!atoms.isSubsetOf(sheet.atoms) && !isReloading(context, id)) state.stale.add(id)
-    }
-    // The next turn of the event loop, so the modules a burst transforms together send one reload
-    // and the reload goes out before the browser has had time to run what grew the set.
-    if (state.stale.size > 0 && state.reloadTimer === undefined && state.readAhead === 0) {
-      state.reloadTimer = setTimeout(() => {
-        reloadStale(context)
-      }, 0)
-      state.reloadTimer.unref()
-    }
+    if (context.state.served.size === 0) return
+    reloadOutgrown(context, context.state.served.keys())
   },
 }
 

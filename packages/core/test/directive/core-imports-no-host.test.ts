@@ -156,15 +156,16 @@ describe('AC-directive-core-02 — the core imports no host', () => {
     // `postcss.js` imports PostCSS and is exempt. `vite.js` imports no host but names
     // `lightningcss` as the `css.transformer` value it reacts to, `vite:css-post` as the name of
     // the Vite plugin whose CSS step it hands the pruned atom layer back to, and
-    // `vite:client:connect` as the event of the dev server's own channel it listens for, so it is
-    // scanned for every host except the first, with the other two names taken out of the text.
+    // `vite:client:connect` and `vite:client:disconnect` as the events of the dev server's own
+    // channel it listens for, so it is scanned for every host except the first, with the other
+    // names taken out of the text.
     const files = readdirSync(DIST).filter((f) => f.endsWith('.js') && f !== 'postcss.js')
     expect(files.length).toBeGreaterThan(0)
 
     for (const file of files) {
       const source = readFileSync(path.join(DIST, file), 'utf8')
         .replaceAll(/\.name === (['"])vite:css-post\1/g, '')
-        .replaceAll(/\.(?:on|off)\((['"])vite:client:connect\1/g, '')
+        .replaceAll(/\.(?:on|off)\((['"])vite:client:(?:dis)?connect\1/g, '')
       const scannedHosts = FORBIDDEN_HOSTS.filter((h) => file !== 'vite.js' || h !== 'lightningcss')
       for (const host of scannedHosts) {
         expect(

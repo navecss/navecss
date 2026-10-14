@@ -8,6 +8,7 @@ import type { UsedContext } from './vite-used.ts'
 
 import { isStylesheetId } from './vite-css-id.ts'
 import { transformQuietly, transformReachable } from './vite-dev-read.ts'
+import { noteReloadSent } from './vite-dev-reloads.ts'
 
 type UpdateEnvironment = HotUpdateContext['environment']
 
@@ -64,7 +65,7 @@ function takeStaleModules(context: UsedContext, environment: UpdateEnvironment):
   for (const id of ids) {
     const module = environment.moduleGraph.getModuleById(id) as GraphModuleLike | undefined
     if (!module) continue
-    state.reloading.set(id, Date.now())
+    noteReloadSent(state, id)
     sheets.push(module)
   }
   return sheets

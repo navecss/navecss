@@ -7,11 +7,14 @@
  * even from the same config object, starts a fresh one.
  */
 import type { DeclaredModules } from './vite-cx-modules.ts'
+import type { ReloadState } from './vite-dev-reloads.ts'
 import type { Prepared } from './vite-listed-takes.ts'
 import type { ServerImport } from './vite-server-takes.ts'
 import type { SetupExposures } from './vite-setup-member.ts'
 import type { DevEnvironmentLike } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
+
+import { freshReloads } from './vite-dev-reloads.ts'
 
 /**
  * A stylesheet the dev server served with the atomic layer filtered: the environment that serves
@@ -61,7 +64,7 @@ export interface ModuleRecord {
   readonly file: string
 }
 
-export interface RootState {
+export interface RootState extends ReloadState {
   /**
    * Whether an environment has started building: the resolutions of one build all come before
    * that, so a resolution after it belongs to a later build.
@@ -143,20 +146,6 @@ export interface RootState {
    */
   readonly served: Map<string, ServedSheet>
   /**
-   * The served stylesheets whose set has grown since, waiting for the batched reload.
-   */
-  readonly stale: Set<string>
-  /**
-   * The stylesheets a reload was asked for and the page has not asked for again, by when.
-   */
-  readonly reloading: Map<string, number>
-  reloadTimer: ReturnType<typeof setTimeout> | undefined
-  /**
-   * How many file changes are being read ahead of their update, which send the stylesheets they
-   * outgrew in that update themselves, so the timer waits.
-   */
-  readAhead: number
-  /**
    * What the markup warning reads: whether an HTML page was read, a module of a server
    * environment was transformed, or a directive was expanded; and whether it was judged already.
    */
@@ -228,10 +217,7 @@ function freshState(): RootState {
     builtEnvironments: new Set(),
     warned: new Set(),
     served: new Map(),
-    stale: new Set(),
-    reloading: new Map(),
-    reloadTimer: undefined,
-    readAhead: 0,
+    ...freshReloads(),
     htmlRead: false,
     serverTransformed: false,
     directiveExpanded: false,
