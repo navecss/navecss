@@ -12,8 +12,10 @@ import { execFileSync, spawn } from 'node:child_process'
 import {
   closeSync,
   constants,
+  mkdirSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -479,6 +481,28 @@ async function within(promise, ms, fallback) {
 }
 
 /**
+ * Copies the coverage file the runner process `pid` wrote in `scratch` into `destination`, when
+ * the file is whole. When Node runs the tests with coverage, every process it starts writes one
+ * file into a shared directory as it exits, and the run's coverage report reads them all at the
+ * end: a process killed while it writes leaves an empty or cut-off file, which fails the whole
+ * report (`Unexpected end of JSON input`, exit code 1) even though every test passed. The
+ * processes started here are killed part-way on purpose, so they write into a scratch directory
+ * and only the runner's own file, the one that measures run-ci-check.mjs, comes back.
+ */
+function keepRunnerCoverage(scratch, destination, pid) {
+  for (const file of readdirSync(scratch)) {
+    if (!file.startsWith(`coverage-${pid}-`)) continue
+    const text = readFileSync(path.join(scratch, file), 'utf8')
+    try {
+      JSON.parse(text)
+    } catch {
+      continue
+    }
+    writeFileSync(path.join(destination, file), text)
+  }
+}
+
+/**
  * Starts the real runner, in a process group of its own, with every step faked and `build` the
  * slow one, and calls `body({ child, exited, output, pids })` once the slow step is up. `exited`
  * resolves to the runner's exit code (null when a signal killed it). Whatever is still running
@@ -495,6 +519,9 @@ async function withRunningSlowStep({ closableOutput = false, trapTerm = false },
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => key !== 'TURBO_FORCE'),
   )
+  const coverageDir = env.NODE_V8_COVERAGE
+  const scratchCoverage = path.join(dir, 'coverage')
+  if (coverageDir) mkdirSync(scratchCoverage)
   let reader
   let stdio = ['ignore', 'pipe', 'pipe']
   if (closableOutput) {
@@ -511,6 +538,7 @@ async function withRunningSlowStep({ closableOutput = false, trapTerm = false },
       FAKE_PIDS_FILE: pidsFile,
       FAKE_OTHER_STEPS_MS: closableOutput ? '600' : '0',
       FAKE_SLOW_STEP: 'build',
+      ...(coverageDir && { NODE_V8_COVERAGE: scratchCoverage }),
       ...(trapTerm && { FAKE_TRAP_TERM: '1' }),
       npm_execpath: entry,
     },
@@ -548,9 +576,35 @@ async function withRunningSlowStep({ closableOutput = false, trapTerm = false },
     }
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
     for (const pid of pids) if (isAlive(pid)) process.kill(pid, 'SIGKILL')
+    if (coverageDir) keepRunnerCoverage(scratchCoverage, coverageDir, child.pid)
     rmSync(dir, { force: true, recursive: true })
   }
 }
+
+test('keepRunnerCoverage brings back only the runner’s own whole coverage file', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ci-check-coverage-'))
+  try {
+    const scratch = path.join(dir, 'scratch')
+    const destination = path.join(dir, 'destination')
+    mkdirSync(scratch)
+    mkdirSync(destination)
+    const whole = '{"result":[]}'
+    writeFileSync(path.join(scratch, 'coverage-100-1700000000000-0.json'), whole)
+    writeFileSync(path.join(scratch, 'coverage-100-1700000000001-1.json'), '')
+    writeFileSync(path.join(scratch, 'coverage-100-1700000000002-2.json'), '{"result":[{"scr')
+    writeFileSync(path.join(scratch, 'coverage-200-1700000000000-0.json'), whole)
+
+    keepRunnerCoverage(scratch, destination, 100)
+
+    assert.deepEqual(readdirSync(destination), ['coverage-100-1700000000000-0.json'])
+    assert.equal(
+      readFileSync(path.join(destination, 'coverage-100-1700000000000-0.json'), 'utf8'),
+      whole,
+    )
+  } finally {
+    rmSync(dir, { force: true, recursive: true })
+  }
+})
 
 const allGone = (pids, ms) => until(() => pids.every((pid) => !isAlive(pid)), ms)
 
