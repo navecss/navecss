@@ -28,6 +28,7 @@ import { userEvent } from 'vitest/browser'
 
 import { Accordion } from '../../dist/accordion/index.js'
 import { Collapsible } from '../../dist/collapsible/index.js'
+import { isReachedWithin } from './support/frames.ts'
 import {
   byTestId,
   emulateReducedMotion,
@@ -41,7 +42,7 @@ import {
 } from './support/page.ts'
 import { closeBy, open, required as popupPart } from './support/w8-actions.ts'
 import { popupCases } from './support/w8-popups.ts'
-import { atRest, isReachedWithin, type Watch, watchPopup } from './support/w8-watch.ts'
+import { atRest, type Watch, watchPopup } from './support/w8-watch.ts'
 
 /**
 The versions at which an exit cancelled mid-way is never treated as finished.

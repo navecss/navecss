@@ -14,6 +14,7 @@ import { userEvent } from 'vitest/browser'
 
 import type { Scene } from './support/w8-scenes.ts'
 
+import { FEW_FRAMES, isReachedWithin, MAX_FRAMES } from './support/frames.ts'
 import {
   emulateReducedMotion,
   el as h,
@@ -26,16 +27,7 @@ import {
 import { closeBy, open, required } from './support/w8-actions.ts'
 import { popupCases } from './support/w8-popups.ts'
 import { tokenEasing, tokenMilliseconds } from './support/w8-tokens.ts'
-import {
-  appears,
-  atRest,
-  FEW_FRAMES,
-  framesAfterFinish,
-  isReachedWithin,
-  MAX_FRAMES,
-  type Watch,
-  watchPopup,
-} from './support/w8-watch.ts'
+import { appears, atRest, framesAfterFinish, type Watch, watchPopup } from './support/w8-watch.ts'
 
 /**
  * A scene whose Root is controlled by a button that is not its trigger, so the popup opens from

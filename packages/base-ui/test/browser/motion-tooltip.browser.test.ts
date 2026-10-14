@@ -12,16 +12,22 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
 import { Tooltip } from '../../dist/tooltip/index.js'
-import { el as h, mount, type Page, stylesheet, tokens, useSheets } from './support/page.ts'
-import { required } from './support/w8-actions.ts'
+import { FEW_FRAMES, framesLater, isReachedWithin, MAX_FRAMES } from './support/frames.ts'
+import {
+  byTestId,
+  el as h,
+  mount,
+  type Page,
+  stylesheet,
+  tokens,
+  useSheets,
+} from './support/page.ts'
+import { parkPointer, required } from './support/w8-actions.ts'
 import { tokenEasing, tokenMilliseconds } from './support/w8-tokens.ts'
 import {
   appears,
   atRest,
-  FEW_FRAMES,
   framesAfterFinish,
-  isReachedWithin,
-  MAX_FRAMES,
   MOUNT,
   type Watch,
   watchPopup,
@@ -45,6 +51,11 @@ const tip = (number: number): ReactNode =>
 
 const scene = (): ReactNode => h('div', {}, h(Tooltip.Provider, { delay: 0 }, tip(1), tip(2)))
 
+/**
+Frames given to a mounted scene for a hover under the pointer to show.
+ */
+const PARKED_FRAMES = 3
+
 const opacity = (easing: string, fast: number): object[] => [
   { duration: fast, easing: tokenEasing(easing), kind: 'CSSTransition', property: 'opacity' },
 ]
@@ -65,16 +76,27 @@ describe('AC-base-ui-overlay-completion-18: the tooltip fades, and is instant in
     removeSheets = undefined
   })
 
-  const start = (...ids: string[]): Watch[] => {
+  /**
+   * Mounts the scene with the pointer away from every trigger and shows that no tooltip is open:
+   * a pointer left over a trigger's place by an earlier test hovers it at mount, which opens it
+   * and makes the test's own hover a second open inside the delay group.
+   */
+  const start = async (...ids: string[]): Promise<Watch[]> => {
+    await parkPointer()
     removeSheets = useSheets(tokens, stylesheet)
     const made = ids.map((id) => watchPopup(id))
     watches.push(...made)
     page = mount(scene())
+    await framesLater(PARKED_FRAMES)
+    expect(
+      ['popup-1', 'popup-2'].filter((id) => byTestId(id) !== undefined),
+      'tooltips open before the first hover',
+    ).toEqual([])
     return made
   }
 
   it('AC-base-ui-overlay-completion-18: the first opens on hover and closes on pointer leave, each in one opacity transition of the fast duration', async () => {
-    const [first] = start('popup-1')
+    const [first] = await start('popup-1')
     const fast = tokenMilliseconds('--nave-motion-duration-fast')
     await userEvent.hover(required('trigger-1'))
     await appears('popup-1')
@@ -96,7 +118,7 @@ describe('AC-base-ui-overlay-completion-18: the tooltip fades, and is instant in
   })
 
   it('AC-base-ui-overlay-completion-18: the second, opened from the first inside the delay group, computes a transition-duration of 0s while data-instant is present', async () => {
-    const [, second] = start('popup-1', 'popup-2')
+    const [, second] = await start('popup-1', 'popup-2')
     await userEvent.hover(required('trigger-1'))
     await appears('popup-1')
     await atRest('popup-1')

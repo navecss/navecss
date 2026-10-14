@@ -1,3 +1,4 @@
+import { MAX_FRAMES, nextFrame } from './frames.ts'
 /**
  * What a popup's style attributes do over time, read at the moment each one changes. A transition
  * starts on the style recalculation after an attribute flips, and `getAnimations()` forces that
@@ -215,25 +216,6 @@ export const watchPopup = (testId = 'popup'): Watch => {
   }
 }
 
-const nextFrame = (): Promise<void> =>
-  new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      resolve()
-    })
-  })
-
-/**
-With nothing to wait for, a popup is gone within this many frames of its close starting, or of the
-transition it waited for finishing.
- */
-export const FEW_FRAMES = 4
-
-/**
-The most frames waited for something that should happen, which only something that does not happen
-runs out.
- */
-export const MAX_FRAMES = 300
-
 /**
  * How many frames after its first running transition finished a followed popup left the page: below
  * zero if it left first, and `undefined` if the transition did not finish or the popup did not leave.
@@ -242,18 +224,6 @@ export const framesAfterFinish = (closing: Moment, followed: Tracked): number | 
   const left = followed.goneFrame()
   const finished = closing.running[0]?.finishedFrame()
   return left === undefined || finished === undefined ? undefined : left - finished
-}
-
-/**
- * Waits frame by frame until `isDone` holds, for at most `limit` frames, and says whether it held.
- * The limit is a count of frames and not a time, so a machine that is slow to draw is waited for
- * as long as it takes to draw that many frames.
- */
-export const isReachedWithin = async (isDone: () => boolean, limit: number): Promise<boolean> => {
-  for (let frame = 0; frame < limit && !isDone(); frame += 1) {
-    await nextFrame()
-  }
-  return isDone()
 }
 
 /**
