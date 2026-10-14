@@ -54,6 +54,25 @@ describe.each(Object.entries(VITE_APIS))(
       }
     }, 60_000)
 
+    it('turns a worker’s cx() call into its class string, and ships no name map in the worker', async () => {
+      const app = makeUsedApp(appFiles(WORKER, ['src/a.js']))
+      try {
+        const built = await buildUsed(app, { api })
+        const control = await buildUsed(app, { api, options: { atomic: 'all' } })
+        const shipped = (result: typeof built): string =>
+          [result.js, ...Object.values(result.assets)].join('\n')
+
+        expect(built.error).toBeUndefined()
+        expect(shipped(built)).toContain('<p class="')
+        expect(shipped(built)).toContain('nave-grid')
+        expect(shipped(built)).not.toContain('srOnlyFocusable')
+        // Control: the build that rewrites nothing ships the map, so the key can be found.
+        expect(shipped(control)).toContain('srOnlyFocusable')
+      } finally {
+        app.dispose()
+      }
+    }, 60_000)
+
     it('control: under all the worker is not read and every atom ships', async () => {
       const app = makeUsedApp(appFiles(WORKER, ['src/a.js']))
       try {

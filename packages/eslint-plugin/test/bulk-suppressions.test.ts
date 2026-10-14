@@ -19,7 +19,13 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// Every test in this file starts the ESLint CLI several times, which no hook can pay for ahead of
+// time. Measured: the slowest took 1.4 s alone, 18.6 s beside 160 busy processes and 24.1 s beside
+// 240, where it timed out at the default 20 s, and five others took 15 to 18 s there. Each test
+// in this file gets 120 s, about five times the worst measured; the default stays 20 s elsewhere.
+vi.setConfig({ testTimeout: 120_000 })
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(HERE, '..')

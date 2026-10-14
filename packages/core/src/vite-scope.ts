@@ -97,8 +97,10 @@ export function analyze(program: AstNode): ScopeAnalysis {
     byNode.set(reference.node, reference)
   }
   // A local named `eval` is no direct eval.
-  markEvalWrites(walker.evalScopes.filter((scope) => !lookup(scope, 'eval')))
+  const evalScopes = walker.evalScopes.filter((scope) => !lookup(scope, 'eval'))
+  markEvalWrites(evalScopes)
   return {
+    hasDirectEval: evalScopes.length > 0,
     references: walker.references,
     parentOf: walker.parentOf,
     referenceOf: (node) => byNode.get(node),
