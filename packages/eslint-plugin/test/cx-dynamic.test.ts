@@ -221,6 +221,8 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
     it.each([
       ["cx.dynamic('legacy' + `-card`)", false],
       ["cx.dynamic('legacy' + ('-card' as string))", true],
+      ["cx.dynamic('legacy' + (('-' + 'card') as string))", true],
+      ["cx.dynamic('legacy' + ('-' + 'card')!)", true],
     ])('%s is still read: every operand is literal, however spelled', (value, isTypeScriptOnly) => {
       if (isTypeScriptOnly && parser !== 'typescript') return
       const reports = rule1Reports(value, parser)
@@ -228,8 +230,18 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
       expect(reports[0]!.message).toContain(`${value.slice('cx.dynamic('.length, -1)}) is not`)
     })
 
-    it("cx('legacy' + `-card`) is still reported once", () => {
-      expect(rule1Reports("cx('legacy' + `-card`)", parser)).toHaveLength(1)
+    it.each([
+      ["cx('legacy' + `-card`)", false],
+      ["cx('legacy' + (('-' + 'card') as string))", true],
+      ["cx('legacy' + ('-' + 'card')!)", true],
+    ])('%s is still reported once', (value, isTypeScriptOnly) => {
+      if (isTypeScriptOnly && parser !== 'typescript') return
+      expect(rule1Reports(value, parser)).toHaveLength(1)
+    })
+
+    it('a nested chain through a wrapper that holds a non-literal is still built and passes', () => {
+      if (parser !== 'typescript') return
+      expect(rule1Reports("cx.dynamic('legacy' + (('-' + size) as string))", parser)).toEqual([])
     })
 
     it.each([

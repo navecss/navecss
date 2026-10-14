@@ -102,14 +102,27 @@ export function concatOperands(node: Node): Node[] {
 }
 
 /**
-A string literal, or an expression-free template, through `as`/`satisfies`/`!`.
+Reads through `as`/`satisfies`/`!` to the node they wrap.
  */
-function isLiteralOperand(node: Node): boolean {
+function unwrap(node: Node): Node {
   let current = node
   while (TRANSPARENT_WRAPPER_TYPES.has(current.type)) {
     current = (current as TSESTree.TSAsExpression).expression
   }
-  return (
+  return current
+}
+
+/**
+ * True when a `+` operand is built at run time: anything but a string literal or an
+ * expression-free template, through `as`/`satisfies`/`!`, and a nested `+` chain (itself possibly
+ * wrapped) is built when any of its own operands is.
+ */
+function isBuiltOperand(operand: Node): boolean {
+  const current = unwrap(operand)
+  if (current.type === 'BinaryExpression' && current.operator === '+') {
+    return concatOperands(current).some((nested) => isBuiltOperand(nested))
+  }
+  return !(
     isStringLiteral(current) ||
     (current.type === 'TemplateLiteral' && current.expressions.length === 0)
   )
@@ -130,7 +143,7 @@ export function isBuiltName(node: Node): boolean {
   return (
     node.type === 'BinaryExpression' &&
     node.operator === '+' &&
-    concatOperands(node).some((operand) => !isLiteralOperand(operand))
+    concatOperands(node).some((operand) => isBuiltOperand(operand))
   )
 }
 
