@@ -36,6 +36,12 @@ const EXPECTED_ERRORS: Readonly<Record<BaseUiVersion, readonly string[]>> = {
     // README and the changeset sentence that name them.
     'ContextMenu.Root.Actions TS2694',
     'Combobox.Root.Props<any, any, any> TS2707',
+    // The third and fourth recorded floor exceptions (the feedback and navigation release): the
+    // floor gives the Navigation Menu root's Props no type parameter and the namespace no Value, so
+    // the dotted spellings are not generic and absent. The flat `NavigationMenuRootProps<string>` and
+    // `NavigationMenuRoot.Value<string>` are what the criterion holds, in `feedback-types.test.ts`.
+    'NavigationMenu.Root.Props<any> TS2315',
+    'NavigationMenu.Root.Value<any> TS2694',
   ],
   // Nothing: every type name the floor Base UI exports compiles through this package.
   floor: [],

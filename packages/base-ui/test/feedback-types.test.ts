@@ -31,12 +31,17 @@ import { BASE, compile, EQUAL, NAVE } from './support/type-fixtures.ts'
 const VERSIONS: readonly BaseUiVersion[] = ['current', 'floor']
 const MINUTES = 180_000
 
-// The type error TypeScript reports for a type argument list on a type that declares no type
-// parameter (TS2315), or on a generic reached through a namespace that is not (TS2707).
-const NOT_GENERIC = /fixture\.tsx?\(\d+,\d+\): error TS(?:2315|2707): /
+// The flat names Base UI exports beside its namespace, named with a type argument (QA's ruling on
+// the carrier: the dotted `NavigationMenu.Root.Props` is a recorded floor exception).
+const propsOfString = (from: string): string =>
+  `import type { NavigationMenuRootProps } from '${from}/navigation-menu'\nexport type OfString = NavigationMenuRootProps<string>\n`
 
-const namedWithString = (from: string): string =>
-  `import { NavigationMenu } from '${from}/navigation-menu'\nexport type OfString = NavigationMenu.Root.Props<string>\n`
+const valueOfString = (from: string): string =>
+  `import type { NavigationMenuRoot } from '${from}/navigation-menu'\nexport type OfString = NavigationMenuRoot.Value<string>\n`
+
+// TS2315: the type is not generic. TS2694: the namespace has no exported member.
+const NOT_GENERIC = /fixture\.tsx?\(\d+,\d+\): error TS2315: /
+const NO_MEMBER = /fixture\.tsx?\(\d+,\d+\): error TS2694: /
 
 describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) => {
   const infos = readFeedbackTypes(version)
@@ -152,7 +157,7 @@ describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) 
     )
 
     it.runIf(isNavigationMenuGeneric)(
-      'names NavigationMenu.Root.Props<string> through the wrapper and through Base UI, and both compile',
+      'names NavigationMenuRootProps<string> and NavigationMenuRoot.Value<string> through the wrapper and through Base UI, and both compile',
       { timeout: MINUTES },
       async () => {
         for (const [from, label] of [
@@ -160,8 +165,11 @@ describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) 
           [BASE, 'base'],
         ] as const) {
           const result = await compile(
-            `fn-02-nav-generic-${version}-${label}`,
-            { 'fixture.ts': namedWithString(from) },
+            `fn-02-nav-flat-${version}-${label}`,
+            {
+              'props.ts': propsOfString(from),
+              'value.ts': valueOfString(from),
+            },
             version,
           )
           expect(result.output, `${label} at the current run`).toBe('')
@@ -171,20 +179,27 @@ describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) 
     )
 
     it.runIf(!isNavigationMenuGeneric)(
-      'control: NavigationMenu.Root.Props<string> fails at 1.3.0 under the rewritten specifier and the unrewritten one, which declares no type parameter',
+      'control: NavigationMenuRootProps<string> fails with TS2315 and NavigationMenuRoot.Value<string> with TS2694 at 1.3.0, under the rewritten specifier and the unrewritten one',
       { timeout: MINUTES },
       async () => {
         for (const [from, label] of [
           [NAVE, 'wrapper'],
           [BASE, 'base'],
         ] as const) {
-          const result = await compile(
-            `fn-02-nav-generic-${version}-${label}`,
-            { 'fixture.ts': namedWithString(from) },
+          const props = await compile(
+            `fn-02-nav-props-${version}-${label}`,
+            { 'fixture.ts': propsOfString(from) },
             version,
           )
-          expect(result.output, `${label} at the floor`).toMatch(NOT_GENERIC)
-          expect(result.code).not.toBe(0)
+          expect(props.output, `${label} Props at the floor`).toMatch(NOT_GENERIC)
+          expect(props.code).not.toBe(0)
+          const value = await compile(
+            `fn-02-nav-value-${version}-${label}`,
+            { 'fixture.ts': valueOfString(from) },
+            version,
+          )
+          expect(value.output, `${label} Value at the floor`).toMatch(NO_MEMBER)
+          expect(value.code).not.toBe(0)
         }
       },
     )

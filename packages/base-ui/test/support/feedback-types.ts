@@ -194,6 +194,14 @@ export const feedbackImports = (infos: readonly FeedbackSubpathTypes[]): string[
     `import * as B_${identifier(subpath)} from '${BASE}/${subpath}'`,
   ])
 
+// The dotted `NavigationMenu.Root.Props` is the third recorded floor exception (QA's ruling on the
+// carrier): a part's types are declared from the floor, which gives the Props no type parameter, so
+// at the current run the dotted spelling is not generic. The criterion names the flat
+// `NavigationMenuRootProps<string>` and `NavigationMenuRoot.Value<string>` instead, and does not
+// assert that the dotted one fails.
+const isRecordedException = (subpath: string, part: string): boolean =>
+  subpath === 'navigation-menu' && part === 'Root'
+
 const importSwapLines = ({ flatTypes, parts, subpath }: FeedbackSubpathTypes): string[] => {
   const id = identifier(subpath)
   const imported = flatTypes.map(({ name }) => `${name} as T_${id}_${name}`)
@@ -207,10 +215,12 @@ const importSwapLines = ({ flatTypes, parts, subpath }: FeedbackSubpathTypes): s
         `export type F_${id}_${name} = T_${id}_${name}${argumentsOf(parameters)}`,
     ),
     ...parts.flatMap((part) =>
-      part.members.map(
-        ({ name, parameters }) =>
-          `export type P_${id}_${part.name === '.' ? 'self' : part.name}_${name} = ${accessor(subpath, part.name)}.${name}${argumentsOf(parameters)}`,
-      ),
+      part.members
+        .filter(() => !isRecordedException(subpath, part.name))
+        .map(
+          ({ name, parameters }) =>
+            `export type P_${id}_${part.name === '.' ? 'self' : part.name}_${name} = ${accessor(subpath, part.name)}.${name}${argumentsOf(parameters)}`,
+        ),
     ),
   ]
 }
@@ -230,7 +240,11 @@ export const importSwapFixture = (
     'export type ProgressStatus = Progress.Status',
     'export type ManagerReturn = ReturnType<typeof Toast.useToastManager<{ id: string }>>',
     ...(options.navigationMenuRootProps === 'string'
-      ? ['export type NavigationMenuRootOfString = NavigationMenu.Root.Props<string>']
+      ? [
+          `import type { NavigationMenuRoot as NMRoot, NavigationMenuRootProps as NMRootProps } from '${BASE}/navigation-menu'`,
+          'export type NavigationMenuRootPropsOfString = NMRootProps<string>',
+          'export type NavigationMenuRootValueOfString = NMRoot.Value<string>',
+        ]
       : []),
   ].join('\n')
 
