@@ -1,9 +1,9 @@
-import { MAX_FRAMES, nextFrame } from './frames.ts'
 /**
  * What a popup's style attributes do over time, read at the moment each one changes. A transition
  * starts on the style recalculation after an attribute flips, and `getAnimations()` forces that
  * recalculation, so reading it inside the observer's callback sees the transition the flip began.
  */
+import { MAX_FRAMES, nextFrame } from './frames.ts'
 import { byTestId } from './page.ts'
 
 export interface Seen {
