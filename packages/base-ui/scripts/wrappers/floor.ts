@@ -2,7 +2,8 @@
  * What the wrappers declare must hold under every Base UI the package supports, and the generator
  * reads the current one. This reads the floor as well and narrows the current declarations to what
  * both agree on: a type namespace keeps the members the floor declares, with the type parameters
- * the floor gives them, the type-only members of a component's namespace are kept the same way, and a part the floor does not have is declared as a type that resolves to
+ * the floor gives them, the type-only members of a component's namespace are kept the same way,
+ * and a part the floor does not have is declared as a type that resolves to
  * that part where it exists and to `never` where it does not.
  */
 import type { PartTypes, SubpathTypes } from './read-types.ts'
