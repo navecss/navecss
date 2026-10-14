@@ -48,15 +48,20 @@ export function problemsOf(record: ModuleRecord, context: UsedContext): LocatedP
 }
 
 /**
- * Throws the dev server's error for the application problems of one module.
+ * Throws the dev server's error for the application problems of one module, its remedy lines
+ * naming `home` as the place the options are written.
  */
 function failModule(
   ctx: TransformContext,
   context: UsedContext,
-  input: { readonly id: string; readonly problems: readonly LocatedProblem[] },
+  input: {
+    readonly home: string
+    readonly id: string
+    readonly problems: readonly LocatedProblem[]
+  },
 ): never {
-  const { id, problems } = input
-  const message = moduleReport(problems, context.options.cxModules)
+  const { home, id, problems } = input
+  const message = moduleReport(problems, context.options.cxModules, home)
   const first = problems[0]!
   return ctx.error({
     message,
@@ -71,10 +76,10 @@ function failModule(
 export function failDevModule(
   ctx: TransformContext,
   context: UsedContext,
-  input: { readonly id: string; readonly record: RecordedModule },
+  input: { readonly home: string; readonly id: string; readonly record: RecordedModule },
 ): void {
-  const { id, record } = input
+  const { home, id, record } = input
   if (context.command !== 'serve' || record.pkg !== undefined) return
   const problems = problemsOf(record, context)
-  if (problems.length > 0) failModule(ctx, context, { id, problems })
+  if (problems.length > 0) failModule(ctx, context, { home, id, problems })
 }

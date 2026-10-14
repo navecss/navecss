@@ -1,0 +1,24 @@
+10 problems in 10 files: the build cannot tell which atoms these apply, and it ships only the atoms it can read.
+src/Card.tsx:3:5: cx(v)
+src/ui.ts:1:1: export { cx }
+cx.dynamic() is called in 1 place in your code, but keep is empty, so none of them applies a class.
+src/Tone.tsx:1:1: cx.dynamic(t)
+node_modules/calls-lib/index.js:1:1: cx(v)
+node_modules/declared-lib/index.js:1:1: cx(v)
+node_modules/dynamic-lib/index.js:1:1: cx.dynamic(t)
+node_modules/internal-lib/index.js:1:1: cx(v)
+node_modules/listed-lib/index.js:1:1: cx(v)
+node_modules/renamed-lib/index.js:1:1: cx(v)
+node_modules/through-lib/index.js:1:1: cx(v)
+Name the atoms at the call: a string literal, a const in the same file, or a condition choosing between them, as in cx(on ? 'flex' : 'grid').
+To choose by a value, call cx() once per case and pick between the results: ({ row: cx('flex'), grid: cx('grid') })[variant].
+If the name comes from data the build never sees, write cx.dynamic(name) and list every atom it can take in keep in navePlugin().
+To keep a module that re-exports cx, list it in navePlugin() by its path from the project root: cxModules: ['./src/own.ts', './src/ui.ts']. Files that import cx from it are then read as if they imported it from @navecss/core/cx. Or import cx from @navecss/core/cx directly where it is called.
+List the atoms those calls can take in keep in navePlugin().
+calls-lib is a dependency, so its code is not yours to change. List the atoms its calls can produce, from its documentation, under its name in navePlugin(): keepFor: { 'calls-lib': ['<atom>'] }. The lasting fix is the package's: names chosen at run time go through cx.dynamic().
+declared-lib exports a cx the build does not follow from 'declared-lib', which is listed in cxModules. Remove it from cxModules in navePlugin(), and where your code imports cx from it, import cx from @navecss/core/cx instead. The lasting fix is the package's: make export { cx } from '@navecss/core/cx' the only export of cx in the module you list.
+dynamic-lib calls cx.dynamic() in 1 place, and keepFor lists no atoms for it, so none of them applies a class. List the atoms those calls can take, from its documentation, under its name in navePlugin(): keepFor: { 'dynamic-lib': ['<atom>'] }.
+internal-lib re-exports cx in a file that only the package itself imports, so your code has no specifier for it to list in cxModules, and the build does not read calls made through that cx. Where your code imports cx from internal-lib or one of its subpaths, import it from @navecss/core/cx instead. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): keepFor: { 'internal-lib': ['<atom>'] }. The lasting fix is the package's: import cx from @navecss/core/cx where it is called, or re-export it from the package's entry.
+listed-lib re-exports cx in 'listed-lib'. List it in navePlugin(): cxModules: ['./src/own.ts', 'listed-lib'].
+renamed-lib re-exports cx other than under the name cx (renamed, as a default or inside a namespace), which the build does not follow even from a module listed in cxModules. Listing a module that does fails the build, so no entry there clears an export of cx from it, under the name cx or another, and the build does not read calls made through that export. Where your code imports that export from renamed-lib or one of its subpaths, import cx from @navecss/core/cx instead and call cx in its place. For the package's own calls, list the atoms they can produce, from its documentation, under its name in navePlugin(): keepFor: { 'renamed-lib': ['<atom>'] }. The lasting fix is the package's: import cx from @navecss/core/cx where it is called, and re-export it only under the name cx.
+through-lib re-exports the cx of a module listed in cxModules, and the build follows a listed module one step, so it does not read the calls that node_modules/caller-lib/index.js makes through that re-export. That code is a dependency's, not yours to change: list the atoms those calls can produce, from its documentation, under the name of through-lib, which holds the re-export, in navePlugin(): keepFor: { 'through-lib': ['<atom>'] }. The lasting fix is upstream: through-lib can re-export cx from @navecss/core/cx itself, or the code that calls through it can import cx from there.

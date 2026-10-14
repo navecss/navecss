@@ -76,7 +76,7 @@ const NO_SPECIFIER_REMEDY =
 function applicationRemedyOf(
   items: readonly ListedImporter[],
   lines: readonly ApplicationLines[],
-  configured: readonly string[],
+  input: { readonly configured: readonly string[]; readonly home: string },
 ): string[] {
   const remedy: string[] = []
   const relativeCount = lines.reduce((count, line) => count + line.relative.length, 0)
@@ -101,10 +101,10 @@ function applicationRemedyOf(
       items.flatMap((item) => item.specifiers.filter((specifier) => !isRelative(specifier))),
     ),
   ]
-  const array = cxModulesArray(configured, added)
+  const array = cxModulesArray(input.configured, added)
   if (array !== undefined) {
     const each = added.length === 1 ? 'the specifier' : 'each specifier'
-    remedy.push(`Add ${each}, as written, to cxModules in navePlugin(): cxModules: ${array}.`)
+    remedy.push(`Add ${each}, as written, to cxModules in ${input.home}: cxModules: ${array}.`)
   }
   return remedy
 }
@@ -114,26 +114,36 @@ const LASTING_FIX_HERE =
 
 /**
  * The one remedy line of a package whose files import a listed module through a specifier the
- * build does not recognise. `hasKeepFor` is whether the report in the same failure already printed
- * the package's `keepFor` line, which clears these files too, so it is not printed twice.
+ * build does not recognise. `home` is the place the options are written. `hasKeepFor` is whether
+ * the report in the same failure already printed the package's `keepFor` line, which clears these
+ * files too, so it is not printed twice.
  */
-function packageRemedyOf(pkg: string, files: number, hasKeepFor: boolean): string {
-  if (hasKeepFor) {
+function packageRemedyOf(
+  pkg: string,
+  files: number,
+  input: { readonly hasKeepFor: boolean; readonly home: string },
+): string {
+  if (input.hasKeepFor) {
     const file = files === 1 ? 'a file' : 'files'
     return `${pkg} also imports a module listed in cxModules in ${file} the build did not read; the keepFor entry above clears that too. ${LASTING_FIX_HERE}`
   }
-  return `For ${pkg}, list the atoms its calls can produce, from its documentation, under its name in navePlugin(): keepFor: { '${pkg}': ['<atom>'] }. Once the package is listed, its files no longer fail the build here, and the atoms you list stand in for the calls the build did not read. The lasting fix is the package's: import the module by a specifier ending in the listed file's name.`
+  return `For ${pkg}, list the atoms its calls can produce, from its documentation, under its name in ${input.home}: keepFor: { '${pkg}': ['<atom>'] }. Once the package is listed, its files no longer fail the build here, and the atoms you list stand in for the calls the build did not read. The lasting fix is the package's: import the module by a specifier ending in the listed file's name.`
 }
 
 /**
  * The error for the importers `found`: the count, the application's lines then the dependencies'
  * by path, the application's remedies, and last one line for each package. `configured` is the
- * `cxModules` list the array extends, and `report` the text of the report printed before this
- * error in the same failure, if any.
+ * `cxModules` list the array extends, `home` the place the options are written (as the report's
+ * remedy lines take it), and `report` the text of the report printed before this error in the same
+ * failure, if any.
  */
 export function importerErrorOf(
   found: readonly ListedImporter[],
-  input: { readonly configured: readonly string[]; readonly report: string | undefined },
+  input: {
+    readonly configured: readonly string[]
+    readonly home: string
+    readonly report: string | undefined
+  },
 ): string {
   const application = found.filter((item) => item.pkg === undefined)
   const dependencies = found.filter((item) => item.pkg !== undefined)
@@ -151,13 +161,12 @@ export function importerErrorOf(
       .flatMap((line) => [...line.relative, ...line.other, ...line.none])
       .toSorted(compareText),
     ...dependencies.map((item) => dependencyLineOf(item)).toSorted(compareText),
-    ...applicationRemedyOf(application, lines, input.configured),
+    ...applicationRemedyOf(application, lines, input),
     ...packages.map((pkg) =>
-      packageRemedyOf(
-        pkg,
-        new Set(byPackage.get(pkg)!.map((item) => item.importer)).size,
-        input.report?.includes(`keepFor: { '${pkg}'`) ?? false,
-      ),
+      packageRemedyOf(pkg, new Set(byPackage.get(pkg)!.map((item) => item.importer)).size, {
+        hasKeepFor: input.report?.includes(`keepFor: { '${pkg}'`) ?? false,
+        home: input.home,
+      }),
     ),
   ].join('\n')
 }

@@ -103,22 +103,27 @@ describe('AC-directive-core-27 — the export map only grows, and core gains no 
     expect(() => assertPublishedExportsPresent(exports)).not.toThrow()
   })
 
-  it('adds exactly ./check, ./vite, ./lightningcss and ./standalone beyond the 0.1.0 keys', () => {
+  it('adds exactly ./check, ./collect, ./vite, ./lightningcss and ./standalone beyond the 0.1.0 keys', () => {
     const exports = manifest().exports as Record<string, unknown>
     const added = Object.keys(exports).filter((k) => !Object.hasOwn(PUBLISHED_0_1_0_EXPORTS, k))
     expect(added.toSorted((a, b) => a.localeCompare(b))).toEqual([
       './check',
+      './collect',
       './lightningcss',
       './standalone',
       './vite',
     ])
   })
 
-  it('adds only ./lightningcss and ./standalone to what ./check and ./vite already had', () => {
+  it('adds only ./collect, ./lightningcss and ./standalone to what ./check and ./vite already had', () => {
     const exports = manifest().exports as Record<string, unknown>
     const slice2 = new Set([...Object.keys(PUBLISHED_0_1_0_EXPORTS), './check', './vite'])
     const added = Object.keys(exports).filter((k) => !slice2.has(k))
-    expect(added.toSorted((a, b) => a.localeCompare(b))).toEqual(['./lightningcss', './standalone'])
+    expect(added.toSorted((a, b) => a.localeCompare(b))).toEqual([
+      './collect',
+      './lightningcss',
+      './standalone',
+    ])
   })
 
   it('exports no host subpath without a green fixture: none of rspack, esbuild, rollup, rolldown, webpack, turbopack', () => {

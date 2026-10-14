@@ -47,6 +47,11 @@ import { isSecondHop, withoutRemoved } from './vite-used-package-lines.ts'
 import { buildReport } from './vite-used-report.ts'
 import { isUsed, ownAtomNames } from './vite-used.ts'
 
+/**
+ * Where a Vite project writes the options, as the report's remedy lines name it.
+ */
+const OPTIONS_HOME = 'navePlugin()'
+
 interface HtmlHook {
   readonly order: 'pre'
   handler(html: string, context: { readonly filename?: string }): undefined
@@ -114,7 +119,7 @@ async function problemsOfBuild(
  * what an earlier server build recorded.
  */
 function reportOf(context: UsedContext, problems: readonly LocatedProblem[]): string {
-  const report = buildReport(problems, context.options.cxModules)
+  const report = buildReport(problems, context.options.cxModules, OPTIONS_HOME)
   const recorded = problems
     .flatMap((problem) => problem.takes ?? [])
     .filter((take) => take.isRecorded === true)
@@ -136,6 +141,7 @@ async function failuresOf(
   const report = problems.length > 0 ? reportOf(context, problems) : undefined
   const importers = await declaredImporterError(ctx, context, {
     configured: withoutRemoved(problems, context.options.cxModules),
+    home: OPTIONS_HOME,
     report,
   })
   return { failures: [report, importers].filter((failure) => failure !== undefined), prepared }
@@ -201,7 +207,7 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
       const record = await recordModule(context, this, { code, id, moduleType: meta?.moduleType })
       if (context.command === 'serve') devServing.noteGrowth(context)
       if (record?.edits) return applyEdits(code, id, record.edits)
-      if (record) failDevModule(this, context, { id, record })
+      if (record) failDevModule(this, context, { home: OPTIONS_HOME, id, record })
     },
 
     transformIndexHtml: {
