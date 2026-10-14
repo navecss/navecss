@@ -5,8 +5,9 @@
  * been transformed (so the set is complete for what the pages load, whichever script each page
  * starts from), and a set that grows afterwards reloads the stylesheets already served, batched,
  * through Vite's own module reload, and, when a page's classes grew it, drops their cached text so
- * the next request filters again. `devServing` is an object, so a test can stand a scratch copy of
- * one step in its place.
+ * the next request filters again. Vite drops a reload sent while no page is connected, so when a
+ * page connects the reloads sent and not yet answered are forgotten and the check runs again.
+ * `devServing` is an object, so a test can stand a scratch copy of one step in its place.
  */
 import type {
   DevEnvironmentLike,
@@ -47,6 +48,13 @@ export interface DevServing {
    * outgrew.
    */
   noteGrowth(context: UsedContext): void
+  /**
+   * Notes that a page connected to the dev server. The reloads sent and not yet answered by a
+   * request for the stylesheet may have gone to no one, because Vite drops an update sent while no
+   * page is connected, so they are forgotten and the served stylesheets the set has outgrown are
+   * reloaded now that a page can hear it.
+   */
+  noteConnect(context: UsedContext): void
   /**
    * Notes that a page was read: the served stylesheets its classes outgrew are dropped from the
    * module graph's cache, so the request of a page that is loading filters them again, and the
@@ -129,6 +137,11 @@ export const devServing: DevServing = {
       const module = environment.moduleGraph.getModuleById(id)
       if (module) environment.moduleGraph.invalidateModule(module)
     }
+    devServing.noteGrowth(context)
+  },
+
+  noteConnect(context) {
+    context.state.reloading.clear()
     devServing.noteGrowth(context)
   },
 

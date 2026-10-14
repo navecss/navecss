@@ -88,13 +88,24 @@ export interface RequestLike {
 }
 
 /**
+ * The client environment as the plugin listens to it: the channel its pages connect over, where
+ * `vite:client:connect` is emitted for each page that opens a connection.
+ */
+interface ClientEnvironmentLike extends DevEnvironmentLike {
+  readonly hot: {
+    off(event: 'vite:client:connect', listener: () => void): void
+    on(event: 'vite:client:connect', listener: () => void): void
+  }
+}
+
+/**
  * The part of a dev server the plugin touches when it starts: where its middleware goes, its base,
  * and the client environment.
  */
 export interface DevServerLike {
   close: () => Promise<void>
   readonly config: { readonly base: string }
-  readonly environments: { readonly client: DevEnvironmentLike }
+  readonly environments: { readonly client: ClientEnvironmentLike }
   readonly middlewares: {
     use(
       handler: (request: RequestLike, response: unknown, next: () => void) => Promise<void> | void,

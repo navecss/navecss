@@ -6,6 +6,7 @@ import type { UsedContext } from './vite-used.ts'
 
 import { noteStylesheetRequests } from './vite-dev-judge.ts'
 import { installServerKeepMap, removeServerKeepMap } from './vite-dev-keep.ts'
+import { devServing } from './vite-dev.ts'
 import { expectBuilds } from './vite-markup.ts'
 
 /**
@@ -20,7 +21,8 @@ function warnThrough(ctx: { warn(message: string): void }): (message: string) =>
 /**
  * The hooks of the first plugin object that belong to the dev server and to a builder's process:
  * the map `cx.dynamic()` reads in a server render of this process, put on the global when the dev
- * server starts and taken off when it closes, and, for a builder's process, the note of which
+ * server starts and taken off when it closes, the note of each page that connects (a reload sent
+ * before any page was listening reached no one), and, for a builder's process, the note of which
  * environments are about to build, so the markup warning is judged once the last of them has
  * built (every module it was going to transform has been read).
  */
@@ -40,8 +42,15 @@ export function serverHooks(context: UsedContext): {
       // The map comes off when the server is told to close, not only when its environments finish
       // closing: Vite 8.2.1 skips the close hooks of an environment whose `buildEnd` throws.
       const close = devServer.close.bind(devServer)
+      // A reload sent while no page was connected is dropped by Vite, and the page that connects
+      // next has not been told, so each connection checks the stylesheets again.
+      const noteConnect = (): void => {
+        devServing.noteConnect(context)
+      }
+      owner.hot.on('vite:client:connect', noteConnect)
       devServer.close = () => {
         removeServerKeepMap(owner)
+        owner.hot.off('vite:client:connect', noteConnect)
         return close()
       }
       noteStylesheetRequests(context, devServer)

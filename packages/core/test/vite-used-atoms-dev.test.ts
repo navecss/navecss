@@ -1,5 +1,5 @@
 /* eslint-disable unicorn/consistent-function-scoping -- each fixture sits beside the criterion whose rows use it */
-import type { InlineConfig, PluginOption } from 'vite'
+import type { InlineConfig, PluginOption, ViteDevServer } from 'vite'
 
 /**
  * The used-atoms criteria for the dev server (AC-used-atoms-33, -39, -41, -42 and the dev
@@ -406,6 +406,34 @@ async function servedOnceRead(
   return servedLayer(server, root)
 }
 
+/**
+ * A scratch plugin, listed ahead of `navePlugin()`, that keeps what the dev server listens for on
+ * the client channel when a page connects, so a row can stand a page's connection in without a
+ * browser. `connect` calls each of those listeners.
+ */
+function pageConnections(): { connect: () => void; plugin: PluginOption } {
+  const listeners: (() => void)[] = []
+  const plugin: PluginOption = {
+    name: 'page-connections',
+    configureServer(server: ViteDevServer) {
+      const { hot } = server.environments.client
+      const on = hot.on.bind(hot) as (event: string, listener: () => void) => void
+      Object.assign(hot, {
+        on: (event: string, listener: () => void) => {
+          if (event === 'vite:client:connect') listeners.push(listener)
+          on(event, listener)
+        },
+      })
+    },
+  }
+  return {
+    plugin,
+    connect: () => {
+      for (const listener of listeners) listener()
+    },
+  }
+}
+
 const ACCEPTING = (body: string): string =>
   `${IMPORT}export const a = ${body}\nif (import.meta.hot) import.meta.hot.accept()\n`
 
@@ -539,6 +567,64 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
       app.dispose()
     }
   }, 60_000)
+
+  it('a page that connects after a reload was sent to no one is sent the reload again', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
+    const page = pageConnections()
+    try {
+      const server = await startDev(devConfig(app.root, [page.plugin, navePlugin()], NO_WATCHER))
+      try {
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
+        const reloads = (): Update[] =>
+          updates.sent.filter((update) =>
+            update.updates?.some((entry) => entry.path === '/src/app.css'),
+          )
+
+        await edit(server, app.root, "cx('flex', 'block')")
+        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        // Nothing has asked for the stylesheet since, so the reload may have gone to no one, and
+        // more growth is not announced on top of it.
+        await edit(server, app.root, "cx('flex', 'block', 'gap')")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        expect(reloads()).toHaveLength(1)
+
+        const asked = reloadAsked(server, UPDATE_CEILING_MS)
+        page.connect()
+        await asked.done
+
+        expect(reloads()).toHaveLength(2)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('control: a page that connects when the stylesheet it was served is current is sent nothing', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
+    const page = pageConnections()
+    try {
+      const server = await startDev(devConfig(app.root, [page.plugin, navePlugin()], NO_WATCHER))
+      try {
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
+
+        await edit(server, app.root, "cx('flex', 'block')")
+        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        await stylesheetServedAgain(server, app.root)
+        page.connect()
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
+        expect(updates.sent).toHaveLength(1)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
 })
 
 /**

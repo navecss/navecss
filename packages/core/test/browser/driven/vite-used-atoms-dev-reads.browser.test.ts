@@ -467,6 +467,67 @@ function rulesIn(css: string | undefined, names: readonly string[]): Record<stri
   )
 }
 
+/**
+ * A scratch plugin that holds Vite's client module until the dev server has read the module
+ * `script` and one turn of the event loop has passed, so a reload sent when that read grew the
+ * set goes out before the page is listening. List it after `navePlugin()`.
+ */
+function clientAfterScript(script: string): PluginOption {
+  let isScriptRead = false
+  return [
+    {
+      name: 'client-after-script',
+      enforce: 'pre',
+      async transform(_code: string, id: string) {
+        if (!id.endsWith('vite/dist/client/client.mjs')) return
+        await untilServer(() => isScriptRead, `the read of ${script}`)
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      },
+    },
+    {
+      name: 'script-read',
+      enforce: 'post',
+      transform(_code: string, id: string) {
+        if (id.endsWith(script)) isScriptRead = true
+      },
+    },
+  ]
+}
+
+/**
+ * Whether the `nave-flex` element of `LINKED_APP` gets its rule when the `<link>` was answered
+ * before `src/main.ts` was read and the page starts listening only after that read, and whether
+ * the page is still the one first loaded (no page reload).
+ */
+async function scriptClassAfterGrowth(
+  options: NaveViteOptions,
+): Promise<{ isRuled: boolean; isSamePage: boolean }> {
+  const app = makeUsedApp(LINKED_APP)
+  const order = answeredBeforeScript('src/linked.css', 'src/main.ts')
+  try {
+    const { server, url } = await listenDev(
+      devConfig(app.root, [navePlugin(options), order.plugin, clientAfterScript('src/main.ts')]),
+    )
+    try {
+      const page = await browser.newPage()
+      await page.goto(url)
+      await until(page, () => hasElement(page, '#f'), 'the script’s element')
+      await page.evaluate(() => {
+        document.documentElement.dataset.mark = '1'
+      })
+      await untilQuietly(page, () => hasRuleNow(page, 'nave-flex'), 'the rule for nave-flex')
+      const isSamePage = await page.evaluate(() => document.documentElement.dataset.mark === '1')
+      const isRuled = await hasRuleNow(page, 'nave-flex')
+      await page.close()
+      return { isRuled, isSamePage }
+    } finally {
+      await stopDev(server)
+    }
+  } finally {
+    app.dispose()
+  }
+}
+
 describe('AC-used-atoms-40 — what the first stylesheet response has read', () => {
   it('a second script of the page, which the stylesheet’s own graph does not hold, has had its lazy module read', async () => {
     const app = makeUsedApp(
@@ -527,5 +588,18 @@ describe('AC-used-atoms-40 — what the first stylesheet response has read', () 
     } finally {
       app.dispose()
     }
+  }, 120_000)
+})
+
+describe('AC-used-atoms-41 — a set that grew before the page was listening', () => {
+  it('the class a script adds to that page gets its rule with no page reload, though the set grew before the page was listening', async () => {
+    expect(await scriptClassAfterGrowth({})).toEqual({ isRuled: true, isSamePage: true })
+  }, 120_000)
+
+  it('control: with the atom in keep it has one', async () => {
+    expect(await scriptClassAfterGrowth({ keep: ['flex'] })).toEqual({
+      isRuled: true,
+      isSamePage: true,
+    })
   }, 120_000)
 })
