@@ -37,3 +37,4 @@ export declare namespace Input {
   export type State = Base.Input.State
   export type Props = Base.Input.Props
 }
+export type Orientation = Base.Orientation

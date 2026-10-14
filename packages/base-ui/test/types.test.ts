@@ -36,16 +36,9 @@ const EXPECTED_ERRORS: Readonly<Record<BaseUiVersion, readonly string[]>> = {
     // README and the changeset sentence that name them.
     'ContextMenu.Root.Actions TS2694',
     'Combobox.Root.Props<any, any, any> TS2707',
-    // Known defects of the first release, not of the floor rule: a type-only member the wrapper
-    // does not re-export. A separate fix removes them, and these two lines with them.
-    'Field.ValidityData TS2724',
-    'Toolbar.Orientation TS2694',
   ],
-  floor: [
-    // The same two defects, present at the floor too.
-    'Field.ValidityData TS2724',
-    'Toolbar.Orientation TS2694',
-  ],
+  // Nothing: every type name the floor Base UI exports compiles through this package.
+  floor: [],
 }
 
 const byName = (a: string, b: string): number => a.localeCompare(b)

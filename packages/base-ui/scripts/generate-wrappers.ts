@@ -17,7 +17,7 @@ import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { PartTypes, SubpathTypes } from './wrappers/read-types.ts'
+import type { MemberTypes, PartTypes, SubpathTypes } from './wrappers/read-types.ts'
 import type { StyledPart } from './wrappers/roster.ts'
 
 import { readSharedTypes } from './wrappers/floor.ts'
@@ -182,10 +182,20 @@ const imports = (subpath: string, body: string): string => {
   ].join('\n')
 }
 
+/**
+ * The members of a component's namespace that are only a type (`Field.ValidityData`): each one is
+ * Base UI's own type under the same name, with the type parameters it declares.
+ */
+const typeMemberLine = ({ arguments: args, name, parameters }: MemberTypes): string =>
+  `export type ${name}${generics(parameters)} = Base.${name}${generics(args)}`
+
 const generateSubpath = (types: SubpathTypes, used: Set<string>): Map<string, string> => {
-  const { parts, subpath } = types
+  const { parts, subpath, typeMembers } = types
   const isSingle = SINGLE_COMPONENT.has(subpath)
-  const body = parts.flatMap((part) => partBlock(subpath, part, isSingle, used)).join('\n')
+  const body = [
+    ...parts.flatMap((part) => partBlock(subpath, part, isSingle, used)),
+    ...typeMembers.map((member) => typeMemberLine(member)),
+  ].join('\n')
   const reexport = `export type * from '@base-ui/react/${subpath}'`
   // A namespace of parts is exported as `Dialog`; a single component is exported by its own name,
   // which takes the place of the one the star re-export of Base UI's types would otherwise bring.
