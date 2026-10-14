@@ -203,7 +203,7 @@ describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07
   })
 
   it('reds on the class of an unsigned draft left in its state, and not on the state itself (control)', () => {
-    const state = deriveState(allSigned, ['highlight-fill'])
+    const state = expectedSheet(['highlight-fill'])
     const kept = `${state}\n.nave-base-ui-item-highlight { }`
 
     expect(classesOf(state)).toEqual(tablePClassesFor(['highlight-fill']))
@@ -211,7 +211,7 @@ describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07
   })
 
   it('reds on an unsigned draft whose class no table row removes (control)', () => {
-    const state = deriveState(allSigned, ['combobox'])
+    const state = expectedSheet(['combobox'])
 
     expect(classesOf(`${state}\n.nave-base-ui-chip { }`)).not.toEqual(
       tablePClassesFor(['combobox']),

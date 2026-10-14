@@ -129,6 +129,8 @@ describe('AC-base-ui-feedback-navigation-42 (first scenario), AC-base-ui-overlay
     expect(selectors).toEqual([
       `.${TRIGGER}`,
       `.${TRIGGER}:active:not(:disabled, [aria-disabled="true"])`,
+      // focusRing, composed because the trigger is in Table T2; it names no disabled state.
+      `.${TRIGGER}:focus-visible`,
       `.${TRIGGER}:hover:not(:disabled, [aria-disabled="true"])`,
     ])
   })

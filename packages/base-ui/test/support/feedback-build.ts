@@ -13,7 +13,6 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import postcss from 'postcss'
 
-import type { BuildOptions } from '../../scripts/build-styles.ts'
 import type { AnyDraft } from './feedback-states.ts'
 
 import { buildStyles } from '../../scripts/build-styles.ts'
@@ -48,9 +47,8 @@ export const buildWithoutClasses = async (classes: readonly string[]): Promise<s
 }
 
 /**
- * The shipping build with drafts of either list unsigned. `buildStyles` types `unsigned` by the
- * drafts the build file knows; the #789 ids are the build's to learn, so this is the one place the
- * option is passed through typed as the union of both lists.
+ * The shipping build with drafts of either list unsigned: one place to pass the union of both
+ * lists, `Draft` and `Draft789`, to `buildStyles`.
  */
 export const buildState = (unsigned: readonly AnyDraft[]): Promise<string> =>
-  buildStyles({ unsigned } as BuildOptions)
+  buildStyles({ unsigned })

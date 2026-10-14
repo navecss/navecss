@@ -498,7 +498,7 @@ const calcShapesIn = (css: string): Set<string> =>
 const literalsOf = (css: string): Set<string> =>
   new Set(
     flatten(css)
-      .filter((item) => NEW_CLASSES_789.includes(item.owner))
+      .filter((item) => NEW_CLASSES_789.includes(item.owner) && !isFocusRingDeclaration(item))
       .flatMap((item) => item.value.replaceAll(/var\([^()]*\)/g, ' ').split(/[\s(),*/+]+/))
       .filter((word) => /^-?\d*\.?\d+(?:px|rem|em|deg|ms|s|%)$/.test(word)),
   )

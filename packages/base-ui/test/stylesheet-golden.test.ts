@@ -501,7 +501,10 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
     expect(classes787).toHaveLength(65)
     expect(classes787.filter((name) => !classLists(sheet).has(name))).toEqual([])
     expect(listDrift(sheet, without)).toEqual([])
-    expect(listDrift(without, sheet)).toEqual([])
+    const sheetClasses = classLists(sheet).keys().toArray()
+    const kept = classLists(without)
+
+    expect(sheetClasses.filter((name) => !kept.has(name))).toEqual(NEW_CLASSES_789)
     expect(listDrift(sheet, expected787)).toEqual([])
   })
 
