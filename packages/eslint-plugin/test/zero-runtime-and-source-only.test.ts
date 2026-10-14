@@ -220,6 +220,11 @@ describe('AC-06: rules key on source, never on build output (R3)', () => {
     }
   })
 
+  // The one heavy step of this test is the `tsc` build of the package into the scratch copy, which
+  // it runs itself every time, so no hook can pay for it ahead of time. Measured: 1.2 s alone,
+  // 8.7 s beside 70 busy processes, 17 s beside 160, and beside 240 it timed out at the default
+  // 20 s (20.4 s) and, with the budget below, finished in 28 s. Its own budget is 120 s, about
+  // four times the worst measured; the default stays 20 s for every other test.
   it("the compiled plugin, built into a scratch copy (never this package's own dist/), gives the same verdicts as the source", async () => {
     const scratch = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-build-'))
     const copy = realpathSync(scratch)
@@ -245,5 +250,5 @@ describe('AC-06: rules key on source, never on build output (R3)', () => {
       rmSync(copy, { recursive: true, force: true })
       rmSync(project, { recursive: true, force: true })
     }
-  })
+  }, 120_000)
 })
