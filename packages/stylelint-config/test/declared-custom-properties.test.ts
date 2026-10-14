@@ -35,6 +35,15 @@ import {
 import config, { declaredCustomPropertiesRuleName } from '../index.js'
 import { packTarball } from './helpers/pack.ts'
 
+// Packing the tarball (`npm pack` and two `tar` calls) is the one expensive step a test here
+// shares, and the first test to ask for it used to pay for it inside its own 20 second timeout.
+// Measured: `npm pack` alone takes 1.3 s, and beside 240 busy processes the first test of these
+// two files took 24.5 s and 27.5 s and timed out. Pay it here, under a hook budget of 120 s, about
+// four times the worst measured, so no test carries it.
+beforeAll(() => {
+  packTarball()
+}, 120_000)
+
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(HERE, '..')
 const TOKENS_CSS_PATH = path.resolve(PACKAGE_DIR, '../tokens/dist/tokens.css')
@@ -248,13 +257,6 @@ describe('AC-eslint-plugin-20 covers: R11', () => {
 })
 
 describe('AC-eslint-plugin-21 covers: R11, R12', () => {
-  // The README rows below read the packed tarball, and the first read runs `npm pack` and two
-  // `tar` children, far slower on a loaded machine than a row's default budget. Pay it once, under
-  // this hook's own budget, so the first of those rows does not carry it.
-  beforeAll(() => {
-    packTarball()
-  }, 120_000)
-
   it('by default reads @navecss/tokens/css, resolved from this package: a declared name passes, an undeclared one is reported', async () => {
     expect(await lintReportedNames(`.a { color: var(${aRealDeclaredName()}); }`)).toEqual([])
     expect(await lintReportedNames('.a { color: var(--nave-does-not-exist); }')).toContain(

@@ -2,6 +2,7 @@ import type { Problem } from './vite-problems.ts'
 /**
  * What the collector takes and what it returns for one module.
  */
+import type { Edit } from './vite-rewrite-edit.ts'
 import type { SetupExposure, SetupExposures } from './vite-setup-member.ts'
 
 export interface ReadOptions {
@@ -36,6 +37,11 @@ export interface ReadOptions {
    * Whether the module is a compiled Vue component's `<script setup>`.
    */
   readonly isVueScript?: boolean
+  /**
+   * Set in a build: the reading also returns the edits that turn each call it read into the
+   * string the call returns, and `keep` is the map a `cx.dynamic()` call looks a name up in.
+   */
+  readonly rewrite?: { readonly keep: Readonly<Record<string, string>> }
 }
 
 export interface ModuleReading {
@@ -60,4 +66,8 @@ export interface ModuleReading {
    * Whether the module imports from a `cx` source, whether or not it uses the import.
    */
   readonly usesCx: boolean
+  /**
+   * With `rewrite` set: the edits that replace the calls the reading found, empty otherwise.
+   */
+  readonly edits: Edit[]
 }

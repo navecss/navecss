@@ -106,6 +106,45 @@ describe('AC-used-atoms-05 — every other reference to the binding is a build e
   })
 })
 
+describe('AC-used-atoms-05 — the words for a refused write to the binding', () => {
+  const NAMESPACE = `import * as ns from '${CX_SOURCE}'\n`
+  const VALUE = 'instead of being called.'
+
+  it.each([
+    ['cx = 1', `${IMPORT}cx = 1\n`, `cx is used as a value ${VALUE}`],
+    ['cx += 1', `${IMPORT}cx += 1\n`, `cx is used as a value ${VALUE}`],
+    ['cx ??= 1', `${IMPORT}cx ??= 1\n`, `cx is used as a value ${VALUE}`],
+    ['ns.cx = 1', `${NAMESPACE}ns.cx = 1\n`, `ns.cx is used as a value ${VALUE}`],
+  ])('says %s uses the binding as a value, not that it is assigned', (_name, code, text) => {
+    const reading = read(code)
+
+    expect(reading.problems.map((problem) => problem.text)).toEqual([text])
+  })
+
+  it('says a write to cx on $setup uses the binding as a value', () => {
+    const code = 'export default (_ctx, _cache, $props, $setup) => { $setup.cx = 1 }\n'
+    const reading = readModule(code, parseAst(code) as unknown as AstNode, {
+      cxSources: new Set([CX_SOURCE]),
+      ownAtoms: new Set(),
+      isDependency: false,
+      setup: new Map([['cx', { kind: 'cx' }]]),
+    })
+
+    expect(reading.problems.map((problem) => problem.text)).toEqual([
+      'cx is used as a value instead of being called.',
+    ])
+  })
+
+  it('still says what a binding assigned to something is assigned to', () => {
+    const reading = read(`${IMPORT}let other\nother = cx\nexport const f = cx\n`)
+
+    expect(reading.problems.map((problem) => problem.text)).toEqual([
+      `cx is assigned to other.`,
+      `cx is assigned to f.`,
+    ])
+  })
+})
+
 describe('AC-used-atoms-07 — references are attributed by lexical scope', () => {
   const code = [
     "import { cx as e } from '@navecss/core/cx'",

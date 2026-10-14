@@ -368,7 +368,7 @@ describe('AC-used-atoms-52 - a take the build cannot read counts as taking the m
     ] as const)('when the importer %s', async (_, code, parse) => {
       const prepared = await prepareReexports(over(code, parse), context, [problem])
       const kept = decideReexports(prepared, [])
-      const lines = packageLines('@acme/ui', kept, [])
+      const lines = packageLines('@acme/ui', kept, [], 'navePlugin()')
 
       expect(lines).toHaveLength(1)
       expect(lines[0]).toContain(

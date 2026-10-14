@@ -32,7 +32,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { classChannelRule } from '../src/rules/class-channel.ts'
-import { spawnBudget } from './helpers/spawn-budget.ts'
 
 const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WORKSPACE_ROOT = path.resolve(PACKAGE_DIR, '../..')
@@ -221,40 +220,35 @@ describe('AC-06: rules key on source, never on build output (R3)', () => {
     }
   })
 
-  // The one child is a full `tsc` compile of the package, then a cold import of what it wrote.
-  it(
-    "the compiled plugin, built into a scratch copy (never this package's own dist/), gives the same verdicts as the source",
-    { timeout: spawnBudget(1) },
-    async () => {
-      const scratch = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-build-'))
-      const copy = realpathSync(scratch)
-      const project = scratchProject()
-      try {
-        writeFileSync(
-          path.join(copy, 'package.json'),
-          readFileSync(path.join(PACKAGE_DIR, 'package.json')),
-        )
-        symlinkSync(path.join(PACKAGE_DIR, 'node_modules'), path.join(copy, 'node_modules'), 'dir')
-        execFileSync(
-          path.join(PACKAGE_DIR, 'node_modules/.bin/tsc'),
-          [
-            '-p',
-            path.join(PACKAGE_DIR, 'tsconfig.build.json'),
-            '--outDir',
-            path.join(copy, 'dist'),
-          ],
-          { cwd: PACKAGE_DIR, stdio: 'pipe' },
-        )
-        const built = (await import(pathToFileURL(path.join(copy, 'dist/index.js')).href)) as {
-          default: unknown
-        }
-        expect(lintIn(project, built.default, FIXTURE)).toEqual(
-          lintIn(project, sourcePlugin, FIXTURE),
-        )
-      } finally {
-        rmSync(copy, { recursive: true, force: true })
-        rmSync(project, { recursive: true, force: true })
+  // The one heavy step of this test is the `tsc` build of the package into the scratch copy, which
+  // it runs itself every time, so no hook can pay for it ahead of time. Measured: 1.2 s alone,
+  // 8.7 s beside 70 busy processes, 17 s beside 160, and beside 240 it timed out at the default
+  // 20 s (20.4 s) and, with the budget below, finished in 28 s. Its own budget is 120 s, about
+  // four times the worst measured; the default stays 20 s for every other test.
+  it("the compiled plugin, built into a scratch copy (never this package's own dist/), gives the same verdicts as the source", async () => {
+    const scratch = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-build-'))
+    const copy = realpathSync(scratch)
+    const project = scratchProject()
+    try {
+      writeFileSync(
+        path.join(copy, 'package.json'),
+        readFileSync(path.join(PACKAGE_DIR, 'package.json')),
+      )
+      symlinkSync(path.join(PACKAGE_DIR, 'node_modules'), path.join(copy, 'node_modules'), 'dir')
+      execFileSync(
+        path.join(PACKAGE_DIR, 'node_modules/.bin/tsc'),
+        ['-p', path.join(PACKAGE_DIR, 'tsconfig.build.json'), '--outDir', path.join(copy, 'dist')],
+        { cwd: PACKAGE_DIR, stdio: 'pipe' },
+      )
+      const built = (await import(pathToFileURL(path.join(copy, 'dist/index.js')).href)) as {
+        default: unknown
       }
-    },
-  )
+      expect(lintIn(project, built.default, FIXTURE)).toEqual(
+        lintIn(project, sourcePlugin, FIXTURE),
+      )
+    } finally {
+      rmSync(copy, { recursive: true, force: true })
+      rmSync(project, { recursive: true, force: true })
+    }
+  }, 120_000)
 })

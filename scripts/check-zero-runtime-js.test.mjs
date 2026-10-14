@@ -201,6 +201,7 @@ test('the real @navecss/core manifest reports exactly its JS export entries, one
       '@navecss/core/vite ./dist/vite.js',
       '@navecss/core/lightningcss ./dist/lightningcss.js',
       '@navecss/core/check ./dist/check.js',
+      '@navecss/core/collect ./dist/collect.js',
     ],
   )
 })

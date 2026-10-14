@@ -40,6 +40,11 @@ export interface Reference {
 }
 
 export interface ScopeAnalysis {
+  /**
+   * Whether the module calls `eval` directly, as the global one: the text it runs can read any
+   * name in sight.
+   */
+  readonly hasDirectEval: boolean
   readonly references: readonly Reference[]
   readonly parentOf: ReadonlyMap<AstNode, AstNode>
   /**

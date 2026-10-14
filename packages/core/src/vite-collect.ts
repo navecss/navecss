@@ -20,6 +20,15 @@ import {
   atomsWrittenIn,
   concatenationProblems,
 } from './vite-literal-classes.ts'
+import {
+  finishRewrite,
+  newRewriting,
+  noteUse,
+  rewriteCx,
+  rewriteDynamic,
+  rewriteRaw,
+  type Rewriting,
+} from './vite-rewrite-module.ts'
 import { analyze, type ScopeAnalysis } from './vite-scope.ts'
 import { mergedExposures, setupMemberName } from './vite-setup-member.ts'
 import { cxReadsOnSetup, stringExposures } from './vite-vue-setup.ts'
@@ -33,12 +42,14 @@ interface Reading {
   readonly options: ReadOptions
   readonly result: ModuleReading
   readonly seen: Set<string>
+  readonly rewriting: Rewriting
 }
 
 /**
  * Records `problem` unless the same one is already recorded at the same place.
  */
 function report(reading: Reading, problem: Problem): void {
+  reading.rewriting.attempts += 1
   const key = `${problem.kind}:${problem.offset}`
   if (reading.seen.has(key)) return
   reading.seen.add(key)
@@ -155,12 +166,14 @@ function refusedProblem(reading: Reading, use: CxUse): Problem | undefined {
 }
 
 /**
- * Reads one use of the binding.
+ * Reads one use of the binding, and rewrites it when the build asks and the reading met no problem.
  */
 function readUse(reading: Reading, use: CxUse, analysis: ReturnType<typeof analyze>): void {
   switch (use.kind) {
     case 'call': {
+      const before = reading.rewriting.attempts
       readCall(reading, use, analysis)
+      if (reading.rewriting.attempts === before) rewriteCx(reading, use.node, analysis)
 
       break
     }
@@ -168,11 +181,17 @@ function readUse(reading: Reading, use: CxUse, analysis: ReturnType<typeof analy
       const args = nodesAt(use.node, 'arguments')
       const construct = quoteCall(reading, use, args, `${use.local}.dynamic`)
       reading.result.dynamicCalls.push({ offset: use.node.start, construct })
+      rewriteDynamic(reading, use.node, analysis)
 
       break
     }
     case 'exposure': {
       reading.result.exposes.set(use.exposedAs ?? use.local, { kind: 'cx' })
+
+      break
+    }
+    case 'raw': {
+      rewriteRaw(reading, use.node, analysis)
 
       break
     }
@@ -207,6 +226,7 @@ function readUses(
     const cx = reference.binding && bindings.get(reference.binding)
     const use = cx && useOf(frame, reference, cx)
     if (use) readUse(reading, use, analysis)
+    noteUse(reading.rewriting, cx, use)
   }
   for (const [name, exposure] of stringExposures(analysis)) result.exposes.set(name, exposure)
   const setup = mergedExposures(options.setup, result.exposes)
@@ -229,9 +249,15 @@ export function readModule(code: string, program: AstNode, options: ReadOptions)
     dynamicCalls: [],
     exposes: new Map(),
     usesCx: isImportingCx(program, options.cxSources),
+    edits: [],
   }
-  const reading: Reading = { code, options, result, seen: new Set() }
+  const reading: Reading = { code, options, result, seen: new Set(), rewriting: newRewriting() }
   const { analysis, bindings } = readUses(reading, program)
+  finishRewrite(reading, program, {
+    bindings,
+    hasDirectEval: analysis.hasDirectEval,
+    source: CX_SOURCE,
+  })
   const listed =
     options.isDeclared === true
       ? declaredExportProblems({

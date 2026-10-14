@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises'
 import type { AstNode } from './vite-ast.ts'
 import type { ModuleReading, ReadOptions } from './vite-collect.ts'
 import type { Problem } from './vite-problems.ts'
+import type { Edit } from './vite-rewrite-edit.ts'
 import type { ModuleRecord, Position } from './vite-state.ts'
 import type { TransformContext } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
@@ -16,6 +17,7 @@ import { CX_SOURCE, readModule } from './vite-collect.ts'
 import { filePathOf } from './vite-css-id.ts'
 import { type DeclaredModules, declaredModulesFor, isAboutListed } from './vite-cx-modules.ts'
 import { declaredReadingOf } from './vite-cx-reading.ts'
+import { keepMap } from './vite-dev-keep.ts'
 import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
 import { setupExposuresFor } from './vite-setup-link.ts'
 import { combinedMapOf, placerFor } from './vite-source-map.ts'
@@ -51,6 +53,13 @@ export function isMentioningAtoms(code: string): boolean {
     code.includes('vue&type=') ||
     ESCAPED_SPECIFIER.test(code)
   )
+}
+
+/**
+ * What a module found, and, in a build, the edits that turn its calls into the strings they return.
+ */
+export interface RecordedModule extends ModuleRecord {
+  readonly edits?: readonly Edit[]
 }
 
 interface Placing {
@@ -156,7 +165,7 @@ async function recordOf(
   ctx: TransformContext,
   input: { readonly code: string; readonly id: string; readonly pkg: string | undefined },
   reading: ModuleReading,
-): Promise<ModuleRecord> {
+): Promise<RecordedModule> {
   const { code, id, pkg } = input
   const hasPlaces = reading.problems.length + reading.dynamicCalls.length > 0
   const map = hasPlaces ? combinedMapOf(ctx) : undefined
@@ -177,6 +186,7 @@ async function recordOf(
     dynamicCalls: locateDynamic(reading, placing),
     pkg,
     file: placing.file,
+    ...(reading.edits.length > 0 && { edits: reading.edits }),
   }
 }
 
@@ -216,7 +226,7 @@ async function recordParsed(
   ctx: TransformContext,
   input: Parsed,
   key: string,
-): Promise<ModuleRecord> {
+): Promise<RecordedModule> {
   const { code, id, pkg, program, declared } = input
   const { declaredSources, isDeclared, onlyVia } = await declaredReadingOf(context, ctx, declared, {
     environment: ctx.environment?.name ?? 'client',
@@ -232,6 +242,8 @@ async function recordParsed(
     isDependency: isDependencyId(id),
     isVueScript: /\.vue(?:$|\?)/.test(id),
     setup: await setupExposuresFor(context, ctx, { program, code, id }),
+    // A build turns each call into the string it returns; the dev server keeps the functions.
+    ...(context.command === 'build' && { rewrite: { keep: keepMap(context.kept) } }),
   })
   if (!reading) {
     context.state.exposures.delete(key)
@@ -256,7 +268,7 @@ export async function recordModule(
   context: UsedContext,
   ctx: TransformContext,
   module: { readonly code: string; readonly id: string; readonly moduleType?: string | undefined },
-): Promise<ModuleRecord | undefined> {
+): Promise<RecordedModule | undefined> {
   const { code, id, moduleType } = module
   const environment = ctx.environment?.name ?? 'client'
   const key = moduleKey(environment, id)

@@ -34,6 +34,21 @@ const VITE_DECLARATION = path.join(
 )
 
 /**
+ * The text of `dist/vite.d.ts` and of the declaration chunks it imports, where the options' types
+ * are declared once for both entries that share them.
+ */
+function viteDeclaration(): string {
+  const entry = readFileSync(VITE_DECLARATION, 'utf8')
+  const chunks = entry
+    .matchAll(/from '\.\/([^']+)\.js'/gu)
+    .map((match) =>
+      readFileSync(path.join(path.dirname(VITE_DECLARATION), `${match[1]}.d.ts`), 'utf8'),
+    )
+    .toArray()
+  return [entry, ...chunks].join('\n')
+}
+
+/**
  * An app importing the packages `names` (each for its effect), and calling `flex` itself.
  */
 function appUsing(names: readonly string[], files: Record<string, string> = {}): ScratchApp {
@@ -428,7 +443,7 @@ describe('AC-used-atoms-45 — keepFor entries are validated as keep is, under b
   }, 60_000)
 
   it('documents an empty list as adding no atom, not as shipping none for the package', () => {
-    const declaration = readFileSync(VITE_DECLARATION, 'utf8')
+    const declaration = viteDeclaration()
     const start = declaration.indexOf('keepFor?:')
     const docblock = declaration
       .slice(declaration.lastIndexOf('/**', start), start)

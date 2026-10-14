@@ -30,6 +30,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(HERE, '..')
 const ROOT = path.resolve(HERE, '../../..')
 
+// Packing the tarball (`npm pack` and two `tar` calls) is the one expensive step the tests below
+// share, and the first test to ask for it used to pay for it inside its own 20 second timeout.
+// Measured: 1.9 s alone, 12 s beside 70 busy processes, 18 s beside 160, 26 s beside 240 (where
+// that test timed out). Pay it here, under a hook budget of 120 s, about four times the worst
+// measured, so no test carries it.
+beforeAll(() => {
+  packTarball()
+}, 120_000)
+
 function manifest(): Record<string, unknown> {
   return JSON.parse(readFileSync(path.join(PACKAGE_DIR, 'package.json'), 'utf8')) as Record<
     string,
@@ -61,13 +70,6 @@ function expectMinorInFirstReleaseEntry(): void {
   expect(start).toBeGreaterThan(-1)
   expect(changelog.slice(start)).toMatch(/^### Minor Changes$/mu)
 }
-
-// Several rows below read the packed tarball, and the first read runs `npm pack` and two `tar`
-// children, far slower on a loaded machine than a row's default budget. Pay it once, under this
-// hook's own budget, so the first row that needs it does not carry it.
-beforeAll(() => {
-  packTarball()
-}, 120_000)
 
 describe('AC-01: the package manifest', () => {
   it('type: module, license: MIT, no bin, build runs only tsc', () => {

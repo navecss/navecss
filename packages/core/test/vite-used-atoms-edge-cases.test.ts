@@ -174,10 +174,14 @@ describe('the report', () => {
   })
 
   it('keeps the application’s cx.dynamic() calls ahead of a dependency’s problems', () => {
-    const report = buildReport([
-      problem({ file: 'node_modules/dep/index.js', pkg: 'dep' }),
-      problem({ kind: 'dynamic', construct: 'cx.dynamic(t)', text: '', file: 'src/z.ts' }),
-    ])
+    const report = buildReport(
+      [
+        problem({ file: 'node_modules/dep/index.js', pkg: 'dep' }),
+        problem({ kind: 'dynamic', construct: 'cx.dynamic(t)', text: '', file: 'src/z.ts' }),
+      ],
+      [],
+      'navePlugin()',
+    )
     const lines = report.split('\n')
 
     expect(lines.findIndex((line) => line.startsWith('src/z.ts'))).toBeLessThan(
@@ -333,18 +337,22 @@ describe('what the report and the messages say', () => {
   })
 
   it('does not offer a keepFor entry for an atom of the consumer’s own in a dependency', () => {
-    const report = buildReport([
-      {
-        kind: 'own',
-        offset: 0,
-        construct: 'cx()',
-        text: '"brandBox" is an atom of your own, which has no class.',
-        file: 'node_modules/dep/index.js',
-        line: 1,
-        column: 1,
-        pkg: 'dep',
-      },
-    ])
+    const report = buildReport(
+      [
+        {
+          kind: 'own',
+          offset: 0,
+          construct: 'cx()',
+          text: '"brandBox" is an atom of your own, which has no class.',
+          file: 'node_modules/dep/index.js',
+          line: 1,
+          column: 1,
+          pkg: 'dep',
+        },
+      ],
+      [],
+      'navePlugin()',
+    )
 
     expect(report).not.toContain("keepFor: { 'dep'")
   })

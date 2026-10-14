@@ -16,12 +16,21 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import stylelint, { type Config } from 'stylelint'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import config, { OUTLINE_GUARD_CONSUMER_MESSAGE, OUTLINE_GUARD_PATTERN } from '../index.js'
 import { pendingChangesetSurfaces } from './helpers/changesets.ts'
 import { commentText, findOutcomeWords, foldProse, type Surface } from './helpers/outcome-words.ts'
 import { packTarball } from './helpers/pack.ts'
+
+// Packing the tarball (`npm pack` and two `tar` calls) is the one expensive step a test here
+// shares, and the first test to ask for it used to pay for it inside its own 20 second timeout.
+// Measured: `npm pack` alone takes 1.3 s, and beside 240 busy processes the first test of these
+// two files took 24.5 s and 27.5 s and timed out. Pay it here, under a hook budget of 120 s, about
+// four times the worst measured, so no test carries it.
+beforeAll(() => {
+  packTarball()
+}, 120_000)
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '../../..')

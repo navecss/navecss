@@ -206,13 +206,17 @@ async function unrecognisedImporters(
 /**
  * The build-end error for modules that import a listed module through a specifier the post-order
  * half did not recognise, or `undefined` when there are none. `configured` is the `cxModules` list
- * the array it prints extends, and `report` the text of the report printed before it in the same
- * failure.
+ * the array it prints extends, `home` the place the options are written, and `report` the text of
+ * the report printed before it in the same failure.
  */
 export async function declaredImporterError(
   ctx: RenderContext,
   context: UsedContext,
-  input: { readonly configured: readonly string[]; readonly report: string | undefined },
+  input: {
+    readonly configured: readonly string[]
+    readonly home: string
+    readonly report: string | undefined
+  },
 ): Promise<string | undefined> {
   const declared = await declaredModulesFor(context, ctx, ctx.environment.name)
   if (!declared) return undefined

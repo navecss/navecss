@@ -6,12 +6,18 @@
  * the rest, when the build ends), except that a worker's import of `cx` through an alias fails
  * its own build, since no later step sees the worker's module graph.
  */
-import type { RenderContext, TransformContext, TransformMeta } from './vite-types.ts'
+import type {
+  RenderContext,
+  TransformContext,
+  TransformMeta,
+  TransformResultLike,
+} from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
 import { recordModule } from './vite-collect-module.ts'
 import { isReadable } from './vite-collect-plugin.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
+import { applyEdits } from './vite-rewrite-edit.ts'
 import { isUsed } from './vite-used.ts'
 
 export interface NaveWorkerPlugin {
@@ -22,7 +28,7 @@ export interface NaveWorkerPlugin {
     code: string,
     id: string,
     meta?: TransformMeta,
-  ): Promise<undefined>
+  ): Promise<TransformResultLike | undefined>
   buildEnd(this: RenderContext, error?: unknown): Promise<void>
 }
 
@@ -37,7 +43,8 @@ export function workerCollectPlugins(context: UsedContext): () => NaveWorkerPlug
 
     async transform(code, id, meta) {
       if (!isReadable(context, id)) return
-      await recordModule(context, this, { code, id, moduleType: meta?.moduleType })
+      const record = await recordModule(context, this, { code, id, moduleType: meta?.moduleType })
+      if (record?.edits) return applyEdits(code, id, record.edits)
     },
 
     async buildEnd(error) {

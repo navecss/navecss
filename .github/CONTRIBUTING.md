@@ -162,6 +162,11 @@ reasons are in `scripts/run-ci-check.mjs`), and start once those have
 finished, whether they passed or not, so one failure does not hide the
 results of the steps behind it. It prints each step's output as one block
 when it finishes, and ends with a summary naming every step that did not pass.
+Only one `ci:check` runs at a time per user on a machine: a second one says so,
+waits for the first, and starts when it finishes, because two at once make
+timing-sensitive tests fail on correct code. The lock lives in your temporary
+directory, so two users, or two sessions with different `TMPDIR`, do not wait on
+each other.
 
 To auto-fix what can be auto-fixed, then verify:
 

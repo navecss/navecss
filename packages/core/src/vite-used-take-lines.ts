@@ -105,10 +105,10 @@ export function forwardLine(pkg: string, takes: readonly Take[]): string {
  * The line for a dependency module that re-exports the `cx` of a module `cxModules` lists, when
  * other dependencies call through it: `callers` are their modules, root-relative, in code-unit
  * order. Only the package's `keepFor` entry stands in for those calls, so it is offered, and the
- * line never says the re-exporting module makes any.
+ * line never says the re-exporting module makes any. `home` is where the options are written.
  */
-export function callsThroughLine(pkg: string, callers: readonly string[]): string {
+export function callsThroughLine(pkg: string, callers: readonly string[], home: string): string {
   const [make, owner, its] =
     callers.length === 1 ? ['makes', "a dependency's", 'its'] : ['make', "dependencies'", 'their']
-  return `${pkg} re-exports the cx of a module listed in cxModules, and the build follows a listed module one step, so it does not read the calls that ${callers.join(', ')} ${make} through that re-export. That code is ${owner}, not yours to change: list the atoms those calls can produce, from ${its} documentation, under the name of ${pkg}, which holds the re-export, in navePlugin(): keepFor: { '${pkg}': ['<atom>'] }. The lasting fix is upstream: ${pkg} can re-export cx from @navecss/core/cx itself, or the code that calls through it can import cx from there.`
+  return `${pkg} re-exports the cx of a module listed in cxModules, and the build follows a listed module one step, so it does not read the calls that ${callers.join(', ')} ${make} through that re-export. That code is ${owner}, not yours to change: list the atoms those calls can produce, from ${its} documentation, under the name of ${pkg}, which holds the re-export, in ${home}: keepFor: { '${pkg}': ['<atom>'] }. The lasting fix is upstream: ${pkg} can re-export cx from @navecss/core/cx itself, or the code that calls through it can import cx from there.`
 }
