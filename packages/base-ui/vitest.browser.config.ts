@@ -77,8 +77,8 @@ const browser = (): BrowserConfigOptions => ({
  * Base UI minors where an interrupted exit is never counted as finished, installed under their own
  * names (`base-ui-react-<version>` in the manifest) and substituted for `@base-ui/react`.
  */
-const alias = (version: string): { find: RegExp; replacement: string }[] => [
-  { find: /^@base-ui\/react(\/.*)?$/, replacement: `base-ui-react-${version}$1` },
+const alias = (installedAs: string): { find: RegExp; replacement: string }[] => [
+  { find: /^@base-ui\/react(\/.*)?$/, replacement: `base-ui-react-${installedAs}$1` },
 ]
 
 /**
@@ -112,6 +112,29 @@ const MID_EXIT_SUBPATHS = [
 
 const MID_EXIT_FILE = 'test/browser/reduced-motion-mid-exit.browser.test.ts'
 
+/**
+The Base UI minors the files below run against besides the devDependency, each by the name it is
+installed under (`base-ui-react-<name>`).
+ */
+const MINORS = [
+  { installedAs: 'floor', version: '1.3.0' },
+  { installedAs: '1.4.0', version: '1.4.0' },
+  { installedAs: '1.5.0', version: '1.5.0' },
+  { installedAs: '1.6.0', version: '1.6.0' },
+  { installedAs: '1.7.0', version: '1.7.0' },
+] as const
+
+/**
+The files that run at every minor from the floor: the Navigation Menu panel's exit, and the Scroll
+Area strip as one target.
+ */
+const MINOR_FILES = [
+  'test/browser/navigation-menu-exit.browser.test.ts',
+  'test/browser/scroll-area-strip.browser.test.ts',
+]
+
+const MINOR_SUBPATHS = ['navigation-menu', 'scroll-area']
+
 export default defineConfig({
   plugins: [serveFixturesAsTheyAre()],
   test: {
@@ -129,15 +152,21 @@ export default defineConfig({
           browser: browser(),
         },
       },
-      ...['1.5.0', '1.6.0'].map((version) => ({
+      ...MINORS.map(({ installedAs, version }) => ({
         extends: true,
-        resolve: { alias: alias(version) },
+        resolve: { alias: alias(installedAs) },
         optimizeDeps: {
-          include: optimized(`base-ui-react-${version}`, MID_EXIT_SUBPATHS),
+          include: optimized(`base-ui-react-${installedAs}`, [
+            ...MINOR_SUBPATHS,
+            ...(version === '1.5.0' || version === '1.6.0' ? MID_EXIT_SUBPATHS : []),
+          ]),
         },
         test: {
           name: `base-ui-${version}`,
-          include: [MID_EXIT_FILE],
+          include: [
+            ...(version === '1.5.0' || version === '1.6.0' ? [MID_EXIT_FILE] : []),
+            ...MINOR_FILES,
+          ],
           provide: { baseUi: version },
           browser: browser(),
         },
