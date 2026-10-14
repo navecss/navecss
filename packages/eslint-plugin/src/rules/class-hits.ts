@@ -17,7 +17,16 @@ export interface ClassPieceHit extends LiteralPiece {
 }
 
 /**
- * One argument of Nave's `cx()`, which must be an atom name as a whole. `rendered` is the
+ * The call an atom argument belongs to: the callee node, and whether it is `cx.dynamic` (which
+ * takes one name) rather than `cx` (which maps each argument whole).
+ */
+export interface AtomCallee {
+  isDynamic: boolean
+  node: AnyNode
+}
+
+/**
+ * One argument of Nave's `cx()` or `cx.dynamic()`, which must be an atom name as a whole. `rendered` is the
  * argument as the message quotes it; `isWhole` is false for static text beside a `${}` slot,
  * which can never be exactly one atom name; `isContainer` is true for an array or object literal,
  * which `cx()` turns into one string rather than reading as atom names.
@@ -25,6 +34,7 @@ export interface ClassPieceHit extends LiteralPiece {
 export interface AtomPieceHit extends LiteralPiece {
   callee: AnyNode
   isContainer: boolean
+  isDynamic: boolean
   isWhole: boolean
   kind: 'atom'
   rendered: string
@@ -48,20 +58,21 @@ export const classHits = (pieces: LiteralPiece[]): ClassHit[] =>
   pieces.map((piece) => ({ ...piece, kind: 'class' }))
 
 /**
-A string literal or expression-free template as one whole `cx()` argument.
+A string literal or expression-free template as one whole `cx()` or `cx.dynamic()` argument.
  */
 export function wholeAtomPiece(
   node: AnyNode,
   text: string,
   rendered: string,
-  callee: AnyNode,
+  callee: AtomCallee,
 ): AtomPieceHit {
   return {
     kind: 'atom',
     node,
     text,
     rendered,
-    callee,
+    callee: callee.node,
+    isDynamic: callee.isDynamic,
     isContainer: false,
     isWhole: true,
     truncated: false,
@@ -71,13 +82,14 @@ export function wholeAtomPiece(
 /**
 A template with static text beside a slot as a `cx()` argument: never exactly one atom name.
  */
-export function partAtomPiece(node: AnyNode, rendered: string, callee: AnyNode): AtomPieceHit {
+export function partAtomPiece(node: AnyNode, rendered: string, callee: AtomCallee): AtomPieceHit {
   return {
     kind: 'atom',
     node,
     text: rendered,
     rendered,
-    callee,
+    callee: callee.node,
+    isDynamic: callee.isDynamic,
     isContainer: false,
     isWhole: false,
     truncated: false,
@@ -90,14 +102,15 @@ An array or object literal as a `cx()` argument, quoted as written.
 export function containerAtomPiece(
   node: TSESTree.ArrayExpression | TSESTree.ObjectExpression,
   rendered: string,
-  callee: AnyNode,
+  callee: AtomCallee,
 ): AtomPieceHit {
   return {
     kind: 'atom',
     node,
     text: rendered,
     rendered,
-    callee,
+    callee: callee.node,
+    isDynamic: callee.isDynamic,
     isContainer: true,
     isWhole: false,
     truncated: false,

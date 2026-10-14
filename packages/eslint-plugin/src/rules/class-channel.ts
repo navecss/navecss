@@ -17,6 +17,7 @@ import { rawCalleeText } from '../cx-callee.ts'
 import {
   cxAtomMessage,
   cxContainerMessage,
+  dynamicContainerMessage,
   isNaveOutputLike,
   literalClassMessage,
   naveOutputMessage,
@@ -75,9 +76,10 @@ function hitMessage(
   }
   if (hit.kind === 'atom') {
     const callee = sourceCode.getText(hit.callee as never)
-    return hit.isContainer
-      ? cxContainerMessage(callee, hit.rendered, declared, rawCallee)
-      : cxAtomMessage(callee, hit.rendered, declared, rawCallee)
+    if (!hit.isContainer) return cxAtomMessage(callee, hit.rendered, declared, rawCallee)
+    return hit.isDynamic
+      ? dynamicContainerMessage(callee, hit.rendered, declared, rawCallee)
+      : cxContainerMessage(callee, hit.rendered, declared, rawCallee)
   }
   return literalClassMessage(hit.text, declared, rawCallee)
 }

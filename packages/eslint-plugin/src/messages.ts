@@ -71,6 +71,20 @@ export function cxContainerMessage(
   return `${callee}(${rendered}) is not a Nave atom: ${containerExplanation(callee)} ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
 }
 
+/**
+ * An array or object literal passed to Nave's `cx.dynamic()`, with each callee as the file names
+ * it. `cx.dynamic()` takes one name and returns no class for anything that is not an atom, so
+ * neither half of `cx()`'s explanation holds for it.
+ */
+export function dynamicContainerMessage(
+  callee: string,
+  rendered: string,
+  declared: string,
+  rawCallee: string,
+): string {
+  return `${callee}(${rendered}) is not a Nave atom: ${callee}() takes one name, so an array or object is stringified into one name first: ['flex', 'block'] becomes "flex,block" and { flex: on } becomes "[object Object]", neither is an atom name, and the call renders no class. Write the atoms through cx(), each as its own argument with its own condition if it needs one: cx('flex', on && 'block'); pass ${callee}() one name chosen at run time: ${callee}(name). ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
+}
+
 const NAVE_PREFIX = 'nave-'
 
 /**

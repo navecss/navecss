@@ -154,3 +154,12 @@ export function resolveCxCallee(
   }
   return 'none'
 }
+
+/**
+ * True for a call to a name in the helper list, or to any `cx` that did not resolve to Nave's
+ * (the caller has already ruled that out through scope analysis before asking).
+ */
+export function isHelperCall(callee: TSESTree.Node, helpers: string[]): boolean {
+  if (callee.type !== 'Identifier') return false
+  return helpers.includes(callee.name) || callee.name === 'cx'
+}

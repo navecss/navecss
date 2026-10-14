@@ -164,6 +164,113 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
     expect(reports[0]!.message).toContain('legacy-card')
   })
 
+  describe('a name built at run time passes, as an identifier does', () => {
+    const built = [
+      'cx.dynamic(`text${align}`)',
+      'ncx.dynamic(`text${align}`)',
+      'N.cx.dynamic(`text${align}`)',
+      'cx.dynamic(`legacy-${x}`)',
+      "cx.dynamic('gap' + size)",
+      "cx.dynamic('gap' + size + 'x')",
+      "cx.dynamic(`${on ? 'text' : 'gap'}${size}`)",
+      'cx.dynamic(`${a}${b}`)',
+    ]
+    it.each(built)('%s passes', (value) => {
+      expect(rule1Reports(value, parser)).toEqual([])
+    })
+
+    const builtInPosition = [
+      'cx.dynamic(on && `text${align}`)',
+      'cx.dynamic(tone ?? `text${align}`)',
+      'cx.dynamic(NAME)',
+    ]
+    it.each(builtInPosition)('%s passes (one side, or one const hop)', (value) => {
+      const tail = `const NAME = \`text\${align}\`\nconst el = <div className={${value}} />`
+      expect(rule1After(tail, parser)).toEqual([])
+    })
+
+    it.each([
+      "cx.dynamic(on ? `text${align}` : 'legacy-card')",
+      "cx.dynamic('legacy-card' || `text${align}`)",
+    ])('%s reports legacy-card alone: only the built part goes unread', (value) => {
+      const reports = rule1Reports(value, parser)
+      expect(reports).toHaveLength(1)
+      expect(reports[0]!.message).toContain('legacy-card')
+      expect(reports[0]!.message).not.toContain('align')
+    })
+
+    it.each(['cx.dynamic(`legacy-card`)', "cx.dynamic(`${on ? 'flex' : 'legacy-card'}`)"])(
+      '%s is still read: an expression-free template is one name, a single slot is that slot',
+      (value) => {
+        const reports = rule1Reports(value, parser)
+        expect(reports).toHaveLength(1)
+        expect(reports[0]!.message).toContain('legacy-card')
+      },
+    )
+
+    it('a chain of string literals alone is still read, and quoted as written', () => {
+      for (const value of ["cx.dynamic('legacy' + '-card')", 'cx.dynamic(JOINED)']) {
+        const tail = `const JOINED = 'legacy' + '-card'\nconst el = <div className={${value}} />`
+        const reports = rule1After(tail, parser)
+        expect(reports, value).toHaveLength(1)
+        expect(reports[0]!.message).toContain('is not a Nave atom')
+        expect(reports[0]!.message).toContain("'legacy' + '-card'")
+      }
+    })
+
+    it.each([
+      'cx(`text${align}`)',
+      "cx('gap' + size)",
+      "cx(`${on ? 'text' : 'gap'}${size}`)",
+      'cx(on && `text${align}`)',
+    ])('%s is still reported by cx()', (value) => {
+      expect(rule1Reports(value, parser).length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('an array or object passed to cx.dynamic() is explained for cx.dynamic()', () => {
+    const containers = [
+      { callee: 'cx.dynamic', arg: "['flex', 'block']", reads: 'renders the class "flex,block"' },
+      { callee: 'cx.dynamic', arg: '{ flex: on }', reads: 'renders "[object Object]"' },
+      { callee: 'ncx.dynamic', arg: "['flex', 'block']", reads: 'renders the class "flex,block"' },
+    ]
+    it.each(containers)('$callee($arg)', ({ callee, arg, reads }) => {
+      const reports = rule1Reports(`${callee}(${arg})`, parser)
+      expect(reports).toHaveLength(1)
+      const [report] = reports
+      const lastLine = `const el = <div className={${callee}(${arg})} />`
+      expect(report!.column).toBe(lastLine.indexOf(arg) + 1)
+      const marker = 'is not a Nave atom:'
+      expect(report!.message.startsWith(`${callee}(${arg}) ${marker}`)).toBe(true)
+      // The quoted construct holds a comma itself, so the check reads the text after the call.
+      const explanation = report!.message.slice(report!.message.indexOf(marker) + marker.length)
+      expect(explanation).not.toMatch(/cx\.dynamic\([^)]*,/u)
+      expect(explanation).not.toContain(reads)
+      expect(explanation).not.toContain('renders the class')
+      expect(explanation).toContain('renders no class')
+      expect(explanation).toContain("cx('flex', on && 'block')")
+      expect(explanation).toContain(
+        `pass ${callee}() one name chosen at run time: ${callee}(name).`,
+      )
+      const order = [
+        'CSS Module class',
+        'Nave atom through cx()',
+        'declares as its own',
+        'with a reason',
+      ]
+      const positions = order.map((phrase) => report!.message.indexOf(phrase))
+      expect(positions.every((position) => position > -1)).toBe(true)
+      expect(positions).toEqual(positions.toSorted((a, b) => a - b))
+    })
+
+    it('cx([...]) keeps its own explanation', () => {
+      const [report] = rule1Reports("cx(['flex', 'block'])", parser)
+      expect(report!.message).toContain('renders the class "flex,block"')
+      expect(report!.message).toContain("cx('flex', on && 'block')")
+      expect(report!.message).toContain('cx() maps each argument whole')
+    })
+  })
+
   it("cx.dynamic('legacy-card' as AtomName) is reported once, naming legacy-card", () => {
     if (parser === 'espree') return
     const reports = rule1Reports("cx.dynamic('legacy-card' as AtomName)", parser)
@@ -242,14 +349,10 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
       "'constructor'",
       "'flex', 'legacy-card'",
       'name',
-      "['flex']",
-      '{ flex: on }',
       '`legacy-card`',
-      '`flex ${x}`',
       "'nave-flex'",
       "'nave-banana-split'",
       "'flex' + 'x'",
-      "'a' + b",
       "on ? 'flex' : 'legacy-card'",
       "on && 'legacy-card'",
       "on || 'legacy-card'",
@@ -275,6 +378,32 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
       )
       expect(actual.map(({ line }) => line)).toEqual(expected.map(({ line }) => line))
     })
+
+    it.each(callees)(
+      '$dynamic([...]) and $dynamic({...}) compare in count and line only',
+      (callee) => {
+        for (const arg of ["['flex']", '{ flex: on }']) {
+          const expected = rule1Reports(`${callee.plain}(${arg})`, parser)
+          const actual = rule1Reports(`${callee.dynamic}(${arg})`, parser)
+          expect(expected, arg).toHaveLength(1)
+          expect(
+            actual.map(({ line }) => line),
+            arg,
+          ).toEqual(expected.map(({ line }) => line))
+          expect(actual, arg).toHaveLength(expected.length)
+        }
+      },
+    )
+
+    it.each(callees)(
+      '$plain() reports a name built at run time and $dynamic() does not',
+      (callee) => {
+        for (const arg of ['`flex ${x}`', "'a' + b"]) {
+          expect(rule1Reports(`${callee.plain}(${arg})`, parser).length, arg).toBeGreaterThan(0)
+          expect(rule1Reports(`${callee.dynamic}(${arg})`, parser), arg).toEqual([])
+        }
+      },
+    )
 
     it('the comparison is not vacuous: most of the argument rows are reported', () => {
       const reportedRows = args.filter(
@@ -325,15 +454,16 @@ describe('AC-28: a cxModules wrapper re-exporting cx', () => {
 })
 
 describe('AC-28: the verdicts do not depend on the installed core', () => {
-  it("no class-channel or counting module reads core's cx module at lint time", async () => {
-    const { readFileSync } = await import('node:fs')
-    const sources = [
-      'src/cx-binding.ts',
-      'src/rules/class-channel.ts',
-      'src/rules/count-escapes.ts',
-    ]
+  it("no file under src/ reads core's cx module at lint time", async () => {
+    const { readdirSync, readFileSync } = await import('node:fs')
+    const srcDir = path.resolve(import.meta.dirname, '..', 'src')
+    const sources = readdirSync(srcDir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => path.join(entry.parentPath, entry.name))
+    expect(sources.length).toBeGreaterThan(10)
+    expect(sources.some((file) => file.endsWith('cx-callee.ts'))).toBe(true)
     for (const source of sources) {
-      const text = readFileSync(path.resolve(import.meta.dirname, '..', source), 'utf8')
+      const text = readFileSync(source, 'utf8')
       expect(text, source).not.toMatch(/from\s+['"]@navecss\/core\/cx['"]/u)
       expect(text, source).not.toMatch(/import\(\s*['"]@navecss\/core\/cx['"]/u)
     }
@@ -444,6 +574,22 @@ describe.each(PARSERS)('AC-29: the counting rule counts cx.dynamic() calls (%s)'
       expect(countedMessage('cx.dynamic(tone)', parser)).toContain('cx.dynamic()')
       expect(countedMessage('ncx.dynamic(tone)', parser)).toContain('ncx.dynamic()')
       expect(countedMessage('N.cx.dynamic(tone)', parser)).toContain('N.cx.dynamic()')
+    })
+
+    it('says only what is true of every call: atoms are picked by name at run time', () => {
+      for (const callee of ['cx.dynamic', 'ncx.dynamic', 'N.cx.dynamic']) {
+        for (const argument of ['tone', 'null', '']) {
+          expect(countedMessage(`${callee}(${argument})`, parser)).toBe(
+            `Calls to ${callee}() pick atoms by name at run time, where the build cannot read them: this one is counted as an escape.`,
+          )
+        }
+      }
+    })
+
+    it('leaves the cx.raw() message as it was', () => {
+      expect(countedMessage("cx.raw('legacy-card')", parser)).toBe(
+        'This cx.raw() call carries class text that needs a reason: counted as an escape.',
+      )
     })
 
     it('never asks for a reason, and differs from the cx.raw() message', () => {

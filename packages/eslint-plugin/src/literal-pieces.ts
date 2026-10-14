@@ -102,6 +102,24 @@ export function concatOperands(node: Node): Node[] {
 }
 
 /**
+ * True for the two shapes that build one name at run time: a template literal with a slot (unless
+ * it is a single slot and nothing else, which is read as that slot), and a string `+` chain with
+ * an operand that is not a string literal.
+ */
+export function isBuiltName(node: Node): boolean {
+  if (node.type === 'TemplateLiteral') {
+    const isSingleSlot =
+      node.expressions.length === 1 && node.quasis.every((quasi) => quasi.value.raw.length === 0)
+    return node.expressions.length > 0 && !isSingleSlot
+  }
+  return (
+    node.type === 'BinaryExpression' &&
+    node.operator === '+' &&
+    concatOperands(node).some((operand) => !isStringLiteral(operand))
+  )
+}
+
+/**
  * One run of adjacent string literals in a `+` chain, split on whitespace like a template's static
  * text: a piece glued to a slot before it is no piece, one running into a slot after it is
  * `truncated`, and each piece is placed at the literal it starts in.

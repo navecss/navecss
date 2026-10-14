@@ -159,6 +159,9 @@ Stated as rules, not as gaps to be filled later:
   `c.cx.raw`, or one `const` alias: a call reached any other way, such as `(0, cx.raw)(...)` or
   `cx.raw.call(...)`, is not seen by either rule. `cx.dynamic` is recognised in the same forms,
   and by the class channel and the counting rule alone.
+- A name built at run time inside `cx.dynamic()` (a template literal with a slot, a `+` chain with
+  an operand that is not a string literal) is not read: it renders nothing when it is no atom, or is
+  not listed in `keep`, as an identifier's value can.
 - A camelCase string passed to `cx()` passes only if it names a real atom of the **installed**
   `@navecss/core` — a name registered through `navePlugin({ extend })` is not in `cx()`'s map and
   is reported.
@@ -189,7 +192,8 @@ call is read through its arguments; a `cx.raw()` call is left to the next rule. 
 (`className={(state) => (state.open ? 'is-open' : undefined)}`), is read through the values it
 returns: its expression body, or each `return` of its block body, but not the returns of a
 function nested inside it. A string passed to `cx.dynamic()` is read the way one passed to `cx()`
-is: a class that is no atom is reported, whatever your project declares.
+is: a class that is no atom is reported, whatever your project declares; a name built at run time
+inside it (a template with a slot, a `+` chain with an operand that is not a string literal) passes.
 
 ### Rule 2: the `cx.raw()` reason
 

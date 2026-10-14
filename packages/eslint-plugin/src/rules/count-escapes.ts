@@ -59,7 +59,7 @@ export const countEscapesRule: Rule.RuleModule = {
       escape:
         'This {{callee}}() call carries class text that needs a reason: counted as an escape.',
       dynamicEscape:
-        'This {{callee}}() call chooses its class by name at run time: counted as an escape.',
+        'Calls to {{callee}}() pick atoms by name at run time, where the build cannot read them: this one is counted as an escape.',
       disableComment: 'This disable comment can hide an escape from the count.',
     },
     schema: [],

@@ -7,35 +7,41 @@
  *
  * The grammar: a whole `className` value that is an inline function, read through the values it
  * returns (an expression body, or each `return` of a block body, nested functions excluded); a
- * string literal; a template literal's static text, and each `${}` slot read as a
- * class position of its own (wherever the template sits); both branches of a conditional; the
- * right side of `&&` and both sides of `||`/`??`; a string `+` chain, read like a template
- * literal (its string literals the static text, every other operand a slot); an identifier bound
- * by a `const`, followed exactly one hop; single-child wrappers (TypeScript's `as`, `satisfies`,
- * `!`, an optional chain); and calls. A call to Nave's `cx()` has each argument read as one atom
- * name, whole (the way `cx()` maps it at run time), and an array or object literal there is reported whatever it holds, since cx() maps each argument whole and stringifies an array or object first; a call to a class-composition
- * helper, or to a `cx` that is not Nave's, has each argument read as class text, arrays and object
- * keys included; `cx.raw()` and any other call contribute nothing. A call to Nave's `cx.dynamic()`
- * is read exactly as one to `cx()`, except inside the arguments of a `cx.raw()`, where it
- * contributes nothing: there it is composition, and the counting rule counts it once at the call.
+ * string literal; a template literal's static text, and each `${}` slot read as a class position
+ * of its own; both branches of a conditional; the right side of `&&` and both sides of `||`/`??`;
+ * a string `+` chain, read like a template literal (its string literals the static text, every
+ * other operand a slot); an identifier bound by a `const`, followed exactly one hop;
+ * single-child wrappers (TypeScript's `as`, `satisfies`, `!`, an optional chain); and calls.
+ *
+ * A call to Nave's `cx()` has each argument read as one atom name, whole, and an array or object
+ * literal there is reported whatever it holds. A call to Nave's `cx.dynamic()` is read the same
+ * way, except that a name built at run time contributes nothing: a template literal with a slot
+ * (unless it is a single slot and nothing else) and a string `+` chain with an operand that is
+ * not a string literal, because `cx.dynamic()` exists for a name the build cannot read. Inside
+ * the arguments of a `cx.raw()`, a `cx.dynamic()` call contributes nothing at all: it is
+ * composition there, and the counting rule counts it once at the call. A call to a helper, or to
+ * a `cx` that is not Nave's, has each argument read as class text, arrays and object keys
+ * included; `cx.raw()` and any other call contribute nothing.
  */
 import type { TSESTree } from '@typescript-eslint/types'
 import type { Scope, SourceCode } from 'eslint'
 
 import type { CxBindings } from '../cx-binding.ts'
 
-import { resolveCxCallee } from '../cx-callee.ts'
+import { isHelperCall, resolveCxCallee } from '../cx-callee.ts'
 import { inlineFunction, returnedValues } from '../function-returns.ts'
 import {
   collectConcatPieces,
   collectTemplatePieces,
   concatOperands,
+  isBuiltName,
   isStringLiteral,
   resolveConstHop,
   splitWhitespace,
   TRANSPARENT_WRAPPER_TYPES,
 } from '../literal-pieces.ts'
 import {
+  type AtomCallee,
   type ClassHit,
   classHits,
   containerAtomPiece,
@@ -50,19 +56,10 @@ export interface WalkContext {
   bindings: CxBindings
   helpers: string[]
   /**
-  True while reading the arguments of a `cx.raw()` call, where `cx.dynamic()` is composition.
+   * True while reading the arguments of a `cx.raw()` call, where `cx.dynamic()` is composition.
    */
   insideRaw?: true
   sourceCode: SourceCode
-}
-
-/**
- * True for a call to a name in the helper list, or to any `cx` that did not resolve to Nave's
- * (the caller has already ruled that out through scope analysis before asking).
- */
-function isHelperCall(callee: AnyNode, helpers: string[]): boolean {
-  if (callee.type !== 'Identifier') return false
-  return helpers.includes(callee.name) || callee.name === 'cx'
 }
 
 /**
@@ -74,7 +71,7 @@ function atomTemplateHits(
   ctx: WalkContext,
   node: TSESTree.TemplateLiteral,
   scope: Scope.Scope,
-  callee: AnyNode,
+  callee: AtomCallee,
 ): ClassHit[] {
   const rendered = ctx.sourceCode.getText(node as never)
   if (node.expressions.length === 0) {
@@ -94,7 +91,7 @@ A string literal in a class position: its pieces, or (inside `cx()`) one whole n
 function stringHits(
   ctx: WalkContext,
   node: TSESTree.StringLiteral,
-  callee: AnyNode | undefined,
+  callee: AtomCallee | undefined,
 ): ClassHit[] {
   if (callee) {
     return [wholeAtomPiece(node, node.value, ctx.sourceCode.getText(node), callee)]
@@ -109,7 +106,7 @@ function templateHits(
   ctx: WalkContext,
   node: TSESTree.TemplateLiteral,
   scope: Scope.Scope,
-  callee: AnyNode | undefined,
+  callee: AtomCallee | undefined,
 ): ClassHit[] {
   if (callee) return atomTemplateHits(ctx, node, scope, callee)
   return [
@@ -141,7 +138,7 @@ function atomConcatHits(
   ctx: WalkContext,
   node: AnyNode,
   scope: Scope.Scope,
-  callee: AnyNode,
+  callee: AtomCallee,
 ): ClassHit[] {
   const operands = concatOperands(node)
   const rendered = ctx.sourceCode.getText(node as never)
@@ -180,7 +177,8 @@ function callHits(ctx: WalkContext, node: TSESTree.CallExpression, scope: Scope.
   const args = node.arguments.filter((argument) => argument.type !== 'SpreadElement')
   const resolved = resolveCxCallee(node.callee, ctx.bindings, scope)
   if (resolved === 'cx' || (resolved === 'dynamic' && !ctx.insideRaw)) {
-    return args.flatMap((argument) => positionHits(ctx, argument, scope, node.callee))
+    const callee = { node: node.callee, isDynamic: resolved === 'dynamic' }
+    return args.flatMap((argument) => positionHits(ctx, argument, scope, callee))
   }
   if (resolved === 'raw' || resolved === 'dynamic' || !isHelperCall(node.callee, ctx.helpers)) {
     return []
@@ -190,7 +188,7 @@ function callHits(ctx: WalkContext, node: TSESTree.CallExpression, scope: Scope.
 
 /**
  * Every hit reachable from `node` through the grammar in this file's docblock. `callee` is
- * set while reading an argument of Nave's `cx()` (so a literal there is one atom name) and unset
+ * set while reading an argument of Nave's `cx()` or `cx.dynamic()` (so a literal there is one atom name) and unset
  * in a plain class position. Unwraps the single-child productions in a loop, so only the
  * genuinely branching productions recurse.
  *
@@ -202,13 +200,14 @@ function positionHits(
   ctx: WalkContext,
   node: AnyNode,
   scope: Scope.Scope,
-  callee: AnyNode | undefined,
+  callee: AtomCallee | undefined,
 ): ClassHit[] {
   let current = node
   let currentScope = scope
   let canHop = true
 
   while (true) {
+    if (callee?.isDynamic && isBuiltName(current)) return []
     if (isStringLiteral(current)) return stringHits(ctx, current, callee)
     if (current.type === 'TemplateLiteral') {
       return templateHits(ctx, current, currentScope, callee)
