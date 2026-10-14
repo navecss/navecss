@@ -12,8 +12,8 @@ import {
   NON_LIVE_REDUCED_MOTION,
   problems789,
   readmeInState,
-  WITHDRAWN_reader,
   WITHDRAWN_cleared,
+  WITHDRAWN_reader,
 } from './support/w12-feedback-rules.ts'
 import * as S from './support/w12-feedback-sentences.ts'
 import { phrasesFor, phrasesIn } from './support/w12-not-painted.ts'
