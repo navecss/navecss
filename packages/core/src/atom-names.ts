@@ -2,13 +2,13 @@
  * The names of Nave's built-in atoms, and the class each one gets.
  *
  * cx() needs this and nothing else, so it lives apart from the declaration data in atoms.ts:
- * a module that imports atoms.ts carries every atom's CSS declarations into a consumer's
- * bundle, and cx() would pay that for a name map.
+ * a module that imports atoms.ts hands a consumer's bundler every atom's CSS declarations,
+ * not every bundler can drop them, and cx() would pay that for a name map.
  *
  * atoms.ts is checked against this list (`satisfies Record<AtomName, AtomDefinition>`), so
- * an atom added there and missing here, or the other way round, fails the typecheck. The
- * order matters too: it is the order atomic.css is written in, and test/cx.test.ts holds the
- * two together.
+ * an atom added there and missing here, or the other way round, fails the typecheck. Keep the
+ * two in the same order as well: atomic.css is written in the order of atoms.ts, the Vite
+ * plugin lists the atoms in the order of this list, and a test holds the two together.
  */
 export const atomNames = [
   'flex',

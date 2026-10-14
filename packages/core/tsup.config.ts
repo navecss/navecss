@@ -19,9 +19,10 @@ export default defineConfig({
   // build-css.ts runs first and writes dist/atomic.css, index.css, reset.css.
   // clean: true would delete them before tsup could finish.
   sourcemap: false,
-  // splitting: true keeps the atoms object in dist/atoms.js only.
-  // Without it every entry inlines its own copy of the declaration data, so
-  // cx.js — which needs nothing but a name map — carried all of it (C12).
+  // splitting: true puts the atom declarations in one shared chunk that every entry needing
+  // them imports; without it each of those entries inlines its own copy. cx.js needs none of
+  // them because cx.ts imports the name list in src/atom-names.ts, not atoms.ts, and
+  // test/dist-bundles.test.ts checks both.
   splitting: true,
   treeshake: true,
   // The two files that let `require('@navecss/core/postcss')` work are written by hand and

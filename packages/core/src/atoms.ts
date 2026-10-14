@@ -1,5 +1,7 @@
 /**
- * Nave atomic utilities — single source of truth.
+ * Nave atomic utilities: the declarations of every built-in atom.
+ * Their names live in src/atom-names.ts, and `satisfies Record<AtomName, AtomDefinition>` below
+ * fails the typecheck when an atom is named in one file and not the other.
  *
  * Each atom defines:
  *   declarations  — CSS property/value pairs applied to the base selector
@@ -10,9 +12,10 @@
  *
  * Consumed by:
  *   1. scripts/build-css.ts        → dist/atomic.css (global .nave-* classes)
- *   2. src/atom-names.ts           → the name list this file is checked against (cx() reads
- *                                    that list, never this file's declarations)
- *   3. src/postcss.ts              → resolves @nave directives
+ *   2. src/postcss.ts              → resolves @nave directives
+ *
+ * cx() reads src/atom-names.ts and never imports this file, so a bundle that imports only cx
+ * carries none of these declarations.
  *
  * Naming: camelCase keys → nave-kebab-case class names
  *   focusRing → .nave-focus-ring
