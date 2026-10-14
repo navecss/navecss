@@ -677,4 +677,17 @@ describe('AC-nextjs-used-atoms-09: a tree that keeps a node for a pair of parent
     expect(() => readTree(code, kept)).toThrow(new TypeError(REFUSAL))
     expect(authoredVerdict(code)).toEqual({ atoms: [], problems: ['concatenation'] })
   })
+
+  it('walks the root of the tree at most 3 times, so the refusal adds no walk (a pass that adds a walk changes this bound on purpose)', () => {
+    const code = `${IMPORT}export const a = (on: boolean) => cx(on ? 'flex' : 'grid')\n`
+    let enumerations = 0
+    const root = new Proxy(parseAst(code, { lang: 'ts' }) as unknown as AstNode, {
+      ownKeys(target) {
+        enumerations += 1
+        return Reflect.ownKeys(target)
+      },
+    })
+    readTree(code, root)
+    expect(enumerations).toBeLessThanOrEqual(3)
+  })
 })

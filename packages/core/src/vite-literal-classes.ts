@@ -133,15 +133,22 @@ function escapedText(node: AstNode): { decoded: string; raw: string } | undefine
   return { raw, decoded: cooked }
 }
 
+const PARENTHESES_KEPT =
+  "readModule reads a syntax tree with no node for a pair of parentheses, as Vite's parser returns it. This tree keeps one (a ParenthesizedExpression): parse with the parentheses dropped, for example oxc-parser with preserveParens: false."
+
 /**
- * The atoms whose class a string written with escapes spells once decoded (`'nave-\x66lex'`):
- * the text scan reads the source as written, so it cannot see these.
+ * The one pass over the whole tree that `readModule` makes before it reads anything, whichever key
+ * holds a node. It refuses a tree that keeps a node for a pair of parentheses, which would read a
+ * class built from pieces as whole, with a `TypeError`; and it gathers the atoms whose class a
+ * string written with escapes spells once decoded (`'nave-\x66lex'`), which the text scan cannot
+ * see because it reads the source as written. One pass does both, so the refusal adds no walk.
  */
-export function atomsInEscapedStrings(program: AstNode): Set<string> {
+export function refuseParenthesesAndFindEscapedAtoms(program: AstNode): Set<string> {
   const found = new Set<string>()
   const stack: AstNode[] = [program]
   while (stack.length > 0) {
     const node = stack.pop()!
+    if (node.type === 'ParenthesizedExpression') throw new TypeError(PARENTHESES_KEPT)
     const text = escapedText(node)
     if (text?.raw.includes('\\')) {
       for (const atom of atomsWrittenIn(text.decoded)) found.add(atom)

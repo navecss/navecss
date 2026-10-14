@@ -16,11 +16,10 @@ import { cxBindingsOf, isImportingCx } from './vite-cx-bindings.ts'
 import { useOf, useOfExpression } from './vite-cx-reference.ts'
 import { sourceFormProblems } from './vite-cx-source-forms.ts'
 import { declaredExportProblems } from './vite-declared-exports.ts'
-import { refuseKeptParentheses } from './vite-kept-parentheses.ts'
 import {
-  atomsInEscapedStrings,
   atomsWrittenIn,
   concatenationProblems,
+  refuseParenthesesAndFindEscapedAtoms,
 } from './vite-literal-classes.ts'
 import {
   finishRewrite,
@@ -242,7 +241,7 @@ function readUses(
  * Reads `program`, the parse of `code`.
  */
 export function readModule(code: string, program: AstNode, options: ReadOptions): ModuleReading {
-  refuseKeptParentheses(program)
+  const escapedAtoms = refuseParenthesesAndFindEscapedAtoms(program)
   const result: ModuleReading = {
     atoms: new Set(),
     classes: new Set(),
@@ -273,7 +272,7 @@ export function readModule(code: string, program: AstNode, options: ReadOptions)
     report(reading, problem)
   }
   for (const atom of atomsWrittenIn(code)) result.classes.add(atom)
-  for (const atom of atomsInEscapedStrings(program)) result.classes.add(atom)
+  for (const atom of escapedAtoms) result.classes.add(atom)
   if (result.usesCx || !options.isDependency) {
     for (const problem of concatenationProblems(program, code, analysis)) report(reading, problem)
   }
