@@ -12,6 +12,12 @@
  *
  * `vitest.browser.config.ts` runs this file at the Base UI the package is developed against and,
  * through the manifest's aliases, at 1.5.0 and 1.6.0.
+ *
+ * Nothing here is timed by the clock. An exit that has to be running when the setting flips runs
+ * for a minute, so no stall of the page can finish it first. The reduced-motion guard leaves a
+ * running transition to finish, so the time that would pass is passed by finishing the running
+ * animations, and what is waited for after that is counted in animation frames, which a slow
+ * machine stretches in time and not in number.
  */
 /* eslint-disable unicorn/max-nested-calls -- a scene is a tree, written as the nested calls it renders */
 import type { ReactNode } from 'react'
@@ -35,8 +41,7 @@ import {
 } from './support/page.ts'
 import { closeBy, open, required as popupPart } from './support/w8-actions.ts'
 import { popupCases } from './support/w8-popups.ts'
-import { atRest, type Watch, watchPopup } from './support/w8-watch.ts'
-import { sleep } from './support/wait.ts'
+import { atRest, isReachedWithin, type Watch, watchPopup } from './support/w8-watch.ts'
 
 /**
 The versions at which an exit cancelled mid-way is never treated as finished.
@@ -44,13 +49,75 @@ The versions at which an exit cancelled mid-way is never treated as finished.
 const VERSIONS_WITH_THE_HOLE = new Set(['1.5.0', '1.6.0'])
 
 /**
-Long enough that the flip, 100ms in, lands in the middle of the exit.
+Long enough that the exit is still running whenever the flip is made, however long the page stalls
+before it.
  */
-const SLOW = `@layer overrides { :root { --nave-motion-duration-fast: 600ms; --nave-motion-duration-base: 600ms } }`
+const LONG_EXIT = `@layer overrides { :root { --nave-motion-duration-fast: 60000ms; --nave-motion-duration-base: 60000ms } }`
+
+/**
+The most frames waited for the exit to start, which only an exit that never starts runs out.
+ */
+const MAX_FRAMES = 600
+
+/**
+Frames given to Base UI, once an exit has started, to begin waiting for its transition to finish: a
+transition cancelled before it does is a transition it has nothing to wait for.
+ */
+const STARTED_FRAMES = 5
+
+/**
+Frames for the page to recalculate its styles under a changed setting.
+ */
+const STYLE_FRAMES = 3
+
+/**
+Frames given to a popup or panel to unmount once its running transition has finished, and to a
+panel or popup that does not unmount to show it.
+ */
+const SETTLE_FRAMES = 10
 
 const GUARD = 'transition-duration: calc(0 * var(--nave-motion-duration-fast))'
 const PROPERTY_FORM = 'transition-property: none'
 const GUARDS = 9
+
+const nextFrame = (): Promise<void> =>
+  new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      resolve()
+    })
+  })
+
+/**
+Lets the given number of animation frames pass.
+ */
+const framesLater = async (count: number): Promise<void> => {
+  for (let frame = 0; frame < count; frame += 1) {
+    await nextFrame()
+  }
+}
+
+/**
+Finishes the transitions running on an element, which is the time they had left passing.
+ */
+const letRunFinish = (element: HTMLElement): void => {
+  for (const animation of element.getAnimations()) {
+    animation.finish()
+  }
+}
+
+const isReduced = (): boolean => matchMedia('(prefers-reduced-motion: reduce)').matches
+
+/**
+Flips the setting to reduce and waits until the page has taken it and drawn a frame or two under
+it, which it does a moment after the command returns: a transition that the new setting cancels is
+cancelled by then, and one it leaves running is still running. Finishing the running transitions
+before that would finish them under the old setting.
+ */
+const flipToReduce = async (): Promise<void> => {
+  await emulateReducedMotion('reduce')
+  expect(await isReachedWithin(isReduced, MAX_FRAMES), 'the page took the setting').toBe(true)
+  await framesLater(STYLE_FRAMES)
+}
 
 const required = (id: string): HTMLElement => {
   const element = byTestId(id)
@@ -116,18 +183,25 @@ describe(`AC-base-ui-overlay-completion-19: a reduced-motion flip during a panel
   })
 
   /**
-  Closes the open panel, flips to reduce 100ms later, and 1.5s after that presses Tab from the
-  trigger.
+  Closes the open panel, flips to reduce once its exit is running, lets the running transition
+  finish, and presses Tab from the trigger when the frames given to unmount have passed.
    */
   const closeThenFlip = async (name: string, stylesheetText: string): Promise<Outcome> => {
-    removeSheets = useSheets(tokens, stylesheetText, SLOW)
+    removeSheets = useSheets(tokens, stylesheetText, LONG_EXIT)
     await emulateReducedMotion('no-preference')
     page = mount(scenes[name]?.())
     await settled(() => byTestId('panel'))
+    const closing = required('panel')
     await userEvent.click(required('trigger'))
-    await sleep(100)
-    await emulateReducedMotion('reduce')
-    await sleep(1500)
+    const isRunning = await isReachedWithin(
+      () => Object.hasOwn(closing.dataset, 'endingStyle') && closing.getAnimations().length > 0,
+      MAX_FRAMES,
+    )
+    expect(isRunning, 'the exit is running when the flip is made').toBe(true)
+    await framesLater(STARTED_FRAMES)
+    await flipToReduce()
+    letRunFinish(closing)
+    await framesLater(SETTLE_FRAMES)
     required('trigger').focus()
     await userEvent.tab()
     const panel = byTestId('panel')
@@ -166,29 +240,17 @@ describe(`AC-base-ui-overlay-completion-19: a reduced-motion flip during a panel
   })
 })
 
-/**
-Slow enough that the flip, within 50ms of the close starting, lands in the middle of the exit.
- */
-const MID_EXIT = `@layer overrides { :root { --nave-motion-duration-fast: 300ms; --nave-motion-duration-base: 300ms } }`
-
-const nextFrame = (): Promise<void> =>
-  new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      resolve()
-    })
-  })
-
 interface PopupOutcome {
   /**
   The transitions running on the popup when the flip was made.
    */
   readonly runningAtFlip: number
   /**
-  Whether the popup was still in the document 500ms after the flip.
+  Whether the popup was still in the document once the frames given to unmount had passed.
    */
   readonly isMounted: boolean
   /**
-  Whether it unmounted within the 500ms, and so how long after the flip it did.
+  Whether it unmounted within those frames, and so how many frames after the flip it did.
    */
   readonly unmountedAfter: number | undefined
   readonly isEnding: boolean
@@ -229,37 +291,43 @@ describe.each(['Menu', 'Dialog'])(
     })
 
     /**
-     * Closes the open popup, waits for `data-ending-style`, flips to reduce at once (well inside
-     * 50ms), and reads what is left 500ms after the flip.
+     * Closes the open popup, waits for `data-ending-style`, flips to reduce at once, lets the running
+     * transition finish, and reads what is left once the frames given to unmount have passed.
      */
     const closeThenFlip = async (stylesheetText: string): Promise<PopupOutcome> => {
-      removeSheets = useSheets(tokens, stylesheetText, MID_EXIT)
+      const removeBase = useSheets(tokens, stylesheetText)
+      removeSheets = removeBase
       await emulateReducedMotion('no-preference')
       watch = watchPopup()
       page = mount(popupCase.scene())
       await open(popupCase.opening)
       const popup = await atRest()
       const layersWhileOpen = internalLayers()
+      // Only the exit is made long: the popup came in at the usual speed.
+      const removeLong = useSheets(LONG_EXIT)
+      removeSheets = () => {
+        removeBase()
+        removeLong()
+      }
       await closeBy(popupCase.closes)
-      const deadline = performance.now() + 1000
-      while (!Object.hasOwn(popup.dataset, 'endingStyle')) {
-        if (performance.now() > deadline) {
-          throw new Error('the popup never started closing')
-        }
-        await nextFrame()
+      const isEnding = await isReachedWithin(
+        () => Object.hasOwn(popup.dataset, 'endingStyle'),
+        MAX_FRAMES,
+      )
+      if (!isEnding) {
+        throw new Error('the popup never started closing')
       }
+      await framesLater(STARTED_FRAMES)
       const runningAtFlip = popup.getAnimations().length
-      await emulateReducedMotion('reduce')
-      const flipped = performance.now()
+      await flipToReduce()
+      letRunFinish(popup)
       let unmountedAfter: number | undefined
-      while (performance.now() < flipped + 500) {
-        if (!popup.isConnected) {
-          unmountedAfter = performance.now() - flipped
-          break
-        }
+      for (let frame = 1; frame <= SETTLE_FRAMES; frame += 1) {
         await nextFrame()
+        if (unmountedAfter === undefined && !popup.isConnected) {
+          unmountedAfter = frame
+        }
       }
-      await sleep(Math.max(0, flipped + 500 - performance.now()))
       const isFocusOnTrigger = document.activeElement === popupPart('trigger')
       const layers = internalLayers()
       let isClickReached = false
@@ -286,7 +354,7 @@ describe.each(['Menu', 'Dialog'])(
       const outcome = await closeThenFlip(stylesheet)
       expect(outcome.runningAtFlip, 'transitions running at the flip').toBe(1)
       expect(outcome.isMounted, 'the popup is still in the document').toBe(false)
-      expect(outcome.unmountedAfter, 'unmounted within 500ms of the flip').toBeLessThan(500)
+      expect(outcome.unmountedAfter, 'unmounted within the frames given').toBeDefined()
       expect(outcome.isFocusOnTrigger, 'focus is on the trigger').toBe(true)
       expect(outcome.layersWhileOpen, "Base UI's internal layer while open").toBeGreaterThanOrEqual(
         name === 'Dialog' ? 1 : 0,
@@ -296,7 +364,7 @@ describe.each(['Menu', 'Dialog'])(
     })
 
     it.runIf(VERSIONS_WITH_THE_HOLE.has(BASE_UI))(
-      'AC-base-ui-overlay-completion-19: the property form leaves the popup mounted after 500ms (control)',
+      'AC-base-ui-overlay-completion-19: the property form leaves the popup mounted after the frames given to unmount (control)',
       async () => {
         expect(stylesheet.split(GUARD).length - 1, 'guards in the built stylesheet').toBe(GUARDS)
         const outcome = await closeThenFlip(stylesheet.split(GUARD).join(PROPERTY_FORM))

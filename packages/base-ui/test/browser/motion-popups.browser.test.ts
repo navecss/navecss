@@ -26,7 +26,14 @@ import {
 import { closeBy, open, required } from './support/w8-actions.ts'
 import { popupCases } from './support/w8-popups.ts'
 import { tokenEasing, tokenMilliseconds } from './support/w8-tokens.ts'
-import { appears, atRest, goneAt, type Watch, watchPopup } from './support/w8-watch.ts'
+import {
+  appears,
+  atRest,
+  goneAt,
+  isReachedWithin,
+  type Watch,
+  watchPopup,
+} from './support/w8-watch.ts'
 
 /**
  * A scene whose Root is controlled by a button that is not its trigger, so the popup opens from
@@ -72,6 +79,16 @@ const withoutPopupFade = (): string => {
 Frames are about 16ms: the margin by which a measured time may differ from a transition's length.
  */
 const FRAME = 20
+
+/**
+With nothing to wait for, an unmounting popup is gone within this many frames of its close starting.
+ */
+const FEW_FRAMES = 4
+
+/**
+The most frames waited for a popup to leave the page, which only a popup that does not leave runs out.
+ */
+const MAX_FRAMES = 120
 
 describe.each(popupCases)('AC-base-ui-overlay-completion-17: the $name popup', (popupCase) => {
   let page: Page | undefined
@@ -196,13 +213,17 @@ describe.each(popupCases)('AC-base-ui-overlay-completion-17: the $name popup', (
     const seen = start(withoutPopupFade())
     await open(popupCase.opening)
     const popup = await atRest()
+    const followed = seen.track(popup)
     await closeBy(popupCase.closes)
     const [ending] = seen.of('data-ending-style', true)
     expect(ending, 'data-ending-style was set').toBeDefined()
     expect(ending?.animations, 'no animation runs').toEqual([])
     expect(ending?.duration).toBe('0s')
-    const gone = await goneAt(popup, 1000)
-    expect(gone, 'the popup left the page').toBeDefined()
-    expect(gone! - ending!.time, 'within a few frames').toBeLessThan(4 * FRAME)
+    const isGone = await isReachedWithin(() => followed.goneFrame() !== undefined, MAX_FRAMES)
+    expect(isGone, 'the popup left the page').toBe(true)
+    // Counted in frames: how long a frame takes is the machine's, how many pass is the page's.
+    expect(followed.goneFrame()! - ending!.frame, 'within a few frames').toBeLessThanOrEqual(
+      FEW_FRAMES,
+    )
   })
 })

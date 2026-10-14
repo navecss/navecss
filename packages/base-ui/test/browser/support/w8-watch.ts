@@ -19,6 +19,11 @@ export interface Moment {
   readonly animations: readonly Seen[]
   readonly attribute: string
   /**
+  How many animation frames had passed since the watch began, so that a gap can be told in frames,
+  which a slow machine does not stretch, as well as in milliseconds.
+   */
+  readonly frame: number
+  /**
   The computed `transition-duration` at that moment.
    */
   readonly duration: string
@@ -61,13 +66,68 @@ const describeAnimation = (animation: Animation): Seen => {
 
 const ATTRIBUTES = ['data-starting-style', 'data-ending-style', 'data-instant']
 
+/**
+ * Whether a popup is out of the rendering tree: removed, or kept in the document by Base UI but
+ * without a box (the Select keeps its positioner mounted, hidden).
+ */
+export const isGone = (popup: Element): boolean =>
+  !popup.isConnected || popup.getClientRects().length === 0
+
+/**
+A popup followed frame by frame, to find the frame at which it left the page.
+ */
+export interface Tracked {
+  /**
+  The frame at which the popup was first seen gone, or `undefined` while it is not.
+   */
+  readonly goneFrame: () => number | undefined
+}
+
 export interface Watch {
+  /**
+  The number of animation frames since the watch began.
+   */
+  readonly frames: () => number
   readonly moments: Moment[]
   readonly stop: () => void
+  /**
+  Follows a popup frame by frame from now on.
+   */
+  readonly track: (popup: Element) => Tracked
   /**
   The moments of one attribute, in order.
    */
   readonly of: (attribute: string, isPresent: boolean) => Moment[]
+}
+
+/**
+ * Counts animation frames from now on, and notes the frame at which each popup it is asked to
+ * follow is first seen gone.
+ */
+const countFrames = (): Pick<Watch, 'frames' | 'stop' | 'track'> => {
+  let frames = 0
+  const followed: { goneFrame: number | undefined; popup: Element }[] = []
+  const tick = (): void => {
+    frames += 1
+    for (const entry of followed) {
+      if (entry.goneFrame === undefined && isGone(entry.popup)) {
+        entry.goneFrame = frames
+      }
+    }
+    handle = requestAnimationFrame(tick)
+  }
+  let handle = requestAnimationFrame(tick)
+  return {
+    frames: () => frames,
+    stop: () => {
+      cancelAnimationFrame(handle)
+    },
+    track: (popup) => {
+      const entry = { goneFrame: undefined as number | undefined, popup }
+      followed.push(entry)
+      return { goneFrame: () => entry.goneFrame }
+    },
+  }
 }
 
 /**
@@ -76,11 +136,13 @@ export interface Watch {
  */
 export const watchPopup = (testId = 'popup'): Watch => {
   const moments: Moment[] = []
+  const counter = countFrames()
   const record = (target: HTMLElement, attribute: string): void => {
     const style = getComputedStyle(target)
     moments.push({
       animations: target.getAnimations().map((animation) => describeAnimation(animation)),
       attribute,
+      frame: counter.frames(),
       duration: style.transitionDuration,
       easing: style.transitionTimingFunction,
       instant: target.dataset.instant,
@@ -114,12 +176,15 @@ export const watchPopup = (testId = 'popup'): Watch => {
     subtree: true,
   })
   return {
+    frames: counter.frames,
     moments,
     of: (attribute, isPresent) =>
       moments.filter((moment) => moment.attribute === attribute && moment.isPresent === isPresent),
     stop: () => {
       observer.disconnect()
+      counter.stop()
     },
+    track: counter.track,
   }
 }
 
@@ -131,11 +196,16 @@ const nextFrame = (): Promise<void> =>
   })
 
 /**
- * Whether a popup is out of the rendering tree: removed, or kept in the document by Base UI but
- * without a box (the Select keeps its positioner mounted, hidden).
+ * Waits frame by frame until `isDone` holds, for at most `limit` frames, and says whether it held.
+ * The limit is a count of frames and not a time, so a machine that is slow to draw is waited for
+ * as long as it takes to draw that many frames.
  */
-export const isGone = (popup: Element): boolean =>
-  !popup.isConnected || popup.getClientRects().length === 0
+export const isReachedWithin = async (isDone: () => boolean, limit: number): Promise<boolean> => {
+  for (let frame = 0; frame < limit && !isDone(); frame += 1) {
+    await nextFrame()
+  }
+  return isDone()
+}
 
 /**
  * Waits frame by frame until the popup is gone and returns the time that was seen, or `undefined`
