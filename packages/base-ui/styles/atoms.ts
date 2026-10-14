@@ -15,12 +15,13 @@ import { completionAtoms } from './completion-atoms.ts'
 import { controlAtoms } from './control-atoms.ts'
 import { disclosureAtoms } from './disclosure-atoms.ts'
 import { type Draft, draftAtoms, openGhostKey } from './drafts.ts'
+import { feedbackAtoms } from './feedback-atoms.ts'
 import { fieldAtoms } from './field-atoms.ts'
 import { overlayAtoms } from './overlay-atoms.ts'
 import { toolbarSliderAtoms } from './toolbar-slider-atoms.ts'
 
 /**
-The role atoms, in the order their rules ship: the first release's, then the overlay completion's.
+The role atoms, in the order their rules ship: the first release's, the overlay completion's, then the feedback and navigation atoms.
  */
 export const atoms: Record<string, AtomDefinition> = {
   ...overlayAtoms,
@@ -30,6 +31,7 @@ export const atoms: Record<string, AtomDefinition> = {
   ...toolbarSliderAtoms,
   ...completionAtoms,
   ...comboboxAtoms,
+  ...feedbackAtoms,
 }
 
 /**
@@ -71,4 +73,5 @@ export const focusRingAtoms: readonly string[] = [
   'baseUiToolbarLink',
   'baseUiChip',
   'baseUiComboboxTrigger',
+  'baseUiNavigationMenuTrigger',
 ]

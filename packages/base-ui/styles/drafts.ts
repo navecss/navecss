@@ -10,6 +10,10 @@ export const DRAFTS = [
   'popup-fade',
   'tooltip-fade',
   'scrim',
+  'toast-placement',
+  'toast-fade',
+  'toast-limit',
+  'navigation-menu-fade',
 ] as const
 
 export type Draft = (typeof DRAFTS)[number]
@@ -33,6 +37,10 @@ export const draftAtoms: Readonly<Record<Draft, readonly string[]>> = {
   'popup-fade': ['baseUiPopupMotion', 'baseUiPopupFade'],
   'tooltip-fade': ['baseUiTooltipMotion'],
   scrim: ['baseUiBackdrop'],
+  'toast-placement': ['baseUiToastPlacement'],
+  'toast-fade': ['baseUiToastFade'],
+  'toast-limit': ['baseUiToastLimit'],
+  'navigation-menu-fade': ['baseUiNavigationMenuFade'],
 }
 
 /**
