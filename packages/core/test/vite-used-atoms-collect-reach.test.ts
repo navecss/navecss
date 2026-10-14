@@ -795,10 +795,14 @@ describe('AC-used-atoms-34: a position is printed only where the source map lead
 
   it('sorts a problem with no position after the problems that have one', () => {
     const base = { kind: 'argument', offset: 0, construct: 'cx(v)', text: 'x.', file: 'src/m.js' }
-    const report = buildReport([
-      { ...base, line: 0, column: 0, unknownLine: UNKNOWN_UNMAPPED },
-      { ...base, line: 9, column: 3 },
-    ] as never)
+    const report = buildReport(
+      [
+        { ...base, line: 0, column: 0, unknownLine: UNKNOWN_UNMAPPED },
+        { ...base, line: 9, column: 3 },
+      ] as never,
+      [],
+      'navePlugin()',
+    )
     const lines = report.split('\n').filter((line) => line.startsWith('src/m.js'))
 
     expect(lines).toEqual([`src/m.js:9:3: cx(v): x.`, `src/m.js: cx(v): x.${UNKNOWN_UNMAPPED}`])

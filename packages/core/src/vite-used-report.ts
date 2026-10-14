@@ -64,11 +64,14 @@ export const LINE_UNKNOWN_UNMAPPED =
 export const REPORT_CAUSE =
   'the build cannot tell which atoms these apply, and it ships only the atoms it can read.'
 
-const REMEDIES: Readonly<Record<ProblemKind, readonly string[]>> = {
+/**
+ * The fixed remedy lines of each kind, `home` being where the options are written.
+ */
+const remedies = (home: string): Readonly<Record<ProblemKind, readonly string[]>> => ({
   argument: [
     "Name the atoms at the call: a string literal, a const in the same file, or a condition choosing between them, as in cx(on ? 'flex' : 'grid').",
     "To choose by a value, call cx() once per case and pick between the results: ({ row: cx('flex'), grid: cx('grid') })[variant].",
-    'If the name comes from data the build never sees, write cx.dynamic(name) and list every atom it can take in keep in navePlugin().',
+    `If the name comes from data the build never sees, write cx.dynamic(name) and list every atom it can take in keep in ${home}.`,
   ],
   reference: [
     'Call cx() where the classes are applied, with the atom names as its arguments: the build reads calls, not a cx that is assigned, passed or spread.',
@@ -81,11 +84,11 @@ const REMEDIES: Readonly<Record<ProblemKind, readonly string[]>> = {
   concatenation: [
     'Write cx() with the atom name, or cx.dynamic() with keep for a name chosen at run time.',
   ],
-  dynamic: ['List the atoms those calls can take in keep in navePlugin().'],
+  dynamic: [`List the atoms those calls can take in keep in ${home}.`],
   unknown: [],
   own: [],
   unreadable: [],
-}
+})
 
 /**
  * The line a problem prints: its position, then the construct and the sentence.
@@ -110,6 +113,7 @@ function problemLine(problem: LocatedProblem): string {
 function reexportRemedy(
   problems: readonly LocatedProblem[],
   configured: readonly string[],
+  home: string,
 ): string[] {
   const modules = problems
     .filter((problem) => isListableReexport(problem))
@@ -119,7 +123,7 @@ function reexportRemedy(
     array === undefined
       ? []
       : [
-          `To keep a module that re-exports cx, list it in navePlugin() by its path from the project root: cxModules: ${array}. Files that import cx from it are then read as if they imported it from @navecss/core/cx. Or import cx from @navecss/core/cx directly where it is called.`,
+          `To keep a module that re-exports cx, list it in ${home} by its path from the project root: cxModules: ${array}. Files that import cx from it are then read as if they imported it from @navecss/core/cx. Or import cx from @navecss/core/cx directly where it is called.`,
         ]
   if (problems.some((problem) => problem.kind === 'reexport' && !isListableReexport(problem))) {
     lines.push(
@@ -133,13 +137,20 @@ function reexportRemedy(
  * The remedy block: the application's lines in the fixed order of the kinds present, then each
  * dependency's line sorted by package name, then `Available:` when a unknown name had no hint.
  */
-function remedyBlock(problems: readonly LocatedProblem[], listed: readonly string[]): string[] {
+function remedyBlock(
+  problems: readonly LocatedProblem[],
+  listed: readonly string[],
+  home: string,
+): string[] {
   const configured = withoutRemoved(problems, listed)
+  const fixed = remedies(home)
   const application = problems.filter((problem) => problem.pkg === undefined)
   const lines: string[] = []
   for (const kind of PROBLEM_KINDS) {
     if (application.every((problem) => problem.kind !== kind)) continue
-    lines.push(...(kind === 'reexport' ? reexportRemedy(application, configured) : REMEDIES[kind]))
+    lines.push(
+      ...(kind === 'reexport' ? reexportRemedy(application, configured, home) : fixed[kind]),
+    )
   }
   const byPackage = new Map<string, LocatedProblem[]>()
   for (const problem of problems) {
@@ -147,7 +158,7 @@ function remedyBlock(problems: readonly LocatedProblem[], listed: readonly strin
       byPackage.set(problem.pkg, [...(byPackage.get(problem.pkg) ?? []), problem])
   }
   for (const pkg of byPackage.keys().toArray().toSorted(compareText)) {
-    lines.push(...packageLines(pkg, byPackage.get(pkg)!, configured))
+    lines.push(...packageLines(pkg, byPackage.get(pkg)!, configured, home))
   }
   if (application.some((problem) => problem.needsAvailable)) lines.push(availableLine())
   return lines
@@ -202,15 +213,17 @@ function noun(count: number, word: string): string {
 
 /**
  * The build report for every problem of an environment. `configured` is the `cxModules` list the
- * remedies that print one extend.
+ * remedies that print one extend, and `home` is how the host spells where the options are written,
+ * the call of its plugin or its wrapper: the one place the report names its host.
  */
 export function buildReport(
   problems: readonly LocatedProblem[],
-  configured: readonly string[] = [],
+  configured: readonly string[],
+  home: string,
 ): string {
   const files = new Set(problems.map((problem) => problem.file)).size
   const first = `${noun(problems.length, 'problem')} in ${noun(files, 'file')}: ${REPORT_CAUSE}`
-  return [first, ...problemLines(problems), ...remedyBlock(problems, configured)].join('\n')
+  return [first, ...problemLines(problems), ...remedyBlock(problems, configured, home)].join('\n')
 }
 
 /**
@@ -218,7 +231,8 @@ export function buildReport(
  */
 export function moduleReport(
   problems: readonly LocatedProblem[],
-  configured: readonly string[] = [],
+  configured: readonly string[],
+  home: string,
 ): string {
-  return [...problemLines(problems), ...remedyBlock(problems, configured)].join('\n')
+  return [...problemLines(problems), ...remedyBlock(problems, configured, home)].join('\n')
 }

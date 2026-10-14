@@ -21,7 +21,7 @@ pnpm add @navecss/core
   included, is reachable only through the package's `exports` map: there is no
   `main` field to fall back on.
 - **ES modules.** `@navecss/core/cx`, `@navecss/core/atoms`,
-  `@navecss/core/vite`, `@navecss/core/lightningcss` and `@navecss/core/check` load through `import` only. A `require()` of any of
+  `@navecss/core/vite`, `@navecss/core/lightningcss`, `@navecss/core/check` and `@navecss/core/collect` load through `import` only. A `require()` of any of
   them fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`, which reads as though the
   entry point did not exist. In TypeScript, set `moduleResolution` to `bundler`,
   `node16` or `nodenext`; under `node10` their types are not found. A CommonJS
@@ -879,3 +879,4 @@ Consumers of `@navecss/tokens` alone get no guide: it ships only in this package
 | `@navecss/core/standalone`   | The whole stylesheet in one file, with no `@import`, for projects with no bundler                     |
 | `@navecss/core/postcss`      | PostCSS plugin — `navePlugin()`                                                                       |
 | `@navecss/core/check`        | The survival check as a function — `check({ source })`                                                |
+| `@navecss/core/collect`      | Reads which atoms a module uses, for build tools; not meant for application code                      |

@@ -55,6 +55,10 @@
       "types": "./dist/check.d.ts",
       "import": "./dist/check.js"
     },
+    "./collect": {
+      "types": "./dist/collect.d.ts",
+      "import": "./dist/collect.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {
