@@ -23,6 +23,10 @@ export interface PackedCoreTarball {
    */
   readonly files: readonly string[]
   /**
+   * The directory the tarball was extracted into: a packed file `package/dist/cx.js` sits under it.
+   */
+  readonly directory: string
+  /**
    * Reads one packed file's bytes as utf8, given its `package/`-relative path.
    */
   read(relPath: string): string
@@ -123,6 +127,7 @@ export function packCoreTarball(): PackedCoreTarball {
 
   cache.tarball = {
     files: fileList,
+    directory: extractDir,
     read: (relPath: string) => readFileSync(path.join(extractDir, relPath), 'utf8'),
   }
   return cache.tarball

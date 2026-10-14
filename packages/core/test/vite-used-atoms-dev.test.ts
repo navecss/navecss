@@ -1,5 +1,5 @@
 /* eslint-disable unicorn/consistent-function-scoping -- each fixture sits beside the criterion whose rows use it */
-import type { InlineConfig, PluginOption } from 'vite'
+import type { InlineConfig, PluginOption, ViteDevServer } from 'vite'
 
 /**
  * The used-atoms criteria for the dev server (AC-used-atoms-33, -39, -41, -42 and the dev
@@ -267,6 +267,7 @@ describe('AC-used-atoms-39 — a dependency’s calls are read in dev, on a cold
 
 interface Update {
   readonly type: string
+  readonly path?: string
   readonly updates?: readonly { readonly path: string }[]
 }
 
@@ -406,6 +407,40 @@ async function servedOnceRead(
   return servedLayer(server, root)
 }
 
+/**
+ * A scratch plugin, listed ahead of `navePlugin()`, that keeps what the dev server listens for on
+ * the client channel when a page connects or disconnects, so a row can stand a page's connection
+ * in without a browser. `connect` and `disconnect` call each of those listeners.
+ */
+function pageConnections(): { connect: () => void; disconnect: () => void; plugin: PluginOption } {
+  const listeners: Record<string, (() => void)[]> = {
+    'vite:client:connect': [],
+    'vite:client:disconnect': [],
+  }
+  const plugin: PluginOption = {
+    name: 'page-connections',
+    configureServer(server: ViteDevServer) {
+      const { hot } = server.environments.client
+      const on = hot.on.bind(hot) as (event: string, listener: () => void) => void
+      Object.assign(hot, {
+        on: (event: string, listener: () => void) => {
+          listeners[event]?.push(listener)
+          on(event, listener)
+        },
+      })
+    },
+  }
+  const call = (event: string) => (): void => {
+    const heard = listeners[event] ?? []
+    for (const listener of heard) listener()
+  }
+  return {
+    plugin,
+    connect: call('vite:client:connect'),
+    disconnect: call('vite:client:disconnect'),
+  }
+}
+
 const ACCEPTING = (body: string): string =>
   `${IMPORT}export const a = ${body}\nif (import.meta.hot) import.meta.hot.accept()\n`
 
@@ -539,6 +574,270 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
       app.dispose()
     }
   }, 60_000)
+
+  it('a page that connects after a reload was sent to no one is sent the reload again', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
+    const page = pageConnections()
+    try {
+      const server = await startDev(devConfig(app.root, [page.plugin, navePlugin()], NO_WATCHER))
+      try {
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
+        const reloads = (): Update[] =>
+          updates.sent.filter((update) =>
+            update.updates?.some((entry) => entry.path === '/src/app.css'),
+          )
+
+        await edit(server, app.root, "cx('flex', 'block')")
+        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        // Nothing has asked for the stylesheet since, so the reload may have gone to no one, and
+        // more growth is not announced on top of it.
+        await edit(server, app.root, "cx('flex', 'block', 'gap')")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        expect(reloads()).toHaveLength(1)
+
+        const asked = reloadAsked(server, UPDATE_CEILING_MS)
+        page.connect()
+        await asked.done
+
+        expect(reloads()).toHaveLength(2)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('a connection when no reload went unheard sends nothing, though a served stylesheet is outgrown', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
+    const page = pageConnections()
+    try {
+      const server = await startDev(devConfig(app.root, [page.plugin, navePlugin()], NO_WATCHER))
+      try {
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
+        const reloads = (): Update[] =>
+          updates.sent.filter((update) =>
+            update.updates?.some((entry) => entry.path === '/src/app.css'),
+          )
+
+        page.connect()
+        await edit(server, app.root, "cx('flex', 'block')")
+        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        // The page was listening, so the reload was heard; the stylesheet has not been asked for
+        // since, so it is still outgrown, and more growth is held back by the reload in flight.
+        await edit(server, app.root, "cx('flex', 'block', 'gap')")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        page.connect()
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
+        expect(reloads()).toHaveLength(1)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('a page that disconnects and connects again, with no reload unheard, is sent nothing', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
+    const page = pageConnections()
+    try {
+      const server = await startDev(devConfig(app.root, [page.plugin, navePlugin()], NO_WATCHER))
+      try {
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
+        const reloads = (): Update[] =>
+          updates.sent.filter((update) =>
+            update.updates?.some((entry) => entry.path === '/src/app.css'),
+          )
+
+        page.connect()
+        await edit(server, app.root, "cx('flex', 'block')")
+        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        await edit(server, app.root, "cx('flex', 'block', 'gap')")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        page.disconnect()
+        page.connect()
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
+        expect(reloads()).toHaveLength(1)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('a page that disconnected before a reload was sent is not counted: the next connection is sent the reload again', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
+    const page = pageConnections()
+    try {
+      const server = await startDev(devConfig(app.root, [page.plugin, navePlugin()], NO_WATCHER))
+      try {
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
+        const reloads = (): Update[] =>
+          updates.sent.filter((update) =>
+            update.updates?.some((entry) => entry.path === '/src/app.css'),
+          )
+
+        page.connect()
+        page.disconnect()
+        await edit(server, app.root, "cx('flex', 'block')")
+        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        await edit(server, app.root, "cx('flex', 'block', 'gap')")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        expect(reloads()).toHaveLength(1)
+
+        const asked = reloadAsked(server, UPDATE_CEILING_MS)
+        page.connect()
+        await asked.done
+
+        expect(reloads()).toHaveLength(2)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('a connection when no reload went unheard sends nothing, though a served stylesheet is outgrown and its reload no longer holds the next back', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
+    const page = pageConnections()
+    try {
+      const server = await startDev(devConfig(app.root, [page.plugin, navePlugin()], NO_WATCHER))
+      try {
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
+        const reloads = (): Update[] =>
+          updates.sent.filter((update) =>
+            update.updates?.some((entry) => entry.path === '/src/app.css'),
+          )
+
+        page.connect()
+        await edit(server, app.root, "cx('flex', 'block')")
+        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        await edit(server, app.root, "cx('flex', 'block', 'gap')")
+        // Longer than the 2 s a reload not yet answered holds the next one back, so what keeps this
+        // outgrown stylesheet from reloading is that a connection reloads only what no page heard.
+        await new Promise((resolve) => setTimeout(resolve, 2100))
+        page.connect()
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
+        expect(reloads()).toHaveLength(1)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('a page that connects after a file change sent the stylesheet to no one is sent its reload again', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': ACCEPTING("cx('flex')") }))
+    const page = pageConnections()
+    try {
+      const server = await startDev(devConfig(app.root, [page.plugin, navePlugin()], NO_WATCHER))
+      try {
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
+        const file = path.join(app.root, 'src/App.ts')
+        writeFileSync(file, ACCEPTING("cx('flex', 'block')"))
+        server.watcher.emit('change', file)
+        expect(await updates.isSent(['/src/App.ts', '/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+
+        const asked = reloadAsked(server, UPDATE_CEILING_MS)
+        page.connect()
+        await asked.done
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('control: a page that connects when the stylesheet it was served is current is sent nothing', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
+    const page = pageConnections()
+    try {
+      const server = await startDev(devConfig(app.root, [page.plugin, navePlugin()], NO_WATCHER))
+      try {
+        await servedOnceRead(server, app.root, atoms('flex'))
+        const updates = recordUpdates(server)
+
+        await edit(server, app.root, "cx('flex', 'block')")
+        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        await stylesheetServedAgain(server, app.root)
+        page.connect()
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
+        expect(updates.sent).toHaveLength(1)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+})
+
+/**
+ * Resolves with the page reloads `updates` has recorded once one has been sent, or with none
+ * after `ms`.
+ */
+async function pageReloadsSent(updates: Recording, ms: number): Promise<Update[]> {
+  const deadline = Date.now() + ms
+  const reloads = (): Update[] => updates.sent.filter((update) => update.type === 'full-reload')
+  while (reloads().length === 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return reloads()
+}
+
+describe('AC-used-atoms-41 — a stylesheet inlined in index.html, after the set grew', () => {
+  const INLINE_PAGE = `<!doctype html><html><head><style>${APP_CSS}</style></head><body><script type="module" src="/src/main.ts"></script></body></html>`
+
+  it('is answered by a reload of the page, named in the way the client heeds', async () => {
+    const app = makeUsedApp(
+      appFiles({
+        'index.html': INLINE_PAGE,
+        'src/App.ts': `${IMPORT}export const a = cx('flex')\n`,
+        'src/main.ts': "import './App.ts'\n",
+      }),
+    )
+    try {
+      // Not a middleware-mode server: Vite names every page there with `*`, and the reload that
+      // went wrong is the one it sends for a server that serves a single page's HTML.
+      const server = await startDev(
+        devConfig(app.root, [navePlugin()], { ...NO_WATCHER, middlewareMode: false }),
+      )
+      try {
+        await server.transformRequest('/src/main.ts')
+        await server.transformIndexHtml(
+          '/index.html',
+          readFileSync(path.join(app.root, 'index.html'), 'utf8'),
+        )
+        const updates = recordUpdates(server)
+
+        await edit(server, app.root, "cx('flex', 'block')")
+        const reloads = await pageReloadsSent(updates, UPDATE_CEILING_MS)
+
+        // Vite's client ignores a reload that names an `.html` path other than the page's URL,
+        // which is what a reload of the module asked for with its file-system path would send.
+        expect(reloads.map((reload) => reload.path)).toEqual(['*'])
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
 })
 
 /**

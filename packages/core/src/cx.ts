@@ -92,12 +92,31 @@ interface Cx {
   dynamic: (name: AtomName | Falsy) => string
 }
 
+type KeepMap = Readonly<Record<string, string>>
+
 /**
  * The atoms the Vite plugin ships for `cx.dynamic()`: the plugin hands the map of the atoms in
  * `keep` and in every `keepFor` list to the bundler as a constant, static data folded into the
- * bundle. Undefined without the plugin, and under `atomic: 'all'`.
+ * bundle. The constant holds the map as an object (Vite) or as its JSON text (a host whose
+ * define folds only strings, such as Next.js's `compiler.define`). Undefined without the plugin,
+ * and under `atomic: 'all'`.
  */
-declare const __NAVE_KEEP_CLASSES__: Readonly<Record<string, string>> | undefined
+declare const __NAVE_KEEP_CLASSES__: KeepMap | string | undefined
+
+const decodedKeep = new Map<string, KeepMap>()
+
+/**
+ * The map the constant's JSON text decodes to, decoded on first use and kept, so a later call
+ * reads the map the first one made.
+ */
+function decodedMap(text: string): KeepMap {
+  let map = decodedKeep.get(text)
+  if (map === undefined) {
+    map = JSON.parse(text) as KeepMap
+    decodedKeep.set(text, map)
+  }
+  return map
+}
 
 export const cx: Cx = (...args: (AtomName | Falsy)[]): string =>
   args
@@ -115,6 +134,12 @@ cx.raw = (...args: (Falsy | string)[]): string => args.filter(Boolean).join(' ')
 
 cx.dynamic = (name: AtomName | Falsy): string => {
   if (!name) return ''
+  // The text case is a test of its own, before the object's line, so a bundler that folds the map
+  // in as an object drops this branch and the decoder with it.
+  if (typeof __NAVE_KEEP_CLASSES__ === 'string') {
+    const decoded = decodedMap(__NAVE_KEEP_CLASSES__)
+    return Object.hasOwn(decoded, name) ? (decoded[name] ?? '') : ''
+  }
   // `typeof`, not a comparison: without the plugin the constant is not declared at all, and
   // reading an undeclared name throws where `typeof` does not.
   // eslint-disable-next-line unicorn/no-typeof-undefined
