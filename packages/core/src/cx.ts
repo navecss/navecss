@@ -71,11 +71,11 @@
  *   They do not generate global CSS classes and are not available in cx().
  *   cx() covers Nave built-in atoms only.
  */
-import type { AtomName } from './atoms.ts'
+import type { AtomName } from './atom-names.ts'
 
-import { atomClassMap } from './atoms.ts'
+import { atomClassMap } from './atom-names.ts'
 
-export type { AtomName } from './atoms.ts'
+export type { AtomName } from './atom-names.ts'
 
 type Falsy = false | null | undefined
 

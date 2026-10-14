@@ -101,7 +101,7 @@ function assertNoForbiddenHost(bareSpecifiers: ReadonlySet<string>): void {
 }
 
 describe('AC-directive-core-02 — the core imports no host', () => {
-  it('reaches only modules under src/directive/ and src/atoms.ts, src/selector-utils.ts', () => {
+  it('reaches only modules under src/directive/ and src/atoms.ts, src/atom-names.ts, src/selector-utils.ts', () => {
     const { files } = walkSourceGraph(CORE_ENTRIES)
 
     for (const file of files) {
@@ -109,6 +109,7 @@ describe('AC-directive-core-02 — the core imports no host', () => {
       expect(
         relative.startsWith(`directive${path.sep}`) ||
           relative === 'atoms.ts' ||
+          relative === 'atom-names.ts' ||
           relative === 'selector-utils.ts',
       ).toBe(true)
     }
