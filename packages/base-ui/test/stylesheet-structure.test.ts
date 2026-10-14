@@ -1171,6 +1171,6 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
     const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}${owner} { ${key} { color: red } } }`
 
     expect(vocabularyViolations(css)).not.toEqual([])
-    expect(vocabularyViolations(css).join('\n')).toContain(key.replace('&', '').replace('> ', '> '))
+    expect(vocabularyViolations(css).join('\n')).toContain(key.replaceAll('&', ''))
   })
 })
