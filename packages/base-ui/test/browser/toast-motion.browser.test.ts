@@ -7,7 +7,7 @@
  * removed within that duration plus 200ms. At rest it computes no opacity, transform, scale or
  * translate. A toast dismissed by a swipe carries `data-swipe-direction` when its ending style
  * lands, runs no `opacity` transition and is removed within 50ms of the release, never fading. The
- * control is the same close in a build without the fade (`q1dc` unsigned): no animation runs and
+ * control is the same close in a build without the fade (`toast fade` unsigned): no animation runs and
  * the root is gone on the next frame.
  *
  * The reduced-motion flip in the middle of the exit is `toast-reduced-motion.browser.test.ts`,
@@ -251,7 +251,7 @@ describe('AC-base-ui-feedback-navigation-15: the toast fade', () => {
     expect(Math.min(...opacities), 'the opacity never fell below 1').toBe(1)
   }, 30_000)
 
-  it('AC-base-ui-feedback-navigation-15 (Tier B, q1dc unsigned): the same close runs no animation and removes the root on the next frame (control)', async () => {
+  it('AC-base-ui-feedback-navigation-15 (Tier B, toast fade unsigned): the same close runs no animation and removes the root on the next frame (control)', async () => {
     const manager = await show(withoutClass(stylesheet, 'toast-fade'))
     watch = await raiseWatched(manager, 'plain')
     await atRest('toast-plain')

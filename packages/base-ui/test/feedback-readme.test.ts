@@ -148,7 +148,8 @@ describe("AC-base-ui-feedback-navigation-49: the README carries the reader items
 
     it('carries them nowhere else in the prose, and carries no draft id', () => {
       expect(phrasesIn(prose)).toEqual(phrasesFor(SHIPPING_789))
-      expect(readme).not.toMatch(/\b(?:vgiq|q1dc|i696|wlu6|zmko|wi8q|owz2|udfy|zubh|n85k)\b/)
+      // A draft label (a backticked word followed by signed or unsigned) is never reader copy.
+      expect(readme).not.toMatch(/`[\w-]+` (?:un)?signed\b/)
     })
 
     it('control: a paragraph composed for each of the sixteen states lists exactly its phrases', () => {
@@ -383,7 +384,7 @@ describe('AC-base-ui-feedback-navigation-50: the cleared final cleared sentences
   })
 })
 
-describe("AC-base-ui-feedback-navigation-19: the unplaced branch carries wi8q's sentences (README half)", () => {
+describe("AC-base-ui-feedback-navigation-19: the unplaced branch carries unplaced alternative's sentences (README half)", () => {
   it('carries S-U, not S-A before its remedy row, neither S-P3 nor S-Pp2, and the shipped 104 B sentence instead of D3', () => {
     const unplaced = readmeInState(readme, UNPLACED)
     expect(unplaced).toContain(S.S_U_TOAST_AREA_UNPLACED.text)
@@ -400,17 +401,17 @@ describe("AC-base-ui-feedback-navigation-19: the unplaced branch carries wi8q's 
     expect(unplaced).toContain(S.S_A_ANCHORED_NOT_STACKED.text)
   })
 
-  it('carries neither S-U nor S-A with the placement signed, wi8q being null', () => {
+  it('carries neither S-U nor S-A with the placement signed, unplaced alternative being null', () => {
     expect(readme).not.toContain(S.S_U_TOAST_AREA_UNPLACED.text)
     expect(readme).not.toContain(S.S_A_ANCHORED_NOT_STACKED.text)
     expect(readme).toContain(S.S_P3_PLACEMENT_AND_STACKING.text)
   })
 
-  it('carries neither S-U nor S-A when neither the placement nor wi8q is signed: the state the criterion does not ship', () => {
+  it('carries neither S-U nor S-A when neither the placement nor unplaced alternative is signed: the state the criterion does not ship', () => {
     const neither: State789 = {
       remedyRowPosted: true,
       unsigned: ['toast-placement'],
-      wi8qSigned: false,
+      unplacedAlternativeSigned: false,
     }
     const text = readmeInState(readme, neither)
     expect(text).not.toContain(S.S_U_TOAST_AREA_UNPLACED.text)

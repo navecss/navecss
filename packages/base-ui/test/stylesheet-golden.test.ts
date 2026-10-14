@@ -508,7 +508,7 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
     expect(listDrift(sheet, expected787)).toEqual([])
   })
 
-  it('names, in no feedback rule, popup-fade, popup-motion, active-option or the open ghost key of abv1', async () => {
+  it('names, in no feedback rule, popup-fade, popup-motion, active-option or the open ghost key of open-ghost', async () => {
     const rules = [...blockRules(feedbackBlock())]
     const built = withoutRing(await buildStyles()).text
     const names = NEW_CLASSES_789.map((name) => name.replace('nave-base-ui-', ''))

@@ -8,7 +8,7 @@
     "toast-placement": {
       "bytes": 272,
       "sha256": "e12ea712fca8f578",
-      "route": "`vgiq`"
+      "route": "`placement`"
     },
     "toast-root": {
       "bytes": 384,
@@ -18,12 +18,12 @@
     "toast-fade": {
       "bytes": 498,
       "sha256": "498d66b363da2d2d",
-      "route": "`q1dc`"
+      "route": "`toast fade`"
     },
     "toast-limit": {
       "bytes": 75,
       "sha256": "b2411b47285998cf",
-      "route": "`i696`"
+      "route": "`limit`"
     },
     "navigation-menu-list": {
       "bytes": 155,
@@ -43,7 +43,7 @@
     "navigation-menu-fade": {
       "bytes": 441,
       "sha256": "a19f704b39b6ccf1",
-      "route": "`wlu6`"
+      "route": "`panel fade`"
     },
     "current-link": {
       "bytes": 196,

@@ -43,7 +43,7 @@ export const COMPLETION_SUBPATHS = [
 /**
 The seven components the feedback and navigation release adds.
  */
-export const FEEDBACK_SUBPATHS = [
+const FEEDBACK_SUBPATHS = [
   'toast',
   'navigation-menu',
   'scroll-area',

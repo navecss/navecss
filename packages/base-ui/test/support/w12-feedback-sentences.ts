@@ -5,7 +5,7 @@
  * it. The lengths and prefixes are the spec's, not computed from the text: the test that reads
  * this module computes both from the text and compares. The texts are the reader's items
  * (6132562445, 6138966109) and the cleared sentences (6131841394, 6132543996, 6138991843,
- * 6139394551 and the findings `i696`, `70di`, `l7fy`), byte for byte.
+ * 6139394551 and the findings `limit`, `sentence table`, `sentence table`), byte for byte.
  */
 import type { Literal } from './w9-sentences.ts'
 
@@ -468,17 +468,17 @@ export const S_PP1_POPUP_LIMITATION: Literal = {
   text: 'A popover, menu or tooltip opened from a toast opens under the other toasts where they overlap.',
 }
 /**
-Cleared zubh reduced-motion form (413 B).
+Cleared first-fade reduced-motion form (413 B).
  */
-export const ZUBH_REDUCED_MOTION_413: Literal = {
+export const FIRST_FADE_FORM_413: Literal = {
   bytes: 413,
   prefix: 'b6321bc8c76558ff',
   text: "When the reader's system asks for reduced motion, this package turns off the popups' fade, the tooltip's fade, the backdrop's fade, the toasts' fade, the tab indicator's slide, the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.",
 }
 /**
-Cleared udfy placement sentence (212 B).
+Cleared first-placement placement sentence (212 B).
  */
-export const UDFY_PLACEMENT_212: Literal = {
+export const FIRST_PLACEMENT_212: Literal = {
   bytes: 212,
   prefix: 'cf3b8d899be5df85',
   text: 'Nave fixes the toasts to a corner of the window, so a toast can cover part of your page, including the control that has keyboard focus. If your page has controls in that corner, move the toasts with your own CSS.',

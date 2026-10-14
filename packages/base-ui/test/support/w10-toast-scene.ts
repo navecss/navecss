@@ -28,7 +28,15 @@ const contentOf = (toast: Ns, closeProps: Props, action: ReactElement[]): ReactE
   const title = part(toast, 'Title', { 'data-part': 'Toast.Title' })
   const description = part(toast, 'Description', { 'data-part': 'Toast.Description' })
   const close = part(toast, 'Close', { 'data-part': 'Toast.Close', ...closeProps }, 'Close')
-  return part(toast, 'Content', { 'data-part': 'Toast.Content' }, title, description, close, ...action)
+  return part(
+    toast,
+    'Content',
+    { 'data-part': 'Toast.Content' },
+    title,
+    description,
+    close,
+    ...action,
+  )
 }
 
 /**
@@ -114,7 +122,12 @@ export const renderToasts = async (
     toastNamespace: Toast,
     withAction: options.withAction ?? false,
   })
-  const viewport = part(Toast, 'Viewport', { 'data-part': 'Toast.Viewport', ...options.viewportProps }, list)
+  const viewport = part(
+    Toast,
+    'Viewport',
+    { 'data-part': 'Toast.Viewport', ...options.viewportProps },
+    list,
+  )
   const portal = part(Toast, 'Portal', {}, viewport)
   const providerProps = {
     toastManager: manager,

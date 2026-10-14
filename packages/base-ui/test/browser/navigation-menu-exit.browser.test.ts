@@ -1,6 +1,6 @@
 /**
  * AC-base-ui-feedback-navigation-24: the Navigation Menu panel leaves with no empty frame, never
- * strands, and never drops focus to the body (`wlu6` signed), in a real engine with the built
+ * strands, and never drops focus to the body (`panel fade` signed), in a real engine with the built
  * tokens and stylesheet, through the built wrappers, with a per-frame sampler recording the
  * popup's computed opacity, whether it has a painted child, and where focus is.
  *
@@ -19,7 +19,7 @@
  * Two controls. The R15 hazard reproduced: the fade-both-ways form with `transition-property: none`
  * injected 30ms into its exit stays mounted after 700ms at 1.3.0, 1.5.0 and 1.6.0. The empty-frame
  * control: the fade-in-only form with no exit key shows an empty frame on the mid Escape. Each form
- * is checked against the byte count and hash the spec prints before it is used. With `wlu6`
+ * is checked against the byte count and hash the spec prints before it is used. With `panel fade`
  * unsigned the popup has no transition, is removed within two frames on every Escape and is opaque
  * in its first painted frame.
  */
@@ -205,7 +205,7 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
     return run
   }
 
-  describe('with wlu6 signed', () => {
+  describe('with panel fade signed', () => {
     it('AC-base-ui-feedback-navigation-24 (Tier B): Escape after a settled open with focus on the trigger shows no empty frame and the popup is gone within two frames', async () => {
       start()
       await openByKeyboard()
@@ -346,8 +346,8 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
     }, 30_000)
   })
 
-  describe('with wlu6 unsigned', () => {
-    it('AC-base-ui-feedback-navigation-24 (Tier B, wlu6 unsigned): the popup has no transition, appears opaque in its first painted frame and is removed within two frames of every Escape', async () => {
+  describe('with panel fade unsigned', () => {
+    it('AC-base-ui-feedback-navigation-24 (Tier B, panel fade unsigned): the popup has no transition, appears opaque in its first painted frame and is removed within two frames of every Escape', async () => {
       start(withoutClass(stylesheet, 'navigation-menu-fade'))
       const { mountedAt } = await openByKeyboard()
       const popup = required('popup')

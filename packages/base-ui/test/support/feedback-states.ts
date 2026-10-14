@@ -32,14 +32,14 @@ export type Draft789 = (typeof DRAFTS_789)[number]
 export type AnyDraft = Draft | Draft789
 
 /**
- * The finding each draft is signed by: `vgiq` placement and stacking, `q1dc` toast fade, `i696`
- * limited toasts hidden, `wlu6` the Navigation Menu fade-in.
+ * The finding each draft is signed by: `placement` placement and stacking, `toast fade` toast fade, `limit`
+ * limited toasts hidden, `panel fade` the Navigation Menu fade-in.
  */
 export const SIGNATURES_789: Readonly<Record<Draft789, string>> = {
-  'toast-placement': 'vgiq',
-  'toast-fade': 'q1dc',
-  'toast-limit': 'i696',
-  'navigation-menu-fade': 'wlu6',
+  'toast-placement': 'placement',
+  'toast-fade': 'toast fade',
+  'toast-limit': 'limit',
+  'navigation-menu-fade': 'panel fade',
 }
 
 const BASE = 'nave-base-ui-'

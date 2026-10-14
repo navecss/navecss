@@ -1,7 +1,7 @@
 /**
  * AC-base-ui-feedback-navigation-18: a popup opened from a toast, with and without the Toast
  * viewport as its container, in a real engine with the built tokens and stylesheet, through the
- * built wrappers. `vgiq` signed: the viewport is on `layer.toast`.
+ * built wrappers. `placement` signed: the viewport is on `layer.toast`.
  *
  * Without `container` the Popover is portalled into `<body>` after the viewport, so it paints under
  * the toasts: at least one of five points over the popup returns a toast. That is the positive
@@ -134,7 +134,7 @@ describe(`AC-base-ui-feedback-navigation-18: a popup opened from a toast, at Bas
   }
 
   describe.each(SCHEMES)('in %s', (scheme) => {
-    it('AC-base-ui-feedback-navigation-18 (Tier B, vgiq signed): without a container at least one of five points over the popup returns a toast (the positive control)', async () => {
+    it('AC-base-ui-feedback-navigation-18 (Tier B, placement signed): without a container at least one of five points over the popup returns a toast (the positive control)', async () => {
       await show(scheme, false)
       await userEvent.click(required('popover-trigger'))
       const popup = await settled(() => byTestId('popup'))
@@ -147,7 +147,7 @@ describe(`AC-base-ui-feedback-navigation-18: a popup opened from a toast, at Bas
       )
     }, 30_000)
 
-    it('AC-base-ui-feedback-navigation-18 (Tier B, vgiq signed): with the viewport as container all five points return the popup or a descendant and its button is clickable', async () => {
+    it('AC-base-ui-feedback-navigation-18 (Tier B, placement signed): with the viewport as container all five points return the popup or a descendant and its button is clickable', async () => {
       await show(scheme, true)
       await userEvent.click(required('popover-trigger'))
       const popup = await settled(() => byTestId('popup'))
@@ -192,7 +192,7 @@ describe(`AC-base-ui-feedback-navigation-18: a popup opened from a toast, at Bas
     return popup
   }
 
-  it('AC-base-ui-feedback-navigation-18 (Tier B, vgiq signed): with the viewport as container, in a toast with a timeout of 2500, Enter puts focus in the popup and the toast outlives its timeout with focus in the popup; Escape returns focus to the trigger in the toast', async () => {
+  it('AC-base-ui-feedback-navigation-18 (Tier B, placement signed): with the viewport as container, in a toast with a timeout of 2500, Enter puts focus in the popup and the toast outlives its timeout with focus in the popup; Escape returns focus to the trigger in the toast', async () => {
     const popup = await openByKeyboard()
     const newer = required('toast-newer')
     await forMilliseconds(PAST_TIMEOUT_MS)
@@ -205,7 +205,7 @@ describe(`AC-base-ui-feedback-navigation-18: a popup opened from a toast, at Bas
     expect(newer.contains(document.activeElement), 'inside the toast').toBe(true)
   }, 40_000)
 
-  it('AC-base-ui-feedback-navigation-18 (Tier B, vgiq signed): with the viewport as container, in a toast with a timeout of 2500, a Tab out of the popup lands on the next control of the toast, the toast is open 3500ms later and focus was never on the body', async () => {
+  it('AC-base-ui-feedback-navigation-18 (Tier B, placement signed): with the viewport as container, in a toast with a timeout of 2500, a Tab out of the popup lands on the next control of the toast, the toast is open 3500ms later and focus was never on the body', async () => {
     await openByKeyboard()
     const newer = required('toast-newer')
     await userEvent.tab()

@@ -14,13 +14,13 @@ export type Draft789 = (typeof DRAFTS_789)[number]
 
 /**
 A signature state: the drafts that are not signed, and the two facts about the unplaced branch that
-live outside the stylesheet. `wi8q` (the scrim's premise) is signed in that branch unless said
+live outside the stylesheet. `unplaced alternative` (the scrim's premise) is signed in that branch unless said
 otherwise, and S-A waits for its remedy row, which a state must say is posted.
  */
 export interface State789 {
   readonly remedyRowPosted?: boolean
   readonly unsigned: readonly Draft789[]
-  readonly wi8qSigned?: boolean
+  readonly unplacedAlternativeSigned?: boolean
 }
 
 /**

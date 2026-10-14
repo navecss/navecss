@@ -279,7 +279,7 @@ describe('AC-base-ui-feedback-navigation-47: each feedback signature removes exa
     },
   )
 
-  it('removes 272 B with vgiq, 498 B with q1dc, 75 B with i696 and 441 B with wlu6, and 1,286 B with all four', () => {
+  it('removes 272 B with placement, 498 B with toast fade, 75 B with limit and 441 B with panel fade, and 1,286 B with all four', () => {
     expect(REMOVED_BYTES_789).toEqual({
       'toast-placement': 272,
       'toast-fade': 498,
@@ -299,7 +299,7 @@ describe('AC-base-ui-feedback-navigation-47: each feedback signature removes exa
     expect(NEW_CLASSES_789).toHaveLength(21)
   })
 
-  it('names owz2 and wi8q in no build input: their signatures move no stylesheet byte', () => {
+  it('names scroller ring record and unplaced alternative in no build input: their signatures move no stylesheet byte', () => {
     const inputs = [
       ...new Set([
         'scripts/build-styles.ts',
@@ -307,14 +307,16 @@ describe('AC-base-ui-feedback-navigation-47: each feedback signature removes exa
       ]),
     ]
     const naming = inputs.filter((file) =>
-      /owz2|wi8q/.test(readFileSync(path.join(PACKAGE_DIR, file), 'utf8')),
+      /scroller ring record|unplaced alternative/.test(
+        readFileSync(path.join(PACKAGE_DIR, file), 'utf8'),
+      ),
     )
 
     expect(inputs.length).toBeGreaterThan(10)
     expect(naming).toEqual([])
   })
 
-  it('reds on a vgiq-unsigned build that keeps the rule of toast-placement, in the bytes, the hash, the class set and the list (control)', () => {
+  it('reds on a placement-unsigned build that keeps the rule of toast-placement, in the bytes, the hash, the class set and the list (control)', () => {
     const state = expectedSheet([], ['toast-placement'])
     const kept = expectedSheet()
     const row = table789.states['toast-placement']

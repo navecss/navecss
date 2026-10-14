@@ -177,7 +177,7 @@ const planted789 = (edit: (root: Root) => void): string => mutate(edit, expected
 const placement = (root: Root): Rule => classRule(root, 'toast-placement')
 
 describe('AC-base-ui-feedback-navigation-17: exactly one z-index, on one criterion', () => {
-  it('has, with vgiq signed, the one z-index of toast-placement as a direct declaration of its rule, and no isolation', () => {
+  it('has, with placement signed, the one z-index of toast-placement as a direct declaration of its rule, and no isolation', () => {
     const css = readStylesheet()
 
     expect(zIndexes(css)).toEqual([`${PREFIX}toast-placement 1 var(--nave-layer-toast)`])
@@ -185,7 +185,7 @@ describe('AC-base-ui-feedback-navigation-17: exactly one z-index, on one criteri
     expect(componentsOnlyViolations(css)).toEqual([])
   })
 
-  it('has, with vgiq unsigned, no z-index and no isolation at all', async () => {
+  it('has, with placement unsigned, no z-index and no isolation at all', async () => {
     const css = await buildState(['toast-placement'])
 
     expect(zIndexes(css)).toEqual([])
@@ -268,7 +268,7 @@ describe('AC-base-ui-feedback-navigation-17: exactly one z-index, on one criteri
   })
 
   it.each(allStates789().map((unsigned) => [stateKey789(unsigned), unsigned] as const))(
-    'holds the one z-index in the state with %s unsigned exactly when vgiq is signed (the positive control for the unsigned reading)',
+    'holds the one z-index in the state with %s unsigned exactly when placement is signed (the positive control for the unsigned reading)',
     (_key, unsigned) => {
       const found = zIndexes(expectedSheet([], unsigned))
 
@@ -304,7 +304,7 @@ const MOTION_GUARD_SELECTOR = '&, &[data-instant]'
 /**
  * The classes that carry the guard, each with the selector of the one rule inside it: the first
  * release's four transitioning classes, the five motion classes of the overlay completion, and the
- * Navigation Menu icon with the two fades of the feedback and navigation spec (`q1dc` and `wlu6`),
+ * Navigation Menu icon with the two fades of the feedback and navigation spec (`toast fade` and `panel fade`),
  * each of whose guard names `&` only. Twelve with every draft signed.
  */
 const GUARDED: ReadonlyMap<string, string> = new Map([
@@ -443,7 +443,7 @@ describe('AC-base-ui-feedback-navigation-36, AC-base-ui-overlay-completion-20 an
   })
 
   it.each(allStates789().map((unsigned) => [stateKey789(unsigned), unsigned] as const))(
-    'has a guard in each class the state with %s unsigned ships: twelve, eleven with one of q1dc and wlu6 unsigned, ten with both',
+    'has a guard in each class the state with %s unsigned ships: twelve, eleven with one of toast fade and panel fade unsigned, ten with both',
     async (_key, unsigned) => {
       const css = await buildState(unsigned)
       const nested = nestedAtRules(postcss.parse(css))

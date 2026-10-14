@@ -14,7 +14,7 @@
  * anywhere, and the zero is not credited.
  *
  * This asserts no inline-axis (sideways) Tab state and no Firefox or WebKit Tab state; those are a
- * record (`owz2`), and no criterion of the spec claims them.
+ * record (`scroller ring record`), and no criterion of the spec claims them.
  */
 /* eslint-disable unicorn/max-nested-calls -- a scene is a tree, written as the nested calls it renders */
 import { afterEach, describe, expect, it } from 'vitest'

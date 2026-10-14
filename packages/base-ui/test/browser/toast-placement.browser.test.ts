@@ -3,16 +3,16 @@
  * clause): where the Toast viewport sits, and what is above what, in a real engine with the built
  * tokens and stylesheet, through the built wrappers, in light and in dark.
  *
- * -16: with `vgiq` signed the viewport is fixed in the block-end and inline-end corner on
+ * -16: with `placement` signed the viewport is fixed in the block-end and inline-end corner on
  * `layer.toast`, above a sticky header with a `z-index` of 10, above a Dialog and an Alert Dialog
  * opened after it, and above a Dialog a toast is raised from; its `Toast.Close` is clicked with a
  * real pointer and the dialog stays open. An anchored toast stays under its anchor, at most 20rem
  * wide, and is the hit at its centre too. One viewport holding a stacked and an anchored toast
  * keeps the stacked one in its corner. In right-to-left text the other physical corner is the one.
- * The control named by the scenario is the `vgiq`-unsigned build: the dialog's layer is what is at
+ * The control named by the scenario is the `placement`-unsigned build: the dialog's layer is what is at
  * the toast's centre and a click there closes the Dialog. A second control takes only the
  * `z-index` out of the placement rule, which is the stacking and nothing else.
- * -19: with `vgiq` unsigned the viewport computes `position: static` and `z-index: auto`.
+ * -19: with `placement` unsigned the viewport computes `position: static` and `z-index: auto`.
  * -43: the anchored `Toast.Positioner`'s inline transform is a single `translate()`.
  */
 /* eslint-disable unicorn/max-nested-calls -- a scene is a tree, written as the nested calls it renders */
@@ -219,7 +219,7 @@ describe('AC-base-ui-feedback-navigation-16 (second scenario), -19 and -43: plac
   }
 
   describe.each(SCHEMES)('in %s', (scheme) => {
-    it('AC-base-ui-feedback-navigation-16 (Tier B, vgiq signed): the viewport is fixed on layer.toast, 24px from the block-end and inline-end edges, 320px wide', async () => {
+    it('AC-base-ui-feedback-navigation-16 (Tier B, placement signed): the viewport is fixed on layer.toast, 24px from the block-end and inline-end edges, 320px wide', async () => {
       await compose('header', scheme)
       const style = getComputedStyle(required('viewport'))
       const box = required('viewport').getBoundingClientRect()
@@ -237,7 +237,7 @@ describe('AC-base-ui-feedback-navigation-16 (second scenario), -19 and -43: plac
     })
 
     describe.each(KINDS)('over $name', ({ kind }) => {
-      it('AC-base-ui-feedback-navigation-16 (Tier B, vgiq signed): the toast is the hit at its centre and its Toast.Close, clicked with a real pointer, closes it and leaves the dialog open', async () => {
+      it('AC-base-ui-feedback-navigation-16 (Tier B, placement signed): the toast is the hit at its centre and its Toast.Close, clicked with a real pointer, closes it and leaves the dialog open', async () => {
         const { name } = await compose(kind, scheme)
         const root = toastRoot(name)
         expect(isInside(root, hitAtCentre(root)), 'the hit at the toast centre').toBe(true)
@@ -262,7 +262,7 @@ describe('AC-base-ui-feedback-navigation-16 (second scenario), -19 and -43: plac
       }, 30_000)
 
       it.runIf(kind !== 'header')(
-        'AC-base-ui-feedback-navigation-16 (Tier B, vgiq unsigned): the dialog layer is what is at the toast centre, and the click there closes a Dialog (control)',
+        'AC-base-ui-feedback-navigation-16 (Tier B, placement unsigned): the dialog layer is what is at the toast centre, and the click there closes a Dialog (control)',
         async () => {
           const { name } = await compose(kind, scheme, {
             height: '320px',
@@ -318,7 +318,7 @@ describe('AC-base-ui-feedback-navigation-16 (second scenario), -19 and -43: plac
   })
 
   describe.each(SCHEMES)('anchored toasts in %s', (scheme) => {
-    it('AC-base-ui-feedback-navigation-16 (Tier B, vgiq signed): an anchored toast near the inline-end edge stays under its anchor, at most 20rem wide and inside the window', async () => {
+    it('AC-base-ui-feedback-navigation-16 (Tier B, placement signed): an anchored toast near the inline-end edge stays under its anchor, at most 20rem wide and inside the window', async () => {
       removeSheets = useSheets(tokens, stylesheet)
       removeScheme = useScheme(scheme)
       const manager = createManager()
@@ -352,7 +352,7 @@ describe('AC-base-ui-feedback-navigation-16 (second scenario), -19 and -43: plac
       )
     })
 
-    it('AC-base-ui-feedback-navigation-16 (Tier B, vgiq signed): an anchored toast raised from a button inside an open Dialog is the hit at its centre', async () => {
+    it('AC-base-ui-feedback-navigation-16 (Tier B, placement signed): an anchored toast raised from a button inside an open Dialog is the hit at its centre', async () => {
       await compose('raised', scheme, { isAnchored: true })
       const root = toastRoot('raised')
       expect(isInside(root, hitAtCentre(root)), 'the hit at the toast centre').toBe(true)
@@ -360,7 +360,7 @@ describe('AC-base-ui-feedback-navigation-16 (second scenario), -19 and -43: plac
     }, 30_000)
   })
 
-  it('AC-base-ui-feedback-navigation-16 (Tier B, vgiq signed): one viewport holding a stacked toast and an anchored toast keeps the stacked toast in its corner while the anchored one is open', async () => {
+  it('AC-base-ui-feedback-navigation-16 (Tier B, placement signed): one viewport holding a stacked toast and an anchored toast keeps the stacked toast in its corner while the anchored one is open', async () => {
     removeSheets = useSheets(tokens, stylesheet)
     removeScheme = useScheme('light')
     const manager = createManager()
@@ -393,7 +393,7 @@ describe('AC-base-ui-feedback-navigation-16 (second scenario), -19 and -43: plac
     expect(getComputedStyle(required('viewport')).position).toBe('fixed')
   })
 
-  it('AC-base-ui-feedback-navigation-19 (Tier B, vgiq unsigned): the viewport computes position static and z-index auto, the signed sheet fixed and 500 (control)', async () => {
+  it('AC-base-ui-feedback-navigation-19 (Tier B, placement unsigned): the viewport computes position static and z-index auto, the signed sheet fixed and 500 (control)', async () => {
     await compose('header', 'light', { sheet: withoutClass(stylesheet, 'toast-placement') })
     const unsigned = getComputedStyle(required('viewport'))
     expect({ position: unsigned.position, zIndex: unsigned.zIndex }).toEqual({

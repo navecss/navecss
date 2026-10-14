@@ -162,7 +162,7 @@ describe('AC-base-ui-feedback-navigation-11, -12 and -13: the Toast list', () =>
   describe('AC-base-ui-feedback-navigation-13: toasts over the limit are hidden, and only those', () => {
     const FOUR = ['t1', 't2', 't3', 't4'] as const
 
-    it('AC-base-ui-feedback-navigation-13 (Tier B, i696 signed): the limited root computes display none, the three active roots (the positive control) do not, and closing the newest shows the oldest again', async () => {
+    it('AC-base-ui-feedback-navigation-13 (Tier B, limit signed): the limited root computes display none, the three active roots (the positive control) do not, and closing the newest shows the oldest again', async () => {
       const manager = createManager()
       await show('light', { manager })
       await raiseInOrder(manager, FOUR)
@@ -200,7 +200,7 @@ describe('AC-base-ui-feedback-navigation-11, -12 and -13: the Toast list', () =>
       expect(getComputedStyle(viewport).display).not.toBe('none')
     })
 
-    it('AC-base-ui-feedback-navigation-13 (Tier B, i696 unsigned): the class kept on the element and its rule gone, the limited root computes a visible box and is still inert', async () => {
+    it('AC-base-ui-feedback-navigation-13 (Tier B, limit unsigned): the class kept on the element and its rule gone, the limited root computes a visible box and is still inert', async () => {
       const manager = createManager()
       await show('light', { manager }, withoutClass(stylesheet, 'toast-limit'))
       await raiseInOrder(manager, FOUR)

@@ -91,7 +91,7 @@ const steward = (
 const isPlacementUnsigned = (state: State789): boolean => !isSigned789(state, 'toast-placement')
 
 const isUnplacedWithScrimReturn = (state: State789): boolean =>
-  isPlacementUnsigned(state) && state.wi8qSigned !== false
+  isPlacementUnsigned(state) && state.unplacedAlternativeSigned !== false
 
 export const ITEM_RULES: readonly ItemRule[] = [
   reader('D1, Toast setup', S.D1_TOAST_SETUP),
@@ -178,8 +178,8 @@ export const WITHDRAWN_cleared: readonly NamedLiteral[] = [
   named("S-K's round-2b form (16px gutter)", S.S_K_ROUND_2B),
   named('the 308 B placement sentence', S.S_P_PLACEMENT_308),
   named('the 95 B popup limitation', S.S_PP1_POPUP_LIMITATION),
-  named("zubh's 413 B reduced-motion form", S.ZUBH_REDUCED_MOTION_413),
-  named("udfy's 212 B placement sentence", S.UDFY_PLACEMENT_212),
+  named("first-fade's 413 B reduced-motion form", S.FIRST_FADE_FORM_413),
+  named("first-placement's 212 B placement sentence", S.FIRST_PLACEMENT_212),
   named("the parent's reduced-motion sentence", PARENT_REDUCED_MOTION),
   ...Object.entries(SENTENCE_4_FORMS).map(([code, form]) =>
     named(`the overlay release's reduced-motion form ${code.split('').join(' ')}`, form),
