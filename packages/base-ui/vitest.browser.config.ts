@@ -168,6 +168,9 @@ const MINORS = [
 export default defineConfig({
   plugins: [serveFixturesAsTheyAre()],
   test: {
+    // The pointer, the focus and the frame clock belong to the page, so two files never run at once:
+    // one file's hover or Escape would land in another's scene.
+    fileParallelism: false,
     projects: [
       {
         extends: true,
