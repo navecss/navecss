@@ -1,6 +1,6 @@
 /**
  * The package's build with some classes taken out of the atom map, for the instrument that needs
- * "the stylesheet built with every #789 class removed" (AC-09). `buildStyles` only drops whole
+ * "the stylesheet built with every feedback class removed" (AC-09). `buildStyles` only drops whole
  * drafts, and 17 of the 21 new classes are not drafts, so this runs the same expansion on a map
  * with those atoms left out: the layer order statement from core's own file, one `@nave` line per
  * atom (with `focusRing` on the Table T2 ones), expanded by core's PostCSS adapter.

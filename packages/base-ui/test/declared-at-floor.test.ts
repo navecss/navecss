@@ -537,7 +537,7 @@ describe('AC-base-ui-overlay-completion-31: every Nave token the stylesheet name
     expect(FEEDBACK_TOKENS.filter((name) => !named.has(name))).toEqual([])
   })
 
-  it('names the same 67 in the expected sheet, and the eight are the ones the 59 of the #787 sheet lack (positive control)', () => {
+  it('names the same 67 in the expected sheet, and the eight are the ones the 59 of the overlay sheet lack (positive control)', () => {
     const oracle = namedTokens(expectedSheet())
 
     expect(oracle.size).toBe(67)

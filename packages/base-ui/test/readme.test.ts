@@ -209,7 +209,7 @@ describe('AC-base-ui-bridge-46: the fixed sentences are carried byte for byte', 
 })
 
 /**
-#787's cleared sentences that stand in the combined package's README: sentence 4 is not among them,
+the overlay release's cleared sentences that stand in the combined package's README: sentence 4 is not among them,
 because the toasts' form replaces it in place (AC-base-ui-feedback-navigation-50).
  */
 const shipping787Sentences = sentencesPresentIn(SHIPPING).filter(
@@ -218,8 +218,8 @@ const shipping787Sentences = sentencesPresentIn(SHIPPING).filter(
 
 /**
 The sentences removed before the claims are scanned for: the first release's that are still carried,
-#787's that are present in the shipping state (its reduced-motion form is replaced in place by
-STEWARD's, which `clearedFor` holds), STEWARD's cleared sentences of the combined package that are
+the overlay release's that are present in the shipping state (its reduced-motion form is replaced in place by
+the cleared, which `clearedFor` holds), the cleared sentences of the combined package that are
 present in the shipping state, and the promise.
  */
 const CLEARED: readonly string[] = [
@@ -596,7 +596,7 @@ describe('AC-base-ui-overlay-completion-40, as AC-base-ui-feedback-navigation-50
     expect(readme).not.toContain(text)
   })
 
-  it("contains none of the eight forms of sentence 4: the toasts' form (AC-base-ui-feedback-navigation-50) replaces #787's in place", () => {
+  it("contains none of the eight forms of sentence 4: the toasts' form (AC-base-ui-feedback-navigation-50) replaces the overlay release's in place", () => {
     const contained = Object.entries(SENTENCE_4_FORMS)
       .filter(([, { text }]) => readme.includes(text))
       .map(([code]) => code)

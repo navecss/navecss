@@ -82,7 +82,7 @@ const OVERLAY_ROWS: readonly (readonly [readonly string[], readonly string[]])[]
 
 /**
  * The parts the feedback and navigation spec adds or changes, each with every class it takes in
- * the signature state (Table P delta, every #789 draft signed). A part that already has a class
+ * the signature state (Table P delta, every feedback draft signed). A part that already has a class
  * keeps it first. Written here from the spec's table so the instrument does not wait on Table P.
  */
 const FEEDBACK_ROWS: readonly (readonly [readonly string[], readonly string[]])[] = [

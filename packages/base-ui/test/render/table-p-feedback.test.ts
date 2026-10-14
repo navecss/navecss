@@ -75,7 +75,7 @@ const REUSED_CLASSES = [
 ]
 
 /**
- * The spec's Table P delta, row by row: the part and the classes it takes with every #789 draft
+ * The spec's Table P delta, row by row: the part and the classes it takes with every feedback draft
  * signed, and the draft the class waits on, if any.
  */
 const DELTA: readonly (readonly [string, readonly (readonly [string, string?])[]])[] = [
@@ -394,7 +394,7 @@ describe('AC-base-ui-feedback-navigation-07: the rendered classes are Table P, f
     expect(REUSED_CLASSES).toHaveLength(10)
   })
 
-  it('agrees with the spec row for row, in the shipping state and with every #789 draft unsigned', () => {
+  it('agrees with the spec row for row, in the shipping state and with every feedback draft unsigned', () => {
     for (const unsigned of [[], [...FEEDBACK_DRAFTS]] as const) {
       const table = tablePFor(unsigned)
       for (const [part, names] of deltaFor(unsigned)) {

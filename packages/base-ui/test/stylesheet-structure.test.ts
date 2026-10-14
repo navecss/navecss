@@ -849,7 +849,7 @@ const buttonExpandedViolations = (owner: string, selector: string): string[] =>
     : []
 
 /**
- * What no selector of a #789 class names (AC-37): `:has()`, and the attributes that are either
+ * What no selector of a feedback class names (AC-37): `:has()`, and the attributes that are either
  * Base UI's deck and swipe state (`data-expanded`, `data-behind`, `data-swiping`, `data-type`),
  * another part's (`data-side`, `data-instant`, `data-active`, `data-popup-open`, `data-pressed`),
  * or a disabled state (`data-disabled`).
@@ -879,7 +879,7 @@ const newClassProblems = (owner: string, selector: string): string[] =>
     : []
 
 /**
- * `aria-expanded` in a #789 class is the parent key of the icon and nothing else.
+ * `aria-expanded` in a feedback class is the parent key of the icon and nothing else.
  */
 const iconExpandedViolations = (owner: string, selector: string): string[] =>
   NEW_CLASSES_789.includes(owner) &&
@@ -1028,7 +1028,7 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
     expect(vocabularyViolations(css)).toEqual([])
   })
 
-  it('admits the fourteen attribute names, #787 five scoped ones and this spec six scoped ones: the vocabulary gains exactly the six names', () => {
+  it('admits the fourteen attribute names, overlay five scoped ones and this spec six scoped ones: the vocabulary gains exactly the six names', () => {
     const scoped = SCOPED_ATTRIBUTES.keys().toArray().toSorted(byText)
 
     expect(ATTRIBUTES.size).toBe(14)
@@ -1092,7 +1092,7 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
     expect(reads).toEqual([`${PREFIX}toast-fade :not`])
   })
 
-  it('keys data-orientation in scroll-area-scrollbar and scroll-area-thumb, data-starting-style and data-ending-style in toast-fade and navigation-menu-fade, and aria-expanded in the #789 classes only as the parent key of the icon', () => {
+  it('keys data-orientation in scroll-area-scrollbar and scroll-area-thumb, data-starting-style and data-ending-style in toast-fade and navigation-menu-fade, and aria-expanded in the feedback classes only as the parent key of the icon', () => {
     const owners = (name: string): Set<string> =>
       new Set(
         flattenRules(readStylesheet())
@@ -1121,7 +1121,7 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
     expect(expanded).toEqual([`[aria-expanded="true"] > .${PREFIX}navigation-menu-icon`])
   })
 
-  it('names, in no #789 class, :has(), data-side, data-active, data-popup-open, data-pressed, data-disabled, data-instant, data-expanded, data-behind, data-swiping or data-type', () => {
+  it('names, in no feedback class, :has(), data-side, data-active, data-popup-open, data-pressed, data-disabled, data-instant, data-expanded, data-behind, data-swiping or data-type', () => {
     const problems = flattenRules(readStylesheet())
       .filter((item) => NEW_CLASSES_789.includes(item.owner))
       .flatMap((item) =>

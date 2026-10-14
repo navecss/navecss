@@ -12,8 +12,8 @@ import {
   NON_LIVE_REDUCED_MOTION,
   problems789,
   readmeInState,
-  WITHDRAWN_DEVREL,
-  WITHDRAWN_STEWARD,
+  WITHDRAWN_reader,
+  WITHDRAWN_cleared,
 } from './support/w12-feedback-rules.ts'
 import * as S from './support/w12-feedback-sentences.ts'
 import { phrasesFor, phrasesIn } from './support/w12-not-painted.ts'
@@ -42,8 +42,8 @@ const syntheticReadme = (state: State789): string =>
 const hasItem = (text: string, rule: ItemRule): boolean =>
   problems789(text, SHIPPING_789).every((problem) => problem !== `missing: ${rule.literal.name}`)
 
-const devrelItems = ITEM_RULES.filter(({ author }) => author === 'DEVREL')
-const stewardItems = ITEM_RULES.filter(({ author }) => author === 'STEWARD')
+const readerItems = ITEM_RULES.filter(({ author }) => author === 'reader')
+const clearedItems = ITEM_RULES.filter(({ author }) => author === 'cleared')
 
 const bytesAndHash = ({
   bytes,
@@ -59,8 +59,8 @@ const bytesAndHash = ({
   wanted: bytes,
 })
 
-describe("AC-base-ui-feedback-navigation-49: the README carries DEVREL's reader items, each in its state's form", () => {
-  it.each(devrelItems.map(({ literal }) => literal))(
+describe("AC-base-ui-feedback-navigation-49: the README carries the reader items, each in its state's form", () => {
+  it.each(readerItems.map(({ literal }) => literal))(
     'holds $name at its length and hash',
     (literal) => {
       const measured = bytesAndHash(literal)
@@ -70,23 +70,23 @@ describe("AC-base-ui-feedback-navigation-49: the README carries DEVREL's reader 
     },
   )
 
-  it.each(devrelItems.filter(({ present }) => present(SHIPPING_789)))(
+  it.each(readerItems.filter(({ present }) => present(SHIPPING_789)))(
     'contains $literal.name in the shipping state',
     (rule) => {
       expect(hasItem(readme, rule)).toBe(true)
     },
   )
 
-  it('contains no DEVREL item the shipping state does not call for, and none of the withdrawn texts', () => {
-    expect(problems789(readme, SHIPPING_789, 'DEVREL')).toEqual([])
+  it('contains no reader item the shipping state does not call for, and none of the withdrawn texts', () => {
+    expect(problems789(readme, SHIPPING_789, 'reader')).toEqual([])
   })
 
-  it.each([...WITHDRAWN_DEVREL])('does not contain the withdrawn text $name', ({ text }) => {
+  it.each([...WITHDRAWN_reader])('does not contain the withdrawn text $name', ({ text }) => {
     expect(readme).not.toContain(text)
   })
 
   it('holds the three rows of D13b cell by cell, whatever Prettier pads them to', () => {
-    const rule = devrelItems.find(({ literal }) => literal.text === S.D13B_WHAT_IS_STYLED_ROWS.text)
+    const rule = readerItems.find(({ literal }) => literal.text === S.D13B_WHAT_IS_STYLED_ROWS.text)
     expect(rule?.holds?.(readme, S.D13B_WHAT_IS_STYLED_ROWS.text)).toBe(true)
     expect(
       rule?.holds?.(
@@ -137,7 +137,7 @@ describe("AC-base-ui-feedback-navigation-49: the README carries DEVREL's reader 
       .split(/\n{2,}/)
       .find((candidate) => notPaintedIn(candidate).length > 0 || /\bnot paint\b/i.test(candidate))
 
-    it("carries, in #787's paragraph, exactly the phrases of the shipping state", () => {
+    it("carries, in the overlay release's paragraph, exactly the phrases of the shipping state", () => {
       expect(paragraph).toBeDefined()
       expect(phrasesIn(paragraph ?? '')).toEqual(phrasesFor(SHIPPING_789))
       expect(phrasesFor(SHIPPING_789)).toEqual([
@@ -177,7 +177,7 @@ describe("AC-base-ui-feedback-navigation-49: the README carries DEVREL's reader 
     it.each(allStates789().map((state) => ({ key: stateKey789(state), state })))(
       'is clean for its own state: $key',
       ({ state }) => {
-        expect(problems789(readmeInState(readme, state), state, 'DEVREL')).toEqual([])
+        expect(problems789(readmeInState(readme, state), state, 'reader')).toEqual([])
       },
     )
   })
@@ -232,7 +232,7 @@ describe("AC-base-ui-feedback-navigation-49: the README carries DEVREL's reader 
     })
 
     it('control: a table with one cell changed is not D13b', () => {
-      const rule = devrelItems.find(
+      const rule = readerItems.find(
         ({ literal }) => literal.text === S.D13B_WHAT_IS_STYLED_ROWS.text,
       )
       const edited = syntheticReadme(SHIPPING_789).replace(
@@ -244,8 +244,8 @@ describe("AC-base-ui-feedback-navigation-49: the README carries DEVREL's reader 
   })
 })
 
-describe("AC-base-ui-feedback-navigation-50: STEWARD's final cleared sentences, byte for byte, each in exactly its signature state", () => {
-  it.each(stewardItems.map(({ literal }) => literal))(
+describe('AC-base-ui-feedback-navigation-50: the cleared final cleared sentences, byte for byte, each in exactly its signature state', () => {
+  it.each(clearedItems.map(({ literal }) => literal))(
     'holds $name at its length and hash',
     (literal) => {
       const measured = bytesAndHash(literal)
@@ -254,7 +254,7 @@ describe("AC-base-ui-feedback-navigation-50: STEWARD's final cleared sentences, 
     },
   )
 
-  it.each(stewardItems.filter(({ present }) => present(SHIPPING_789)))(
+  it.each(clearedItems.filter(({ present }) => present(SHIPPING_789)))(
     'contains $literal.name in the shipping state',
     (rule) => {
       expect(readme).toContain(rule.literal.text)
@@ -262,28 +262,28 @@ describe("AC-base-ui-feedback-navigation-50: STEWARD's final cleared sentences, 
   )
 
   it('contains exactly the sentences the shipping state calls for and none of the others', () => {
-    expect(problems789(readme, SHIPPING_789, 'STEWARD')).toEqual([])
+    expect(problems789(readme, SHIPPING_789, 'cleared')).toEqual([])
   })
 
-  it.each([...WITHDRAWN_STEWARD])('does not contain the withdrawn text $name', ({ text }) => {
+  it.each([...WITHDRAWN_cleared])('does not contain the withdrawn text $name', ({ text }) => {
     expect(readme).not.toContain(text)
   })
 
-  describe("the reduced-motion sentence: exactly one of the two live forms, in the place #787's form stood", () => {
+  describe("the reduced-motion sentence: exactly one of the two live forms, in the place the overlay release's form stood", () => {
     it('contains the 463 B form with the toast fade signed, and not the 445 B form', () => {
       expect(readme).toContain(S.RM_TOASTS_IN.text)
       expect(readme).not.toContain(S.RM_TOASTS_OUT.text)
     })
 
-    it("contains none of the fourteen other forms and none of #787's eight", () => {
+    it("contains none of the fourteen other forms and none of the overlay release's eight", () => {
       const carried = [
         ...NON_LIVE_REDUCED_MOTION,
-        ...Object.values(SENTENCE_4_FORMS).map((form) => ({ ...form, name: '#787 form' })),
+        ...Object.values(SENTENCE_4_FORMS).map((form) => ({ ...form, name: 'overlay form' })),
       ].filter(({ text }) => readme.includes(text))
       expect(carried.map(({ name }) => name)).toEqual([])
     })
 
-    it("stands after the Menu.LinkItem sentence, where #787's form stood, and is the only sentence that opens as it does", () => {
+    it("stands after the Menu.LinkItem sentence, where the overlay release's form stood, and is the only sentence that opens as it does", () => {
       const linkItem = FIXED_SENTENCES.find(({ name }) => name === 'Menu.LinkItem')?.text ?? ''
       expect(readme.indexOf(S.RM_TOASTS_IN.text)).toBeGreaterThan(readme.indexOf(linkItem))
       expect(readme.match(/When the reader's system asks for reduced motion/g)).toHaveLength(1)
@@ -305,7 +305,7 @@ describe("AC-base-ui-feedback-navigation-50: STEWARD's final cleared sentences, 
       },
     )
 
-    it("has sixteen distinct forms, none inside another or inside #787's forms", () => {
+    it("has sixteen distinct forms, none inside another or inside the overlay release's forms", () => {
       const texts = RM_TABLE.map(({ code }) => composeReducedMotion(signedOfCode(code)))
       expect(new Set(texts).size).toBe(16)
       const all = [...texts, ...Object.values(SENTENCE_4_FORMS).map(({ text }) => text)]
@@ -320,7 +320,7 @@ describe("AC-base-ui-feedback-navigation-50: STEWARD's final cleared sentences, 
     it.each(allStates789().map((state) => ({ key: stateKey789(state), state })))(
       'is clean for its own state: $key',
       ({ state }) => {
-        expect(problems789(readmeInState(readme, state), state, 'STEWARD')).toEqual([])
+        expect(problems789(readmeInState(readme, state), state, 'cleared')).toEqual([])
       },
     )
   })
@@ -351,10 +351,10 @@ describe("AC-base-ui-feedback-navigation-50: STEWARD's final cleared sentences, 
       ])
     })
 
-    it("control: a README carrying both the 463 B form and #787's 395 B form reds", () => {
+    it("control: a README carrying both the 463 B form and the overlay release's 395 B form reds", () => {
       const planted = `${syntheticReadme(SHIPPING_789)}\n\n${SENTENCE_4_FORMS.SSS?.text ?? ''}`
       expect(problems789(planted, SHIPPING_789)).toEqual([
-        "unexpected: #787's reduced-motion form S S S",
+        "unexpected: the overlay release's reduced-motion form S S S",
       ])
     })
 
@@ -394,7 +394,7 @@ describe("AC-base-ui-feedback-navigation-19: the unplaced branch carries wi8q's 
     expect(unplaced).not.toContain(S.D3_STYLESHEET_SENTENCE.text)
   })
 
-  it('carries S-A as well once its DEVREL remedy row is posted', () => {
+  it('carries S-A as well once its remedy row is posted', () => {
     const unplaced = readmeInState(readme, UNPLACED_WITH_REMEDY)
     expect(unplaced).toContain(S.S_U_TOAST_AREA_UNPLACED.text)
     expect(unplaced).toContain(S.S_A_ANCHORED_NOT_STACKED.text)
@@ -478,8 +478,8 @@ describe('AC-base-ui-feedback-navigation-51: no accessibility claim beyond the c
     expect(FORBIDDEN.some((pattern) => pattern.test(S.S_S_SWIPE.text))).toBe(true)
   })
 
-  it('has no DEVREL item that holds a word the scan forbids', () => {
-    const offending = devrelItems.flatMap(({ literal }) =>
+  it('has no reader item that holds a word the scan forbids', () => {
+    const offending = readerItems.flatMap(({ literal }) =>
       FORBIDDEN.filter((pattern) => pattern.test(literal.text)).map(
         (pattern) => `${literal.name}: ${String(pattern)}`,
       ),

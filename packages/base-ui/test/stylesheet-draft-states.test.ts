@@ -109,9 +109,9 @@ describe('AC-base-ui-overlay-completion-06: the expected stylesheet of every sig
   )
 })
 
-describe('AC-base-ui-overlay-completion-37 and AC-base-ui-feedback-navigation-47: each #787 signature removes exactly its own bytes and nothing else, and the #789 block comes through every #787 state unmoved', () => {
+describe('AC-base-ui-overlay-completion-37 and AC-base-ui-feedback-navigation-47: each overlay signature removes exactly its own bytes and nothing else, and the feedback block comes through every overlay state unmoved', () => {
   it.each(states)(
-    'builds the state with %s unsigned as the table gives it, with the #789 block appended unchanged',
+    'builds the state with %s unsigned as the table gives it, with the feedback block appended unchanged',
     async (key, unsigned) => {
       const expected = expectedSheet(unsigned)
       const built = await buildStyles({ unsigned })
@@ -177,7 +177,7 @@ describe('AC-base-ui-overlay-completion-37 and AC-base-ui-feedback-navigation-47
     },
   )
 
-  it('names the drafts the build is parameterised by: the six of #787 in the order the table lists them, and the four of #789', async () => {
+  it('names the drafts the build is parameterised by: the six of overlay in the order the table lists them, and the four of feedback', async () => {
     const url = new URL('../styles/drafts.ts', import.meta.url).href
     const drafts = (await import(/* @vite-ignore */ url)) as { DRAFTS: readonly string[] }
 
@@ -203,17 +203,17 @@ interface Table789 {
 }
 
 // Appendix C.4, read from the spec text by a script and frozen: the sheet and block bytes, sha256
-// prefixes and class counts of the 16 #789 states, and the six corners.
+// prefixes and class counts of the 16 feedback states, and the six corners.
 const table789 = JSON.parse(fixture('feedback-states.json')) as Table789
 
 const states789 = allStates789().map((unsigned) => [stateKey789(unsigned), unsigned] as const)
 
-// The section of the ring-less sheet that follows #787's rules: the block and the layer's close.
+// The section of the ring-less sheet that follows the overlay release's rules: the block and the layer's close.
 const blockOf = (ringless: string): string => ringless.slice(sheet787().length - 2, -2)
 
 const bytesOf = (text: string): number => Buffer.byteLength(text)
 
-describe('AC-base-ui-feedback-navigation-47: each #789 signature removes exactly its own bytes and nothing else', () => {
+describe('AC-base-ui-feedback-navigation-47: each feedback signature removes exactly its own bytes and nothing else', () => {
   it('names each of the 16 states once, and holds the anchors: 37,300 B and 86 classes all signed, 36,014 B and 82 none signed', () => {
     expect(states789).toHaveLength(16)
     expect(new Set(states789.map(([key]) => key)).size).toBe(16)
@@ -246,7 +246,7 @@ describe('AC-base-ui-feedback-navigation-47: each #789 signature removes exactly
   )
 
   it.each(states789)(
-    'builds the state with %s unsigned, #787 all signed, as the table gives it, focusRing left out',
+    'builds the state with %s unsigned, overlay all signed, as the table gives it, focusRing left out',
     async (key, unsigned) => {
       const built = await buildState(unsigned)
       const { count, text } = withoutRing(built)
@@ -343,7 +343,7 @@ describe('AC-base-ui-feedback-navigation-47: each #789 signature removes exactly
   )
 })
 
-// The six corners of Appendix C.4: #787 and #789 states that meet.
+// The six corners of Appendix C.4: overlay and feedback states that meet.
 const ALL_787 = [...DRAFTS]
 const RING_BASE_COUNT_787_SIGNED = 15
 const RING_COUNT_787_UNSIGNED = 13
@@ -351,7 +351,7 @@ const RING_COUNT_787_UNSIGNED = 13
 describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () => {
   const corners = table789.corners
 
-  it('holds the six corners: 30,401 B and 24,139 B for #787 alone, and the four combinations', () => {
+  it('holds the six corners: 30,401 B and 24,139 B for overlay alone, and the four combinations', () => {
     expect(Object.keys(corners).toSorted(byText)).toEqual([
       '787-signed',
       '787-unsigned',
@@ -430,7 +430,7 @@ describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () =>
     },
   )
 
-  it('builds #787 alone, with the 21 new classes out of the atom map, at 30,401 B e9b54cd0 and 65 classes, and its all-unsigned state at 24,139 B 8161223e and 53', async () => {
+  it('builds overlay alone, with the 21 new classes out of the atom map, at 30,401 B e9b54cd0 and 65 classes, and its all-unsigned state at 24,139 B 8161223e and 53', async () => {
     const without = withoutRing(await buildWithoutClasses(NEW_CLASSES_789))
     const unsigned = deriveState(without.text, ALL_787)
 
@@ -446,7 +446,7 @@ describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () =>
     }).toEqual(corners['787-unsigned'])
   })
 
-  it('composes the #787 sheet of every one of its 64 states with the whole block, byte for byte, in the table', () => {
+  it('composes the overlay sheet of every one of its 64 states with the whole block, byte for byte, in the table', () => {
     const block = blockFor()
     const composed = states.map(([, unsigned]) => expectedSheet(unsigned))
 
@@ -459,7 +459,7 @@ describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () =>
     ).toEqual(composed.map(() => 6899))
   })
 
-  it('reds on a corner built with the #787 sheet of another state: all-unsigned #787 with the all-signed one swapped in (control)', () => {
+  it('reds on a corner built with the overlay sheet of another state: all-unsigned overlay with the all-signed one swapped in (control)', () => {
     const swapped = expectedSheet([], DRAFTS_789)
 
     expect(bytesOf(swapped)).toBe(corners['signed+unsigned']?.bytes)

@@ -1,8 +1,8 @@
 /**
- * The states of the feedback and navigation spec (#789): its four drafts, the byte oracles of
- * Appendix C written from the spec text, and the textual composition of a #789 state from a #787
- * one. The #787 side (`DRAFTS`, `allStates`, `deriveState`) is `draft-states.ts` and is not
- * multiplied by this: a #789 state is read with #787 all signed, and the six corners of Appendix
+ * The states of the feedback and navigation spec (feedback): its four drafts, the byte oracles of
+ * Appendix C written from the spec text, and the textual composition of a feedback state from a overlay
+ * one. The overlay side (`DRAFTS`, `allStates`, `deriveState`) is `draft-states.ts` and is not
+ * multiplied by this: a feedback state is read with overlay all signed, and the six corners of Appendix
  * C.4 are where the two meet.
  */
 import { readFileSync } from 'node:fs'
@@ -27,7 +27,7 @@ export const DRAFTS_789 = [
 export type Draft789 = (typeof DRAFTS_789)[number]
 
 /**
- * The ids a build takes in `unsigned`, #787's and this spec's.
+ * The ids a build takes in `unsigned`, the overlay release's and this spec's.
  */
 export type AnyDraft = Draft | Draft789
 
@@ -45,7 +45,7 @@ export const SIGNATURES_789: Readonly<Record<Draft789, string>> = {
 const BASE = 'nave-base-ui-'
 
 /**
- * The class each #789 draft owns, one apiece, and the bytes it takes out of the block (Appendix
+ * The class each feedback draft owns, one apiece, and the bytes it takes out of the block (Appendix
  * C.3).
  */
 export const DRAFT_CLASSES_789: Readonly<Record<Draft789, readonly string[]>> = {
@@ -90,7 +90,7 @@ export const NEW_CLASSES_789: readonly string[] = [
 ].map((name) => `${BASE}${name}`)
 
 /**
- * Every combination of unsigned #789 drafts, smallest first: 16 states.
+ * Every combination of unsigned feedback drafts, smallest first: 16 states.
  */
 export const allStates789 = (): Draft789[][] => {
   const states: Draft789[][] = [[]]
@@ -99,7 +99,7 @@ export const allStates789 = (): Draft789[][] => {
 }
 
 /**
- * A #789 state's name: the unsigned drafts in the order `DRAFTS_789` lists them, joined by `+`;
+ * A feedback state's name: the unsigned drafts in the order `DRAFTS_789` lists them, joined by `+`;
  * `none` when nothing is unsigned. The keys of `feedback-states.json`.
  */
 export const stateKey789 = (unsigned: readonly Draft789[]): string =>
@@ -118,7 +118,7 @@ export const readOracle = (name: string): string =>
 export const feedbackBlock = (): string => readOracle('feedback-block.css')
 
 /**
- * The all-signed #787 sheet, built independently of this package's atoms (30,401 B).
+ * The all-signed overlay sheet, built independently of this package's atoms (30,401 B).
  */
 export const sheet787 = (): string => readOracle('independent-build.css')
 
@@ -134,7 +134,7 @@ export const blockRules = (block: string): Map<string, string> =>
   )
 
 /**
- * The block of a #789 state: Appendix C.1 minus the rules of the unsigned drafts (C.3).
+ * The block of a feedback state: Appendix C.1 minus the rules of the unsigned drafts (C.3).
  */
 export const blockFor = (unsigned: readonly Draft789[] = []): string => {
   const removed = new Set(unsigned.flatMap((draft) => DRAFT_CLASSES_789[draft]))
@@ -147,7 +147,7 @@ export const blockFor = (unsigned: readonly Draft789[] = []): string => {
 const LAYER_CLOSE = '\n}\n'
 
 /**
- * A #787 sheet with the #789 block appended before the closing `}` of `@layer components.nave`:
+ * A overlay sheet with the feedback block appended before the closing `}` of `@layer components.nave`:
  * the construction of Appendix C, textual and without `focusRing`.
  */
 export const composeSheet = (sheet: string, unsigned: readonly Draft789[] = []): string => {
@@ -156,7 +156,7 @@ export const composeSheet = (sheet: string, unsigned: readonly Draft789[] = []):
 }
 
 /**
- * The expected sheet of a state without `focusRing`, #787 drafts and #789 drafts both named.
+ * The expected sheet of a state without `focusRing`, overlay drafts and feedback drafts both named.
  */
 export const expectedSheet = (
   unsigned787: readonly Draft[] = [],

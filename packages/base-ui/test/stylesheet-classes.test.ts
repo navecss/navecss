@@ -106,7 +106,7 @@ interface StateRow {
   readonly classes: number
 }
 
-// Appendix C.4: the class count of each of the 16 #789 states, at #787 all signed.
+// Appendix C.4: the class count of each of the 16 feedback states, at overlay all signed.
 const feedbackRows = JSON.parse(readOracle('feedback-states.json')) as {
   states: Record<string, StateRow>
 }
@@ -162,7 +162,7 @@ describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07
       (unsigned) => [stateKey(unsigned), unsigned] as const,
     ),
   )(
-    'is Table P for the state with %s unsigned (the #789 drafts signed), and has no class of an unsigned draft',
+    'is Table P for the state with %s unsigned (the feedback drafts signed), and has no class of an unsigned draft',
     async (_key, unsigned) => {
       const built = classesOf(await buildStyles({ unsigned }))
       const unsignedClasses = unsigned.flatMap((draft) => DRAFT_CLASSES[draft])
@@ -174,7 +174,7 @@ describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07
   )
 
   it.each(states789)(
-    'is the set Appendix C.4 counts for the state with %s unsigned, and has no class of an unsigned #789 draft',
+    'is the set Appendix C.4 counts for the state with %s unsigned, and has no class of an unsigned feedback draft',
     async (key, unsigned) => {
       const built = classesOf(await buildState(unsigned))
       const unsignedClasses = unsigned.flatMap((draft) => DRAFT_CLASSES_789[draft])

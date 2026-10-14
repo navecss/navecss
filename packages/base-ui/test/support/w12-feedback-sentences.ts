@@ -1,17 +1,17 @@
 /* eslint-disable max-lines -- every README literal of the release is held in this one module, as data */
 /**
- * The README text #789 owes, each item held as a literal (Markdown source, no trailing newline)
+ * The README text feedback owes, each item held as a literal (Markdown source, no trailing newline)
  * with the UTF-8 length and the first sixteen hex digits of the sha256 that the spec's tables give
  * it. The lengths and prefixes are the spec's, not computed from the text: the test that reads
- * this module computes both from the text and compares. The texts are DEVREL's items
- * (6132562445, 6138966109) and STEWARD's cleared sentences (6131841394, 6132543996, 6138991843,
+ * this module computes both from the text and compares. The texts are the reader's items
+ * (6132562445, 6138966109) and the cleared sentences (6131841394, 6132543996, 6138991843,
  * 6139394551 and the findings `i696`, `70di`, `l7fy`), byte for byte.
  */
 import type { Literal } from './w9-sentences.ts'
 
-// DEVREL
+// Reader items
 /**
-DEVREL D1: Toast setup, with the example.
+Reader item D1: Toast setup, with the example.
  */
 export const D1_TOAST_SETUP: Literal = {
   bytes: 1324,
@@ -59,7 +59,7 @@ export const D1_TOAST_SETUP: Literal = {
   ].join('\n'),
 }
 /**
-DEVREL D1b: the manager in a client module.
+Reader item D1b: the manager in a client module.
  */
 export const D1B_MANAGER_IN_A_CLIENT_MODULE: Literal = {
   bytes: 188,
@@ -67,7 +67,7 @@ export const D1B_MANAGER_IN_A_CLIENT_MODULE: Literal = {
   text: "Call `Toast.createToastManager()` in a module that starts with `'use client'`, as in the example, and import the manager from that module: every subpath of this package is a client module.",
 }
 /**
-DEVREL D3: the stylesheet paragraph, with one z-index (replaces the shipped sentence in place).
+Reader item D3: the stylesheet paragraph, with one z-index (replaces the shipped sentence in place).
  */
 export const D3_STYLESHEET_SENTENCE: Literal = {
   bytes: 154,
@@ -75,7 +75,7 @@ export const D3_STYLESHEET_SENTENCE: Literal = {
   text: 'Every rule in it sits in `@layer components.nave` and it declares no custom property. It sets one `z-index`, on the toast area, from `--nave-layer-toast`.',
 }
 /**
-DEVREL D6: Toast.Title's element.
+Reader item D6: Toast.Title's element.
  */
 export const D6_TOAST_TITLE_ELEMENT: Literal = {
   bytes: 70,
@@ -83,7 +83,7 @@ export const D6_TOAST_TITLE_ELEMENT: Literal = {
   text: '`Toast.Title` renders an `<h2>`. Pass `render` to use another element.',
 }
 /**
-DEVREL D7: Navigation Menu structure, with the example.
+Reader item D7: Navigation Menu structure, with the example.
  */
 export const D7_NAVIGATION_MENU_STRUCTURE: Literal = {
   bytes: 1659,
@@ -132,7 +132,7 @@ export const D7_NAVIGATION_MENU_STRUCTURE: Literal = {
   ].join('\n'),
 }
 /**
-DEVREL D7b: the icon.
+Reader item D7b: the icon.
  */
 export const D7B_NAVIGATION_MENU_ICON: Literal = {
   bytes: 107,
@@ -140,7 +140,7 @@ export const D7B_NAVIGATION_MENU_ICON: Literal = {
   text: '`NavigationMenu.Icon` turns half a turn while its item is open, so put the arrow you want turned inside it.',
 }
 /**
-DEVREL D8: panel size.
+Reader item D8: panel size.
  */
 export const D8_NAVIGATION_MENU_SIZE: Literal = {
   bytes: 134,
@@ -148,7 +148,7 @@ export const D8_NAVIGATION_MENU_SIZE: Literal = {
   text: "The panel takes the size of the open item's content, and changes size at once when you move to another item: Nave does not animate it.",
 }
 /**
-DEVREL D10: Scroll Area.
+Reader item D10: Scroll Area.
  */
 export const D10_SCROLL_AREA: Literal = {
   bytes: 634,
@@ -156,7 +156,7 @@ export const D10_SCROLL_AREA: Literal = {
   text: "Give `ScrollArea.Root` a height in a class of your own, with `block-size` or `max-block-size`, and its viewport fills it. Render one `ScrollArea.Scrollbar` with a `ScrollArea.Thumb` for each direction that can scroll, and a `ScrollArea.Corner` when both can: Base UI hides the browser's own scrollbars, so a direction without them shows none. Base UI does that with a `<style>` element it renders, so under a Content Security Policy pass your nonce through Base UI's `CSPProvider`. Nave gives the scrollbar and the corner the page's base surface; on a raised panel, set the panel's `background-color` on both with a class of your own.",
 }
 /**
-DEVREL D11: Meter and Progress (rewritten).
+Reader item D11: Meter and Progress (rewritten).
  */
 export const D11_METER_AND_PROGRESS: Literal = {
   bytes: 388,
@@ -164,7 +164,7 @@ export const D11_METER_AND_PROGRESS: Literal = {
   text: "Meter and Progress draw their value as a bar inside an outlined track, in the text colour: set `color` on the `Indicator` to change it. Making the `Track` taller leaves the bar as thick as Nave draws it, centred in the track. To draw it thicker, set the `Indicator`'s `border-block-width` to half the thickness you want and its `max-block-size` to the whole of it, in a class of your own.",
 }
 /**
-DEVREL D12: Avatar (rewritten).
+Reader item D12: Avatar (rewritten).
  */
 export const D12_AVATAR: Literal = {
   bytes: 155,
@@ -172,7 +172,7 @@ export const D12_AVATAR: Literal = {
   text: "`Avatar.Fallback` takes Base UI's `delay` prop, which holds the fallback back for that many milliseconds, so an image that loads quickly does not flash it.",
 }
 /**
-DEVREL D13a: variants, the new parts.
+Reader item D13a: variants, the new parts.
  */
 export const D13A_VARIANTS: Literal = {
   bytes: 208,
@@ -180,7 +180,7 @@ export const D13A_VARIANTS: Literal = {
   text: "`Toast.Action` and `Toast.Close` take both props too. `NavigationMenu.Trigger` has a quieter look of its own and takes neither. `Avatar.Root` takes a `size` of its own: `'sm'`, `'md'` (the default) or `'lg'`.",
 }
 /**
-DEVREL D13b: what is styled, three rows (Prettier re-pads the cells).
+Reader item D13b: what is styled, three rows (Prettier re-pads the cells).
  */
 export const D13B_WHAT_IS_STYLED_ROWS: Literal = {
   bytes: 290,
@@ -192,7 +192,7 @@ export const D13B_WHAT_IS_STYLED_ROWS: Literal = {
   ].join('\n'),
 }
 /**
-DEVREL D13c: not-painted phrases, with their conditions (the README carries the phrases, not this block).
+Reader item D13c: not-painted phrases, with their conditions (the README carries the phrases, not this block).
  */
 export const D13C_NOT_PAINTED_PHRASES: Literal = {
   bytes: 232,
@@ -204,9 +204,9 @@ export const D13C_NOT_PAINTED_PHRASES: Literal = {
     '- `zmko` unsigned: no motion on the Navigation Menu panel',
   ].join('\n'),
 }
-// STEWARD
+// Cleared sentences
 /**
-STEWARD T1: F6 into the toasts.
+Cleared sentence T1: F6 into the toasts.
  */
 export const T1_F6_INTO_THE_TOASTS: Literal = {
   bytes: 173,
@@ -214,7 +214,7 @@ export const T1_F6_INTO_THE_TOASTS: Literal = {
   text: "While a toast is open, pressing F6 moves keyboard focus to the region that holds the toasts, and Tab moves on into them. This is Base UI's behaviour; Nave's styles add none.",
 }
 /**
-STEWARD T2: the toast timer.
+Cleared sentence T2: the toast timer.
  */
 export const T2_TOAST_TIMER: Literal = {
   bytes: 377,
@@ -222,7 +222,7 @@ export const T2_TOAST_TIMER: Literal = {
   text: 'A toast closes on its own after its `timeout`, 5000 milliseconds unless you set another on the toast or on the provider. Base UI pauses that timer while the pointer is over the toasts, while keyboard focus is in them and while the window is in the background. A toast whose `timeout` is `0` stays until it is closed, which suits a toast that carries an action the reader needs.',
 }
 /**
-STEWARD T3: every toast type painted alike.
+Cleared sentence T3: every toast type painted alike.
  */
 export const T3_TYPES_ALIKE: Literal = {
   bytes: 111,
@@ -230,7 +230,7 @@ export const T3_TYPES_ALIKE: Literal = {
   text: 'Nave paints every toast alike, whatever its `type`. Say what kind of message it is in its title or description.',
 }
 /**
-STEWARD RM: reduced motion, the toasts' fade in (toast fade signed).
+Cleared sentence RM: reduced motion, the toasts' fade in (toast fade signed).
  */
 export const RM_TOASTS_IN: Literal = {
   bytes: 463,
@@ -238,7 +238,7 @@ export const RM_TOASTS_IN: Literal = {
   text: "When the reader's system asks for reduced motion, this package turns off the popups' fade, the tooltip's fade, the backdrop's fade, the toasts' fade, the turn of the icon in Navigation Menu triggers, the tab indicator's slide, the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.",
 }
 /**
-STEWARD RM: reduced motion, the toasts' fade out (toast fade unsigned).
+Cleared sentence RM: reduced motion, the toasts' fade out (toast fade unsigned).
  */
 export const RM_TOASTS_OUT: Literal = {
   bytes: 445,
@@ -246,7 +246,7 @@ export const RM_TOASTS_OUT: Literal = {
   text: "When the reader's system asks for reduced motion, this package turns off the popups' fade, the tooltip's fade, the backdrop's fade, the turn of the icon in Navigation Menu triggers, the tab indicator's slide, the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.",
 }
 /**
-STEWARD I: limited toasts hidden (limit draft signed).
+Cleared sentence I: limited toasts hidden (limit draft signed).
  */
 export const I_LIMITED_TOASTS_HIDDEN: Literal = {
   bytes: 295,
@@ -254,7 +254,7 @@ export const I_LIMITED_TOASTS_HIDDEN: Literal = {
   text: "When more toasts are open than the provider's `limit` (three unless you set it), Base UI keeps the oldest ones on the page but makes them inert, and Nave hides them. Each one comes back when a newer toast closes, unless its own timer runs out first, because a hidden toast's timer keeps running.",
 }
 /**
-STEWARD S-L: limited toasts visible and inert (limit draft unsigned).
+Cleared sentence S-L: limited toasts visible and inert (limit draft unsigned).
  */
 export const S_L_LIMITED_TOASTS_VISIBLE: Literal = {
   bytes: 365,
@@ -262,7 +262,7 @@ export const S_L_LIMITED_TOASTS_VISIBLE: Literal = {
   text: "When more toasts are open than the provider's `limit` (three unless you set it), Base UI keeps the oldest ones on the page but makes them inert, and Nave still shows them: they cannot be clicked, focused or read by a screen reader, and their timers keep running, so one can close without ever becoming usable. Raise `limit` if every toast you show must stay usable.",
 }
 /**
-STEWARD S-P3: placement and stacking (placement signed).
+Cleared sentence S-P3: placement and stacking (placement signed).
  */
 export const S_P3_PLACEMENT_AND_STACKING: Literal = {
   bytes: 496,
@@ -270,7 +270,7 @@ export const S_P3_PLACEMENT_AND_STACKING: Literal = {
   text: "Nave fixes the toasts to a bottom corner of the window, above Nave's dialogs and other popups, and an anchored toast, which Base UI places beside its anchor, sits at that same level. So a toast can cover part of your page, a popup or an open dialog, including the control that has keyboard focus. If your page, popups or dialogs can put controls where toasts appear, move the toasts with your own CSS, or move an anchored toast with the `side`, `align` and `sideOffset` of its `Toast.Positioner`.",
 }
 /**
-STEWARD S-Pp2: a popup opened from a toast, the remedy (placement signed).
+Cleared sentence S-Pp2: a popup opened from a toast, the remedy (placement signed).
  */
 export const S_PP2_POPUP_FROM_A_TOAST: Literal = {
   bytes: 229,
@@ -278,7 +278,7 @@ export const S_PP2_POPUP_FROM_A_TOAST: Literal = {
   text: 'A popover, menu or tooltip opened from a toast opens under the other toasts where they overlap, unless you pass the toast viewport to its `Portal` as `container`. It then renders inside the region Base UI uses to announce toasts.',
 }
 /**
-STEWARD S-U: toast area unplaced (placement unsigned and the scrim return signed).
+Cleared sentence S-U: toast area unplaced (placement unsigned and the scrim return signed).
  */
 export const S_U_TOAST_AREA_UNPLACED: Literal = {
   bytes: 314,
@@ -286,7 +286,7 @@ export const S_U_TOAST_AREA_UNPLACED: Literal = {
   text: 'Nave does not place the toasts. Fix the toast area to a corner of the window in your own CSS and give it a `z-index` above your dialogs, such as `var(--nave-layer-toast)`: without one, a dialog opened later covers the toasts while F6 still moves keyboard focus into them, and a click on a toast can close a Dialog.',
 }
 /**
-STEWARD S-A: anchored toasts not stacked (as S-U, after its DEVREL remedy row).
+Cleared sentence S-A: anchored toasts not stacked (as S-U, after its remedy row).
  */
 export const S_A_ANCHORED_NOT_STACKED: Literal = {
   bytes: 319,
@@ -294,7 +294,7 @@ export const S_A_ANCHORED_NOT_STACKED: Literal = {
   text: 'Nave does not position or stack anchored toasts. Base UI places each one beside its anchor, and a dialog opened later covers it while F6 can still move keyboard focus into it, so give `Toast.Positioner` a `z-index` above your dialogs, such as `var(--nave-layer-toast)`, if anchored toasts can be open while a dialog is.',
 }
 /**
-STEWARD S-T: a popup in a timed toast.
+Cleared sentence S-T: a popup in a timed toast.
  */
 export const S_T_POPUP_IN_A_TIMED_TOAST: Literal = {
   bytes: 293,
@@ -302,7 +302,7 @@ export const S_T_POPUP_IN_A_TIMED_TOAST: Literal = {
   text: "If a toast holds a control that opens a popover, menu or other popup, give that toast a `timeout` of `0`. When keyboard focus moves into a popup rendered outside the toast area, Base UI resumes the toast's timer, so the toast can close while the popup is open, and keyboard focus is then lost.",
 }
 /**
-STEWARD S-S: swipe.
+Cleared sentence S-S: swipe.
  */
 export const S_S_SWIPE: Literal = {
   bytes: 186,
@@ -310,7 +310,7 @@ export const S_S_SWIPE: Literal = {
   text: "Base UI moves a toast under the pointer while it is being swiped away, whatever Nave's styles and the reduced-motion setting say; `swipeDirection={[]}` on `Toast.Root` turns swiping off.",
 }
 /**
-STEWARD S-C: current page.
+Cleared sentence S-C: current page.
  */
 export const S_C_CURRENT_PAGE: Literal = {
   bytes: 239,
@@ -318,7 +318,7 @@ export const S_C_CURRENT_PAGE: Literal = {
   text: 'Pass `active` to the `NavigationMenu.Link` for the page the reader is on. Base UI then gives it `aria-current="page"`, which marks it as the current page for assistive technology, and Nave gives it a thicker underline than the other links.',
 }
 /**
-STEWARD S-I: indeterminate Progress.
+Cleared sentence S-I: indeterminate Progress.
  */
 export const S_I_INDETERMINATE_PROGRESS: Literal = {
   bytes: 258,
@@ -326,7 +326,7 @@ export const S_I_INDETERMINATE_PROGRESS: Literal = {
   text: 'An indeterminate Progress (`value={null}`) shows only its empty track: Nave hides the bar, because a full bar would look like a finished task. If you restyle Progress, give the track its height, not the indicator, or an indeterminate bar will fill the track.',
 }
 /**
-STEWARD S-M: Meter and Progress roles.
+Cleared sentence S-M: Meter and Progress roles.
  */
 export const S_M_METER_AND_PROGRESS_ROLES: Literal = {
   bytes: 247,
@@ -334,7 +334,7 @@ export const S_M_METER_AND_PROGRESS_ROLES: Literal = {
   text: 'Meter and Progress look alike in Nave, but Base UI gives Meter the `meter` role and Progress the `progressbar` role, so choose by meaning: Meter for a measurement within a known range, such as storage used, and Progress for how far a task has got.',
 }
 /**
-STEWARD S-Av: Avatar alt.
+Cleared sentence S-Av: Avatar alt.
  */
 export const S_AV_AVATAR_ALT: Literal = {
   bytes: 245,
@@ -342,7 +342,7 @@ export const S_AV_AVATAR_ALT: Literal = {
   text: 'Give `Avatar.Image` an `alt` that names the person, or `alt=""` when their name is written next to it. Until the image loads, or if it fails to load, Base UI shows the fallback in its place, and a screen reader reads the fallback\'s text instead.',
 }
 /**
-STEWARD S-N: Navigation Menu list.
+Cleared sentence S-N: Navigation Menu list.
  */
 export const S_N_NAVIGATION_MENU_LIST: Literal = {
   bytes: 257,
@@ -350,7 +350,7 @@ export const S_N_NAVIGATION_MENU_LIST: Literal = {
   text: 'Nave removes the bullets from `NavigationMenu.List`. Safari still treats it as a list for screen readers because Base UI renders it inside a `nav` element; if you give the menu\'s root or popup another element through `render`, add `role="list"` to the list.',
 }
 /**
-STEWARD S-SA: Scroll Area viewport.
+Cleared sentence S-SA: Scroll Area viewport.
  */
 export const S_SA_SCROLL_AREA_VIEWPORT: Literal = {
   bytes: 214,
@@ -358,7 +358,7 @@ export const S_SA_SCROLL_AREA_VIEWPORT: Literal = {
   text: "While its content overflows, a Scroll Area's viewport is a Tab stop, so a keyboard can reach and scroll it. Nave leaves its focus ring to the browser and paints the scrollbars whenever there is something to scroll.",
 }
 /**
-STEWARD S-K: keepMounted scrollbar.
+Cleared sentence S-K: keepMounted scrollbar.
  */
 export const S_K_KEEP_MOUNTED_SCROLLBAR: Literal = {
   bytes: 391,
@@ -366,7 +366,7 @@ export const S_K_KEEP_MOUNTED_SCROLLBAR: Literal = {
   text: 'If you pass `keepMounted` to a `ScrollArea.Scrollbar`, it stays on screen over the edge of the content even when there is nothing to scroll in its direction, but Nave makes room for a scrollbar only while its direction can scroll. Give the viewport that room yourself on that edge, as both `padding` and `scroll-padding`: `calc(var(--nave-size-control-xs) + var(--nave-spacing-control-xs))`.',
 }
 /**
-STEWARD S-D: disabled trigger.
+Cleared sentence S-D: disabled trigger.
  */
 export const S_D_DISABLED_TRIGGER: Literal = {
   bytes: 204,
@@ -384,7 +384,7 @@ export const SHIPPED_STYLESHEET_SENTENCE: Literal = {
 }
 // Withdrawn: never in the README of the combined package
 /**
-DEVREL D2 (dropped: false since the reset went).
+Reader item D2 (dropped: false since the reset went).
  */
 export const D2_ANCHORED_PROVIDER: Literal = {
   bytes: 344,
@@ -392,7 +392,7 @@ export const D2_ANCHORED_PROVIDER: Literal = {
   text: "Give anchored toasts, each a `Toast.Root` inside a `Toast.Positioner` that Base UI places beside its anchor, a `Toast.Provider` of their own, as Base UI's documentation advises. While an anchored toast is open, Nave stops fixing that provider's toast area to the corner, so stacked toasts sharing the provider would move to the end of the page.",
 }
 /**
-DEVREL D5 (dropped: S-S carries it).
+Reader item D5 (dropped: S-S carries it).
  */
 export const D5_SWIPE: Literal = {
   bytes: 203,
@@ -400,7 +400,7 @@ export const D5_SWIPE: Literal = {
   text: "Swiping a toast away is Base UI's: it moves the toast under the pointer itself, down or to the right unless you pass another `swipeDirection` to `Toast.Root`, and `swipeDirection={[]}` turns swiping off.",
 }
 /**
-DEVREL D9 (dropped: S-C carries it).
+Reader item D9 (dropped: S-C carries it).
  */
 export const D9_CURRENT_PAGE: Literal = {
   bytes: 134,
@@ -408,7 +408,7 @@ export const D9_CURRENT_PAGE: Literal = {
   text: "Pass `active` to the `NavigationMenu.Link` of the page the reader is on, and Nave draws that link's underline thicker than the others.",
 }
 /**
-DEVREL D14 (superseded by S-K).
+Reader item D14 (superseded by S-K).
  */
 export const D14_KEEP_MOUNTED: Literal = {
   bytes: 443,
@@ -416,7 +416,7 @@ export const D14_KEEP_MOUNTED: Literal = {
   text: 'If you pass `keepMounted` to a `ScrollArea.Scrollbar`, it stays on screen even when there is nothing to scroll, over the edge of the content: Nave makes room for a scrollbar only while its direction can scroll. Give the viewport that room yourself in a class of your own, `padding-inline-end` for a vertical scrollbar or `padding-block-end` for a horizontal one, set to `calc(var(--nave-border-width-lg) + 3 * var(--nave-spacing-control-xs))`.',
 }
 /**
-STEWARD S-K, first form (the round-2b 16px gutter; replaced by the 391 B form).
+cleared S-K, first form (the round-2b 16px gutter; replaced by the 391 B form).
  */
 export const S_K_ROUND_2B: Literal = {
   bytes: 395,
@@ -424,7 +424,7 @@ export const S_K_ROUND_2B: Literal = {
   text: 'If you pass `keepMounted` to a `ScrollArea.Scrollbar`, it stays on screen over the edge of the content even when there is nothing to scroll in its direction, but Nave makes room for a scrollbar only while its direction can scroll. Give the viewport that room yourself on that edge, as both `padding` and `scroll-padding`: `calc(var(--nave-border-width-lg) + 3 * var(--nave-spacing-control-xs))`.',
 }
 /**
-DEVREL D11, round 2a.
+Reader item D11, round 2a.
  */
 export const D11_ROUND_2A: Literal = {
   bytes: 377,
@@ -432,7 +432,7 @@ export const D11_ROUND_2A: Literal = {
   text: "Meter and Progress draw their value as a bar inside an outlined track, in the text colour: set `color` on the `Indicator` to change it. An indeterminate Progress (`value={null}`) shows its empty track, and nothing on it moves. If you restyle the bar, give the height to the `Track`, not to the `Indicator`, because Base UI sets the indicator's width only when there is a value.",
 }
 /**
-DEVREL D12, round 2a.
+Reader item D12, round 2a.
  */
 export const D12_ROUND_2A: Literal = {
   bytes: 252,
@@ -440,7 +440,7 @@ export const D12_ROUND_2A: Literal = {
   text: "`Avatar.Fallback` shows while the image loads and when it fails to load, in which case Base UI renders no `<img>` at all. Its `delay` prop, Base UI's, holds the fallback back for that many milliseconds, so an image that loads quickly does not flash it.",
 }
 /**
-DEVREL D13c, round 2a.
+Reader item D13c, round 2a.
  */
 export const D13C_ROUND_2A: Literal = {
   bytes: 167,
@@ -452,7 +452,7 @@ export const D13C_ROUND_2A: Literal = {
   ].join('\n'),
 }
 /**
-STEWARD placement sentence (308 B, false for an anchored toast).
+Cleared placement sentence (308 B, false for an anchored toast).
  */
 export const S_P_PLACEMENT_308: Literal = {
   bytes: 308,
@@ -460,7 +460,7 @@ export const S_P_PLACEMENT_308: Literal = {
   text: "Nave fixes the toasts to a bottom corner of the window, above Nave's dialogs and other popups, so a toast can cover part of your page, a popup or an open dialog, including the control that has keyboard focus. If your page, popups or dialogs can put controls in that corner, move the toasts with your own CSS.",
 }
 /**
-STEWARD popup limitation (95 B, replaced by the remedy).
+Cleared popup limitation (95 B, replaced by the remedy).
  */
 export const S_PP1_POPUP_LIMITATION: Literal = {
   bytes: 95,
@@ -468,7 +468,7 @@ export const S_PP1_POPUP_LIMITATION: Literal = {
   text: 'A popover, menu or tooltip opened from a toast opens under the other toasts where they overlap.',
 }
 /**
-STEWARD zubh reduced-motion form (413 B).
+Cleared zubh reduced-motion form (413 B).
  */
 export const ZUBH_REDUCED_MOTION_413: Literal = {
   bytes: 413,
@@ -476,7 +476,7 @@ export const ZUBH_REDUCED_MOTION_413: Literal = {
   text: "When the reader's system asks for reduced motion, this package turns off the popups' fade, the tooltip's fade, the backdrop's fade, the toasts' fade, the tab indicator's slide, the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.",
 }
 /**
-STEWARD udfy placement sentence (212 B).
+Cleared udfy placement sentence (212 B).
  */
 export const UDFY_PLACEMENT_212: Literal = {
   bytes: 212,

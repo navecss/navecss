@@ -1,5 +1,5 @@
 /**
- * The reduced-motion sentence of the combined package: its list rule, composed from #787's template,
+ * The reduced-motion sentence of the combined package: its list rule, composed from the overlay release's template,
  * and the table of its sixteen forms.
  */
 import type { State789 } from './w12-states.ts'
@@ -77,7 +77,7 @@ export const signedOfCode = (code: string): ReducedMotionSigned => ({
 })
 
 /**
-The two forms a README can carry: #787's three drafts are signed, so only the toasts' fade varies.
+The two forms a README can carry: the overlay release's three drafts are signed, so only the toasts' fade varies.
  */
 export const LIVE_CODES = ['SSSS', 'SSSu'] as const
 

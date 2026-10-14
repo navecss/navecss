@@ -170,13 +170,13 @@ const ruleOf = (container: Root | Rule, selector: string): Rule => {
   return first
 }
 
-describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06: the built stylesheet is Appendix A plus #787 Appendix B plus Appendix C', () => {
-  // The #787 oracle (Appendix A with B.1 and B.2, all signed), and the expected sheet of the
-  // combined package: that oracle with Appendix C's block appended, all #789 drafts signed.
+describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06: the built stylesheet is Appendix A plus overlay Appendix B plus Appendix C', () => {
+  // The overlay oracle (Appendix A with B.1 and B.2, all signed), and the expected sheet of the
+  // combined package: that oracle with Appendix C's block appended, all feedback drafts signed.
   const expected787 = fixture(INDEPENDENT_BUILD)
   const expected = expectedSheet()
 
-  it('holds the #787 independent build byte for byte', () => {
+  it('holds the overlay independent build byte for byte', () => {
     expect(sha256(expected787)).toBe(INDEPENDENT_BUILD_SHA256)
   })
 
@@ -188,7 +188,7 @@ describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06
     expect(sha256(expected787).slice(0, 16)).toBe('e9b54cd0a877debe')
   })
 
-  it("holds Appendix C's block (6,899 B, 028c71ff), and appends it to the #787 sheet before the layer's closing brace", () => {
+  it("holds Appendix C's block (6,899 B, 028c71ff), and appends it to the overlay sheet before the layer's closing brace", () => {
     const block = feedbackBlock()
 
     expect(Buffer.byteLength(block)).toBe(BLOCK_BYTES)
@@ -467,11 +467,11 @@ const listDrift = (candidate: string, reference: string): string[] => {
     .toArray()
 }
 
-describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block is appended, and every #787 state composes with every #789 state', () => {
+describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block is appended, and every overlay state composes with every feedback state', () => {
   const expected = expectedSheet()
   const expected787 = sheet787()
 
-  it('builds, with every #789 class left out of the atom map, the #787 sheet of 30,401 B, e9b54cd0', async () => {
+  it('builds, with every feedback class left out of the atom map, the overlay sheet of 30,401 B, e9b54cd0', async () => {
     const without = await buildWithoutClasses(NEW_CLASSES_789)
     const ringless = withoutRing(without)
 
@@ -491,7 +491,7 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
     )
   })
 
-  it('has an identical per-class ordered list, in both builds, for every class of Appendix A and of #787 B.1 and B.2', async () => {
+  it('has an identical per-class ordered list, in both builds, for every class of Appendix A and of overlay B.1 and B.2', async () => {
     const [sheet, without] = await Promise.all([
       buildStyles(),
       buildWithoutClasses(NEW_CLASSES_789),
@@ -508,7 +508,7 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
     expect(listDrift(sheet, expected787)).toEqual([])
   })
 
-  it('names, in no #789 rule, popup-fade, popup-motion, active-option or the open ghost key of abv1', async () => {
+  it('names, in no feedback rule, popup-fade, popup-motion, active-option or the open ghost key of abv1', async () => {
     const rules = [...blockRules(feedbackBlock())]
     const built = withoutRing(await buildStyles()).text
     const names = NEW_CLASSES_789.map((name) => name.replace('nave-base-ui-', ''))
@@ -536,7 +536,7 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
     ).toEqual([])
   })
 
-  it('does not red on the expected sheet against the #787 oracle with the block appended (control)', () => {
+  it('does not red on the expected sheet against the overlay oracle with the block appended (control)', () => {
     expect(prefixProblems(expected, expected787, feedbackBlock())).toEqual([])
     expect(listDrift(expected, expected787)).toEqual([])
   })

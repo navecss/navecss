@@ -1,6 +1,6 @@
 /**
  * The stylesheet rules the Scroll Area and value bar controls take away or swap, as the spec prints
- * them (Appendix C.1 for the shipped bytes, C.5 for the variants DSGN priced), each with the byte
+ * them (Appendix C.1 for the shipped bytes, C.5 for the variants priced), each with the byte
  * count and sha256 prefix the spec gives it. A control built from text that is not the rule it names
  * proves nothing, so `measureControlRule` reads the text back, to be held against those figures.
  *

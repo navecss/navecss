@@ -3,10 +3,10 @@
  * draft that is unsigned removes its own rules and nothing else. The derivation is textual on
  * purpose, so it shares no code with the build it is compared with.
  *
- * Two lists of drafts, never multiplied. `DRAFTS` is #787's six and `allStates` its 64 states, as
+ * Two lists of drafts, never multiplied. `DRAFTS` is the overlay release's six and `allStates` its 64 states, as
  * they were: every function that takes a `Draft` still means what it meant. The four drafts of the
  * feedback and navigation spec (`vgiq`, `q1dc`, `i696`, `wlu6`) are in `feedback-states.ts` with
- * their own `allStates789` (16 states) and `stateKey789`; their states are read with #787 all
+ * their own `allStates789` (16 states) and `stateKey789`; their states are read with overlay all
  * signed, and the six corners of Appendix C.4 are the only places the two lists meet.
  */
 import { createHash } from 'node:crypto'

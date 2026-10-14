@@ -1,8 +1,8 @@
 /**
- * What the combined package's README may carry in each signature state of the four drafts #789
+ * What the combined package's README may carry in each signature state of the four drafts feedback
  * adds: the items of `w12-feedback-sentences.ts`, each with the state it belongs to, the
  * reduced-motion sentence composed by its rule, the phrases the not-painted list gains, and the
- * check of a README text against a state. #787's drafts are signed in every state here: the
+ * check of a README text against a state. the overlay release's drafts are signed in every state here: the
  * combined package's README is written for them signed, and their other states are `w9-*`'s.
  */
 import type { Literal, NamedLiteral } from './w9-sentences.ts'
@@ -30,11 +30,11 @@ export const FORBIDDEN: readonly RegExp[] = [
   /prefers-reduced/i,
 ]
 
-export type Author = 'DEVREL' | 'STEWARD'
+export type Author = 'reader' | 'cleared'
 
 export interface ItemRule {
   /**
-  Whose item it is: DEVREL's reader items, or STEWARD's cleared sentences.
+  Whose item it is: the reader items, or the cleared sentences.
    */
   readonly author: Author
   /**
@@ -70,13 +70,13 @@ export const hasTableRows = (readme: string, fragment: string): boolean => {
   return tableRowsOf(fragment).every((cells) => have.has(cells.join('\u{0}')))
 }
 
-const devrel = (
+const reader = (
   name: string,
   literal: Literal,
   present: ItemRule['present'] = () => true,
   holds?: ItemRule['holds'],
 ): ItemRule => ({
-  author: 'DEVREL',
+  author: 'reader',
   ...(holds !== undefined && { holds }),
   literal: named(name, literal),
   present,
@@ -86,7 +86,7 @@ const steward = (
   name: string,
   literal: Literal,
   present: ItemRule['present'] = () => true,
-): ItemRule => ({ author: 'STEWARD', literal: named(name, literal), present })
+): ItemRule => ({ author: 'cleared', literal: named(name, literal), present })
 
 const isPlacementUnsigned = (state: State789): boolean => !isSigned789(state, 'toast-placement')
 
@@ -94,20 +94,20 @@ const isUnplacedWithScrimReturn = (state: State789): boolean =>
   isPlacementUnsigned(state) && state.wi8qSigned !== false
 
 export const ITEM_RULES: readonly ItemRule[] = [
-  devrel('D1, Toast setup', S.D1_TOAST_SETUP),
-  devrel('D1b, the manager in a client module', S.D1B_MANAGER_IN_A_CLIENT_MODULE),
-  devrel('D3, the stylesheet sentence', S.D3_STYLESHEET_SENTENCE, (state) =>
+  reader('D1, Toast setup', S.D1_TOAST_SETUP),
+  reader('D1b, the manager in a client module', S.D1B_MANAGER_IN_A_CLIENT_MODULE),
+  reader('D3, the stylesheet sentence', S.D3_STYLESHEET_SENTENCE, (state) =>
     isSigned789(state, 'toast-placement'),
   ),
-  devrel("D6, Toast.Title's element", S.D6_TOAST_TITLE_ELEMENT),
-  devrel('D7, Navigation Menu structure', S.D7_NAVIGATION_MENU_STRUCTURE),
-  devrel('D7b, the icon', S.D7B_NAVIGATION_MENU_ICON),
-  devrel('D8, panel size', S.D8_NAVIGATION_MENU_SIZE),
-  devrel('D10, Scroll Area', S.D10_SCROLL_AREA),
-  devrel('D11, Meter and Progress', S.D11_METER_AND_PROGRESS),
-  devrel('D12, Avatar', S.D12_AVATAR),
-  devrel('D13a, variants: the new parts', S.D13A_VARIANTS),
-  devrel('D13b, what is styled: three rows', S.D13B_WHAT_IS_STYLED_ROWS, () => true, hasTableRows),
+  reader("D6, Toast.Title's element", S.D6_TOAST_TITLE_ELEMENT),
+  reader('D7, Navigation Menu structure', S.D7_NAVIGATION_MENU_STRUCTURE),
+  reader('D7b, the icon', S.D7B_NAVIGATION_MENU_ICON),
+  reader('D8, panel size', S.D8_NAVIGATION_MENU_SIZE),
+  reader('D10, Scroll Area', S.D10_SCROLL_AREA),
+  reader('D11, Meter and Progress', S.D11_METER_AND_PROGRESS),
+  reader('D12, Avatar', S.D12_AVATAR),
+  reader('D13a, variants: the new parts', S.D13A_VARIANTS),
+  reader('D13b, what is styled: three rows', S.D13B_WHAT_IS_STYLED_ROWS, () => true, hasTableRows),
   steward('T1, F6 into the toasts', S.T1_F6_INTO_THE_TOASTS),
   steward('T2, toast timer', S.T2_TOAST_TIMER),
   steward('T3, types alike', S.T3_TYPES_ALIKE),
@@ -151,16 +151,16 @@ export const ITEM_RULES: readonly ItemRule[] = [
   steward('S-D, disabled trigger', S.S_D_DISABLED_TRIGGER),
   // The stylesheet paragraph keeps the shipped sentence exactly when the placement is unsigned.
   {
-    author: 'DEVREL',
+    author: 'reader',
     literal: named('the shipped stylesheet sentence', S.SHIPPED_STYLESHEET_SENTENCE),
     present: isPlacementUnsigned,
   },
 ]
 
 /**
-DEVREL's withdrawn texts: never in the README of the combined package, in any state.
+The reader items' withdrawn texts: never in the README of the combined package, in any state.
  */
-export const WITHDRAWN_DEVREL: readonly NamedLiteral[] = [
+export const WITHDRAWN_reader: readonly NamedLiteral[] = [
   named('D2', S.D2_ANCHORED_PROVIDER),
   named('D5', S.D5_SWIPE),
   named('D9', S.D9_CURRENT_PAGE),
@@ -172,9 +172,9 @@ export const WITHDRAWN_DEVREL: readonly NamedLiteral[] = [
 ]
 
 /**
-STEWARD's withdrawn and superseded texts, #787's reduced-motion forms among them.
+The cleared sentences' withdrawn and superseded texts, the overlay release's reduced-motion forms among them.
  */
-export const WITHDRAWN_STEWARD: readonly NamedLiteral[] = [
+export const WITHDRAWN_cleared: readonly NamedLiteral[] = [
   named("S-K's round-2b form (16px gutter)", S.S_K_ROUND_2B),
   named('the 308 B placement sentence', S.S_P_PLACEMENT_308),
   named('the 95 B popup limitation', S.S_PP1_POPUP_LIMITATION),
@@ -182,7 +182,7 @@ export const WITHDRAWN_STEWARD: readonly NamedLiteral[] = [
   named("udfy's 212 B placement sentence", S.UDFY_PLACEMENT_212),
   named("the parent's reduced-motion sentence", PARENT_REDUCED_MOTION),
   ...Object.entries(SENTENCE_4_FORMS).map(([code, form]) =>
-    named(`#787's reduced-motion form ${code.split('').join(' ')}`, form),
+    named(`the overlay release's reduced-motion form ${code.split('').join(' ')}`, form),
   ),
 ]
 
@@ -212,8 +212,8 @@ export const textsAbsent = (state: State789, author?: Author): readonly NamedLit
   ...ITEM_RULES.filter(
     (rule) => !rule.present(state) && (author === undefined || rule.author === author),
   ).map(({ literal }) => literal),
-  ...(author === 'STEWARD' ? [] : WITHDRAWN_DEVREL),
-  ...(author === 'DEVREL' ? [] : [...WITHDRAWN_STEWARD, ...NON_LIVE_REDUCED_MOTION]),
+  ...(author === 'cleared' ? [] : WITHDRAWN_reader),
+  ...(author === 'reader' ? [] : [...WITHDRAWN_cleared, ...NON_LIVE_REDUCED_MOTION]),
 ]
 
 const isHeld = ({ holds, literal }: ItemRule, readme: string): boolean =>
@@ -237,8 +237,8 @@ Every literal the README can be held to, for the table of lengths and hashes.
  */
 export const ALL_LITERALS_789: readonly NamedLiteral[] = [
   ...ITEM_RULES.map(({ literal }) => literal),
-  ...WITHDRAWN_DEVREL,
-  ...WITHDRAWN_STEWARD,
+  ...WITHDRAWN_reader,
+  ...WITHDRAWN_cleared,
   ...NON_LIVE_REDUCED_MOTION,
 ]
 
@@ -273,9 +273,9 @@ export const readmeInState = (shipped: string, state: State789): string => {
 }
 
 /**
-The sentences of a state that STEWARD cleared, for the scan that removes them.
+The sentences of a state that were cleared, for the scan that removes them.
  */
 export const clearedFor = (state: State789): string[] =>
   itemsPresent(state)
-    .filter(({ author }) => author === 'STEWARD')
+    .filter(({ author }) => author === 'cleared')
     .map(({ literal }) => literal.text)
