@@ -6,9 +6,11 @@
  * rule on every call. The rules read the source (R3), so none of this loads the installed core.
  */
 import { Linter } from 'eslint'
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { classChannelRule } from '../src/rules/class-channel.ts'
@@ -536,6 +538,13 @@ describe.each(PARSERS)(
         ).toHaveLength(1)
       })
 
+      it("cx.dynamic(on ? 'flex' : undefined) is reported once with the lone-name message", () => {
+        const reports = rule1Reports("cx.dynamic(on ? 'flex' : undefined)", parser)
+        expect(reports).toHaveLength(1)
+        expect(reports[0]!.message).toBe(rule1Reports("cx.dynamic('flex')", parser)[0]!.message)
+        expect(reports[0]!.message).not.toContain('beside')
+      })
+
       it("cx.dynamic('nave-flex') gets the nave- message and no report of this kind", () => {
         const reports = rule1Reports("cx.dynamic('nave-flex')", parser)
         expect(reports).toHaveLength(1)
@@ -590,6 +599,10 @@ describe.each(PARSERS)(
         },
       )
 
+      it("a leading spread leaves the call unread: cx.dynamic(...a, 'legacy-card') passes", () => {
+        expect(rule1Reports("cx.dynamic(...a, 'legacy-card')", parser)).toEqual([])
+      })
+
       it('a spread argument is not read', () => {
         expect(rule1Reports('cx.dynamic(tone, ...rest)', parser)).toEqual([])
       })
@@ -617,6 +630,17 @@ describe.each(PARSERS)(
         expect(message).not.toContain("cx('")
         expect(message).not.toContain('@nave ')
         expectRemediesInOrder(message)
+      })
+
+      it.each(['cx.dynamic(`${x}Phone`)', 'cx.dynamic(`Phone${x}`)', 'cx.dynamic(`gap${x}gap`)'])(
+        '%s is reported once: the text before and after the slot must start and end the name',
+        (value) => {
+          expect(rule1Reports(value, parser)).toHaveLength(1)
+        },
+      )
+
+      it('cx.dynamic(`${x}Center`) passes: it fits textCenter', () => {
+        expect(rule1Reports('cx.dynamic(`${x}Center`)', parser)).toEqual([])
       })
 
       it('cx.dynamic(on ? `legacy-${x}` : tone) is reported once, on the built side', () => {
@@ -651,6 +675,57 @@ describe.each(PARSERS)(
     })
   },
 )
+
+const slots = (count: number): string[] => Array.from({ length: count }, (_, i) => `s${i}`)
+const template = `\`${slots(30)
+  .map((name) => `\${${name}}`)
+  .join('')}Q\``
+const chain = `${slots(30).join(' + ')} + 'Q'`
+
+/**
+ * Lints `value` in a child process, so that a matcher that never finishes fails this test at
+ * the timeout instead of hanging it: the work is synchronous, which a test timeout cannot cut.
+ */
+function reportsInChild(value: string): { error: Error | undefined; stdout: string } {
+  const rule = pathToFileURL(path.resolve(import.meta.dirname, '../src/rules/class-channel.ts'))
+  const code = `import { cx } from '@navecss/core/cx'\nconst el = <div className={cx.dynamic(${value})} />`
+  const script = `
+    import { Linter } from 'eslint'
+    import { classChannelRule } from ${JSON.stringify(rule.href)}
+    const messages = new Linter().verify(${JSON.stringify(code)}, {
+      languageOptions: { ecmaVersion: 2024, sourceType: 'module', parserOptions: { ecmaFeatures: { jsx: true } } },
+      plugins: { '@navecss': { rules: { 'class-channel': classChannelRule } } },
+      rules: { '@navecss/class-channel': 'error' },
+    })
+    console.log(messages.filter((message) => message.ruleId === '@navecss/class-channel').length)
+  `
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: path.resolve(import.meta.dirname, '..'),
+    encoding: 'utf8',
+    timeout: 8000,
+  })
+  return { error: result.error, stdout: result.stdout.trim() }
+}
+
+describe('AC-28: the fit check does not slow down as slots are added', () => {
+  it('constructs no regular expression to match an atom name', () => {
+    const text = readFileSync(path.resolve(import.meta.dirname, '../src/dynamic-name.ts'), 'utf8')
+    expect(text).not.toMatch(/RegExp|\.(?:replace|replaceAll|match|matchAll|search|split)\(\s*\//u)
+  })
+
+  it.each([
+    ['a template of 30 slots then Q', template],
+    ['a chain of 30 identifiers then Q', chain],
+  ])(
+    '%s gets one report, in bounded time',
+    (_name, value) => {
+      const result = reportsInChild(value)
+      expect(result.error).toBeUndefined()
+      expect(result.stdout).toBe('1')
+    },
+    15_000,
+  )
+})
 
 describe('AC-28: a cxModules wrapper re-exporting cx', () => {
   const scratch = mkdtempSync(path.join(tmpdir(), 'nave-eslint-plugin-dynamic-'))

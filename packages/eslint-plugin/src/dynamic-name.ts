@@ -55,8 +55,34 @@ function nameParts(node: Node): Part[] {
   return concatOperands(node).map((operand) => literalText(operand))
 }
 
-const escapeText = (text: string): string =>
-  text.replaceAll(/[$()*+.?[\\\]^{|}]/gu, String.raw`\$&`)
+/**
+ * True when `name` is the static texts of `parts` in order, with each slot standing for any run of
+ * characters, the empty run included. No regular expression: the text before the first slot must
+ * start the name, the text after the last slot must end it, and each text between is taken at its
+ * leftmost place after the one before, which never rules out a fit when the only wildcard matches
+ * any run. Linear in the name's length for each text, whatever the number of slots.
+ */
+function isFitByParts(name: string, parts: Part[]): boolean {
+  const texts = ['']
+  for (const part of parts) {
+    if (part === undefined) texts.push('')
+    else texts[texts.length - 1] += part
+  }
+  if (texts.length === 1) return name === texts[0]
+  const head = texts[0]!
+  const tail = texts.at(-1)!
+  if (name.length < head.length + tail.length) return false
+  if (!name.startsWith(head) || !name.endsWith(tail)) return false
+  const end = name.length - tail.length
+  let position = head.length
+  const between = texts.slice(1, -1)
+  for (const text of between) {
+    const found = name.indexOf(text, position)
+    if (found === -1 || found + text.length > end) return false
+    position = found + text.length
+  }
+  return true
+}
 
 /**
  * True when some atom name is the static texts of the built name `node`, in order, with each slot
@@ -64,11 +90,8 @@ const escapeText = (text: string): string =>
  * case-sensitively, so static text holding whitespace fits nothing.
  */
 export function isFitByAtom(node: Node): boolean {
-  const pattern = nameParts(node)
-    .map((part) => (part === undefined ? '.*' : escapeText(part)))
-    .join('')
-  const fit = new RegExp(`^${pattern}$`, 'u')
-  return hasMatchingAtom((name) => fit.test(name))
+  const parts = nameParts(node)
+  return hasMatchingAtom((name) => isFitByParts(name, parts))
 }
 
 /**
