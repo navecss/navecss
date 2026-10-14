@@ -148,6 +148,51 @@ export const GUARD_PAIRS: readonly Pair[] = [
   pair('tab-indicator-motion', 'data-instant'),
 ]
 
+/**
+The pairs the feedback and navigation render rows assert (AC-39's Examples, Tier A): the limited
+toast, the closing toast, the Icon on its open trigger, the Navigation Menu panel's transient
+attributes, the current link, the Scroll Area scrollbar and thumb, the indeterminate Progress
+Indicator, and the trigger's `aria-disabled` (the hover key's `:not()`, asserted by AC-20's
+disabled-trigger rows). The Arrows' `data-side` pair is the existing `arrowInline` one.
+ */
+export const FEEDBACK_PAIRS: Table = {
+  currentLink: pairs('current-link', 'aria-current'),
+  disabledTrigger: pairs('navigation-menu-trigger', 'aria-disabled'),
+  indeterminate: pairs('value-bar-indicator', 'data-indeterminate'),
+  limited: pairs('toast-limit', 'data-limited'),
+  menuIcon: pairs('navigation-menu-icon', 'aria-expanded'),
+  menuTransition: pairs('navigation-menu-fade', 'data-ending-style', 'data-starting-style'),
+  scrollOrientation: [
+    ...pairs('scroll-area-scrollbar', 'data-orientation'),
+    ...pairs('scroll-area-thumb', 'data-orientation'),
+  ],
+  toastEnding: pairs('toast-fade', 'data-ending-style'),
+}
+
+/**
+The pairs jsdom cannot produce, asserted by the Tier B rows of the criterion each names (AC-39's
+second scenario): an opening toast (`data-starting-style` is not set on `Toast.Root` in jsdom), a
+swiped toast, and an overflowing Viewport. Each is a pair of the stylesheet and each is asserted
+by a browser test that names the criterion and the item.
+ */
+export const TIER_B_PAIRS: readonly (readonly [Pair, string])[] = [
+  [pair('toast-fade', 'data-starting-style'), 'AC-base-ui-feedback-navigation-15'],
+  [pair('toast-fade', 'data-swipe-direction'), 'AC-base-ui-feedback-navigation-15'],
+  [pair('scroll-area-viewport', 'data-has-overflow-x'), 'AC-base-ui-feedback-navigation-28'],
+  [pair('scroll-area-viewport', 'data-has-overflow-y'), 'AC-base-ui-feedback-navigation-28'],
+]
+
+/**
+The one (class, part) pair no row asserts: `&[data-indeterminate]` on `Meter.Indicator`, which
+declares the attribute at no minor and never carries it. Its (class, item) pair is asserted by
+`Progress.Indicator`'s row, so no extracted pair goes unasserted; this constant names the part so
+that the exemption is exactly this one and reaches nothing else.
+ */
+export const METER_INDICATOR_EXEMPT: Readonly<{ pair: Pair; part: string }> = {
+  part: 'Meter.Indicator',
+  pair: pair('value-bar-indicator', 'data-indeterminate'),
+}
+
 export const ROW_PAIRS: Table = {
   ...CONTROL_PAIRS,
   ...OVERLAY_PAIRS,
@@ -155,4 +200,5 @@ export const ROW_PAIRS: Table = {
   ...INPUT_GROUP_PAIRS,
   ...LIST_PAIRS,
   ...POPUP_PAIRS,
+  ...FEEDBACK_PAIRS,
 }
