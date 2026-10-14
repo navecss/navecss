@@ -197,11 +197,11 @@ A literal that names an atom is reported, with `cx()` as the fix: a name written
 a name the build can read, so `cx.dynamic('flex')` becomes `cx('flex')`; `''`, `null`, `undefined`
 and `false` pass. Every argument after a non-spread argument, a spread included, is reported,
 whatever it holds, because `cx.dynamic()` takes one name and ignores the rest. The first argument
-written after only spreads is reported too, because whether it is used depends on the spread
-before it: when the spread has items the call takes the first of them, and when it is empty this
-argument is the name. A name built at run time (a template literal with a slot beside static text
-or another slot, a `+` chain with an operand that is not literal text) passes unless no atom name
-fits the text written around its slots, in which case it is reported.
+written after only spreads is reported too, because whether it is used depends on the spreads
+before it: when any of them has items the call takes the first item, and when all of them are
+empty this argument is the name. A name built at run time (a template literal with a slot beside
+static text or another slot, a `+` chain with an operand that is not literal text) passes unless
+no atom name fits the text written around its slots, in which case it is reported.
 
 ### Rule 2: the `cx.raw()` reason
 

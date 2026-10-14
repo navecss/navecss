@@ -84,6 +84,10 @@ export interface DynamicSpreadHit {
   kind: 'dynamic-spread'
   node: AnyNode
   rendered: string
+  /**
+   * How many spreads are written before the argument: what the source shows, never what they hold.
+   */
+  spreadCount: number
 }
 
 export type ClassHit =

@@ -28,18 +28,19 @@ export function dynamicCallHits(
 ): ClassHit[] {
   const firstIndex = call.arguments.findIndex((argument) => argument.type !== 'SpreadElement')
   if (firstIndex === -1) return []
-  const reported = (kind: 'dynamic-extra' | 'dynamic-spread', argument: AnyNode): ClassHit => {
-    const rendered = sourceCode.getText(argument as never)
-    return { kind, node: argument, rendered, callee: call.callee }
-  }
+  const hit = (argument: AnyNode): { callee: AnyNode; node: AnyNode; rendered: string } => ({
+    callee: call.callee,
+    node: argument,
+    rendered: sourceCode.getText(argument as never),
+  })
   const first = call.arguments[firstIndex]!
-  const name =
+  const name: ClassHit[] =
     firstIndex === 0
       ? read(first, { node: call.callee, isDynamic: true })
-      : [reported('dynamic-spread', first)]
+      : [{ ...hit(first), kind: 'dynamic-spread', spreadCount: firstIndex }]
   const extras = call.arguments
     .slice(firstIndex + 1)
-    .map((argument) => reported('dynamic-extra', argument))
+    .map((argument): ClassHit => ({ ...hit(argument), kind: 'dynamic-extra' }))
   return [...name, ...extras]
 }
 

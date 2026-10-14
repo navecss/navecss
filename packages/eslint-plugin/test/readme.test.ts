@@ -293,7 +293,7 @@ describe('AC-19: the counting rule denominator, stated and fixtured', () => {
     for (const statement of [
       'A literal that names an atom is reported, with `cx()` as the fix',
       'Every argument after a non-spread argument, a spread included, is reported, whatever it holds',
-      'The first argument written after only spreads is reported too, because whether it is used depends on the spread before it',
+      'The first argument written after only spreads is reported too, because whether it is used depends on the spreads before it: when any of them has items the call takes the first item, and when all of them are empty this argument is the name.',
       'A name built at run time (a template literal with a slot beside static text or another slot, a `+` chain with an operand that is not literal text) passes unless no atom name fits the text written around its slots, in which case it is reported.',
       "- A name built at run time inside `cx.dynamic()` that an atom name fits (`` `text${align}` `` fits `textLeft`) is not read further: it renders nothing when its run-time value is no atom or, under the Vite plugin, is not listed in `keep`, as an identifier's value can. A spread that comes first in `cx.dynamic()`, or follows only spreads, is not read.",
     ]) {

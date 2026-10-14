@@ -652,8 +652,12 @@ describe.each(PARSERS)(
         const { column, message } = reports[0]!
         const line = `const el = <div className={${value}} />`
         expect(column).toBe(line.lastIndexOf(argument) + 1)
-        expect(message).toContain(`The argument ${argument} follows a spread`)
-        expect(message).toContain(`${callee}() takes the first of them and ignores ${argument}`)
+        const hasSeveralSpreads = value.includes('...b')
+        expect(message).toContain(
+          `The argument ${argument} follows ${hasSeveralSpreads ? 'spreads' : 'a spread'}`,
+        )
+        expect(message).toContain(`${callee}() takes the first`)
+        expect(message).toContain(`ignores ${argument}`)
         expect(message).toContain(`${argument} is the name`)
         expect(message).toContain('spread')
         expect(message).toContain(`${callee}(name)`)
@@ -674,6 +678,24 @@ describe.each(PARSERS)(
         // The quoted argument may hold a comma itself, so the check reads the text after it.
         const after = message.slice(message.indexOf(argument) + argument.length)
         expect(after).not.toMatch(/cx\.dynamic\([^)]*,/u)
+      })
+
+      it('with more than one leading spread, says when any has items and when all are empty', () => {
+        const [report] = rule1Reports('cx.dynamic(...a, ...b, x)', parser)
+        const { message } = report!
+        expect(message).toContain(
+          'The argument x follows spreads: when any of them has items, cx.dynamic() takes the first item and ignores x, and when all of them are empty, x is the name.',
+        )
+        expect(message).toContain('all of them are empty')
+        expect(message).not.toContain('the spread is empty')
+        expect(message).toContain('cx.dynamic(name)')
+      })
+
+      it('with one leading spread, the message is the one for a single spread', () => {
+        const [report] = rule1Reports("cx.dynamic(...a, 'legacy-card')", parser)
+        expect(report!.message).toContain(
+          "The argument 'legacy-card' follows a spread: when the spread has items, cx.dynamic() takes the first of them and ignores 'legacy-card', and when the spread is empty, 'legacy-card' is the name.",
+        )
       })
 
       it('says the same whatever the spread holds', () => {

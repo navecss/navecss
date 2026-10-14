@@ -115,12 +115,12 @@ function dynamicCallMessage(
   { declared, rawCallee }: Wording,
 ): string {
   const callee = sourceCode.getText(hit.callee as never)
-  const messages = {
-    'dynamic-built': dynamicBuiltMessage,
-    'dynamic-extra': dynamicExtraMessage,
-    'dynamic-spread': dynamicSpreadMessage,
+  if (hit.kind === 'dynamic-spread') {
+    return dynamicSpreadMessage(callee, hit.rendered, hit.spreadCount, { declared, rawCallee })
   }
-  return messages[hit.kind](callee, hit.rendered, declared, rawCallee)
+  return hit.kind === 'dynamic-extra'
+    ? dynamicExtraMessage(callee, hit.rendered, declared, rawCallee)
+    : dynamicBuiltMessage(callee, hit.rendered, declared, rawCallee)
 }
 
 /**

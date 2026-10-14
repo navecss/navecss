@@ -116,16 +116,20 @@ export function dynamicExtraMessage(
 
 /**
  * The first non-spread argument of Nave's `cx.dynamic()` when only spreads come before it. It
- * says what is true either way, whatever the spread holds: with items the call takes the first of
- * them and ignores this argument, and empty this argument is the name.
+ * says what is true either way, whatever the spreads hold: with items in any of them the call
+ * takes the first item and ignores this argument, and with all empty this argument is the name.
  */
 export function dynamicSpreadMessage(
   callee: string,
   rendered: string,
-  declared: string,
-  rawCallee: string,
+  spreadCount: number,
+  { declared, rawCallee }: { declared: string; rawCallee: string },
 ): string {
-  return `The argument ${rendered} follows a spread: when the spread has items, ${callee}() takes the first of them and ignores ${rendered}, and when the spread is empty, ${rendered} is the name. Pass one name as the only argument, ${callee}(name), and write names given in the source through cx(). ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
+  const cases =
+    spreadCount === 1
+      ? `follows a spread: when the spread has items, ${callee}() takes the first of them and ignores ${rendered}, and when the spread is empty, ${rendered} is the name.`
+      : `follows spreads: when any of them has items, ${callee}() takes the first item and ignores ${rendered}, and when all of them are empty, ${rendered} is the name.`
+  return `The argument ${rendered} ${cases} Pass one name as the only argument, ${callee}(name), and write names given in the source through cx(). ${preferredRemedies(declared)} ${rawCallee}() with a reason.`
 }
 
 /**
