@@ -291,10 +291,10 @@ describe('AC-19: the counting rule denominator, stated and fixtured', () => {
   it('AC-eslint-plugin-28: states that a name built at run time inside cx.dynamic() passes, and what it does not check', () => {
     const collapsed = README.replaceAll(/\s+/g, ' ')
     expect(collapsed).toContain(
-      'a name built at run time inside it (a template with a slot, a `+` chain with an operand that is not a string literal) passes.',
+      'a name built at run time inside it (a template literal with a slot beside static text or another slot, a `+` chain with an operand that is not a string literal) passes.',
     )
     expect(collapsed).toContain(
-      "- A name built at run time inside `cx.dynamic()` (a template literal with a slot, a `+` chain with an operand that is not a string literal) is not read: it renders nothing when it is no atom, or is not listed in `keep`, as an identifier's value can.",
+      "- A name built at run time inside `cx.dynamic()` (a template literal with a slot beside static text or another slot, a `+` chain with an operand that is not a string literal) is not read: it renders nothing when it is no atom, or, under the Vite plugin, is not listed in `keep`, as an identifier's value can.",
     )
     const PRELUDE = "import { cx } from '@navecss/core/cx'\n"
     for (const value of ['cx.dynamic(`text${align}`)', "cx.dynamic('gap' + size)"]) {

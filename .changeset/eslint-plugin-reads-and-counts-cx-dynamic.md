@@ -5,8 +5,9 @@
 The class-channel rule now reads a literal inside `cx.dynamic()` the way it reads one inside
 `cx()`: a string that is no atom, a `nave-` class and an array or object are reported, with the
 same remedies (an array or object gets its own explanation, since `cx.dynamic()` takes one name),
-and a name that is an atom passes. A name built at run time inside `cx.dynamic()` (a template with
-a slot, or a `+` with a side that is not a string literal) is not read. Before, a call to
+and a name that is an atom passes. A name built at run time inside `cx.dynamic()` (a template
+literal with a slot beside static text or another slot, or a `+` chain with an operand that is not
+a string literal) is not read. Before, a call to
 `cx.dynamic('legacy-card')` passed unreported.
 
 `@navecss/count-escapes` now counts every call to Nave's `cx.dynamic()`, whatever its argument

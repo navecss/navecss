@@ -219,6 +219,20 @@ describe.each(PARSERS)('AC-28: rule 1 reads cx.dynamic() (%s)', (parser) => {
     })
 
     it.each([
+      ["cx.dynamic('legacy' + `-card`)", false],
+      ["cx.dynamic('legacy' + ('-card' as string))", true],
+    ])('%s is still read: every operand is literal, however spelled', (value, isTypeScriptOnly) => {
+      if (isTypeScriptOnly && parser !== 'typescript') return
+      const reports = rule1Reports(value, parser)
+      expect(reports).toHaveLength(1)
+      expect(reports[0]!.message).toContain(`${value.slice('cx.dynamic('.length, -1)}) is not`)
+    })
+
+    it("cx('legacy' + `-card`) is still reported once", () => {
+      expect(rule1Reports("cx('legacy' + `-card`)", parser)).toHaveLength(1)
+    })
+
+    it.each([
       'cx(`text${align}`)',
       "cx('gap' + size)",
       "cx(`${on ? 'text' : 'gap'}${size}`)",

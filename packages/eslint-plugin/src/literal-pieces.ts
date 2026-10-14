@@ -102,9 +102,24 @@ export function concatOperands(node: Node): Node[] {
 }
 
 /**
+A string literal, or an expression-free template, through `as`/`satisfies`/`!`.
+ */
+function isLiteralOperand(node: Node): boolean {
+  let current = node
+  while (TRANSPARENT_WRAPPER_TYPES.has(current.type)) {
+    current = (current as TSESTree.TSAsExpression).expression
+  }
+  return (
+    isStringLiteral(current) ||
+    (current.type === 'TemplateLiteral' && current.expressions.length === 0)
+  )
+}
+
+/**
  * True for the two shapes that build one name at run time: a template literal with a slot (unless
  * it is a single slot and nothing else, which is read as that slot), and a string `+` chain with
- * an operand that is not a string literal.
+ * an operand that is not a string literal (an expression-free template, or a literal through a
+ * TypeScript wrapper, is one).
  */
 export function isBuiltName(node: Node): boolean {
   if (node.type === 'TemplateLiteral') {
@@ -115,7 +130,7 @@ export function isBuiltName(node: Node): boolean {
   return (
     node.type === 'BinaryExpression' &&
     node.operator === '+' &&
-    concatOperands(node).some((operand) => !isStringLiteral(operand))
+    concatOperands(node).some((operand) => !isLiteralOperand(operand))
   )
 }
 
