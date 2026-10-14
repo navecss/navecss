@@ -4,7 +4,7 @@
  * finishes, an Escape close of a Menu, Context Menu or Popover popup is instant, and at rest a popup
  * carries no opacity, transform, scale or translate. The control is the same close with the
  * `-popup-motion` and `-popup-fade` rules taken out of the stylesheet, as a build without the
- * signature would have it: nothing animates and the popup is gone on the next frame.
+ * signature would have it: nothing animates and the popup is gone within a few frames.
  *
  * Read in a real engine, since only one runs a transition and reports it through `getAnimations()`.
  */
@@ -203,7 +203,7 @@ describe.each(popupCases)('AC-base-ui-overlay-completion-17: the $name popup', (
     }).toEqual({ opacity: '1', scale: 'none', transform: 'none', translate: 'none' })
   })
 
-  it('AC-base-ui-overlay-completion-17: without the signature the same close runs no animation and unmounts on the next frame (control)', async () => {
+  it('AC-base-ui-overlay-completion-17: without the signature the same close runs no animation and unmounts within a few frames (control)', async () => {
     const seen = start(withoutPopupFade())
     await open(popupCase.opening)
     const popup = await atRest()
