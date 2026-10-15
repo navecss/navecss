@@ -82,6 +82,21 @@ const allChangesets = (): Record<string, string>[] =>
     .filter((file) => file.endsWith('.md') && file !== 'README.md')
     .map((file) => releasesOf(readFileSync(path.join(ROOT, '.changeset', file), 'utf8')))
 
+const SIX_SUBPATHS = [
+  'alert-dialog',
+  'context-menu',
+  'menubar',
+  'preview-card',
+  'combobox',
+  'autocomplete',
+]
+
+/**
+The entries of a CHANGELOG section, one per changeset, keyed by its commit.
+ */
+const entriesOf = (section: string): string[] =>
+  section.split(/^(?=- [\da-f]{7,}: )/m).filter((entry) => /^- [\da-f]{7,}: /.test(entry))
+
 /**
 The CHANGELOG section of the release after the first, if there is one.
  */
@@ -102,7 +117,7 @@ describe('AC-base-ui-overlay-completion-38 (superseded by AC-base-ui-feedback-na
   )
 
   it.runIf(pending.length === 0)(
-    'was released as 0.2.0 from exactly one minor changeset, once the changeset is spent',
+    'was released as 0.2.0, with exactly one minor changeset that adds the six components among its entries, once the changeset is spent',
     () => {
       const section = secondReleaseSection()
       expect(
@@ -112,7 +127,13 @@ describe('AC-base-ui-overlay-completion-38 (superseded by AC-base-ui-feedback-na
       expect(section?.split('\n', 1)[0]?.trim()).toBe('0.2.0')
       expect(section).toContain('### Minor Changes')
       expect(section).not.toContain('### Major Changes')
-      expect(section?.match(/^- [\da-f]{7,}: /gm) ?? []).toHaveLength(1)
+      // The next release's changeset can have merged before this release was cut, and is then in the
+      // same section, so the entries are not counted: the one that adds the six is.
+      expect(
+        entriesOf(section ?? '').filter((entry) =>
+          SIX_SUBPATHS.every((subpath) => entry.includes(subpath)),
+        ),
+      ).toHaveLength(1)
     },
   )
 

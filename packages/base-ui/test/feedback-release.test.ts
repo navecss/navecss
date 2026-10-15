@@ -72,9 +72,12 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
     const pending = changesetsNaming(NAME)
     const changelog = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
 
-    it('has every pending changeset that names @navecss/base-ui name it alone with bump minor, and exactly one of them name the seven components', () => {
-      expect(changesetProblems(pending, NAME)).toEqual([])
-    })
+    it.runIf(pending.length > 0)(
+      'has every pending changeset that names @navecss/base-ui name it alone with bump minor, and exactly one of them name the seven components',
+      () => {
+        expect(changesetProblems(pending, NAME)).toEqual([])
+      },
+    )
 
     it("has the changeset that names the seven be a file of this pull request, not the overlay release's", () => {
       const own = pending.filter(({ text }) => hasTheSeven(text))
@@ -82,14 +85,18 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
     })
 
     it.runIf(pending.length === 0 && existsSync(changelog))(
-      'was released as a minor from exactly one changeset that names the seven components, once the changeset is spent',
+      'was released as a minor, with exactly one changeset that names the seven components among its entries, once the changeset is spent',
       () => {
         const sections = readFileSync(changelog, 'utf8').split(/^## /m).slice(1)
         const newest = sections[0] ?? ''
         expect(newest).toContain('### Minor Changes')
         expect(newest).not.toContain('### Major Changes')
-        expect(newest.match(/^- [\da-f]{7,}: /gm) ?? []).toHaveLength(1)
-        expect(hasTheSeven(newest)).toBe(true)
+        // One entry per changeset, keyed by its commit. An earlier changeset that was still pending
+        // when this one merged is released in the same section, so the entries are not counted.
+        const entries = newest
+          .split(/^(?=- [\da-f]{7,}: )/m)
+          .filter((entry) => /^- [\da-f]{7,}: /.test(entry))
+        expect(entries.filter((entry) => hasTheSeven(entry))).toHaveLength(1)
       },
     )
 
