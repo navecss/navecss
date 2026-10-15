@@ -674,6 +674,9 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
     const declared = await listing()
     const textTest = (n: number): (() => void) => {
       const code = make(n)
+      // A text the test matches is answered where the match is, whatever its size, and its
+      // growth would say nothing: every shape here must be read to its end and not match.
+      expect(isAboutListed({ code, id: `${ROOT}/src/m.ts` }, declared)).toBe(false)
       return () => isAboutListed({ code, id: `${ROOT}/src/m.ts` }, declared)
     }
     return leastGrowth(textTest, 4000)
@@ -685,7 +688,7 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
     ['a quote-free run of names and hashes', (n) => `\`${'/index#a'.repeat(n)}`],
     ['`from` followed by many spaces', (n) => `from${' '.repeat(n)}`],
     ['many `from` each followed by spaces', (n) => `from${' '.repeat(40)}`.repeat(n)],
-    ['many quotes each opening a long text', (n) => `'ui?${'x'.repeat(60)}`.repeat(n)],
+    ['many quotes each opening a long text', (n) => `'ui?${'x'.repeat(60)}\n`.repeat(n)],
   ]
 
   it.each(shapes)(
@@ -698,7 +701,7 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
 
   it('takes about twice as long for twice as many typical modules', async () => {
     const typical = [
-      "import { cx } from './ui'",
+      "import { cx } from './uix'",
       'const s = "it\'s"',
       'const t = `a ${s} b`',
       "export const x = 'a.b.c'.split('.')",
