@@ -69,6 +69,7 @@ function failureOf(records: [string, string[]][], kase: 'a' | 'b'): string {
       firstWriter: kase === 'a' ? 'client' : 'server',
       writers: new Set([kase === 'a' ? 'client' : 'prerender']),
       modules,
+      sheets: new Map<string, string>(),
     },
   } as unknown as UsedContext
   try {
@@ -174,7 +175,7 @@ const ASTRO_DEV_CSS_ID = '\0virtual:astro:dev-css:/src/pages/index.astro'
  * A plugin that serves the virtual modules `modules` (specifier to module text), each under a
  * resolved id of its own.
  */
-function virtualModules(modules: Record<string, { id: string; code: string }>): PluginOption {
+function virtualModules(modules: Record<string, { code: string; id: string }>): PluginOption {
   return {
     name: 'fixture-virtual',
     resolveId: (source) => modules[source]?.id,
@@ -187,7 +188,7 @@ function virtualModules(modules: Record<string, { id: string; code: string }>): 
  * modules.
  */
 async function servedAtoms(
-  modules: Record<string, { id: string; code: string }>,
+  modules: Record<string, { code: string; id: string }>,
 ): Promise<string[]> {
   const imports = Object.keys(modules).map((name) => `import '${name}'`)
   const app = makeUsedApp(
@@ -226,10 +227,17 @@ function writeMain(root: string, imports: string[]): void {
   writeFileSync(path.join(root, 'src/main.ts'), ['import "./app.css"', ...imports, ''].join('\n'))
 }
 
-const CSS_MODULE = (id: string): { id: string; code: string } => ({
+const CSS_MODULE = (id: string): { code: string; id: string } => ({
   id,
   code: `export const css = new Set([{ content: ".nave-grid{display:grid}" }])\n`,
 })
+/**
+ * Whether a text holds an id a host serialises its stylesheet under.
+ */
+function hasHostId(text: string): boolean {
+  return text.includes('virtual:astro') || text.includes('astro:dev-css')
+}
+
 const ORDINARY = { id: '\0virtual:ordinary', code: 'export const c = "nave-flex"\n' }
 
 describe('AC-astro-21 — a stylesheet a host serialised into JavaScript is left unread, by a general test', () => {
@@ -257,10 +265,10 @@ describe('AC-astro-21 — a stylesheet a host serialised into JavaScript is left
   it('has neither host id in the built package, and the check finds an id in a file holding it', () => {
     const files = readdirSync(path.join(CORE_ROOT, 'dist')).filter((name) => name.endsWith('.js'))
     expect(files.length).toBeGreaterThan(0)
-    const holding = (text: string): boolean =>
-      text.includes('virtual:astro') || text.includes('astro:dev-css')
-    for (const file of files)
-      expect(holding(readFileSync(path.join(CORE_ROOT, 'dist', file), 'utf8')), file).toBe(false)
-    expect(holding(`const id = '${ASTRO_DEV_CSS_ID}'`)).toBe(true)
+    for (const file of files) {
+      const text = readFileSync(path.join(CORE_ROOT, 'dist', file), 'utf8')
+      expect(hasHostId(text), file).toBe(false)
+    }
+    expect(hasHostId(`const id = '${ASTRO_DEV_CSS_ID}'`)).toBe(true)
   })
 })

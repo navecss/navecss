@@ -5,8 +5,8 @@
  */
 import { afterAll, describe, expect, it } from 'vitest'
 
-import type { PlainViteSettings } from './helpers/vite-cli.ts'
 import type { ScratchApp } from './helpers/vite-app.ts'
+import type { PlainViteSettings } from './helpers/vite-cli.ts'
 
 import { atomLayerAtoms, atoms } from './helpers/used-atoms-css.ts'
 import { cssFiles, plainViteApp, runViteBuild } from './helpers/vite-cli.ts'
@@ -22,9 +22,9 @@ afterAll(() => {
  */
 async function run(settings: PlainViteSettings): Promise<{
   app: ScratchApp
+  client: Record<string, string>
   code: number | null
   output: string
-  client: Record<string, string>
   server: Record<string, string>
 }> {
   const app = plainViteApp(settings)

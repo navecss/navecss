@@ -125,6 +125,7 @@ export interface DevServerLike {
 export interface EnvironmentLike {
   readonly name: string
   readonly config: {
+    readonly build?: { readonly emitAssets?: boolean }
     readonly command?: string
     readonly consumer: string
     readonly inlineConfig?: object
@@ -270,6 +271,17 @@ export interface BundleEntry {
   readonly type: string
   readonly fileName: string
   readonly source?: string | Uint8Array
+  /**
+   * The names an asset was emitted under, and the files it was made from: they survive a
+   * renaming of the file.
+   */
+  readonly names?: readonly string[]
+  readonly originalFileNames?: readonly string[]
+  /**
+   * What a chunk holds, and the stylesheets it imports.
+   */
+  readonly modules?: Readonly<Record<string, unknown>>
+  readonly viteMetadata?: { readonly importedCss?: ReadonlySet<string> }
 }
 
 export interface TransformResultLike {

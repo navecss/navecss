@@ -4,11 +4,9 @@
  * client output and the `<style>` elements of the pages it prerendered.
  */
 import { build as astroBuild } from 'astro'
-import { spawn } from 'node:child_process'
 import { readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
-import { createServer } from 'node:net'
-import type { AddressInfo } from 'node:net'
 import path from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 
 import type { AstroApp } from './astro-app.ts'
 
@@ -49,16 +47,14 @@ async function captured(work: () => Promise<void>): Promise<{ error: unknown; te
   let error: unknown
   try {
     await work()
-  } catch (caught) {
-    error = caught
+  } catch (error_) {
+    error = error_
   } finally {
     process.stdout.write = out
     process.stderr.write = err
   }
   return { error, text: chunks.join('') }
 }
-
-const ANSI = /\u001B\[[\d;]*m/g
 
 /**
  * The message of an error `build()` rejected with.
@@ -68,10 +64,17 @@ function messageOf(error: unknown): string {
 }
 
 /**
+ * Turns Astro's telemetry off for this process.
+ */
+export function disableTelemetry(): void {
+  process.env.ASTRO_TELEMETRY_DISABLED = '1'
+}
+
+/**
  * Builds `app` from a clean output directory, with telemetry off.
  */
 export async function buildAstro(app: AstroApp): Promise<AstroBuilt> {
-  process.env['ASTRO_TELEMETRY_DISABLED'] = '1'
+  disableTelemetry()
   const dist = path.join(app.root, 'dist')
   rmSync(dist, { force: true, recursive: true })
   const { error, text } = await captured(() => astroBuild({ root: app.root, logLevel: 'info' }))
@@ -79,7 +82,10 @@ export async function buildAstro(app: AstroApp): Promise<AstroBuilt> {
   const server = app.settings.server === true ? path.join(dist, 'server') : undefined
   return {
     error: failure,
-    output: [text.replaceAll(ANSI, ''), failure?.replaceAll(ANSI, '')].filter(Boolean).join('\n'),
+    output: [text, failure ?? '']
+      .map((part) => stripVTControlCharacters(part))
+      .filter(Boolean)
+      .join('\n'),
     client: app.settings.server === true ? path.join(dist, 'client') : dist,
     server,
   }
@@ -91,14 +97,15 @@ export async function buildAstro(app: AstroApp): Promise<AstroBuilt> {
 export function filesUnder(directory: string): string[] {
   const found: string[] = []
   const visit = (relative: string): void => {
-    for (const name of readdirSync(path.join(directory, relative))) {
+    const names = readdirSync(path.join(directory, relative))
+    for (const name of names) {
       const next = path.join(relative, name)
       if (statSync(path.join(directory, next)).isDirectory()) visit(next)
       else found.push(next)
     }
   }
   visit('')
-  return found.toSorted()
+  return found.toSorted((a, b) => a.localeCompare(b))
 }
 
 /**
@@ -123,14 +130,20 @@ export function layerSheets(built: AstroBuilt): LayerSheet[] {
     const text = readFileSync(path.join(built.client, file), 'utf8')
     if (file.endsWith('.css') && text.includes('@layer atomic'))
       sheets.push({ name: file, css: text })
-    if (file.endsWith('.html')) {
-      for (const match of text.matchAll(STYLE_ELEMENT)) {
-        if (match[1]!.includes('@layer atomic'))
-          sheets.push({ name: `${file}#style`, css: match[1]!, page: file })
-      }
-    }
+    if (file.endsWith('.html')) sheets.push(...inlineLayerSheets(file, text))
   }
   return sheets
+}
+
+/**
+ * The `<style>` elements of the page `file` (its HTML is `text`) that hold the atomic layer.
+ */
+function inlineLayerSheets(file: string, text: string): LayerSheet[] {
+  return text
+    .matchAll(STYLE_ELEMENT)
+    .filter((match) => match[1]!.includes('@layer atomic'))
+    .map((match) => ({ name: `${file}#style`, css: match[1]!, page: file }))
+    .toArray()
 }
 
 /**
@@ -170,7 +183,7 @@ export function stylesOf(built: AstroBuilt, html: string): PageStyle[] {
       continue
     }
     const href = /\bhref="([^"]+)"/.exec(text)?.[1]
-    if (href === undefined || !href.startsWith('/')) continue
+    if (!href?.startsWith('/')) continue
     const file = path.join(built.client, href.slice(1))
     styles.push({ kind: 'linked', name: href.slice(1), css: readFileSync(file, 'utf8') })
   }
@@ -183,90 +196,4 @@ export function stylesOf(built: AstroBuilt, html: string): PageStyle[] {
 export function prerenderedHtml(built: AstroBuilt, route: string): string {
   const relative = route === '/' ? 'index.html' : path.join(route.replace(/^\//, ''), 'index.html')
   return readFileSync(path.join(built.client, relative), 'utf8')
-}
-
-export interface Served {
-  readonly url: string
-  /**
-   * The text of `route`, fetched from the server.
-   */
-  text(route: string): Promise<string>
-  stop(): Promise<void>
-}
-
-/**
- * Starts the standalone Node server a server build wrote, on a free port, and resolves once it
- * listens.
- */
-export async function serveServerBuild(app: AstroApp): Promise<Served> {
-  const port = await freePort()
-  const child = spawn(process.execPath, [path.join(app.root, 'dist', 'server', 'entry.mjs')], {
-    cwd: app.root,
-    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), ASTRO_TELEMETRY_DISABLED: '1' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-  let printed = ''
-  child.stdout.on('data', (chunk: Buffer) => {
-    printed += chunk.toString()
-  })
-  child.stderr.on('data', (chunk: Buffer) => {
-    printed += chunk.toString()
-  })
-  const url = `http://127.0.0.1:${port}`
-  for (let waited = 0; waited < 20_000; waited += 100) {
-    if (child.exitCode !== null) throw new Error(`the server exited: ${printed}`)
-    try {
-      await fetch(url)
-      break
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
-  }
-  return {
-    url,
-    text: async (route) => (await fetch(`${url}${route}`)).text(),
-    stop: async () => {
-      child.kill()
-      await new Promise((resolve) => child.once('exit', resolve))
-    },
-  }
-}
-
-/**
- * A port nothing listens on.
- */
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const probe = createServer()
-    probe.once('error', reject)
-    probe.listen(0, '127.0.0.1', () => {
-      const { port } = probe.address() as AddressInfo
-      probe.close(() => {
-        resolve(port)
-      })
-    })
-  })
-}
-
-/**
- * The stylesheets holding the atomic layer that `routes` load, with the route each came from, in
- * document order. A static project is read from the prerendered pages; a server project is
- * started, and each route is fetched from it.
- */
-export async function layerStylesOfRoutes(
-  app: AstroApp,
-  built: AstroBuilt,
-  routes: readonly string[],
-): Promise<Record<string, PageStyle[]>> {
-  const result: Record<string, PageStyle[]> = {}
-  const server = app.settings.server === true ? await serveServerBuild(app) : undefined
-  try {
-    for (const route of routes) {
-      const html = server ? await server.text(route) : prerenderedHtml(built, route)
-      result[route] = stylesOf(built, html).filter((style) => style.css.includes('@layer atomic'))
-    }
-  } finally {
-    await server?.stop()
-  }
-  return result
 }

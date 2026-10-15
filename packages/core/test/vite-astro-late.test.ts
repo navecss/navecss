@@ -1,22 +1,18 @@
+/* eslint-disable unicorn/no-incorrect-template-string-interpolation -- the fixture texts below are source text: `{a}` and `{root}` are JSX and Astro attribute braces in it, not a mistyped interpolation */
 /**
  * The Astro criteria for what is read after the stylesheet is written (AC-astro-03, -08, -09, -11,
  * -13, -15, -17, -18, -29, -31): code only the browser runs, a dependency the server build left
  * external, a check of every stylesheet Astro ships, and a skip link in an `.astro` layout.
  */
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 
-import type { AstroApp, AstroAppSettings } from './helpers/astro-app.ts'
+import type { AstroApp, AstroAppSettings, Patch } from './helpers/astro-app.ts'
 import type { AstroBuilt } from './helpers/astro-build.ts'
 
-import {
-  BASE_FILES,
-  LEAN_FILES,
-  makeAstroApp,
-  NO_RENAME_FILES,
-  PRERENDERED_FILES,
-  SERVER_FILES,
-} from './helpers/astro-app.ts'
-import { buildAstro, layerStylesOfRoutes } from './helpers/astro-build.ts'
+import { makeAstroApp } from './helpers/astro-app.ts'
+import { buildAstro } from './helpers/astro-build.ts'
 import {
   ALL_ATOMS,
   BROWSER_KEEP,
@@ -26,6 +22,14 @@ import {
   setOfCss,
   unique,
 } from './helpers/astro-checks.ts'
+import {
+  BASE_FILES,
+  LEAN_FILES,
+  NO_RENAME_FILES,
+  PRERENDERED_FILES,
+  SERVER_FILES,
+} from './helpers/astro-files.ts'
+import { layerStylesOfRoutes } from './helpers/astro-serve.ts'
 
 const apps: AstroApp[] = []
 
@@ -59,20 +63,24 @@ function place(source: string, needle: string): string {
   return `${lines.length}:${lines.at(-1)!.length + 1}`
 }
 
+/**
+ * `about.astro` with a `client:only` island that calls `cx(variant)` added.
+ */
+function aboutWithOnlyBad(about: string): string {
+  return about
+    .replace(
+      "import Layout from '../layouts/Layout.astro'",
+      "import Layout from '../layouts/Layout.astro'\nimport OnlyBad from '../components/OnlyBad.tsx'",
+    )
+    .replace(
+      '<a id="to-index"',
+      '<OnlyBad client:only="react" variant="flex" />\n  <a id="to-index"',
+    )
+}
+
 describe('AC-astro-03 — an unreadable cx() call in an .astro file, or read late by the browser’s build, fails at its file, line and column', () => {
   const BAD = `---\n${IMPORT}const { tone } = Astro.props\nconst a = cx(tone)\n---\n<div class={cx(Astro.props.tone)}>{a}</div>\n`
   const ONLY_BAD = `${IMPORT}export default function OnlyBad({ variant }: { variant: string }) {\n  return <div className={cx(variant)}>x</div>\n}\n`
-  const ABOUT_WITH_ONLY_BAD = (about: string): string =>
-    about
-      .replace(
-        "import Layout from '../layouts/Layout.astro'",
-        "import Layout from '../layouts/Layout.astro'\nimport OnlyBad from '../components/OnlyBad.tsx'",
-      )
-      .replace(
-        '<a id="to-index"',
-        '<OnlyBad client:only="react" variant="flex" />\n  <a id="to-index"',
-      )
-
   it.each(OUTPUTS)(
     '%s: both states fail at the argument of the call, and pass with a literal',
     async (_name, settings) => {
@@ -82,9 +90,10 @@ describe('AC-astro-03 — an unreadable cx() call in an .astro file, or read lat
         files: { 'src/pages/bad.astro': BAD },
       })
       expect(first.result.error).toBeDefined()
-      const found = [
-        ...first.result.output.matchAll(/^src\/pages\/bad\.astro:(\d+):(\d+): /gm),
-      ].map((match) => ({ line: Number(match[1]), column: Number(match[2]) }))
+      const found = first.result.output
+        .matchAll(/^src\/pages\/bad\.astro:(\d+):(\d+): /gm)
+        .map((match) => ({ line: Number(match[1]), column: Number(match[2]) }))
+        .toArray()
       const [frontmatter, template] = [place(BAD, 'tone)'), place(BAD, 'Astro.props.tone)')].map(
         (at) => {
           const [line, column] = at.split(':').map(Number)
@@ -93,8 +102,8 @@ describe('AC-astro-03 — an unreadable cx() call in an .astro file, or read lat
       )
       // The line is exact for both calls; the template call’s column is its argument’s, and the
       // frontmatter call’s is where Astro’s source map leads, never past its argument.
-      expect(unique(found.map((one) => `${one.line}`))).toEqual(
-        [`${frontmatter!.line}`, `${template!.line}`].toSorted(),
+      expect(unique(found.map((one) => String(one.line)))).toEqual(
+        [String(frontmatter!.line), String(template!.line)].toSorted((a, b) => a.localeCompare(b)),
       )
       const atTemplate = found.find((one) => one.line === template!.line)!
       expect(atTemplate.column).toBe(template!.column)
@@ -109,7 +118,7 @@ describe('AC-astro-03 — an unreadable cx() call in an .astro file, or read lat
         options: BROWSER_KEEP,
         files: {
           'src/components/OnlyBad.tsx': ONLY_BAD,
-          'src/pages/about.astro': ABOUT_WITH_ONLY_BAD(about),
+          'src/pages/about.astro': aboutWithOnlyBad(about),
         },
       })
       expect(second.result.error).toBeDefined()
@@ -128,8 +137,8 @@ describe('AC-astro-03 — an unreadable cx() call in an .astro file, or read lat
             'cx(Astro.props.tone)',
             "cx('grid')",
           ),
-          'src/components/OnlyBad.tsx': ONLY_BAD.replace('cx(variant)', "cx('flex')"),
-          'src/pages/about.astro': ABOUT_WITH_ONLY_BAD(about),
+          'src/components/OnlyBad.tsx': ONLY_BAD.replace('cx(variant)', "cx('wFull')"),
+          'src/pages/about.astro': aboutWithOnlyBad(about),
         },
       })
       expect(fixed.result.error).toBeUndefined()
@@ -137,6 +146,24 @@ describe('AC-astro-03 — an unreadable cx() call in an .astro file, or read lat
     SECOND * 2,
   )
 })
+
+/**
+ * The scratch copy whose collect half forgets the set when any client environment starts, as the
+ * plugin did before it knew who wrote first.
+ */
+const FORGETS_AT_CLIENT_START: Patch = {
+  file: 'vite-collect-plugin.ts',
+  from: 'if (isWriter) forgetWriters(context.state)',
+  to: "if (this.environment.config.consumer === 'client') forgetWriters(context.state)",
+}
+/**
+ * The scratch copy that never reads a bundle before the other plugins have.
+ */
+const NO_FIRST_PASS: Patch = {
+  file: 'vite-collect-plugin.ts',
+  from: "checkBundle(this, context, { bundle, options, pass: 'pre' })",
+  to: 'void [bundle, options]',
+}
 
 const SERVER_RENDERED = ['grid', 'justifyCenter', 'flexWrap', 'itemsEnd']
 const MISS_LINES = [
@@ -170,6 +197,20 @@ describe('AC-astro-08 — code only the browser runs fails the build in case (b)
   )
 })
 
+describe('AC-astro-08 — the control: a copy that forgets the set at the client’s start passes the miss in silence', () => {
+  it(
+    'builds green with the three atoms in no stylesheet',
+    async () => {
+      const { app, result } = await built({ scratch: [FORGETS_AT_CLIENT_START] })
+      expect(result.error).toBeUndefined()
+      const pages = await layerStylesOfRoutes(app, result, ['/'])
+      const set = unique(pages['/']!.flatMap((style) => setOfCss(style.css)))
+      for (const atom of BROWSER_ONLY) expect(set).not.toContain(atom)
+    },
+    SECOND,
+  )
+})
+
 const ISLAND_LIB = {
   'island-lib': {
     'package.json': JSON.stringify({
@@ -183,6 +224,7 @@ const ISLAND_LIB = {
   },
 }
 const LOAD_WITH_LIB = `import { useEffect, useRef } from 'react'
+import { cx } from '@navecss/core/cx'
 import { cls } from 'island-lib'
 
 export default function Load() {
@@ -191,7 +233,7 @@ export default function Load() {
     root.current?.setAttribute('data-hydrated', '')
   }, [])
   return (
-    <div ref={root} id="load" className={cls()}>
+    <div ref={root} id="load" className={cx('grid') + ' ' + cls()}>
       Load
     </div>
   )
@@ -296,12 +338,14 @@ describe('AC-astro-11 — in case (b) the untransformed-dependency warning names
       expect(warned.result.error).toBeUndefined()
       expect(warned.result.output.split(WARNING).length - 1).toBe(1)
       const pages = await layerStylesOfRoutes(warned.app, warned.result, ['/'])
-      for (const style of pages['/']!) expect(setOfCss(style.css)).not.toContain('flexGrow')
+      const warnedStyles = pages['/']!
+      for (const style of warnedStyles) expect(setOfCss(style.css)).not.toContain('flexGrow')
 
       const fixed = await built({ ...settings, vite: "resolve: { noExternal: ['server-lib'] }" })
       expect(fixed.result.output).not.toContain('depends on @navecss/core')
       const fixedPages = await layerStylesOfRoutes(fixed.app, fixed.result, ['/'])
-      for (const style of fixedPages['/']!) expect(setOfCss(style.css)).toContain('flexGrow')
+      const fixedStyles = fixedPages['/']!
+      for (const style of fixedStyles) expect(setOfCss(style.css)).toContain('flexGrow')
 
       const control = await built({ ...settings, vite: "ssr: { noExternal: ['server-lib'] }" })
       expect(control.result.output.split(WARNING).length - 1).toBe(1)
@@ -310,15 +354,45 @@ describe('AC-astro-11 — in case (b) the untransformed-dependency warning names
   )
 })
 
+describe('AC-astro-12 — on Astro, the keepFor take warning is reached and names resolve.noExternal', () => {
+  it(
+    'prints the case (b) text for a listed package the server leaves external',
+    async () => {
+      const index = BASE_FILES['src/pages/index.astro']!.replace(
+        'import Load from',
+        "import { cls } from 'server-lib'\nimport { x } from 'server-lib/extra.js'\nimport Load from",
+      ).replace('<p id="s">s</p>', '<p id="s" class={cls() + x}>s</p>')
+      const { result } = await built({
+        options:
+          "{ keep: ['inlineFlex', 'wFull', 'truncate'], keepFor: { 'server-lib': ['flexGrow'] } }",
+        files: { 'src/pages/index.astro': index },
+        packages: {
+          'server-lib': { ...SERVER_LIB['server-lib'], 'extra.js': 'export const x = 1\n' },
+        },
+      })
+      expect(result.error).toBeUndefined()
+      expect(result.output).toContain(
+        "server-lib, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/pages/index.astro imports 'server-lib', which the server loads as node_modules/server-lib/index.js, a file no environment of this build transforms; src/pages/index.astro imports 'server-lib/extra.js', which the server loads as node_modules/server-lib/extra.js, a file no environment of this build transforms. Add server-lib to resolve.noExternal in your Vite config (on Astro, under vite in astro.config) so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead.",
+      )
+    },
+    SECOND,
+  )
+})
+
+/**
+ * A file of the fixture, the server rows' and the prerendered page's included.
+ */
+function fixtureFile(name: string): string {
+  return { ...BASE_FILES, ...SERVER_FILES, ...PRERENDERED_FILES }[name]!
+}
+
 const PERSIST = `${IMPORT}export default function Persist() {\n  return <div id="persist" className={cx('noWrap')}>Persist</div>\n}\n`
 
 describe('AC-astro-13 — the late check is against the first stylesheet, for code only the browser runs', () => {
   it(
     'names noWrap and Persist, and leaves a module a server environment read alone',
     async () => {
-      const read = (name: string): string =>
-        ({ ...BASE_FILES, ...SERVER_FILES, ...PRERENDERED_FILES })[name]!
-      const dyn = read('src/pages/dyn.astro')
+      const dyn = fixtureFile('src/pages/dyn.astro')
       const files = {
         ...NO_RENAME_FILES,
         'src/components/Persist.tsx': PERSIST,
@@ -343,13 +417,13 @@ describe('AC-astro-13 — the late check is against the first stylesheet, for co
         options: BROWSER_KEEP,
         files: {
           'src/lib/shared.ts': `${IMPORT}export const shared = cx('itemsStart')\n`,
-          'src/components/OnlyIsland.tsx': read('src/components/OnlyIsland.tsx')
+          'src/components/OnlyIsland.tsx': fixtureFile('src/components/OnlyIsland.tsx')
             .replace(
               "import { cx } from '@navecss/core/cx'",
               "import { cx } from '@navecss/core/cx'\nimport { shared } from '../lib/shared.ts'",
             )
             .replace("className={cx('inlineFlex')}", "className={cx('inlineFlex') + ' ' + shared}"),
-          'src/pages/index.astro': read('src/pages/index.astro')
+          'src/pages/index.astro': fixtureFile('src/pages/index.astro')
             .replace(
               'import Layout from',
               "import { shared } from '../lib/shared.ts'\nimport Layout from",
@@ -360,7 +434,8 @@ describe('AC-astro-13 — the late check is against the first stylesheet, for co
       expect(shared.result.output).not.toContain('names itemsStart')
       expect(shared.result.error).toBeUndefined()
       const pages = await layerStylesOfRoutes(shared.app, shared.result, ['/'])
-      for (const style of pages['/']!) expect(setOfCss(style.css)).toContain('itemsStart')
+      const styles = pages['/']!
+      for (const style of styles) expect(setOfCss(style.css)).toContain('itemsStart')
     },
     SECOND * 3,
   )
@@ -376,12 +451,12 @@ describe('AC-astro-15 — the check runs on every stylesheet a case (b) environm
       { files: LEAN_FILES, probe: { tamper: { css: TAMPER, match: 'lean' } } },
     ],
     [
-      'a stylesheet ssr emits that prerender did not (no-rename shape)',
+      'a stylesheet only ssr built (no-rename shape)',
       {
         server: true,
         prerendered: true,
-        files: NO_RENAME_FILES,
-        probe: { tamper: { css: TAMPER, environment: 'ssr' } },
+        files: { ...NO_RENAME_FILES, ...LEAN_FILES },
+        probe: { tamper: { css: TAMPER, environment: 'ssr', match: 'lean' } },
       },
     ],
   ]
@@ -397,6 +472,26 @@ describe('AC-astro-15 — the check runs on every stylesheet a case (b) environm
       expect(clean.result.error).toBeUndefined()
     },
     SECOND * 2,
+  )
+})
+
+describe('AC-astro-19 — the second pass stays, and a stylesheet both passes read counts once', () => {
+  it(
+    'counts the CSS assets of the build once in the survivor report',
+    async () => {
+      const page = `---\nimport Layout from '../layouts/Layout.astro'\n---\n<Layout><p class="surv2">s</p></Layout>\n<style>\n  .surv2 {\n    color: @nave flex;\n  }\n</style>\n`
+      const { result } = await built({
+        options: BROWSER_KEEP,
+        files: { 'src/pages/surv.astro': page },
+      })
+      expect(result.error).toBeDefined()
+      const counted = /Scanned (\d+) CSS assets? this build wrote\./.exec(result.output)
+      expect(counted, 'the report states how many CSS assets the build wrote').not.toBeNull()
+      // The shared stylesheet and the page's own, which Astro inlines between the two passes: each is
+      // one asset the build wrote, though the first pass read both and the second only one.
+      expect(Number(counted![1])).toBe(2)
+    },
+    SECOND,
   )
 })
 
@@ -429,6 +524,25 @@ describe('AC-astro-17 — a @nave left in a small page <style> fails the build, 
   )
 })
 
+describe('AC-astro-17 — the control: a copy with no first pass lets a @nave in a small page style through', () => {
+  it(
+    'builds green and leaves @nave flex in the page',
+    async () => {
+      const page = `---\nimport Layout from '../layouts/Layout.astro'\n---\n<Layout><p class="surv2">s</p></Layout>\n<style>\n  .surv2 {\n    color: @nave flex;\n  }\n</style>\n`
+      const { app, result } = await built({
+        options: BROWSER_KEEP,
+        files: { 'src/pages/surv.astro': page },
+        scratch: [NO_FIRST_PASS],
+      })
+      expect(result.error).toBeUndefined()
+      expect(readFileSync(path.join(app.root, 'dist/surv/index.html'), 'utf8')).toContain(
+        '@nave flex',
+      )
+    },
+    SECOND,
+  )
+})
+
 describe('AC-astro-18 — a pruned atom layer Astro inlines is filtered and checked like a linked one', () => {
   it(
     'holds the same set as the linked stylesheet and passes parity',
@@ -454,4 +568,20 @@ describe('AC-astro-18 — a pruned atom layer Astro inlines is filtered and chec
   )
 })
 
-export { BROWSER_ONLY, unique }
+describe('AC-astro-18 — the control: a copy with no first pass leaves the inlined layer unchecked', () => {
+  it(
+    'builds green with a rule for an atom nobody emitted in /lean',
+    async () => {
+      const { app, result } = await built({
+        options: BROWSER_KEEP,
+        files: LEAN_FILES,
+        probe: { tamper: { css: TAMPER, match: 'lean' } },
+        scratch: [NO_FIRST_PASS],
+      })
+      expect(result.error).toBeUndefined()
+      const pages = await layerStylesOfRoutes(app, result, ['/lean'])
+      expect(setOfCss(pages['/lean']![0]!.css)).toContain('hidden')
+    },
+    SECOND,
+  )
+})

@@ -37,19 +37,20 @@ import type {
 } from './vite-types.ts'
 
 import { type Assembled, shareAcrossBuilds } from './vite-builds.ts'
+import { checkBundle } from './vite-bundle.ts'
 import { createCollectPlugin } from './vite-collect-plugin.ts'
 import { usedConfig, usedEnvironmentConfig } from './vite-config-hooks.ts'
 import { captureStylesheets } from './vite-css-capture.ts'
 import { devServing, serveStylesheet } from './vite-dev.ts'
-import { checkAtomicLayers, refeedChunkStylesheets, warnTextImports } from './vite-emit.ts'
-import { emittedSet } from './vite-emitted.ts'
+import { refeedChunkStylesheets, warnTextImports } from './vite-emit.ts'
+import { canWriteStylesheets, emittedSet } from './vite-emitted.ts'
 import { createExtendSource, type ExtendSource } from './vite-extend.ts'
 import { dropLightningNaveWarning } from './vite-logger.ts'
 import { assertOptions, resolveUsedOptions } from './vite-options.ts'
-import { scanBundle } from './vite-scan.ts'
 import { serverHooks } from './vite-server-hooks.ts'
 import { createStylesheets } from './vite-stylesheets.ts'
 import { configureUsed, createUsedContext, isUsed } from './vite-used.ts'
+import { stylesheetsLeftWhole, withoutWhole } from './vite-whole.ts'
 
 export interface NaveViteOptions extends UsedAtomOptions {
   /**
@@ -156,27 +157,19 @@ function assemble(options: NaveViteOptions, extend: ExtendSource): Assembled {
     },
 
     async renderChunk(_code, chunk) {
-      if (!isUsed(context) || this.environment.config.consumer !== 'client') return
+      if (!isUsed(context) || !canWriteStylesheets(context, this.environment)) return
       const emitted = emittedSet(context, this.environment, (message) => {
         this.warn(message)
       })
-      await refeedChunkStylesheets(this, chunk, context.state, emitted)
+      const fed = withoutWhole(chunk, stylesheetsLeftWhole(context, this.environment, chunk))
+      await refeedChunkStylesheets(this, fed, context.state, emitted)
       warnTextImports(this, chunk, context, emitted)
     },
 
     generateBundle: {
       order: 'post',
-      handler(_options, bundle) {
-        if (isUsed(context) && this.environment?.config.consumer === 'client') {
-          checkAtomicLayers(
-            this,
-            bundle,
-            emittedSet(context, this.environment, (message) => {
-              this.warn(message)
-            }),
-          )
-        }
-        scanBundle(this, bundle)
+      handler(options, bundle) {
+        checkBundle(this, context, { bundle, options, pass: 'post' })
       },
     },
   }

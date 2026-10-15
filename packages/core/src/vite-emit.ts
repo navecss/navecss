@@ -161,56 +161,79 @@ function textOf(entry: BundleEntry): string {
 }
 
 /**
- * What is wrong with the atomic layers of the CSS assets, in words: a rule for an atom that was
- * not emitted, in any asset, and an emitted atom that no asset carrying a layer has a rule for
- * (a layer may be split across assets, and a layer of the consumer's own holds no atom at all).
+ * What a bundle's CSS assets say about the atomic layer, by asset: the atoms an asset that carries
+ * a layer has a rule for (a layer of the consumer's own holds no atom), and the line for a rule of
+ * an atom that was not emitted. An asset with no layer is not in it.
  */
-function mismatchLines(
-  assets: readonly { css: string; fileName: string }[],
+export type LayerReading = Map<
+  string,
+  { readonly extra: string | undefined; readonly seen: ReadonlySet<string> }
+>
+
+/**
+ * Reads the atomic layers of the CSS assets of `bundle` against the emitted set.
+ */
+export function readLayers(
+  bundle: Readonly<Record<string, BundleEntry>>,
   emitted: ReadonlySet<string>,
-): string[] {
-  const lines: string[] = []
-  const seenAnywhere = new Set<string>()
-  let hasLayer = false
+): LayerReading {
+  const reading: LayerReading = new Map()
+  const assets = Object.values(bundle)
+    .filter((entry) => entry.type === 'asset' && entry.fileName.toLowerCase().endsWith('.css'))
+    .map((entry) => ({ fileName: entry.fileName, css: textOf(entry) }))
   for (const { fileName, css } of assets) {
     const seen = inspectAtomicLayer(css)
     if (!seen.hasLayer) continue
-    hasLayer = true
-    for (const atom of seen.atoms) seenAnywhere.add(atom)
     const extra = unprunedAtoms(css, emitted)
-    if (extra.length > 0) {
-      lines.push(
-        `${fileName}: the atomic layer holds a rule for ${extra.join(', ')}, which the build did not emit.`,
-      )
-    }
+    reading.set(fileName, {
+      seen: new Set(seen.atoms),
+      extra:
+        extra.length > 0
+          ? `${fileName}: the atomic layer holds a rule for ${extra.join(', ')}, which the build did not emit.`
+          : undefined,
+    })
   }
+  return reading
+}
+
+/**
+ * What is wrong with the atomic layers, in words: a rule for an atom that was not emitted, in any
+ * asset, and an emitted atom that no asset carrying a layer has a rule for (a layer may be split
+ * across assets).
+ */
+export function mismatchLines(reading: LayerReading, emitted: ReadonlySet<string>): string[] {
+  const assets = reading.values().toArray()
+  const lines = assets.flatMap((asset) => (asset.extra ? [asset.extra] : []))
+  const seenAnywhere = new Set(assets.flatMap((asset) => [...asset.seen]))
   const missing = [...emitted.difference(seenAnywhere)]
-  if (hasLayer && missing.length > 0) {
+  if (reading.size > 0 && missing.length > 0) {
     lines.push(`the atomic layers hold no rule for ${missing.join(', ')}, which the build emitted.`)
   }
   return lines
 }
 
 /**
- * Fails the build when a CSS asset's atomic layer does not hold exactly the emitted atoms: the
+ * The failure when a CSS asset's atomic layer does not hold exactly the emitted atoms: the
  * substitution did not take on this Vite, and the stylesheet would ship wrong. Text outside
  * `@layer atomic` is not examined.
+ */
+export function layerMessage(lines: readonly string[]): string {
+  return [
+    'nave: the built CSS does not hold exactly the atoms the build emitted, so the plugin could not remove the unused ones on this version of Vite.',
+    ...lines,
+    "Ship every atom with atomic: 'all' in navePlugin() until the plugin supports this version of Vite.",
+  ].join('\n')
+}
+
+/**
+ * Fails the build when a CSS asset's atomic layer does not hold exactly the emitted atoms, reading
+ * the bundle once.
  */
 export function checkAtomicLayers(
   ctx: BundleContext,
   bundle: Readonly<Record<string, BundleEntry>>,
   emitted: ReadonlySet<string>,
 ): void {
-  const assets = Object.values(bundle)
-    .filter((entry) => entry.type === 'asset' && entry.fileName.toLowerCase().endsWith('.css'))
-    .map((entry) => ({ fileName: entry.fileName, css: textOf(entry) }))
-  const lines = mismatchLines(assets, emitted)
-  if (lines.length === 0) return
-  ctx.error({
-    message: [
-      'nave: the built CSS does not hold exactly the atoms the build emitted, so the plugin could not remove the unused ones on this version of Vite.',
-      ...lines,
-      "Ship every atom with atomic: 'all' in navePlugin() until the plugin supports this version of Vite.",
-    ].join('\n'),
-  })
+  const lines = mismatchLines(readLayers(bundle, emitted), emitted)
+  if (lines.length > 0) ctx.error({ message: layerMessage(lines) })
 }
