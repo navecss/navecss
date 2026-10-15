@@ -161,6 +161,8 @@ describe('AC-consumer-constraints-36', () => {
 
   it(
     'at stylelint exactly 16.17.0 the fence gives the same results, while at 16.16.0 @nave is still reported (the floor control)',
+    // Two installs and two stylelint runs from a cold start: about 7 s alone, 27 s on a busy
+    // machine, and 55 s when the run is given a twentieth of a CPU.
     { timeout: 120_000 },
     () => {
       // Each version gets its OWN fresh directory: `stylelint-config-standard@40` pins a
@@ -185,10 +187,23 @@ describe('AC-consumer-constraints-36', () => {
           writeFileSync(path.join(scratch, 'test.css'), '.a { @nave interactive; }')
           writeFileSync(path.join(scratch, '.stylelintrc.json'), config)
 
-          execFileSync('npm', ['install', '--ignore-scripts', `stylelint@${version}`], {
-            cwd: scratch,
-            encoding: 'utf8',
-          })
+          // Once npm's cache is older than the registry's few minutes of freshness, a plain install
+          // asks the registry again about each of stylelint's hundred or so packages and posts an
+          // audit, which on a slow network outlasts this test's budget. `--prefer-offline` reads
+          // what the cache already holds and asks only for what it lacks; the audit and the
+          // funding notice are never read here. The stylelint version is pinned either way.
+          execFileSync(
+            'npm',
+            [
+              'install',
+              '--ignore-scripts',
+              '--prefer-offline',
+              '--no-audit',
+              '--no-fund',
+              `stylelint@${version}`,
+            ],
+            { cwd: scratch, encoding: 'utf8' },
+          )
           const [fileResult] = stylelintJsonReport(scratch)
           const isReported = fileResult!.warnings.some((w) => w.rule === 'at-rule-no-unknown')
           expect(isReported, `stylelint ${version}`).toBe(expectReported)

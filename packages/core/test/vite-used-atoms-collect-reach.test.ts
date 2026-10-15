@@ -693,7 +693,10 @@ const COUNT = 500_000
 const wide = (value: string): string =>
   `${IMPORT}export const a = cx('flex')\nexport const data = ${value}\n`
 
-describe('a module wider than the argument limit of a call is read', () => {
+// Each row parses and reads a module of `COUNT` elements: about 2 s alone, and 20 s on a busy CI
+// runner, past the shared 20 s budget. The width is the point of the rows (it must stay well past
+// the argument limit of a call, which depends on the stack), so they state their own budget.
+describe('a module wider than the argument limit of a call is read', { timeout: 60_000 }, () => {
   it.each([
     ['an array of elements', `[${'1,'.repeat(COUNT)}]`],
     ['a call of arguments', `String(${'1,'.repeat(COUNT)})`],
