@@ -2,9 +2,10 @@
 /**
  * The README text feedback owes, each item held as a literal (Markdown source, no trailing newline)
  * with the UTF-8 length and the first sixteen hex digits of the sha256 that the spec's tables give
- * it. The lengths and prefixes are the spec's, not computed from the text: the test that reads
- * this module computes both from the text and compares. The texts are the reader's items and the
- * cleared sentences, byte for byte.
+ * it. The lengths and prefixes are the spec's, not computed from the text, except the two D13c
+ * blocks: their conditions name the build's draft ids, so their lengths and prefixes were computed
+ * from this text and pin it. The test that reads this module computes both from the text and
+ * compares. The texts are the reader's items and the cleared sentences, byte for byte.
  */
 import type { Literal } from './w9-sentences.ts'
 
