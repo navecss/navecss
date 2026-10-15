@@ -10,7 +10,7 @@ import path from 'node:path'
 
 import type { ScratchApp } from './vite-app.ts'
 
-import { APP_CSS, appFiles, makeUsedApp } from './used-atoms-app.ts'
+import { addPackage, APP_CSS, appFiles, makeUsedApp } from './used-atoms-app.ts'
 
 export interface PlainViteSettings {
   /**
@@ -42,6 +42,10 @@ export interface PlainViteSettings {
    * Packages to write into `node_modules`, by name.
    */
   readonly packages?: Readonly<Record<string, Readonly<Record<string, string>>>>
+  /**
+   * Keys added to the config's default export, as text (`resolve: { noExternal: ['x'] },`).
+   */
+  readonly extra?: string
 }
 
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
@@ -69,7 +73,7 @@ function configText(settings: PlainViteSettings): string {
 
 export default {
   plugins: [navePlugin(${settings.options ?? ''})],
-  build: {
+${settings.extra ? `  ${settings.extra}\n` : ''}  build: {
     cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'],
     cssMinify: false,${settings.ssrEmitAssets ? '\n    ssrEmitAssets: true,' : ''}
   },${builder}
@@ -94,6 +98,8 @@ export function plainViteApp(settings: PlainViteSettings): ScratchApp {
     'vite.config.mjs': configText(settings),
     ...settings.files,
   })
+  const packages = Object.entries(settings.packages ?? {})
+  for (const [name, files] of packages) addPackage(app, name, files)
   return app
 }
 

@@ -106,3 +106,51 @@ describe('AC-astro-16 — a separate server invocation writes its stylesheet as 
     SECOND * 2,
   )
 })
+
+const LIB_WARNING = (key: string): string =>
+  `ssr-lib depends on @navecss/core, but no environment of this build transforms it, so the atoms its cx() calls name are not read. Add it to ${key} so the build reads it, or list the atoms its calls can produce under its name in keepFor in navePlugin().`
+const SSR_LIB = {
+  'ssr-lib': {
+    'index.js': "import { cx } from '@navecss/core/cx'\nexport const a = cx('flexGrow')\n",
+  },
+}
+const SERVER_WITH_LIB = {
+  'src/entry-server.tsx':
+    "import './app.css'\nimport { cx } from '@navecss/core/cx'\nimport { a } from 'ssr-lib'\nexport const s = [cx('grid'), a]\n",
+}
+
+describe('AC-astro-11 — on plain Vite the untransformed-dependency warning names the key that reaches the server environment', () => {
+  const base = { files: SERVER_WITH_LIB, packages: SSR_LIB, options: "{ keep: ['grid'] }" }
+
+  it(
+    'names ssr.noExternal with the client first, unchanged',
+    async () => {
+      const built = await run({ ...base, order: ['client', 'ssr'] })
+      expect(built.code, built.output).toBe(0)
+      expect(built.output).toContain(LIB_WARNING('ssr.noExternal in your Vite config'))
+    },
+    SECOND,
+  )
+
+  it(
+    'names resolve.noExternal with a server environment that writes assets first, and resolve.noExternal clears it',
+    async () => {
+      const warned = await run({ ...base, order: ['ssr', 'client'], emitAssets: true })
+      expect(warned.code, warned.output).toBe(0)
+      expect(warned.output).toContain(
+        LIB_WARNING(
+          'resolve.noExternal in your Vite config (on Astro, under vite in astro.config)',
+        ),
+      )
+      const cleared = await run({
+        ...base,
+        order: ['ssr', 'client'],
+        emitAssets: true,
+        extra: "resolve: { noExternal: ['ssr-lib'] },",
+      })
+      expect(cleared.code, cleared.output).toBe(0)
+      expect(cleared.output).not.toContain('depends on @navecss/core')
+    },
+    SECOND * 2,
+  )
+})
