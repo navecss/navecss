@@ -14,7 +14,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import type { AstroApp, AstroAppSettings, Patch } from '../../helpers/astro-app.ts'
 
 import { makeAstroApp } from '../../helpers/astro-app.ts'
-import { hasAttribute, isPresent } from '../../helpers/astro-browser.ts'
+import { hasAttribute, isPresent, readSettled } from '../../helpers/astro-browser.ts'
 import { ALL_ATOMS, BROWSER_KEEP, eSet, setOfCss } from '../../helpers/astro-checks.ts'
 import { serveDev } from '../../helpers/astro-serve.ts'
 import { launchChromium, until } from '../../helpers/vite-browser.ts'
@@ -55,37 +55,16 @@ async function serve(settings: AstroAppSettings): Promise<{ app: AstroApp; url: 
  * The text of the style the page holds for `app.css`.
  */
 async function stylesheetOf(page: Page): Promise<string> {
-  // The dev server reloads a page whose stylesheet grew, and a read made as that happens finds
-  // its context gone: it is made again on the page that follows.
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      return await page.evaluate(() => {
-        const texts: (string | null)[] = []
-        document.querySelectorAll<HTMLElement>('style[data-vite-dev-id]').forEach((element) => {
-          if (element.dataset.viteDevId?.endsWith('src/styles/app.css'))
-            texts.push(element.textContent)
-        })
-        return texts.join('\n')
+  return await readSettled(page, () =>
+    page.evaluate(() => {
+      const texts: (string | null)[] = []
+      document.querySelectorAll<HTMLElement>('style[data-vite-dev-id]').forEach((element) => {
+        if (element.dataset.viteDevId?.endsWith('src/styles/app.css'))
+          texts.push(element.textContent)
       })
-    } catch (error) {
-      const isNavigating = String(error).includes('Execution context was destroyed')
-      if (!isNavigating || attempt === 5) throw error
-      await page.waitForLoadState('load')
-    }
-  }
-}
-
-/**
- * Whether `isTrue` holds, a page the dev server reloads mid-read counting as not yet: it reloads a
- * page whose stylesheet grew, and a read made as that happens finds its context gone.
- */
-async function isHolding(isTrue: () => Promise<boolean>): Promise<boolean> {
-  try {
-    return await isTrue()
-  } catch (error) {
-    if (String(error).includes('Execution context was destroyed')) return false
-    throw error
-  }
+      return texts.join('\n')
+    }),
+  )
 }
 
 /**
@@ -104,7 +83,7 @@ async function load(url: string, route: '/' | '/about'): Promise<Page> {
       () => document.querySelector('#s')?.className.includes('nave-truncate') === true,
     ))
   const readiness = route === '/' ? isIndexReady : () => isPresent(page, '#r')
-  await until(page, () => isHolding(readiness), `the scripts of ${route}`, 30_000)
+  await until(page, () => readSettled(page, readiness), `the scripts of ${route}`, 30_000)
   return page
 }
 

@@ -125,6 +125,23 @@ export async function previewStatic(app: AstroApp): Promise<Running> {
 }
 
 /**
+ * Waits until the dev server at `url` has answered two requests in a row. Its first requests can
+ * make it prebundle dependencies and restart, and a request made as it does is reset.
+ */
+async function waitUntilAnswering(url: string): Promise<void> {
+  let answered = 0
+  for (let attempt = 0; attempt < 120 && answered < 2; attempt += 1) {
+    try {
+      await fetch(url)
+      answered += 1
+    } catch {
+      answered = 0
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+}
+
+/**
  * Serves the project with Astro's dev server, in this process.
  */
 export async function serveDev(app: AstroApp): Promise<Running> {
@@ -142,10 +159,9 @@ export async function serveDev(app: AstroApp): Promise<Running> {
       logLevel: 'error',
       server: { host: '127.0.0.1', port: 0 },
     })
-    return {
-      url: `http://127.0.0.1:${server.address.port}`,
-      stop: () => server.stop(),
-    }
+    const url = `http://127.0.0.1:${server.address.port}`
+    await waitUntilAnswering(url)
+    return { url, stop: () => server.stop() }
   } finally {
     Object.assign(process.env, kept)
   }

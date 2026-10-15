@@ -90,3 +90,19 @@ export async function markPage(page: Page): Promise<void> {
 export async function isMarked(page: Page): Promise<boolean> {
   return await page.evaluate(() => (globalThis as unknown as { __soft?: string }).__soft === 'kept')
 }
+
+/**
+ * Reads from a page the dev server may reload as the read is made, which fails with a destroyed
+ * context: the read is made again, on the page that follows.
+ */
+export async function readSettled<T>(page: Page, read: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await read()
+    } catch (error) {
+      const isNavigating = String(error).includes('Execution context was destroyed')
+      if (!isNavigating || attempt === 5) throw error
+      await page.waitForLoadState('load')
+    }
+  }
+}
