@@ -78,7 +78,7 @@ const isTopLevelClassRule = (node: Declaration['parent'], owner: string): boolea
   node?.type === 'rule' && node.selector === `.${owner}` && isComponentsLayer(node.parent)
 
 const isAdmittedZIndex = (decl: Declaration): boolean =>
-  decl.prop === ADMITTED_Z_INDEX.property &&
+  decl.prop.toLowerCase() === ADMITTED_Z_INDEX.property &&
   decl.value === ADMITTED_Z_INDEX.value &&
   isTopLevelClassRule(decl.parent, ADMITTED_Z_INDEX.owner)
 
@@ -95,8 +95,10 @@ const forbiddenViolations = (root: Root): string[] => {
   })
   root.walkDecls((decl) => {
     if (decl.prop.startsWith('--')) problems.push(`custom property ${decl.prop}`)
-    if (decl.prop === 'isolation') problems.push(`property ${decl.prop} in ${whereIs(decl)}`)
-    if (decl.prop === 'z-index' && !isAdmittedZIndex(decl)) {
+    // A property name is ASCII case-insensitive, so `Z-INDEX` is a z-index too.
+    const property = decl.prop.toLowerCase()
+    if (property === 'isolation') problems.push(`property ${decl.prop} in ${whereIs(decl)}`)
+    if (property === 'z-index' && !isAdmittedZIndex(decl)) {
       problems.push(`property ${decl.prop} in ${whereIs(decl)}`)
     }
   })
@@ -160,12 +162,12 @@ describe('AC-base-ui-feedback-navigation-17, AC-base-ui-overlay-completion-20 an
 
 const zIndexes = (css: string): string[] =>
   flatten(css)
-    .filter((item) => item.property === 'z-index')
+    .filter((item) => item.property.toLowerCase() === 'z-index')
     .map((item) => `${item.owner} ${item.selectors.length} ${item.value}`)
 
 const isolations = (css: string): string[] =>
   flatten(css)
-    .filter((item) => item.property === 'isolation')
+    .filter((item) => item.property.toLowerCase() === 'isolation')
     .map((item) => item.owner)
 
 /**
@@ -233,6 +235,17 @@ describe('AC-base-ui-feedback-navigation-17: exactly one z-index, on one criteri
       'a z-index in the toast-fade rule of the viewport',
       (root: Root) => classRule(root, 'toast-viewport').append({ prop: 'z-index', value: 'auto' }),
       [`property z-index in .${PREFIX}toast-viewport`],
+    ],
+    [
+      'an upper-case Z-Index in toast-root (a property name is case-insensitive)',
+      (root: Root) =>
+        classRule(root, 'toast-root').append({ prop: 'Z-Index', value: 'var(--nave-layer-toast)' }),
+      [`property Z-Index in .${PREFIX}toast-root`],
+    ],
+    [
+      'an upper-case ISOLATION in toast-placement',
+      (root: Root) => placement(root).append({ prop: 'ISOLATION', value: 'isolate' }),
+      [`property ISOLATION in .${PREFIX}toast-placement`],
     ],
     [
       'an isolation in toast-placement',
