@@ -859,11 +859,20 @@ function slow(file: string, delay: number): PluginOption {
  * until `ceiling` milliseconds have passed, so the module is certain not to have been read by any
  * response that returns before `release` is. The ceiling only bounds a response that is itself
  * waiting for the module: it is set far above what a response that waits for nothing needs.
+ * `entered` settles once the module's transform has begun, which is when it is in the module graph,
+ * or at the same ceiling, so a transform that never begins fails the row's own assertion.
  */
-function held(file: string, ceiling: number): { plugin: PluginOption; release: () => void } {
+function held(
+  file: string,
+  ceiling: number,
+): { entered: Promise<void>; plugin: PluginOption; release: () => void } {
+  const { promise: entered, resolve: enter } = Promise.withResolvers<void>()
   let release = (): void => {}
   const released = new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ceiling)
+    const timer = setTimeout(() => {
+      enter()
+      resolve()
+    }, ceiling)
     release = () => {
       clearTimeout(timer)
       resolve()
@@ -872,11 +881,12 @@ function held(file: string, ceiling: number): { plugin: PluginOption; release: (
   const plugin: PluginOption = {
     name: 'held-module',
     async transform(_code: string, id: string) {
-      if (id.endsWith(file)) await released
-      return
+      if (!id.endsWith(file)) return
+      enter()
+      await released
     },
   }
-  return { plugin, release }
+  return { entered, plugin, release }
 }
 
 describe('AC-used-atoms-40 — the first stylesheet response waits for the graph', () => {
@@ -1035,9 +1045,12 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
       try {
         if (idle) server.environments.client.waitForRequestsIdle = idle
         // A held `main.ts` is not read before the stylesheet's wait begins: it cannot be waited for.
-        if (heldModule === 'src/main.ts')
+        // Its transform having begun can: until then it is not in the module graph at all, and on
+        // a busy machine the stylesheet's own request can reach its wait first.
+        if (heldModule === 'src/main.ts') {
           void server.transformRequest('/src/main.ts').catch(() => {})
-        else await server.transformRequest('/src/main.ts')
+          await gate.entered
+        } else await server.transformRequest('/src/main.ts')
         const css = await server.transformRequest('/src/app.css')
         return layerAtomsOf(css!.code)
       } finally {

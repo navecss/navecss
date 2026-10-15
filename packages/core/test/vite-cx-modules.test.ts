@@ -623,22 +623,47 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
   }
 
   /**
-   * The fastest of several runs of `work`, repeated until one run takes a few milliseconds so a
-   * clock's grain does not decide the answer. Load only ever adds time, so the fastest run is
-   * the one that says what the pattern costs.
+   * The time one call of `work` takes, from `reps` calls in a row.
    */
-  function fastest(work: () => void): number {
-    const once = performance.now()
-    work()
-    const elapsed = Math.max(performance.now() - once, 0.001)
-    const reps = Math.max(1, Math.ceil(8 / elapsed))
-    let best = Infinity
-    for (let run = 0; run < 7; run += 1) {
-      const start = performance.now()
-      for (let rep = 0; rep < reps; rep += 1) work()
-      best = Math.min(best, (performance.now() - start) / reps)
+  function perCall(work: () => void, reps: number): number {
+    const start = performance.now()
+    for (let rep = 0; rep < reps; rep += 1) work()
+    return (performance.now() - start) / reps
+  }
+
+  /**
+   * How much longer one call of `large` takes than one call of `small`, from the fastest of many
+   * short runs of each, taken in turn. Load only ever adds time, so the fastest run is the one that
+   * says what the pattern costs, and a run of about half a millisecond is short beside the time a
+   * busy machine lets a process run between pauses, so most runs see none. Both sizes run the same
+   * number of calls, set from the fastest of several single calls, and are taken in turn so the
+   * same load and the same compiled code reach both: a run length set by one timed call, or the
+   * two sizes timed one after the other, gives them different numbers of pauses, and the ratio
+   * then measures the machine.
+   */
+  function growthOf(small: () => void, large: () => void): number {
+    let once = Infinity
+    for (let warm = 0; warm < 5; warm += 1) {
+      large()
+      once = Math.min(once, perCall(small, 1))
     }
-    return best
+    const reps = Math.max(1, Math.ceil(0.5 / Math.max(once, 0.0001)))
+    let smallBest = Infinity
+    let largeBest = Infinity
+    for (let run = 0; run < 25; run += 1) {
+      smallBest = Math.min(smallBest, perCall(small, reps))
+      largeBest = Math.min(largeBest, perCall(large, reps))
+    }
+    return largeBest / smallBest
+  }
+
+  /**
+   * The least of three measurements of `growthOf`. A pause can still land on every run of one size
+   * in a measurement, and it only ever adds time, while a quadratic pattern is about 4 in every
+   * measurement, so the least of three still tells the two apart.
+   */
+  function leastGrowth(work: (n: number) => () => void, n: number): number {
+    return Math.min(...Array.from({ length: 3 }, () => growthOf(work(n), work(2 * n))))
   }
 
   /**
@@ -647,15 +672,14 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
    */
   async function growth(make: (n: number) => string): Promise<number> {
     const declared = await listing()
-    const time = (n: number): number => {
+    const textTest = (n: number): (() => void) => {
       const code = make(n)
-      return fastest(() => isAboutListed({ code, id: `${ROOT}/src/m.ts` }, declared))
+      // A text the test matches is answered where the match is, whatever its size, and its
+      // growth would say nothing: every shape here must be read to its end and not match.
+      expect(isAboutListed({ code, id: `${ROOT}/src/m.ts` }, declared)).toBe(false)
+      return () => isAboutListed({ code, id: `${ROOT}/src/m.ts` }, declared)
     }
-    // One stall of the scheduler can lengthen either time of a measurement by a whole factor, as a
-    // pattern that takes a fraction of a millisecond is easily outlasted by it. A stall only ever
-    // adds time, and a quadratic pattern is about 4 in every measurement, so the least of three
-    // measurements still tells the two apart.
-    return Math.min(...Array.from({ length: 3 }, () => time(8000) / time(4000)))
+    return leastGrowth(textTest, 4000)
   }
 
   const MOST = 3
@@ -664,7 +688,7 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
     ['a quote-free run of names and hashes', (n) => `\`${'/index#a'.repeat(n)}`],
     ['`from` followed by many spaces', (n) => `from${' '.repeat(n)}`],
     ['many `from` each followed by spaces', (n) => `from${' '.repeat(40)}`.repeat(n)],
-    ['many quotes each opening a long text', (n) => `'ui?${'x'.repeat(60)}`.repeat(n)],
+    ['many quotes each opening a long text', (n) => `'ui?${'x'.repeat(60)}\n`.repeat(n)],
   ]
 
   it.each(shapes)(
@@ -677,7 +701,7 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
 
   it('takes about twice as long for twice as many typical modules', async () => {
     const typical = [
-      "import { cx } from './ui'",
+      "import { cx } from './uix'",
       'const s = "it\'s"',
       'const t = `a ${s} b`',
       "export const x = 'a.b.c'.split('.')",
@@ -694,15 +718,13 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
     'reads the last segment of a specifier with %s in time proportional to the run',
     async (_name, make) => {
       const declared = (await listing())!
-      const time = (n: number): number => {
+      const naming = (n: number): (() => void) => {
         const specifier = make(n)
-        return fastest(() => isNamingListed(specifier, declared))
+        return () => isNamingListed(specifier, declared)
       }
 
       // Twice the slashes: about 2 when the cost is linear, about 4 when it is quadratic.
-      expect(Math.min(...Array.from({ length: 3 }, () => time(16_000) / time(8000)))).toBeLessThan(
-        MOST,
-      )
+      expect(leastGrowth(naming, 8000)).toBeLessThan(MOST)
     },
     60_000,
   )
