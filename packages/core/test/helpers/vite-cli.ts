@@ -26,6 +26,11 @@ export interface PlainViteSettings {
    */
   readonly ssrEmitAssets?: boolean
   /**
+   * Whether the config names a builder. Without one the client and the server render are built
+   * by separate commands.
+   */
+  readonly hasBuilder?: boolean
+  /**
    * The argument of `navePlugin(...)`, as text.
    */
   readonly options?: string
@@ -46,16 +51,10 @@ const IMPORT = "import { cx } from '@navecss/core/cx'\n"
  */
 function configText(settings: PlainViteSettings): string {
   const emit = settings.emitAssets === undefined ? '' : `emitAssets: ${settings.emitAssets}, `
-  return `import { navePlugin } from '@navecss/core/vite'
-
-const order = ${JSON.stringify(settings.order)}
-
-export default {
-  plugins: [navePlugin(${settings.options ?? ''})],
-  build: {
-    cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'],
-    cssMinify: false,${settings.ssrEmitAssets ? '\n    ssrEmitAssets: true,' : ''}
-  },
+  const builder =
+    settings.hasBuilder === false
+      ? ''
+      : `
   environments: {
     ssr: {
       build: { outDir: 'dist-ssr', ${emit}rolldownOptions: { input: 'src/entry-server.tsx' } },
@@ -63,9 +62,17 @@ export default {
   },
   builder: {
     async buildApp(builder) {
-      for (const name of order) await builder.build(builder.environments[name])
+      for (const name of ${JSON.stringify(settings.order)}) await builder.build(builder.environments[name])
     },
-  },
+  },`
+  return `import { navePlugin } from '@navecss/core/vite'
+
+export default {
+  plugins: [navePlugin(${settings.options ?? ''})],
+  build: {
+    cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'],
+    cssMinify: false,${settings.ssrEmitAssets ? '\n    ssrEmitAssets: true,' : ''}
+  },${builder}
 }
 `
 }
@@ -96,16 +103,16 @@ export interface CliResult {
 }
 
 /**
- * Runs `vite build` in the project.
+ * Runs `vite build` in the project, with `args` after it.
  */
-export function runViteBuild(app: ScratchApp): Promise<CliResult> {
+export function runViteBuild(app: ScratchApp, args: readonly string[] = []): Promise<CliResult> {
   const bin = path.join(
     path.dirname(createRequire(import.meta.url).resolve('vite/package.json')),
     'bin',
     'vite.js',
   )
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [bin, 'build'], {
+    const child = spawn(process.execPath, [bin, 'build', ...args], {
       cwd: app.root,
       env: { ...process.env, NO_COLOR: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
