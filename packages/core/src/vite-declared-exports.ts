@@ -13,7 +13,16 @@ import type { CxBinding } from './vite-cx-use.ts'
 import type { Problem } from './vite-problems.ts'
 import type { Binding, ScopeAnalysis } from './vite-scope.ts'
 
-import { exportNameOf, nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
+import {
+  exportNameOf,
+  isTypeOnly,
+  nodeAt,
+  nodesAt,
+  pushAll,
+  staticStringOf,
+  stringAt,
+  valueSpecifiersOf,
+} from './vite-ast.ts'
 
 const DECLARED_TEXT =
   "listed in cxModules, but this export can give it a cx the build does not follow: the build follows a listed module one step, to Nave's cx re-exported from @navecss/core/cx under the name cx."
@@ -69,7 +78,7 @@ function patternNames(pattern: AstNode | undefined): string[] {
   while (stack.length > 0) {
     const next = stack.pop()!
     if (next.type === 'Identifier') names.push(stringAt(next, 'name') ?? '')
-    stack.push(...innerPatterns(next))
+    pushAll(stack, innerPatterns(next))
   }
   return names
 }
@@ -107,7 +116,7 @@ function isPlainReExport(local: string | undefined, exported: string | undefined
 function fromSourceProblems(node: AstNode, source: string, input: DeclaredExportsInput): Problem[] {
   const isNave = input.cxSources.has(source) && !input.declaredSources.has(source)
   const isListed = input.declaredSources.has(source)
-  const isBad = nodesAt(node, 'specifiers').some((specifier) => {
+  const isBad = valueSpecifiersOf(node).some((specifier) => {
     const local = exportNameOf(nodeAt(specifier, 'local'))
     const exported = exportNameOf(nodeAt(specifier, 'exported'))
     if (isNave) return !isPlainReExport(local, exported)
@@ -120,7 +129,7 @@ function fromSourceProblems(node: AstNode, source: string, input: DeclaredExport
  * The problems of `export { ... }` with no source: each specifier names a binding of the module.
  */
 function localProblems(node: AstNode, input: DeclaredExportsInput): Problem[] {
-  const isBad = nodesAt(node, 'specifiers').some((specifier) => {
+  const isBad = valueSpecifiersOf(node).some((specifier) => {
     const local = nodeAt(specifier, 'local')
     const binding = local && input.analysis.referenceOf(local)?.binding
     const cx = binding ? input.bindings.get(binding) : undefined
@@ -212,7 +221,7 @@ function isNaveCxExport(node: AstNode, input: DeclaredExportsInput): boolean {
     return isNaveSource(source, input) && nodeAt(node, 'exported') === undefined
   }
   if (node.type !== 'ExportNamedDeclaration' || nodeAt(node, 'declaration')) return false
-  return nodesAt(node, 'specifiers').some((specifier) => isNaveSpecifier(specifier, source, input))
+  return valueSpecifiersOf(node).some((specifier) => isNaveSpecifier(specifier, source, input))
 }
 
 /**
@@ -251,7 +260,9 @@ const EXPORT_PROBLEMS: Readonly<
  * The problems in the exports of a module listed in `cxModules`.
  */
 export function declaredExportProblems(input: DeclaredExportsInput): Problem[] {
-  const body = nodesAt(input.program, 'body')
+  // A type-only export exports no value, so it can neither give the module a `cx` nor give it a
+  // wrong one.
+  const body = nodesAt(input.program, 'body').filter((node) => !isTypeOnly(node))
   const hasNaveCx = body.some((node) => isNaveCxExport(node, input))
   const problems = [
     ...body.flatMap((node) =>

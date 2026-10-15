@@ -9,7 +9,7 @@
 import type { AstNode } from './vite-ast.ts'
 import type { ScopeAnalysis } from './vite-scope.ts'
 
-import { nodeAt } from './vite-ast.ts'
+import { nodeAt, wrappedBy } from './vite-ast.ts'
 import { isIdentChar } from './vite-class-pieces.ts'
 import { stringValues } from './vite-string-values.ts'
 
@@ -126,11 +126,10 @@ export function isEndingTheClass(
 }
 
 /**
- * `node` without the parentheses around it.
+ * `node` without the parentheses and type assertions around it.
  */
 function unwrap(node: AstNode): AstNode {
   let current = node
-  while (current.type === 'ParenthesizedExpression')
-    current = nodeAt(current, 'expression') ?? current
+  for (let inner = wrappedBy(current); inner; inner = wrappedBy(current)) current = inner
   return current
 }

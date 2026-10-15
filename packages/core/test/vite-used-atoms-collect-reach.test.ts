@@ -572,6 +572,150 @@ function nestedProgram(depth: number): unknown {
   return { type: 'Program', body: [declaration], ...at }
 }
 
+describe('a decorator is read like any other expression', () => {
+  const DECORATOR = 'function dec(value) {\n  return value\n}\nconst tone = () => {}\n'
+
+  it.each([
+    ['a class decorator', "@dec(cx('flex'))\nexport class A {}", ['flex'], []],
+    ['a class expression decorator', "export const A = @dec(cx('flex')) class {}", ['flex'], []],
+    ['a method decorator', "export class A {\n  @dec(cx('grid')) m() {}\n}", ['grid'], []],
+    ['a property decorator', "export class A {\n  @dec(cx('grid')) p = 1\n}", ['grid'], []],
+    [
+      'an accessor decorator',
+      "export class A {\n  @dec(cx('grid')) accessor p = 1\n}",
+      ['grid'],
+      [],
+    ],
+    [
+      'a static member decorator',
+      "export class A {\n  @dec(cx('block')) static m() {}\n}",
+      ['block'],
+      [],
+    ],
+    ['cx passed on, not called', '@dec(cx)\nexport class A {}', [], ['reference']],
+    [
+      'an argument that is written elsewhere',
+      "let x = 'flex'\nexport function set(value) {\n  x = value\n}\n@dec(cx(x))\nexport class A {}",
+      [],
+      ['argument'],
+    ],
+  ])('reads %s', (_name, body, expectedAtoms, expectedProblems) => {
+    const reading = read(`${IMPORT}${DECORATOR}${body}\n`)
+    expect([...reading.atoms]).toEqual(expectedAtoms)
+    expect(reading.problems.map((problem) => problem.kind)).toEqual(expectedProblems)
+  })
+
+  it('keeps the atom a class decorator calls in the stylesheet of a built app', async () => {
+    const built = await build({
+      'src/a.ts': `${IMPORT}function dec(value: unknown) {\n  return (target: unknown) => target\n}\n@dec(cx('flex'))\nexport class A {}\nconsole.log(new A())\n`,
+    })
+
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
+  }, 60_000)
+})
+
+describe('an auto-accessor is a class member', () => {
+  it.each([
+    [
+      'named cx, beside a cx call',
+      "export class A {\n  accessor cx = 1\n}\nexport const a = cx('flex')",
+      ['flex'],
+      [],
+    ],
+    ['whose value calls cx', "export class A {\n  accessor x = cx('grid')\n}", ['grid'], []],
+    ['whose computed key is cx', 'export class A {\n  accessor [cx] = 1\n}', [], ['reference']],
+  ])('reads an auto-accessor %s', (_name, body, expectedAtoms, expectedProblems) => {
+    const reading = read(`${IMPORT}${body}\n`)
+    expect([...reading.atoms]).toEqual(expectedAtoms)
+    expect(reading.problems.map((problem) => problem.kind)).toEqual(expectedProblems)
+  })
+})
+
+/**
+ * A module whose one call of `cx` has `count` arguments that cannot be read, then `'flex'`.
+ */
+const call = (count: number): string =>
+  `${IMPORT}export const f = (v) => cx(${'v, '.repeat(count)}'flex')\n`
+
+describe('a call with many unreadable arguments is quoted once', () => {
+  const OPTIONS = {
+    cxSources: new Set([CX_SOURCE]),
+    ownAtoms: new Set<string>(),
+    isDependency: false,
+  }
+
+  /**
+   * How many times the reader enumerates the keys of the call's last argument, which every quote
+   * of the call walks.
+   */
+  function enumerationsOfLastArgument(count: number): number {
+    const code = call(count)
+    const program = parseAst(code) as unknown as AstNode
+    const body = (program.body as AstNode[])[1]!.declaration as AstNode
+    const callNode = ((body.declarations as AstNode[])[0]!.init as AstNode).body as {
+      arguments: unknown[]
+    }
+    let enumerations = 0
+    const last = callNode.arguments.length - 1
+    callNode.arguments[last] = new Proxy(callNode.arguments[last] as object, {
+      ownKeys(target) {
+        enumerations += 1
+        return Reflect.ownKeys(target)
+      },
+    })
+    readModule(code, program, OPTIONS)
+    return enumerations
+  }
+
+  it('walks the arguments of the call the same number of times however many are unreadable', () => {
+    expect(enumerationsOfLastArgument(20)).toBe(enumerationsOfLastArgument(10))
+  })
+
+  it('takes time in proportion to the number of unreadable arguments', async () => {
+    await expect(
+      assertScalesLinearly((size) => {
+        const code = call(size)
+        const program = parseAst(code) as unknown as AstNode
+        return elapsed(() => {
+          readModule(code, program, OPTIONS)
+        })
+      }, 2000),
+    ).resolves.toBeDefined()
+  }, 300_000)
+})
+
+const COUNT = 500_000
+
+/**
+ * A module that calls `cx('flex')` and holds `value` as data.
+ */
+const wide = (value: string): string =>
+  `${IMPORT}export const a = cx('flex')\nexport const data = ${value}\n`
+
+describe('a module wider than the argument limit of a call is read', () => {
+  it.each([
+    ['an array of elements', `[${'1,'.repeat(COUNT)}]`],
+    ['a call of arguments', `String(${'1,'.repeat(COUNT)})`],
+  ])('reads %s, hundreds of thousands wide', (_name, value) => {
+    const reading = read(wide(value))
+    expect([...reading.atoms]).toEqual(['flex'])
+    expect(reading.problems).toEqual([])
+  })
+
+  it('records a wide module as read, not as nested too deeply', async () => {
+    const { context, ctx } = recordingFixture()
+
+    const record = await recordModule(context, ctx, {
+      code: wide(`[${'1,'.repeat(COUNT)}]`),
+      id: '/scale-root/src/wide.js',
+    })
+
+    expect(record!.problems).toEqual([])
+    expect([...record!.atoms]).toContain('flex')
+  })
+})
+
 describe('a module nested deeper than the reader can follow', () => {
   it('is recorded as a problem naming the module, never a crash and never a skip', async () => {
     const { context, ctx } = recordingFixture(() => nestedProgram(200_000))

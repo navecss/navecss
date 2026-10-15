@@ -7,7 +7,16 @@
 import type { AstNode } from './vite-ast.ts'
 import type { Problem } from './vite-problems.ts'
 
-import { childrenOf, exportNameOf, nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
+import {
+  childrenOf,
+  exportNameOf,
+  isTypeOnly,
+  nodeAt,
+  pushAll,
+  staticStringOf,
+  stringAt,
+  valueSpecifiersOf,
+} from './vite-ast.ts'
 
 export interface SourceFormOptions {
   /**
@@ -37,7 +46,7 @@ const DYNAMIC_IMPORT_TEXT =
  */
 function isExportingCx(node: AstNode): boolean {
   if (node.type === 'ExportAllDeclaration') return true
-  return nodesAt(node, 'specifiers').some((specifier) => {
+  return valueSpecifiersOf(node).some((specifier) => {
     const local = nodeAt(specifier, 'local')
     return (local?.type === 'Identifier' ? stringAt(local, 'name') : staticStringOf(local)) === 'cx'
   })
@@ -49,7 +58,7 @@ function isExportingCx(node: AstNode): boolean {
  */
 function isExportingRenamed(node: AstNode): boolean {
   if (node.type === 'ExportAllDeclaration') return nodeAt(node, 'exported') !== undefined
-  return nodesAt(node, 'specifiers').some(
+  return valueSpecifiersOf(node).some(
     (specifier) =>
       exportNameOf(nodeAt(specifier, 'local')) === 'cx' &&
       exportNameOf(nodeAt(specifier, 'exported')) !== 'cx',
@@ -65,7 +74,7 @@ function exportedNamesOf(node: AstNode): string[] {
   if (node.type === 'ExportAllDeclaration') {
     return [exportNameOf(nodeAt(node, 'exported')) ?? 'cx']
   }
-  return nodesAt(node, 'specifiers')
+  return valueSpecifiersOf(node)
     .filter((specifier) => exportNameOf(nodeAt(specifier, 'local')) === 'cx')
     .flatMap((specifier) => exportNameOf(nodeAt(specifier, 'exported')) ?? [])
 }
@@ -97,8 +106,9 @@ function sourceFormProblem(
   const source = staticStringOf(nodeAt(node, 'source'))
   if (source === undefined || !options.cxSources.has(source)) return undefined
   if (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') {
-    // A listed module's exports are judged whole by `declaredExportProblems`.
-    if (options.isDeclared === true) return undefined
+    // A type-only re-export exports no value, and a listed module's exports are judged whole by
+    // `declaredExportProblems`.
+    if (isTypeOnly(node) || options.isDeclared === true) return undefined
     return reexportProblem(code, node, options.declaredSources?.has(source) === true)
   }
   if (node.type !== 'ImportExpression') return undefined
@@ -120,7 +130,7 @@ export function sourceFormProblems(
     const node = stack.pop()!
     const problem = sourceFormProblem(code, node, options)
     if (problem) problems.push(problem)
-    stack.push(...childrenOf(node))
+    pushAll(stack, childrenOf(node))
   }
   return problems
 }

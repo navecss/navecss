@@ -7,7 +7,15 @@
  */
 import type { AstNode } from './vite-ast.ts'
 
-import { childrenOf, exportNameOf, nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
+import {
+  childrenOf,
+  exportNameOf,
+  nodeAt,
+  nodesAt,
+  pushAll,
+  staticStringOf,
+  stringAt,
+} from './vite-ast.ts'
 import { analyze, type Binding, type Reference, type ScopeAnalysis } from './vite-scope.ts'
 
 interface Source {
@@ -38,11 +46,18 @@ function declaredNames(pattern: AstNode | undefined): string[] {
     if (node.type === 'Identifier') {
       found.push(stringAt(node, 'name') ?? '')
     } else if (node.type === 'AssignmentPattern') {
-      stack.push(...[nodeAt(node, 'left')].filter((part) => part !== undefined))
+      pushAll(
+        stack,
+        [nodeAt(node, 'left')].filter((part) => part !== undefined),
+      )
     } else {
       const single = ['argument', 'value'].map((key) => nodeAt(node, key))
       const lists = ['properties', 'elements'].flatMap((key) => nodesAt(node, key))
-      stack.push(...single.filter((part) => part !== undefined), ...lists)
+      pushAll(
+        stack,
+        single.filter((part) => part !== undefined),
+      )
+      pushAll(stack, lists)
     }
   }
   return found
@@ -141,7 +156,7 @@ export function reexportedNames(program: AstNode, source: Source): string[] {
     if (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') {
       for (const name of exportedBy(node, source, own)) found.add(name)
     }
-    stack.push(...childrenOf(node))
+    pushAll(stack, childrenOf(node))
   }
   const analysis = analyze(program)
   for (const reference of analysis.references) {

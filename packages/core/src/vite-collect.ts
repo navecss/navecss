@@ -8,6 +8,7 @@ import type { ModuleReading, ReadOptions } from './vite-collect-types.ts'
 import type { CxUse } from './vite-cx-use.ts'
 import type { Problem } from './vite-problems.ts'
 
+import { textWithoutAssertions } from './vite-assertion-text.ts'
 import { nodesAt } from './vite-ast.ts'
 import { judgeAtom } from './vite-atom-check.ts'
 import { resolveArgument } from './vite-cx-args.ts'
@@ -16,9 +17,9 @@ import { useOf, useOfExpression } from './vite-cx-reference.ts'
 import { sourceFormProblems } from './vite-cx-source-forms.ts'
 import { declaredExportProblems } from './vite-declared-exports.ts'
 import {
-  atomsInEscapedStrings,
   atomsWrittenIn,
   concatenationProblems,
+  refuseParenthesesAndFindEscapedAtoms,
 } from './vite-literal-classes.ts'
 import {
   finishRewrite,
@@ -70,9 +71,7 @@ function quoteCall(
   args: readonly AstNode[],
   callee = use.local,
 ): string {
-  const first = args[0]
-  const last = args.at(-1)
-  const inner = first && last ? reading.code.slice(first.start, last.end) : ''
+  const inner = args.length > 0 ? textWithoutAssertions(reading.code, args) : ''
   return `${callee}(${inner.replaceAll(COMPILER_PREFIX, '')})`
 }
 
@@ -124,12 +123,15 @@ function judgeString(reading: Reading, use: CxUse, value: string, node: AstNode)
  */
 function readCall(reading: Reading, use: CxUse, analysis: ReturnType<typeof analyze>): void {
   const args = nodesAt(use.node, 'arguments')
+  // Every problem of the call quotes the whole call, which walks every argument: quote it once.
+  let quote: string | undefined
+  const quoted = (): string => (quote ??= quoteCall(reading, use, args))
   for (const arg of args) {
     if (arg.type === 'SpreadElement') {
       report(reading, {
         kind: 'argument',
         offset: arg.start,
-        construct: quoteCall(reading, use, args),
+        construct: quoted(),
         text: 'a spread argument.',
       })
       continue
@@ -139,7 +141,7 @@ function readCall(reading: Reading, use: CxUse, analysis: ReturnType<typeof anal
       report(reading, {
         kind: 'argument',
         offset: arg.start,
-        construct: quoteCall(reading, use, args),
+        construct: quoted(),
         text: 'the argument is not a literal atom name.',
       })
       continue
@@ -242,6 +244,7 @@ function readUses(
  * Reads `program`, the parse of `code`.
  */
 export function readModule(code: string, program: AstNode, options: ReadOptions): ModuleReading {
+  const escapedAtoms = refuseParenthesesAndFindEscapedAtoms(program)
   const result: ModuleReading = {
     atoms: new Set(),
     classes: new Set(),
@@ -272,7 +275,7 @@ export function readModule(code: string, program: AstNode, options: ReadOptions)
     report(reading, problem)
   }
   for (const atom of atomsWrittenIn(code)) result.classes.add(atom)
-  for (const atom of atomsInEscapedStrings(program)) result.classes.add(atom)
+  for (const atom of escapedAtoms) result.classes.add(atom)
   if (result.usesCx || !options.isDependency) {
     for (const problem of concatenationProblems(program, code, analysis)) report(reading, problem)
   }

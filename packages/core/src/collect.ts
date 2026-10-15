@@ -2,7 +2,9 @@
  * The reader that finds which atoms a build uses, with no parser behind it: it reads the syntax
  * tree its caller parsed. The Vite plugin calls it with Vite's parser; this entry exposes it so a
  * host with another parser can read modules the same way, report what it cannot read with the
- * same sentences and validate the same options. Not meant for application code.
+ * same sentences and validate the same options. The tree must be the one Vite's parser returns,
+ * with no node for a pair of parentheses (`oxc-parser` gives it with `preserveParens: false`);
+ * `readModule` throws a `TypeError` on a tree that keeps one. Not meant for application code.
  */
 export type { AstNode } from './vite-ast.ts'
 export { CX_SOURCE, readModule } from './vite-collect.ts'

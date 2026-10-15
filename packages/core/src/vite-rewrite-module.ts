@@ -10,7 +10,7 @@ import type { ArgumentFrame } from './vite-rewrite-class.ts'
 import type { Edit } from './vite-rewrite-edit.ts'
 import type { Binding, ScopeAnalysis } from './vite-scope.ts'
 
-import { nodeAt, nodesAt, staticStringOf, stringAt } from './vite-ast.ts'
+import { nodeAt, nodesAt, pushAll, staticStringOf, stringAt } from './vite-ast.ts'
 import { cxCallEdits, dynamicCallEdits, rawCallEdits, rawCallOf } from './vite-rewrite-call.ts'
 import { startOfNext } from './vite-rewrite-edit.ts'
 
@@ -70,7 +70,7 @@ function addEdits(
   }
   if (!edits) return
   for (const node of nodes) rewriting.done.add(node)
-  result.edits.push(...edits)
+  pushAll(result.edits, edits)
 }
 
 /**

@@ -47,13 +47,65 @@ export function stringAt(node: AstNode, key: string): string | undefined {
 }
 
 /**
- * Every direct child node of `node`, in source order of its keys.
+ * Appends `items` to `target` one by one. `target.push(...items)` passes every item as an argument,
+ * which fails for a list of a few hundred thousand: a long array literal or argument list.
  */
-export function childrenOf(node: AstNode): AstNode[] {
-  return Object.values(node).flatMap((value) => {
+export function pushAll<Item>(target: Item[], items: readonly Item[]): void {
+  for (const item of items) target.push(item)
+}
+
+const NO_KEYS: ReadonlySet<string> = new Set()
+
+/**
+ * Every direct child node of `node`, in source order of its keys, except those under a key in
+ * `skipping`.
+ */
+export function childrenOf(node: AstNode, skipping = NO_KEYS): AstNode[] {
+  return Object.entries(node).flatMap(([key, value]) => {
+    if (skipping.has(key)) return []
     if (Array.isArray(value)) return value.filter((item) => isNode(item))
     return isNode(value) ? [value] : []
   })
+}
+
+/**
+ * The expressions a type wraps, which a types-stripped copy of the module leaves out: `x as T`,
+ * `x satisfies T`, the non-null `x!` and the angle-bracket assertion `<T>x`.
+ */
+const ASSERTIONS: ReadonlySet<string> = new Set([
+  'TSAsExpression',
+  'TSNonNullExpression',
+  'TSSatisfiesExpression',
+  'TSTypeAssertion',
+])
+
+/**
+ * The expression `node` wraps when it is a type assertion; `undefined` for any other node.
+ */
+export function assertedBy(node: AstNode): AstNode | undefined {
+  return ASSERTIONS.has(node.type) ? nodeAt(node, 'expression') : undefined
+}
+
+/**
+ * The expression `node` wraps when it is a parenthesised expression or a type assertion.
+ */
+export function wrappedBy(node: AstNode): AstNode | undefined {
+  return node.type === 'ParenthesizedExpression' ? nodeAt(node, 'expression') : assertedBy(node)
+}
+
+/**
+ * Whether `node` is declared as a type only: `import type`, `export type`, `import { type x }`.
+ */
+export function isTypeOnly(node: AstNode): boolean {
+  return node.importKind === 'type' || node.exportKind === 'type'
+}
+
+/**
+ * The specifiers of an import or export statement that bind or export a value: those a
+ * types-stripped copy keeps (`type` ones are dropped).
+ */
+export function valueSpecifiersOf(node: AstNode): AstNode[] {
+  return nodesAt(node, 'specifiers').filter((specifier) => !isTypeOnly(specifier))
 }
 
 /**

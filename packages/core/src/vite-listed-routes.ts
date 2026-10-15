@@ -10,6 +10,7 @@ import type { ResolvedServerImport } from './vite-server-takes.ts'
 import type { RenderContext } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
+import { pushAll } from './vite-ast.ts'
 import { filePathOf } from './vite-css-id.ts'
 import { fileOf } from './vite-cx-modules.ts'
 import { takesIn, UNREADABLE } from './vite-cx-takes.ts'
@@ -189,9 +190,9 @@ export async function takesFrom(
       resolutions,
       wantCalls,
     })
-    entry.push(...routes.entry)
-    told.push(...routes.told)
-    calls.push(...routes.calls)
+    pushAll(entry, routes.entry)
+    pushAll(told, routes.told)
+    pushAll(calls, routes.calls)
   }
   return { entry: merged(entry), told: merged(told), calls: merged(calls) }
 }

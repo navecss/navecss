@@ -5,7 +5,7 @@
  */
 import type { AstNode } from './vite-ast.ts'
 
-import { nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'
+import { assertedBy, nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'
 
 /**
  * Whether `char` can occur in a CSS identifier.
@@ -55,9 +55,15 @@ function pieceOfText(node: AstNode, text: string): Piece {
 
 /**
  * The piece a string literal, or the last piece of a template literal, is; `undefined` for any
- * other node.
+ * other node. A type assertion around one leaves the piece as it was (`'nave-' as string`), the
+ * assertion being the node it is reported at.
  */
 function leafPiece(node: AstNode): Piece | undefined {
+  const asserted = assertedBy(node)
+  if (asserted) {
+    const piece = leafPiece(asserted)
+    return piece && { ...piece, node }
+  }
   const whole = staticStringOf(node)
   if (whole !== undefined) return pieceOfText(node, whole)
   if (node.type !== 'TemplateLiteral') return undefined
