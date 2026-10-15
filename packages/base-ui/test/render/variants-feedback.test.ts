@@ -57,6 +57,8 @@ const AVATAR_CASES: readonly Case[] = [
   { expected: { 'data-nave-size': 'sm' }, label: 'size="sm"', props: { size: 'sm' } },
   { expected: {}, label: 'size="md"', props: { size: 'md' } },
   { expected: { 'data-nave-size': 'lg' }, label: 'size="lg"', props: { size: 'lg' } },
+  // From untyped JavaScript: a size the stylesheet does not key renders no attribute.
+  { expected: {}, label: 'size="xl" (untyped)', props: { size: 'xl' } },
 ]
 
 describe("AC-base-ui-feedback-navigation-04: data-nave-* only off the default, for the Button family's new parts and for Avatar.Root", () => {
