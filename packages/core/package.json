@@ -1,6 +1,6 @@
 {
   "name": "@navecss/core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "MIT",
   "type": "module",
   "description": "Nave design system — layer architecture, reset, atomic utilities, and the Vite, PostCSS and Lightning CSS adapters and a command line for the @nave directive",
