@@ -19,6 +19,7 @@ import { build } from 'vite'
 import { describe, expect, it } from 'vitest'
 
 import { extractFences } from './doc-fences.ts'
+import { astroNotCoveredSentences, astroSection, fixtureVersions } from './helpers/astro-readme.ts'
 import { changelogEntries } from './helpers/released-changeset.ts'
 
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -131,8 +132,13 @@ describe('the Vite plugin’s README section says what the criteria require it t
     expect(vite).toMatch(/public\//)
   })
 
-  it('AC-32: Astro is named as not covered, or has a row (exactly one of the two)', () => {
-    expect(vite).toMatch(/Astro[^.]*not covered/i)
+  it('AC-32: a #### Astro subsection names the Astro and Vite versions the lockfile resolves, and no sentence puts "not covered" after "Astro"', () => {
+    const { astro, vite: viteVersion } = fixtureVersions()
+
+    expect(vite).toContain('#### Astro')
+    expect(flat(astroSection())).toContain(`Astro ${astro}`)
+    expect(flat(astroSection())).toContain(`Vite ${viteVersion}`)
+    expect(astroNotCoveredSentences(section(coreReadme, '### Vite plugin setup'))).toEqual([])
   })
 
   it('AC-16: the fold is per stylesheet, and a bundler stopping at the first failing file reports one per build', () => {
