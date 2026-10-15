@@ -7,9 +7,9 @@
 export interface StyledPart {
   readonly atoms: readonly string[]
   /**
-  The typed props the part gains: `variant` and `size`, or `size` alone.
+  The typed props the part gains: `variant` and `size`, `size` alone, or the Avatar's three sizes.
    */
-  readonly variants?: 'size' | 'variant'
+  readonly variants?: 'avatar' | 'size' | 'variant'
 }
 
 const atoms = (...names: string[]): Pick<StyledPart, 'atoms'> => ({ atoms: names })
@@ -139,4 +139,36 @@ export const styledParts: Readonly<Record<string, StyledPart>> = {
   'Tooltip.Arrow': popupArrow,
   'Tooltip.Popup': atoms('baseUiTooltipPopup', 'baseUiTooltipMotion'),
   'Tooltip.Trigger': button,
+  'Avatar.Fallback': atoms('baseUiAvatarFallback'),
+  'Avatar.Image': atoms('baseUiAvatarImage'),
+  'Avatar.Root': { ...atoms('baseUiAvatar'), variants: 'avatar' },
+  'Meter.Indicator': atoms('baseUiValueBarIndicator'),
+  'Meter.Label': atoms('baseUiLabel'),
+  'Meter.Root': atoms('baseUiValueBar'),
+  'Meter.Track': atoms('baseUiValueBarTrack'),
+  'Meter.Value': atoms('baseUiSliderValue'),
+  'NavigationMenu.Arrow': popupArrow,
+  'NavigationMenu.Icon': atoms('baseUiNavigationMenuIcon'),
+  'NavigationMenu.Link': atoms('baseUiToolbarLink', 'baseUiCurrentLink'),
+  'NavigationMenu.List': atoms('baseUiNavigationMenuList'),
+  'NavigationMenu.Popup': atoms('baseUiPopoverPopup', 'baseUiNavigationMenuFade'),
+  'NavigationMenu.Trigger': atoms('baseUiNavigationMenuTrigger'),
+  'Progress.Indicator': atoms('baseUiValueBarIndicator'),
+  'Progress.Label': atoms('baseUiLabel'),
+  'Progress.Root': atoms('baseUiValueBar'),
+  'Progress.Track': atoms('baseUiValueBarTrack'),
+  'Progress.Value': atoms('baseUiSliderValue'),
+  'ScrollArea.Corner': atoms('baseUiScrollAreaCorner'),
+  'ScrollArea.Root': atoms('baseUiScrollArea'),
+  'ScrollArea.Scrollbar': atoms('baseUiScrollAreaScrollbar'),
+  'ScrollArea.Thumb': atoms('baseUiScrollAreaThumb'),
+  'ScrollArea.Viewport': atoms('baseUiScrollAreaViewport'),
+  Separator: atoms('baseUiToolbarSeparator'),
+  'Toast.Action': button,
+  'Toast.Arrow': popupArrow,
+  'Toast.Close': button,
+  'Toast.Description': atoms('baseUiDescription'),
+  'Toast.Root': atoms('baseUiToastRoot', 'baseUiToastFade', 'baseUiToastLimit'),
+  'Toast.Title': atoms('baseUiTitle'),
+  'Toast.Viewport': atoms('baseUiToastViewport', 'baseUiToastPlacement'),
 }

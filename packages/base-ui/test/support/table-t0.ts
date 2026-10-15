@@ -3,8 +3,7 @@
  * bare name stands for that part of every component that has it. The Backdrop is not listed here:
  * whether it is unstyled depends on the scrim's signature state, which `isInT0` reads off Table P.
  */
-import type { Draft } from './draft-states.ts'
-import type { BackdropScope } from './table-p.ts'
+import type { AnyDraft, BackdropScope } from './table-p.ts'
 
 import { tablePFor } from './table-p.ts'
 
@@ -58,11 +57,15 @@ export const T0_QUALIFIED: ReadonlySet<string> = new Set([
   'Menu.RadioItemIndicator',
   'Menu.Root',
   'Menu.SubmenuRoot',
+  'NavigationMenu.Content',
+  'NavigationMenu.Item',
+  'NavigationMenu.Root',
   'NumberField.Root',
   'NumberField.ScrubAreaCursor',
   'Popover.Root',
   'PreviewCard.Root',
   'PreviewCard.Trigger',
+  'ScrollArea.Content',
   'Select.Group',
   'Select.ItemIndicator',
   'Select.ItemText',
@@ -75,8 +78,17 @@ export const T0_QUALIFIED: ReadonlySet<string> = new Set([
   'Slider.Root',
   'Tabs.Panel',
   'Tabs.Root',
+  'Toast.Content',
+  'Toast.createToastManager',
+  'Toast.useToastManager',
   'Tooltip.Root',
 ])
+
+/**
+The parts whose bare name is in `T0_BARE` for the other components that have it, yet are styled
+here: a `Viewport` is unstyled everywhere but on the Toast and the Scroll Area.
+ */
+const STYLED_BARE_NAMES: ReadonlySet<string> = new Set(['ScrollArea.Viewport', 'Toast.Viewport'])
 
 /**
 Whether a part (as `Namespace.Part`, or the bare component) is in Table T0 for a signature state
@@ -85,12 +97,12 @@ styled where Table P gives it a row for the state, and unstyled everywhere else.
  */
 export const isInT0 = (
   part: string,
-  unsigned: readonly Draft[] = [],
+  unsigned: readonly AnyDraft[] = [],
   scope: BackdropScope = 'i',
 ): boolean => {
   const name = part.slice(part.lastIndexOf('.') + 1)
   if (name === 'Backdrop') {
     return !tablePFor(unsigned, scope).has(part)
   }
-  return T0_QUALIFIED.has(part) || T0_BARE.has(name)
+  return T0_QUALIFIED.has(part) || (T0_BARE.has(name) && !STYLED_BARE_NAMES.has(part))
 }

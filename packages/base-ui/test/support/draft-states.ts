@@ -2,6 +2,12 @@
  * The stylesheet of every signature state, derived by taking text out of the all-signed one: a
  * draft that is unsigned removes its own rules and nothing else. The derivation is textual on
  * purpose, so it shares no code with the build it is compared with.
+ *
+ * Two lists of drafts, never multiplied. `DRAFTS` is the overlay release's six and `allStates` its 64 states, as
+ * they were: every function that takes a `Draft` still means what it meant. The four drafts of the
+ * feedback and navigation spec (`placement`, `toast fade`, `limit`, `panel fade`) are in `feedback-states.ts` with
+ * their own `allStatesFeedback` (16 states) and `stateKeyFeedback`; their states are read with overlay all
+ * signed, and the six corners of Appendix C.4 are the only places the two lists meet.
  */
 import { createHash } from 'node:crypto'
 

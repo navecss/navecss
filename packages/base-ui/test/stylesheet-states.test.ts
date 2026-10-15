@@ -3,9 +3,15 @@ import { describe, expect, it } from 'vitest'
 
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
+import { expectedSheet, NEW_CLASSES_FEEDBACK } from './support/feedback-states.ts'
 import { ringBlock } from './support/focus.ts'
-import { requiresDisabled, requiresInvalidGroup, requiresInvalidState } from './support/selector.ts'
-import { flatten, readStylesheet } from './support/stylesheet.ts'
+import {
+  requiresDisabled,
+  requiresInvalidGroup,
+  requiresInvalidState,
+  selectorNodes,
+} from './support/selector.ts'
+import { flatten, flattenRules, readStylesheet } from './support/stylesheet.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
 
 const PREFIX = 'nave-base-ui-'
@@ -69,7 +75,108 @@ const disabledViolations = (css: string): string[] => {
   return [...found.flatMap((item) => disabledPaintProblems(item)), ...orderProblems(found)]
 }
 
-describe('AC-base-ui-overlay-completion-33 and AC-base-ui-bridge-30: B4, disabled paint is tokens, never opacity', () => {
+/**
+ * The rules of the 21 new classes whose selector requires a disabled state, outside a `:not()`:
+ * what AC-42's first scenario says there are none of, as `class selector` for each.
+ */
+const newDisabledRules = (css: string): string[] =>
+  flattenRules(css)
+    .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
+    .flatMap((item) => item.selectors)
+    .filter((selector) => requiresDisabled(selector))
+
+const TRIGGER = `${PREFIX}navigation-menu-trigger`
+
+/**
+ * Where the trigger's `:disabled` and `[aria-disabled="true"]` sit: every selector of its rules that
+ * names either, with whether each occurrence is inside a `:not()`.
+ */
+const triggerDisabledNodes = (css: string): { inside: boolean; selector: string }[] =>
+  flattenRules(css)
+    .filter((item) => item.owner === TRIGGER)
+    .flatMap((item) => item.selectors)
+    .flatMap((selector) =>
+      selectorNodes(selector)
+        .filter(
+          ({ node }) =>
+            (node.type === 'pseudo' && node.value === ':disabled') ||
+            (node.type === 'attribute' &&
+              node.attribute === 'aria-disabled' &&
+              node.value === 'true'),
+        )
+        .map(({ inside }) => ({ inside: inside.includes(':not'), selector })),
+    )
+
+describe('AC-base-ui-feedback-navigation-42 (first scenario), AC-base-ui-overlay-completion-33 and AC-base-ui-bridge-30: B4, disabled paint is tokens, never opacity, and the new classes paint none', () => {
+  it('has no rule of the 21 new classes whose selector requires :disabled, [aria-disabled="true"] or [data-disabled] outside a :not()', () => {
+    expect(
+      NEW_CLASSES_FEEDBACK.filter((name) =>
+        flatten(readStylesheet()).every((item) => item.owner !== name),
+      ),
+    ).toEqual([])
+    expect(newDisabledRules(readStylesheet())).toEqual([])
+  })
+
+  it('puts the trigger\'s :disabled and [aria-disabled="true"] only inside :not() in its hover and active keys', () => {
+    const nodes = triggerDisabledNodes(readStylesheet())
+    const selectors = flattenRules(readStylesheet())
+      .filter((item) => item.owner === TRIGGER)
+      .flatMap((item) => item.selectors)
+      .toSorted((a, b) => a.localeCompare(b))
+
+    expect(nodes).toHaveLength(4)
+    expect(nodes.filter(({ inside }) => !inside)).toEqual([])
+    expect(selectors).toEqual([
+      `.${TRIGGER}`,
+      `.${TRIGGER}:active:not(:disabled, [aria-disabled="true"])`,
+      // focusRing, composed because the trigger is in Table T2; it names no disabled state.
+      `.${TRIGGER}:focus-visible`,
+      `.${TRIGGER}:hover:not(:disabled, [aria-disabled="true"])`,
+    ])
+  })
+
+  it('reads the same of the expected sheet: the hover and active keys hold both, inside :not() (positive control for the check above)', () => {
+    const nodes = triggerDisabledNodes(expectedSheet())
+
+    expect(nodes).toHaveLength(4)
+    expect(nodes.every(({ inside }) => inside)).toBe(true)
+    expect(newDisabledRules(expectedSheet())).toEqual([])
+  })
+
+  it.each([
+    [
+      'a :disabled rule in the trigger',
+      'navigation-menu-trigger',
+      '&:disabled { color: var(--nave-color-content-disabled) }',
+    ],
+    [
+      'an [aria-disabled="true"] rule in the trigger',
+      'navigation-menu-trigger',
+      '&[aria-disabled="true"] { cursor: not-allowed }',
+    ],
+    [
+      'a [data-disabled] rule in the trigger, which no minor older than 1.8.0 sets',
+      'navigation-menu-trigger',
+      '&[data-disabled] { color: var(--nave-color-content-disabled) }',
+    ],
+    [
+      'an [aria-disabled="true"] rule in the toast card',
+      'toast-root',
+      '&[aria-disabled="true"] { border-color: var(--nave-color-border-disabled) }',
+    ],
+  ])('reds on %s (control)', (_name, owner, rule) => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}${owner} { ${rule} } }`
+
+    expect(newDisabledRules(css)).toHaveLength(1)
+    expect(newDisabledRules(css)[0]).toContain(owner)
+  })
+
+  it('does not read the trigger disabled keys inside :not() as disabled paint, and does not red on them (control)', () => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}navigation-menu-trigger { &:focus-visible:not(:disabled, [aria-disabled="true"]) { color: red } } }`
+
+    expect(newDisabledRules(css)).toEqual([])
+  })
+
   it('sets only content.disabled, border.disabled, not-allowed and a transparent fill on a disabled key', () => {
     expect(disabledViolations(readStylesheet())).toEqual([])
   })
@@ -251,6 +358,12 @@ describe('AC-base-ui-overlay-completion-14: the highlight fill reaches every lis
  * A length in px, from a literal or a workspace token, with rem at 16px.
  */
 const px = (value: string): number | undefined => {
+  const sum = /^calc\((.+)\)$/.exec(value)?.[1]
+  if (sum !== undefined) {
+    // The one calc() the clip rows hold: a sum of lengths, as the scrollbar edge of a viewport has.
+    const terms = sum.split(' + ').map((term) => px(term))
+    return terms.includes(undefined) ? undefined : terms.reduce((a, b) => (a ?? 0) + (b ?? 0), 0)
+  }
   const token = /^var\((--nave-[\da-z-]+)(?:,[^)]*)?\)$/.exec(value)?.[1]
   const literal = token === undefined ? value : tokenValues.get(token)
   const match = /^(-?\d*\.?\d+)(px|rem)?$/.exec(literal ?? '')
@@ -261,6 +374,10 @@ const px = (value: string): number | undefined => {
 interface Side {
   readonly property: string
   readonly selector?: string
+  /**
+  What the side must clear beyond the ring and the corner: the scrollbar strip, on a scrollbar edge.
+   */
+  readonly strip?: number
 }
 
 const PANEL: readonly Side[] = [
@@ -271,12 +388,35 @@ const PANEL: readonly Side[] = [
 
 const POPUP: readonly Side[] = [{ property: 'padding' }, { property: 'scroll-padding' }]
 
+// The Scroll Area viewport (Table T3 gains it, tied to the inline-overflow row of AC-39): the class
+// declares no clip, and Base UI's inline `overflow: scroll` clips. P is 4 on an edge with no
+// scrollbar, and 28 on a scrollbar edge, the 24px strip plus the ring's reach, for `padding` and
+// `scroll-padding` alike.
+const STRIP = 24
+const VIEWPORT: readonly Side[] = [
+  { property: 'padding' },
+  { property: 'scroll-padding' },
+  { property: 'padding-inline-end', selector: '&[data-has-overflow-y]', strip: STRIP },
+  { property: 'scroll-padding-inline-end', selector: '&[data-has-overflow-y]', strip: STRIP },
+  { property: 'padding-block-end', selector: '&[data-has-overflow-x]', strip: STRIP },
+  { property: 'scroll-padding-block-end', selector: '&[data-has-overflow-x]', strip: STRIP },
+]
+
 const T3: ReadonlyMap<string, readonly Side[]> = new Map([
   [`${PREFIX}accordion-panel`, PANEL],
   [`${PREFIX}collapsible-panel`, PANEL],
   [`${PREFIX}dialog-popup`, POPUP],
   [`${PREFIX}list-popup`, POPUP],
   [`${PREFIX}popover-popup`, POPUP],
+])
+
+/**
+ * Table T3 as the feedback and navigation spec amends it: the rows above and the Scroll Area
+ * viewport's.
+ */
+const T3_AMENDED: ReadonlyMap<string, readonly Side[]> = new Map([
+  ...T3,
+  [`${PREFIX}scroll-area-viewport`, VIEWPORT],
 ])
 
 const declared = (found: FlatDeclaration[], owner: string, side: Side): string | undefined =>
@@ -321,9 +461,12 @@ const rowProblem = (found: FlatDeclaration[], owner: string, sides: readonly Sid
   ) {
     return [`${owner} has a side that does not resolve to px`]
   }
-  const smallest = Math.min(...(insets as number[]))
   const needed = width + offset + CORNER_SAGITTA * radius
-  return smallest >= needed ? [] : [`${owner}: ${smallest} < ${needed}`]
+  return sides.flatMap((side, index) => {
+    const inset = insets[index] ?? 0
+    const required = needed + (side.strip ?? 0)
+    return inset >= required ? [] : [`${owner}: ${inset} < ${required}`]
+  })
 }
 
 const OVERFLOW_PROPERTIES = new Set([
@@ -372,11 +515,14 @@ const isUncomputableClip = (item: FlatDeclaration): boolean => {
  * P >= W + O + CORNER_SAGITTA x R for each row of Table T3, every class that clips a row, and
  * every clip the inset rule cannot compute reported to be checked by hand.
  */
-const clipViolations = (css: string): string[] => {
+const clipViolations = (
+  css: string,
+  table: ReadonlyMap<string, readonly Side[]> = T3,
+): string[] => {
   const found = flatten(css)
-  const rows = T3.entries().flatMap(([owner, sides]) => rowProblem(found, owner, sides))
+  const rows = table.entries().flatMap(([owner, sides]) => rowProblem(found, owner, sides))
   const missing = found
-    .filter((item) => isClipping(item) && !T3.has(item.owner))
+    .filter((item) => isClipping(item) && !table.has(item.owner))
     .map((item) => `${item.owner} clips and is not a row of Table T3`)
   const byHand = found
     .filter((item) => isUncomputableClip(item))
@@ -387,8 +533,13 @@ const clipViolations = (css: string): string[] => {
   return [...rows, ...new Set(missing), ...byHand]
 }
 
-const withDeclaration = (rule: string, property: string, value: string): string => {
-  const root = postcss.parse(readStylesheet())
+const withDeclaration = (
+  rule: string,
+  property: string,
+  value: string,
+  css: string = readStylesheet(),
+): string => {
+  const root = postcss.parse(css)
   root.walkRules(`.${PREFIX}${rule}`, (found) => {
     found.walkDecls(property, (decl) => {
       decl.value = value
@@ -400,6 +551,39 @@ const withDeclaration = (rule: string, property: string, value: string): string 
 describe('AC-base-ui-bridge-31: clip insets and scroll-padding, computed from the built tokens and atoms', () => {
   it('holds P >= W + O + CORNER_SAGITTA x R for every row of Table T3', () => {
     expect(clipViolations(readStylesheet())).toEqual([])
+  })
+
+  it('holds P = 4 on an edge with no scrollbar and P = 28 on a scrollbar edge for the Scroll Area viewport, padding and scroll-padding alike, as Table T3 amended', () => {
+    expect(T3_AMENDED.has(`${PREFIX}scroll-area-viewport`)).toBe(true)
+    const found = flatten(readStylesheet())
+    const gutter = declared(found, `${PREFIX}scroll-area-viewport`, {
+      property: 'scroll-padding-inline-end',
+      selector: '&[data-has-overflow-y]',
+    })
+
+    expect(clipViolations(readStylesheet(), T3_AMENDED)).toEqual([])
+    expect(gutter).toBe('calc(var(--nave-size-control-xs) + var(--nave-spacing-control-xs))')
+  })
+
+  it('holds the same of the expected sheet, whose viewport is the row (positive control for the three below)', () => {
+    expect(clipViolations(expectedSheet(), T3_AMENDED)).toEqual([])
+    expect(px('calc(var(--nave-size-control-xs) + var(--nave-spacing-control-xs))')).toBe(28)
+  })
+
+  it.each([
+    ['the viewport padding planted to zero', 'padding', '0'],
+    [
+      'the earlier 16px gutter on the inline-end scroll-padding',
+      'scroll-padding-inline-end',
+      '16px',
+    ],
+    ['the 12px strip arithmetic on the block-end padding', 'padding-block-end', 'calc(12px + 4px)'],
+  ])('reds on %s, naming the Scroll Area viewport (control)', (_name, property, value) => {
+    const css = withDeclaration('scroll-area-viewport', property, value, expectedSheet())
+    const problems = clipViolations(css, T3_AMENDED)
+
+    expect(problems).not.toEqual([])
+    expect(problems.every((problem) => problem.includes('scroll-area-viewport'))).toBe(true)
   })
 
   it('reds when the accordion panel inset is planted to zero (control)', () => {

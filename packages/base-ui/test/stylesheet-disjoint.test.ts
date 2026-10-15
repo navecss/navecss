@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
+import { expectedSheet } from './support/feedback-states.ts'
 import { compare, selectorSpecificity } from './support/selector.ts'
 import { flatten, readStylesheet, resolveAgainst } from './support/stylesheet.ts'
 import { tableP } from './support/table-p.ts'
@@ -80,12 +81,45 @@ const OVERLAY_ROWS: readonly (readonly [readonly string[], readonly string[]])[]
 ]
 
 /**
- * Table P with the overlay completion's rows merged in: a part keeps the classes it already has and
- * gains the others after them.
+ * The parts the feedback and navigation spec adds or changes, each with every class it takes in
+ * the signature state (Table P delta, every feedback draft signed). A part that already has a class
+ * keeps it first. Written here from the spec's table so the instrument does not wait on Table P.
+ */
+const FEEDBACK_ROWS: readonly (readonly [readonly string[], readonly string[]])[] = [
+  [['Toast.Viewport'], classes('toast-viewport', 'toast-placement')],
+  [['Toast.Root'], classes('toast-root', 'toast-fade', 'toast-limit')],
+  [['Toast.Title'], classes('title')],
+  [['Toast.Description'], classes('description')],
+  [['Toast.Action', 'Toast.Close'], classes('button')],
+  [['Toast.Arrow', 'NavigationMenu.Arrow'], classes('arrow', 'arrow-inline')],
+  [['NavigationMenu.List'], classes('navigation-menu-list')],
+  [['NavigationMenu.Trigger'], classes('navigation-menu-trigger')],
+  [['NavigationMenu.Icon'], classes('navigation-menu-icon')],
+  [['NavigationMenu.Link'], classes('toolbar-link', 'current-link')],
+  [['NavigationMenu.Popup'], classes('popover-popup', 'navigation-menu-fade')],
+  [['ScrollArea.Root'], classes('scroll-area')],
+  [['ScrollArea.Viewport'], classes('scroll-area-viewport')],
+  [['ScrollArea.Scrollbar'], classes('scroll-area-scrollbar')],
+  [['ScrollArea.Thumb'], classes('scroll-area-thumb')],
+  [['ScrollArea.Corner'], classes('scroll-area-corner')],
+  [['Meter.Root', 'Progress.Root'], classes('value-bar')],
+  [['Meter.Label', 'Progress.Label'], classes('label')],
+  [['Meter.Value', 'Progress.Value'], classes('slider-value')],
+  [['Meter.Track', 'Progress.Track'], classes('value-bar-track')],
+  [['Meter.Indicator', 'Progress.Indicator'], classes('value-bar-indicator')],
+  [['Avatar.Root'], classes('avatar')],
+  [['Avatar.Image'], classes('avatar-image')],
+  [['Avatar.Fallback'], classes('avatar-fallback')],
+  [['Separator'], classes('toolbar-separator')],
+]
+
+/**
+ * Table P with the overlay completion's rows and the feedback and navigation rows merged in: a part
+ * keeps the classes it already has and gains the others after them.
  */
 const combinedParts = (): Parts => {
   const merged = new Map<string, readonly string[]>(tableP)
-  for (const [parts, names] of OVERLAY_ROWS) {
+  for (const [parts, names] of [...OVERLAY_ROWS, ...FEEDBACK_ROWS]) {
     for (const part of parts) {
       merged.set(part, [...new Set([...(merged.get(part) ?? []), ...names])])
     }
@@ -230,6 +264,12 @@ const SHARED = keysOf([
   ['item', 'active-option'],
   ['item-highlight', 'active-option'],
   ['tab-indicator', 'tab-indicator-motion'],
+  ['toast-viewport', 'toast-placement'],
+  ['toast-root', 'toast-fade'],
+  ['toast-root', 'toast-limit'],
+  ['toast-fade', 'toast-limit'],
+  ['popover-popup', 'navigation-menu-fade'],
+  ['toolbar-link', 'current-link'],
 ])
 
 /**
@@ -242,11 +282,29 @@ const NAMED_FREE = keysOf([
   ['dialog-popup', 'popup-fade'],
   ['list-popup', 'popup-motion'],
   ['tab-indicator', 'tab-indicator-motion'],
+  ['toast-viewport', 'toast-placement'],
+  ['toast-root', 'toast-fade'],
+  ['toast-root', 'toast-limit'],
+  ['toast-fade', 'toast-limit'],
+  ['popover-popup', 'navigation-menu-fade'],
+  ['toolbar-link', 'current-link'],
 ])
+
+/**
+ * The classes among a part's own that set the longhand on its box, in the part's class order.
+ */
+const settersOn = (css: string, part: string, longhand: string): string[] => {
+  const own = COMBINED.get(part) ?? []
+  return own.filter((name) =>
+    settingRules(css).some(
+      (rule) => rule.owner === name && rule.box === 'element' && rule.properties.has(longhand),
+    ),
+  )
+}
 
 const planted = (rule: string): string => `${readStylesheet()}\n@layer components.nave { ${rule} }`
 
-describe('AC-base-ui-overlay-completion-10: the disjointness instrument judges per box and per attribute value, and still bites', () => {
+describe('AC-base-ui-feedback-navigation-10 and AC-base-ui-overlay-completion-10: the disjointness instrument judges per box and per attribute value, and still bites', () => {
   it('finds exactly the shared-part pairs of the combined package', () => {
     expect(
       sharedPairs(COMBINED)
@@ -264,6 +322,83 @@ describe('AC-base-ui-overlay-completion-10: the disjointness instrument judges p
     expect(checkedPairs(readStylesheet(), COMBINED).free).toEqual(
       expect.arrayContaining(NAMED_FREE),
     )
+  })
+
+  it('checks all 18 shared-part pairs of the expected sheet and finds them conflict-free, the named six among them (the instrument on the oracle)', () => {
+    const oracle = expectedSheet()
+    const { checked, free } = checkedPairs(oracle, COMBINED)
+
+    expect(checked.toSorted(byText)).toEqual(SHARED)
+    expect(SHARED).toHaveLength(18)
+    expect(free).toEqual(expect.arrayContaining(NAMED_FREE))
+    expect(conflicts(oracle, COMBINED)).toEqual([])
+  })
+
+  it('names the Toast and Navigation Menu arrows as sharing the arrow and the inline arrow, and finds them conflict-free', () => {
+    for (const part of ['Toast.Arrow', 'NavigationMenu.Arrow']) {
+      expect(COMBINED.get(part)).toEqual(classes('arrow', 'arrow-inline'))
+    }
+    expect(conflictsOf(readStylesheet(), classes('arrow', 'arrow-inline'))).toEqual([])
+  })
+
+  it('sets display and align-items on the Track only in the value bar track, and max-block-size on the Indicator only in the value bar indicator', () => {
+    const css = readStylesheet()
+
+    expect(settersOn(css, 'Meter.Track', 'display')).toEqual(classes('value-bar-track'))
+    expect(settersOn(css, 'Progress.Track', 'align-items')).toEqual(classes('value-bar-track'))
+    expect(settersOn(css, 'Meter.Indicator', 'max-height')).toEqual(classes('value-bar-indicator'))
+    expect(settersOn(css, 'Progress.Indicator', 'max-height')).toEqual(
+      classes('value-bar-indicator'),
+    )
+  })
+
+  it('sets scroll-padding-inline-end and scroll-padding-block-end only in the scroll area viewport, and padding-block on the Navigation Menu link only in the current link', () => {
+    const css = readStylesheet()
+
+    expect(settersOn(css, 'ScrollArea.Viewport', 'scroll-padding-right')).toEqual(
+      classes('scroll-area-viewport'),
+    )
+    expect(settersOn(css, 'ScrollArea.Viewport', 'scroll-padding-bottom')).toEqual(
+      classes('scroll-area-viewport'),
+    )
+    expect(settersOn(css, 'NavigationMenu.Link', 'padding-top')).toEqual(classes('current-link'))
+    expect(settersOn(css, 'NavigationMenu.Link', 'padding-bottom')).toEqual(classes('current-link'))
+    expect(settersOn(css, 'NavigationMenu.Link', 'padding-left')).toEqual(classes('toolbar-link'))
+  })
+
+  it('reports a planted rest text-decoration-thickness in the toolbar link against the current link key (control)', () => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}toolbar-link { text-decoration-thickness: 1px } }`
+
+    expect(conflicts(css, COMBINED)).toEqual([
+      `text-decoration-thickness: .${PREFIX}toolbar-link (0,1,0) against .${PREFIX}current-link[aria-current="page"] (0,2,0, unequal)`,
+    ])
+    expect(conflicts(expectedSheet(), COMBINED)).toEqual([])
+  })
+
+  it('reports a planted padding: 0 in the Navigation Menu fade against the popover popup padding (control)', () => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}navigation-menu-fade { padding: 0 } }`
+
+    expect(conflicts(css, COMBINED)).toEqual(
+      ['top', 'right', 'bottom', 'left'].map(
+        (side) =>
+          `padding-${side}: .${PREFIX}popover-popup (0,1,0) against .${PREFIX}navigation-menu-fade (0,1,0, equal)`,
+      ),
+    )
+  })
+
+  it('sees a second setter of a longhand the part owner must set alone: a padding-block in the toolbar link, a max-block-size in the track, a display in the indicator (control)', () => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}toolbar-link { padding-block: 1px } .${PREFIX}value-bar-indicator { display: block } }`
+
+    expect(settersOn(expectedSheet(), 'NavigationMenu.Link', 'padding-top')).toEqual(
+      classes('current-link'),
+    )
+    expect(settersOn(css, 'NavigationMenu.Link', 'padding-top')).toEqual(
+      classes('toolbar-link', 'current-link'),
+    )
+    expect(conflicts(css, COMBINED)).toEqual([
+      `padding-top: .${PREFIX}toolbar-link (0,1,0) against .${PREFIX}current-link (0,1,0, equal)`,
+      `padding-bottom: .${PREFIX}toolbar-link (0,1,0) against .${PREFIX}current-link (0,1,0, equal)`,
+    ])
   })
 
   it('reports a highlight rule on Menu.Item against the item disabled colour, at equal specificity (first control)', () => {

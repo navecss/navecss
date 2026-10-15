@@ -4,7 +4,7 @@
  * included, whichever of them carries the version. The lookup is lazy: a minor whose alias is not
  * installed fails the test that asks for it, naming the alias to add, and nothing else.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { PACKAGE_DIR } from './stylesheet.ts'
@@ -76,4 +76,28 @@ export const itemsMissingFrom = (
 ): string[] => {
   const text = readDeclarationFile(root, file)
   return items.filter((item) => !isDeclared(text, item))
+}
+
+/**
+The declaration files (`*DataAttributes.d.ts`) a directory of the package holds, by name, or an
+empty list when the directory is not there. Read from whichever of the two layouts has it.
+ */
+export const dataAttributeFilesIn = (root: string, directory: string): string[] => {
+  const found = [path.join(root, 'esm', directory), path.join(root, directory)].find((candidate) =>
+    existsSync(candidate),
+  )
+  return found === undefined
+    ? []
+    : readdirSync(found).filter((file) => file.endsWith('DataAttributes.d.ts'))
+}
+
+/**
+What is wrong with a row at a root: the file is not there at all, or the items it lacks. A row that
+names a file the package does not have is a problem, not an exception.
+ */
+export const rowProblems = (root: string, file: string, items: readonly string[]): string[] => {
+  const isExists = [path.join(root, 'esm', file), path.join(root, file)].some((candidate) =>
+    existsSync(candidate),
+  )
+  return isExists ? itemsMissingFrom(root, file, items) : [`${file} is not in the package`]
 }

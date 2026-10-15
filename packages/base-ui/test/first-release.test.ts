@@ -25,6 +25,9 @@ const releasesOf = (text: string): Record<string, string> => {
   )
 }
 
+const isMinorAlone = (releases: Record<string, string>): boolean =>
+  Object.keys(releases).length === 1 && releases[NAME] === 'minor'
+
 const pendingForThisPackage = (): Record<string, string>[] =>
   readdirSync(path.join(ROOT, '.changeset'))
     .filter((file) => file.endsWith('.md') && file !== 'README.md')
@@ -87,13 +90,14 @@ const secondReleaseSection = (): string | undefined => {
   return sections.length > 1 ? sections.at(-2) : undefined
 }
 
-describe('AC-base-ui-overlay-completion-38: the release that adds the six components', () => {
+describe('AC-base-ui-overlay-completion-38 (superseded by AC-base-ui-feedback-navigation-48 for the combined package): the release that adds the six components', () => {
   const pending = pendingForThisPackage()
 
   it.runIf(pending.length > 0)(
-    'has exactly one changeset naming @navecss/base-ui, and it names it alone with bump minor',
+    'has every pending changeset naming @navecss/base-ui name it alone with bump minor',
     () => {
-      expect(pending).toEqual([{ [NAME]: 'minor' }])
+      // This release and the one after it can be pending together, so the count is not held here.
+      expect(pending.filter((releases) => !isMinorAlone(releases))).toEqual([])
     },
   )
 
@@ -128,5 +132,8 @@ describe('AC-base-ui-overlay-completion-38: the release that adds the six compon
       })
     }
     expect(releasesOf("---\n'@navecss/tokens': minor\n---\n\nx")).not.toHaveProperty(NAME)
+    expect(isMinorAlone({ [NAME]: 'minor' })).toBe(true)
+    expect(isMinorAlone({ [NAME]: 'minor', [TOKENS]: 'minor' })).toBe(false)
+    expect(isMinorAlone({ [NAME]: 'patch' })).toBe(false)
   })
 })

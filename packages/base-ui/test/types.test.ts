@@ -36,6 +36,12 @@ const EXPECTED_ERRORS: Readonly<Record<BaseUiVersion, readonly string[]>> = {
     // README and the changeset sentence that name them.
     'ContextMenu.Root.Actions TS2694',
     'Combobox.Root.Props<any, any, any> TS2707',
+    // The third and fourth recorded floor exceptions (the feedback and navigation release): the
+    // floor gives the Navigation Menu root's Props no type parameter and the namespace no Value, so
+    // the dotted spellings are not generic and absent. The flat `NavigationMenuRootProps<string>` and
+    // `NavigationMenuRoot.Value<string>` are what the criterion holds, in `feedback-types.test.ts`.
+    'NavigationMenu.Root.Props<any> TS2315',
+    'NavigationMenu.Root.Value<any> TS2694',
   ],
   // Nothing: every type name the floor Base UI exports compiles through this package.
   floor: [],
@@ -67,7 +73,7 @@ const errorsOf = (output: string, fixture: string, references: readonly Referenc
 describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
   const subpaths = readBaseUiTypes(version)
 
-  describe('AC-base-ui-overlay-completion-02 (supersedes AC-base-ui-bridge-02): the import swap is the whole migration for types as well as values', () => {
+  describe('AC-base-ui-feedback-navigation-02 and AC-base-ui-overlay-completion-02 (supersede AC-base-ui-bridge-02): the import swap is the whole migration for types as well as values', () => {
     const references = typeWalkReferences(version)
 
     it(
@@ -177,7 +183,7 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
     )
   })
 
-  describe('AC-base-ui-overlay-completion-03 (extends AC-base-ui-bridge-15): each export is typed from its own namespace', () => {
+  describe('AC-base-ui-feedback-navigation-03 and AC-base-ui-overlay-completion-03 (extend AC-base-ui-bridge-15): each export is typed from its own namespace', () => {
     it(
       'keeps every part outside the Button family typed as the Base UI part of its own namespace, the six included',
       { timeout: MINUTES },
@@ -221,7 +227,7 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
     )
   })
 
-  describe('AC-base-ui-overlay-completion-05 (supersedes the variant clauses of AC-base-ui-bridge-15): the variant types', () => {
+  describe('AC-base-ui-feedback-navigation-05 and AC-base-ui-overlay-completion-05 (supersede the variant clauses of AC-base-ui-bridge-15): the variant types', () => {
     it(
       'gives every Button-family part Base UI props plus exactly variant secondary, primary or ghost and size md or sm, and Base UI declares neither',
       { timeout: MINUTES },

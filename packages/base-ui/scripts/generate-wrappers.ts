@@ -41,6 +41,18 @@ const GLOBAL_NAMES: ReadonlySet<string> = new Set(['Error'])
 const SINGLE_NOTICE =
   '/* eslint-disable import-x/export -- the named export wins over the star re-export, as TypeScript has it */\n'
 
+const WRAPPERS = {
+  avatar: 'wrapAvatarPart',
+  size: 'wrapSizePart',
+  variant: 'wrapVariantPart',
+} as const
+
+const ADDED_PROPS = {
+  avatar: 'AvatarProps',
+  size: 'SizeProps',
+  variant: 'VariantProps',
+} as const
+
 const classNameOf = (styled: StyledPart): string =>
   styled.atoms.map((atom) => toClassName(atom as AtomName)).join(' ')
 
@@ -73,7 +85,7 @@ const valueOf = (
   if (styled.variants === undefined) {
     return `export const ${name}: typeof ${reference} = /*#__PURE__*/ (() => wrapPart(${reference}, '${className}'))()`
   }
-  const wrapper = styled.variants === 'variant' ? 'wrapVariantPart' : 'wrapSizePart'
+  const wrapper = WRAPPERS[styled.variants]
   return `export const ${name}: ${variantType(reference, part, styled)} = /*#__PURE__*/ (() => ${wrapper}(${reference}, '${className}'))()`
 }
 
@@ -85,7 +97,7 @@ const valueOf = (
  */
 const variantType = (reference: string, part: PartTypes, styled: StyledPart): string => {
   const props = part.members.find((member) => member.name === 'Props')
-  const added = styled.variants === 'variant' ? 'VariantProps' : 'SizeProps'
+  const added = ADDED_PROPS[styled.variants ?? 'variant']
   const element = part.refElement ?? 'HTMLElement'
   const own = `Omit<${reference}.Props${generics(props?.arguments ?? [])}, 'ref'> & RefAttributes<${element}> & ${added}`
   const declared = part.callTypeParameters.length > 0 ? (props?.bare ?? []) : []
@@ -93,9 +105,7 @@ const variantType = (reference: string, part: PartTypes, styled: StyledPart): st
 }
 
 const addedProps = (styled: StyledPart | undefined): string =>
-  styled?.variants === undefined
-    ? ''
-    : ` & ${styled.variants === 'variant' ? 'VariantProps' : 'SizeProps'}`
+  styled?.variants === undefined ? '' : ` & ${ADDED_PROPS[styled.variants]}`
 
 /**
 The type namespace of a part: each member Base UI's own, with the variant props added to `Props`.
@@ -164,10 +174,12 @@ const partBlock = (
 }
 
 const helpersUsed = (body: string): string[] =>
-  ['wrapPart', 'wrapSizePart', 'wrapVariantPart'].filter((helper) => body.includes(`${helper}(`))
+  ['wrapAvatarPart', 'wrapPart', 'wrapSizePart', 'wrapVariantPart'].filter((helper) =>
+    body.includes(`${helper}(`),
+  )
 
 const typesUsed = (body: string): string[] => [
-  ...['SizeProps', 'VariantProps'].filter((type) => body.includes(`& ${type}`)),
+  ...['AvatarProps', 'SizeProps', 'VariantProps'].filter((type) => body.includes(`& ${type}`)),
   ...(body.includes('PartOf<') ? ['PartOf'] : []),
 ]
 

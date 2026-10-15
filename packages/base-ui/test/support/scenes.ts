@@ -10,6 +10,7 @@
 /* eslint-disable unicorn/max-nested-calls -- a scene is a tree, written as the nested calls it renders */
 import { createElement, type ElementType, type ReactElement, type ReactNode } from 'react'
 
+import { feedbackBuilds } from './feedback-scenes.ts'
 import { overlayBuilds } from './overlay-scenes.ts'
 import { topName } from './subpaths.ts'
 
@@ -58,10 +59,22 @@ const maker =
     )
   }
 
-const scene = (subpath: string, build: (h: Make, other: Other) => ReactNode): Scene => ({
+/**
+ * What a build may need beyond the makers: the scene's config, and the component's export itself
+ * (for a hook the component has, such as `Toast.useToastManager`).
+ */
+export interface SceneContext {
+  readonly config: SceneConfig
+  readonly ui: Ui
+}
+
+const scene = (
+  subpath: string,
+  build: (h: Make, other: Other, context: SceneContext) => ReactNode,
+): Scene => ({
   render: (source, config = {}) => {
     const other: Other = (name) => maker(source(name), topName(name), config)
-    return build(other(subpath), other) as ReactElement
+    return build(other(subpath), other, { config, ui: source(subpath) }) as ReactElement
   },
   subpath,
 })
@@ -187,6 +200,7 @@ export const scenes: Readonly<Record<string, Scene>> = Object.fromEntries(
     ...disclosureScenes,
     ...fieldScenes,
     ...choiceScenes,
+    ...Object.entries(feedbackBuilds).map(([subpath, build]) => scene(subpath, build)),
   ].map((entry) => [entry.subpath, entry] as const),
 )
 

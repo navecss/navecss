@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
 import { COLOR_KEYWORDS } from './support/colors.ts'
+import { expectedSheet, NEW_CLASSES_FEEDBACK } from './support/feedback-states.ts'
 import { isFocusRingDeclaration, isThumbBarInset, isThumbRingDeclaration } from './support/focus.ts'
 import { requiresInvalid, requiresInvalidGroup } from './support/selector.ts'
 import {
@@ -190,7 +191,7 @@ const PLANTED_VALUES = [
   'calc(100% - 13px)',
 ]
 
-describe('AC-base-ui-overlay-completion-30 and AC-base-ui-bridge-24: every declared value is one of the admitted forms, with the overlay completion admissions', () => {
+describe('AC-base-ui-feedback-navigation-40, AC-base-ui-overlay-completion-30 and AC-base-ui-bridge-24: every declared value is one of the admitted forms, with the overlay completion admissions', () => {
   it('classifies every value of the stylesheet', () => {
     expect(unacceptedValues(readStylesheet())).toEqual([])
   })
@@ -412,6 +413,193 @@ describe('AC-base-ui-overlay-completion-30 and AC-base-ui-bridge-24: every decla
 
     expect(dangerElsewhere(css)).toEqual([
       `${PREFIX}title color names feedback.danger outside a control border`,
+    ])
+  })
+})
+
+/**
+ * The outermost `calc( ... )` expressions of a value, each as the text between its parentheses.
+ */
+const calcsIn = (value: string): string[] => {
+  const found: string[] = []
+  let at = value.indexOf('calc(')
+  while (at !== -1) {
+    let depth = 0
+    let end = at + 'calc'.length
+    do {
+      if (value[end] === '(') depth += 1
+      else if (value[end] === ')') depth -= 1
+      end += 1
+    } while (depth > 0 && end < value.length)
+    found.push(value.slice(at, end))
+    at = value.indexOf('calc(', end)
+  }
+  return found
+}
+
+/**
+ * A calc() with each `var(--nave-*)` read as V, so that its shape is compared and not its tokens.
+ */
+const shapeOf = (expression: string): string => expression.replaceAll(/var\(--nave-[\w-]+\)/g, 'V')
+
+// The shapes AC-40's sentence lists: `calc(100% - 2 * var(--nave-*))`, `calc(var(--nave-*) + N *
+// var(--nave-*))` and `calc(var(--nave-*) / 2)`, with the guard's `calc(0 * var(--nave-motion-duration-fast))`
+// admitted inside its `@media` only.
+const LISTED_SHAPES: readonly RegExp[] = [
+  /^calc\(100% - 2 \* V\)$/,
+  /^calc\(V \+ \d+ \* V\)$/,
+  /^calc\(V \/ 2\)$/,
+]
+const GUARD_SHAPE = 'calc(0 * var(--nave-motion-duration-fast))'
+
+// The two shapes Appendix C.1 holds that the sentence does not list: `calc(V + V)` (the viewport's
+// padding and scroll-padding on a scrollbar edge) and `calc((V - V) / 2)` (the strip's centring
+// padding). Admitted here because the normative bytes carry them; the question is in the report.
+const C1_ONLY_SHAPES: ReadonlySet<string> = new Set(['calc((V - V) / 2)', 'calc(V + V)'])
+
+const isListedShape = (shape: string): boolean => LISTED_SHAPES.some((form) => form.test(shape))
+
+const isInGuard = (item: FlatDeclaration): boolean =>
+  item.atRules.some((rule) => rule.startsWith('@media (prefers-reduced-motion: reduce)'))
+
+/**
+ * The calc() shapes of the 21 new classes outside the reduced-motion guard that are neither listed
+ * nor Appendix C.1's two, and the guard shape outside its `@media`.
+ */
+const calcViolations = (css: string): string[] =>
+  flatten(css)
+    .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
+    .flatMap((item) =>
+      calcsIn(item.value).flatMap((expression) => {
+        if (expression === GUARD_SHAPE) {
+          return isInGuard(item)
+            ? []
+            : [`${item.owner} ${item.property}: ${expression} outside its guard`]
+        }
+        const shape = shapeOf(expression)
+        return isListedShape(shape) || C1_ONLY_SHAPES.has(shape)
+          ? []
+          : [`${item.owner} ${item.property}: ${shape}`]
+      }),
+    )
+
+const calcShapesIn = (css: string): Set<string> =>
+  new Set(
+    flatten(css)
+      .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
+      .flatMap((item) => calcsIn(item.value))
+      .map((expression) => (expression === GUARD_SHAPE ? expression : shapeOf(expression))),
+  )
+
+/**
+ * The named literals the new classes carry: every word of their values that has a unit or is a
+ * named literal of the value classifier.
+ */
+const literalsOf = (css: string): Set<string> =>
+  new Set(
+    flatten(css)
+      .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner) && !isFocusRingDeclaration(item))
+      .flatMap((item) => item.value.replaceAll(/var\([^()]*\)/g, ' ').split(/[\s(),*/+]+/))
+      .filter((word) => /^-?\d*\.?\d+(?:px|rem|em|deg|ms|s|%)$/.test(word)),
+  )
+
+const fallbacksOutsideRings = (css: string): string[] =>
+  flatten(css)
+    .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner) && !isFocusRingDeclaration(item))
+    .flatMap((item) => fallbacksIn(item).map((text) => `${item.owner} ${text}`))
+
+describe('AC-base-ui-feedback-navigation-40: the values of the 21 new classes are each one of the admitted forms', () => {
+  it('classifies every value of the stylesheet, as the overlay release does, the new classes included', () => {
+    expect(unacceptedValues(readStylesheet())).toEqual([])
+    expect(unacceptedValues(expectedSheet())).toEqual([])
+    expect(fallbackViolations(readStylesheet())).toEqual([])
+  })
+
+  it('adds no named literal beyond 20rem and 180deg, and no unit-bearing word but 100%', () => {
+    const expected = new Set(['20rem', '100%', '180deg'])
+
+    expect(literalsOf(expectedSheet())).toEqual(expected)
+    expect(literalsOf(readStylesheet())).toEqual(expected)
+  })
+
+  it('adds no var() fallback in the 21 classes', () => {
+    expect(fallbacksOutsideRings(readStylesheet())).toEqual([])
+    expect(fallbacksOutsideRings(expectedSheet())).toEqual([])
+    expect(
+      flatten(expectedSheet()).filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner)),
+    ).not.toEqual([])
+  })
+
+  it('uses only the calc() shapes the criterion lists and the two Appendix C.1 holds besides, the guard shape only in its @media', () => {
+    expect(calcViolations(readStylesheet())).toEqual([])
+    expect(calcShapesIn(readStylesheet())).toEqual(
+      new Set([
+        'calc(100% - 2 * V)',
+        'calc((V - V) / 2)',
+        'calc(V + 4 * V)',
+        'calc(V + V)',
+        'calc(V / 2)',
+        GUARD_SHAPE,
+      ]),
+    )
+  })
+
+  it('reads the oracle sheet the same way: its calc() shapes are those six', () => {
+    expect(calcViolations(expectedSheet())).toEqual([])
+    expect(calcShapesIn(expectedSheet()).size).toBe(6)
+  })
+
+  it('admits transition-property: none as a keyword, with no new value form', () => {
+    const none = flatten(expectedSheet()).filter(
+      (item) => item.property === 'transition-property' && item.value === 'none',
+    )
+
+    expect(none.map((item) => item.owner)).toEqual([`${PREFIX}navigation-menu-fade`])
+    expect(none.flatMap((item) => unacceptedIn(item))).toEqual([])
+  })
+
+  it.each(PLANTED_VALUES)('reds on planted %s in a new class (control)', (value) => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}toast-root { color: ${value} } }`
+
+    expect(unacceptedValues(css)).not.toEqual([])
+  })
+
+  it('reds on a planted inline-size: 320px in toast-placement (control)', () => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}toast-placement { inline-size: 320px } }`
+
+    expect(unacceptedValues(css)).toEqual([`${PREFIX}toast-placement inline-size: 320px`])
+  })
+
+  it.each([
+    [
+      'a calc() of two tokens multiplied',
+      'calc(var(--nave-spacing-content-lg) * var(--nave-spacing-content-sm))',
+    ],
+    ['a calc() with a literal length', 'calc(100% - 13px)'],
+    [
+      'a calc() subtracting two tokens, which no shape lists',
+      'calc(var(--nave-spacing-content-lg) - var(--nave-spacing-content-sm))',
+    ],
+  ])('reds on %s planted in a new class (control)', (_name, value) => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}scroll-area { padding: ${value} } }`
+
+    expect(calcViolations(expectedSheet())).toEqual([])
+    expect(calcViolations(css)).not.toEqual([])
+  })
+
+  it('reds on the guard value planted outside its @media in a new class (control)', () => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}toast-fade { transition-duration: ${GUARD_SHAPE} } }`
+
+    expect(calcViolations(css)).toEqual([
+      `${PREFIX}toast-fade transition-duration: ${GUARD_SHAPE} outside its guard`,
+    ])
+  })
+
+  it('reds on a var() fallback planted in a new class (control)', () => {
+    const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}avatar { color: var(--nave-color-content-primary, red) } }`
+
+    expect(fallbacksOutsideRings(css)).toEqual([
+      `${PREFIX}avatar var(--nave-color-content-primary, red)`,
     ])
   })
 })

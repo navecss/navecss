@@ -4,11 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Source } from '../support/scenes.ts'
 
 import { marked, partsNamed } from '../support/dom.ts'
+import { EARLIER_SUBPATHS } from '../support/feedback.ts'
 import { cleanup, render } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
-import { COMPLETION_SUBPATHS, SUBPATHS, topName } from '../support/subpaths.ts'
+import { COMPLETION_SUBPATHS, topName } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 import { isInT0 } from '../support/table-t0.ts'
 import { COMPLETION_PASS_THROUGHS } from '../support/w5-pass-throughs.ts'
@@ -55,7 +56,7 @@ const passThroughsOf = (subpath: string, parts: readonly string[]): string[] => 
  */
 const subjects = async (): Promise<{ part: string; subpath: string }[]> => {
   const found: { part: string; subpath: string }[] = []
-  for (const subpath of SUBPATHS) {
+  for (const subpath of EARLIER_SUBPATHS) {
     await render(scenes[subpath]?.render(bare, { props: openProps() }) as never)
     const parts = [...new Set(marked().map(({ part }) => part))]
     found.push(

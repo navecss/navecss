@@ -79,7 +79,12 @@ const SETTLE_FRAMES = 10
 
 const GUARD = 'transition-duration: calc(0 * var(--nave-motion-duration-fast))'
 const PROPERTY_FORM = 'transition-property: none'
-const GUARDS = 9
+/**
+The guards in the built stylesheet with every draft signed: v1's four, the overlay completion's
+five and the feedback and navigation components' three (the toast fade, the Navigation Menu
+fade and the Navigation Menu icon).
+ */
+const GUARDS = 12
 
 const nextFrame = (): Promise<void> =>
   new Promise((resolve) => {

@@ -31,9 +31,11 @@ export default defineConfig({
           execArgv: ['--no-sparkplug', ...preload(run.react)],
           include: ['test/render/*.test.ts'],
           setupFiles: ['test/support/setup-render.ts'],
-          // A render test renders whole scenes, and a run shares the machine with every other
-          // package's tests in `ci:check`.
+          // A render test renders whole scenes, a hook can render them too (the minor-version
+          // files render in `beforeAll`), and a run shares the machine with every other package's
+          // tests in `ci:check`.
           testTimeout: 60_000,
+          hookTimeout: 60_000,
         },
       })),
     ],

@@ -69,7 +69,7 @@ teams that want a principled foundation. The components Nave styles are Base
 UI's own, and your CSS wins over them by layer, so there is nothing to
 configure.
 
-Nave styles the 29 components that `@navecss/base-ui` wraps and builds none of
+Nave styles the 36 components that `@navecss/base-ui` wraps and builds none of
 its own. If you want the best possible base layer for your own system, read on.
 
 ## Quick start

@@ -8,11 +8,11 @@ import type { Props } from '../support/scenes.ts'
 import { wrapPart, wrapSizePart, wrapVariantPart } from '../../src/part.ts'
 import { filesUnder, SRC_DIR } from '../support/dist.ts'
 import { marked, partsNamed } from '../support/dom.ts'
+import { EARLIER_SUBPATHS, isFeedbackPart } from '../support/feedback.ts'
 import { act, cleanup, render, user } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
-import { SUBPATHS } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 import { COMPLETION_PASS_THROUGHS } from '../support/w5-pass-throughs.ts'
 
@@ -30,7 +30,9 @@ const withPanelsOpen = (): Record<string, Props> => ({
 
 const subpathOf = (part: string): string | undefined => {
   const top = part.split('.', 1)[0] ?? ''
-  return SUBPATHS.find((subpath) => subpath.replaceAll('-', '').toLowerCase() === top.toLowerCase())
+  return EARLIER_SUBPATHS.find(
+    (subpath) => subpath.replaceAll('-', '').toLowerCase() === top.toLowerCase(),
+  )
 }
 
 /**
@@ -38,7 +40,7 @@ Which styled parts the scene of each subpath renders, by the subpath whose scene
  */
 const renderedStyledParts = async (): Promise<Map<string, string[]>> => {
   const bySubpath = new Map<string, string[]>()
-  for (const subpath of SUBPATHS) {
+  for (const subpath of EARLIER_SUBPATHS) {
     await render(scenes[subpath]?.render(bare, { props: withPanelsOpen() }) as never)
     const present = new Set(marked().map(({ part }) => part))
     bySubpath.set(
@@ -161,7 +163,7 @@ describe('AC-base-ui-bridge-10, extended to the six by AC-base-ui-overlay-comple
     expect(
       tableP
         .keys()
-        .filter((part) => !looked.has(part))
+        .filter((part) => !isFeedbackPart(part) && !looked.has(part))
         .toArray(),
     ).toEqual([])
   })

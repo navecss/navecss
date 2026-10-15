@@ -39,6 +39,13 @@ const bareLoaders: Loaders = {
   'preview-card': () => import('@base-ui/react/preview-card'),
   combobox: () => import('@base-ui/react/combobox'),
   autocomplete: () => import('@base-ui/react/autocomplete'),
+  toast: () => import('@base-ui/react/toast'),
+  'navigation-menu': () => import('@base-ui/react/navigation-menu'),
+  'scroll-area': () => import('@base-ui/react/scroll-area'),
+  meter: () => import('@base-ui/react/meter'),
+  progress: () => import('@base-ui/react/progress'),
+  avatar: () => import('@base-ui/react/avatar'),
+  separator: () => import('@base-ui/react/separator'),
 }
 
 const naveLoaders: Loaders = {
@@ -73,18 +80,65 @@ const naveLoaders: Loaders = {
   autocomplete: () => import('../../src/autocomplete/index.ts'),
 }
 
-const load = async (loaders: Loaders): Promise<Source> => {
-  const entries = await Promise.all(
+/**
+The seven wrapper subpaths of the feedback and navigation spec. Loaded apart from the rest: a
+subpath that is not built yet must fail the test that asks for it, naming the import error, and
+not every scene of the other 29. The specifier is computed, because a transform that cannot resolve
+a literal one fails the whole file; the module runner resolves it relative to this file at run time
+and applies the run's aliases to everything the module imports, as it does for a literal one.
+ */
+const feedbackModule = (subpath: string): (() => Promise<Record<string, unknown>>) => {
+  return () => import(/* @vite-ignore */ `../../src/${subpath}/index.ts`)
+}
+
+const naveFeedbackLoaders: Loaders = Object.fromEntries(
+  ['toast', 'navigation-menu', 'scroll-area', 'meter', 'progress', 'avatar', 'separator'].map(
+    (subpath) => [subpath, feedbackModule(subpath)],
+  ),
+)
+
+const loadEach = async (loaders: Loaders): Promise<Map<string, Ui>> =>
+  new Map(
+    await Promise.all(
+      Object.entries(loaders).map(async ([subpath, loader]) => {
+        const module = await loader()
+        return [subpath, module[topName(subpath)] as Ui] as const
+      }),
+    ),
+  )
+
+/**
+ * The loaders that may fail without failing the load: each failure is kept by subpath and thrown,
+ * with its own message, by the lookup of that subpath.
+ */
+const loadEachOrKeepError = async (
+  loaders: Loaders,
+): Promise<{ failures: Map<string, unknown>; found: Map<string, Ui> }> => {
+  const failures = new Map<string, unknown>()
+  const found = new Map<string, Ui>()
+  await Promise.all(
     Object.entries(loaders).map(async ([subpath, loader]) => {
-      const module = await loader()
-      return [subpath, module[topName(subpath)] as Ui] as const
+      try {
+        const module = await loader()
+        found.set(subpath, module[topName(subpath)] as Ui)
+      } catch (error) {
+        failures.set(subpath, error)
+      }
     }),
   )
-  const byName = new Map(entries)
+  return { failures, found }
+}
+
+const load = async (loaders: Loaders, optional: Loaders = {}): Promise<Source> => {
+  const byName = await loadEach(loaders)
+  const { failures, found } = await loadEachOrKeepError(optional)
   return (subpath) => {
-    const ui = byName.get(subpath)
+    const ui = byName.get(subpath) ?? found.get(subpath)
     if (ui === undefined) {
-      throw new Error(`no component for the subpath ${subpath}`)
+      const reason = failures.get(subpath)
+      throw new Error(
+        `no component for the subpath ${subpath}${reason instanceof Error ? `: ${reason.message}` : ''}`,
+      )
     }
     return ui
   }
@@ -98,4 +152,4 @@ export const loadBare = (): Promise<Source> => load(bareLoaders)
 /**
 The wrapped components of this package's source.
  */
-export const loadNave = (): Promise<Source> => load(naveLoaders)
+export const loadNave = (): Promise<Source> => load(naveLoaders, naveFeedbackLoaders)

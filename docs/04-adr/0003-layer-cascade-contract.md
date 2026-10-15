@@ -74,6 +74,12 @@ properties. `components.nave` has one writer, `@navecss/base-ui`, whose single
 stylesheet carries only rules inside that layer, restates the order statement,
 declares no custom property and sets no `z-index`.
 
+- **Correction (2026-10-14):** the stylesheet sets one `z-index`,
+  `z-index: var(--nave-layer-toast)` in `nave-base-ui-toast-placement`, the toast area. No layer
+  is renamed, reordered, removed or inserted: the order is as before. The declaration is admitted
+  on one criterion, a portalled container that exists before the overlays it must sit above, and
+  nothing else in the stylesheet may set a `z-index`.
+
 The top-level order is `tokens`, `reset`, `atomic`, `components`, `overrides`;
 the sublayers order within their parent as listed. Renaming, reordering,
 removing or inserting a layer is a breaking change to a published contract.

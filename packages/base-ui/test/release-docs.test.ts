@@ -3,6 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { PACKAGE_DIR } from './support/stylesheet.ts'
+import { sectionOf, zIndexProblems } from './support/w12-release.ts'
 
 const ROOT = path.join(PACKAGE_DIR, '../..')
 const read = (...segments: string[]): string => readFileSync(path.join(ROOT, ...segments), 'utf8')
@@ -195,5 +196,85 @@ describe('AC-base-ui-bridge-50: every sentence and config this release makes fal
     expect(readme).not.toContain(
       'Anything about the component registry, until components exist and have\n   been reviewed one by one.',
     )
+  })
+})
+
+describe('AC-base-ui-feedback-navigation-17 (the docs clause): the ADR decisions that said the stylesheet sets no z-index', () => {
+  const decisionOf0003 = sectionOf(adr('0003'), /^## Decision$/, /^## Consequences$/)
+  const decisionTwoOf0010 = sectionOf(adr('0010'), /^\*\*2\. /, /^\*\*3\. /)
+
+  const oldCorrection =
+    '- **Correction (2026-09-30):** the entry shipped, and the stylesheet sets one `z-index` somewhere.'
+  const goodCorrection =
+    '- **Correction (2026-10-15):** the stylesheet sets one `z-index`, `z-index: var(--nave-layer-toast)` in `nave-base-ui-toast-placement`, the toast area. No layer is renamed, reordered, removed or inserted: the order is as before.'
+  const claim = 'whose single stylesheet declares no custom property and sets no `z-index`.'
+
+  it('reads the two decisions it checks', () => {
+    expect(decisionOf0003).toContain('The contract is the seven names')
+    expect(decisionTwoOf0010).toContain('The styling is one stylesheet')
+  })
+
+  it('has ADR 0003 decision 1 carry a dated correction that names the admitted declaration and says no layer moves', () => {
+    expect(zIndexProblems(decisionOf0003, { needsCorrection: true })).toEqual([])
+  })
+
+  it('has ADR 0010 decision 2 carry a dated correction that names the admitted declaration and says no layer moves', () => {
+    expect(zIndexProblems(decisionTwoOf0010, { needsCorrection: true })).toEqual([])
+  })
+
+  it('control: the sentence as it stood, with no correction beside it, is reported', () => {
+    expect(zIndexProblems(claim, { needsCorrection: true })).toContain(
+      'no dated correction about the z-index',
+    )
+    expect(zIndexProblems(claim, { needsCorrection: false })).toContain(
+      'no dated correction about the z-index',
+    )
+  })
+
+  it('control: the sentence changed to match but not naming the declaration is reported', () => {
+    expect(
+      zIndexProblems('whose single stylesheet sets one `z-index`.', { needsCorrection: false }),
+    ).toContain('the decision does not name the admitted z-index declaration')
+  })
+
+  it('control: the sentence with a correction that names the declaration and says no layer moves is clean', () => {
+    expect(zIndexProblems(`${claim}\n\n${goodCorrection}`, { needsCorrection: true })).toEqual([])
+  })
+
+  it('control: each real decision with a good correction appended is clean, so the checks read the real text', () => {
+    expect(
+      zIndexProblems(`${decisionOf0003}\n${goodCorrection}`, { needsCorrection: true }),
+    ).toEqual([])
+    expect(
+      zIndexProblems(`${decisionTwoOf0010}\n\n${goodCorrection}`, { needsCorrection: false }),
+    ).toEqual([])
+  })
+
+  it('control: a correction that is undated, or dated before the placement was signed, is reported', () => {
+    const early = goodCorrection.replace('2026-10-15', '2026-09-30')
+    expect(zIndexProblems(`${claim}\n\n${early}`, { needsCorrection: true })).toEqual([
+      'the correction is dated 2026-09-30, before 2026-10-14',
+    ])
+    expect(zIndexProblems(`${claim}\n\n${oldCorrection}`, { needsCorrection: true })).toContain(
+      'the correction does not name z-index with --nave-layer-toast',
+    )
+  })
+
+  it('control: a correction that does not say no layer moves is reported', () => {
+    const silent = goodCorrection.replace(/ No layer is renamed.*$/, '')
+    expect(silent).not.toBe(goodCorrection)
+    expect(zIndexProblems(`${claim}\n\n${silent}`, { needsCorrection: true })).toEqual([
+      'the correction does not say that no layer moves',
+    ])
+  })
+
+  it('control: a correction that does not name the toast placement is reported', () => {
+    const vague = goodCorrection.replace(
+      'in `nave-base-ui-toast-placement`, the toast area',
+      'somewhere',
+    )
+    expect(zIndexProblems(`${claim}\n\n${vague}`, { needsCorrection: true })).toEqual([
+      'the correction does not name the toast placement',
+    ])
   })
 })

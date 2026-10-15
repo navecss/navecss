@@ -41,9 +41,26 @@ export const COMPLETION_SUBPATHS = [
 ] as const
 
 /**
+The seven components the feedback and navigation release adds.
+ */
+const FEEDBACK_SUBPATHS = [
+  'toast',
+  'navigation-menu',
+  'scroll-area',
+  'meter',
+  'progress',
+  'avatar',
+  'separator',
+] as const
+
+/**
 Every subpath the package ships.
  */
-export const SUBPATHS = [...FIRST_RELEASE_SUBPATHS, ...COMPLETION_SUBPATHS] as const
+export const SUBPATHS = [
+  ...FIRST_RELEASE_SUBPATHS,
+  ...COMPLETION_SUBPATHS,
+  ...FEEDBACK_SUBPATHS,
+] as const
 
 export type Subpath = (typeof SUBPATHS)[number]
 
@@ -66,6 +83,7 @@ export const SINGLE_COMPONENT: ReadonlySet<string> = new Set([
   'input',
   'menubar',
   'radio-group',
+  'separator',
   'toggle',
   'toggle-group',
 ])

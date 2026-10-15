@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { readBaseUiTypes } from '../scripts/wrappers/read-types.ts'
 import { DIST_DIR } from './support/dist.ts'
+import { FEEDBACK_KEYS, FEEDBACK_SUBPATHS, FEEDBACK_TOP } from './support/feedback-subpaths.ts'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
 import { COMPLETION_SUBPATHS, SINGLE_COMPONENT, topName } from './support/subpaths.ts'
 import { tableP } from './support/table-p.ts'
@@ -158,10 +159,12 @@ const scratchDist = (name: string, subpath: string): string => {
 
 describe("AC-base-ui-bridge-39 and AC-base-ui-overlay-completion-43: an unused part is dropped by the consumer's bundler", () => {
   // Components with a Root, a styled part and a part to leave unused: the ones of three or more
-  // parts. A component of two has no part left over to drop.
+  // parts. A component of two has no part left over to drop. The seven of the feedback and
+  // navigation release are measured below, with pairs written out.
   const subpaths = readBaseUiTypes('current')
     .filter(({ parts, subpath }) => !SINGLE_COMPONENT.has(subpath) && parts.length >= 3)
     .map(({ subpath }) => subpath)
+    .filter((subpath) => !(FEEDBACK_SUBPATHS as readonly string[]).includes(subpath))
 
   it('covers the components that have a part to leave unused, one pair for each of the six but Menubar', () => {
     expect(subpaths).toEqual([
@@ -277,6 +280,153 @@ describe("AC-base-ui-bridge-39 and AC-base-ui-overlay-completion-43: an unused p
       )
       const helper = await helperCost(dist, 'plain')
       const { second } = await bundleProblems(await subjectOf('popover'), helper, dist, 'plain')
+      expect(second).toHaveLength(1)
+    },
+  )
+})
+
+/**
+ * The pair each of the seven is measured with: its Root and one styled part. The rest of the
+ * namespace is left unused, and the bundler must drop it.
+ */
+const FEEDBACK_PAIRS: Readonly<Record<string, readonly [string, string]>> = {
+  avatar: ['Root', 'Image'],
+  meter: ['Root', 'Track'],
+  'navigation-menu': ['Root', 'Popup'],
+  progress: ['Root', 'Track'],
+  'scroll-area': ['Root', 'Viewport'],
+  // Toast.Root is a styled part with the longest class string, so the pair is the provider, which
+  // is Base UI's own, and the viewport.
+  toast: ['Provider', 'Viewport'],
+}
+
+const byCodeUnit = (a: string, b: string): number => a.localeCompare(b)
+
+/**
+ * The entry that uses Meter.Root and Progress.Root together, and the one that uses one of the two,
+ * from Base UI (`bare`) or from this package (`wrapped`).
+ */
+const bothRoots = (side: 'bare' | 'wrapped'): string => {
+  const prefix = side === 'bare' ? '@base-ui/react' : '@navecss/base-ui'
+  return `import { Meter } from '${prefix}/meter'\nimport { Progress } from '${prefix}/progress'\nconsole.log(Meter.Root, Progress.Root)\n`
+}
+
+const oneRoot = (side: 'bare' | 'wrapped', which: 'Meter' | 'Progress'): string => {
+  const prefix = side === 'bare' ? '@base-ui/react' : '@navecss/base-ui'
+  return `import { ${which} } from '${prefix}/${which.toLowerCase()}'\nconsole.log(${which}.Root)\n`
+}
+
+const feedbackSubject = (subpath: string): Subject => {
+  const top = FEEDBACK_TOP[subpath] ?? ''
+  const pair = FEEDBACK_PAIRS[subpath] ?? ['Root', 'Root']
+  return {
+    entry: (side, extra) =>
+      entry(side === 'bare' ? `@base-ui/react/${subpath}` : `@navecss/base-ui/${subpath}`, top, [
+        ...pair,
+        ...extra,
+      ]),
+    label: subpath,
+    others: (FEEDBACK_KEYS[subpath as keyof typeof FEEDBACK_KEYS] ?? []).filter(
+      (key) => !pair.includes(key),
+    ),
+  }
+}
+
+describe("AC-base-ui-feedback-navigation-46 (extends AC-base-ui-bridge-39): an unused part of the seven is dropped by the consumer's bundler", () => {
+  it('measures one pair per subpath of the seven, and each pair is two parts of its namespace', () => {
+    expect(Object.keys(FEEDBACK_PAIRS).toSorted(byCodeUnit)).toEqual(
+      FEEDBACK_SUBPATHS.filter((subpath) => subpath !== 'separator').toSorted(byCodeUnit),
+    )
+    for (const [subpath, pair] of Object.entries(FEEDBACK_PAIRS)) {
+      const keys = FEEDBACK_KEYS[subpath as keyof typeof FEEDBACK_KEYS]
+      expect(
+        pair.every((part) => keys.includes(part)),
+        `${subpath} pair`,
+      ).toBe(true)
+      expect(
+        feedbackSubject(subpath).others.length,
+        `${subpath} leaves parts unused`,
+      ).toBeGreaterThan(0)
+    }
+  })
+
+  for (const subpath of Object.keys(FEEDBACK_PAIRS)) {
+    it(
+      `${subpath}: the wrapper adds the helper and its own calls, and drops every unused part`,
+      { timeout: 300_000 },
+      async () => {
+        const helper = await helperCost(DIST_DIR, subpath)
+        const { second, third } = await bundleProblems(
+          feedbackSubject(subpath),
+          helper,
+          DIST_DIR,
+          `feedback-${subpath}`,
+        )
+        expect([...second, ...third]).toEqual([])
+      },
+    )
+  }
+
+  it(
+    'separator: a single component, the wrapper adds the helper and its own call',
+    { timeout: 300_000 },
+    async () => {
+      const subject: Subject = {
+        entry: (side) =>
+          `import { Separator } from '${side === 'bare' ? '@base-ui/react/separator' : '@navecss/base-ui/separator'}'\nconsole.log(Separator)\n`,
+        label: 'separator',
+        others: [],
+      }
+      const helper = await helperCost(DIST_DIR, 'separator')
+      const { second, third } = await bundleProblems(
+        subject,
+        helper,
+        DIST_DIR,
+        'feedback-separator',
+      )
+      expect([...second, ...third]).toEqual([])
+    },
+  )
+
+  it(
+    'meter and progress: Meter.Root used alone keeps none of Progress, and Progress.Root alone none of Meter',
+    { timeout: 300_000 },
+    async () => {
+      const helper = await helperCost(DIST_DIR, 'feedback-shared')
+      for (const [which, other] of [
+        ['Meter', 'Progress'],
+        ['Progress', 'Meter'],
+      ] as const) {
+        const a = await sizeOf(`feedback-shared-a-${which}`, oneRoot('bare', which))
+        const c = await sizeOf(`feedback-shared-c-${which}`, oneRoot('wrapped', which))
+        // The wrapper's Meter.Root alone costs the helper and its own call over Base UI's.
+        expect(c - a, `${which}.Root alone`).toBeLessThanOrEqual(helper + SLACK)
+        // The other component's Root, added, adds at least half of what it adds to Base UI's own.
+        const bareBoth = await sizeOf(`feedback-shared-b-${which}`, bothRoots('bare'))
+        const wrappedBoth = await sizeOf(`feedback-shared-d-${which}`, bothRoots('wrapped'))
+        const otherAlone = await sizeOf(`feedback-shared-o-${other}`, oneRoot('bare', other))
+        expect(otherAlone).toBeGreaterThan(0)
+        expect(wrappedBoth - c, `${other}.Root added to ${which}.Root`).toBeGreaterThanOrEqual(
+          (bareBoth - a) / 2,
+        )
+      }
+    },
+  )
+
+  it(
+    'control: a pass-through written as a plain property is reported where the bundler cannot drop it',
+    { timeout: 300_000 },
+    async () => {
+      const dist = scratchDist('plain-properties-toast', 'toast')
+      const modules = path.join(dist, 'toast/parts.generated.js')
+      const text = readFileSync(modules, 'utf8')
+      writeFileSync(
+        modules,
+        text.replaceAll(/\/\*#__PURE__\*\/ \(\(\) => (Base\.\w+)\)\(\)/g, '$1'),
+      )
+      expect(readFileSync(modules, 'utf8')).not.toBe(text)
+      const helper = await helperCost(dist, 'plain-toast')
+      const { second } = await bundleProblems(feedbackSubject('toast'), helper, dist, 'plain-toast')
       expect(second).toHaveLength(1)
     },
   )

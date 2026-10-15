@@ -27,3 +27,11 @@ opens through its Menu roots, which `openProps` opens.
  */
 export const isOverlay = (subpath: string): boolean =>
   subpath === 'menubar' || (OVERLAYS as readonly string[]).includes(topName(subpath))
+
+/**
+The props that put the Navigation Menu's scene in its open state: the item the scene names `a` is
+open. The component has no `open` prop of its own, so `openProps` does not reach it.
+ */
+export const navigationMenuOpenProps = (): Record<string, Props> => ({
+  'NavigationMenu.Root': { defaultValue: 'a' },
+})

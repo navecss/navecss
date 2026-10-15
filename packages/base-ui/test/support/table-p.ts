@@ -4,55 +4,13 @@
  * class set and the roles' atom names are both checked against it. `tableP`, `tablePClasses` and
  * `focusRingClasses` are the shipping state (every draft signed, the scrim at scope (i)).
  */
-import type { Draft } from './draft-states.ts'
+import type { AnyDraft, BackdropScope, Row } from './table-p-rows.ts'
 
-const BASE = 'nave-base-ui-'
+import { feedbackRows } from './table-p-feedback-rows.ts'
+import { always, BASE, row, rowWith, signedWith } from './table-p-rows.ts'
 
-/**
- * Where the scrim class goes when `scrim` is signed: at scope (i) on `AlertDialog.Backdrop` alone,
- * at scope (ii) on `Dialog.Backdrop` too.
- */
-export type BackdropScope = 'i' | 'ii'
-
-interface ClassEntry {
-  readonly name: string
-  /**
-  The draft that has to be signed for the class to ship; absent when it always ships.
-   */
-  readonly draft?: Draft
-}
-
-interface Row {
-  readonly parts: readonly string[]
-  readonly classes: readonly ClassEntry[]
-  /**
-  The draft that has to be signed for the row to exist at all.
-   */
-  readonly draft?: Draft
-  readonly scope?: BackdropScope
-}
-
-const always = (name: string): ClassEntry => ({ name: `${BASE}${name}` })
-
-const signedWith = (draft: Draft, name: string): ClassEntry => ({
-  name: `${BASE}${name}`,
-  draft,
-})
-
-const row = (parts: readonly string[], ...classes: readonly ClassEntry[]): Row => ({
-  parts,
-  classes,
-})
-
-const rowWith = (
-  draft: Draft,
-  parts: readonly string[],
-  ...classes: readonly ClassEntry[]
-): Row => ({
-  parts,
-  classes,
-  draft,
-})
+export { FEEDBACK_DRAFTS } from './table-p-rows.ts'
+export type { AnyDraft, BackdropScope, FeedbackDraft } from './table-p-rows.ts'
 
 const MENU_ITEMS = [
   'Menu.Item',
@@ -77,7 +35,14 @@ const rows: readonly Row[] = [
   row(['Dialog.Popup'], always('dialog-popup'), signedWith('popup-fade', 'popup-fade')),
   row(['Tooltip.Popup'], always('tooltip-popup'), signedWith('tooltip-fade', 'tooltip-motion')),
   row(
-    ['Popover.Arrow', 'Menu.Arrow', 'Select.Arrow', 'Tooltip.Arrow'],
+    [
+      'Popover.Arrow',
+      'Menu.Arrow',
+      'Select.Arrow',
+      'Tooltip.Arrow',
+      'Toast.Arrow',
+      'NavigationMenu.Arrow',
+    ],
     always('arrow'),
     always('arrow-inline'),
   ),
@@ -112,6 +77,8 @@ const rows: readonly Row[] = [
       'Popover.Close',
       'Menu.Trigger',
       'Tooltip.Trigger',
+      'Toast.Action',
+      'Toast.Close',
     ],
     always('button'),
   ),
@@ -122,7 +89,7 @@ const rows: readonly Row[] = [
   row(['Select.Value'], always('select-value')),
   row(['Select.Icon'], always('select-icon')),
   row(['Field.Root'], always('field')),
-  row(['Field.Label', 'Select.Label'], always('label')),
+  row(['Field.Label', 'Select.Label', 'Meter.Label', 'Progress.Label'], always('label')),
   row(['Field.Description'], always('field-description')),
   row(['Field.Error'], always('field-error')),
   row(['Fieldset.Root'], always('fieldset')),
@@ -140,12 +107,13 @@ const rows: readonly Row[] = [
   row(['NumberField.ScrubArea'], always('number-field-scrub-area')),
   row(['Toolbar.Root'], always('toolbar')),
   row(['Toolbar.Group'], always('toolbar-group')),
-  row(['Toolbar.Separator'], always('toolbar-separator')),
+  row(['Toolbar.Separator', 'Separator'], always('toolbar-separator')),
   row(['Toolbar.Link'], always('toolbar-link')),
+  row(['NavigationMenu.Link'], always('toolbar-link'), always('current-link')),
   row(['Slider.Control'], always('slider-control')),
   row(['Slider.Track'], always('slider-track')),
   row(['Slider.Thumb'], always('slider-thumb')),
-  row(['Slider.Value'], always('slider-value')),
+  row(['Slider.Value', 'Meter.Value', 'Progress.Value'], always('slider-value')),
   // The scrim: `Dialog.Backdrop` takes it only at scope (ii); `AlertDialog.Backdrop` at either.
   { parts: ['Dialog.Backdrop'], classes: [always('backdrop')], draft: 'scrim', scope: 'ii' },
   rowWith('scrim', ['AlertDialog.Backdrop'], always('backdrop')),
@@ -197,9 +165,10 @@ const rows: readonly Row[] = [
   rowWith('combobox', ['Combobox.GroupLabel', 'Autocomplete.GroupLabel'], always('group-label')),
   rowWith('combobox', ['Combobox.Separator', 'Autocomplete.Separator'], always('separator')),
   rowWith('combobox', ['Combobox.Empty', 'Autocomplete.Empty'], always('list-empty')),
+  ...feedbackRows,
 ]
 
-const isSigned = (draft: Draft | undefined, unsigned: readonly Draft[]): boolean =>
+const isSigned = (draft: AnyDraft | undefined, unsigned: readonly AnyDraft[]): boolean =>
   draft === undefined || !unsigned.includes(draft)
 
 /**
@@ -207,7 +176,7 @@ const isSigned = (draft: Draft | undefined, unsigned: readonly Draft[]): boolean
  * the shipping state), `scope` is the scope `scrim` is signed at. The v1 class stays first in a row.
  */
 export const tablePFor = (
-  unsigned: readonly Draft[] = [],
+  unsigned: readonly AnyDraft[] = [],
   scope: BackdropScope = 'i',
 ): ReadonlyMap<string, readonly string[]> =>
   new Map(
@@ -225,7 +194,7 @@ export const tablePFor = (
  * Every class Table P names for a signature state.
  */
 export const tablePClassesFor = (
-  unsigned: readonly Draft[] = [],
+  unsigned: readonly AnyDraft[] = [],
   scope: BackdropScope = 'i',
 ): ReadonlySet<string> => new Set(tablePFor(unsigned, scope).values().toArray().flat())
 
@@ -255,7 +224,7 @@ export const sliderClasses: readonly string[] = [
  * four popups when they take focus themselves and the number field's steppers are excluded by
  * name; the chip and the combobox trigger are in only while `combobox` is signed.
  */
-export const focusRingClassesFor = (unsigned: readonly Draft[] = []): readonly string[] =>
+export const focusRingClassesFor = (unsigned: readonly AnyDraft[] = []): readonly string[] =>
   [
     always('button'),
     always('input'),
@@ -269,6 +238,7 @@ export const focusRingClassesFor = (unsigned: readonly Draft[] = []): readonly s
     always('disclosure-trigger'),
     always('item'),
     always('toolbar-link'),
+    always('navigation-menu-trigger'),
     signedWith('combobox', 'chip'),
     signedWith('combobox', 'combobox-trigger'),
   ]

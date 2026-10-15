@@ -4,9 +4,9 @@
  * The one helper every wrapped part is built with. A wrapped part is Base UI's part with Nave's
  * class added to its `className` (a string is joined after Nave's class, a function of state is
  * wrapped, never stringified) and, for the Button family, the typed `variant` and `size` props
- * turned into `data-nave-*` attributes. Everything else (every other prop, the ref, `render`) goes
- * to Base UI's part untouched, and nothing here reads state, layout or style: what the wrapper adds
- * is chosen by the props the consumer passed.
+ * turned into `data-nave-*` attributes (as `size` is for an Avatar). Everything else (every other
+ * prop, the ref, `render`) goes to Base UI's part untouched, and nothing here reads state, layout
+ * or style: what the wrapper adds is chosen by the props the consumer passed.
  */
 import {
   createElement,
@@ -16,6 +16,13 @@ import {
   type RefAttributes,
   useMemo,
 } from 'react'
+
+/**
+ * The size an Avatar takes. It is not a Base UI prop of any Avatar part, so nothing is shadowed.
+ */
+export interface AvatarProps {
+  size?: 'lg' | 'md' | 'sm'
+}
 
 export interface VariantProps {
   size?: 'md' | 'sm'
@@ -33,6 +40,11 @@ export type PartOf<Namespace, Key extends string> = Key extends keyof Namespace
 export interface SizeProps {
   size?: 'md' | 'sm'
 }
+
+type Variants = 'avatar' | 'size' | 'variant'
+
+const isOffDefault = (size: unknown, variants: Variants): boolean =>
+  size === 'sm' || (variants === 'avatar' && size === 'lg')
 
 type ClassNameFunction = (state: unknown) => string | undefined
 type ClassName = ClassNameFunction | string | undefined
@@ -59,20 +71,20 @@ const useClassName = (own: string, consumer: ClassName): ClassName =>
  * The attributes a non-default variant or size renders as, and the props left over. `variant` and
  * `size` are consumed here and never reach Base UI's part, which has no such props.
  */
-const variantAttributes = (props: Props, variants: 'size' | 'variant'): Props => {
+const variantAttributes = (props: Props, variants: Variants): Props => {
   const { size, variant, ...rest } = props
   return {
     ...rest,
     ...(variants === 'variant' &&
       (variant === 'primary' || variant === 'ghost') && { 'data-nave-variant': variant }),
-    ...(size === 'sm' && { 'data-nave-size': 'sm' }),
+    ...(isOffDefault(size, variants) && { 'data-nave-size': size }),
   }
 }
 
 const build = (
   part: ElementType,
   own: string,
-  variants: 'size' | 'variant' | undefined,
+  variants: Variants | undefined,
 ): ForwardRefExoticComponent<Props & RefAttributes<unknown>> =>
   forwardRef<unknown, Props>(function NaveBaseUiPart(props, ref) {
     const forwarded = variants === undefined ? props : variantAttributes(props, variants)
@@ -84,7 +96,7 @@ const build = (
  * The wrapped part, or nothing where the installed Base UI has no such part (one younger than the
  * peer floor): the export stays absent instead of becoming a component that throws when rendered.
  */
-const wrap = <T>(part: unknown, className: string, variants: 'size' | 'variant' | undefined): T =>
+const wrap = <T>(part: unknown, className: string, variants: Variants | undefined): T =>
   part === undefined
     ? (part as T)
     : (build(part as ElementType, className, variants) as unknown as T)
@@ -109,3 +121,10 @@ export const wrapVariantPart = <T>(part: unknown, className: string): T =>
  */
 export const wrapSizePart = <T>(part: unknown, className: string): T =>
   wrap<T>(part, className, 'size')
+
+/**
+ * A part that gains `size` with the Avatar's three values. A part the installed Base UI does not
+ * have stays absent, as for `wrapPart`.
+ */
+export const wrapAvatarPart = <T>(part: unknown, className: string): T =>
+  wrap<T>(part, className, 'avatar')

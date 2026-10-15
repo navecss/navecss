@@ -5,6 +5,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { DIST_DIR, filesUnder, manifest, readDist, SRC_DIR } from './support/dist.ts'
+import { FEEDBACK_SUBPATHS } from './support/feedback-subpaths.ts'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
 import { COMPLETION_SUBPATHS, SINGLE_COMPONENT, SUBPATHS } from './support/subpaths.ts'
 
@@ -23,7 +24,7 @@ const hasDirective = (code: string): boolean => {
   return /^(['"])use client\1/.test(rest)
 }
 
-describe("AC-base-ui-bridge-13 and AC-base-ui-overlay-completion-43: 'use client' survives, per file", () => {
+describe("AC-base-ui-bridge-13, AC-base-ui-overlay-completion-43 and AC-base-ui-feedback-navigation-46: 'use client' survives, per file", () => {
   const sources = filesUnder(SRC_DIR, ['.ts', '.tsx'])
   const built = filesUnder(DIST_DIR, ['.js'])
 
@@ -51,6 +52,54 @@ describe("AC-base-ui-bridge-13 and AC-base-ui-overlay-completion-43: 'use client
       }),
     ).toEqual([])
     expect(SINGLE_COMPONENT.has('menubar')).toBe(true)
+  })
+
+  it('AC-base-ui-feedback-navigation-46: has a source module, a built module with the directive and a declaration file for the index and the parts of each of the seven', () => {
+    const declarations = filesUnder(DIST_DIR, ['.d.ts'])
+    const modules = FEEDBACK_SUBPATHS.flatMap((subpath) => [
+      `${subpath}/index`,
+      `${subpath}/parts.generated`,
+    ])
+    expect(modules).toHaveLength(14)
+    expect(modules.filter((module) => !sources.includes(`${module}.ts`))).toEqual([])
+    expect(modules.filter((module) => !built.includes(`${module}.js`))).toEqual([])
+    expect(modules.filter((module) => !declarations.includes(`${module}.d.ts`))).toEqual([])
+    expect(
+      modules.filter((module) => {
+        const file = `${module}.js`
+        return built.includes(file) && !hasDirective(readDist(file))
+      }),
+    ).toEqual([])
+    // The source modules begin with the directive too: the build keeps what the source has.
+    expect(
+      modules.filter(
+        (module) =>
+          sources.includes(`${module}.ts`) &&
+          !hasDirective(readFileSync(path.join(SRC_DIR, `${module}.ts`), 'utf8')),
+      ),
+    ).toEqual([])
+  })
+
+  it('control: a module whose first statement is not the directive is reported', () => {
+    expect(hasDirective("'use client'\nexport const a = 1")).toBe(true)
+    expect(hasDirective("/* generated */\n'use client'\nexport const a = 1")).toBe(true)
+    expect(hasDirective("export const a = 1\n'use client'")).toBe(false)
+  })
+
+  it('AC-base-ui-feedback-navigation-46, control: the seven bundled with esbuild lose the directive', async () => {
+    const result = await build({
+      absWorkingDir: PACKAGE_DIR,
+      bundle: true,
+      stdin: {
+        contents: `export { Toast } from ${JSON.stringify(path.join(DIST_DIR, 'toast/index.js'))}`,
+        resolveDir: PACKAGE_DIR,
+      },
+      external: ['react', 'react-dom', '@base-ui/react', '@base-ui/react/*'],
+      format: 'esm',
+      logLevel: 'silent',
+      write: false,
+    })
+    expect(hasDirective(result.outputFiles[0]?.text ?? '')).toBe(false)
   })
 
   it('control: the same source bundled with esbuild loses the directive', async () => {
@@ -82,12 +131,13 @@ const importsOf = (code: string): string[] =>
     .toArray()
 
 /**
- * A subpath of Base UI that this package wraps: one of the 23 v1 components. Base UI exports more
+ * A subpath of Base UI that this package wraps: one of the 36 components (the seven of the feedback
+ * and navigation release among them). Base UI exports more
  * besides its root and internals (21 at 1.8.0, 20 at the 1.3.0 floor: hooks, utilities and types,
  * and components this package does not wrap), and a wrapper has no reason to import any of them.
  */
 const isComponentSubpath = (specifier: string): boolean =>
-  SUBPATHS.some((subpath) => specifier === `@base-ui/react/${subpath}`)
+  [...SUBPATHS, ...FEEDBACK_SUBPATHS].some((subpath) => specifier === `@base-ui/react/${subpath}`)
 
 /**
  * The specifiers that reach into Base UI beyond the subpaths this package wraps.

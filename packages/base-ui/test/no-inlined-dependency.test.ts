@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 /**
- * AC-base-ui-bridge-36 covers: R10.
+ * AC-base-ui-bridge-36.
  *
  * No build inlines a third-party dependency. This package compiles with `tsc`, one output file per
  * source file, so nothing is bundled and the property holds by construction; this test is what

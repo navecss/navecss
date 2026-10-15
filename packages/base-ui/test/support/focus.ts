@@ -25,11 +25,15 @@ const T2_NAMES = [
   // combobox trigger. `-active-option` is not here: its options never take DOM focus.
   'chip',
   'combobox-trigger',
+  // The one focusable part the feedback and navigation spec adds (Table T2 amended): the
+  // Navigation Menu trigger, an atom of its own. `-toast-root` and `-scroll-area-viewport` keep the
+  // browser's ring and are not here.
+  'navigation-menu-trigger',
 ]
 
 /**
- * Table T2: the focusable parts that take `focusRing`, the twelve of the first release and the two
- * the overlay completion adds. The Slider thumb, the four popups when they take focus themselves
+ * Table T2: the focusable parts that take `focusRing`, the twelve of the first release, the two
+ * the overlay completion adds and the one the feedback and navigation spec adds. The Slider thumb, the four popups when they take focus themselves
  * and the number field's steppers are excluded by name.
  */
 export const focusRingClasses: readonly string[] = T2_NAMES.map((name) => `nave-base-ui-${name}`)
