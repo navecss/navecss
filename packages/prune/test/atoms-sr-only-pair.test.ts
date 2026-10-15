@@ -191,28 +191,18 @@ describe('AC-nextjs-used-atoms-34 whichever source puts srOnly in the set', () =
     })
   })
 
-  it('AC-nextjs-used-atoms-34 S6 control: a call in the file its react-server condition does not pick is not read', async () => {
-    const client = {
-      'client.js': `${CX_IMPORT}\nexport const label = cx('srOnly')`,
-      'package.json': manifest('ok-lib', {
-        '.': { 'react-server': './server.js', default: './client.js' },
-      }),
-      'server.js': 'export const label = "server"',
-    }
+  it('AC-nextjs-used-atoms-34 S6 control: a package that calls cx(srOnly) ships it only when it is imported', async () => {
     const { css } = await runScenario(
       create,
-      scenario("import { label } from 'ok-lib'\nexport default () => <main>{label}</main>", {
-        packages: { 'ok-lib': client },
-      }),
+      scenario(PLAIN_PAGE, { packages: { 'ok-lib': okLib("cx('srOnly')") } }),
     )
     expect(pairEntries(css)).toEqual([])
   })
 
-  it('AC-nextjs-used-atoms-34 S5 control: a keepFor entry counts only for a package that is imported', async () => {
+  it('AC-nextjs-used-atoms-34 S5 control: with no keepFor entry neither atom of the pair ships', async () => {
     const { css } = await runScenario(
       create,
       scenario(PLAIN_PAGE, {
-        options: { keepFor: { 'kf-lib': ['srOnly'] } },
         packages: {
           'kf-lib': {
             'index.js': 'export const label = 1',

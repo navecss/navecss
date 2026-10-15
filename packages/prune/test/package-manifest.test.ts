@@ -68,7 +68,8 @@ describe('AC-nextjs-used-atoms-11: the package carries the parser and the resolv
 
   it('control: the field scan finds a dependency that core does list', () => {
     expect(fieldsListing(coreManifest, '@navecss/tokens')).toEqual(['dependencies'])
-    expect(fieldsListing(manifest, 'next')).toEqual(['devDependencies', 'peerDependencies'])
+    expect(fieldsListing(manifest, 'next')).toEqual(['peerDependencies'])
+    expect(fieldsListing(manifest, 'postcss')).toEqual(['devDependencies', 'peerDependencies'])
   })
 
   it('is licensed MIT', () => {

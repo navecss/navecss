@@ -67,7 +67,6 @@
     "@navecss/core": "workspace:*",
     "@types/node": "^26.6.4",
     "@vitest/coverage-v8": "5.0.3",
-    "next": "16.2.0",
     "postcss": "^8.5.28",
     "typescript": "6.0.3",
     "vitest": "5.0.3"

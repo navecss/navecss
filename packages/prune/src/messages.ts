@@ -1,0 +1,47 @@
+/**
+ * The messages the plugin gives the bundler so it runs the plugin again when what the plugin read
+ * changes: a `dependency` for each file, a `dir-dependency` for each directory files were selected
+ * from. Never a directory as a `dependency`, and nothing outside the bundler's root.
+ */
+import type { Message } from 'postcss'
+
+import path from 'node:path'
+
+import type { SelectedDirectory } from './entries.ts'
+
+const PLUGIN = 'postcss-nave-prune'
+
+/**
+ * Whether `file` lies inside `root`.
+ */
+function isInside(root: string, file: string): boolean {
+  const relative = path.relative(root, file)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+/**
+ * The messages for the files read and the directories selected from.
+ */
+export function dependencyMessages(input: {
+  readonly directories: readonly SelectedDirectory[]
+  readonly files: Iterable<string>
+  readonly parent: string | undefined
+  readonly root: string
+}): Message[] {
+  const { root, parent, files, directories } = input
+  const messages: Message[] = []
+  for (const file of files) {
+    if (isInside(root, file)) messages.push({ type: 'dependency', plugin: PLUGIN, file, parent })
+  }
+  for (const directory of directories) {
+    if (!isInside(root, directory.path)) continue
+    messages.push({
+      type: 'dir-dependency',
+      plugin: PLUGIN,
+      dir: directory.path,
+      glob: directory.glob,
+      parent,
+    })
+  }
+  return messages
+}

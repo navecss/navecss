@@ -150,16 +150,35 @@ describe('AC-nextjs-used-atoms-37 the page shell is read', () => {
       expect(atomsShipped(css)).toEqual(shell.emitted)
       expect(recordOf(project).atoms).toEqual(shell.emitted)
     })
-
-    it(`AC-nextjs-used-atoms-37 control: ${state} with its skip link removed ships no srOnlyFocusable`, async () => {
-      const { css } = await runScenario(create, shell.build(false))
-      expect(atomsShipped(css)).not.toContain('srOnlyFocusable')
-    })
   })
 
-  it('AC-nextjs-used-atoms-37 control: T1 with its skip link removed still ships srOnly alone', async () => {
+  // T1 reads `srOnly` elsewhere, and a set holding `srOnly` holds `srOnlyFocusable` too, so its
+  // control is the next test.
+  describe.each(Object.entries(SHELLS).filter(([state]) => state !== 'T1'))(
+    '%s',
+    (state, shell) => {
+      it(`AC-nextjs-used-atoms-37 control: ${state} with its skip link removed ships no srOnlyFocusable`, async () => {
+        const { css } = await runScenario(create, shell.build(false))
+        expect(atomsShipped(css)).not.toContain('srOnlyFocusable')
+      })
+    },
+  )
+
+  it('AC-nextjs-used-atoms-37 control: T1 without its link still ships srOnlyFocusable, through srOnly read elsewhere', async () => {
     const { css } = await runScenario(create, SHELLS.T1!.build(false))
-    expect(atomsShipped(css)).toEqual(['srOnly'])
+    expect(atomsShipped(css)).toEqual(['srOnly', 'srOnlyFocusable'])
+  })
+
+  it('AC-nextjs-used-atoms-37 control: T1 without its link and without the other use ships neither', async () => {
+    const built = SHELLS.T1!.build(false)
+    const { css } = await runScenario(create, {
+      ...built,
+      files: {
+        ...built.files,
+        'components/Visually.tsx': 'export function Visually() { return null }',
+      },
+    })
+    expect(atomsShipped(css)).toEqual([])
   })
 
   it('AC-nextjs-used-atoms-37 control: the full layer holds srOnlyFocusable entries', () => {

@@ -333,6 +333,9 @@ importers:
 
   packages/prune:
     dependencies:
+      next:
+        specifier: '>=16.2.0'
+        version: 16.2.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.105.1)
       oxc-parser:
         specifier: 0.150.0
         version: 0.150.0
@@ -349,9 +352,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 5.0.3
         version: 5.0.3(@vitest/browser@5.0.3)(vitest@5.0.3)
-      next:
-        specifier: 16.2.0
-        version: 16.2.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(sass@1.105.1)
       postcss:
         specifier: ^8.5.28
         version: 8.5.29

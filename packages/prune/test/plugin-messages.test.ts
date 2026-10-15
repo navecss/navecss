@@ -87,10 +87,12 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
         path.join(project.dir, 'node_modules/ok-lib/index.js'),
       ]),
     )
-    expect(named).toEqual(expect.arrayContaining([...recorded, ...configs]))
-    expect(
-      named.filter((file) => !recorded.includes(file)).toSorted((a, b) => a.localeCompare(b)),
-    ).toEqual(configs.toSorted((a, b) => a.localeCompare(b)))
+    // The record lists the config files among the files it read, so the messages are exactly the
+    // recorded files: both config files are among them.
+    expect(recorded).toEqual(expect.arrayContaining(configs))
+    expect(named.toSorted((a, b) => a.localeCompare(b))).toEqual(
+      [...new Set([...recorded, ...configs])].toSorted((a, b) => a.localeCompare(b)),
+    )
   })
 
   it('AC-nextjs-used-atoms-04: dir-dependency messages name the directories the files were selected from', async () => {
