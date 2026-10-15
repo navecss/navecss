@@ -573,7 +573,7 @@ describe('AC-base-ui-bridge-31: clip insets and scroll-padding, computed from th
   it.each([
     ['the viewport padding planted to zero', 'padding', '0'],
     [
-      'the 16px gutter of round 2b on the inline-end scroll-padding',
+      'the earlier 16px gutter on the inline-end scroll-padding',
       'scroll-padding-inline-end',
       '16px',
     ],

@@ -763,7 +763,7 @@ const SCOPED_ATTRIBUTES: ReadonlyMap<
 ])
 
 /**
- * The six attribute names this spec adds to R7's vocabulary (section F row R7, AC-20).
+ * The six attribute names this spec adds to the stylesheet's attribute vocabulary (AC-20).
  */
 const ADDED_ATTRIBUTES = [
   'aria-current',

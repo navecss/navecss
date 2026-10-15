@@ -16,7 +16,7 @@
  * 50ms. With reduced motion switched on 30ms into the fade-in, then Escape, the popup is removed
  * within two frames and focus ends on the trigger.
  *
- * Two controls. The R15 hazard reproduced: the fade-both-ways form with `transition-property: none`
+ * Two controls. The hazard reproduced: the fade-both-ways form with `transition-property: none`
  * injected 30ms into its exit stays mounted after 700ms at 1.3.0, 1.5.0 and 1.6.0. The empty-frame
  * control: the fade-in-only form with no exit key shows an empty frame on the mid Escape. Each form
  * is checked against the byte count and hash the spec prints before it is used. With `panel fade`

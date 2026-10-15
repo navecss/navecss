@@ -116,7 +116,7 @@ test that asked, and each later ask gets the same rejection.
 export const feedbackNave: () => Promise<Source> = once(() => load(naveLoaders))
 
 /**
-The measured key set of each namespace (QA, 1.3.0, 1.5.0, 1.6.0 and 1.8.0 identical), split into
+The measured key set of each namespace (measured at 1.3.0, 1.5.0, 1.6.0 and 1.8.0, identical), split into
 the keys Table P styles and the keys Table T0 leaves unstyled; `Meter` and `Progress` have only
 runtime keys here (`Progress.Status` is a type). Written out, not derived from Table P or T0.
  */

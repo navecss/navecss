@@ -31,8 +31,9 @@ import { BASE, compile, EQUAL, NAVE } from './support/type-fixtures.ts'
 const VERSIONS: readonly BaseUiVersion[] = ['current', 'floor']
 const MINUTES = 180_000
 
-// The flat names Base UI exports beside its namespace, named with a type argument (QA's ruling on
-// the carrier: the dotted `NavigationMenu.Root.Props` is a recorded floor exception).
+// The flat names Base UI exports beside its namespace, named with a type argument (the dotted
+// `NavigationMenu.Root.Props` cannot carry one: a part's types are declared from Base UI 1.3, which
+// gives the Props none).
 const propsOfString = (from: string): string =>
   `import type { NavigationMenuRootProps } from '${from}/navigation-menu'\nexport type OfString = NavigationMenuRootProps<string>\n`
 

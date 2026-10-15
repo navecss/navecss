@@ -10,7 +10,7 @@
  * strip's outer edge and moved 30px along it must scroll the Viewport.
  *
  * The controls: the same press-and-move started on the Thumb scrolls the Viewport too (so a
- * press that scrolls nothing is the strip's, not the instrument's), and the round-2b 12px strip
+ * press that scrolls nothing is the strip's, not the instrument's), and the earlier 12px strip
  * (`-scroll-area-scrollbar`, 458 B `b6d8420edcd5b266`) measures below 24 and reds the first clause.
  */
 /* eslint-disable unicorn/max-nested-calls -- a scene is a tree, written as the nested calls it renders */
@@ -21,7 +21,7 @@ import {
   measureControlRule,
   replaceRule,
   SCROLLBAR,
-  SCROLLBAR_ROUND_2B,
+  SCROLLBAR_12PX_STRIP,
 } from './support/w11-controls.ts'
 import { parkPointer } from './support/w11-page.ts'
 import {
@@ -138,21 +138,21 @@ describe(`AC-base-ui-feedback-navigation-45: the Scroll Area strip is one 24px t
     })
 
     it(`AC-base-ui-feedback-navigation-45: the bound control, the 12px ${orientation} strip measures below 24 and reds the first clause`, async () => {
-      const parts = await show(replaceRule(stylesheet, SCROLLBAR, SCROLLBAR_ROUND_2B.text))
+      const parts = await show(replaceRule(stylesheet, SCROLLBAR, SCROLLBAR_12PX_STRIP.text))
       const strip = stripOf(parts, orientation)
-      expect(thinDimension(strip), 'the round-2b strip').toBeCloseTo(12, 2)
+      expect(thinDimension(strip), 'the earlier 12px strip').toBeCloseTo(12, 2)
       expect(() => {
         expectThinAtLeastMinimum(strip)
       }, 'the first clause on the 12px strip').toThrow()
     })
   })
 
-  it('AC-base-ui-feedback-navigation-45: the control rules are the spec bytes, 450 B for the shipped strip and 458 B for round 2b', async () => {
+  it('AC-base-ui-feedback-navigation-45: the control rules are the spec bytes, 450 B for the shipped strip and 458 B for the earlier 12px strip', async () => {
     expect(await measureControlRule(SCROLLBAR), 'the shipped strip rule').toEqual({
       bytes: 450,
       hash: '7145173da3a49712',
     })
-    expect(await measureControlRule(SCROLLBAR_ROUND_2B), 'the round-2b strip rule').toEqual({
+    expect(await measureControlRule(SCROLLBAR_12PX_STRIP), 'the earlier 12px strip rule').toEqual({
       bytes: 458,
       hash: 'b6d8420edcd5b266',
     })

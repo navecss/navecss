@@ -2,8 +2,9 @@
  * What the combined package's README may carry in each signature state of the four drafts feedback
  * adds: the items of `w12-feedback-sentences.ts`, each with the state it belongs to, the
  * reduced-motion sentence composed by its rule, the phrases the not-painted list gains, and the
- * check of a README text against a state. the overlay release's drafts are signed in every state here: the
- * combined package's README is written for them signed, and their other states are `w9-*`'s.
+ * check of a README text against a state. The overlay release's drafts are signed in every state
+ * here: the combined package's README is written for them signed, and their other states are
+ * `w9-*`'s.
  */
 import type { Literal, NamedLiteral } from './w9-sentences.ts'
 import type { State789 } from './w12-states.ts'
@@ -82,7 +83,7 @@ const reader = (
   present,
 })
 
-const steward = (
+const cleared = (
   name: string,
   literal: Literal,
   present: ItemRule['present'] = () => true,
@@ -108,47 +109,47 @@ export const ITEM_RULES: readonly ItemRule[] = [
   reader('D12, Avatar', S.D12_AVATAR),
   reader('D13a, variants: the new parts', S.D13A_VARIANTS),
   reader('D13b, what is styled: three rows', S.D13B_WHAT_IS_STYLED_ROWS, () => true, hasTableRows),
-  steward('T1, F6 into the toasts', S.T1_F6_INTO_THE_TOASTS),
-  steward('T2, toast timer', S.T2_TOAST_TIMER),
-  steward('T3, types alike', S.T3_TYPES_ALIKE),
-  steward('RM, reduced motion, toasts in', S.RM_TOASTS_IN, (state) =>
+  cleared('T1, F6 into the toasts', S.T1_F6_INTO_THE_TOASTS),
+  cleared('T2, toast timer', S.T2_TOAST_TIMER),
+  cleared('T3, types alike', S.T3_TYPES_ALIKE),
+  cleared('RM, reduced motion, toasts in', S.RM_TOASTS_IN, (state) =>
     isSigned789(state, 'toast-fade'),
   ),
-  steward(
+  cleared(
     'RM, reduced motion, toasts out',
     S.RM_TOASTS_OUT,
     (state) => !isSigned789(state, 'toast-fade'),
   ),
-  steward('I, limited toasts hidden', S.I_LIMITED_TOASTS_HIDDEN, (state) =>
+  cleared('I, limited toasts hidden', S.I_LIMITED_TOASTS_HIDDEN, (state) =>
     isSigned789(state, 'toast-limit'),
   ),
-  steward(
+  cleared(
     'S-L, limited toasts visible, inert',
     S.S_L_LIMITED_TOASTS_VISIBLE,
     (state) => !isSigned789(state, 'toast-limit'),
   ),
-  steward('S-P3, placement and stacking', S.S_P3_PLACEMENT_AND_STACKING, (state) =>
+  cleared('S-P3, placement and stacking', S.S_P3_PLACEMENT_AND_STACKING, (state) =>
     isSigned789(state, 'toast-placement'),
   ),
-  steward('S-Pp2, popup from a toast, remedy', S.S_PP2_POPUP_FROM_A_TOAST, (state) =>
+  cleared('S-Pp2, popup from a toast, remedy', S.S_PP2_POPUP_FROM_A_TOAST, (state) =>
     isSigned789(state, 'toast-placement'),
   ),
-  steward('S-U, toast area unplaced', S.S_U_TOAST_AREA_UNPLACED, isUnplacedWithScrimReturn),
-  steward(
+  cleared('S-U, toast area unplaced', S.S_U_TOAST_AREA_UNPLACED, isUnplacedWithScrimReturn),
+  cleared(
     'S-A, anchored not stacked',
     S.S_A_ANCHORED_NOT_STACKED,
     (state) => isUnplacedWithScrimReturn(state) && state.remedyRowPosted === true,
   ),
-  steward('S-T, popup in a timed toast', S.S_T_POPUP_IN_A_TIMED_TOAST),
-  steward('S-S, swipe', S.S_S_SWIPE),
-  steward('S-C, current page', S.S_C_CURRENT_PAGE),
-  steward('S-I, indeterminate Progress', S.S_I_INDETERMINATE_PROGRESS),
-  steward('S-M, Meter and Progress roles', S.S_M_METER_AND_PROGRESS_ROLES),
-  steward('S-Av, Avatar alt', S.S_AV_AVATAR_ALT),
-  steward('S-N, Navigation Menu list', S.S_N_NAVIGATION_MENU_LIST),
-  steward('S-SA, Scroll Area viewport', S.S_SA_SCROLL_AREA_VIEWPORT),
-  steward('S-K, keepMounted scrollbar', S.S_K_KEEP_MOUNTED_SCROLLBAR),
-  steward('S-D, disabled trigger', S.S_D_DISABLED_TRIGGER),
+  cleared('S-T, popup in a timed toast', S.S_T_POPUP_IN_A_TIMED_TOAST),
+  cleared('S-S, swipe', S.S_S_SWIPE),
+  cleared('S-C, current page', S.S_C_CURRENT_PAGE),
+  cleared('S-I, indeterminate Progress', S.S_I_INDETERMINATE_PROGRESS),
+  cleared('S-M, Meter and Progress roles', S.S_M_METER_AND_PROGRESS_ROLES),
+  cleared('S-Av, Avatar alt', S.S_AV_AVATAR_ALT),
+  cleared('S-N, Navigation Menu list', S.S_N_NAVIGATION_MENU_LIST),
+  cleared('S-SA, Scroll Area viewport', S.S_SA_SCROLL_AREA_VIEWPORT),
+  cleared('S-K, keepMounted scrollbar', S.S_K_KEEP_MOUNTED_SCROLLBAR),
+  cleared('S-D, disabled trigger', S.S_D_DISABLED_TRIGGER),
   // The stylesheet paragraph keeps the shipped sentence exactly when the placement is unsigned.
   {
     author: 'reader',
@@ -165,9 +166,9 @@ export const WITHDRAWN_reader: readonly NamedLiteral[] = [
   named('D5', S.D5_SWIPE),
   named('D9', S.D9_CURRENT_PAGE),
   named('D14', S.D14_KEEP_MOUNTED),
-  named("round 2a's D11", S.D11_ROUND_2A),
-  named("round 2a's D12", S.D12_ROUND_2A),
-  named("round 2a's D13c", S.D13C_ROUND_2A),
+  named('the earlier D11', S.D11_EARLIER),
+  named('the earlier D12', S.D12_EARLIER),
+  named('the earlier D13c', S.D13C_EARLIER),
   named('D13c with its draft labels', S.D13C_NOT_PAINTED_PHRASES),
 ]
 
@@ -175,7 +176,7 @@ export const WITHDRAWN_reader: readonly NamedLiteral[] = [
 The cleared sentences' withdrawn and superseded texts, the overlay release's reduced-motion forms among them.
  */
 export const WITHDRAWN_cleared: readonly NamedLiteral[] = [
-  named("S-K's round-2b form (16px gutter)", S.S_K_ROUND_2B),
+  named("S-K's earlier form (16px gutter)", S.S_K_EARLIER),
   named('the 308 B placement sentence', S.S_P_PLACEMENT_308),
   named('the 95 B popup limitation', S.S_PP1_POPUP_LIMITATION),
   named("first-fade's 413 B reduced-motion form", S.FIRST_FADE_FORM_413),

@@ -48,7 +48,7 @@ export const composeReducedMotion = (signed: ReducedMotionSigned): string => {
 /**
 The sixteen forms, by the signature of the popups' fade, the tooltip's fade, the backdrop's fade
 and the toasts' fade in that order (S signed, u unsigned): their lengths and hash prefixes as the
-table of the finding that fixed the rule gives them.
+table of the reduced-motion rule gives them.
  */
 export const RM_TABLE: readonly { bytes: number; code: string; prefix: string }[] = [
   { code: 'SSSS', bytes: 463, prefix: 'fa84dec5b631e5e6' },

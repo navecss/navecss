@@ -99,9 +99,9 @@ export const VIEWPORT: ControlRule = {
 }
 
 /**
- * `-scroll-area-scrollbar` of round 2b: a 12px strip (C.5).
+ * `-scroll-area-scrollbar` as an earlier form: a 12px strip (C.5).
  */
-export const SCROLLBAR_ROUND_2B: ControlRule = {
+export const SCROLLBAR_12PX_STRIP: ControlRule = {
   bytes: 458,
   hash: 'b6d8420edcd5b266',
   text: lines(
@@ -112,9 +112,9 @@ export const SCROLLBAR_ROUND_2B: ControlRule = {
 }
 
 /**
- * `-scroll-area-viewport` of round 2b: a 16px gutter (C.5).
+ * `-scroll-area-viewport` as an earlier form: a 16px gutter (C.5).
  */
-export const VIEWPORT_ROUND_2B: ControlRule = {
+export const VIEWPORT_16PX_GUTTER: ControlRule = {
   bytes: 622,
   hash: '384942addb72ea7b',
   text: lines(
@@ -148,9 +148,9 @@ export const INDICATOR: ControlRule = {
 }
 
 /**
- * `-value-bar-track` of round 1: no flex centring (C.5).
+ * `-value-bar-track` as an earlier form: no flex centring (C.5).
  */
-export const TRACK_ROUND_1: ControlRule = {
+export const TRACK_WITHOUT_CENTRING: ControlRule = {
   bytes: 315,
   hash: 'af592fefde610c29',
   text: lines(
@@ -159,9 +159,9 @@ export const TRACK_ROUND_1: ControlRule = {
 }
 
 /**
- * `-value-bar-indicator` of round 1: no `max-block-size` clamp (C.5).
+ * `-value-bar-indicator` as an earlier form: no `max-block-size` clamp (C.5).
  */
-export const INDICATOR_ROUND_1: ControlRule = {
+export const INDICATOR_WITHOUT_CLAMP: ControlRule = {
   bytes: 262,
   hash: '5b11f20810b366c7',
   text: lines(

@@ -32,8 +32,8 @@ export type Draft789 = (typeof DRAFTS_789)[number]
 export type AnyDraft = Draft | Draft789
 
 /**
- * The finding each draft is signed by: `placement` placement and stacking, `toast fade` toast fade, `limit`
- * limited toasts hidden, `panel fade` the Navigation Menu fade-in.
+ * The short name each draft goes by in test titles: `placement` placement and stacking, `toast fade`
+ * toast fade, `limit` limited toasts hidden, `panel fade` the Navigation Menu fade-in.
  */
 export const SIGNATURES_789: Readonly<Record<Draft789, string>> = {
   'toast-placement': 'placement',

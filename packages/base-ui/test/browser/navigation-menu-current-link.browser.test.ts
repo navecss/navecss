@@ -7,7 +7,7 @@
  * ink is found by a pixel scan below the link's border box with the glyphs and the ring made
  * transparent.
  *
- * Two controls. The round-2b bytes (no `padding-block`) at `line-height: 1` put ink inside the
+ * Two controls. The earlier bytes (no `padding-block`) at `line-height: 1` put ink inside the
  * ring's band. The keyed form (`padding-block` inside `[aria-current="page"]`) moves a sibling by
  * 8px when `active` moves. Each form is checked against the byte count and hash the spec prints
  * before it is used.
@@ -207,7 +207,7 @@ describe('AC-base-ui-feedback-navigation-26 (second scenario): the current link 
     })
   })
 
-  it('AC-base-ui-feedback-navigation-26 (Tier B, control): the round-2b bytes with no padding-block put ink inside the ring band at line-height 1', async () => {
+  it('AC-base-ui-feedback-navigation-26 (Tier B, control): the earlier bytes with no padding-block put ink inside the ring band at line-height 1', async () => {
     const form = await printedForm(CURRENT_LINK_WITHOUT_PADDING, {
       bytes: 157,
       hash: '89711ea1afd33b28',

@@ -508,8 +508,8 @@ const fallbacksOutsideRings = (css: string): string[] =>
     .filter((item) => NEW_CLASSES_789.includes(item.owner) && !isFocusRingDeclaration(item))
     .flatMap((item) => fallbacksIn(item).map((text) => `${item.owner} ${text}`))
 
-describe('AC-base-ui-feedback-navigation-40: the values of the 21 new classes are one of R8 forms', () => {
-  it('classifies every value of the stylesheet, as 787-30 does, the new classes included', () => {
+describe('AC-base-ui-feedback-navigation-40: the values of the 21 new classes are each one of the admitted forms', () => {
+  it('classifies every value of the stylesheet, as the overlay release does, the new classes included', () => {
     expect(unacceptedValues(readStylesheet())).toEqual([])
     expect(unacceptedValues(expectedSheet())).toEqual([])
     expect(fallbackViolations(readStylesheet())).toEqual([])
@@ -558,7 +558,7 @@ describe('AC-base-ui-feedback-navigation-40: the values of the 21 new classes ar
     expect(none.flatMap((item) => unacceptedIn(item))).toEqual([])
   })
 
-  it.each(PLANTED_VALUES)('reds on 787-30 planted %s in a new class (control)', (value) => {
+  it.each(PLANTED_VALUES)('reds on planted %s in a new class (control)', (value) => {
     const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}toast-root { color: ${value} } }`
 
     expect(unacceptedValues(css)).not.toEqual([])

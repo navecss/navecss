@@ -125,7 +125,7 @@ const transitionOwners = (css: string, classes: readonly string[]): string[] =>
 const byFirstSelector = <T extends { selectors: readonly string[] }>(a: T, b: T): number =>
   a.selectors.join(',').localeCompare(b.selectors.join(','))
 
-// R9 B3's list: a property that forms a stacking context, a containing block or a group.
+// The properties that form a stacking context, a containing block or a group.
 const GROUP_FORMING = new Set([
   'backdrop-filter',
   'clip-path',

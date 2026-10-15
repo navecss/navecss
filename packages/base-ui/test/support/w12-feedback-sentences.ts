@@ -3,9 +3,8 @@
  * The README text feedback owes, each item held as a literal (Markdown source, no trailing newline)
  * with the UTF-8 length and the first sixteen hex digits of the sha256 that the spec's tables give
  * it. The lengths and prefixes are the spec's, not computed from the text: the test that reads
- * this module computes both from the text and compares. The texts are the reader's items
- * (6132562445, 6138966109) and the cleared sentences (6131841394, 6132543996, 6138991843,
- * 6139394551 and the findings `limit`, `sentence table`, `sentence table`), byte for byte.
+ * this module computes both from the text and compares. The texts are the reader's items and the
+ * cleared sentences, byte for byte.
  */
 import type { Literal } from './w9-sentences.ts'
 
@@ -195,13 +194,13 @@ export const D13B_WHAT_IS_STYLED_ROWS: Literal = {
 Reader item D13c: not-painted phrases, with their conditions (the README carries the phrases, not this block).
  */
 export const D13C_NOT_PAINTED_PHRASES: Literal = {
-  bytes: 232,
-  prefix: '1df4d7e50e084ae3',
+  bytes: 270,
+  prefix: '557abfc074615bc9',
   text: [
     '- always: toasts form a plain list, not a stack of cards that fans out',
-    '- `q1dc` unsigned: no motion on toasts',
-    '- `zmko` signed: no motion when the Navigation Menu panel closes',
-    '- `zmko` unsigned: no motion on the Navigation Menu panel',
+    '- `toast-fade` unsigned: no motion on toasts',
+    '- `navigation-menu-fade` signed: no motion when the Navigation Menu panel closes',
+    '- `navigation-menu-fade` unsigned: no motion on the Navigation Menu panel',
   ].join('\n'),
 }
 // Cleared sentences
@@ -416,39 +415,39 @@ export const D14_KEEP_MOUNTED: Literal = {
   text: 'If you pass `keepMounted` to a `ScrollArea.Scrollbar`, it stays on screen even when there is nothing to scroll, over the edge of the content: Nave makes room for a scrollbar only while its direction can scroll. Give the viewport that room yourself in a class of your own, `padding-inline-end` for a vertical scrollbar or `padding-block-end` for a horizontal one, set to `calc(var(--nave-border-width-lg) + 3 * var(--nave-spacing-control-xs))`.',
 }
 /**
-cleared S-K, first form (the round-2b 16px gutter; replaced by the 391 B form).
+cleared S-K, an earlier form (the 16px gutter; replaced by the 391 B form).
  */
-export const S_K_ROUND_2B: Literal = {
+export const S_K_EARLIER: Literal = {
   bytes: 395,
   prefix: 'e787adae4cf1304b',
   text: 'If you pass `keepMounted` to a `ScrollArea.Scrollbar`, it stays on screen over the edge of the content even when there is nothing to scroll in its direction, but Nave makes room for a scrollbar only while its direction can scroll. Give the viewport that room yourself on that edge, as both `padding` and `scroll-padding`: `calc(var(--nave-border-width-lg) + 3 * var(--nave-spacing-control-xs))`.',
 }
 /**
-Reader item D11, round 2a.
+Reader item D11, an earlier wording.
  */
-export const D11_ROUND_2A: Literal = {
+export const D11_EARLIER: Literal = {
   bytes: 377,
   prefix: '0b0b882924cf6a72',
   text: "Meter and Progress draw their value as a bar inside an outlined track, in the text colour: set `color` on the `Indicator` to change it. An indeterminate Progress (`value={null}`) shows its empty track, and nothing on it moves. If you restyle the bar, give the height to the `Track`, not to the `Indicator`, because Base UI sets the indicator's width only when there is a value.",
 }
 /**
-Reader item D12, round 2a.
+Reader item D12, an earlier wording.
  */
-export const D12_ROUND_2A: Literal = {
+export const D12_EARLIER: Literal = {
   bytes: 252,
   prefix: '467c949ade3c1b85',
   text: "`Avatar.Fallback` shows while the image loads and when it fails to load, in which case Base UI renders no `<img>` at all. Its `delay` prop, Base UI's, holds the fallback back for that many milliseconds, so an image that loads quickly does not flash it.",
 }
 /**
-Reader item D13c, round 2a.
+Reader item D13c, an earlier wording.
  */
-export const D13C_ROUND_2A: Literal = {
-  bytes: 167,
-  prefix: 'd9e889cf1b1329e6',
+export const D13C_EARLIER: Literal = {
+  bytes: 189,
+  prefix: 'a47e6e2d7dca6bc8',
   text: [
     '- always: toasts form a plain list, not a stack of cards that fans out',
-    '- `zubh` unsigned: no motion on toasts',
-    '- `n85k` unsigned: no motion on the Navigation Menu panel',
+    '- `toast-fade` unsigned: no motion on toasts',
+    '- `navigation-menu-fade` unsigned: no motion on the Navigation Menu panel',
   ].join('\n'),
 }
 /**

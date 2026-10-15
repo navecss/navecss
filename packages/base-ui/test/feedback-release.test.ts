@@ -194,7 +194,8 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
   })
 })
 
-// Review-checked, not tests: that the type-member fix is merged first and alone and the overlay release's slice is on `main` before
-// this branch opens, that this release follows the overlay release's minor, that `pnpm run ci:check` exits 0 on the
-// head merged with `main`, and that the review carries the cleared re-clear of the new bytes at a named
-// commit from which the tarball is built.
+// Checked by hand, not by tests: that the type-member fix is merged first and alone and the overlay
+// release's changes are on `main` before this branch opens, that this release follows the overlay
+// release's minor, that `pnpm run ci:check` exits 0 on the head merged with `main`, and that the
+// accessibility wording the README carries is checked again, byte for byte, at the commit the
+// tarball is built from.

@@ -20,7 +20,7 @@ export const BASE = '@base-ui/react'
 export const NAVE = '@navecss/base-ui'
 
 /**
-The parts whose props gain `variant` and `size` (R4, the Alert Dialog's two from the overlay
+The parts whose props gain `variant` and `size` (the Alert Dialog's two from the overlay
 completion, and the Toast's two from the feedback and navigation release), by subpath and part
 (`.` for the component).
  */

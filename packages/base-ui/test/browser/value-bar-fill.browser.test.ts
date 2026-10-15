@@ -7,7 +7,7 @@
  * 2px each side) holds the Indicator: at 0, 40 and 100 (Meter also 60) its width is 0, 118.39 and
  * 296 (177.59) to 0.01px, its border box is 4px tall with a 0px interior, and its centre is within
  * 0.5px of the Track's content-box centre, whatever block size a reader gives the Track. An
- * indeterminate Progress shows its Track only. The control for the clamp is the round-1 rules.
+ * indeterminate Progress shows its Track only. The control for the clamp is the earlier rules, which have none.
  */
 /* eslint-disable unicorn/max-nested-calls -- a scene is a tree, written as the nested calls it renders */
 import { afterEach, describe, expect, it } from 'vitest'
@@ -19,11 +19,11 @@ import { el as h, mount, type Page, stylesheet, tokens, useSheets } from './supp
 import { emulateForcedColors, SCHEMES, useScheme } from './support/w7-css.ts'
 import {
   INDICATOR,
-  INDICATOR_ROUND_1,
+  INDICATOR_WITHOUT_CLAMP,
   measureControlRule,
   replaceRule,
   TRACK,
-  TRACK_ROUND_1,
+  TRACK_WITHOUT_CENTRING,
 } from './support/w11-controls.ts'
 import { parkPointer, required, TOLERANCE } from './support/w11-page.ts'
 
@@ -190,17 +190,17 @@ describe('AC-base-ui-feedback-navigation-32: the fill width tells the value, and
     })
 
     it.each(KINDS)(
-      'AC-base-ui-feedback-navigation-32: the control, with the round-1 rules and block-size 12px on the Track a %s fill is 12px with an 8px hollow interior',
+      'AC-base-ui-feedback-navigation-32: the control, with the earlier rules and block-size 12px on the Track a %s fill is 12px with an 8px hollow interior',
       async (kind) => {
         const sheet = replaceRule(
-          replaceRule(stylesheet, TRACK, TRACK_ROUND_1.text),
+          replaceRule(stylesheet, TRACK, TRACK_WITHOUT_CENTRING.text),
           INDICATOR,
-          INDICATOR_ROUND_1.text,
+          INDICATOR_WITHOUT_CLAMP.text,
         )
         await show(scheme, kind, 40, { reader: readerSheet('block-size: 12px'), sheet })
         const { height, interior } = read()
-        expect(height, 'the round-1 fill height, no clamp').toBeCloseTo(12, 2)
-        expect(interior, 'the round-1 fill interior, hollow').toBeCloseTo(8, 2)
+        expect(height, 'the earlier fill height, no clamp').toBeCloseTo(12, 2)
+        expect(interior, 'the earlier fill interior, hollow').toBeCloseTo(8, 2)
       },
     )
   })
@@ -209,8 +209,8 @@ describe('AC-base-ui-feedback-navigation-32: the fill width tells the value, and
     const figures = [
       { bytes: 351, hash: '7db6688a2ec5a619', rule: TRACK },
       { bytes: 307, hash: 'f4713d2f8a618f70', rule: INDICATOR },
-      { bytes: 315, hash: 'af592fefde610c29', rule: TRACK_ROUND_1 },
-      { bytes: 262, hash: '5b11f20810b366c7', rule: INDICATOR_ROUND_1 },
+      { bytes: 315, hash: 'af592fefde610c29', rule: TRACK_WITHOUT_CENTRING },
+      { bytes: 262, hash: '5b11f20810b366c7', rule: INDICATOR_WITHOUT_CLAMP },
     ]
     for (const { bytes, hash, rule } of figures) {
       expect(await measureControlRule(rule), `rule ${hash}`).toEqual({ bytes, hash })

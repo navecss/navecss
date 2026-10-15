@@ -194,9 +194,9 @@ export const feedbackImports = (infos: readonly FeedbackSubpathTypes[]): string[
     `import * as B_${identifier(subpath)} from '${BASE}/${subpath}'`,
   ])
 
-// The dotted `NavigationMenu.Root.Props` is the third recorded floor exception (QA's ruling on the
-// carrier): a part's types are declared from the floor, which gives the Props no type parameter, so
-// at the current run the dotted spelling is not generic. The criterion names the flat
+// The dotted `NavigationMenu.Root.Props` is the third floor exception the README lists: a part's
+// types are declared from the floor, which gives the Props no type parameter, so at the current run
+// the dotted spelling is not generic. The criterion names the flat
 // `NavigationMenuRootProps<string>` and `NavigationMenuRoot.Value<string>` instead, and does not
 // assert that the dotted one fails.
 const isRecordedException = (subpath: string, part: string): boolean =>

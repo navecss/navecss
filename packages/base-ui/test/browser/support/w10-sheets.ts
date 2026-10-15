@@ -138,7 +138,7 @@ export const FADE_IN_ONLY = `  .nave-base-ui-navigation-menu-fade { transition-p
 `
 
 /**
-The current link before the base `padding-block` (157 B, `89711ea1afd33b28`), the round-2b bytes.
+The current link before the base `padding-block` (157 B, `89711ea1afd33b28`), an earlier form of the rule.
  */
 export const CURRENT_LINK_WITHOUT_PADDING = `  .nave-base-ui-current-link {
 

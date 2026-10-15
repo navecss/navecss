@@ -241,7 +241,7 @@ describe('AC-base-ui-feedback-navigation-30: a focused child ring on an up-and-d
       const under = readings.filter((reading) => !reading.clearOfStrip)
       expect(
         under.length,
-        'the positions where the planted 4px puts a ring under the strip or the corner; if none, the zero is not credited and the row returns for a ruling',
+        'the positions where the planted 4px puts a ring under the strip or the corner; if there are none, the plant does not show that the zero is checked, and the row needs a different plant',
       ).toBeGreaterThan(0)
     },
   )
