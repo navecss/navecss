@@ -270,6 +270,55 @@ describe('AC-19: the counting rule denominator, stated and fixtured', () => {
     expect(lint(code)).toEqual([])
   })
 
+  it('states that every cx.dynamic() call is counted, whatever its argument, and the fixtures hold', () => {
+    const collapsed = README.replaceAll(/\s+/g, ' ')
+    expect(collapsed).toContain(
+      "Every call to Nave's `cx.dynamic()` is counted, whatever its argument (an atom name, `null` and no argument included), beside the `cx.raw()` calls above.",
+    )
+    const PRELUDE = "import { cx } from '@navecss/core/cx'\n"
+    for (const call of [
+      'cx.dynamic(tone)',
+      "cx.dynamic('flex')",
+      'cx.dynamic(null)',
+      'cx.dynamic()',
+    ]) {
+      expect(lint(`${PRELUDE}const k = ${call}`), call).toEqual(['@navecss/count-escapes'])
+    }
+    expect(lint(`${PRELUDE}const k = cx.raw(cx.dynamic(tone))`)).toEqual(['@navecss/count-escapes'])
+    expect(lint(`${PRELUDE}const f = cx.dynamic`)).toEqual([])
+  })
+
+  it('AC-eslint-plugin-28: states what rule 1 reports inside cx.dynamic() and what it does not check, and the fixtures hold', () => {
+    const collapsed = README.replaceAll(/\s+/g, ' ')
+    for (const statement of [
+      'A literal that names an atom is reported, with `cx()` as the fix',
+      'Every argument after a non-spread argument, a spread included, is reported, whatever it holds',
+      'The first argument written after only spreads is reported too, because whether it is used depends on the spreads before it: when any of them has items the call takes the first item, and when all of them are empty this argument is the name.',
+      'A name built at run time (a template literal with a slot beside static text or another slot, a `+` chain with an operand that is not literal text) passes unless no atom name fits the text written around its slots, in which case it is reported.',
+      "- A name built at run time inside `cx.dynamic()` that an atom name fits (`` `text${align}` `` fits `textLeft`) is not read further: it renders nothing when its run-time value is no atom or, under the Vite plugin, is not listed in `keep`, as an identifier's value can. A spread that comes first in `cx.dynamic()`, or follows only spreads, is not read.",
+    ]) {
+      expect(collapsed).toContain(statement)
+    }
+    const PRELUDE = "import { cx } from '@navecss/core/cx'\n"
+    const rules = (value: string): string[] =>
+      lint(`${PRELUDE}const el = <div className={${value}} />`)
+    const passes = ['cx.dynamic(`text${align}`)', "cx.dynamic('gap' + size)", "cx.dynamic('')"]
+    for (const value of passes) {
+      // Rule 1 passes the name; the counting rule still counts the call.
+      expect(rules(value), value).toEqual(['@navecss/count-escapes'])
+    }
+    const reported = [
+      "cx.dynamic('flex')",
+      'cx.dynamic(tone, x)',
+      'cx.dynamic(tone, ...rest)',
+      'cx.dynamic(...a, x)',
+      'cx.dynamic(`legacy-${x}`)',
+    ]
+    for (const value of reported) {
+      expect(rules(value), value).toContain('@navecss/class-channel')
+    }
+  })
+
   it("states the three limits ESLint's own directive and suppressions handling sets", () => {
     const collapsed = README.replaceAll(/\s+/g, ' ')
     for (const statement of [

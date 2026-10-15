@@ -79,6 +79,16 @@ const FIXTURES: { code: string; settings?: Record<string, unknown> }[] = [
   { code: `${PRELUDE}const k = cx.raw('nave-flex')` },
   { code: `${PRELUDE}const k = /* nave-escape: x */ cx.raw('legacy-card')` },
   { code: `${PRELUDE}const el = <div className={on ? \`\${a && s.x}\` : ''} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic('legacy-card')} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic('nave-flex')} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(['flex'])} />` },
+  { code: `${PRELUDE}const k = cx.dynamic(tone)` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic('flex')} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(on ? 'flex' : tone)} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(tone, x)} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(...a, x)} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(...a, ...b, x)} />` },
+  { code: `${PRELUDE}const el = <div className={cx.dynamic(\`legacy-\${x}\`)} />` },
 ]
 
 const collected = FIXTURES.flatMap(({ code, settings }) => lint(code, settings))

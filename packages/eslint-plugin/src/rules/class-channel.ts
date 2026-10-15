@@ -7,15 +7,28 @@
  * words the reports.
  */
 import type { TSESTree } from '@typescript-eslint/types'
-import type { JSSyntaxElement, Rule } from 'eslint'
+import type { JSSyntaxElement, Rule, SourceCode } from 'eslint'
 
-import type { ClassHit } from './class-hits.ts'
+import type {
+  AtomPieceHit,
+  ClassHit,
+  DynamicBuiltHit,
+  DynamicExtraHit,
+  DynamicSpreadHit,
+} from './class-hits.ts'
 
-import { atomNameForClass } from '../atoms.ts'
-import { collectCxBindings, type CxBindings, NO_CX_BINDINGS, rawCalleeText } from '../cx-binding.ts'
+import { atomNameForClass, isAtomName } from '../atoms.ts'
+import { collectCxBindings, type CxBindings, NO_CX_BINDINGS } from '../cx-binding.ts'
+import { rawCalleeText } from '../cx-callee.ts'
 import {
   cxAtomMessage,
   cxContainerMessage,
+  dynamicBuiltMessage,
+  dynamicContainerMessage,
+  dynamicExtraMessage,
+  dynamicNameBesideMessage,
+  dynamicNameMessage,
+  dynamicSpreadMessage,
   isNaveOutputLike,
   literalClassMessage,
   naveOutputMessage,
@@ -47,6 +60,25 @@ function slotAndMessage(rendered: string, isWhole: boolean, rawCallee: string): 
 }
 
 /**
+ * True for a whole literal argument of Nave's `cx.dynamic()` that is `''` (which passes) or an
+ * atom name (which is written through `cx()` instead).
+ */
+function isWrittenName(hit: AtomPieceHit): boolean {
+  return hit.isDynamic && hit.isWhole && (hit.text === '' || isAtomName(hit.text))
+}
+
+/**
+The message for an atom name written inside `cx.dynamic()`, or `undefined` for `''`.
+ */
+function writtenNameMessage(hit: AtomPieceHit, sourceCode: SourceCode): string | undefined {
+  if (hit.text === '') return undefined
+  const callee = sourceCode.getText(hit.callee as never)
+  return hit.isBeside
+    ? dynamicNameBesideMessage(callee, hit.rendered, hit.text)
+    : dynamicNameMessage(callee, hit.rendered, hit.text)
+}
+
+/**
  * What a message needs beyond the hit itself: the declared entries (compiled, and as printed) and
  * `cx.raw` as the file binds it.
  */
@@ -54,6 +86,41 @@ interface Wording {
   allowEntries: CompiledAllowEntry[]
   declared: string
   rawCallee: string
+}
+
+/**
+The message for an argument of Nave's `cx()` or `cx.dynamic()` that is not one atom name.
+ */
+function atomMessage(hit: AtomPieceHit, sourceCode: SourceCode, wording: Wording): string {
+  const { declared, rawCallee } = wording
+  const callee = sourceCode.getText(hit.callee as never)
+  if (!hit.isContainer) return cxAtomMessage(callee, hit.rendered, declared, rawCallee)
+  return hit.isDynamic
+    ? dynamicContainerMessage(callee, hit.rendered, declared, rawCallee)
+    : cxContainerMessage(callee, hit.rendered, declared, rawCallee)
+}
+
+type DynamicCallHit = DynamicBuiltHit | DynamicExtraHit | DynamicSpreadHit
+
+const isDynamicCallHit = (hit: ClassHit): hit is DynamicCallHit =>
+  ['dynamic-built', 'dynamic-extra', 'dynamic-spread'].includes(hit.kind)
+
+/**
+ * The message for an argument of `cx.dynamic()` the call's shape decides: one after the first, the
+ * first after only spreads, or a name built at run time that no atom name fits.
+ */
+function dynamicCallMessage(
+  hit: DynamicCallHit,
+  sourceCode: SourceCode,
+  { declared, rawCallee }: Wording,
+): string {
+  const callee = sourceCode.getText(hit.callee as never)
+  if (hit.kind === 'dynamic-spread') {
+    return dynamicSpreadMessage(callee, hit.rendered, hit.spreadCount, { declared, rawCallee })
+  }
+  return hit.kind === 'dynamic-extra'
+    ? dynamicExtraMessage(callee, hit.rendered, declared, rawCallee)
+    : dynamicBuiltMessage(callee, hit.rendered, declared, rawCallee)
 }
 
 /**
@@ -68,16 +135,16 @@ function hitMessage(
   if (hit.kind === 'slot-and') {
     return slotAndMessage(sourceCode.getText(hit.node as never), hit.isWhole, rawCallee)
   }
+  if (isDynamicCallHit(hit)) {
+    return dynamicCallMessage(hit, sourceCode, { allowEntries, declared, rawCallee })
+  }
+  if (hit.kind === 'atom' && isWrittenName(hit)) return writtenNameMessage(hit, sourceCode)
   if (!isReportedPiece(hit, allowEntries)) return undefined
   if (isNaveOutputLike(hit.text)) {
     return naveOutputMessage(hit.text, atomNameForClass(hit.text))
   }
-  if (hit.kind === 'atom') {
-    const callee = sourceCode.getText(hit.callee as never)
-    return hit.isContainer
-      ? cxContainerMessage(callee, hit.rendered, declared, rawCallee)
-      : cxAtomMessage(callee, hit.rendered, declared, rawCallee)
-  }
+  if (hit.kind === 'atom')
+    return atomMessage(hit, sourceCode, { allowEntries, declared, rawCallee })
   return literalClassMessage(hit.text, declared, rawCallee)
 }
 

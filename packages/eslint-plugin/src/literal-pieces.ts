@@ -102,6 +102,52 @@ export function concatOperands(node: Node): Node[] {
 }
 
 /**
+Reads through `as`/`satisfies`/`!` to the node they wrap.
+ */
+export function unwrap(node: Node): Node {
+  let current = node
+  while (TRANSPARENT_WRAPPER_TYPES.has(current.type)) {
+    current = (current as TSESTree.TSAsExpression).expression
+  }
+  return current
+}
+
+/**
+ * True when a `+` operand is built at run time: anything but a string literal or an
+ * expression-free template, through `as`/`satisfies`/`!`, and a nested `+` chain (itself possibly
+ * wrapped) is built when any of its own operands is.
+ */
+function isBuiltOperand(operand: Node): boolean {
+  const current = unwrap(operand)
+  if (current.type === 'BinaryExpression' && current.operator === '+') {
+    return concatOperands(current).some((nested) => isBuiltOperand(nested))
+  }
+  return !(
+    isStringLiteral(current) ||
+    (current.type === 'TemplateLiteral' && current.expressions.length === 0)
+  )
+}
+
+/**
+ * True for the two shapes that build one name at run time: a template literal with a slot (unless
+ * it is a single slot and nothing else, which is read as that slot), and a string `+` chain with
+ * an operand that is not a string literal (an expression-free template, or a literal through a
+ * TypeScript wrapper, is one).
+ */
+export function isBuiltName(node: Node): boolean {
+  if (node.type === 'TemplateLiteral') {
+    const isSingleSlot =
+      node.expressions.length === 1 && node.quasis.every((quasi) => quasi.value.raw.length === 0)
+    return node.expressions.length > 0 && !isSingleSlot
+  }
+  return (
+    node.type === 'BinaryExpression' &&
+    node.operator === '+' &&
+    concatOperands(node).some((operand) => isBuiltOperand(operand))
+  )
+}
+
+/**
  * One run of adjacent string literals in a `+` chain, split on whitespace like a template's static
  * text: a piece glued to a slot before it is no piece, one running into a slot after it is
  * `truncated`, and each piece is placed at the literal it starts in.

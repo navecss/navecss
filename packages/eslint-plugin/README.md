@@ -91,7 +91,7 @@ this one as it was.
 ## Count your escapes
 
 `@navecss/count-escapes` is `off` in `recommended`. Turn it on to hold the number of `cx.raw()`
-escapes as a CI number, using ESLint's own bulk-suppressions file:
+escapes and `cx.dynamic()` calls as a CI number, using ESLint's own bulk-suppressions file:
 
 ```js
 { rules: { '@navecss/count-escapes': 'error' } }
@@ -109,6 +109,12 @@ suppression is never recorded for a `warn`. As a fallback that needs no cache fi
 rule's. A file-wide or block `eslint-disable` comment with no rule list silences every rule
 after it in that file, this one included, so a file that opens with a bare `/* eslint-disable */`
 is never in the count at all.
+
+Every call to Nave's `cx.dynamic()` is counted, whatever its argument (an atom name, `null` and no
+argument included), beside the `cx.raw()` calls above. `cx.dynamic()` takes a name chosen at run
+time, so the call itself is the escape and no reason comment applies to it. It is counted inside
+a `className` or not, `.ts` files included. A reference that is never called is not counted, and
+`cx.raw(cx.dynamic(tone))` is one count, at the inner call.
 
 Three more limits come from how ESLint itself applies directives and records suppressions, which
 no rule can see past:
@@ -151,7 +157,12 @@ Stated as rules, not as gaps to be filled later:
   `cx` under another name, or as its default export, is not seen as Nave's `cx`.
 - `cx.raw` is recognised as `cx.raw`, `cx['raw']`, ``cx[`raw`]``, a namespace import's
   `c.cx.raw`, or one `const` alias: a call reached any other way, such as `(0, cx.raw)(...)` or
-  `cx.raw.call(...)`, is not seen by either rule.
+  `cx.raw.call(...)`, is not seen by either rule. `cx.dynamic` is recognised in the same forms,
+  and by the class channel and the counting rule alone.
+- A name built at run time inside `cx.dynamic()` that an atom name fits (`` `text${align}` `` fits
+  `textLeft`) is not read further: it renders nothing when its run-time value is no atom or, under
+  the Vite plugin, is not listed in `keep`, as an identifier's value can. A spread that comes
+  first in `cx.dynamic()`, or follows only spreads, is not read.
 - A camelCase string passed to `cx()` passes only if it names a real atom of the **installed**
   `@navecss/core` — a name registered through `navePlugin({ extend })` is not in `cx()`'s map and
   is reported.
@@ -161,8 +172,8 @@ Stated as rules, not as gaps to be filled later:
   `border` and its sides, `font`, `transition`, `animation`, and any other) is not checked, even
   though `@navecss/stylelint-config`'s own config reports it by expanding the shorthand into the
   longhands it sets.
-- The counting rule's denominator is exactly what `@navecss/raw-reason` counts in the linted
-  files — see above for what that excludes.
+- The counting rule's denominator is what `@navecss/raw-reason` counts in the linted files, plus
+  every call to `cx.dynamic()` — see above for what that excludes.
 
 ## Rules
 
@@ -181,7 +192,16 @@ call is read through its arguments; a `cx.raw()` call is left to the next rule. 
 `class` value that is itself an inline function of component state, as Base UI parts accept
 (`className={(state) => (state.open ? 'is-open' : undefined)}`), is read through the values it
 returns: its expression body, or each `return` of its block body, but not the returns of a
-function nested inside it.
+function nested inside it. A string passed to `cx.dynamic()` is read the way one passed to `cx()` is, with three differences.
+A literal that names an atom is reported, with `cx()` as the fix: a name written in the source is
+a name the build can read, so `cx.dynamic('flex')` becomes `cx('flex')`; `''`, `null`, `undefined`
+and `false` pass. Every argument after a non-spread argument, a spread included, is reported,
+whatever it holds, because `cx.dynamic()` takes one name and ignores the rest. The first argument
+written after only spreads is reported too, because whether it is used depends on the spreads
+before it: when any of them has items the call takes the first item, and when all of them are
+empty this argument is the name. A name built at run time (a template literal with a slot beside
+static text or another slot, a `+` chain with an operand that is not literal text) passes unless
+no atom name fits the text written around its slots, in which case it is reported.
 
 ### Rule 2: the `cx.raw()` reason
 

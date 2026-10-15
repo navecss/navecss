@@ -18,7 +18,15 @@
  * warning pnpm would otherwise let pass.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  linkSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -34,6 +42,14 @@ const TOKENS_PACKAGE_DIR = path.resolve(PACKAGE_DIR, '../tokens')
 
 const dir: { consumer?: string } = {}
 
+/**
+ * The arguments of the consumer's `pnpm install`. `--no-lockfile` keeps the consumer free of any
+ * resolution the workspace decided; `--prefer-offline` lets the install resolve from the store the
+ * workspace install already filled (it pins the same `stylelint`) and still fall back to the
+ * network on a cold store.
+ */
+const INSTALL_ARGS = ['install', '--no-lockfile', '--prefer-offline']
+
 beforeAll(() => {
   const consumerTmp = mkdtempSync(path.join(tmpdir(), 'nave-stylelint-config-consumer-'))
   dir.consumer = realpathSync(consumerTmp)
@@ -46,10 +62,14 @@ beforeAll(() => {
     rmSync(packDestination, { recursive: true, force: true })
   }
 
-  // The consumer's first stylelint run costs far more than any later one: about 1 to 3 seconds
-  // alone, and 13 to 16 inside the full check, where other packages' tests run beside it, against
-  // a 20 second per-test timeout; a later run takes under one. Pay it once here, under this hook's
-  // own budget, so the first timed test below does not carry it.
+  // The consumer's first stylelint run costs far more than any later one, and the cost is
+  // waiting, not computing: it is the first read of files pnpm has just imported, which waits on
+  // the host's disk and grows with its load, so a loaded machine pays most. Measured on macOS, a
+  // first lint in a fresh consumer took 1.8 to 37.5 seconds when pnpm cloned the files, and 0.7
+  // to 3.1 seconds when it hardlinked them from the store the workspace install had already read,
+  // faster in every paired run (see `package-import-method` in the consumer's `.npmrc`). Pay what
+  // is left once here, under this hook's own budget, so the first timed test below does not
+  // carry it.
   writeFileSync(path.join(consumerDir, 'warm-up.css'), '')
   spawnSync(path.join(consumerDir, 'node_modules/.bin/stylelint'), ['warm-up.css'], {
     cwd: consumerDir,
@@ -124,15 +144,28 @@ function installConsumer(consumerDir: string, packDestination: string): void {
       2,
     ),
   )
+  // Hardlinks are safe here because this test only reads `node_modules`, apart from one test that
+  // replaces an installed file and does so through `replaceInstalledFile`, which never writes
+  // through a link into the store; pnpm falls back to copying a file when a link fails (a store on
+  // another filesystem), so the install still succeeds.
   writeFileSync(
     path.join(consumerDir, '.npmrc'),
-    'node-linker=isolated\nstrict-peer-dependencies=true\n',
+    'node-linker=isolated\nstrict-peer-dependencies=true\npackage-import-method=hardlink\n',
   )
   writeFileSync(
     path.join(consumerDir, '.stylelintrc.json'),
     JSON.stringify({ extends: ['@navecss/stylelint-config'] }, undefined, 2),
   )
-  execFileSync('pnpm', ['install', '--no-lockfile'], { cwd: consumerDir, encoding: 'utf8' })
+  execFileSync('pnpm', INSTALL_ARGS, { cwd: consumerDir, encoding: 'utf8' })
+}
+
+/**
+ * Replaces `filePath` with `content` by removing it first, so the new file is its own: a write in
+ * place would go through a hardlink and change the store's copy that other installs share.
+ */
+function replaceInstalledFile(filePath: string, content: string): void {
+  rmSync(filePath, { force: true })
+  writeFileSync(filePath, content)
 }
 
 afterAll(() => {
@@ -172,6 +205,34 @@ function lintInConsumer(code: string): StylelintJsonResult {
   expect(report).toHaveLength(1)
   return report[0]!
 }
+
+describe('how the consumer is installed', () => {
+  it('imports packages into node_modules by hardlink, keeping the isolated layout and strict peers', () => {
+    const npmrc = readFileSync(path.join(dir.consumer!, '.npmrc'), 'utf8')
+    expect(npmrc).toContain('package-import-method=hardlink')
+    expect(npmrc).toContain('node-linker=isolated')
+    expect(npmrc).toContain('strict-peer-dependencies=true')
+  })
+
+  it('replacing an installed file never writes through a hardlink into the store', () => {
+    const scratch = mkdtempSync(path.join(tmpdir(), 'nave-stylelint-config-replace-'))
+    try {
+      const stored = path.join(scratch, 'stored.css')
+      const linked = path.join(scratch, 'linked.css')
+      writeFileSync(stored, 'original')
+      linkSync(stored, linked)
+      replaceInstalledFile(linked, 'changed')
+      expect(readFileSync(linked, 'utf8')).toBe('changed')
+      expect(readFileSync(stored, 'utf8')).toBe('original')
+    } finally {
+      rmSync(scratch, { recursive: true, force: true })
+    }
+  })
+
+  it('installs preferring the offline store', () => {
+    expect(INSTALL_ARGS).toContain('--prefer-offline')
+  })
+})
 
 describe('AC-consumer-constraints-26 covers: R16', () => {
   it('does not itself depend on stylelint-declaration-strict-value (the isolation this test relies on)', () => {
@@ -224,6 +285,12 @@ describe("rule 3 (declared-custom-properties) busts stylelint's own --cache thro
     if (!match) throw new Error('the installed tokens.css declares no --nave- custom property')
     const [declarationLine, name] = [match[0], match[1]!]
 
+    // A second link to the installed file, outside node_modules: it shares the bytes pnpm's store
+    // holds whenever the install hardlinked them, so a write through the link would show here.
+    const sentinelPath = path.join(consumerDir, '.tokens-css-link')
+    rmSync(sentinelPath, { force: true })
+    linkSync(tokensCssPath, sentinelPath)
+
     const cachePath = path.join(consumerDir, '.cache-test.stylelintcache')
     const cssPath = path.join(consumerDir, 'cache-test.css')
     rmSync(cachePath, { force: true })
@@ -244,13 +311,15 @@ describe("rule 3 (declared-custom-properties) busts stylelint's own --cache thro
       // not (it names no path into the workspace, nothing in the consumer's own text changed),
       // so only the default stylesheet's digest, baked into that config by this rule, can make
       // stylelint's cache see a different config and re-check this file.
-      writeFileSync(tokensCssPath, originalTokensCss.replace(declarationLine, ''))
+      replaceInstalledFile(tokensCssPath, originalTokensCss.replace(declarationLine, ''))
+      expect(readFileSync(sentinelPath, 'utf8')).toBe(originalTokensCss)
 
       const warm = runCli()
       expect(warm.status).not.toBe(0)
       expect(warm.stdout + warm.stderr).toContain(name)
     } finally {
-      writeFileSync(tokensCssPath, originalTokensCss)
+      replaceInstalledFile(tokensCssPath, originalTokensCss)
+      rmSync(sentinelPath, { force: true })
       rmSync(cachePath, { force: true })
       rmSync(cssPath, { force: true })
     }
