@@ -13,8 +13,19 @@ import { describe, expect, it } from 'vitest'
 
 import type { AtomName } from '../src/cx.ts'
 
-import { atomClassMap } from '../src/atoms.ts'
+import { atomNames } from '../src/atom-names.ts'
+import { atomClassMap, atoms, toClassName } from '../src/atoms.ts'
 import { cx } from '../src/cx.ts'
+
+describe('atomClassMap', () => {
+  it('maps every atom, in the order the atoms are declared, to its class name', () => {
+    expect(atomClassMap).toStrictEqual(
+      Object.fromEntries(Object.keys(atoms).map((name) => [name, toClassName(name as AtomName)])),
+    )
+    expect([...atomNames]).toStrictEqual(Object.keys(atoms))
+    expect(Object.keys(atomClassMap)).toStrictEqual(Object.keys(atoms))
+  })
+})
 
 describe('cx', () => {
   it('maps atom names to their global class names', () => {

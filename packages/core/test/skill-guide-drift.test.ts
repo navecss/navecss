@@ -4,7 +4,7 @@
  * not accompanied by regenerating the guide reds here rather than shipping a stale reference
  * (the same shape `atoms-doc-drift.test.ts` and `css-data-drift.test.ts` already guard).
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -38,6 +38,7 @@ interface SectionRange {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ATOMS_SRC_PATH = path.resolve(HERE, '../src/atoms.ts')
+const ATOM_NAMES_SRC_PATH = path.resolve(HERE, '../src/atom-names.ts')
 
 /**
  * The markdown table row that names atom `name`.
@@ -83,6 +84,8 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
     try {
       const file = path.join(dir, 'atoms.ts')
       writeFileSync(file, mutatedSource)
+      // atoms.ts imports its name list, so the scratch copy needs it beside it.
+      copyFileSync(ATOM_NAMES_SRC_PATH, path.join(dir, 'atom-names.ts'))
       const mutatedModule = (await import(pathToFileURL(file).href)) as {
         atoms: Record<string, AtomDefinition>
       }

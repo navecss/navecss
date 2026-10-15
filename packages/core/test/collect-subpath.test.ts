@@ -148,7 +148,7 @@ describe('AC-nextjs-used-atoms-08 — the reader is one public, parser-free subp
       .keys()
       .map((file) => path.basename(file))
       .toArray()
-    expect(files).toContain('atoms.d.ts')
+    expect(files.some((file) => /^atom-names-.+\.d\.ts$/u.test(file))).toBe(true)
     expect(files.some((file) => /^vite-options-.+\.d\.ts$/u.test(file))).toBe(true)
   })
 
