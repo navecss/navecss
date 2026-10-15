@@ -77,5 +77,5 @@ export function classOf(html: string, id: string): string | undefined {
  * The `Set` of all of a list's duplicates removed, sorted.
  */
 export function unique(list: readonly string[]): string[] {
-  return [...new Set(list)].toSorted()
+  return [...new Set(list)].toSorted((a, b) => a.localeCompare(b))
 }

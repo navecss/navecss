@@ -7,21 +7,19 @@ import path from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { afterAll, describe, expect, it } from 'vitest'
 
-import type { AstroApp, AstroAppSettings } from './helpers/astro-app.ts'
+import type { AstroApp, AstroAppSettings, Patch } from './helpers/astro-app.ts'
 import type { AstroBuilt } from './helpers/astro-build.ts'
 
+import { atomClassMap } from '../src/atoms.ts'
 import { HANDSHAKE_FILE } from '../src/vite-handshake.ts'
-import { LEAN_FILES, makeAstroApp, NO_RENAME_FILES, probeRecords } from './helpers/astro-app.ts'
+import { makeAstroApp, probeRecords } from './helpers/astro-app.ts'
 import {
   buildAstro,
   filesUnder,
   layerSheets,
-  layerStylesOfRoutes,
   prerenderedHtml,
   setOf,
 } from './helpers/astro-build.ts'
-import { atomClassMap } from '../src/atoms.ts'
-import { classesOf, keepOnly, type Node, parseAtomicLayer } from './helpers/css-layer.ts'
 import {
   ALL_ATOMS,
   BROWSER_KEEP,
@@ -32,6 +30,9 @@ import {
   setOfCss,
   unique,
 } from './helpers/astro-checks.ts'
+import { LEAN_FILES, NO_RENAME_FILES, SERVER_FILES } from './helpers/astro-files.ts'
+import { layerStylesOfRoutes } from './helpers/astro-serve.ts'
+import { classesOf, keepOnly, type Node, parseAtomicLayer } from './helpers/css-layer.ts'
 
 const apps: AstroApp[] = []
 
@@ -142,7 +143,8 @@ describe('AC-astro-04 — on Astro, each emitted atom ships whole and nothing ou
     ),
   )(
     '%s under %s: every stylesheet is the full layer pruned to its set',
-    async (_name, _t, settings, routes, vite) => {
+    async (...row) => {
+      const { 2: settings, 3: routes, 4: vite } = row
       const common = {
         ...settings,
         files: { ...settings.files, 'src/pages/about.astro': FOCUS_PAGE },
@@ -155,8 +157,9 @@ describe('AC-astro-04 — on Astro, each emitted atom ships whole and nothing ou
       const usedPages = await layerStylesOfRoutes(used.app, used.result, routes)
       const allPages = await layerStylesOfRoutes(all.app, all.result, routes)
       for (const route of routes) {
-        expect(usedPages[route]!.length, route).toBeGreaterThan(0)
-        for (const [index, style] of usedPages[route]!.entries()) {
+        const styles = usedPages[route]!
+        expect(styles.length, route).toBeGreaterThan(0)
+        for (const [index, style] of styles.entries()) {
           expect(parityProblems(style.css, allPages[route]![index]!.css), route).toEqual([])
         }
       }
@@ -180,8 +183,10 @@ describe('AC-astro-04 — on Astro, each emitted atom ships whole and nothing ou
         files: { 'src/pages/about.astro': FOCUS_PAGE },
       })
       expect(app.root).toBeTruthy()
-      const [style] = (await layerStylesOfRoutes(app, result, ['/about']))['/about']!
-      const [full] = (await layerStylesOfRoutes(all.app, all.result, ['/about']))['/about']!
+      const usedAbout = await layerStylesOfRoutes(app, result, ['/about'])
+      const allAbout = await layerStylesOfRoutes(all.app, all.result, ['/about'])
+      const [style] = usedAbout['/about']!
+      const [full] = allAbout['/about']!
       const set = setOfCss(style!.css)
       const classes = classesOf(...set)
       const exactly = (nodes: Node[]): Node[] =>
@@ -264,6 +269,59 @@ describe('AC-astro-05 — builds of one project in one process each ship their o
   )
 })
 
+/**
+ * The scratch copy of the plugin that takes the previous build's set from the cache file in a
+ * process that builds again, which the plugin does not.
+ */
+const UNIONS_THE_FILE: Patch = {
+  file: 'vite-emitted.ts',
+  from: 'const file = context.inProcess ? undefined : readHandshake(context.cacheDir)',
+  to: 'const file = readHandshake(context.cacheDir)',
+}
+const TAKES_EVERY_FILE: Patch = {
+  file: 'vite-emitted.ts',
+  from: "if (file.writer !== 'client') return { atoms: file.emitted, took: true }",
+  to: 'return { atoms: file.emitted, took: true }',
+}
+/**
+ * The scratch copy that leaves no stylesheet whole.
+ */
+const NEVER_WHOLE: Patch = {
+  file: 'vite-whole.ts',
+  from: "if (state.firstWriter !== 'server' || environment.config.consumer !== 'server') return whole",
+  to: 'return whole',
+}
+/**
+ * The scratch copy that fixes a later environment's set from its own modules only.
+ */
+const OWN_MODULES_ONLY: Patch = {
+  file: 'vite-emitted.ts',
+  from: 'const atoms = collectedAtoms(state, context.kept)',
+  to: 'const atoms = new Set([...context.kept, ...recordsOf(state, environment.name).flatMap((record) => [...record.atoms])])',
+}
+
+describe('AC-astro-05 — the control: a copy that unions the file in process carries an atom into the next build', () => {
+  it(
+    'ships relative in the second build',
+    async () => {
+      const app = makeAstroApp({
+        options: BROWSER_KEEP,
+        scratch: [UNIONS_THE_FILE, TAKES_EVERY_FILE],
+      })
+      apps.push(app)
+      const about = path.join(app.root, 'src/pages/about.astro')
+      const original = readFileSync(about, 'utf8')
+      const first = await buildAstro(app)
+      expect(first.error).toBeUndefined()
+      writeFileSync(about, original.replace("cx('relative')", "'plain'"))
+      const second = await buildAstro(app)
+      expect(second.error).toBeUndefined()
+      expect(unique(layerSheets(second).flatMap((sheet) => setOf(sheet)))).toContain('relative')
+    },
+    SECOND * 2,
+  )
+})
+
 const RENAME = { server: true, prerendered: true, options: BROWSER_KEEP } as const
 
 /**
@@ -315,19 +373,92 @@ describe('AC-astro-06 — the rename shape: the shared copy ships whole, so no s
       const pagesAll = await layerStylesOfRoutes(all.app, all.result, pagesList)
       for (const pages of [pagesA, pagesB]) {
         for (const route of pagesList) {
-          for (const [index, style] of pages[route]!.entries()) {
+          const styles = pages[route]!
+          for (const [index, style] of styles.entries()) {
             expect(setOfCss(style.css), route).toEqual(ALL_ATOMS)
             expect(parityProblems(style.css, pagesAll[route]![index]!.css), route).toEqual([])
           }
         }
       }
       const inA = new Set(filesUnder(a.result.client).filter((file) => file.endsWith('.css')))
-      for (const file of filesUnder(b.result.client).filter((name) => inA.has(name))) {
+      const shared = filesUnder(b.result.client).filter((name) => inA.has(name))
+      for (const file of shared) {
         expect(readFileSync(path.join(b.result.client, file), 'utf8'), file).toBe(
           readFileSync(path.join(a.result.client, file), 'utf8'),
         )
       }
       expect(pagesB['/dyn']![0]!.css).toContain('nave-no-wrap')
+    },
+    SECOND * 2,
+  )
+})
+
+/**
+ * The cache file `app`'s build wrote.
+ */
+function fileOf(app: AstroApp): { emitted: string[]; writer: string } {
+  return JSON.parse(readFileSync(handshakeIn(app)!, 'utf8')) as {
+    emitted: string[]
+    writer: string
+  }
+}
+
+describe('AC-astro-15 — the cache file records the set the last filtering environment fixed', () => {
+  it(
+    'static: the set of the stylesheet the build wrote, sorted, with a writer',
+    async () => {
+      const { app, result } = await built({ options: BROWSER_KEEP })
+      expect(result.error).toBeUndefined()
+      const file = fileOf(app)
+      expect(file.writer).not.toBe('')
+      expect(file.emitted).toEqual(file.emitted.toSorted(byCodeUnit))
+      expect(atoms2(...file.emitted)).toEqual(
+        unique(layerSheets(result).flatMap((sheet) => setOf(sheet))),
+      )
+    },
+    SECOND,
+  )
+
+  it(
+    'rename shape: the set ssr fixed, not every built-in atom',
+    async () => {
+      const { app, result } = await built({ ...RENAME })
+      expect(result.error).toBeUndefined()
+      const file = fileOf(app)
+      expect(file.writer).toBe('ssr')
+      expect(file.emitted.length).toBeLessThan(ALL_ATOMS.length)
+      expect(file.emitted).toEqual(expect.arrayContaining(['absolute', 'minW0', 'roundedFull']))
+    },
+    SECOND,
+  )
+})
+
+describe('AC-astro-06 — the control: a copy without the whole shared stylesheet changes the bytes of a served name', () => {
+  it(
+    'gives a file name present in both builds different bytes',
+    async () => {
+      const settings = { ...RENAME, scratch: [NEVER_WHOLE] }
+      const a = await built(settings)
+      const b = await built({
+        ...settings,
+        files: {
+          'src/pages/dyn.astro': SERVER_FILES['src/pages/dyn.astro']!.replace(
+            '<Deferred server:defer />',
+            `<span class={cx('noWrap')}>w</span>\n  <Deferred server:defer />`,
+          ),
+        },
+      })
+      expect(a.result.error).toBeUndefined()
+      expect(b.result.error).toBeUndefined()
+      const inA = new Set(filesUnder(a.result.client).filter((file) => file.endsWith('.css')))
+      const changed = filesUnder(b.result.client)
+        .filter((file) => inA.has(file))
+        .filter(
+          (file) =>
+            readFileSync(path.join(b.result.client, file), 'utf8') !==
+            readFileSync(path.join(a.result.client, file), 'utf8'),
+        )
+      expect(changed.length).toBeGreaterThan(0)
     },
     SECOND * 2,
   )
@@ -383,7 +514,8 @@ describe('AC-astro-07 — the no-rename shape: who wrote first decides what each
       // a stylesheet only ssr wrote: everything read by prerender and ssr, and the keep.
       expect(setOfRoute('/lean')).toEqual(eSet('absolute', 'minW0', 'roundedFull'))
       for (const route of routes) {
-        for (const [index, style] of pages[route]!.entries()) {
+        const styles = pages[route]!
+        for (const [index, style] of styles.entries()) {
           expect(parityProblems(style.css, allPages[route]![index]!.css), route).toEqual([])
         }
       }
@@ -391,6 +523,31 @@ describe('AC-astro-07 — the no-rename shape: who wrote first decides what each
     SECOND * 2,
   )
 })
+
+describe('AC-astro-07 — the control: a copy that fixes the later set from its own modules only drops roundedFull from /lean', () => {
+  it(
+    'leaves roundedFull out of the inlined layer',
+    async () => {
+      const { app, result } = await built({
+        ...RENAME,
+        files: { ...NO_RENAME_FILES, ...LEAN_FILES },
+        scratch: [OWN_MODULES_ONLY],
+      })
+      expect(result.error).toBeUndefined()
+      const pages = await layerStylesOfRoutes(app, result, ['/lean'])
+      expect(setOfCss(pages['/lean']![0]!.css)).not.toContain('roundedFull')
+    },
+    SECOND,
+  )
+})
+
+/**
+ * Orders two strings by code unit, the order the cache file sorts its atoms in.
+ */
+function byCodeUnit(a: string, b: string): number {
+  if (a === b) return 0
+  return a < b ? -1 : 1
+}
 
 /**
  * Sorted atom names.

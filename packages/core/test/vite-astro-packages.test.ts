@@ -57,14 +57,16 @@ const SPECIFIER =
  * name Astro's packages.
  */
 function forbiddenImports(text: string): string[] {
-  return [...text.matchAll(SPECIFIER)]
+  return text
+    .matchAll(SPECIFIER)
     .map((match) => match[1] ?? match[2]!)
     .filter((specifier) => {
       const name = specifier.startsWith('@')
         ? specifier.split('/').slice(0, 2).join('/')
-        : specifier.split('/')[0]!
+        : specifier.split('/', 1)[0]!
       return isAstroPackage(name)
     })
+    .toArray()
 }
 
 /**
@@ -111,33 +113,35 @@ const PUBLISHED = readdirSync(PACKAGES)
       unknown
     >,
   }))
-  .filter(({ manifest }) => manifest['private'] !== true)
+  .filter(({ manifest }) => manifest.private !== true)
 
 describe('AC-astro-40 — Astro’s packages are dev dependencies only, and no shipped file imports them', () => {
   it('reads at least the packages that are published', () => {
-    expect(PUBLISHED.map(({ manifest }) => manifest['name'])).toEqual(
+    expect(PUBLISHED.map(({ manifest }) => manifest.name)).toEqual(
       expect.arrayContaining(['@navecss/core', '@navecss/eslint-plugin', '@navecss/tokens']),
     )
   })
 
   it.each(
     PUBLISHED.map(
-      ({ directory, manifest }) => [manifest['name'] as string, directory, manifest] as const,
+      ({ directory, manifest }) => [manifest.name as string, directory, manifest] as const,
     ),
   )(
     '%s: no field but devDependencies names one, and no file of its tarball imports one',
     (_name, directory, manifest) => {
       expect(forbiddenInManifest(manifest)).toEqual([])
       const root = packed(directory)
-      for (const file of filesUnder(root).filter((name) => /\.(?:c|m)?js$/.test(name))) {
-        expect(forbiddenImports(readFileSync(path.join(root, file), 'utf8')), file).toEqual([])
+      const scripts = filesUnder(root).filter((name) => /\.(?:c|m)?js$/.test(name))
+      for (const file of scripts) {
+        const text = readFileSync(path.join(root, file), 'utf8')
+        expect(forbiddenImports(text), file).toEqual([])
       }
     },
     120_000,
   )
 
   it('control: a manifest with astro in core’s peerDependencies, and a file with a dynamic import of astro/config, are both seen', () => {
-    const core = PUBLISHED.find(({ manifest }) => manifest['name'] === '@navecss/core')!.manifest
+    const core = PUBLISHED.find(({ manifest }) => manifest.name === '@navecss/core')!.manifest
     expect(forbiddenInManifest({ ...core, peerDependencies: { astro: '*' } })).toEqual([
       'peerDependencies: astro',
     ])

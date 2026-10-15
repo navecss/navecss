@@ -37,6 +37,11 @@
       // `exports["./postcss"].require` points at that COPY. Nothing imports the source file, so
       // knip's static analysis reads it as dead; it is the CommonJS entry of a public export.
       "entry": ["src/postcss.cjs"],
+      // The Astro fixture (`test/helpers/astro-app.ts`) writes a project at test time whose config
+      // imports `@astrojs/react` and `@astrojs/node` and whose islands import `react`: names that
+      // live in the text of generated files, which knip's static import analysis never reads. The
+      // packages are real, resolved by the project's own `node_modules` lookup up to this one.
+      "ignoreDependencies": ["@astrojs/node", "@astrojs/react", "react", "react-dom"],
     },
     "packages/stylelint-config": {
       // `declared-custom-properties.js` resolves its default stylesheet with

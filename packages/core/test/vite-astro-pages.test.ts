@@ -14,32 +14,25 @@ import type { AstroApp, AstroAppSettings } from './helpers/astro-app.ts'
 import type { AstroBuilt, PageStyle } from './helpers/astro-build.ts'
 
 import { atomClassMap } from '../src/atoms.ts'
+import { makeAstroApp } from './helpers/astro-app.ts'
+import { buildAstro, filesUnder, prerenderedHtml, stylesOf } from './helpers/astro-build.ts'
 import {
-  BASE_FILES,
-  LEAN_FILES,
-  makeAstroApp,
-  NO_RENAME_FILES,
-  PRERENDERED_FILES,
-  SERVER_FILES,
-} from './helpers/astro-app.ts'
-import { layersStatement } from './helpers/astro-readme.ts'
-import {
-  buildAstro,
-  filesUnder,
-  layerStylesOfRoutes,
-  stylesOf,
-  prerenderedHtml,
-} from './helpers/astro-build.ts'
-import { shapeFiles } from './helpers/astro-shapes.ts'
-import {
-  ALL_ATOMS,
   BROWSER_KEEP,
   BROWSER_ONLY,
-  eSet,
   parityProblems,
   setOfCss,
   unique,
 } from './helpers/astro-checks.ts'
+import {
+  BASE_FILES,
+  LEAN_FILES,
+  NO_RENAME_FILES,
+  PRERENDERED_FILES,
+  SERVER_FILES,
+} from './helpers/astro-files.ts'
+import { layersStatement } from './helpers/astro-readme.ts'
+import { layerStylesOfRoutes, serveServerBuild } from './helpers/astro-serve.ts'
+import { shapeFiles } from './helpers/astro-shapes.ts'
 import { withoutAtomicLayer } from './helpers/css-layer.ts'
 import { packCoreTarball } from './helpers/pack-core.ts'
 
@@ -90,10 +83,10 @@ const ATOM_NAMES = Object.keys(atomClassMap)
  * Whether a JavaScript text holds every built-in atom, by its class name or by its name as a string:
  * the signature of a class map.
  */
-function holdsClassMap(text: string): boolean {
+function hasClassMap(text: string): boolean {
   return ATOM_NAMES.every((name, index) => {
-    const quoted = ["'", '"', '`'].some((quote) => text.includes(`${quote}${name}${quote}`))
-    return quoted || text.includes(CLASS_NAMES[index]!)
+    const isQuoted = ["'", '"', '`'].some((quote) => text.includes(`${quote}${name}${quote}`))
+    return isQuoted || text.includes(CLASS_NAMES[index]!)
   })
 }
 
@@ -106,9 +99,10 @@ describe('AC-astro-23 — zero runtime on Astro: no Nave module and no class map
       const directories = [result.client, ...(result.server ? [result.server] : [])]
       const client = javascriptUnder(result.client)
       for (const directory of directories) {
-        for (const [file, text] of Object.entries(javascriptUnder(directory))) {
+        const scripts = Object.entries(javascriptUnder(directory))
+        for (const [file, text] of scripts) {
           expect(text, file).not.toMatch(/@navecss\/core\/cx/)
-          expect(holdsClassMap(text), file).toBe(false)
+          expect(hasClassMap(text), file).toBe(false)
         }
       }
       const joined = Object.values(client).join('\n')
@@ -122,13 +116,16 @@ describe('AC-astro-23 — zero runtime on Astro: no Nave module and no class map
   it('control: the same per-file check finds the class map in the files the package’s cx module imports, in either spelling', () => {
     const dist = path.join(CORE_ROOT, 'dist')
     const text = readFileSync(path.join(dist, 'cx.js'), 'utf8')
-    const imported = [...text.matchAll(/from\s*["']\.\/([^"']+)["']/g)].map((match) => match[1]!)
+    const imported = text
+      .matchAll(/from\s*["']\.\/([^"']+)["']/g)
+      .map((match) => match[1]!)
+      .toArray()
     const closure = [text, ...imported.map((file) => readFileSync(path.join(dist, file), 'utf8'))]
-    expect(closure.some((source) => holdsClassMap(source))).toBe(true)
-    expect(holdsClassMap(CLASS_NAMES.map((name) => `"${name}"`).join(','))).toBe(true)
-    expect(holdsClassMap(ATOM_NAMES.map((name) => `'${name}'`).join(','))).toBe(true)
+    expect(closure.some((source) => hasClassMap(source))).toBe(true)
+    expect(hasClassMap(CLASS_NAMES.map((name) => `"${name}"`).join(','))).toBe(true)
+    expect(hasClassMap(ATOM_NAMES.map((name) => `'${name}'`).join(','))).toBe(true)
     expect(
-      holdsClassMap(
+      hasClassMap(
         ATOM_NAMES.slice(1)
           .map((name) => `'${name}'`)
           .join(','),
@@ -136,6 +133,22 @@ describe('AC-astro-23 — zero runtime on Astro: no Nave module and no class map
     ).toBe(false)
   })
 })
+
+/**
+ * Whether a layer holds `srOnly` and not `srOnlyFocusable`.
+ */
+function isMissingFocusable(set: readonly string[]): boolean {
+  return set.includes('srOnly') && !set.includes('srOnlyFocusable')
+}
+
+/**
+ * Whether a stylesheet whose layer holds either of the screen-reader pair lacks the focusable
+ * class's rule.
+ */
+function isMissingFocusableRule(css: string, set: readonly string[]): boolean {
+  const hasPair = set.includes('srOnly') || set.includes('srOnlyFocusable')
+  return hasPair && !css.includes('.nave-sr-only-focusable')
+}
 
 const SR_ONLY_ISLAND = READ('src/components/OnlyIsland.tsx').replace(
   "className={cx('inlineFlex')}",
@@ -161,7 +174,8 @@ describe('AC-astro-29 — every stylesheet closes the screen-reader pair on its 
       const pages = await layerStylesOfRoutes(kept.app, kept.result, ['/', '/about'])
       const allPages = await layerStylesOfRoutes(all.app, all.result, ['/', '/about'])
       for (const route of ['/', '/about']) {
-        for (const [index, style] of pages[route]!.entries()) {
+        const styles = pages[route]!
+        for (const [index, style] of styles.entries()) {
           expect(setOfCss(style.css)).toEqual(expect.arrayContaining(['srOnly', 'srOnlyFocusable']))
           expect(parityProblems(style.css, allPages[route]![index]!.css)).toEqual([])
         }
@@ -181,26 +195,25 @@ describe('AC-astro-29 — every stylesheet closes the screen-reader pair on its 
         server: true,
         prerendered: true,
         options: BROWSER_KEEP,
-        files: { ...NO_RENAME_FILES, [file]: source.replace(from, to) },
+        files: { ...NO_RENAME_FILES, [file]: source.replace(from, () => to) },
       })
       const all = await built({
         server: true,
         prerendered: true,
         options: "{ atomic: 'all' }",
-        files: { ...NO_RENAME_FILES, [file]: source.replace(from, to) },
+        files: { ...NO_RENAME_FILES, [file]: source.replace(from, () => to) },
       })
       expect(result.error).toBeUndefined()
       const routes = ['/', '/dyn', '/pre']
       const pages = await layerStylesOfRoutes(app, result, routes)
       const allPages = await layerStylesOfRoutes(all.app, all.result, routes)
       for (const route of routes) {
-        for (const [index, style] of pages[route]!.entries()) {
+        const styles = pages[route]!
+        for (const [index, style] of styles.entries()) {
           const set = setOfCss(style.css)
-          if (set.includes('srOnly')) expect(set, route).toContain('srOnlyFocusable')
+          expect(isMissingFocusable(set), route).toBe(false)
           expect(parityProblems(style.css, allPages[route]![index]!.css), route).toEqual([])
-          if (set.includes('srOnly') || set.includes('srOnlyFocusable')) {
-            expect(style.css).toContain('.nave-sr-only-focusable')
-          }
+          expect(isMissingFocusableRule(style.css, set)).toBe(false)
         }
       }
       const holders = routes.flatMap((route) =>
@@ -242,54 +255,107 @@ const PRE_WITH_DEFERRED = (source: string): string =>
     )
     .replace('</Layout>', '  <Deferred server:defer />\n</Layout>')
 
+/**
+ * The routes of an output that the coverage test reads.
+ */
+function coverageRoutes(settings: AstroAppSettings): string[] {
+  return [
+    ...PAGES_OF.static!,
+    ...(settings.server === true ? ['/dyn'] : []),
+    ...(settings.prerendered === true ? ['/pre'] : []),
+  ]
+}
+
+/**
+ * The fixture's files with `pre.astro`, when the output has one, holding a deferred island too.
+ */
+function coverageFiles(settings: AstroAppSettings): Record<string, string | null> {
+  if (settings.prerendered !== true) return { ...settings.files }
+  return {
+    ...settings.files,
+    'src/pages/pre.astro': PRE_WITH_DEFERRED(
+      settings.files?.['src/pages/pre.astro'] ?? READ('src/pages/pre.astro'),
+    ),
+  }
+}
+
+/**
+ * Checks each route's stylesheets against the atoms the page can render and against the `'all'`
+ * build's, and returns the last set of each route.
+ */
+function checkCoverage(
+  routes: readonly string[],
+  pages: Record<string, PageStyle[]>,
+  allPages: Record<string, PageStyle[]>,
+): Map<string, string[]> {
+  const sets = new Map<string, string[]>()
+  for (const route of routes) {
+    const styles = pages[route]!
+    const union = unique(styles.flatMap((style) => setOfCss(style.css)))
+    const needed = NEEDS[route]!
+    for (const atom of needed) expect(union, `${route} needs ${atom}`).toContain(atom)
+    for (const [index, style] of styles.entries()) {
+      expect(parityProblems(style.css, allPages[route]![index]!.css), route).toEqual([])
+      const set = setOfCss(style.css)
+      expect(isMissingFocusable(set)).toBe(false)
+      sets.set(route, set)
+    }
+  }
+  return sets
+}
+
+/**
+ * Expects every route's last set to be the same one.
+ */
+function expectOneSet(routes: readonly string[], sets: Map<string, string[]>): void {
+  const identical = unique(routes.map((route) => JSON.stringify(sets.get(route))))
+  expect(identical, 'one identical set on every page').toHaveLength(1)
+}
+
+/**
+ * Expects a file name linked from two routes to be the same bytes in both.
+ */
+function expectLinkedNamesAgree(
+  routes: readonly string[],
+  pages: Record<string, PageStyle[]>,
+): void {
+  const byName = new Map<string, string>()
+  for (const route of routes) {
+    const linked = pages[route]!.filter((style) => style.kind === 'linked')
+    for (const style of linked) {
+      expect(byName.get(style.name) ?? style.css, style.name).toBe(style.css)
+      byName.set(style.name, style.css)
+    }
+  }
+}
+
+/**
+ * Decision 22: a server island a prerendered page holds is present or the build says which.
+ */
+function expectServerIslandReported(name: string, output: string): void {
+  expect(name).toContain('no-rename')
+  expect(output).toContain('src/components/Deferred.astro')
+  expect(output).toContain('minW0')
+}
+
 describe('AC-astro-31 — coverage per page in every output: each page’s stylesheets hold every atom that page can render', () => {
   it.each(OUTPUTS)(
     '%s',
     async (name, settings) => {
-      const isServer = settings.server === true
-      const hasPre = settings.prerendered === true
-      const routes = PAGES_OF['static']!.concat(isServer ? ['/dyn'] : [], hasPre ? ['/pre'] : [])
-      const files = {
-        ...settings.files,
-        ...(hasPre && {
-          'src/pages/pre.astro': PRE_WITH_DEFERRED(
-            settings.files?.['src/pages/pre.astro'] ?? READ('src/pages/pre.astro'),
-          ),
-        }),
-      }
+      const routes = coverageRoutes(settings)
+      const files = coverageFiles(settings)
       const used = await built({ ...settings, options: BROWSER_KEEP, files })
       const all = await built({ ...settings, options: "{ atomic: 'all' }", files })
       if (used.result.error !== undefined) {
-        // Decision 22: a server island a prerendered page holds is present or the build says which.
-        expect(name).toContain('no-rename')
-        expect(used.result.output).toContain('src/components/Deferred.astro')
-        expect(used.result.output).toContain('minW0')
+        expectServerIslandReported(name, used.result.output)
         return
       }
       const pages = await layerStylesOfRoutes(used.app, used.result, routes)
       const allPages = await layerStylesOfRoutes(all.app, all.result, routes)
-      const sets = new Map<string, string[]>()
-      for (const route of routes) {
-        const union = unique(pages[route]!.flatMap((style) => setOfCss(style.css)))
-        for (const atom of NEEDS[route]!) expect(union, `${route} needs ${atom}`).toContain(atom)
-        for (const [index, style] of pages[route]!.entries()) {
-          expect(parityProblems(style.css, allPages[route]![index]!.css), route).toEqual([])
-          const set = setOfCss(style.css)
-          if (set.includes('srOnly')) expect(set).toContain('srOnlyFocusable')
-          sets.set(route, set)
-        }
-      }
-      if (!hasPre) {
-        const identical = unique(routes.map((route) => JSON.stringify(sets.get(route))))
-        expect(identical, 'one identical set on every page').toHaveLength(1)
-      }
-      const byName = new Map<string, string>()
-      for (const route of routes) {
-        for (const style of pages[route]!.filter((s) => s.kind === 'linked')) {
-          expect(byName.get(style.name) ?? style.css, style.name).toBe(style.css)
-          byName.set(style.name, style.css)
-        }
-      }
+      const sets = checkCoverage(routes, pages, allPages)
+      expect(sets.size, 'a set for every route').toBe(routes.length)
+      if (settings.prerendered !== true) expectOneSet(routes, sets)
+      expectLinkedNamesAgree(routes, pages)
     },
     SECOND * 2,
   )
@@ -332,8 +398,8 @@ describe('AC-astro-33 — every copy of the layer, linked or inlined, sits insid
         ...(settings.server ? ['/dyn'] : []),
         ...(settings.prerendered ? ['/pre'] : []),
       ]
-      const server = settings.server === true
-      expect(server || app.root).toBeTruthy()
+      const isServer = settings.server === true
+      expect(isServer || app.root).toBeTruthy()
       const pageStyles = await stylesOfPages(app, result, routes)
       for (const [route, styles] of Object.entries(pageStyles)) {
         expect(LAYER_STATEMENT_FIRST(styles), route).toBe(normalized(layersStatement()))
@@ -369,7 +435,6 @@ async function stylesOfPages(
   result: AstroBuilt,
   routes: readonly string[],
 ): Promise<Record<string, PageStyle[]>> {
-  const { serveServerBuild } = await import('./helpers/astro-build.ts')
   const server = app.settings.server === true ? await serveServerBuild(app) : undefined
   try {
     const found: Record<string, PageStyle[]> = {}
@@ -389,6 +454,7 @@ describe('AC-astro-34 — the fixture’s output stays test output, and its buil
     async () => {
       const log = 'telemetry.log'
       const { app, result } = await built({
+        options: BROWSER_KEEP,
         integrations: `{ name: 'record', hooks: { 'astro:config:setup': async ({ config }) => { (await import('node:fs')).appendFileSync(config.root.pathname.replace(/\\/?$/, '/') + '${log}', \`\${globalThis.process.env.ASTRO_TELEMETRY_DISABLED}\\n\`) } } }`,
       })
       expect(result.error).toBeUndefined()
@@ -421,7 +487,7 @@ describe('AC-astro-37 — the README’s position claim for a @nave error in an 
     async () => {
       const page = `---\nimport Layout from '../layouts/Layout.astro'\n---\n<Layout><p class="b">b</p></Layout>\n<style>\n  .a {\n    color: red;\n  }\n  .b {\n    @nave inlin;\n  }\n</style>\n`
       const lines = page.split('\n')
-      const tag = lines.findIndex((line) => line === '<style>') + 1
+      const tag = lines.indexOf('<style>') + 1
       const at = lines.findIndex((line) => line.includes('@nave inlin')) + 1
       expect(at - tag).toBeGreaterThanOrEqual(3)
       const { result } = await built({
@@ -438,5 +504,3 @@ describe('AC-astro-37 — the README’s position claim for a @nave error in an 
     SECOND,
   )
 })
-
-export { eSet, ALL_ATOMS }

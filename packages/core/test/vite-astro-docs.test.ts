@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { extractFences } from './doc-fences.ts'
+import { configText } from './helpers/astro-app.ts'
 import {
   astroConfigFence,
   astroNotCoveredSentences,
@@ -182,6 +183,19 @@ describe('AC-astro-35 — Astro has a measured subsection, its versions come fro
     expect(fence).toContain('cssTarget')
     expect(fence).not.toContain('targets')
     expect(both).toHaveLength(1)
+  })
+})
+
+describe('AC-astro-35 — the fixture’s config is the README’s fence', () => {
+  it('is the fence’s body plus the React integration, and nothing else', () => {
+    const text = configText({})
+    const lines = text.split('\n')
+    const without = lines.filter(
+      (line) =>
+        line !== "import react from '@astrojs/react'" && line !== '  integrations: [react()],',
+    )
+    expect(without.join('\n')).toBe(astroConfigFence())
+    expect(lines.length - without.length).toBe(2)
   })
 })
 

@@ -20,7 +20,7 @@ const CONSUMER = `  @layer components.consumer {
  * A layout that imports `app.css`, with `<ClientRouter />` or without, and the order statement
  * first in its head or not.
  */
-function layout(options: { router: boolean; remedy: boolean }): string {
+function layout(options: { remedy: boolean; router: boolean }): string {
   return `---
 ${options.router ? "import { ClientRouter } from 'astro:transitions'\n" : ''}import '../styles/app.css'
 ---
@@ -72,10 +72,10 @@ const PADDING = Array.from(
 /**
  * The files of the shapes: two layouts, a component, nine pages under `/c/`.
  */
-export function shapeFiles(remedy: boolean): Record<string, string> {
+export function shapeFiles(hasRemedy: boolean): Record<string, string> {
   return {
-    'src/layouts/LCR.astro': layout({ router: true, remedy }),
-    'src/layouts/LNO.astro': layout({ router: false, remedy }),
+    'src/layouts/LCR.astro': layout({ router: true, remedy: hasRemedy }),
+    'src/layouts/LNO.astro': layout({ router: false, remedy: hasRemedy }),
     'src/components/Card.astro': CARD,
     'src/pages/c/p1.astro': CLASS_PAGE('LCR', `<style is:global>\n${CONSUMER}</style>`),
     'src/pages/c/p2.astro': CLASS_PAGE('LCR', `<style>\n${CONSUMER}</style>`),
