@@ -572,6 +572,80 @@ function nestedProgram(depth: number): unknown {
   return { type: 'Program', body: [declaration], ...at }
 }
 
+describe('a decorator is read like any other expression', () => {
+  const DECORATOR = 'function dec(value) {\n  return value\n}\nconst tone = () => {}\n'
+
+  it.each([
+    ['a class decorator', "@dec(cx('flex'))\nexport class A {}", ['flex'], []],
+    ['a class expression decorator', "export const A = @dec(cx('flex')) class {}", ['flex'], []],
+    ['a method decorator', "export class A {\n  @dec(cx('grid')) m() {}\n}", ['grid'], []],
+    ['a property decorator', "export class A {\n  @dec(cx('grid')) p = 1\n}", ['grid'], []],
+    [
+      'an accessor decorator',
+      "export class A {\n  @dec(cx('grid')) accessor p = 1\n}",
+      ['grid'],
+      [],
+    ],
+    [
+      'a static member decorator',
+      "export class A {\n  @dec(cx('block')) static m() {}\n}",
+      ['block'],
+      [],
+    ],
+    ['cx passed on, not called', '@dec(cx)\nexport class A {}', [], ['reference']],
+    [
+      'an argument that is written elsewhere',
+      "let x = 'flex'\nexport function set(value) {\n  x = value\n}\n@dec(cx(x))\nexport class A {}",
+      [],
+      ['argument'],
+    ],
+  ])('reads %s', (_name, body, expectedAtoms, expectedProblems) => {
+    const reading = read(`${IMPORT}${DECORATOR}${body}\n`)
+    expect([...reading.atoms]).toEqual(expectedAtoms)
+    expect(reading.problems.map((problem) => problem.kind)).toEqual(expectedProblems)
+  })
+
+  it('keeps the atom a class decorator calls in the stylesheet of a built app', async () => {
+    const built = await build({
+      'src/a.ts': `${IMPORT}function dec(value: unknown) {\n  return (target: unknown) => target\n}\n@dec(cx('flex'))\nexport class A {}\nconsole.log(new A())\n`,
+    })
+
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
+  }, 60_000)
+})
+
+const COUNT = 500_000
+
+/**
+ * A module that calls `cx('flex')` and holds `value` as data.
+ */
+const wide = (value: string): string =>
+  `${IMPORT}export const a = cx('flex')\nexport const data = ${value}\n`
+
+describe('a module wider than the argument limit of a call is read', () => {
+  it.each([
+    ['an array of elements', `[${'1,'.repeat(COUNT)}]`],
+    ['a call of arguments', `String(${'1,'.repeat(COUNT)})`],
+  ])('reads %s, hundreds of thousands wide', (_name, value) => {
+    const reading = read(wide(value))
+    expect([...reading.atoms]).toEqual(['flex'])
+    expect(reading.problems).toEqual([])
+  })
+
+  it('records a wide module as read, not as nested too deeply', async () => {
+    const { context, ctx } = recordingFixture()
+
+    const record = await recordModule(context, ctx, {
+      code: wide(`[${'1,'.repeat(COUNT)}]`),
+      id: '/scale-root/src/wide.js',
+    })
+
+    expect(record!.problems).toEqual([])
+    expect([...record!.atoms]).toContain('flex')
+  })
+})
+
 describe('a module nested deeper than the reader can follow', () => {
   it('is recorded as a problem naming the module, never a crash and never a skip', async () => {
     const { context, ctx } = recordingFixture(() => nestedProgram(200_000))

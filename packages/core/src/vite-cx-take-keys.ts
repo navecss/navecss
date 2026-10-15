@@ -7,7 +7,7 @@
 import type { AstNode } from './vite-ast.ts'
 import type { Reference, ScopeAnalysis } from './vite-scope.ts'
 
-import { nodeAt, nodesAt, propertyNameOf, stringAt } from './vite-ast.ts'
+import { nodeAt, nodesAt, propertyNameOf, pushAll, stringAt } from './vite-ast.ts'
 import { memberReadOf, patternDestructuring } from './vite-cx-reference.ts'
 
 /**
@@ -126,7 +126,7 @@ function parameterTakes(
   for (const { binding, node } of referencesToParameter(analysis, callback, name)) {
     const taken = binding?.writes === 0 ? referenceTakes(analysis, node, names) : undefined
     if (taken === undefined) return undefined
-    found.push(...taken)
+    pushAll(found, taken)
   }
   return found
 }
@@ -150,7 +150,7 @@ function variableTakes(
     if (binding?.init !== init) continue
     const taken = binding.writes === 0 ? referenceTakes(analysis, node, names) : undefined
     if (taken === undefined) return undefined
-    found.push(...taken)
+    pushAll(found, taken)
   }
   return found
 }

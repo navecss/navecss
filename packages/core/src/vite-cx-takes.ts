@@ -8,7 +8,7 @@
  */
 import type { AstNode } from './vite-ast.ts'
 
-import { childrenOf, exportNameOf, nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'
+import { childrenOf, exportNameOf, nodeAt, nodesAt, pushAll, staticStringOf } from './vite-ast.ts'
 import { type CxNames, dynamicKeys, isCxName, referenceTakes } from './vite-cx-take-keys.ts'
 import { analyze, type Reference, type ScopeAnalysis } from './vite-scope.ts'
 
@@ -219,8 +219,8 @@ export function takesIn(
   const stack: AstNode[] = [program]
   while (stack.length > 0) {
     const node = stack.pop()!
-    found.push(...takesOf(node, scan))
-    stack.push(...childrenOf(node))
+    pushAll(found, takesOf(node, scan))
+    pushAll(stack, childrenOf(node))
   }
   return found
 }

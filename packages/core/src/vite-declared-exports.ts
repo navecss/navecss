@@ -18,6 +18,7 @@ import {
   isTypeOnly,
   nodeAt,
   nodesAt,
+  pushAll,
   staticStringOf,
   stringAt,
   valueSpecifiersOf,
@@ -77,7 +78,7 @@ function patternNames(pattern: AstNode | undefined): string[] {
   while (stack.length > 0) {
     const next = stack.pop()!
     if (next.type === 'Identifier') names.push(stringAt(next, 'name') ?? '')
-    stack.push(...innerPatterns(next))
+    pushAll(stack, innerPatterns(next))
   }
   return names
 }

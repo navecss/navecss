@@ -46,6 +46,14 @@ export function stringAt(node: AstNode, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+/**
+ * Appends `items` to `target` one by one. `target.push(...items)` passes every item as an argument,
+ * which fails for a list of a few hundred thousand: a long array literal or argument list.
+ */
+export function pushAll<Item>(target: Item[], items: readonly Item[]): void {
+  for (const item of items) target.push(item)
+}
+
 const NO_KEYS: ReadonlySet<string> = new Set()
 
 /**

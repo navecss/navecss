@@ -12,6 +12,7 @@ import {
   exportNameOf,
   isTypeOnly,
   nodeAt,
+  pushAll,
   staticStringOf,
   stringAt,
   valueSpecifiersOf,
@@ -129,7 +130,7 @@ export function sourceFormProblems(
     const node = stack.pop()!
     const problem = sourceFormProblem(code, node, options)
     if (problem) problems.push(problem)
-    stack.push(...childrenOf(node))
+    pushAll(stack, childrenOf(node))
   }
   return problems
 }

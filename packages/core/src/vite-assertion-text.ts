@@ -4,7 +4,7 @@
  */
 import type { AstNode } from './vite-ast.ts'
 
-import { assertedBy, childrenOf, nodeAt } from './vite-ast.ts'
+import { assertedBy, childrenOf, nodeAt, pushAll } from './vite-ast.ts'
 
 /**
  * Where the comment that begins at `at` ends; `undefined` when none begins there.
@@ -73,7 +73,7 @@ export function textWithoutAssertions(code: string, args: readonly AstNode[]): s
     const node = stack.pop()!
     const asserted = assertedBy(node)
     if (asserted) dropped.push(droppedPartOf(code, node, asserted))
-    stack.push(...childrenOf(node))
+    pushAll(stack, childrenOf(node))
   }
   dropped.sort(([first], [second]) => first - second)
   let text = ''

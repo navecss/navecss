@@ -8,7 +8,7 @@ import type { Problem } from './vite-problems.ts'
 import type { ScopeAnalysis } from './vite-scope.ts'
 
 import { atomClassMap } from './atoms.ts'
-import { childrenOf, nodeAt, nodesAt } from './vite-ast.ts'
+import { childrenOf, nodeAt, nodesAt, pushAll } from './vite-ast.ts'
 import { type After, type EndMemo, isEndingTheClass } from './vite-class-endings.ts'
 import {
   isIdentChar,
@@ -153,7 +153,7 @@ export function refuseParenthesesAndFindEscapedAtoms(program: AstNode): Set<stri
     if (text?.raw.includes('\\')) {
       for (const atom of atomsWrittenIn(text.decoded)) found.add(atom)
     }
-    stack.push(...childrenOf(node))
+    pushAll(stack, childrenOf(node))
   }
   return found
 }
@@ -186,7 +186,7 @@ export function concatenationProblems(
         text: SENTENCE,
       })
     }
-    stack.push(...childrenWithAfter(node, after))
+    pushAll(stack, childrenWithAfter(node, after))
   }
   return problems.toSorted((a, b) => a.offset - b.offset)
 }

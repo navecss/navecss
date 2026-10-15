@@ -515,6 +515,60 @@ const WALKED_ROWS: readonly Row[] = [
     column: flex,
   },
   {
+    form: 'a class decorator whose argument calls cx',
+    code: `${IMPORT}declare function dec(value: unknown): any\n@dec(cx('flex'))\nexport class A {}`,
+    reaches: ofType('Decorator'),
+    column: flex,
+  },
+  {
+    form: 'a method decorator whose argument calls cx',
+    code: `${IMPORT}declare function dec(value: unknown): any\nexport class A {\n  @dec(cx('grid')) m() {}\n}`,
+    reaches: ofType('Decorator'),
+    column: grid,
+  },
+  {
+    form: 'a property decorator whose argument calls cx',
+    code: `${IMPORT}declare function dec(value: unknown): any\nexport class A {\n  @dec(cx('grid')) p = 1\n}`,
+    reaches: ofType('Decorator'),
+    column: grid,
+  },
+  {
+    form: 'an accessor decorator whose argument calls cx',
+    code: `${IMPORT}declare function dec(value: unknown): any\nexport class A {\n  @dec(cx('grid')) accessor p = 1\n}`,
+    reaches: ofType('Decorator'),
+    column: grid,
+  },
+  {
+    form: 'a decorator that passes cx on without calling it',
+    code: `${IMPORT}declare function dec(value: unknown): any\n@dec(cx)\nexport class A {}`,
+    reaches: ofType('Decorator'),
+    column: { atoms: [], problems: ['reference'] },
+  },
+  {
+    form: 'a decorator argument that is written elsewhere',
+    code: `${IMPORT}declare function dec(value: unknown): any\nlet x: AtomName = 'flex'\nexport function set(value: AtomName) {\n  x = value\n}\n@dec(cx(x))\nexport class A {}`,
+    reaches: ofType('Decorator'),
+    column: argument,
+  },
+  {
+    form: 'an enum member named cx',
+    code: `${IMPORT}export enum E {\n  cx = 1,\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSEnumMember'),
+    column: flex,
+  },
+  {
+    form: 'an enum member named cx, written as a string',
+    code: `${IMPORT}enum E {\n  'cx' = 1,\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSEnumMember'),
+    column: flex,
+  },
+  {
+    form: 'an enum member whose initialiser calls cx',
+    code: `${IMPORT}enum E {\n  A = cx('flex').length,\n}`,
+    reaches: ofType('TSEnumMember'),
+    column: flex,
+  },
+  {
     // A type named cx in the function that calls cx declares no value there.
     form: 'a type alias named cx beside a cx call in the same function',
     code: `${IMPORT}export function f() {\n  type cx = string\n  const s: cx = 'a'\n  return cx('flex') + s\n}`,
@@ -541,6 +595,22 @@ describe('AC-nextjs-used-atoms-09: a module listed in cxModules', () => {
       expect(read(stripCode(code), 'js', listed).problems).toEqual([])
     },
   )
+})
+
+describe('AC-nextjs-used-atoms-09: a parameter decorator is read', () => {
+  // The stripped copy of a parameter decorator needs the legacy decorator option, which the strip
+  // helper does not set, so these rows read the authored file only.
+  const block: Verdict = { atoms: ['block'], problems: [] }
+  const reference: Verdict = { atoms: [], problems: ['reference'] }
+
+  it.each([
+    ['a parameter', "@dec(cx('block')) a: string", block],
+    ['a parameter property', "@dec(cx('block')) public a: string", block],
+    ['a parameter that passes cx on', '@dec(cx) a: string', reference],
+  ])('reads a decorator on %s', (_name, parameter, verdict) => {
+    const code = `${IMPORT}declare function dec(value: unknown): any\nexport class A {\n  constructor(${parameter}) {}\n}`
+    expect(authoredVerdict(code)).toEqual(verdict)
+  })
 })
 
 describe('AC-nextjs-used-atoms-09: a type-only specifier exports no value from a cx source', () => {

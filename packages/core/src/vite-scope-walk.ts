@@ -93,6 +93,8 @@ function visitFunction(node: AstNode, scope: Scope, walker: Walker): void {
   }
   const parameters = newScope(outer, true)
   for (const param of nodesAt(node, 'params')) {
+    // A parameter's decorators are evaluated where the function is written, not among its parameters.
+    visitKeys(param, ['decorators'], scope, walker)
     declarePattern(param, { kind: 'param', owner: node }, parameters, walker)
   }
   const body = nodeAt(node, 'body')
@@ -105,9 +107,11 @@ function visitFunction(node: AstNode, scope: Scope, walker: Walker): void {
 }
 
 /**
- * A class: the inner name binds in a scope around the heritage and the body.
+ * A class: its decorators are read where the class is written, and the inner name binds in a scope
+ * around the heritage and the body.
  */
 function visitClass(node: AstNode, scope: Scope, walker: Walker): void {
+  visitKeys(node, ['decorators'], scope, walker)
   const inner = newScope(scope, false)
   const name = stringAt(nodeAt(node, 'id') ?? node, 'name')
   if (name !== undefined) declare(inner, { name, kind: 'class', writes: 0 })
@@ -195,7 +199,7 @@ function visitChain(node: AstNode, scope: Scope, walker: Walker): void {
 }
 
 const MEMBER_LIKE: Handler = (node, scope, walker) => {
-  visitKeys(node, expressionKeys(node, ['value']), scope, walker)
+  visitKeys(node, ['decorators', ...expressionKeys(node, ['value'])], scope, walker)
 }
 
 const HANDLERS: Readonly<Record<string, Handler>> = {
@@ -215,6 +219,9 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   ContinueStatement: leaf,
   MetaProperty: leaf,
   ExportAllDeclaration: leaf,
+  TSEnumMember: (node, scope, walker) => {
+    visitKeys(node, ['initializer'], scope, walker)
+  },
   TSInterfaceDeclaration: leaf,
   TSTypeAliasDeclaration: leaf,
   TSDeclareFunction: leaf,

@@ -12,4 +12,4 @@ assertions. Outside the list the reader is not promised to agree with the stripp
 assertion around `cx` itself (`(cx as typeof cx)('flex')`) is refused, and a string-literal type
 such as `'nave-grid' | 'nave-block'` still collects `grid` and `block`. `readModule` takes the tree
 with no node for a pair of parentheses, as Vite's parser returns it, and throws a `TypeError` on one
-that keeps them. The Vite plugin is unchanged: it reads the code after its types are gone.
+that keeps them. None of this changes what the Vite plugin reads: it reads the code after its types are gone.

@@ -13,7 +13,7 @@ import type { AstNode } from './vite-ast.ts'
 import type { RenderContext } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
-import { childrenOf, nodeAt, staticStringOf } from './vite-ast.ts'
+import { childrenOf, nodeAt, pushAll, staticStringOf } from './vite-ast.ts'
 import { CX_SOURCE } from './vite-collect.ts'
 import { filePathOf } from './vite-css-id.ts'
 import { isDependencyId, isNaveOwn, moduleLabel, packageNameOf } from './vite-module-kind.ts'
@@ -68,7 +68,7 @@ export function specifiersIn(program: AstNode): string[] {
     if (where !== undefined && source !== undefined) {
       found.set(source, Math.min(found.get(source) ?? Infinity, where.start))
     }
-    stack.push(...childrenOf(node))
+    pushAll(stack, childrenOf(node))
   }
   return [...found].toSorted(([, a], [, b]) => a - b).map(([source]) => source)
 }
