@@ -320,7 +320,7 @@ const SIX_SUBPATHS = [
   'autocomplete',
 ]
 
-describe('AC-base-ui-overlay-completion-39: the README carries each item R19 lists, in the shipping state', () => {
+describe('AC-base-ui-overlay-completion-39: the README carries each listed item, in the shipping state', () => {
   it.each(SIX_SUBPATHS)('names the subpath @navecss/base-ui/%s', (name) => {
     expect(prose).toContain(`\`@navecss/base-ui/${name}\``)
   })
