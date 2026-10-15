@@ -1,5 +1,75 @@
 # @navecss/core
 
+## 0.4.0
+
+### Minor Changes
+
+- 9ec0b86: New subpath `@navecss/core/collect`: the code the Vite plugin uses to read which atoms a module
+  uses (`readModule`), to print the report of the calls it cannot read (`buildReport`, with its
+  `REPORT_CAUSE` sentence) and to check the plugin's options (`assertOptions`). It contains no
+  parser: the caller hands it a syntax tree it parsed itself, so a build tool other than Vite can
+  read modules the same way. It is public so that a package outside core can import it, and it is not
+  meant for application code: an application reaches the same behaviour through `navePlugin()` from
+  `@navecss/core/vite`, which behaves as before.
+- 29e563f: In a build, the Vite plugin turns each `cx()` call it read into the class string the call returns,
+  so the map from atom names to classes is not in your bundle. `cx('flex', 'grid')` becomes
+  `"nave-flex nave-grid"`, and a call with a condition keeps its arguments where they are, with each
+  atom name replaced by its class and the result joined as `cx.raw()` joins, so every argument is
+  evaluated once, in the order you wrote it. A direct `cx.raw()` call becomes the same join, and a
+  direct `cx.dynamic()` call a lookup in a map of the atoms in `keep` and `keepFor`. The dev server
+  keeps the run-time functions, which return the same strings, and `atomic: 'all'` rewrites nothing.
+
+  A bundle in which every use of `cx` is one of those direct calls, and no module that imports `cx`
+  calls `eval` directly, holds neither the name map nor the atoms' declarations. Two forms keep the
+  map, because the build cannot follow the alias: `const r = cx.raw` and `const { raw } = cx`. So
+  does a package listed in `keepFor` whose calls the build cannot read, because those calls stay
+  calls to the run-time `cx()`. A module that calls `eval` directly keeps its import of `cx`, and
+  with it the map, whatever text it runs (`eval('1')` too), because that text can read the module's
+  names and the build cannot read the text. An indirect call, `(0, eval)(text)` or
+  `globalThis.eval(text)`, runs its text in the global scope, where `cx` is not visible, and does
+  not keep the import. Each rewritten module returns a source map.
+
+### Patch Changes
+
+- 9413d53: `readModule` from `@navecss/core/collect` now reads a closed list of TypeScript forms as an author
+  writes them, so a host that parses source files without stripping their types gets, for those
+  forms, the verdict the stripped file gets. A type assertion around an argument or an initialiser
+  (`as`, `satisfies`, the non-null `!` and the angle-bracket `<T>x`) is read as the value it wraps, a
+  name written in a type position is no reference, and an `import type` binds nothing. A value under
+  an assertion is still judged like any other argument, and a report line quotes the call without its
+  assertions. Outside the list the reader is not promised to agree with the stripped file: an
+  assertion around `cx` itself (`(cx as typeof cx)('flex')`) is refused, and a string-literal type
+  such as `'nave-grid' | 'nave-block'` still collects `grid` and `block`. `readModule` takes the tree
+  with no node for a pair of parentheses, as Vite's parser returns it, and throws a `TypeError` on one
+  that keeps them. None of this changes what the Vite plugin reads: it reads the code after its types are gone.
+- 9413d53: The Vite plugin now reads a `cx()` call in a decorator's arguments, on a class, a class member or a
+  parameter (`@tracked(cx('flex'))`), so its atoms are kept instead of trimmed with no report, and a
+  use of `cx` there that is not a call is reported like anywhere else. A module holding a very long
+  array or argument list, hundreds of thousands of elements, is read like any other module; it was
+  refused with a report saying it was nested too deeply. Only nesting deeper than the reader's stack
+  is still reported that way. `readModule` from `@navecss/core/collect` reads both the same way.
+- fdd79bb: The Vite dev server no longer serves the first stylesheet response with an empty set of atoms when the stylesheet is transformed before the script that imports it has finished its own transform (Vite's warm-up does this under load). A stylesheet a script imports now waits for the graph whether or not that import is registered yet; a stylesheet a page links is still answered at once. A first paint that came without its rules is fixed; builds were never affected.
+- e9172bb: `cx.dynamic()` also reads its map of kept atoms when a bundler inlines it as a JSON string, as
+  Next.js's `compiler.define` does. A Vite build with `navePlugin()`'s default is unchanged: the
+  bundler drops the new branch. A bundle with no map (no plugin, or `atomic: 'all'`) gains the few
+  bytes that read the string.
+- 3187930: Importing only `cx` no longer pulls every atom's CSS declarations into your bundle. `cx()` needs a name-to-class map and nothing else, but that map was built from the declarations object, so a bundler could not drop it: a bundle that imports `cx` alone was 4.4 KB minified and is now 1.2 KB. `atomClassMap`, `toClassName` and `AtomName` are unchanged and still exported from `@navecss/core/atoms`.
+- e9172bb: In the dev server, a stylesheet that the atoms in use outgrew before the page was listening for
+  updates is now reloaded when the page connects, so its classes get their rules without a manual
+  reload. Vite drops a stylesheet update sent while no page is connected, and a `<link>` stylesheet
+  answered before the page's script was read could be left without the rules for that script's
+  classes. A connection resends only a reload that no page heard.
+
+  A stylesheet inlined in an HTML page now reloads the pages open on the dev server when the atoms in
+  use outgrow it, and one inlined in a page no longer open, or served for another route, still costs
+  them one reload each time the set grows. Its text is part of the HTML a page was given, so the page
+  has to be reloaded to get the new rules; the reload Vite sent for it named the HTML file by its
+  file-system path, which Vite's client ignores, so a class a module added later had no rule for the
+  rest of the session.
+
+- Updated dependencies [2b2399c]
+  - @navecss/tokens@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes
