@@ -4,9 +4,9 @@
  * The one helper every wrapped part is built with. A wrapped part is Base UI's part with Nave's
  * class added to its `className` (a string is joined after Nave's class, a function of state is
  * wrapped, never stringified) and, for the Button family, the typed `variant` and `size` props
- * turned into `data-nave-*` attributes (as `size` is for an Avatar). Everything else (every other prop, the ref, `render`) goes
- * to Base UI's part untouched, and nothing here reads state, layout or style: what the wrapper adds
- * is chosen by the props the consumer passed.
+ * turned into `data-nave-*` attributes (as `size` is for an Avatar). Everything else (every other
+ * prop, the ref, `render`) goes to Base UI's part untouched, and nothing here reads state, layout
+ * or style: what the wrapper adds is chosen by the props the consumer passed.
  */
 import {
   createElement,
