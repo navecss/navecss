@@ -11,7 +11,7 @@ import type { AstroApp } from '../../helpers/astro-app.ts'
 import type { Running } from '../../helpers/astro-serve.ts'
 
 import { makeAstroApp } from '../../helpers/astro-app.ts'
-import { isMarked, isPresent, markPage, styleOf } from '../../helpers/astro-browser.ts'
+import { isMarked, isPresent, markPage, readSettled, styleOf } from '../../helpers/astro-browser.ts'
 import { buildAstro } from '../../helpers/astro-build.ts'
 import { BROWSER_KEEP } from '../../helpers/astro-checks.ts'
 import { previewStatic, serveDev } from '../../helpers/astro-serve.ts'
@@ -55,9 +55,14 @@ async function displayOf(url: string, route: string): Promise<string> {
   const page = await browser.newPage()
   try {
     await page.goto(`${url}${route}`)
-    await until(page, () => isPresent(page, '#c'), `#c on ${route}`, 20_000)
+    await until(
+      page,
+      () => readSettled(page, () => isPresent(page, '#c')),
+      `#c on ${route}`,
+      20_000,
+    )
     await page.waitForTimeout(300)
-    return await styleOf(page, '#c', 'display')
+    return await readSettled(page, () => styleOf(page, '#c', 'display'))
   } finally {
     await page.close()
   }
