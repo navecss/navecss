@@ -504,3 +504,46 @@ describe('AC-astro-37 — the README’s position claim for a @nave error in an 
     SECOND,
   )
 })
+
+const SKIP_LAYOUT = (body: string): string =>
+  BASE_FILES['src/layouts/Layout.astro']!.replace(
+    '<body><slot /></body>',
+    () => `<body>${body}<slot /></body>`,
+  )
+
+describe('AC-astro-30 — a skip link in an .astro layout: the lone class ships alone, the pair ships together', () => {
+  it.each([
+    [
+      'L1, the lone nave-sr-only-focusable',
+      '<a href="#main" class="nave-sr-only-focusable">Skip</a>',
+      false,
+    ],
+    [
+      'L2, the two-class idiom',
+      '<a href="#main" class="nave-sr-only nave-sr-only-focusable">Skip</a>',
+      true,
+    ],
+    ['L3, nave-sr-only and no link', '<span class="nave-sr-only">hidden</span>', true],
+  ])(
+    '%s',
+    async (_name, body, hasBoth) => {
+      const files = { 'src/layouts/Layout.astro': SKIP_LAYOUT(body) }
+      const used = await built({ options: BROWSER_KEEP, files })
+      const all = await built({ options: "{ atomic: 'all' }", files })
+      expect(used.result.error).toBeUndefined()
+      const pages = await layerStylesOfRoutes(used.app, used.result, ['/', '/about'])
+      const allPages = await layerStylesOfRoutes(all.app, all.result, ['/', '/about'])
+      for (const route of ['/', '/about']) {
+        const styles = pages[route]!.entries().toArray()
+        for (const [index, style] of styles) {
+          const set = setOfCss(style.css)
+          expect(set).toContain('srOnlyFocusable')
+          expect(set.includes('srOnly')).toBe(hasBoth)
+          expect(parityProblems(style.css, allPages[route]![index]!.css)).toEqual([])
+          expect(/\.nave-sr-only(?![\w-])/.test(style.css)).toBe(hasBoth)
+        }
+      }
+    },
+    SECOND,
+  )
+})

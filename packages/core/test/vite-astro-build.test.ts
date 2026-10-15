@@ -93,8 +93,12 @@ describe('AC-astro-02 — server output with no prerendered page prunes fully, l
         server: true,
         options: BROWSER_KEEP,
         files: LEAN_FILES,
+        probe: {},
       })
       expect(result.error).toBeUndefined()
+      // No earlier server environment wrote a stylesheet holding the layer, so nothing is left whole.
+      const writers = probeRecords(app).filter((record) => record.holdsLayer)
+      expect(unique(writers.map((record) => record.environment))).toEqual(['ssr'])
       const pages = await layerStylesOfRoutes(app, result, ['/', '/about', '/dyn', '/lean'])
       expect(pages['/lean']!.map((style) => style.kind)).toEqual(['inline'])
       for (const [route, styles] of Object.entries(pages)) {
