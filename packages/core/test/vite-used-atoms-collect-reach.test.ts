@@ -615,6 +615,76 @@ describe('a decorator is read like any other expression', () => {
   }, 60_000)
 })
 
+describe('an auto-accessor is a class member', () => {
+  it.each([
+    [
+      'named cx, beside a cx call',
+      "export class A {\n  accessor cx = 1\n}\nexport const a = cx('flex')",
+      ['flex'],
+      [],
+    ],
+    ['whose value calls cx', "export class A {\n  accessor x = cx('grid')\n}", ['grid'], []],
+    ['whose computed key is cx', 'export class A {\n  accessor [cx] = 1\n}', [], ['reference']],
+  ])('reads an auto-accessor %s', (_name, body, expectedAtoms, expectedProblems) => {
+    const reading = read(`${IMPORT}${body}\n`)
+    expect([...reading.atoms]).toEqual(expectedAtoms)
+    expect(reading.problems.map((problem) => problem.kind)).toEqual(expectedProblems)
+  })
+})
+
+/**
+ * A module whose one call of `cx` has `count` arguments that cannot be read, then `'flex'`.
+ */
+const call = (count: number): string =>
+  `${IMPORT}export const f = (v) => cx(${'v, '.repeat(count)}'flex')\n`
+
+describe('a call with many unreadable arguments is quoted once', () => {
+  const OPTIONS = {
+    cxSources: new Set([CX_SOURCE]),
+    ownAtoms: new Set<string>(),
+    isDependency: false,
+  }
+
+  /**
+   * How many times the reader enumerates the keys of the call's last argument, which every quote
+   * of the call walks.
+   */
+  function enumerationsOfLastArgument(count: number): number {
+    const code = call(count)
+    const program = parseAst(code) as unknown as AstNode
+    const body = (program.body as AstNode[])[1]!.declaration as AstNode
+    const callNode = ((body.declarations as AstNode[])[0]!.init as AstNode).body as {
+      arguments: unknown[]
+    }
+    let enumerations = 0
+    const last = callNode.arguments.length - 1
+    callNode.arguments[last] = new Proxy(callNode.arguments[last] as object, {
+      ownKeys(target) {
+        enumerations += 1
+        return Reflect.ownKeys(target)
+      },
+    })
+    readModule(code, program, OPTIONS)
+    return enumerations
+  }
+
+  it('walks the arguments of the call the same number of times however many are unreadable', () => {
+    expect(enumerationsOfLastArgument(20)).toBe(enumerationsOfLastArgument(10))
+  })
+
+  it('takes time in proportion to the number of unreadable arguments', async () => {
+    await expect(
+      assertScalesLinearly((size) => {
+        const code = call(size)
+        const program = parseAst(code) as unknown as AstNode
+        return elapsed(() => {
+          readModule(code, program, OPTIONS)
+        })
+      }, 2000),
+    ).resolves.toBeDefined()
+  }, 300_000)
+})
+
 const COUNT = 500_000
 
 /**

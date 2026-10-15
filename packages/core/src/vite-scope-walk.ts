@@ -7,6 +7,7 @@ import type { AstNode } from './vite-ast.ts'
 import type { Scope, Walker } from './vite-scope-types.ts'
 
 import { childrenOf, isNode, isTypeOnly, nodeAt, nodesAt, stringAt } from './vite-ast.ts'
+import { visitEnum } from './vite-scope-enum.ts'
 import { declareImport } from './vite-scope-imports.ts'
 import { declarePattern, writeTargets } from './vite-scope-pattern.ts'
 import { declare, newScope, reference } from './vite-scope-types.ts'
@@ -212,6 +213,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   Property: MEMBER_LIKE,
   MethodDefinition: MEMBER_LIKE,
   PropertyDefinition: MEMBER_LIKE,
+  AccessorProperty: MEMBER_LIKE,
   LabeledStatement: (node, scope, walker) => {
     visitKeys(node, ['body'], scope, walker)
   },
@@ -219,6 +221,7 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   ContinueStatement: leaf,
   MetaProperty: leaf,
   ExportAllDeclaration: leaf,
+  TSEnumDeclaration: visitEnum,
   TSEnumMember: (node, scope, walker) => {
     visitKeys(node, ['initializer'], scope, walker)
   },

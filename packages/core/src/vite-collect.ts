@@ -123,12 +123,15 @@ function judgeString(reading: Reading, use: CxUse, value: string, node: AstNode)
  */
 function readCall(reading: Reading, use: CxUse, analysis: ReturnType<typeof analyze>): void {
   const args = nodesAt(use.node, 'arguments')
+  // Every problem of the call quotes the whole call, which walks every argument: quote it once.
+  let quote: string | undefined
+  const quoted = (): string => (quote ??= quoteCall(reading, use, args))
   for (const arg of args) {
     if (arg.type === 'SpreadElement') {
       report(reading, {
         kind: 'argument',
         offset: arg.start,
-        construct: quoteCall(reading, use, args),
+        construct: quoted(),
         text: 'a spread argument.',
       })
       continue
@@ -138,7 +141,7 @@ function readCall(reading: Reading, use: CxUse, analysis: ReturnType<typeof anal
       report(reading, {
         kind: 'argument',
         offset: arg.start,
-        construct: quoteCall(reading, use, args),
+        construct: quoted(),
         text: 'the argument is not a literal atom name.',
       })
       continue

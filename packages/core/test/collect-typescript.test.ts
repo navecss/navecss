@@ -563,6 +563,18 @@ const WALKED_ROWS: readonly Row[] = [
     column: flex,
   },
   {
+    form: 'an enum member named cx, read by a later member',
+    code: `${IMPORT}export enum E {\n  cx = 1,\n  B = cx,\n}\nexport const a = cx('flex')`,
+    reaches: ofType('TSEnumMember'),
+    column: flex,
+  },
+  {
+    form: 'an enum member that reads a constant outside the enum',
+    code: `${IMPORT}const tone = 'grid'\nenum E {\n  A = cx(tone).length,\n}`,
+    reaches: ofType('TSEnumMember'),
+    column: grid,
+  },
+  {
     form: 'an enum member whose initialiser calls cx',
     code: `${IMPORT}enum E {\n  A = cx('flex').length,\n}`,
     reaches: ofType('TSEnumMember'),
