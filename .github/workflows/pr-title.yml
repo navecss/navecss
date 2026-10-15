@@ -42,6 +42,7 @@ jobs:
             cli
             stylelint-config
             eslint-plugin
+            prune
             repo
             deps
             release
