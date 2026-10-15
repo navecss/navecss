@@ -8,6 +8,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import type { ScratchApp } from './helpers/vite-app.ts'
 import type { PlainViteSettings } from './helpers/vite-cli.ts'
 
+import { ALL_ATOMS } from './helpers/astro-checks.ts'
 import { atomLayerAtoms, atoms } from './helpers/used-atoms-css.ts'
 import { cssFiles, plainViteApp, runViteBuild } from './helpers/vite-cli.ts'
 
@@ -78,5 +79,30 @@ describe('AC-astro-14 — the plain Vite builder matrix: verdicts, file names an
       for (const built of [off, on, spelled]) expect(built.output).not.toMatch(/warn/i)
     },
     SECOND * 3,
+  )
+})
+
+describe('AC-astro-16 — a separate server invocation writes its stylesheet as it always did', () => {
+  it(
+    'ships every atom in the stylesheet of vite build --ssr with ssrEmitAssets, the client unchanged',
+    async () => {
+      const app = plainViteApp({ order: ['client'], hasBuilder: false, ssrEmitAssets: true })
+      apps.push(app)
+      const server = await runViteBuild(app, [
+        '--ssr',
+        'src/entry-server.tsx',
+        '--outDir',
+        'dist-ssr',
+      ])
+      expect(server.code, server.output).toBe(0)
+      const written = Object.values(cssFiles(`${app.root}/dist-ssr`))
+      expect(written.map((css) => atomLayerAtoms(css))).toEqual([ALL_ATOMS])
+      const client = await runViteBuild(app)
+      expect(client.code, client.output).toBe(0)
+      expect(Object.values(cssFiles(`${app.root}/dist`)).map((css) => atomLayerAtoms(css))).toEqual(
+        [atoms('flex', 'grid')],
+      )
+    },
+    SECOND * 2,
   )
 })
