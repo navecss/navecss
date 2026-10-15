@@ -49,20 +49,24 @@ measured.
 - **Correction (2026-10-13):** a part's own types are declared from the oldest Base UI the
   package supports (1.3.0 when this was written), so that the package's declarations compile
   there. A type member or type parameter Base UI added later is not on the wrapper's part:
-  against Base UI 1.8.0 that is `ContextMenu.Root.Actions`, the third type parameter of
-  `Combobox.Root.Props`, and the type parameter of `NavigationMenu.Root.Props` with
-  `NavigationMenu.Root.Value`. Each subpath also re-exports Base UI's flat type names, which reach
-  them (`ContextMenuRootActions`, `ComboboxRootProps`, `NavigationMenuRootProps`,
-  `NavigationMenuRoot.Value`).
+  against Base UI 1.8.0 that is `ContextMenu.Root.Actions` and the third type parameter of
+  `Combobox.Root.Props`. Each subpath also re-exports Base UI's flat type names, which reach
+  them (`ContextMenuRootActions`, `ComboboxRootProps`).
+- **Correction (2026-10-14):** `NavigationMenu.Root.Props` with a type argument and
+  `NavigationMenu.Root.Value` are two more such names; the subpath reaches them as
+  `NavigationMenuRootProps` and `NavigationMenuRoot.Value`.
 
 **2. The styling is one stylesheet in `components.nave`, built when the package is built.**
 `@navecss/base-ui/styles.css` is made by expanding Nave's own atoms through the `@nave`
 directive at build time, so the consumer needs no PostCSS plugin and no directive. It carries
 only rules inside `@layer components.nave`, restates the layer order statement, declares no
-custom property, and sets no `isolation`. It sets one `z-index`, `z-index: var(--nave-layer-toast)`
-on the toast area (`nave-base-ui-toast-placement`), admitted on one criterion: a portalled
-container that exists before the overlays it must sit above. No layer moves. The consumer imports
-Nave's tokens, then this file. ADR 0003's table now names this package as `components.nave`'s writer.
+custom property, and sets no `z-index` or `isolation`. The consumer imports Nave's tokens, then
+this file. ADR 0003's table now names this package as `components.nave`'s writer.
+
+- **Correction (2026-10-14):** the stylesheet sets one `z-index`, `z-index: var(--nave-layer-toast)`
+  on the toast area (`nave-base-ui-toast-placement`), admitted on one criterion: a portalled
+  container that exists before the overlays it must sit above. No layer moves, and nothing else in
+  the stylesheet may set a `z-index`.
 
 **3. The override ladder is the cascade contract, not a configuration surface.** Tokens restyle
 every part; a `className` on any part is the consumer's, in `components.consumer`, and beats

@@ -218,8 +218,8 @@ describe('AC-base-ui-feedback-navigation-17 (the docs clause): the ADR decisions
     expect(zIndexProblems(decisionOf0003, { needsCorrection: true })).toEqual([])
   })
 
-  it('has ADR 0010 decision 2 changed to match: no unqualified claim, and the declaration named', () => {
-    expect(zIndexProblems(decisionTwoOf0010, { needsCorrection: false })).toEqual([])
+  it('has ADR 0010 decision 2 carry a dated correction that names the admitted declaration and says no layer moves', () => {
+    expect(zIndexProblems(decisionTwoOf0010, { needsCorrection: true })).toEqual([])
   })
 
   it('control: the sentence as it stood, with no correction beside it, is reported', () => {
