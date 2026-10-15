@@ -16,13 +16,13 @@ import {
 } from './support/draft-states.ts'
 import { buildState } from './support/feedback-build.ts'
 import {
-  allStates789,
-  DRAFT_CLASSES_789,
-  DRAFTS_789,
+  allStatesFeedback,
+  DRAFT_CLASSES_FEEDBACK,
+  DRAFTS_FEEDBACK,
   expectedSheet,
-  NEW_CLASSES_789,
+  NEW_CLASSES_FEEDBACK,
   readOracle,
-  stateKey789,
+  stateKeyFeedback,
 } from './support/feedback-states.ts'
 import { attributeReads, selectorNodes } from './support/selector.ts'
 import {
@@ -117,7 +117,9 @@ const pascal = (name: string): string =>
     .map((word) => `${word[0]?.toUpperCase()}${word.slice(1)}`)
     .join('')
 
-const states789 = allStates789().map((unsigned) => [stateKey789(unsigned), unsigned] as const)
+const statesFeedback = allStatesFeedback().map(
+  (unsigned) => [stateKeyFeedback(unsigned), unsigned] as const,
+)
 
 describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07: the class set is Table P for the signature state (stylesheet half)', () => {
   it("is the set Table P names: 86 classes with every draft signed, the Slider's four included", () => {
@@ -138,11 +140,11 @@ describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07
 
   it('names each of the 21 new classes as toClassName of the atom baseUi plus its name, and the atoms hold all 21', () => {
     const fromAtoms = new Set(Object.keys(atoms).map((name) => toClassName(name as AtomName)))
-    const named = NEW_CLASSES_789.map((name) => `baseUi${pascal(name.slice(PREFIX.length))}`)
+    const named = NEW_CLASSES_FEEDBACK.map((name) => `baseUi${pascal(name.slice(PREFIX.length))}`)
 
-    expect(NEW_CLASSES_789).toHaveLength(21)
-    expect(named.map((name) => toClassName(name as AtomName))).toEqual(NEW_CLASSES_789)
-    expect(NEW_CLASSES_789.filter((name) => !fromAtoms.has(name))).toEqual([])
+    expect(NEW_CLASSES_FEEDBACK).toHaveLength(21)
+    expect(named.map((name) => toClassName(name as AtomName))).toEqual(NEW_CLASSES_FEEDBACK)
+    expect(NEW_CLASSES_FEEDBACK.filter((name) => !fromAtoms.has(name))).toEqual([])
     expect(Object.keys(atoms).filter((name) => named.includes(name))).toHaveLength(21)
   })
 
@@ -154,7 +156,7 @@ describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07
       classes: 82,
     })
     expect(classesOf(expectedSheet()).size).toBe(86)
-    expect(classesOf(expectedSheet([], [...DRAFTS_789])).size).toBe(82)
+    expect(classesOf(expectedSheet([], [...DRAFTS_FEEDBACK])).size).toBe(82)
   })
 
   it.each(
@@ -173,11 +175,11 @@ describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07
     },
   )
 
-  it.each(states789)(
+  it.each(statesFeedback)(
     'is the set Appendix C.4 counts for the state with %s unsigned, and has no class of an unsigned feedback draft',
     async (key, unsigned) => {
       const built = classesOf(await buildState(unsigned))
-      const unsignedClasses = unsigned.flatMap((draft) => DRAFT_CLASSES_789[draft])
+      const unsignedClasses = unsigned.flatMap((draft) => DRAFT_CLASSES_FEEDBACK[draft])
 
       expect(built.size).toBe(feedbackRows.states[key]?.classes)
       expect(built).toEqual(classesOf(expectedSheet([], unsigned)))
@@ -218,11 +220,11 @@ describe('AC-base-ui-feedback-navigation-07 and AC-base-ui-overlay-completion-07
     )
   })
 
-  it.each(DRAFTS_789)(
+  it.each(DRAFTS_FEEDBACK)(
     'reds on the class of %s left in the state that leaves it unsigned, and not on the state itself (control)',
     (draft) => {
       const state = expectedSheet([], [draft])
-      const [name = ''] = DRAFT_CLASSES_789[draft]
+      const [name = ''] = DRAFT_CLASSES_FEEDBACK[draft]
       const kept = `${state}\n  .${name} { }`
       const expected = classesOf(expectedSheet([], [draft]))
 

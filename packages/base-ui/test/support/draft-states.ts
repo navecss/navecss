@@ -6,7 +6,7 @@
  * Two lists of drafts, never multiplied. `DRAFTS` is the overlay release's six and `allStates` its 64 states, as
  * they were: every function that takes a `Draft` still means what it meant. The four drafts of the
  * feedback and navigation spec (`placement`, `toast fade`, `limit`, `panel fade`) are in `feedback-states.ts` with
- * their own `allStates789` (16 states) and `stateKey789`; their states are read with overlay all
+ * their own `allStatesFeedback` (16 states) and `stateKeyFeedback`; their states are read with overlay all
  * signed, and the six corners of Appendix C.4 are the only places the two lists meet.
  */
 import { createHash } from 'node:crypto'

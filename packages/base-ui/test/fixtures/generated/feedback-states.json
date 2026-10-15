@@ -221,12 +221,12 @@
     }
   },
   "corners": {
-    "787-signed": {
+    "overlay-signed": {
       "bytes": 30401,
       "sha256": "e9b54cd0a877debe",
       "classes": 65
     },
-    "787-unsigned": {
+    "overlay-unsigned": {
       "bytes": 24139,
       "sha256": "8161223ed921d479",
       "classes": 53

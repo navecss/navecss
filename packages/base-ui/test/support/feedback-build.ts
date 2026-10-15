@@ -48,7 +48,7 @@ export const buildWithoutClasses = async (classes: readonly string[]): Promise<s
 
 /**
  * The shipping build with drafts of either list unsigned: one place to pass the union of both
- * lists, `Draft` and `Draft789`, to `buildStyles`.
+ * lists, `Draft` and `DraftFeedback`, to `buildStyles`.
  */
 export const buildState = (unsigned: readonly AnyDraft[]): Promise<string> =>
   buildStyles({ unsigned })

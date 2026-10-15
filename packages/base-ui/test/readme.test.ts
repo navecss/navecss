@@ -50,7 +50,7 @@ import {
 } from './support/w9-sentences.ts'
 import { clearedFor, FORBIDDEN } from './support/w12-feedback-rules.ts'
 import { RM_TOASTS_IN } from './support/w12-feedback-sentences.ts'
-import { SHIPPING_789 } from './support/w12-states.ts'
+import { SHIPPING_FEEDBACK } from './support/w12-states.ts'
 
 const readme = readReadme()
 const prose = proseOf(readme)
@@ -212,7 +212,7 @@ describe('AC-base-ui-bridge-46: the fixed sentences are carried byte for byte', 
 the overlay release's cleared sentences that stand in the combined package's README: sentence 4 is not among them,
 because the toasts' form replaces it in place (AC-base-ui-feedback-navigation-50).
  */
-const shipping787Sentences = sentencesPresentIn(SHIPPING).filter(
+const shippingOverlaySentences = sentencesPresentIn(SHIPPING).filter(
   ({ name }) => !name.startsWith('sentence 4'),
 )
 
@@ -224,8 +224,8 @@ present in the shipping state, and the promise.
  */
 const CLEARED: readonly string[] = [
   ...FIXED_SENTENCES.map(({ text }) => text),
-  ...shipping787Sentences.map(({ text }) => text),
-  ...clearedFor(SHIPPING_789),
+  ...shippingOverlaySentences.map(({ text }) => text),
+  ...clearedFor(SHIPPING_FEEDBACK),
   PROMISE_SENTENCE,
 ]
 
@@ -588,7 +588,7 @@ describe('AC-base-ui-overlay-completion-40, as AC-base-ui-feedback-navigation-50
     expect(nested).toEqual([])
   })
 
-  it.each(shipping787Sentences)('contains $name', ({ text }) => {
+  it.each(shippingOverlaySentences)('contains $name', ({ text }) => {
     expect(readme).toContain(text)
   })
 

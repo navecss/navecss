@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
 import { COLOR_KEYWORDS } from './support/colors.ts'
-import { expectedSheet, NEW_CLASSES_789 } from './support/feedback-states.ts'
+import { expectedSheet, NEW_CLASSES_FEEDBACK } from './support/feedback-states.ts'
 import { isFocusRingDeclaration, isThumbBarInset, isThumbRingDeclaration } from './support/focus.ts'
 import { requiresInvalid, requiresInvalidGroup } from './support/selector.ts'
 import {
@@ -468,7 +468,7 @@ const isInGuard = (item: FlatDeclaration): boolean =>
  */
 const calcViolations = (css: string): string[] =>
   flatten(css)
-    .filter((item) => NEW_CLASSES_789.includes(item.owner))
+    .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
     .flatMap((item) =>
       calcsIn(item.value).flatMap((expression) => {
         if (expression === GUARD_SHAPE) {
@@ -486,7 +486,7 @@ const calcViolations = (css: string): string[] =>
 const calcShapesIn = (css: string): Set<string> =>
   new Set(
     flatten(css)
-      .filter((item) => NEW_CLASSES_789.includes(item.owner))
+      .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
       .flatMap((item) => calcsIn(item.value))
       .map((expression) => (expression === GUARD_SHAPE ? expression : shapeOf(expression))),
   )
@@ -498,14 +498,14 @@ const calcShapesIn = (css: string): Set<string> =>
 const literalsOf = (css: string): Set<string> =>
   new Set(
     flatten(css)
-      .filter((item) => NEW_CLASSES_789.includes(item.owner) && !isFocusRingDeclaration(item))
+      .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner) && !isFocusRingDeclaration(item))
       .flatMap((item) => item.value.replaceAll(/var\([^()]*\)/g, ' ').split(/[\s(),*/+]+/))
       .filter((word) => /^-?\d*\.?\d+(?:px|rem|em|deg|ms|s|%)$/.test(word)),
   )
 
 const fallbacksOutsideRings = (css: string): string[] =>
   flatten(css)
-    .filter((item) => NEW_CLASSES_789.includes(item.owner) && !isFocusRingDeclaration(item))
+    .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner) && !isFocusRingDeclaration(item))
     .flatMap((item) => fallbacksIn(item).map((text) => `${item.owner} ${text}`))
 
 describe('AC-base-ui-feedback-navigation-40: the values of the 21 new classes are each one of the admitted forms', () => {
@@ -526,7 +526,7 @@ describe('AC-base-ui-feedback-navigation-40: the values of the 21 new classes ar
     expect(fallbacksOutsideRings(readStylesheet())).toEqual([])
     expect(fallbacksOutsideRings(expectedSheet())).toEqual([])
     expect(
-      flatten(expectedSheet()).filter((item) => NEW_CLASSES_789.includes(item.owner)),
+      flatten(expectedSheet()).filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner)),
     ).not.toEqual([])
   })
 

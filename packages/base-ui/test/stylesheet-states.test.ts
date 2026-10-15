@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
-import { expectedSheet, NEW_CLASSES_789 } from './support/feedback-states.ts'
+import { expectedSheet, NEW_CLASSES_FEEDBACK } from './support/feedback-states.ts'
 import { ringBlock } from './support/focus.ts'
 import {
   requiresDisabled,
@@ -81,7 +81,7 @@ const disabledViolations = (css: string): string[] => {
  */
 const newDisabledRules = (css: string): string[] =>
   flattenRules(css)
-    .filter((item) => NEW_CLASSES_789.includes(item.owner))
+    .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
     .flatMap((item) => item.selectors)
     .filter((selector) => requiresDisabled(selector))
 
@@ -110,7 +110,7 @@ const triggerDisabledNodes = (css: string): { inside: boolean; selector: string 
 describe('AC-base-ui-feedback-navigation-42 (first scenario), AC-base-ui-overlay-completion-33 and AC-base-ui-bridge-30: B4, disabled paint is tokens, never opacity, and the new classes paint none', () => {
   it('has no rule of the 21 new classes whose selector requires :disabled, [aria-disabled="true"] or [data-disabled] outside a :not()', () => {
     expect(
-      NEW_CLASSES_789.filter((name) =>
+      NEW_CLASSES_FEEDBACK.filter((name) =>
         flatten(readStylesheet()).every((item) => item.owner !== name),
       ),
     ).toEqual([])

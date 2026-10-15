@@ -9,13 +9,13 @@ import type { SelectorNode } from './support/selector.ts'
 
 import { buildState } from './support/feedback-build.ts'
 import {
-  allStates789,
-  type Draft789,
-  DRAFT_CLASSES_789,
-  DRAFTS_789,
+  allStatesFeedback,
+  DRAFT_CLASSES_FEEDBACK,
+  type DraftFeedback,
+  DRAFTS_FEEDBACK,
   expectedSheet,
-  NEW_CLASSES_789,
-  stateKey789,
+  NEW_CLASSES_FEEDBACK,
+  stateKeyFeedback,
 } from './support/feedback-states.ts'
 import { focusRingClasses, THUMB } from './support/focus.ts'
 import { attributeReads, selectorNodes } from './support/selector.ts'
@@ -174,7 +174,7 @@ const isolations = (css: string): string[] =>
  * The oracle sheet (Appendix C, every draft signed) with a rule or a declaration planted, to give
  * the controls a state that holds the admitted tuple.
  */
-const planted789 = (edit: (root: Root) => void): string => mutate(edit, expectedSheet())
+const plantedFeedback = (edit: (root: Root) => void): string => mutate(edit, expectedSheet())
 
 const placement = (root: Root): Rule => classRule(root, 'toast-placement')
 
@@ -201,7 +201,7 @@ describe('AC-base-ui-feedback-navigation-17: exactly one z-index, on one criteri
 
     expect(zIndexes(oracle)).toEqual([`${PREFIX}toast-placement 1 var(--nave-layer-toast)`])
     expect(componentsOnlyViolations(oracle)).toEqual([])
-    expect(componentsOnlyViolations(expectedSheet([], [...DRAFTS_789]))).toEqual([])
+    expect(componentsOnlyViolations(expectedSheet([], [...DRAFTS_FEEDBACK]))).toEqual([])
     expect(zIndexes(expectedSheet([], ['toast-placement']))).toEqual([])
   })
 
@@ -253,7 +253,7 @@ describe('AC-base-ui-feedback-navigation-17: exactly one z-index, on one criteri
       [`property isolation in .${PREFIX}toast-placement`],
     ],
   ] as const)('reds on %s, and on nothing else (control)', (_name, edit, expected) => {
-    const css = planted789(edit)
+    const css = plantedFeedback(edit)
 
     expect(css).not.toBe(expectedSheet())
     expect(componentsOnlyViolations(css)).toEqual(expected)
@@ -268,7 +268,7 @@ describe('AC-base-ui-feedback-navigation-17: exactly one z-index, on one criteri
   })
 
   it('reds on the admitted declaration planted in a stylesheet that has a media query around it (control)', () => {
-    const css = planted789((root) => {
+    const css = plantedFeedback((root) => {
       placement(root).append({
         name: 'media',
         params: '(min-width: 1px)',
@@ -280,7 +280,7 @@ describe('AC-base-ui-feedback-navigation-17: exactly one z-index, on one criteri
     expect(zIndexes(css)).toHaveLength(2)
   })
 
-  it.each(allStates789().map((unsigned) => [stateKey789(unsigned), unsigned] as const))(
+  it.each(allStatesFeedback().map((unsigned) => [stateKeyFeedback(unsigned), unsigned] as const))(
     'holds the one z-index in the state with %s unsigned exactly when placement is signed (the positive control for the unsigned reading)',
     (_key, unsigned) => {
       const found = zIndexes(expectedSheet([], unsigned))
@@ -343,7 +343,7 @@ const guardedIn = (unsigned: readonly string[]): ReadonlyMap<string, string> =>
     [...GUARDED].filter(
       ([owner]) =>
         !unsigned
-          .flatMap((draft) => DRAFT_CLASSES_789[draft as Draft789] ?? [])
+          .flatMap((draft) => DRAFT_CLASSES_FEEDBACK[draft as DraftFeedback] ?? [])
           .includes(owner.slice(1)),
     ),
   )
@@ -455,7 +455,7 @@ describe('AC-base-ui-feedback-navigation-36, AC-base-ui-overlay-completion-20 an
     ).toEqual(motion.map(() => [MOTION_GUARD_SELECTOR]))
   })
 
-  it.each(allStates789().map((unsigned) => [stateKey789(unsigned), unsigned] as const))(
+  it.each(allStatesFeedback().map((unsigned) => [stateKeyFeedback(unsigned), unsigned] as const))(
     'has a guard in each class the state with %s unsigned ships: twelve, eleven with one of toast fade and panel fade unsigned, ten with both',
     async (_key, unsigned) => {
       const css = await buildState(unsigned)
@@ -477,7 +477,8 @@ describe('AC-base-ui-feedback-navigation-36, AC-base-ui-overlay-completion-20 an
       ['navigation-menu-fade'],
       ['toast-fade', 'navigation-menu-fade'],
     ].map(
-      (unsigned) => nestedAtRules(postcss.parse(expectedSheet([], unsigned as Draft789[]))).length,
+      (unsigned) =>
+        nestedAtRules(postcss.parse(expectedSheet([], unsigned as DraftFeedback[]))).length,
     )
 
     expect(counts).toEqual([12, 11, 11, 10])
@@ -881,7 +882,7 @@ const FORBIDDEN_IN_NEW = new Set([
 ])
 
 const newClassProblems = (owner: string, selector: string): string[] =>
-  NEW_CLASSES_789.includes(owner)
+  NEW_CLASSES_FEEDBACK.includes(owner)
     ? selectorNodes(selector)
         .filter(
           ({ node }) =>
@@ -895,7 +896,7 @@ const newClassProblems = (owner: string, selector: string): string[] =>
  * `aria-expanded` in a feedback class is the parent key of the icon and nothing else.
  */
 const iconExpandedViolations = (owner: string, selector: string): string[] =>
-  NEW_CLASSES_789.includes(owner) &&
+  NEW_CLASSES_FEEDBACK.includes(owner) &&
   owner !== `${PREFIX}navigation-menu-icon` &&
   attributeReads(selector).some((read) => read.name === 'aria-expanded')
     ? [`aria-expanded in ${selector}`]
@@ -1115,10 +1116,10 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
             ),
           )
           .map((item) => item.owner)
-          .filter((owner) => NEW_CLASSES_789.includes(owner)),
+          .filter((owner) => NEW_CLASSES_FEEDBACK.includes(owner)),
       )
     const expanded = flattenRules(readStylesheet())
-      .filter((item) => NEW_CLASSES_789.includes(item.owner))
+      .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
       .flatMap((item) => item.selectors)
       .filter((selector) => attributeReads(selector).some((read) => read.name === 'aria-expanded'))
 
@@ -1136,14 +1137,15 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
 
   it('names, in no feedback class, :has(), data-side, data-active, data-popup-open, data-pressed, data-disabled, data-instant, data-expanded, data-behind, data-swiping or data-type', () => {
     const problems = flattenRules(readStylesheet())
-      .filter((item) => NEW_CLASSES_789.includes(item.owner))
+      .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
       .flatMap((item) =>
         item.selectors.flatMap((selector) => newClassProblems(item.owner, selector)),
       )
 
-    expect(NEW_CLASSES_789).toHaveLength(21)
+    expect(NEW_CLASSES_FEEDBACK).toHaveLength(21)
     expect(
-      flattenRules(readStylesheet()).filter((item) => NEW_CLASSES_789.includes(item.owner)).length,
+      flattenRules(readStylesheet()).filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
+        .length,
     ).toBeGreaterThan(20)
     expect(problems).toEqual([])
   })

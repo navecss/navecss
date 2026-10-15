@@ -7,12 +7,12 @@
  * `w9-*`'s.
  */
 import type { Literal, NamedLiteral } from './w9-sentences.ts'
-import type { State789 } from './w12-states.ts'
+import type { StateFeedback } from './w12-states.ts'
 
 import { PARENT_REDUCED_MOTION, SENTENCE_4_FORMS } from './w9-sentences.ts'
 import * as S from './w12-feedback-sentences.ts'
 import { composeReducedMotion, LIVE_CODES, RM_TABLE, signedOfCode } from './w12-reduced-motion.ts'
-import { isSigned789 } from './w12-states.ts'
+import { isSignedFeedback } from './w12-states.ts'
 
 /**
 The words AC-base-ui-bridge-47 forbids in the README outside its cleared copy.
@@ -43,7 +43,7 @@ export interface ItemRule {
    */
   readonly holds?: (readme: string, text: string) => boolean
   readonly literal: NamedLiteral
-  readonly present: (state: State789) => boolean
+  readonly present: (state: StateFeedback) => boolean
 }
 
 const named = (name: string, literal: Literal): NamedLiteral => ({ ...literal, name })
@@ -89,16 +89,17 @@ const cleared = (
   present: ItemRule['present'] = () => true,
 ): ItemRule => ({ author: 'cleared', literal: named(name, literal), present })
 
-const isPlacementUnsigned = (state: State789): boolean => !isSigned789(state, 'toast-placement')
+const isPlacementUnsigned = (state: StateFeedback): boolean =>
+  !isSignedFeedback(state, 'toast-placement')
 
-const isUnplacedWithScrimReturn = (state: State789): boolean =>
+const isUnplacedWithScrimReturn = (state: StateFeedback): boolean =>
   isPlacementUnsigned(state) && state.unplacedAlternativeSigned !== false
 
 export const ITEM_RULES: readonly ItemRule[] = [
   reader('D1, Toast setup', S.D1_TOAST_SETUP),
   reader('D1b, the manager in a client module', S.D1B_MANAGER_IN_A_CLIENT_MODULE),
   reader('D3, the stylesheet sentence', S.D3_STYLESHEET_SENTENCE, (state) =>
-    isSigned789(state, 'toast-placement'),
+    isSignedFeedback(state, 'toast-placement'),
   ),
   reader("D6, Toast.Title's element", S.D6_TOAST_TITLE_ELEMENT),
   reader('D7, Navigation Menu structure', S.D7_NAVIGATION_MENU_STRUCTURE),
@@ -113,26 +114,26 @@ export const ITEM_RULES: readonly ItemRule[] = [
   cleared('T2, toast timer', S.T2_TOAST_TIMER),
   cleared('T3, types alike', S.T3_TYPES_ALIKE),
   cleared('RM, reduced motion, toasts in', S.RM_TOASTS_IN, (state) =>
-    isSigned789(state, 'toast-fade'),
+    isSignedFeedback(state, 'toast-fade'),
   ),
   cleared(
     'RM, reduced motion, toasts out',
     S.RM_TOASTS_OUT,
-    (state) => !isSigned789(state, 'toast-fade'),
+    (state) => !isSignedFeedback(state, 'toast-fade'),
   ),
   cleared('I, limited toasts hidden', S.I_LIMITED_TOASTS_HIDDEN, (state) =>
-    isSigned789(state, 'toast-limit'),
+    isSignedFeedback(state, 'toast-limit'),
   ),
   cleared(
     'S-L, limited toasts visible, inert',
     S.S_L_LIMITED_TOASTS_VISIBLE,
-    (state) => !isSigned789(state, 'toast-limit'),
+    (state) => !isSignedFeedback(state, 'toast-limit'),
   ),
   cleared('S-P3, placement and stacking', S.S_P3_PLACEMENT_AND_STACKING, (state) =>
-    isSigned789(state, 'toast-placement'),
+    isSignedFeedback(state, 'toast-placement'),
   ),
   cleared('S-Pp2, popup from a toast, remedy', S.S_PP2_POPUP_FROM_A_TOAST, (state) =>
-    isSigned789(state, 'toast-placement'),
+    isSignedFeedback(state, 'toast-placement'),
   ),
   cleared('S-U, toast area unplaced', S.S_U_TOAST_AREA_UNPLACED, isUnplacedWithScrimReturn),
   cleared(
@@ -203,13 +204,13 @@ export const NON_LIVE_REDUCED_MOTION: readonly NamedLiteral[] = RM_TABLE.filter(
 /**
 Every item a README is held to in a state, present.
  */
-export const itemsPresent = (state: State789): readonly ItemRule[] =>
+export const itemsPresent = (state: StateFeedback): readonly ItemRule[] =>
   ITEM_RULES.filter(({ present }) => present(state))
 
 /**
 Every text a README in a state must not carry: the items of the other states and the withdrawn texts.
  */
-export const textsAbsent = (state: State789, author?: Author): readonly NamedLiteral[] => [
+export const textsAbsent = (state: StateFeedback, author?: Author): readonly NamedLiteral[] => [
   ...ITEM_RULES.filter(
     (rule) => !rule.present(state) && (author === undefined || rule.author === author),
   ).map(({ literal }) => literal),
@@ -224,7 +225,11 @@ const isHeld = ({ holds, literal }: ItemRule, readme: string): boolean =>
 What is wrong with a README for a state: each item the state calls for that it lacks, and each text
 it carries that the state does not allow.
  */
-export const problems789 = (readme: string, state: State789, author?: Author): string[] => [
+export const problemsFeedback = (
+  readme: string,
+  state: StateFeedback,
+  author?: Author,
+): string[] => [
   ...itemsPresent(state)
     .filter((rule) => (author === undefined || rule.author === author) && !isHeld(rule, readme))
     .map(({ literal }) => `missing: ${literal.name}`),
@@ -236,7 +241,7 @@ export const problems789 = (readme: string, state: State789, author?: Author): s
 /**
 Every literal the README can be held to, for the table of lengths and hashes.
  */
-export const ALL_LITERALS_789: readonly NamedLiteral[] = [
+export const ALL_LITERALS_FEEDBACK: readonly NamedLiteral[] = [
   ...ITEM_RULES.map(({ literal }) => literal),
   ...WITHDRAWN_reader,
   ...WITHDRAWN_cleared,
@@ -251,9 +256,9 @@ the shipped sentence in place, the 463 B form the 445 B form, I the sentence S-L
 give way to S-U and S-A where the state calls for them. The phrases of the not-painted list are
 checked apart (`phrasesFor`).
  */
-export const readmeInState = (shipped: string, state: State789): string => {
+export const readmeInState = (shipped: string, state: StateFeedback): string => {
   let text = shipped
-  if (!isSigned789(state, 'toast-placement')) {
+  if (!isSignedFeedback(state, 'toast-placement')) {
     text = replaceOnce(text, S.D3_STYLESHEET_SENTENCE.text, S.SHIPPED_STYLESHEET_SENTENCE.text)
     text = replaceOnce(text, S.S_PP2_POPUP_FROM_A_TOAST.text, '')
     const unplaced = [
@@ -264,10 +269,10 @@ export const readmeInState = (shipped: string, state: State789): string => {
     ].join('\n\n')
     text = replaceOnce(text, S.S_P3_PLACEMENT_AND_STACKING.text, unplaced)
   }
-  if (!isSigned789(state, 'toast-fade')) {
+  if (!isSignedFeedback(state, 'toast-fade')) {
     text = replaceOnce(text, S.RM_TOASTS_IN.text, S.RM_TOASTS_OUT.text)
   }
-  if (!isSigned789(state, 'toast-limit')) {
+  if (!isSignedFeedback(state, 'toast-limit')) {
     text = replaceOnce(text, S.I_LIMITED_TOASTS_HIDDEN.text, S.S_L_LIMITED_TOASTS_VISIBLE.text)
   }
   return text
@@ -276,7 +281,7 @@ export const readmeInState = (shipped: string, state: State789): string => {
 /**
 The sentences of a state that were cleared, for the scan that removes them.
  */
-export const clearedFor = (state: State789): string[] =>
+export const clearedFor = (state: StateFeedback): string[] =>
   itemsPresent(state)
     .filter(({ author }) => author === 'cleared')
     .map(({ literal }) => literal.text)

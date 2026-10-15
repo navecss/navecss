@@ -2,10 +2,10 @@
  * The reduced-motion sentence of the combined package: its list rule, composed from the overlay release's template,
  * and the table of its sixteen forms.
  */
-import type { State789 } from './w12-states.ts'
+import type { StateFeedback } from './w12-states.ts'
 
 import { SENTENCE_4_LIST_RULE, SENTENCE_4_TEMPLATE } from './w9-sentences.ts'
-import { isSigned789 } from './w12-states.ts'
+import { isSignedFeedback } from './w12-states.ts'
 
 /**
 The reduced-motion sentence's list, extended by the toasts' fade and the Navigation Menu icon's turn.
@@ -81,5 +81,5 @@ The two forms a README can carry: the overlay release's three drafts are signed,
  */
 export const LIVE_CODES = ['SSSS', 'SSSu'] as const
 
-export const reducedMotionCodeFor = (state: State789): (typeof LIVE_CODES)[number] =>
-  isSigned789(state, 'toast-fade') ? 'SSSS' : 'SSSu'
+export const reducedMotionCodeFor = (state: StateFeedback): (typeof LIVE_CODES)[number] =>
+  isSignedFeedback(state, 'toast-fade') ? 'SSSS' : 'SSSu'

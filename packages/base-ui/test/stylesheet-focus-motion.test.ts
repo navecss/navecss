@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import type { FlatDeclaration } from './support/stylesheet.ts'
 
 import { sha256 } from './support/draft-states.ts'
-import { expectedSheet, NEW_CLASSES_789, readOracle } from './support/feedback-states.ts'
+import { expectedSheet, NEW_CLASSES_FEEDBACK, readOracle } from './support/feedback-states.ts'
 import {
   focusRingClasses,
   isFocusRingBase,
@@ -132,9 +132,9 @@ const stylesheetOwners = (css: string): Set<string> =>
  * `focusRing` contributes to the trigger; and the only `box-shadow` among them is the toast card's
  * `var(--nave-shadow-overlay)`.
  */
-const ownFocusViolations789 = (css: string): string[] =>
+const ownFocusViolationsFeedback = (css: string): string[] =>
   flatten(css)
-    .filter((item) => NEW_CLASSES_789.includes(item.owner))
+    .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner))
     .filter((item) => !isFocusRingDeclaration(item))
     .flatMap((item) => {
       const where = `${item.owner} ${item.selectors.join(' ')} sets ${item.property}`
@@ -150,7 +150,7 @@ const ownFocusViolations789 = (css: string): string[] =>
 
 const boxShadows = (css: string): string[] =>
   flatten(css)
-    .filter((item) => NEW_CLASSES_789.includes(item.owner) && item.property === 'box-shadow')
+    .filter((item) => NEW_CLASSES_FEEDBACK.includes(item.owner) && item.property === 'box-shadow')
     .map((item) => `${item.owner}: ${item.value}`)
 
 describe('AC-base-ui-feedback-navigation-44, AC-base-ui-overlay-completion-46 and AC-base-ui-bridge-27: B1, focus styling is exactly what the signatures admit, with Table T2 amended', () => {
@@ -356,15 +356,15 @@ describe('AC-base-ui-feedback-navigation-44, AC-base-ui-overlay-completion-46 an
   it('gives each of the 21 new classes no outline and no focus selector of its own, and the only box-shadow among them is the toast card', () => {
     const owners = stylesheetOwners(readStylesheet())
 
-    expect(NEW_CLASSES_789.filter((name) => !owners.has(name))).toEqual([])
-    expect(ownFocusViolations789(readStylesheet())).toEqual([])
+    expect(NEW_CLASSES_FEEDBACK.filter((name) => !owners.has(name))).toEqual([])
+    expect(ownFocusViolationsFeedback(readStylesheet())).toEqual([])
     expect(boxShadows(readStylesheet())).toEqual([
       `${PREFIX}toast-root: var(--nave-shadow-overlay)`,
     ])
   })
 
   it('finds nothing of its own in the expected sheet, whose classes declare no outline or focus key (positive control)', () => {
-    expect(ownFocusViolations789(expectedSheet())).toEqual([])
+    expect(ownFocusViolationsFeedback(expectedSheet())).toEqual([])
     expect(boxShadows(expectedSheet())).toEqual([`${PREFIX}toast-root: var(--nave-shadow-overlay)`])
   })
 
@@ -385,7 +385,7 @@ describe('AC-base-ui-feedback-navigation-44, AC-base-ui-overlay-completion-46 an
   ])('reds on %s (control)', (_name, owner, declaration) => {
     const css = `${expectedSheet()}\n@layer components.nave { .${PREFIX}${owner} { ${declaration} } }`
 
-    expect(ownFocusViolations789(css)).toEqual([expect.stringContaining(`${PREFIX}${owner}`)])
+    expect(ownFocusViolationsFeedback(css)).toEqual([expect.stringContaining(`${PREFIX}${owner}`)])
     expect(placementViolations(css).length + boxShadows(css).length).toBeGreaterThan(0)
   })
 })

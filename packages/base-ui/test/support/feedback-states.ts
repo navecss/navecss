@@ -15,27 +15,27 @@ import { PACKAGE_DIR } from './stylesheet.ts'
 
 /**
  * The four drafts of the feedback and navigation spec, by the id `buildStyles({ unsigned })` takes.
- * The signature each rests on is in `SIGNATURES_789`.
+ * The signature each rests on is in `SIGNATURES_FEEDBACK`.
  */
-export const DRAFTS_789 = [
+export const DRAFTS_FEEDBACK = [
   'toast-placement',
   'toast-fade',
   'toast-limit',
   'navigation-menu-fade',
 ] as const
 
-export type Draft789 = (typeof DRAFTS_789)[number]
+export type DraftFeedback = (typeof DRAFTS_FEEDBACK)[number]
 
 /**
  * The ids a build takes in `unsigned`, the overlay release's and this spec's.
  */
-export type AnyDraft = Draft | Draft789
+export type AnyDraft = Draft | DraftFeedback
 
 /**
  * The short name each draft goes by in test titles: `placement` placement and stacking, `toast fade`
  * toast fade, `limit` limited toasts hidden, `panel fade` the Navigation Menu fade-in.
  */
-export const SIGNATURES_789: Readonly<Record<Draft789, string>> = {
+export const SIGNATURES_FEEDBACK: Readonly<Record<DraftFeedback, string>> = {
   'toast-placement': 'placement',
   'toast-fade': 'toast fade',
   'toast-limit': 'limit',
@@ -48,14 +48,14 @@ const BASE = 'nave-base-ui-'
  * The class each feedback draft owns, one apiece, and the bytes it takes out of the block (Appendix
  * C.3).
  */
-export const DRAFT_CLASSES_789: Readonly<Record<Draft789, readonly string[]>> = {
+export const DRAFT_CLASSES_FEEDBACK: Readonly<Record<DraftFeedback, readonly string[]>> = {
   'toast-placement': [`${BASE}toast-placement`],
   'toast-fade': [`${BASE}toast-fade`],
   'toast-limit': [`${BASE}toast-limit`],
   'navigation-menu-fade': [`${BASE}navigation-menu-fade`],
 }
 
-export const REMOVED_BYTES_789: Readonly<Record<Draft789, number>> = {
+export const REMOVED_BYTES_FEEDBACK: Readonly<Record<DraftFeedback, number>> = {
   'toast-placement': 272,
   'toast-fade': 498,
   'toast-limit': 75,
@@ -65,7 +65,7 @@ export const REMOVED_BYTES_789: Readonly<Record<Draft789, number>> = {
 /**
  * The 21 classes the block adds, in Appendix C.1's order.
  */
-export const NEW_CLASSES_789: readonly string[] = [
+export const NEW_CLASSES_FEEDBACK: readonly string[] = [
   'toast-viewport',
   'toast-placement',
   'toast-root',
@@ -92,18 +92,18 @@ export const NEW_CLASSES_789: readonly string[] = [
 /**
  * Every combination of unsigned feedback drafts, smallest first: 16 states.
  */
-export const allStates789 = (): Draft789[][] => {
-  const states: Draft789[][] = [[]]
-  for (const draft of DRAFTS_789) states.push(...states.map((state) => [...state, draft]))
+export const allStatesFeedback = (): DraftFeedback[][] => {
+  const states: DraftFeedback[][] = [[]]
+  for (const draft of DRAFTS_FEEDBACK) states.push(...states.map((state) => [...state, draft]))
   return states.toSorted((a, b) => a.length - b.length)
 }
 
 /**
- * A feedback state's name: the unsigned drafts in the order `DRAFTS_789` lists them, joined by `+`;
+ * A feedback state's name: the unsigned drafts in the order `DRAFTS_FEEDBACK` lists them, joined by `+`;
  * `none` when nothing is unsigned. The keys of `feedback-states.json`.
  */
-export const stateKey789 = (unsigned: readonly Draft789[]): string =>
-  DRAFTS_789.filter((draft) => unsigned.includes(draft)).join('+') || 'none'
+export const stateKeyFeedback = (unsigned: readonly DraftFeedback[]): string =>
+  DRAFTS_FEEDBACK.filter((draft) => unsigned.includes(draft)).join('+') || 'none'
 
 /**
  * A byte oracle under `test/fixtures/generated/`, read as text. Written by a script from the spec
@@ -120,7 +120,7 @@ export const feedbackBlock = (): string => readOracle('feedback-block.css')
 /**
  * The all-signed overlay sheet, built independently of this package's atoms (30,401 B).
  */
-export const sheet787 = (): string => readOracle('independent-build.css')
+export const sheetOverlay = (): string => readOracle('independent-build.css')
 
 /**
  * A block's rules by class, each from its two leading spaces to its final newline.
@@ -136,8 +136,8 @@ export const blockRules = (block: string): Map<string, string> =>
 /**
  * The block of a feedback state: Appendix C.1 minus the rules of the unsigned drafts (C.3).
  */
-export const blockFor = (unsigned: readonly Draft789[] = []): string => {
-  const removed = new Set(unsigned.flatMap((draft) => DRAFT_CLASSES_789[draft]))
+export const blockFor = (unsigned: readonly DraftFeedback[] = []): string => {
+  const removed = new Set(unsigned.flatMap((draft) => DRAFT_CLASSES_FEEDBACK[draft]))
   return [...blockRules(feedbackBlock())]
     .filter(([name]) => !removed.has(name))
     .map(([, text]) => text)
@@ -150,7 +150,7 @@ const LAYER_CLOSE = '\n}\n'
  * A overlay sheet with the feedback block appended before the closing `}` of `@layer components.nave`:
  * the construction of Appendix C, textual and without `focusRing`.
  */
-export const composeSheet = (sheet: string, unsigned: readonly Draft789[] = []): string => {
+export const composeSheet = (sheet: string, unsigned: readonly DraftFeedback[] = []): string => {
   if (!sheet.endsWith(LAYER_CLOSE)) throw new Error('the sheet does not end with the layer block')
   return `${sheet.slice(0, -2) + blockFor(unsigned)}}\n`
 }
@@ -159,9 +159,9 @@ export const composeSheet = (sheet: string, unsigned: readonly Draft789[] = []):
  * The expected sheet of a state without `focusRing`, overlay drafts and feedback drafts both named.
  */
 export const expectedSheet = (
-  unsigned787: readonly Draft[] = [],
-  unsigned789: readonly Draft789[] = [],
-): string => composeSheet(deriveState(sheet787(), unsigned787), unsigned789)
+  unsignedOverlay: readonly Draft[] = [],
+  unsignedFeedback: readonly DraftFeedback[] = [],
+): string => composeSheet(deriveState(sheetOverlay(), unsignedOverlay), unsignedFeedback)
 
 // What `focusRing` contributes to a class that takes it, as it stands in the built text: the base
 // `outline: none;` among the class's own declarations, and one nested `:focus-visible` rule.

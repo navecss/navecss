@@ -18,9 +18,9 @@ import {
   blockRules,
   expectedSheet,
   feedbackBlock,
-  NEW_CLASSES_789,
+  NEW_CLASSES_FEEDBACK,
   readOracle,
-  sheet787,
+  sheetOverlay,
   withoutRing,
 } from './support/feedback-states.ts'
 import {
@@ -173,19 +173,19 @@ const ruleOf = (container: Root | Rule, selector: string): Rule => {
 describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06: the built stylesheet is Appendix A plus overlay Appendix B plus Appendix C', () => {
   // The overlay oracle (Appendix A with B.1 and B.2, all signed), and the expected sheet of the
   // combined package: that oracle with Appendix C's block appended, all feedback drafts signed.
-  const expected787 = fixture(INDEPENDENT_BUILD)
+  const expectedOverlay = fixture(INDEPENDENT_BUILD)
   const expected = expectedSheet()
 
   it('holds the overlay independent build byte for byte', () => {
-    expect(sha256(expected787)).toBe(INDEPENDENT_BUILD_SHA256)
+    expect(sha256(expectedOverlay)).toBe(INDEPENDENT_BUILD_SHA256)
   })
 
   it('has the byte count and sha256 prefix Appendix C gives the all-signed state, focusRing left out (a check on the expected value)', () => {
     expect(Buffer.byteLength(expected)).toBe(COMBINED_BYTES)
     expect(sha256(expected)).toBe(COMBINED_SHA256)
     expect(sha256(expected).slice(0, 16)).toBe('5b918c4b5551f0c4')
-    expect(Buffer.byteLength(expected787)).toBe(INDEPENDENT_BUILD_BYTES)
-    expect(sha256(expected787).slice(0, 16)).toBe('e9b54cd0a877debe')
+    expect(Buffer.byteLength(expectedOverlay)).toBe(INDEPENDENT_BUILD_BYTES)
+    expect(sha256(expectedOverlay).slice(0, 16)).toBe('e9b54cd0a877debe')
   })
 
   it("holds Appendix C's block (6,899 B, 028c71ff), and appends it to the overlay sheet before the layer's closing brace", () => {
@@ -194,8 +194,8 @@ describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06
     expect(Buffer.byteLength(block)).toBe(BLOCK_BYTES)
     expect(sha256(block)).toBe(BLOCK_SHA256)
     expect(blockFor()).toBe(block)
-    expect(expected.startsWith(expected787.slice(0, -2))).toBe(true)
-    expect(expected.slice(expected787.length - 2)).toBe(`${block}}\n`)
+    expect(expected.startsWith(expectedOverlay.slice(0, -2))).toBe(true)
+    expect(expected.slice(expectedOverlay.length - 2)).toBe(`${block}}\n`)
   })
 
   it('has each of the 21 rules at the bytes and sha256 prefix Appendix C.2 gives', () => {
@@ -204,7 +204,7 @@ describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06
     }
     const rules = blockRules(feedbackBlock())
 
-    expect(rules.keys().toArray()).toEqual(NEW_CLASSES_789)
+    expect(rules.keys().toArray()).toEqual(NEW_CLASSES_FEEDBACK)
     expect(
       [...rules].map(([name, text]) => [
         name.replace('nave-base-ui-', ''),
@@ -215,7 +215,7 @@ describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06
   })
 
   it('is Appendix A once the ghost keys and the 14 new rules are taken out', () => {
-    expect(sha256(parentStylesheet(expected787))).toBe(PARENT_STYLESHEET_SHA256)
+    expect(sha256(parentStylesheet(expectedOverlay))).toBe(PARENT_STYLESHEET_SHA256)
   })
 
   it('has the same ordered (at-rule path, selector path, property, value) list once focusRing is set aside', () => {
@@ -469,10 +469,10 @@ const listDrift = (candidate: string, reference: string): string[] => {
 
 describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block is appended, and every overlay state composes with every feedback state', () => {
   const expected = expectedSheet()
-  const expected787 = sheet787()
+  const expectedOverlay = sheetOverlay()
 
   it('builds, with every feedback class left out of the atom map, the overlay sheet of 30,401 B, e9b54cd0', async () => {
-    const without = await buildWithoutClasses(NEW_CLASSES_789)
+    const without = await buildWithoutClasses(NEW_CLASSES_FEEDBACK)
     const ringless = withoutRing(without)
 
     expect(ringless.count).toBe(14)
@@ -483,7 +483,7 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
   it('is, with the new classes left out, a byte prefix of the built sheet up to the layer closing brace, and what follows is the block', async () => {
     const [sheet, without] = await Promise.all([
       buildStyles(),
-      buildWithoutClasses(NEW_CLASSES_789),
+      buildWithoutClasses(NEW_CLASSES_FEEDBACK),
     ])
 
     expect(prefixProblems(withoutRing(sheet).text, withoutRing(without).text, blockFor())).toEqual(
@@ -494,24 +494,24 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
   it('has an identical per-class ordered list, in both builds, for every class of Appendix A and of overlay B.1 and B.2', async () => {
     const [sheet, without] = await Promise.all([
       buildStyles(),
-      buildWithoutClasses(NEW_CLASSES_789),
+      buildWithoutClasses(NEW_CLASSES_FEEDBACK),
     ])
-    const classes787 = classLists(expected787).keys().toArray()
+    const classesOverlay = classLists(expectedOverlay).keys().toArray()
 
-    expect(classes787).toHaveLength(65)
-    expect(classes787.filter((name) => !classLists(sheet).has(name))).toEqual([])
+    expect(classesOverlay).toHaveLength(65)
+    expect(classesOverlay.filter((name) => !classLists(sheet).has(name))).toEqual([])
     expect(listDrift(sheet, without)).toEqual([])
     const sheetClasses = classLists(sheet).keys().toArray()
     const kept = classLists(without)
 
-    expect(sheetClasses.filter((name) => !kept.has(name))).toEqual(NEW_CLASSES_789)
-    expect(listDrift(sheet, expected787)).toEqual([])
+    expect(sheetClasses.filter((name) => !kept.has(name))).toEqual(NEW_CLASSES_FEEDBACK)
+    expect(listDrift(sheet, expectedOverlay)).toEqual([])
   })
 
   it('names, in no feedback rule, popup-fade, popup-motion, active-option or the open ghost key of open-ghost', async () => {
     const rules = [...blockRules(feedbackBlock())]
     const built = withoutRing(await buildStyles()).text
-    const names = NEW_CLASSES_789.map((name) => name.replace('nave-base-ui-', ''))
+    const names = NEW_CLASSES_FEEDBACK.map((name) => name.replace('nave-base-ui-', ''))
     const forbidden = ['popup-fade', 'popup-motion', 'active-option']
     const ghostKey = '[data-nave-variant="ghost"][aria-expanded="true"]'
     const builtRules = [
@@ -537,8 +537,8 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
   })
 
   it('does not red on the expected sheet against the overlay oracle with the block appended (control)', () => {
-    expect(prefixProblems(expected, expected787, feedbackBlock())).toEqual([])
-    expect(listDrift(expected, expected787)).toEqual([])
+    expect(prefixProblems(expected, expectedOverlay, feedbackBlock())).toEqual([])
+    expect(listDrift(expected, expectedOverlay)).toEqual([])
   })
 
   it('reds on a declaration added to the popover popup, which Navigation Menu popups reuse, naming that class (control)', () => {
@@ -562,7 +562,7 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
     expect(viewport).not.toBe('')
     expect(moved).not.toBe(expected)
     expect(moved.length).toBe(expected.length)
-    expect(prefixProblems(moved, expected787, feedbackBlock())).toEqual([
+    expect(prefixProblems(moved, expectedOverlay, feedbackBlock())).toEqual([
       'the sheet without the new classes is not a byte prefix',
     ])
   })
@@ -574,7 +574,7 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
     )
 
     expect(dropped).not.toBe(expected)
-    expect(prefixProblems(dropped, expected787, feedbackBlock())).toEqual([
+    expect(prefixProblems(dropped, expectedOverlay, feedbackBlock())).toEqual([
       "what follows the prefix is not Appendix C's block",
     ])
   })

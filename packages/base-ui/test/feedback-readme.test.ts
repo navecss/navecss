@@ -4,13 +4,13 @@ import { fencesOf, FIXED_SENTENCES, proseOf, readReadme, sha256 } from './suppor
 import { notPaintedIn, sentencesOf } from './support/w9-readme-items.ts'
 import { SENTENCE_4_FORMS } from './support/w9-sentences.ts'
 import {
-  ALL_LITERALS_789,
+  ALL_LITERALS_FEEDBACK,
   FORBIDDEN,
   ITEM_RULES,
   type ItemRule,
   itemsPresent,
   NON_LIVE_REDUCED_MOTION,
-  problems789,
+  problemsFeedback,
   readmeInState,
   WITHDRAWN_cleared,
   WITHDRAWN_reader,
@@ -23,24 +23,31 @@ import {
   RM_TABLE,
   signedOfCode,
 } from './support/w12-reduced-motion.ts'
-import { allStates789, SHIPPING_789, type State789, stateKey789 } from './support/w12-states.ts'
+import {
+  allStatesFeedback,
+  SHIPPING_FEEDBACK,
+  type StateFeedback,
+  stateKeyFeedback,
+} from './support/w12-states.ts'
 
 const readme = readReadme()
 const prose = proseOf(readme)
 
-const UNPLACED: State789 = { unsigned: ['toast-placement'] }
-const UNPLACED_WITH_REMEDY: State789 = { remedyRowPosted: true, unsigned: ['toast-placement'] }
+const UNPLACED: StateFeedback = { unsigned: ['toast-placement'] }
+const UNPLACED_WITH_REMEDY: StateFeedback = { remedyRowPosted: true, unsigned: ['toast-placement'] }
 
 /**
 A README written from the literals of a state alone: the control for every check of a README.
  */
-const syntheticReadme = (state: State789): string =>
+const syntheticReadme = (state: StateFeedback): string =>
   itemsPresent(state)
     .map(({ literal }) => literal.text)
     .join('\n\n')
 
 const hasItem = (text: string, rule: ItemRule): boolean =>
-  problems789(text, SHIPPING_789).every((problem) => problem !== `missing: ${rule.literal.name}`)
+  problemsFeedback(text, SHIPPING_FEEDBACK).every(
+    (problem) => problem !== `missing: ${rule.literal.name}`,
+  )
 
 const readerItems = ITEM_RULES.filter(({ author }) => author === 'reader')
 const clearedItems = ITEM_RULES.filter(({ author }) => author === 'cleared')
@@ -70,7 +77,7 @@ describe("AC-base-ui-feedback-navigation-49: the README carries the reader items
     },
   )
 
-  it.each(readerItems.filter(({ present }) => present(SHIPPING_789)))(
+  it.each(readerItems.filter(({ present }) => present(SHIPPING_FEEDBACK)))(
     'contains $literal.name in the shipping state',
     (rule) => {
       expect(hasItem(readme, rule)).toBe(true)
@@ -78,7 +85,7 @@ describe("AC-base-ui-feedback-navigation-49: the README carries the reader items
   )
 
   it('contains no reader item the shipping state does not call for, and none of the withdrawn texts', () => {
-    expect(problems789(readme, SHIPPING_789, 'reader')).toEqual([])
+    expect(problemsFeedback(readme, SHIPPING_FEEDBACK, 'reader')).toEqual([])
   })
 
   it.each([...WITHDRAWN_reader])('does not contain the withdrawn text $name', ({ text }) => {
@@ -139,30 +146,30 @@ describe("AC-base-ui-feedback-navigation-49: the README carries the reader items
 
     it("carries, in the overlay release's paragraph, exactly the phrases of the shipping state", () => {
       expect(paragraph).toBeDefined()
-      expect(phrasesIn(paragraph ?? '')).toEqual(phrasesFor(SHIPPING_789))
-      expect(phrasesFor(SHIPPING_789)).toEqual([
+      expect(phrasesIn(paragraph ?? '')).toEqual(phrasesFor(SHIPPING_FEEDBACK))
+      expect(phrasesFor(SHIPPING_FEEDBACK)).toEqual([
         'toasts form a plain list',
         'no motion when the Navigation Menu panel closes',
       ])
     })
 
     it('carries them nowhere else in the prose, and carries no draft id', () => {
-      expect(phrasesIn(prose)).toEqual(phrasesFor(SHIPPING_789))
+      expect(phrasesIn(prose)).toEqual(phrasesFor(SHIPPING_FEEDBACK))
       // A draft label (a backticked word followed by signed or unsigned) is never reader copy.
       expect(readme).not.toMatch(/`[\w-]+` (?:un)?signed\b/)
     })
 
     it('control: a paragraph composed for each of the sixteen states lists exactly its phrases', () => {
-      for (const state of allStates789()) {
+      for (const state of allStatesFeedback()) {
         const composed = `What this package does not paint: ${phrasesFor(state).join('; ')}.`
-        expect(phrasesIn(composed), stateKey789(state)).toEqual(phrasesFor(state))
+        expect(phrasesIn(composed), stateKeyFeedback(state)).toEqual(phrasesFor(state))
       }
     })
 
     it('control: exactly one of the two Navigation Menu phrases, in every state', () => {
-      for (const state of allStates789()) {
+      for (const state of allStatesFeedback()) {
         const both = phrasesFor(state).filter((phrase) => phrase.includes('Navigation Menu panel'))
-        expect(both, stateKey789(state)).toHaveLength(1)
+        expect(both, stateKeyFeedback(state)).toHaveLength(1)
       }
     })
 
@@ -170,63 +177,67 @@ describe("AC-base-ui-feedback-navigation-49: the README carries the reader items
       const planted =
         'No paint: no motion when the Navigation Menu panel closes; no motion on the Navigation Menu panel.'
       expect(phrasesIn(planted)).toHaveLength(2)
-      expect(phrasesIn(planted)).not.toEqual(phrasesFor(SHIPPING_789))
+      expect(phrasesIn(planted)).not.toEqual(phrasesFor(SHIPPING_FEEDBACK))
     })
   })
 
   describe('each of the sixteen states, written from the shipped README by the substitutions the criteria describe', () => {
-    it.each(allStates789().map((state) => ({ key: stateKey789(state), state })))(
+    it.each(allStatesFeedback().map((state) => ({ key: stateKeyFeedback(state), state })))(
       'is clean for its own state: $key',
       ({ state }) => {
-        expect(problems789(readmeInState(readme, state), state, 'reader')).toEqual([])
+        expect(problemsFeedback(readmeInState(readme, state), state, 'reader')).toEqual([])
       },
     )
   })
 
   describe('controls, on a README written from the literals of a state', () => {
     it('is clean for its own state in each of the sixteen, and reds for another whose items differ', () => {
-      const states = allStates789()
+      const states = allStatesFeedback()
       for (const state of states) {
-        expect(problems789(syntheticReadme(state), state), stateKey789(state)).toEqual([])
+        expect(problemsFeedback(syntheticReadme(state), state), stateKeyFeedback(state)).toEqual([])
         const names = itemsPresent(state).map(({ literal }) => literal.name)
         for (const other of states) {
           const otherNames = itemsPresent(other).map(({ literal }) => literal.name)
           const isDiffers = names.join('|') !== otherNames.join('|')
           expect(
-            problems789(syntheticReadme(state), other).length > 0,
-            `${stateKey789(state)} against ${stateKey789(other)}`,
+            problemsFeedback(syntheticReadme(state), other).length > 0,
+            `${stateKeyFeedback(state)} against ${stateKeyFeedback(other)}`,
           ).toBe(isDiffers)
         }
       }
     })
 
     it('control: a README carrying both D3 and the shipped sentence reds', () => {
-      const both = `${syntheticReadme(SHIPPING_789)}\n\n${S.SHIPPED_STYLESHEET_SENTENCE.text}`
-      expect(problems789(both, SHIPPING_789)).toEqual([
+      const both = `${syntheticReadme(SHIPPING_FEEDBACK)}\n\n${S.SHIPPED_STYLESHEET_SENTENCE.text}`
+      expect(problemsFeedback(both, SHIPPING_FEEDBACK)).toEqual([
         'unexpected: the shipped stylesheet sentence',
       ])
       const bothUnplaced = `${syntheticReadme(UNPLACED)}\n\n${S.D3_STYLESHEET_SENTENCE.text}`
-      expect(problems789(bothUnplaced, UNPLACED)).toEqual([
+      expect(problemsFeedback(bothUnplaced, UNPLACED)).toEqual([
         'unexpected: D3, the stylesheet sentence',
       ])
     })
 
     it('control: a README carrying D5 reds', () => {
       expect(
-        problems789(`${syntheticReadme(SHIPPING_789)}\n\n${S.D5_SWIPE.text}`, SHIPPING_789),
+        problemsFeedback(
+          `${syntheticReadme(SHIPPING_FEEDBACK)}\n\n${S.D5_SWIPE.text}`,
+          SHIPPING_FEEDBACK,
+        ),
       ).toEqual(['unexpected: D5'])
     })
 
     it('control: replacing one word of D8 reds containment', () => {
-      const edited = syntheticReadme(SHIPPING_789).replace(S.D8_NAVIGATION_MENU_SIZE.text, () =>
-        S.D8_NAVIGATION_MENU_SIZE.text.replace('animate', 'move'),
+      const edited = syntheticReadme(SHIPPING_FEEDBACK).replace(
+        S.D8_NAVIGATION_MENU_SIZE.text,
+        () => S.D8_NAVIGATION_MENU_SIZE.text.replace('animate', 'move'),
       )
       expect(edited).not.toContain(S.D8_NAVIGATION_MENU_SIZE.text)
-      expect(problems789(edited, SHIPPING_789)).toEqual(['missing: D8, panel size'])
+      expect(problemsFeedback(edited, SHIPPING_FEEDBACK)).toEqual(['missing: D8, panel size'])
     })
 
     it('control: editing a literal reds its hash', () => {
-      for (const literal of ALL_LITERALS_789) {
+      for (const literal of ALL_LITERALS_FEEDBACK) {
         const edited = { ...literal, text: `${literal.text.slice(0, -1)}!` }
         expect(bytesAndHash(edited).hashed, literal.name).toBe(false)
       }
@@ -236,7 +247,7 @@ describe("AC-base-ui-feedback-navigation-49: the README carries the reader items
       const rule = readerItems.find(
         ({ literal }) => literal.text === S.D13B_WHAT_IS_STYLED_ROWS.text,
       )
-      const edited = syntheticReadme(SHIPPING_789).replace(
+      const edited = syntheticReadme(SHIPPING_FEEDBACK).replace(
         '@navecss/base-ui/avatar',
         '@navecss/base-ui/avatars',
       )
@@ -255,7 +266,7 @@ describe('AC-base-ui-feedback-navigation-50: the cleared final cleared sentences
     },
   )
 
-  it.each(clearedItems.filter(({ present }) => present(SHIPPING_789)))(
+  it.each(clearedItems.filter(({ present }) => present(SHIPPING_FEEDBACK)))(
     'contains $literal.name in the shipping state',
     (rule) => {
       expect(readme).toContain(rule.literal.text)
@@ -263,7 +274,7 @@ describe('AC-base-ui-feedback-navigation-50: the cleared final cleared sentences
   )
 
   it('contains exactly the sentences the shipping state calls for and none of the others', () => {
-    expect(problems789(readme, SHIPPING_789, 'cleared')).toEqual([])
+    expect(problemsFeedback(readme, SHIPPING_FEEDBACK, 'cleared')).toEqual([])
   })
 
   it.each([...WITHDRAWN_cleared])('does not contain the withdrawn text $name', ({ text }) => {
@@ -293,7 +304,7 @@ describe('AC-base-ui-feedback-navigation-50: the cleared final cleared sentences
     it('is composed from the template and the rule: the live forms equal the literals, in either state', () => {
       expect(composeReducedMotion(signedOfCode('SSSS'))).toBe(S.RM_TOASTS_IN.text)
       expect(composeReducedMotion(signedOfCode('SSSu'))).toBe(S.RM_TOASTS_OUT.text)
-      expect(reducedMotionCodeFor(SHIPPING_789)).toBe('SSSS')
+      expect(reducedMotionCodeFor(SHIPPING_FEEDBACK)).toBe('SSSS')
       expect(reducedMotionCodeFor({ unsigned: ['toast-fade'] })).toBe('SSSu')
     })
 
@@ -318,21 +329,23 @@ describe('AC-base-ui-feedback-navigation-50: the cleared final cleared sentences
   })
 
   describe('each of the sixteen states, written from the shipped README by the substitutions the criteria describe', () => {
-    it.each(allStates789().map((state) => ({ key: stateKey789(state), state })))(
+    it.each(allStatesFeedback().map((state) => ({ key: stateKeyFeedback(state), state })))(
       'is clean for its own state: $key',
       ({ state }) => {
-        expect(problems789(readmeInState(readme, state), state, 'cleared')).toEqual([])
+        expect(problemsFeedback(readmeInState(readme, state), state, 'cleared')).toEqual([])
       },
     )
   })
 
   describe('controls, on a README written from the literals of a state', () => {
     it('control: replacing one word of T1 reds containment', () => {
-      const edited = syntheticReadme(SHIPPING_789).replace(S.T1_F6_INTO_THE_TOASTS.text, () =>
+      const edited = syntheticReadme(SHIPPING_FEEDBACK).replace(S.T1_F6_INTO_THE_TOASTS.text, () =>
         S.T1_F6_INTO_THE_TOASTS.text.replace('Tab', 'Shift'),
       )
       expect(edited).not.toContain(S.T1_F6_INTO_THE_TOASTS.text)
-      expect(problems789(edited, SHIPPING_789)).toEqual(['missing: T1, F6 into the toasts'])
+      expect(problemsFeedback(edited, SHIPPING_FEEDBACK)).toEqual([
+        'missing: T1, F6 into the toasts',
+      ])
     })
 
     it('control: editing a literal reds its hash', () => {
@@ -342,32 +355,34 @@ describe('AC-base-ui-feedback-navigation-50: the cleared final cleared sentences
 
     it('control: a README carrying S-P3 in the unsigned-placement state reds', () => {
       const planted = `${syntheticReadme(UNPLACED)}\n\n${S.S_P3_PLACEMENT_AND_STACKING.text}`
-      expect(problems789(planted, UNPLACED)).toEqual(['unexpected: S-P3, placement and stacking'])
+      expect(problemsFeedback(planted, UNPLACED)).toEqual([
+        'unexpected: S-P3, placement and stacking',
+      ])
     })
 
     it('control: a README carrying the withdrawn 308 B placement sentence reds', () => {
-      const planted = `${syntheticReadme(SHIPPING_789)}\n\n${S.S_P_PLACEMENT_308.text}`
-      expect(problems789(planted, SHIPPING_789)).toEqual([
+      const planted = `${syntheticReadme(SHIPPING_FEEDBACK)}\n\n${S.S_P_PLACEMENT_308.text}`
+      expect(problemsFeedback(planted, SHIPPING_FEEDBACK)).toEqual([
         'unexpected: the 308 B placement sentence',
       ])
     })
 
     it("control: a README carrying both the 463 B form and the overlay release's 395 B form reds", () => {
-      const planted = `${syntheticReadme(SHIPPING_789)}\n\n${SENTENCE_4_FORMS.SSS?.text ?? ''}`
-      expect(problems789(planted, SHIPPING_789)).toEqual([
+      const planted = `${syntheticReadme(SHIPPING_FEEDBACK)}\n\n${SENTENCE_4_FORMS.SSS?.text ?? ''}`
+      expect(problemsFeedback(planted, SHIPPING_FEEDBACK)).toEqual([
         "unexpected: the overlay release's reduced-motion form S S S",
       ])
     })
 
     it('control: a README carrying both reduced-motion forms of the toasts reds', () => {
-      const planted = `${syntheticReadme(SHIPPING_789)}\n\n${S.RM_TOASTS_OUT.text}`
-      expect(problems789(planted, SHIPPING_789)).toEqual([
+      const planted = `${syntheticReadme(SHIPPING_FEEDBACK)}\n\n${S.RM_TOASTS_OUT.text}`
+      expect(problemsFeedback(planted, SHIPPING_FEEDBACK)).toEqual([
         'unexpected: RM, reduced motion, toasts out',
       ])
     })
 
     it('control: S-U and S-A are in exactly the unsigned-placement README with the scrim return, S-A only after its remedy row', () => {
-      expect(problems789(syntheticReadme(UNPLACED), UNPLACED)).toEqual([])
+      expect(problemsFeedback(syntheticReadme(UNPLACED), UNPLACED)).toEqual([])
       expect(itemsPresent(UNPLACED).map(({ literal }) => literal.name)).toContain(
         'S-U, toast area unplaced',
       )
@@ -377,7 +392,7 @@ describe('AC-base-ui-feedback-navigation-50: the cleared final cleared sentences
       expect(itemsPresent(UNPLACED_WITH_REMEDY).map(({ literal }) => literal.name)).toContain(
         'S-A, anchored not stacked',
       )
-      expect(itemsPresent(SHIPPING_789).map(({ literal }) => literal.name)).not.toContain(
+      expect(itemsPresent(SHIPPING_FEEDBACK).map(({ literal }) => literal.name)).not.toContain(
         'S-U, toast area unplaced',
       )
     })
@@ -408,7 +423,7 @@ describe("AC-base-ui-feedback-navigation-19: the unplaced branch carries unplace
   })
 
   it('carries neither S-U nor S-A when neither the placement nor unplaced alternative is signed: the state the criterion does not ship', () => {
-    const neither: State789 = {
+    const neither: StateFeedback = {
       remedyRowPosted: true,
       unsigned: ['toast-placement'],
       unplacedAlternativeSigned: false,
@@ -416,18 +431,21 @@ describe("AC-base-ui-feedback-navigation-19: the unplaced branch carries unplace
     const text = readmeInState(readme, neither)
     expect(text).not.toContain(S.S_U_TOAST_AREA_UNPLACED.text)
     expect(text).not.toContain(S.S_A_ANCHORED_NOT_STACKED.text)
-    expect(problems789(text, neither)).toEqual([])
+    expect(problemsFeedback(text, neither)).toEqual([])
   })
 
   it('control: a README of the unsigned branch that keeps S-P3 reds, and one that keeps D3 reds', () => {
     expect(
-      problems789(
+      problemsFeedback(
         `${syntheticReadme(UNPLACED)}\n\n${S.S_P3_PLACEMENT_AND_STACKING.text}`,
         UNPLACED,
       ),
     ).toEqual(['unexpected: S-P3, placement and stacking'])
     expect(
-      problems789(`${syntheticReadme(UNPLACED)}\n\n${S.D3_STYLESHEET_SENTENCE.text}`, UNPLACED),
+      problemsFeedback(
+        `${syntheticReadme(UNPLACED)}\n\n${S.D3_STYLESHEET_SENTENCE.text}`,
+        UNPLACED,
+      ),
     ).toEqual(['unexpected: D3, the stylesheet sentence'])
   })
 })
@@ -491,7 +509,7 @@ describe('AC-base-ui-feedback-navigation-51: no accessibility claim beyond the c
 
 describe('the literals of the README, taken together', () => {
   it('holds each at its length and hash', () => {
-    const wrong = ALL_LITERALS_789.filter((literal) => {
+    const wrong = ALL_LITERALS_FEEDBACK.filter((literal) => {
       const measured = bytesAndHash(literal)
       return measured.bytes !== measured.wanted || !measured.hashed
     }).map(({ name }) => name)
@@ -499,7 +517,7 @@ describe('the literals of the README, taken together', () => {
   })
 
   it('has no text inside another, so a containment check names one item only', () => {
-    const texts = ALL_LITERALS_789
+    const texts = ALL_LITERALS_FEEDBACK
     const nested = texts.flatMap(({ name, text }, index) =>
       texts
         .filter((other, at) => at !== index && other.text.includes(text))
@@ -509,7 +527,9 @@ describe('the literals of the README, taken together', () => {
   })
 
   it('carries no dash', () => {
-    const dashes = ALL_LITERALS_789.filter(({ text }) => /[‒-―]/.test(text)).map(({ name }) => name)
+    const dashes = ALL_LITERALS_FEEDBACK.filter(({ text }) => /[‒-―]/.test(text)).map(
+      ({ name }) => name,
+    )
     expect(dashes).toEqual([])
   })
 })
