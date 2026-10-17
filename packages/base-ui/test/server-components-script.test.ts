@@ -5,7 +5,9 @@ import {
   KNOWN_ERRORS,
   logProblems,
   ROUTES,
-} from '../scripts/check-server-components.ts'
+} from '../scripts/server-components/read.ts'
+
+const source = (name: string): string => ROUTES.find((route) => route.name === name)?.source ?? ''
 
 describe('AC-base-ui-bridge-53: the release-time Server Component check reads a build the way the criterion says', () => {
   it('builds the four routes, only the last of them starting with the directive', () => {
@@ -16,8 +18,6 @@ describe('AC-base-ui-bridge-53: the release-time Server Component check reads a 
   })
 
   it('renders a Dialog and an Accordion from a subpath, a Button, and a Dialog from the root', () => {
-    const source = (name: string): string =>
-      ROUTES.find((route) => route.name === name)?.source ?? ''
     expect(source('namespace')).toContain("from '@navecss/base-ui/dialog'")
     expect(source('namespace')).toContain('<Accordion.Root>')
     expect(source('single')).toContain("from '@navecss/base-ui/button'")

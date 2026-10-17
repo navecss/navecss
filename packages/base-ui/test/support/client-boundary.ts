@@ -50,16 +50,20 @@ export const boundaryProblems = (modules: ReadonlyMap<string, string>): string[]
     .entries()
     .flatMap(([module, code]) => {
       const kind = kindOf(module)
-      const directive = hasDirective(code)
+      const hasUseClient = hasDirective(code)
       return [
         ...(kind === 'unclassified'
           ? [`${module}: neither a part module nor an entry module`]
           : []),
-        ...(kind === 'part' && !directive
+        ...(kind === 'part' && !hasUseClient
           ? [`${module}: a part module without the directive`]
           : []),
-        ...(kind === 'entry' && directive ? [`${module}: an entry module with the directive`] : []),
-        ...(directive && hasExportStar(code) ? [`${module}: the directive and an export *`] : []),
+        ...(kind === 'entry' && hasUseClient
+          ? [`${module}: an entry module with the directive`]
+          : []),
+        ...(hasUseClient && hasExportStar(code)
+          ? [`${module}: the directive and an export *`]
+          : []),
       ]
     })
     .toArray()

@@ -9,7 +9,7 @@ const CLIENT_MODULE_CLAIM = [
 ]
 const PACKAGE_CLAIM = [/\b(?:this package|the package)\b.*\bis a client module\b/i]
 
-const claimsClientModule = (text: string): boolean =>
+const hasClientModuleClaim = (text: string): boolean =>
   hasSentenceWith(text, CLIENT_MODULE_CLAIM) || hasSentenceWith(text, PACKAGE_CLAIM)
 
 describe('AC-base-ui-bridge-54: the README no longer calls the subpaths client modules', () => {
@@ -17,7 +17,7 @@ describe('AC-base-ui-bridge-54: the README no longer calls the subpaths client m
   const prose = proseOf(readme)
 
   it('has no sentence saying that every subpath, or the package, is a client module', () => {
-    expect(claimsClientModule(prose)).toBe(false)
+    expect(hasClientModuleClaim(prose)).toBe(false)
   })
 
   it("keeps the Toast manager in a module that starts with 'use client'", () => {
@@ -40,7 +40,7 @@ describe('AC-base-ui-bridge-54: the README no longer calls the subpaths client m
   it("control: 0.2.0's sentence put back reds the first clause", () => {
     const sentence =
       "Call `Toast.createToastManager()` in a module that starts with `'use client'`, as in the example, and import the manager from that module: every subpath of this package is a client module."
-    expect(claimsClientModule(sentence)).toBe(true)
-    expect(claimsClientModule(`${prose}\n\n${sentence}`)).toBe(true)
+    expect(hasClientModuleClaim(sentence)).toBe(true)
+    expect(hasClientModuleClaim(`${prose}\n\n${sentence}`)).toBe(true)
   })
 })
