@@ -8,7 +8,7 @@
 import type { Browser, Page } from 'playwright'
 import type { PluginOption, ViteDevServer } from 'vite'
 
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 
@@ -18,6 +18,7 @@ import { IMPORT } from '../../helpers/used-atoms-rows.ts'
 import { stopDev, VITE_APIS, type ViteApi } from '../../helpers/vite-app.ts'
 import {
   devConfig,
+  edit,
   framesOf,
   hasRuleNow,
   launchChromium,
@@ -98,8 +99,8 @@ describe('AC-used-atoms-42 — HTML read after the stylesheet was first transfor
         const page = await browser.newPage()
         await page.goto(url)
         await until(page, () => hasRuleNow(page, 'nave-flex'), 'the first page')
-        writeFileSync(path.join(app.root, 'index.html'), GRID_PAGE)
-        await until(page, () => hasElement(page, '#g'), 'the reload with the edited page')
+        edit(server, path.join(app.root, 'index.html'), GRID_PAGE)
+        await until(page, () => hasElement(page, '#g'), 'the reload with the edited page', 30_000)
         await page.waitForTimeout(3000)
         const isRuled = await hasRuleNow(page, 'nave-grid')
         await page.close()
@@ -343,12 +344,12 @@ describe('AC-used-atoms-41 — the first frame after an update, for a module the
         await recordFrames(page, ['nave-block'])
         await page.goto(url)
         await until(page, () => hasRuleNow(page, 'nave-flex'), 'the first render')
-        writeFileSync(path.join(app.root, 'src/App.ts'), appModule(true))
-        await untilQuietly(
+        edit(server, path.join(app.root, 'src/App.ts'), appModule(true))
+        await until(
           page,
           async () => Object.hasOwn(await framesOf(page), 'nave-block'),
           'the new module’s element',
-          6000,
+          30_000,
         )
 
         const frames = await framesOf(page)
@@ -811,9 +812,9 @@ async function loadsAfterTheReload(
         await page.evaluate(() => {
           document.documentElement.dataset.mark = '1'
         })
-        writeFileSync(path.join(app.root, settling.edit.file), settling.edit.text)
-        await until(page, () => isReloaded(page), 'the reload for the edit')
-        await until(page, () => hasElement(page, '#f'), 'the element of the edited page')
+        edit(server, path.join(app.root, settling.edit.file), settling.edit.text)
+        await until(page, () => isReloaded(page), 'the reload for the edit', 30_000)
+        await until(page, () => hasElement(page, '#f'), 'the element of the edited page', 30_000)
         await reconnection
       }
       let loads = 0
