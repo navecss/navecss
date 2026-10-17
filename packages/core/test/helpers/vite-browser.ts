@@ -5,6 +5,7 @@
  * animation frame, which classes an element carries and whether a stylesheet holds a rule for
  * each, and the console the page printed.
  */
+import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { type Browser, chromium, type Page } from 'playwright'
 import {
@@ -42,7 +43,8 @@ export function warningLogger(): { readonly logger: Logger; readonly warned: str
 }
 
 /**
- * Starts the dev server for real, on a free port, resolving to it and its address.
+ * Starts the dev server for real, on a free port, resolving to it and its address. The server
+ * watches no file: a test that edits one tells it with `edit`.
  */
 export async function listenDev(
   config: InlineConfig,
@@ -50,12 +52,33 @@ export async function listenDev(
 ): Promise<{ readonly server: ViteDevServer; readonly url: string }> {
   const server = await api.createServer({
     ...config,
-    server: { host: '127.0.0.1', port: 0, strictPort: false, ...config.server },
+    server: {
+      host: '127.0.0.1',
+      port: 0,
+      strictPort: false,
+      // eslint-disable-next-line unicorn/no-null -- null is how Vite is told to watch nothing; undefined keeps its watcher
+      watch: null,
+      ...config.server,
+    },
   })
   await server.listen()
   const url = server.resolvedUrls?.local[0]
   if (url === undefined) throw new Error('the dev server did not report an address')
   return { server, url }
+}
+
+/**
+ * Writes `text` to `file` and tells the dev server it changed, as its file watcher would.
+ *
+ * The operating system's file events are not the test's to wait on. On macOS they come from one
+ * queue for the whole machine, and while other processes were writing many files they reached
+ * Vite's watcher 14 to 16 s after the edit, or not within a minute, and arrived with a late batch
+ * that reported the app's own new files as changed and reloaded the page. A row waiting for its
+ * edit was waiting on everything else the machine was doing.
+ */
+export function edit(server: ViteDevServer, file: string, text: string): void {
+  writeFileSync(file, text)
+  server.watcher.emit('change', file)
 }
 
 /**
