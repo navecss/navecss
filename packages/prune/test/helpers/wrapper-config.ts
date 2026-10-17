@@ -97,12 +97,18 @@ export function changedVariables(before: NodeJS.ProcessEnv, after: NodeJS.Proces
 
 /**
  * Every path under `dir` with its size, sorted, leaving out `node_modules` (core is linked into
- * it, and other test files write there): two equal snapshots mean nothing was created, removed or
- * rewritten in the project.
+ * it, and other test files write there while this one runs): two equal snapshots mean nothing was
+ * created, removed or rewritten in the project.
  */
-export function treeOf(dir: string): string[] {
-  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
-    .filter((entry) => !entry.split(path.sep).includes('node_modules'))
-    .map((entry) => `${entry}:${statSync(path.join(dir, entry)).size}`)
-    .toSorted((a, b) => a.localeCompare(b))
+export function treeOf(dir: string, prefix = ''): string[] {
+  const entries: string[] = []
+  const listing = readdirSync(dir, { withFileTypes: true })
+  for (const entry of listing) {
+    if (entry.name === 'node_modules') continue
+    const relative = path.join(prefix, entry.name)
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) entries.push(...treeOf(full, relative))
+    else entries.push(`${relative}:${statSync(full).size}`)
+  }
+  return entries.toSorted((a, b) => a.localeCompare(b))
 }
