@@ -12,7 +12,7 @@ import { htmlProblems, logProblems, ROUTES } from './read.ts'
 
 export type Bundler = 'turbopack' | 'webpack'
 
-export const BUNDLERS: readonly Bundler[] = ['turbopack', 'webpack']
+const BUNDLERS: readonly Bundler[] = ['turbopack', 'webpack']
 
 export interface Build {
   readonly bundler: Bundler
