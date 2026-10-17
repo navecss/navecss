@@ -1,0 +1,2 @@
+3. **A copy of the component.** To change Nave's rules for a component rather than override them, copy its files into your project with shadcn's CLI and change the copy: see [Copy a component into your project](#copy-a-component-into-your-project).
+4. **The raw Base UI part.** Import the part from `@base-ui/react/<component>` and style it from scratch. It mixes freely with wrapped parts.

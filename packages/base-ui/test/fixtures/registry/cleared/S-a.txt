@@ -1,0 +1,5 @@
+9. **A component you added from the registry.** Its files are generated from
+   the release you added them from, with the rules `@navecss/base-ui` ships
+   moved into `@layer components.consumer`, and no later release changes them,
+   accessibility fixes included. What Nave says about the components
+   `@navecss/base-ui` styles describes the package, not those files.

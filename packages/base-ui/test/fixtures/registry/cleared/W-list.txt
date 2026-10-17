@@ -1,0 +1,37 @@
+\beject
+\bown(?:s|ed|er|ers|ership)?\b
+licen[cs]
+copyright
+\bMIT\b
+\bSPDX\b
+\bnotice\b
+\battribution\b
+\bwarrant
+\brights\b
+\bpatent
+trade ?mark
+[©®™]
+\bMUI\b
+material[- ]?ui
+\bvercel\b
+shadcn/ui
+\baffiliat
+\bendors
+\bsponsor
+\bofficial
+\bpartner
+\bcertif
+accessib
+a11y
+WCAG
+success criterion
+\bSC \d
+conform
+screen reader
+focus ring
+reduced motion
+reduced-motion
+prefers-reduced
+\bARIA\b
+keyboard
+assistive

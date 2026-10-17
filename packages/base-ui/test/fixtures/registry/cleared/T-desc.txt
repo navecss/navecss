@@ -1,0 +1,1 @@
+NaveCSS's styling of the Base UI <Component>, as files copied into your project: Base UI's parts from @base-ui/react, which Base UI's maintainers publish, with Nave's classes from a CSS Module that reads Nave's tokens.
