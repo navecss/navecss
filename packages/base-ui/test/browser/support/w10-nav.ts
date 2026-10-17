@@ -172,6 +172,11 @@ export interface Frame {
   The popup's computed opacity, or 0 while it is not mounted.
    */
   readonly opacity: number
+  /**
+  The animation frame's own time (the `requestAnimationFrame` timestamp), the instant `opacity` is
+  read at, and not the time the callback got to run: a callback that runs late (something ahead of
+  it in the same frame blocked) reports the frame's time, not a later one.
+   */
   readonly time: number
 }
 
@@ -180,7 +185,7 @@ export interface Sampler {
   readonly stop: () => void
 }
 
-const sampleOnce = (index: number): Frame => {
+const sampleOnce = (index: number, time: number): Frame => {
   const popup = byTestId('popup')
   const isMounted = popup?.isConnected === true
   const active = document.activeElement
@@ -196,18 +201,19 @@ const sampleOnce = (index: number): Frame => {
     isEnding: isMounted && Object.hasOwn(popup.dataset, 'endingStyle'),
     isMounted,
     opacity: isMounted ? Number(getComputedStyle(popup).opacity) : 0,
-    time: performance.now(),
+    time,
   }
 }
 
 /**
-Samples the popup in every animation frame from now on.
+Samples the popup in every animation frame from now on, each frame stamped with the animation
+frame's own time, which is the time its opacity is read at.
  */
 export const sampleFrames = (): Sampler => {
   const frames: Frame[] = []
   let handle = 0
-  const tick = (): void => {
-    frames.push(sampleOnce(frames.length))
+  const tick = (time: number): void => {
+    frames.push(sampleOnce(frames.length, time))
     handle = requestAnimationFrame(tick)
   }
   handle = requestAnimationFrame(tick)
