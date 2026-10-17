@@ -61,7 +61,7 @@ jobs:
         run: pnpm run build
 
       - name: Hand the build output to the jobs that read it
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-output-${{ matrix.leg }}
           path: |
@@ -147,7 +147,7 @@ jobs:
       # The floor leg proves the suites pass on Node 22.18; the pinned leg's reports are scanned.
       - name: Hand the coverage reports to the sonar job
         if: matrix.leg == 'pinned'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
           path: packages/*/coverage/lcov.info
@@ -256,7 +256,7 @@ jobs:
       # The scripts' coverage report is produced by this job, not by the test job, so it travels to
       # the sonar job as an artifact of its own.
       - name: Hand the coverage report to the sonar job
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scripts-coverage
           path: scripts/coverage/lcov.info
