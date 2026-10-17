@@ -51,7 +51,7 @@ const majorsFloor = (range: string): string | undefined => {
  * `^1.3.0` is "1.3 or later in the 1.x line", `>=0.4.0 <1.0.0` is "0.4.0 or later before 1.0", and
  * `^18 || ^19` is "18 or 19".
  */
-export const floorInWords = (name: string, range: string): string => {
+const floorInWords = (name: string, range: string): string => {
   const words = caretFloor(range) ?? boundedFloor(range) ?? majorsFloor(range)
   if (words === undefined) throw unwordable(name, range)
   return words

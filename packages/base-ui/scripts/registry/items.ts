@@ -9,7 +9,7 @@ import { stringsFor } from './words.ts'
 
 export const TARGET_DIRECTORY = 'components/nave'
 
-export interface RegistryFile {
+interface RegistryFile {
   content?: string
   path: string
   target: string
@@ -78,7 +78,7 @@ export const buildItem = (files: ItemFiles, license: string, manifest: Manifest)
 /**
  * Where the package's page is, derived from `repository` as npm derives a package page's link.
  */
-export const homepageOf = ({ repository }: Manifest): string => {
+const homepageOf = ({ repository }: Manifest): string => {
   const base = repository.url.replace(/^git\+/, '').replace(/\.git$/, '')
   if (repository.directory === undefined) {
     throw new RegistryBuildError('the manifest has a repository without a directory')

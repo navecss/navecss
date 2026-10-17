@@ -8,7 +8,7 @@ import { localName } from './module-css.ts'
 
 const CLASS_LITERAL = /'(nave-base-ui-[a-z0-9 -]+)'/g
 
-export const itemStem = (subpath: string): string => `nave-${subpath}`
+const itemStem = (subpath: string): string => `nave-${subpath}`
 
 const mustReplace = (text: string, pattern: RegExp | string, to: string, what: string): string => {
   const result = text.replace(pattern, () => to)
@@ -62,7 +62,7 @@ const TYPES_REASON =
 export const typesComment = (rules: readonly string[]): string =>
   `/* eslint-disable ${rules.join(', ')} -- ${TYPES_REASON} */`
 
-export const typesRulesFor = (generated: string): string[] =>
+const typesRulesFor = (generated: string): string[] =>
   /\bany\b/.test(generated) ? [NAMESPACE_RULE, ANY_RULE] : [NAMESPACE_RULE]
 
 export interface PartsModule {
