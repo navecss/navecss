@@ -32,6 +32,15 @@ const FIXTURE = [
 
 const workDir = mkdtempSync(path.join(tmpdir(), 'nave-astro-lint-'))
 writeFileSync(path.join(workDir, 'card.astro'), FIXTURE)
+const STYLE_FIXTURE = [
+  '---',
+  '---',
+  '<div style={{ color: "red" }}></div>',
+  '<div style="color: red"></div>',
+  '<div style={{ color: "var(--nave-color-text)" }}></div>',
+  '',
+].join('\n')
+writeFileSync(path.join(workDir, 'style.astro'), STYLE_FIXTURE)
 
 afterAll(() => {
   rmSync(workDir, { recursive: true, force: true })
@@ -56,6 +65,16 @@ describe('AC-astro-38: an .astro file read through astro-eslint-parser', () => {
   it('control: without the plugin rules the same file reports nothing, so line 3 is the rules running', async () => {
     const messages = await lintCard([astroFiles])
     expect(messages).toEqual([])
+  })
+
+  it('reports a style object through style-values on line 3, and reads neither the string style on line 4 nor the tokenized object on line 5', async () => {
+    const eslint = new ESLint({
+      cwd: workDir,
+      overrideConfigFile: true,
+      overrideConfig: [astroFiles, plugin.configs!.recommended as never],
+    })
+    const [result] = await eslint.lintFiles(['style.astro'])
+    expect(result!.messages.map((m) => [m.line, m.ruleId])).toEqual([[3, '@navecss/style-values']])
   })
 })
 
