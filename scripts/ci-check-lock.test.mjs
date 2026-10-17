@@ -551,6 +551,62 @@ test('a lock with no owner file is stale only after the grace', async () => {
   release()
 })
 
+/**
+ * Stops for `ms` of real time without yielding, so the file system's clock has moved on before the
+ * next thing the test does to the lock directory: its change time is coarse on some systems.
+ */
+const pauseFor = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+
+test('a lock with no owner file that is replaced by another gets its own grace', async () => {
+  const { lockPath } = freshLock()
+  leaveLock(lockPath)
+  const clock = fakeTime(1000, (count) => {
+    if (count !== 4) return
+    pauseFor(20)
+    rmSync(lockPath, { recursive: true })
+    mkdirSync(lockPath)
+  })
+
+  const release = await acquireLock({
+    cwd: '/work/b',
+    graceMs: 5000,
+    lockPath,
+    now: clock.now,
+    pid: 1002,
+    sleep: clock.sleep,
+  })
+
+  // The second lock is first seen at 4 s, so its grace ends at 9 s, not at 5 s with the first one's.
+  assert.ok(clock.time.now >= 9000, `taken at ${clock.time.now} ms, on the first lock's grace`)
+  assert.equal(ownerOf(lockPath).pid, 1002)
+  release()
+})
+
+test('a lock with no owner file that changes in place, keeping its inode, gets its own grace', async () => {
+  const { lockPath } = freshLock()
+  leaveLock(lockPath)
+  const clock = fakeTime(1000, (count) => {
+    if (count !== 4) return
+    pauseFor(20)
+    // The same directory under the same inode, with a later change time: what a lock removed and
+    // made again under a reused inode looks like to anything that reads only the inode.
+    chmodSync(lockPath, 0o700)
+  })
+
+  const release = await acquireLock({
+    cwd: '/work/b',
+    graceMs: 5000,
+    lockPath,
+    now: clock.now,
+    pid: 1002,
+    sleep: clock.sleep,
+  })
+
+  assert.ok(clock.time.now >= 9000, `taken at ${clock.time.now} ms, on the grace it began with`)
+  assert.equal(ownerOf(lockPath).pid, 1002)
+  release()
+})
+
 test('a lock whose owner file cannot be read is stale only after the grace', async () => {
   const { lockPath } = freshLock()
   leaveLock(lockPath, '{"pid": ')

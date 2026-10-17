@@ -15,7 +15,8 @@
  * makes the guard checks again that the lock is still the one it judged stale, and only then
  * replaces it, so a waiter that was slow cannot remove a lock that a faster one has just taken.
  * A lock with no readable owner file is a holder between `mkdir` and the write, so it is judged
- * stale only after a grace.
+ * stale only after a grace. The grace belongs to the lock it began on: when that lock is removed
+ * and another with no owner file is made in its place, the new one gets a grace of its own.
  */
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -84,19 +85,30 @@ function readOwner(lockPath) {
 }
 
 /**
- * A string that changes when the lock is replaced: its directory's inode and its owner file's text.
+ * A string that changes when the lock is replaced: its directory's inode and change time, and its
+ * owner file's text. The change time is there because an inode freed by a removed lock is often
+ * given to the next one, so the inode alone does not tell a lock from the one that replaced it. It
+ * is the change time and not the creation time, which some Linux file systems report as 0.
  */
 function fingerprintOf(lockPath) {
   try {
     const text = readFileSync(path.join(lockPath, OWNER_FILE), 'utf8')
-    return `${statSync(lockPath).ino}:${text}`
+    return `${identityOf(lockPath)}:${text}`
   } catch {
     try {
-      return `${statSync(lockPath).ino}:`
+      return `${identityOf(lockPath)}:`
     } catch {
       return undefined
     }
   }
+}
+
+/**
+ * The inode and change time of the lock directory, to the nanosecond.
+ */
+function identityOf(lockPath) {
+  const { ctimeNs, ino } = statSync(lockPath, { bigint: true })
+  return `${ino}:${ctimeNs}`
 }
 
 /**
@@ -221,10 +233,15 @@ function breakOldGuard(config, wait) {
 /**
  * Whether the lock `holder` left (undefined when unreadable) is stale. An unreadable one is a
  * holder between `mkdir` and its write, so it is stale only once it has stayed so for the grace.
+ * The grace is counted from when this lock, the one `judged` (its fingerprint) describes, was first
+ * seen unreadable: a different lock that is also unreadable starts the count again.
  */
-function isStale(config, wait, holder) {
+function isStale(config, wait, holder, judged) {
   if (holder !== undefined) return true
-  wait.invalidSince ??= config.now()
+  if (wait.invalidFingerprint !== judged) {
+    wait.invalidFingerprint = judged
+    wait.invalidSince = config.now()
+  }
   return config.now() - wait.invalidSince >= config.graceMs
 }
 
@@ -241,7 +258,12 @@ export async function acquireLock(options = {}) {
   const { lockPath, pid } = config
   const owner = { cwd: config.cwd, pid, startedAt: config.wallNow() }
   const release = () => releaseFor(lockPath, pid)
-  const wait = { guardSince: undefined, invalidSince: undefined, reportedAt: undefined }
+  const wait = {
+    guardSince: undefined,
+    invalidFingerprint: undefined,
+    invalidSince: undefined,
+    reportedAt: undefined,
+  }
   for (;;) {
     if (tryCreate(lockPath, owner)) return release
     // Taken before the owner is read, so a lock replaced in between is never judged by the old one.
@@ -249,10 +271,11 @@ export async function acquireLock(options = {}) {
     if (judged === undefined) continue
     const holder = readOwner(lockPath)
     if (isHolding(holder, config)) {
+      wait.invalidFingerprint = undefined
       wait.invalidSince = undefined
       wait.guardSince = undefined
       reportWaiting(config, wait, holder)
-    } else if (isStale(config, wait, holder)) {
+    } else if (isStale(config, wait, holder, judged)) {
       if (takeOver(config, judged, owner)) return release
       breakOldGuard(config, wait)
     }
