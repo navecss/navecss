@@ -59,15 +59,15 @@ Chromium against the shipped bytes.
 
 **1. The contract is the seven names, in this order, and each has one owner.**
 
-| Layer                 | Holds                                                                                | Written by         |
-| --------------------- | ------------------------------------------------------------------------------------ | ------------------ |
-| `tokens.defaults`     | Nave's shipped token values (CSS custom properties)                                  | `@navecss/tokens`  |
-| `tokens.presets`      | Token values generated for a project (`navecss-tokens build`), and any future preset | the token build    |
-| `reset`               | Cross-browser normalisation                                                          | `@navecss/core`    |
-| `atomic`              | The global atom classes (`.nave-flex`, …) that `cx()` names                          | `@navecss/core`    |
-| `components.nave`     | Components Nave publishes                                                            | `@navecss/base-ui` |
-| `components.consumer` | The consumer's own component CSS                                                     | the consumer       |
-| `overrides`           | The consumer's deliberate exceptions to everything above                             | the consumer       |
+| Layer                 | Holds                                                                                | Written by                       |
+| --------------------- | ------------------------------------------------------------------------------------ | -------------------------------- |
+| `tokens.defaults`     | Nave's shipped token values (CSS custom properties)                                  | `@navecss/tokens`                |
+| `tokens.presets`      | Token values generated for a project (`navecss-tokens build`), and any future preset | the token build                  |
+| `reset`               | Cross-browser normalisation                                                          | `@navecss/core`                  |
+| `atomic`              | The global atom classes (`.nave-flex`, …) that `cx()` names                          | `@navecss/core`                  |
+| `components.nave`     | Components Nave publishes                                                            | `@navecss/base-ui`               |
+| `components.consumer` | The consumer's own component CSS                                                     | the consumer, or a registry copy |
+| `overrides`           | The consumer's deliberate exceptions to everything above                             | the consumer                     |
 
 `tokens.defaults` has one writer, `@navecss/tokens`, which writes the `--nave-*`
 properties. `components.nave` has one writer, `@navecss/base-ui`, whose single
@@ -89,7 +89,10 @@ the contract.** Nave's order statement must be the first `@layer` declaration
 the document sees. Every guarantee in this ADR is conditional on it. Nave cannot
 enforce it from inside its own stylesheets, because the failure is decided by
 bytes Nave does not write, so the obligation is stated to the consumer (below)
-and the means to meet it is shipped (decision 5).
+and the means to meet it is shipped (decision 5). A component copied from the
+`@navecss/base-ui` registry meets it by itself: the first statement of each of its
+CSS Modules, after the two-line header, is Nave's order statement, so the copy
+registers the seven names in order even when its CSS reaches the page first.
 
 **3. The consumer's obligation: author into a named sublayer, with the standard
 `@layer` block.**
