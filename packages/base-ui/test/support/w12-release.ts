@@ -131,15 +131,44 @@ Whether a changeset's text names all seven components of the release.
 export const hasTheSeven = (text: string): boolean =>
   SEVEN_COMPONENTS.every((component) => new RegExp(component, 'i').test(text))
 
-/**
-What is wrong with the pending changesets that name a package: each must name it alone with bump
-`minor`, and exactly one of them, the pull request's own, must name the seven components.
- */
-export const changesetProblems = (pending: readonly Changeset[], name: string): string[] => [
-  ...pending
-    .filter(({ releases }) => Object.keys(releases).length !== 1 || releases[name] !== 'minor')
-    .map(({ file }) => `${file} does not name ${name} alone with bump minor`),
-  ...(pending.filter(({ text }) => hasTheSeven(text)).length === 1
-    ? []
-    : ['not exactly one pending changeset names the seven components']),
+export const SIX_SUBPATHS = [
+  'alert-dialog',
+  'context-menu',
+  'menubar',
+  'preview-card',
+  'combobox',
+  'autocomplete',
 ]
+
+/**
+Whether a changeset's text names the six subpaths of the release before the seven.
+ */
+export const hasTheSix = (text: string): boolean =>
+  SIX_SUBPATHS.every((subpath) => text.includes(subpath))
+
+/**
+Whether a changeset is about one of the two releases the clause below holds: the six or the seven.
+ */
+export const isAboutTheReleases = ({ text }: Changeset): boolean =>
+  hasTheSix(text) || hasTheSeven(text)
+
+/**
+What is wrong with the pending changesets that name a package, among those about the two releases:
+each must name it alone with bump `minor`, and exactly one of them, the pull request's own, must
+name the seven components. A changeset about neither, such as a later fix, is outside the clause,
+and with none about either pending there is nothing to hold.
+ */
+export const changesetProblems = (pending: readonly Changeset[], name: string): string[] => {
+  const about = pending.filter((changeset) => isAboutTheReleases(changeset))
+  if (about.length === 0) {
+    return []
+  }
+  return [
+    ...about
+      .filter(({ releases }) => Object.keys(releases).length !== 1 || releases[name] !== 'minor')
+      .map(({ file }) => `${file} does not name ${name} alone with bump minor`),
+    ...(about.filter(({ text }) => hasTheSeven(text)).length === 1
+      ? []
+      : ['not exactly one pending changeset names the seven components']),
+  ]
+}

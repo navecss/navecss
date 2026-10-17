@@ -16,6 +16,7 @@ import {
   changesetProblems,
   changesetsNaming,
   hasTheSeven,
+  isAboutTheReleases,
   releasesOf,
   ROOT,
   SEVEN_COMPONENTS,
@@ -65,6 +66,15 @@ const make = (file: string, frontmatter: string, text: string): Changeset => ({
   text,
 })
 
+/**
+The entries of a CHANGELOG section that name the seven components, one per changeset, keyed by its
+commit.
+ */
+const entriesOfTheSeven = (section: string): string[] =>
+  section
+    .split(/^(?=- [\da-f]{7,}: )/m)
+    .filter((entry) => /^- [\da-f]{7,}: /.test(entry) && hasTheSeven(entry))
+
 const planted = '.x { color: var(--nave-layer-notification) }'
 
 describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tokens floor (supersedes AC-base-ui-overlay-completion-31 and -38 for the combined package)', () => {
@@ -72,8 +82,8 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
     const pending = changesetsNaming(NAME)
     const changelog = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
 
-    it.runIf(pending.length > 0)(
-      'has every pending changeset that names @navecss/base-ui name it alone with bump minor, and exactly one of them name the seven components',
+    it.runIf(pending.some((changeset) => isAboutTheReleases(changeset)))(
+      'has every pending changeset about the six or the seven name @navecss/base-ui alone with bump minor, and exactly one of them name the seven components',
       () => {
         expect(changesetProblems(pending, NAME)).toEqual([])
       },
@@ -84,26 +94,28 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
       expect(own.map(({ file }) => file)).not.toContain('base-ui-overlay-components.md')
     })
 
-    it.runIf(pending.length === 0 && existsSync(changelog))(
+    it.runIf(pending.every(({ text }) => !hasTheSeven(text)) && existsSync(changelog))(
       'was released as a minor, with exactly one changeset that names the seven components among its entries, once the changeset is spent',
       () => {
         const sections = readFileSync(changelog, 'utf8').split(/^## /m).slice(1)
-        const newest = sections[0] ?? ''
-        expect(newest).toContain('### Minor Changes')
-        expect(newest).not.toContain('### Major Changes')
         // One entry per changeset, keyed by its commit. An earlier changeset that was still pending
-        // when this one merged is released in the same section, so the entries are not counted.
-        const entries = newest
-          .split(/^(?=- [\da-f]{7,}: )/m)
-          .filter((entry) => /^- [\da-f]{7,}: /.test(entry))
-        expect(entries.filter((entry) => hasTheSeven(entry))).toHaveLength(1)
+        // when this one merged is released in the same section, so the entries are not counted. A
+        // later release can follow, so the section is the one holding the entry, wherever it sits.
+        expect(sections.flatMap((section) => entriesOfTheSeven(section))).toHaveLength(1)
+        const released = sections.find((section) => entriesOfTheSeven(section).length > 0) ?? ''
+        expect(released).toContain('### Minor Changes')
+        expect(released).not.toContain('### Major Changes')
       },
     )
 
     it('control: a second changeset for the seven, a second package or another bump is reported', () => {
       const seven = SEVEN_COMPONENTS.join(', ')
       const own = make('own.md', "'@navecss/base-ui': minor", seven)
-      const earlier = make('earlier.md', "'@navecss/base-ui': minor", 'Six components.')
+      const earlier = make(
+        'earlier.md',
+        "'@navecss/base-ui': minor",
+        'alert-dialog, context-menu, menubar, preview-card, combobox, autocomplete',
+      )
       expect(changesetProblems([earlier, own], NAME)).toEqual([])
       expect(changesetProblems([earlier], NAME)).toEqual([
         'not exactly one pending changeset names the seven components',
@@ -123,6 +135,13 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
       expect(
         changesetProblems([earlier, make('patch.md', "'@navecss/base-ui': patch", seven)], NAME),
       ).toEqual(['patch.md does not name @navecss/base-ui alone with bump minor'])
+    })
+
+    it('control: a lone patch changeset for the package, after the release, is accepted', () => {
+      const fix = make('fix.md', "'@navecss/base-ui': patch", 'A fix that names neither set.')
+      const own = make('own.md', "'@navecss/base-ui': minor", SEVEN_COMPONENTS.join(', '))
+      expect(changesetProblems([fix], NAME)).toEqual([])
+      expect(changesetProblems([fix, own], NAME)).toEqual([])
     })
 
     it('control: a second changeset, a second package or another bump is not the release', () => {
