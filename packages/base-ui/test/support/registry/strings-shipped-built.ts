@@ -24,7 +24,7 @@ const replaceLineNumber = (text: string, lineNumber: number, block: string): str
 /**
  * The files the cleared blocks describe, made from the base branch's: the CLI's header, `NOT_YET`
  * and help lines, the architecture line of `CLAUDE.md` and the three docs lines. The two ADRs
- * are ENG's words, so they are left as the base has them.
+ * are written by hand, so they are left as the base has them.
  */
 export const shippedFilesBuiltFrom = (base: ShippedFiles): ShippedFiles => {
   const baseCli = linesOf(base.cli)

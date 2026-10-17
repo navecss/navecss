@@ -174,7 +174,7 @@ export const copiedCommentStrings = (registry: LoadedRegistry): LabeledString[] 
   )
 
 /**
- * Every string R8 binds that the registry holds: each item's `title`, `description`, `docs` and
+ * Every string the registry-facing wording rule covers: each item's `title`, `description`, `docs` and
  * `meta` values, the index's strings, and the comments of the copied files.
  */
 export const registryStrings = (registry: LoadedRegistry): LabeledString[] => [

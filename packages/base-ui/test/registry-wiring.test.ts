@@ -75,7 +75,7 @@ describe('AC-base-ui-registry-31: the instruments run where they are claimed to 
     expect(() => loadRegistry(path.join(PACKAGE_DIR, 'dist/registry-absent'))).toThrow(/absent/)
   })
 
-  it("runs in ci:check: the package's test and test:browser are steps of the gate", () => {
+  it("runs in ci:check: the package's test and test:browser are steps of ci:check", () => {
     const gate = readFileSync(path.join(ROOT, 'scripts/run-ci-check.mjs'), 'utf8')
     expect(gate).toMatch(/name: 'test'/)
     expect(gate).toMatch(/name: 'test:browser'/)

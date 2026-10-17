@@ -139,7 +139,7 @@ const builds = (): Builds => {
   }
 }
 
-describe("AC-base-ui-registry-26: Vite's build keeps R9 (c)'s four things for the copy", () => {
+describe("AC-base-ui-registry-26: Vite's build keeps the layers, the focus rules, the outlines and the motion guards of the copy", () => {
   it('AC-base-ui-registry-26: the module carries focus rules, outline declarations and guards', () => {
     const { apps } = builds()
     const facts = factsOf(apps.moduleCss)

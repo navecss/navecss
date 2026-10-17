@@ -17,7 +17,7 @@ import { typesComment, typesRules } from './files-types-comment.ts'
 export const TARGET_DIR = 'components/nave/'
 
 /**
- * The targets of an item, in R3's order.
+ * The targets of an item, in the order the item lists its files.
  */
 export const targetsFor = (subpath: string): string[] =>
   [
