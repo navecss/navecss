@@ -769,7 +769,7 @@ const SETTLING_APPS: Readonly<Record<string, SettlingApp>> = {
 
 /**
  * Opens `url` in `page` until the page holds the element `#f`. A page the dev server reloads
- * while it opens (a change the file watcher reports late) aborts the navigation and loads anyway.
+ * while it opens aborts the navigation and loads anyway.
  */
 async function openApp(page: Page, url: string): Promise<void> {
   try {
