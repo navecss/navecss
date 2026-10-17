@@ -21,13 +21,13 @@ import postcss from 'postcss'
 import type { Manifest, RegistryItem } from './registry/items.ts'
 
 import { atomsFor, focusRingAtoms } from '../styles/atoms.ts'
+import { generateWrappers } from './generate-wrappers.ts'
 import { RegistryBuildError } from './registry/errors.ts'
 import { buildIndex, buildItem } from './registry/items.ts'
 import { cssHeader, readLicense, typescriptHeader } from './registry/license.ts'
 import { localName, moduleBody } from './registry/module-css.ts'
 import { entryModule, partsModule, wrapModule } from './registry/sources.ts'
 import { validateItem } from './registry/validate.ts'
-import { generateWrappers } from './generate-wrappers.ts'
 
 const PACKAGE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -68,10 +68,12 @@ const optionOf = (argv: readonly string[], name: string): string | undefined => 
  * The subpaths a registry has an item for: those whose generated module names a Nave class.
  */
 const styledSubpaths = (wrapped: ReadonlyMap<string, string>): string[] =>
-  [...wrapped.keys()]
+  wrapped
+    .keys()
     .filter((name) => name.endsWith('/parts.generated.ts'))
     .filter((name) => wrapped.get(name)?.includes('nave-base-ui-') === true)
     .map((name) => name.slice(0, name.indexOf('/')))
+    .toArray()
     .toSorted((a, b) => a.localeCompare(b))
 
 const readManifest = (root: string): Manifest =>
@@ -91,66 +93,81 @@ const atomClasses = (atoms: Readonly<Record<string, unknown>>): Map<string, stri
   return byClass
 }
 
+interface Shared {
+  readonly atomOfClass: ReadonlyMap<string, string>
+  readonly atoms: ReturnType<typeof atomsFor>
+  readonly license: ReturnType<typeof readLicense>
+  readonly manifest: Manifest
+  readonly orderStatement: string
+  readonly part: string
+  readonly wrapped: ReadonlyMap<string, string>
+}
+
+const itemOf = async (subpath: string, shared: Shared): Promise<RegistryItem> => {
+  const { atomOfClass, atoms, license, manifest, orderStatement, part, wrapped } = shared
+  const header = typescriptHeader(license)
+  const generated = wrapped.get(`${subpath}/parts.generated.ts`) ?? ''
+  const parts = partsModule(subpath, generated, atomOfClass, header)
+  const body = await moduleBody({ atoms, focusRingAtoms, orderStatement, used: parts.used })
+  const files = {
+    entry: entryModule(subpath, wrapped.get(`${subpath}/index.ts`) ?? '', header),
+    module: `${cssHeader(license)}${body}`,
+    parts: parts.text,
+    subpath,
+    wrap: wrapModule(part, header),
+  }
+  return buildItem(files, license.text, manifest)
+}
+
 /**
  * Every item of the registry, from the package's own source.
  */
 export const generateItems = async (root: string): Promise<RegistryItem[]> => {
-  const manifest = readManifest(root)
-  const license = readLicense(root)
   const atoms = atomsFor([])
-  const atomOfClass = atomClasses(atoms)
-  const orderStatement = readOrderStatement()
   const wrapped = generateWrappers()
-  const part = readFileSync(path.join(PACKAGE, 'src/part.ts'), 'utf8')
-  const items: RegistryItem[] = []
-  for (const subpath of styledSubpaths(wrapped)) {
-    const ts = typescriptHeader(license)
-    const parts = partsModule(
-      subpath,
-      wrapped.get(`${subpath}/parts.generated.ts`) ?? '',
-      atomOfClass,
-      ts,
-    )
-    const body = await moduleBody({ atoms, focusRingAtoms, orderStatement, used: parts.used })
-    items.push(
-      buildItem(
-        {
-          entry: entryModule(subpath, wrapped.get(`${subpath}/index.ts`) ?? '', ts),
-          module: `${cssHeader(license)}${body}`,
-          parts: parts.text,
-          subpath,
-          wrap: wrapModule(part, ts),
-        },
-        license.text,
-        manifest,
-      ),
-    )
+  const shared: Shared = {
+    atomOfClass: atomClasses(atoms),
+    atoms,
+    license: readLicense(root),
+    manifest: readManifest(root),
+    orderStatement: readOrderStatement(),
+    part: readFileSync(path.join(PACKAGE, 'src/part.ts'), 'utf8'),
+    wrapped,
   }
+  const items: RegistryItem[] = []
+  for (const subpath of styledSubpaths(wrapped)) items.push(await itemOf(subpath, shared))
   return items
 }
 
 const writeJson = (directory: string, name: string, value: unknown): void => {
-  writeFileSync(path.join(directory, name), `${JSON.stringify(value, null, 2)}\n`)
+  writeFileSync(path.join(directory, name), `${JSON.stringify(value, undefined, 2)}\n`)
+}
+
+const writeRegistry = (out: string, items: readonly RegistryItem[], manifest: Manifest): void => {
+  mkdirSync(out, { recursive: true })
+  for (const item of items) writeJson(out, `${item.name}.json`, item)
+  writeJson(out, 'registry.json', buildIndex(items, manifest))
 }
 
 /**
  * Builds the registry and writes it, emptied first; returns the process exit code. A refusal
  * prints the item and file it concerns and writes no item.
  */
-export const main = async (options: MainOptions = {}): Promise<number> => {
+const resolvePaths = (options: MainOptions): { out: string; root: string } => {
   const argv = options.argv ?? process.argv.slice(2)
   const root = path.resolve(options.root ?? optionOf(argv, '--root') ?? PACKAGE)
-  const out = path.resolve(
-    options.out ?? optionOf(argv, '--out') ?? path.join(root, 'dist/registry'),
-  )
+  const out = options.out ?? optionOf(argv, '--out') ?? path.join(root, 'dist/registry')
+  return { out: path.resolve(out), root }
+}
+
+export const main = async (options: MainOptions = {}): Promise<number> => {
+  const { out, root } = resolvePaths(options)
   try {
     rmSync(out, { force: true, recursive: true })
     const items = await generateItems(root)
     options.mutate?.(items)
     for (const item of items) validateItem(item)
-    mkdirSync(out, { recursive: true })
-    for (const item of items) writeJson(out, `${item.name}.json`, item)
-    writeJson(out, 'registry.json', buildIndex(items, readManifest(root)))
+    writeRegistry(out, items, readManifest(root))
     return 0
   } catch (error) {
     if (!(error instanceof RegistryBuildError)) throw error

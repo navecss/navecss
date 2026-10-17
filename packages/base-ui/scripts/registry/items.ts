@@ -1,10 +1,10 @@
+import { RegistryBuildError } from './errors.ts'
 /**
  * The items and the index: every item a universal shadcn item (`registry:item`, every file a
  * `registry:file` with a plain relative `target`), carrying the five files in a fixed order, the
  * bare names of the package's peers as dependencies and the package's version and peer ranges.
  */
 import { LICENSE_FILE } from './license.ts'
-import { RegistryBuildError } from './errors.ts'
 import { stringsFor } from './words.ts'
 
 export const TARGET_DIRECTORY = 'components/nave'

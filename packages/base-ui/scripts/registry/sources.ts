@@ -11,7 +11,7 @@ const CLASS_LITERAL = /'(nave-base-ui-[a-z0-9 -]+)'/g
 export const itemStem = (subpath: string): string => `nave-${subpath}`
 
 const mustReplace = (text: string, pattern: RegExp | string, to: string, what: string): string => {
-  const result = text.replace(pattern, to)
+  const result = text.replace(pattern, () => to)
   if (result === text) throw new RegistryBuildError(`the package's source no longer has ${what}`)
   return result
 }
@@ -32,7 +32,7 @@ const classExpression = (
     return `styles.${localName(atom)}`
   })
   const [only] = references
-  return references.length === 1 && only !== undefined
+  return only !== undefined && references.length === 1
     ? only
     : `\`${references.map((reference) => `\${${reference}}`).join(' ')}\``
 }

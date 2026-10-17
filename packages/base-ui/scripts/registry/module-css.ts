@@ -41,7 +41,7 @@ const directive = (name: string, focusRingAtoms: readonly string[]): string =>
 const isRing = (node: { selector?: string; type: string }): boolean =>
   node.type === 'rule' && node.selector === '&:focus-visible'
 
-const drawsRing = (rule: Rule, after: Declaration): boolean => {
+const hasRingAfter = (rule: Rule, after: Declaration): boolean => {
   const index = rule.index(after)
   return rule.nodes
     .slice(index + 1)
@@ -66,7 +66,11 @@ const guardOutlines = (root: postcss.Root, atomOf: ReadonlyMap<string, string>):
     const rule = declaration.parent as Rule
     const atom = atomOf.get(rule.selector.replace(/^\./, '')) ?? rule.selector
     const value = declaration.value.trim()
-    if (value === 'none' && declaration.parent?.type === 'rule' && drawsRing(rule, declaration)) {
+    if (
+      value === 'none' &&
+      declaration.parent?.type === 'rule' &&
+      hasRingAfter(rule, declaration)
+    ) {
       declaration.before(postcss.comment({ raws: { before: '\n    ' }, text: comment }))
       return
     }

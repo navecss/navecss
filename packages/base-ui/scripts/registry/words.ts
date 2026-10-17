@@ -26,24 +26,35 @@ const unwordable = (name: string, range: string): RegistryBuildError =>
 
 const withoutPatch = (version: string): string => version.replace(/\.0$/, '')
 
+const caretFloor = (range: string): string | undefined => {
+  const caret = /^\^(\d+)\.(\d+)\.0$/.exec(range)
+  return caret?.[1] === undefined || caret[2] === undefined || caret[1] === '0'
+    ? undefined
+    : `${caret[1]}.${caret[2]} or later in the ${caret[1]}.x line`
+}
+
+const boundedFloor = (range: string): string | undefined => {
+  const bounded = /^>=(\d+\.\d+\.\d+) <(\d+\.\d+\.\d+)$/.exec(range)
+  return bounded?.[1] === undefined || bounded[2] === undefined
+    ? undefined
+    : `${bounded[1]} or later before ${withoutPatch(bounded[2])}`
+}
+
+const majorsFloor = (range: string): string | undefined => {
+  const majors = /^\^(\d+) \|\| \^(\d+)$/.exec(range)
+  return majors?.[1] === undefined || majors[2] === undefined
+    ? undefined
+    : `${majors[1]} or ${majors[2]}`
+}
+
 /**
  * `^1.3.0` is "1.3 or later in the 1.x line", `>=0.4.0 <1.0.0` is "0.4.0 or later before 1.0", and
  * `^18 || ^19` is "18 or 19".
  */
 export const floorInWords = (name: string, range: string): string => {
-  const caret = /^\^(\d+)\.(\d+)\.0$/.exec(range)
-  if (caret?.[1] !== undefined && caret[2] !== undefined && caret[1] !== '0') {
-    return `${caret[1]}.${caret[2]} or later in the ${caret[1]}.x line`
-  }
-  const bounded = /^>=(\d+\.\d+\.\d+) <(\d+\.\d+\.\d+)$/.exec(range)
-  if (bounded?.[1] !== undefined && bounded[2] !== undefined) {
-    return `${bounded[1]} or later before ${withoutPatch(bounded[2])}`
-  }
-  const majors = /^\^(\d+) \|\| \^(\d+)$/.exec(range)
-  if (majors?.[1] !== undefined && majors[2] !== undefined) {
-    return `${majors[1]} or ${majors[2]}`
-  }
-  throw unwordable(name, range)
+  const words = caretFloor(range) ?? boundedFloor(range) ?? majorsFloor(range)
+  if (words === undefined) throw unwordable(name, range)
+  return words
 }
 
 export interface Strings {
@@ -79,6 +90,9 @@ export const stringsFor = (
     '<version>': version,
   }
   const fill = (template: string): string =>
-    Object.entries(slots).reduce((text, [slot, value]) => text.replaceAll(slot, value), template)
+    Object.entries(slots).reduce(
+      (text, [slot, value]) => text.replaceAll(slot, () => value),
+      template,
+    )
   return { description: fill(DESCRIPTION), docs: fill(DOCS), title: fill(TITLE) }
 }
