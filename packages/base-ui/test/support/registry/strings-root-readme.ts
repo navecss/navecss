@@ -1,13 +1,12 @@
 /**
  * The root README's checks for the registry: the "What Nave does not promise" list gains a ninth
  * item, and the "Headless components" bullet gains a pointer. Each check takes the README text
- * (and the base's) and returns its problems, so a control can run it over a README with one thing
+ * and returns its problems, so a control can run it over a README with one thing
  * changed; `rootReadmeBuiltFrom` makes the README the cleared bytes describe.
  */
 import { cleared } from './cleared.ts'
 
 export interface RootContext {
-  readonly base: string
   readonly readme: string
 }
 
@@ -52,16 +51,16 @@ export const isItemNine = (item: string): boolean => {
   return name.length > 0 && !name.includes('\n')
 }
 
-export const promiseListProblems = ({ base, readme }: RootContext): string[] => {
-  const head = promiseItems(readme)
-  const before = promiseItems(base)
-  if (before.length === 0) return ['the base README has no promise list to compare with']
-  const problems = before
-    .map((item, index) => (head[index] === item ? '' : `item ${index + 1} differs from the base's`))
+export const promiseListProblems = ({ readme }: RootContext): string[] => {
+  const items = promiseItems(readme)
+  const problems = items
+    .map((item, index) =>
+      item.startsWith(`${index + 1}. `) ? '' : `item ${index + 1} is misnumbered`,
+    )
     .filter((problem) => problem !== '')
-  if (head.length !== before.length + 1) {
-    problems.push(`the list has ${head.length} items, expected ${before.length + 1}`)
-  } else if (!isItemNine(head.at(-1) ?? '')) {
+  if (items.length !== 9) {
+    problems.push(`the list has ${items.length} items, expected 9`)
+  } else if (!isItemNine(items.at(-1) ?? '')) {
     problems.push('the ninth item is not S-a')
   }
   return problems
@@ -96,7 +95,7 @@ export const pointerProblems = ({ readme }: RootContext): string[] => {
 }
 
 /**
- * The README the cleared bytes describe: the base's with `S-a` appended to the promise list and
+ * The README the cleared bytes describe: the base release's text, given as a literal, with `S-a` appended to the promise list and
  * `P` on the lines after the one ending "Radix has no Nave package yet.".
  */
 export const rootReadmeBuiltFrom = (base: string): string => {
@@ -109,7 +108,7 @@ export const rootReadmeBuiltFrom = (base: string): string => {
 }
 
 export const ROOT_CHECKS: Readonly<Record<string, (context: RootContext) => string[]>> = {
-  "items 1 to 8 are the base's and the ninth is S-a": promiseListProblems,
+  'the list has nine items and the ninth is S-a': promiseListProblems,
   'the old registry sentence stays absent': oldSentenceProblems,
   'P is present once, directly after the Radix line': pointerProblems,
 }

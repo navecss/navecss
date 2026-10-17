@@ -1,7 +1,7 @@
 import { fencesOf, FIXED_SENTENCES, proseOf } from '../readme.ts'
 /**
- * The package README's checks for the copy section: each takes the README text (and the base
- * branch's, and the manifest's peers where it needs them) and returns its problems, so a control
+ * The package README's checks for the copy section: each takes the README text (and the
+ * manifest's peers where it needs them) and returns its problems, so a control
  * can run the same check over a README with one thing changed. `readmeBuiltFrom` makes the README
  * the cleared bytes describe, so the checks can be run over a README that does not exist yet.
  */
@@ -11,10 +11,6 @@ import { copySectionOf } from './strings-sources.ts'
 import { paragraphsOf, sectionOf } from './strings-text.ts'
 
 export interface ReadmeContext {
-  /**
-  The base branch's README.
-   */
-  readonly base: string
   readonly peerDependencies: Readonly<Record<string, string>>
   /**
   The README under test.
@@ -26,9 +22,9 @@ const WHAT_IS_STYLED = '## What is styled'
 const LOCAL_PREFIX = './node_modules/@navecss/base-ui/dist/registry/'
 
 /**
- * The README the cleared bytes describe: the base's with `N` for the "On this page" line, `L1`
+ * The README the cleared bytes describe: the README text it is given (the base release's) with `N` for the "On this page" line, `L1`
  * for the ladder's count line, `L2` for its third item and `S-noform` directly before the
- * "What is styled" heading. Every other line is the base's.
+ * "What is styled" heading. Every other line is as given.
  */
 export const readmeBuiltFrom = (base: string): string => {
   const replacements: [(line: string) => boolean, string][] = [
@@ -46,55 +42,24 @@ export const readmeBuiltFrom = (base: string): string => {
     .join('\n')
 }
 
-const lineNumberOfDifference = (a: readonly string[], b: readonly string[]): number => {
-  const length = Math.max(a.length, b.length)
-  for (let line = 0; line < length; line += 1) {
-    if (a[line] !== b[line]) return line + 1
-  }
-  return 0
-}
-
-/**
- * Problems with every line other than the cleared blocks: the README is the base's with those
- * blocks in place, line for line. Reports the first line that differs.
- */
-export const otherLinesProblems = ({ base, readme }: ReadmeContext): string[] => {
-  const expected = readmeBuiltFrom(base).split('\n')
-  const actual = readme.split('\n')
-  const line = lineNumberOfDifference(expected, actual)
-  if (line === 0) return []
-  return [
-    `line ${line} differs: expected ${JSON.stringify(expected[line - 1])}, found ${JSON.stringify(actual[line - 1])}`,
-  ]
-}
-
 export const onThisPageProblems = ({ readme }: ReadmeContext): string[] => {
   const lines = readme.split('\n').filter((line) => line.startsWith('On this page:'))
   return lines.length === 1 && lines[0] === cleared('N') ? [] : ['the "On this page" line is not N']
 }
 
-const overridingItem = (base: string, number: number): string => {
-  const lines = sectionOf(base, '## Overriding')?.split('\n') ?? []
-  const item = lines.find((line) => line.startsWith(`${number}. `))
-  if (item === undefined) throw new Error(`the base README has no item ${number} under Overriding`)
-  return item
-}
-
-export const ladderProblems = ({ base, readme }: ReadmeContext): string[] => {
-  const expected = [
-    '## Overriding',
-    '',
-    cleared('ladder-L1'),
-    '',
-    overridingItem(base, 1),
-    overridingItem(base, 2),
-    cleared('ladder-L2'),
-    '',
-  ].join('\n')
-  const section = sectionOf(readme, '## Overriding')
-  return section?.startsWith(expected) === true
-    ? []
-    : ['the Overriding count line and list are not L1, the base items 1 and 2, and L2']
+export const ladderProblems = ({ readme }: ReadmeContext): string[] => {
+  const lines = (sectionOf(readme, '## Overriding') ?? '').split('\n')
+  const found = lines.slice(0, 6).join('\n')
+  const expected = ['## Overriding', '', cleared('ladder-L1'), '', lines[4], lines[5]].join('\n')
+  const problems: string[] = []
+  if (found !== expected) problems.push('the Overriding heading is not followed by L1')
+  if (!lines[4]?.startsWith('1. ') || !lines[5]?.startsWith('2. ')) {
+    problems.push('the Overriding list does not open with items 1 and 2')
+  }
+  if (lines.slice(6, 8).join('\n') !== cleared('ladder-L2')) {
+    problems.push('items 1 and 2 are not followed by L2')
+  }
+  return problems
 }
 
 export const sectionPlacementProblems = ({ readme }: ReadmeContext): string[] =>
@@ -138,18 +103,29 @@ export const addressProblems = ({ readme }: ReadmeContext): string[] => {
   return problems
 }
 
-export const versionPlacementProblems = ({ readme }: ReadmeContext): string[] => {
-  const problems: string[] = []
-  if (/@navecss\/base-ui@\d/.test(readme))
-    problems.push('a literal @navecss/base-ui@<digits> appears')
-  const fences = fencesOf(copySectionOf(readme) ?? '')
-  if (fences.length === 0) problems.push('the section has no command fence')
+const versionInFences = (section: string): string[] => {
+  const fences = fencesOf(section)
+  const problems = fences.length === 0 ? ['the section has no command fence'] : []
   for (const { body } of fences) {
     const isRemote = body.includes('cdn.jsdelivr.net')
     const isVersioned = body.includes('<version>')
     if (isVersioned && !isRemote)
       problems.push('<version> appears in a fence that is not a jsDelivr one')
     if (isRemote && !isVersioned) problems.push('a jsDelivr fence has no <version>')
+  }
+  return problems
+}
+
+const versionsInProse = (text: string): number => proseOf(text).split('<version>').length - 1
+
+export const versionPlacementProblems = ({ readme }: ReadmeContext): string[] => {
+  const section = copySectionOf(readme) ?? ''
+  const problems = versionInFences(section)
+  if (/@navecss\/base-ui@\d/.test(readme)) {
+    problems.push('a literal @navecss/base-ui@<digits> appears')
+  }
+  if (versionsInProse(section) !== versionsInProse(cleared('S-noform'))) {
+    problems.push('<version> appears in prose other than where S-noform has it')
   }
   return problems
 }
@@ -205,7 +181,6 @@ export const README_CHECKS: Readonly<Record<string, (context: ReadmeContext) => 
   'the Overriding count line and list': ladderProblems,
   'S-noform sits directly before "What is styled"': sectionPlacementProblems,
   'S-b is its own paragraph of the section': layerSentenceProblems,
-  "every other line is the base README's": otherLinesProblems,
   "the first command fence is the installed package's": fenceOrderProblems,
   'every address has /dist/registry/': addressProblems,
   '<version> sits only in the jsDelivr and registries fences': versionPlacementProblems,

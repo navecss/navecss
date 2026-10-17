@@ -131,38 +131,60 @@ const wrappedPartsOf = (subpath: string): string[] => {
     .toArray()
 }
 
+interface RefReading {
+  /**
+  How many elements carry the part's marker, summed over the setups.
+   */
+  readonly rendered: number
+  /**
+  The tag of the element the ref reached, once for each setup where it reached one.
+   */
+  readonly tags: string
+}
+
 /**
- * The tag of the element a ref passed to a part reaches, once for each setup the scene is read under
- * that rendered the part and the ref reached.
+ * What a ref passed to a part reaches in a render of the subpath's scene, once for each setup the
+ * scene is read under (the Scroll Area's corner and the Avatar's image show under one only).
  */
-const refTags = async (source: Source, subpath: string, part: string): Promise<string> => {
+const refReading = async (source: Source, subpath: string, part: string): Promise<RefReading> => {
   const tags: string[] = []
+  let rendered = 0
   await underSetups(subpath, async () => {
     const ref: RefObject<unknown> = createRef<unknown>()
     const props = { ...openProps(), ...fullProps(), [part]: { ref } }
     await render(sceneOf(subpath).render(source, { props }))
     await settle(10)
-    const reached = partsNamed(part).find((element) => element === ref.current)
+    const elements = partsNamed(part)
+    rendered += elements.length
+    const reached = elements.find((element) => element === ref.current)
     if (reached !== undefined) tags.push(reached.tagName)
   })
-  return tags.join(' ')
+  return { rendered, tags: tags.join(' ') }
 }
 
 describe('AC-base-ui-registry-18, refs: a ref passed to every wrapped part receives an element of the same tag in both', () => {
   it.each(styled)('%s', async (subpath) => {
     const { copies } = await prepared()
-    const wrapped = wrappedPartsOf(subpath)
-    expect(wrapped.length, `Table P names parts of ${subpath}`).toBeGreaterThan(0)
     const problems: string[] = []
-    for (const part of wrapped) {
-      const expected = await refTags(packageSource, subpath, part)
-      const actual = await refTags(copies, subpath, part)
-      if (expected === '') {
-        problems.push(`${part}: the package's ref reached no element`)
-      } else if (actual !== expected) {
-        problems.push(`${part}: the copy's ref reaches [${actual}], the package's [${expected}]`)
+    let checked = 0
+    for (const part of wrappedPartsOf(subpath)) {
+      const expected = await refReading(packageSource, subpath, part)
+      // A part the scene does not render in any state (a closed panel, a menu item the Menubar's
+      // scene has none of) has no element to hand a ref to; the package's own scene decides.
+      if (expected.rendered === 0) continue
+      checked += 1
+      const actual = await refReading(copies, subpath, part)
+      if (expected.tags === '') {
+        problems.push(
+          `${part}: the package's ref reached none of its ${expected.rendered} elements`,
+        )
+      } else if (actual.tags !== expected.tags) {
+        problems.push(
+          `${part}: the copy's ref reaches [${actual.tags}], the package's [${expected.tags}]`,
+        )
       }
     }
+    expect(checked, `parts of ${subpath} the scene renders`).toBeGreaterThan(0)
     expect(problems).toEqual([])
   })
 })

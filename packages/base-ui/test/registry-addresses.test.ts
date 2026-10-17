@@ -167,13 +167,34 @@ const dialogFiles = (registry: LoadedRegistry): Map<string, string> =>
 const underSrc = (tree: ReadonlyMap<string, Buffer>): Map<string, Buffer> =>
   new Map(tree.entries().filter(([file]) => file.startsWith('src/')))
 
+const ELLIPSIS = '...'
+const SHORTEST_PREFIX = 40
+
 /**
- * The items of the index whose `shadcn search` line is not in the output.
+ * Whether the CLI's display of a description is the description, or a prefix of it (at least 40
+ * characters) followed by an ellipsis: the shortening is the CLI's, not the registry's bytes.
+ */
+const isDisplayOf = (shown: string, description: string): boolean => {
+  if (shown === description) return true
+  const prefix = shown.slice(0, -ELLIPSIS.length)
+  return (
+    shown.endsWith(ELLIPSIS) && prefix.length >= SHORTEST_PREFIX && description.startsWith(prefix)
+  )
+}
+
+/**
+ * The items of the index that `shadcn search` does not list with their description, shortened or not.
  */
 const missingFromSearch = (output: string, items: readonly RegistryItem[]): string[] => {
-  const lines = new Set(output.split('\n'))
+  const lines = output.split('\n')
   return items
-    .filter((item) => !lines.has(`- @navecss/${item.name} (item) — ${item.description}`))
+    .filter((item) => {
+      const lead = `- @navecss/${item.name} (item) — `
+      return lines.every(
+        (line) =>
+          !(line.startsWith(lead) && isDisplayOf(line.slice(lead.length), item.description)),
+      )
+    })
     .map((item) => item.name)
 }
 
@@ -268,17 +289,25 @@ describe('AC-base-ui-registry-06: the three addresses resolve the same bytes, th
       LONG,
     )
 
-    it('control: a search output without one item, or with another description, reports that item', () => {
-      const items = [
-        { description: 'The dialog.', name: DIALOG },
-        { description: 'The button.', name: BUTTON },
-      ] as RegistryItem[]
-      const lines = [
-        `- @navecss/${DIALOG} (item) — The dialog.`,
-        `- @navecss/${BUTTON} (item) — A different button.`,
+    it('control: a search output reports an item that is absent, has another description, or a prefix that differs or is too short', () => {
+      const description =
+        'NaveCSS styling of the Base UI Dialog, as files copied into your project.'
+      const items = [{ description, name: DIALOG }] as RegistryItem[]
+      const lead = `- @navecss/${DIALOG} (item) — `
+      const accepted = [description, `${description.slice(0, 50)}...`]
+      const rejected = [
+        'A different description.',
+        `${description.slice(0, 50)}x...`,
+        `${description.slice(0, 39)}...`,
+        description.slice(0, 50),
       ]
-      expect(missingFromSearch(lines.join('\n'), items)).toEqual([BUTTON])
-      expect(missingFromSearch(lines[0] ?? '', items)).toEqual([BUTTON])
+      for (const shown of accepted) {
+        expect(missingFromSearch(`${lead}${shown}`, items), shown).toEqual([])
+      }
+      for (const shown of rejected) {
+        expect(missingFromSearch(`${lead}${shown}`, items), shown).toEqual([DIALOG])
+      }
+      expect(missingFromSearch('', items)).toEqual([DIALOG])
     })
   })
 

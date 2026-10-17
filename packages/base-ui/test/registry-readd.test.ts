@@ -220,7 +220,10 @@ describe('AC-base-ui-registry-34: the re-add behaviour the README states holds o
         const { stopped } = await sequence()
         const lists = parsePrintedLists(stopped.run.output)
         const printed = [...lists.created, ...lists.updated]
-        expect(printed, stopped.run.output).toContain(`${DIR}nave-dialog.ts`)
+        expect(
+          printed,
+          `Depends on the pinned CLI's version: a CLI that meets end of input at the prompt prints no list (4.21.5 does). Output: ${stopped.run.output}`,
+        ).toContain(`${DIR}nave-dialog.ts`)
         expect(printed).not.toContain(`${DIR}nave-dialog.module.css`)
       },
       LONG,

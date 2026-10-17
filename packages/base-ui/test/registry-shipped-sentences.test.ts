@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { shippedFilesBuiltFrom } from './support/registry/strings-shipped-built.ts'
 import {
   adr0010Problems,
-  layersUnchangedProblems,
+  BASE_SHIPPED,
+  layersProblems,
   registryUpdateOf,
   SHIPPED_CHECKS,
   type ShippedFiles,
@@ -11,10 +12,7 @@ import {
   STALE_PHRASES,
   staleSentenceProblems,
 } from './support/registry/strings-shipped.ts'
-import { readAtBase, readHead } from './support/registry/strings-text.ts'
-
-const RELEASE_DOCS_TEST = 'packages/base-ui/test/release-docs.test.ts'
-const RELEASE_DOCS_SUPPORT = 'packages/base-ui/test/support/w12-release.ts'
+import { readHead } from './support/registry/strings-text.ts'
 
 const checkNames = Object.keys(SHIPPED_CHECKS)
 
@@ -28,32 +26,27 @@ const withText = (
 })
 
 describe('AC-base-ui-registry-30: every shipped sentence the registry makes false changes in the same pull request', () => {
-  const base = shippedFilesFrom(readAtBase)
+  const base = BASE_SHIPPED
 
   describe('the files as they stand', () => {
     it.each(checkNames)('holds: %s', (name) => {
       const files = shippedFilesFrom(readHead)
-      expect(SHIPPED_CHECKS[name]?.check(files, base)).toEqual([])
-    })
-
-    it('leaves the AC-base-ui-bridge-49 rows unedited', () => {
-      expect(readHead(RELEASE_DOCS_TEST)).toBe(readAtBase(RELEASE_DOCS_TEST))
-      expect(readHead(RELEASE_DOCS_SUPPORT)).toBe(readAtBase(RELEASE_DOCS_SUPPORT))
+      expect(SHIPPED_CHECKS[name]?.check(files)).toEqual([])
     })
   })
 
-  describe('the same checks, fed each line as it stands at the base branch', () => {
+  describe('the same checks, fed each line as it stood at the base release (e3f7c153), held as a literal', () => {
     const redChecks = checkNames.filter((name) => SHIPPED_CHECKS[name]?.redsAtBase === true)
 
-    it('has checks that the base branch reds', () => {
+    it('has checks that the base release reds', () => {
       expect(redChecks.length).toBeGreaterThan(0)
     })
 
     it.each(redChecks)('reds: %s', (name) => {
-      expect(SHIPPED_CHECKS[name]?.check(base, base)).not.toEqual([])
+      expect(SHIPPED_CHECKS[name]?.check(base)).not.toEqual([])
     })
 
-    it("finds each of the four stale sentences in the base branch's files, naming the file", () => {
+    it("finds each of the four stale sentences in the base release's files, naming the file", () => {
       const problems = staleSentenceProblems(base)
       expect(problems).toHaveLength(STALE_PHRASES.length + 1)
       for (const phrase of STALE_PHRASES) {
@@ -62,9 +55,9 @@ describe('AC-base-ui-registry-30: every shipped sentence the registry makes fals
     })
 
     it('finds the eject help line, the old add help line and the old NOT_YET separately', () => {
-      expect(SHIPPED_CHECKS['no help line names eject']?.check(base, base)).toHaveLength(1)
-      expect(SHIPPED_CHECKS['the add help line is C-add-help']?.check(base, base)).toHaveLength(1)
-      expect(SHIPPED_CHECKS['NOT_YET is C-notyet']?.check(base, base)).toHaveLength(1)
+      expect(SHIPPED_CHECKS['no help line names eject']?.check(base)).toHaveLength(1)
+      expect(SHIPPED_CHECKS['the add help line is C-add-help']?.check(base)).toHaveLength(1)
+      expect(SHIPPED_CHECKS['NOT_YET is C-notyet']?.check(base)).toHaveLength(1)
     })
   })
 
@@ -80,7 +73,7 @@ describe('AC-base-ui-registry-30: every shipped sentence the registry makes fals
     })
 
     it.each(checkNames.filter((name) => !name.startsWith('ADR 0')))('accepts them: %s', (name) => {
-      expect(SHIPPED_CHECKS[name]?.check(built, base)).toEqual([])
+      expect(SHIPPED_CHECKS[name]?.check(built)).toEqual([])
     })
 
     const ONE_WORD_EDITS = [
@@ -140,7 +133,7 @@ describe('AC-base-ui-registry-30: every shipped sentence the registry makes fals
       ({ check, file, present, replacement }) => {
         const edited = withText(built, file, (text) => text.replace(present, () => replacement))
         expect(edited[file]).not.toBe(built[file])
-        expect(SHIPPED_CHECKS[check]?.check(edited, base)).not.toEqual([])
+        expect(SHIPPED_CHECKS[check]?.check(edited)).not.toEqual([])
       },
     )
 
@@ -148,7 +141,7 @@ describe('AC-base-ui-registry-30: every shipped sentence the registry makes fals
       const edited = withText(built, 'cli', (text) =>
         text.replace('    init ', () => '    eject           Export it\n    init '),
       )
-      expect(SHIPPED_CHECKS['no help line names eject']?.check(edited, base)).toHaveLength(1)
+      expect(SHIPPED_CHECKS['no help line names eject']?.check(edited)).toHaveLength(1)
     })
 
     it('reds a stale sentence put back into each file', () => {
@@ -161,9 +154,9 @@ describe('AC-base-ui-registry-30: every shipped sentence the registry makes fals
         'adr0010',
       ] as const) {
         const edited = withText(built, key, (text) => `${text}\n${STALE_PHRASES[0]}\n`)
-        expect(
-          SHIPPED_CHECKS['no file still holds a stale sentence']?.check(edited, base),
-        ).toHaveLength(1)
+        expect(SHIPPED_CHECKS['no file still holds a stale sentence']?.check(edited)).toHaveLength(
+          1,
+        )
       }
       expect(staleSentenceProblems(built)).toEqual([])
     })
@@ -236,10 +229,7 @@ describe('AC-base-ui-registry-30: every shipped sentence the registry makes fals
       )
       expect(files.adr0003).not.toBe(base.adr0003)
       expect(
-        SHIPPED_CHECKS['ADR 0003 names the copy in its row and its precondition']?.check(
-          files,
-          base,
-        ),
+        SHIPPED_CHECKS['ADR 0003 names the copy in its row and its precondition']?.check(files),
       ).toEqual([])
       const rowOnly = withText(files, 'adr0003', (adr) =>
         adr.replace(
@@ -248,10 +238,7 @@ describe('AC-base-ui-registry-30: every shipped sentence the registry makes fals
         ),
       )
       expect(
-        SHIPPED_CHECKS['ADR 0003 names the copy in its row and its precondition']?.check(
-          rowOnly,
-          base,
-        ),
+        SHIPPED_CHECKS['ADR 0003 names the copy in its row and its precondition']?.check(rowOnly),
       ).toEqual([
         'the precondition paragraph does not name a registry copy',
         'the precondition paragraph does not name the header',
@@ -259,9 +246,9 @@ describe('AC-base-ui-registry-30: every shipped sentence the registry makes fals
     })
   })
 
-  describe('the layer order and names, run over text with one thing changed', () => {
-    it("accepts the base branch's files, which read non-empty layers", () => {
-      expect(layersUnchangedProblems(base, base)).toEqual([])
+  describe("the layer order and names are Nave's seven, run over text with one thing changed", () => {
+    it("accepts the base release's files, which read non-empty layers", () => {
+      expect(layersProblems(base)).toEqual([])
     })
 
     it('reds two layer names swapped in the order statement', () => {
@@ -269,20 +256,20 @@ describe('AC-base-ui-registry-30: every shipped sentence the registry makes fals
         adr.replace('reset, atomic,', () => 'atomic, reset,'),
       )
       expect(files.adr0003).not.toBe(base.adr0003)
-      expect(layersUnchangedProblems(files, base)).toEqual(['ADR 0003 states a different order'])
+      expect(layersProblems(files)).toEqual(['ADR 0003 states a different order'])
     })
 
     it('reds a layer row renamed and a changed core layers file', () => {
       const renamed = withText(base, 'adr0003', (adr) =>
         adr.replace('| `overrides`', () => '| `exceptions`'),
       )
-      expect(layersUnchangedProblems(renamed, base)).toEqual([
-        'ADR 0003 names the layers differently',
+      expect(layersProblems(renamed)).toEqual([
+        'ADR 0003 names the layers differently from the seven, in order',
       ])
       const core = withText(base, 'coreLayers', (css) =>
         css.replace('overrides', () => 'exceptions'),
       )
-      expect(layersUnchangedProblems(core, base)).toEqual(['@navecss/core layers.css differs'])
+      expect(layersProblems(core)).toEqual(['@navecss/core layers.css differs'])
     })
   })
 })

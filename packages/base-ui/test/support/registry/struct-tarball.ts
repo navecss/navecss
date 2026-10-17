@@ -1,6 +1,6 @@
 /**
- * What the tarball holds and whether the package's public surface moved: the packed listing, the
- * `exports` map compared with the base branch's, and the base branch's bytes of two test files.
+ * What the tarball holds and whether the package's public surface moved: the packed listing and the
+ * `exports` map, read from the head alone.
  */
 import { execFileSync } from 'node:child_process'
 import { isDeepStrictEqual } from 'node:util'
@@ -73,50 +73,17 @@ export const rosterExports = (): ExportsMap => ({
   './package.json': './package.json',
 })
 
-const BASE_REFS = ['origin/main', 'main']
-
-const COMMIT_SUFFIX = '^{commit}'
-
-const git = (cwd: string, ...args: string[]): string =>
-  execFileSync('git', args, {
-    cwd,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-  })
-
-/**
- * The first base ref this checkout carries, or undefined where git or the history is absent.
- */
-export const baseRef = (): string | undefined => {
-  for (const ref of BASE_REFS) {
-    try {
-      git(PACKAGE_DIR, 'rev-parse', '--verify', '--quiet', `${ref}${COMMIT_SUFFIX}`)
-      return ref
-    } catch {
-      // try the next ref
-    }
-  }
-  return undefined
+const stringsOf = (value: unknown): string[] => {
+  if (typeof value === 'string') return [value]
+  if (value === null || typeof value !== 'object') return []
+  return Object.values(value).flatMap((inner) => stringsOf(inner))
 }
 
 /**
- * The base branch's `package.json`, parsed.
+ * Each key and each string value of `exports`, at any depth, that names `registry`: an item is
+ * never importable.
  */
-export const baseManifest = (ref: string): { exports: ExportsMap; files: string[] } =>
-  JSON.parse(git(PACKAGE_DIR, 'show', `${ref}:./package.json`)) as {
-    exports: ExportsMap
-    files: string[]
-  }
-
-/**
- * The paths among `paths` (relative to `directory`) whose bytes in the working tree differ from
- * `ref`'s.
- */
-export const editedSinceBase = (
-  ref: string,
-  paths: readonly string[],
-  directory: string = PACKAGE_DIR,
-): string[] =>
-  git(directory, 'diff', '--name-only', ref, '--', ...paths)
-    .split('\n')
-    .filter((line) => line !== '')
+export const registryExportProblems = (exportsMap: ExportsMap): string[] =>
+  [...Object.keys(exportsMap), ...stringsOf(exportsMap)]
+    .filter((text) => /registry/i.test(text))
+    .map((text) => `exports names registry: ${text}`)

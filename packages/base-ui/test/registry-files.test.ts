@@ -8,6 +8,13 @@ import { headerFor, parseNotice } from './support/registry/files-header.ts'
 import { type Problem, problemsAt, problemTexts } from './support/registry/files-problem.ts'
 import { packageSources } from './support/registry/files-sources.ts'
 import {
+  ANY_RULE,
+  hasExplicitAny,
+  NAMESPACE_RULE,
+  TYPES_REASON,
+  typesComment,
+} from './support/registry/files-types-comment.ts'
+import {
   cloneRegistry,
   type LoadedRegistry,
   loadRegistry,
@@ -31,6 +38,11 @@ const formProblems = (registry: LoadedRegistry): Problem[] =>
       ? [{ file: '(item)', item: `base-ui-${subpath}`, message: 'the registry has no such item' }]
       : itemFormProblems(item, subpath, NOTICE, packageSources(subpath))
   })
+
+const target = (subpath: string): string => `components/nave/nave-${subpath}.parts.ts`
+
+const reds = (clone: LoadedRegistry, subpath: string): string =>
+  problemsAt(formProblems(clone), `base-ui-${subpath}`, target(subpath)).join('\n')
 
 const fileOf = (item: RegistryItem, name: string): RegistryItem['files'][number] => {
   const file = item.files.find((candidate) => candidate.target.endsWith(`/${name}`))
@@ -134,6 +146,72 @@ describe('AC-base-ui-registry-10: each item has the five files, in order, each i
       (file): file is RegistryItem['files'][number] => file !== undefined,
     )
     expect(problemsAt(formProblems(reordered), 'base-ui-dialog', '(targets)')).not.toEqual([])
+  })
+
+  describe('the types comment, alone on the line after the directive', () => {
+    const withoutAny = styledSubpaths().find((s) => !hasExplicitAny(packageSources(s).generated))
+    const withAny = styledSubpaths().find((s) => hasExplicitAny(packageSources(s).generated))
+    it('is derived from the package modules: some have an explicit any and some do not', () => {
+      expect(withAny).toBeDefined()
+      expect(withoutAny).toBeDefined()
+      expect(TYPES_REASON.length).toBe(129)
+      expect(typesComment([NAMESPACE_RULE]).length).toBe(185)
+      expect(typesComment([NAMESPACE_RULE, ANY_RULE]).length).toBe(221)
+    })
+
+    it('reds a parts file without it, naming the line', () => {
+      const subpath = withoutAny ?? 'dialog'
+      const comment = typesComment([NAMESPACE_RULE])
+      const stripped = withContent(registry, subpath, `nave-${subpath}.parts.ts`, (content) =>
+        content.replace(`${comment}\n`, () => ''),
+      )
+      expect(reds(stripped, subpath)).toContain("the line after 'use client'")
+    })
+
+    it('reds an extra rule where the package module has no any, and a missing one where it has', () => {
+      const plain = withoutAny ?? 'dialog'
+      const extra = withContent(registry, plain, `nave-${plain}.parts.ts`, (content) =>
+        content.replace(typesComment([NAMESPACE_RULE]), () =>
+          typesComment([NAMESPACE_RULE, ANY_RULE]),
+        ),
+      )
+      expect(reds(extra, plain)).toContain("the line after 'use client'")
+      const typed = withAny ?? 'accordion'
+      const short = withContent(registry, typed, `nave-${typed}.parts.ts`, (content) =>
+        content.replace(typesComment([NAMESPACE_RULE, ANY_RULE]), () =>
+          typesComment([NAMESPACE_RULE]),
+        ),
+      )
+      expect(reds(short, typed)).toContain("the line after 'use client'")
+    })
+
+    it('reds a duplicated comment, and one moved below the imports', () => {
+      const subpath = withoutAny ?? 'dialog'
+      const comment = typesComment([NAMESPACE_RULE])
+      const twice = withContent(registry, subpath, `nave-${subpath}.parts.ts`, (content) =>
+        content.replace(`${comment}\n`, () => `${comment}\n${comment}\n`),
+      )
+      expect(reds(twice, subpath)).toContain('2 eslint-disable comments')
+      const moved = withContent(registry, subpath, `nave-${subpath}.parts.ts`, (content) =>
+        content
+          .replace(`${comment}\n`, () => '')
+          .replace(/\n\n/, (blank) => `\n${comment}${blank}`),
+      )
+      expect(reds(moved, subpath)).toContain("the line after 'use client'")
+    })
+
+    it('reds a changed reason and a comment that shares its line with another statement', () => {
+      const subpath = withoutAny ?? 'dialog'
+      const comment = typesComment([NAMESPACE_RULE])
+      const reworded = withContent(registry, subpath, `nave-${subpath}.parts.ts`, (content) =>
+        content.replace(comment, () => comment.replace('compiles here', 'compiles there')),
+      )
+      expect(reds(reworded, subpath)).toContain("the line after 'use client'")
+      const joined = withContent(registry, subpath, `nave-${subpath}.parts.ts`, (content) =>
+        content.replace(`${comment}\n`, () => `${comment} `),
+      )
+      expect(reds(joined, subpath)).toContain("the line after 'use client'")
+    })
   })
 
   it('reds a suppression comment, and lets the cleared outline comment through', () => {

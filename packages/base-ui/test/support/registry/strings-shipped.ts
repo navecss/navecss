@@ -1,7 +1,7 @@
 /**
  * The checks for the sentences the registry makes false: the CLI's source, the repository's
  * guidance and docs pages, and two ADRs. Each check takes the files as one record, so the same
- * check runs over the tree and over the base branch's copies.
+ * check runs over the tree and over the base release's lines, held as literals.
  */
 import {
   createSourceFile,
@@ -15,6 +15,15 @@ import {
 } from 'typescript'
 
 import { cleared } from './cleared.ts'
+import {
+  BASE_ADR_0003,
+  BASE_ADR_0010,
+  BASE_CLAUDE,
+  BASE_CLI,
+  BASE_CORE_LAYERS,
+  BASE_DOCS_INDEX,
+  BASE_TECH_INDEX,
+} from './strings-literals-shipped.ts'
 import { sectionOf } from './strings-text.ts'
 
 export const SHIPPED_PATHS = {
@@ -30,7 +39,7 @@ export const SHIPPED_PATHS = {
 export type ShippedFiles = Readonly<Record<keyof typeof SHIPPED_PATHS, string>>
 
 /**
- * Every file the criterion reads, through one reader (the tree's or the base branch's).
+ * Every file the criterion reads, through one reader.
  */
 export const shippedFilesFrom = (read: (repoPath: string) => string): ShippedFiles =>
   Object.fromEntries(
@@ -78,8 +87,8 @@ export const helpLinesOf = (source: string): string[] => {
 
 const linesOf = (text: string): string[] => text.split('\n')
 
-export const cliHeaderProblems = ({ cli }: ShippedFiles, base: ShippedFiles): string[] => {
-  const baseLines = linesOf(base.cli)
+export const cliHeaderProblems = ({ cli }: ShippedFiles): string[] => {
+  const baseLines = BASE_CLI.split('\n')
   const expected = [...baseLines.slice(0, 3), cleared('C-doc'), baseLines[5]].join('\n')
   return cli.startsWith(`${expected}\n`)
     ? []
@@ -200,38 +209,49 @@ export const adr0003Problems = ({ adr0003 }: ShippedFiles): string[] => {
   return problems
 }
 
-const ORDER_STATEMENT = /^@layer tokens\.defaults, .*;$/m
+const NAVE_LAYERS = [
+  'tokens.defaults',
+  'tokens.presets',
+  'reset',
+  'atomic',
+  'components.nave',
+  'components.consumer',
+  'overrides',
+]
+
+const NAVE_STATEMENT = `@layer ${NAVE_LAYERS.join(', ')};`
+
+const ORDER_STATEMENT = /^@layer tokens\.defaults, .*;$/gm
 
 const layerNamesOf = (adr: string): string[] =>
   linesOf(sectionOf(adr, '## Decision') ?? '')
     .map((line) => /^\| `([\w.]+)`\s*\|/.exec(line)?.[1])
     .filter((name): name is string => name !== undefined)
 
-export const layersUnchangedProblems = (files: ShippedFiles, base: ShippedFiles): string[] => {
+export const layersProblems = ({ adr0003, coreLayers }: ShippedFiles): string[] => {
   const problems: string[] = []
-  const statement = ORDER_STATEMENT.exec(base.adr0003)?.[0]
-  if (statement === undefined) return ['the base ADR 0003 has no order statement']
-  if (ORDER_STATEMENT.exec(files.adr0003)?.[0] !== statement) {
+  const statements = adr0003.match(ORDER_STATEMENT) ?? []
+  if (statements.length === 0) problems.push('ADR 0003 has no order statement')
+  if (statements.some((statement) => statement !== NAVE_STATEMENT)) {
     problems.push('ADR 0003 states a different order')
   }
-  const names = layerNamesOf(base.adr0003)
-  if (names.length === 0) problems.push('the base ADR 0003 has no layer table')
-  if (layerNamesOf(files.adr0003).join(',') !== names.join(',')) {
-    problems.push('ADR 0003 names the layers differently')
+  if (layerNamesOf(adr0003).join(',') !== NAVE_LAYERS.join(',')) {
+    problems.push('ADR 0003 names the layers differently from the seven, in order')
   }
-  if (files.coreLayers !== base.coreLayers) problems.push('@navecss/core layers.css differs')
+  const coreStatement = coreLayers.replaceAll(/\/\*[\s\S]*?\*\//g, '').trim()
+  if (coreStatement !== NAVE_STATEMENT) problems.push('@navecss/core layers.css differs')
   return problems
 }
 
 /**
  * Every check of the criterion, by the clause it holds. `redsAtBase` marks the ones whose line
- * stands differently at the base branch, so the control can feed them the base's files.
+ * stands differently at the base release, so the control can feed them `BASE_SHIPPED`.
  */
 export const SHIPPED_CHECKS: Readonly<
   Record<
     string,
     {
-      readonly check: (files: ShippedFiles, base: ShippedFiles) => string[]
+      readonly check: (files: ShippedFiles) => string[]
       readonly redsAtBase: boolean
     }
   >
@@ -255,5 +275,21 @@ export const SHIPPED_CHECKS: Readonly<
     check: adr0003Problems,
     redsAtBase: true,
   },
-  'the layer order and names are unchanged': { check: layersUnchangedProblems, redsAtBase: false },
+  "the layer order and names are Nave's seven in order": {
+    check: layersProblems,
+    redsAtBase: false,
+  },
+}
+
+/**
+ * The same files as the base release (`e3f7c153`) had them, from the literals the controls hold.
+ */
+export const BASE_SHIPPED: ShippedFiles = {
+  adr0003: BASE_ADR_0003,
+  adr0010: BASE_ADR_0010,
+  claude: BASE_CLAUDE,
+  cli: BASE_CLI,
+  coreLayers: BASE_CORE_LAYERS,
+  docsIndex: BASE_DOCS_INDEX,
+  techIndex: BASE_TECH_INDEX,
 }

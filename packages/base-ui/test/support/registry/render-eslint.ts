@@ -65,3 +65,61 @@ export const withDisableComment = (item: RegistryItem, comment: string): Registr
   entry.content = `${comment}\n${entry.content}`
   return planted
 }
+
+/**
+ * The item with its parts file's content changed by `change`.
+ */
+export const withPartsFile = (
+  item: RegistryItem,
+  change: (text: string) => string,
+): RegistryItem => {
+  const planted = structuredClone(item)
+  const parts = planted.files.find((file) => file.target.endsWith('.parts.ts'))
+  if (parts?.content === undefined) throw new Error(`${item.name}: the item has no parts file`)
+  const changed = change(parts.content)
+  if (changed === parts.content)
+    throw new Error(`${item.name}: the change left the parts file as it was`)
+  parts.content = changed
+  return planted
+}
+
+export const REASON =
+  'the types keep the names and generic defaults @navecss/base-ui exports, so code typed against the package compiles here unchanged'
+export const REASON_SHA256 = '539ec6e43ca57e876d824733050da0cd7acf4511facef012011c326ac6a5a2c1'
+export const TYPES_RULES = ['@typescript-eslint/no-namespace', '@typescript-eslint/no-explicit-any']
+const TYPES_COMMENT = /^\/\* eslint-disable (\S+(?:, \S+)*) -- (.*) \*\/$/
+
+const countOf = (text: string | undefined): number => (text?.match(/eslint-disable/g) ?? []).length
+
+const commentLineProblems = (item: RegistryItem, lines: readonly string[]): string[] => {
+  const at = lines.indexOf("'use client'")
+  const match = TYPES_COMMENT.exec(lines[at + 1] ?? '')
+  if (at === -1 || match === null) return [`${item.name}: no lint comment after 'use client'`]
+  const rules = match[1]?.split(', ') ?? []
+  return [
+    ...(match[2] === REASON ? [] : [`${item.name}: the reason differs`]),
+    ...(rules[0] === TYPES_RULES[0] && rules.every((rule) => TYPES_RULES.includes(rule))
+      ? []
+      : [`${item.name}: rules are ${rules.join(', ')}`]),
+    ...(new Set(rules).size === rules.length ? [] : [`${item.name}: a rule is named twice`]),
+  ]
+}
+
+/**
+ * What is wrong with an item's lint comments: the parts file's comment must follow `'use client'`
+ * directly, name only the two rules (no-namespace first, none twice) with the reason, and be the only
+ * `eslint-disable` of the item's files.
+ */
+export const typesCommentProblems = (item: RegistryItem): string[] => {
+  const parts = item.files.find((file) => file.target.endsWith('.parts.ts'))
+  return [
+    ...commentLineProblems(item, (parts?.content ?? '').split('\n')),
+    ...item.files.flatMap((file) => {
+      const expected = file === parts ? 1 : 0
+      const count = countOf(file.content)
+      return count === expected
+        ? []
+        : [`${file.target}: ${count} eslint-disable, expected ${expected}`]
+    }),
+  ]
+}

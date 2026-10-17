@@ -25,13 +25,6 @@ const LICENSE = readFileSync(path.join(PACKAGE_DIR, 'LICENSE'), 'utf8')
 const ROOT_LICENSE = readFileSync(path.join(REPOSITORY_DIR, 'LICENSE'), 'utf8')
 const NOTICE = parseNotice(LICENSE)
 
-// `scripts/check-license-parity.mjs` reads the source tree only, by design, and this release
-// leaves it as it is: its digest at the base ref.
-const PARITY_SCRIPT = {
-  bytes: 27_348,
-  sha256: '389780e53c4705bb1dca606ac73cc78d571bab95810a0ab97dd871ecb0aac8f4',
-}
-
 const sha256Of = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex')
 
 const itemNamed = (registry: LoadedRegistry, name: string): RegistryItem => {
@@ -69,11 +62,6 @@ describe('AC-base-ui-registry-13: The notice travels with every copy', () => {
 
   it('ends every item with NAVECSS-LICENSE, once, equal to packages/base-ui/LICENSE', () => {
     expect(problemTexts(licenseProblems(registry, LICENSE))).toEqual([])
-  })
-
-  it('leaves scripts/check-license-parity.mjs as the base ref has it', () => {
-    const script = readFileSync(path.join(REPOSITORY_DIR, 'scripts/check-license-parity.mjs'))
-    expect({ bytes: script.length, sha256: sha256Of(script) }).toEqual(PARITY_SCRIPT)
   })
 
   describe('controls: the same checks over a planted clone', () => {

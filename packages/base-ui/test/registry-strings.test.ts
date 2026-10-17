@@ -17,7 +17,7 @@ import {
   type ManifestFacts,
   templateProblems,
 } from './support/registry/strings-templates.ts'
-import { readHead } from './support/registry/strings-text.ts'
+import { itemsOf, readHead } from './support/registry/strings-text.ts'
 import {
   copiedCommentStrings,
   cssCommentTexts,
@@ -222,6 +222,28 @@ describe('AC-base-ui-registry-17: registry-facing strings are the cleared templa
       expect(copiedCommentStrings(loaded).length).toBeGreaterThan(0)
       expect(strings.length).toBeGreaterThan(loaded.items.size)
       expect(tripwireOverRegistry(loaded)).toEqual([])
+    })
+
+    it('reads the lint comment of every parts file among the comments it runs over, and it passes', () => {
+      const reason =
+        'the types keep the names and generic defaults @navecss/base-ui exports, so code typed against the package compiles here unchanged'
+      const loaded = registry()
+      const comments = copiedCommentStrings(loaded)
+      const parts = itemsOf(loaded).flatMap((item) =>
+        item.files.filter((file) => file.target.endsWith('.parts.ts')).map(() => item.name),
+      )
+      expect(parts.length).toBeGreaterThan(0)
+      for (const name of parts) {
+        const lint = comments.filter(
+          ({ label, text }) =>
+            label.startsWith(`${name} `) &&
+            label.includes('.parts.ts') &&
+            text.startsWith('eslint-disable @typescript-eslint/no-namespace') &&
+            text.endsWith(`-- ${reason}`),
+        )
+        expect(lint, name).toHaveLength(1)
+        expect(tripwireProblems(lint)).toEqual([])
+      }
     })
 
     it('passes the README section, the ladder step, and the CLI lines as the repository has them', () => {

@@ -12,6 +12,7 @@ import type { RegistryItem } from './load.ts'
 import { cleared } from './cleared.ts'
 import { headerFor, type Notice } from './files-header.ts'
 import { foldWhitespace, localNameByClass, type PackageSources } from './files-sources.ts'
+import { typesComment, typesRules } from './files-types-comment.ts'
 
 export const TARGET_DIR = 'components/nave/'
 
@@ -131,6 +132,7 @@ const copyOutline = (body: string, subpath: string): { missingImport: boolean; t
   const withoutImport = body.replace(importLine, '')
   const text = withoutImport
     .replace(/^\s*'use client'\n/, '')
+    .replace(/^\/\* eslint-disable [^\n]*\*\/\n/, '')
     .replaceAll(STYLES_EXPRESSION, (expression) =>
       markedClasses(
         expression
@@ -154,6 +156,30 @@ const allowedImports = (subpath: string, sources: PackageSources): Set<string> =
     `./nave-${subpath}.wrap`,
   ])
 
+/**
+ * The lint comment sits alone on the line after `'use client'`, names exactly the rules the file
+ * needs, and is the only `eslint-disable` in the file.
+ */
+const typesCommentProblems = (
+  body: string,
+  at: Omit<Problem, 'message'>,
+  sources: PackageSources,
+): Problem[] => {
+  const expected = typesComment(typesRules(sources.generated))
+  const problems: Problem[] = []
+  if (!body.startsWith(`'use client'\n${expected}\n`)) {
+    problems.push({
+      ...at,
+      message: `the line after 'use client' is not exactly ${expected}`,
+    })
+  }
+  const count = body.split('eslint-disable').length - 1
+  if (count !== 1) {
+    problems.push({ ...at, message: `has ${count} eslint-disable comments, not one` })
+  }
+  return problems
+}
+
 const partsProblems = (
   item: RegistryItem,
   subpath: string,
@@ -169,6 +195,7 @@ const partsProblems = (
   if (!body.startsWith("'use client'")) {
     problems.push({ ...at, message: "'use client' is not the first statement after the header" })
   }
+  problems.push(...typesCommentProblems(body, at, sources))
   if (content.includes('nave-base-ui-')) {
     problems.push({ ...at, message: 'a class is still spelt as a nave-base-ui- string' })
   }
@@ -210,14 +237,20 @@ const COMMENT_FORMS: readonly RegExp[] = [/eslint-disable/, /@ts-/, /stylelint-d
 /**
  * No file carries a lint or type-check suppression, other than the one cleared outline comment.
  */
-const suppressionProblems = (item: RegistryItem): Problem[] => {
+const suppressionProblems = (
+  item: RegistryItem,
+  subpath: string,
+  sources: PackageSources,
+): Problem[] => {
   const outline = cleared('W-outline')
+  const types = typesComment(typesRules(sources.generated))
   return item.files.flatMap((file) => {
-    const rest = (file.content ?? '').replaceAll(outline, '')
+    const allowed = file.target.endsWith(`nave-${subpath}.parts.ts`) ? [outline, types] : [outline]
+    const rest = allowed.reduce((text, comment) => text.replaceAll(comment, ''), file.content ?? '')
     return COMMENT_FORMS.filter((form) => form.test(rest)).map((form) => ({
       file: file.target,
       item: item.name,
-      message: `carries a ${form.source} comment other than the cleared outline comment`,
+      message: `carries a ${form.source} comment other than the cleared outline and types comments`,
     }))
   })
 }
@@ -235,5 +268,5 @@ export const itemFormProblems = (
   ...entryProblems(item, subpath, notice, sources),
   ...partsProblems(item, subpath, notice, sources),
   ...wrapProblems(item, subpath, notice, sources),
-  ...suppressionProblems(item),
+  ...suppressionProblems(item, subpath, sources),
 ]

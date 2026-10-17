@@ -14,7 +14,9 @@ const tokensOf = (value: string | undefined): string[] => (value ?? '').split(' 
 const hasValue = (value: string | undefined): boolean => value !== undefined && value !== ''
 
 /**
- * What is wrong with one element's class tokens in a copy, given the atom each class token stands for.
+ * What is wrong with one element's class tokens in a copy, given the atom each class token stands
+ * for. A class Base UI puts on the element itself is on both sides as it is; every other token of the
+ * copy stands for one atom, and those atoms are the package element's, in order.
  */
 const classProblems = (
   where: string,
@@ -23,17 +25,27 @@ const classProblems = (
   atomOfToken: ReadonlyMap<string, string>,
 ): string[] => {
   const copyTokens = hasValue(copyClass) ? tokensOf(copyClass) : []
-  const expected = tokensOf(packageClass).filter((token) => token.startsWith(PACKAGE_PREFIX))
+  const packageTokens = hasValue(packageClass) ? tokensOf(packageClass) : []
+  const baseUi = packageTokens.filter((token) => !token.startsWith(PACKAGE_PREFIX))
+  const expected = packageTokens.filter((token) => token.startsWith(PACKAGE_PREFIX))
+  const own = copyTokens.filter((token) => !atomOfToken.has(token))
   const problems = copyTokens.flatMap((token) => {
     if (token === '') return [`${where}: an empty class token`]
     if (token === 'undefined') return [`${where}: the class token "undefined"`]
-    return atomOfToken.has(token) ? [] : [`${where}: class token "${token}" stands for no atom`]
+    return atomOfToken.has(token) || baseUi.includes(token)
+      ? []
+      : [`${where}: class token "${token}" stands for no atom`]
   })
   if (problems.length > 0) return problems
-  const atoms = copyTokens.map((token) => atomOfToken.get(token))
-  return atoms.length === expected.length && atoms.every((atom, index) => atom === expected[index])
+  const atoms = copyTokens.flatMap((token) => atomOfToken.get(token) ?? [])
+  const areAtomsEqual =
+    atoms.length === expected.length && atoms.every((atom, index) => atom === expected[index])
+  const arePassedThrough = own.join(' ') === baseUi.join(' ')
+  return areAtomsEqual && arePassedThrough
     ? []
-    : [`${where}: classes are atoms [${atoms.join(' ')}], the package has [${expected.join(' ')}]`]
+    : [
+        `${where}: classes are atoms [${atoms.join(' ')}] and [${own.join(' ')}], the package has [${expected.join(' ')}] and [${baseUi.join(' ')}]`,
+      ]
 }
 
 const attributeProblems = (

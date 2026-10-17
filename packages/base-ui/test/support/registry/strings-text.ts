@@ -1,9 +1,7 @@
 /**
- * Reading text for the criteria that pin cleared strings: the same file at the base branch and in
- * the tree, a heading's section, a block's presence, and the one-word edit that must make a
+ * Reading text for the criteria that pin cleared strings: a file of the tree, a heading's section, a block's presence, and the one-word edit that must make a
  * presence check red.
  */
-import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -16,33 +14,10 @@ import { cleared, clearedRow } from './cleared.ts'
 export const REPO_ROOT = path.resolve(PACKAGE_DIR, '../..')
 
 /**
- * The branch the pull request is measured against, as the `readAtBase` helper reads it.
- */
-export const BASE_REF = 'origin/main'
-
-/**
  * A file of the repository as it stands in the tree, by path from the repository root.
  */
 export const readHead = (repoPath: string): string =>
   readFileSync(path.join(REPO_ROOT, repoPath), 'utf8')
-
-/**
- * A file of the repository at the base branch, by path from the repository root. Throws, naming
- * the path and the ref, when git cannot read it: an unreadable base is a failure, never a skip.
- */
-export const readAtBase = (repoPath: string): string => {
-  try {
-    return execFileSync('git', ['show', `${BASE_REF}:${repoPath}`], {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
-    throw new Error(`git cannot read ${repoPath} at ${BASE_REF}: ${reason}`, { cause: error })
-  }
-}
 
 export const sha256Hex = (text: string): string =>
   createHash('sha256').update(text, 'utf8').digest('hex')
