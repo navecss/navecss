@@ -42,7 +42,8 @@ const ADMITTED = [
  * The shipped policy with `admitsPackages` replaced by `rows` (removed when `undefined`).
  */
 function policyWith(rows) {
-  const { admitsPackages: _removed, ...rest } = SHIPPED_POLICY
+  const rest = { ...SHIPPED_POLICY }
+  delete rest.admitsPackages
   return rows === undefined ? rest : { ...rest, admitsPackages: rows }
 }
 
@@ -81,7 +82,7 @@ test('the list admits no licence as an identifier', () => {
   const policy = policyWith(ROWS)
   assert.equal(classifyBucketB(LGPL, policy, 'some-other-package').allowed, false)
   assert.equal(classifyBucketB('CC-BY-4.0', policy, 'some-other-package').allowed, false)
-  assert.ok(!policy.prodPermissive.some((entry) => entry.id === LGPL || entry.id === 'CC-BY-4.0'))
+  assert.ok(policy.prodPermissive.every((entry) => entry.id !== LGPL && entry.id !== 'CC-BY-4.0'))
 })
 
 test('a use-restricting licence is refused even for a listed name', () => {
