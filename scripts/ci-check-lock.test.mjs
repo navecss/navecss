@@ -671,6 +671,10 @@ release()
 
 const ROUNDS = 8
 const WAITERS = 4
+// The pid the stale lock names, which every waiter is told is dead. It must be one no waiter can
+// be given, or a waiter holding the lock under it is judged dead and taken over: the largest
+// pid_t, above the most any system hands out (2^22 on Linux, 99999 on macOS).
+const DEAD_PID = 2 ** 31 - 1
 
 test('four waiters racing a freshly stale lock take it one at a time, eight times over', async () => {
   const { dir, lockPath } = freshLock()
@@ -679,16 +683,20 @@ test('four waiters racing a freshly stale lock take it one at a time, eight time
   for (let round = 0; round < ROUNDS; round += 1) {
     const logPath = path.join(dir, `log-${round}.txt`)
     writeFileSync(logPath, '')
-    leaveLock(lockPath, JSON.stringify({ cwd: '/work/dead', pid: 4242, startedAt: 1 }))
+    leaveLock(lockPath, JSON.stringify({ cwd: '/work/dead', pid: DEAD_PID, startedAt: 1 }))
     const startAt = String(Date.now() + 400)
 
     const exits = Array.from(
       { length: WAITERS },
       () =>
         new Promise((resolve) => {
-          const child = spawn(process.execPath, [script, lockPath, logPath, '4242', startAt], {
-            stdio: 'inherit',
-          })
+          const child = spawn(
+            process.execPath,
+            [script, lockPath, logPath, String(DEAD_PID), startAt],
+            {
+              stdio: 'inherit',
+            },
+          )
           child.on('close', resolve)
         }),
     )
