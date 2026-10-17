@@ -643,10 +643,12 @@ export default defineConfig([
   },
 
   // ── Four suites that simulate a build mode by assigning NODE_ENV themselves and restoring it
-  // afterwards; the variable is a value the test sets, not an input the build reads from the
+  // afterwards, and the Astro helper that switches Astro's telemetry off for the builds and servers
+  // it starts; each variable is a value the test sets, not an input the build reads from the
   // environment, so turbo has nothing to hash for it ───────────────────────────────────────────
   {
     files: [
+      'packages/core/test/helpers/astro-build.ts',
       'packages/core/test/browser/driven/vite-used-atoms-inline.browser.test.ts',
       'packages/core/test/vite-used-atoms-collect-reach.test.ts',
       'packages/core/test/vite-used-atoms-frameworks.test.ts',

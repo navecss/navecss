@@ -1,8 +1,11 @@
 /**
- * The emitted set: the atoms the build ships, fixed when the first client stylesheet holding the
- * atomic layer is handed back to Vite. It is the atoms every environment has read, `keep`, every
- * `keepFor` list, and, when a server invocation ran first, the set it left in the cache directory,
- * closed under the one pair of atoms where one restores what the other removes.
+ * The emitted set: the atoms the build ships, fixed when the first stylesheet holding the atomic
+ * layer is handed back to Vite, by the environment that writes it (a client environment, or, where
+ * the server build writes the CSS first as Astro's does, a server one). It is the atoms every
+ * environment has read so far, `keep`, every `keepFor` list, and, when a server invocation ran
+ * first, the set it left in the cache directory, closed under the one pair of atoms where one
+ * restores what the other removes. An environment that writes after the first fixes a set of its
+ * own the same way.
  */
 import type { Handshake, PackageRecord } from './vite-handshake.ts'
 import type { EnvironmentLike, RenderContext } from './vite-types.ts'
@@ -11,6 +14,7 @@ import type { UsedContext } from './vite-used.ts'
 import { handshakePath, readHandshake, writeHandshake } from './vite-handshake.ts'
 import { compareText } from './vite-problems.ts'
 import { collectedAtoms, recordsOf, withRestorers } from './vite-state.ts'
+import { hasStylesheet } from './vite-writers.ts'
 
 /**
  * Where a call the build could not read is: `path:line:column`, or the path alone when no source
@@ -61,8 +65,27 @@ function takenFromCache(context: UsedContext): { atoms: readonly string[]; took:
 }
 
 /**
- * The emitted set. A client environment fixes it (and writes the cache file); any other
- * environment reads what is known so far and fixes nothing.
+ * Whether the stylesheets `environment` writes are the plugin's to filter. A client environment
+ * writes the page's, unless a server environment wrote the first stylesheet and this one has none
+ * of its own (Astro's browser build writes no CSS). A server environment writes them too when one
+ * process builds every environment and it asks for assets, unless a client environment has already
+ * written the first stylesheet holding the layer: a server environment after that reads its atoms
+ * too late and is checked instead.
+ */
+export function canWriteStylesheets(context: UsedContext, environment: EnvironmentLike): boolean {
+  const { state } = context
+  if (environment.config.consumer === 'client')
+    return state.firstWriter !== 'server' || hasStylesheet(state, environment.name)
+  if (!context.inProcess || state.firstWriter === 'client') return false
+  return environment.config.build?.emitAssets === true
+}
+
+/**
+ * The set `environment` filters its stylesheets with. It is fixed the first time it is asked
+ * for, when the environment renders its first chunk, from every atom read up to then, by its
+ * own modules and by every environment built before it. The first environment to write fixes
+ * `emitted`; a client environment also writes the cache file a server invocation that follows it
+ * is checked against.
  */
 export function emittedSet(
   context: UsedContext,
@@ -70,18 +93,23 @@ export function emittedSet(
   warn?: (message: string) => void,
 ): ReadonlySet<string> {
   const { state } = context
-  if (state.emitted) return state.emitted
+  const known = state.fixed.get(environment.name)
+  if (known) return known
   const atoms = collectedAtoms(state, context.kept)
-  if (environment.config.consumer !== 'client') return atoms
   const taken = takenFromCache(context)
   for (const atom of taken.atoms) atoms.add(atom)
   withRestorers(atoms)
-  state.emitted = atoms
+  state.fixed.set(environment.name, atoms)
+  if (state.emitted === undefined) {
+    state.emitted = atoms
+    state.emittedBy = environment.name
+    state.firstWriter = environment.config.consumer === 'client' ? 'client' : 'server'
+  }
   writeHandshake(
     context.cacheDir,
     {
       emitted: [...atoms],
-      writer: 'client',
+      writer: environment.config.consumer === 'client' ? 'client' : environment.name,
       consumed: taken.took,
       keepFor: packageRecords(context),
       unmatchedKeepFor: unmatchedKeys(context),

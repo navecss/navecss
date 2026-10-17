@@ -7,6 +7,8 @@
  */
 import type { ResolvedServerImport, ServerImport } from './vite-server-takes.ts'
 import type {
+  BundleContext,
+  BundleEntry,
   RenderContext,
   TransformContext,
   TransformMeta,
@@ -15,6 +17,7 @@ import type {
 import type { LocatedProblem } from './vite-used-report.ts'
 import type { UsedContext } from './vite-used.ts'
 
+import { checkBundle } from './vite-bundle.ts'
 import { isMentioningAtoms, recordModule } from './vite-collect-module.ts'
 import { failDevModule, problemsOf } from './vite-collect-problems.ts'
 import { isStylesheetId } from './vite-css-id.ts'
@@ -46,6 +49,7 @@ import { noteClientEnded, noteServerExternals } from './vite-untransformed.ts'
 import { isSecondHop, withoutRemoved } from './vite-used-package-lines.ts'
 import { buildReport } from './vite-used-report.ts'
 import { isUsed, ownAtomNames } from './vite-used.ts'
+import { forgetWriters } from './vite-writers.ts'
 
 /**
  * Where a Vite project writes the options, as the report's remedy lines name it.
@@ -69,6 +73,10 @@ export interface NaveCollectPlugin {
   readonly transformIndexHtml: HtmlHook
   buildStart(this: RenderContext): Promise<void>
   buildEnd(this: RenderContext, error?: unknown): Promise<void>
+  readonly generateBundle: {
+    handler(this: BundleContext, options: unknown, bundle: Record<string, BundleEntry>): void
+    readonly order: 'pre'
+  }
 }
 
 /**
@@ -196,9 +204,13 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
       // list that names one is judged now. A rebuild in watch mode fixes its emitted set again.
       assertOptions(context.options, await ownAtomNames(context))
       forgetDeclared(context.state, this.environment.name)
-      if (this.environment.config.consumer !== 'client') return
-      context.state.emitted = undefined
-      context.state.clientEnded = false
+      if (this.environment.config.consumer === 'client') context.state.clientEnded = false
+      // Only the environment that fixed the set forgets it: in one process, a client environment
+      // that starts after a server one wrote the first stylesheet leaves that set standing.
+      const isWriter = context.inProcess
+        ? context.state.emittedBy === this.environment.name
+        : this.environment.config.consumer === 'client'
+      if (isWriter) forgetWriters(context.state)
     },
 
     async transform(code, id, meta) {
@@ -218,6 +230,13 @@ export function createCollectPlugin(context: UsedContext): NaveCollectPlugin {
         if (filename === undefined || !isMentioningAtoms(html)) return
         context.state.pages.set(filename, atomsWrittenIn(html))
         if (context.command === 'serve') devServing.notePages(context)
+      },
+    },
+
+    generateBundle: {
+      order: 'pre',
+      handler(options, bundle) {
+        checkBundle(this, context, { bundle, options, pass: 'pre' })
       },
     },
 
