@@ -181,6 +181,35 @@ export function findPolicyShapeViolation(policy) {
       'string, so every pattern must be one.'
     )
   }
+  return findAdmitsPackagesViolation(policy.admitsPackages)
+}
+
+/**
+ * The shape violation in `admitsPackages`, the per-package list of bucket B, or `null` when the
+ * key is absent or well-formed. Each row is `{ package, license, bucket: "B" }`: a package
+ * admitted by name and exact licence string, for a package a consumer installs and never one
+ * that is bundled. A list this gate cannot read is a stop, never an empty list, and a row
+ * listed twice is refused so a copy-paste cannot widen what one signature admitted.
+ */
+function findAdmitsPackagesViolation(rows) {
+  if (rows === undefined) return null
+  if (!Array.isArray(rows)) {
+    return '"admitsPackages" is not an array; it must be an array of { package, license, bucket } rows.'
+  }
+  const seen = new Set()
+  for (const [index, row] of rows.entries()) {
+    const where = `"admitsPackages" index ${index} (${JSON.stringify(row)})`
+    const isText = (value) => typeof value === 'string' && value !== '' && value === value.trim()
+    if (row === null || typeof row !== 'object' || !isText(row.package) || !isText(row.license)) {
+      return `${where} must be an object with a non-empty, trimmed "package" and "license" string.`
+    }
+    if (row.bucket !== 'B') {
+      return `${where} must carry "bucket": "B": a package is admitted by name for bucket B only, never for a bundled one.`
+    }
+    const key = `${row.package}\u0000${row.license}`
+    if (seen.has(key)) return `${where} repeats an earlier row.`
+    seen.add(key)
+  }
   return null
 }
 
@@ -268,12 +297,20 @@ export const BUCKET_B_UNDECIDABLE_REASON =
  * disjunction whose branches are all admitted needs no election rule at
  * all. Tier 3 (undecidable) refuses to classify and flags it for
  * licensing review, rather than approximating. Returns
- * `{ allowed, reason }`.
+ * `{ allowed, reason }`. `name` is the package's name, for the per-package list.
  */
-export function classifyBucketB(license, policy) {
+export function classifyBucketB(license, policy, name) {
   if (isAlwaysBlocked(license, policy)) {
     return { allowed: false, reason: 'source-available use-restricting licence' }
   }
+
+  // A package admitted by name AND its exact declared licence string (`admitsPackages`): a
+  // named list, not a pattern, and not a licence identifier. A relicence or a new string on the
+  // same name is not admitted, and the licence alone admits nothing else.
+  const isAdmittedByName = (policy.admitsPackages ?? []).some(
+    (row) => row.package === name && row.license === license,
+  )
+  if (isAdmittedByName) return { allowed: true, reason: 'admitted by name' }
 
   const decomposed = decomposeExpression(license)
   if (decomposed === null) {
@@ -721,7 +758,7 @@ export function main(rootDir = ROOT, listLicenses = runLicensesList) {
   const violations = []
 
   for (const pkg of prodPackages) {
-    const { allowed, reason } = classifyBucketB(pkg.license, policy)
+    const { allowed, reason } = classifyBucketB(pkg.license, policy, pkg.name)
     if (!allowed) violations.push({ ...pkg, bucket: 'B (prod)', reason })
   }
 
