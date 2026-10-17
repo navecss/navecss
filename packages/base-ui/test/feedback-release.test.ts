@@ -72,7 +72,8 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
     const pending = changesetsNaming(NAME)
     const changelog = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
 
-    it.runIf(pending.length > 0)(
+    // Only while a pending changeset names the seven: a later release's changeset is its own.
+    it.runIf(pending.some(({ text }) => hasTheSeven(text)))(
       'has every pending changeset that names @navecss/base-ui name it alone with bump minor, and exactly one of them name the seven components',
       () => {
         expect(changesetProblems(pending, NAME)).toEqual([])

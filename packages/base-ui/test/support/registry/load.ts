@@ -109,11 +109,11 @@ export const cloneRegistry = (registry: LoadedRegistry): LoadedRegistry => ({
 export const writeRegistry = (registry: LoadedRegistry, directory: string): void => {
   mkdirSync(directory, { recursive: true })
   for (const [name, item] of registry.items) {
-    writeFileSync(path.join(directory, `${name}.json`), `${JSON.stringify(item, null, 2)}\n`)
+    writeFileSync(path.join(directory, `${name}.json`), `${JSON.stringify(item, undefined, 2)}\n`)
   }
   writeFileSync(
     path.join(directory, 'registry.json'),
-    `${JSON.stringify(registry.index, null, 2)}\n`,
+    `${JSON.stringify(registry.index, undefined, 2)}\n`,
   )
 }
 

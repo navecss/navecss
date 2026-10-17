@@ -129,7 +129,9 @@ export const HEADER = {
   line1Sha256: 'adcef9d88762da9951c56d4d7b61235fb458f9d2bbc4516538e5a1b4d214aed4',
   line2: (year: string, holder: string): string =>
     `Copyright (c) ${year} ${holder}. From NaveCSS (https://github.com/navecss/navecss), under the MIT License; the full text is in NAVECSS-LICENSE.`,
-  /** The year and holder at the base ref, and the digest of the line they give. */
+  /**
+   * The year and holder at the base ref, and the digest of the line they give.
+   */
   line2At: {
     bytes: 148,
     holder: 'Nave Contributors',

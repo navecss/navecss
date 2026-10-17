@@ -33,10 +33,6 @@ const INSTALLED_ITEM = 'base-ui-dialog'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-const isMain =
-  process.argv[1] !== undefined &&
-  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
-
 export const servedUrl = (version, name) =>
   `https://cdn.jsdelivr.net/npm/${PACKAGE}@${version}/dist/registry/${name}`
 
@@ -178,6 +174,9 @@ export const main = async (argv = process.argv.slice(2)) => {
   }
 }
 
-if (isMain) {
+if (
+  process.argv[1] !== undefined &&
+  realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+) {
   process.exitCode = await main()
 }

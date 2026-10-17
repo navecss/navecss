@@ -26,7 +26,7 @@ export const componentSubpaths = (): string[] =>
   Object.keys(manifestOf().exports)
     .filter((key) => !NOT_A_SUBPATH.has(key))
     .map((key) => key.slice(2))
-    .toSorted((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .toSorted((a, b) => a.localeCompare(b, 'en'))
 
 /**
  * The subpaths whose generated module names at least one Nave class.
