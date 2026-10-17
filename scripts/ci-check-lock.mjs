@@ -104,7 +104,7 @@ function fingerprintOf(lockPath) {
 }
 
 /**
- * The inode and change time of the lock directory, to the nanosecond.
+ * The inode and change time of the lock directory, in nanoseconds (a file system may keep the time coarser).
  */
 function identityOf(lockPath) {
   const { ctimeNs, ino } = statSync(lockPath, { bigint: true })
