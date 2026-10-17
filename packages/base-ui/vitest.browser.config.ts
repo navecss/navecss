@@ -180,7 +180,10 @@ export default defineConfig({
         test: {
           name: 'current',
           include: ['test/browser/**/*.browser.test.ts'],
-          globalSetup: ['test/browser/support/consumer-app.global-setup.ts'],
+          globalSetup: [
+            'test/browser/support/consumer-app.global-setup.ts',
+            'test/browser/support/registry-consumer-app.global-setup.ts',
+          ],
           provide: { baseUi: installedVersion('@base-ui/react') },
           browser: browser(),
         },

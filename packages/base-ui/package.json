@@ -197,7 +197,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "node scripts/build-styles.ts && tsc -p tsconfig.build.json",
+    "build": "node scripts/build-styles.ts && node scripts/generate-registry.ts && tsc -p tsconfig.build.json",
     "generate": "node scripts/generate-wrappers.ts",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
