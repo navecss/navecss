@@ -90,9 +90,11 @@ the document sees. Every guarantee in this ADR is conditional on it. Nave cannot
 enforce it from inside its own stylesheets, because the failure is decided by
 bytes Nave does not write, so the obligation is stated to the consumer (below)
 and the means to meet it is shipped (decision 5). A component copied from the
-`@navecss/base-ui` registry meets it by itself: the first statement of each of its
-CSS Modules, after the two-line header, is Nave's order statement, so the copy
-registers the seven names in order even when its CSS reaches the page first.
+`@navecss/base-ui` registry carries the statement with it: the first statement of
+each of its CSS Modules, after the two-line header, is Nave's order statement, so
+a copy whose CSS reaches the page first registers the seven names in order. A
+consumer stylesheet that names one of the seven layers before any of Nave's CSS,
+a copy's included, still inverts the order.
 
 **3. The consumer's obligation: author into a named sublayer, with the standard
 `@layer` block.**

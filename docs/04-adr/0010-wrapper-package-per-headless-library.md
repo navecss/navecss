@@ -120,15 +120,15 @@ ships it: a team can copy one component's files into its project and change the 
 **How it is generated.** `scripts/generate-registry.ts` runs in the package build after the
 stylesheet is built, from the inputs the wrappers and the stylesheet are built from: the wrapper
 generator's output for each subpath, the role atoms expanded through the PostCSS adapter,
-`src/part.ts` and `LICENSE`. Nothing in the registry is written by hand, so a copy moves when the
-roster or an atom moves, and the package's tests hold a copy to the package: the same DOM, the
-same rules and the same computed styles.
+`src/part.ts` and `LICENSE`. Nothing in the registry is written by hand, so each release's items
+follow that release's roster and atoms, and the package's tests hold every item to the package:
+the same DOM, the same rules and the same computed styles.
 
-**What it is.** One shadcn registry item per styled subpath (35 at 0.2.0; Form styles no part and
+**What it is.** One shadcn registry item per styled subpath (35 components today; Form styles no part and
 has none). Every item is a universal item: each file is a `registry:file` with a plain
 `components/nave/` target, so shadcn's CLI installs it into a project with no Tailwind, no
 `components.json` and no `init`. An item has five files: the entry, the parts, the wrap helper, a
-CSS Module and the licence text. It names no dependency version and no other item.
+CSS Module and `NAVECSS-LICENSE`. It names no dependency version and no other item.
 
 **Where it is served.** Inside the package tarball under `dist/registry/`, reached by path from
 the installed package and, at an exact version, from jsDelivr
