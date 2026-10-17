@@ -207,12 +207,16 @@ const sampleOnce = (index: number, time: number): Frame => {
 
 /**
 Samples the popup in every animation frame from now on, each frame stamped with the animation
-frame's own time, which is the time its opacity is read at.
+frame's own time, which is the time its opacity is read at. `beforeSample`, when given, runs first
+in each frame, before the popup is read, and is told the frame's time and the index its sample
+will have: whatever it does (a stall of the page) lands in that frame ahead of the sample, by
+construction and not by the order two callbacks were registered in.
  */
-export const sampleFrames = (): Sampler => {
+export const sampleFrames = (beforeSample?: (time: number, index: number) => void): Sampler => {
   const frames: Frame[] = []
   let handle = 0
   const tick = (time: number): void => {
+    beforeSample?.(time, frames.length)
     frames.push(sampleOnce(frames.length, time))
     handle = requestAnimationFrame(tick)
   }

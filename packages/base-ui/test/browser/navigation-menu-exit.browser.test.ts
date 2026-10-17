@@ -12,11 +12,11 @@
  * the pointer leaving during the fade-in. Each shows no empty frame (the popup mounted at an
  * opacity above 0.01 with no painted child) and the popup removed within two frames of the frame
  * its exit starts. In the Escape cases focus is never on `<body>` and ends on the trigger. On open
- * the popup is at opacity 0 in its first sampled frame, its last sampled frame short of full opacity
- * falls within the fast duration plus 50ms, a frame at full opacity follows, and the fade it
- * declares is no longer than the fast duration plus 50ms: the declared length is what a stalled
- * page cannot move. With reduced motion switched on 30ms into the fade-in, then Escape, the popup
- * is removed within two frames and focus ends on the trigger.
+ * the popup is at opacity 0 in its first sampled frame, a frame reaches full opacity, its last
+ * sampled frame short of full opacity falls within the fast duration plus 50ms of the first frame
+ * past opacity 0.01, and the fade it declares is no longer than the fast duration plus 50ms: the
+ * declared length is what a stalled page cannot move. With reduced motion switched on 30ms into
+ * the fade-in, then Escape, the popup is removed within two frames and focus ends on the trigger.
  *
  * Two controls. The hazard reproduced: the fade-both-ways form with `transition-property: none`
  * injected 30ms into its exit stays mounted after 700ms at 1.3.0, 1.5.0 and 1.6.0. The empty-frame
@@ -27,9 +27,11 @@
  * popup has no transition, is removed within two frames on every Escape and is opaque in its first
  * painted frame.
  *
- * Two stall controls on the fade-in bound. A page that stalls for 90ms inside the frame the sampler
- * reads, ahead of it, must not make a correct 100ms fade fail; a 300ms fade that stalls the same
- * way must still fail, which only the declared length can see. Each checks that its stall ran.
+ * Three stall controls on the fade-in bound. A page that stalls for 90ms inside the frame the
+ * sampler reads, ahead of it, late in the fade, or for 80ms in the frame the popup mounts, must
+ * not make a correct 100ms fade fail; a 300ms fade that stalls the same way must still fail on its
+ * declared length. Each checks that its stall ran, and the two that wait for an opacity are
+ * skipped, not failed, when a slow page never showed a frame in the window they wait for.
  */
 
 import type { ReactNode } from 'react'
@@ -87,8 +89,9 @@ How long the two controls' fade runs, in place of the fast duration. The hazards
 exit cancelled while it runs, a panel emptied while it fades in) do not depend on the length of the
 transition, but each control must act while the transition is running, "30ms into" it. On a busy
 machine the act can come a few hundred milliseconds late, and at the fast duration (100ms) it then
-lands after the transition and proves nothing. Under the 700ms the strand control waits: 400ms
-leaves 300ms before that wait ends, so a form that did not strand is gone by then.
+lands after the transition and proves nothing. Under the 700ms the strand control waits, which
+starts 30ms into the exit: 400ms leaves about 330ms before the check, so a form that did not strand
+is gone by then.
  */
 const CONTROL_FADE_MS = 400
 
@@ -139,10 +142,15 @@ const declaredFadeMilliseconds = (popup: Element): number => {
 /**
  * The fade-in checks of the opacity row, shared with the stall controls: the declared fade length
  * is within `fast + 50`; opacity is 0 in the first sampled frame; a frame reaches full opacity;
- * and the last sampled frame short of full opacity is within `fast + 50` of the first. Each frame
- * is stamped with the time its opacity was read at, so a callback that runs late cannot make a
- * short frame look late. A stall between frames can still hide how long the fade took, because the
- * next sampled frame is already opaque; the declared length covers that, so it is checked first.
+ * and the last sampled frame short of full opacity is within `fast + 50` of the first frame past
+ * opacity 0.01, where the transition is visibly under way. Each frame is stamped with the time its
+ * opacity was read at, so a callback that runs late cannot make a short frame look late. A stall
+ * between frames can still hide how long the fade took, because the next sampled frame is already
+ * opaque; the declared length covers that, so it is checked first. Reading the span from the first
+ * visible frame instead of the first sampled one keeps a stall between the mount and the
+ * transition's first frame, which moves the fade itself, out of it. The cost is that the span is
+ * one frame shorter, so a fade that is not the declared transition can run about one frame past
+ * `fast + 50` and pass this check; the declared length is what holds that line.
  */
 const expectFadeIn = (frames: readonly Frame[], popup: Element, fast: number): void => {
   expect(declaredFadeMilliseconds(popup), 'the declared fade-in length').toBeLessThanOrEqual(
@@ -155,10 +163,11 @@ const expectFadeIn = (frames: readonly Frame[], popup: Element, fast: number): v
     mounted.find((frame) => frame.opacity >= 0.999),
     'a frame at full opacity',
   ).toBeDefined()
+  const started = mounted.find((frame) => frame.opacity > 0.01)
   const lastShort = mounted.findLast((frame) => frame.opacity < 0.999)
   expect(
-    lastShort!.time - first!.time,
-    'to the last frame short of full opacity',
+    lastShort!.time - started!.time,
+    'from the first frame under way to the last frame short of full opacity',
   ).toBeLessThanOrEqual(fast + 50)
 }
 
@@ -173,32 +182,76 @@ const blockFor = (milliseconds: number): void => {
 }
 
 /**
- * A stall, registered before the sampler so it runs ahead of it in the same animation frame: the
- * first frame in which the popup's computed opacity is above `above`, it blocks the page once for
- * `milliseconds`. `landedAt` is the opacity it blocked at, or `undefined` while it has not run.
+The popup's computed opacity, or 0 while it is not mounted.
+ */
+const popupOpacity = (): number => {
+  const popup = byTestId('popup')
+  return popup === undefined ? 0 : Number(getComputedStyle(popup).opacity)
+}
+
+/**
+ * Where a stall landed: the frame's time and the index its sample has, and the popup's opacity
+ * when the page blocked.
+ */
+interface Ran {
+  readonly frameIndex: number
+  readonly frameTime: number
+  readonly opacity: number
+}
+
+/**
+ * A stall that blocks the page once for `milliseconds`, in the first frame in which `isDue` holds.
+ * Its `beforeSample` goes to `sampleFrames`, which runs it first in each frame, so the stall always
+ * lands in the frame the sampler is about to read, ahead of the read. `ran` is where it landed, or
+ * `undefined` while it has not run.
  */
 const stallInFrame = (
   milliseconds: number,
-  above: number,
-): { readonly landedAt: () => number | undefined; readonly stop: () => void } => {
-  let landedAt: number | undefined
-  let handle = 0
-  const tick = (): void => {
-    const popup = byTestId('popup')
-    const opacity = popup === undefined ? 0 : Number(getComputedStyle(popup).opacity)
-    if (opacity > above) {
-      landedAt = opacity
-      blockFor(milliseconds)
-      return
-    }
-    handle = requestAnimationFrame(tick)
-  }
-  handle = requestAnimationFrame(tick)
+  isDue: () => boolean,
+): {
+  readonly beforeSample: (time: number, index: number) => void
+  readonly ran: () => Ran | undefined
+} => {
+  let ran: Ran | undefined
   return {
-    landedAt: () => landedAt,
-    stop: () => {
-      cancelAnimationFrame(handle)
+    beforeSample: (frameTime, frameIndex) => {
+      if (ran !== undefined || !isDue()) {
+        return
+      }
+      ran = { frameIndex, frameTime, opacity: popupOpacity() }
+      blockFor(milliseconds)
     },
+    ran: () => ran,
+  }
+}
+
+/**
+ * What the stall controls say when a slow page never showed a frame in the opacity window the
+ * stall waits for: the control tested nothing, which is not a failure.
+ */
+const MISSED_THE_FADE = 'a slow page showed no frame in the opacity window the stall waits for'
+
+/**
+ * The sample at the stall's index is the stall's own frame: the sampler read that frame after the
+ * stall ran, and not the frame that followed it.
+ */
+const expectSampledInStallFrame = (ran: Ran, frames: readonly Frame[]): void => {
+  expect(frames[ran.frameIndex]?.time, 'the sampler read the stall frame after it').toBe(
+    ran.frameTime,
+  )
+}
+
+/**
+ * The declared fade length of a scratch element in the document with the given inline style.
+ */
+const declaredLengthOf = (css: string): number => {
+  const probe = document.createElement('div')
+  probe.style.cssText = css
+  document.body.append(probe)
+  try {
+    return declaredFadeMilliseconds(probe)
+  } finally {
+    probe.remove()
   }
 }
 
@@ -286,12 +339,15 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
 
   /**
    * Opens the menu by keyboard from its trigger. The sampler runs from before the key, with focus
-   * on the trigger, so no frame before the open counts against focus.
+   * on the trigger, so no frame before the open counts against focus. `beforeSample` is what the
+   * sampler runs first in each frame.
    */
-  const openByKeyboard = async (): Promise<{ readonly mountedAt: number }> => {
+  const openByKeyboard = async (
+    beforeSample?: (time: number, index: number) => void,
+  ): Promise<{ readonly mountedAt: number }> => {
     await settled(() => byTestId('trigger-guides'))
     required('trigger-guides').focus()
-    sampler = sampleFrames()
+    sampler = sampleFrames(beforeSample)
     await userEvent.keyboard('{Enter}')
     await appears('popup')
     const first = sampler.frames.find((frame) => frame.isMounted)
@@ -470,39 +526,94 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
   })
 
   describe('the stall controls', () => {
-    it('AC-base-ui-feedback-navigation-24 (Tier B, in-frame stall control): a 90ms stall late in the fade-in leaves the fade-in checks passing', async () => {
+    it('AC-base-ui-feedback-navigation-24 (Tier B, in-frame stall control): a 90ms stall late in the fade-in leaves the fade-in checks passing', async ({
+      skip,
+    }) => {
       start()
       const fast = tokenMilliseconds('--nave-motion-duration-fast')
-      const stall = stallInFrame(90, 0.95)
-      await openByKeyboard()
+      const stall = stallInFrame(90, () => popupOpacity() > 0.95)
+      await openByKeyboard(stall.beforeSample)
       const popup = await atRest('popup')
       sampler!.stop()
-      stall.stop()
-      expect(stall.landedAt(), 'the stall ran').toBeDefined()
-      expect(stall.landedAt(), 'the stall ran inside the fade').toBeLessThan(0.999)
+      const ran = stall.ran()
+      expect(ran, 'the stall ran').toBeDefined()
+      if (ran!.opacity >= 0.999) {
+        skip(MISSED_THE_FADE)
+      }
+      // The old stamp read the time after the block: this frame's offset plus 90ms is what it would
+      // have reported, and it only fails the bound if that is over fast + 50.
+      const first = sampler!.frames.find((frame) => frame.isMounted)
+      expect(ran!.frameTime - first!.time + 90, 'the stall is long enough to bite').toBeGreaterThan(
+        fast + 50,
+      )
       expectFadeIn(sampler!.frames, popup, fast)
+      expectSampledInStallFrame(ran!, sampler!.frames)
     }, 30_000)
 
-    it('AC-base-ui-feedback-navigation-24 (Tier B, in-frame stall control, slow fade): a 300ms fade-in with a 250ms stall still fails the fade-in checks', async () => {
+    it('AC-base-ui-feedback-navigation-24 (Tier B, in-frame stall control, mount frame): an 80ms stall in the frame the popup mounts leaves the fade-in checks passing', async () => {
+      start()
+      const fast = tokenMilliseconds('--nave-motion-duration-fast')
+      const stall = stallInFrame(80, () => byTestId('popup') !== undefined)
+      await openByKeyboard(stall.beforeSample)
+      const popup = await atRest('popup')
+      sampler!.stop()
+      const ran = stall.ran()
+      expect(ran, 'the stall ran').toBeDefined()
+      expect(ran!.frameIndex, 'the stall landed in the first frame with the popup mounted').toBe(
+        sampler!.frames.find((frame) => frame.isMounted)!.index,
+      )
+      expectFadeIn(sampler!.frames, popup, fast)
+      expectSampledInStallFrame(ran!, sampler!.frames)
+    }, 30_000)
+
+    it('AC-base-ui-feedback-navigation-24 (Tier B, in-frame stall control, slow fade): a 300ms fade-in with a 250ms stall still fails the fade-in checks', async ({
+      skip,
+    }) => {
       start(
         `${stylesheet}\n@layer overrides { .nave-base-ui-navigation-menu-fade { transition-duration: ${String(SLOW_FADE_MS)}ms } }\n`,
       )
       const fast = tokenMilliseconds('--nave-motion-duration-fast')
-      const stall = stallInFrame(250, 0.5)
-      await openByKeyboard()
+      const stall = stallInFrame(250, () => popupOpacity() > 0.5)
+      await openByKeyboard(stall.beforeSample)
       const popup = await atRest('popup')
       sampler!.stop()
-      stall.stop()
       expect(declaredFadeMilliseconds(popup), 'the slow fade is in force').toBe(SLOW_FADE_MS)
-      expect(stall.landedAt(), 'the stall ran').toBeDefined()
-      expect(stall.landedAt(), 'the stall ran inside the fade').toBeLessThan(0.999)
-      // The stall starts past halfway and outlasts the fade, so the next sampled frame is already
-      // opaque and the sampled frames cannot show how long the fade took: only the declared length
-      // can fail it.
+      const ran = stall.ran()
+      expect(ran, 'the stall ran').toBeDefined()
+      if (ran!.opacity >= 0.999) {
+        skip(MISSED_THE_FADE)
+      }
+      // The stall starts once the fade is past half opacity (60ms into 300ms) and outlasts the fade
+      // (it ends at 310ms or later, the fade at 287ms), so the next sampled frame is already opaque.
+      // The check must fail, and it must fail on the declared length.
       expect(() => {
         expectFadeIn(sampler!.frames, popup, fast)
       }).toThrow('the declared fade-in length')
+      expectSampledInStallFrame(ran!, sampler!.frames)
     }, 30_000)
+  })
+
+  describe('the declared fade length', () => {
+    it.each([
+      ['transition: opacity 100ms', 100],
+      ['transition: all 0s', 0],
+      ['transition: transform 50ms, opacity 100ms', 100],
+      ['transition: opacity 100ms ease 20ms', 120],
+      ['transition: opacity 100ms, all 200ms', 200],
+      ['transition-property: transform, color, opacity; transition-duration: 100ms, 50ms', 100],
+    ] as const)(
+      'AC-base-ui-feedback-navigation-24 (declared fade length): %s reads %i ms',
+      (css, expected) => {
+        expect(declaredLengthOf(css)).toBeCloseTo(expected, 6)
+      },
+    )
+
+    it.each(['transition: transform 50ms', 'transition: none'] as const)(
+      'AC-base-ui-feedback-navigation-24 (declared fade length): %s throws',
+      (css) => {
+        expect(() => declaredLengthOf(css)).toThrow('the popup transitions no opacity')
+      },
+    )
   })
 
   describe('with panel fade unsigned', () => {
