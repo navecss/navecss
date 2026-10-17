@@ -1,0 +1,44 @@
+name: registry-reach
+
+# Checks that the registry the latest release of @navecss/base-ui ships is the registry readers
+# receive: every file jsDelivr serves for that version is the tarball's file byte for byte, and one
+# component installs from that address with the newest shadcn CLI (the one the package README
+# tells readers to type) into a project with no Tailwind and no components.json. Quiet until a
+# release carries a registry. Run it by hand with a version after a release that serves one.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1' # every Monday, 07:00 UTC
+  workflow_dispatch:
+    inputs:
+      version:
+        description: A published @navecss/base-ui version to check instead of the latest
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  reach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install mise-pinned toolchain (node + pnpm)
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with:
+          version: 2026.8.3
+
+      - name: Check the served registry
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$VERSION" ]; then
+            node scripts/check-registry-reach.mjs --version "$VERSION" --cli latest
+          else
+            node scripts/check-registry-reach.mjs --latest --cli latest
+          fi
