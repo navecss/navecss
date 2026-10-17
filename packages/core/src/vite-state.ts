@@ -15,6 +15,7 @@ import type { DevEnvironmentLike } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
 
 import { freshReloads } from './vite-dev-reloads.ts'
+import { withRestorers } from './vite-restorers.ts'
 
 /**
  * A stylesheet the dev server served with the atomic layer filtered: the environment that serves
@@ -256,16 +257,6 @@ export function collectedAtoms(state: RootState, kept: readonly string[]): Set<s
   const atoms = new Set(kept)
   for (const record of state.modules.values()) for (const atom of record.atoms) atoms.add(atom)
   for (const page of state.pages.values()) for (const atom of page) atoms.add(atom)
-  return atoms
-}
-
-/**
- * `atoms` with the atoms added that restore what an atom in it removes: `srOnlyFocusable` shows
- * again on focus what `srOnly` hides, so a set that holds `srOnly` holds it too. This adds to the
- * emitted set only, not to `keep` or to what `cx.dynamic()` accepts.
- */
-export function withRestorers(atoms: Set<string>): Set<string> {
-  if (atoms.has('srOnly')) atoms.add('srOnlyFocusable')
   return atoms
 }
 

@@ -23,6 +23,52 @@
     { "id": "Python-2.0" },
     { "id": "BlueOak-1.0.0" }
   ],
+  "admitsPackages": [
+    { "package": "caniuse-lite", "license": "CC-BY-4.0", "bucket": "B" },
+    { "package": "@img/sharp-libvips-darwin-arm64", "license": "LGPL-3.0-or-later", "bucket": "B" },
+    { "package": "@img/sharp-libvips-darwin-x64", "license": "LGPL-3.0-or-later", "bucket": "B" },
+    { "package": "@img/sharp-libvips-linux-arm", "license": "LGPL-3.0-or-later", "bucket": "B" },
+    { "package": "@img/sharp-libvips-linux-arm64", "license": "LGPL-3.0-or-later", "bucket": "B" },
+    { "package": "@img/sharp-libvips-linux-ppc64", "license": "LGPL-3.0-or-later", "bucket": "B" },
+    {
+      "package": "@img/sharp-libvips-linux-riscv64",
+      "license": "LGPL-3.0-or-later",
+      "bucket": "B"
+    },
+    { "package": "@img/sharp-libvips-linux-s390x", "license": "LGPL-3.0-or-later", "bucket": "B" },
+    { "package": "@img/sharp-libvips-linux-x64", "license": "LGPL-3.0-or-later", "bucket": "B" },
+    {
+      "package": "@img/sharp-libvips-linuxmusl-arm64",
+      "license": "LGPL-3.0-or-later",
+      "bucket": "B"
+    },
+    {
+      "package": "@img/sharp-libvips-linuxmusl-x64",
+      "license": "LGPL-3.0-or-later",
+      "bucket": "B"
+    },
+    {
+      "package": "@img/sharp-win32-arm64",
+      "license": "Apache-2.0 AND LGPL-3.0-or-later",
+      "bucket": "B"
+    },
+    {
+      "package": "@img/sharp-win32-ia32",
+      "license": "Apache-2.0 AND LGPL-3.0-or-later",
+      "bucket": "B"
+    },
+    {
+      "package": "@img/sharp-win32-x64",
+      "license": "Apache-2.0 AND LGPL-3.0-or-later",
+      "bucket": "B"
+    },
+    {
+      "package": "@img/sharp-wasm32",
+      "license": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
+      "bucket": "B"
+    }
+  ],
+  "admitsPackagesComment": "Packages admitted by NAME and exact licence string, for bucket B only (a package a consumer installs, never one that is bundled into what a Nave package ships). They are not licence identifiers: neither CC-BY-4.0 nor LGPL-3.0-or-later is admitted in general, and prodPermissive is unchanged. A new platform build or a changed licence string on a listed name is not on this list and reds the gate. The rows are the fifteen approved by name for the packages that installing the next peer brings in; a row is only ever removed here, and one is added only with a new written approval.",
   "prodPermissiveComment": "Bucket B (dependencies/peerDependencies): permissive only auto-passes. Apache-2.0 is accepted but is NOT free — its NOTICE duty (§4(d)) becomes a real THIRD-PARTY-LICENSES obligation the moment anything under it is bundled (bucket A), which the no-inlined-dependency guard (packages/*/test/no-inlined-dependency.test.ts) is what keeps bucket A empty. Python-2.0 is accepted on the same terms: if anything under it were bundled, its notices would have to be kept and a brief summary of the changes included. Anything not on this list — including weak copyleft (MPL-2.0, LGPL) and strong copyleft (GPL, AGPL) — fails the gate and routes to the maintainer for a written licensing review before it can be added; a 'review item' is not an auto-pass, so it is not on this list until it has been reviewed by name, not by licence-family blanket.",
   "prodPermissiveSchemaComment": "Each entry carries only its own licence identifier (id), and the object shape is load-bearing rather than stylistic: check-license-allowlist.mjs matches a package's declared licence against entry.id, so a bare string here would silently match nothing, and check-license-enumeration-provenance.mjs rejects any entry that is not an object with a non-empty, already-trimmed id, so that cannot happen quietly."
 }

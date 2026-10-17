@@ -88,13 +88,14 @@ test('a manifest with private: false is publishable (changesets checks strict !=
   assert.equal(isPublishable({ name: '@navecss/base-ui', private: false }), true)
 })
 
-test('the shipped set (tokens + core + stylelint-config + eslint-plugin + base-ui publishable, cli private) matches with no mismatches', () => {
+test('the shipped set (tokens + core + stylelint-config + eslint-plugin + base-ui + prune publishable, cli private) matches with no mismatches', () => {
   const manifests = [
     { name: '@navecss/tokens' },
     { name: '@navecss/core' },
     { name: '@navecss/stylelint-config' },
     { name: '@navecss/eslint-plugin' },
     { name: '@navecss/base-ui' },
+    { name: '@navecss/prune' },
     { name: '@navecss/cli', private: true },
   ]
   assert.deepEqual(findMismatches(manifests), {
@@ -120,17 +121,19 @@ test('an expected-set member gaining "private: true" by mistake is caught as une
     { name: '@navecss/stylelint-config' },
     { name: '@navecss/eslint-plugin' },
     { name: '@navecss/base-ui' },
+    { name: '@navecss/prune' },
     { name: '@navecss/cli', private: true },
   ]
   const { unexpectedlyPrivate } = findMismatches(manifests)
   assert.deepEqual(unexpectedlyPrivate, ['@navecss/tokens'])
 })
 
-test('PUBLISHABLE_SET is exactly {tokens, core, stylelint-config, eslint-plugin, base-ui} today', () => {
+test('PUBLISHABLE_SET is exactly {tokens, core, stylelint-config, eslint-plugin, base-ui, prune} today', () => {
   assert.deepEqual([...PUBLISHABLE_SET].sort(), [
     '@navecss/base-ui',
     '@navecss/core',
     '@navecss/eslint-plugin',
+    '@navecss/prune',
     '@navecss/stylelint-config',
     '@navecss/tokens',
   ])
@@ -199,6 +202,7 @@ test('main(): a confirmed workspace with the expected publishable set passes wit
     VALID_WORKSPACE_YAML,
     {
       'base-ui': { name: '@navecss/base-ui' },
+      prune: { name: '@navecss/prune' },
       cli: { name: '@navecss/cli', private: true },
       core: { name: '@navecss/core' },
       'eslint-plugin': { name: '@navecss/eslint-plugin' },
@@ -317,6 +321,7 @@ test('nothing this gate prints down ANY path names a tracker a reader cannot ope
 test('the mismatch report is byte-exact, not only opacity- and shape-checked', () => {
   const mismatched = buildFixture(VALID_WORKSPACE_YAML, {
     'base-ui': { name: '@navecss/base-ui' },
+    prune: { name: '@navecss/prune' },
     core: { name: '@navecss/core', private: true },
     'eslint-plugin': { name: '@navecss/eslint-plugin' },
     'stylelint-config': { name: '@navecss/stylelint-config' },
@@ -459,6 +464,7 @@ test('no message this gate PRINTS names a tracker a consumer cannot read', () =>
 
 const EXPECTED_SET_PACKAGES = {
   'base-ui': { name: '@navecss/base-ui' },
+  prune: { name: '@navecss/prune' },
   core: { name: '@navecss/core' },
   'eslint-plugin': { name: '@navecss/eslint-plugin' },
   'stylelint-config': { name: '@navecss/stylelint-config' },
