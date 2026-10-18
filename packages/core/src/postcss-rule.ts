@@ -37,7 +37,9 @@ function atRuleToModel(atRule: PostCSSAtRule, table: NodeTable): ModelNode {
   const match = matchNaveAtRule(atRule)
   if (match.isNave) return { kind: 'directive', ref, prelude: match.prelude }
   const name = atRule.name.toLowerCase()
-  if (!GROUP_NAMES.has(name) || atRule.nodes === undefined) return { kind: 'opaque', ref }
+  if (!GROUP_NAMES.has(name) || atRule.nodes === undefined) {
+    return { kind: 'opaque', ref, name, prelude: atRule.params }
+  }
   return { kind: 'group', ref, name, prelude: atRule.params, nodes: childrenToModel(atRule, table) }
 }
 

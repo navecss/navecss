@@ -4,24 +4,26 @@
  * blocks, then the next atom's. What the rule says outside a directive keeps its authored order.
  * A run of declarations that follows a nested node is written inside one `& { }`, since a bare
  * declaration after a nested rule reads as part of that rule in an engine without nested
- * declarations (the Baseline 2024 floor).
+ * declarations (the Baseline 2024 floor). The rule's own declarations before its first directive
+ * are not touched.
  */
-import type { DirectiveFacts } from './order-model.ts'
 import type {
   DirectiveNode,
-  Emission,
   ModelNode,
   NodeRef,
-  PlanItem,
   PlanWarning,
   RuleInput,
   RulePlan,
 } from './rule-model.ts'
+import type { PlanState } from './rule-state.ts'
 
-import { checkOrder, type Segment } from './order-check.ts'
+import { checkOrder } from './order-check.ts'
 import { findingWarnings, markerWarnings } from './order-warnings.ts'
-import { type Declaration, plan, type PlannedAtom, type PlanResult } from './plan.ts'
-import { ampersandSpecificity, isPseudoElementOnlyList } from './selector-specificity.ts'
+import { plan, type PlanResult } from './plan.ts'
+import { directiveFacts, emitAtoms, recordSegments } from './rule-emit.ts'
+import { createState } from './rule-state.ts'
+import { ampersandSpecificity } from './selector-specificity.ts'
+import { shapeWarnings } from './shape-warnings.ts'
 
 /**
  * A directive that could not be planned at all (an atom registered without a declarations
@@ -38,40 +40,21 @@ export class DirectiveFailure extends Error {
   }
 }
 
-interface PendingRun {
-  /**
-  Declarations and the comments between them.
-   */
-  refs: NodeRef[]
-  /**
-  Comments after the last declaration, which belong to no run.
-   */
-  trailing: NodeRef[]
-}
-
-interface PlanState {
-  readonly input: RuleInput
-  readonly items: PlanItem[]
-  readonly run: PendingRun
-  readonly isPseudoElementRule: boolean
-  /**
-  Whether a nested node (a rule, an at-rule, an emitted block) is already in the output.
-   */
-  isNested: boolean
-  /**
-  The nearest directive before this point, once there is one.
-   */
-  lastDirective: NodeRef | undefined
-  /**
-  The directives so far, and the parts of the output in order, for the order check.
-   */
-  readonly directives: DirectiveFacts[]
-  readonly segments: Segment[]
+/**
+ * How a warning names a nested node of the rule's own.
+ */
+function nestedText(node: ModelNode): string {
+  if (node.kind === 'rule') return `the ${node.selector} block`
+  if (node.kind === 'group' || node.kind === 'opaque') {
+    return ['the', `@${node.name}`, node.prelude, 'block'].filter((part) => part !== '').join(' ')
+  }
+  return ''
 }
 
 /**
- * Whether an own run is written inside `& { }`: only after a directive, only after a nested node,
- * and never in a rule whose every selector is a pseudo-element, where `&` matches nothing.
+ * Whether an own run is written inside `& { }`: only after the first directive, only after a
+ * nested node, and never in a rule whose every selector is a pseudo-element, where `&` matches
+ * nothing.
  */
 function isRunWrapped(state: PlanState): boolean {
   return state.lastDirective !== undefined && state.isNested && !state.isPseudoElementRule
@@ -85,6 +68,12 @@ function flushRun(state: PlanState): void {
   if (run.refs.length > 0) {
     if (isRunWrapped(state)) {
       items.push({ kind: 'wrap', refs: run.refs, after: state.lastDirective! })
+      state.runs.push({
+        kind: 'own',
+        anchorRef: run.refs[0]!,
+        above: state.above ?? '',
+        nested: state.lastNested?.text ?? '',
+      })
     } else {
       for (const ref of run.refs) items.push({ kind: 'keep', ref })
     }
@@ -102,75 +91,12 @@ function takeIntoRun(state: PlanState, node: ModelNode): void {
   if (node.kind === 'decl') {
     run.refs.push(...run.trailing, node.ref)
     run.trailing = []
+    if (state.above !== undefined) state.ownDeclarationSinceAbove = true
   } else if (run.refs.length === 0) {
     state.items.push({ kind: 'keep', ref: node.ref })
   } else {
     run.trailing.push(node.ref)
   }
-}
-
-/**
- * Flushes `declarations` as one emission, wrapped when a nested node precedes it.
- */
-function flushDeclarations(
-  declarations: Declaration[],
-  isWrapped: boolean,
-  emissions: Emission[],
-): void {
-  if (declarations.length === 0) return
-  emissions.push({ kind: 'declarations', declarations: [...declarations], isWrapped })
-  declarations.length = 0
-}
-
-/**
- * One atom's contribution: its declarations join the run in progress, and its blocks end that run.
- */
-function emitAtom(
-  state: PlanState,
-  atom: PlannedAtom,
-  pending: Declaration[],
-  out: Emission[],
-): void {
-  pending.push(...atom.declarations)
-  if (atom.blocks.length === 0 || state.isPseudoElementRule) return
-  flushDeclarations(pending, state.isNested, out)
-  for (const block of atom.blocks) out.push({ kind: 'block', block })
-  state.isNested = true
-}
-
-/**
- * Adds the parts one directive puts in the output to the order check's view of it, in output order.
- */
-function recordSegments(
-  state: PlanState,
-  directive: DirectiveFacts,
-  atoms: readonly PlannedAtom[],
-): void {
-  for (const [atomIndex, planned] of atoms.entries()) {
-    const atom = directive.atoms[atomIndex]!
-    if (planned.declarations.length > 0) {
-      state.segments.push({
-        kind: 'atom-declarations',
-        directive,
-        atom,
-        declarations: planned.declarations,
-      })
-    }
-    if (state.isPseudoElementRule) continue
-    for (const block of planned.blocks)
-      state.segments.push({ kind: 'atom-block', directive, atom, block })
-  }
-}
-
-/**
- * The emissions of every atom a directive named, in order.
- */
-function emitAtoms(state: PlanState, atoms: readonly PlannedAtom[]): Emission[] {
-  const emissions: Emission[] = []
-  const pending: Declaration[] = []
-  for (const atom of atoms) emitAtom(state, atom, pending, emissions)
-  flushDeclarations(pending, state.isNested && !state.isPseudoElementRule, emissions)
-  return emissions
 }
 
 /**
@@ -189,22 +115,6 @@ function planDirective(state: PlanState, node: DirectiveNode): PlanResult {
 }
 
 /**
- * What a warning needs to know about a directive.
- */
-function directiveFacts(node: DirectiveNode, result: PlanResult): DirectiveFacts {
-  return {
-    ref: node.ref,
-    prelude: node.prelude,
-    atoms: result.atoms.map((atom, atomIndex) => ({
-      atomIndex,
-      name: atom.name,
-      offset: atom.offset,
-      endOffset: atom.endOffset,
-    })),
-  }
-}
-
-/**
  * Expands one directive at its position.
  */
 function expandDirective(state: PlanState, node: DirectiveNode): void {
@@ -216,20 +126,36 @@ function expandDirective(state: PlanState, node: DirectiveNode): void {
   state.items.push({
     kind: 'expand',
     ref: node.ref,
-    emissions: emitAtoms(state, result.atoms),
+    emissions: emitAtoms(state, directive, result.atoms),
     diagnostics: result.diagnostics,
   })
   state.lastDirective = node.ref
 }
 
 /**
- * The warnings about the rule: where later content overrides an atom's block, and what is wrong
- * with a marker.
+ * Keeps a nested node of the rule's own where it is.
+ */
+function keepNested(state: PlanState, node: ModelNode): void {
+  flushRun(state)
+  state.items.push({ kind: 'keep', ref: node.ref })
+  state.isNested = true
+  state.hasOwnNested = true
+  state.lastNested = { text: nestedText(node) }
+  state.above ??= nestedText(node)
+}
+
+/**
+ * The warnings about the rule: where later content overrides an atom's block, what is wrong with
+ * a marker, and what the shape of the output costs a selector list.
  */
 function warningsOf(state: PlanState): PlanWarning[] {
   const amp = ampersandSpecificity(state.input.selector)
   const findings = checkOrder(state.segments, amp)
-  const warnings = [...findingWarnings(findings), ...markerWarnings(state.directives, findings)]
+  const warnings = [
+    ...findingWarnings(findings),
+    ...markerWarnings(state.directives, findings),
+    ...shapeWarnings(state),
+  ]
   return warnings.toSorted(
     (a, b) => a.anchor.ref - b.anchor.ref || (a.anchor.offset ?? -1) - (b.anchor.offset ?? -1),
   )
@@ -240,26 +166,11 @@ function warningsOf(state: PlanState): PlanWarning[] {
  * emits and each run of the rule's own declarations that needs it marked for wrapping.
  */
 export function planRule(input: RuleInput): RulePlan {
-  const state: PlanState = {
-    input,
-    items: [],
-    run: { refs: [], trailing: [] },
-    isPseudoElementRule: isPseudoElementOnlyList(input.selector),
-    isNested: false,
-    lastDirective: undefined,
-    directives: [],
-    segments: [],
-  }
+  const state = createState(input)
   for (const node of input.nodes) {
-    if (node.kind === 'decl' || node.kind === 'comment') {
-      takeIntoRun(state, node)
-    } else if (node.kind === 'directive') {
-      expandDirective(state, node)
-    } else {
-      flushRun(state)
-      state.items.push({ kind: 'keep', ref: node.ref })
-      state.isNested = true
-    }
+    if (node.kind === 'decl' || node.kind === 'comment') takeIntoRun(state, node)
+    else if (node.kind === 'directive') expandDirective(state, node)
+    else keepNested(state, node)
     if (node.kind !== 'comment' && node.kind !== 'directive') {
       state.segments.push({ kind: 'own', node })
     }

@@ -137,6 +137,18 @@ describe.each(HOSTS)('AC-native-apply-order-03 — runs after a nested node (%s)
       ['display: flex', 'text-align: left', 'color: red'],
     ],
     [
+      '.x { &:hover { color: blue } color: red; @nave flex; }',
+      ['&:hover { color: blue }', 'color: red', '& { display: flex }'],
+    ],
+    [
+      '.x { &:hover { color: blue } color: red; @nave flex; gap: 1px; }',
+      ['&:hover { color: blue }', 'color: red', '& { display: flex }', '& { gap: 1px }'],
+    ],
+    [
+      '.x { @media (x) { color: red } gap: 1px; @nave flex; }',
+      ['@media (x) { color: red }', 'gap: 1px', '& { display: flex }'],
+    ],
+    [
       '.x { @nave hideDesktopUp; @media (x) { color: red } gap: 1px; }',
       [
         '@media (width >= 75em) { & { display: none } }',

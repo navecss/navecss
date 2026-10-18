@@ -1,0 +1,179 @@
+/**
+ * The focus clauses a warning carries where the later declaration takes something from a focus
+ * atom, the place a block holds and, when the overrider has a place of its own, that too, and the
+ * sentence about the previous release.
+ */
+import { describe, expect, it } from 'vitest'
+
+import { MIGRATION_VERSION } from '../../src/directive/migration.ts'
+import { REVEAL_CLAUSE, RING_CLAUSE } from '../../src/directive/order-focus.ts'
+import { warningsViaPostcss, warningsViaText } from '../helpers/native-order.ts'
+
+const HOSTS = [
+  ['the PostCSS host', warningsViaPostcss],
+  ['the text expander', (css: string, o?: object) => Promise.resolve(warningsViaText(css, o))],
+] as const
+
+const RING = 'ring'
+const REVEAL = 'reveal'
+
+describe.each(HOSTS)('AC-native-apply-order-28 — focus clauses (%s)', (_name, run) => {
+  it.each([
+    ['focusRing', '&:focus-visible { outline-color: red }', 1, undefined],
+    ['focusRing', '&:focus { outline: none }', 1, RING],
+    ['focusRing', '&:focus { outline-style: none }', 1, RING],
+    ['focusRing', '&:focus { outline-width: 0 }', 1, RING],
+    ['focusRing', '&:focus { outline-color: transparent }', 1, RING],
+    ['focusRing', '&:focus { outline: 2px red }', 1, RING],
+    ['focusRing', '&:focus { outline: 0 }', 1, RING],
+    ['focusRing', '&:focus { outline: 2px solid transparent }', 1, RING],
+    ['focusRing', '&:focus-visible { outline: none }', 1, RING],
+    ['focusRing', '&:focus-within { outline: none }', 1, RING],
+    ['focusRing', '&:hover { outline: none }', 1, RING],
+    ['focusRing', '&:focus { outline: 2px dashed red }', 1, undefined],
+    ['focusRing', '&:focus { outline: auto }', 1, undefined],
+    ['focusRing', '&:focus-visible { outline-offset: -2px }', 1, undefined],
+    ['focusRing', '&:focus { outline-style: var(--s) }', 1, undefined],
+    ['focusRing', '&:focus { outline-width: env(--w) }', 1, undefined],
+    ['focusRing', '&:focus-visible { outline-style: unset }', 1, RING],
+    ['focusRing', '&:focus { outline: initial }', 1, RING],
+    ['focusRing', '&:focus { all: unset }', 1, RING],
+    ['focusRing', '&:focus-visible { outline: revert }', 1, undefined],
+    ['focusRing', '&:focus { outline: inherit }', 1, undefined],
+    ['focusRing', '&:focus { outline-style: revert-layer }', 1, undefined],
+    ['focusRing', 'outline: 0;', 0, undefined],
+    ['srOnlyFocusable', '&:focus-visible { position: fixed }', 2, undefined],
+    ['srOnlyFocusable', '&:focus-visible { clip-path: inset(50%) }', 2, REVEAL],
+    ['srOnlyFocusable', '&:focus { clip-path: inset(50%) }', 2, REVEAL],
+    ['srOnlyFocusable', '&:focus-visible { width: 1px; height: 1px; overflow: hidden }', 6, REVEAL],
+    [
+      'srOnlyFocusable',
+      '&:focus-visible { width: 1px; height: 1px } &:focus-visible { overflow: hidden }',
+      6,
+      undefined,
+    ],
+    ['srOnlyFocusable', '&:focus-visible { all: unset }', 2, undefined],
+    ['srOnlyFocusable', '&:focus-visible { width: 1px }', 2, undefined],
+    ['srOnlyFocusable', '&:focus-visible { position: absolute }', 2, undefined],
+  ])('%s then %s reports %i with clause %s', async (atom, later, count, clause) => {
+    const warnings = await run(`.x { @nave ${atom}; ${later} }`)
+    const carried = warnings.filter(
+      (w) => w.text.includes(RING_CLAUSE) || w.text.includes(REVEAL_CLAUSE),
+    )
+    const expectedClause = clause === RING ? RING_CLAUSE : REVEAL_CLAUSE
+
+    expect(warnings).toHaveLength(count)
+    expect(carried).toHaveLength(clause === undefined ? 0 : count)
+    for (const warning of carried) expect(warning.text).toContain(expectedClause)
+  })
+
+  it('reports none for the atoms srOnlyFocusable shares nothing with', async () => {
+    expect(await run('.x { @nave srOnlyFocusable srOnly; }')).toEqual([])
+    expect(await run('.x { @nave srOnlyFocusable relative; }')).toEqual([])
+  })
+
+  it('puts the clause right after the so sentence and before the previous-release sentence', async () => {
+    const [warning] = await run('.x { @nave focusRing; &:focus { outline: none } }')
+    const text = warning!.text
+
+    expect(text.indexOf(RING_CLAUSE)).toBeGreaterThan(text.indexOf('replaces outline-style'))
+    expect(text.indexOf(RING_CLAUSE)).toBeLessThan(text.indexOf('Before @navecss/core'))
+    expect(text).not.toMatch(/marker keeps/)
+  })
+})
+
+describe.each(HOSTS)('AC-native-apply-order-49 — a place of its own (%s)', (_name, run) => {
+  const extend = {
+    mA: { declarations: {}, media: { '(width >= 75em)': { declarations: { color: 'red' } } } },
+    mB: { declarations: {}, media: { '(width >= 60em)': { declarations: { color: 'blue' } } } },
+  }
+
+  it.each([
+    [
+      '.skip { @nave srOnlyFocusable; &:focus-visible { position: fixed } }',
+      'so on :focus-visible position is fixed',
+      1,
+    ],
+    [
+      '.skip { @nave srOnlyFocusable; &:focus-visible { position: fixed } }',
+      'so on :focus-within while also on :focus-visible, position is fixed',
+      1,
+    ],
+    [
+      '.c { @nave hideTabletPortraitUp; @media (width < 75em) { display: grid } }',
+      'so under @media (width >= 37.5em) while also under @media (width < 75em), display is grid',
+      1,
+    ],
+    [
+      '.x { @nave hideDesktopUp; @media (orientation: landscape) { display: grid } }',
+      'while also under @media (orientation: landscape)',
+      1,
+    ],
+    [
+      '.x { @nave mA mB; }',
+      '"mB" comes after "mA", so under @media (width >= 75em) while also under @media (width >= 60em),',
+      1,
+    ],
+    ['.x { @nave focusRing; &:hover { outline: none } }', 'while also on :hover', 1],
+    ['.x { @nave focusRing; &.open { outline-color: red } }', 'while also on .open', 1],
+    [
+      '.x { @nave focusRing; &:focus-within { outline: none } }',
+      'so on :focus-visible outline: none replaces',
+      1,
+    ],
+    [
+      '.x { @nave focusRing; &:focus-visible { outline-color: red } }',
+      'so on :focus-visible outline-color is red',
+      1,
+    ],
+    [
+      '.x { @nave hideDesktopUp; display: grid; }',
+      'so under @media (width >= 75em) display is grid',
+      1,
+    ],
+    ['.c { @nave hideDesktopUp flex; }', 'so under @media (width >= 75em) display is flex', 1],
+  ])('%s says %s', async (css, phrase) => {
+    const warnings = await run(css, { extend })
+
+    expect(warnings.some((w) => w.text.includes(phrase))).toBe(true)
+  })
+
+  it('composes the own place with the shorthand form and the ring clause', async () => {
+    const [warning] = await run('.x { @nave focusRing; &:hover { outline: none } }')
+
+    expect(warning!.text).toContain(
+      `on :focus-visible while also on :hover, outline: none replaces outline-style, outline-width and outline-color. ${RING_CLAUSE}`,
+    )
+  })
+})
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-32 — the previous-release sentence (%s)',
+  (_name, run) => {
+    const extend = {
+      mA: { declarations: {}, media: { '(width >= 75em)': { declarations: { color: 'red' } } } },
+      mB: { declarations: {}, media: { '(width >= 60em)': { declarations: { color: 'blue' } } } },
+    }
+    const SENTENCE = `Before @navecss/core ${MIGRATION_VERSION} `
+
+    it.each([
+      ['.c { @nave hideDesktopUp flex; }', true],
+      ['.x { @nave hideDesktopUp; display: grid; }', true],
+      ['.x { @nave focusRing; &:focus { outline: none } }', true],
+      ['.card { @nave wFullPhoneOnly; inline-size: 50%; }', true],
+      ['.x { @nave mA mB; }', false],
+    ])('%s carries it: %s', async (css, isCarried) => {
+      const [warning] = await run(css, { extend })
+
+      expect(warning!.text.includes(SENTENCE)).toBe(isCarried)
+    })
+
+    it('puts it after the focus clause and before the fix', async () => {
+      const [warning] = await run('.x { @nave focusRing; &:focus { outline: none } }')
+      const { text } = warning!
+
+      expect(text.indexOf(RING_CLAUSE)).toBeLessThan(text.indexOf(SENTENCE))
+      expect(text.indexOf(SENTENCE)).toBeLessThan(text.indexOf('To let'))
+    })
+  },
+)

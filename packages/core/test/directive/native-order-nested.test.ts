@@ -48,10 +48,10 @@ const EXTEND: Record<string, AtomDefinition> = {
  */
 async function countOf(
   css: string,
-  run: (css: string, options?: object) => Promise<unknown[]>,
+  run: (css: string, options?: object) => Promise<{ text: string }[]>,
 ): Promise<number> {
   const warnings = await run(css, { extend: EXTEND })
-  return warnings.length
+  return warnings.filter((warning) => warning.text.includes(' comes after ')).length
 }
 
 describe.each(HOSTS)('AC-native-apply-order-13 — same element (%s)', (_name, run) => {

@@ -178,11 +178,11 @@ function itemNode(source: ModelSource, item: Item, itemOf: Item[], depth: number
   if (item.kind === 'declaration') return declarationNode(source, item, ref)
   if (item.kind === 'rule') {
     const nodes = childrenOf(source, item, itemOf, depth)
-    if (nodes === undefined) return { kind: 'opaque', ref }
+    if (nodes === undefined) return { kind: 'opaque', ref, name: '', prelude: '' }
     return { kind: 'rule', ref, selector: selectorOf(source, item), nodes }
   }
   if (item.kind === 'at-rule') return atRuleNode(source, item, ref, { itemOf, depth })
-  return { kind: 'opaque', ref }
+  return { kind: 'opaque', ref, name: '', prelude: '' }
 }
 
 /**
@@ -199,7 +199,9 @@ function atRuleNode(
   const nodes = GROUP_NAMES.has(item.atKeyword ?? '')
     ? childrenOf(source, item, where.itemOf, where.depth)
     : undefined
-  if (nodes === undefined) return { kind: 'opaque', ref }
+  if (nodes === undefined) {
+    return { kind: 'opaque', ref, name: item.atKeyword ?? '', prelude: prelude.trim() }
+  }
   return { kind: 'group', ref, name: item.atKeyword!, prelude: prelude.trim(), nodes }
 }
 

@@ -152,3 +152,10 @@ export function declarationsIn(container: Container): string[] {
   })
   return found
 }
+
+/**
+ * Each warning as a host frames it: `x.css:line:column: text`.
+ */
+export function framedWarnings(warnings: readonly SeenWarning[]): string[] {
+  return warnings.map(({ column, line, text }) => `x.css:${line}:${column}: ${text}`)
+}

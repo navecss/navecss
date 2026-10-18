@@ -46,6 +46,11 @@ export interface GroupNode {
  */
 export interface OpaqueNode {
   readonly kind: 'opaque'
+  /**
+  The at-rule's name and prelude as written, `''` when the node is not an at-rule.
+   */
+  readonly name: string
+  readonly prelude: string
   readonly ref: NodeRef
 }
 

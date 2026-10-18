@@ -24,9 +24,9 @@ export interface TextContext {
 /**
  * `a`, `a and b`, `a, b and c`.
  */
-export function joinList(items: readonly string[]): string {
+export function joinList(items: readonly string[], conjunction = 'and'): string {
   if (items.length <= 1) return items.join('')
-  return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
+  return `${items.slice(0, -1).join(', ')} ${conjunction} ${items.at(-1)}`
 }
 
 /**

@@ -83,3 +83,19 @@ function withMarker(prelude: string, additions: readonly string[], found: Prelud
 export function markedDirective(prelude: string, additions: readonly string[]): string {
   return directiveText(withMarker(prelude, additions, readMarkers(prelude)))
 }
+
+/**
+ * The directive with the atoms at `moving` written, in their order, right before `atoms[before]`.
+ */
+export function directiveWithAtomsBefore(
+  prelude: string,
+  atoms: readonly AtomFacts[],
+  placement: { readonly before: number; readonly moving: readonly number[] },
+): string {
+  const rest = atoms
+    .map((_atom, index) => index)
+    .filter((index) => !placement.moving.includes(index))
+  const at = rest.indexOf(placement.before)
+  const order = [...rest.slice(0, at), ...placement.moving, ...rest.slice(at)]
+  return directiveText(withAtomsInOrder(prelude, atoms, order))
+}

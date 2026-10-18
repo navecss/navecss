@@ -103,7 +103,7 @@ function codeMask(text: string): boolean[] {
  * Splits `selectorList` on top-level commas only, ignoring commas inside parentheses,
  * brackets, quoted strings or comments (`:is(a, b)`, `[data-x="a,b"]`, `/* a, b *\/`).
  */
-function splitTopLevel(selectorList: string): string[] {
+export function splitTopLevel(selectorList: string): string[] {
   const mask = codeMask(selectorList)
   const branches: string[] = []
   let depth = 0
