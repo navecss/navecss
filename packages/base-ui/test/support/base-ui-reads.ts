@@ -55,13 +55,16 @@ const keyRead = (node: ts.Node, local: string): string | undefined => {
 
 /**
  * The keys a destructuring of the binding reads: `const { X, Y: y } = Base`, and the same pattern
- * as the left side of an assignment.
+ * as the left side of an assignment. A rest element (`...others`) names the leftover members as a
+ * group, not a member, so it is not listed.
  */
 const destructuredKeys = (node: ts.Node, local: string): string[] => {
   if (ts.isVariableDeclaration(node) && isBinding(node.initializer, local)) {
     return ts.isObjectBindingPattern(node.name)
-      ? node.name.elements.flatMap(
-          (element) => nameText(element.propertyName ?? element.name) ?? [],
+      ? node.name.elements.flatMap((element) =>
+          element.dotDotDotToken === undefined
+            ? (nameText(element.propertyName ?? element.name) ?? [])
+            : [],
         )
       : []
   }
@@ -140,6 +143,25 @@ const importsOf = ({ file, text }: ModuleText): BaseUiImport[] => {
  */
 export const readBaseUiImports = (modules: readonly ModuleText[]): BaseUiImport[] =>
   modules.flatMap((module) => importsOf(module))
+
+/**
+ * How many import statements from Base UI the parse finds in the modules, whatever they bring in.
+ * One statement can bring in several bindings, which `readBaseUiImports` lists one by one, so this
+ * is the count to set beside `baseUiSpecifierCount`.
+ */
+export const baseUiImportStatementCount = (modules: readonly ModuleText[]): number =>
+  modules.reduce((count, { file, text }) => {
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+    return (
+      count +
+      source.statements.filter(
+        (statement) =>
+          ts.isImportDeclaration(statement) &&
+          ts.isStringLiteral(statement.moduleSpecifier) &&
+          SPECIFIER.test(statement.moduleSpecifier.text),
+      ).length
+    )
+  }, 0)
 
 /**
  * How many times the modules name a Base UI module as a string, found by a text search and not by

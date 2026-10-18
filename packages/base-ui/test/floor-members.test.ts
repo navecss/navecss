@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   type BaseUiImport,
+  baseUiImportStatementCount,
   baseUiSpecifierCount,
   type ModuleText,
   problemsAgainst,
@@ -20,10 +21,12 @@ import { DIST_DIR, filesUnder } from './support/dist.ts'
 
 /**
  * Base UI at the floor, 1.3.0, installed as `base-ui-react-floor`. The subpath is a literal path
- * of the package's export map.
+ * of the package's export map, or `.` for the package root.
  */
 const loadFloor = (subpath: string): Promise<Record<string, unknown>> =>
-  import(/* @vite-ignore */ `base-ui-react-floor/${subpath}`) as Promise<Record<string, unknown>>
+  import(
+    /* @vite-ignore */ subpath === '.' ? 'base-ui-react-floor' : `base-ui-react-floor/${subpath}`
+  ) as Promise<Record<string, unknown>>
 
 const distModules = (): ModuleText[] =>
   filesUnder(DIST_DIR, ['.js']).map((file) => ({
@@ -67,7 +70,29 @@ describe('AC-base-ui-overlay-completion-51: every member the shipped wrappers re
     const modules = distModules()
     const found = baseUiSpecifierCount(modules)
     expect(found).toBeGreaterThan(0)
-    expect(readBaseUiImports(modules)).toHaveLength(found)
+    expect(baseUiImportStatementCount(modules)).toBe(found)
+  })
+
+  it('control: an import statement that brings in two bindings counts once as a statement and twice as imports', () => {
+    const modules = [
+      {
+        file: 'two.js',
+        text: "import { Combobox as Base, useRender } from '@base-ui/react/combobox';\nBase.Root;\n",
+      },
+    ]
+    expect(baseUiSpecifierCount(modules)).toBe(1)
+    expect(baseUiImportStatementCount(modules)).toBe(1)
+    expect(readBaseUiImports(modules)).toHaveLength(2)
+  })
+
+  it('loads the package root for the subpath ".", so an import from the root is checked rather than failing to load', async () => {
+    const imports = readBaseUiImports([
+      {
+        file: 'root.js',
+        text: "import { Combobox as Base } from '@base-ui/react';\nBase.Root;\n",
+      },
+    ])
+    expect(await problemsAgainst(imports, loadFloor)).toEqual([])
   })
 
   it('control: the list for combobox holds Root and useFilter, the list for menu holds createHandle, and menubar, which reads no member, is reported with none', () => {
@@ -106,7 +131,7 @@ describe('AC-base-ui-overlay-completion-51: every member the shipped wrappers re
     ])
   })
 
-  it('lists a member read by each of the five forms, and no computed key', () => {
+  it('lists a member read by each of the five forms, and neither a computed key nor a rest element', () => {
     const imports = readBaseUiImports([
       {
         file: 'forms.js',
@@ -117,7 +142,8 @@ describe('AC-base-ui-overlay-completion-51: every member the shipped wrappers re
           'export const c = Base[`Three`];',
           'export const d = Base?.Four;',
           'export const { Five, Six: six } = Base;',
-          "export const e = Base['Sev' + 'en'];",
+          'export const { Seven: s7, ...others } = Base;',
+          "export const e = Base['Eig' + 'ht'];",
           'export const f = Base[key];',
         ].join('\n'),
       },
@@ -126,7 +152,7 @@ describe('AC-base-ui-overlay-completion-51: every member the shipped wrappers re
       {
         file: 'forms.js',
         imported: 'Combobox',
-        members: ['One', 'Two', 'Three', 'Four', 'Five', 'Six'],
+        members: ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'],
         subpath: 'combobox',
       },
     ])
