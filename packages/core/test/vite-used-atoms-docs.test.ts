@@ -14,6 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import { REPORT_CAUSE } from '../src/vite-used-report.ts'
 import { extractFences, type Fence } from './doc-fences.ts'
+import { astroParagraph } from './helpers/astro-readme.ts'
 import { changelogEntries, shippedChangesetProse } from './helpers/released-changeset.ts'
 import { appFiles, buildUsed, makeUsedApp } from './helpers/used-atoms-app.ts'
 import { VITE_APIS } from './helpers/vite-app.ts'
@@ -409,6 +410,13 @@ describe('section() — a fenced line is not a heading', () => {
   })
 })
 
+/**
+ * What names focus, screen readers or accessibility in the setup once its cleared units are
+ * taken out. The units are folded, as the setup is.
+ */
+const outsideClearedUnits = (setup: string, units: readonly string[]): string =>
+  units.reduce((text, unit) => text.replace(unit, ''), fold(setup)).replaceAll(/`[^`]*`/g, '')
+
 describe('AC-used-atoms-36 — the cleared copy is the cleared copy', () => {
   /*
    * Each unit below was supplied or cleared as one piece. The digests are of the whitespace-folded
@@ -473,19 +481,50 @@ describe('AC-used-atoms-36 — the cleared copy is the cleared copy', () => {
     expect(digest(clause), changed('renderedByServer')).toBe(PINS.renderedByServer)
   })
 
+  /*
+   * The Astro subsection's two paragraphs that name keyboard, screen-reader and accessibility
+   * checks. Each was cleared as written, line breaks included: the digests are of the paragraph
+   * text, the first 16 hex digits of its SHA-256.
+   */
+  const ASTRO_UNITS = [
+    { digest: '874ea5b01d748086', opening: 'The build chooses which atoms ship' },
+    { digest: 'ef08582ef38f725b', opening: 'In `astro dev`, the first paint' },
+  ] as const
+
+  const clearedUnits = (): string[] => [
+    paragraphStarting(coreReadme, '**It also chooses which atoms ship.**'),
+    paragraphStarting(atoms, PARAGRAPH_OPENING),
+    paragraphStarting(atoms, 'List every atom your components can apply at run time'),
+    ...ASTRO_UNITS.map(({ opening }) => fold(astroParagraph(opening))),
+  ]
+
+  it('holds the Astro subsection’s two cleared paragraphs as they were cleared', () => {
+    for (const { digest: expected, opening } of ASTRO_UNITS) {
+      expect(
+        createHash('sha256').update(astroParagraph(opening)).digest('hex').slice(0, 16),
+        changed(opening),
+      ).toBe(expected)
+    }
+  })
+
   it('names focus, screen readers or accessibility in the setup and the section only inside those units', () => {
-    const cleared = [
-      paragraphStarting(coreReadme, '**It also chooses which atoms ship.**'),
-      paragraphStarting(atoms, PARAGRAPH_OPENING),
-      paragraphStarting(atoms, 'List every atom your components can apply at run time'),
-    ]
-    const leftover = cleared.reduce(
-      (text, unit) => text.replace(unit, ''),
-      fold(section(coreReadme, '### Vite plugin setup')),
-    )
+    const setup = section(coreReadme, '### Vite plugin setup')
 
     // Atom names in code spans (`srOnlyFocusable`) are names, not claims about focus.
-    expect(leftover.replaceAll(/`[^`]*`/g, '')).not.toMatch(ACCESSIBILITY_WORDS)
+    expect(outsideClearedUnits(setup, clearedUnits())).not.toMatch(ACCESSIBILITY_WORDS)
+  })
+
+  it('control: the guard reds with the Astro dev paragraph’s accessibility sentence moved into the cascade paragraph', () => {
+    const setup = section(coreReadme, '### Vite plugin setup')
+    const dev = astroParagraph('In `astro dev`, the first paint')
+    const sentence = dev.slice(dev.indexOf('As on any Vite project'))
+    const moved = setup
+      .replace(dev, () => dev.slice(0, dev.indexOf(sentence)).trimEnd())
+      .replace('where they beat all of them.', () => `where they beat all of them. ${sentence}`)
+
+    expect(moved).not.toBe(setup)
+    expect(moved).toContain(`where they beat all of them. ${sentence}`)
+    expect(outsideClearedUnits(moved, clearedUnits())).toMatch(ACCESSIBILITY_WORDS)
   })
 
   it('control: the accessibility scan catches the words, assistive technology included', () => {
