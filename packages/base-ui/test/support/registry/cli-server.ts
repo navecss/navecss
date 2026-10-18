@@ -4,7 +4,7 @@
  */
 import type { AddressInfo } from 'node:net'
 
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -20,25 +20,27 @@ export interface StaticServer {
 
 const pathOf = (url: string | undefined): string => (url ?? '/').split('?', 1)[0] ?? '/'
 
-const SERVED_NAME = /^[\w.-]+$/
-
 /**
- * The file a request names: one directly inside the directory, by a plain name (letters, digits,
- * dots, dashes), so the request path never reaches outside it.
+ * The files of the served directory by name, listed once. A request is answered only from this
+ * map, so nothing in a request path is ever used to build a path on disk.
  */
-const fileFor = (directory: string, url: string | undefined): string | undefined => {
-  const name = decodeURIComponent(pathOf(url)).replace(/^\/+/, '')
-  if (!SERVED_NAME.test(name)) return undefined
-  const file = path.join(directory, name)
-  return existsSync(file) && statSync(file).isFile() ? file : undefined
-}
+const filesOf = (directory: string): Map<string, string> =>
+  new Map(
+    readdirSync(directory, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => [entry.name, path.join(directory, entry.name)] as const),
+  )
+
+const fileFor = (files: ReadonlyMap<string, string>, url: string | undefined): string | undefined =>
+  files.get(decodeURIComponent(pathOf(url)).replace(/^\/+/, ''))
 
 export const serveDirectory = (directory: string): Promise<StaticServer> =>
   new Promise((resolve, reject) => {
     const requests: string[] = []
+    const files = filesOf(directory)
     const server = createServer((request, response) => {
       requests.push(pathOf(request.url))
-      const file = fileFor(directory, request.url)
+      const file = fileFor(files, request.url)
       if (file === undefined || request.method !== 'GET') {
         response.statusCode = 404
         response.end('not found')
