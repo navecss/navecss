@@ -76,13 +76,11 @@ interface FrameTailScan {
   // so the highest token index found is always the most recently opened,
   // and the one to close first.
   readonly unmatchedOpeners: readonly number[]
-  readonly hasDanglingText: boolean
   readonly hasOpenColon: boolean
 }
 
 /**
- * `[start, limit)` in one pass: every opener still unmatched at `limit`;
- * whether it holds any token besides whitespace or a comment; and whether
+ * `[start, limit)` in one pass: every opener still unmatched at `limit`, and whether
  * it holds a property name's `:` with nothing terminating it yet, read at
  * its own top level — a matched bracket's own content is skipped whole
  * (jumped to its closer), since nothing inside it, however it punctuates
@@ -93,13 +91,11 @@ interface FrameTailScan {
  */
 function scanFrameTail(w: Walker, start: number, limit: number): FrameTailScan {
   const unmatchedOpeners: number[] = []
-  let hasDanglingText = false
   let hasOpenColon = false
   let i = start
   while (i < limit) {
     const token = w.tokens[i]!
     const type = token.type
-    if (type !== 'whitespace-token' && type !== 'comment') hasDanglingText = true
     if (type === 'semicolon-token') {
       hasOpenColon = false
     } else if (type === 'colon-token') {
@@ -114,7 +110,7 @@ function scanFrameTail(w: Walker, start: number, limit: number): FrameTailScan {
     }
     i++
   }
-  return { unmatchedOpeners: unmatchedOpeners.toReversed(), hasDanglingText, hasOpenColon }
+  return { unmatchedOpeners: unmatchedOpeners.toReversed(), hasOpenColon }
 }
 
 export interface EofClose {
@@ -125,13 +121,9 @@ export interface EofClose {
 /**
  * Every closer `[start, limit)` needs, in writing order: whatever `last`
  * (the token right before `limit`) needed lexically, then one per still
- * unmatched bracket, then `;` for a declaration still open at this level —
- * or, when none of those apply yet real tokens remain, one `{}` for a bare
- * selector/at-rule prelude that never reached its own `{`. Per CSS Syntax 3
- * that prelude is only dropped because nothing follows it: appending the
- * block right after it un-drops it, and lets the block's own tokens read as
- * more of the same prelude instead of its own sibling, unless given its own
- * (empty, harmless) block first.
+ * unmatched bracket, then `;` for a declaration still open at this level.
+ * What follows (the `}` closing a wrapper the expansion opened) then reads as
+ * its own token, never as more of the construct the input left open.
  */
 function eofClosers(w: Walker, start: number, limit: number, last: Token | undefined): string {
   const closers: string[] = []
@@ -144,11 +136,7 @@ function eofClosers(w: Walker, start: number, limit: number, last: Token | undef
     closers.push(bracketEofCloser(w.tokens[openIndex]!.type))
   }
 
-  if (scan.hasOpenColon) {
-    closers.push(';')
-  } else if (closers.length === 0 && scan.hasDanglingText) {
-    closers.push('{}')
-  }
+  if (scan.hasOpenColon) closers.push(';')
   return closers.join('')
 }
 

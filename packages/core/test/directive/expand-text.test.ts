@@ -262,28 +262,28 @@ describe('AC-directive-core-07 — expander-only rows, Syntax 3 recovery', () =>
     expect(tokens.some((t) => t.type === 'ident-token' && t.raw === 'focus-visible')).toBe(true)
   })
 
-  it('closes a later, still-open sibling rule first, so the appended block is its sibling, not nested inside it', () => {
+  it('leaves a later, still-open sibling rule exactly as written, after the expansion', () => {
     const { css } = expandText('.a { @nave focusRing; .b {', { onUnknown: 'warn' })
 
-    // `.b {` is closed (empty) before `&:focus-visible` is appended, so the
-    // two are siblings under `.a`, not `&:focus-visible` nested inside `.b`.
-    expect(norm(css)).toContain('.b {} &:focus-visible')
+    // The expansion sits where the directive was, so `&:focus-visible` is a child of `.a`
+    // written before `.b {`, not something nested inside it.
+    expect(norm(css)).toMatch(/outline: none; &:focus-visible \{[^}]*\} \.b \{$/)
   })
 })
 
 describe('nested frames left open at EOF each close only their own level, never a deeper one twice', () => {
-  it('closes the innermost level first, then each ancestor closes only the one level directly below it', () => {
+  it('expands each level where its directive is and closes nothing it did not open', () => {
     const { css } = expandText('.a { @nave focusRing; .b { @nave focusRing; .c {')
+    const ring =
+      '&:focus-visible { outline-style: solid; outline-width: var(--nave-border-width-focus, 2px); outline-color: var(--nave-color-border-focus, currentColor); outline-offset: 2px }'
 
-    expect(css).toBe(
-      '.a { outline: none; .b { outline: none; .c {} &:focus-visible { outline-style: solid; outline-width: var(--nave-border-width-focus, 2px); outline-color: var(--nave-color-border-focus, currentColor); outline-offset: 2px }} &:focus-visible { outline-style: solid; outline-width: var(--nave-border-width-focus, 2px); outline-color: var(--nave-color-border-focus, currentColor); outline-offset: 2px }',
-    )
+    expect(css).toBe(`.a { outline: none; ${ring} .b { outline: none; ${ring} .c {`)
   })
 
   it('closes a dangling string once, not once per still-open ancestor frame, and still terminates its declaration', () => {
     const { css } = expandText('.a { @nave focusRing; .b { @nave focusRing; content: "abc')
 
-    expect(css).toMatch(/content: "abc";\s*&:focus-visible/)
+    expect(css).toMatch(/& \{ content: "abc"; \}$/)
     expect(css.match(/"abc"/g)).toHaveLength(1)
   })
 })
@@ -321,11 +321,11 @@ function hasFocusVisibleChildOf(root: ReturnType<typeof postcss.parse>, selector
   return isFound
 }
 
-describe('an unterminated declaration at EOF is given its own semicolon before the appended block', () => {
+describe('an unterminated declaration at EOF is given its own semicolon before the wrapper closes', () => {
   it('ends a bare declaration with no dangling string, url or bracket', () => {
     const { css } = expandText('.a { @nave focusRing; color: red')
 
-    expect(css).toMatch(/color: red;\s*&:focus-visible/)
+    expect(css).toMatch(/& \{ color: red; \}$/)
   })
 
   it.each([
@@ -352,11 +352,10 @@ describe('an unterminated declaration at EOF is given its own semicolon before t
     expect(hasFocusVisibleChildOf(parseWithOuterClosed(css), '.a')).toBe(true)
   })
 
-  it('drops an unterminated qualified-rule prelude with no block of its own, appending the block as its sibling, not nested inside it', () => {
+  it('leaves an unterminated qualified-rule prelude with no block of its own where it is, after the expansion', () => {
     const { css } = expandText('.a { @nave focusRing; .b')
 
-    expect(hasFocusVisibleChildOf(parseWithOuterClosed(css), '.a')).toBe(true)
-    expect(css).not.toContain('.b &:focus-visible')
+    expect(css).toMatch(/&:focus-visible \{[^}]*\} \.b$/)
   })
 })
 

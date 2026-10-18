@@ -7,11 +7,12 @@ import type { AppendPart, Edit } from './expand-text-output.ts'
 import type { ExpandTextOptions } from './expand-text.ts'
 import type { Position } from './source-map.ts'
 
-import { isNaveAtKeyword, type Item, matchBrackets, readItem } from './block-reader.ts'
+import { isNaveAtKeyword, type Item, matchBrackets } from './block-reader.ts'
+import { applyRuleFrame, repositionDiagnostics } from './expand-text-apply.ts'
 import { childContext, type WalkContext } from './expand-text-context.ts'
 import { createPositionFinder } from './expand-text-diagnostics.ts'
 import { closeInfoFor } from './expand-text-eof-close.ts'
-import { renderBlock, renderInline } from './expand-text-render.ts'
+import { readBlockItems, readBlockModel } from './expand-text-model.ts'
 import { plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
 
@@ -54,40 +55,6 @@ export class Walker {
 }
 
 /**
-Not whitespace, not a comment: a candidate item-start token, or the end of a block/input.
- */
-function isStructural(token: Token): boolean {
-  return token.type !== 'whitespace-token' && token.type !== 'comment'
-}
-
-/**
- *
- */
-function skipInert(tokens: readonly Token[], i: number, limit: number): number {
-  let j = i
-  while (j < limit && !isStructural(tokens[j]!)) j++
-  return j
-}
-
-/**
- *
- */
-function repositionDiagnostics(
-  diagnostics: readonly Diagnostic[],
-  item: Item,
-  directiveStart: number,
-  directiveEnd: number,
-): Diagnostic[] {
-  const preludeOffset = item.preludeOffset ?? 0
-  return diagnostics.map((d) => {
-    if (d.code === 'unknown-atom' || d.code === 'bad-token') {
-      return { ...d, offset: preludeOffset + d.offset, endOffset: preludeOffset + d.endOffset }
-    }
-    return { ...d, offset: directiveStart, endOffset: directiveEnd }
-  })
-}
-
-/**
  * Marks a refused-parent diagnostic as sitting in a group rule nested in a style rule, which is
  * what makes its text name the `& { @nave ...; }` workaround.
  */
@@ -101,55 +68,29 @@ interface Frame {
   parts: AppendPart[]
 }
 
-interface DirectiveSite {
-  readonly item: Item
-  readonly context: WalkContext
-  readonly hasNestedNode: boolean
-  readonly frame: Frame
-}
-
 /**
-The `@nave` item's own edit and diagnostics: `has-block` when it carries one, plus whatever `plan()` reports.
+The `@nave` item's own edit and diagnostics where it sits outside a style rule: the problems `plan()` reports for it, and `has-block` when it carries one. A directive in a style rule is expanded with its rule (`applyRuleFrame`).
  */
-function processDirective(w: Walker, site: DirectiveSite): void {
-  const { item, context, hasNestedNode, frame } = site
+function processRefusedDirective(w: Walker, item: Item, context: WalkContext): void {
   const directiveStart = w.tokens[item.start]!.startIndex
   const directiveEnd = w.tokens[item.end - 1]!.endIndex
-  const source = w.positionAt(directiveStart)
   const prelude = w.css.slice(item.preludeOffset ?? 0, item.preludeEndOffset ?? 0)
 
   const result = plan(
     prelude,
-    {
-      isStyleRuleParent: context.isStyleRuleParent,
-      isInsideKeyframes: context.isInsideKeyframes,
-      isFollowingNestedNode: hasNestedNode,
-    },
+    { isStyleRuleParent: false, isInsideKeyframes: context.isInsideKeyframes },
     { extend: w.options.extend },
   )
 
-  const positioned = repositionDiagnostics(result.diagnostics, item, directiveStart, directiveEnd)
+  const positioned = repositionDiagnostics(result.diagnostics, item, {
+    start: directiveStart,
+    end: directiveEnd,
+  })
   if (context.isWorkaroundGroup) markNestedGroup(positioned)
   if (item.blockStart !== undefined)
     positioned.push({ code: 'has-block', offset: directiveStart, endOffset: directiveEnd })
   w.diagnostics.push(...positioned)
-
-  const inline = renderInline(result.declarations, result.wrapInAmpersand)
-  w.edits.push({
-    start: directiveStart,
-    end: directiveEnd,
-    parts: inline === '' ? [] : [{ text: inline, source }],
-  })
-  for (const block of result.blocks) frame.parts.push({ text: ` ${renderBlock(block)}`, source })
-}
-
-/**
-True for a `rule` or `at-rule` item other than `@nave` itself — a nested node, one of the facts `plan()` needs to decide the `& { … }` wrap.
- */
-function isNestedNode(tokens: readonly Token[], item: Item): boolean {
-  if (item.kind === 'rule') return true
-  if (item.kind !== 'at-rule') return false
-  return !isNaveAtKeyword(tokens[item.start]!)
+  w.edits.push({ start: directiveStart, end: directiveEnd, parts: [] })
 }
 
 /**
@@ -178,11 +119,11 @@ export interface BlockBounds {
 }
 
 /**
-One block's own walk, resumable: `i` and `hasNestedNode` are mutated as items are consumed, so a child block can be walked to completion and this one picked back up right where it left off.
+One block's own walk, resumable: `next` is advanced as items are consumed, so a child block can be walked to completion and this one picked back up right where it left off.
  */
 interface WalkFrame {
-  i: number
-  hasNestedNode: boolean
+  next: number
+  readonly items: readonly Item[]
   readonly limit: number
   readonly start: number
   readonly context: WalkContext
@@ -190,16 +131,36 @@ interface WalkFrame {
 }
 
 /**
- *
+Whether `item` is a `@nave` directive.
+ */
+function isDirective(w: Walker, item: Item): boolean {
+  return item.kind === 'at-rule' && isNaveAtKeyword(w.tokens[item.start]!)
+}
+
+/**
+ * A block's frame. A style rule holding a directive is expanded here, once, before its children
+ * are walked: the plan needs the rule's whole content, not one item at a time.
  */
 function toWalkFrame(w: Walker, bounds: BlockBounds): WalkFrame {
+  const items = readBlockItems(w, bounds.start, bounds.limit)
+  const frame: Frame = { parts: [] }
+  if (bounds.context.isStyleRuleParent && items.some((item) => isDirective(w, item))) {
+    applyRuleFrame(w, {
+      items,
+      model: readBlockModel(w, items),
+      selector: bounds.context.selector,
+      isInsideKeyframes: bounds.context.isInsideKeyframes,
+      isClosed: w.tokens[bounds.limit] !== undefined,
+      endParts: frame.parts,
+    })
+  }
   return {
-    i: skipInert(w.tokens, bounds.start, bounds.limit),
-    hasNestedNode: false,
+    next: 0,
+    items,
     limit: bounds.limit,
     start: bounds.start,
     context: bounds.context,
-    frame: { parts: [] },
+    frame,
   }
 }
 
@@ -211,7 +172,7 @@ function childFrameFor(w: Walker, item: Item, context: WalkContext): WalkFrame |
   return toWalkFrame(w, {
     start: item.blockStart,
     limit: item.blockEnd,
-    context: childContext(w.tokens, item, context),
+    context: childContext(w, item, context),
   })
 }
 
@@ -230,27 +191,19 @@ export function walkBlock(w: Walker, bounds: BlockBounds): void {
 
   while (stack.length > 0) {
     const top = stack.at(-1)!
-    if (top.i >= top.limit) {
+    const item = top.items[top.next]
+    if (item === undefined) {
       flushFrame(w, top.start, top.limit, top.frame)
       stack.pop()
       continue
     }
+    top.next++
 
-    const item = readItem(w.tokens, top.i, top.limit, w.closerFor)
-    top.i = skipInert(w.tokens, item.end, top.limit)
-
-    if (item.kind === 'at-rule' && isNaveAtKeyword(w.tokens[item.start]!)) {
-      processDirective(w, {
-        item,
-        context: top.context,
-        hasNestedNode: top.hasNestedNode,
-        frame: top.frame,
-      })
+    if (isDirective(w, item)) {
+      if (!top.context.isStyleRuleParent) processRefusedDirective(w, item, top.context)
     } else if (item.kind === 'rule' || item.kind === 'at-rule') {
       const child = childFrameFor(w, item, top.context)
       if (child) stack.push(child)
     }
-
-    if (isNestedNode(w.tokens, item)) top.hasNestedNode = true
   }
 }

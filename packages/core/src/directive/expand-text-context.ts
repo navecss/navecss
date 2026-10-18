@@ -19,6 +19,10 @@ export interface WalkContext {
   Whether this block is a group at-rule the `& { }` workaround sentence applies to: one of `WORKAROUND_GROUP_AT_RULE_NAMES`, outside `@keyframes`, with a style rule above it.
    */
   readonly isWorkaroundGroup: boolean
+  /**
+  The selector list of the style rule this block belongs to, or `''` when it belongs to no style rule.
+   */
+  readonly selector: string
 }
 
 /**
@@ -32,17 +36,20 @@ function isKeyframesName(name: string): boolean {
 The child context a `rule`/`at-rule` item's own block is walked under.
  */
 export function childContext(
-  tokens: readonly Token[],
+  source: { readonly css: string; readonly tokens: readonly Token[] },
   item: Item,
   context: WalkContext,
 ): WalkContext {
   const { isInsideKeyframes, hasStyleRuleAncestor } = context
+  const { css, tokens } = source
   if (item.kind === 'rule') {
+    const selectorEnd = tokens[item.blockStart! - 1]!.startIndex
     return {
       isStyleRuleParent: true,
       isInsideKeyframes,
       hasStyleRuleAncestor: true,
       isWorkaroundGroup: false,
+      selector: css.slice(tokens[item.start]!.startIndex, selectorEnd).trim(),
     }
   }
   const name = atKeywordName(tokens[item.start]!)
@@ -53,5 +60,6 @@ export function childContext(
     hasStyleRuleAncestor,
     isWorkaroundGroup:
       WORKAROUND_GROUP_AT_RULE_NAMES.has(name) && !isKeyframes && hasStyleRuleAncestor,
+    selector: '',
   }
 }

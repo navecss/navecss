@@ -42,6 +42,7 @@ export function expandText(css: string, options: ExpandTextOptions = {}): Expand
       isInsideKeyframes: false,
       hasStyleRuleAncestor: false,
       isWorkaroundGroup: false,
+      selector: '',
     },
   })
   const { css: outputCss, map } = buildOutput({

@@ -51,9 +51,9 @@ import type { AtomDefinition } from './atoms.ts'
 import type { ExtendMap } from './directive/resolve.ts'
 import type { FoldEntry } from './postcss-fold.ts'
 
-import { handleAtRule } from './postcss-at-rule.ts'
 import { applyExtendModule, resolveExtendSpecifier } from './postcss-extend-module.ts'
 import { foldMessage, sortFoldBySourceOrder } from './postcss-fold.ts'
+import { handleDirective } from './postcss-rule.ts'
 import { snapshotExtendMap } from './snapshot-extend-atoms.ts'
 import { validateExtendAtoms } from './validate-extend-atoms.ts'
 
@@ -144,7 +144,7 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
         },
 
         AtRule(atRule: PostCSSAtRule) {
-          handleAtRule(atRule, { onUnknown, result, extend, fold })
+          handleDirective(atRule, { onUnknown, result, extend, fold })
         },
 
         OnceExit() {
