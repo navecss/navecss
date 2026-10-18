@@ -7,6 +7,7 @@ import {
   FEEDBACK_SUBPATHS,
   FEEDBACK_TOP,
 } from './support/feedback-subpaths.ts'
+import { isLeftOut } from './support/left-out.ts'
 import {
   COMPLETION_SUBPATHS,
   FIRST_RELEASE_SUBPATHS,
@@ -49,8 +50,13 @@ const exportDifferences = (
     const naveKeys = Object.keys(naveTop)
     const baseKeys = Object.keys(baseTop)
     differences.push(
-      ...baseKeys.filter((key) => !naveKeys.includes(key)).map((key) => `${top}.${key} is missing`),
+      ...baseKeys
+        .filter((key) => !naveKeys.includes(key) && !isLeftOut(`${top}.${key}`))
+        .map((key) => `${top}.${key} is missing`),
       ...naveKeys.filter((key) => !baseKeys.includes(key)).map((key) => `${top}.${key} is extra`),
+      ...naveKeys
+        .filter((key) => isLeftOut(`${top}.${key}`))
+        .map((key) => `${top}.${key} is left out and still carried`),
     )
   }
   return differences
@@ -59,7 +65,7 @@ const exportDifferences = (
 const HOOKS_AND_FACTORIES: Readonly<Record<string, readonly string[]>> = {
   autocomplete: ['useFilter', 'useFilteredItems'],
   'alert-dialog': ['createHandle', 'Handle'],
-  combobox: ['useFilter', 'useFilteredItems', 'createItems'],
+  combobox: ['useFilter', 'useFilteredItems'],
   'preview-card': ['createHandle', 'Handle'],
 }
 
@@ -233,6 +239,25 @@ describe('AC-base-ui-feedback-navigation-01 (supersedes AC-base-ui-overlay-compl
     const { useFilter: _removed, ...rest } = nave.Combobox as Record<string, unknown>
     expect(exportDifferences('combobox', { Combobox: rest }, base)).toContain(
       'Combobox.useFilter is missing',
+    )
+  })
+
+  it('combobox: createItems is the one member left out, and it is a key of Base UI at the installed version', async () => {
+    const nave = await importDist('combobox/index.js')
+    const base = await loadBase('combobox')
+    expect(Object.keys(base.Combobox as object)).toContain('createItems')
+    expect(Object.keys(nave.Combobox as object)).not.toContain('createItems')
+  })
+
+  it('control: createItems added to the built Combobox namespace (a dynamic re-export) reds the check, naming it', async () => {
+    const nave = await importDist('combobox/index.js')
+    const base = await loadBase('combobox')
+    const added = {
+      ...(nave.Combobox as Record<string, unknown>),
+      createItems: Reflect.get(base.Combobox as object, 'createItems') as unknown,
+    }
+    expect(exportDifferences('combobox', { Combobox: added }, base)).toContain(
+      'Combobox.createItems is left out and still carried',
     )
   })
 })

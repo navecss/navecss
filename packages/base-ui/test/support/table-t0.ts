@@ -31,7 +31,6 @@ export const T0_QUALIFIED: ReadonlySet<string> = new Set([
   'Autocomplete.Value',
   'Collapsible.Root',
   'Combobox.Collection',
-  'Combobox.createItems',
   'Combobox.Group',
   'Combobox.ItemIndicator',
   'Combobox.List',

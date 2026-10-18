@@ -267,7 +267,19 @@ A right-to-left app needs both `dir="rtl"` on `<html>` (or on the element you pa
 
 Context Menu's trigger area is your own element, and Nave paints nothing on it.
 
-Parts that Base UI added after 1.3 are exported as whatever your installed version provides. In this release the only such part is Combobox's `createItems`, added in Base UI 1.8.0. On 1.3 to 1.7 it is `undefined`, as it is in Base UI itself, and building an app that imports `@navecss/base-ui` or `@navecss/base-ui/combobox` may print a bundler warning that `createItems` has no matching export in Base UI's combobox module, even if the app never uses it. Vite prints it as `IMPORT_IS_UNDEFINED`. The warning is harmless and stops on Base UI 1.8.0. The package keeps it because avoiding it would make every app that uses `createItems` bundle all of Combobox.
+Combobox's `createItems` is not exported here: Base UI added it in 1.8.0, and this package supports Base UI from 1.3. On 1.8.0 or later, import it from Base UI and pass what it returns to `items` on this package's `Combobox.Root`:
+
+```ts
+import { Combobox as BaseCombobox } from '@base-ui/react/combobox'
+
+const fruits = BaseCombobox.createItems(
+  [
+    { id: 1, name: 'Apple' },
+    { id: 2, name: 'Banana' },
+  ],
+  { getValue: (fruit) => fruit.id, getLabel: (fruit) => fruit.name },
+)
+```
 
 The types under a part, such as `Menu.Item.Props`, take their names and type parameters from Base UI 1.3, so four that Base UI added up to 1.8.0 do not come through: `ContextMenu.Root.Actions`, the third type parameter of `Combobox.Root.Props` (`Item`), the type parameter of `NavigationMenu.Root.Props`, and `NavigationMenu.Root.Value`. Import `ContextMenuRootActions` from `@navecss/base-ui/context-menu`, `ComboboxRootProps<Value, Multiple, Item>` from `@navecss/base-ui/combobox`, and `NavigationMenuRootProps<Value>` and `NavigationMenuRoot.Value<Value>` from `@navecss/base-ui/navigation-menu` instead.
 
