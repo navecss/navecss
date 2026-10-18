@@ -34,18 +34,22 @@ const VITE_DECLARATION = path.join(
 )
 
 /**
- * The text of `dist/vite.d.ts` and of the declaration chunks it imports, where the options' types
- * are declared once for both entries that share them.
+ * The text of `dist/vite.d.ts` and of every declaration file it reaches through imports and
+ * re-exports, where the options' types are declared once for both entries that share them. The
+ * bundler decides how many hops that takes, so every one is followed.
  */
 function viteDeclaration(): string {
-  const entry = readFileSync(VITE_DECLARATION, 'utf8')
-  const chunks = entry
-    .matchAll(/from '\.\/([^']+)\.js'/gu)
-    .map((match) =>
-      readFileSync(path.join(path.dirname(VITE_DECLARATION), `${match[1]}.d.ts`), 'utf8'),
-    )
-    .toArray()
-  return [entry, ...chunks].join('\n')
+  const directory = path.dirname(VITE_DECLARATION)
+  const texts = new Map<string, string>()
+  const pending = [path.basename(VITE_DECLARATION, '.d.ts')]
+  while (pending.length > 0) {
+    const name = pending.pop()!
+    if (texts.has(name)) continue
+    const text = readFileSync(path.join(directory, `${name}.d.ts`), 'utf8')
+    texts.set(name, text)
+    pending.push(...text.matchAll(/from '\.\/([^']+)\.js'/gu).map((match) => match[1]!))
+  }
+  return texts.values().toArray().join('\n')
 }
 
 /**

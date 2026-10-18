@@ -20,6 +20,12 @@ updates:
       # own devDependency bumps from opening a flood of one-line PRs.
       dev-dependencies:
         dependency-type: 'development'
+        # @base-ui/react is base-ui's peer as well as its dev dependency, and base-ui's tests pin
+        # Base UI's surface (the export map, the generated wrappers, the parts' ARIA semantics)
+        # to the version it builds against. A Base UI minor is therefore an upgrade of base-ui,
+        # not a routine bump: it gets its own pull request rather than holding the group back.
+        exclude-patterns:
+          - '@base-ui/react'
     ignore:
       # TypeScript 7 breaks the build today: typescript-eslint 8.70 throws "does not support
       # TS 7.0" at plugin load (so nothing can be linted), and tsup's bundled rollup-plugin-dts
