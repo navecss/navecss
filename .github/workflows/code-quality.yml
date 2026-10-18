@@ -61,7 +61,7 @@ jobs:
         run: pnpm run build
 
       - name: Hand the build output to the jobs that read it
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-output-${{ matrix.leg }}
           path: |
@@ -82,7 +82,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Take the build output
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-output-pinned
 
@@ -100,7 +100,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Take the build output
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-output-pinned
 
@@ -134,7 +134,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Take the build output
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-output-${{ matrix.leg }}
 
@@ -147,7 +147,7 @@ jobs:
       # The floor leg proves the suites pass on Node 22.18; the pinned leg's reports are scanned.
       - name: Hand the coverage reports to the sonar job
         if: matrix.leg == 'pinned'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
           path: packages/*/coverage/lcov.info
@@ -165,7 +165,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Take the build output
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-output-pinned
 
@@ -192,7 +192,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Take the build output
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-output-pinned
 
@@ -246,7 +246,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Take the build output
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-output-pinned
 
@@ -256,7 +256,7 @@ jobs:
       # The scripts' coverage report is produced by this job, not by the test job, so it travels to
       # the sonar job as an artifact of its own.
       - name: Hand the coverage report to the sonar job
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scripts-coverage
           path: scripts/coverage/lcov.info
@@ -274,7 +274,7 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Take the build output
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-output-pinned
 
@@ -303,7 +303,7 @@ jobs:
       # The reports were uploaded from packages/*/coverage/lcov.info, and an artifact keeps paths
       # relative to the files' common directory, packages/, so that is where they go back.
       - name: Take the coverage reports from the test job
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: coverage
           path: packages
@@ -311,7 +311,7 @@ jobs:
       # The scripts' report was uploaded from scripts/coverage/lcov.info, so its directory is the
       # artifact's root and that is where it goes back.
       - name: Take the coverage report from the scripts:test job
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: scripts-coverage
           path: scripts/coverage

@@ -220,7 +220,7 @@ describe('AC-used-atoms-10 — anything else is a build error', () => {
     ['assigned again', "let v = 'flex'; v = 'grid'; cx(v)"],
     ['updated', "let u = 'flex'; u += ''; cx(u)"],
     ['no initialiser', "let w; w = 'flex'; cx(w)"],
-    ['parameter', 'export function C2(p) { return cx(p) }'],
+    ['parameter', 'function C2(p) { return cx(p) }'],
     ['member', 'cx(props.variant)'],
     ['call', 'cx(pick())'],
     ['import from another module', 'cx(N)'],
@@ -230,7 +230,7 @@ describe('AC-used-atoms-10 — anything else is a build error', () => {
     ['one branch unresolvable', "cx(props.on ? 'flex' : props.variant)"],
     [
       'not in an enclosing scope',
-      "function a() { const s = 'flex'; return s } export function b() { return cx(s) }",
+      "function a() { const s = 'flex'; return s } function b() { return cx(s) }",
     ],
     ['whitespace inside', "cx('flex gap')"],
     ['trailing space', "cx('flex ')"],
