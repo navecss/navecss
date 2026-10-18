@@ -214,7 +214,11 @@ const generateSubpath = (types: SubpathTypes, used: Set<string>): Map<string, st
   const ownExport = isSingle
     ? `export { ${topName(subpath)} } from './parts.generated.ts'`
     : `export * as ${topName(subpath)} from './parts.generated.ts'`
-  const index = `'use client'\n${isSingle ? SINGLE_NOTICE : ''}\n${ownExport}\n${reexport}\n`
+  // The entry module carries no directive, as Base UI's own namespace modules carry none: the
+  // directive is on the parts module, so each part is a client reference and `Dialog` is an
+  // ordinary object a Server Component can dot into. With the directive here, `Dialog` itself
+  // would be one client reference, which cannot be dotted into on the server.
+  const index = `${isSingle ? `${SINGLE_NOTICE}\n` : ''}${ownExport}\n${reexport}\n`
   const generated = `'use client'\n${NOTICE}\n${imports(subpath, body)}\n${body}\n`
   return new Map([
     [`${subpath}/index.ts`, index],
@@ -222,8 +226,9 @@ const generateSubpath = (types: SubpathTypes, used: Set<string>): Map<string, st
   ])
 }
 
+// No directive here either, for the reason given in `generateSubpath`.
 const rootModule = (): string =>
-  `'use client'\n\n${SUBPATHS.map((subpath) => `export * from './${subpath}/index.ts'`)
+  `${SUBPATHS.map((subpath) => `export * from './${subpath}/index.ts'`)
     .toSorted((a, b) => a.localeCompare(b))
     .join('\n')}\n`
 

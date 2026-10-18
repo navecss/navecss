@@ -4,7 +4,7 @@
  * same lines, so the build and the command agree on what survived. It has no off switch: a
  * directive in shipped CSS is never wanted, and `onUnknown: 'ignore'` does not turn it off.
  */
-import type { BundleContext, BundleEntry } from './vite-types.ts'
+import type { BundleEntry } from './vite-types.ts'
 
 import { type Finding, findingsInText, formatFinding } from './directive/findings.ts'
 
@@ -29,7 +29,7 @@ function textOf(entry: BundleEntry): string {
 /**
  * The build error: a heading, one line per finding, and how many CSS files were read.
  */
-function messageFor(findings: readonly Finding[], assetCount: number): string {
+export function scanMessage(findings: readonly Finding[], assetCount: number): string {
   const noun = assetCount === 1 ? 'asset' : 'assets'
   return [
     '@nave survived into the built CSS:',
@@ -39,13 +39,15 @@ function messageFor(findings: readonly Finding[], assetCount: number): string {
 }
 
 /**
- * Scans `bundle`'s CSS assets and fails the build when any holds a directive.
+ * The CSS assets of `bundle` and every directive left in them.
  */
-export function scanBundle(
-  ctx: BundleContext,
-  bundle: Readonly<Record<string, BundleEntry>>,
-): void {
+export function scanAssets(bundle: Readonly<Record<string, BundleEntry>>): {
+  readonly findings: Finding[]
+  readonly names: string[]
+} {
   const assets = Object.values(bundle).filter((entry) => isCssAsset(entry))
-  const findings = assets.flatMap((asset) => findingsInText(asset.fileName, textOf(asset)))
-  if (findings.length > 0) ctx.error({ message: messageFor(findings, assets.length) })
+  return {
+    findings: assets.flatMap((asset) => findingsInText(asset.fileName, textOf(asset))),
+    names: assets.map((asset) => asset.fileName),
+  }
 }

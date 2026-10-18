@@ -19,6 +19,7 @@ import { type DeclaredModules, declaredModulesFor, isAboutListed } from './vite-
 import { declaredReadingOf } from './vite-cx-reading.ts'
 import { keepMap } from './vite-dev-keep.ts'
 import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
+import { isSerialisedStylesheet } from './vite-serialised-css.ts'
 import { setupExposuresFor } from './vite-setup-link.ts'
 import { combinedMapOf, placerFor } from './vite-source-map.ts'
 import { moduleKey } from './vite-state.ts'
@@ -43,16 +44,12 @@ const ESCAPED_SPECIFIER = /(?:\bfrom|\bimport)[\s(]*(?:'[^'\\\n]*\\|"[^"\\\n]*\\
 /**
  * Whether the text could name an atom at all: it imports from `cx` (as written, or with an escape
  * in the specifier), it holds `nave-`, or it is a Vue template reading its component's bindings
- * off `$setup`.
+ * off `$setup`; a module that is only a stylesheet a host serialised into JavaScript does not.
  */
 export function isMentioningAtoms(code: string): boolean {
-  return (
-    code.includes(CX_SOURCE) ||
-    code.includes('nave-') ||
-    code.includes('$setup') ||
-    code.includes('vue&type=') ||
-    ESCAPED_SPECIFIER.test(code)
-  )
+  if (code.includes(CX_SOURCE) || ESCAPED_SPECIFIER.test(code)) return true
+  if (isSerialisedStylesheet(code)) return false
+  return code.includes('nave-') || code.includes('$setup') || code.includes('vue&type=')
 }
 
 /**

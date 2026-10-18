@@ -6,6 +6,9 @@ export default defineConfig({
     // A V8 garbage-collector crash in Node 24's baseline compiler (nodejs/node#62393) can kill a
     // test worker with SIGSEGV. Remove this once the pinned Node carries the fix.
     execArgv: ['--no-sparkplug'],
+    // A row that runs the theming build takes a third of a second alone, but queues behind other
+    // runs when several share a loaded machine: 20 s each, as in the other packages.
+    testTimeout: 20_000,
     include: ['test/**/*.test.ts'],
     coverage: {
       // Measure and report only — no thresholds are configured, and none

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import { hasDirective, kindOf } from './support/client-boundary.ts'
 import { DIST_DIR, filesUnder, manifest, readDist, SRC_DIR } from './support/dist.ts'
 import { FEEDBACK_SUBPATHS } from './support/feedback-subpaths.ts'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
@@ -11,20 +12,7 @@ import { COMPLETION_SUBPATHS, SINGLE_COMPONENT, SUBPATHS } from './support/subpa
 
 const byName = (a: string, b: string): number => a.localeCompare(b)
 
-/**
- * Whether a module's first statement is the `'use client'` directive: leading whitespace and
- * comments are skipped one at a time, so no pattern has to match across them.
- */
-const hasDirective = (code: string): boolean => {
-  let rest = code.trimStart()
-  while (rest.startsWith('//') || rest.startsWith('/*')) {
-    const end = rest.startsWith('//') ? rest.indexOf('\n') : rest.indexOf('*/') + 1
-    rest = end <= 0 ? '' : rest.slice(end + 1).trimStart()
-  }
-  return /^(['"])use client\1/.test(rest)
-}
-
-describe("AC-base-ui-bridge-13, AC-base-ui-overlay-completion-43 and AC-base-ui-feedback-navigation-46: 'use client' survives, per file", () => {
+describe("AC-base-ui-bridge-13, AC-base-ui-overlay-completion-43 and AC-base-ui-feedback-navigation-46: 'use client' survives on the part modules, per file", () => {
   const sources = filesUnder(SRC_DIR, ['.ts', '.tsx'])
   const built = filesUnder(DIST_DIR, ['.js'])
 
@@ -34,11 +22,19 @@ describe("AC-base-ui-bridge-13, AC-base-ui-overlay-completion-43 and AC-base-ui-
     )
   })
 
-  it('begins every built module with the directive', () => {
-    expect(built.filter((file) => !hasDirective(readDist(file)))).toEqual([])
+  it('begins every part module with the directive', () => {
+    const parts = built.filter((file) => kindOf(file.replace(/\.js$/, '')) === 'part')
+    expect(parts).toHaveLength(37)
+    expect(parts.filter((file) => !hasDirective(readDist(file)))).toEqual([])
   })
 
-  it('has a source module and a built module with the directive for the index and the parts of each of the six', () => {
+  it('begins no other built module with the directive', () => {
+    const others = built.filter((file) => kindOf(file.replace(/\.js$/, '')) !== 'part')
+    expect(others).toHaveLength(37)
+    expect(others.filter((file) => hasDirective(readDist(file)))).toEqual([])
+  })
+
+  it('has a source module and a built module for the index and the parts of each of the six, the directive on the parts', () => {
     const modules = COMPLETION_SUBPATHS.flatMap((subpath) => [
       `${subpath}/index`,
       `${subpath}/parts.generated`,
@@ -48,13 +44,13 @@ describe("AC-base-ui-bridge-13, AC-base-ui-overlay-completion-43 and AC-base-ui-
     expect(
       modules.filter((module) => {
         const file = `${module}.js`
-        return built.includes(file) && !hasDirective(readDist(file))
+        return built.includes(file) && hasDirective(readDist(file)) !== (kindOf(module) === 'part')
       }),
     ).toEqual([])
     expect(SINGLE_COMPONENT.has('menubar')).toBe(true)
   })
 
-  it('AC-base-ui-feedback-navigation-46: has a source module, a built module with the directive and a declaration file for the index and the parts of each of the seven', () => {
+  it('AC-base-ui-feedback-navigation-46: has a source module, a built module and a declaration file for the index and the parts of each of the seven, the directive on the parts', () => {
     const declarations = filesUnder(DIST_DIR, ['.d.ts'])
     const modules = FEEDBACK_SUBPATHS.flatMap((subpath) => [
       `${subpath}/index`,
@@ -67,15 +63,16 @@ describe("AC-base-ui-bridge-13, AC-base-ui-overlay-completion-43 and AC-base-ui-
     expect(
       modules.filter((module) => {
         const file = `${module}.js`
-        return built.includes(file) && !hasDirective(readDist(file))
+        return built.includes(file) && hasDirective(readDist(file)) !== (kindOf(module) === 'part')
       }),
     ).toEqual([])
-    // The source modules begin with the directive too: the build keeps what the source has.
+    // The source modules agree: the build keeps what the source has.
     expect(
       modules.filter(
         (module) =>
           sources.includes(`${module}.ts`) &&
-          !hasDirective(readFileSync(path.join(SRC_DIR, `${module}.ts`), 'utf8')),
+          hasDirective(readFileSync(path.join(SRC_DIR, `${module}.ts`), 'utf8')) !==
+            (kindOf(module) === 'part'),
       ),
     ).toEqual([])
   })
@@ -86,12 +83,12 @@ describe("AC-base-ui-bridge-13, AC-base-ui-overlay-completion-43 and AC-base-ui-
     expect(hasDirective("export const a = 1\n'use client'")).toBe(false)
   })
 
-  it('AC-base-ui-feedback-navigation-46, control: the seven bundled with esbuild lose the directive', async () => {
+  it('AC-base-ui-feedback-navigation-46, control: the parts of the seven bundled with esbuild lose the directive', async () => {
     const result = await build({
       absWorkingDir: PACKAGE_DIR,
       bundle: true,
       stdin: {
-        contents: `export { Toast } from ${JSON.stringify(path.join(DIST_DIR, 'toast/index.js'))}`,
+        contents: `export { Root } from ${JSON.stringify(path.join(DIST_DIR, 'toast/parts.generated.js'))}`,
         resolveDir: PACKAGE_DIR,
       },
       external: ['react', 'react-dom', '@base-ui/react', '@base-ui/react/*'],
@@ -102,14 +99,15 @@ describe("AC-base-ui-bridge-13, AC-base-ui-overlay-completion-43 and AC-base-ui-
     expect(hasDirective(result.outputFiles[0]?.text ?? '')).toBe(false)
   })
 
-  it('control: the same source bundled with esbuild loses the directive', async () => {
-    // A consumer's entry that imports the package: the modules' own directives are not the
-    // bundle's, which is what a bundler that merges the files does to them.
+  it('control: the part module of a namespace bundled with esbuild loses the directive', async () => {
+    // A consumer's entry that imports the parts: the modules' own directives are not the
+    // bundle's, which is what a bundler that merges the files does to them. The parts module is the
+    // one file that must keep it, so it is the one the control bundles.
     const result = await build({
       absWorkingDir: PACKAGE_DIR,
       bundle: true,
       stdin: {
-        contents: `export { Dialog } from ${JSON.stringify(path.join(DIST_DIR, 'dialog/index.js'))}`,
+        contents: `export { Root } from ${JSON.stringify(path.join(DIST_DIR, 'dialog/parts.generated.js'))}`,
         resolveDir: PACKAGE_DIR,
       },
       external: ['react', 'react-dom', '@base-ui/react', '@base-ui/react/*'],

@@ -22,6 +22,14 @@ const FILES = {
   'atoms.mjs': atomsModule('1px'),
 }
 
+// The dev-server rows tell the server about each edit with an event of their own, so its file
+// watcher is switched off: the operating system's file events can reach it seconds late while
+// other processes write many files, along with a late batch that reports the app's own new files
+// as changed, which sends a full reload no edit asked for. The event still re-runs a stylesheet
+// only if the plugin registered the module with addWatchFile.
+// eslint-disable-next-line unicorn/no-null -- `null` is Vite's own spelling for "no watcher"
+const DEV_SERVER = { server: { middlewareMode: true, watch: null } }
+
 const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
   // Last registered, first run: a server or watcher closes before the app it watches is removed.
@@ -37,6 +45,14 @@ async function until(isMet: () => Promise<boolean>, what: string): Promise<void>
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
   throw new Error(`timed out waiting for ${what}`)
+}
+
+/**
+ * Writes `text` to `file` and tells the dev server it changed, as its file watcher would.
+ */
+function edit(server: Awaited<ReturnType<typeof startDev>>, file: string, text: string): void {
+  writeFileSync(file, text)
+  server.watcher.emit('change', file)
 }
 
 /**
@@ -58,16 +74,14 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     const app: ScratchApp = makeApp(FILES)
     cleanups.push(() => app.dispose())
     const server = await startDev(
-      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], {
-        server: { middlewareMode: true, watch: {} },
-      }),
+      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], DEV_SERVER),
     )
     cleanups.push(() => server.close())
 
     const first = await server.transformRequest('/src/app.css')
     expect(first?.code).toMatch(/margin:\s*1px/)
 
-    writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
+    edit(server, path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
 
     await until(async () => {
       const next = await server.transformRequest('/src/app.css')
@@ -79,15 +93,13 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     const app: ScratchApp = makeApp({ ...FILES, 'atoms.mjs': "throw new Error('not ready')\n" })
     cleanups.push(() => app.dispose())
     const server = await startDev(
-      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], {
-        server: { middlewareMode: true, watch: {} },
-      }),
+      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], DEV_SERVER),
     )
     cleanups.push(() => server.close())
     const sent = spyOnClient(server)
 
     await expect(server.transformRequest('/src/app.css')).rejects.toThrow()
-    writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
+    edit(server, path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
 
     await until(
       () => Promise.resolve(sent.some((payload) => payload.type === 'full-reload')),
@@ -101,24 +113,21 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     const app: ScratchApp = makeApp({ ...FILES, 'src/late.css': '.late { @nave brand; }\n' })
     cleanups.push(() => app.dispose())
     const server = await startDev(
-      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], {
-        server: { middlewareMode: true, watch: {} },
-      }),
+      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], DEV_SERVER),
     )
     cleanups.push(() => server.close())
     const sent = spyOnClient(server)
     await server.transformRequest('/src/app.css')
 
-    writeFileSync(path.join(app.root, 'atoms.mjs'), "throw new Error('not ready')\n")
+    edit(server, path.join(app.root, 'atoms.mjs'), "throw new Error('not ready')\n")
     await expect(server.transformRequest('/src/late.css')).rejects.toThrow()
-    // Let the dev server finish with the throwing write before the fix lands: its file watcher
-    // drops a second change to one file that follows the first too closely.
+    // Let the dev server finish with the throwing edit before the fix lands.
     await until(() => Promise.resolve(sent.length > 0), 'the dev server to see the throwing module')
     await new Promise((resolve) => setTimeout(resolve, 300))
     // The client that was told to reload asks for the stylesheet again, and it fails again.
     await expect(server.transformRequest('/src/late.css')).rejects.toThrow()
     sent.length = 0
-    writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
+    edit(server, path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
 
     await until(
       () => Promise.resolve(sent.some((payload) => payload.type === 'full-reload')),
@@ -130,20 +139,18 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     const app: ScratchApp = makeApp({ ...FILES, 'atoms.mjs': "throw new Error('not ready')\n" })
     cleanups.push(() => app.dispose())
     const server = await startDev(
-      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], {
-        server: { middlewareMode: true, watch: {} },
-      }),
+      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], DEV_SERVER),
     )
     cleanups.push(() => server.close())
     const sent = spyOnClient(server)
 
     await expect(server.transformRequest('/src/app.css')).rejects.toThrow()
-    writeFileSync(path.join(app.root, 'src/app.css'), '.a { color: red; }\n')
+    edit(server, path.join(app.root, 'src/app.css'), '.a { color: red; }\n')
     const edited = await server.transformRequest('/src/app.css')
     expect(edited?.code).toContain('color: red')
     await new Promise((resolve) => setTimeout(resolve, 500))
     sent.length = 0
-    writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
+    edit(server, path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
     // A reload, if one is coming, comes within a few seconds; stop looking as soon as one does.
     const deadline = Date.now() + 4000
     while (Date.now() < deadline && sent.every((payload) => payload.type !== 'full-reload')) {
@@ -157,15 +164,13 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     const app: ScratchApp = makeApp(FILES)
     cleanups.push(() => app.dispose())
     const server = await startDev(
-      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], {
-        server: { middlewareMode: true, watch: {} },
-      }),
+      appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })], DEV_SERVER),
     )
     cleanups.push(() => server.close())
     const sent = spyOnClient(server)
     await server.transformRequest('/src/app.css')
 
-    writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
+    edit(server, path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
     await until(async () => {
       const next = await server.transformRequest('/src/app.css')
       return next?.code.includes('margin: 2px') === true

@@ -145,8 +145,11 @@ migrate.
 
 Stated as rules, not as gaps to be filled later:
 
-- **JSX only**, at this version: Vue, Svelte, Astro, plain HTML templates and slot props
-  (`classNames={{ root: '...' }}`) are outside every rule here.
+- **JSX only**, at this version: Vue, Svelte, plain HTML templates and slot props
+  (`classNames={{ root: '...' }}`) are outside every rule here. An `.astro` file linted through
+  `eslint-plugin-astro` is read, because its parser gives the rules the template as JSX: `class`
+  and a `style` object are checked as in JSX, so a class your `<style>` block styles is reported
+  unless `allow` declares it. Astro's `class:list` and a `style` written as a string are not read.
 - A class reached through an imported constant, a variable beyond one `const` hop, or a call to a
   helper not in `settings['@navecss'].helpers` is not seen.
 - A function's return value is read only when an inline function is the whole `className` or

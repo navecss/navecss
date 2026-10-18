@@ -163,6 +163,7 @@ export const ITEM_RULES: readonly ItemRule[] = [
 The reader items' withdrawn texts: never in the README of the combined package, in any state.
  */
 export const WITHDRAWN_reader: readonly NamedLiteral[] = [
+  named('D1b as first written', S.D1B_EARLIER),
   named('D2', S.D2_ANCHORED_PROVIDER),
   named('D5', S.D5_SWIPE),
   named('D9', S.D9_CURRENT_PAGE),

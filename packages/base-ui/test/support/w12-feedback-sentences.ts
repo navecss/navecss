@@ -62,6 +62,15 @@ export const D1_TOAST_SETUP: Literal = {
 Reader item D1b: the manager in a client module.
  */
 export const D1B_MANAGER_IN_A_CLIENT_MODULE: Literal = {
+  bytes: 138,
+  prefix: '28999d0098197d3c',
+  text: "Call `Toast.createToastManager()` in a module that starts with `'use client'`, as in the example, and import the manager from that module.",
+}
+/**
+Reader item D1b as first written, withdrawn when the package stopped marking every subpath a client
+module: its last clause is no longer true.
+ */
+export const D1B_EARLIER: Literal = {
   bytes: 188,
   prefix: '69cce4fe8d66c81c',
   text: "Call `Toast.createToastManager()` in a module that starts with `'use client'`, as in the example, and import the manager from that module: every subpath of this package is a client module.",

@@ -2,7 +2,8 @@
  * The untransformed-dependency warning. A server build leaves packages in `node_modules` external
  * by default, and an external package's `cx()` calls are read by no environment. When such a
  * package declares `@navecss/core`, the build may be missing atoms it applies, so it says so,
- * naming the package and `ssr.noExternal`: a possible miss, never a known one.
+ * naming the package and the `noExternal` that reaches the environments: a possible miss, never a
+ * known one.
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -40,10 +41,21 @@ export function isDeclaringCore(root: string, name: string): boolean {
 }
 
 /**
+ * The key to name where a package must be bundled so the build reads it. Where a server
+ * environment wrote the first stylesheet (Astro), `ssr.noExternal` reaches only some of the
+ * environments, so it is the key that reaches every one.
+ */
+export function noExternalKey(firstWriter: 'client' | 'server' | undefined): string {
+  return firstWriter === 'server'
+    ? 'resolve.noExternal in your Vite config (on Astro, under vite in astro.config)'
+    : 'ssr.noExternal in your Vite config'
+}
+
+/**
  * The words of the warning for the package `name`.
  */
-function warningFor(name: string): string {
-  return `${name} depends on @navecss/core, but no environment of this build transforms it, so the atoms its cx() calls name are not read. Add it to ssr.noExternal in your Vite config so the build reads it, or list the atoms its calls can produce under its name in keepFor in navePlugin().`
+function warningFor(name: string, firstWriter: 'client' | 'server' | undefined): string {
+  return `${name} depends on @navecss/core, but no environment of this build transforms it, so the atoms its cx() calls name are not read. Add it to ${noExternalKey(firstWriter)} so the build reads it, or list the atoms its calls can produce under its name in keepFor in navePlugin().`
 }
 
 /**
@@ -56,7 +68,7 @@ function judgeExternals(ctx: RenderContext, context: UsedContext): void {
     if (state.packages.has(name) || state.warned.has(name)) continue
     if (Object.hasOwn(context.options.keepFor, name)) continue
     state.warned.add(name)
-    ctx.warn(warningFor(name))
+    ctx.warn(warningFor(name, state.firstWriter))
   }
   state.externals.clear()
 }
