@@ -781,7 +781,12 @@ others. The report covers one stylesheet, so a bundler that stops at the first
 failing file reports one file per build. Under `'warn'`, each problem is a
 warning of its own. On Next.js's default bundler, which shows no PostCSS
 warning, each one is printed to the terminal instead, as `file:line:column:`
-and the message ([where Next.js shows them](#nextjs)).
+and the message ([where Next.js shows them](#nextjs)). The PostCSS plugin knows
+that bundler, Turbopack, by the `TURBOPACK` environment variable, which Next.js
+sets for it, so wherever that variable is set and not empty, under Vite or the
+PostCSS CLI as well, the plugin prints each problem to the terminal and raises
+no PostCSS warning. The Vite plugin and the Lightning CSS adapter do not read
+the variable.
 
 To add atoms of your own to `@nave`, pass them as `extend`: see
 [CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md). An `extend` object written inline in

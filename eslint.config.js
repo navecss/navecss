@@ -277,9 +277,9 @@ export default defineConfig([
     },
   },
   // ── postcss-warn.ts — where a `'warn'`-mode problem goes. Turbopack shows no PostCSS warning,
-  // so under it `console.warn` is the output channel, and `TURBOPACK` is read in the host's
-  // process while a stylesheet is built, not by a task turbo runs, so turbo has no cache key to
-  // add it to. ─────────────────────────────────────────────────────────────────────────────
+  // so under it `console.warn` is the output channel. `TURBOPACK` is read in the host's process
+  // while a stylesheet is built; the one turbo task that runs this code, `test`, pins it empty in
+  // vitest.config.ts, so turbo has no cache key to add it to. ──────────────────────────────
   {
     files: ['**/src/postcss-warn.ts'],
     rules: {
