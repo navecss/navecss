@@ -57,11 +57,26 @@ function nodesOf(atRule: PostCSSAtRule, emission: Emission): ChildNode[] {
 }
 
 /**
+ * Writes a block in front of `atRule`. A block takes the whitespace of the node before it, and
+ * the stylesheet's own default when nothing is before it, as a block written at the end of the
+ * rule always did; copying the directive's whitespace would put a block on the directive's line.
+ */
+function insertBlock(atRule: PostCSSAtRule, node: ChildNode): void {
+  const previous = atRule.prev()
+  atRule.before(node)
+  if (previous?.raws.before === undefined) delete node.raws.before
+  else node.raws.before = previous.raws.before.replaceAll(/\S/g, '')
+}
+
+/**
  * Writes `emissions` into the tree in front of `atRule`, in order.
  */
 export function insertEmissions(atRule: PostCSSAtRule, emissions: readonly Emission[]): void {
   for (const emission of emissions) {
-    for (const node of nodesOf(atRule, emission)) atRule.before(node)
+    for (const node of nodesOf(atRule, emission)) {
+      if (emission.kind === 'block') insertBlock(atRule, node)
+      else atRule.before(node)
+    }
   }
 }
 
