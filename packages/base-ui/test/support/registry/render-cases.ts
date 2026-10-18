@@ -5,28 +5,15 @@
  */
 import type { Props } from '../scenes.ts'
 
-import { INDETERMINATE } from '../feedback-render.ts'
 import { EARLIER_SUBPATHS, FEEDBACK_SUBPATHS } from '../feedback.ts'
-import { isOverlay, navigationMenuOpenProps, openProps } from '../states.ts'
+import { FEEDBACK_PARITY_STATES, VARIANT_PARTS } from '../parity-lists.ts'
+import { isOverlay, openProps } from '../states.ts'
 
 export interface ParityCase {
   readonly name: string
   readonly props: Record<string, Props>
   readonly subpath: string
 }
-
-const VARIANT_PARTS = [
-  'Button',
-  'Toolbar.Button',
-  'Dialog.Trigger',
-  'Dialog.Close',
-  'Popover.Trigger',
-  'Popover.Close',
-  'Menu.Trigger',
-  'Tooltip.Trigger',
-  'AlertDialog.Trigger',
-  'AlertDialog.Close',
-]
 
 const variantProps = (variant: 'ghost' | 'primary'): Record<string, Props> => ({
   ...Object.fromEntries(VARIANT_PARTS.map((part) => [part, { size: 'sm', variant }] as const)),
@@ -48,35 +35,16 @@ interface State {
 
 const REST: readonly State[] = [{ label: 'rendered', props: {} }]
 
-const FEEDBACK_STATES: Readonly<Record<string, readonly State[]>> = {
-  avatar: [
-    { label: 'rendered', props: {} },
-    { label: 'rendered, with size="lg"', props: { 'Avatar.Root': { size: 'lg' } } },
-    { label: 'rendered, with size="sm"', props: { 'Avatar.Root': { size: 'sm' } } },
-  ],
-  meter: REST,
-  'navigation-menu': [
-    { label: 'closed', props: {} },
-    { label: 'open', props: navigationMenuOpenProps() },
-  ],
-  progress: [
-    { label: 'rendered', props: {} },
-    { label: 'indeterminate', props: { 'Progress.Root': { value: INDETERMINATE } } },
-  ],
-  'scroll-area': REST,
-  separator: [
-    { label: 'horizontal', props: {} },
-    { label: 'vertical', props: { Separator: { orientation: 'vertical' } } },
-  ],
-  toast: [
-    { label: 'two toasts', props: {} },
-    { label: 'four toasts open', props: { 'Toast.Adder': { count: 4 } } },
-    {
-      label: 'four toasts open, one over the limit',
-      props: { 'Toast.Adder': { count: 4 }, 'Toast.Provider': { limit: 3 } },
-    },
-  ],
-}
+/**
+ * The feedback states the package rows render, each with what only the wrapper is given merged into
+ * its props: the copy and the package are given the same props.
+ */
+const FEEDBACK_STATES: Readonly<Record<string, readonly State[]>> = Object.fromEntries(
+  Object.entries(FEEDBACK_PARITY_STATES).map(([subpath, states]) => [
+    subpath,
+    states.map(({ extra, label, props }) => ({ label, props: { ...props, ...extra } })),
+  ]),
+)
 
 const earlierStates = (subpath: string): readonly State[] =>
   isOverlay(subpath)

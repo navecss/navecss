@@ -7,7 +7,12 @@ import path from 'node:path'
 
 import { PACKAGE_DIR } from '../stylesheet.ts'
 
-export const REGISTRY_DIR = path.join(PACKAGE_DIR, 'dist/registry')
+/**
+ * The directory every registry test reads. `NAVE_REGISTRY_DIR` points it elsewhere, which the wiring
+ * test uses to run every registry test over a registry that is absent.
+ */
+// eslint-disable-next-line turbo/no-undeclared-env-vars -- a test-run variable, not a build input
+export const REGISTRY_DIR = process.env.NAVE_REGISTRY_DIR ?? path.join(PACKAGE_DIR, 'dist/registry')
 
 export interface RegistryFile {
   content?: string

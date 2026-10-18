@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { createRef, type RefObject } from 'react'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
@@ -24,6 +26,7 @@ import { styledSubpaths } from '../support/registry/styled-subpaths.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
 import { openProps } from '../support/states.ts'
+import { PACKAGE_DIR } from '../support/stylesheet.ts'
 import { topName } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 
@@ -83,6 +86,13 @@ const violationsOf = async (
   return found
 }
 
+const sourceOf = (file: string): string => readFileSync(path.join(PACKAGE_DIR, file), 'utf8')
+
+const isImportedFromSharedLists = (source: string, name: string): boolean =>
+  new RegExp(
+    String.raw`import \{[^}]*\b${name}\b[^}]*\} from '[./]*(?:support/)?parity-lists\.ts'`,
+  ).test(source)
+
 const comparedCases: string[] = []
 
 describe('AC-base-ui-registry-18: The copy renders the package DOM, part for part, in the four runs', () => {
@@ -108,6 +118,23 @@ describe('AC-base-ui-registry-18: The copy renders the package DOM, part for par
     const { atomOfToken, copies } = await prepared()
     comparedCases.push(name)
     expect(await violationsOf(copies, { props, subpath }, atomOfToken)).toEqual([])
+  })
+
+  it('takes the Button-family parts and the feedback states from the one list the package rows use', () => {
+    const BUTTON_FAMILY = "'Toolbar.Button'"
+    const FEEDBACK_STATE = "'four toasts open, one over the limit'"
+    const users: readonly (readonly [string, string, string])[] = [
+      ['test/render/dom-parity.test.ts', 'VARIANT_PARTS', BUTTON_FAMILY],
+      ['test/render/dom-parity-feedback.test.ts', 'FEEDBACK_PARITY_STATES', FEEDBACK_STATE],
+      ['test/support/registry/render-cases.ts', 'VARIANT_PARTS', BUTTON_FAMILY],
+      ['test/support/registry/render-cases.ts', 'FEEDBACK_PARITY_STATES', FEEDBACK_STATE],
+    ]
+    for (const [file, name, literal] of users) {
+      expect(isImportedFromSharedLists(sourceOf(file), name), `${file} imports ${name}`).toBe(true)
+      expect(sourceOf(file), `${file} retypes ${name}`).not.toContain(literal)
+    }
+    expect(sourceOf('test/support/parity-lists.ts')).toContain(BUTTON_FAMILY)
+    expect(sourceOf('test/support/parity-lists.ts')).toContain(FEEDBACK_STATE)
   })
 
   it('compares as many (scene, state) pairs in this run as the package parity rows have, and not zero', () => {

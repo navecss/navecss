@@ -1,4 +1,6 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -14,7 +16,8 @@ const range = (from: number, to: number): number[] =>
   Array.from({ length: to - from + 1 }, (_unused, index) => from + index)
 
 // Criteria whose instrument is not another test file of this package: 31 is this file, 27 is checked
-// once at review, and 32's release half and 33 run after a release (scripts/check-registry-reach.mjs).
+// once by hand, 32's release half runs after a release, and 33's rows sit beside the script they
+// test, in the root scripts:test set (scripts/check-registry-reach.test.mjs).
 const TIER_A = [...range(1, 23), 28, 29, 30, 32, 34]
 const BROWSER = [24, 25, 26]
 
@@ -30,6 +33,18 @@ const tierAFiles = [...testFiles('.', '.test.ts'), ...testFiles('render', '.test
   (file) => file !== 'registry-wiring.test.ts',
 )
 const browserFiles = testFiles('browser', '.browser.test.ts')
+
+// The registry test files that read no registry the build wrote: they run the generator in copies of
+// the package, or check documents. They pass with the registry absent, and the row that runs every
+// file over an absent registry holds this list to exactly the files that do, so a test that reads
+// the registry cannot be put here and a file that stops being independent of it is taken off.
+const READS_NO_BUILT_REGISTRY = new Set([
+  'registry-generated.test.ts',
+  'registry-license-source.test.ts',
+  'registry-readme.test.ts',
+  'registry-root-readme.test.ts',
+  'registry-shipped-sentences.test.ts',
+])
 
 const namingTest = (files: readonly string[], id: string): string[] =>
   files.filter((file) => new RegExp(`describe\\(\\s*['"\`]${id}\\b`).test(read(file)))
@@ -60,6 +75,59 @@ describe('AC-base-ui-registry-31: the instruments run where they are claimed to 
     )
     expect(skipping).toEqual([])
   })
+
+  it('fails every registry test file that reads the registry, and skips none, when the registry directory is absent', () => {
+    const scratch = mkdtempSync(path.join(tmpdir(), 'registry-wiring-'))
+    try {
+      const reportFile = path.join(scratch, 'report.json')
+      // Never inherit the outer run's markers: the inner run is a run of its own.
+      const environment = Object.fromEntries(
+        Object.entries(process.env).filter(([name]) => !name.startsWith('VITEST')),
+      )
+      const run = spawnSync(
+        process.execPath,
+        [
+          path.join(PACKAGE_DIR, 'node_modules/vitest/vitest.mjs'),
+          'run',
+          '--project',
+          'node',
+          '--project',
+          'current-react-19',
+          '--coverage.enabled=false',
+          '--reporter=json',
+          `--outputFile=${reportFile}`,
+          ...tierAFiles.map((file) => path.posix.join('test', file)),
+        ],
+        {
+          cwd: PACKAGE_DIR,
+          encoding: 'utf8',
+          env: { ...environment, NAVE_REGISTRY_DIR: path.join(scratch, 'absent') },
+          maxBuffer: 64 * 1024 * 1024,
+        },
+      )
+      const report = JSON.parse(readFileSync(reportFile, 'utf8')) as {
+        testResults: { assertionResults: { status: string }[]; name: string; status: string }[]
+      }
+      const statusOf = (file: string): string | undefined =>
+        report.testResults.find((result) => result.name.endsWith(`/test/${file}`))?.status
+      const expectedStatus = (file: string): string =>
+        READS_NO_BUILT_REGISTRY.has(file) ? 'passed' : 'failed'
+      expect(
+        tierAFiles
+          .filter((file) => statusOf(file) !== expectedStatus(file))
+          .map((file) => `${file}: ${statusOf(file) ?? 'not run'}, not ${expectedStatus(file)}`),
+        `files whose status is not the expected one (exit ${run.status})`,
+      ).toEqual([])
+      const unrun = report.testResults.flatMap((result) =>
+        result.assertionResults
+          .filter(({ status }) => ['disabled', 'pending', 'skipped', 'todo'].includes(status))
+          .map(() => result.name),
+      )
+      expect(unrun, 'files with a test that did not run').toEqual([])
+    } finally {
+      rmSync(scratch, { force: true, recursive: true })
+    }
+  }, 600_000)
 
   it('has no registry test that generates the registry in process: they read the one the build wrote', () => {
     const generating = [...tierAFiles, ...browserFiles].filter((file) =>
