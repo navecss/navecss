@@ -59,11 +59,17 @@ export interface PruneRecord {
   readonly markdown: readonly string[]
   /**
    * The stylesheets the build can still hold, relative like `files`, sorted: the ones the code
-   * imports and every one an `@import` or a `composes ... from` reaches from those. A stylesheet's
-   * own record counts only while its stylesheet is listed here. Absent when the run stopped before
-   * reading the code, and then every stylesheet record that names a file on disk counts.
+   * imports and every one an `@import` or a `composes ... from` reaches from those. When the list
+   * is complete, a stylesheet's own record counts only while its stylesheet is listed here.
+   * Absent when the run stopped before reading the code.
    */
   readonly stylesheets?: readonly string[]
+  /**
+   * Whether `stylesheets` names every stylesheet the build can hold: the run met no Markdown or
+   * MDX file and read every stylesheet it met as CSS. When it is not, or the run stopped before
+   * reading the code, every stylesheet record that names a file on disk counts.
+   */
+  readonly isStylesheetListComplete?: boolean
   /**
    * Whether core's PostCSS plugin ran in the same pipeline.
    */
@@ -199,7 +205,10 @@ export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneReco
   } catch {
     return undefined
   }
-  const listed = stored.stylesheets === undefined ? undefined : new Set(stored.stylesheets)
+  const listed =
+    stored.isStylesheetListComplete === true && stored.stylesheets !== undefined
+      ? new Set(stored.stylesheets)
+      : undefined
   const sheets = readSheetRecords(handoff, listed)
   const directiveProblems = sheets
     .flatMap((sheet) => sheet.problems)

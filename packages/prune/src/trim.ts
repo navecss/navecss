@@ -152,6 +152,9 @@ function recordOfRun(
     stylesheets: [...graph.stylesheets]
       .map((file) => relativeTo(dir, file))
       .toSorted((a, b) => a.localeCompare(b)),
+    // A Markdown or MDX file can import a stylesheet the graph never reads, as can a stylesheet
+    // that was not read as CSS: the list then may miss one that is in the build.
+    isStylesheetListComplete: graph.markdown.size === 0 && graph.unreadStylesheets.size === 0,
     readsNoCode: graph.atoms.size === 0 && (options.keep ?? []).length === 0,
     failures: [],
   }

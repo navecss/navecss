@@ -115,5 +115,6 @@ export function emptyGraph(): Graph {
     markdown: new Set(),
     directories: [],
     stylesheets: new Set(),
+    unreadStylesheets: new Set(),
   }
 }

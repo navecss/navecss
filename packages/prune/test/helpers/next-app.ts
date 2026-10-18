@@ -40,6 +40,13 @@ export const SKIP_REASON: string | undefined = (() => {
 })()
 
 /**
+ * Whether a package is installed beside `next`, as its optional peers are.
+ */
+export function isBesideNext(name: string): boolean {
+  return NEXT_ROOT !== undefined && existsSync(path.join(NEXT_ROOT, '..', name))
+}
+
+/**
  * The browser floor core's README gives for Next.js, read from the README.
  */
 function readmeFloor(): string[] {
@@ -108,6 +115,11 @@ export interface NextApp {
    */
   readonly dir: string
   readonly write: (files: Record<string, string>) => void
+  /**
+   * Links a package installed beside `next` (one of its optional peers, such as `sass`) into the
+   * app's `node_modules`.
+   */
+  readonly linkBesideNext: (name: string) => void
   /**
    * Deletes a file or directory relative to the app's directory.
    */
@@ -204,6 +216,7 @@ export function createNextApp(nextConfig: string = WRAPPED_CONFIG): NextApp {
     top,
     dir,
     write,
+    linkBesideNext: (name) => link(modules, name, path.join(next, '..', name)),
     delete: (file) => rmSync(path.join(dir, file), { recursive: true, force: true }),
     next: (args, cwd = dir) => runNext(args, cwd),
     dev: async (args, cwd = dir) => {

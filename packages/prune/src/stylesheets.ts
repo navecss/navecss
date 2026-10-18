@@ -98,20 +98,24 @@ function createStylesheetResolver(dir: string): (importer: string, url: string) 
   }
 }
 
+const SASS_EXTENSIONS = new Set(['.sass', '.scss'])
+
 /**
- * The stylesheets one stylesheet reaches, read from its text, or none when it cannot be parsed as
- * CSS (Sass's indented syntax, say, whose imports Sass itself inlines).
+ * The stylesheets one stylesheet reaches, read from its text, or `undefined` when it cannot be
+ * read as CSS: a Sass file, whose own imports Sass resolves and inlines, or a file the CSS parser
+ * refuses.
  */
 function reachedFrom(
   file: string,
   css: string,
   resolve: (importer: string, url: string) => string[],
-): string[] {
+): string[] | undefined {
+  if (SASS_EXTENSIONS.has(path.extname(file))) return undefined
   let root: Root
   try {
     root = postcss.parse(css, { from: file })
   } catch {
-    return []
+    return undefined
   }
   return urlsOf(root).flatMap((url) => resolve(file, url))
 }
@@ -130,8 +134,9 @@ function textOf(file: string): string | undefined {
 /**
  * Reads the stylesheets the graph met and every stylesheet they reach, adding each to the graph's
  * stylesheets and its text's digest to the graph's files, so the bundler runs the atom layer
- * again when an `@import` changes. `running` is the stylesheet the plugin is running over: it is
- * counted, and not read again.
+ * again when an `@import` changes. A stylesheet that cannot be read, or read as CSS, goes into the
+ * graph's unread stylesheets: what it imports is not known. `running` is the stylesheet the
+ * plugin is running over: it is counted, and not read again.
  */
 export function readStylesheets(graph: Graph, dir: string, running: string | undefined): void {
   const resolve = createStylesheetResolver(dir)
@@ -141,7 +146,11 @@ export function readStylesheets(graph: Graph, dir: string, running: string | und
     const file = queue.pop()!
     const css = textOf(file)
     graph.files.set(file, digestOf(css ?? ''))
-    const reached = css === undefined ? [] : reachedFrom(file, css, resolve)
+    const reached = css === undefined ? undefined : reachedFrom(file, css, resolve)
+    if (reached === undefined) {
+      graph.unreadStylesheets.add(file)
+      continue
+    }
     const unmet = reached.filter((sheet) => !graph.stylesheets.has(sheet))
     for (const sheet of unmet) graph.stylesheets.add(sheet)
     queue.push(...unmet)

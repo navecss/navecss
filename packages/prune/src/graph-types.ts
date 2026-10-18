@@ -41,4 +41,9 @@ export interface Graph {
    * an `@import` or a `composes ... from` reaches from those.
    */
   readonly stylesheets: Set<string>
+  /**
+   * The stylesheets met that could not be read as CSS (unreadable, refused by the CSS parser, or
+   * Sass), absolute: what they import is not known.
+   */
+  readonly unreadStylesheets: Set<string>
 }
