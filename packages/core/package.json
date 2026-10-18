@@ -114,6 +114,7 @@
     "react-dom": "^19.3.0",
     "sass": "1.105.1",
     "source-map": "^0.8.0",
+    "stylelint": "17.16.0",
     "stylelint-16-16": "npm:stylelint@16.16.0",
     "stylelint-16-17": "npm:stylelint@16.17.0",
     "svelte": "5.57.2",

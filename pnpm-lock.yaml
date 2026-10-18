@@ -293,6 +293,9 @@ importers:
       source-map:
         specifier: ^0.8.0
         version: 0.8.0
+      stylelint:
+        specifier: 17.16.0
+        version: 17.16.0(typescript@6.0.3)
       stylelint-16-16:
         specifier: npm:stylelint@16.16.0
         version: stylelint@16.16.0(typescript@6.0.3)
