@@ -4,7 +4,7 @@
  */
 import { withRestorers } from '@navecss/core/collect'
 
-import type { Graph } from './graph.ts'
+import type { Graph } from './graph-types.ts'
 
 /**
  * The emitted set, sorted: the atoms the graph read, `keep` and every `keepFor` list, closed

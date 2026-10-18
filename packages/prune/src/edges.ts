@@ -75,17 +75,39 @@ function declarationEdge(node: Node): Edge | undefined {
 }
 
 /**
+ * Whether a node is a call of `createRequire()`, as a name or as a member (`module.createRequire`).
+ */
+function isCreateRequireCall(node: Node | undefined): boolean {
+  if (node?.type !== 'CallExpression') return false
+  const callee = node.callee as Node | undefined
+  if (callee?.type === 'Identifier') return callee.name === 'createRequire'
+  const property =
+    callee?.type === 'MemberExpression' ? (callee.property as Node | undefined) : undefined
+  return property?.type === 'Identifier' && property.name === 'createRequire'
+}
+
+/**
+ * Whether a callee is a `require` function: the name `require`, a name bound to the result of
+ * `createRequire()`, or such a call itself. webpack bundles each statically on a Node target.
+ */
+function isRequireCallee(callee: Node | undefined, requireNames: ReadonlySet<string>): boolean {
+  if (callee?.type === 'Identifier') {
+    return callee.name === 'require' || requireNames.has(callee.name as string)
+  }
+  return isCreateRequireCall(callee)
+}
+
+/**
  * The edge a call or dynamic import makes, if it makes one with a string.
  */
-function callEdge(node: Node): Edge | undefined {
+function callEdge(node: Node, requireNames: ReadonlySet<string>): Edge | undefined {
   if (node.type === 'ImportExpression') {
     const source = literalOf(node.source)
     return source && { specifier: source.value, offset: source.start, isRequire: false }
   }
   if (node.type !== 'CallExpression') return undefined
-  const callee = node.callee as Node | undefined
   const args = node.arguments as unknown[]
-  if (callee?.type !== 'Identifier' || callee.name !== 'require' || args.length !== 1) {
+  if (!isRequireCallee(node.callee as Node | undefined, requireNames) || args.length !== 1) {
     return undefined
   }
   const source = literalOf(args[0])
@@ -93,19 +115,22 @@ function callEdge(node: Node): Edge | undefined {
 }
 
 /**
- * The edge a TypeScript `import x = require('y')` makes.
+ * The edge a TypeScript `import x = require('y')` makes; `import type x = require('y')` makes
+ * none, since it emits nothing.
  */
 function equalsEdge(node: Node): Edge | undefined {
-  if (node.type !== 'TSExternalModuleReference') return undefined
-  const source = literalOf(node.expression)
+  if (node.type !== 'TSImportEqualsDeclaration' || node.importKind === 'type') return undefined
+  const reference = node.moduleReference as Node | undefined
+  if (reference?.type !== 'TSExternalModuleReference') return undefined
+  const source = literalOf(reference.expression)
   return source && { specifier: source.value, offset: source.start, isRequire: true }
 }
 
 /**
- * Every edge of the module, in source order.
+ * Every node of the tree, parents before children, in source order.
  */
-export function edgesOf(program: AstNode): Edge[] {
-  const edges: Edge[] = []
+function nodesOf(program: AstNode): Node[] {
+  const nodes: Node[] = []
   const stack: unknown[] = [program]
   while (stack.length > 0) {
     const value = stack.pop()
@@ -115,9 +140,35 @@ export function edgesOf(program: AstNode): Edge[] {
     }
     if (typeof value !== 'object' || value === null) continue
     const node = value as Node
-    const edge = declarationEdge(node) ?? callEdge(node) ?? equalsEdge(node)
-    if (edge) edges.push(edge)
+    nodes.push(node)
     for (const key of Object.keys(node).toReversed()) stack.push(node[key])
+  }
+  return nodes
+}
+
+/**
+ * The names bound to the result of a `createRequire()` call.
+ */
+function requireNamesIn(nodes: readonly Node[]): Set<string> {
+  const names = new Set<string>()
+  for (const node of nodes) {
+    const id = node.id as Node | undefined
+    if (node.type !== 'VariableDeclarator' || id?.type !== 'Identifier') continue
+    if (isCreateRequireCall(node.init as Node | undefined)) names.add(id.name as string)
+  }
+  return names
+}
+
+/**
+ * Every edge of the module, in source order.
+ */
+export function edgesOf(program: AstNode): Edge[] {
+  const nodes = nodesOf(program)
+  const requireNames = requireNamesIn(nodes)
+  const edges: Edge[] = []
+  for (const node of nodes) {
+    const edge = declarationEdge(node) ?? callEdge(node, requireNames) ?? equalsEdge(node)
+    if (edge) edges.push(edge)
   }
   return edges.toSorted((a, b) => a.offset - b.offset)
 }

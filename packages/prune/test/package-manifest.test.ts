@@ -170,6 +170,26 @@ describe('the package check and the words npm shows', () => {
     expect(excluded.filter((key) => javascriptEntries.includes(key))).toEqual([])
   })
 
+  it('check:pack checks the require() route too: the node16 profile, which reads both', () => {
+    const script = (manifest.scripts as Record<string, string>)['check:pack'] ?? ''
+    expect(script).toMatch(/attw --pack \. --profile node16(\s|$)/u)
+  })
+
+  it("has the README's first paragraph, by its size and digest", () => {
+    const paragraph =
+      readFileSync(path.join(PACKAGE_DIR, 'README.md'), 'utf8').split('\n', 3)[2] ?? ''
+    expect(fingerprintOf(paragraph)).toEqual({ bytes: 221, sha256: '164a9f39337b5f89' })
+  })
+
+  it('while the package is private, the README says under Installation that it is not on npm yet', () => {
+    const readme = readFileSync(path.join(PACKAGE_DIR, 'README.md'), 'utf8')
+    const installation = readme.slice(readme.indexOf('## Installation'), readme.indexOf('```sh'))
+    // Control: the section is there, and the manifest is private.
+    expect(installation).toMatch(/^## Installation/u)
+    expect(manifest.private).toBe(true)
+    expect(installation).toMatch(/\bnot on npm yet\b/u)
+  })
+
   it('has the description npm shows, by its size and digest', () => {
     expect(fingerprintOf(String(manifest.description))).toEqual({
       bytes: 131,

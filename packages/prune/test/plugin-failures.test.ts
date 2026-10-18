@@ -3,7 +3,7 @@
  * and leaves the failure where the build's own check reads, so a run that stopped is never read
  * as a clean one.
  */
-import { mkdirSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
@@ -74,5 +74,79 @@ describe('a record that cannot be written', () => {
     const lines = printed()
     expect(lines.some((line) => line.includes('stopped without trimming'))).toBe(true)
     expect(atomsIn(result!.css)).toEqual(atomsIn(ATOMIC_CSS))
+  })
+})
+
+const isRoot = process.getuid?.() === 0
+
+describe('an extend module that cannot be found, over a whole run', () => {
+  it('is said in one line per run, however many stylesheets the run holds', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
+    const printed = capturePrinted()
+    const modules = [0, 1, 2].map((index) => ({
+      css: '.m {\n  color: red;\n}\n',
+      file: `app/m${index}.module.css`,
+    }))
+    const run = { options: { extend: './nope.mjs' } }
+    await runSheets(project, [ATOMIC_SHEET, ...modules], run)
+    expect(printed().filter((line) => line.includes('nope.mjs'))).toHaveLength(1)
+    // Control: a second run says it again.
+    await runSheets(project, [ATOMIC_SHEET, ...modules], run)
+    expect(printed().filter((line) => line.includes('nope.mjs'))).toHaveLength(2)
+  })
+})
+
+describe('an extend map core refuses', () => {
+  it('is a failure in the record even when no stylesheet holds @nave', async () => {
+    const project = makeProject({
+      'app/page.tsx': pageCalling("'grid'"),
+      'atoms.mjs': `export default ${JSON.stringify({ brandBox: { declarations: { color: 'red;}body{color:blue' } } })}\n`,
+    })
+    capturePrinted()
+    await runSheets(
+      project,
+      [ATOMIC_SHEET, { css: '.m {\n  color: red;\n}\n', file: 'app/m.module.css' }],
+      {
+        options: { extend: './atoms.mjs' },
+      },
+    )
+    expect(recordOf(project).failures.length).toBeGreaterThan(0)
+  })
+})
+
+describe.skipIf(isRoot)('a record that cannot be written over an earlier one', () => {
+  it('ships the layer whole and says it stopped without trimming', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'flex'") })
+    await runSheets(project, [ATOMIC_SHEET], { options: {} })
+    project.write({ 'app/page.tsx': pageCalling("'flex', 'grid'") })
+    const record = path.join(project.dir, '.next/cache/navecss-prune.json')
+    chmodSync(record, 0o444)
+    try {
+      const printed = capturePrinted()
+      const [result] = await runSheets(project, [ATOMIC_SHEET], { options: {} })
+      expect(atomsIn(result!.css)).toEqual(atomsIn(ATOMIC_CSS))
+      expect(printed().some((line) => line.includes('stopped without trimming'))).toBe(true)
+    } finally {
+      chmodSync(record, 0o644)
+    }
+  })
+})
+
+describe('a record written before the failures field existed', () => {
+  it('reads as one with no failure, for the run record and a stylesheet record', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'flex'") })
+    await runSheets(project, [ATOMIC_SHEET], { options: {} })
+    const cache = path.join(project.dir, '.next/cache')
+    const runRecord = path.join(cache, 'navecss-prune.json')
+    const { failures: _dropped, ...older } = JSON.parse(readFileSync(runRecord, 'utf8')) as Record<
+      string,
+      unknown
+    >
+    writeFileSync(runRecord, JSON.stringify(older))
+    writeFileSync(
+      path.join(cache, 'navecss-prune-sheets', 'older.json'),
+      JSON.stringify({ file: 'app/old.css', isOnDisk: false, hasDirective: false, problems: [] }),
+    )
+    expect(recordOf(project).failures).toEqual([])
   })
 })

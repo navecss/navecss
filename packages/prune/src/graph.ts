@@ -11,12 +11,18 @@ import { isBuiltin } from 'node:module'
 import { parseSync } from 'oxc-parser'
 
 import type { Edge } from './edges.ts'
-import type { SelectedDirectory } from './entries.ts'
+import type { Graph, GraphOptions } from './graph-types.ts'
 import type { Place } from './lines.ts'
 import type { PackageInfo } from './packages.ts'
-import type { Resolver } from './resolve.ts'
+import type { Resolution, Resolver } from './resolve.ts'
 
-import { CORE_PACKAGE, declaredModules, isCoreFile, isUnboundCxEdge } from './core-edges.ts'
+import {
+  CORE_PACKAGE,
+  createCxFileTest,
+  declaredModules,
+  isCoreFile,
+  isUnboundCxEdge,
+} from './core-edges.ts'
 import { digestOf } from './digest.ts'
 import { edgesOf } from './edges.ts'
 import { findEntries } from './entries.ts'
@@ -33,53 +39,39 @@ import { createPackageReader, packageNameOfSpecifier } from './packages.ts'
 import { createResolver } from './resolve.ts'
 import { isDependencyPath, isMarkdownFile, isSourceFile, relativeTo } from './source-files.ts'
 
-export interface GraphOptions {
-  readonly dir: string
-  readonly keep: readonly string[]
-  readonly keepFor: Readonly<Record<string, readonly string[]>>
-  readonly cxModules: readonly string[]
-  /**
-   * The names of the consumer's own atoms, which have no class.
-   */
-  readonly ownAtoms: ReadonlySet<string>
-}
-
-export interface Graph {
-  /**
-   * The built-in atoms the files name: `cx()` calls and classes written whole.
-   */
-  readonly atoms: Set<string>
-  readonly problems: LocatedProblem[]
-  /**
-   * Content digest of every file read, by absolute path.
-   */
-  readonly files: Map<string, string>
-  /**
-   * The Markdown and MDX files met, absolute, not read.
-   */
-  readonly markdown: Set<string>
-  readonly directories: SelectedDirectory[]
+/**
+ * A file to read, and whether the build's own mode reaches it, so its problems count.
+ */
+interface Queued {
+  readonly file: string
+  readonly isInMode: boolean
 }
 
 interface Walk {
   readonly options: GraphOptions
   readonly resolver: Resolver
   readonly packageOf: (file: string) => PackageInfo
+  readonly isCxFile: (file: string) => boolean
   readonly declaredFiles: ReadonlySet<string>
   readonly declaredEntries: ReadonlySet<string>
-  readonly queue: string[]
-  readonly seen: Set<string>
+  readonly queue: Queued[]
+  /**
+   * Every file met, and whether the build's mode reached it.
+   */
+  readonly seen: Map<string, boolean>
   readonly graph: Graph
 }
 
 /**
- * Queues a file the graph has not met.
+ * Queues a file the graph has not met, or met only outside the build's mode and now meets in it:
+ * that file is read again, so its problems count.
  */
-function enqueue(walk: Walk, file: string): void {
-  if (walk.seen.has(file)) return
-  walk.seen.add(file)
+function enqueue(walk: Walk, file: string, isInMode: boolean): void {
+  const met = walk.seen.get(file)
+  if (met === true || (met === false && !isInMode)) return
+  walk.seen.set(file, isInMode)
   if (isMarkdownFile(file)) walk.graph.markdown.add(file)
-  else if (isSourceFile(file)) walk.queue.push(file)
+  else if (isSourceFile(file)) walk.queue.push({ file, isInMode })
 }
 
 /**
@@ -104,6 +96,23 @@ interface FileFacts {
   readonly rel: string
   readonly pkg: string | undefined
   readonly place: (offset: number) => Place
+  readonly isInMode: boolean
+  /**
+   * Where the file's problems go: the graph's when the build's mode reaches the file, nowhere
+   * otherwise.
+   */
+  readonly problems: LocatedProblem[]
+}
+
+/**
+ * Queues the files an edge resolves to, but core's own: in the build's mode when the importer is
+ * and a set of that mode found the file.
+ */
+function enqueueResolved(walk: Walk, facts: FileFacts, resolution: Resolution): void {
+  for (const resolved of resolution.files) {
+    const isInMode = facts.isInMode && resolution.filesInMode.includes(resolved)
+    if (!isCoreFile(walk.packageOf, resolved)) enqueue(walk, resolved, isInMode)
+  }
 }
 
 /**
@@ -115,17 +124,15 @@ function followEdges(walk: Walk, facts: FileFacts, edges: readonly Edge[]): Set<
   for (const edge of edges) {
     const resolution = walk.resolver.resolve(facts.file, edge.specifier, edge.isRequire)
     if (resolution.isBuiltin || isBuiltin(edge.specifier)) continue
-    if (isUnboundCxEdge(walk.resolver, facts.file, edge, resolution.files)) {
+    if (isUnboundCxEdge(walk, facts.file, edge, resolution.files)) {
       recordUnboundCx(walk, facts, edge)
       continue
     }
-    for (const resolved of resolution.files) {
-      if (!isCoreFile(walk.packageOf, resolved)) enqueue(walk, resolved)
-    }
+    enqueueResolved(walk, facts, resolution)
     if (isNamingDeclared(walk, edge, resolution.files)) declared.add(edge.specifier)
     if (resolution.files.length === 0 && isCheckedImport(walk, facts.file)) {
       const found = unresolvedProblem(facts.code, edge, facts.place(edge.offset))
-      walk.graph.problems.push({
+      facts.problems.push({
         kind: 'unreadable',
         offset: edge.offset,
         file: facts.rel,
@@ -149,7 +156,7 @@ function isStoodInFor(walk: Walk, facts: FileFacts): boolean {
  */
 function recordUnboundCx(walk: Walk, facts: FileFacts, edge: Edge): void {
   if (isStoodInFor(walk, facts)) return
-  walk.graph.problems.push({
+  facts.problems.push({
     file: facts.rel,
     pkg: facts.pkg,
     ...unboundCxProblem(facts.code, edge, facts.place(edge.offset)),
@@ -164,7 +171,7 @@ function record(walk: Walk, facts: FileFacts, reading: ModuleReading): void {
   for (const atom of [...reading.atoms, ...reading.classes]) graph.atoms.add(atom)
   if (isStoodInFor(walk, facts)) return
   for (const problem of reading.problems) {
-    graph.problems.push({
+    facts.problems.push({
       ...problem,
       file: facts.rel,
       pkg: facts.pkg,
@@ -173,7 +180,7 @@ function record(walk: Walk, facts: FileFacts, reading: ModuleReading): void {
   }
   if (listedAtomsFor(options, facts.pkg).length > 0) return
   for (const call of reading.dynamicCalls) {
-    graph.problems.push({
+    facts.problems.push({
       kind: 'dynamic',
       offset: 0,
       construct: call.construct,
@@ -196,7 +203,7 @@ function read(walk: Walk, facts: FileFacts): void {
     preserveParens: false,
   })
   if (parsed.errors.some((error) => isFatalParseError(error))) {
-    walk.graph.problems.push(unreadProblem(facts.rel, facts.pkg))
+    facts.problems.push(unreadProblem(facts.rel, facts.pkg))
     return
   }
   const program = parsed.program as unknown as Parameters<typeof readModule>[1]
@@ -222,9 +229,10 @@ function packageNameOf(walk: Walk, file: string): string | undefined {
  * Reads one source file of the graph. A file that cannot be opened, or whose reading throws, is a
  * problem in that file, and the walk goes on.
  */
-function visit(walk: Walk, file: string): void {
+function visit(walk: Walk, { file, isInMode }: Queued): void {
   const { options, graph } = walk
   const rel = relativeTo(options.dir, file)
+  const problems = isInMode ? graph.problems : []
   let code: string
   try {
     code = readFileSync(file, 'utf8')
@@ -232,21 +240,16 @@ function visit(walk: Walk, file: string): void {
     // Declared all the same, so the bundler runs the plugin again once the file can be read.
     graph.files.set(file, digestOf(''))
     const reason = `opening it failed (${(error as NodeJS.ErrnoException).code ?? String(error)}).`
-    graph.problems.push(unreadProblem(rel, packageNameOf(walk, file), reason))
+    problems.push(unreadProblem(rel, packageNameOf(walk, file), reason))
     return
   }
   graph.files.set(file, digestOf(code))
-  const facts: FileFacts = {
-    code,
-    file,
-    rel,
-    pkg: packageNameOf(walk, file),
-    place: placerFor(code),
-  }
+  const pkg = packageNameOf(walk, file)
+  const facts: FileFacts = { code, file, rel, pkg, place: placerFor(code), isInMode, problems }
   try {
     read(walk, facts)
   } catch (error) {
-    graph.problems.push(unreadProblem(rel, facts.pkg, `reading it threw ${String(error)}`))
+    problems.push(unreadProblem(rel, pkg, `reading it threw ${String(error)}`))
   }
 }
 
@@ -254,7 +257,7 @@ function visit(walk: Walk, file: string): void {
  * Reads the graph of the project in `options.dir`.
  */
 export function readGraph(options: GraphOptions): Graph {
-  const resolver = createResolver(options.dir)
+  const resolver = createResolver(options.dir, options.mode)
   const declared = declaredModules(options.dir, options.cxModules, resolver)
   const naveNames = new Set([
     CORE_PACKAGE,
@@ -274,13 +277,14 @@ export function readGraph(options: GraphOptions): Graph {
     options,
     resolver,
     packageOf: createPackageReader(naveNames),
+    isCxFile: createCxFileTest(),
     declaredFiles: declared.files,
     declaredEntries: declared.entries,
     queue: [],
-    seen: new Set(),
+    seen: new Map(),
     graph,
   }
-  for (const file of entries.files) enqueue(walk, file)
+  for (const file of entries.files) enqueue(walk, file, true)
   while (walk.queue.length > 0) visit(walk, walk.queue.pop()!)
   return graph
 }

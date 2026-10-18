@@ -102,6 +102,13 @@ export interface SheetRecord {
 }
 
 /**
+ * A record as read from disk: one written before `failures` existed has none.
+ */
+type Stored<Shape extends { readonly failures: readonly string[] }> = Omit<Shape, 'failures'> & {
+  readonly failures?: readonly string[]
+}
+
+/**
  * Where the record of a project lives, under its `distDir`'s `cache` directory.
  */
 function recordPath(handoff: Pick<Handoff, 'dir' | 'distDir'>): string {
@@ -142,7 +149,11 @@ function readSheetRecords(handoff: Pick<Handoff, 'dir' | 'distDir'>): SheetRecor
   const sheets: SheetRecord[] = []
   for (const name of readdirSync(directory)) {
     try {
-      const sheet = JSON.parse(readFileSync(path.join(directory, name), 'utf8')) as SheetRecord
+      const stored = JSON.parse(
+        readFileSync(path.join(directory, name), 'utf8'),
+      ) as Stored<SheetRecord>
+      // A record written before `failures` existed has none.
+      const sheet = { ...stored, failures: stored.failures ?? [] }
       if (!sheet.isOnDisk || existsSync(path.join(handoff.dir, sheet.file))) sheets.push(sheet)
     } catch {
       // A file another run is writing: that run's own record will be read next time.
@@ -156,7 +167,7 @@ function readSheetRecords(handoff: Pick<Handoff, 'dir' | 'distDir'>): SheetRecor
  * folded in, or `undefined` when no run left one.
  */
 export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneRecord | undefined {
-  let stored: Omit<PruneRecord, 'readsNoUse'>
+  let stored: Stored<Omit<PruneRecord, 'readsNoUse'>>
   try {
     stored = JSON.parse(readFileSync(recordPath(handoff), 'utf8')) as typeof stored
   } catch {
@@ -170,6 +181,6 @@ export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneReco
     ...stored,
     directiveProblems,
     readsNoUse: stored.readsNoCode && sheets.every((sheet) => !sheet.hasDirective),
-    failures: [...stored.failures, ...sheets.flatMap((sheet) => sheet.failures)],
+    failures: [...(stored.failures ?? []), ...sheets.flatMap((sheet) => sheet.failures)],
   }
 }

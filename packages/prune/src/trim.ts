@@ -11,9 +11,10 @@ import { readFileSync } from 'node:fs'
 import postcss from 'postcss'
 
 import type { ExtendMap } from './extend.ts'
-import type { Graph } from './graph.ts'
+import type { Graph } from './graph-types.ts'
 import type { Handoff } from './handoff.ts'
 import type { DirectiveProblem, PruneRecord } from './record.ts'
+import type { Mode } from './resolve.ts'
 
 import { configFilesIn } from './config-files.ts'
 import { digestOf } from './digest.ts'
@@ -177,6 +178,15 @@ function replaceContent(root: Root, css: string, from: string | undefined): void
 }
 
 /**
+ * The mode of the build running the plugin: Next.js sets `NODE_ENV` to `development` under
+ * `next dev` and to `production` under `next build`.
+ */
+function modeOfRun(): Mode {
+  // eslint-disable-next-line turbo/no-undeclared-env-vars -- set by Next.js in the process that runs the plugin, not a build input
+  return process.env.NODE_ENV === 'development' ? 'development' : 'production'
+}
+
+/**
  * Reads the graph, writes the record, then trims the layer and declares what was read.
  */
 function trim(run: LayerRun): void {
@@ -190,6 +200,7 @@ function trim(run: LayerRun): void {
     keepFor,
     cxModules: options.cxModules ?? [],
     ownAtoms: new Set(Object.keys(run.extend ?? {})),
+    mode: modeOfRun(),
   })
   const atoms = emittedAtoms(graph, { keep, keepFor })
   const files = filesRead(handoff, graph.files)

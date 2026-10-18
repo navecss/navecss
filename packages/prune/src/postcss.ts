@@ -89,8 +89,9 @@ async function expandWithoutOptions(root: Root, result: Result): Promise<void> {
 }
 
 /**
- * Reads `extend` for the run; a failure is added to `failures` and the run goes on with Nave's own
- * atoms only.
+ * Reads `extend` for the run; a failure is added to `failures`, which are recorded and not
+ * printed (the run over the atom layer says it, once), and the run goes on with Nave's own atoms
+ * only.
  */
 async function extendOf(
   handoff: Handoff,
@@ -99,7 +100,7 @@ async function extendOf(
   try {
     return { extend: await loadExtend(handoff.options, handoff.dir), failure: undefined }
   } catch (error) {
-    const failure = `the extend option could not be read: ${String(error)}`
+    const failure = `the extend option could not be used: ${String(error)}`
     failures.push(`${PLUGIN} expanded @nave with Nave's own atoms only, because ${failure}`)
     return { extend: undefined, failure }
   }
@@ -153,16 +154,17 @@ async function runWithHandoff(
   entryOptions: object,
 ): Promise<void> {
   if (hasCorePlugin(result)) sayBothPluginsAreListed()
-  const failures: string[] = []
-  const { extend, failure } = await extendOf(handoff, failures)
-  const expansion = await expandOrRecord(root, result, { handoff, extend }, failures)
-  for (const line of failures) printEachRun(`Nave: ${line}`)
+  const recorded: string[] = []
+  const { extend, failure } = await extendOf(handoff, recorded)
+  const expansionFailures: string[] = []
+  const expansion = await expandOrRecord(root, result, { handoff, extend }, expansionFailures)
+  for (const line of expansionFailures) printEachRun(`Nave: ${line}`)
   writeSheetRecord(handoff, {
     file: sheetPathIn(handoff.dir, result),
     isOnDisk: result.opts.from !== undefined && existsSync(result.opts.from),
     hasDirective: expansion.hasDirective,
     problems: expansion.problems,
-    failures,
+    failures: [...recorded, ...expansionFailures],
   })
   if (!inspectAtomicLayer(root.toString()).hasLayer) return
   trimAtomicLayer({

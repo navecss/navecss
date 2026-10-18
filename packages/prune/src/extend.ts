@@ -6,6 +6,7 @@
  */
 import type { AtomDefinition } from '@navecss/core/postcss'
 
+import { navePlugin } from '@navecss/core/postcss'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -40,16 +41,11 @@ async function defaultExportOf(file: string): Promise<unknown> {
 }
 
 /**
- * The consumer's own atoms `extend` defines, or `undefined` when there is no `extend`. Throws when
- * a path names no file, or a module whose default export is not a plain object.
+ * The map a path-valued `extend` names. Throws when the path names no file, or a module whose
+ * default export is not a plain object.
  */
-export async function loadExtend(
-  options: NaveOptions,
-  dir: string,
-): Promise<ExtendMap | undefined> {
-  const { extend } = options
-  if (typeof extend !== 'string') return extend
-  const file = extendFileOf(extend, dir)
+async function loadExtendFile(specifier: string, dir: string): Promise<ExtendMap> {
+  const file = extendFileOf(specifier, dir)
   const value = await defaultExportOf(file)
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(
@@ -57,4 +53,20 @@ export async function loadExtend(
     )
   }
   return value as ExtendMap
+}
+
+/**
+ * The consumer's own atoms `extend` defines, or `undefined` when there is no `extend`. Throws when
+ * a path names no file or a module whose default export is not a plain object, and when core's
+ * plugin refuses the map, whether or not any stylesheet uses it.
+ */
+export async function loadExtend(
+  options: NaveOptions,
+  dir: string,
+): Promise<ExtendMap | undefined> {
+  const { extend } = options
+  const map = typeof extend === 'string' ? await loadExtendFile(extend, dir) : extend
+  // Core's plugin validates the map when it is made.
+  if (map !== undefined) navePlugin({ extend: map })
+  return map
 }
