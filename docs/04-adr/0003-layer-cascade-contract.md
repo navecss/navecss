@@ -59,15 +59,15 @@ Chromium against the shipped bytes.
 
 **1. The contract is the seven names, in this order, and each has one owner.**
 
-| Layer                 | Holds                                                                                | Written by                       |
-| --------------------- | ------------------------------------------------------------------------------------ | -------------------------------- |
-| `tokens.defaults`     | Nave's shipped token values (CSS custom properties)                                  | `@navecss/tokens`                |
-| `tokens.presets`      | Token values generated for a project (`navecss-tokens build`), and any future preset | the token build                  |
-| `reset`               | Cross-browser normalisation                                                          | `@navecss/core`                  |
-| `atomic`              | The global atom classes (`.nave-flex`, …) that `cx()` names                          | `@navecss/core`                  |
-| `components.nave`     | Components Nave publishes                                                            | `@navecss/base-ui`               |
-| `components.consumer` | The consumer's own component CSS                                                     | the consumer, or a registry copy |
-| `overrides`           | The consumer's deliberate exceptions to everything above                             | the consumer                     |
+| Layer                 | Holds                                                                                | Written by                             |
+| --------------------- | ------------------------------------------------------------------------------------ | -------------------------------------- |
+| `tokens.defaults`     | Nave's shipped token values (CSS custom properties)                                  | `@navecss/tokens`                      |
+| `tokens.presets`      | Token values generated for a project (`navecss-tokens build`), and any future preset | the token build                        |
+| `reset`               | Cross-browser normalisation                                                          | `@navecss/core`                        |
+| `atomic`              | The global atom classes (`.nave-flex`, …) that `cx()` names                          | `@navecss/core`                        |
+| `components.nave`     | Components Nave publishes                                                            | `@navecss/base-ui`                     |
+| `components.consumer` | The consumer's own component CSS                                                     | the consumer, registry copies included |
+| `overrides`           | The consumer's deliberate exceptions to everything above                             | the consumer                           |
 
 `tokens.defaults` has one writer, `@navecss/tokens`, which writes the `--nave-*`
 properties. `components.nave` has one writer, `@navecss/base-ui`, whose single

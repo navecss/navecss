@@ -83,8 +83,10 @@ and a Base UI major is a major of this package; the peer floor is the oldest Bas
 whose declarations type-check against ours. A visual change is a `minor`.
 
 **6. A registry is a later delivery from the same source, not part of this record's shipped
-state.** The plan is a shadcn-format registry generated from the same source, as the way to own
-a copy of one component. It does not exist yet, and nothing here depends on it.
+state.** The plan is a shadcn-format registry generated from the same source, as the way to copy
+one component into a project and change it there. It did not exist when this was decided, and
+nothing here depends on it.
+It now ships: see [Update: the registry now exists](#update-the-registry-now-exists).
 
 ## Consequences
 
