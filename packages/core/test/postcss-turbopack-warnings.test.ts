@@ -82,8 +82,9 @@ describe('onUnknown: warn on any other bundler', () => {
 })
 
 describe('onUnknown: warn when TURBOPACK holds any non-empty value', () => {
-  // Next's own test is `if (process.env.TURBOPACK)` (dist/lib/bundler.js), and the value it sets
-  // for the default, flagless run is 'auto', not '1'.
+  // Next's own test is `if (process.env.TURBOPACK)` (dist/lib/bundler.js). For the default,
+  // flagless run Next sets 'auto' in its own process, and the process that runs PostCSS saw '1'
+  // on Next 16.4.1, so the plugin acts on any non-empty value rather than on one of them.
   it.each(['1', 'auto', '0', 'false'])(
     'with TURBOPACK=%s prints once and raises nothing',
     async (value) => {
