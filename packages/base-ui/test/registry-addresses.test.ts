@@ -327,7 +327,9 @@ describe('AC-base-ui-registry-06: the three addresses resolve the same bytes, th
       })
       const publicFetch = await publicFetchUnderPreload()
       expect(publicFetch.didFail).toBe(true)
-      expect(publicFetch.refused.some((target) => target.startsWith('example.com'))).toBe(true)
+      expect(publicFetch.refused.some((target) => target.split(':', 1)[0] === 'example.com')).toBe(
+        true,
+      )
     }, 60_000)
   })
 })

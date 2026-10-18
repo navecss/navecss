@@ -209,7 +209,9 @@ describe('AC-base-ui-registry-05: add installs every item into a Tailwind-free d
       })
       const publicFetch = await publicFetchUnderPreload()
       expect(publicFetch.didFail).toBe(true)
-      expect(publicFetch.refused.some((target) => target.startsWith('example.com'))).toBe(true)
+      expect(publicFetch.refused.some((target) => target.split(':', 1)[0] === 'example.com')).toBe(
+        true,
+      )
     }, 60_000)
   })
 

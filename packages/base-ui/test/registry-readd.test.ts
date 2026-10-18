@@ -343,7 +343,9 @@ describe('AC-base-ui-registry-34: the re-add behaviour the README states holds o
       })
       const publicFetch = await publicFetchUnderPreload()
       expect(publicFetch.didFail).toBe(true)
-      expect(publicFetch.refused.some((target) => target.startsWith('example.com'))).toBe(true)
+      expect(publicFetch.refused.some((target) => target.split(':', 1)[0] === 'example.com')).toBe(
+        true,
+      )
     }, 60_000)
   })
 })

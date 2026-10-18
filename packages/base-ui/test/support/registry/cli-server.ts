@@ -20,11 +20,17 @@ export interface StaticServer {
 
 const pathOf = (url: string | undefined): string => (url ?? '/').split('?', 1)[0] ?? '/'
 
+const SERVED_NAME = /^[\w.-]+$/
+
+/**
+ * The file a request names: one directly inside the directory, by a plain name (letters, digits,
+ * dots, dashes), so the request path never reaches outside it.
+ */
 const fileFor = (directory: string, url: string | undefined): string | undefined => {
   const name = decodeURIComponent(pathOf(url)).replace(/^\/+/, '')
+  if (!SERVED_NAME.test(name)) return undefined
   const file = path.join(directory, name)
-  const isInside = !path.relative(directory, file).startsWith('..')
-  return isInside && existsSync(file) && statSync(file).isFile() ? file : undefined
+  return existsSync(file) && statSync(file).isFile() ? file : undefined
 }
 
 export const serveDirectory = (directory: string): Promise<StaticServer> =>

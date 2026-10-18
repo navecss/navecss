@@ -83,7 +83,7 @@ export const fenceOrderProblems = ({ readme }: ReadmeContext): string[] => {
     problems.push(`the first command fence is not the ${LOCAL_PREFIX} form`)
   }
   const remote = fences.findIndex(
-    ({ body }) => body.includes('cdn.jsdelivr.net') || body.includes('registry add'),
+    ({ body }) => /\bcdn\.jsdelivr\.net\b/.test(body) || body.includes('registry add'),
   )
   if (remote !== -1 && remote < fences.findIndex(({ body }) => body.includes(LOCAL_PREFIX))) {
     problems.push('a jsDelivr or registries fence comes before the installed-package fence')
@@ -107,7 +107,7 @@ const versionInFences = (section: string): string[] => {
   const fences = fencesOf(section)
   const problems = fences.length === 0 ? ['the section has no command fence'] : []
   for (const { body } of fences) {
-    const isRemote = body.includes('cdn.jsdelivr.net')
+    const isRemote = /\bcdn\.jsdelivr\.net\b/.test(body)
     const isVersioned = body.includes('<version>')
     if (isVersioned && !isRemote)
       problems.push('<version> appears in a fence that is not a jsDelivr one')
