@@ -2,9 +2,10 @@
  * `watchFiles`, the watching half of `navecss-core expand --watch`, with the file watcher replaced
  * by a stand-in the test fires: it watches the directory of each file, and of a symlink's target;
  * it listens for the names it was asked about and for an event that carries no name; a burst of
- * events becomes one call once it settles; and closing it stops the calls and closes every watcher.
- * The operating system's file events can arrive seconds late when the machine is busy, so nothing
- * here waits on them; the real watcher end to end is covered by the `--watch` row of
+ * events becomes one call once it settles; a change no event reported is still seen, once the files
+ * are read again; and closing it stops the calls and closes every watcher. The operating system's
+ * file events can arrive seconds late when the machine is busy, or not at all, so nothing here
+ * waits on them; the real watcher end to end is covered by the `--watch` row of
  * `expand-command.test.ts` (AC-directive-core-42).
  */
 import type * as Fs from 'node:fs'
@@ -80,6 +81,11 @@ function fire(directory: string, name: string | null): void {
 }
 
 /*
+ * Long enough for the files to be read again and the change to settle.
+ */
+const POLL_AND_SETTLE_MS = 2000
+
+/*
  * Longer than the settle wait, shorter than anything a test could mistake for a second burst.
  */
 function settle(): void {
@@ -153,6 +159,44 @@ describe('watchFiles', () => {
 
     expect(changed).toHaveBeenCalledTimes(1)
     close()
+  })
+
+  it('calls back for a change no file event reported, once the files are read again', () => {
+    const watched = write('w/a.css', 'one')
+    const changed = vi.fn()
+    const close = watchFiles([watched], changed)
+
+    writeFileSync(watched, 'two, longer')
+    vi.advanceTimersByTime(POLL_AND_SETTLE_MS)
+
+    expect(changed).toHaveBeenCalledTimes(1)
+    close()
+  })
+
+  it('does not call back a second time for a change an event already reported', () => {
+    const watched = write('w/a.css', 'one')
+    const changed = vi.fn()
+    const close = watchFiles([watched], changed)
+
+    writeFileSync(watched, 'two, longer')
+    fire(file('w'), 'a.css')
+    settle()
+    vi.advanceTimersByTime(POLL_AND_SETTLE_MS * 3)
+
+    expect(changed).toHaveBeenCalledTimes(1)
+    close()
+  })
+
+  it('reads the files again no more after it is closed', () => {
+    const watched = write('w/a.css', 'one')
+    const changed = vi.fn()
+    const close = watchFiles([watched], changed)
+
+    close()
+    writeFileSync(watched, 'two, longer')
+    vi.advanceTimersByTime(POLL_AND_SETTLE_MS * 3)
+
+    expect(changed).not.toHaveBeenCalled()
   })
 
   it('watches a symlinked source through its target', () => {

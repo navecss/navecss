@@ -89,9 +89,9 @@ function tree(): string[] {
 }
 
 /**
- * Waits for `isDone` for as long as the test runs. What it waits on comes from the operating
- * system's file events, which a busy machine can deliver many seconds late, so the wait has no
- * deadline of its own: the runner's timeout ends it, through the test's `signal`.
+ * Waits for `isDone` for as long as the test runs. What it waits on follows a file event, which a
+ * busy machine can deliver many seconds late, so the wait has no deadline of its own: the runner's
+ * timeout ends it, through the test's `signal`.
  */
 async function until(isDone: () => boolean, what: string, signal: AbortSignal): Promise<void> {
   for (;;) {
@@ -349,8 +349,8 @@ describe('AC-directive-core-42 — --watch', () => {
     children.length = 0
   })
 
-  // Three edits, each seen through a file event that can come many seconds late on a busy
-  // machine: the runner's timeout leaves room for all three.
+  // Three edits, each seen through a file event, which a busy machine can deliver seconds late,
+  // or by the next read of the files when the event never comes.
   it('rewrites --out when the source changes, and keeps running after a diagnostic', async ({
     signal,
   }) => {
@@ -386,7 +386,7 @@ describe('AC-directive-core-42 — --watch', () => {
       signal,
     )
     expect(child.exitCode).toBeNull()
-  }, 180_000)
+  }, 60_000)
 })
 
 describe('AC-directive-core-43 — a bare @import is reported, with the stylesheet to link instead', () => {
