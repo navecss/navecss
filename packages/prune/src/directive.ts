@@ -36,25 +36,31 @@ export function hasNaveDirective(root: postcss.Root): boolean {
 }
 
 /**
- * Expands the `@nave` directives of `root` with the consumer's own atoms `extend`, already read.
- * Under `'ignore'` a problem is skipped; otherwise it is returned as a finding, for the caller to
- * record (`'error'`) or print (`'warn'`).
+ * Core's PostCSS plugin for one stylesheet, with the consumer's own atoms `extend`, already read.
+ * Making it validates the map, so a stylesheet makes one and uses it for the expansion too.
+ * Under `'ignore'` a problem is skipped; otherwise it is a warning, which the expansion returns.
  */
-export async function expandDirectives(
-  root: postcss.Root,
-  input: {
-    readonly extend: ExtendMap | undefined
-    readonly from: string | undefined
-    readonly onUnknown: NaveOptions['onUnknown']
-  },
-): Promise<Expansion> {
-  const hasDirective = hasNaveDirective(root)
-  if (!hasDirective) return { hasDirective, findings: [] }
-  const { extend, from, onUnknown } = input
-  const plugin = navePlugin({
+export function corePluginFor(
+  extend: ExtendMap | undefined,
+  onUnknown: NaveOptions['onUnknown'],
+): postcss.Plugin {
+  return navePlugin({
     ...(extend !== undefined && { extend }),
     onUnknown: onUnknown === 'ignore' ? 'ignore' : 'warn',
   })
+}
+
+/**
+ * Expands the `@nave` directives of `root` with `plugin`, made by `corePluginFor()`. A problem is
+ * returned as a finding, for the caller to record (`'error'`) or print (`'warn'`).
+ */
+export async function expandDirectives(
+  root: postcss.Root,
+  input: { readonly from: string | undefined; readonly plugin: postcss.Plugin | undefined },
+): Promise<Expansion> {
+  const hasDirective = hasNaveDirective(root)
+  const { from, plugin } = input
+  if (!hasDirective || plugin === undefined) return { hasDirective, findings: [] }
   const expanded = await postcss([plugin]).process(root, { from })
   const findings = expanded.warnings().map((warning) => {
     const start = warning.node.source?.start

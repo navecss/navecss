@@ -178,12 +178,19 @@ function replaceContent(root: Root, css: string, from: string | undefined): void
 }
 
 /**
- * The mode of the build running the plugin: Next.js sets `NODE_ENV` to `development` under
- * `next dev` and to `production` under `next build`.
+ * The modes whose files count for problems. The mode comes from the phase Next.js calls a
+ * function config with, which `withNave()` puts in the hand-off: the development server reads the
+ * `development` condition, every other phase the `production` one. An object config is given no
+ * phase, and `NODE_ENV` does not settle the question (`next build` keeps a `NODE_ENV` the user
+ * set, and `--debug-prerender` sets it to `development`), so `development` there counts both
+ * modes, and anything else production.
  */
-function modeOfRun(): Mode {
+function modesOfRun(handoff: Handoff): readonly Mode[] {
+  if (handoff.phase !== undefined) {
+    return [handoff.phase === 'phase-development-server' ? 'development' : 'production']
+  }
   // eslint-disable-next-line turbo/no-undeclared-env-vars -- set by Next.js in the process that runs the plugin, not a build input
-  return process.env.NODE_ENV === 'development' ? 'development' : 'production'
+  return process.env.NODE_ENV === 'development' ? ['development', 'production'] : ['production']
 }
 
 /**
@@ -200,7 +207,7 @@ function trim(run: LayerRun): void {
     keepFor,
     cxModules: options.cxModules ?? [],
     ownAtoms: new Set(Object.keys(run.extend ?? {})),
-    mode: modeOfRun(),
+    modes: modesOfRun(handoff),
   })
   const atoms = emittedAtoms(graph, { keep, keepFor })
   const files = filesRead(handoff, graph.files)

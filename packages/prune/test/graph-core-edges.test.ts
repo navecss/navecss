@@ -3,7 +3,7 @@
  * TypeScript `import x = require()`, and either one inside an installed package. Each call made
  * through such an import would ship with no rule, so the module is recorded as a problem.
  */
-import { cpSync, mkdirSync } from 'node:fs'
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -258,5 +258,38 @@ describe('the forms of reaching cx already refused stay refused', () => {
     const { atoms, record } = await runAndRead(app)
     expect(problemsOf(record)).toEqual([])
     expect(atoms).toContain('grid')
+  })
+})
+
+describe('every file a copy of core exports as ./cx is its cx', () => {
+  it('a vendored copy exporting ./cx under browser and import: its browser file is a reference problem', async () => {
+    const app = project({ 'app/page.tsx': pageWith('Box()', "import { Box } from '@acme/ui'") })
+    const root = app.install('@acme/ui', {
+      'package.json': JSON.stringify({
+        name: '@acme/ui',
+        version: '1.0.0',
+        type: 'module',
+        main: 'index.js',
+        dependencies: { '@navecss/core': '*' },
+      }),
+      'index.js':
+        "import { cx } from './vendor/core/dist/cx.browser.js'\nexport const Box = () => cx('grid')\n",
+    })
+    const vendored = path.join(root, 'vendor/core')
+    copyCore(vendored)
+    cpSync(path.join(CORE_ROOT, 'dist/cx.js'), path.join(vendored, 'dist/cx.browser.js'))
+    writeFileSync(
+      path.join(vendored, 'package.json'),
+      JSON.stringify({
+        name: '@navecss/core',
+        version: '0.0.0',
+        type: 'module',
+        exports: { './cx': { browser: './dist/cx.browser.js', import: './dist/cx.js' } },
+      }),
+    )
+    const { record } = await runAndRead(app)
+    expect(problemsOf(record)).toEqual([
+      "node_modules/@acme/ui/index.js|reference|'./vendor/core/dist/cx.browser.js'",
+    ])
   })
 })

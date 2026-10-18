@@ -18,6 +18,11 @@ export interface Handoff {
    * The root the bundler resolves paths against: no file or directory outside it is declared.
    */
   readonly root: string
+  /**
+   * The phase Next.js called a function config with (`phase-development-server`,
+   * `phase-production-build`, ...); absent for an object config, which is given none.
+   */
+  readonly phase?: string
 }
 
 /**
@@ -32,11 +37,12 @@ export function encodeHandoff(handoff: Handoff): string {
  */
 function isHandoff(value: unknown): value is Handoff {
   if (typeof value !== 'object' || value === null) return false
-  const { options, dir, distDir, root } = value as Record<string, unknown>
+  const { options, dir, distDir, root, phase } = value as Record<string, unknown>
   return (
     typeof options === 'object' &&
     options !== null &&
-    [dir, distDir, root].every((field) => typeof field === 'string')
+    [dir, distDir, root].every((field) => typeof field === 'string') &&
+    (phase === undefined || typeof phase === 'string')
   )
 }
 

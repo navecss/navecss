@@ -22,49 +22,43 @@ export function isCoreFile(packageOf: (file: string) => PackageInfo, file: strin
 }
 
 /**
- * The file an export map entry gives an import, through nested conditions.
+ * Every file an export map entry names, under any condition, however nested.
  */
-function importTargetOf(entry: unknown): string | undefined {
-  if (typeof entry === 'string') return entry
-  if (typeof entry !== 'object' || entry === null) return undefined
-  const conditions = entry as Record<string, unknown>
-  for (const condition of ['import', 'node', 'default']) {
-    const target = importTargetOf(conditions[condition])
-    if (target !== undefined) return target
-  }
-  return undefined
+function targetsOf(entry: unknown): string[] {
+  if (typeof entry === 'string') return [entry]
+  if (typeof entry !== 'object' || entry === null) return []
+  return Object.values(entry as Record<string, unknown>).flatMap((value) => targetsOf(value))
 }
 
 /**
- * The `./cx` file of the core package rooted at `dir`, or `undefined` when `dir` holds another
- * package.
+ * The `./cx` files of the core package rooted at `dir`, none when `dir` holds another package.
  */
-function cxFileOfPackage(dir: string): string | undefined {
+function cxFilesOfPackage(dir: string): ReadonlySet<string> {
   try {
     const manifest = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8')) as {
       exports?: Record<string, unknown>
       name?: string
     }
-    if (manifest.name !== CORE_PACKAGE) return undefined
-    const target = importTargetOf(manifest.exports?.['./cx'])
-    return target === undefined ? undefined : path.resolve(dir, target)
+    if (manifest.name !== CORE_PACKAGE) return new Set()
+    return new Set(targetsOf(manifest.exports?.['./cx']).map((target) => path.resolve(dir, target)))
   } catch {
-    return undefined
+    return new Set()
   }
 }
 
 /**
  * Returns a test of whether a file is the `./cx` module of a copy of core, wherever that copy
  * lives (nested in a package, vendored, installed under another name): the nearest
- * `package.json` above the file is core's, and its `./cx` export names the file.
+ * `package.json` above the file is core's, and its `./cx` export names the file under some
+ * condition.
  */
 export function createCxFileTest(): (file: string) => boolean {
-  const byPackage = new Map<string, string | undefined>()
+  const byPackage = new Map<string, ReadonlySet<string>>()
   return (file) => {
     for (let dir = path.dirname(file); ; dir = path.dirname(dir)) {
       if (existsSync(path.join(dir, 'package.json'))) {
-        if (!byPackage.has(dir)) byPackage.set(dir, cxFileOfPackage(dir))
-        return byPackage.get(dir) === file
+        if (!byPackage.has(dir)) byPackage.set(dir, cxFilesOfPackage(dir))
+        return byPackage.get(dir)?.has(file) === true
       }
       if (path.dirname(dir) === dir) return false
     }

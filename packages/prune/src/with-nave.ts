@@ -43,14 +43,21 @@ function keepMapText(options: NaveOptions): string {
 }
 
 /**
- * Puts the hand-off for `config` in the environment, for the PostCSS plugin to read.
+ * Puts the hand-off for `config` in the environment, for the PostCSS plugin to read, with the
+ * phase Next.js called a function config with.
  */
-function setHandoff(config: ConfigShape, options: NaveOptions, dir: string): void {
+function setHandoff(
+  config: ConfigShape,
+  options: NaveOptions,
+  dir: string,
+  phase: string | undefined,
+): void {
   const handoff: Handoff = {
     options,
     dir,
     distDir: config.distDir ?? '.next',
     root: config.turbopack?.root ?? config.outputFileTracingRoot ?? dir,
+    ...(phase !== undefined && { phase }),
   }
   process.env[HANDOFF_VARIABLE] = encodeHandoff(handoff)
 }
@@ -68,8 +75,12 @@ function withName(list: readonly string[] | undefined, name: string): string[] {
  * the config has a `turbopack` key, because Next.js refuses a Turbopack build whose config has a
  * `webpack` function and none.
  */
-function wrapConfig(config: ConfigShape, options: NaveOptions): ConfigShape {
-  setHandoff(config, options, process.cwd())
+function wrapConfig(
+  config: ConfigShape,
+  options: NaveOptions,
+  phase: string | undefined,
+): ConfigShape {
+  setHandoff(config, options, process.cwd(), phase)
   const user = config.webpack
   return {
     ...config,
@@ -80,25 +91,27 @@ function wrapConfig(config: ConfigShape, options: NaveOptions): ConfigShape {
     transpilePackages: withName(config.transpilePackages, CORE_PACKAGE),
     ...(config.turbopack === undefined && { turbopack: {} }),
     webpack: (webpackConfig: unknown, context: { dir?: string }) => {
-      if (context.dir !== undefined) setHandoff(config, options, context.dir)
+      if (context.dir !== undefined) setHandoff(config, options, context.dir, phase)
       return user ? user(webpackConfig, context) : webpackConfig
     },
   }
 }
 
 /**
- * Wraps a Next.js config (an object, or a function of the phase, sync or async).
+ * Wraps a Next.js config (an object, or a function of the phase, sync or async). A function's
+ * phase goes into the hand-off, so the plugin knows whether the build is the development server.
  * @param config The config `next.config` exports.
  * @param options The options for which atoms ship.
  * @returns The same kind of config, with Nave's settings in it.
  */
 export function withNave<Config extends object>(config: Config, options: NaveOptions = {}): Config {
   assertNaveOptions(options)
-  if (typeof config !== 'function') return wrapConfig(config, options) as Config
+  if (typeof config !== 'function') return wrapConfig(config, options, undefined) as Config
   const wrapped = (...args: unknown[]): unknown => {
+    const phase = typeof args[0] === 'string' ? args[0] : undefined
     const resolved: unknown = (config as (...rest: unknown[]) => unknown)(...args)
-    if (!(resolved instanceof Promise)) return wrapConfig(resolved as ConfigShape, options)
-    return (async () => wrapConfig((await resolved) as ConfigShape, options))()
+    if (!(resolved instanceof Promise)) return wrapConfig(resolved as ConfigShape, options, phase)
+    return (async () => wrapConfig((await resolved) as ConfigShape, options, phase))()
   }
   return wrapped as Config
 }

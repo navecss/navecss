@@ -14,7 +14,7 @@ import type { ExtendMap } from './extend.ts'
 import type { Handoff } from './handoff.ts'
 import type { DirectiveProblem } from './record.ts'
 
-import { expandDirectives, hasNaveDirective } from './directive.ts'
+import { corePluginFor, expandDirectives, hasNaveDirective } from './directive.ts'
 import { loadExtend } from './extend.ts'
 import { readHandoff } from './handoff.ts'
 import { printEachRun, printOnce } from './print.ts'
@@ -61,10 +61,10 @@ async function expand(
   root: Root,
   result: Result,
   handoff: Handoff,
-  extend: ExtendMap | undefined,
+  plugin: Plugin | undefined,
 ): Promise<SheetExpansion> {
   const { onUnknown } = handoff.options
-  const expansion = await expandDirectives(root, { extend, from: result.opts.from, onUnknown })
+  const expansion = await expandDirectives(root, { plugin, from: result.opts.from })
   const file = sheetPathIn(handoff.dir, result)
   const problems: DirectiveProblem[] = []
   for (const finding of expansion.findings) {
@@ -79,30 +79,49 @@ async function expand(
  * printed, as `'warn'` prints it.
  */
 async function expandWithoutOptions(root: Root, result: Result): Promise<void> {
-  const { findings } = await expandDirectives(root, {
-    extend: undefined,
-    from: result.opts.from,
-    onUnknown: 'warn',
-  })
+  const plugin = hasNaveDirective(root) ? corePluginFor(undefined, 'warn') : undefined
+  const { findings } = await expandDirectives(root, { plugin, from: result.opts.from })
   const file = sheetPathIn(process.cwd(), result)
   for (const finding of findings) sayFinding(file, finding)
 }
 
+interface SheetPlugin {
+  readonly extend: ExtendMap | undefined
+  /**
+   * Why `extend` could not be used, when it could not.
+   */
+  readonly failure: string | undefined
+  /**
+   * Core's plugin for the stylesheet, made only when there is a map to validate or a `@nave` to
+   * expand.
+   */
+  readonly plugin: Plugin | undefined
+}
+
 /**
- * Reads `extend` for the run; a failure is added to `failures`, which are recorded and not
- * printed (the run over the atom layer says it, once), and the run goes on with Nave's own atoms
- * only.
+ * Reads `extend` and makes the stylesheet's one core plugin, which validates the map and expands
+ * `@nave`. A failure is added to `failures`, which are recorded and not printed (the run over the
+ * atom layer says it, once), and the stylesheet goes on with Nave's own atoms only.
  */
-async function extendOf(
+async function sheetPluginOf(
+  root: Root,
   handoff: Handoff,
   failures: string[],
-): Promise<{ readonly extend: ExtendMap | undefined; readonly failure: string | undefined }> {
+): Promise<SheetPlugin> {
+  const { onUnknown } = handoff.options
   try {
-    return { extend: await loadExtend(handoff.options, handoff.dir), failure: undefined }
+    const extend = await loadExtend(handoff.options, handoff.dir)
+    const isNeeded = extend !== undefined || hasNaveDirective(root)
+    return {
+      extend,
+      failure: undefined,
+      plugin: isNeeded ? corePluginFor(extend, onUnknown) : undefined,
+    }
   } catch (error) {
     const failure = `the extend option could not be used: ${String(error)}`
     failures.push(`${PLUGIN} expanded @nave with Nave's own atoms only, because ${failure}`)
-    return { extend: undefined, failure }
+    const plugin = hasNaveDirective(root) ? corePluginFor(undefined, onUnknown) : undefined
+    return { extend: undefined, failure, plugin }
   }
 }
 
@@ -112,11 +131,11 @@ async function extendOf(
 async function expandOrRecord(
   root: Root,
   result: Result,
-  input: { readonly extend: ExtendMap | undefined; readonly handoff: Handoff },
+  input: { readonly handoff: Handoff; readonly plugin: Plugin | undefined },
   failures: string[],
 ): Promise<SheetExpansion> {
   try {
-    return await expand(root, result, input.handoff, input.extend)
+    return await expand(root, result, input.handoff, input.plugin)
   } catch (error) {
     failures.push(`${PLUGIN} could not expand @nave: ${String(error)}`)
     return { hasDirective: hasNaveDirective(root), problems: [] }
@@ -155,9 +174,9 @@ async function runWithHandoff(
 ): Promise<void> {
   if (hasCorePlugin(result)) sayBothPluginsAreListed()
   const recorded: string[] = []
-  const { extend, failure } = await extendOf(handoff, recorded)
+  const { extend, failure, plugin } = await sheetPluginOf(root, handoff, recorded)
   const expansionFailures: string[] = []
-  const expansion = await expandOrRecord(root, result, { handoff, extend }, expansionFailures)
+  const expansion = await expandOrRecord(root, result, { handoff, plugin }, expansionFailures)
   for (const line of expansionFailures) printEachRun(`Nave: ${line}`)
   writeSheetRecord(handoff, {
     file: sheetPathIn(handoff.dir, result),

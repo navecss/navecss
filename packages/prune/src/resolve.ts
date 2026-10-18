@@ -49,7 +49,7 @@ export interface Resolution {
    */
   readonly files: readonly string[]
   /**
-   * The files among them a condition set of the run's own mode finds: the ones this build
+   * The files among them a condition set of one of the run's modes finds: the ones this build
    * bundles, whose problems count.
    */
   readonly filesInMode: readonly string[]
@@ -74,7 +74,7 @@ interface SetResolver {
   readonly factory: ResolverFactory
   readonly isRequire: boolean
   /**
-   * Whether the set holds the condition of the run's mode.
+   * Whether the set holds the condition of one of the run's modes.
    */
   readonly isInMode: boolean
 }
@@ -82,12 +82,12 @@ interface SetResolver {
 /**
  * A resolver per condition set and module system, with the project's config for its own files.
  */
-function resolversFor(dir: string, isProject: boolean, mode: Mode): SetResolver[] {
+function resolversFor(dir: string, isProject: boolean, modes: readonly Mode[]): SetResolver[] {
   const configFile = isProject ? configFileIn(dir) : undefined
   return CONDITION_SETS.flatMap((set) =>
     [false, true].map((isRequire) => ({
       isRequire,
-      isInMode: set.includes(mode),
+      isInMode: modes.some((mode) => set.includes(mode)),
       factory: new ResolverFactory({
         conditionNames: [...set, isRequire ? 'require' : 'import', 'default'],
         extensions: EXTENSIONS,
@@ -105,11 +105,11 @@ function resolversFor(dir: string, isProject: boolean, mode: Mode): SetResolver[
 }
 
 /**
- * The resolver for the project in `dir`, for a build in `mode`.
+ * The resolver for the project in `dir`, for a build whose problems count under `modes`.
  */
-export function createResolver(dir: string, mode: Mode): Resolver {
-  const project = resolversFor(dir, true, mode)
-  const dependency = resolversFor(dir, false, mode)
+export function createResolver(dir: string, modes: readonly Mode[]): Resolver {
+  const project = resolversFor(dir, true, modes)
+  const dependency = resolversFor(dir, false, modes)
   const cache = new Map<string, Resolution>()
   return {
     resolve(importer, specifier, isRequire) {

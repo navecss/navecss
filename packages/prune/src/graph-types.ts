@@ -16,9 +16,9 @@ export interface GraphOptions {
    */
   readonly ownAtoms: ReadonlySet<string>
   /**
-   * The build's mode: files are read for atoms under both modes, for problems under this one.
+   * The modes whose files count for problems; files are read for atoms under both.
    */
-  readonly mode: Mode
+  readonly modes: readonly Mode[]
 }
 
 export interface Graph {

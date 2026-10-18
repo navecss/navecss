@@ -257,7 +257,7 @@ function visit(walk: Walk, { file, isInMode }: Queued): void {
  * Reads the graph of the project in `options.dir`.
  */
 export function readGraph(options: GraphOptions): Graph {
-  const resolver = createResolver(options.dir, options.mode)
+  const resolver = createResolver(options.dir, options.modes)
   const declared = declaredModules(options.dir, options.cxModules, resolver)
   const naveNames = new Set([
     CORE_PACKAGE,
