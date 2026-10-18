@@ -272,6 +272,9 @@ importers:
       lightningcss-1-24:
         specifier: npm:lightningcss@1.24.1
         version: lightningcss@1.24.1
+      mdn-data:
+        specifier: 2.29.0
+        version: 2.29.0
       playwright:
         specifier: 1.64.1
         version: 1.64.1
