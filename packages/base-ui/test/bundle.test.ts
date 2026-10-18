@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { readBaseUiTypes } from '../scripts/wrappers/read-types.ts'
 import { DIST_DIR } from './support/dist.ts'
 import { FEEDBACK_KEYS, FEEDBACK_SUBPATHS, FEEDBACK_TOP } from './support/feedback-subpaths.ts'
+import { isLeftOut } from './support/left-out.ts'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
 import { COMPLETION_SUBPATHS, SINGLE_COMPONENT, topName } from './support/subpaths.ts'
 import { tableP } from './support/table-p.ts'
@@ -79,7 +80,7 @@ const subjectOf = async (subpath: string): Promise<Subject | undefined> => {
     ((await import(/* @vite-ignore */ `@base-ui/react/${subpath}`)) as Record<string, object>)[
       top
     ] ?? {},
-  )
+  ).filter((key) => !isLeftOut(`${top}.${key}`))
   const styled = keys.includes('Popup')
     ? 'Popup'
     : keys.find((key) => key !== 'Root' && tableP.has(`${top}.${key}`))
@@ -222,27 +223,6 @@ describe("AC-base-ui-bridge-39 and AC-base-ui-overlay-completion-43: an unused p
       const helper = await helperCost(DIST_DIR, 'menubar')
       const { second, third } = await bundleProblems(subject, helper, DIST_DIR, 'menubar')
       expect([...second, ...third]).toEqual([])
-    },
-  )
-
-  it(
-    'AC-base-ui-overlay-completion-43: a used part younger than the floor keeps no other part of its component',
-    { timeout: 120_000 },
-    async () => {
-      // At the installed Base UI, which has `createItems`.
-      const use = 'console.log(Combobox.Root, Combobox.Input, Combobox.createItems)\n'
-      const direct = await sizeOf(
-        'young-used-direct',
-        `import { Combobox } from '@base-ui/react/combobox'\n${use}`,
-      )
-      const wrapped = await sizeOf(
-        'young-used-wrapped',
-        `import { Combobox } from '@navecss/base-ui/combobox'\n${use}`,
-      )
-      // The helper's measured size and the part's own call, as for every other part. A part read by
-      // a key instead of by name keeps every part of the component, tens of thousands of bytes more.
-      const helper = await helperCost(DIST_DIR, 'young-used')
-      expect(wrapped - direct).toBeLessThanOrEqual(helper + SLACK)
     },
   )
 

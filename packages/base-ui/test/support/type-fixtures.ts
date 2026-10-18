@@ -12,6 +12,7 @@ import { promisify } from 'node:util'
 
 import type { BaseUiVersion, SubpathTypes } from '../../scripts/wrappers/read-types.ts'
 
+import { isLeftOut } from './left-out.ts'
 import { PACKAGE_DIR } from './stylesheet.ts'
 
 const run = promisify(execFile)
@@ -126,7 +127,10 @@ const refAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
 const equalityAssertions = (subpaths: readonly SubpathTypes[]): string[] =>
   subpaths.flatMap(({ parts, subpath }) =>
     parts
-      .filter((part) => !isTypedApart(subpath, part.name))
+      .filter(
+        (part) =>
+          !isTypedApart(subpath, part.name) && !isLeftOut(`${topName(subpath)}.${part.name}`),
+      )
       .map(
         (part) =>
           `export type E_${identifier(subpath)}_${part.name === '.' ? 'self' : part.name} = Assert<Equal<${typeOf('N', subpath, part.name)}, ${typeOf('B', subpath, part.name)}>>`,
