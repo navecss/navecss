@@ -6,18 +6,22 @@
  * declaration after a nested rule reads as part of that rule in an engine without nested
  * declarations (the Baseline 2024 floor).
  */
+import type { DirectiveFacts } from './order-model.ts'
 import type {
   DirectiveNode,
   Emission,
   ModelNode,
   NodeRef,
   PlanItem,
+  PlanWarning,
   RuleInput,
   RulePlan,
 } from './rule-model.ts'
 
+import { checkOrder, type Segment } from './order-check.ts'
+import { findingWarnings, markerWarnings } from './order-warnings.ts'
 import { type Declaration, plan, type PlannedAtom, type PlanResult } from './plan.ts'
-import { isPseudoElementOnlyList } from './selector-specificity.ts'
+import { ampersandSpecificity, isPseudoElementOnlyList } from './selector-specificity.ts'
 
 /**
  * A directive that could not be planned at all (an atom registered without a declarations
@@ -58,6 +62,11 @@ interface PlanState {
   The nearest directive before this point, once there is one.
    */
   lastDirective: NodeRef | undefined
+  /**
+  The directives so far, and the parts of the output in order, for the order check.
+   */
+  readonly directives: DirectiveFacts[]
+  readonly segments: Segment[]
 }
 
 /**
@@ -130,6 +139,30 @@ function emitAtom(
 }
 
 /**
+ * Adds the parts one directive puts in the output to the order check's view of it, in output order.
+ */
+function recordSegments(
+  state: PlanState,
+  directive: DirectiveFacts,
+  atoms: readonly PlannedAtom[],
+): void {
+  for (const [atomIndex, planned] of atoms.entries()) {
+    const atom = directive.atoms[atomIndex]!
+    if (planned.declarations.length > 0) {
+      state.segments.push({
+        kind: 'atom-declarations',
+        directive,
+        atom,
+        declarations: planned.declarations,
+      })
+    }
+    if (state.isPseudoElementRule) continue
+    for (const block of planned.blocks)
+      state.segments.push({ kind: 'atom-block', directive, atom, block })
+  }
+}
+
+/**
  * The emissions of every atom a directive named, in order.
  */
 function emitAtoms(state: PlanState, atoms: readonly PlannedAtom[]): Emission[] {
@@ -156,11 +189,30 @@ function planDirective(state: PlanState, node: DirectiveNode): PlanResult {
 }
 
 /**
+ * What a warning needs to know about a directive.
+ */
+function directiveFacts(node: DirectiveNode, result: PlanResult): DirectiveFacts {
+  return {
+    ref: node.ref,
+    prelude: node.prelude,
+    atoms: result.atoms.map((atom, atomIndex) => ({
+      atomIndex,
+      name: atom.name,
+      offset: atom.offset,
+      endOffset: atom.endOffset,
+    })),
+  }
+}
+
+/**
  * Expands one directive at its position.
  */
 function expandDirective(state: PlanState, node: DirectiveNode): void {
   flushRun(state)
   const result = planDirective(state, node)
+  const directive = directiveFacts(node, result)
+  state.directives.push(directive)
+  recordSegments(state, directive, result.atoms)
   state.items.push({
     kind: 'expand',
     ref: node.ref,
@@ -168,6 +220,19 @@ function expandDirective(state: PlanState, node: DirectiveNode): void {
     diagnostics: result.diagnostics,
   })
   state.lastDirective = node.ref
+}
+
+/**
+ * The warnings about the rule: where later content overrides an atom's block, and what is wrong
+ * with a marker.
+ */
+function warningsOf(state: PlanState): PlanWarning[] {
+  const amp = ampersandSpecificity(state.input.selector)
+  const findings = checkOrder(state.segments, amp)
+  const warnings = [...findingWarnings(findings), ...markerWarnings(state.directives, findings)]
+  return warnings.toSorted(
+    (a, b) => a.anchor.ref - b.anchor.ref || (a.anchor.offset ?? -1) - (b.anchor.offset ?? -1),
+  )
 }
 
 /**
@@ -182,6 +247,8 @@ export function planRule(input: RuleInput): RulePlan {
     isPseudoElementRule: isPseudoElementOnlyList(input.selector),
     isNested: false,
     lastDirective: undefined,
+    directives: [],
+    segments: [],
   }
   for (const node of input.nodes) {
     if (node.kind === 'decl' || node.kind === 'comment') {
@@ -193,7 +260,10 @@ export function planRule(input: RuleInput): RulePlan {
       state.items.push({ kind: 'keep', ref: node.ref })
       state.isNested = true
     }
+    if (node.kind !== 'comment' && node.kind !== 'directive') {
+      state.segments.push({ kind: 'own', node })
+    }
   }
   flushRun(state)
-  return { items: state.items }
+  return { items: state.items, warnings: warningsOf(state) }
 }

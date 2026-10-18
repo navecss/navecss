@@ -8,7 +8,12 @@ import type { SourceMap } from './source-map.ts'
  * splices. Every byte outside a directive's span and the inserted text is
  * unchanged.
  */
-import { type ExpandedDiagnostic, reportDiagnostics } from './expand-text-diagnostics.ts'
+import {
+  type ExpandedDiagnostic,
+  type ExpandedWarning,
+  positionWarnings,
+  reportDiagnostics,
+} from './expand-text-diagnostics.ts'
 import { buildOutput } from './expand-text-output.ts'
 import { walkBlock, Walker } from './expand-text-walk.ts'
 
@@ -23,6 +28,10 @@ export interface ExpandTextResult {
   readonly css: string
   readonly map: string
   readonly diagnostics: readonly ExpandedDiagnostic[]
+  /**
+  The order check's warnings: reported whatever `onUnknown` says, and they never fail a build.
+   */
+  readonly warnings: readonly ExpandedWarning[]
 }
 
 /**
@@ -53,5 +62,10 @@ export function expandText(css: string, options: ExpandTextOptions = {}): Expand
     inputSourceMap: options.inputSourceMap,
     positionAt: (offset) => w.positionAt(offset),
   })
-  return { css: outputCss, map, diagnostics: reportDiagnostics(w.diagnostics, css, options) }
+  return {
+    css: outputCss,
+    map,
+    diagnostics: reportDiagnostics(w.diagnostics, css, options),
+    warnings: positionWarnings(w.warnings, css, options.from),
+  }
 }

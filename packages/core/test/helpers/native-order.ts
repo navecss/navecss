@@ -48,6 +48,39 @@ function separatorBefore(nodes: readonly ChildNode[], index: number): string {
   return nodes[index - 1]!.type === 'comment' ? ' ' : '; '
 }
 
+export interface SeenWarning {
+  readonly column: number
+  readonly line: number
+  readonly text: string
+}
+
+/**
+ * The order warnings the PostCSS host reports for `css`, in the order it reports them.
+ */
+export async function warningsViaPostcss(
+  css: string,
+  options: HostOptions = {},
+): Promise<SeenWarning[]> {
+  const plugin = navePlugin({
+    onUnknown: options.onUnknown ?? 'warn',
+    ...(options.extend && { extend: options.extend }),
+  })
+  const result = await postcss([plugin]).process(css, { from: options.from })
+  return result.warnings().map(({ column, line, text }) => ({ column, line, text }))
+}
+
+/**
+ * The order warnings the text expander reports for `css`, in the order it reports them.
+ */
+export function warningsViaText(css: string, options: HostOptions = {}): SeenWarning[] {
+  const result = expandText(css, {
+    onUnknown: options.onUnknown ?? 'warn',
+    ...(options.extend && { extend: options.extend }),
+    ...(options.from !== undefined && { from: options.from }),
+  })
+  return result.warnings.map(({ column, line, text }) => ({ column, line, text }))
+}
+
 /**
  * `nodes` on one line: joined with `; `, except that a comment is followed by a plain space.
  */

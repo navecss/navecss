@@ -114,9 +114,28 @@ export interface ExpandItem {
 
 export type PlanItem = ExpandItem | KeepItem | WrapItem
 
+/**
+ * Where a warning is reported: a node of the rule, and, for a name inside a directive's prelude,
+ * where in the prelude the name starts.
+ */
+export interface WarningAnchor {
+  readonly offset: number | undefined
+  readonly ref: NodeRef
+}
+
+/**
+ * A warning about the rule: its text without the host's frame, and where it sits. A warning
+ * reports and never fails a build.
+ */
+export interface PlanWarning {
+  readonly anchor: WarningAnchor
+  readonly text: string
+}
+
 export interface RulePlan {
   /**
   Every child of the rule exactly once, in authored order.
    */
   readonly items: readonly PlanItem[]
+  readonly warnings: readonly PlanWarning[]
 }

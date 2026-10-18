@@ -39,6 +39,7 @@ export class Walker {
   readonly findPosition: (offset: number) => Position
   readonly options: ExpandTextOptions
   readonly tokens: readonly Token[]
+  readonly warnings: { readonly offset: number; readonly text: string }[] = []
 
   constructor(css: string, options: ExpandTextOptions) {
     this.css = css

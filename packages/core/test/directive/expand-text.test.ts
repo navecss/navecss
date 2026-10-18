@@ -134,13 +134,14 @@ describe('AC-directive-core-06 — expandText() changes only directive spans', (
     },
   )
 
-  it('returns an object with exactly css, map and diagnostics', () => {
+  it('returns an object with exactly css, map, diagnostics and warnings', () => {
     const result = expandText('.a { @nave flex; }', { onUnknown: 'warn' })
 
     expect(Object.keys(result).toSorted((a, b) => a.localeCompare(b))).toEqual([
       'css',
       'diagnostics',
       'map',
+      'warnings',
     ])
   })
 

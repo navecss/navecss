@@ -4,7 +4,7 @@
  */
 import type { ChildNode, AtRule as PostCSSAtRule, Rule } from 'postcss'
 
-import type { ModelNode, PlanItem } from './directive/rule-model.ts'
+import type { ModelNode, PlanItem, PlanWarning, RulePlan } from './directive/rule-model.ts'
 import type { DirectiveContext } from './postcss-at-rule.ts'
 
 import { DirectiveFailure, planRule } from './directive/rule-plan.ts'
@@ -78,6 +78,27 @@ function hasDirective(rule: Rule): boolean {
 }
 
 /**
+ * Reports the order warnings on the nodes they sit on, before any node is replaced. They never
+ * fail a build and are not governed by `onUnknown`.
+ */
+function reportWarnings(
+  warnings: readonly PlanWarning[],
+  table: NodeTable,
+  ctx: RuleContext,
+): void {
+  for (const { anchor, text } of warnings) {
+    const node = table[anchor.ref]!
+    if (anchor.offset === undefined) {
+      node.warn(ctx.result, text)
+      continue
+    }
+    const atRule = node as PostCSSAtRule
+    const { preludeStartIndex } = matchNaveAtRule(atRule)
+    atRule.warn(ctx.result, text, { index: preludeStartIndex + anchor.offset })
+  }
+}
+
+/**
  * Applies one plan item to the tree.
  */
 function applyItem(item: PlanItem, table: NodeTable, ctx: RuleContext): void {
@@ -110,19 +131,14 @@ function applyItem(item: PlanItem, table: NodeTable, ctx: RuleContext): void {
 /**
  * The plan for `rule`, a directive that cannot be planned reported as an error at its own place.
  */
-function planOrThrow(
-  rule: Rule,
-  nodes: ModelNode[],
-  table: NodeTable,
-  ctx: RuleContext,
-): readonly PlanItem[] {
+function planOrThrow(rule: Rule, nodes: ModelNode[], table: NodeTable, ctx: RuleContext): RulePlan {
   try {
     return planRule({
       selector: rule.selector,
       nodes,
       isInsideKeyframes: isInsideKeyframes(rule),
       extend: ctx.extend,
-    }).items
+    })
   } catch (error) {
     if (error instanceof DirectiveFailure) {
       return throwMalformedAtom(table[error.ref] as PostCSSAtRule, error.cause)
@@ -137,7 +153,9 @@ function planOrThrow(
 export function handleRule(rule: Rule, ctx: RuleContext): void {
   if (!hasDirective(rule)) return
   const { table, nodes } = readRule(rule)
-  for (const item of planOrThrow(rule, nodes, table, ctx)) applyItem(item, table, ctx)
+  const plan = planOrThrow(rule, nodes, table, ctx)
+  reportWarnings(plan.warnings, table, ctx)
+  for (const item of plan.items) applyItem(item, table, ctx)
 }
 
 /**

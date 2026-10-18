@@ -31,11 +31,11 @@ export interface NaveMatch {
    */
   readonly isNave: boolean
   /**
-  The prelude text, as authored, starting right after the directive's real name — identical to `atRule.raws.params?.raw ?? atRule.params` when PostCSS's own split already lands on that boundary (the common case), and only different when an escape crosses it.
+  The prelude text, as authored, starting right after the directive's real name and running to its end: the comments PostCSS keeps in `raws.afterName`, `raws.params.raw` and `raws.between` included.
    */
   readonly prelude: string
   /**
-  Where `prelude` starts within `'@' + atRule.name + (raws.afterName ?? ' ') + params` — for repositioning a diagnostic's own prelude-relative offset back onto `atRule` (`atRuleErrorIndex`).
+  Where `prelude` starts within `'@' + atRule.name + (raws.afterName ?? ' ') + params + between` — for repositioning a diagnostic's own prelude-relative offset back onto `atRule` (`atRuleErrorIndex`).
    */
   readonly preludeStartIndex: number
 }
@@ -56,22 +56,25 @@ function currentParams(atRule: PostCSSAtRule): string {
 }
 
 /**
- * Re-tokenizes `'@' + atRule.name + afterName + params` with the core
+ * Re-tokenizes `'@' + atRule.name + afterName + params + between` with the core
  * tokenizer to find the directive's real name across a boundary PostCSS's
- * own parser draws in the wrong place whenever an escape spans it.
+ * own parser draws in the wrong place whenever an escape spans it. The prelude
+ * is everything between the name and the end of the directive: PostCSS keeps a
+ * comment there in `raws.afterName` (right after the name), in `raws.params.raw`
+ * (between names) or in `raws.between` (before the `;`), so the three are joined.
  */
 export function matchNaveAtRule(atRule: PostCSSAtRule): NaveMatch {
   const afterName = atRule.raws.afterName ?? ' '
   const paramsRaw = currentParams(atRule)
+  const between = atRule.raws.between ?? ''
   const nameBoundary = 1 + atRule.name.length
-  const full = `@${atRule.name}${afterName}${paramsRaw}`
+  const full = `@${atRule.name}${afterName}${paramsRaw}${between}`
   const token = tokenize(full)[0]
-  const commonPrelude = { prelude: paramsRaw, preludeStartIndex: nameBoundary + afterName.length }
+  const commonPrelude = { prelude: full.slice(nameBoundary), preludeStartIndex: nameBoundary }
   if (token?.type !== 'at-keyword-token') return { isNave: false, ...commonPrelude }
   const isNave = (token.structured?.value as string).toLowerCase() === 'nave'
   // The common case: PostCSS's own name already ends exactly where the real
-  // token does, so the prelude PostCSS itself hands out (params, comments
-  // preserved via raws.params.raw) is used unchanged. Only when an escape
+  // token does, so the text after it is the prelude. Only when an escape
   // pushed the real name past that boundary is the prelude recomputed from
   // the re-tokenized text instead.
   if (token.endIndex === nameBoundary) return { isNave, ...commonPrelude }

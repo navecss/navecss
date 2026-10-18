@@ -9,7 +9,7 @@ import type { Diagnostic } from './diagnostics-types.ts'
 import type { BlockModel } from './expand-text-model.ts'
 import type { AppendPart } from './expand-text-output.ts'
 import type { Walker } from './expand-text-walk.ts'
-import type { ExpandItem, PlanItem, WrapItem } from './rule-model.ts'
+import type { ExpandItem, PlanItem, PlanWarning, RulePlan, WrapItem } from './rule-model.ts'
 import type { Token } from './tokenizer.ts'
 
 import { renderEmissions } from './expand-text-render.ts'
@@ -124,19 +124,38 @@ function applyItem(w: Walker, plan: PlanItem, facts: RuleFrameFacts): void {
 }
 
 /**
+ * Records the warnings of a plan at the offsets they sit at in the stylesheet.
+ */
+function recordWarnings(
+  w: Walker,
+  warnings: readonly PlanWarning[],
+  itemOf: readonly Item[],
+): void {
+  for (const { anchor, text } of warnings) {
+    const item = itemOf[anchor.ref]!
+    const start =
+      anchor.offset === undefined
+        ? w.tokens[item.start]!.startIndex
+        : (item.preludeOffset ?? 0) + anchor.offset
+    w.warnings.push({ offset: start, text })
+  }
+}
+
+/**
  * Plans the rule whose block holds `facts.items`, and applies the plan to the text.
  */
 export function applyRuleFrame(w: Walker, facts: RuleFrameFacts): void {
-  let items: readonly PlanItem[]
+  let plan: RulePlan
   try {
-    items = planRule({
+    plan = planRule({
       selector: facts.selector,
       nodes: facts.model.nodes,
       isInsideKeyframes: facts.isInsideKeyframes,
       extend: w.options.extend,
-    }).items
+    })
   } catch (error) {
     throw error instanceof DirectiveFailure ? error.cause : error
   }
-  for (const item of items) applyItem(w, item, facts)
+  recordWarnings(w, plan.warnings, facts.model.itemOf)
+  for (const item of plan.items) applyItem(w, item, facts)
 }
