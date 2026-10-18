@@ -112,6 +112,22 @@ Pseudo-class rules (`:focus-visible` from `focusRing`), `@media` and
 apply to every selector in a selector list. Native nesting is inside the browser
 floor under [Requirements](#requirements).
 
+#### Output size
+
+`@nave` copies an atom's declarations into every rule that uses it. That is the design: the directive is a build-time stand-in for native CSS mixins, whose `@apply` puts a mixin's declarations into the rule that applies it ([why](https://github.com/navecss/navecss/blob/main/docs/04-adr/0006-nave-directive-stands-in-for-css-mixins.md)). The browser does that expansion itself, so a stylesheet using native mixins carries each one once; a build step has to write the copies out.
+
+What the copies cost, in a model of a large app (10,000 component rules using a 25-atom design system, minified): about 70 percent of the raw CSS, 40 percent after gzip and 30 percent after brotli. Your app will differ, so measure your own bundle. What reduces it:
+
+- **Compress CSS ahead of time with brotli at its highest level (11)**, instead of compressing on the fly at a lower one. In the model, level 11 sent 260 KB where level 5 sent 330 KB, which saves more than any way of removing the copies that was tried (below).
+- **Split CSS by route**, so a page loads a shared part and its own rules rather than the whole app's. Split into one shared part and 40 routes, a page in the model loaded 65 KB, about a quarter.
+
+What Nave does not do, and why:
+
+- **It does not merge the copies into shared rules with combined selector lists.** In the model that saved 0.3 percent under brotli and made gzip output 19 percent larger, because each selector then repeats once per atom, far apart. It also changed the computed style of 4 to 6 percent of the elements sampled: two atoms that set the same property stop resolving in the order you wrote them, and an atom's `@media` and pseudo-class blocks move relative to your own declarations.
+- **It does not ship heavy atoms as shared classes for your markup to carry.** That moves them into the `atomic` layer, below your component CSS, so your other rules and Nave's own component styles start beating them, and the class names it adds to your JavaScript and HTML cost about as much as the CSS it removes.
+
+The lasting fix is native CSS mixins. Once they ship in a browser and the specification settles, Nave adds a flag that writes `@mixin` and `@apply`, and once all three engines support them that becomes the default.
+
 ### Escape hatch — cx() utility
 
 No build plugin required. Atom names move to JSX — autocompleted, and type-checked.
