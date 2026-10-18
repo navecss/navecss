@@ -42,9 +42,10 @@ const reachableText = (entry: string): string =>
   [...reachableFiles(entry)].map((file) => read(file)).join('\n')
 
 /**
- * A declaration string that only ever appears in the atoms source of truth.
+ * A declaration string that only ever appears in the atoms source of truth: the property name
+ * alone also appears in the table of CSS property names, so the marker is a whole declaration.
  */
-const ATOM_DECLARATION_MARKER = 'container-type'
+const ATOM_DECLARATION_MARKER = '"container-type": "inline-size"'
 
 describe('C12 — the atom declarations are bundled once, and cx.js never reaches them', () => {
   it('keeps the declaration data out of cx.js', () => {
