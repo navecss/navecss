@@ -146,21 +146,32 @@ const versionOf = (argv) => {
   )
 }
 
-export const main = async (argv = process.argv.slice(2)) => {
-  const version = versionOf(argv)
+const REAL_STEPS = {
+  fetchText: fetchOrUndefined,
+  install: installFromServed,
+  readTarball: readTarballRegistry,
+  versionOf,
+}
+
+/**
+ * Runs the check and returns the exit code. The steps that reach the network or spawn a process are
+ * a parameter so a test can answer for them.
+ */
+export const main = async (argv = process.argv.slice(2), steps = REAL_STEPS) => {
+  const version = steps.versionOf(argv)
   const cli = optionOf(argv, '--cli') ?? '4'
   const scratch = mkdtempSync(path.join(tmpdir(), 'registry-reach-'))
   try {
-    const tarball = readTarballRegistry(version, scratch)
+    const tarball = steps.readTarball(version, scratch)
     if (tarball.size === 0) {
       console.log(`${PACKAGE}@${version} carries no registry`)
       return argv.includes('--latest') ? 0 : 1
     }
-    const served = await fetchServed(version, [...tarball.keys()], fetchOrUndefined)
+    const served = await fetchServed(version, [...tarball.keys()], steps.fetchText)
     const problems = servedDifferences(tarball, served)
     const item = JSON.parse(tarball.get(`${INSTALLED_ITEM}.json`) ?? '{}')
     if (problems.length === 0) {
-      problems.push(...installDifferences(item, installFromServed(version, item, cli, scratch)))
+      problems.push(...installDifferences(item, steps.install(version, item, cli, scratch)))
     }
     for (const problem of problems) console.error(`${PACKAGE}@${version}: ${problem}`)
     if (problems.length === 0) {
