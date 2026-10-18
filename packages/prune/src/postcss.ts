@@ -5,76 +5,52 @@
  * it read. It never throws: a problem in the code it reads goes into the record under
  * `<distDir>/cache` for the build's own check to report.
  */
-import type { LocatedProblem } from '@navecss/core/collect'
 import type { Plugin, Result, Root } from 'postcss'
 
-import { inspectAtomicLayer, pruneAtomicLayer } from '@navecss/core/collect'
-import { existsSync, readFileSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
-import postcss from 'postcss'
+import { inspectAtomicLayer } from '@navecss/core/collect'
+import { existsSync } from 'node:fs'
 
-import type { Graph } from './graph.ts'
+import type { ExtendMap } from './extend.ts'
 import type { Handoff } from './handoff.ts'
-import type { NaveOptions } from './options.ts'
-import type { DirectiveProblem, PruneRecord } from './record.ts'
+import type { DirectiveProblem } from './record.ts'
 
-import { configFilesIn } from './config-files.ts'
-import { digestOf } from './digest.ts'
-import { expandDirectives } from './directive.ts'
-import { readGraph } from './graph.ts'
+import { expandDirectives, hasNaveDirective } from './directive.ts'
+import { loadExtend } from './extend.ts'
 import { readHandoff } from './handoff.ts'
-import { dependencyMessages } from './messages.ts'
-import { printOnce } from './print.ts'
-import { writeRecord, writeSheetRecord } from './record.ts'
+import { printEachRun, printOnce } from './print.ts'
+import { writeSheetRecord } from './record.ts'
 import { relativeTo } from './source-files.ts'
-import { emittedAtoms } from './used.ts'
+import { hasCorePlugin, trimAtomicLayer } from './trim.ts'
 
 const PLUGIN = 'postcss-nave-prune'
-const CORE_PLUGIN = 'postcss-nave'
 
-/**
- * The names of the consumer's own atoms: the keys of `extend`, read from the module when it is a
- * path.
- */
-async function ownAtomsOf(options: NaveOptions, dir: string): Promise<Set<string>> {
-  const { extend } = options
-  if (typeof extend === 'object') return new Set(Object.keys(extend))
-  if (typeof extend !== 'string') return new Set()
-  try {
-    const file = pathToFileURL(new URL(extend, pathToFileURL(`${dir}/`)).pathname).href
-    const loaded = (await import(file)) as { default?: Record<string, unknown> }
-    return new Set(Object.keys(loaded.default ?? {}))
-  } catch {
-    return new Set()
-  }
+interface Finding {
+  readonly text: string
+  readonly line: number
+  readonly column: number
+}
+
+interface SheetExpansion {
+  readonly hasDirective: boolean
+  readonly problems: DirectiveProblem[]
 }
 
 /**
- * The problems a PostCSS entry's own options are: any option belongs to `withNave()`.
+ * The stylesheet's path relative to `dir`.
  */
-function entryProblemsOf(entryOptions: object): string[] {
-  const keys = Object.keys(entryOptions)
-  if (keys.length === 0) return []
-  return [
-    `The PostCSS entry for ${PLUGIN} takes no options, but it was given ${keys.join(', ')}. Set options in withNave() in next.config instead.`,
-  ]
-}
-
-/**
- * Whether core's own PostCSS plugin runs in the same pipeline.
- */
-function hasCorePlugin(result: Result): boolean {
-  return result.processor.plugins.some((plugin) => {
-    return 'postcssPlugin' in plugin && plugin.postcssPlugin === CORE_PLUGIN
-  })
-}
-
-/**
- * The stylesheet's path relative to the directory holding `next.config`.
- */
-function sheetPath(handoff: Handoff, result: Result): string {
+function sheetPathIn(dir: string, result: Result): string {
   const from = result.opts.from
-  return from === undefined ? '<stylesheet>' : relativeTo(handoff.dir, from)
+  return from === undefined ? '<stylesheet>' : relativeTo(dir, from)
+}
+
+/**
+ * Prints a `@nave` problem once, placed in its stylesheet.
+ */
+function sayFinding(file: string, finding: Finding): void {
+  printOnce(
+    `directive:${file}:${finding.line}:${finding.column}:${finding.text}`,
+    `${file}:${finding.line}:${finding.column}: ${finding.text}`,
+  )
 }
 
 /**
@@ -85,132 +61,65 @@ async function expand(
   root: Root,
   result: Result,
   handoff: Handoff,
-): Promise<{ hasDirective: boolean; problems: DirectiveProblem[] }> {
-  const { options } = handoff
-  const expansion = await expandDirectives(root, {
-    dir: handoff.dir,
-    from: result.opts.from,
-    options,
-  })
-  const file = sheetPath(handoff, result)
+  extend: ExtendMap | undefined,
+): Promise<SheetExpansion> {
+  const { onUnknown } = handoff.options
+  const expansion = await expandDirectives(root, { extend, from: result.opts.from, onUnknown })
+  const file = sheetPathIn(handoff.dir, result)
   const problems: DirectiveProblem[] = []
   for (const finding of expansion.findings) {
-    if (options.onUnknown === 'warn') {
-      printOnce(
-        `directive:${file}:${finding.line}:${finding.column}:${finding.text}`,
-        `${file}:${finding.line}:${finding.column}: ${finding.text}`,
-      )
-    } else problems.push({ file, ...finding })
+    if (onUnknown === 'warn') sayFinding(file, finding)
+    else problems.push({ file, ...finding })
   }
   return { hasDirective: expansion.hasDirective, problems }
 }
 
 /**
- * Replaces the stylesheet's content with `css`.
+ * Expands `@nave` with no options, when there is no hand-off to read them from: every problem is
+ * printed, as `'warn'` prints it.
  */
-function replaceContent(root: Root, css: string, from: string | undefined): void {
-  const parsed = postcss.parse(css, { from })
-  root.removeAll()
-  root.append(parsed.nodes)
+async function expandWithoutOptions(root: Root, result: Result): Promise<void> {
+  const { findings } = await expandDirectives(root, {
+    extend: undefined,
+    from: result.opts.from,
+    onUnknown: 'warn',
+  })
+  const file = sheetPathIn(process.cwd(), result)
+  for (const finding of findings) sayFinding(file, finding)
 }
 
 /**
- * The files the plugin read: the graph's and the config files.
+ * Reads `extend` for the run; a failure is added to `failures` and the run goes on with Nave's own
+ * atoms only.
  */
-function filesRead(handoff: Handoff, graphFiles: Map<string, string>): Map<string, string> {
-  const files = new Map(graphFiles)
-  for (const file of configFilesIn(handoff.dir)) files.set(file, digestFileSafely(file))
-  return files
-}
-
-/**
- * The digest of a file's text, or of nothing when it cannot be read.
- */
-function digestFileSafely(file: string): string {
+async function extendOf(
+  handoff: Handoff,
+  failures: string[],
+): Promise<{ readonly extend: ExtendMap | undefined; readonly failure: string | undefined }> {
   try {
-    return digestOf(readFileSync(file))
-  } catch {
-    return digestOf('')
+    return { extend: await loadExtend(handoff.options, handoff.dir), failure: undefined }
+  } catch (error) {
+    const failure = `the extend option could not be read: ${String(error)}`
+    failures.push(`${PLUGIN} expanded @nave with Nave's own atoms only, because ${failure}`)
+    return { extend: undefined, failure }
   }
 }
 
 /**
- * Orders problems by file, then line, then column.
+ * Expands `@nave`; a failure is added to `failures` and leaves the directives as they are.
  */
-function byPlace(a: LocatedProblem, b: LocatedProblem): number {
-  return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column
-}
-
-/**
- * The record of one run over the atom layer.
- */
-function recordOfRun(input: {
-  readonly atoms: readonly string[]
-  readonly entryOptions: object
-  readonly files: Map<string, string>
-  readonly graph: Graph
-  readonly handoff: Handoff
-  readonly result: Result
-}): Omit<PruneRecord, 'readsNoUse'> {
-  const { handoff, graph, files, atoms, result, entryOptions } = input
-  const { options, dir } = handoff
-  return {
-    version: 1,
-    optionsDigest: digestOf(JSON.stringify(options)),
-    atoms,
-    problems: graph.problems.toSorted(byPlace),
-    directiveProblems: [],
-    entryProblems: entryProblemsOf(entryOptions),
-    files: Object.fromEntries(
-      [...files]
-        .map(([file, digest]): [string, string] => [relativeTo(dir, file), digest])
-        .toSorted(([a], [b]) => a.localeCompare(b)),
-    ),
-    directories: Object.fromEntries(
-      graph.directories.map((directory) => [
-        `${relativeTo(dir, directory.path) || '.'}/`,
-        digestOf(directory.names.join('\n')),
-      ]),
-    ),
-    markdown: [...graph.markdown]
-      .map((file) => relativeTo(dir, file))
-      .toSorted((a, b) => a.localeCompare(b)),
-    hasCorePlugin: hasCorePlugin(result),
-    readsNoCode: graph.atoms.size === 0 && (options.keep ?? []).length === 0,
-  }
-}
-
-/**
- * Trims the atom layer of the stylesheet to what the code uses and records the run.
- */
-async function trimAtomicLayer(
+async function expandOrRecord(
   root: Root,
   result: Result,
-  handoff: Handoff,
-  entryOptions: object,
-): Promise<void> {
-  const { options, dir } = handoff
-  const keep = options.keep ?? []
-  const keepFor = options.keepFor ?? {}
-  const graph = readGraph({
-    dir,
-    keep,
-    keepFor,
-    cxModules: options.cxModules ?? [],
-    ownAtoms: await ownAtomsOf(options, dir),
-  })
-  const atoms = emittedAtoms(graph, { keep, keepFor })
-  replaceContent(root, pruneAtomicLayer(root.toString(), new Set(atoms)), result.opts.from)
-  const files = filesRead(handoff, graph.files)
-  result.messages.push(
-    ...dependencyMessages({
-      root: handoff.root,
-      parent: result.opts.from,
-      files: files.keys(),
-      directories: graph.directories,
-    }),
-  )
-  writeRecord(handoff, recordOfRun({ handoff, graph, files, atoms, result, entryOptions }))
+  input: { readonly extend: ExtendMap | undefined; readonly handoff: Handoff },
+  failures: string[],
+): Promise<SheetExpansion> {
+  try {
+    return await expand(root, result, input.handoff, input.extend)
+  } catch (error) {
+    failures.push(`${PLUGIN} could not expand @nave: ${String(error)}`)
+    return { hasDirective: hasNaveDirective(root), problems: [] }
+  }
 }
 
 /**
@@ -234,32 +143,59 @@ function sayBothPluginsAreListed(): void {
 }
 
 /**
+ * One stylesheet through the plugin, with the wrapper's hand-off: `@nave` is expanded and
+ * recorded first, then the atom layer, if the stylesheet holds it, is trimmed.
+ */
+async function runWithHandoff(
+  root: Root,
+  result: Result,
+  handoff: Handoff,
+  entryOptions: object,
+): Promise<void> {
+  if (hasCorePlugin(result)) sayBothPluginsAreListed()
+  const failures: string[] = []
+  const { extend, failure } = await extendOf(handoff, failures)
+  const expansion = await expandOrRecord(root, result, { handoff, extend }, failures)
+  for (const line of failures) printEachRun(`Nave: ${line}`)
+  writeSheetRecord(handoff, {
+    file: sheetPathIn(handoff.dir, result),
+    isOnDisk: result.opts.from !== undefined && existsSync(result.opts.from),
+    hasDirective: expansion.hasDirective,
+    problems: expansion.problems,
+    failures,
+  })
+  if (!inspectAtomicLayer(root.toString()).hasLayer) return
+  trimAtomicLayer({
+    root,
+    result,
+    handoff,
+    entryOptions,
+    extend,
+    directiveProblems: expansion.problems,
+    blocked: failure,
+  })
+}
+
+/**
  * One stylesheet through the plugin.
  */
 async function run(root: Root, result: Result, entryOptions: object): Promise<void> {
-  const handoff = readHandoff()
+  let handoff: Handoff | undefined
+  try {
+    handoff = readHandoff()
+  } catch (error) {
+    printEachRun(
+      `Nave: ${PLUGIN} cannot read what withNave() handed it, so every atom ships and @nave is expanded without its options: ${String(error)}`,
+    )
+    await expandWithoutOptions(root, result)
+    return
+  }
   if (!handoff) {
     sayWrapperIsMissing()
-    await expandDirectives(root, {
-      dir: process.cwd(),
-      from: result.opts.from,
-      options: { onUnknown: 'warn' },
-    })
+    await expandWithoutOptions(root, result)
     return
   }
-  const isCore = hasCorePlugin(result)
-  if (isCore) sayBothPluginsAreListed()
-  const expansion = await expand(root, result, handoff)
-  if (!inspectAtomicLayer(root.toString()).hasLayer) {
-    writeSheetRecord(handoff, {
-      file: sheetPath(handoff, result),
-      isOnDisk: result.opts.from !== undefined && existsSync(result.opts.from),
-      hasDirective: expansion.hasDirective,
-      problems: expansion.problems,
-    })
-    return
-  }
-  await trimAtomicLayer(root, result, handoff, entryOptions)
+  await runWithHandoff(root, result, handoff, entryOptions)
 }
 
 /**
@@ -275,10 +211,7 @@ export function prunePlugin(entryOptions: object = {}): Plugin {
       try {
         await run(root, result, entryOptions)
       } catch (error) {
-        printOnce(
-          `failed:${String(error)}`,
-          `Nave: ${PLUGIN} stopped without trimming: ${String(error)}`,
-        )
+        printEachRun(`Nave: ${PLUGIN} stopped without trimming: ${String(error)}`)
       }
     },
   }

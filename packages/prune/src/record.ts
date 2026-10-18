@@ -71,6 +71,11 @@ export interface PruneRecord {
    * no use of an atom. Derived when the record is read, from `readsNoCode` and the stylesheets.
    */
   readonly readsNoUse: boolean
+  /**
+   * What stopped the plugin before it finished, one sentence each, from the run over the atom
+   * layer and from every stylesheet: a record holding one is incomplete.
+   */
+  readonly failures: readonly string[]
 }
 
 /**
@@ -90,6 +95,10 @@ export interface SheetRecord {
   readonly isOnDisk: boolean
   readonly hasDirective: boolean
   readonly problems: readonly DirectiveProblem[]
+  /**
+   * What stopped the plugin before it finished with this stylesheet.
+   */
+  readonly failures: readonly string[]
 }
 
 /**
@@ -161,5 +170,6 @@ export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneReco
     ...stored,
     directiveProblems,
     readsNoUse: stored.readsNoCode && sheets.every((sheet) => !sheet.hasDirective),
+    failures: [...stored.failures, ...sheets.flatMap((sheet) => sheet.failures)],
   }
 }

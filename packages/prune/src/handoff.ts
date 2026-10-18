@@ -28,10 +28,41 @@ export function encodeHandoff(handoff: Handoff): string {
 }
 
 /**
+ * Whether a parsed value has the shape the wrapper writes.
+ */
+function isHandoff(value: unknown): value is Handoff {
+  if (typeof value !== 'object' || value === null) return false
+  const { options, dir, distDir, root } = value as Record<string, unknown>
+  return (
+    typeof options === 'object' &&
+    options !== null &&
+    [dir, distDir, root].every((field) => typeof field === 'string')
+  )
+}
+
+/**
+ * The parsed text of the variable, or `undefined` when it is not JSON.
+ */
+function parsed(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * The handoff in `env`, or `undefined` when the wrapper did not run (the variable is unset).
+ * Throws when the variable holds something other than what the wrapper writes.
  */
 export function readHandoff(env: NodeJS.ProcessEnv = process.env): Handoff | undefined {
   const text = env[HANDOFF_VARIABLE]
   if (text === undefined || text === '') return undefined
-  return JSON.parse(text) as Handoff
+  const value = parsed(text)
+  if (!isHandoff(value)) {
+    throw new Error(
+      `the ${HANDOFF_VARIABLE} environment variable does not hold what withNave() sets: ${JSON.stringify(text)}`,
+    )
+  }
+  return value
 }

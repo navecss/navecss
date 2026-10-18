@@ -1,23 +1,21 @@
 /**
- * Pieces of the graph reader that stand alone: the language a file is parsed as, the sentences of
- * the problems it records, and the tests of what is worth reading.
+ * Pieces of the graph reader that stand alone: the language a file is parsed as and the sentences
+ * of the problems it records.
  */
 import type { LocatedProblem, Problem } from '@navecss/core/collect'
 
-import { CX_SOURCE } from '@navecss/core/collect'
 import path from 'node:path'
 
 import type { Edge } from './edges.ts'
 import type { Place } from './lines.ts'
 
-const UNPARSED_TEXT =
-  'the module could not be read, so the atoms it names would not ship: it did not parse as JavaScript or TypeScript.'
+const UNREAD_TEXT = 'the module could not be read, so the atoms it names would not ship: '
+const UNPARSED_REASON = 'it did not parse as JavaScript or TypeScript.'
 const UNRESOLVED_TEXT =
   'the build cannot resolve this import, so it cannot read the cx() calls behind it'
-
-const CORE_PACKAGE = '@navecss/core'
-
-const ESCAPED_SPECIFIER = /(?:\bfrom|\bimport)[\s(]*(?:'[^'\\\n]*\\|"[^"\\\n]*\\|`[^`\\\n]*\\)/
+// The sentences the Vite plugin's build-end check gives a module that reaches cx this way.
+const UNBOUND_CX_TEXT =
+  "imports cx through a specifier the build does not follow, so the atoms its calls name would not ship. Import cx from '@navecss/core/cx' directly where it is called."
 
 /**
  * The language `oxc-parser` reads the file as.
@@ -42,28 +40,23 @@ export function unresolvedProblem(
 }
 
 /**
- * Whether a specifier names `@navecss/core` itself, whose own files the graph does not read: its
- * `cx` is the binding the reader looks for, not a use of it.
+ * The text and place of the problem for an import that reaches core's `cx` module in a form the
+ * reader does not bind: a `require()`, an `import x = require()`, or a specifier other than the
+ * package's own.
  */
-export function isNaveCore(specifier: string): boolean {
-  return specifier === CORE_PACKAGE || specifier.startsWith(`${CORE_PACKAGE}/`)
-}
-
-/**
- * Whether the module could name an atom at all, so reading it is worth doing.
- */
-export function isMentioningAtoms(
+export function unboundCxProblem(
   code: string,
-  declared: ReadonlySet<string>,
-  isDeclared: boolean,
-): boolean {
-  return (
-    declared.size > 0 ||
-    isDeclared ||
-    code.includes(CX_SOURCE) ||
-    code.includes('nave-') ||
-    ESCAPED_SPECIFIER.test(code)
-  )
+  edge: Edge,
+  place: Place,
+): Pick<Problem, 'construct' | 'kind' | 'offset' | 'text'> & Place {
+  const quote = code[edge.offset] ?? "'"
+  return {
+    kind: 'reference',
+    offset: edge.offset,
+    construct: `${quote}${edge.specifier}${quote}`,
+    text: UNBOUND_CX_TEXT,
+    ...place,
+  }
 }
 
 /**
@@ -82,14 +75,19 @@ export function listedAtomsFor(
 }
 
 /**
- * The problem for a file that did not parse, at its first character.
+ * The problem for a file that could not be read, at its first character: `reason` says why, and
+ * is the parse failure's sentence when none is given.
  */
-export function unparsedProblem(rel: string, pkg: string | undefined): LocatedProblem {
+export function unreadProblem(
+  rel: string,
+  pkg: string | undefined,
+  reason: string = UNPARSED_REASON,
+): LocatedProblem {
   return {
     kind: 'unreadable',
     offset: 0,
     construct: '',
-    text: UNPARSED_TEXT,
+    text: `${UNREAD_TEXT}${reason}`,
     file: rel,
     pkg,
     line: 1,

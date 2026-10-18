@@ -8,7 +8,6 @@ import type { LocatedProblem, ModuleReading } from '@navecss/core/collect'
 import { CX_SOURCE, readModule } from '@navecss/core/collect'
 import { readFileSync } from 'node:fs'
 import { isBuiltin } from 'node:module'
-import path from 'node:path'
 import { parseSync } from 'oxc-parser'
 
 import type { Edge } from './edges.ts'
@@ -17,16 +16,16 @@ import type { Place } from './lines.ts'
 import type { PackageInfo } from './packages.ts'
 import type { Resolver } from './resolve.ts'
 
+import { CORE_PACKAGE, declaredModules, isCoreFile, isUnboundCxEdge } from './core-edges.ts'
 import { digestOf } from './digest.ts'
 import { edgesOf } from './edges.ts'
 import { findEntries } from './entries.ts'
 import {
   isFatalParseError,
-  isMentioningAtoms,
-  isNaveCore,
   languageOf,
   listedAtomsFor,
-  unparsedProblem,
+  unboundCxProblem,
+  unreadProblem,
   unresolvedProblem,
 } from './graph-parts.ts'
 import { placerFor } from './lines.ts'
@@ -115,8 +114,14 @@ function followEdges(walk: Walk, facts: FileFacts, edges: readonly Edge[]): Set<
   const declared = new Set<string>()
   for (const edge of edges) {
     const resolution = walk.resolver.resolve(facts.file, edge.specifier, edge.isRequire)
-    if (resolution.isBuiltin || isBuiltin(edge.specifier) || isNaveCore(edge.specifier)) continue
-    for (const resolved of resolution.files) enqueue(walk, resolved)
+    if (resolution.isBuiltin || isBuiltin(edge.specifier)) continue
+    if (isUnboundCxEdge(walk.resolver, facts.file, edge, resolution.files)) {
+      recordUnboundCx(walk, facts, edge)
+      continue
+    }
+    for (const resolved of resolution.files) {
+      if (!isCoreFile(walk.packageOf, resolved)) enqueue(walk, resolved)
+    }
     if (isNamingDeclared(walk, edge, resolution.files)) declared.add(edge.specifier)
     if (resolution.files.length === 0 && isCheckedImport(walk, facts.file)) {
       const found = unresolvedProblem(facts.code, edge, facts.place(edge.offset))
@@ -133,13 +138,31 @@ function followEdges(walk: Walk, facts: FileFacts, edges: readonly Edge[]): Set<
 }
 
 /**
+ * Whether the file is in a package `keepFor` stands in for, whose problems are not recorded.
+ */
+function isStoodInFor(walk: Walk, facts: FileFacts): boolean {
+  return facts.pkg !== undefined && Object.hasOwn(walk.options.keepFor, facts.pkg)
+}
+
+/**
+ * Records an import of core's `cx` the reader does not bind.
+ */
+function recordUnboundCx(walk: Walk, facts: FileFacts, edge: Edge): void {
+  if (isStoodInFor(walk, facts)) return
+  walk.graph.problems.push({
+    file: facts.rel,
+    pkg: facts.pkg,
+    ...unboundCxProblem(facts.code, edge, facts.place(edge.offset)),
+  })
+}
+
+/**
  * Records what reading a module found.
  */
 function record(walk: Walk, facts: FileFacts, reading: ModuleReading): void {
   const { graph, options } = walk
   for (const atom of [...reading.atoms, ...reading.classes]) graph.atoms.add(atom)
-  const isStandingIn = facts.pkg !== undefined && Object.hasOwn(options.keepFor, facts.pkg)
-  if (isStandingIn) return
+  if (isStoodInFor(walk, facts)) return
   for (const problem of reading.problems) {
     graph.problems.push({
       ...problem,
@@ -163,65 +186,68 @@ function record(walk: Walk, facts: FileFacts, reading: ModuleReading): void {
 }
 
 /**
- * Reads one source file of the graph.
+ * Parses one file, follows its edges and reads it.
  */
-function visit(walk: Walk, file: string): void {
-  let code: string
-  try {
-    code = readFileSync(file, 'utf8')
-  } catch {
-    return
-  }
-  const { options, graph } = walk
-  graph.files.set(file, digestOf(code))
-  const facts: FileFacts = {
-    code,
-    file,
-    rel: relativeTo(options.dir, file),
-    pkg: isDependencyPath(file) ? walk.packageOf(file).name : undefined,
-    place: placerFor(code),
-  }
+function read(walk: Walk, facts: FileFacts): void {
+  const { file, code } = facts
   const parsed = parseSync(file, code, {
     lang: languageOf(file),
     sourceType: 'unambiguous',
     preserveParens: false,
   })
   if (parsed.errors.some((error) => isFatalParseError(error))) {
-    graph.problems.push(unparsedProblem(facts.rel, facts.pkg))
+    walk.graph.problems.push(unreadProblem(facts.rel, facts.pkg))
     return
   }
   const program = parsed.program as unknown as Parameters<typeof readModule>[1]
   const declared = followEdges(walk, facts, edgesOf(program))
-  const isDeclared = walk.declaredFiles.has(file)
-  if (!isMentioningAtoms(code, declared, isDeclared)) return
   const reading = readModule(code, program, {
     cxSources: new Set([CX_SOURCE, ...declared]),
     declaredSources: declared,
-    isDeclared,
-    ownAtoms: options.ownAtoms,
+    isDeclared: walk.declaredFiles.has(file),
+    ownAtoms: walk.options.ownAtoms,
     isDependency: isDependencyPath(file),
   })
   record(walk, facts, reading)
 }
 
 /**
- * The files `cxModules` lists, resolved from the project directory, and the entries that are not
- * relative, which an import names as written.
+ * The package a file belongs to, for a file under `node_modules`.
  */
-function declaredModules(
-  options: GraphOptions,
-  resolver: Resolver,
-): { entries: Set<string>; files: Set<string> } {
-  const files = new Set<string>()
-  const entries = new Set<string>()
-  const from = path.join(options.dir, 'next.config')
-  for (const entry of options.cxModules) {
-    if (entry === CX_SOURCE) continue
-    const found = resolver.resolve(from, entry, false).files
-    for (const file of found) files.add(file)
-    if (!entry.startsWith('.') && !path.isAbsolute(entry)) entries.add(entry)
+function packageNameOf(walk: Walk, file: string): string | undefined {
+  return isDependencyPath(file) ? walk.packageOf(file).name : undefined
+}
+
+/**
+ * Reads one source file of the graph. A file that cannot be opened, or whose reading throws, is a
+ * problem in that file, and the walk goes on.
+ */
+function visit(walk: Walk, file: string): void {
+  const { options, graph } = walk
+  const rel = relativeTo(options.dir, file)
+  let code: string
+  try {
+    code = readFileSync(file, 'utf8')
+  } catch (error) {
+    // Declared all the same, so the bundler runs the plugin again once the file can be read.
+    graph.files.set(file, digestOf(''))
+    const reason = `opening it failed (${(error as NodeJS.ErrnoException).code ?? String(error)}).`
+    graph.problems.push(unreadProblem(rel, packageNameOf(walk, file), reason))
+    return
   }
-  return { files, entries }
+  graph.files.set(file, digestOf(code))
+  const facts: FileFacts = {
+    code,
+    file,
+    rel,
+    pkg: packageNameOf(walk, file),
+    place: placerFor(code),
+  }
+  try {
+    read(walk, facts)
+  } catch (error) {
+    graph.problems.push(unreadProblem(rel, facts.pkg, `reading it threw ${String(error)}`))
+  }
 }
 
 /**
@@ -229,9 +255,9 @@ function declaredModules(
  */
 export function readGraph(options: GraphOptions): Graph {
   const resolver = createResolver(options.dir)
-  const declared = declaredModules(options, resolver)
+  const declared = declaredModules(options.dir, options.cxModules, resolver)
   const naveNames = new Set([
-    '@navecss/core',
+    CORE_PACKAGE,
     ...options.cxModules
       .filter((entry) => !entry.startsWith('.'))
       .map((entry) => packageNameOfSpecifier(entry)),

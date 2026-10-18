@@ -1,6 +1,6 @@
 import type { Message } from 'postcss'
 
-import { rmSync, statSync } from 'node:fs'
+import { existsSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -162,5 +162,16 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
       expect(entry === project.dir || isInside(project.dir, entry)).toBe(true)
       expect(entry === outside.dir || isInside(outside.dir, entry)).toBe(false)
     }
+  })
+})
+
+describe('the plugin declares only the directories that are there', () => {
+  it('an app/-only project declares no dir-dependency on a directory it does not have', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'flex'") })
+    const { messages } = await runAtomic(project)
+    const named = messagesOf(messages, 'dir-dependency').map((message) => message.dir as string)
+    // Control: the directory that is there is declared.
+    expect(named).toContain(path.join(project.dir, 'app'))
+    expect(named.filter((dir) => !existsSync(dir))).toEqual([])
   })
 })

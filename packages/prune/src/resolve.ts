@@ -1,6 +1,8 @@
 /**
  * Resolving an import the way Next.js's bundlers do: tsconfig (or jsconfig) `paths`, package
- * `exports` under the server, browser and edge conditions, and Node built-ins as leaves.
+ * `exports` under the server, browser and edge conditions, each alone and with the `production`
+ * and `development` conditions webpack adds by mode, the legacy `browser` field for the browser,
+ * and Node built-ins as leaves.
  */
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -18,10 +20,22 @@ const EXTENSION_ALIAS = {
 }
 
 /**
- * The condition sets a specifier is resolved under: the server (React Server Components, Node),
- * the browser and the edge. A file any of them picks is read.
+ * The environments a specifier is resolved for: the server (React Server Components, Node), the
+ * browser and the edge.
  */
-const CONDITION_SETS = [['react-server', 'node'], ['node'], ['browser'], ['edge-light', 'worker']]
+const ENVIRONMENTS = [['react-server', 'node'], ['node'], ['browser'], ['edge-light', 'worker']]
+
+/**
+ * The conditions a build's mode adds: none, `production` (`next build`), `development`.
+ */
+const MODES = [[], ['production'], ['development']]
+
+/**
+ * The condition sets a specifier is resolved under: each environment in each mode. A file any of
+ * them picks is read, since reading a file one build does not bundle is safe and missing one is
+ * not.
+ */
+const CONDITION_SETS = ENVIRONMENTS.flatMap((set) => MODES.map((mode) => [...set, ...mode]))
 
 interface Resolution {
   /**
@@ -58,7 +72,11 @@ function resolversFor(dir: string, isProject: boolean): ResolverFactory[] {
           conditionNames: [...set, ...kind, 'default'],
           extensions: EXTENSIONS,
           extensionAlias: EXTENSION_ALIAS,
-          mainFields: ['module', 'main'],
+          // The client build reads a package's legacy `browser` field first, as a file in place
+          // of `main` and as a map from one of its files to another.
+          ...(set.includes('browser')
+            ? { mainFields: ['browser', 'module', 'main'], aliasFields: [['browser']] }
+            : { mainFields: ['module', 'main'] }),
           builtinModules: true,
           ...(configFile && { tsconfig: { configFile, references: 'auto' } }),
         }),

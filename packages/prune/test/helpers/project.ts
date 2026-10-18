@@ -54,11 +54,13 @@ export interface Project {
 
 /**
  * Creates the project directory with core linked into its `node_modules`, the default config
- * files, and `files` on top of them.
+ * files, and `files` on top of them. With `name`, the project is a directory of that name inside
+ * the scratch directory, so a test can choose what its path holds.
  */
-export function createProject(files: Record<string, string> = {}): Project {
+export function createProject(files: Record<string, string> = {}, name?: string): Project {
   const made = mkdtempSync(path.join(tmpdir(), 'prune-'))
-  const dir = realpathSync(made)
+  const top = realpathSync(made)
+  const dir = name === undefined ? top : path.join(top, name)
   const write = (more: Record<string, string>): void => {
     for (const [name, text] of Object.entries(more)) {
       const target = path.join(dir, name)
@@ -78,7 +80,7 @@ export function createProject(files: Record<string, string> = {}): Project {
   mkdirSync(path.join(dir, 'node_modules/@navecss'), { recursive: true })
   symlinkSync(CORE_ROOT, path.join(dir, 'node_modules/@navecss/core'), 'dir')
   write({ ...DEFAULT_FILES, ...files })
-  return { dir, remove: () => rmSync(dir, { recursive: true, force: true }), write, install }
+  return { dir, remove: () => rmSync(top, { recursive: true, force: true }), write, install }
 }
 
 export interface RunOptions {

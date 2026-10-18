@@ -24,12 +24,32 @@ const DECLARATIONS = new Set([
 type Node = Record<string, unknown> & { start?: number; type?: string }
 
 /**
- * The string literal a node is, if it is one.
+ * The text of a template literal with no substitution, which names one module as a string does.
+ */
+function templateTextOf(node: Node): string | undefined {
+  const quasis = node.quasis as { value?: { cooked?: unknown } }[] | undefined
+  const expressions = node.expressions as unknown[] | undefined
+  if (quasis?.length !== 1 || expressions?.length !== 0) return undefined
+  const cooked = quasis[0]?.value?.cooked
+  return typeof cooked === 'string' ? cooked : undefined
+}
+
+/**
+ * The string a node is, if it is one: a string literal, or a template literal with no
+ * substitution.
+ */
+function stringOf(node: Node | undefined): string | undefined {
+  if (node?.type === 'TemplateLiteral') return templateTextOf(node)
+  return node?.type === 'Literal' && typeof node.value === 'string' ? node.value : undefined
+}
+
+/**
+ * The string a node is, with where it starts, if it is one.
  */
 function literalOf(node: unknown): { start: number; value: string } | undefined {
   const literal = node as Node | undefined
-  if (literal?.type !== 'Literal' || typeof literal.value !== 'string') return undefined
-  return { value: literal.value, start: literal.start ?? 0 }
+  const value = stringOf(literal)
+  return value === undefined ? undefined : { value, start: literal?.start ?? 0 }
 }
 
 /**
@@ -55,7 +75,7 @@ function declarationEdge(node: Node): Edge | undefined {
 }
 
 /**
- * The edge a call or dynamic import makes, if it makes one with a string literal.
+ * The edge a call or dynamic import makes, if it makes one with a string.
  */
 function callEdge(node: Node): Edge | undefined {
   if (node.type === 'ImportExpression') {

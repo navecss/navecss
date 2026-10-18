@@ -4,7 +4,7 @@
  * `mdx-components`). A convention a later Next.js release adds is not read until this list
  * names it.
  */
-import { readdirSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
 import { isMarkdownFile, isSourceFile } from './source-files.ts'
@@ -97,7 +97,8 @@ function walk(
 ): Entries {
   const files: string[] = []
   const directories: SelectedDirectory[] = []
-  const queue = [root]
+  // A directory that is not there is not selected from, so it is never declared to the bundler.
+  const queue = existsSync(root) ? [root] : []
   while (queue.length > 0) {
     const dir = queue.pop()!
     const names: string[] = []
@@ -124,6 +125,7 @@ function walk(
  * The root conventions of `base`: only the files directly in it.
  */
 function rootEntries(base: string): Entries {
+  if (!existsSync(base)) return { files: [], directories: [] }
   const names = listing(base)
     .filter((entry) => !entry.isDirectory && isConventionFile(entry.name, ROOT_CONVENTIONS))
     .map((entry) => entry.name)

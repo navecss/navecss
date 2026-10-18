@@ -23,3 +23,13 @@ export function printOnce(key: string, line: string): void {
   // eslint-disable-next-line no-console -- printing to the terminal running Next.js is this package's output
   console.warn(line)
 }
+
+/**
+ * Prints `line` through `console.warn` on every run: for what went wrong in this run, which a
+ * later run may or may not repeat.
+ */
+export function printEachRun(line: string): void {
+  if (!isPrintingCompilation()) return
+  // eslint-disable-next-line no-console -- printing to the terminal running Next.js is this package's output
+  console.warn(line)
+}

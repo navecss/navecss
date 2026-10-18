@@ -92,3 +92,22 @@ describe('AC-nextjs-used-atoms-24: without the wrapper every atom ships, nothing
     expect(printed()).toHaveLength(2)
   })
 })
+
+describe('without the wrapper a @nave problem is still said', () => {
+  it('a @nave problem prints one line naming it, as the warn setting prints it', async () => {
+    const project = projectWithProblem()
+    const printed = capturePrinted()
+    const [sheet] = await runSheets(
+      project,
+      [{ css: '.c {\n  @nave interactve;\n}\n', file: 'app/g.css' }],
+      {
+        options: false,
+      },
+    )
+    const lines = printed().filter((line) => line.includes('interactve'))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatch(/app\/g\.css:2:3: /u)
+    // Control: the directive was expanded away, so the line is the only trace of the problem.
+    expect(sheet!.css).not.toContain('@nave')
+  })
+})
