@@ -48,6 +48,13 @@ Consumer rules go in `@layer components.consumer`, and a deliberate exception in
 `@layer overrides`; never write an unlayered rule. Atom names are the camelCase keys listed
 under Atoms below (`focusRing`, `justifyBetween`), never the `nave-` class they emit.
 
+`@nave a b;` expands in place, atom by atom, each atom's pseudo-class, `@media` and `@container`
+blocks right after its declarations, and a declaration after the directive overrides them. Name
+responsive and state atoms (`hide*`, `*PhoneOnly`, `focusRing`) after the atoms they adjust, and
+write a declaration that should give way to them above the directive. When the build warns that a
+later declaration overrides an atom's block, reorder; add a `nave-allow-override` marker only when
+the override is what the task asks for.
+
 See where `@nave` is valid (nesting depth, `@media`/`@container`, `@keyframes`) in
 [the package README](../../README.md#where-nave-is-valid).
 

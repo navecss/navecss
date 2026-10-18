@@ -107,10 +107,110 @@ Requires the Vite plugin or the PostCSS plugin. Everything stays in CSS files.
 ```
 
 Declarations are inlined at build time, and nothing of `@nave` is left at run time.
-Pseudo-class rules (`:focus-visible` from `focusRing`), `@media` and
-`@container` blocks are emitted as native CSS nesting inside your rule, so they
-apply to every selector in a selector list. Native nesting is inside the browser
-floor under [Requirements](#requirements).
+Pseudo-class rules (`:focus-visible` from `focusRing`), `@media` and `@container` blocks are
+emitted as native CSS nesting inside your rule, each right after its own atom's declarations, so
+they apply to every selector in a selector list. Native nesting is inside the browser floor under
+[Requirements](#requirements), and [Order inside a rule](#order-inside-a-rule) says what wins when
+your rule sets the same property.
+
+#### Order inside a rule
+
+`@nave a b;` expands where you write it, in the order CSS mixins will apply
+`@apply --a; @apply --b;`: the declarations of `a`, then the pseudo-class,
+`@media` and `@container` blocks of `a`, then the same for `b`. Whatever your rule
+says after the directive comes after all of it. So of two declarations of one
+property that both apply, the later one wins, unless the earlier one has the more
+specific selector (an atom's pseudo-class block, such as the `:focus-visible` of
+`focusRing`, does), as anywhere else in CSS.
+
+```css
+.panel {
+  @nave flex hideDesktopUp;
+  gap: var(--nave-spacing-content-md);
+}
+```
+
+expands to:
+
+```css
+.panel {
+  display: flex;
+  @media (width >= 75em) {
+    & {
+      display: none;
+    }
+  }
+  & {
+    gap: var(--nave-spacing-content-md);
+  }
+}
+```
+
+A declaration that follows a nested block is written inside `& { }`, the wrapper
+Nave already uses for a directive written after a nested rule. Under a selector
+list, `&` matches with the specificity of the list's most specific selector, so a
+wrapped declaration can win over a rule elsewhere that a bare one would lose to;
+write it above the directive if that matters.
+
+The order you write is the order that wins:
+
+| You write                             | From 75em up     |
+| ------------------------------------- | ---------------- |
+| `@nave flex hideDesktopUp;`           | hidden           |
+| `@nave hideDesktopUp flex;`           | shown, as flex   |
+| `display: grid; @nave hideDesktopUp;` | hidden           |
+| `@nave hideDesktopUp; display: grid;` | shown, as a grid |
+
+Name a responsive or state atom after the atoms it adjusts, and write a declaration
+that should give way to an atom's variants above the directive. A declaration or a
+nested block below the directive is how you customize an atom inside your own rule.
+
+The same order applies to the focus atoms. After `@nave focusRing;`, a later
+`&:focus-visible { outline-color: var(--brand) }` recolours the ring, and a later
+`&:focus { outline: none }` or `&:focus-visible { outline: none }` removes it,
+which leaves the element with no focus indicator from `focusRing` under keyboard
+focus. After `@nave srOnlyFocusable;`, a later `&:focus-visible { position: fixed }`
+places the revealed element, and a later `clip-path: inset(50%)` in the same state
+hides it again, so a skip link stays hidden when it has focus. To keep the atom's
+result, write the block above the directive. The order warning below reports each
+of these, and says so when the ring or the reveal is lost.
+
+**The order warning.** Where something later in the rule overrides one of an atom's
+pseudo-class, `@media` or `@container` blocks with a different value, the build
+prints a warning at the later declaration, with the fix:
+
+```text
+src/panel.css:3:3: @nave: display: grid comes after "hideDesktopUp", so under @media (width >= 75em) display is grid, not none. Before @navecss/core 0.5.0 "hideDesktopUp" won, because an atom's blocks were placed last in the rule. To let "hideDesktopUp" win, move display: grid above the directive. If it is meant to win, mark the directive that names "hideDesktopUp": `@nave /* nave-allow-override: display */ hideDesktopUp;`
+```
+
+It never fails the build, and `onUnknown` does not change it. The Vite plugin prints
+it through Vite's logger, the PostCSS plugin as a PostCSS warning (and with `console.warn` on
+Next.js under Turbopack, which does not print PostCSS warnings), the Lightning CSS
+adapter with `console.warn`, and `navecss-core expand` on standard error, without
+changing its exit code. No option turns it off for the whole project.
+
+**Marking an override you mean.** Name the property in a comment inside the
+directive:
+
+```css
+.panel {
+  @nave /* nave-allow-override: display */ hideDesktopUp;
+  display: grid;
+}
+```
+
+The comment says that what comes after this directive's atoms (a later atom in it,
+or your rule's own content) is meant to win for the properties it names. It
+silences the warning for those properties on this directive and nothing else: an
+override of another property, or of another directive's atoms, still warns. A
+shorthand covers its longhands (`outline` covers `outline-color`). You can add a
+reason after `--`: `/* nave-allow-override: display -- a grid on wide screens */`.
+The comment never reaches your CSS. Only a comment inside the directive is read,
+because some build steps remove the others before Nave sees the stylesheet (Vite
+under `css.transformer: 'lightningcss'`, for one). A marker naming a property that
+nothing overrides any more is reported, so remove it when you reorder. The Vite plugin under
+`css.transformer: 'lightningcss'` does not report one, at any targets, because it cannot tell
+whether Lightning CSS has already moved what follows the directive.
 
 ### Escape hatch — cx() utility
 
@@ -243,10 +343,15 @@ Nave class it cannot see has no rule unless its atom is listed in `keep`.
 
 **Under `css.transformer: 'lightningcss'`** the plugin expands exactly as it does under the default
 transformer once both floor keys below are set. At Vite's default targets, which sit below the
-floor, Lightning CSS lowers CSS nesting before any plugin runs, and two things change.
+floor, Lightning CSS lowers CSS nesting before any plugin runs, and three things change.
 A directive written after a declaration that follows a nested rule can be moved ahead of that
 declaration: in `.a { &:hover { color: red; } display: grid; @nave block; }`, `grid` wins with no
-message, where the default transformer makes `block` win. A directive in a group rule nested in a
+message, where the default transformer makes `block` win.
+What a rule says after a directive becomes a rule of its own, after the directive's, so it
+already resolves in the order [Order inside a rule](#order-inside-a-rule) describes, but no order
+warning is printed for it: a later `&:focus { outline: none }` after `focusRing`, for one, removes
+the ring there with no message.
+A directive in a group rule nested in a
 style rule (`.a { @media (...) { @nave flex; } }`) still fails the build, but the message no longer
 names the `& { @nave ...; }` workaround, and its position is in the CSS as Lightning CSS rewrote
 it, not in your file. The plugin also drops one message and only that one: Lightning CSS's
@@ -695,6 +800,8 @@ Without it, Turbopack compiles for older browsers and rewrites every `light-dark
 Nave's colours included, into `--lightningcss-light` and `--lightningcss-dark` variables. Spell
 the floor out as above: Next 15 rejects the shorter `baseline 2024` with `Unknown browser baseline`.
 
+**Where Nave's warnings show.** With webpack (`next build --webpack`), `next build` prints them under `Compiled with warnings`, once for each compilation that reads the stylesheet, so a CSS Module imported from a Server Component can show the same warning twice; `next dev --webpack` may not print a global stylesheet's, so read them from `next build`. Turbopack does not print PostCSS warnings, so under Turbopack the plugin prints them itself on standard error, with the file, line and column, in `next build` and `next dev` alike. Neither bundler shows them in the browser console or Next's error overlay.
+
 **If your Vite config sets `css.transformer: 'lightningcss'`, this plugin never
 runs.** That option replaces Vite's CSS pipeline with Lightning CSS, which does
 not run PostCSS plugins at all: the build stays green, `@nave` reaches the
@@ -744,7 +851,8 @@ Nave's own messages, with the file's path and the line and column of each proble
 and the map as a string, ready for `transform()`'s `code` and `inputSourceMap`. `resolver.read` reads each file
 `bundleAsync()` asks for and returns its expanded text, so a file reached through `@import` is
 covered too. It takes `extend` (an object of your own atoms) and `onUnknown` as the other plugins
-do ([Options](#options)); under `'warn'` it prints each problem with `console.warn`.
+do ([Options](#options)); under `'warn'` it prints each problem with `console.warn`, and prints
+the [order warning](#order-inside-a-rule) the same way under every `onUnknown`.
 
 The adapter imports nothing from `lightningcss`, types included, and declares no peer: you bring
 your own copy. The supported range is documented, not declared: `lightningcss` 1.24.1 and later.
@@ -773,6 +881,8 @@ in one error, positioned at the first: its message, then
 others. The report covers one stylesheet, so a bundler that stops at the first
 failing file reports one file per build. Under `'warn'`, each problem is a
 warning of its own.
+The [order warning](#order-inside-a-rule) is not one of these problems: it is printed as a
+warning whatever `onUnknown` says.
 
 To add atoms of your own to `@nave`, pass them as `extend`: see
 [CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md). An `extend` object written inline in
@@ -871,6 +981,9 @@ across every file is printed in one run, one report per stylesheet. Exit codes:
   used, a `--source` that could not be read, an `--out` that could not be written, or, under
   `--watch`, a directory that could not be watched. Nothing is written, except that files written
   before an `--out` that failed stay written.
+
+An order warning is printed and is not a problem here: it changes neither the exit code nor what is
+written.
 
 It does not resolve or inline `@import`; that would make it a CSS bundler. It
 expands only the files you name with `--source`, so a stylesheet you import that

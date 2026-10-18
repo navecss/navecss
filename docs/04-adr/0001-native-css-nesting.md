@@ -44,6 +44,9 @@ ordered by document position inside the rule, not by insertion anchors.
    inserted at the directive's authored position; pseudo, `@media` and
    `@container` blocks are appended to the end of the rule in authored order.
    The hoisting and reversal machinery is deleted.
+   - **Correction (2026-10-18):** superseded by [ADR 0011](0011-nave-expands-in-native-apply-order.md)
+     from `@navecss/core` 0.5.0. Blocks are no longer appended to the end of the rule: each
+     atom's blocks sit right after its own declarations, at the directive's position.
 2. `scripts/build-css.ts` emits the **same nested shape** into
    `dist/atomic.css`. One atom source, two renderers, one output shape.
 3. Declarations inside a nested at-rule are wrapped in `& { … }`. They are never
@@ -67,6 +70,11 @@ ordered by document position inside the rule, not by insertion anchors.
 - Consumer nested rules authored _before_ a `@nave` directive are overridden by
   that atom's nested rules, which are appended after them. Same-specificity
   source order; documented, not accidental.
+- **Correction (2026-10-18):** from `@navecss/core` 0.5.0 the atom's nested rules are no longer
+  appended after the consumer's. [ADR 0011](0011-nave-expands-in-native-apply-order.md) places
+  them at the directive, so a consumer nested rule authored before the directive is still
+  overridden at equal specificity, by position and not by appending, and one authored after the
+  directive now wins.
 - **Correction (2026-08-11):** the point above records the
   cascade effect of a consumer nested rule preceding a directive, but not the
   validity effect, which is more serious. The directive's declarations insert

@@ -86,6 +86,22 @@ mapping will follow).
   with fallbacks still draw a ring when the token layer is missing. See
   `packages/core/src/atoms.ts`.
 
+- **Correction (2026-10-18):** before `@navecss/core` 0.5.0, two rows of this table did
+  not hold as written. `@nave focusRing;` inside a rule was not `@apply --focus-ring;` at
+  that position: the atom's conditional blocks were appended to the end of the rule, so
+  they won over the rule's own later declarations and nested rules of equal specificity.
+  `@nave interactive focusRing;` was not one `@apply` per name in order: every atom's
+  declarations came before every atom's blocks, so an earlier atom's `@media` or
+  `@container` block won over a later atom's declaration of the same property. From
+  0.5.0 both rows hold, with two divergences that follow from writing for engines
+  without nested declarations. Under a selector list whose selectors differ in
+  specificity, declarations Nave writes inside `& { }` match with the specificity of the
+  list's most specific selector, where native nested declarations match per selector. In
+  a rule whose every selector targets a pseudo-element, Nave emits no conditional blocks,
+  where a mixin's `@media` and `@container` rules would still apply to the pseudo-element;
+  and in a list that mixes such selectors with others, the declarations Nave wraps do not
+  reach the pseudo-element ones. See ADR 0011.
+
 **3. What Nave keeps on top of the standard, permanently.** The standard gives
 none of these, and they are why the directive is more than syntax:
 
