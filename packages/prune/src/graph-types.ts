@@ -36,4 +36,9 @@ export interface Graph {
    */
   readonly markdown: Set<string>
   readonly directories: SelectedDirectory[]
+  /**
+   * The stylesheets the build can still hold, absolute: the ones the code imports, and every one
+   * an `@import` or a `composes ... from` reaches from those.
+   */
+  readonly stylesheets: Set<string>
 }

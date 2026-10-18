@@ -58,6 +58,13 @@ export interface PruneRecord {
    */
   readonly markdown: readonly string[]
   /**
+   * The stylesheets the build can still hold, relative like `files`, sorted: the ones the code
+   * imports and every one an `@import` or a `composes ... from` reaches from those. A stylesheet's
+   * own record counts only while its stylesheet is listed here. Absent when the run stopped before
+   * reading the code, and then every stylesheet record that names a file on disk counts.
+   */
+  readonly stylesheets?: readonly string[]
+  /**
    * Whether core's PostCSS plugin ran in the same pipeline.
    */
   readonly hasCorePlugin: boolean
@@ -141,9 +148,28 @@ export function writeSheetRecord(handoff: Handoff, sheet: SheetRecord): void {
 }
 
 /**
- * The stylesheets' records that still name a stylesheet that exists.
+ * Whether a stylesheet's record still counts: its stylesheet, if it was a file on disk, still is
+ * one, and the build can still hold it. A record of a stylesheet that was never a file on disk has
+ * nothing to be checked against, and counts.
  */
-function readSheetRecords(handoff: Pick<Handoff, 'dir' | 'distDir'>): SheetRecord[] {
+function isStillCounted(
+  handoff: Pick<Handoff, 'dir'>,
+  sheet: SheetRecord,
+  stylesheets: ReadonlySet<string> | undefined,
+): boolean {
+  if (!sheet.isOnDisk) return true
+  if (!existsSync(path.join(handoff.dir, sheet.file))) return false
+  return stylesheets === undefined || stylesheets.has(sheet.file)
+}
+
+/**
+ * The stylesheets' records that still count, given the stylesheets the build can hold (every one
+ * that is on disk, when that is not known).
+ */
+function readSheetRecords(
+  handoff: Pick<Handoff, 'dir' | 'distDir'>,
+  stylesheets: ReadonlySet<string> | undefined,
+): SheetRecord[] {
   const directory = sheetsDirectory(handoff)
   if (!existsSync(directory)) return []
   const sheets: SheetRecord[] = []
@@ -154,7 +180,7 @@ function readSheetRecords(handoff: Pick<Handoff, 'dir' | 'distDir'>): SheetRecor
       ) as Stored<SheetRecord>
       // A record written before `failures` existed has none.
       const sheet = { ...stored, failures: stored.failures ?? [] }
-      if (!sheet.isOnDisk || existsSync(path.join(handoff.dir, sheet.file))) sheets.push(sheet)
+      if (isStillCounted(handoff, sheet, stylesheets)) sheets.push(sheet)
     } catch {
       // A file another run is writing: that run's own record will be read next time.
     }
@@ -173,7 +199,8 @@ export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneReco
   } catch {
     return undefined
   }
-  const sheets = readSheetRecords(handoff)
+  const listed = stored.stylesheets === undefined ? undefined : new Set(stored.stylesheets)
+  const sheets = readSheetRecords(handoff, listed)
   const directiveProblems = sheets
     .flatMap((sheet) => sheet.problems)
     .toSorted((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column)

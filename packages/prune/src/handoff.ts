@@ -23,6 +23,12 @@ export interface Handoff {
    * `phase-production-build`, ...); absent for an object config, which is given none.
    */
   readonly phase?: string
+  /**
+   * Set when webpack's `webpack(config, ctx)` callback passed its own project directory on as
+   * `dir`. Absent when `dir` is the directory `next.config` was loaded from, which is wherever
+   * `next` was started: `next build apps/web` run from a repository's top loads it from the top.
+   */
+  readonly isBundlerDir?: boolean
 }
 
 /**
@@ -37,12 +43,13 @@ export function encodeHandoff(handoff: Handoff): string {
  */
 function isHandoff(value: unknown): value is Handoff {
   if (typeof value !== 'object' || value === null) return false
-  const { options, dir, distDir, root, phase } = value as Record<string, unknown>
+  const { options, dir, distDir, root, phase, isBundlerDir } = value as Record<string, unknown>
   return (
     typeof options === 'object' &&
     options !== null &&
     [dir, distDir, root].every((field) => typeof field === 'string') &&
-    (phase === undefined || typeof phase === 'string')
+    (phase === undefined || typeof phase === 'string') &&
+    (isBundlerDir === undefined || typeof isBundlerDir === 'boolean')
   )
 }
 

@@ -68,6 +68,17 @@ describe('AC-nextjs-used-atoms-19: withNave() hands its options over in one envi
     expect(handoff.root).toBe(project.dir)
   })
 
+  it("marks the directory webpack's callback passes on as the bundler's own, and not the one from config load", () => {
+    const wrapped = withNave({}, OPTIONS) as unknown as {
+      webpack: (config: unknown, context: { dir: string }) => unknown
+    }
+    expect(handoffInEnv().isBundlerDir).toBeUndefined()
+    wrapped.webpack({}, { dir: '/work/apps/web' })
+    const handoff = handoffInEnv()
+    expect(handoff.dir).toBe('/work/apps/web')
+    expect(handoff.isBundlerDir).toBe(true)
+  })
+
   it('holds an options object when withNave() is called with none', () => {
     withNave({})
     const handoff = handoffInEnv()

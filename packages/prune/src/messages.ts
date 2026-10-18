@@ -5,19 +5,11 @@
  */
 import type { Message } from 'postcss'
 
-import path from 'node:path'
-
 import type { SelectedDirectory } from './entries.ts'
 
-const PLUGIN = 'postcss-nave-prune'
+import { isInside } from './source-files.ts'
 
-/**
- * Whether `file` lies inside `root`.
- */
-function isInside(root: string, file: string): boolean {
-  const relative = path.relative(root, file)
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
-}
+const PLUGIN = 'postcss-nave-prune'
 
 /**
  * The messages for the files read and the directories selected from.

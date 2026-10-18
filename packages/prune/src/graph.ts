@@ -27,6 +27,7 @@ import { digestOf } from './digest.ts'
 import { edgesOf } from './edges.ts'
 import { findEntries } from './entries.ts'
 import {
+  emptyGraph,
   isFatalParseError,
   languageOf,
   listedAtomsFor,
@@ -37,7 +38,13 @@ import {
 import { placerFor } from './lines.ts'
 import { createPackageReader, packageNameOfSpecifier } from './packages.ts'
 import { createResolver } from './resolve.ts'
-import { isDependencyPath, isMarkdownFile, isSourceFile, relativeTo } from './source-files.ts'
+import {
+  isDependencyPath,
+  isMarkdownFile,
+  isSourceFile,
+  isStylesheetFile,
+  relativeTo,
+} from './source-files.ts'
 
 /**
  * A file to read, and whether the build's own mode reaches it, so its problems count.
@@ -72,6 +79,7 @@ function enqueue(walk: Walk, file: string, isInMode: boolean): void {
   walk.seen.set(file, isInMode)
   if (isMarkdownFile(file)) walk.graph.markdown.add(file)
   else if (isSourceFile(file)) walk.queue.push({ file, isInMode })
+  else if (isStylesheetFile(file)) walk.graph.stylesheets.add(file)
 }
 
 /**
@@ -254,9 +262,12 @@ function visit(walk: Walk, { file, isInMode }: Queued): void {
 }
 
 /**
- * Reads the graph of the project in `options.dir`.
+ * Reads the graph of the project in `options.dir` into `graph`, which holds what was read so far
+ * if reading stops.
  */
-export function readGraph(options: GraphOptions): Graph {
+export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): Graph {
+  const entries = findEntries(options.dir)
+  graph.directories.push(...entries.directories)
   const resolver = createResolver(options.dir, options.modes)
   const declared = declaredModules(options.dir, options.cxModules, resolver)
   const naveNames = new Set([
@@ -265,14 +276,6 @@ export function readGraph(options: GraphOptions): Graph {
       .filter((entry) => !entry.startsWith('.'))
       .map((entry) => packageNameOfSpecifier(entry)),
   ])
-  const entries = findEntries(options.dir)
-  const graph: Graph = {
-    atoms: new Set(),
-    problems: [],
-    files: new Map(),
-    markdown: new Set(),
-    directories: entries.directories,
-  }
   const walk: Walk = {
     options,
     resolver,

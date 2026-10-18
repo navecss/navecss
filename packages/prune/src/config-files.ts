@@ -21,3 +21,14 @@ export function configFilesIn(dir: string): string[] {
     return []
   }
 }
+
+/**
+ * Whether `dir` holds a `next.config`, whatever its extension.
+ */
+export function hasNextConfig(dir: string): boolean {
+  try {
+    return readdirSync(dir).some((name) => NEXT_CONFIG.test(name))
+  } catch {
+    return false
+  }
+}

@@ -1,13 +1,15 @@
 /**
  * Trimming the atom layer of the stylesheet that holds it: the graph is read, the record written,
  * and only then is the layer replaced with the atoms the code uses. A run that cannot finish
- * leaves the layer whole, says so, and writes the failure where the build's own check reads it.
+ * leaves the layer whole, says so, tells the bundler what it read before it stopped, and writes
+ * the failure where the build's own check reads it.
  */
 import type { LocatedProblem } from '@navecss/core/collect'
 import type { Message, Result, Root } from 'postcss'
 
 import { inspectAtomicLayer, pruneAtomicLayer } from '@navecss/core/collect'
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import postcss from 'postcss'
 
 import type { ExtendMap } from './extend.ts'
@@ -18,11 +20,13 @@ import type { Mode } from './resolve.ts'
 
 import { configFilesIn } from './config-files.ts'
 import { digestOf } from './digest.ts'
+import { emptyGraph } from './graph-parts.ts'
 import { readGraph } from './graph.ts'
 import { dependencyMessages } from './messages.ts'
 import { printEachRun } from './print.ts'
 import { writeRecord } from './record.ts'
 import { relativeTo } from './source-files.ts'
+import { readStylesheets } from './stylesheets.ts'
 import { emittedAtoms } from './used.ts'
 
 const PLUGIN = 'postcss-nave-prune'
@@ -145,6 +149,9 @@ function recordOfRun(
     markdown: [...graph.markdown]
       .map((file) => relativeTo(dir, file))
       .toSorted((a, b) => a.localeCompare(b)),
+    stylesheets: [...graph.stylesheets]
+      .map((file) => relativeTo(dir, file))
+      .toSorted((a, b) => a.localeCompare(b)),
     readsNoCode: graph.atoms.size === 0 && (options.keep ?? []).length === 0,
     failures: [],
   }
@@ -194,29 +201,43 @@ function modesOfRun(handoff: Handoff): readonly Mode[] {
 }
 
 /**
- * Reads the graph, writes the record, then trims the layer and declares what was read.
+ * The messages that declare to the bundler what the run read: the files, with the config files,
+ * and the directories files were selected from.
  */
-function trim(run: LayerRun): void {
+function declarations(run: LayerRun, files: Map<string, string>, graph: Graph): Message[] {
+  return dependencyMessages({
+    root: run.handoff.root,
+    parent: run.result.opts.from,
+    files: files.keys(),
+    directories: graph.directories,
+  })
+}
+
+/**
+ * Reads the graph into `graph`, writes the record, then trims the layer and declares what was
+ * read.
+ */
+function trim(run: LayerRun, graph: Graph): void {
   const { handoff, root, result } = run
   const { options, dir } = handoff
   const keep = options.keep ?? []
   const keepFor = options.keepFor ?? {}
-  const graph = readGraph({
-    dir,
-    keep,
-    keepFor,
-    cxModules: options.cxModules ?? [],
-    ownAtoms: new Set(Object.keys(run.extend ?? {})),
-    modes: modesOfRun(handoff),
-  })
+  readGraph(
+    {
+      dir,
+      keep,
+      keepFor,
+      cxModules: options.cxModules ?? [],
+      ownAtoms: new Set(Object.keys(run.extend ?? {})),
+      modes: modesOfRun(handoff),
+    },
+    graph,
+  )
+  const from = result.opts.from
+  readStylesheets(graph, dir, from === undefined ? undefined : path.resolve(from))
   const atoms = emittedAtoms(graph, { keep, keepFor })
   const files = filesRead(handoff, graph.files)
-  const messages: Message[] = dependencyMessages({
-    root: handoff.root,
-    parent: result.opts.from,
-    files: files.keys(),
-    directories: graph.directories,
-  })
+  const messages = declarations(run, files, graph)
   const trimmed = pruneAtomicLayer(root.toString(), new Set(atoms))
   // The record goes first: the layer is trimmed only once the build's check can read the run.
   writeRecord(handoff, recordOfRun(run, graph, files, atoms))
@@ -225,11 +246,14 @@ function trim(run: LayerRun): void {
 }
 
 /**
- * Says the layer ships whole and why, and records the failure when the record can be written.
+ * Says the layer ships whole and why, declares what the run read before it stopped, so the
+ * bundler runs it again once that changes, and records the failure when the record can be
+ * written.
  */
-function stopWithoutTrimming(run: LayerRun, reason: string): void {
+function stopWithoutTrimming(run: LayerRun, reason: string, graph: Graph): void {
   const failure = `${PLUGIN} stopped without trimming: ${reason}`
   printEachRun(`Nave: ${failure}`)
+  run.result.messages.push(...declarations(run, filesRead(run.handoff, graph.files), graph))
   try {
     writeRecord(run.handoff, recordOfStoppedRun(run, failure))
   } catch {
@@ -242,13 +266,14 @@ function stopWithoutTrimming(run: LayerRun, reason: string): void {
  * cannot finish, the layer is left whole and the failure is recorded.
  */
 export function trimAtomicLayer(run: LayerRun): void {
+  const graph = emptyGraph()
   if (run.blocked !== undefined) {
-    stopWithoutTrimming(run, run.blocked)
+    stopWithoutTrimming(run, run.blocked, graph)
     return
   }
   try {
-    trim(run)
+    trim(run, graph)
   } catch (error) {
-    stopWithoutTrimming(run, String(error))
+    stopWithoutTrimming(run, String(error), graph)
   }
 }

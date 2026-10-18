@@ -7,6 +7,7 @@ import type { LocatedProblem, Problem } from '@navecss/core/collect'
 import path from 'node:path'
 
 import type { Edge } from './edges.ts'
+import type { Graph } from './graph-types.ts'
 import type { Place } from './lines.ts'
 
 const UNREAD_TEXT = 'the module could not be read, so the atoms it names would not ship: '
@@ -101,4 +102,18 @@ export function unreadProblem(
  */
 export function isFatalParseError(error: { readonly severity: unknown }): boolean {
   return error.severity === 'Error'
+}
+
+/**
+ * A graph with nothing read yet.
+ */
+export function emptyGraph(): Graph {
+  return {
+    atoms: new Set(),
+    problems: [],
+    files: new Map(),
+    markdown: new Set(),
+    directories: [],
+    stylesheets: new Set(),
+  }
 }

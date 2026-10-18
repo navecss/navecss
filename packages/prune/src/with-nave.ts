@@ -49,15 +49,17 @@ function keepMapText(options: NaveOptions): string {
 function setHandoff(
   config: ConfigShape,
   options: NaveOptions,
-  dir: string,
+  project: { readonly dir: string; readonly isBundlerDir: boolean },
   phase: string | undefined,
 ): void {
+  const { dir, isBundlerDir } = project
   const handoff: Handoff = {
     options,
     dir,
     distDir: config.distDir ?? '.next',
     root: config.turbopack?.root ?? config.outputFileTracingRoot ?? dir,
     ...(phase !== undefined && { phase }),
+    ...(isBundlerDir && { isBundlerDir }),
   }
   process.env[HANDOFF_VARIABLE] = encodeHandoff(handoff)
 }
@@ -80,7 +82,7 @@ function wrapConfig(
   options: NaveOptions,
   phase: string | undefined,
 ): ConfigShape {
-  setHandoff(config, options, process.cwd(), phase)
+  setHandoff(config, options, { dir: process.cwd(), isBundlerDir: false }, phase)
   const user = config.webpack
   return {
     ...config,
@@ -91,7 +93,9 @@ function wrapConfig(
     transpilePackages: withName(config.transpilePackages, CORE_PACKAGE),
     ...(config.turbopack === undefined && { turbopack: {} }),
     webpack: (webpackConfig: unknown, context: { dir?: string }) => {
-      if (context.dir !== undefined) setHandoff(config, options, context.dir, phase)
+      if (context.dir !== undefined) {
+        setHandoff(config, options, { dir: context.dir, isBundlerDir: true }, phase)
+      }
       return user ? user(webpackConfig, context) : webpackConfig
     },
   }

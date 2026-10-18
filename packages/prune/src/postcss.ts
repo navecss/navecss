@@ -18,6 +18,7 @@ import { corePluginFor, expandDirectives, hasNaveDirective } from './directive.t
 import { loadExtend } from './extend.ts'
 import { readHandoff } from './handoff.ts'
 import { printEachRun, printOnce } from './print.ts'
+import { projectHandoff } from './project.ts'
 import { writeSheetRecord } from './record.ts'
 import { relativeTo } from './source-files.ts'
 import { hasCorePlugin, trimAtomicLayer } from './trim.ts'
@@ -216,7 +217,7 @@ async function run(root: Root, result: Result, entryOptions: object): Promise<vo
     await expandWithoutOptions(root, result)
     return
   }
-  await runWithHandoff(root, result, handoff, entryOptions)
+  await runWithHandoff(root, result, projectHandoff(handoff), entryOptions)
 }
 
 /**

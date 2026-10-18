@@ -66,7 +66,7 @@ export interface Resolver {
 /**
  * The config file `paths` are read from: `tsconfig.json`, else `jsconfig.json`.
  */
-function configFileIn(dir: string): string | undefined {
+export function configFileIn(dir: string): string | undefined {
   return ['tsconfig.json', 'jsconfig.json'].map((name) => path.join(dir, name)).find(existsSync)
 }
 
