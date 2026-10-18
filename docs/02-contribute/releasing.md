@@ -36,7 +36,7 @@ If the release includes a new version of `@navecss/base-ui`, check first that a 
 pnpm --filter @navecss/base-ui run check:server-components
 ```
 
-It packs the package, installs it in a throwaway Next.js app in the operating system's temporary directory, and builds pages that render its components from Server Components, under Turbopack and under webpack. It exits 0 only when every page builds and a copy with the `'use client'` directive put back on `dialog/index.js`, as 0.2.0 shipped it, fails to build. It needs the network and takes a minute or more, a few on a cold npm cache. Neither `pnpm run ci:check` nor the release workflow runs it, so do not start the run below until it exits 0, and if it fails, fix the cause through a normal pull request first. It builds with the Next.js and React versions it was written against; add `--next <version> --react <version>` to build with others.
+It packs the package, installs it in a throwaway Next.js app in the operating system's temporary directory, and builds pages that render its components from Server Components, under Turbopack and under webpack. It exits 0 only when every page builds and a copy with the `'use client'` directive put back on `dialog/index.js`, as 0.2.0 shipped it, fails to build. It needs the network and takes under a minute on a warm npm cache, a few minutes on a cold one. Neither `pnpm run ci:check` nor the release workflow runs it, so do not start the run below until it exits 0, and if it fails, fix the cause through a normal pull request first. It builds with the Next.js and React versions it was written against; add `--next <version> --react <version>` to build with others.
 
 From the **Actions** tab, open the **release** workflow and choose **Run workflow** on `main`, or:
 

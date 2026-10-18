@@ -75,7 +75,11 @@ describe('AC-base-ui-bridge-53: the release-time Server Component check reads a 
       guide.indexOf('## 2. Stage the release'),
       guide.indexOf('## 3. Approve'),
     )
-    expect(staging).toContain('pnpm --filter @navecss/base-ui run check:server-components')
+    const command = staging.indexOf(
+      '```sh\npnpm --filter @navecss/base-ui run check:server-components\n```',
+    )
+    expect(command).toBeGreaterThan(-1)
+    expect(command).toBeLessThan(staging.indexOf('gh workflow run release.yml'))
     const manifest = JSON.parse(readFileSync(path.join(PACKAGE_DIR, 'package.json'), 'utf8')) as {
       scripts: Record<string, string>
     }
