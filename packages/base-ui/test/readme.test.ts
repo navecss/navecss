@@ -369,10 +369,34 @@ describe('AC-base-ui-overlay-completion-39: the README carries each listed item,
     ).toBe(true)
   })
 
-  it('says parts younger than the floor are exported as whatever the installed Base UI provides', () => {
-    expect(hasProseSentenceWith([/\b1\.3\b/, /\binstalled\b/, /\bexport/i, /\bparts?\b/i])).toBe(
-      true,
+  it("says Combobox's createItems is not exported, that Base UI added it in 1.8.0, and that it is imported from @base-ui/react/combobox", () => {
+    expect(hasProseSentenceWith([/`createItems`/, /not exported/, /\b1\.8\.0\b/])).toBe(true)
+    const snippets = fences.filter(({ body }) => body.includes('createItems'))
+    expect(snippets).toHaveLength(1)
+    expect(snippets[0]?.body).toContain("from '@base-ui/react/combobox'")
+    // The snippet is not the Combobox example the first clause counts.
+    expect(comboboxExamples.map(({ body }) => body)).not.toContain(snippets[0]?.body)
+  })
+
+  it('names createItems in that passage and nowhere else', () => {
+    const first = readme.indexOf('createItems')
+    const last = readme.lastIndexOf('createItems')
+    const passage = readme.slice(
+      readme.lastIndexOf('\n\n', first) + 2,
+      readme.indexOf('\n```\n', last) + 5,
     )
+    expect(passage).toContain('createItems')
+    expect(proseOf(passage).trim()).not.toContain('\n\n')
+    expect(fencesOf(passage)).toHaveLength(1)
+    expect(readme.split('createItems').length - 1).toBe(passage.split('createItems').length - 1)
+  })
+
+  it('no longer says parts younger than the floor are exported as whatever the installed Base UI provides, or that a bundler may warn about one', () => {
+    expect(hasProseSentenceWith([/\b1\.3\b/, /\binstalled\b/, /\bexport/i, /\bparts?\b/i])).toBe(
+      false,
+    )
+    expect(prose).not.toMatch(/whatever your installed version provides/)
+    expect(prose).not.toMatch(/bundler warning|IMPORT_IS_UNDEFINED|\bharmless\b/)
   })
 
   it('documents variant as secondary (the default), primary or ghost, and never a data-nave attribute', () => {
