@@ -193,7 +193,8 @@ Every custom property Nave declares is in the stylesheet you already installed, 
 
 ## Setting up `@nave`
 
-On Vite, use the Vite plugin: it is the one route this package teaches for Vite. On
+On Vite, use the Vite plugin: it is the one route this package teaches for Vite, and for Astro,
+which builds with Vite ([Astro](#astro) has its config). On
 Next.js, webpack, or any other pipeline that runs PostCSS plugins, use the PostCSS plugin. A host
 that runs Lightning CSS directly uses [the Lightning CSS adapter](#lightning-css-adapter-setup),
 and a project with no bundler uses [`navecss-core expand`](#navecss-core-expand).
@@ -218,8 +219,8 @@ It has no dependency and no peer. It expands `@nave` after Vite's own CSS step h
 through `@import`, a Sass file (including a `@mixin` that holds a directive), a CSS Module, an
 `?inline` or `?url` import, a Vue or Svelte style block and a `.css` inside `node_modules` are all
 read as the CSS they compile to, in `vite build` and in the dev server, under either
-`css.transformer`. A `?raw` import returns the file's text as it is. Astro is not covered: it was
-not measured at this release, and no fixture of it runs.
+`css.transformer`. A `?raw` import returns the file's text as it is. Astro has its own setup and
+its own measured list: [Astro](#astro).
 
 **It also chooses which atoms ship.** A `cx()` call in your code whose atoms the build cannot read,
 such as `cx(variant)` with a prop, is an error in the dev server and fails `vite build`.
@@ -561,6 +562,82 @@ list to `keep` instead (`navePlugin({ keep: naveAtoms })`): the build reads a wo
 their own code, and `keepFor` does not reach it.
 
 List every atom your components can apply at run time, `focusRing`, `srOnly`, `srOnlyFocusable`, `hidden` and the `hide*` atoms included where you use them: a consumer passes them to `keepFor` under your package's name, and one left out renders as if the class were absent in their production build.
+
+#### Astro
+
+Astro builds with Vite, so the Vite plugin is the route there too. Add it under `vite` in your
+Astro config, which is where Astro takes Vite plugins, and put the floor key under `vite` as well:
+Astro's own `build` has no `cssTarget`, and drops one written there without an error.
+
+```js
+// astro.config.mjs
+import { defineConfig } from 'astro/config'
+import { navePlugin } from '@navecss/core/vite'
+
+export default defineConfig({
+  vite: {
+    plugins: [navePlugin()],
+    build: { cssTarget: ['chrome125', 'edge125', 'firefox128', 'safari18', 'ios18'] },
+  },
+})
+```
+
+The build chooses which atoms ship, so run your checks, keyboard, screen-reader and automated
+accessibility checks included, against a production build as well as in dev: `astro build`, then
+`astro preview` or however you serve production.
+
+Put Nave's order statement first in the `<head>` of every layout, as an inline style, ahead of
+anything that can bring a style, `<ClientRouter />` included:
+
+```astro
+---
+// src/layouts/Layout.astro
+import '../styles/app.css'
+---
+<html lang="en">
+  <head>
+    <style is:inline>@layer tokens.defaults, tokens.presets, reset, atomic, components.nave, components.consumer, overrides;</style>
+    <meta charset="utf-8" />
+    <!-- the rest of your head, <ClientRouter /> included -->
+  </head>
+  <body><slot /></body>
+</html>
+```
+
+Astro can place a page's or a component's own style ahead of your layout's stylesheet, and with
+`<ClientRouter />` it does so whatever the page imports first. A `@layer` in that style then fixes
+its layer's place before Nave's order statement does, and the order inverts with no error. Astro
+leaves an `is:inline` style where you write it, so this one is the first `@layer` the page sees.
+`astro dev` does not show the inversion a build makes, so check the order in a build. The statement
+is the one `@navecss/core/layers` holds, and the two must stay identical. Write the rules of a
+`<style>` block inside `@layer components.consumer`, as for any CSS of yours: Astro leaves them
+outside every layer otherwise, where they beat all of them.
+
+The build chooses atoms as [Which atoms the build ships](#which-atoms-the-build-ships) says, with
+three things particular to Astro. Astro writes its CSS in its server build, before the browser's
+build runs, so an atom named only by code the browser runs, such as a `client:only` component or a
+`<script>` in an `.astro` file, fails the build: list it in `keep`. A dependency the server build
+leaves external is read just as late: add it to `resolve.noExternal` under `vite`, which reaches
+every environment Astro builds, where `ssr.noExternal` does not. And in `output: 'server'` with
+prerendered pages, the stylesheet the on-demand pages share ships every atom.
+
+Both end-of-build checks, the `@nave` scan and the check that the atom layer holds exactly the atoms
+the build chose, also read the stylesheets Astro writes into the page instead of as files (those
+under 4 kB, by default). The file a message names for one of those is the name the stylesheet had
+before Astro inlined it, so no file of that name is in `dist`. In an `.astro` file, the line of a
+`@nave` error counts from the start of the `<style>` block that holds it, not from the top of the
+file, and its column can differ from your file's, because Astro rewrites the block's whitespace.
+
+In `astro dev`, the first paint holds the stylesheet as Vite's own CSS step left it, every atom and
+every `@nave` unexpanded, until the page's scripts load; after that the dev server serves what the
+build would, as far as it has read. The build is unaffected. As on any Vite project, run your
+checks, keyboard, screen-reader and automated accessibility checks included, against a production
+build as well as in dev: `astro build`, then `astro preview` or however you serve production.
+
+A fixture measures this on Astro 7.3.8, with Vite 8.3.3 underneath: `@nave` expanded in `.css`
+files and in `<style>` and `<style is:global>` blocks, and `cx()` read in frontmatter, in templates
+and in React islands, in `astro build` for a static site and for `output: 'server'`, and in
+`astro dev`. Islands in Vue, Svelte or Solid were not measured.
 
 ### PostCSS plugin setup
 

@@ -172,6 +172,11 @@ export interface Frame {
   The popup's computed opacity, or 0 while it is not mounted.
    */
   readonly opacity: number
+  /**
+  The animation frame's own time (the `requestAnimationFrame` timestamp), the instant `opacity` is
+  read at, and not the time the callback got to run: a callback that runs late (something ahead of
+  it in the same frame blocked) reports the frame's time, not a later one.
+   */
   readonly time: number
 }
 
@@ -180,7 +185,7 @@ export interface Sampler {
   readonly stop: () => void
 }
 
-const sampleOnce = (index: number): Frame => {
+const sampleOnce = (index: number, time: number): Frame => {
   const popup = byTestId('popup')
   const isMounted = popup?.isConnected === true
   const active = document.activeElement
@@ -196,18 +201,23 @@ const sampleOnce = (index: number): Frame => {
     isEnding: isMounted && Object.hasOwn(popup.dataset, 'endingStyle'),
     isMounted,
     opacity: isMounted ? Number(getComputedStyle(popup).opacity) : 0,
-    time: performance.now(),
+    time,
   }
 }
 
 /**
-Samples the popup in every animation frame from now on.
+Samples the popup in every animation frame from now on, each frame stamped with the animation
+frame's own time, which is the time its opacity is read at. `beforeSample`, when given, runs first
+in each frame, before the popup is read, and is told the frame's time and the index its sample
+will have: whatever it does (a stall of the page) lands in that frame ahead of the sample, by
+construction and not by the order two callbacks were registered in.
  */
-export const sampleFrames = (): Sampler => {
+export const sampleFrames = (beforeSample?: (time: number, index: number) => void): Sampler => {
   const frames: Frame[] = []
   let handle = 0
-  const tick = (): void => {
-    frames.push(sampleOnce(frames.length))
+  const tick = (time: number): void => {
+    beforeSample?.(time, frames.length)
+    frames.push(sampleOnce(frames.length, time))
     handle = requestAnimationFrame(tick)
   }
   handle = requestAnimationFrame(tick)

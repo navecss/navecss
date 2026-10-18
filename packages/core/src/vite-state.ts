@@ -13,9 +13,11 @@ import type { ServerImport } from './vite-server-takes.ts'
 import type { SetupExposures } from './vite-setup-member.ts'
 import type { DevEnvironmentLike } from './vite-types.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
+import type { Writers } from './vite-writers.ts'
 
 import { freshReloads } from './vite-dev-reloads.ts'
 import { withRestorers } from './vite-restorers.ts'
+import { freshWriters } from './vite-writers.ts'
 
 /**
  * A stylesheet the dev server served with the atomic layer filtered: the environment that serves
@@ -65,7 +67,7 @@ export interface ModuleRecord {
   readonly file: string
 }
 
-export interface RootState extends ReloadState {
+export interface RootState extends ReloadState, Writers {
   /**
    * Whether an environment has started building: the resolutions of one build all come before
    * that, so a resolution after it belongs to a later build.
@@ -210,6 +212,7 @@ function freshState(): RootState {
     sheets: new Map(),
     pages: new Map(),
     emitted: undefined,
+    ...freshWriters(),
     externals: new Set(),
     clientEnded: false,
     serverImports: [],

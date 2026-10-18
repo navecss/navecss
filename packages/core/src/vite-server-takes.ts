@@ -23,7 +23,7 @@ import { takesIn, UNREADABLE } from './vite-cx-takes.ts'
 import { isDependencyId, isNaveOwn } from './vite-module-kind.ts'
 import { compareText } from './vite-problems.ts'
 import { serverFileOf } from './vite-server-resolve.ts'
-import { packageOfSpecifier } from './vite-untransformed.ts'
+import { noExternalKey, packageOfSpecifier } from './vite-untransformed.ts'
 
 const SERVER_TAKES_FILE = 'nave-used-server-takes.json'
 
@@ -259,8 +259,9 @@ function recordedTakers(imports: readonly ServerImport[]): string[] {
  * The words of the warning for the listed package `pkg`, whose server imports the build cannot
  * judge.
  */
-function warningFor(pkg: string, input: { found: readonly ServerImport[]; root: string }): string {
-  const { found, root } = input
+function warningFor(pkg: string, found: readonly ServerImport[], context: UsedContext): string {
+  const { root } = context
+  const { firstWriter } = context.state
   const listed = found
     .map((one) => {
       if (one.isUnreadable === true)
@@ -273,7 +274,7 @@ function warningFor(pkg: string, input: { found: readonly ServerImport[]; root: 
     .toSorted(compareText)
     .join('; ')
   const note = recordedSentence(recordedTakers(found))
-  const warning = `${pkg}, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: ${listed}. Add ${pkg} to ssr.noExternal in your Vite config so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead.`
+  const warning = `${pkg}, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: ${listed}. Add ${pkg} to ${noExternalKey(firstWriter)} so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead.`
   return note === undefined ? warning : `${warning} ${note}`
 }
 
@@ -293,6 +294,6 @@ export function warnUnknown(
   }
   for (const [pkg, imports] of byPackage) {
     context.state.warned.add(pkg)
-    ctx.warn(warningFor(pkg, { found: imports, root: context.root }))
+    ctx.warn(warningFor(pkg, imports, context))
   }
 }

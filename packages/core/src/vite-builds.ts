@@ -142,6 +142,14 @@ function secondHalf(pickers: Pickers): NaveCollectPlugin {
     buildEnd(error) {
       return pickers.forHook(this).collect.buildEnd.call(this, error)
     },
+    // The same step as the first half's, ahead of every other plugin's: a plugin that inlines or
+    // renames a stylesheet in its own `generateBundle` has not yet done so.
+    generateBundle: {
+      order: 'pre',
+      handler(options, bundle) {
+        pickers.forHook(this).collect.generateBundle.handler.call(this, options, bundle)
+      },
+    },
   }
 }
 

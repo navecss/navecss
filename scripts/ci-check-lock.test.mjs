@@ -551,6 +551,62 @@ test('a lock with no owner file is stale only after the grace', async () => {
   release()
 })
 
+/**
+ * Stops for `ms` of real time without yielding, so the file system's clock has moved on before the
+ * next thing the test does to the lock directory: its change time is coarse on some systems.
+ */
+const pauseFor = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+
+test('a lock with no owner file that is replaced by another gets its own grace', async () => {
+  const { lockPath } = freshLock()
+  leaveLock(lockPath)
+  const clock = fakeTime(1000, (count) => {
+    if (count !== 4) return
+    pauseFor(20)
+    rmSync(lockPath, { recursive: true })
+    mkdirSync(lockPath)
+  })
+
+  const release = await acquireLock({
+    cwd: '/work/b',
+    graceMs: 5000,
+    lockPath,
+    now: clock.now,
+    pid: 1002,
+    sleep: clock.sleep,
+  })
+
+  // The second lock is first seen at 4 s, so its grace ends at 9 s, not at 5 s with the first one's.
+  assert.ok(clock.time.now >= 9000, `taken at ${clock.time.now} ms, on the first lock's grace`)
+  assert.equal(ownerOf(lockPath).pid, 1002)
+  release()
+})
+
+test('a lock with no owner file that changes in place, keeping its inode, gets its own grace', async () => {
+  const { lockPath } = freshLock()
+  leaveLock(lockPath)
+  const clock = fakeTime(1000, (count) => {
+    if (count !== 4) return
+    pauseFor(20)
+    // The same directory under the same inode, with a later change time: what a lock removed and
+    // made again under a reused inode looks like to anything that reads only the inode.
+    chmodSync(lockPath, 0o700)
+  })
+
+  const release = await acquireLock({
+    cwd: '/work/b',
+    graceMs: 5000,
+    lockPath,
+    now: clock.now,
+    pid: 1002,
+    sleep: clock.sleep,
+  })
+
+  assert.ok(clock.time.now >= 9000, `taken at ${clock.time.now} ms, on the grace it began with`)
+  assert.equal(ownerOf(lockPath).pid, 1002)
+  release()
+})
+
 test('a lock whose owner file cannot be read is stale only after the grace', async () => {
   const { lockPath } = freshLock()
   leaveLock(lockPath, '{"pid": ')
@@ -671,6 +727,10 @@ release()
 
 const ROUNDS = 8
 const WAITERS = 4
+// The pid the stale lock names, which every waiter is told is dead. It must be one no waiter can
+// be given, or a waiter holding the lock under it is judged dead and taken over: the largest
+// pid_t, above the most any system hands out (2^22 on Linux, 99999 on macOS).
+const DEAD_PID = 2 ** 31 - 1
 
 test('four waiters racing a freshly stale lock take it one at a time, eight times over', async () => {
   const { dir, lockPath } = freshLock()
@@ -679,16 +739,20 @@ test('four waiters racing a freshly stale lock take it one at a time, eight time
   for (let round = 0; round < ROUNDS; round += 1) {
     const logPath = path.join(dir, `log-${round}.txt`)
     writeFileSync(logPath, '')
-    leaveLock(lockPath, JSON.stringify({ cwd: '/work/dead', pid: 4242, startedAt: 1 }))
+    leaveLock(lockPath, JSON.stringify({ cwd: '/work/dead', pid: DEAD_PID, startedAt: 1 }))
     const startAt = String(Date.now() + 400)
 
     const exits = Array.from(
       { length: WAITERS },
       () =>
         new Promise((resolve) => {
-          const child = spawn(process.execPath, [script, lockPath, logPath, '4242', startAt], {
-            stdio: 'inherit',
-          })
+          const child = spawn(
+            process.execPath,
+            [script, lockPath, logPath, String(DEAD_PID), startAt],
+            {
+              stdio: 'inherit',
+            },
+          )
           child.on('close', resolve)
         }),
     )
