@@ -118,10 +118,7 @@ const packageOutline = (subpath: string, sources: PackageSources): string => {
     .replaceAll(CLASS_LITERAL, (_match, literal: string) =>
       markedClasses(literal.split(' ').map((name) => localNames.get(name) ?? `?${name}`)),
     )
-  return foldWhitespace(classes).replaceAll(
-    /(export const \w+): (PartOf<typeof Base, '(\w+)'>) = \/\*#__PURE__\*\/ \(\(\) => Base\.\3\)\(\)/g,
-    "$1: $2 = /*#__PURE__*/ (() => (Base as Record<string, unknown>).$3 as PartOf<typeof Base, '$3'>)()",
-  )
+  return foldWhitespace(classes)
 }
 
 const copyOutline = (body: string, subpath: string): { missingImport: boolean; text: string } => {

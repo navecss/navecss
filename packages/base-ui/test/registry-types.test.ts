@@ -174,23 +174,32 @@ const smallCompile = (
   extra: Readonly<Record<string, string>> = {},
 ): Problem[] => compileSources(newScratch(), version, { ...sourcesOf(items), ...extra })
 
-describe('AC-base-ui-registry-11 (compile half): a part younger than the floor is read in a form the floor types accept', () => {
+describe('AC-base-ui-registry-11 (compile half): the floor run compiles every parts file, and catches a read of a part younger than the floor', () => {
+  it(
+    'compiles every parts file as generated, at the floor, with no special form',
+    { timeout: TIMEOUT },
+    () => {
+      const parts = runs.floor().copies.filter((problem) => problem.file?.endsWith('.parts.ts'))
+      expect(describeProblems(parts)).toEqual([])
+      expect(styled.length).toBeGreaterThan(0)
+    },
+  )
+
   it("compiles Combobox's copy as generated at the floor", { timeout: SMALL_TIMEOUT }, () => {
     const problems = smallCompile('floor', [itemOf('base-ui-combobox')])
     expect(describeProblems(problems)).toEqual([])
   })
 
   it(
-    "control: Combobox's line written as Base.createItems reds the floor run with TS2339, and not the current one",
+    "control: Combobox's parts file with a direct read of createItems appended reds the floor run with TS2339, and not the current one",
     { timeout: SMALL_TIMEOUT },
     () => {
       const planted = withDirectCreateItems(itemOf('base-ui-combobox'))
       const atFloor = smallCompile('floor', [planted])
       const parts = path.join('src', 'nave-combobox.parts.ts')
-      const direct = atFloor.filter((problem) => problem.code === 2339)
-      expect(direct.map((problem) => problem.file)).toEqual([parts])
-      expect(direct[0]?.text).toContain("'createItems'")
-      expect(atFloor.filter((problem) => problem.file !== parts)).toEqual([])
+      expect(atFloor.length).toBeGreaterThan(0)
+      expect(atFloor.every((problem) => problem.code === 2339 && problem.file === parts)).toBe(true)
+      expect(atFloor.every((problem) => problem.text.includes("'createItems'"))).toBe(true)
       expect(describeProblems(smallCompile('current', [planted]))).toEqual([])
     },
   )

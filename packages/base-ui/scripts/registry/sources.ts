@@ -44,16 +44,6 @@ const classExpression = (
     : `\`${references.map((reference) => `\${${reference}}`).join(' ')}\``
 }
 
-/**
- * A part younger than the Base UI floor is read through a cast: a direct property access fails the
- * floor's types, and a copy is source a consumer's `skipLibCheck` does not skip.
- */
-const castYoungParts = (text: string): string =>
-  text.replaceAll(
-    /(PartOf<typeof Base, '(\w+)'> = \/\*#__PURE__\*\/ \(\(\) => )Base\.\2(\)\(\))/g,
-    "$1(Base as Record<string, unknown>).$2 as PartOf<typeof Base, '$2'>$3",
-  )
-
 const NAMESPACE_RULE = '@typescript-eslint/no-namespace'
 const ANY_RULE = '@typescript-eslint/no-explicit-any'
 
@@ -102,7 +92,6 @@ export const partsModule = (
   text = text.replaceAll(CLASS_LITERAL, (_match, classes: string) =>
     classExpression(classes, atomOfClass, used),
   )
-  text = castYoungParts(text)
   text = mustReplace(
     text,
     /^(import \{ \w+ as Base \} from '@base-ui\/react\/[a-z-]+'\n)/m,
