@@ -218,9 +218,9 @@
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitest/browser": "5.0.4",
-    "@vitest/browser-playwright": "5.0.4",
-    "@vitest/coverage-v8": "5.0.4",
+    "@vitest/browser": "5.0.5",
+    "@vitest/browser-playwright": "5.0.5",
+    "@vitest/coverage-v8": "5.0.5",
     "base-ui-react-1.4.0": "npm:@base-ui/react@1.4.0",
     "base-ui-react-1.5.0": "npm:@base-ui/react@1.5.0",
     "base-ui-react-1.6.0": "npm:@base-ui/react@1.6.0",
@@ -239,7 +239,7 @@
     "rolldown": "1.2.14",
     "typescript": "6.0.3",
     "vite": "8.3.4",
-    "vitest": "5.0.4"
+    "vitest": "5.0.5"
   },
   "engines": {
     "node": ">=22.18"
