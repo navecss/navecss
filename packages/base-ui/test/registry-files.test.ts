@@ -80,13 +80,13 @@ describe('AC-base-ui-registry-10: each item has the five files, in order, each i
     expect(problemTexts(formProblems(registry))).toEqual([])
   })
 
-  it('reds a button entry that is the package index.ts unchanged, naming the directive and the lint comment', () => {
+  it('reds a button entry that is the package index.ts with a directive put on it, naming the directive and the lint comment', () => {
     const sources = packageSources('button')
     const mutated = withContent(
       registry,
       'button',
       'nave-button.ts',
-      () => `${headerFor('ts', NOTICE)}${sources.index}`,
+      () => `${headerFor('ts', NOTICE)}'use client'\n${sources.index}`,
     )
     const messages = problemsAt(
       formProblems(mutated),

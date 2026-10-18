@@ -114,15 +114,14 @@ export const partsModule = (
 }
 
 export const entryModule = (subpath: string, packageIndex: string, header: string): string => {
-  let text = mustReplace(packageIndex, "'use client'\n", () => '', "the entry's directive")
-  text = text.replace(/^\/\* eslint-disable[^\n]*\n/m, '')
-  text = mustReplace(
-    text,
+  const withoutNotice = packageIndex.replace(/^\/\* eslint-disable[^\n]*\n/m, '')
+  const text = mustReplace(
+    withoutNotice,
     "'./parts.generated.ts'",
     () => `'./${itemStem(subpath)}.parts'`,
     'the parts import',
   )
-  return `${header}${text}`
+  return `${header}\n${text.trimStart()}`
 }
 
 export const wrapModule = (part: string, header: string): string => `${header}${part}`

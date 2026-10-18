@@ -1,6 +1,6 @@
 /**
  * The form of the five files of an item, read against the package's own source for its subpath: the
- * entry is the package's `index.ts` less its directive and lint comment, the parts file is the
+ * entry is the package's `index.ts` less its lint comment, the parts file is the
  * package's generated module with the helper and the classes redirected, and the wrap file is
  * `src/part.ts`. Each check is a pure function over a registry item.
  */
@@ -47,7 +47,7 @@ const contentOf = (item: RegistryItem, target: string): string | undefined =>
   item.files.find((file) => file.target === target)?.content
 
 /**
- * The entry: the header, then the package's `index.ts` less its directive line and its lint
+ * The entry: the header, then the package's `index.ts` less any directive line and its lint
  * comment, `./parts.generated.ts` read as `./nave-<s>.parts`. Blank lines between statements are
  * the generator's to lay out, so they are folded before the comparison.
  */
@@ -80,7 +80,7 @@ const entryProblems = (
   if (squashBlankLines(body) !== squashBlankLines(expected)) {
     problems.push({
       ...at,
-      message: `the entry is not the package index less its directive and lint comment, ${firstDifference(squashBlankLines(body), squashBlankLines(expected))}`,
+      message: `the entry is not the package index less its lint comment, ${firstDifference(squashBlankLines(body), squashBlankLines(expected))}`,
     })
   }
   return problems
