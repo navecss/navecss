@@ -62,8 +62,8 @@ const CLEARED: Readonly<Record<string, ClearedRow>> = {
   'S-a': { bytes: 369, sha256: '94c7009a8c2e4c2fc7f539771cf15e5cf6830115bbdfe8429cb7b5589fd8411b' },
   'S-b': { bytes: 388, sha256: '1020e8d4abbf70c02841c0284cf59983f309e88b5b56b602a5f1ea02d4086d27' },
   'S-noform': {
-    bytes: 4751,
-    sha256: '7f57ea3112972a1f677013017a773b622e85eade1ac65bc4ec15abd9da496791',
+    bytes: 4817,
+    sha256: '7f9e8d1ffa3da1c8969169fc9dddc0ef2115872b732fd4794acda6743a54c323',
   },
   'T-desc': {
     bytes: 218,

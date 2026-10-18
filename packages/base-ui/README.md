@@ -149,7 +149,7 @@ With `@navecss/base-ui` installed, add a component from the files of the version
 npx shadcn@latest add ./node_modules/@navecss/base-ui/dist/registry/base-ui-dialog.json
 ```
 
-Replace `dialog` with the subpath of the component you want, from [What is styled](#what-is-styled), and list several paths to add several components. The copy then comes from the same release as the components you still import from the package, with no network and no version to type. The command needs no Tailwind, no `components.json` and no `shadcn init`: every file in the registry says where it goes, so `add` installs it into a project that has none of them. Run `add` for Nave's components alone, with no item from another registry in the same command: shadcn's CLI decides from the first item it is given whether the project needs that setup.
+Replace `dialog` with the subpath of the component you want, from [What is styled](#what-is-styled), and list several paths to add several components. The copy then comes from the same release as the components you still import from the package, with no version to type: `add` reads the files it copies from `node_modules` instead of downloading them. The command needs no Tailwind, no `components.json` and no `shadcn init`: every file in the registry says where it goes, so `add` installs it into a project that has none of them. Run `add` for Nave's components alone, with no item from another registry in the same command: shadcn's CLI decides from the first item it is given whether the project needs that setup.
 
 The registry is also served at an exact version of `@navecss/base-ui`. Use that address in a project without the package installed, or with Yarn Plug'n'Play, which has no `node_modules`:
 
