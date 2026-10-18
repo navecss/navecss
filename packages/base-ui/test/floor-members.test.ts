@@ -34,6 +34,19 @@ const distModules = (): ModuleText[] =>
     text: readFileSync(path.join(DIST_DIR, file), 'utf8'),
   }))
 
+/**
+ * The modules that name a Base UI module, by a text search, and have no entry in the list of
+ * imports, so the list the check reads cannot quietly leave a module out.
+ */
+const filesMissedBy = (
+  imports: readonly BaseUiImport[],
+  modules: readonly ModuleText[],
+): string[] =>
+  modules
+    .filter((module) => baseUiSpecifierCount([module]) > 0)
+    .map(({ file }) => file)
+    .filter((file) => imports.every((entry) => entry.file !== file))
+
 const membersOf = (imports: readonly BaseUiImport[], subpath: string): string[] =>
   imports.filter((entry) => entry.subpath === subpath).flatMap((entry) => [...entry.members])
 
@@ -71,6 +84,20 @@ describe('AC-base-ui-overlay-completion-51: every member the shipped wrappers re
     const found = baseUiSpecifierCount(modules)
     expect(found).toBeGreaterThan(0)
     expect(baseUiImportStatementCount(modules)).toBe(found)
+    expect(filesMissedBy(readBaseUiImports(modules), modules)).toEqual([])
+  })
+
+  it('control: a list of imports that leaves out a module of dist is caught, naming that module', () => {
+    const modules = distModules()
+    const imports = readBaseUiImports(modules)
+    const skipped = imports[0]?.file
+    expect(skipped).toBeDefined()
+    expect(
+      filesMissedBy(
+        imports.filter((entry) => entry.file !== skipped),
+        modules,
+      ),
+    ).toEqual([skipped])
   })
 
   it('control: an import statement that brings in two bindings counts once as a statement and twice as imports', () => {
