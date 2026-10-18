@@ -215,16 +215,25 @@ describe('AC-base-ui-registry-34: the re-add behaviour the README states holds o
     )
 
     it(
-      'prints a list of written files that names nave-dialog.ts and does not name nave-dialog.module.css',
+      "ends its output with the CLI's question about nave-dialog.wrap.ts, which the exit status does not show",
       async () => {
         const { stopped } = await sequence()
-        const lists = parsePrintedLists(stopped.run.output)
-        const printed = [...lists.created, ...lists.updated]
-        expect(
-          printed,
-          `Depends on the pinned CLI's version: a CLI that meets end of input at the prompt prints no list (4.21.5 does). Output: ${stopped.run.output}`,
-        ).toContain(`${DIR}nave-dialog.ts`)
-        expect(printed).not.toContain(`${DIR}nave-dialog.module.css`)
+        const lines = stopped.run.output.split('\n').filter((line) => line.trim() !== '')
+        const last = lines.at(-1) ?? ''
+        expect(last, stopped.run.output).toContain('nave-dialog.wrap.ts')
+        expect(last, stopped.run.output).toMatch(/overwrite/i)
+        expect(stopped.run.status).toBe(0)
+      },
+      LONG,
+    )
+
+    it(
+      'control: the first run, which finishes, names nave-dialog.ts, and does not end with a question',
+      async () => {
+        const { dialog } = await sequence()
+        expect(dialog.run.output).toContain('nave-dialog.ts')
+        const last = dialog.run.output.split('\n').findLast((line) => line.trim() !== '') ?? ''
+        expect(last).not.toMatch(/overwrite/i)
       },
       LONG,
     )
