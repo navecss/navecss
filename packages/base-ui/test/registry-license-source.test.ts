@@ -19,7 +19,7 @@ import {
   writeInCopy,
 } from './support/registry/files-package-copy.ts'
 import { problemTexts } from './support/registry/files-problem.ts'
-import { type LoadedRegistry, loadRegistry } from './support/registry/load.ts'
+import { byCodeUnit, type LoadedRegistry, loadRegistry } from './support/registry/load.ts'
 import { styledSubpaths } from './support/registry/styled-subpaths.ts'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
 
@@ -86,12 +86,9 @@ describe("AC-base-ui-registry-14: The header's year and holder come from LICENSE
 
     it('writes every item, with the second line of every header reading the example year and holder', () => {
       const registry = registryOf(copy)
-      expect(
-        registry.items
-          .keys()
-          .toArray()
-          .toSorted((a, b) => a.localeCompare(b)),
-      ).toEqual(styledSubpaths().map((subpath) => `base-ui-${subpath}`))
+      expect(registry.items.keys().toArray().toSorted(byCodeUnit)).toEqual(
+        styledSubpaths().map((subpath) => `base-ui-${subpath}`),
+      )
       expect(problemTexts(headerProblems(registry, EXAMPLE))).toEqual([])
       const lines = registry.items
         .values()

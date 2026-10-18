@@ -9,6 +9,8 @@ import { registrySchema } from 'shadcn/schema'
 
 import type { LoadedRegistry, RegistryFile, RegistryItem } from './load.ts'
 
+import { byCodeUnit } from './load.ts'
+
 const INDEX_FILE = 'registry.json'
 
 export const itemFileName = (subpath: string): string => `base-ui-${subpath}.json`
@@ -28,7 +30,7 @@ export const styledSubpathsIn = (packageDirectory: string): string[] => {
       const generated = path.join(packageDirectory, 'src', subpath, 'parts.generated.ts')
       return existsSync(generated) && readFileSync(generated, 'utf8').includes('nave-base-ui-')
     })
-    .toSorted((a, b) => a.localeCompare(b))
+    .toSorted(byCodeUnit)
 }
 
 const nameInside = (text: string | undefined): string | undefined => {

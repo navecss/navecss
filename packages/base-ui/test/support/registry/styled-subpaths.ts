@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { PACKAGE_DIR } from '../stylesheet.ts'
+import { byCodeUnit } from './load.ts'
 
 const NOT_A_SUBPATH: ReadonlySet<string> = new Set(['.', './package.json', './styles.css'])
 
@@ -26,7 +27,7 @@ export const componentSubpaths = (): string[] =>
   Object.keys(manifestOf().exports)
     .filter((key) => !NOT_A_SUBPATH.has(key))
     .map((key) => key.slice(2))
-    .toSorted((a, b) => a.localeCompare(b, 'en'))
+    .toSorted(byCodeUnit)
 
 /**
  * The subpaths whose generated module names at least one Nave class.

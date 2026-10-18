@@ -7,6 +7,7 @@ import path from 'node:path'
 import postcss, { type ChildNode, type Container, type Declaration } from 'postcss'
 
 import { foldWhitespace } from './files-sources.ts'
+import { byCodeUnit } from './load.ts'
 
 /**
  * Every file of a directory, name to text. Empty when the directory is absent.
@@ -18,7 +19,7 @@ export const snapshotOf = (directory: string): Map<string, string> => {
     .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)))
   return new Map(
     names
-      .toSorted((a, b) => a.localeCompare(b))
+      .toSorted(byCodeUnit)
       .map((name) => [name, readFileSync(path.join(directory, name), 'utf8')]),
   )
 }

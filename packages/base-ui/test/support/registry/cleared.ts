@@ -82,8 +82,8 @@ const CLEARED: Readonly<Record<string, ClearedRow>> = {
     sha256: '53982f5679849399bf6c789755a08a22ee77d0fb22e5d74082d57ddf206832bc',
   },
   'W-outline': {
-    bytes: 229,
-    sha256: 'cefc4f7aba59262c089747f7865edd9d83d486c3661ebf470906327a24c811f7',
+    bytes: 230,
+    sha256: '753659ea65dacfdf35d668f6f6f4d009992029c059e4b565932afcd1edc5d4b8',
   },
 }
 

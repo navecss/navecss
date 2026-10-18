@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { LoadedRegistry } from './support/registry/load.ts'
 
-import { cloneRegistry, loadRegistry } from './support/registry/load.ts'
+import { byCodeUnit, cloneRegistry, loadRegistry } from './support/registry/load.ts'
 import {
   dependencyProblems,
   forbiddenImportProblems,
@@ -50,7 +50,7 @@ describe('AC-base-ui-registry-09: dependencies are the peer names, bare, and met
   it('has no devDependencies or registryDependencies, and a meta of exactly version and peerDependencies', () => {
     expect(dependencyProblems(loadRegistry(), manifest())).toEqual([])
     for (const item of itemsOf(loadRegistry())) {
-      expect(Object.keys(item.meta ?? {}).toSorted((a, b) => a.localeCompare(b))).toEqual([
+      expect(Object.keys(item.meta ?? {}).toSorted(byCodeUnit)).toEqual([
         'peerDependencies',
         'version',
       ])

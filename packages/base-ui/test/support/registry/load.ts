@@ -62,7 +62,10 @@ export interface LoadedRegistry {
   raw: Map<string, string>
 }
 
-const byCodeUnit = (a: string, b: string): number => {
+/**
+ * Orders by code unit, the order the generator writes in whatever the locale.
+ */
+export const byCodeUnit = (a: string, b: string): number => {
   if (a === b) return 0
   return a < b ? -1 : 1
 }

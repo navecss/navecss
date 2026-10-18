@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import type { LoadedRegistry, RegistryFile, RegistryItem } from './load.ts'
 
+import { byCodeUnit } from './load.ts'
+
 export const itemIn = (registry: LoadedRegistry, name: string): RegistryItem => {
   const item = registry.items.get(name)
   if (item === undefined) throw new Error(`the registry has no item ${name}`)
@@ -42,7 +44,7 @@ export const removeFile = (registry: LoadedRegistry, fileName: string): void => 
 export const addFile = (registry: LoadedRegistry, fileName: string, text: string): void => {
   registry.raw.set(fileName, text)
   registry.fileNames.push(fileName)
-  registry.fileNames.sort((a, b) => a.localeCompare(b))
+  registry.fileNames.sort(byCodeUnit)
 }
 
 export const itemsOf = (registry: LoadedRegistry): RegistryItem[] =>

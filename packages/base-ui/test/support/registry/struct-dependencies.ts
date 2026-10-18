@@ -8,6 +8,7 @@ import { isDeepStrictEqual } from 'node:util'
 
 import type { LoadedRegistry, RegistryFile, RegistryItem } from './load.ts'
 
+import { byCodeUnit } from './load.ts'
 import { isInsidePackage, specifiersOf } from './struct-imports.ts'
 import { itemsOf } from './struct-mutate.ts'
 
@@ -20,7 +21,7 @@ const BARE_PACKAGE_NAME = /^(?:@[^/@]+\/)?[^/@]+$/
 
 const dependencyListProblems = (item: RegistryItem, manifest: PeerManifest): string[] => {
   if (!Array.isArray(item.dependencies)) return [`${item.name}: has no dependencies array`]
-  const expected = Object.keys(manifest.peerDependencies).toSorted((a, b) => a.localeCompare(b))
+  const expected = Object.keys(manifest.peerDependencies).toSorted(byCodeUnit)
   const problems: string[] = []
   for (const dependency of item.dependencies) {
     if (!BARE_PACKAGE_NAME.test(dependency)) {

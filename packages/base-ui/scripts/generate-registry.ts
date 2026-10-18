@@ -65,6 +65,15 @@ const optionOf = (argv: readonly string[], name: string): string | undefined => 
 }
 
 /**
+ * Orders by code unit, never by locale: the order of `registry.json` must not depend on the
+ * machine that builds it.
+ */
+const byCodeUnit = (a: string, b: string): number => {
+  if (a === b) return 0
+  return a < b ? -1 : 1
+}
+
+/**
  * The subpaths a registry has an item for: those whose generated module names a Nave class.
  */
 const styledSubpaths = (wrapped: ReadonlyMap<string, string>): string[] =>
@@ -74,7 +83,7 @@ const styledSubpaths = (wrapped: ReadonlyMap<string, string>): string[] =>
     .filter((name) => wrapped.get(name)?.includes('nave-base-ui-') === true)
     .map((name) => name.slice(0, name.indexOf('/')))
     .toArray()
-    .toSorted((a, b) => a.localeCompare(b))
+    .toSorted(byCodeUnit)
 
 const readManifest = (root: string): Manifest =>
   JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')) as Manifest

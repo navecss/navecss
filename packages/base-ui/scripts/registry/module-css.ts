@@ -8,16 +8,17 @@
 import type { AtomDefinition } from '@navecss/core/atoms'
 
 import { navePlugin } from '@navecss/core/postcss'
-import postcss, { type Declaration, type Rule } from 'postcss'
+import postcss, { type ChildNode, type Declaration, type Rule } from 'postcss'
 import { format } from 'prettier'
 
 import { RegistryBuildError } from './errors.ts'
 
 /**
- * The comment that precedes each `outline: none` a focusable atom carries, alone on its line.
+ * The comment that precedes each `outline: none` a focusable atom carries, alone on its line. It is
+ * written only where `guardOutlines` has found the `&:focus-visible` rule that draws the ring.
  */
 export const OUTLINE_COMMENT =
-  "/* stylelint-disable-next-line declaration-property-value-disallowed-list -- the outline the &:focus-visible rule in this block draws replaces the browser's default focus indicator; keep that rule while this declaration stays. */"
+  "/* stylelint-disable-next-line declaration-property-value-disallowed-list -- the outline the &:focus-visible rule for this class draws replaces the browser's default focus indicator; keep that rule while this declaration stays. */"
 
 /**
  * An atom's name as the class it is in a copy: the name minus `baseUi`, first letter lower-cased.
@@ -38,44 +39,93 @@ export interface ModuleInputs {
 const directive = (name: string, focusRingAtoms: readonly string[]): string =>
   focusRingAtoms.includes(name) ? `${name} focusRing` : name
 
-const isRing = (node: { selector?: string; type: string }): boolean =>
-  node.type === 'rule' && node.selector === '&:focus-visible'
+const RING_LONGHANDS = ['outline-width', 'outline-color', 'outline-offset']
 
-const hasRingAfter = (rule: Rule, after: Declaration): boolean => {
-  const index = rule.index(after)
-  return rule.nodes
-    .slice(index + 1)
-    .some(
-      (node) =>
-        isRing(node) &&
-        node.type === 'rule' &&
-        node.nodes.some(
-          (child) =>
-            child.type === 'decl' && child.prop === 'outline-style' && child.value === 'solid',
-        ),
-    )
+const hasDeclaration = (rule: Rule, property: string, value?: string): boolean =>
+  rule.nodes.some(
+    (node) =>
+      node.type === 'decl' &&
+      node.prop === property &&
+      (value === undefined || node.value === value),
+  )
+
+const isRingRule = (node: ChildNode): boolean =>
+  node.type === 'rule' &&
+  node.selector === '&:focus-visible' &&
+  hasDeclaration(node, 'outline-style', 'solid') &&
+  RING_LONGHANDS.every((property) => hasDeclaration(node, property))
+
+const isClassRule = (rule: Rule): boolean =>
+  rule.selector.startsWith('.') && rule.parent?.type === 'atrule'
+
+/**
+ * The outermost rule around a declaration: the atom's class rule.
+ */
+const classRuleOf = (declaration: Declaration): Rule | undefined => {
+  let found: Rule | undefined
+  let current: postcss.Container | postcss.Document | undefined = declaration.parent
+  while (current !== undefined && current.type !== 'root') {
+    if (current.type === 'rule') found = current as Rule
+    current = current.parent
+  }
+  return found
 }
 
 /**
- * Puts the disable comment before each `outline: none` whose rule draws a ring after it, and
- * refuses any other `outline: none` and every `outline: 0`.
+ * The node of the class rule that holds the declaration, when the declaration sits directly in the
+ * class rule or is the only declaration of a `&` rule directly in it.
+ */
+const holderOf = (declaration: Declaration, classRule: Rule): ChildNode | undefined => {
+  const parent = declaration.parent
+  if (parent === classRule) return declaration
+  const isAlone =
+    parent?.type === 'rule' &&
+    parent.selector === '&' &&
+    parent.parent === classRule &&
+    parent.nodes.length === 1
+  return isAlone ? parent : undefined
+}
+
+const isPaired = (declaration: Declaration): boolean => {
+  const classRule = classRuleOf(declaration)
+  if (classRule === undefined || !isClassRule(classRule)) return false
+  const holder = holderOf(declaration, classRule)
+  return (
+    holder !== undefined &&
+    classRule.nodes.slice(classRule.index(holder) + 1).some((node) => isRingRule(node))
+  )
+}
+
+const shown = (declaration: Declaration): string =>
+  `outline: ${declaration.value}${declaration.important ? ' !important' : ''}`
+
+/**
+ * Puts the disable comment before each `outline: none` that is paired with the ring that replaces
+ * it, and refuses every other `outline`, naming the atom. An `outline: none` is paired when it is a
+ * lowercase `none` without `!important`, sits directly in the atom's class rule or alone in a `&`
+ * rule directly in it, and the class rule has an `&:focus-visible` rule after it that sets
+ * `outline-style: solid`, `outline-width`, `outline-color` and `outline-offset`.
  */
 const guardOutlines = (root: postcss.Root, atomOf: ReadonlyMap<string, string>): void => {
   const comment = OUTLINE_COMMENT.slice(3, -3)
-  root.walkDecls('outline', (declaration) => {
-    const rule = declaration.parent as Rule
-    const atom = atomOf.get(rule.selector.replace(/^\./, '')) ?? rule.selector
-    const value = declaration.value.trim()
-    if (
-      value === 'none' &&
-      declaration.parent?.type === 'rule' &&
-      hasRingAfter(rule, declaration)
-    ) {
+  root.walkDecls(/^outline$/i, (declaration) => {
+    const named = classRuleOf(declaration)?.selector ?? (declaration.parent as Rule).selector
+    const atom = atomOf.get(named.replace(/^\./, '')) ?? named
+    if (declaration.important) {
+      throw new RegistryBuildError(
+        `${atom} has "${shown(declaration)}": !important beats the focus ring, so it is refused`,
+        { file: 'module.css' },
+      )
+    }
+    if (declaration.prop === 'outline' && declaration.value === 'none' && isPaired(declaration)) {
       declaration.before(postcss.comment({ raws: { before: '\n    ' }, text: comment }))
       return
     }
     throw new RegistryBuildError(
-      `${atom} has "outline: ${value}" that no &:focus-visible rule after it draws a ring for`,
+      `${atom} has "${shown(declaration)}" with no focus ring paired to it: only a lowercase ` +
+        '"outline: none", directly in the atom\'s rule or alone in a "&" rule there, followed ' +
+        'by a "&:focus-visible" rule that sets outline-style: solid, outline-width, ' +
+        'outline-color and outline-offset, is accepted',
       { file: 'module.css' },
     )
   })
