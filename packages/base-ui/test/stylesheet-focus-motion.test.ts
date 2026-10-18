@@ -208,6 +208,41 @@ describe('AC-base-ui-feedback-navigation-44, AC-base-ui-overlay-completion-46 an
     )
   })
 
+  it("admits focusRing's outline in a `& { }` only alone, in a Table T2 class, before the ring block", () => {
+    const wrapped = flatten(readStylesheet()).filter(
+      (item) => isFocusRingBase(item) && item.selectors.length === 2,
+    )
+
+    expect(wrapped.map((item) => item.owner)).toHaveLength(14)
+    expect(wrapped.every((item) => focusRingClasses.includes(item.owner))).toBe(true)
+    expect(focusViolations(readStylesheet())).toEqual([])
+  })
+
+  const ring = Object.entries(ringBlock)
+    .map(([property, value]) => `${property}: ${value}`)
+    .join('; ')
+
+  it.each([
+    ['a class outside Table T2', `.${PREFIX}title { & { outline: none } }`],
+    ['a Table T2 class with no ring block after it', `.${PREFIX}tab { & { outline: none } }`],
+    [
+      'a Table T2 class whose ring block comes before it',
+      `.${PREFIX}tab { &:focus-visible { ${ring} } & { outline: none } }`,
+    ],
+    [
+      'a Table T2 class where it shares the `& { }` with another declaration',
+      `.${PREFIX}tab { & { outline: none; color: red } &:focus-visible { ${ring} } }`,
+    ],
+  ])('reds on a planted `& { outline: none }` in %s (control)', (_name, rule) => {
+    expect(placementViolations(planted(rule))).toEqual([expect.stringContaining('sets outline')])
+  })
+
+  it('admits the same `& { outline: none }` once the ring block follows it in a Table T2 class (positive control)', () => {
+    const rule = `.${PREFIX}tab { & { outline: none } &:focus-visible { ${ring} } }`
+
+    expect(placementViolations(planted(rule))).toEqual([])
+  })
+
   it('reds on a focus-keyed box-shadow (control)', () => {
     const css = planted(`.${PREFIX}title { &:focus-visible { box-shadow: 0 0 0 1px red } }`)
 
@@ -268,14 +303,14 @@ describe('AC-base-ui-feedback-navigation-44, AC-base-ui-overlay-completion-46 an
     ).toEqual([])
   })
 
-  it('composes the ring on the Navigation Menu trigger as it does on the others: 1,011 B, b727f2868b58e052, with focusRing (informative)', () => {
+  it('composes the ring on the Navigation Menu trigger as it does on the others: 1,020 B, bd5534dd9659d527, with focusRing (informative)', () => {
     const rule = readStylesheet()
       .split(/^(?= {2}\.nave-base-ui-)/m)
       .find((part) => part.startsWith(`  .${PREFIX}navigation-menu-trigger `))
 
     expect(rule).toBeDefined()
-    expect(Buffer.byteLength(rule ?? '')).toBe(1011)
-    expect(sha256(rule ?? '').slice(0, 16)).toBe('b727f2868b58e052')
+    expect(Buffer.byteLength(rule ?? '')).toBe(1020)
+    expect(sha256(rule ?? '').slice(0, 16)).toBe('bd5534dd9659d527')
   })
 
   it('has no violation in the combined golden, which holds the ring on the fifteen (positive control for the Table T2 controls)', () => {
