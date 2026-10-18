@@ -27,6 +27,7 @@ describe.each([
   ['focusRing before another directive', '.x { @nave focusRing hideDesktopUp; color: red }'],
   ['a comment after the declaration', '.x { @nave focusRing; color: red /* c */ }'],
   ['!important on the declaration', '.x { @nave focusRing; color: red !important }'],
+  ['no space before the closing brace', '.x{@nave focusRing;color:red}'],
   ['a semicolon after the declaration (control)', '.x { @nave focusRing; color: red; }'],
 ])('%s', (_name, source) => {
   it('keeps the declaration', () => {

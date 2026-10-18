@@ -93,6 +93,13 @@ const ROWS: readonly Row[] = [
     atRules: [],
   },
   {
+    name: 'a declaration that abuts the closing brace',
+    css: '.x{@nave focusRing;color:red}',
+    declarations: { outline: 'none', color: 'red' },
+    rules: [FOCUS],
+    atRules: [],
+  },
+  {
     name: '!important on the last declaration',
     css: '.x { @nave focusRing; color: red !important }',
     declarations: { outline: 'none', color: 'red' },
@@ -277,9 +284,34 @@ describe('input that ends before the rule closes', () => {
   })
 })
 
+describe('a declaration that abuts an unclosed comment at the end of the input', () => {
+  // `postcss.parse()` refuses an unclosed comment (and the rule it leaves open), so the printed
+  // text is closed for the parser only: the verdict is the one every row above is read against.
+  it('keeps the declaration and the block ahead of the comment', () => {
+    const { css } = expandText('.x{@nave focusRing;color:red/* c', {})
+
+    expect(readRule(`${css}*/}`)).toMatchObject({
+      atRules: [],
+      declarations: expect.objectContaining({ outline: 'none', color: 'red' }) as Record<
+        string,
+        string
+      >,
+      rules: expect.arrayContaining([FOCUS]) as string[],
+    })
+  })
+})
+
 describe('an at-rule statement with no semicolon as the last item', () => {
   it('is ended before the block that follows it', () => {
     const { css } = expandText('.x { @nave focusRing; @unknown thing }', {})
+
+    expect(readRule(css).rules).toContain(FOCUS)
+  })
+})
+
+describe('a trailing backslash before the line break', () => {
+  it('is not turned into an escape by the inserted semicolon', () => {
+    const { css } = expandText('.x { @nave focusRing; color: red\\\n }', {})
 
     expect(readRule(css).rules).toContain(FOCUS)
   })
