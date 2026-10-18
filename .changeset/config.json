@@ -2,12 +2,12 @@
   "$schema": "https://unpkg.com/@changesets/config/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [["@navecss/tokens", "@navecss/core", "@navecss/prune"]],
+  "fixed": [["@navecss/tokens", "@navecss/core"]],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@navecss/cli"],
+  "ignore": ["@navecss/cli", "@navecss/prune"],
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
     "onlyUpdatePeerDependentsWhenOutOfRange": true
   }

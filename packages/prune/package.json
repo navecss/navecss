@@ -1,13 +1,16 @@
 {
   "name": "@navecss/prune",
   "version": "0.0.0",
-  "description": "NaveCSS atomic CSS, pruned to the atoms your Next.js build reads: a PostCSS plugin and a next.config wrapper.",
+  "private": true,
+  "description": "NaveCSS atom pruning for Next.js: a PostCSS plugin and a next.config wrapper that ship only the atoms the build can read a use for.",
   "keywords": [
     "navecss",
     "nextjs",
+    "postcss-plugin",
     "css",
     "atomic-css",
-    "postcss-plugin",
+    "css-layers",
+    "design-system",
     "zero-runtime"
   ],
   "homepage": "https://github.com/navecss/navecss/tree/main/packages/prune#readme",
@@ -51,7 +54,7 @@
     "lint": "eslint src test --max-warnings 0",
     "lint:fix": "eslint src test --fix",
     "test": "vitest run",
-    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints . ./postcss",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
   "peerDependencies": {

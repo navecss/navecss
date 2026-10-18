@@ -1,6 +1,6 @@
 # @navecss/prune
 
-NaveCSS atomic CSS for Next.js, pruned to the atoms your build reads a use of: a PostCSS plugin and a `next.config` wrapper that drop the `@layer atomic` rules no `cx()` call or written `nave-*` class asks for. On Vite, [`@navecss/core/vite`](https://github.com/navecss/navecss/tree/main/packages/core#vite-plugin-setup) does the same and you do not need this package.
+NaveCSS atom pruning for Next.js: a PostCSS plugin and a `next.config` wrapper that ship only the atoms the build can read a use for. On Vite you do not need it: `navePlugin()` from `@navecss/core/vite` already does this.
 
 ## Installation
 

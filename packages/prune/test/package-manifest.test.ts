@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -127,12 +128,65 @@ describe('AC-nextjs-used-atoms-12: the export map, the peers and the version gro
     expect(isAtLeast(range, '15.5.0')).toBe(false)
   })
 
-  it('versions with tokens and core: the changeset fixed group holds all three names', () => {
-    const config = readJson<{ fixed: string[][] }>(path.join(REPO_ROOT, '.changeset/config.json'))
-    const group = config.fixed.find((names) => names.includes('@navecss/core'))
-    expect(group).toBeDefined()
-    expect(group).toEqual(
-      expect.arrayContaining(['@navecss/tokens', '@navecss/core', manifest.name]),
+  // The package becomes publishable, and joins the tokens/core fixed group, in the release that
+  // ships the build check its trimming relies on.
+  it('is not published yet: private, ignored by Changesets and in no fixed group', () => {
+    const config = readJson<{ fixed: string[][]; ignore: string[] }>(
+      path.join(REPO_ROOT, '.changeset/config.json'),
     )
+    expect(manifest.private).toBe(true)
+    expect(config.ignore).toContain(manifest.name)
+    expect(config.fixed.flat()).not.toContain(manifest.name)
+    // Control: the group the package will join is there, holding tokens and core.
+    expect(config.fixed).toContainEqual(['@navecss/tokens', '@navecss/core'])
+  })
+})
+
+/**
+ * The size in bytes and the first 16 hex digits of the SHA-256 of a text, as UTF-8.
+ */
+function fingerprintOf(text: string): { readonly bytes: number; readonly sha256: string } {
+  const bytes = Buffer.from(text, 'utf8')
+  return {
+    bytes: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex').slice(0, 16),
+  }
+}
+
+describe('the package check and the words npm shows', () => {
+  it('check:pack excludes no JavaScript entry point from the type check', () => {
+    const script = (manifest.scripts as Record<string, string>)['check:pack'] ?? ''
+    const words = script.split(/\s+/u)
+    const flag = words.indexOf('--exclude-entrypoints')
+    const excluded =
+      flag === -1 ? [] : words.slice(flag + 1).filter((word) => !word.startsWith('-'))
+    const javascriptEntries = Object.keys(manifest.exports).filter((key) => {
+      const entry = manifest.exports[key]
+      return typeof entry === 'object' && entry !== null && Object.hasOwn(entry, 'import')
+    })
+    // Control: the package has JavaScript entries the check must reach, and runs the check.
+    expect(javascriptEntries).toEqual(['.', './postcss'])
+    expect(script).toContain('attw --pack .')
+    expect(excluded.filter((key) => javascriptEntries.includes(key))).toEqual([])
+  })
+
+  it('has the description npm shows, by its size and digest', () => {
+    expect(fingerprintOf(String(manifest.description))).toEqual({
+      bytes: 131,
+      sha256: '2c81b26fe94f1836',
+    })
+  })
+
+  it('has the keywords, NaveCSS first and nextjs the only Next.js form', () => {
+    expect(manifest.keywords).toEqual([
+      'navecss',
+      'nextjs',
+      'postcss-plugin',
+      'css',
+      'atomic-css',
+      'css-layers',
+      'design-system',
+      'zero-runtime',
+    ])
   })
 })
