@@ -8,6 +8,7 @@ import { feedbackBare, feedbackNave } from '../support/feedback.ts'
 import { cleanup, render } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { tableP } from '../support/table-p.ts'
+import { runMinor } from '../support/w6-minors.ts'
 
 afterEach(cleanup)
 
@@ -32,12 +33,15 @@ const inlineStyle = (element: HTMLElement | undefined, property: string): string
   element?.style.getPropertyValue(property) ?? ''
 
 describe("AC-base-ui-feedback-navigation-28: what Base UI renders on the Scroll Area's parts (Tier A)", () => {
-  it('gives the Viewport role="presentation", an inline overflow: scroll and tabindex="-1" while nothing overflows', async () => {
+  // Base UI 1.9.0 took the Viewport's `role="presentation"` away; the floor run still reads it.
+  const viewportRole = runMinor().version === '1.3.0' ? 'presentation' : undefined
+
+  it(`gives the Viewport ${viewportRole === undefined ? 'no role' : 'role="presentation"'}, an inline overflow: scroll and tabindex="-1" while nothing overflows`, async () => {
     await renderScrollArea(true)
     const [viewport, ...rest] = partsNamed('ScrollArea.Viewport')
     expect(viewport, 'ScrollArea.Viewport rendered').toBeDefined()
     expect(rest).toEqual([])
-    expect(viewport?.getAttribute('role')).toBe('presentation')
+    expect(viewport?.getAttribute('role') ?? undefined).toBe(viewportRole)
     expect(inlineStyle(viewport, 'overflow')).toBe('scroll')
     expect(viewport?.getAttribute('tabindex')).toBe('-1')
     // Nothing overflows, and the overflow attributes are absent.

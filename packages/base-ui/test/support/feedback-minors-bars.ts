@@ -52,6 +52,14 @@ const loadersOf = (alias: string): Loaders => {
         separator: () => import('base-ui-react-1.7.0/separator'),
       }
     }
+    case 'base-ui-react-1.8.0': {
+      return {
+        avatar: () => import('base-ui-react-1.8.0/avatar'),
+        meter: () => import('base-ui-react-1.8.0/meter'),
+        progress: () => import('base-ui-react-1.8.0/progress'),
+        separator: () => import('base-ui-react-1.8.0/separator'),
+      }
+    }
     default: {
       throw new Error(`no loader for ${alias}: add it here and install ${alias}`)
     }

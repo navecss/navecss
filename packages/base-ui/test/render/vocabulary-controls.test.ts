@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Props, Source } from '../support/scenes.ts'
 
+import { disclosureTriggerDisabled } from '../support/disclosure-disabled.ts'
 import { cleanup, render } from '../support/react.ts'
 import { recordCarried, recordRelated, unrecordedPairs } from '../support/row-pairs.ts'
 import { hasClass, hasItem, part, renderScene } from '../support/rows.ts'
@@ -214,17 +215,15 @@ const DISABLED: readonly {
     subpath: 'tabs',
   },
   {
-    aria: true,
+    ...disclosureTriggerDisabled(),
     disable: { 'Accordion.Item': { disabled: true } },
     marker: 'Accordion.Trigger',
-    native: false,
     subpath: 'accordion',
   },
   {
-    aria: true,
+    ...disclosureTriggerDisabled(),
     disable: { 'Collapsible.Root': { disabled: true } },
     marker: 'Collapsible.Trigger',
-    native: false,
     subpath: 'collapsible',
   },
   {
@@ -351,6 +350,31 @@ describe('AC-base-ui-overlay-completion-29 and AC-base-ui-bridge-22: every disab
       expect(hasItem(trigger, 'aria-disabled', 'true'), `${disabledBy} disabled`).toBe(true)
       expect(trigger?.hasAttribute('disabled')).toBe(false)
       expect(hasClass(trigger, `${C}select-trigger`)).toBe(true)
+      recordCarried(trigger, 'aria-disabled', 'true')
+      await cleanup()
+    }
+  })
+  it('Accordion.Trigger and Collapsible.Trigger carry aria-disabled when they are not a native button', async () => {
+    const asDiv = { nativeButton: false, render: createElement('div') }
+    const routes: readonly (readonly [string, string, Record<string, Props>])[] = [
+      [
+        'accordion',
+        'Accordion.Trigger',
+        { 'Accordion.Item': { disabled: true }, 'Accordion.Trigger': asDiv },
+      ],
+      [
+        'collapsible',
+        'Collapsible.Trigger',
+        { 'Collapsible.Root': { disabled: true }, 'Collapsible.Trigger': asDiv },
+      ],
+    ]
+    for (const [subpath, marker, props] of routes) {
+      await renderScene(nave, subpath, props)
+      const trigger = part(marker)
+      expect(trigger?.tagName, `${marker} is a div`).toBe('DIV')
+      expect(hasItem(trigger, 'aria-disabled', 'true'), marker).toBe(true)
+      expect(trigger?.hasAttribute('disabled')).toBe(false)
+      expect(hasClass(trigger, `${C}disclosure-trigger`)).toBe(true)
       recordCarried(trigger, 'aria-disabled', 'true')
       await cleanup()
     }

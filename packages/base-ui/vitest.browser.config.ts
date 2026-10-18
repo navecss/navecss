@@ -163,6 +163,12 @@ const MINORS = [
     subpaths: ['navigation-menu', 'scroll-area'],
     version: '1.7.0',
   },
+  {
+    files: [EXIT_FILE, STRIP_FILE],
+    installedAs: '1.8.0',
+    subpaths: ['navigation-menu', 'scroll-area'],
+    version: '1.8.0',
+  },
 ] as const
 
 export default defineConfig({

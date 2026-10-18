@@ -31,7 +31,7 @@ describe('AC-base-ui-feedback-navigation-20: what a disabled trigger does at eac
   const EXAMPLES = [
     { isDataDisabled: false, minors: ['1.3.0', '1.4.0', '1.5.0'], opens: 'true' },
     { isDataDisabled: false, minors: ['1.6.0', '1.7.0'], opens: 'false' },
-    { isDataDisabled: true, minors: ['1.8.0'], opens: 'false' },
+    { isDataDisabled: true, minors: ['1.8.0', '1.9.0'], opens: 'false' },
   ] as const
 
   interface Observed {

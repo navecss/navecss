@@ -109,7 +109,7 @@ const menubarSubject = async (): Promise<Subject> => {
     entry: (side, extra) =>
       menubarEntry(side === 'bare' ? '@base-ui/react' : '@navecss/base-ui', extra),
     label: 'menubar',
-    others: Object.keys(menu).filter((key) => key !== 'Trigger'),
+    others: Object.keys(menu).filter((key) => key !== 'Trigger' && !isLeftOut(`Menu.${key}`)),
   }
 }
 

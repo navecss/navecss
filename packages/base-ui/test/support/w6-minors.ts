@@ -1,6 +1,6 @@
 /**
  * Rendering the wrappers against a Base UI minor other than the two the runs install. A run
- * aliases `@base-ui/react` to the floor (1.3.0) or leaves the current devDependency (1.8.0); the
+ * aliases `@base-ui/react` to the floor (1.3.0) or leaves the current devDependency (1.9.0); the
  * minors in between are installed as devDependency aliases (`base-ui-react-<version>`) for the
  * tests that read their declaration files. Here the Base UI specifiers the wrappers import are
  * redirected to one of those aliases for the length of a load, so the wrappers, `Field` and
@@ -21,7 +21,7 @@ devDependency alias that installs each one (the floor's alias is `base-ui-react-
  */
 export const FLOOR_MINOR = { alias: 'base-ui-react-floor', version: '1.3.0' } as const
 
-export const CURRENT_MINOR = { alias: '@base-ui/react', version: '1.8.0' } as const
+export const CURRENT_MINOR = { alias: '@base-ui/react', version: '1.9.0' } as const
 
 export const MINORS = [
   FLOOR_MINOR,
@@ -29,6 +29,7 @@ export const MINORS = [
   { alias: 'base-ui-react-1.5.0', version: '1.5.0' },
   { alias: 'base-ui-react-1.6.0', version: '1.6.0' },
   { alias: 'base-ui-react-1.7.0', version: '1.7.0' },
+  { alias: 'base-ui-react-1.8.0', version: '1.8.0' },
   CURRENT_MINOR,
 ] as const
 
@@ -73,6 +74,13 @@ const loadersOf = (alias: string): Loaders => {
         autocomplete: () => import('base-ui-react-1.7.0/autocomplete'),
         combobox: () => import('base-ui-react-1.7.0/combobox'),
         field: () => import('base-ui-react-1.7.0/field'),
+      }
+    }
+    case 'base-ui-react-1.8.0': {
+      return {
+        autocomplete: () => import('base-ui-react-1.8.0/autocomplete'),
+        combobox: () => import('base-ui-react-1.8.0/combobox'),
+        field: () => import('base-ui-react-1.8.0/field'),
       }
     }
     default: {

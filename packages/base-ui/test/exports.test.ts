@@ -7,7 +7,7 @@ import {
   FEEDBACK_SUBPATHS,
   FEEDBACK_TOP,
 } from './support/feedback-subpaths.ts'
-import { isLeftOut } from './support/left-out.ts'
+import { isLeftOut, isLeftOutConstants, LEFT_OUT } from './support/left-out.ts'
 import {
   COMPLETION_SUBPATHS,
   FIRST_RELEASE_SUBPATHS,
@@ -32,12 +32,16 @@ const exportDifferences = (
   const differences = [
     ...baseNames
       .values()
-      .filter((key) => !naveNames.has(key))
+      .filter((key) => !naveNames.has(key) && !isLeftOutConstants(top, key))
       .map((key) => `${subpath}: ${key} is missing`),
     ...naveNames
       .values()
       .filter((key) => !baseNames.has(key))
       .map((key) => `${subpath}: ${key} is extra`),
+    ...naveNames
+      .values()
+      .filter((key) => isLeftOutConstants(top, key))
+      .map((key) => `${subpath}: ${key} is left out and still carried`),
   ]
   const naveTop = nave[top]
   const baseTop = base[top]
@@ -71,6 +75,9 @@ const HOOKS_AND_FACTORIES: Readonly<Record<string, readonly string[]>> = {
 
 const loadBase = (subpath: string): Promise<Record<string, unknown>> =>
   import(/* @vite-ignore */ `@base-ui/react/${subpath}`) as Promise<Record<string, unknown>>
+
+const loadFloor = (subpath: string): Promise<Record<string, unknown>> =>
+  import(/* @vite-ignore */ `base-ui-react-floor/${subpath}`) as Promise<Record<string, unknown>>
 
 // The subpaths before the seven, listed as the earlier criteria list them: the package's own list
 // grows with the seven and is not what the earlier expectation reads.
@@ -242,11 +249,57 @@ describe('AC-base-ui-feedback-navigation-01 (supersedes AC-base-ui-overlay-compl
     )
   })
 
-  it('combobox: createItems is the one member left out, and it is a key of Base UI at the installed version', async () => {
+  it('combobox: createItems is left out, and it is a key of Base UI at the installed version', async () => {
     const nave = await importDist('combobox/index.js')
     const base = await loadBase('combobox')
     expect(Object.keys(base.Combobox as object)).toContain('createItems')
     expect(Object.keys(nave.Combobox as object)).not.toContain('createItems')
+  })
+
+  it('every member left out is a key of Base UI at the installed version and none at the floor', async () => {
+    for (const qualified of LEFT_OUT) {
+      const [top = '', member = ''] = qualified.split('.', 2)
+      const subpath = [...EARLIER_SUBPATHS, ...FEEDBACK_SUBPATHS].find(
+        (candidate) => topName(candidate) === top,
+      )
+      expect(subpath, `${top} is a subpath's component`).toBeDefined()
+      const [base, floor] = [await loadBase(subpath ?? ''), await loadFloor(subpath ?? '')]
+      expect(Object.keys(base[top] as object), qualified).toContain(member)
+      expect(Object.keys(floor[top] as object), qualified).not.toContain(member)
+    }
+  })
+
+  it.each([...EARLIER_SUBPATHS, ...FEEDBACK_SUBPATHS])(
+    '%s: the namespaces of data attribute and CSS variable names left out are values of Base UI at the installed version and none at the floor',
+    async (subpath) => {
+      const top = topName(subpath)
+      const [base, floor] = [await loadBase(subpath), await loadFloor(subpath)]
+      const constants = Object.keys(base).filter((key) => isLeftOutConstants(top, key))
+      for (const key of constants) {
+        expect(typeof base[key], key).toBe('object')
+      }
+      expect(Object.keys(floor).filter((key) => isLeftOutConstants(top, key))).toEqual([])
+    },
+  )
+
+  it('control: DialogPopupDataAttributes is left out, and a missing name that is no such namespace still reds', async () => {
+    const nave = await importDist('dialog/index.js')
+    const base = await loadBase('dialog')
+    expect(Object.keys(base).filter((key) => isLeftOutConstants('Dialog', key))).toContain(
+      'DialogPopupDataAttributes',
+    )
+    expect(exportDifferences('dialog', nave, { ...base, DialogHandle: {} })).toEqual([
+      'dialog: DialogHandle is missing',
+    ])
+  })
+
+  it('control: a namespace of names left out that the built module carries reds the check, naming it', async () => {
+    const nave = await importDist('dialog/index.js')
+    const base = await loadBase('dialog')
+    const carried = { ...nave, DialogPopupDataAttributes: base.DialogPopupDataAttributes }
+    expect(exportDifferences('dialog', carried, base)).toEqual([
+      'dialog: DialogPopupDataAttributes is left out and still carried',
+    ])
   })
 
   it('control: createItems added to the built Combobox namespace (a dynamic re-export) reds the check, naming it', async () => {

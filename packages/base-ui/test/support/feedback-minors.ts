@@ -37,56 +37,60 @@ export const ownLoaders: Loaders = {
 Base UI's seven subpaths from a devDependency alias, imported with literal specifiers so the
 bundler sees them.
  */
+const ALIAS_LOADERS: Readonly<Record<string, Loaders>> = {
+  'base-ui-react-1.4.0': {
+    toast: () => import('base-ui-react-1.4.0/toast'),
+    'navigation-menu': () => import('base-ui-react-1.4.0/navigation-menu'),
+    'scroll-area': () => import('base-ui-react-1.4.0/scroll-area'),
+    meter: () => import('base-ui-react-1.4.0/meter'),
+    progress: () => import('base-ui-react-1.4.0/progress'),
+    avatar: () => import('base-ui-react-1.4.0/avatar'),
+    separator: () => import('base-ui-react-1.4.0/separator'),
+  },
+  'base-ui-react-1.5.0': {
+    toast: () => import('base-ui-react-1.5.0/toast'),
+    'navigation-menu': () => import('base-ui-react-1.5.0/navigation-menu'),
+    'scroll-area': () => import('base-ui-react-1.5.0/scroll-area'),
+    meter: () => import('base-ui-react-1.5.0/meter'),
+    progress: () => import('base-ui-react-1.5.0/progress'),
+    avatar: () => import('base-ui-react-1.5.0/avatar'),
+    separator: () => import('base-ui-react-1.5.0/separator'),
+  },
+  'base-ui-react-1.6.0': {
+    toast: () => import('base-ui-react-1.6.0/toast'),
+    'navigation-menu': () => import('base-ui-react-1.6.0/navigation-menu'),
+    'scroll-area': () => import('base-ui-react-1.6.0/scroll-area'),
+    meter: () => import('base-ui-react-1.6.0/meter'),
+    progress: () => import('base-ui-react-1.6.0/progress'),
+    avatar: () => import('base-ui-react-1.6.0/avatar'),
+    separator: () => import('base-ui-react-1.6.0/separator'),
+  },
+  'base-ui-react-1.7.0': {
+    toast: () => import('base-ui-react-1.7.0/toast'),
+    'navigation-menu': () => import('base-ui-react-1.7.0/navigation-menu'),
+    'scroll-area': () => import('base-ui-react-1.7.0/scroll-area'),
+    meter: () => import('base-ui-react-1.7.0/meter'),
+    progress: () => import('base-ui-react-1.7.0/progress'),
+    avatar: () => import('base-ui-react-1.7.0/avatar'),
+    separator: () => import('base-ui-react-1.7.0/separator'),
+  },
+  'base-ui-react-1.8.0': {
+    toast: () => import('base-ui-react-1.8.0/toast'),
+    'navigation-menu': () => import('base-ui-react-1.8.0/navigation-menu'),
+    'scroll-area': () => import('base-ui-react-1.8.0/scroll-area'),
+    meter: () => import('base-ui-react-1.8.0/meter'),
+    progress: () => import('base-ui-react-1.8.0/progress'),
+    avatar: () => import('base-ui-react-1.8.0/avatar'),
+    separator: () => import('base-ui-react-1.8.0/separator'),
+  },
+}
+
 export const loadersOf = (alias: string): Loaders => {
-  switch (alias) {
-    case 'base-ui-react-1.4.0': {
-      return {
-        toast: () => import('base-ui-react-1.4.0/toast'),
-        'navigation-menu': () => import('base-ui-react-1.4.0/navigation-menu'),
-        'scroll-area': () => import('base-ui-react-1.4.0/scroll-area'),
-        meter: () => import('base-ui-react-1.4.0/meter'),
-        progress: () => import('base-ui-react-1.4.0/progress'),
-        avatar: () => import('base-ui-react-1.4.0/avatar'),
-        separator: () => import('base-ui-react-1.4.0/separator'),
-      }
-    }
-    case 'base-ui-react-1.5.0': {
-      return {
-        toast: () => import('base-ui-react-1.5.0/toast'),
-        'navigation-menu': () => import('base-ui-react-1.5.0/navigation-menu'),
-        'scroll-area': () => import('base-ui-react-1.5.0/scroll-area'),
-        meter: () => import('base-ui-react-1.5.0/meter'),
-        progress: () => import('base-ui-react-1.5.0/progress'),
-        avatar: () => import('base-ui-react-1.5.0/avatar'),
-        separator: () => import('base-ui-react-1.5.0/separator'),
-      }
-    }
-    case 'base-ui-react-1.6.0': {
-      return {
-        toast: () => import('base-ui-react-1.6.0/toast'),
-        'navigation-menu': () => import('base-ui-react-1.6.0/navigation-menu'),
-        'scroll-area': () => import('base-ui-react-1.6.0/scroll-area'),
-        meter: () => import('base-ui-react-1.6.0/meter'),
-        progress: () => import('base-ui-react-1.6.0/progress'),
-        avatar: () => import('base-ui-react-1.6.0/avatar'),
-        separator: () => import('base-ui-react-1.6.0/separator'),
-      }
-    }
-    case 'base-ui-react-1.7.0': {
-      return {
-        toast: () => import('base-ui-react-1.7.0/toast'),
-        'navigation-menu': () => import('base-ui-react-1.7.0/navigation-menu'),
-        'scroll-area': () => import('base-ui-react-1.7.0/scroll-area'),
-        meter: () => import('base-ui-react-1.7.0/meter'),
-        progress: () => import('base-ui-react-1.7.0/progress'),
-        avatar: () => import('base-ui-react-1.7.0/avatar'),
-        separator: () => import('base-ui-react-1.7.0/separator'),
-      }
-    }
-    default: {
-      throw new Error(`no loader for ${alias}: add it here and install ${alias}`)
-    }
+  const loaders = ALIAS_LOADERS[alias]
+  if (loaders === undefined) {
+    throw new Error(`no loader for ${alias}: add it here and install ${alias}`)
   }
+  return loaders
 }
 
 /**
