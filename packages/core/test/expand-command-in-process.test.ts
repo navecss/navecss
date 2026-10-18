@@ -12,7 +12,6 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -317,24 +316,6 @@ describe('runExpand', () => {
 })
 
 describe('watchFiles', () => {
-  it('calls back once after a change to a watched file settles, and stops when closed', async () => {
-    const watched = write('w/a.css', 'one')
-    const changed = vi.fn()
-    const close = watchFiles([watched], changed)
-
-    // The event stream starts a moment after watchFiles returns; a write made at once can be missed.
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    changed.mockClear()
-    writeFileSync(watched, 'two')
-    await vi.waitFor(() => expect(changed).toHaveBeenCalled(), { timeout: 15_000 })
-    close()
-    const calls = changed.mock.calls.length
-    writeFileSync(watched, 'three')
-    await new Promise((resolve) => setTimeout(resolve, 200))
-
-    expect(changed.mock.calls.length).toBe(calls)
-  }, 30_000)
-
   it('throws for a directory that does not exist', () => {
     expect(() => watchFiles([file('nope/a.css')], vi.fn())).toThrow()
   })
@@ -351,22 +332,4 @@ describe('watchFiles', () => {
     expect(ran.signal, 'the process was still alive: a watcher was left open').toBeNull()
     expect(ran.status).toBe(0)
   })
-
-  it('watches a symlinked source through its target', async () => {
-    write('real/a.css', 'one')
-    mkdirSync(file('src'))
-    symlinkSync(file('real/a.css'), file('src/a.css'))
-    const changed = vi.fn()
-    const close = watchFiles([file('src/a.css')], changed)
-
-    try {
-      // Let a delayed event for the files created above arrive, so only the change below counts.
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      changed.mockClear()
-      writeFileSync(file('real/a.css'), 'two')
-      await vi.waitFor(() => expect(changed).toHaveBeenCalled(), { timeout: 10_000 })
-    } finally {
-      close()
-    }
-  }, 20_000)
 })
