@@ -4,6 +4,7 @@ import type { Source } from '../support/scenes.ts'
 
 import { marked, partsNamed } from '../support/dom.ts'
 import { EARLIER_SUBPATHS, isFeedbackPart } from '../support/feedback.ts'
+import { isLeftOut } from '../support/left-out.ts'
 import { cleanup, render } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
@@ -28,7 +29,9 @@ const keysAt = (source: Source, subpath: string): string[] => {
   const top = topName(subpath)
   return typeof ui === 'object' &&
     Object.keys(ui).some((key) => /^[A-Z]/.test(key) || key === 'createHandle')
-    ? Object.keys(ui).map((key) => `${top}.${key}`)
+    ? Object.keys(ui)
+        .map((key) => `${top}.${key}`)
+        .filter((part) => !isLeftOut(part))
     : [top]
 }
 

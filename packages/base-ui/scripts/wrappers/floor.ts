@@ -3,21 +3,22 @@
  * reads the current one. This reads the floor as well and narrows the current declarations to what
  * both agree on: a type namespace keeps the members the floor declares, with the type parameters
  * the floor gives them, the type-only members of a component's namespace are kept the same way,
- * and a part the floor does not have is declared as a type that resolves to
- * that part where it exists and to `never` where it does not.
+ * and a function the floor does not have is left out: an app on the floor that imports a wrapper
+ * reading it fails to build, since a bundler treats a missing member of Base UI's module as an
+ * error. A part the floor does not have that is not a function stops the generator.
  */
 import type { PartTypes, SubpathTypes } from './read-types.ts'
 
 import { readBaseUiTypes } from './read-types.ts'
 
-const sharedPart = (part: PartTypes, atFloor: PartTypes | undefined): PartTypes => {
+const sharedPart = (part: PartTypes, atFloor: PartTypes | undefined): PartTypes | undefined => {
   if (atFloor === undefined) {
     if (part.kind !== 'function') {
       throw new Error(
-        `${part.name} is younger than the floor and is a ${part.kind}: only a function can be declared absent`,
+        `${part.name} is younger than the floor and is a ${part.kind}: only a function can be left out`,
       )
     }
-    return { ...part, members: [], young: true }
+    return undefined
   }
   const members = atFloor.members.filter((member) =>
     part.members.some((current) => current.name === member.name),
@@ -31,11 +32,12 @@ const sharedSubpath = (current: SubpathTypes, atFloor: SubpathTypes | undefined)
   }
   return {
     ...current,
-    parts: current.parts.map((part) =>
-      sharedPart(
-        part,
-        atFloor.parts.find((candidate) => candidate.name === part.name),
-      ),
+    parts: current.parts.flatMap(
+      (part) =>
+        sharedPart(
+          part,
+          atFloor.parts.find((candidate) => candidate.name === part.name),
+        ) ?? [],
     ),
     typeMembers: atFloor.typeMembers.filter((member) =>
       current.typeMembers.some((candidate) => candidate.name === member.name),

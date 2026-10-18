@@ -107,8 +107,10 @@ const secondReleaseSection = (): string | undefined => {
 
 describe('AC-base-ui-overlay-completion-38 (superseded by AC-base-ui-feedback-navigation-48 for the combined package): the release that adds the six components', () => {
   const pending = pendingForThisPackage()
+  // Once 0.2.0 is cut, a pending changeset belongs to a later release and is not held to this one's bump.
+  const hasShipped = secondReleaseSection()?.split('\n', 1)[0]?.trim() === '0.2.0'
 
-  it.runIf(pending.length > 0)(
+  it.runIf(pending.length > 0 && !hasShipped)(
     'has every pending changeset naming @navecss/base-ui name it alone with bump minor',
     () => {
       // This release and the one after it can be pending together, so the count is not held here.
@@ -116,7 +118,7 @@ describe('AC-base-ui-overlay-completion-38 (superseded by AC-base-ui-feedback-na
     },
   )
 
-  it.runIf(pending.length === 0)(
+  it.runIf(hasShipped)(
     'was released as 0.2.0, with exactly one minor changeset that adds the six components among its entries, once the changeset is spent',
     () => {
       const section = secondReleaseSection()

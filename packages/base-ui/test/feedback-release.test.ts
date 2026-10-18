@@ -71,8 +71,13 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
   describe('the changeset', () => {
     const pending = changesetsNaming(NAME)
     const changelog = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
+    const sections = existsSync(changelog)
+      ? readFileSync(changelog, 'utf8').split(/^## /m).slice(1)
+      : []
+    const release = sections.find((section) => section.split('\n', 1)[0]?.trim() === '0.2.0')
 
-    it.runIf(pending.length > 0)(
+    // Once 0.2.0 is cut, a pending changeset belongs to a later release and is not held to this one's bump.
+    it.runIf(pending.length > 0 && release === undefined)(
       'has every pending changeset that names @navecss/base-ui name it alone with bump minor, and exactly one of them name the seven components',
       () => {
         expect(changesetProblems(pending, NAME)).toEqual([])
@@ -84,11 +89,10 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
       expect(own.map(({ file }) => file)).not.toContain('base-ui-overlay-components.md')
     })
 
-    it.runIf(pending.length === 0 && existsSync(changelog))(
+    it.runIf(release !== undefined)(
       'was released as a minor, with exactly one changeset that names the seven components among its entries, once the changeset is spent',
       () => {
-        const sections = readFileSync(changelog, 'utf8').split(/^## /m).slice(1)
-        const newest = sections[0] ?? ''
+        const newest = release ?? ''
         expect(newest).toContain('### Minor Changes')
         expect(newest).not.toContain('### Major Changes')
         // One entry per changeset, keyed by its commit. An earlier changeset that was still pending

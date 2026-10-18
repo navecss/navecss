@@ -71,13 +71,6 @@ const valueOf = (
   styled: StyledPart | undefined,
   part: PartTypes,
 ): string => {
-  if (part.young === true) {
-    // Read as a static member, like every other part. Where the installed Base UI lacks the part, a
-    // bundler warns that the import is always undefined and the build is still correct. Reading it by
-    // a key instead would silence that warning and keep the whole namespace in any app that uses the
-    // part, so the warning is the lesser cost.
-    return `export const ${name}: PartOf<typeof Base, '${part.name}'> = /*#__PURE__*/ (() => ${reference})()`
-  }
   if (styled === undefined) {
     return `export const ${name}: typeof ${reference} = /*#__PURE__*/ (() => ${reference})()`
   }
@@ -133,7 +126,7 @@ const namespaceOf = (
  * wherever the value is wrapped, and it is valid at every Base UI version.
  */
 const alsoTypeOf = (name: string, part: PartTypes): string[] =>
-  part.isAlsoType && part.young !== true ? [`export type ${name} = typeof ${name}`] : []
+  part.isAlsoType ? [`export type ${name} = typeof ${name}`] : []
 
 const classOf = (name: string, reference: string, part: PartTypes): string[] =>
   part.kind === 'class'
@@ -178,10 +171,8 @@ const helpersUsed = (body: string): string[] =>
     body.includes(`${helper}(`),
   )
 
-const typesUsed = (body: string): string[] => [
-  ...['AvatarProps', 'SizeProps', 'VariantProps'].filter((type) => body.includes(`& ${type}`)),
-  ...(body.includes('PartOf<') ? ['PartOf'] : []),
-]
+const typesUsed = (body: string): string[] =>
+  ['AvatarProps', 'SizeProps', 'VariantProps'].filter((type) => body.includes(`& ${type}`))
 
 const imports = (subpath: string, body: string): string => {
   const names = [...helpersUsed(body), ...typesUsed(body).map((type) => `type ${type}`)].join(', ')

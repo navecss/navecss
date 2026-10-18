@@ -29,14 +29,6 @@ export interface VariantProps {
   variant?: 'ghost' | 'primary' | 'secondary'
 }
 
-/**
- * A part of a Base UI component, or `never` where the installed Base UI has no such part (one
- * younger than the peer floor).
- */
-export type PartOf<Namespace, Key extends string> = Key extends keyof Namespace
-  ? Namespace[Key]
-  : never
-
 export interface SizeProps {
   size?: 'md' | 'sm'
 }
