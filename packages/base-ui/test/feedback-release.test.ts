@@ -12,10 +12,14 @@ import {
   undeclaredIn,
 } from './support/w3-tokens-floor.ts'
 import {
+  aboutAnUnreleasedRelease,
   type Changeset,
   changesetProblems,
   changesetsNaming,
   hasTheSeven,
+  NOTHING_RELEASED,
+  releasedNow,
+  releasedOf,
   releasesOf,
   ROOT,
   SEVEN_COMPONENTS,
@@ -65,22 +69,29 @@ const make = (file: string, frontmatter: string, text: string): Changeset => ({
   text,
 })
 
+/**
+The entries of a CHANGELOG section that name the seven components, one per changeset, keyed by its
+commit.
+ */
+const entriesOfTheSeven = (section: string): string[] =>
+  section
+    .split(/^(?=- [\da-f]{7,}: )/m)
+    .filter((entry) => /^- [\da-f]{7,}: /.test(entry) && hasTheSeven(entry))
+
 const planted = '.x { color: var(--nave-layer-notification) }'
 
 describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tokens floor (supersedes AC-base-ui-overlay-completion-31 and -38 for the combined package)', () => {
   describe('the changeset', () => {
     const pending = changesetsNaming(NAME)
     const changelog = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
-    const sections = existsSync(changelog)
-      ? readFileSync(changelog, 'utf8').split(/^## /m).slice(1)
-      : []
-    const release = sections.find((section) => section.split('\n', 1)[0]?.trim() === '0.2.0')
+    const released = releasedNow()
+    // The seven's own changeset, while their release is not yet in the CHANGELOG.
+    const isSevenPending = pending.some(({ text }) => !released.seven && hasTheSeven(text))
 
-    // Once 0.2.0 is cut, a pending changeset belongs to a later release and is not held to this one's bump.
-    it.runIf(pending.length > 0 && release === undefined)(
-      'has every pending changeset that names @navecss/base-ui name it alone with bump minor, and exactly one of them name the seven components',
+    it.runIf(pending.some(aboutAnUnreleasedRelease(released)))(
+      'has every pending changeset about a release not yet made name @navecss/base-ui alone with bump minor, and exactly one of them name the seven components',
       () => {
-        expect(changesetProblems(pending, NAME)).toEqual([])
+        expect(changesetProblems(pending, NAME, released)).toEqual([])
       },
     )
 
@@ -89,25 +100,28 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
       expect(own.map(({ file }) => file)).not.toContain('base-ui-overlay-components.md')
     })
 
-    it.runIf(release !== undefined)(
+    it.runIf(!isSevenPending && existsSync(changelog))(
       'was released as a minor, with exactly one changeset that names the seven components among its entries, once the changeset is spent',
       () => {
-        const newest = release ?? ''
-        expect(newest).toContain('### Minor Changes')
-        expect(newest).not.toContain('### Major Changes')
+        const sections = readFileSync(changelog, 'utf8').split(/^## /m).slice(1)
         // One entry per changeset, keyed by its commit. An earlier changeset that was still pending
-        // when this one merged is released in the same section, so the entries are not counted.
-        const entries = newest
-          .split(/^(?=- [\da-f]{7,}: )/m)
-          .filter((entry) => /^- [\da-f]{7,}: /.test(entry))
-        expect(entries.filter((entry) => hasTheSeven(entry))).toHaveLength(1)
+        // when this one merged is released in the same section, so the entries are not counted. A
+        // later release can follow, so the section is the one holding the entry, wherever it sits.
+        expect(sections.flatMap((section) => entriesOfTheSeven(section))).toHaveLength(1)
+        const released = sections.find((section) => entriesOfTheSeven(section).length > 0) ?? ''
+        expect(released).toContain('### Minor Changes')
+        expect(released).not.toContain('### Major Changes')
       },
     )
 
     it('control: a second changeset for the seven, a second package or another bump is reported', () => {
       const seven = SEVEN_COMPONENTS.join(', ')
       const own = make('own.md', "'@navecss/base-ui': minor", seven)
-      const earlier = make('earlier.md', "'@navecss/base-ui': minor", 'Six components.')
+      const earlier = make(
+        'earlier.md',
+        "'@navecss/base-ui': minor",
+        'alert-dialog, context-menu, menubar, preview-card, combobox, autocomplete',
+      )
       expect(changesetProblems([earlier, own], NAME)).toEqual([])
       expect(changesetProblems([earlier], NAME)).toEqual([
         'not exactly one pending changeset names the seven components',
@@ -127,6 +141,37 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
       expect(
         changesetProblems([earlier, make('patch.md', "'@navecss/base-ui': patch", seven)], NAME),
       ).toEqual(['patch.md does not name @navecss/base-ui alone with bump minor'])
+    })
+
+    it('control: a lone patch changeset for the package, after the release, is accepted', () => {
+      const fix = make('fix.md', "'@navecss/base-ui': patch", 'A fix that names neither set.')
+      const own = make('own.md', "'@navecss/base-ui': minor", SEVEN_COMPONENTS.join(', '))
+      expect(changesetProblems([fix], NAME)).toEqual([])
+      expect(changesetProblems([fix, own], NAME)).toEqual([])
+    })
+
+    it('control: a later patch that names the seven is reported before their release and accepted after it', () => {
+      const focus = make(
+        'focus.md',
+        "'@navecss/base-ui': patch",
+        `The focus ring of ${SEVEN_COMPONENTS.join(', ')} now follows the token.`,
+      )
+      expect(changesetProblems([focus], NAME, NOTHING_RELEASED)).toEqual([
+        'focus.md does not name @navecss/base-ui alone with bump minor',
+      ])
+      expect(changesetProblems([focus], NAME, { seven: true, six: true })).toEqual([])
+    })
+
+    it('control: the CHANGELOG tells a released set from an unreleased one by its entries', () => {
+      const seven = SEVEN_COMPONENTS.join(', ')
+      expect(releasedOf(`## 0.2.0\n\n### Minor Changes\n\n- c20ff6d: ${seven}.\n`)).toEqual({
+        seven: true,
+        six: false,
+      })
+      expect(releasedOf(`## 0.2.1\n\nA note on ${seven}, outside any entry.\n`)).toEqual(
+        NOTHING_RELEASED,
+      )
+      expect(releasedNow()).toEqual({ seven: true, six: true })
     })
 
     it('control: a second changeset, a second package or another bump is not the release', () => {

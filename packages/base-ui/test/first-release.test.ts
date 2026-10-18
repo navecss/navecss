@@ -4,6 +4,13 @@ import { describe, expect, it } from 'vitest'
 
 import { PUBLISHABLE_SET } from '../../../scripts/check-publishable-set.mjs'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
+import {
+  aboutTheUnreleasedSix,
+  hasTheSix,
+  NOTHING_RELEASED,
+  releasedNow,
+  SIX_SUBPATHS,
+} from './support/w12-release.ts'
 
 const ROOT = path.join(PACKAGE_DIR, '../..')
 const NAME = '@navecss/base-ui'
@@ -28,11 +35,27 @@ const releasesOf = (text: string): Record<string, string> => {
 const isMinorAlone = (releases: Record<string, string>): boolean =>
   Object.keys(releases).length === 1 && releases[NAME] === 'minor'
 
-const pendingForThisPackage = (): Record<string, string>[] =>
+const pendingChangesets = (): { releases: Record<string, string>; text: string }[] =>
   readdirSync(path.join(ROOT, '.changeset'))
     .filter((file) => file.endsWith('.md') && file !== 'README.md')
-    .map((file) => releasesOf(readFileSync(path.join(ROOT, '.changeset', file), 'utf8')))
-    .filter((releases) => Object.hasOwn(releases, NAME))
+    .map((file) => {
+      const text = readFileSync(path.join(ROOT, '.changeset', file), 'utf8')
+      return { releases: releasesOf(text), text }
+    })
+    .filter(({ releases }) => Object.hasOwn(releases, NAME))
+
+const pendingForThisPackage = (): Record<string, string>[] =>
+  pendingChangesets().map(({ releases }) => releases)
+
+/**
+The pending changesets about the release of the six while it is not yet in the CHANGELOG, which hold
+the clauses of that release; a later changeset, such as a fix, and every changeset once the six are
+released, is outside them.
+ */
+const pendingAboutTheSix = (): Record<string, string>[] =>
+  pendingChangesets()
+    .filter(aboutTheUnreleasedSix(releasedNow()))
+    .map(({ releases }) => releases)
 
 /**
 The oldest section of the package's CHANGELOG: the record of its first release.
@@ -82,15 +105,6 @@ const allChangesets = (): Record<string, string>[] =>
     .filter((file) => file.endsWith('.md') && file !== 'README.md')
     .map((file) => releasesOf(readFileSync(path.join(ROOT, '.changeset', file), 'utf8')))
 
-const SIX_SUBPATHS = [
-  'alert-dialog',
-  'context-menu',
-  'menubar',
-  'preview-card',
-  'combobox',
-  'autocomplete',
-]
-
 /**
 The entries of a CHANGELOG section, one per changeset, keyed by its commit.
  */
@@ -106,19 +120,17 @@ const secondReleaseSection = (): string | undefined => {
 }
 
 describe('AC-base-ui-overlay-completion-38 (superseded by AC-base-ui-feedback-navigation-48 for the combined package): the release that adds the six components', () => {
-  const pending = pendingForThisPackage()
-  // Once 0.2.0 is cut, a pending changeset belongs to a later release and is not held to this one's bump.
-  const hasShipped = secondReleaseSection()?.split('\n', 1)[0]?.trim() === '0.2.0'
+  const pending = pendingAboutTheSix()
 
-  it.runIf(pending.length > 0 && !hasShipped)(
-    'has every pending changeset naming @navecss/base-ui name it alone with bump minor',
+  it.runIf(pending.length > 0)(
+    'has every pending changeset about the six name @navecss/base-ui alone with bump minor',
     () => {
       // This release and the one after it can be pending together, so the count is not held here.
       expect(pending.filter((releases) => !isMinorAlone(releases))).toEqual([])
     },
   )
 
-  it.runIf(hasShipped)(
+  it.runIf(pending.length === 0)(
     'was released as 0.2.0, with exactly one minor changeset that adds the six components among its entries, once the changeset is spent',
     () => {
       const section = secondReleaseSection()
@@ -144,6 +156,21 @@ describe('AC-base-ui-overlay-completion-38 (superseded by AC-base-ui-feedback-na
       (releases) => Object.hasOwn(releases, NAME) && Object.hasOwn(releases, TOKENS),
     )
     expect(together).toEqual([])
+  })
+
+  it('control: a changeset about the six is told from a later fix that names neither set', () => {
+    expect(hasTheSix(SIX_SUBPATHS.join(', '))).toBe(true)
+    expect(hasTheSix('A fix to the Dialog namespace.')).toBe(false)
+    expect(hasTheSix('alert-dialog and combobox only')).toBe(false)
+  })
+
+  it('control: a later patch that lists the six is held before their release and outside the clause after it', () => {
+    const later = {
+      releases: { [NAME]: 'patch' },
+      text: `Popups of ${SIX_SUBPATHS.join(', ')} no longer clip.`,
+    }
+    expect([later].filter(aboutTheUnreleasedSix(NOTHING_RELEASED))).toEqual([later])
+    expect([later].filter(aboutTheUnreleasedSix({ seven: true, six: true }))).toEqual([])
   })
 
   it('control: a changeset naming both packages, or the package with a patch or a major, is not the release', () => {

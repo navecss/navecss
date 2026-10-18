@@ -205,6 +205,7 @@
     "lint:fix": "eslint src styles scripts test --fix",
     "test": "vitest run",
     "test:browser": "vitest run --config vitest.browser.config.ts",
+    "check:server-components": "node scripts/check-server-components.ts",
     "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints styles.css",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },

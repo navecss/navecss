@@ -2,7 +2,7 @@
  * What the release of the seven components is read from: the changesets that name the package, and
  * the two ADR decisions that said the stylesheet sets no `z-index`.
  */
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { PACKAGE_DIR } from './stylesheet.ts'
@@ -131,15 +131,92 @@ Whether a changeset's text names all seven components of the release.
 export const hasTheSeven = (text: string): boolean =>
   SEVEN_COMPONENTS.every((component) => new RegExp(component, 'i').test(text))
 
-/**
-What is wrong with the pending changesets that name a package: each must name it alone with bump
-`minor`, and exactly one of them, the pull request's own, must name the seven components.
- */
-export const changesetProblems = (pending: readonly Changeset[], name: string): string[] => [
-  ...pending
-    .filter(({ releases }) => Object.keys(releases).length !== 1 || releases[name] !== 'minor')
-    .map(({ file }) => `${file} does not name ${name} alone with bump minor`),
-  ...(pending.filter(({ text }) => hasTheSeven(text)).length === 1
-    ? []
-    : ['not exactly one pending changeset names the seven components']),
+export const SIX_SUBPATHS = [
+  'alert-dialog',
+  'context-menu',
+  'menubar',
+  'preview-card',
+  'combobox',
+  'autocomplete',
 ]
+
+/**
+Whether a changeset's text names the six subpaths of the release before the seven.
+ */
+export const hasTheSix = (text: string): boolean =>
+  SIX_SUBPATHS.every((subpath) => text.includes(subpath))
+
+/**
+Which of the two releases `packages/base-ui/CHANGELOG.md` already holds: a set is released once one
+of its entries, one per changeset and keyed by its commit, names the set.
+ */
+export interface Released {
+  readonly seven: boolean
+  readonly six: boolean
+}
+
+export const NOTHING_RELEASED: Released = { seven: false, six: false }
+
+export const releasedOf = (changelog: string): Released => {
+  const entries = changelog
+    .split(/^## /m)
+    .slice(1)
+    .flatMap((section) =>
+      section.split(/^(?=- [\da-f]{7,}: )/m).filter((entry) => /^- [\da-f]{7,}: /.test(entry)),
+    )
+  return {
+    seven: entries.some((entry) => hasTheSeven(entry)),
+    six: entries.some((entry) => hasTheSix(entry)),
+  }
+}
+
+/**
+The releases the package's CHANGELOG holds now; nothing is released while it does not exist.
+ */
+export const releasedNow = (): Released => {
+  const changelog = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
+  return existsSync(changelog) ? releasedOf(readFileSync(changelog, 'utf8')) : NOTHING_RELEASED
+}
+
+/**
+Whether a changeset is about the release of the six while that release is not yet in the CHANGELOG.
+ */
+export const aboutTheUnreleasedSix =
+  (released: Released) =>
+  ({ text }: { readonly text: string }): boolean =>
+    !released.six && hasTheSix(text)
+
+/**
+Whether a changeset is about one of the two releases the clause below holds, the six or the seven,
+while that release is not yet in the CHANGELOG. Once it is, the clause about it is retired: a later
+changeset that names the set, such as a fix, is not that release.
+ */
+export const aboutAnUnreleasedRelease =
+  (released: Released) =>
+  (changeset: Changeset): boolean =>
+    aboutTheUnreleasedSix(released)(changeset) || (!released.seven && hasTheSeven(changeset.text))
+
+/**
+What is wrong with the pending changesets that name a package, among those about a release not yet
+in the CHANGELOG: each must name it alone with bump `minor`, and exactly one of them, the pull
+request's own, must name the seven components. A changeset about neither set, or about a release
+already made, is outside the clause, and with none left there is nothing to hold.
+ */
+export const changesetProblems = (
+  pending: readonly Changeset[],
+  name: string,
+  released: Released = NOTHING_RELEASED,
+): string[] => {
+  const about = pending.filter(aboutAnUnreleasedRelease(released))
+  if (about.length === 0) {
+    return []
+  }
+  return [
+    ...about
+      .filter(({ releases }) => Object.keys(releases).length !== 1 || releases[name] !== 'minor')
+      .map(({ file }) => `${file} does not name ${name} alone with bump minor`),
+    ...(about.filter(({ text }) => hasTheSeven(text)).length === 1
+      ? []
+      : ['not exactly one pending changeset names the seven components']),
+  ]
+}
