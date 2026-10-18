@@ -20,12 +20,14 @@ async function run(css: string, onUnknown: 'error' | 'ignore' | 'warn'): Promise
   return postcss([navePlugin({ onUnknown })]).process(css, { from: '/proj/app.css' })
 }
 
-describe('onUnknown: warn under Turbopack', () => {
+describe('the test environment', () => {
   it('runs with TURBOPACK empty, whatever the shell exports', () => {
     // eslint-disable-next-line turbo/no-undeclared-env-vars -- the test reads the value its own config pins, not an input the build depends on
     expect(process.env.TURBOPACK).toBe('')
   })
+})
 
+describe('onUnknown: warn under Turbopack', () => {
   it('prints the problem once, framed file:line:column, and raises no PostCSS warning', async () => {
     vi.stubEnv('TURBOPACK', '1')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -158,6 +160,6 @@ describe('the Turbopack frame places each problem where the PostCSS warning does
     await run(css, 'warn')
 
     expect(raised.length).toBeGreaterThan(0)
-    expect(warn.mock.calls.map(([line]) => String(line))).toEqual(raised)
+    expect(warn.mock.calls).toEqual(raised.map((frame) => [frame]))
   })
 })
