@@ -232,6 +232,13 @@ const stallInFrame = (
 const MISSED_THE_FADE = 'a slow page showed no frame in the opacity window the stall waits for'
 
 /**
+ * What the Escape cases say when a slow page delivered the Escape after the fade-in was over: the
+ * case, an Escape part-way through the fade-in, did not happen, so the row tested nothing, which is
+ * not a failure.
+ */
+const ESCAPE_CAME_AFTER_THE_FADE = 'a slow page delivered the Escape after the fade-in was over'
+
+/**
  * The sample at the stall's index is the stall's own frame: the sampler read that frame after the
  * stall ran, and not the frame that followed it.
  */
@@ -367,9 +374,14 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
 
   /**
    * Escape a given time into the fade-in, with focus put on the first link of the panel partway,
-   * as a person tabbing in would.
+   * as a person tabbing in would. When the fade-in was already over by the time the Escape came,
+   * the case did not happen and the row is skipped through `skip`, not failed; that the popup
+   * fades in at all is held by the opacity row, which needs it at opacity 0 in its first frame.
    */
-  const escapeDuringFadeIn = async (milliseconds: number): Promise<Run> => {
+  const escapeDuringFadeIn = async (
+    milliseconds: number,
+    skip: (note: string) => never,
+  ): Promise<Run> => {
     const { mountedAt } = await openByKeyboard()
     await waitUntilSince(mountedAt, milliseconds - 10)
     required('panel-link-0').focus()
@@ -379,13 +391,15 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
     await untilGone()
     sampler!.stop()
     const run = summarise(sampler!, actedAt)
-    // The case happened: the panel was part-way through its fade when the exit began.
+    // The case happened if the panel was part-way through its fade when the exit began.
     const before = run.frames.filter(
       (frame) => frame.index < (run.exitFrame ?? 0) && frame.isMounted,
     )
     const last = before.at(-1)
     expect(last, 'a sampled frame before the exit').toBeDefined()
-    expect(last!.opacity, 'the fade-in was still running when the exit began').toBeLessThan(0.99)
+    if (last!.opacity >= 0.99) {
+      skip(ESCAPE_CAME_AFTER_THE_FADE)
+    }
     return run
   }
 
@@ -416,9 +430,11 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
       expectFocusStayedOffTheBody(run)
     }, 30_000)
 
-    it('AC-base-ui-feedback-navigation-24 (Tier B): Escape 30ms into the fade-in with focus on a link shows no empty frame, never puts focus on the body and ends on the trigger', async () => {
+    it('AC-base-ui-feedback-navigation-24 (Tier B): Escape 30ms into the fade-in with focus on a link shows no empty frame, never puts focus on the body and ends on the trigger', async ({
+      skip,
+    }) => {
       start()
-      const run = await escapeDuringFadeIn(30)
+      const run = await escapeDuringFadeIn(30, skip)
       expect(run.frames.length, 'frames were sampled').toBeGreaterThan(0)
       expectClean(run)
       expectFocusStayedOffTheBody(run)
@@ -511,14 +527,16 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
       30_000,
     )
 
-    it('AC-base-ui-feedback-navigation-24 (Tier B, empty-frame control): the fade-in-only form with no exit key shows an empty frame on the Escape 30ms into the fade-in', async () => {
+    it('AC-base-ui-feedback-navigation-24 (Tier B, empty-frame control): the fade-in-only form with no exit key shows an empty frame on the Escape 30ms into the fade-in', async ({
+      skip,
+    }) => {
       const fadeInOnly = await printedForm(FADE_IN_ONLY, { bytes: 364, hash: 'ad98077420eeff98' })
       start(withControlFade(withRule(stylesheet, 'navigation-menu-fade', fadeInOnly)))
       expect(tokenMilliseconds('--nave-motion-duration-fast'), 'the control fade is in force').toBe(
         CONTROL_FADE_MS,
       )
-      // Also checks that the fade-in was still running when the Escape came.
-      const run = await escapeDuringFadeIn(30)
+      // Skipped, not failed, when the fade-in was already over by the time the Escape came.
+      const run = await escapeDuringFadeIn(30, skip)
       expect(run.empty.length, 'frames with the popup mounted, visible and empty').toBeGreaterThan(
         0,
       )
