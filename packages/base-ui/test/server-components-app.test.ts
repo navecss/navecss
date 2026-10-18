@@ -48,7 +48,7 @@ const isControl = (app: string): boolean => entryOf(app).startsWith("'use client
 // directive is on dialog/index.js, fails.
 const working: Builder = (app, bundler) => {
   if (isControl(app)) {
-    return { bundler, exit: 1, log: 'Build failed' }
+    return { bundler, exit: 1, log: 'Error: Element type is invalid' }
   }
   prerender(app, PRIMARY + ACCORDION)
   return { bundler, exit: 0, log: 'Compiled' }
@@ -71,6 +71,22 @@ const bare: Builder = (app, bundler) => {
   }
   return { bundler, exit: isControl(app) ? 1 : 0, log: '' }
 }
+
+// Turbopack prerenders pages without the button; webpack prerenders the right ones.
+const turbopackPrerendersNoButton: Builder = (app, bundler) => {
+  if (isControl(app)) {
+    return { bundler, exit: 1, log: 'unsupported to use "export *"' }
+  }
+  rmSync(path.join(app, '.next'), { force: true, recursive: true })
+  prerender(app, bundler === 'turbopack' ? '<p>empty</p>' : PRIMARY + ACCORDION)
+  return { bundler, exit: 0, log: 'Compiled' }
+}
+
+// A control build that fails, but not with any of the known errors.
+const noSpace: Builder = (app, bundler) =>
+  isControl(app)
+    ? { bundler, exit: 1, log: 'Error: ENOSPC: no space left on device, write' }
+    : working(app, bundler)
 
 const run = (app: string, builder: Builder): { lines: string[]; problems: string[] } => {
   const lines: string[] = []
@@ -136,5 +152,18 @@ describe('AC-base-ui-bridge-53: the release-time check writes its app and judges
     expect(run(newApp(), bare).problems).toContain(
       'turbopack: single: no <button> with data-nave-variant="primary"',
     )
+  })
+
+  it('control: each bundler is judged on its own pages, though the next build replaces them', () => {
+    expect(run(newApp(), turbopackPrerendersNoButton).problems).toContain(
+      'turbopack: single: no <button> with data-nave-variant="primary"',
+    )
+  })
+
+  it('control: a control build that fails for another reason is reported', () => {
+    expect(run(newApp(), noSpace).problems).toEqual([
+      "control, turbopack: the build failed without any of 0.2.0's errors",
+      "control, webpack: the build failed without any of 0.2.0's errors",
+    ])
   })
 })

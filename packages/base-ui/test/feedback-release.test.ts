@@ -12,11 +12,14 @@ import {
   undeclaredIn,
 } from './support/w3-tokens-floor.ts'
 import {
+  aboutAnUnreleasedRelease,
   type Changeset,
   changesetProblems,
   changesetsNaming,
   hasTheSeven,
-  isAboutTheReleases,
+  NOTHING_RELEASED,
+  releasedNow,
+  releasedOf,
   releasesOf,
   ROOT,
   SEVEN_COMPONENTS,
@@ -81,11 +84,14 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
   describe('the changeset', () => {
     const pending = changesetsNaming(NAME)
     const changelog = path.join(ROOT, 'packages/base-ui/CHANGELOG.md')
+    const released = releasedNow()
+    // The seven's own changeset, while their release is not yet in the CHANGELOG.
+    const isSevenPending = pending.some(({ text }) => !released.seven && hasTheSeven(text))
 
-    it.runIf(pending.some((changeset) => isAboutTheReleases(changeset)))(
-      'has every pending changeset about the six or the seven name @navecss/base-ui alone with bump minor, and exactly one of them name the seven components',
+    it.runIf(pending.some(aboutAnUnreleasedRelease(released)))(
+      'has every pending changeset about a release not yet made name @navecss/base-ui alone with bump minor, and exactly one of them name the seven components',
       () => {
-        expect(changesetProblems(pending, NAME)).toEqual([])
+        expect(changesetProblems(pending, NAME, released)).toEqual([])
       },
     )
 
@@ -94,7 +100,7 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
       expect(own.map(({ file }) => file)).not.toContain('base-ui-overlay-components.md')
     })
 
-    it.runIf(pending.every(({ text }) => !hasTheSeven(text)) && existsSync(changelog))(
+    it.runIf(!isSevenPending && existsSync(changelog))(
       'was released as a minor, with exactly one changeset that names the seven components among its entries, once the changeset is spent',
       () => {
         const sections = readFileSync(changelog, 'utf8').split(/^## /m).slice(1)
@@ -142,6 +148,30 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
       const own = make('own.md', "'@navecss/base-ui': minor", SEVEN_COMPONENTS.join(', '))
       expect(changesetProblems([fix], NAME)).toEqual([])
       expect(changesetProblems([fix, own], NAME)).toEqual([])
+    })
+
+    it('control: a later patch that names the seven is reported before their release and accepted after it', () => {
+      const focus = make(
+        'focus.md',
+        "'@navecss/base-ui': patch",
+        `The focus ring of ${SEVEN_COMPONENTS.join(', ')} now follows the token.`,
+      )
+      expect(changesetProblems([focus], NAME, NOTHING_RELEASED)).toEqual([
+        'focus.md does not name @navecss/base-ui alone with bump minor',
+      ])
+      expect(changesetProblems([focus], NAME, { seven: true, six: true })).toEqual([])
+    })
+
+    it('control: the CHANGELOG tells a released set from an unreleased one by its entries', () => {
+      const seven = SEVEN_COMPONENTS.join(', ')
+      expect(releasedOf(`## 0.2.0\n\n### Minor Changes\n\n- c20ff6d: ${seven}.\n`)).toEqual({
+        seven: true,
+        six: false,
+      })
+      expect(releasedOf(`## 0.2.1\n\nA note on ${seven}, outside any entry.\n`)).toEqual(
+        NOTHING_RELEASED,
+      )
+      expect(releasedNow()).toEqual({ seven: true, six: true })
     })
 
     it('control: a second changeset, a second package or another bump is not the release', () => {

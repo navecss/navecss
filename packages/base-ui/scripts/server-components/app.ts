@@ -91,11 +91,14 @@ const controlProblems = (
   const entry = path.join(app, 'node_modules/@navecss/base-ui/dist/dialog/index.js')
   writeFileSync(entry, `'use client';\n${readFileSync(entry, 'utf8')}`)
   return BUNDLERS.flatMap((bundler) => {
-    const { exit } = builder(app, bundler)
+    const { exit, log } = builder(app, bundler)
     report(`control, ${bundler}: next build exit ${exit} (non-zero expected)`)
-    return exit === 0
-      ? [`control, ${bundler}: the build passed with the directive on dialog/index.js`]
-      : []
+    if (exit === 0) {
+      return [`control, ${bundler}: the build passed with the directive on dialog/index.js`]
+    }
+    return logProblems(log).length > 0
+      ? []
+      : [`control, ${bundler}: the build failed without any of 0.2.0's errors`]
   })
 }
 
@@ -103,14 +106,12 @@ const controlProblems = (
  * Builds the app under both bundlers, then the control, and returns what is wrong: nothing when
  * every build passes and shows its pages, and every control build fails.
  */
-export const check = (app: string, builder: Builder, report: (line: string) => void): string[] => {
-  const builds = BUNDLERS.map((bundler) => {
+export const check = (app: string, builder: Builder, report: (line: string) => void): string[] => [
+  // Each build replaces `.next`, so its pages are read before the next build runs.
+  ...BUNDLERS.flatMap((bundler) => {
     const result = builder(app, bundler)
     report(`${bundler}: next build exit ${result.exit}`)
-    return result
-  })
-  return [
-    ...builds.flatMap((result) => problemsOf(app, result)),
-    ...controlProblems(app, builder, report),
-  ]
-}
+    return problemsOf(app, result)
+  }),
+  ...controlProblems(app, builder, report),
+]

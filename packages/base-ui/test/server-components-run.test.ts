@@ -88,7 +88,11 @@ const PAGE =
 const passing = worksRunner((app) => {
   const isControl = readIndex(app).startsWith("'use client'")
   if (isControl) {
-    return { status: 1, stderr: 'Build failed', stdout: '' }
+    return {
+      status: 1,
+      stderr: 'Error: unsupported to use "export *" in a client boundary',
+      stdout: '',
+    }
   }
   const directory = path.join(app, '.next/server/app')
   mkdirSync(directory, { recursive: true })

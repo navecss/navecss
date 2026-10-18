@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -6,6 +8,9 @@ import {
   logProblems,
   ROUTES,
 } from '../scripts/server-components/read.ts'
+import { PACKAGE_DIR } from './support/stylesheet.ts'
+
+const RELEASING = path.join(PACKAGE_DIR, '../../docs/02-contribute/releasing.md')
 
 const source = (name: string): string => ROUTES.find((route) => route.name === name)?.source ?? ''
 
@@ -54,5 +59,26 @@ describe('AC-base-ui-bridge-53: the release-time Server Component check reads a 
     expect(htmlProblems('single', '<button type="button">Save</button>')).toEqual([
       'single: no <button> with data-nave-variant="primary"',
     ])
+  })
+
+  it('names the three errors in the words of the criterion', () => {
+    expect(KNOWN_ERRORS).toEqual([
+      'Element type is invalid',
+      'unsupported to use "export *"',
+      'Cannot access',
+    ])
+  })
+
+  it('is named in the release guide, before the release is staged', () => {
+    const guide = readFileSync(RELEASING, 'utf8')
+    const staging = guide.slice(
+      guide.indexOf('## 2. Stage the release'),
+      guide.indexOf('## 3. Approve'),
+    )
+    expect(staging).toContain('pnpm --filter @navecss/base-ui run check:server-components')
+    const manifest = JSON.parse(readFileSync(path.join(PACKAGE_DIR, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>
+    }
+    expect(manifest.scripts).toHaveProperty('check:server-components')
   })
 })

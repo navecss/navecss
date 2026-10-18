@@ -4,7 +4,13 @@ import { describe, expect, it } from 'vitest'
 
 import { PUBLISHABLE_SET } from '../../../scripts/check-publishable-set.mjs'
 import { PACKAGE_DIR } from './support/stylesheet.ts'
-import { hasTheSix, SIX_SUBPATHS } from './support/w12-release.ts'
+import {
+  aboutTheUnreleasedSix,
+  hasTheSix,
+  NOTHING_RELEASED,
+  releasedNow,
+  SIX_SUBPATHS,
+} from './support/w12-release.ts'
 
 const ROOT = path.join(PACKAGE_DIR, '../..')
 const NAME = '@navecss/base-ui'
@@ -42,12 +48,13 @@ const pendingForThisPackage = (): Record<string, string>[] =>
   pendingChangesets().map(({ releases }) => releases)
 
 /**
-The pending changesets that are about the release of the six components, which hold the clauses of
-that release; a later changeset, such as a fix, is outside them.
+The pending changesets about the release of the six while it is not yet in the CHANGELOG, which hold
+the clauses of that release; a later changeset, such as a fix, and every changeset once the six are
+released, is outside them.
  */
 const pendingAboutTheSix = (): Record<string, string>[] =>
   pendingChangesets()
-    .filter(({ text }) => hasTheSix(text))
+    .filter(aboutTheUnreleasedSix(releasedNow()))
     .map(({ releases }) => releases)
 
 /**
@@ -155,6 +162,15 @@ describe('AC-base-ui-overlay-completion-38 (superseded by AC-base-ui-feedback-na
     expect(hasTheSix(SIX_SUBPATHS.join(', '))).toBe(true)
     expect(hasTheSix('A fix to the Dialog namespace.')).toBe(false)
     expect(hasTheSix('alert-dialog and combobox only')).toBe(false)
+  })
+
+  it('control: a later patch that lists the six is held before their release and outside the clause after it', () => {
+    const later = {
+      releases: { [NAME]: 'patch' },
+      text: `Popups of ${SIX_SUBPATHS.join(', ')} no longer clip.`,
+    }
+    expect([later].filter(aboutTheUnreleasedSix(NOTHING_RELEASED))).toEqual([later])
+    expect([later].filter(aboutTheUnreleasedSix({ seven: true, six: true }))).toEqual([])
   })
 
   it('control: a changeset naming both packages, or the package with a patch or a major, is not the release', () => {
