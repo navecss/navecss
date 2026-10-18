@@ -50,6 +50,8 @@ export default function RenameDialog() {
 
 Every subpath of Base UI that this package wraps is listed under [What is styled](#what-is-styled). Each one also re-exports every flat type name Base UI exports there, such as `DialogRootProps`, so those imports change the same way. Base UI's dotted type names, such as `Dialog.Root.Props`, come through as well, but not all of them: where one does not compile through this package, import Base UI's flat name for the same type from the same subpath. The end of [What is styled](#what-is-styled) names the ones left out by design. The package root, `@navecss/base-ui`, re-exports the same components.
 
+A Server Component can import a namespace such as `Dialog` from a subpath and render its parts, `Dialog.Root` among them, without a `'use client'` directive of its own.
+
 ## The stylesheet
 
 Import Nave's tokens, then this package's stylesheet, before any stylesheet of yours that declares a `@layer`:
@@ -269,7 +271,7 @@ export default function ToastArea({ children }: { children: ReactNode }) {
 
 `toastManager.add({ title: 'Saved', description: 'Your changes were saved.' })` then raises a toast from anywhere in your app.
 
-Call `Toast.createToastManager()` in a module that starts with `'use client'`, as in the example, and import the manager from that module: every subpath of this package is a client module.
+Call `Toast.createToastManager()` in a module that starts with `'use client'`, as in the example, and import the manager from that module.
 
 `Toast.Title` renders an `<h2>`. Pass `render` to use another element.
 

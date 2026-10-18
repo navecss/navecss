@@ -5,12 +5,14 @@
  * stylelint config it offers beside the one-line fence, so it lands with that package rather
  * than with the css data file or the skill guide it also describes.
  */
-import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import type { Config } from 'stylelint'
+
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import stylelint from 'stylelint'
+import stylelintBelowFloor from 'stylelint-16-16'
+import stylelintAtFloor from 'stylelint-16-17'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { PUBLISHABLE_SET } from '../../../scripts/check-publishable-set.mjs'
@@ -84,29 +86,6 @@ describe('AC-consumer-constraints-35', () => {
   })
 })
 
-/**
- * Runs the scratch project's own stylelint over `test.css` and parses the JSON report it writes
- * to `--output-file`, and nothing else. The CLI prints the same report to stdout on a clean run
- * and to stderr once it finds a problem, so reading "whichever stream is non-empty" would parse
- * any other text a failing run printed. A run that wrote no parseable report throws with its exit
- * status and stderr instead.
- */
-function stylelintJsonReport(cwd: string): { warnings: { rule: string }[] }[] {
-  const reportPath = path.join(cwd, 'stylelint-report.json')
-  const result = spawnSync(
-    path.join(cwd, 'node_modules/.bin/stylelint'),
-    ['test.css', '--formatter', 'json', '--output-file', reportPath],
-    { cwd, encoding: 'utf8' },
-  )
-  try {
-    return JSON.parse(readFileSync(reportPath, 'utf8')) as { warnings: { rule: string }[] }[]
-  } catch {
-    throw new Error(
-      `stylelint wrote no JSON report (status ${String(result.status)}): ${result.stderr}`,
-    )
-  }
-}
-
 describe('AC-consumer-constraints-36', () => {
   const section = coreSection()
   const lintFence = jsonFencesIn(section).find((f) => f.includes('languageOptions'))!
@@ -161,55 +140,28 @@ describe('AC-consumer-constraints-36', () => {
 
   it(
     'at stylelint exactly 16.17.0 the fence gives the same results, while at 16.16.0 @nave is still reported (the floor control)',
-    // Two installs and two stylelint runs from a cold start: about 7 s alone, 27 s on a busy
-    // machine, and 55 s when the run is given a twentieth of a CPU.
-    { timeout: 120_000 },
-    () => {
-      // Each version gets its OWN fresh directory: `stylelint-config-standard@40` pins a
-      // `^17.0.0` stylelint peer, so this fixture enables `at-rule-no-unknown` directly
-      // (stylelint's own built-in rule, the one the fence's languageOptions declaration is
-      // read by) rather than pull in a config incompatible with 16.x — reinstalling a
-      // different stylelint version IN PLACE inside one directory was tried and measured to
-      // leave npm's own dependency resolution in a broken, order-dependent state.
-      const { languageOptions } = JSON.parse(lintFence) as Record<string, unknown>
-      const config = JSON.stringify({ rules: { 'at-rule-no-unknown': true }, languageOptions })
+    // The first lint of each version loads it: about a quarter of a second alone, and several
+    // seconds each under heavy load.
+    { timeout: 60_000 },
+    async () => {
+      // `stylelint-config-standard@40` pins a `^17.0.0` stylelint peer, so this enables
+      // `at-rule-no-unknown` directly: stylelint's own built-in rule, the one the fence's
+      // languageOptions declaration is read by. Both versions are installed with the workspace,
+      // under their own names, so nothing is installed while the test runs.
+      const { languageOptions } = JSON.parse(lintFence) as Required<Pick<Config, 'languageOptions'>>
+      const config = { rules: { 'at-rule-no-unknown': true }, languageOptions }
 
-      for (const [version, expectReported] of [
-        ['16.16.0', true],
-        ['16.17.0', false],
+      for (const [release, linter, expectReported] of [
+        [{ name: 'stylelint-16-16', version: '16.16.0' }, stylelintBelowFloor, true],
+        [{ name: 'stylelint-16-17', version: '16.17.0' }, stylelintAtFloor, false],
       ] as const) {
-        const scratch = mkdtempSync(path.join(tmpdir(), `nave-stylelint-floor-${version}-`))
-        try {
-          writeFileSync(
-            path.join(scratch, 'package.json'),
-            JSON.stringify({ name: `floor-scratch-${version}`, version: '1.0.0', private: true }),
-          )
-          writeFileSync(path.join(scratch, 'test.css'), '.a { @nave interactive; }')
-          writeFileSync(path.join(scratch, '.stylelintrc.json'), config)
-
-          // Once npm's cache is older than the registry's few minutes of freshness, a plain install
-          // asks the registry again about each of stylelint's hundred or so packages and posts an
-          // audit, which on a slow network outlasts this test's budget. `--prefer-offline` reads
-          // what the cache already holds and asks only for what it lacks; the audit and the
-          // funding notice are never read here. The stylelint version is pinned either way.
-          execFileSync(
-            'npm',
-            [
-              'install',
-              '--ignore-scripts',
-              '--prefer-offline',
-              '--no-audit',
-              '--no-fund',
-              `stylelint@${version}`,
-            ],
-            { cwd: scratch, encoding: 'utf8' },
-          )
-          const [fileResult] = stylelintJsonReport(scratch)
-          const isReported = fileResult!.warnings.some((w) => w.rule === 'at-rule-no-unknown')
-          expect(isReported, `stylelint ${version}`).toBe(expectReported)
-        } finally {
-          rmSync(scratch, { recursive: true, force: true })
-        }
+        const manifest = path.join(CORE_DIR, 'node_modules', release.name, 'package.json')
+        const installed = (JSON.parse(readFileSync(manifest, 'utf8')) as { version: string })
+          .version
+        expect(installed, release.name).toBe(release.version)
+        const result = await linter.lint({ code: '.a { @nave interactive; }', config })
+        const isReported = result.results[0]!.warnings.some((w) => w.rule === 'at-rule-no-unknown')
+        expect(isReported, `stylelint ${release.version}`).toBe(expectReported)
       }
     },
   )

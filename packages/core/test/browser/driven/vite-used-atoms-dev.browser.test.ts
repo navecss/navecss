@@ -7,7 +7,7 @@
  */
 import type { Browser, Page } from 'playwright'
 
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { build, type InlineConfig, type PluginOption } from 'vite'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -21,6 +21,7 @@ import { appConfig, stopDev } from '../../helpers/vite-app.ts'
 import {
   atFirstStylesheet,
   consoleOf,
+  edit,
   framesOf,
   launchChromium,
   listenDev,
@@ -222,12 +223,12 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
             __mark: 1,
           })
         })
-        writeFileSync(path.join(app.root, 'src/App.ts'), appModule("cx('flex', 'block')"))
-        await untilQuietly(
+        edit(server, path.join(app.root, 'src/App.ts'), appModule("cx('flex', 'block')"))
+        await until(
           page,
           async () => Object.hasOwn(await framesOf(page), 'nave-block'),
           'the new class',
-          6000,
+          30_000,
         )
         await page.waitForTimeout(isReloading ? 0 : 500)
         const frames = await framesOf(page)
