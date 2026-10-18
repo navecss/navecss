@@ -23,7 +23,7 @@ export interface Marker {
   readonly start: number
 }
 
-export interface MalformedMarker {
+interface MalformedMarker {
   readonly end: number
   readonly start: number
   readonly text: string

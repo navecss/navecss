@@ -48,7 +48,7 @@ function isPartStart(text: string, i: number): boolean {
  * The simple selectors after the `&` of a selector that is one compound starting with `&`, or
  * `undefined` when the selector is anything else (a combinator, a list, a second `&`).
  */
-export function compoundParts(selector: string): readonly string[] | undefined {
+function compoundParts(selector: string): readonly string[] | undefined {
   const text = selector.trim()
   if (!text.startsWith('&')) return undefined
   const parts: string[] = []
@@ -77,7 +77,7 @@ function isCharAppended(parts: string[], text: string, i: number, isCodeAtTop: b
 /**
  * A condition as a warning names it.
  */
-export function conditionText(condition: ConditionRule): string {
+function conditionText(condition: ConditionRule): string {
   return `@${condition.name} ${condition.prelude.replaceAll(/\s+/g, ' ').trim()}`
 }
 

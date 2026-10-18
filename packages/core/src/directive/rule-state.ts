@@ -9,7 +9,7 @@ import type { NodeRef, PlanItem, RuleInput } from './rule-model.ts'
 
 import { isPseudoElementOnlyList } from './selector-specificity.ts'
 
-export interface PendingRun {
+interface PendingRun {
   /**
   Declarations and the comments between them.
    */
@@ -71,7 +71,7 @@ export interface DirectiveRunFact {
   readonly nested: NestedFact
 }
 
-export type RunFact = DirectiveRunFact | OwnRunFact
+type RunFact = DirectiveRunFact | OwnRunFact
 
 /**
  * The blocks a directive leaves out of a rule whose every selector is a pseudo-element.

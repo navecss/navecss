@@ -152,7 +152,7 @@ function planOrThrow(rule: Rule, nodes: ModelNode[], table: NodeTable, ctx: Rule
 /**
  * Expands every `@nave` directly in `rule`.
  */
-export function handleRule(rule: Rule, ctx: RuleContext): void {
+function handleRule(rule: Rule, ctx: RuleContext): void {
   if (!hasDirective(rule)) return
   const { table, nodes } = readRule(rule)
   const plan = planOrThrow(rule, nodes, table, ctx)

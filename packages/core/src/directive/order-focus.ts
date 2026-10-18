@@ -93,7 +93,7 @@ function isRingHiddenByValue(property: string, tokens: readonly Token[]): boolea
 /**
  * Whether a declaration leaves `focusRing`'s outline hidden, judged on what can be read.
  */
-export function isRingHidden(declaration: OrderDeclaration): boolean {
+function isRingHidden(declaration: OrderDeclaration): boolean {
   const property = declaration.prop.toLowerCase()
   if (!OUTLINE_PROPERTIES.has(property)) return false
   const tokens = significantTokens(declaration.value)

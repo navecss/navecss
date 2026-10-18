@@ -37,7 +37,7 @@ function lastSignificant(tokens: ReturnType<typeof tokenize>, before: number): n
 /**
  * A declaration whose value may end in `!important`, as the declaration and the flag.
  */
-export function toOrderDeclaration(declaration: Declaration): OrderDeclaration {
+function toOrderDeclaration(declaration: Declaration): OrderDeclaration {
   const tokens = tokenize(declaration.value)
   const last = lastSignificant(tokens, tokens.length)
   const ident = tokens[last]

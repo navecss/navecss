@@ -33,19 +33,19 @@ import { declarationValuesEqual } from './value-equality.ts'
  */
 export type Segment = AtomBlockSegment | AtomDeclarationsSegment | OwnSegment
 
-export interface OwnSegment {
+interface OwnSegment {
   readonly kind: 'own'
   readonly node: ModelNode
 }
 
-export interface AtomDeclarationsSegment {
+interface AtomDeclarationsSegment {
   readonly atom: AtomFacts
   readonly declarations: readonly Declaration[]
   readonly directive: DirectiveFacts
   readonly kind: 'atom-declarations'
 }
 
-export interface AtomBlockSegment {
+interface AtomBlockSegment {
   readonly atom: AtomFacts
   readonly block: AnchoredBlock
   readonly directive: DirectiveFacts

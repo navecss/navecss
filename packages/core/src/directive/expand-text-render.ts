@@ -34,7 +34,7 @@ function renderRule(selector: string, decls: readonly Declaration[]): string {
 /**
  *
  */
-export function renderBlock(block: AnchoredBlock): string {
+function renderBlock(block: AnchoredBlock): string {
   if (block.kind === 'pseudo') return renderRule(block.selector, block.declarations)
   const inner: string[] = []
   if (block.declarations.length > 0) inner.push(renderRule('&', block.declarations))

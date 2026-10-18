@@ -10,7 +10,7 @@ import type { ExtendMap } from './resolve.ts'
 
 export type NodeRef = number
 
-export interface DeclNode {
+interface DeclNode {
   readonly kind: 'decl'
   readonly ref: NodeRef
   readonly prop: string
@@ -18,12 +18,12 @@ export interface DeclNode {
   readonly important: boolean
 }
 
-export interface CommentNode {
+interface CommentNode {
   readonly kind: 'comment'
   readonly ref: NodeRef
 }
 
-export interface StyleRuleNode {
+interface StyleRuleNode {
   readonly kind: 'rule'
   readonly ref: NodeRef
   readonly selector: string
@@ -33,7 +33,7 @@ export interface StyleRuleNode {
 /**
  * A conditional group at-rule (`@media`, `@container`, `@supports`) whose content is read.
  */
-export interface GroupNode {
+interface GroupNode {
   readonly kind: 'group'
   readonly ref: NodeRef
   readonly name: string
@@ -44,7 +44,7 @@ export interface GroupNode {
 /**
  * Any other at-rule: it is a nested node, and its content is not read.
  */
-export interface OpaqueNode {
+interface OpaqueNode {
   readonly kind: 'opaque'
   /**
   The at-rule's name and prelude as written, `''` when the node is not an at-rule.
@@ -80,13 +80,13 @@ export interface RuleInput {
 /**
  * Declarations one directive emits, bare or inside one `& { }`.
  */
-export interface DeclarationsEmission {
+interface DeclarationsEmission {
   readonly kind: 'declarations'
   readonly declarations: readonly Declaration[]
   readonly isWrapped: boolean
 }
 
-export interface BlockEmission {
+interface BlockEmission {
   readonly kind: 'block'
   readonly block: AnchoredBlock
 }
@@ -96,7 +96,7 @@ export type Emission = BlockEmission | DeclarationsEmission
 /**
  * A node of the rule that stays where it is.
  */
-export interface KeepItem {
+interface KeepItem {
   readonly kind: 'keep'
   readonly ref: NodeRef
 }
@@ -127,7 +127,7 @@ export type PlanItem = ExpandItem | KeepItem | WrapItem
  * Where a warning is reported: a node of the rule, and, for a name inside a directive's prelude,
  * where in the prelude the name starts.
  */
-export interface WarningAnchor {
+interface WarningAnchor {
   readonly offset: number | undefined
   readonly ref: NodeRef
 }

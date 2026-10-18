@@ -57,7 +57,7 @@ export type Overrider = AtomOverrider | OwnOverrider
 /**
  * A declaration of a later atom: bare, or inside one of its blocks.
  */
-export interface AtomOverrider {
+interface AtomOverrider {
   readonly atom: AtomFacts
   readonly directive: DirectiveFacts
   readonly isBlock: boolean
@@ -68,13 +68,13 @@ export interface AtomOverrider {
  * A declaration the rule itself holds after the directive, directly or inside a nested node.
  * `topRef` is the child of the rule that holds it, and `top` says what that child is.
  */
-export interface OwnOverrider {
+interface OwnOverrider {
   readonly kind: 'own'
   readonly top: OwnTop
   readonly topRef: NodeRef
 }
 
-export type OwnTop =
+type OwnTop =
   | { readonly kind: 'declaration' }
   | { readonly kind: 'group'; readonly name: string; readonly prelude: string }
   | { readonly kind: 'rule'; readonly selector: string }
