@@ -108,6 +108,7 @@ describe('watchFiles', () => {
     const changed = vi.fn()
     const close = watchFiles([watched], changed)
 
+    writeFileSync(watched, 'two, longer')
     fire(file('w'), 'a.css')
     fire(file('w'), 'a.css')
     fire(file('w'), 'a.css')
@@ -139,6 +140,8 @@ describe('watchFiles', () => {
     const changed = vi.fn()
     const close = watchFiles([write('w/a.css', 'one')], changed)
 
+    // The watched file changed too, so only the name in the event keeps this from calling back.
+    writeFileSync(file('w/a.css'), 'two, longer')
     fire(file('w'), 'other.css')
     settle()
     expect(changed).not.toHaveBeenCalled()
@@ -153,6 +156,7 @@ describe('watchFiles', () => {
     const changed = vi.fn()
     const close = watchFiles([write('w/a.css', 'one')], changed)
 
+    writeFileSync(file('w/a.css'), 'two, longer')
     // eslint-disable-next-line unicorn/no-null -- `null` is what `fs.watch` passes when it cannot say which file changed
     fire(file('w'), null)
     settle()
@@ -187,6 +191,22 @@ describe('watchFiles', () => {
     close()
   })
 
+  it('does not call back a second time for a change a read of the files already reported', () => {
+    const watched = write('w/a.css', 'one')
+    const changed = vi.fn()
+    const close = watchFiles([watched], changed)
+
+    writeFileSync(watched, 'two, longer')
+    vi.advanceTimersByTime(POLL_AND_SETTLE_MS)
+    expect(changed).toHaveBeenCalledTimes(1)
+    // The file event for the same edit, arriving after the read already reported it.
+    fire(file('w'), 'a.css')
+    settle()
+
+    expect(changed).toHaveBeenCalledTimes(1)
+    close()
+  })
+
   it('reads the files again no more after it is closed', () => {
     const watched = write('w/a.css', 'one')
     const changed = vi.fn()
@@ -207,6 +227,7 @@ describe('watchFiles', () => {
     const close = watchFiles([file('src/a.css')], changed)
 
     expect(watchedDirectories()).toEqual([file('real'), file('src')])
+    writeFileSync(file('real/a.css'), 'two, longer')
     fire(file('real'), 'a.css')
     settle()
 

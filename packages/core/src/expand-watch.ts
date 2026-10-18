@@ -36,18 +36,25 @@ function stampOf(file: string): string {
  */
 export function watchFiles(files: readonly string[], onChange: () => void): () => void {
   const wanted = new Set(files.map((file) => path.resolve(file)))
-  // What each file was at the last call back, so a poll calls back only for a change since then.
+  // What each file was at the last call back, so one edit calls back once, whether its file event
+  // or a read of the files reports it first.
   const stamps = new Map<string, string>()
-  const stampAll = (): void => {
-    for (const file of wanted) stamps.set(file, stampOf(file))
+  // Whether any file changed since the last call back; records what each file is now.
+  const isChangedSinceLastCall = (): boolean => {
+    let isChanged = false
+    for (const file of wanted) {
+      const stamp = stampOf(file)
+      if (stamp !== stamps.get(file)) isChanged = true
+      stamps.set(file, stamp)
+    }
+    return isChanged
   }
-  stampAll()
+  isChangedSinceLastCall()
   let timer: NodeJS.Timeout | undefined
   const schedule = (): void => {
     clearTimeout(timer)
     timer = setTimeout(() => {
-      stampAll()
-      onChange()
+      if (isChangedSinceLastCall()) onChange()
     }, SETTLE_MS)
   }
   const watchedNames = new Set(wanted)
