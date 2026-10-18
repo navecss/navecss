@@ -24,7 +24,7 @@ import type { ExtendMap } from './directive/resolve.ts'
 
 import { splitByteOrderMark } from './byte-order-mark.ts'
 import { expandText } from './directive/expand-text.ts'
-import { foldedText, warningTexts } from './directive/report-text.ts'
+import { foldedText, orderWarningTexts, warningTexts } from './directive/report-text.ts'
 import { snapshotExtendMap } from './snapshot-extend-atoms.ts'
 import { validateExtendAtomsHostFree } from './validate-extend-host-free.ts'
 
@@ -98,6 +98,8 @@ export function navePlugin(options: NaveLightningOptions = {}): NaveLightningAda
 
   const expandToText = (text: string, file: string): { css: string; map: string } => {
     const result = expandText(text, { extend, onUnknown, from: file })
+    // Before any throw below, whatever `onUnknown` says: an order warning is not a problem.
+    for (const line of orderWarningTexts(result.warnings, file)) console.warn(line)
     report(result.diagnostics, file, extend, onUnknown)
     return result
   }

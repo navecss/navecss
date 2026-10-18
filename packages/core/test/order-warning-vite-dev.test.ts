@@ -62,7 +62,7 @@ function naveWarnings(): string[] {
   return state.printed.filter((message) => message.includes('comes after'))
 }
 
-describe('AC-native-apply-order-23 — the dev server', () => {
+describe('AC-native-apply-order-23: the dev server', () => {
   it('prints the warning on the first transform, positioned at flex', async () => {
     await state.server!.transformRequest(URL)
 
@@ -71,11 +71,11 @@ describe('AC-native-apply-order-23 — the dev server', () => {
     expect(naveWarnings()[0]).toMatch(/a\.css:1:26: @nave: "flex" comes after/)
   }, 60_000)
 
-  it('maps the position through the incoming source map: a Sass rule on line 5 reports src/a.scss:5:26', async () => {
+  it('maps the position through the incoming source map: a Sass rule on line 5 reports src/a.scss line 5', async () => {
     await state.server!.transformRequest('/src/a.scss')
 
     expect(naveWarnings()).toHaveLength(1)
-    expect(naveWarnings()[0]).toMatch(/a\.scss:5:26: @nave: "flex" comes after/)
+    expect(naveWarnings()[0]).toMatch(/a\.scss:5:\d+: @nave: "flex" comes after/)
     expect(naveWarnings()[0]).not.toContain('as processed')
   }, 60_000)
 

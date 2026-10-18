@@ -121,7 +121,7 @@ export type NavePlugins = [NaveVitePlugin, NaveCollectPlugin]
  */
 function assemble(options: NaveViteOptions, extend: ExtendSource): Assembled {
   const context = createUsedContext(resolveUsedOptions(options), extend)
-  const stylesheets = createStylesheets(extend, options.onUnknown ?? 'error')
+  const stylesheets = createStylesheets(extend, options.onUnknown ?? 'error', context)
 
   const nave: NaveVitePlugin = {
     name: 'nave',

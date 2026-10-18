@@ -71,6 +71,10 @@ export interface RuleInput {
   readonly nodes: readonly ModelNode[]
   readonly isInsideKeyframes: boolean
   readonly extend?: ExtendMap | undefined
+  /**
+  Whether a marker that covers nothing is reported (the default). A host that cannot tell whether an earlier stage moved a rule's content turns it off.
+   */
+  readonly reportStaleMarkers?: boolean | undefined
 }
 
 /**

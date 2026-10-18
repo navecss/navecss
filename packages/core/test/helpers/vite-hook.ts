@@ -28,6 +28,10 @@ export interface HookInput {
   readonly id?: string
   readonly options?: NaveViteOptions
   /**
+   * `css.transformer` of the resolved config.
+   */
+  readonly transformer?: string
+  /**
    * The map Vite supplies, with `hasStylesheetMaps` telling the plugin it is a real one.
    */
   readonly incomingMap?: IncomingSourceMap
@@ -54,7 +58,7 @@ export async function runHook(input: HookInput): Promise<HookRun> {
   plugin.configResolved({
     root: process.cwd(),
     command: 'build',
-    css: {},
+    css: input.transformer === undefined ? {} : { transformer: input.transformer },
     build: { sourcemap: input.incomingMap !== undefined },
     logger: {
       warn() {

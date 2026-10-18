@@ -41,12 +41,12 @@ export function orderProject(project: OrderProject): ScratchApp {
   const imports = Object.keys(project.sheets).map(
     (name) => `import './${name.replace(/^src\//, '')}'`,
   )
-  const config = `import { navePlugin } from '@navecss/core/vite'
+  const config = String.raw`import { navePlugin } from '@navecss/core/vite'
 
 const probe = {
   name: 'probe',
   transform(_code, id) {
-    if (/\\.(?:css|scss)(?:\\?|$)/.test(id) && !id.includes('app.css')) console.log('probe transform ' + (this.environment?.name ?? 'client'))
+    if (/\.(?:css|scss)(?:\?|$)/.test(id) && !id.includes('app.css')) console.log('probe transform ' + (this.environment?.name ?? 'client'))
   },
 }
 

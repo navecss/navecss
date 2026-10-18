@@ -22,6 +22,10 @@ export interface ExpandTextOptions {
   readonly onUnknown?: 'warn' | 'error' | 'ignore'
   readonly from?: string | undefined
   readonly inputSourceMap?: SourceMap | undefined
+  /**
+  Whether a marker that covers nothing is reported in `warnings` (default `true`). A host that cannot tell whether an earlier stage moved a rule's content turns it off; the other reports about a marker stay.
+   */
+  readonly reportStaleMarkers?: boolean | undefined
 }
 
 export interface ExpandTextResult {

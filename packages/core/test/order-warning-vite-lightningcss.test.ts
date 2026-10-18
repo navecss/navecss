@@ -15,6 +15,7 @@ import {
   orderProject,
 } from './helpers/order-warning-vite.ts'
 import { runViteBuild } from './helpers/vite-cli.ts'
+import { runHook } from './helpers/vite-hook.ts'
 
 const C1 = '.c1 { @nave hideDesktopUp; display: grid }\n'
 const C2 = '.c2 { @nave hideDesktopUp flex; }\n'
@@ -24,7 +25,8 @@ const PROJECT = C1 + C2 + D3 + F3
 
 const apps: ScratchApp[] = []
 afterEach(() => {
-  for (const app of apps.splice(0)) app.dispose()
+  for (const app of apps) app.dispose()
+  apps.length = 0
 })
 
 /**
@@ -38,7 +40,7 @@ async function build(css: string, keys: string): Promise<string> {
   return run.output
 }
 
-describe('AC-native-apply-order-44 — Lightning CSS below the floor', () => {
+describe('AC-native-apply-order-44: Lightning CSS below the floor', () => {
   it('prints exactly two warnings at default targets: the atom pairs of c2 and d3', async () => {
     const output = await build(PROJECT, LIGHTNING_DEFAULT_TARGETS)
 
@@ -58,17 +60,17 @@ describe('AC-native-apply-order-44 — Lightning CSS below the floor', () => {
   }, 60_000)
 })
 
-describe('AC-native-apply-order-44 — the stale-marker report under Lightning CSS', () => {
+describe('AC-native-apply-order-44: the stale-marker report under Lightning CSS', () => {
   const STALE = '.s { @nave /* nave-allow-override: display */ flex; }\n'
-  const EMPTY = '.m { @nave /* nave-allow-override: */ flex; }\n'
+  const OTHERS =
+    '.m { @nave /* nave-allow-override: */ flex; }\n.n { @nave /* nave-allow-override: nope-prop */ flex; }\n.o { @nave /* nave-allow-override display */ flex; }\n'
 
   it.each([LIGHTNING_DEFAULT_TARGETS, FLOOR_KEYS])(
-    'a marker that covers nothing is not reported, and an empty marker still is',
+    'a build prints no report about a marker that covers nothing',
     async (keys) => {
-      const output = await build(STALE + EMPTY, keys)
+      const output = await build(STALE, keys)
 
       expect(output).not.toContain('but nothing after the directive overrides')
-      expect(output).toContain('names no property')
     },
     60_000,
   )
@@ -78,4 +80,19 @@ describe('AC-native-apply-order-44 — the stale-marker report under Lightning C
 
     expect(output).toContain('but nothing after the directive overrides display')
   }, 60_000)
+
+  it('the plugin turns the stale report off under lightningcss only; the other reports stay', async () => {
+    const stale = await runHook({ code: STALE, transformer: 'lightningcss' })
+    const kept = await runHook({ code: OTHERS, transformer: 'lightningcss' })
+    const control = await runHook({ code: STALE })
+
+    expect(stale.warnings).toEqual([])
+    expect(kept.warnings.map((warning) => warning.message)).toEqual([
+      expect.stringContaining('names no property'),
+      expect.stringContaining('not a CSS property'),
+      expect.stringContaining('is not a marker'),
+    ])
+    expect(control.warnings).toHaveLength(1)
+    expect(control.warnings[0]!.message).toContain('but nothing after the directive overrides')
+  })
 })

@@ -153,7 +153,7 @@ function warningsOf(state: PlanState): PlanWarning[] {
   const findings = checkOrder(state.segments, amp)
   const warnings = [
     ...findingWarnings(findings),
-    ...markerWarnings(state.directives, findings),
+    ...markerWarnings(state.directives, findings, state.input.reportStaleMarkers !== false),
     ...shapeWarnings(state),
   ]
   return warnings.toSorted(

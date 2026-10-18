@@ -4,7 +4,7 @@
  * problem, and under Next.js's Turbopack (which drops every PostCSS warning) is printed with
  * `console.warn` instead, framed as the Lightning CSS adapter frames a problem.
  */
-import postcss from 'postcss'
+import postcss, { type Result } from 'postcss'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { expandText } from '../src/directive/expand-text.ts'
@@ -28,8 +28,20 @@ function orderText(css: string): string {
 /**
  * Runs `css` through the PostCSS host the way a build does.
  */
-function run(css: string, options: Parameters<typeof navePlugin>[0] = {}) {
-  return postcss([navePlugin(options)]).process(css, { from: 'a.css' })
+async function run(css: string, options: Parameters<typeof navePlugin>[0] = {}): Promise<Result> {
+  return await postcss([navePlugin(options)]).process(css, { from: 'a.css' })
+}
+
+/**
+ * The message `run(css, options)` rejects with.
+ */
+async function failureOf(css: string, options: Parameters<typeof navePlugin>[0]): Promise<string> {
+  try {
+    await run(css, options)
+  } catch (error) {
+    return (error as Error).message
+  }
+  throw new Error('expected a rejection')
 }
 
 afterEach(() => {
@@ -37,7 +49,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('AC-native-apply-order-21 — the PostCSS host', () => {
+describe('AC-native-apply-order-21: the PostCSS host', () => {
   it.each(MODES)(
     'onUnknown %s: process() resolves, the warning rides result.warnings() once, the output is the marked output',
     async (onUnknown) => {
@@ -82,11 +94,13 @@ describe('AC-native-apply-order-21 — the PostCSS host', () => {
     vi.stubEnv('TURBOPACK', '1')
     vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    expect((await run(FIXTURE)).css).toBe(quiet.css)
+    const loud = await run(FIXTURE)
+
+    expect(loud.css).toBe(quiet.css)
   })
 })
 
-describe('AC-native-apply-order-21 — the text expander', () => {
+describe('AC-native-apply-order-21: the text expander', () => {
   it.each(MODES)(
     'onUnknown %s: returns, the warning is in warnings, diagnostics is empty',
     (onUnknown) => {
@@ -100,16 +114,13 @@ describe('AC-native-apply-order-21 — the text expander', () => {
   )
 })
 
-describe('AC-native-apply-order-22 — never folded with a problem', () => {
+describe('AC-native-apply-order-22: never folded with a problem', () => {
   it('the PostCSS host rejects under error, naming nope and none of the order warning', async () => {
-    const error = await run(WITH_PROBLEM, { onUnknown: 'error' }).then(
-      () => undefined,
-      (caught: unknown) => caught as Error,
-    )
+    const message = await failureOf(WITH_PROBLEM, { onUnknown: 'error' })
 
-    expect(error?.message).toContain('nope')
-    expect(error?.message).not.toContain('so under @media')
-    expect(error?.message).not.toContain('nave-allow-override')
+    expect(message).toContain('nope')
+    expect(message).not.toContain('so under @media')
+    expect(message).not.toContain('nave-allow-override')
   })
 
   it('the PostCSS host under warn prints the problem and the order warning as two reports', async () => {
@@ -140,7 +151,7 @@ describe('AC-native-apply-order-22 — never folded with a problem', () => {
   )
 })
 
-describe('AC-native-apply-order-24 — no switch, and the fixture prints under every onUnknown', () => {
+describe('AC-native-apply-order-24: no switch, and the fixture prints under every onUnknown', () => {
   it.each(MODES)(
     'the PostCSS host with extend, onUnknown %s, prints the warning',
     async (onUnknown) => {

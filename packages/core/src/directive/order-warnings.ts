@@ -98,20 +98,29 @@ function isUsed(name: string, findings: readonly Finding[]): boolean {
 }
 
 /**
- * The report for one marker name, if it is wrong.
+ * The report for one marker name, if it is wrong. A name that covers nothing is reported only when
+ * `isStaleReported`.
  */
-function nameReport(name: string, findings: readonly Finding[]): string | undefined {
+function nameReport(
+  name: string,
+  findings: readonly Finding[],
+  isStaleReported: boolean,
+): string | undefined {
   if (!isCssProperty(name)) {
     return `@nave: the marker on this directive names "${name}", which is not a CSS property, so it allows nothing. The marker takes property names, such as display, not atom names.`
   }
-  if (isUsed(name, findings)) return undefined
+  if (!isStaleReported || isUsed(name, findings)) return undefined
   return `@nave: the marker on this directive names ${name}, but nothing after the directive overrides ${name} in its atoms' blocks. Remove ${name} from the marker.`
 }
 
 /**
  * The reports for one directive's markers, in the order they are written.
  */
-function markerReports(directive: DirectiveFacts, findings: readonly Finding[]): PlanWarning[] {
+function markerReports(
+  directive: DirectiveFacts,
+  findings: readonly Finding[],
+  isStaleReported: boolean,
+): PlanWarning[] {
   const mine = findings.filter((finding) => finding.unit.directive.ref === directive.ref)
   const { markers, malformed } = readMarkers(directive.prelude)
   const reports: { readonly start: number; readonly text: string }[] = []
@@ -123,7 +132,7 @@ function markerReports(directive: DirectiveFacts, findings: readonly Finding[]):
       })
     }
     for (const name of marker.names) {
-      const text = nameReport(name, mine)
+      const text = nameReport(name, mine, isStaleReported)
       if (text) reports.push({ start: marker.start, text })
     }
   }
@@ -144,6 +153,7 @@ function markerReports(directive: DirectiveFacts, findings: readonly Finding[]):
 export function markerWarnings(
   directives: readonly DirectiveFacts[],
   findings: readonly Finding[],
+  isStaleReported: boolean,
 ): PlanWarning[] {
-  return directives.flatMap((directive) => markerReports(directive, findings))
+  return directives.flatMap((directive) => markerReports(directive, findings, isStaleReported))
 }

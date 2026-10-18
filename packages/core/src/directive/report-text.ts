@@ -5,7 +5,7 @@
  * that read the stylesheet as the author wrote it (the Lightning CSS adapter, `navecss-core
  * expand`); a host that maps positions through a source map (Vite) frames its own.
  */
-import type { ExpandedDiagnostic } from './expand-text-diagnostics.ts'
+import type { ExpandedDiagnostic, ExpandedWarning } from './expand-text-diagnostics.ts'
 import type { ExtendMap } from './resolve.ts'
 
 import { formatDiagnostic } from './diagnostics-format.ts'
@@ -16,6 +16,21 @@ import { foldLocated } from './fold.ts'
  */
 function inSourceOrder(diagnostics: readonly ExpandedDiagnostic[]): ExpandedDiagnostic[] {
   return diagnostics.toSorted((a, b) => a.offset - b.offset)
+}
+
+/**
+ * `text` behind the `file:line:column: ` frame every host prints a report with.
+ */
+export function framedText(file: string, line: number, column: number, text: string): string {
+  return `${file}:${line}:${column}: ${text}`
+}
+
+/**
+ * One line of text per order warning, each `file:line:column: <the core's text>`, in source order.
+ * Order warnings are not problems: no `onUnknown` governs them and they are never folded.
+ */
+export function orderWarningTexts(warnings: readonly ExpandedWarning[], file: string): string[] {
+  return warnings.map((warning) => framedText(file, warning.line, warning.column, warning.text))
 }
 
 /**

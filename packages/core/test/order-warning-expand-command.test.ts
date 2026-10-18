@@ -71,7 +71,7 @@ function bin(
   return { status: result.status, stderr: result.stderr, stdout: result.stdout }
 }
 
-describe('AC-native-apply-order-21 — navecss-core expand', () => {
+describe('AC-native-apply-order-21: navecss-core expand', () => {
   it('exits 0, writes every --out, and prints the warning once on standard error', () => {
     write('a.css', FIXTURE)
     write('m.css', MARKED)
@@ -113,7 +113,7 @@ describe('AC-native-apply-order-21 — navecss-core expand', () => {
   })
 })
 
-describe('AC-native-apply-order-22 — navecss-core expand with a problem', () => {
+describe('AC-native-apply-order-22: navecss-core expand with a problem', () => {
   it('exits 1 as it does without the warning, and writes nothing', () => {
     write('a.css', WITH_PROBLEM)
     write('p.css', '.d { @nave nope; }\n')
@@ -128,7 +128,7 @@ describe('AC-native-apply-order-22 — navecss-core expand with a problem', () =
   })
 })
 
-describe('AC-native-apply-order-21 — navecss-core expand --watch', () => {
+describe('AC-native-apply-order-21: navecss-core expand --watch', () => {
   it('prints the warning on each pass that reads the file, and the outputs are those of a run without it', async () => {
     const source = path.join(project.dir, 'a.css')
     const out = path.join(project.dir, 'o.css')
@@ -155,7 +155,7 @@ describe('AC-native-apply-order-21 — navecss-core expand --watch', () => {
   }, 15_000)
 })
 
-describe('AC-native-apply-order-24 — navecss-core check has nothing to check', () => {
+describe('AC-native-apply-order-24: navecss-core check has nothing to check', () => {
   it('prints nothing about order on the built output of the fixture, and exits 0', () => {
     write('a.css', FIXTURE)
     expect(bin('expand', '--source=a.css', '--out=o.css').status).toBe(0)

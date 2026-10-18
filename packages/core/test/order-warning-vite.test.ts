@@ -9,8 +9,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { ScratchApp } from './helpers/vite-app.ts'
 
-import { orderProject, occurrences, warningTextsOf } from './helpers/order-warning-vite.ts'
-import { runViteBuild } from './helpers/vite-cli.ts'
+import { occurrences, orderProject, warningTextsOf } from './helpers/order-warning-vite.ts'
+import { type CliResult, runViteBuild } from './helpers/vite-cli.ts'
 
 const FIXTURE = '.c { @nave hideDesktopUp flex; }\n'
 const PIN = '.p { @nave srOnlyFocusable; &:focus-visible { position: fixed } }\n'
@@ -18,19 +18,20 @@ const SCSS = `$gap: 1px;\n// the rule below is on line 5\n\n\n${FIXTURE}`
 
 const apps: ScratchApp[] = []
 afterEach(() => {
-  for (const app of apps.splice(0)) app.dispose()
+  for (const app of apps) app.dispose()
+  apps.length = 0
 })
 
 /**
  * Builds a project holding `sheets` with `vite build`.
  */
-function build(sheets: Record<string, string>, onUnknown = 'warn') {
+function build(sheets: Record<string, string>, onUnknown = 'warn'): Promise<CliResult> {
   const app = orderProject({ options: `{ onUnknown: '${onUnknown}' }`, sheets })
   apps.push(app)
   return runViteBuild(app)
 }
 
-describe('AC-native-apply-order-21 — the Vite plugin, build', () => {
+describe('AC-native-apply-order-21: the Vite plugin, build', () => {
   it.each(['warn', 'error', 'ignore'])(
     'onUnknown %s: vite build exits 0 and the logger prints the warning once',
     async (onUnknown) => {
@@ -44,7 +45,7 @@ describe('AC-native-apply-order-21 — the Vite plugin, build', () => {
   )
 })
 
-describe('AC-native-apply-order-23 — Vite build: one print per warning per command', () => {
+describe('AC-native-apply-order-23: Vite build: one print per warning per command', () => {
   it('both environments transform the stylesheet, and the warning is printed once, at its file', async () => {
     const run = await build({ 'src/a.scss': SCSS })
 

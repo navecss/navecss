@@ -16,6 +16,7 @@ import type { LocatedProblem } from './vite-used-report.ts'
 import type { Writers } from './vite-writers.ts'
 
 import { freshReloads } from './vite-dev-reloads.ts'
+import { freshWarningMemory, type WarningMemory } from './vite-order-warnings.ts'
 import { freshWriters } from './vite-writers.ts'
 
 /**
@@ -161,6 +162,10 @@ export interface RootState extends ReloadState, Writers {
    */
   warmedUp: boolean
   readonly requested: Set<string>
+  /**
+   * The order warnings already printed, so one stylesheet's are not printed again by each environment.
+   */
+  readonly orderWarnings: WarningMemory
 }
 
 /**
@@ -227,6 +232,7 @@ function freshState(): RootState {
     markupJudged: false,
     warmedUp: false,
     requested: new Set(),
+    orderWarnings: freshWarningMemory(),
   }
 }
 

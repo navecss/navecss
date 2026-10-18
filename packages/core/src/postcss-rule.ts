@@ -17,6 +17,7 @@ import {
 } from './postcss-at-rule.ts'
 import { insertEmissions, wrapRun } from './postcss-emit.ts'
 import { isInsideKeyframes } from './postcss-node-utils.ts'
+import { reportWarning } from './postcss-warn.ts'
 
 type RuleContext = Omit<DirectiveContext, 'atRule'>
 
@@ -81,7 +82,7 @@ function hasDirective(rule: Rule): boolean {
 
 /**
  * Reports the order warnings on the nodes they sit on, before any node is replaced. They never
- * fail a build and are not governed by `onUnknown`.
+ * fail a build and are not governed by `onUnknown`; under Turbopack they are printed, not attached.
  */
 function reportWarnings(
   warnings: readonly PlanWarning[],
@@ -91,12 +92,11 @@ function reportWarnings(
   for (const { anchor, text } of warnings) {
     const node = table[anchor.ref]!
     if (anchor.offset === undefined) {
-      node.warn(ctx.result, text)
+      reportWarning(node, ctx.result, text)
       continue
     }
-    const atRule = node as PostCSSAtRule
-    const { preludeStartIndex } = matchNaveAtRule(atRule)
-    atRule.warn(ctx.result, text, { index: preludeStartIndex + anchor.offset })
+    const { preludeStartIndex } = matchNaveAtRule(node as PostCSSAtRule)
+    reportWarning(node, ctx.result, text, preludeStartIndex + anchor.offset)
   }
 }
 

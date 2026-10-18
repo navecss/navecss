@@ -7,7 +7,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest'
 
 import { expandText } from '../src/directive/expand-text.ts'
 import { navePlugin } from '../src/lightningcss.ts'
@@ -50,11 +50,11 @@ function framed(file: string): string {
 /**
  * Spies on `console.warn` without printing.
  */
-function spyOnWarn(): ReturnType<typeof vi.spyOn> {
+function spyOnWarn(): MockInstance<typeof console.warn> {
   return vi.spyOn(console, 'warn').mockImplementation(() => {})
 }
 
-describe('AC-native-apply-order-21 — the Lightning CSS adapter', () => {
+describe('AC-native-apply-order-21: the Lightning CSS adapter', () => {
   it.each(MODES)(
     'expand(), onUnknown %s: returns, and prints the warning once framed',
     (onUnknown) => {
@@ -121,7 +121,7 @@ describe('AC-native-apply-order-21 — the Lightning CSS adapter', () => {
   })
 })
 
-describe('AC-native-apply-order-22 — the Lightning CSS adapter never folds it with a problem', () => {
+describe('AC-native-apply-order-22: the Lightning CSS adapter never folds it with a problem', () => {
   it('under error, console.warn gets the order warning before the throw, whose text holds none of it', () => {
     const order: string[] = []
     vi.spyOn(console, 'warn').mockImplementation((text: unknown) => {
@@ -173,7 +173,7 @@ describe('AC-native-apply-order-22 — the Lightning CSS adapter never folds it 
   })
 })
 
-describe('AC-native-apply-order-24 — the fixture prints under every onUnknown, with extend', () => {
+describe('AC-native-apply-order-24: the fixture prints under every onUnknown, with extend', () => {
   it.each(MODES)('onUnknown %s with an extend atom prints the warning', (onUnknown) => {
     const warn = spyOnWarn()
 
