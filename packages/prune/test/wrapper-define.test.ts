@@ -1,4 +1,6 @@
 import { atomClassMap } from '@navecss/core/atoms'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import type { ConfigLike } from './helpers/wrapper-config.ts'
@@ -82,5 +84,16 @@ describe("AC-nextjs-used-atoms-22: withNave()'s define carries the keep map as J
     )
     expect(decoded(defineOf(fromFunction))).toEqual({ interactive: 'nave-interactive' })
     expect(decoded(defineOf(fromAsync))).toEqual({ interactive: 'nave-interactive' })
+  })
+})
+
+describe("withNave()'s define names the constant core's built cx reads", () => {
+  it("the define key withNave() adds is the one identifier of that shape in core's dist/cx.js", () => {
+    const coreCx = readFileSync(path.resolve(import.meta.dirname, '../../core/dist/cx.js'), 'utf8')
+    const read = new Set(coreCx.match(/\b__NAVE_\w+__\b/gu))
+    const added = Object.keys(asConfig(withNave({})).compiler?.define ?? {})
+    // Control: core's built cx reads exactly one such constant.
+    expect(read.size).toBe(1)
+    expect(added).toEqual([...read])
   })
 })
