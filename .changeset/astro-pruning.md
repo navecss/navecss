@@ -4,7 +4,7 @@
 
 Astro: the Vite plugin now ships only the atoms it reads on Astro, where it shipped every atom
 before, and it checks every stylesheet Astro ships. Add `navePlugin()` under `vite.plugins` in
-`astro.config`; the README's new Astro section has the setup and what is measured (Astro 7.3.8,
+`astro.config`; the README's new Astro section has the setup and what is measured (Astro 7.4.0,
 Vite 8.3.4).
 
 - Astro writes its CSS in its server build, before the browser's build runs. The plugin now
