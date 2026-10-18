@@ -49,7 +49,7 @@ function viteDeclaration(): string {
     texts.set(name, text)
     pending.push(...text.matchAll(/from '\.\/([^']+)\.js'/gu).map((match) => match[1]!))
   }
-  return [...texts.values()].join('\n')
+  return texts.values().toArray().join('\n')
 }
 
 /**
