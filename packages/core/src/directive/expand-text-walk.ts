@@ -12,6 +12,7 @@ import { childContext, type WalkContext } from './expand-text-context.ts'
 import { createPositionFinder } from './expand-text-diagnostics.ts'
 import { closeInfoFor } from './expand-text-eof-close.ts'
 import { renderBlock, renderInline } from './expand-text-render.ts'
+import { unterminatedEnd } from './expand-text-terminator.ts'
 import { plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
 
@@ -99,6 +100,8 @@ function markNestedGroup(diagnostics: Diagnostic[]): void {
 
 interface Frame {
   parts: AppendPart[]
+  // The block's last item so far: what the appended text follows, and so whether it needs a `;`.
+  lastItem: Item | undefined
 }
 
 interface DirectiveSite {
@@ -164,6 +167,16 @@ function flushFrame(w: Walker, frameStart: number, blockEndIndex: number, frame:
   // A real closer (not the EOF fallback) needs no bound update: this frame
   // closed cleanly, so it never entered the still-open chain at all.
   if (w.tokens[blockEndIndex] === undefined) w.eofScanLimit = frameStart
+  // The end-of-input closers end an open declaration themselves; any other close leaves the
+  // last item as it was written, and a declaration with no `;` would swallow the text after it.
+  const semicolonAt = close.prefix === '' ? unterminatedEnd(w.tokens, frame.lastItem) : undefined
+  if (semicolonAt !== undefined) {
+    w.edits.push({
+      start: semicolonAt,
+      end: semicolonAt,
+      parts: [{ text: ';', source: w.positionAt(semicolonAt) }],
+    })
+  }
   const parts =
     close.prefix === ''
       ? frame.parts
@@ -199,7 +212,7 @@ function toWalkFrame(w: Walker, bounds: BlockBounds): WalkFrame {
     limit: bounds.limit,
     start: bounds.start,
     context: bounds.context,
-    frame: { parts: [] },
+    frame: { parts: [], lastItem: undefined },
   }
 }
 
@@ -238,6 +251,7 @@ export function walkBlock(w: Walker, bounds: BlockBounds): void {
 
     const item = readItem(w.tokens, top.i, top.limit, w.closerFor)
     top.i = skipInert(w.tokens, item.end, top.limit)
+    top.frame.lastItem = item
 
     if (item.kind === 'at-rule' && isNaveAtKeyword(w.tokens[item.start]!)) {
       processDirective(w, {
