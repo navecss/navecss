@@ -3,8 +3,11 @@ name: registry-reach
 # Checks that the registry the latest release of @navecss/base-ui ships is the registry readers
 # receive: every file jsDelivr serves for that version is the tarball's file byte for byte, and one
 # component installs from that address with the newest shadcn CLI (the one the package README
-# tells readers to type) into a project with no Tailwind and no components.json. Quiet until a
-# release carries a registry. Run it by hand with a version after a release that serves one.
+# tells readers to type) into a project with no Tailwind and no components.json. It also fails
+# when the latest version of a package the components depend on is outside the range the registry
+# states for it. Quiet until the first release that writes a registry (0.3.0); from then on a
+# release without one fails. After a release that serves the registry, run it by hand with that
+# version, as "Check it is live" in docs/02-contribute/releasing.md says.
 
 on:
   schedule:
@@ -29,7 +32,7 @@ jobs:
           persist-credentials: false
 
       - name: Install mise-pinned toolchain (node + pnpm)
-        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
         with:
           version: 2026.8.3
 

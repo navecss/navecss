@@ -72,6 +72,14 @@ npm view @navecss/core version
 
 Both should print the new version. On npmjs.com, each package page shows a provenance badge linking to the workflow run that built it.
 
+For each release of `@navecss/base-ui` that ships the shadcn registry (`dist/registry/` in its tarball), also check that jsDelivr serves that registry as published and that a component installs from it:
+
+```sh
+node scripts/check-registry-reach.mjs --version <version>
+```
+
+It fetches every file of the released tarball's `dist/registry/` from jsDelivr at that exact version and compares each one byte for byte, then adds one component from that address with shadcn's CLI into a project with no Tailwind and no `components.json`, and compares the files it writes with the item. It needs the network. The weekly **registry-reach** workflow runs the same check against the latest release with the newest shadcn CLI, and also fails when the latest version of a package the components depend on falls outside the range the registry states.
+
 ## 5. Tag the release and create the GitHub Releases
 
 A staged version is not a release until it is approved, so the workflow creates no tags and no GitHub Releases. Once both versions are live, create one GitHub Release per package, which also creates its tag. Use the commit the workflow ran on and that version's section of the package's `CHANGELOG.md` as the notes. The target must be the full 40-character sha: the workflow run's page shows only the short one, and `gh release create` refuses a short sha when the tag does not exist yet. Get the full sha from the run (its id is the number after `/actions/runs/` in the run page's address, and `gh run list --workflow release.yml` lists it too):
