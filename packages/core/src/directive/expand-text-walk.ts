@@ -106,11 +106,15 @@ function flushFrame(w: Walker, frameStart: number, blockEndIndex: number, frame:
   // A real closer (not the EOF fallback) needs no bound update: this frame
   // closed cleanly, so it never entered the still-open chain at all.
   if (w.tokens[blockEndIndex] === undefined) w.eofScanLimit = frameStart
-  const parts =
-    close.prefix === ''
-      ? frame.parts
-      : [{ text: close.prefix, source: w.positionAt(close.position) }, ...frame.parts]
-  w.edits.push({ start: close.position, end: close.position, parts })
+  if (close.prefix !== '') {
+    const source = w.positionAt(close.prefixPosition)
+    w.edits.push({
+      start: close.prefixPosition,
+      end: close.prefixPosition,
+      parts: [{ text: close.prefix, source }],
+    })
+  }
+  w.edits.push({ start: close.position, end: close.position, parts: frame.parts })
 }
 
 export interface BlockBounds {

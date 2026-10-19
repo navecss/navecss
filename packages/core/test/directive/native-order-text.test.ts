@@ -191,21 +191,21 @@ describe.each(LEG)(
   'AC-native-apply-order-05 — what the input left open at its end, after a comment (%s)',
   (_name, run) => {
     it.each<readonly [string, string]>([
-      ['.x { @nave focusRing; width: calc(1px /* c */', 'width : calc( 1px [/* c */] ) ; }'],
+      ['.x { @nave focusRing; width: calc(1px /* c */', 'width : calc( 1px ) ; [/* c */] }'],
       ['.x { @nave focusRing; width: calc(1px /* c', 'width : calc( 1px ) ; } [/* c]'],
-      ['.x { @nave focusRing; margin: [a /* c */', 'margin : [ a [/* c */] ] ; }'],
+      ['.x { @nave focusRing; margin: [a /* c */', 'margin : [ a ] ; [/* c */] }'],
       [
         '.x { @nave focusRing; width: min(1px, max(2px /* c */',
-        'width : min( 1px , max( 2px [/* c */] ) ) ; }',
+        'width : min( 1px , max( 2px ) ) ; [/* c */] }',
       ],
       [
         '.x { @nave hideDesktopUp; &:hover { color: red } width: calc(1px /* c */',
-        'width : calc( 1px [/* c */] ) ; }',
+        'width : calc( 1px ) ; [/* c */] }',
       ],
-      ['.a { .x { @nave focusRing; width: calc(1px /* c */', 'width : calc( 1px [/* c */] ) ; }'],
+      ['.a { .x { @nave focusRing; width: calc(1px /* c */', 'width : calc( 1px ) ; [/* c */] }'],
       [
         '.x { @nave focusRing; width: calc(1px /* c */ /* d */',
-        'width : calc( 1px [/* c */] [/* d */] ) ; }',
+        'width : calc( 1px ) ; [/* c */] [/* d */] }',
       ],
       ['.x { @nave focusRing; width: calc(1px', 'width : calc( 1px ) ; }'],
       ['.x { @nave focusRing; content: "abc\\\\', String.raw`content : str(abc\) ; }`],

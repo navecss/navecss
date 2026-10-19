@@ -8,6 +8,7 @@ import type { Walker } from './expand-text-walk.ts'
 import type { Token } from './tokenizer.ts'
 
 import { OPENERS } from './bracket-match.ts'
+import { endOfToken } from './expand-text-terminator.ts'
 
 /**
  * Whether `raw`'s own last character is `char`, genuinely — not an escaped
@@ -31,33 +32,18 @@ function trailingBackslashCount(raw: string): number {
 }
 
 /**
- * The one character EOF closed early on `token`, had the input kept
- * going: a string's own opening quote, or a url's closing paren.
- * `undefined` when `token` is not one of these, or already closed
- * properly. Never a comment: a comment at the end of the frame is
- * stepped over (below) instead, so what it follows is closed before it or
- * after it, whichever keeps it a comment.
+ * What follows a lone trailing backslash. At the end of input a backslash
+ * is a valid escape that decodes to U+FFFD, so `fffd` after it spells that
+ * same escape out (`\fffd`, which decodes to that same code point) and frees
+ * the `;`, `)` or `}` written next from being swallowed as the escaped
+ * character.
  */
-function lexicalEofCloser(token: Token): string | undefined {
-  if (token.type === 'string-token') {
-    const quote = token.raw[0]
-    if (quote === undefined || hasUnescapedTrailingChar(token.raw, quote)) return undefined
-    return quote
-  }
-  if (token.type === 'url-token' || token.type === 'bad-url-token') {
-    if (token.raw.endsWith(')')) return undefined
-    // An unpaired trailing backslash would otherwise escape the `)` meant to close the url,
-    // rather than end it, so it is paired first.
-    return trailingBackslashCount(token.raw) % 2 === 1 ? String.raw`\)` : ')'
-  }
-  return undefined
-}
+const ESCAPE_CLOSER = 'fffd'
 
 /**
- * Whether `token` is a string left open by a lone backslash at the very end of input. CSS Syntax 3
- * reads that backslash as "consumed, contributes nothing", so the string's value ends before it;
- * a closing quote written after it would be escaped by it. The closers go before the backslash
- * instead, and the backslash stays the last byte of the output.
+ * Whether `token` is a string left open by a lone backslash at the very end of input. A closing
+ * quote written after that backslash would be escaped by it, and a backslash added to pair it
+ * would change the string's value, so the closers go before it and it stays the last byte.
  */
 function isStringEndingInLoneBackslash(token: Token): boolean {
   return (
@@ -65,6 +51,34 @@ function isStringEndingInLoneBackslash(token: Token): boolean {
     !hasUnescapedTrailingChar(token.raw, token.raw[0] ?? '') &&
     trailingBackslashCount(token.raw) % 2 === 1
   )
+}
+
+/**
+ * The one piece of text EOF closed early on `token`, had the input kept
+ * going: a string's own opening quote, a url's closing paren, or the
+ * `fffd` that completes a trailing backslash. `undefined` when `token` is
+ * none of these, or already closed properly. Never a comment: that case is
+ * handled by placing the appended block BEFORE it instead (below), since a
+ * comment's own two closing bytes can span as few as two bytes past its own
+ * opener and that overlap can misread as already present when checked as a
+ * bare substring rather than by the scanner that actually walked it.
+ */
+function lexicalEofCloser(token: Token): string | undefined {
+  if (token.type === 'string-token') {
+    const quote = token.raw[0]
+    if (quote === undefined || hasUnescapedTrailingChar(token.raw, quote)) return undefined
+    // A lone trailing backslash is "consumed, contributes nothing" at EOF, so the string's value
+    // ends before it; the closers are written before it (`isStringEndingInLoneBackslash`).
+    return quote
+  }
+  if (token.type === 'url-token' || token.type === 'bad-url-token') {
+    if (token.raw.endsWith(')')) return undefined
+    // The same reasoning as a string's dangling escape above: an unpaired
+    // trailing backslash would otherwise escape the `)` meant to close the
+    // url, rather than end it, so it is paired first.
+    return trailingBackslashCount(token.raw) % 2 === 1 ? String.raw`\)` : ')'
+  }
+  return trailingBackslashCount(token.raw) % 2 === 1 ? ESCAPE_CLOSER : undefined
 }
 
 /**
@@ -82,11 +96,13 @@ interface FrameTailScan {
   // so the highest token index found is always the most recently opened,
   // and the one to close first.
   readonly unmatchedOpeners: readonly number[]
+  readonly hasDanglingText: boolean
   readonly hasOpenColon: boolean
 }
 
 /**
- * `[start, limit)` in one pass: every opener still unmatched at `limit`, and whether
+ * `[start, limit)` in one pass: every opener still unmatched at `limit`;
+ * whether it holds any token besides whitespace or a comment; and whether
  * it holds a property name's `:` with nothing terminating it yet, read at
  * its own top level — a matched bracket's own content is skipped whole
  * (jumped to its closer), since nothing inside it, however it punctuates
@@ -96,82 +112,97 @@ interface FrameTailScan {
  * still-open frame at EOF and a stylesheet can nest arbitrarily many.
  */
 function scanFrameTail(w: Walker, start: number, limit: number): FrameTailScan {
-  const unmatchedOpeners: number[] = []
-  let hasOpenColon = false
+  const scan = { unmatchedOpeners: [] as number[], hasDanglingText: false, hasOpenColon: false }
   let i = start
-  while (i < limit) {
-    const token = w.tokens[i]!
-    const type = token.type
-    if (type === 'semicolon-token') {
-      hasOpenColon = false
-    } else if (type === 'colon-token') {
-      hasOpenColon = true
-    } else if (OPENERS.has(type)) {
-      const closeIndex = w.closerFor[i]!
-      if (closeIndex === -1 || closeIndex >= limit) {
-        unmatchedOpeners.push(i)
-      } else {
-        i = closeIndex
-      }
+  while (i < limit) i = scanToken(w, i, limit, scan) + 1
+  return { ...scan, unmatchedOpeners: scan.unmatchedOpeners.toReversed() }
+}
+
+interface TailState {
+  readonly unmatchedOpeners: number[]
+  hasDanglingText: boolean
+  hasOpenColon: boolean
+}
+
+/**
+ * Reads the token at `i` into `scan`, a matched bracket whole, and answers the index of the last
+ * token it read.
+ */
+function scanToken(w: Walker, i: number, limit: number, scan: TailState): number {
+  const type = w.tokens[i]!.type
+  if (type !== 'whitespace-token' && type !== 'comment') scan.hasDanglingText = true
+  if (type === 'semicolon-token') {
+    // A `;` ends the item before it, so nothing before it is a prelude waiting for a block.
+    scan.hasOpenColon = false
+    scan.hasDanglingText = false
+  } else if (type === 'colon-token') {
+    scan.hasOpenColon = true
+  } else if (OPENERS.has(type)) {
+    const closeIndex = w.closerFor[i]!
+    if (closeIndex === -1 || closeIndex >= limit) {
+      scan.unmatchedOpeners.push(i)
+      return i
     }
-    i++
+    // A block that closes ends the rule whose prelude it follows.
+    if (type === '{-token') scan.hasDanglingText = false
+    return closeIndex
   }
-  return { unmatchedOpeners: unmatchedOpeners.toReversed(), hasOpenColon }
+  return i
 }
 
 export interface EofClose {
   readonly position: number
   readonly prefix: string
+  // Where `prefix` goes: `position` itself, except ahead of a trailing comment.
+  readonly prefixPosition: number
 }
 
 /**
  * Every closer `[start, limit)` needs, in writing order: whatever `last`
  * (the token right before `limit`) needed lexically, then one per still
- * unmatched bracket, then `;` for a declaration still open at this level.
- * What follows (the `}` closing a wrapper the expansion opened) then reads as
- * its own token, never as more of the construct the input left open.
+ * unmatched bracket, then `;` for a declaration still open at this level —
+ * or, when none of those apply yet real tokens remain, one `{}` for a bare
+ * selector/at-rule prelude that never reached its own `{`. Per CSS Syntax 3
+ * that prelude is only dropped because nothing follows it: appending the
+ * block right after it un-drops it, and lets the block's own tokens read as
+ * more of the same prelude instead of its own sibling, unless given its own
+ * (empty, harmless) block first.
  */
 function eofClosers(w: Walker, start: number, limit: number, last: Token | undefined): string {
   const closers: string[] = []
-  if (last) {
-    const lexical = lexicalEofCloser(last)
-    if (lexical) closers.push(lexical)
-  }
+  const lexical = last ? lexicalEofCloser(last) : undefined
+  if (lexical) closers.push(lexical)
   const scan = scanFrameTail(w, start, limit)
   for (const openIndex of scan.unmatchedOpeners) {
     closers.push(bracketEofCloser(w.tokens[openIndex]!.type))
   }
 
-  if (scan.hasOpenColon) closers.push(';')
-  return closers.join('')
-}
-
-/**
- * The index of the first token of the run of whitespace and comments that ends `[start, limit)`:
- * `limit` itself when the frame does not end in one.
- */
-function trailingInertStart(w: Walker, start: number, limit: number): number {
-  let first = limit
-  while (first > start) {
-    const type = w.tokens[first - 1]!.type
-    if (type !== 'whitespace-token' && type !== 'comment') break
-    first--
+  if (scan.hasOpenColon) {
+    closers.push(';')
+  } else if (closers.length === (lexical === ESCAPE_CLOSER ? 1 : 0) && scan.hasDanglingText) {
+    // Spelling out a trailing escape ends an identifier, not the prelude it is part of.
+    closers.push('{}')
   }
-  return first
+  return closers.join('')
 }
 
 /**
  * Where a block's own close sits, and what (if anything) EOF closed for it
  * implicitly: the `}` token's start with no prefix, the normal case; or,
- * when it never closes, the end of input, with whatever the input left open written first
- * (`eofClosers`) so the appended block that follows tokenizes as a sibling rather than more of
- * that construct's own content.
- *
- * Comments at the end are not part of what is open. What is open is closed as if they were not
- * there, and they keep their place as comments: a closed comment stays before the closers (which
- * are written after it, at the end of input), and an unclosed comment, which consumes every byte
- * to the end, stays last, the closers written at its own start. A string ending in a lone
- * backslash has its closers written before that backslash (`isStringEndingInLoneBackslash`).
+ * when it never closes, the end of input — except when the very
+ * last token in `[frameStart, scanLimit)` is an unclosed comment, which
+ * (having nowhere to end) consumes every byte to that limit: placed at the
+ * comment's own start instead, so the appended block lands before it, as
+ * real syntax; an outer frame, whose own scan stops short of that comment, writes at the same
+ * place. What the input left open ahead of that comment (a nested
+ * rule, a function, the last declaration) is still closed, by closers
+ * written right after the last real token, ahead of the comment too. Any
+ * OTHER unterminated construct reaching that limit (a string, a url, an
+ * unclosed bracket, a bare declaration, or a bare selector/at-rule prelude
+ * with no block of its own) still ends exactly at EOF, but whatever it needed to read as valid
+ * syntax is written first (`eofClosers`), so the appended block that
+ * follows tokenizes as a sibling rather than more of that construct's own
+ * content.
  *
  * `scanLimit` is `blockEndIndex` bounded to `w.eofScanLimit`: the frame
  * this call is for writes only the closers between its own opener and
@@ -189,18 +220,71 @@ export function closeInfoFor(
   scanLimit: number,
 ): EofClose {
   const closer = w.tokens[blockEndIndex]
-  if (closer) return { position: closer.startIndex, prefix: '' }
+  if (closer) return { position: closer.startIndex, prefix: '', prefixPosition: closer.startIndex }
 
-  const lastIndex = scanLimit > frameStart ? scanLimit - 1 : -1
-  const lastToken = w.tokens[lastIndex]
-  const open = trailingInertStart(w, frameStart, scanLimit)
-  const prefix = eofClosers(w, frameStart, open, open > frameStart ? w.tokens[open - 1] : undefined)
-  if (lastToken?.type === 'comment') {
-    const isClosed = lastToken.raw.length >= 4 && lastToken.raw.endsWith('*/')
-    return { position: isClosed ? w.css.length : lastToken.startIndex, prefix }
+  const last = scanLimit > frameStart ? w.tokens[scanLimit - 1] : undefined
+  const trailing = unclosedTrailingComment(w)
+  if (trailing !== undefined && last !== trailing) {
+    // An outer frame whose scan stops short of the comment still writes ahead of it.
+    const prefix = eofClosers(w, frameStart, scanLimit, last)
+    return { position: trailing.startIndex, prefix, prefixPosition: trailing.startIndex }
   }
-  if (lastToken !== undefined && isStringEndingInLoneBackslash(lastToken)) {
-    return { position: lastToken.endIndex - 1, prefix }
+  if (last?.type === 'comment') {
+    const position = isClosedComment(last) ? w.css.length : last.startIndex
+    return { position, ...closersBeforeComment(w, frameStart, scanLimit, position) }
   }
-  return { position: w.css.length, prefix }
+
+  const prefix = eofClosers(w, frameStart, scanLimit, last)
+  if (last !== undefined && isStringEndingInLoneBackslash(last)) {
+    const position = last.endIndex - 1
+    return { position, prefix, prefixPosition: position }
+  }
+  return { position: w.css.length, prefix, prefixPosition: w.css.length }
+}
+
+/**
+ * Whether the comment `token` is closed. It takes at least four bytes to end in a closer of its
+ * own: the closing bytes of a bare opener-and-slash comment overlap the opener.
+ */
+function isClosedComment(token: Token): boolean {
+  return token.raw.length >= 4 && token.raw.endsWith('*/')
+}
+
+/**
+ * The input's very last token when it is a comment that never closes: it runs to the end of the
+ * input, so anything written after it would be inside it.
+ */
+function unclosedTrailingComment(w: Walker): Token | undefined {
+  const token = w.tokens.at(-1)
+  return token?.type === 'comment' && !isClosedComment(token) ? token : undefined
+}
+
+/**
+ * Whitespace or a comment: neither can end a declaration, or hold one open.
+ */
+function isInert(token: Token): boolean {
+  return token.type === 'whitespace-token' || token.type === 'comment'
+}
+
+/**
+ * The closers a frame that ends in a comment needs, and where they go: right
+ * after the last token that is neither whitespace nor a comment, so they land
+ * ahead of the comment and not after it. After a lone backslash they go after the line break
+ * that follows it, since written right after the backslash they would be read as the escaped
+ * character. No lexical closer is needed, since a trailing comment token proves no string or
+ * url is still open. Nothing is written when no such token exists or the frame needs no closers.
+ */
+function closersBeforeComment(
+  w: Walker,
+  frameStart: number,
+  scanLimit: number,
+  fallback: number,
+): { prefix: string; prefixPosition: number } {
+  let i = scanLimit - 1
+  while (i >= frameStart && isInert(w.tokens[i]!)) i--
+  if (i < frameStart) return { prefix: '', prefixPosition: fallback }
+  return {
+    prefix: eofClosers(w, frameStart, scanLimit, undefined),
+    prefixPosition: endOfToken(w.tokens, i, scanLimit),
+  }
 }
