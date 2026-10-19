@@ -17,6 +17,7 @@ import { type AnchoredBlock, type Declaration, plan, type PlanResult } from './d
 import { tokenize } from './directive/tokenizer.ts'
 import { isFollowingNestedNode } from './postcss-nested-builders.ts'
 import { hasWorkaroundSentence, isInsideKeyframes, stampSource } from './postcss-node-utils.ts'
+import { warnDirective } from './postcss-warn.ts'
 
 export interface DirectiveContext {
   atRule: PostCSSAtRule
@@ -126,7 +127,7 @@ function reportDiagnostic(
   )
   const index = atRuleErrorIndex(preludeStartIndex, diagnostic)
   if (ctx.onUnknown === 'warn') {
-    ctx.atRule.warn(ctx.result, text, index === undefined ? {} : { index })
+    warnDirective(ctx.atRule, ctx.result, text, index)
     return
   }
   if (ctx.onUnknown === 'ignore') return
