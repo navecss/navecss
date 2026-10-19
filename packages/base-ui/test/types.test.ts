@@ -52,7 +52,8 @@ const EXPECTED_ERRORS: Readonly<Record<BaseUiVersion, readonly string[]>> = {
     'Menu.Root.HighlightEventDetails TS2694',
     'Menu.Root.HighlightEventReason TS2694',
     // The Menu's filtering parts, which Base UI 1.9.0 added as a preview, are left out of the package
-    // (`support/left-out.ts`), so their own types are not reached through it either.
+    // (`support/left-out.ts`), so their dotted type names are not reached through it. Their flat type
+    // names (`MenuInputProps`, `MenuFilter`) still come through.
     'Menu.Clear.Props TS2694',
     'Menu.Clear.State TS2694',
     'Menu.Empty.Props TS2694',
@@ -213,6 +214,32 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
         )
         expect(result.output).toBe('')
         expect(result.code).toBe(0)
+      },
+    )
+
+    it.runIf(version === 'current')(
+      'the data attribute and CSS variable names are types only: a use as a value is a compile error',
+      { timeout: MINUTES },
+      async () => {
+        const result = await compile(
+          '02-attributes-as-value',
+          {
+            'fixture.ts': [
+              "import { DialogPopupDataAttributes } from '@navecss/base-ui/dialog'",
+              "import { TabsIndicatorCssVariables } from '@navecss/base-ui'",
+              'export const open = DialogPopupDataAttributes.open',
+              'export const sizes = TabsIndicatorCssVariables',
+            ].join('\n'),
+          },
+          'current',
+        )
+        expect(result.output).toMatch(
+          /fixture\.ts\(3,\d+\): error TS1362: 'DialogPopupDataAttributes' cannot be used as a value/,
+        )
+        expect(result.output).toMatch(
+          /fixture\.ts\(4,\d+\): error TS1362: 'TabsIndicatorCssVariables' cannot be used as a value/,
+        )
+        expect(result.code).not.toBe(0)
       },
     )
   })

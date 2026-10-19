@@ -146,7 +146,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Accordion.Trigger',
     name: 'Accordion.Trigger (Item disabled)',
-    attrs: disclosureTriggerDisabled(),
+    attrs: { ...disclosureTriggerDisabled(), tabindex: '0' },
     props: (d, s) => ({
       'Accordion.Item': { disabled: d },
       'Accordion.Root': { onValueChange: s },
@@ -157,7 +157,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Accordion.Trigger',
     name: 'Accordion.Trigger (Root disabled)',
-    attrs: disclosureTriggerDisabled(),
+    attrs: { ...disclosureTriggerDisabled(), tabindex: '0' },
     props: (d, s) => ({ 'Accordion.Root': { disabled: d, onValueChange: s } }),
     state: attribute('aria-expanded'),
     subpath: 'accordion',
@@ -165,7 +165,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Collapsible.Trigger',
     name: 'Collapsible.Trigger (Root disabled)',
-    attrs: disclosureTriggerDisabled(),
+    attrs: { ...disclosureTriggerDisabled(), tabindex: '0' },
     props: (d, s) => ({ 'Collapsible.Root': { disabled: d, onOpenChange: s } }),
     state: attribute('aria-expanded'),
     subpath: 'collapsible',

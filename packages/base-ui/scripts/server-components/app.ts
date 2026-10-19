@@ -47,7 +47,7 @@ export const writeApp = (app: string, versions: Versions, tarball: string): void
     path.join(app, 'package.json'),
     JSON.stringify({
       dependencies: {
-        '@base-ui/react': '1.8.0',
+        '@base-ui/react': '1.9.0',
         '@navecss/base-ui': `file:${tarball}`,
         next: versions.next,
         react: versions.react,
