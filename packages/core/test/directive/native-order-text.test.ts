@@ -9,6 +9,7 @@ import { SourceMapConsumer } from 'source-map'
 import { describe, expect, it } from 'vitest'
 
 import { expandText } from '../../src/directive/expand-text.ts'
+import { tokenize } from '../../src/directive/tokenizer.ts'
 import { navePlugin as lightningAdapter } from '../../src/lightningcss.ts'
 import { navePlugin } from '../../src/postcss.ts'
 import { isEquivalent } from '../helpers/css-equivalence.ts'
@@ -161,5 +162,84 @@ describe.each(LEG)('AC-native-apply-order-45 — an unclosed input (%s)', (_name
     const actual = closed(run(input))
 
     expect(isEquivalent(actual, expected)).toBe(true)
+  })
+})
+
+/**
+ * The tokens the expander wrote after the last `& {` wrapper, whitespace dropped: a comment in
+ * brackets as written, a string as its value, every other token as written.
+ */
+function tokensAfterWrapper(output: string): string {
+  const tokens = tokenize(output)
+  const opens = tokens.flatMap((token, index) =>
+    token.type === '{-token' && tokens[index - 2]?.raw === '&' ? [index] : [],
+  )
+  const wrapper = opens.at(-1)
+  if (wrapper === undefined) throw new Error(`no wrapper in: ${output}`)
+  return tokens
+    .slice(wrapper + 1)
+    .filter((token) => token.type !== 'whitespace-token')
+    .map((token) => {
+      if (token.type === 'comment') return `[${token.raw}]`
+      if (token.type === 'string-token') return `str(${String(token.structured?.value)})`
+      return token.raw
+    })
+    .join(' ')
+}
+
+describe.each(LEG)(
+  'AC-native-apply-order-05 — what the input left open at its end, after a comment (%s)',
+  (_name, run) => {
+    it.each<readonly [string, string]>([
+      ['.x { @nave focusRing; width: calc(1px /* c */', 'width : calc( 1px [/* c */] ) ; }'],
+      ['.x { @nave focusRing; width: calc(1px /* c', 'width : calc( 1px ) ; } [/* c]'],
+      ['.x { @nave focusRing; margin: [a /* c */', 'margin : [ a [/* c */] ] ; }'],
+      [
+        '.x { @nave focusRing; width: min(1px, max(2px /* c */',
+        'width : min( 1px , max( 2px [/* c */] ) ) ; }',
+      ],
+      [
+        '.x { @nave hideDesktopUp; &:hover { color: red } width: calc(1px /* c */',
+        'width : calc( 1px [/* c */] ) ; }',
+      ],
+      ['.a { .x { @nave focusRing; width: calc(1px /* c */', 'width : calc( 1px [/* c */] ) ; }'],
+      [
+        '.x { @nave focusRing; width: calc(1px /* c */ /* d */',
+        'width : calc( 1px [/* c */] [/* d */] ) ; }',
+      ],
+      ['.x { @nave focusRing; width: calc(1px', 'width : calc( 1px ) ; }'],
+      ['.x { @nave focusRing; content: "abc\\\\', String.raw`content : str(abc\) ; }`],
+      ['.x { @nave focusRing; content: "abc', 'content : str(abc) ; }'],
+    ])('%j closes what is open with the wrapper a real token', (input, expected) => {
+      const output = run(input)
+
+      expect(tokensAfterWrapper(output)).toBe(expected)
+      expect(lineBreaks(output)).toBe(lineBreaks(input))
+    })
+
+    it('writes the control with no comment as `& { width: calc(1px); }` byte for byte', () => {
+      expect(run('.x { @nave focusRing; width: calc(1px').endsWith('& { width: calc(1px); }')).toBe(
+        true,
+      )
+    })
+
+    it('keeps the string `abc` when the input ends in a lone backslash and adds no backslash', () => {
+      const input = '.x { @nave focusRing; content: "abc\\'
+      const output = run(input)
+
+      expect(tokensAfterWrapper(output)).toBe('content : str(abc) ; } \\')
+      expect(output.split('\\')).toHaveLength(input.split('\\').length)
+    })
+  },
+)
+
+describe('AC-native-apply-order-05 — both hosts write the same bytes after a trailing comment', () => {
+  it.each([
+    '.x { @nave focusRing; width: calc(1px /* c */',
+    '.x { @nave focusRing; width: calc(1px /* c',
+    '.x { @nave focusRing; width: calc(1px /* c */ /* d */',
+    '.a { .x { @nave focusRing; width: calc(1px /* c */',
+  ])('%j', (input) => {
+    expect(viaLightning(input)).toBe(viaText(input))
   })
 })

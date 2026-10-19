@@ -34,31 +34,37 @@ function trailingBackslashCount(raw: string): number {
  * The one character EOF closed early on `token`, had the input kept
  * going: a string's own opening quote, or a url's closing paren.
  * `undefined` when `token` is not one of these, or already closed
- * properly. Never a comment: that case is handled by placing the
- * appended block BEFORE it instead (below), since a comment's own two
- * closing bytes can span as few as two bytes past its own opener and
- * that overlap can misread as already present when checked as a bare
- * substring rather than by the scanner that actually walked it.
+ * properly. Never a comment: a comment at the end of the frame is
+ * stepped over (below) instead, so what it follows is closed before it or
+ * after it, whichever keeps it a comment.
  */
 function lexicalEofCloser(token: Token): string | undefined {
   if (token.type === 'string-token') {
     const quote = token.raw[0]
     if (quote === undefined || hasUnescapedTrailingChar(token.raw, quote)) return undefined
-    // A dangling, unpaired trailing backslash (itself "consumed, contributes
-    // nothing" at EOF per the tokenizer) would otherwise escape the very
-    // quote meant to close the string: one more backslash first pairs it
-    // into a literal backslash, so the quote after it closes for real.
-    const hasDanglingEscape = trailingBackslashCount(token.raw) % 2 === 1
-    return hasDanglingEscape ? `\\${quote}` : quote
+    return quote
   }
   if (token.type === 'url-token' || token.type === 'bad-url-token') {
     if (token.raw.endsWith(')')) return undefined
-    // The same reasoning as a string's dangling escape above: an unpaired
-    // trailing backslash would otherwise escape the `)` meant to close the
-    // url, rather than end it, so it is paired first.
+    // An unpaired trailing backslash would otherwise escape the `)` meant to close the url,
+    // rather than end it, so it is paired first.
     return trailingBackslashCount(token.raw) % 2 === 1 ? String.raw`\)` : ')'
   }
   return undefined
+}
+
+/**
+ * Whether `token` is a string left open by a lone backslash at the very end of input. CSS Syntax 3
+ * reads that backslash as "consumed, contributes nothing", so the string's value ends before it;
+ * a closing quote written after it would be escaped by it. The closers go before the backslash
+ * instead, and the backslash stays the last byte of the output.
+ */
+function isStringEndingInLoneBackslash(token: Token): boolean {
+  return (
+    token.type === 'string-token' &&
+    !hasUnescapedTrailingChar(token.raw, token.raw[0] ?? '') &&
+    trailingBackslashCount(token.raw) % 2 === 1
+  )
 }
 
 /**
@@ -141,19 +147,31 @@ function eofClosers(w: Walker, start: number, limit: number, last: Token | undef
 }
 
 /**
+ * The index of the first token of the run of whitespace and comments that ends `[start, limit)`:
+ * `limit` itself when the frame does not end in one.
+ */
+function trailingInertStart(w: Walker, start: number, limit: number): number {
+  let first = limit
+  while (first > start) {
+    const type = w.tokens[first - 1]!.type
+    if (type !== 'whitespace-token' && type !== 'comment') break
+    first--
+  }
+  return first
+}
+
+/**
  * Where a block's own close sits, and what (if anything) EOF closed for it
  * implicitly: the `}` token's start with no prefix, the normal case; or,
- * when it never closes, the end of input — except when the very
- * last token in `[frameStart, scanLimit)` is an unclosed comment, which
- * (having nowhere to end) consumes every byte to that limit: placed at the
- * comment's own start instead, so the appended block lands before it, as
- * real syntax, with no prefix needed. Any OTHER unterminated construct
- * reaching that limit (a string, a url, an unclosed bracket, a bare
- * declaration, or a bare selector/at-rule prelude with no block of its
- * own) still ends exactly at EOF, but whatever it needed to read as valid
- * syntax is written first (`eofClosers`), so the appended block that
- * follows tokenizes as a sibling rather than more of that construct's own
- * content.
+ * when it never closes, the end of input, with whatever the input left open written first
+ * (`eofClosers`) so the appended block that follows tokenizes as a sibling rather than more of
+ * that construct's own content.
+ *
+ * Comments at the end are not part of what is open. What is open is closed as if they were not
+ * there, and they keep their place as comments: a closed comment stays before the closers (which
+ * are written after it, at the end of input), and an unclosed comment, which consumes every byte
+ * to the end, stays last, the closers written at its own start. A string ending in a lone
+ * backslash has its closers written before that backslash (`isStringEndingInLoneBackslash`).
  *
  * `scanLimit` is `blockEndIndex` bounded to `w.eofScanLimit`: the frame
  * this call is for writes only the closers between its own opener and
@@ -173,11 +191,16 @@ export function closeInfoFor(
   const closer = w.tokens[blockEndIndex]
   if (closer) return { position: closer.startIndex, prefix: '' }
 
-  const last = scanLimit > frameStart ? w.tokens[scanLimit - 1] : undefined
-  if (last?.type === 'comment') {
-    const isClosed = last.raw.length >= 4 && last.raw.endsWith('*/')
-    return { position: isClosed ? w.css.length : last.startIndex, prefix: '' }
+  const lastIndex = scanLimit > frameStart ? scanLimit - 1 : -1
+  const lastToken = w.tokens[lastIndex]
+  const open = trailingInertStart(w, frameStart, scanLimit)
+  const prefix = eofClosers(w, frameStart, open, open > frameStart ? w.tokens[open - 1] : undefined)
+  if (lastToken?.type === 'comment') {
+    const isClosed = lastToken.raw.length >= 4 && lastToken.raw.endsWith('*/')
+    return { position: isClosed ? w.css.length : lastToken.startIndex, prefix }
   }
-
-  return { position: w.css.length, prefix: eofClosers(w, frameStart, scanLimit, last) }
+  if (lastToken !== undefined && isStringEndingInLoneBackslash(lastToken)) {
+    return { position: lastToken.endIndex - 1, prefix }
+  }
+  return { position: w.css.length, prefix }
 }

@@ -308,7 +308,9 @@ function parseWithOuterClosed(css: string): ReturnType<typeof postcss.parse> {
   const hasOpenComment =
     last?.type === 'comment' && !(last.raw.length >= 4 && last.raw.endsWith('*/'))
   const closedComment = hasOpenComment ? `${css}*/` : css
-  return postcss.parse(`${closedComment}}`)
+  // A lone backslash the output ends in is a delimiter PostCSS's parser rejects ("Unknown word"),
+  // and would escape the `}` that follows it; the structure is what is inspected, so it is left off.
+  return postcss.parse(`${closedComment.replace(/\\$/, '')}}`)
 }
 
 function hasFocusVisibleChildOf(root: ReturnType<typeof postcss.parse>, selector: string): boolean {
