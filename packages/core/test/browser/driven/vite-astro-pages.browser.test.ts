@@ -90,7 +90,6 @@ async function loadIndex(url: string): Promise<Page> {
         () => document.querySelector('#s')?.className.includes('nave-truncate') === true,
       )),
     'the islands to hydrate',
-    20_000,
   )
   return page
 }
@@ -165,7 +164,7 @@ describe('AC-astro-28 — server output served by @astrojs/node: a dynamic page,
       const page = await browser.newPage()
       const dyn = await page.goto(`${site.url}/dyn`)
       expect(dyn?.status()).toBe(200)
-      await until(page, () => isPresent(page, '#d'), 'the deferred island', 20_000)
+      await until(page, () => isPresent(page, '#d'), 'the deferred island')
       expect(await styleOf(page, '#a', 'position')).toBe('absolute')
       expect(await styleOf(page, '#d', 'min-width')).toBe('0px')
       expect(await styleOf(page, '#d', 'flex-direction')).toBe('column')
@@ -237,7 +236,7 @@ describe('AC-astro-29 and AC-astro-30 — a skip link in an .astro layout is rev
       const site = await serve({ server: true, options: BROWSER_KEEP })
       const page = await browser.newPage()
       await page.goto(`${site.url}/dyn`)
-      await until(page, () => isPresent(page, '#d'), 'the deferred island', 20_000)
+      await until(page, () => isPresent(page, '#d'), 'the deferred island')
       expect(await styleOf(page, '#d', 'min-width')).toBe('0px')
       await page.close()
     },
@@ -245,11 +244,14 @@ describe('AC-astro-29 and AC-astro-30 — a skip link in an .astro layout is rev
   )
 })
 
-const KEEP_ISLAND = `import { useState } from 'react'
+const KEEP_ISLAND = `import { useEffect, useState } from 'react'
 import { cx } from '@navecss/core/cx'
 
 export default function Keep() {
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    document.getElementById('keep')?.setAttribute('data-hydrated', '')
+  }, [])
   return (
     <button id="keep" type="button" className={open ? cx('gap', 'noWrap') : cx('gap')} onClick={() => setOpen(true)}>
       {open ? 'open' : 'closed'}
@@ -297,7 +299,12 @@ describe('AC-astro-32 — an island transition:persist keeps across a ClientRout
       ] as const) {
         const page = await browser.newPage()
         await page.goto(`${site.url}${start}`)
-        await until(page, () => hasAttribute(page, '#keep', 'type'), 'the island')
+        // The button is in the server's HTML, so a click before React hydrates it does nothing.
+        await until(
+          page,
+          () => hasAttribute(page, '#keep', 'data-hydrated'),
+          'the island to hydrate',
+        )
         await page.click('#keep')
         await until(
           page,

@@ -210,24 +210,27 @@ export function consoleOf(page: Page): string[] {
 }
 
 /**
- * Waits until `done` is true, polling the page, and fails with `what` after `ms`.
+ * Waits until `isDone` is true, polling the page, for as long as the test may run. The test's own
+ * timeout is the bound: on a busy machine a dev server can take many seconds to compile a page or
+ * to hear a file event, and a shorter deadline of its own here would fail a server that was only
+ * slow. The wait ends with an error naming `what` if the page closes first, which is also how it
+ * stops once a timed-out test's browser is closed.
  */
 export async function until(
   page: Page,
   isDone: () => Promise<boolean>,
   what: string,
-  ms = 8000,
 ): Promise<void> {
-  const deadline = Date.now() + ms
-  while (Date.now() < deadline) {
-    if (await isDone()) return
-    await page.waitForTimeout(25)
+  try {
+    while (!(await isDone())) await page.waitForTimeout(25)
+  } catch (error) {
+    throw new Error(`stopped waiting for ${what}`, { cause: error })
   }
-  throw new Error(`timed out waiting for ${what}`)
 }
 
 /**
- * `until`, giving up without an error: for a wait whose outcome the test reads afterwards.
+ * Waits up to `ms` for `isDone`, giving up without an error: for a wait whose outcome the test
+ * reads afterwards.
  */
 export async function untilQuietly(
   page: Page,
@@ -236,8 +239,25 @@ export async function untilQuietly(
   ms = 8000,
 ): Promise<void> {
   try {
-    await until(page, isDone, what, ms)
+    await untilWithin(page, isDone, what, ms)
   } catch {
     // The test reads what the page holds, whether or not the wait ended.
   }
+}
+
+/**
+ * Waits until `isDone` is true, polling the page, and fails with `what` after `ms`.
+ */
+async function untilWithin(
+  page: Page,
+  isDone: () => Promise<boolean>,
+  what: string,
+  ms: number,
+): Promise<void> {
+  const deadline = Date.now() + ms
+  while (Date.now() < deadline) {
+    if (await isDone()) return
+    await page.waitForTimeout(25)
+  }
+  throw new Error(`timed out waiting for ${what}`)
 }
