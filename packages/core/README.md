@@ -802,7 +802,10 @@ that bundler, Turbopack, by the `TURBOPACK` environment variable, which Next.js
 sets for it, so wherever that variable is set and not empty, under Vite or the
 PostCSS CLI as well, the plugin prints each problem to the terminal and raises
 no PostCSS warning. The Vite plugin and the Lightning CSS adapter do not read
-the variable.
+the variable. The PostCSS plugin also takes `printWarnings` (default `true`):
+with `printWarnings: false` it raises each `'warn'`-mode problem as a PostCSS
+warning and never prints it, whatever `TURBOPACK` holds, for a tool that runs
+the plugin itself and reports the warnings it raises.
 
 To add atoms of your own to `@nave`, pass them as `extend`: see
 [CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md). An `extend` object written inline in
@@ -988,18 +991,18 @@ Consumers of `@navecss/tokens` alone get no guide: it ships only in this package
 
 ## Exports
 
-| Export                       | Description                                                                                           |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `@navecss/core`              | CSS entry point — `@import url('@navecss/core')`                                                      |
-| `@navecss/core/layers`       | The `@layer` order statement alone. Import it first, before any other stylesheet                      |
-| `@navecss/core/no-tokens`    | Entry point for projects that generate their own Nave token layer; see the header comment in the file |
-| `@navecss/core/reset`        | Reset stylesheet only. It reads Nave's custom properties, so it needs a token layer beside it         |
-| `@navecss/core/atomic`       | Generated atomic CSS (global `nave-` classes)                                                         |
-| `@navecss/core/cx`           | `cx()` / `cx.raw()` utilities + `AtomName` type                                                       |
-| `@navecss/core/atoms`        | Atom definitions + `atomClassMap`                                                                     |
-| `@navecss/core/vite`         | Vite plugin — `navePlugin()`                                                                          |
-| `@navecss/core/lightningcss` | Lightning CSS adapter — `navePlugin()`, returning `expand` and `resolver`                             |
-| `@navecss/core/standalone`   | The whole stylesheet in one file, with no `@import`, for projects with no bundler                     |
-| `@navecss/core/postcss`      | PostCSS plugin — `navePlugin()`                                                                       |
-| `@navecss/core/check`        | The survival check as a function — `check({ source })`                                                |
-| `@navecss/core/collect`      | Reads which atoms a module uses, for build tools; not meant for application code                      |
+| Export                       | Description                                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `@navecss/core`              | CSS entry point — `@import url('@navecss/core')`                                                                  |
+| `@navecss/core/layers`       | The `@layer` order statement alone. Import it first, before any other stylesheet                                  |
+| `@navecss/core/no-tokens`    | Entry point for projects that generate their own Nave token layer; see the header comment in the file             |
+| `@navecss/core/reset`        | Reset stylesheet only. It reads Nave's custom properties, so it needs a token layer beside it                     |
+| `@navecss/core/atomic`       | Generated atomic CSS (global `nave-` classes)                                                                     |
+| `@navecss/core/cx`           | `cx()` / `cx.raw()` utilities + `AtomName` type                                                                   |
+| `@navecss/core/atoms`        | Atom definitions + `atomClassMap`                                                                                 |
+| `@navecss/core/vite`         | Vite plugin — `navePlugin()`                                                                                      |
+| `@navecss/core/lightningcss` | Lightning CSS adapter — `navePlugin()`, returning `expand` and `resolver`                                         |
+| `@navecss/core/standalone`   | The whole stylesheet in one file, with no `@import`, for projects with no bundler                                 |
+| `@navecss/core/postcss`      | PostCSS plugin — `navePlugin()`                                                                                   |
+| `@navecss/core/check`        | The survival check as a function — `check({ source })`                                                            |
+| `@navecss/core/collect`      | Reads which atoms a module uses and trims the atom layer to them, for build tools; not meant for application code |

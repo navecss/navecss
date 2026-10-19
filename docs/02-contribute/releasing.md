@@ -1,6 +1,6 @@
 # Releasing
 
-How a new version of `@navecss/tokens` and `@navecss/core` gets to npm. These two packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of that pair ([ADR 0009](../04-adr/0009-release-topology.md)), and `@navecss/cli` is not published yet.
+How a new version of `@navecss/tokens` and `@navecss/core` gets to npm. These two packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of that pair ([ADR 0009](../04-adr/0009-release-topology.md)), and `@navecss/cli` and `@navecss/prune` are not published yet.
 
 You need publish rights on both packages on npmjs.com, with two-factor authentication on your npm account.
 

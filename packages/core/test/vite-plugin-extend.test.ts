@@ -3,6 +3,8 @@
  * with no restart, in the dev server and under `vite build --watch`; and the plugin refuses an atom
  * that would break out of the rule it is spliced into, the same way the PostCSS adapter does.
  */
+import type { BuildOptions } from 'vite'
+
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -29,6 +31,14 @@ const FILES = {
 // only if the plugin registered the module with addWatchFile.
 // eslint-disable-next-line unicorn/no-null -- `null` is Vite's own spelling for "no watcher"
 const DEV_SERVER = { server: { middlewareMode: true, watch: null } }
+
+// The `vite build --watch` row has the build poll the files it watches, for the same reason: a
+// change reported by the operating system can reach the watcher seconds late, while a poll reads
+// the file as it is. Vite hands Rolldown the polling settings it finds under `chokidar`, in place
+// of any `watcher` key given directly; its type does not list `chokidar`.
+const POLLING_WATCH = { chokidar: { usePolling: true, interval: 100 } } as NonNullable<
+  BuildOptions['watch']
+>
 
 const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -219,7 +229,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     const config = appConfig(app.root, 'postcss', [navePlugin({ extend: './atoms.mjs' })])
     const watcher = (await build({
       ...config,
-      build: { ...config.build, write: true, outDir, watch: {} },
+      build: { ...config.build, write: true, outDir, watch: POLLING_WATCH },
     })) as unknown as { close(): Promise<void> }
     cleanups.push(() => watcher.close())
 

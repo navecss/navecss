@@ -1,0 +1,88 @@
+{
+  "name": "@navecss/prune",
+  "version": "0.0.0",
+  "private": true,
+  "description": "NaveCSS atom pruning for Next.js: a PostCSS plugin and a next.config wrapper that ship only the atoms the build can read a use for.",
+  "keywords": [
+    "navecss",
+    "nextjs",
+    "postcss-plugin",
+    "css",
+    "atomic-css",
+    "css-layers",
+    "design-system",
+    "zero-runtime"
+  ],
+  "homepage": "https://github.com/navecss/navecss/tree/main/packages/prune#readme",
+  "license": "MIT",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./cjs/index.d.cts",
+        "default": "./cjs/index.cjs"
+      }
+    },
+    "./postcss": {
+      "import": {
+        "types": "./dist/postcss.d.ts",
+        "default": "./dist/postcss.js"
+      },
+      "require": {
+        "types": "./cjs/postcss.d.cts",
+        "default": "./cjs/postcss.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "cjs",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test --max-warnings 0",
+    "lint:fix": "eslint src test --fix",
+    "test": "vitest run",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile node16",
+    "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
+  },
+  "peerDependencies": {
+    "@navecss/core": "workspace:^",
+    "next": ">=16.2.0",
+    "postcss": "^8"
+  },
+  "dependencies": {
+    "oxc-parser": "0.150.0",
+    "oxc-resolver": "11.24.2"
+  },
+  "devDependencies": {
+    "@navecss/core": "workspace:*",
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "5.0.5",
+    "postcss": "^8.5.28",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navecss/navecss.git",
+    "directory": "packages/prune"
+  },
+  "bugs": {
+    "url": "https://github.com/navecss/navecss/issues"
+  }
+}

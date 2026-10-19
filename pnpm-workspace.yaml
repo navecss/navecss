@@ -23,3 +23,9 @@ ignoredBuiltDependencies:
 # a fixed esbuild.
 overrides:
   esbuild: ^0.28.1
+  # `@navecss/prune` peers on `next` from 16.2.0, and `auto-install-peers` resolves a peer range to
+  # its lowest match: 16.2.0, a release with published remote-code-execution and request-forgery
+  # advisories that the dependency review fails on. Nothing here runs that release (the fixtures that
+  # build against the 16.2.0 floor install their own copy outside this lockfile), so this keeps the
+  # lockfile on a patched release without raising the range consumers see.
+  next: '>=16.3.6'
