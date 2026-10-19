@@ -9,8 +9,9 @@ import {
 /**
  * Nave's own stylelint rules, corrected for a consumer's project: `@nave` known to the
  * language, a check that values on its listed properties use a `var()` or an admitted keyword,
- * a check that flags `outline: none` and `outline: 0`, and a check that a `var(--nave-*)`
- * reference names a custom property declared in the consumer's own token stylesheet(s).
+ * a check that flags `outline: none`, `outline: 0` and `outline-style: none`, and a check that a
+ * `var(--nave-*)` reference names a custom property declared in the consumer's own token
+ * stylesheet(s).
  *
  * Everything here is a rendering of Nave's design-system constraints, never a copy of any
  * shared config: this package extends nothing and declares `stylelint` as a peer, never a
@@ -244,6 +245,19 @@ export const OUTLINE_GUARD_CONSUMER_MESSAGE =
   'replaces it. An indicator drawn only with box-shadow is not painted in forced-colors mode.'
 
 /**
+ * The message printed when `outline-style: none` is reported: the same sentences as the message
+ * above, kept byte for byte (434 bytes, ASCII, sha256 prefix `69a1872fa1dc14c2`), with the first
+ * one naming this declaration. It speaks to the consumer's own project.
+ */
+export const OUTLINE_STYLE_GUARD_CONSUMER_MESSAGE =
+  "'outline-style: none' removes the browser's default focus indicator, the visible sign " +
+  'of which element has focus, wherever this rule applies. Remove the declaration, or ' +
+  "change the outline's colour, width or offset instead. If you are replacing it with an " +
+  'indicator of your own, disable this rule for that declaration with a comment saying ' +
+  'what replaces it. An indicator drawn only with box-shadow is not painted in ' +
+  'forced-colors mode.'
+
+/**
  * The default export: `@nave` known to the language, a check that values on its listed
  * properties use a `var()` or an admitted keyword, the outline guard, and the declared
  * custom-property check. Extends no shared config: no `selector-class-pattern`,
@@ -262,8 +276,13 @@ const config = {
   rules: {
     'scale-unlimited/declaration-strict-value': [STRICT_VALUE_PROPERTIES, STRICT_VALUE_OPTIONS],
     'declaration-property-value-disallowed-list': [
-      { outline: OUTLINE_GUARD_PATTERN },
-      { message: OUTLINE_GUARD_CONSUMER_MESSAGE },
+      { outline: OUTLINE_GUARD_PATTERN, 'outline-style': ['/^none$/i'] },
+      {
+        message: (property) =>
+          property === 'outline-style'
+            ? OUTLINE_STYLE_GUARD_CONSUMER_MESSAGE
+            : OUTLINE_GUARD_CONSUMER_MESSAGE,
+      },
     ],
     [declaredCustomPropertiesRuleName]: [true, declaredCustomPropertiesDefaultOptions],
   },

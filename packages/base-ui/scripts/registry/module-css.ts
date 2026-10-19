@@ -99,18 +99,39 @@ const isPaired = (declaration: Declaration): boolean => {
 const shown = (declaration: Declaration): string =>
   `${declaration.prop}: ${declaration.value}${declaration.important ? ' !important' : ''}`
 
+const REMOVING_STYLES = /^(?:none|initial|unset)$/i
+
+/**
+ * Refuses an `outline-style` of `none`, `initial` or `unset`, in any rule or at-rule, whether or
+ * not it is `!important`: each removes the focus indicator, and no comment is ever written for
+ * one. Every other `outline-style` passes.
+ */
+const refuseRemovedStyle = (declaration: Declaration, atom: string): void => {
+  if (!REMOVING_STYLES.test(declaration.value)) return
+  throw new RegistryBuildError(
+    `${atom} has "${shown(declaration)}": an outline-style of none, initial or unset removes ` +
+      'the focus indicator, so it is refused',
+    { file: 'module.css' },
+  )
+}
+
 /**
  * Puts the disable comment before each `outline: none` that is paired with the ring that replaces
  * it, and refuses every other `outline`, naming the atom. An `outline: none` is paired when it is a
  * lowercase `none` without `!important`, sits directly in the atom's class rule or alone in a `&`
  * rule directly in it, and the class rule has an `&:focus-visible` rule after it that sets
- * `outline-style: solid`, `outline-width`, `outline-color` and `outline-offset`.
+ * `outline-style: solid`, `outline-width`, `outline-color` and `outline-offset`. An `outline-style`
+ * of `none`, `initial` or `unset` is refused as well.
  */
 const guardOutlines = (root: postcss.Root, atomOf: ReadonlyMap<string, string>): void => {
   const comment = OUTLINE_COMMENT.slice(3, -3)
-  root.walkDecls(/^outline$/i, (declaration) => {
+  root.walkDecls(/^outline(?:-style)?$/i, (declaration) => {
     const named = classRuleOf(declaration)?.selector ?? (declaration.parent as Rule).selector
     const atom = atomOf.get(named.replace(/^\./, '')) ?? named
+    if (declaration.prop.toLowerCase() === 'outline-style') {
+      refuseRemovedStyle(declaration, atom)
+      return
+    }
     if (declaration.important) {
       throw new RegistryBuildError(
         `${atom} has "${shown(declaration)}": !important beats the focus ring, so it is refused`,

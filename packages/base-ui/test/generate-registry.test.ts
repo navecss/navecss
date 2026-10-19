@@ -55,6 +55,18 @@ describe('the registry generator, run in this process', () => {
     ).toBe(true)
   }, 180_000)
 
+  it('builds all 35 modules, the Slider thumb with its outline-style: solid in &:has(:focus-visible)', async () => {
+    const out = path.join(directory(), 'registry')
+    expect(await main({ out })).toBe(0)
+    const items = readdirSync(out).filter((name) => /^base-ui-[\w-]+\.json$/.test(name))
+    expect(items).toHaveLength(35)
+    const slider = JSON.parse(readFileSync(path.join(out, 'base-ui-slider.json'), 'utf8')) as {
+      files: { content: string; target: string }[]
+    }
+    const module = slider.files.find((file) => file.target.endsWith('.module.css'))
+    expect(module?.content).toMatch(/:has\(:focus-visible\)[^}]*outline-style: solid/)
+  }, 180_000)
+
   it('refuses an item that is not a universal item and writes none', async () => {
     const out = path.join(directory(), 'registry')
     const written = refusal()
@@ -281,6 +293,47 @@ describe('the outlines a module may carry', () => {
     const refused = moduleBody(inputs({ OUTLINE: 'none !important' }, { '&:focus-visible': RING }))
     await expect(refused).rejects.toThrow('"OUTLINE: none !important"')
     await expect(refused).rejects.toThrow('!important beats the focus ring')
+  })
+
+  it.each(['none', 'NONE', 'none !important', 'initial', 'unset', 'UNSET'])(
+    'refuses outline-style: %s, which removes the focus indicator, naming the atom',
+    async (value) => {
+      const refused = moduleBody(inputs({ 'outline-style': value }, { '&:focus-visible': RING }))
+      await expect(refused).rejects.toThrow('baseUiProbe')
+      await expect(refused).rejects.toThrow(`"outline-style: ${value}"`)
+      await expect(refused).rejects.not.toThrow('published')
+    },
+  )
+
+  it('refuses outline-style: none with the property in capitals', async () => {
+    await expect(moduleBody(inputs({ 'OUTLINE-STYLE': 'none' }))).rejects.toThrow('baseUiProbe')
+  })
+
+  it('refuses outline-style: none in a pseudo-class rule and in an at-rule, naming the atom', async () => {
+    await expect(
+      moduleBody(inputs({ display: 'block' }, { '&:hover': { 'outline-style': 'none' } })),
+    ).rejects.toThrow('baseUiProbe')
+    const atom: ProbeAtom = {
+      declarations: { display: 'block' },
+      media: { '(min-width: 1px)': { declarations: { 'outline-style': 'none' } } },
+    }
+    await expect(moduleBody(inputsFor(atom))).rejects.toThrow('baseUiProbe')
+  })
+
+  it.each(['solid', 'dotted', 'auto', 'hidden', 'inherit', 'revert', 'revert-layer', 'var(--x)'])(
+    'accepts outline-style: %s',
+    async (value) => {
+      await expect(moduleBody(inputs({ 'outline-style': value }))).resolves.toContain(
+        `outline-style: ${value}`,
+      )
+    },
+  )
+
+  it('accepts outline-style: solid in the &:has(:focus-visible) rule that the Slider thumb uses', async () => {
+    const body = await moduleBody(
+      inputs({}, { '&:has(:focus-visible)': { ...RING, 'outline-style': 'solid' } }),
+    )
+    expect(body).toContain('outline-style: solid')
   })
 
   it.each(['outline-color', 'outline-offset', 'outline-style', 'outline-width'])(

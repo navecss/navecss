@@ -18,7 +18,11 @@ import { fileURLToPath } from 'node:url'
 import stylelint, { type Config } from 'stylelint'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import config, { OUTLINE_GUARD_CONSUMER_MESSAGE, OUTLINE_GUARD_PATTERN } from '../index.js'
+import config, {
+  OUTLINE_GUARD_CONSUMER_MESSAGE,
+  OUTLINE_GUARD_PATTERN,
+  OUTLINE_STYLE_GUARD_CONSUMER_MESSAGE,
+} from '../index.js'
 import { pendingChangesetSurfaces } from './helpers/changesets.ts'
 import { commentText, findOutcomeWords, foldProse, type Surface } from './helpers/outcome-words.ts'
 import { packTarball } from './helpers/pack.ts'
@@ -51,12 +55,36 @@ describe('AC-consumer-constraints-17 covers: R11c, R12, R10', () => {
     }
   })
 
+  it.each(['outline-style: none', 'outline-style: NONE', 'outline-style: none !important'])(
+    'reports %s in a consumer fixture with the 434-byte message, and the outline message is unchanged',
+    async (declaration) => {
+      const result = await stylelint.lint({ code: `.a { ${declaration}; }`, config })
+      const warnings = result.results[0]!.warnings.filter(
+        (w) => w.rule === 'declaration-property-value-disallowed-list',
+      )
+      expect(warnings).toHaveLength(1)
+      const text = stripRuleSuffix(warnings[0]!.text)
+      expect(text).toBe(OUTLINE_STYLE_GUARD_CONSUMER_MESSAGE)
+      expect(Buffer.byteLength(text, 'utf8')).toBe(434)
+      expect(createHash('sha256').update(text).digest('hex').slice(0, 16)).toBe('69a1872fa1dc14c2')
+      expect(text).not.toBe(OUTLINE_GUARD_CONSUMER_MESSAGE)
+    },
+  )
+
+  it('does not report an outline-style other than none', async () => {
+    for (const value of ['solid', 'dotted', 'auto', 'hidden', 'var(--style)']) {
+      const result = await stylelint.lint({ code: `.a { outline-style: ${value}; }`, config })
+      const rules = result.results[0]!.warnings.map((w) => w.rule)
+      expect(rules, value).not.toContain('declaration-property-value-disallowed-list')
+    }
+  })
+
   it.each(['packages/core/src/index.css', 'packages/core/src/reset.css'])(
     'reports the same declarations in %s under the root config with the house message, byte-identical',
     async (file) => {
       const rcPath = path.join(ROOT, '.stylelintrc.json')
       const rootConfig = JSON.parse(readFileSync(rcPath, 'utf8')) as Config
-      for (const declaration of ['outline: none', 'outline: 0']) {
+      for (const declaration of ['outline: none', 'outline: 0', 'outline-style: none']) {
         const result = await stylelint.lint({
           code: `.a { ${declaration}; }`,
           codeFilename: path.join(ROOT, file),
@@ -68,9 +96,9 @@ describe('AC-consumer-constraints-17 covers: R11c, R12, R10', () => {
         )
         expect(warning, `${file}: ${declaration}`).toBeDefined()
         const text = stripRuleSuffix(warning!.text)
-        expect(Buffer.byteLength(text, 'utf8')).toBe(1012)
+        expect(Buffer.byteLength(text, 'utf8')).toBe(1037)
         expect(createHash('sha256').update(text).digest('hex').slice(0, 16)).toBe(
-          'e9e40077899491ed',
+          'f7c258b9cc5cfdcb',
         )
       }
     },
