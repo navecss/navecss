@@ -10,7 +10,7 @@ import {
 } from '../support/disclosure-disabled.ts'
 import { cleanup, render } from '../support/react.ts'
 import { loadNave } from '../support/sources.ts'
-import { el, need } from '../support/w6-render.ts'
+import { el, need, settle } from '../support/w6-render.ts'
 
 const nave: Source = await loadNave()
 afterEach(cleanup)
@@ -51,6 +51,23 @@ describe('a disabled disclosure trigger inside the parts that add aria-disabled'
       ).toBe(true)
     },
   )
+
+  it('inside the open NavigationMenu.Content it carries aria-disabled and the disabled rule reaches it', async () => {
+    const content = el(nave, 'navigation-menu', 'Content', {}, trigger())
+    const navTrigger = el(nave, 'navigation-menu', 'Trigger', {}, 'Open')
+    const item = el(nave, 'navigation-menu', 'Item', { value: 'a' }, navTrigger, content)
+    const popup = el(nave, 'navigation-menu', 'Popup', {}, el(nave, 'navigation-menu', 'Viewport'))
+    const positioner = el(nave, 'navigation-menu', 'Positioner', {}, popup)
+    const portal = el(nave, 'navigation-menu', 'Portal', {}, positioner)
+    const list = el(nave, 'navigation-menu', 'List', {}, item)
+    await render(el(nave, 'navigation-menu', 'Root', { defaultValue: 'a' }, list, portal))
+    await settle()
+    const collapsible = need('Collapsible.Trigger')
+    expect(collapsible.getAttribute('aria-disabled')).toBe('true')
+    expect(
+      disclosureTriggerDisabledSelectors().some((selector) => collapsible.matches(selector)),
+    ).toBe(true)
+  })
 
   it('inside Tabs.Panel, which is not one of them, it follows the run like a bare one', async () => {
     const panel = el(nave, 'tabs', 'Panel', { value: 'a' }, trigger())
