@@ -112,6 +112,22 @@ Pseudo-class rules (`:focus-visible` from `focusRing`), `@media` and
 apply to every selector in a selector list. Native nesting is inside the browser
 floor under [Requirements](#requirements).
 
+#### Output size
+
+`@nave` copies an atom's declarations into every rule that uses it. That is the design: the directive is a build-time stand-in for native CSS mixins, whose `@apply` puts a mixin's declarations into the rule that applies it ([why](https://github.com/navecss/navecss/blob/main/docs/04-adr/0006-nave-directive-stands-in-for-css-mixins.md)). A browser that supports native mixins does that expansion itself, so such a stylesheet carries each mixin's body once, plus a short `@apply` where it is used; a build step has to write the copies out.
+
+What the copies cost, in a model of a large app (10,000 component rules using a 25-atom design system and class names of about 20 characters, minified): about 70 percent of the raw CSS, 40 percent after gzip and 30 percent after brotli at level 11. Your app will differ, so measure your own bundle. What reduces it:
+
+- **Compress CSS ahead of time with brotli at its highest level (11)**, instead of compressing on the fly at a lower one. In the model, level 11 sent 260 KB where level 5 sent 330 KB, which saves more than any way of removing the copies that was tried (below).
+- **Split CSS by route**, so a page loads a shared part and its own rules rather than the whole app's. Split into one shared part and 40 routes, a page in the model loaded 65 KB at level 11, about a quarter, though all the parts together came to 348 KB, a third more than the single bundle.
+
+What Nave does not do, and why:
+
+- **It does not merge the copies into shared rules with combined selector lists.** In the model that saved 0.3 percent under brotli at level 11 and made gzip output 19 percent larger, because each selector then repeats once per atom, far apart. With 7-character class names the same merge saved 2 percent under gzip, 4 under brotli at level 11 and 12 under brotli at level 5, still less than level 11 saves over level 5. It also changed the computed style of 4 to 6 percent of the elements sampled: two atoms that set the same property stop resolving in the order you wrote them, and an atom's `@media` blocks move relative to your own declarations.
+- **It does not turn your `@nave` atoms into shared classes for your markup to carry** (`cx()` does that for Nave's built-in atoms, where you choose it). That would move them into the `atomic` layer, below your component CSS, so your other rules and Nave's own component styles start beating them, and the class names it would add to your JavaScript and HTML cost about as much as the CSS it would remove under brotli, and about half as much under gzip.
+
+The lasting fix is native CSS mixins. Once they ship in a browser and the specification settles, Nave adds a flag that writes `@mixin` and `@apply`, and once all three engines support them that becomes the default.
+
 ### Escape hatch — cx() utility
 
 No build plugin required. Atom names move to JSX — autocompleted, and type-checked.

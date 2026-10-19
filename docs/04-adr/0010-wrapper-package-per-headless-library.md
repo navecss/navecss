@@ -55,6 +55,16 @@ measured.
 - **Correction (2026-10-14):** `NavigationMenu.Root.Props` with a type argument and
   `NavigationMenu.Root.Value` are two more such names; the subpath reaches them as
   `NavigationMenuRootProps` and `NavigationMenuRoot.Value`.
+- **Correction (2026-10-19):** the same rule covers whole parts and values. A part, function or
+  value Base UI added after the oldest version the package supports is not exported, because an
+  app on that version would fail to build on a name its Base UI does not export:
+  `Combobox.createItems` (Base UI 1.8.0), the Menu's filtering parts (`Menu.FilterProvider`,
+  `Menu.Input`, `Menu.List`, `Menu.Empty`, `Menu.Clear`, `Menu.useFilter`) and the objects that
+  name each part's data attributes and CSS variables (both Base UI 1.9.0), which still come
+  through as types. Against Base UI 1.9.0 five more type members are not on the wrapper's part,
+  `OpenChangeEventDetails` under the roots of Select, Combobox and Autocomplete and
+  `Menu.Root.HighlightEventDetails` and `Menu.Root.HighlightEventReason`; their flat names reach
+  them.
 
 **2. The styling is one stylesheet in `components.nave`, built when the package is built.**
 `@navecss/base-ui/styles.css` is made by expanding Nave's own atoms through the `@nave`

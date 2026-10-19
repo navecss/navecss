@@ -270,7 +270,7 @@ describe('AC-base-ui-overlay-completion-23: the group paints invalid exactly whe
     expect(key).not.toBe(OLD_KEY)
   })
 
-  it('names the six minors of the criterion, and runs each one that is installed', () => {
+  it('names the seven minors from the floor to the devDependency, and runs each one that is installed', () => {
     expect(MINORS.map(({ version }) => version)).toEqual([
       '1.3.0',
       '1.4.0',
@@ -278,6 +278,7 @@ describe('AC-base-ui-overlay-completion-23: the group paints invalid exactly whe
       '1.6.0',
       '1.7.0',
       '1.8.0',
+      '1.9.0',
     ])
     expect(minorsOfRun().every(isInstalled)).toBe(true)
   })

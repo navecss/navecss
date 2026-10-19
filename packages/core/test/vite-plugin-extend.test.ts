@@ -49,18 +49,19 @@ afterEach(async () => {
 })
 
 /**
- * Waits for `isMet` for as long as the test runs: a busy machine can take many seconds to serve or
- * rebuild, so the wait has no deadline of its own and the runner's timeout ends it, through the
- * test's `signal`.
+ * Waits until `isMet` is true, for as long as the test may run. The test's own timeout is the
+ * bound: `vite build --watch` hears an edit through the operating system's file events, which can
+ * arrive many seconds late on a busy machine, and a shorter deadline of its own here would fail a
+ * watcher that was only slow. `signal` is the test's, so the wait stops once the test has timed
+ * out.
  */
 async function until(
   isMet: () => Promise<boolean>,
   what: string,
   signal: AbortSignal,
 ): Promise<void> {
-  for (;;) {
-    if (signal.aborted) throw new Error(`stopped waiting for ${what}`)
-    if (await isMet()) return
+  while (!(await isMet())) {
+    if (signal.aborted) throw new Error(`timed out waiting for ${what}`)
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 }

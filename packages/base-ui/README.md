@@ -235,7 +235,9 @@ const fruits = BaseCombobox.createItems(
 )
 ```
 
-The types under a part, such as `Menu.Item.Props`, take their names and type parameters from Base UI 1.3, so four that Base UI added up to 1.8.0 do not come through: `ContextMenu.Root.Actions`, the third type parameter of `Combobox.Root.Props` (`Item`), the type parameter of `NavigationMenu.Root.Props`, and `NavigationMenu.Root.Value`. Import `ContextMenuRootActions` from `@navecss/base-ui/context-menu`, `ComboboxRootProps<Value, Multiple, Item>` from `@navecss/base-ui/combobox`, and `NavigationMenuRootProps<Value>` and `NavigationMenuRoot.Value<Value>` from `@navecss/base-ui/navigation-menu` instead.
+The types under a part, such as `Menu.Item.Props`, take their names and type parameters from Base UI 1.3, so nine that Base UI added up to 1.9.0 do not come through: `ContextMenu.Root.Actions`, the third type parameter of `Combobox.Root.Props` (`Item`), the type parameter of `NavigationMenu.Root.Props`, `NavigationMenu.Root.Value`, `OpenChangeEventDetails` under the roots of Select, Combobox and Autocomplete, and `Menu.Root.HighlightEventDetails` and `Menu.Root.HighlightEventReason`. Import `ContextMenuRootActions` from `@navecss/base-ui/context-menu`, `ComboboxRootProps<Value, Multiple, Item>` from `@navecss/base-ui/combobox`, `NavigationMenuRootProps<Value>` and `NavigationMenuRoot.Value<Value>` from `@navecss/base-ui/navigation-menu`, `SelectRootOpenChangeEventDetails`, `ComboboxRootOpenChangeEventDetails` and `AutocompleteRootOpenChangeEventDetails` from their own subpaths, and `MenuRootHighlightEventDetails` and `MenuRootHighlightEventReason` from `@navecss/base-ui/menu` instead.
+
+Two more things Base UI 1.9.0 added are not exported here, because this package supports Base UI from 1.3. The Menu's filtering parts (`Menu.FilterProvider`, `Menu.Input`, `Menu.List`, `Menu.Empty`, `Menu.Clear` and `Menu.useFilter`), which Base UI marks as a preview, are left out, and Nave does not style them; import them from `@base-ui/react/menu` if you use them. Their flat type names, such as `MenuInputProps` and `MenuFilter`, still come through. The objects that name each part's data attributes and CSS variables, such as `DialogPopupDataAttributes`, come through as types only: to read their values, import them from Base UI's subpath.
 
 ## Feedback and navigation
 
@@ -423,7 +425,9 @@ A Preview Card opens when its link is hovered or focused, but its contents are n
 
 In a Menubar, moving to the next menu with the arrow keys puts focus on that menu's panel before any item, so the browser's ring around the panel shows where you are until the next arrow key reaches an item.
 
-In Base UI 1.8.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.
+In Base UI 1.8.0 and 1.9.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.
+
+In Base UI 1.9.0, outside a Toolbar, `Tabs.List`, Radio Group, Toggle Group, Menubar or Navigation Menu, a disabled `Accordion.Trigger` or `Collapsible.Trigger` that renders a `<button>`, as it does by default, is marked with the `disabled` attribute and not `aria-disabled`, so it keeps the colour and pointer cursor of an enabled trigger; if you disable one, style its `:disabled` state yourself.
 
 When the reader's system asks for reduced motion, this package turns off the popups' fade, the tooltip's fade, the backdrop's fade, the toasts' fade, the turn of the icon in Navigation Menu triggers, the tab indicator's slide, the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.
 

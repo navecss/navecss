@@ -142,7 +142,12 @@ async function waitUntilAnswering(url: string): Promise<void> {
 }
 
 /**
- * Serves the project with Astro's dev server, in this process.
+ * Serves the project with Astro's dev server, in this process. The server watches no file, since
+ * no test that uses it edits one. On a busy machine the operating system's file events for the
+ * files the project was just written with can reach the server's watcher many seconds after it
+ * has started (16 s in one measured start), as if those files had changed. One of them is
+ * `astro.config.mjs`, so Astro restarts the server, which then refuses connections on its port for
+ * several seconds while a test is loading pages from it.
  */
 export async function serveDev(app: AstroApp): Promise<Running> {
   disableTelemetry()
@@ -158,6 +163,9 @@ export async function serveDev(app: AstroApp): Promise<Running> {
       root: app.root,
       logLevel: 'error',
       server: { host: '127.0.0.1', port: 0 },
+      // Astro merges this into its own Vite config, where a `null` watch is skipped rather than
+      // applied, so the watcher is told to ignore every path instead.
+      vite: { server: { watch: { ignored: ['**'] } } },
     })
     const url = `http://127.0.0.1:${server.address.port}`
     await waitUntilAnswering(url)

@@ -89,14 +89,14 @@ function tree(): string[] {
 }
 
 /**
- * Waits for `isDone` for as long as the test runs. What it waits on follows a file event, which a
- * busy machine can deliver many seconds late, so the wait has no deadline of its own: the runner's
- * timeout ends it, through the test's `signal`.
+ * Waits until `isDone` is true, for as long as the test may run. The test's own timeout is the
+ * bound: on a busy machine a file event can reach the watcher many seconds late, and a shorter
+ * deadline of its own here would fail a watcher that was only slow. `signal` is the test's, so
+ * the wait stops once the test has timed out.
  */
 async function until(isDone: () => boolean, what: string, signal: AbortSignal): Promise<void> {
-  for (;;) {
-    if (signal.aborted) throw new Error(`stopped waiting for ${what}`)
-    if (isDone()) return
+  while (!isDone()) {
+    if (signal.aborted) throw new Error(`timed out waiting for ${what}`)
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
 }
