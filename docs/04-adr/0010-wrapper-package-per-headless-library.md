@@ -122,7 +122,7 @@ It now ships: see [Update: the registry now exists](#update-the-registry-now-exi
   delivery: it leaves the per-part wiring, which is the work to be removed, with every team.
   The atoms survive underneath the stylesheet.
 - **Copying component source into the consumer's project as the only delivery.** Kept as a
-  later, second delivery (decision 6): it gives ownership, but not updates.
+  later, second delivery (decision 6): a team can change the copy, but gets no updates.
 
 ## Update: the registry now exists
 
