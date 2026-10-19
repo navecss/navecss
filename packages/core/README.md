@@ -177,11 +177,17 @@ of these, and says so when the ring or the reveal is lost.
 
 **The order warning.** Where something later in the rule overrides one of an atom's
 pseudo-class, `@media` or `@container` blocks with a different value, the build
-prints a warning at the later declaration, with the fix:
+prints a warning at the later content. Where moving something lets the atom win
+without a new warning, it says what to move, and it always shows how to mark the
+directive if the later value is meant to win:
 
 ```text
 src/panel.css:3:3: @nave: display: grid comes after "hideDesktopUp", so under @media (width >= 75em) display is grid, not none. Before @navecss/core 0.5.0 "hideDesktopUp" won, because an atom's blocks were placed last in the rule. To let "hideDesktopUp" win, move display: grid above the directive. If it is meant to win, mark the directive that names "hideDesktopUp": `@nave /* nave-allow-override: display */ hideDesktopUp;`
 ```
+
+Where no move clears the warning, as when the later value comes from another atom's
+block and moving either only turns the pair round, it prints only the marker. Write
+the atom that should win last, and mark the directive the warning then names.
 
 It never fails the build, and `onUnknown` does not change it. The Vite plugin prints
 it through Vite's logger, the PostCSS plugin as a PostCSS warning (and with `console.warn` on

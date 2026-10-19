@@ -107,7 +107,8 @@ first-party table generated from `mdn-data` by a development script, so the chec
 dependency.
 
 Each warning is positioned at the overrider and names the atom, the condition, the property with
-both values, the fix and the directive with a marker inserted. Where the later value, as written,
+both values, a move only where the check, run again on the moved order, no longer finds that pair,
+and always the directive with a marker inserted. Where the later value, as written,
 hides `focusRing`'s outline (a style of `none`; a width written as `0` or as a zero length; the
 keyword `transparent`; an `outline` with no style keyword; or `initial` or `unset` on `outline`,
 `outline-style` or `all`), or puts back over `srOnlyFocusable`'s reveal what hid the element
@@ -191,8 +192,8 @@ the floor decisions in ADR 0001 and [ADR 0005](0005-browser-floor.md).
 
 - The outcome of two shapes changes for a page. A responsive atom named before an atom that sets
   the same property now yields to it, and a declaration or nested block of a rule's own after the
-  directive now wins over an atom's block of equal specificity. Each is reported by the build with
-  its fix, and the changeset names both.
+  directive now wins over an atom's block of equal specificity. The build reports each, with the
+  move that lets the atom win where one does so without a new warning, and the changeset names both.
 - The focus atoms are in scope. After `@nave focusRing;`, a later `&:focus { outline: none }` or
   `&:focus-visible { outline: none }` in the same rule now removes the ring where it used to leave
   it, and a later `&:focus-visible { outline-color: ... }` there now applies. The warning says when
@@ -217,8 +218,8 @@ the floor decisions in ADR 0001 and [ADR 0005](0005-browser-floor.md).
   not change what a project shows except at the two stated divergences.
 - A reader can predict the result from the stylesheet: the later declaration wins, as elsewhere in
   CSS.
-- An override that changed meaning is surfaced at the build, with the fix, and a deliberate one is
-  recorded at the place it is made.
+- An override that changed meaning is surfaced at the build, with a move where one clears it, and a
+  deliberate one is recorded at the place it is made.
 
 ## Alternatives considered
 

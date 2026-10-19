@@ -10,6 +10,7 @@ import type { ModelNode } from './rule-model.ts'
 import type { Specificity } from './selector-specificity.ts'
 
 import { compare } from './order-compare.ts'
+import { markMoves } from './order-moves.ts'
 import { outwardFindings } from './order-outward.ts'
 import {
   candidatesOfAtomBlock,
@@ -98,11 +99,34 @@ function findingsOfBlock(
 }
 
 /**
+ * The pairs in an arrangement of a rule's output, before any move is checked.
+ */
+function pairsIn(
+  segments: readonly Segment[],
+  rule: {
+    readonly amp: Specificity
+    readonly emitted: Emitted
+    readonly isPseudoElementRule: boolean
+  },
+  candidatesOfPart: (segment: Segment) => readonly Candidate[],
+): Finding[] {
+  const { amp, emitted, isPseudoElementRule } = rule
+  const candidatesOfSegment = (index: number): readonly Candidate[] =>
+    candidatesOfPart(segments[index]!)
+  const inner = segments.flatMap((segment, index) =>
+    segment.kind === 'atom-block' ? findingsOfBlock(index, segments, candidatesOfSegment, amp) : [],
+  )
+  if (isPseudoElementRule) return inner
+  return [...inner, ...outwardFindings(segments, amp, emitted, candidatesOfSegment)]
+}
+
+/**
  * Every finding in a rule's output, `segments` being its parts in output order, `amp` what `&`
  * weighs inside it and `emitted` what a directive inside a nested rule expands to, which is also
  * compared with what the rule holds after it (`order-outward.ts`), unless every selector of the rule
  * ends in a pseudo-element, where a nested `&` matches nothing. The candidates
- * of each part are read once, however many blocks come before it.
+ * of each part are read once, however many blocks come before it or arrangement is checked. Each
+ * finding says whether the move its warning would print clears it (`order-moves.ts`).
  */
 export function checkOrder(
   segments: readonly Segment[],
@@ -110,18 +134,16 @@ export function checkOrder(
   emitted: Emitted,
   isPseudoElementRule = false,
 ): Finding[] {
-  const known = new Map<number, readonly Candidate[]>()
-  const candidatesOfSegment = (index: number): readonly Candidate[] => {
-    let candidates = known.get(index)
+  const rule = { amp, emitted, isPseudoElementRule }
+  const known = new WeakMap<Segment, readonly Candidate[]>()
+  const candidatesOfPart = (segment: Segment): readonly Candidate[] => {
+    let candidates = known.get(segment)
     if (candidates === undefined) {
-      candidates = candidatesOf(segments[index]!, amp, emitted)
-      known.set(index, candidates)
+      candidates = candidatesOf(segment, amp, emitted)
+      known.set(segment, candidates)
     }
     return candidates
   }
-  const inner = segments.flatMap((segment, index) =>
-    segment.kind === 'atom-block' ? findingsOfBlock(index, segments, candidatesOfSegment, amp) : [],
-  )
-  if (isPseudoElementRule) return inner
-  return [...inner, ...outwardFindings(segments, amp, emitted, candidatesOfSegment)]
+  const findings = pairsIn(segments, rule, candidatesOfPart)
+  return markMoves(findings, segments, (arranged) => pairsIn(arranged, rule, candidatesOfPart))
 }

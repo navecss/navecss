@@ -76,13 +76,16 @@ export async function expandDirectives(
     return { hasDirective, findings: [], orderWarnings: [] }
   const expanded = await postcss([plugin]).process(root, { from })
   const located = expanded.warnings().map((warning) => {
-    const start = warning.node.source?.start
+    const isOrder = isOrderWarning(warning)
+    // A problem is framed at its directive; an order warning at the place core positions it, the
+    // later atom's name or the later content.
+    const start = isOrder ? undefined : warning.node.source?.start
     const finding = {
       text: warning.text,
       line: start?.line ?? warning.line,
       column: start?.column ?? warning.column,
     }
-    return { finding, isOrder: isOrderWarning(warning) }
+    return { finding, isOrder }
   })
   return {
     hasDirective,

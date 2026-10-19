@@ -68,3 +68,32 @@ describe('an order warning is printed by the plugin and is never a problem', () 
     expect(printed().filter((line) => line.includes('comes after "hideDesktopUp"'))).toHaveLength(1)
   })
 })
+
+describe('an order warning is framed where core frames it', () => {
+  it('puts each atom-pair warning at the later atom, not at the start of the directive', async () => {
+    const project = makeProject({ 'app/page.tsx': PAGE_WITH_PROP })
+    const printed = capturePrinted()
+
+    await runAtomic(
+      project,
+      [{ css: '.card {\n  @nave hideDesktopUp flex grid;\n}\n', file: 'app/globals.css' }],
+      { options: { onUnknown: 'warn' } },
+    )
+
+    const lines = printed().filter((line) => line.includes(' comes after '))
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toMatch(/^app\/globals\.css:2:23: @nave: "flex" comes after "hideDesktopUp"/)
+    expect(lines[1]).toMatch(/^app\/globals\.css:2:28: @nave: "grid" comes after "hideDesktopUp"/)
+  })
+
+  it('prints an order warning once when the wrapper left no options behind', async () => {
+    const project = makeProject({ 'app/page.tsx': PAGE_WITH_PROP })
+    const printed = capturePrinted()
+
+    await runAtomic(project, [ORDER], { options: false })
+
+    const lines = printed().filter((line) => line.includes('comes after "hideDesktopUp"'))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatch(/:3:3: @nave: display: flex comes after "hideDesktopUp"/)
+  })
+})

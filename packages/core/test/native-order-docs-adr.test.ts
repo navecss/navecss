@@ -125,7 +125,8 @@ describe('AC-native-apply-order-36: ADR 0011 holds the full reasoning', () => {
  * property relations: each paragraph as it is to read, whitespace folded.
  */
 const FOCUS_REPORT_PARAGRAPH = `Each warning is positioned at the overrider and names the atom, the condition, the property with
-both values, the fix and the directive with a marker inserted. Where the later value, as written,
+both values, a move only where the check, run again on the moved order, no longer finds that pair,
+and always the directive with a marker inserted. Where the later value, as written,
 hides \`focusRing\`'s outline (a style of \`none\`; a width written as \`0\` or as a zero length; the
 keyword \`transparent\`; an \`outline\` with no style keyword; or \`initial\` or \`unset\` on \`outline\`,
 \`outline-style\` or \`all\`), or puts back over \`srOnlyFocusable\`'s reveal what hid the element

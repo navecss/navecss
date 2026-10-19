@@ -29,7 +29,8 @@ moves what a rule says after a directive into a rule of its own before Nave sees
 content already resolved this way there, focus styles included, and the build cannot report it.
 
 The build reports each such place as a warning naming the atom, the condition, the property with
-both values, and the fix. Where the later content is not itself an atom's block, the warning also
+both values, and, where a move lets the atom win without a new warning, that move. Where the later
+content is not itself an atom's block, the warning also
 says what the result was before: `Before @navecss/core 0.5.0 "hideDesktopUp" won, because an atom's
 blocks were placed last in the rule.` It never fails the build, `onUnknown` does not change it, and
 no option turns it off. Where the later declaration is meant to win, mark the directive:

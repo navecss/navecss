@@ -6,6 +6,9 @@
  */
 import type { ConditionRule } from './condition-overlap.ts'
 
+import { printedValue } from './order-print.ts'
+import { type Token, tokenize } from './tokenizer.ts'
+
 /**
  * What a state implies: an element matching `:focus-visible` matches `:focus` and `:focus-within`.
  */
@@ -13,6 +16,9 @@ const IMPLIED_STATES = new Map<string, readonly string[]>([
   [':focus', [':focus-within']],
   [':focus-visible', [':focus', ':focus-within']],
 ])
+
+const OPENING = new Set(['(-token', '[-token', 'function-token'])
+const CLOSING = new Set([')-token', ']-token'])
 
 interface Scan {
   depth: number
@@ -75,10 +81,42 @@ function isCharAppended(parts: string[], text: string, i: number, isCodeAtTop: b
 }
 
 /**
- * A condition as a warning names it.
+ * Whether a token is the word `or`, in any case.
+ */
+function isOr(token: Token): boolean {
+  return token.type === 'ident-token' && String(token.structured?.value).toLowerCase() === 'or'
+}
+
+/**
+ * Whether a prelude holds a comma or the word `or` outside parentheses, brackets and strings: a
+ * list of queries or a disjunction, which `and` would read as binding tighter than it does.
+ */
+function isListOrDisjunction(prelude: string): boolean {
+  let depth = 0
+  for (const token of tokenize(prelude)) {
+    if (OPENING.has(token.type)) depth += 1
+    else if (CLOSING.has(token.type)) depth -= 1
+    else if (depth === 0 && (token.type === 'comma-token' || isOr(token))) return true
+  }
+  return false
+}
+
+/**
+ * A condition as a warning names it: its at-rule and prelude in printed form, in parentheses where
+ * the prelude is a list or holds an `or`, so that the conditions joined by `and` and the comma
+ * after the last one read as what they are.
  */
 function conditionText(condition: ConditionRule): string {
-  return `@${condition.name} ${condition.prelude.replaceAll(/\s+/g, ' ').trim()}`
+  const text = `@${condition.name} ${printedValue(condition.prelude)}`
+  return isListOrDisjunction(condition.prelude) ? `(${text})` : text
+}
+
+/**
+ * A condition as two are compared: the same group at-rule, whatever whitespace or comments lie
+ * between the tokens of its prelude and around its operators.
+ */
+export function conditionKey(condition: ConditionRule): string {
+  return `${condition.name} ${printedValue(condition.prelude).replaceAll(/\s*([<>=:(),])\s*/g, '$1')}`
 }
 
 /**
@@ -105,8 +143,9 @@ export function statesOf(selector: string): readonly string[] {
  * Where a selector under some conditions holds.
  */
 export function whereOf(selector: string, conditions: readonly ConditionRule[]): string {
-  const parts = compoundParts(selector)
-  return phrase(parts === undefined ? selector.trim() : parts.join(''), conditions)
+  const printed = printedValue(selector)
+  const parts = compoundParts(printed)
+  return phrase(parts === undefined ? printed : parts.join(''), conditions)
 }
 
 /**
@@ -130,10 +169,11 @@ export function alsoWhere(
   },
   later: { readonly conditions: readonly ConditionRule[]; readonly selector: string },
 ): string {
-  const firstParts = first.said ?? compoundParts(first.selector) ?? []
-  const laterParts = compoundParts(later.selector)
-  const seen = new Set(first.conditions.map((c) => conditionText(c)))
-  const conditions = later.conditions.filter((c) => !seen.has(conditionText(c)))
-  if (laterParts === undefined) return phrase(later.selector.trim(), conditions)
+  const firstParts = first.said ?? compoundParts(printedValue(first.selector)) ?? []
+  const laterSelector = printedValue(later.selector)
+  const laterParts = compoundParts(laterSelector)
+  const seen = new Set(first.conditions.map((c) => conditionKey(c)))
+  const conditions = later.conditions.filter((c) => !seen.has(conditionKey(c)))
+  if (laterParts === undefined) return phrase(laterSelector, conditions)
   return phrase(laterParts.filter((part) => !isSaid(part, firstParts)).join(''), conditions)
 }

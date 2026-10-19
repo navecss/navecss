@@ -68,3 +68,14 @@ export function stampSource(node: Rule | PostCSSAtRule, source: PostCSSAtRule['s
     child.source = source
   })
 }
+
+/**
+ * A selector or a prelude as it was written, comments included, when PostCSS kept it (as for a
+ * value): a warning prints it from the written text in every host.
+ */
+export function writtenText(
+  cleaned: string,
+  raws: { raw: string; value: string } | undefined,
+): string {
+  return raws?.value === cleaned ? raws.raw.trim() : cleaned
+}

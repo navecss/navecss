@@ -120,19 +120,19 @@ function overriderName(finding: Finding): string {
     return `${declaration.prop}: ${printedValue(declaration.value)}`
   }
   if (finding.outward?.overrider !== undefined) return finding.outward.overrider
-  if (overrider.top.kind === 'rule') return `the ${overrider.top.selector} block`
-  return `the @${overrider.top.name} ${overrider.top.prelude} block`
+  if (overrider.top.kind === 'rule') return `the ${printedValue(overrider.top.selector)} block`
+  return `the @${overrider.top.name} ${printedValue(overrider.top.prelude)} block`
 }
 
 /**
  * The sentence that says what to do to let the atom win.
  */
 function fixSentence(finding: Finding, context: TextContext): string | undefined {
+  if (finding.canMove !== true) return undefined
   const { unit, candidate } = finding
   const atom = `"${unit.atom.name}"`
   const { overrider } = candidate
   if (finding.outward !== undefined) {
-    if (!finding.outward.canMove) return undefined
     const moved =
       overrider.kind === 'own'
         ? overriderName(finding)

@@ -12,9 +12,11 @@ import { tokenize } from './tokenizer.ts'
  * How a warning names a nested node of the rule's own.
  */
 export function nestedText(node: ModelNode): string {
-  if (node.kind === 'rule') return `the ${node.selector} block`
+  if (node.kind === 'rule') return `the ${printedValue(node.selector)} block`
   if (node.kind === 'group' || node.kind === 'opaque') {
-    return ['the', `@${node.name}`, node.prelude, 'block'].filter((part) => part !== '').join(' ')
+    return ['the', `@${node.name}`, printedValue(node.prelude), 'block']
+      .filter((part) => part !== '')
+      .join(' ')
   }
   return ''
 }

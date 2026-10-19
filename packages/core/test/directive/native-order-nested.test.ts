@@ -253,9 +253,15 @@ describe.each(HOSTS)(
       const clause =
         'so on :focus-within while also on :focus-visible under @media (width < 37.5em), width is 100%, not auto.'
 
+      // The block that holds a directive cannot be moved above the directive without turning the
+      // pair round, so only the forms that hold plain declarations print that move.
       expect(nested.at(-1)!.text).toContain(clause)
-      expect(viaBare.map((w) => w.text)).toEqual(nested.map((w) => w.text))
-      expect(direct.map((w) => w.text)).toEqual(nested.map((w) => w.text))
+      expect(nested.some((w) => w.text.includes('To let'))).toBe(false)
+      expect(viaBare.every((w) => w.text.includes('move the &:focus-visible block above'))).toBe(
+        true,
+      )
+      expect(withoutMove(viaBare)).toEqual(nested.map((w) => w.text))
+      expect(withoutMove(direct)).toEqual(nested.map((w) => w.text))
     })
 
     it('reads a marker as used when the override sits in a nested directive', async () => {
@@ -490,6 +496,13 @@ describe('AC-native-apply-order-16 — two nested directives, and a nested rule 
     }
   })
 })
+
+/**
+ * The text of each warning without the sentence that names the move above the directive.
+ */
+function withoutMove(warnings: readonly { text: string }[]): string[] {
+  return warnings.map((w) => w.text.replace(/ To let .*? above the directive\./, ''))
+}
 
 const OUTWARD_EXTEND: Record<string, AtomDefinition> = {
   fx: { declarations: {}, media: { '(width >= 60em)': { declarations: { color: 'blue' } } } },

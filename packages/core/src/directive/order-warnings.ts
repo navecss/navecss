@@ -9,6 +9,7 @@ import type { PlanWarning } from './rule-model.ts'
 
 import { namesForLonghands } from './marker-names.ts'
 import { coveredLonghands, longhandsCoveredBy, type Marker, readMarkers } from './order-marker.ts'
+import { lastOverriderIndex } from './order-moves.ts'
 import { overriddenLonghands } from './order-overridden.ts'
 import { markedDirective } from './order-print.ts'
 import { findingText, type TextContext } from './order-text.ts'
@@ -34,33 +35,6 @@ function remainingLonghands(finding: Finding, markers: readonly Marker[]): strin
   return overriddenLonghands(finding.pairs).filter(
     (longhand) => !covered.has(standardName(longhand)),
   )
-}
-
-/**
- * The atom of a finding's directive that the atom must be written after to win, if the overrider
- * is a later atom of that directive: after the last atom of the directive that overrides a block
- * of any occurrence of the atom (a name written twice is one atom, and all its occurrences move).
- */
-function lastOverriderIndex(finding: Finding, all: readonly Finding[]): number | undefined {
-  const { unit, candidate } = finding
-  if (
-    candidate.overrider.kind !== 'atom' ||
-    candidate.overrider.directive.ref !== unit.directive.ref
-  ) {
-    return undefined
-  }
-  const indexes = all
-    .filter(
-      (other) =>
-        other.unit.directive.ref === unit.directive.ref && other.unit.atom.name === unit.atom.name,
-    )
-    .flatMap((other) =>
-      other.candidate.overrider.kind === 'atom' &&
-      other.candidate.overrider.directive.ref === unit.directive.ref
-        ? [other.candidate.overrider.atom.atomIndex]
-        : [],
-    )
-  return Math.max(...indexes)
 }
 
 /**

@@ -4,7 +4,7 @@
  * and what each group holds after the child that holds the directive. The search keeps a stack
  * of its own, so nesting depth cannot overflow the call stack.
  */
-import type { DirectiveNode, ModelNode } from './rule-model.ts'
+import type { DirectiveNode, ModelNode, NodeRef } from './rule-model.ts'
 import type { Specificity } from './selector-specificity.ts'
 
 import { namesOf } from './order-outward-names.ts'
@@ -17,6 +17,8 @@ import { nestedSpecificities } from './selector-specificity.ts'
 export interface GroupLevelFact {
   readonly above: string
   readonly chain: ConditionChain | undefined
+  readonly container: NodeRef
+  readonly group: NodeRef
   readonly later: readonly ModelNode[]
   readonly names: ReadonlyMap<number, string>
   readonly specificities: readonly Specificity[]
@@ -47,6 +49,7 @@ interface Level {
   readonly isRule: boolean
   readonly nodes: readonly ModelNode[]
   readonly path: readonly string[]
+  readonly ref: NodeRef
   readonly specificities: readonly Specificity[]
 }
 
@@ -66,12 +69,13 @@ function enter(node: ModelNode, level: Level): Level | undefined {
       isRule: true,
       nodes: node.nodes,
       path,
+      ref: node.ref,
       specificities,
     }
   }
   if (node.kind === 'group' && GROUP_NAMES.has(node.name)) {
     const chain = { rule: { name: node.name, prelude: node.prelude }, parent: level.chain }
-    return { ...level, next: 0, chain, isRule: false, nodes: node.nodes }
+    return { ...level, next: 0, chain, isRule: false, nodes: node.nodes, ref: node.ref }
   }
   return undefined
 }
@@ -87,6 +91,8 @@ function groupFacts(stack: readonly Level[]): GroupLevelFact[] {
       {
         above: namesOf(level.nodes).get(container.ref) ?? '',
         chain: level.chain,
+        container: container.ref,
+        group: level.ref,
         later: level.nodes.slice(level.next),
         names: namesOf(level.nodes),
         specificities: level.specificities,
@@ -108,6 +114,7 @@ export function directivesBelow(top: ModelNode, amp: Specificity): Found[] {
     isRule: true,
     nodes: [],
     path: [],
+    ref: top.ref,
     specificities: [amp],
   }
   const first = enter(top, start)

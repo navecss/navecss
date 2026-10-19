@@ -23,7 +23,7 @@ import {
   throwMalformedAtom,
 } from './postcss-at-rule.ts'
 import { insertEmissions, wrapRun } from './postcss-emit.ts'
-import { isInsideKeyframes } from './postcss-node-utils.ts'
+import { isInsideKeyframes, writtenText } from './postcss-node-utils.ts'
 import {
   isLastDirectiveUnder,
   isRuleDirective,
@@ -74,7 +74,7 @@ function toModel(node: ChildNode, table: NodeTable): ModelNode {
     return {
       kind: 'rule',
       ref,
-      selector: node.selector,
+      selector: writtenText(node.selector, node.raws.selector),
       get nodes() {
         return content()
       },
@@ -84,14 +84,14 @@ function toModel(node: ChildNode, table: NodeTable): ModelNode {
   if (match.isNave) return { kind: 'directive', ref, prelude: match.prelude }
   const name = node.name.toLowerCase()
   if (!GROUP_NAMES.has(name) || node.nodes === undefined) {
-    return { kind: 'opaque', ref, name, prelude: node.params }
+    return { kind: 'opaque', ref, name, prelude: writtenText(node.params, node.raws.params) }
   }
   const content = contentOf(node, table)
   return {
     kind: 'group',
     ref,
     name,
-    prelude: node.params,
+    prelude: writtenText(node.params, node.raws.params),
     get nodes() {
       return content()
     },
