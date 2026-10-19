@@ -695,6 +695,13 @@ Without it, Turbopack compiles for older browsers and rewrites every `light-dark
 Nave's colours included, into `--lightningcss-light` and `--lightningcss-dark` variables. Spell
 the floor out as above: Next 15 rejects the shorter `baseline 2024` with `Unknown browser baseline`.
 
+With `onUnknown: 'warn'`, where Nave's warning shows depends on the bundler. Measured on Next 16.4.1:
+`next build --webpack` lists it under `Compiled with warnings`, and Turbopack, the default for
+`next build` and `next dev`, prints each one to the terminal as `file:line:column:` and the
+message, because it shows no PostCSS warning at all. `next dev --webpack` prints a CSS Module's
+warning but may print none for a global stylesheet's. The default, `'error'`, fails the build on
+every bundler. Next 15 was not measured.
+
 **If your Vite config sets `css.transformer: 'lightningcss'`, this plugin never
 runs.** That option replaces Vite's CSS pipeline with Lightning CSS, which does
 not run PostCSS plugins at all: the build stays green, `@nave` reaches the
@@ -772,7 +779,14 @@ in one error, positioned at the first: its message, then
 `N more in this stylesheet:` and one `line:column:` line for each of the
 others. The report covers one stylesheet, so a bundler that stops at the first
 failing file reports one file per build. Under `'warn'`, each problem is a
-warning of its own.
+warning of its own. On Next.js's default bundler, which shows no PostCSS
+warning, each one is printed to the terminal instead, as `file:line:column:`
+and the message ([where Next.js shows them](#nextjs)). The PostCSS plugin knows
+that bundler, Turbopack, by the `TURBOPACK` environment variable, which Next.js
+sets for it, so wherever that variable is set and not empty, under Vite or the
+PostCSS CLI as well, the plugin prints each problem to the terminal and raises
+no PostCSS warning. The Vite plugin and the Lightning CSS adapter do not read
+the variable.
 
 To add atoms of your own to `@nave`, pass them as `extend`: see
 [CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md). An `extend` object written inline in
