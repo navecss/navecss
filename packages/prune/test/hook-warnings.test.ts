@@ -152,7 +152,7 @@ describe('AC-nextjs-used-atoms-30: each single use of an atom silences the warni
       'a page calling cx("flex")',
       KEEP_FOR,
       {
-        'app/page.tsx': `import { look } from 'kf-lib'\nimport { cx } from '@navecss/core/cx'\n\nexport default function Page() {\n  return <div className={cx('flex', look('x'))} />\n}\n`,
+        'app/page.tsx': `import { look } from 'kf-lib'\nimport { cx } from '@navecss/core/cx'\n\nexport default function Page() {\n  return <div className={cx('flex')} data-x={look('x')} />\n}\n`,
       },
       [],
     ],

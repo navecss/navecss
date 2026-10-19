@@ -130,7 +130,7 @@ describe('AC-nextjs-used-atoms-29: in next dev the report goes to the terminal, 
     expect(lines.at(-1)).toBe(CLOSING)
   })
 
-  it('AC-nextjs-used-atoms-29: the application problem comes first, then the @nave problem with core text', async () => {
+  it('AC-nextjs-used-atoms-29: the problems are in path order, the @nave problem with core text', async () => {
     const project = brokenProject()
     const seen = watchConsole()
     await runSheets(project, [GLOBALS, ATOMIC_SHEET], { phase: DEV })
@@ -138,8 +138,8 @@ describe('AC-nextjs-used-atoms-29: in next dev the report goes to the terminal, 
     const lines = reportIn(seen()).split('\n')
     const page = lines.findIndex((line) => line.startsWith('app/page.tsx:4:'))
     const sheet = lines.indexOf(`app/globals.css:3:3: ${thrown.text}`)
-    expect(page).toBeGreaterThan(0)
-    expect(sheet).toBeGreaterThan(page)
+    expect(sheet).toBeGreaterThan(0)
+    expect(page).toBeGreaterThan(sheet)
   })
 
   it("AC-nextjs-used-atoms-29: the remedy block is core's, and the closing line follows it", async () => {
@@ -168,15 +168,22 @@ describe('AC-nextjs-used-atoms-29: in next dev the report goes to the terminal, 
 })
 
 describe('AC-nextjs-used-atoms-29: the report is cleared when fixed and comes back with what comes back', () => {
-  it('AC-nextjs-used-atoms-29: once the problems are fixed on disk one line says so, and a further run prints nothing', async () => {
+  it('AC-nextjs-used-atoms-29: each fix reprints what is left, the last one says the problems are fixed, and a further run prints nothing', async () => {
     const project = brokenProject()
     const seen = watchConsole()
-    const fix = afterWriting(project, { 'app/page.tsx': pageCalling("'flex'") }, FIXED_GLOBALS)
-    await runSheets(project, [GLOBALS, ATOMIC_SHEET, fix, ATOMIC_SHEET, ATOMIC_SHEET], {
-      phase: DEV,
-    })
+    const fixPage = afterWriting(project, { 'app/page.tsx': pageCalling("'flex'") }, GLOBALS)
+    const fixSheet = afterWriting(project, {}, FIXED_GLOBALS)
+    await runSheets(
+      project,
+      [GLOBALS, ATOMIC_SHEET, fixPage, ATOMIC_SHEET, fixSheet, ATOMIC_SHEET, ATOMIC_SHEET],
+      { phase: DEV },
+    )
     const printed = textsOf(seen())
-    expect(printed).toEqual([expect.stringContaining('2 problems in 2 files: '), FIXED])
+    expect(printed).toHaveLength(3)
+    expect(firstLine(printed[0]!)).toBe(`2 problems in 2 files: ${REPORT_CAUSE}`)
+    expect(firstLine(printed[1]!)).toBe(`1 problem in 1 file: ${REPORT_CAUSE}`)
+    expect(printed[1]).toContain('app/globals.css:3:3: ')
+    expect(printed[2]).toBe(FIXED)
     // Control: the fixed project holds no problem.
     expect(recordOf(project).problems).toEqual([])
     expect(recordOf(project).directiveProblems).toEqual([])
@@ -185,18 +192,21 @@ describe('AC-nextjs-used-atoms-29: the report is cleared when fixed and comes ba
   it('AC-nextjs-used-atoms-29: reintroducing one problem prints the report again with that one problem', async () => {
     const project = brokenProject()
     const seen = watchConsole()
-    const fix = afterWriting(project, { 'app/page.tsx': pageCalling("'flex'") }, FIXED_GLOBALS)
+    const fixPage = afterWriting(project, { 'app/page.tsx': pageCalling("'flex'") }, GLOBALS)
+    const fixSheet = afterWriting(project, {}, FIXED_GLOBALS)
     const back = afterWriting(project, { 'app/page.tsx': PAGE_WITH_PROP }, FIXED_GLOBALS)
-    await runSheets(project, [GLOBALS, ATOMIC_SHEET, fix, ATOMIC_SHEET, back, ATOMIC_SHEET], {
-      phase: DEV,
-    })
+    await runSheets(
+      project,
+      [GLOBALS, ATOMIC_SHEET, fixPage, ATOMIC_SHEET, fixSheet, ATOMIC_SHEET, back, ATOMIC_SHEET],
+      { phase: DEV },
+    )
     const printed = textsOf(seen())
-    expect(printed).toHaveLength(3)
-    expect(printed[1]).toBe(FIXED)
-    expect(firstLine(printed[2]!)).toBe(`1 problem in 1 file: ${REPORT_CAUSE}`)
-    expect(printed[2]).toContain('app/page.tsx:4:')
-    expect(printed[2]).not.toContain('app/globals.css')
-    expect(printed[2]!.endsWith(`\n${CLOSING}`)).toBe(true)
+    expect(printed).toHaveLength(4)
+    expect(printed[2]).toBe(FIXED)
+    expect(firstLine(printed[3]!)).toBe(`1 problem in 1 file: ${REPORT_CAUSE}`)
+    expect(printed[3]).toContain('app/page.tsx:4:')
+    expect(printed[3]).not.toContain('app/globals.css')
+    expect(printed[3]!.endsWith(`\n${CLOSING}`)).toBe(true)
   })
 })
 

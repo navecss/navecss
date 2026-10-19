@@ -184,7 +184,10 @@ const DYN_PACKAGE = {
     "import { cx } from '@navecss/core/cx'\n\nexport const look = () => cx.dynamic('interactive')\n",
 }
 
-const LEGACY_OPTIONS: NaveOptions = { keepFor: { 'dyn-pages': ['interactive'] } }
+const LEGACY_OPTIONS: NaveOptions = {
+  keep: ['interactive'],
+  keepFor: { 'dyn-pages': ['interactive'] },
+}
 
 const LEGACY_PAGE =
   "import { look } from 'dyn-pages'\n\nexport default function Legacy() {\n  return <div className={look()} />\n}\n"
