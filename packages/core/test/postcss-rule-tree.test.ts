@@ -113,3 +113,45 @@ describe('AC-native-apply-order-25 — a tree of rules reports its warnings in s
     expect(viaPostcss).toEqual(viaText)
   })
 })
+
+/**
+ * A plugin that sets every `margin` to `5px` before Nave runs.
+ */
+const set = (): Plugin => ({
+  postcssPlugin: 'set',
+  Once(root) {
+    root.walkDecls('margin', (decl) => {
+      decl.value = '5px'
+    })
+  },
+})
+set.postcss = true
+
+describe('AC-native-apply-order-25 — what the PostCSS host reads and reports', () => {
+  it('prints the value a plugin ahead set, not the raw text PostCSS kept before the change', async () => {
+    const extend = {
+      pv: {
+        declarations: {},
+        media: { '(width >= 75em)': { declarations: { margin: '0' } } },
+      },
+    }
+    const result = await postcss([set(), navePlugin({ onUnknown: 'warn', extend })]).process(
+      '.x { @nave pv; margin: 0 /* c */ auto; }',
+      { from: 'x.css' },
+    )
+
+    expect(result.warnings()[0]!.text.startsWith('@nave: margin: 5px comes after "pv"')).toBe(true)
+  })
+
+  it('reports the unknown atoms of sibling nested rules in source order', async () => {
+    const result = await postcss([navePlugin({ onUnknown: 'warn' })]).process(
+      '.x { &:hover { @nave nopeA } &:focus { @nave nopeB } }',
+      { from: 'x.css' },
+    )
+
+    expect(result.warnings().map((w) => [w.line, w.column])).toEqual([
+      [1, 22],
+      [1, 46],
+    ])
+  })
+})

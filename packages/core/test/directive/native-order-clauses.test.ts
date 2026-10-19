@@ -196,3 +196,48 @@ describe.each(HOSTS)(
     })
   },
 )
+
+/**
+ * The text of each warning.
+ */
+function texts(warnings: readonly { text: string }[]): string[] {
+  return warnings.map((w) => w.text)
+}
+
+describe('AC-native-apply-order-28 and AC-native-apply-order-25 — a comment in a declaration the reveal sentence reads does not change the sentence', () => {
+  it.each([
+    [
+      '.x { @nave srOnlyFocusable; &:focus-visible { clip-path: inset(50%) /* c */; } }',
+      '.x { @nave srOnlyFocusable; &:focus-visible { clip-path: inset(50%); } }',
+    ],
+    [
+      '.x { @nave srOnlyFocusable; &:focus-visible { clip-path: inset(/* c */ 50%); } }',
+      '.x { @nave srOnlyFocusable; &:focus-visible { clip-path: inset(50%); } }',
+    ],
+    [
+      '.x { @nave srOnlyFocusable; &:focus-visible { width: 1px /* c */; height: 1px; overflow: hidden; } }',
+      '.x { @nave srOnlyFocusable; &:focus-visible { width: 1px; height: 1px; overflow: hidden; } }',
+    ],
+    [
+      '.x { @nave srOnlyFocusable; &:focus-visible { width: 1px; height: 1px; overflow: hidden /* c */; } }',
+      '.x { @nave srOnlyFocusable; &:focus-visible { width: 1px; height: 1px; overflow: hidden; } }',
+    ],
+  ])('%s says what its comment-free twin says, in both hosts', async (css, bare) => {
+    const expected = texts(warningsViaText(bare))
+
+    expect(expected.some((t) => t.includes('hides again what "srOnlyFocusable" reveals'))).toBe(
+      true,
+    )
+    expect(texts(warningsViaText(css))).toEqual(expected)
+    expect(texts(await warningsViaPostcss(css))).toEqual(expected)
+  })
+
+  it('reads nested parentheses in the outline shorthand as one block, in both hosts', async () => {
+    const css = '.x { @nave focusRing; &:focus { outline: calc((1px) + 0px) solid red } }'
+
+    for (const warnings of [warningsViaText(css), await warningsViaPostcss(css)]) {
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]!.text).not.toContain('keyboard focus indicator')
+    }
+  })
+})

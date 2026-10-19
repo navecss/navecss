@@ -76,7 +76,7 @@ export interface RuleInput {
    */
   readonly reportStaleMarkers?: boolean | undefined
   /**
-  What a directive written inside a nested rule emits, kept by the host across the rules of one stylesheet so each directive is planned once however many rules around it read it. Keyed by `emittedKey()`.
+  What a directive written inside a nested rule emits, kept by the host while it plans one tree of rules (the text expander keeps it for the whole stylesheet) so a directive written the same way is planned once however many rules around it read it. Keyed by the directive's prelude and whether it sits inside `@keyframes`.
    */
   readonly emittedCache?: Map<string, readonly ModelNode[]> | undefined
 }

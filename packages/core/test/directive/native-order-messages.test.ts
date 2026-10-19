@@ -145,3 +145,42 @@ describe('AC-native-apply-order-25 — a printed value keeps its strings and its
     expect(viaPostcss).toEqual(viaText)
   })
 })
+
+const PINNED: Record<string, AtomDefinition> = {
+  pv: {
+    declarations: {},
+    media: {
+      '(width >= 75em)': {
+        declarations: {
+          background: 'blue',
+          color: 'blue',
+          'grid-template-columns': '1px',
+          margin: '0',
+        },
+      },
+    },
+  },
+}
+
+describe('AC-native-apply-order-25 — a dropped comment leaves the tokens it separated apart, and no others', () => {
+  it.each([
+    ['color: rgb( /* c */ 0 0 0)', 'color: rgb(0 0 0)'],
+    ['color: rgb(0 0 0)', 'color: rgb(0 0 0)'],
+    ['margin: calc((/* c */ 1px) + 0px)', 'margin: calc((1px) + 0px)'],
+    ['grid-template-columns: [/* c */ a /* d */] 1px', 'grid-template-columns: [a] 1px'],
+    ['margin: 1px/* c */2px', 'margin: 1px 2px'],
+    ['margin: 1%/* c */2%', 'margin: 1% 2%'],
+    ['color: #fff/* c */#000', 'color: #fff #000'],
+    ['color: red/* c */rgb(0 0 0)', 'color: red rgb(0 0 0)'],
+    ['background: red/* c */url(a.png)', 'background: red url(a.png)'],
+    ['margin: 1px 2px,3px', 'margin: 1px 2px,3px'],
+  ])('%s prints %s', async (declaration, printed) => {
+    const css = `.x { @nave pv; ${declaration}; }`
+    const viaText = warningsViaText(css, { extend: PINNED })
+    const viaPostcss = await warningsViaPostcss(css, { extend: PINNED })
+
+    expect(viaText).toHaveLength(1)
+    expect(viaText[0]!.text.startsWith(`@nave: ${printed} comes after "pv"`)).toBe(true)
+    expect(viaPostcss).toEqual(viaText)
+  })
+})

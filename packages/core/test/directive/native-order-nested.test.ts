@@ -363,3 +363,43 @@ describe.each(HOSTS)(
     })
   },
 )
+
+/**
+ * The text of each warning.
+ */
+function texts(warnings: readonly { text: string }[]): string[] {
+  return warnings.map((w) => w.text)
+}
+
+describe('AC-native-apply-order-16 — two nested directives, and a nested rule written over two lines', () => {
+  it('prints the atoms of each of two nested directives, not the first one twice', async () => {
+    const css = '.x { @nave hideDesktopUp; &:where(.q) { @nave flex } &:where(.r) { @nave block } }'
+
+    for (const warnings of [warningsViaText(css), await warningsViaPostcss(css)]) {
+      expect(warnings).toHaveLength(2)
+      expect(warnings[0]!.text).toContain('display is flex, not none')
+      expect(warnings[1]!.text).toContain('display is block, not none')
+    }
+  })
+
+  it('reports a tree written over several lines in line order', async () => {
+    const css = '.x {\n  &:hover { @nave hidePhoneOnly block }\n  @nave hideDesktopUp flex;\n}'
+    const viaPostcss = await warningsViaPostcss(css)
+    const viaText = warningsViaText(css)
+
+    expect(viaText.map((w) => w.line)).toEqual([2, 3])
+    expect(viaPostcss).toEqual(viaText)
+  })
+
+  it('keeps the enclosing holder for a bare & written over two lines, and takes the nested one otherwise', async () => {
+    const bare = '.x { @nave srOnlyFocusable; &:focus-visible { &\n{ @nave wFullPhoneOnly } } }'
+    const direct = '.x { @nave srOnlyFocusable; &:focus-visible { @nave wFullPhoneOnly } }'
+    const named = '.x { @nave srOnlyFocusable; &:focus-visible { &:where(.q) { margin: 4px } } }'
+
+    expect(texts(warningsViaText(bare))).toEqual(texts(warningsViaText(direct)))
+    expect(texts(await warningsViaPostcss(bare))).toEqual(texts(warningsViaText(direct)))
+    for (const warnings of [warningsViaText(named), await warningsViaPostcss(named)]) {
+      expect(warnings[0]!.text).toContain('while also on :where(.q), margin is 4px, not 0')
+    }
+  })
+})

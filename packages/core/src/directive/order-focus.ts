@@ -43,6 +43,17 @@ function significantTokens(value: string): Token[] {
 }
 
 /**
+ * A value as the lowercase text of its significant tokens joined, without whitespace or comments,
+ * so `inset( /* c *\/ 50% )` reads as `inset(50%)`.
+ */
+function compact(value: string): string {
+  return significantTokens(value)
+    .map((token) => token.raw)
+    .join('')
+    .toLowerCase()
+}
+
+/**
  * The lowercase text of an ident token.
  */
 function identOf(token: Token | undefined): string | undefined {
@@ -136,8 +147,7 @@ function isRingHidden(declaration: OrderDeclaration): boolean {
  */
 function isClipPathInset(declaration: OrderDeclaration): boolean {
   return (
-    declaration.prop.toLowerCase() === 'clip-path' &&
-    declaration.value.replaceAll(/\s+/g, '').toLowerCase() === 'inset(50%)'
+    declaration.prop.toLowerCase() === 'clip-path' && compact(declaration.value) === 'inset(50%)'
   )
 }
 
@@ -146,8 +156,7 @@ function isClipPathInset(declaration: OrderDeclaration): boolean {
  */
 function isHidingSize(declaration: OrderDeclaration): boolean {
   const prop = declaration.prop.toLowerCase()
-  const value = declaration.value.replaceAll(/\s+/g, '').toLowerCase()
-  return (prop === 'width' || prop === 'height') && value === '1px'
+  return (prop === 'width' || prop === 'height') && compact(declaration.value) === '1px'
 }
 
 /**
@@ -155,10 +164,7 @@ function isHidingSize(declaration: OrderDeclaration): boolean {
  */
 function isHidingTrio(declarations: readonly OrderDeclaration[]): boolean {
   const isPresent = (prop: string, value: string): boolean =>
-    declarations.some(
-      (d) =>
-        d.prop.toLowerCase() === prop && d.value.replaceAll(/\s+/g, '').toLowerCase() === value,
-    )
+    declarations.some((d) => d.prop.toLowerCase() === prop && compact(d.value) === value)
   return isPresent('width', '1px') && isPresent('height', '1px') && isPresent('overflow', 'hidden')
 }
 
@@ -172,8 +178,7 @@ function isRevealHidden(
   if (isClipPathInset(declaration)) return true
   const prop = declaration.prop.toLowerCase()
   const isTrioMember =
-    isHidingSize(declaration) ||
-    (prop === 'overflow' && declaration.value.trim().toLowerCase() === 'hidden')
+    isHidingSize(declaration) || (prop === 'overflow' && compact(declaration.value) === 'hidden')
   return isTrioMember && isHidingTrio(siblings)
 }
 

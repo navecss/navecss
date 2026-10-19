@@ -17,6 +17,7 @@ const WORD_LIKE = new Set([
   'ident-token',
   'number-token',
   'percentage-token',
+  'url-token',
 ])
 const OPENING = new Set(['(-token', '[-token', 'function-token'])
 const CLOSING = new Set([')-token', ']-token', 'comma-token', 'semicolon-token'])
