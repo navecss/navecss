@@ -71,10 +71,10 @@ export const FIXED_SENTENCES: readonly FixedSentence[] = [
     text: 'This package is not affiliated with, endorsed by or sponsored by MUI or the Base UI project.',
   },
   {
-    bytes: 214,
+    bytes: 224,
     name: 'Menu.LinkItem',
-    prefix: '98a262547c17440c',
-    text: 'In Base UI 1.8.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.',
+    prefix: '2b7152fa3f24b8c2',
+    text: 'In Base UI 1.8.0 and 1.9.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.',
   },
 ]
 
