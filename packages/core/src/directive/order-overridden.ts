@@ -5,15 +5,17 @@
  */
 import type { RelatedPair } from './order-model.ts'
 
-import { longhandsOf } from './property-relations.ts'
+import { longhandsOf, standardName } from './property-relations.ts'
 
 /**
- * The longhands one pair overrides.
+ * The longhands one pair overrides, named as the block's own property names them: those whose
+ * property the later declaration also sets, a legacy name alias counting as the property it
+ * stands for.
  */
 function overriddenByPair(pair: RelatedPair): readonly string[] {
   const block = longhandsOf(pair.block.prop)
-  const later = new Set(longhandsOf(pair.later.prop))
-  const shared = block.filter((longhand) => later.has(longhand))
+  const later = new Set(longhandsOf(pair.later.prop).map((longhand) => standardName(longhand)))
+  const shared = block.filter((longhand) => later.has(standardName(longhand)))
   return shared.length > 0 ? shared : block
 }
 

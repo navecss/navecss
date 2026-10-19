@@ -5,13 +5,18 @@
  * but `direction` and `unicode-bidi`), or they are a logical and a physical member of one logical
  * property group. A custom property relates only to itself, and so does a vendor-prefixed one.
  *
+ * A legacy name alias (`grid-gap` for `gap`, `word-wrap` for `overflow-wrap`) is the property it
+ * is another name for. A legacy shorthand (`page-break-before`) is a shorthand like any other.
+ *
  * The data is `property-table.generated.ts`; this module is only the lookups over it.
  */
-import { LOGICAL_GROUPS, PROPERTY_LONGHANDS } from './property-table.generated.ts'
+import { LEGACY_ALIASES, LOGICAL_GROUPS, PROPERTY_LONGHANDS } from './property-table.generated.ts'
 
 type Side = 'both' | 'logical' | 'physical'
 
 const VENDOR_PREFIXED = /^-(?:webkit|moz|ms|o)-[a-z0-9-]+$/
+
+const ALIASES = new Map<string, string>(Object.entries(LEGACY_ALIASES))
 
 const LONGHAND_LISTS = new Map<string, readonly string[]>(Object.entries(PROPERTY_LONGHANDS))
 
@@ -46,6 +51,24 @@ function isCustomProperty(name: string): boolean {
  */
 function foldAscii(name: string): string {
   return name.replaceAll(/[A-Z]+/g, (letters) => letters.toLowerCase())
+}
+
+/**
+ * The property a name stands for: the name itself, ASCII-lowercased, or the property it is a
+ * legacy name alias of; a custom property as written.
+ */
+export function standardName(name: string): string {
+  if (isCustomProperty(name)) return name
+  const folded = foldAscii(name)
+  return ALIASES.get(folded) ?? folded
+}
+
+/**
+ * Whether two property names are the same property: custom properties by exact name, any other
+ * in any ASCII case and through legacy name aliases.
+ */
+export function isSameProperty(a: string, b: string): boolean {
+  return standardName(a) === standardName(b)
 }
 
 /**
@@ -142,8 +165,8 @@ export function isLogicalPhysicalPair(a: string, b: string): boolean {
 // eslint-disable-next-line unicorn/consistent-boolean-name -- the relation reads as a sentence: propertiesRelate(a, b)
 export function propertiesRelate(a: string, b: string): boolean {
   if (isCustomProperty(a) || isCustomProperty(b)) return a === b
-  const first = foldAscii(a)
-  const second = foldAscii(b)
+  const first = standardName(a)
+  const second = standardName(b)
   if (first === second) return true
   if (VENDOR_PREFIXED.test(first) || VENDOR_PREFIXED.test(second)) return false
   const firstLonghands = LONGHAND_SETS.get(first)

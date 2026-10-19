@@ -12,7 +12,7 @@ import { coveredLonghands, longhandsCoveredBy, type Marker, readMarkers } from '
 import { overriddenLonghands } from './order-overridden.ts'
 import { markedDirective } from './order-print.ts'
 import { findingText, type TextContext } from './order-text.ts'
-import { isCssProperty } from './property-relations.ts'
+import { isCssProperty, standardName } from './property-relations.ts'
 
 /**
  * Where a finding is reported: the later atom's name, or the rule's own node.
@@ -31,12 +31,15 @@ function anchorOf(finding: Finding): PlanWarning['anchor'] {
 function remainingLonghands(finding: Finding, markers: readonly Marker[]): string[] {
   const covered = coveredLonghands(markers, finding.candidate.declaration.prop)
   if (covered.has('*')) return []
-  return overriddenLonghands(finding.pairs).filter((longhand) => !covered.has(longhand))
+  return overriddenLonghands(finding.pairs).filter(
+    (longhand) => !covered.has(standardName(longhand)),
+  )
 }
 
 /**
  * The atom of a finding's directive that the atom must be written after to win, if the overrider
- * is a later atom of that directive: after the last atom of the directive that overrides it.
+ * is a later atom of that directive: after the last atom of the directive that overrides a block
+ * of any occurrence of the atom (a name written twice is one atom, and all its occurrences move).
  */
 function lastOverriderIndex(finding: Finding, all: readonly Finding[]): number | undefined {
   const { unit, candidate } = finding
@@ -49,8 +52,7 @@ function lastOverriderIndex(finding: Finding, all: readonly Finding[]): number |
   const indexes = all
     .filter(
       (other) =>
-        other.unit.directive.ref === unit.directive.ref &&
-        other.unit.atom.atomIndex === unit.atom.atomIndex,
+        other.unit.directive.ref === unit.directive.ref && other.unit.atom.name === unit.atom.name,
     )
     .flatMap((other) =>
       other.candidate.overrider.kind === 'atom' &&
@@ -93,7 +95,7 @@ function isUsed(name: string, findings: readonly Finding[]): boolean {
   }
   const covered = new Set(longhandsCoveredBy(name))
   return findings.some((f) =>
-    overriddenLonghands(f.pairs).some((longhand) => covered.has(longhand)),
+    overriddenLonghands(f.pairs).some((longhand) => covered.has(standardName(longhand))),
   )
 }
 

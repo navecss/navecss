@@ -6,8 +6,24 @@
 import type { AtomFacts } from './order-model.ts'
 
 import { type PreludeMarkers, readMarkers } from './order-marker.ts'
+import { tokenize } from './tokenizer.ts'
 
 const MARKER_HEAD = 'nave-allow-override'
+
+/**
+ * A value as a warning prints it, the same in every host: comments dropped, each run of
+ * whitespace one space, none at either end. A host hands over a value as it read it (PostCSS
+ * keeps the whitespace around a comment it took out of the value), so this is the one place the
+ * printed form is decided.
+ */
+export function printedValue(value: string): string {
+  const parts: string[] = []
+  for (const token of tokenize(value)) {
+    if (token.type === 'comment') continue
+    parts.push(token.type === 'whitespace-token' ? ' ' : token.raw)
+  }
+  return parts.join('').replaceAll(/ {2,}/g, ' ').trim()
+}
 
 /**
  * `@nave ` and the prelude, trimmed, ending in the semicolon.
@@ -35,16 +51,19 @@ function withAtomsInOrder(
 }
 
 /**
- * The directive with `atoms[moving]` written after `atoms[after]`, the others keeping their order.
+ * The directive with the atoms at `moving` written, in their order, right after `atoms[after]`,
+ * the others keeping their order.
  */
 export function reorderedDirective(
   prelude: string,
   atoms: readonly AtomFacts[],
-  placement: { readonly after: number; readonly moving: number },
+  placement: { readonly after: number; readonly moving: readonly number[] },
 ): string {
-  const rest = atoms.map((_atom, index) => index).filter((index) => index !== placement.moving)
+  const rest = atoms
+    .map((_atom, index) => index)
+    .filter((index) => !placement.moving.includes(index))
   const at = rest.indexOf(placement.after)
-  const order = [...rest.slice(0, at + 1), placement.moving, ...rest.slice(at + 1)]
+  const order = [...rest.slice(0, at + 1), ...placement.moving, ...rest.slice(at + 1)]
   return directiveText(withAtomsInOrder(prelude, atoms, order))
 }
 

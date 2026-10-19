@@ -1,6 +1,6 @@
 /**
  * Generates `src/directive/property-table.generated.ts`: every CSS property name, the longhands
- * each one sets (transitively), and the logical property groups. Dev-only: the table ships as
+ * each one sets (transitively), the legacy name aliases, and the logical property groups. Dev-only: the table ships as
  * plain data and `mdn-data` is never imported by anything that reaches `dist/`.
  *
  * Seed: `css/properties.json` of the installed `mdn-data`, where a property whose `computed`
@@ -136,6 +136,24 @@ function buildLonghandTable(properties: Record<string, MdnProperty>): Map<string
 }
 
 /**
+ * The legacy name aliases, each checked to name a property the table holds and to stand for one
+ * that is not itself an alias.
+ */
+function readAliases(table: Map<string, string[]>): [string, string][] {
+  const aliases = CORRECTIONS.flatMap((correction) =>
+    'aliasOf' in correction ? [[correction.property, correction.aliasOf] as [string, string]] : [],
+  )
+  const names = new Set(aliases.map(([alias]) => alias))
+  for (const [alias, standard] of aliases) {
+    if (!table.has(alias) || !table.has(standard)) {
+      throw new Error(`alias ${alias} of ${standard}: the table lacks one of them`)
+    }
+    if (names.has(standard)) throw new Error(`alias ${alias} stands for another alias, ${standard}`)
+  }
+  return aliases.toSorted(([a], [b]) => compareCodeUnits(a, b))
+}
+
+/**
  * The logical property groups, each member checked to be a longhand of the table: a group that
  * names a property the table lacks, or a shorthand, would answer wrongly for it.
  */
@@ -184,6 +202,10 @@ export function generate(): string {
   const { version, properties } = readMdnData()
   const table = buildLonghandTable(properties)
   checkLogicalGroups(table)
+  const aliasEntries = readAliases(table).map(([alias, standard]): [string, string] => [
+    alias,
+    `'${standard}'`,
+  ])
   const longhandEntries = [...table].map(([name, longhands]): [string, string] => [
     name,
     renderNames(longhands),
@@ -206,6 +228,11 @@ export function generate(): string {
     '/** Every property name (lowercase), mapped to the longhands it sets, itself when it is one. */',
     'export const PROPERTY_LONGHANDS: Readonly<Record<string, readonly string[]>> = {',
     renderEntries(longhandEntries),
+    '}',
+    '',
+    '/** Each legacy name alias, mapped to the property it is another name for. */',
+    'export const LEGACY_ALIASES: Readonly<Record<string, string>> = {',
+    renderEntries(aliasEntries),
     '}',
     '',
     '/** The logical property groups, by name. */',

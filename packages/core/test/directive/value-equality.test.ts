@@ -1,7 +1,7 @@
 /**
  * AC-native-apply-order-20: two declaration values of one property are equal when their token
- * sequences match after dropping comments, collapsing whitespace and lowercasing idents and
- * function names (never a dashed ident, a unit, a hash or a string).
+ * sequences match after dropping comments, collapsing whitespace and lowercasing function names
+ * (never a dashed one). The case of an ident is never folded, a keyword's included.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -12,8 +12,6 @@ import {
 
 describe('AC-native-apply-order-20 - declaration value equality', () => {
   it.each([
-    ['none', 'NONE'],
-    ['red', 'Red'],
     ['0 auto', '0    auto'],
     ['0 auto', '0 /* c */ auto'],
     ['  0 auto  ', '0 auto'],
@@ -21,7 +19,6 @@ describe('AC-native-apply-order-20 - declaration value equality', () => {
     ['var(--w)', 'VAR(--w)'],
     ['calc(1px + 2px)', 'CALC(1px + 2px)'],
     ['calc(1px + 2px)', 'calc(1px  +\n2px)'],
-    ['1px solid red', '1px SOLID RED'],
     ['rgb(0 0 0 / 50%)', 'RGB(0 0 0 / 50%)'],
     ['', ''],
     ['', '/* only a comment */'],
@@ -30,6 +27,14 @@ describe('AC-native-apply-order-20 - declaration value equality', () => {
   })
 
   it.each([
+    ['none', 'NONE'],
+    ['red', 'Red'],
+    ['red', 'RED'],
+    ['Arial', 'arial'],
+    ['1px solid red', '1px SOLID RED'],
+    ['Foo', 'foo'],
+    ['Main', 'main'],
+    ['--Fn(1px)', '--fn(1px)'],
     ['var(--w)', 'var(--W)'],
     ['--a', '--A'],
     ['var(--w, 2px)', 'var(--w)'],
@@ -53,7 +58,8 @@ describe('AC-native-apply-order-20 - declaration value equality', () => {
   })
 
   it('normalizes a value to a string that is equal exactly when the values are equal', () => {
-    expect(normalizeValueForCompare('NONE')).toBe(normalizeValueForCompare('none'))
+    expect(normalizeValueForCompare('CALC(1px)')).toBe(normalizeValueForCompare('calc(1px)'))
+    expect(normalizeValueForCompare('NONE')).not.toBe(normalizeValueForCompare('none'))
     expect(normalizeValueForCompare('0 /* c */ auto')).toBe(normalizeValueForCompare('0   auto'))
     expect(normalizeValueForCompare('0')).not.toBe(normalizeValueForCompare('0px'))
   })

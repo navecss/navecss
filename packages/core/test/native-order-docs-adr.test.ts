@@ -120,6 +120,48 @@ describe('AC-native-apply-order-36: ADR 0011 holds the full reasoning', () => {
   })
 })
 
+/**
+ * What the record says of the focus report, of the consequence for the focus atoms and of the
+ * property relations: each paragraph as it is to read, whitespace folded.
+ */
+const FOCUS_REPORT_PARAGRAPH = `Each warning is positioned at the overrider and names the atom, the condition, the property with
+both values, the fix and the directive with a marker inserted. Where the later value, as written,
+hides \`focusRing\`'s outline (a style of \`none\`, a zero width, \`transparent\`, an \`outline\` with no
+style keyword, or \`initial\` or \`unset\`), or puts back over \`srOnlyFocusable\`'s reveal what hid the
+element (\`clip-path: inset(50%)\`, or all of \`width: 1px\`, \`height: 1px\` and \`overflow: hidden\` in
+one later block), it says so: that it hides the keyboard focus indicator \`focusRing\` draws, or
+hides again what \`srOnlyFocusable\` reveals. A value it cannot read (\`var()\`, \`env()\`, \`attr()\`),
+or one another rule decides (\`inherit\`, \`revert\`, \`revert-layer\`), gets no such sentence.`
+const FOCUS_CONSEQUENCE_BULLET = `- The focus atoms are in scope. After \`@nave focusRing;\`, a later \`&:focus { outline: none }\` or
+  \`&:focus-visible { outline: none }\` now removes the ring where it used to leave it, and a later
+  \`&:focus-visible { outline-color: ... }\` now applies. The warning says when the ring, or the
+  reveal of \`srOnlyFocusable\`, is lost to a value it can read.`
+const RELATIONS_ALTERNATIVE_BULLET = `- **A runtime dependency, or a published package, for the property relations.** Rejected. A
+  generated first-party table, built from CC0 data and from the CSS specifications, with the credit
+  in the package's \`LICENSE\`, adds nothing to install and nothing to load.`
+
+describe('AC-native-apply-order-36: the record states the focus report as it is read from a value', () => {
+  it.each([
+    ['decision 3 says what the focus sentence covers and what it leaves', FOCUS_REPORT_PARAGRAPH],
+    [
+      'the consequences say the ring is lost to a value the warning can read',
+      FOCUS_CONSEQUENCE_BULLET,
+    ],
+    [
+      'the alternatives credit the specifications as well as the CC0 data',
+      RELATIONS_ALTERNATIVE_BULLET,
+    ],
+  ])('%s', (_name, paragraph) => {
+    expect(fold(adr.text)).toContain(fold(paragraph))
+  })
+
+  it('no longer says the warning reports every loss of the ring', () => {
+    expect(fold(adr.text)).not.toContain(
+      'Where the later value takes away what a focus atom provides',
+    )
+  })
+})
+
 describe('AC-native-apply-order-37: ADR 0001, ADR 0006 and the index point at 0011', () => {
   const first = adrRecord('0001')
   const sixth = adrRecord('0006')

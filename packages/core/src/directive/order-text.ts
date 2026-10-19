@@ -7,9 +7,14 @@ import type { Finding, RelatedPair } from './order-model.ts'
 
 import { overriderSentence } from './migration.ts'
 import { focusClauseOf } from './order-focus.ts'
-import { reorderedDirective } from './order-print.ts'
+import { printedValue, reorderedDirective } from './order-print.ts'
 import { alsoWhere, whereOf } from './order-where.ts'
-import { isLogicalPhysicalPair, longhandsOf } from './property-relations.ts'
+import {
+  isLogicalPhysicalPair,
+  isSameProperty,
+  longhandsOf,
+  standardName,
+} from './property-relations.ts'
 
 /**
  * What a finding needs beyond itself: the names the printed marker adds, and the atom of the same
@@ -30,11 +35,12 @@ export function joinList(items: readonly string[], conjunction = 'and'): string 
 }
 
 /**
- * Whether the later declaration's longhands include every longhand of the block's.
+ * Whether the later declaration's longhands include every longhand of the block's, a legacy name
+ * alias counting as the property it stands for.
  */
 function isLaterContaining(pair: RelatedPair): boolean {
-  const later = new Set(longhandsOf(pair.later.prop))
-  return longhandsOf(pair.block.prop).every((longhand) => later.has(longhand))
+  const later = new Set(longhandsOf(pair.later.prop).map((longhand) => standardName(longhand)))
+  return longhandsOf(pair.block.prop).every((longhand) => later.has(standardName(longhand)))
 }
 
 /**
@@ -47,13 +53,17 @@ function isBareDeclaration(finding: Finding): boolean {
 
 /**
  * The overridden longhands in the longhand-over-shorthand form: the later property itself where
- * the block's shorthand sets every longhand of it, otherwise the longhands the two share.
+ * the block's shorthand sets every longhand of it, otherwise the longhands the two share. A legacy
+ * name alias is named as the property it stands for.
  */
 function overriddenName(pair: RelatedPair): string {
-  const block = new Set(longhandsOf(pair.block.prop))
-  const later = longhandsOf(pair.later.prop)
-  if (later.every((longhand) => block.has(longhand))) return pair.later.prop
-  return joinList(later.filter((longhand) => block.has(longhand)))
+  const block = new Set(longhandsOf(pair.block.prop).map((longhand) => standardName(longhand)))
+  const later = longhandsOf(pair.later.prop).map((longhand) => standardName(longhand))
+  if (later.every((longhand) => block.has(longhand))) {
+    const standard = standardName(pair.later.prop)
+    return standard === pair.later.prop.toLowerCase() ? pair.later.prop : standard
+  }
+  return joinList([...new Set(later.filter((longhand) => block.has(longhand)))])
 }
 
 /**
@@ -63,21 +73,23 @@ function valueClause(finding: Finding): string {
   const [first] = finding.pairs
   const { block, later } = first!
   const isBare = isBareDeclaration(finding)
+  const blockValue = printedValue(block.value)
+  const laterValue = printedValue(later.value)
   if (
     finding.pairs.length > 1 ||
-    (block.prop.toLowerCase() !== later.prop.toLowerCase() && isLaterContaining(first!))
+    (!isSameProperty(block.prop, later.prop) && isLaterContaining(first!))
   ) {
     const list = joinList([...new Set(finding.pairs.map((pair) => pair.block.prop))])
-    return `${later.prop}: ${later.value} replaces ${list}`
+    return `${later.prop}: ${laterValue} replaces ${list}`
   }
-  if (block.prop.toLowerCase() === later.prop.toLowerCase()) {
-    return `${block.prop} is ${later.value}, not ${block.value}`
+  if (isSameProperty(block.prop, later.prop)) {
+    return `${block.prop} is ${laterValue}, not ${blockValue}`
   }
-  const subject = isBare ? 'it' : `its ${later.prop}: ${later.value}`
+  const subject = isBare ? 'it' : `its ${later.prop}: ${laterValue}`
   if (isLogicalPhysicalPair(block.prop, later.prop)) {
-    return `${subject} may override ${block.prop}: ${block.value}, depending on writing mode`
+    return `${subject} may override ${block.prop}: ${blockValue}, depending on writing mode`
   }
-  return `${subject} replaces the ${overriddenName(first!)} that ${block.prop}: ${block.value} sets`
+  return `${subject} replaces the ${overriddenName(first!)} that ${block.prop}: ${blockValue} sets`
 }
 
 /**
@@ -99,7 +111,9 @@ function placeClause(finding: Finding): string {
 function overriderName(finding: Finding): string {
   const { overrider, declaration } = finding.candidate
   if (overrider.kind === 'atom') return `"${overrider.atom.name}"`
-  if (overrider.top.kind === 'declaration') return `${declaration.prop}: ${declaration.value}`
+  if (overrider.top.kind === 'declaration') {
+    return `${declaration.prop}: ${printedValue(declaration.value)}`
+  }
   if (overrider.top.kind === 'rule') return `the ${overrider.top.selector} block`
   return `the @${overrider.top.name} ${overrider.top.prelude} block`
 }
@@ -117,8 +131,9 @@ function fixSentence(finding: Finding, context: TextContext): string {
   if (overrider.directive.ref !== unit.directive.ref || context.moveAfter === undefined) {
     return `To let ${atom} win, move it into the later directive, after ${later}.`
   }
+  const occurrences = unit.directive.atoms.filter((named) => named.name === unit.atom.name)
   const printed = reorderedDirective(unit.directive.prelude, unit.directive.atoms, {
-    moving: unit.atom.atomIndex,
+    moving: occurrences.map((named) => named.atomIndex),
     after: context.moveAfter,
   })
   return `To let ${atom} win, name it after ${later}: \`${printed}\`.`

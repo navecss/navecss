@@ -19,6 +19,7 @@ import {
 } from '../../scripts/generate-property-table.ts'
 import {
   CORRECTIONS,
+  LEGACY_NAME_EXCLUSIONS,
   type PropertyCorrection,
   SPECIFICATION_TITLES,
   SPECIFICATIONS_COMMIT,
@@ -248,6 +249,63 @@ describe('AC-native-apply-order-19: the hand corrections are recorded with their
     )
   })
 
+  it.each([
+    ['grid-gap', 'gap'],
+    ['grid-row-gap', 'row-gap'],
+    ['grid-column-gap', 'column-gap'],
+    ['word-wrap', 'overflow-wrap'],
+  ])('records %s as a legacy name alias of %s', (property, standard) => {
+    const [correction] = correctionFor(property)
+    expect(correction).toBeDefined()
+    expect('aliasOf' in correction! && correction.aliasOf).toBe(standard)
+  })
+
+  it.each([
+    ['page-break-before', 'break-before'],
+    ['page-break-after', 'break-after'],
+    ['page-break-inside', 'break-inside'],
+  ])('records %s as a legacy shorthand of %s', (property, standard) => {
+    const [correction] = correctionFor(property)
+    expect(correction).toBeDefined()
+    expect('adds' in correction! && correction.adds).toEqual([standard])
+  })
+
+  it('records the border-image longhands border resets', () => {
+    const [correction] = correctionFor('border')
+    expect(correction).toBeDefined()
+    expect('adds' in correction! && correction.adds).toEqual([
+      'border-image-outset',
+      'border-image-repeat',
+      'border-image-slice',
+      'border-image-source',
+      'border-image-width',
+    ])
+  })
+
+  it('records what it leaves out of the legacy names, each with its reason', () => {
+    expect(LEGACY_NAME_EXCLUSIONS.map((exclusion) => exclusion.names)).toEqual([
+      ['vendor-prefixed aliases'],
+      ['font-stretch', 'font-width'],
+      ['app-region', 'window-drag'],
+    ])
+    for (const exclusion of LEGACY_NAME_EXCLUSIONS) {
+      expect(exclusion.reason.length, exclusion.names.join(' ')).toBeGreaterThan(40)
+    }
+  })
+
+  it('names the specification of every correction by a title the LICENSE credits', () => {
+    const license = readFileSync(path.join(PACKAGE_ROOT, 'LICENSE'), 'utf8').replaceAll(/\s+/g, ' ')
+    for (const correction of CORRECTIONS) {
+      const cited = SPECIFICATION_TITLES.filter((title) => correction.reason.includes(title))
+      expect(cited.length, correction.property).toBeGreaterThan(0)
+      const named = correction.reason.match(/CSS [A-Z][A-Za-z ]+ Module Level \d+/g) ?? []
+      for (const title of named) {
+        expect(SPECIFICATION_TITLES, `${correction.property}: ${title}`).toContain(title)
+        expect(license, title).toContain(title)
+      }
+    }
+  })
+
   it('names all, with its two exceptions', () => {
     const [correction] = correctionFor('all')
     expect(correction).toBeDefined()
@@ -315,9 +373,10 @@ describe('AC-native-apply-order-19: LICENSE credits mdn-data and the specificati
     expect(thirdParty).toContain(
       'What is copied or derived is implemented in ' +
         'src/directive/property-table.generated.ts, built into the JavaScript under dist/: ' +
-        'the names of CSS properties, the properties each shorthand sets, and which logical and ' +
-        "physical properties belong to one group. The code using them is this package's own, " +
-        'and everything in this package is offered under the MIT licence above.',
+        'the names of CSS properties, the properties each shorthand sets, which names are legacy ' +
+        'name aliases of another property, and which logical and physical properties belong to ' +
+        "one group. The code using them is this package's own, and everything in this package " +
+        'is offered under the MIT licence above.',
     )
   })
 

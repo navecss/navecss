@@ -27,6 +27,9 @@ export const SPECIFICATION_TITLES: readonly string[] = [
   'CSS Box Sizing Module Level 4',
   'CSS Fonts Module Level 4',
   'CSS Text Module Level 4',
+  'CSS Gaps Module Level 1',
+  'CSS Fragmentation Module Level 4',
+  'CSS Backgrounds and Borders Module Level 3',
   'CSS Cascading and Inheritance Module Level 5',
 ]
 
@@ -50,7 +53,17 @@ interface AllExcept {
   readonly reason: string
 }
 
-export type PropertyCorrection = AddedMembers | AllExcept
+/**
+ * A legacy name alias: another name for `aliasOf`, which a cascade treats as the same property.
+ * The table keeps the alias as the data it came from lists it; `aliasOf` is what it stands for.
+ */
+interface AliasOf {
+  readonly property: string
+  readonly aliasOf: string
+  readonly reason: string
+}
+
+export type PropertyCorrection = AddedMembers | AliasOf | AllExcept
 
 export const CORRECTIONS: readonly PropertyCorrection[] = [
   {
@@ -96,6 +109,21 @@ export const CORRECTIONS: readonly PropertyCorrection[] = [
       'which contains font-variant, would reach none of the font-variant-* longhands.',
   },
   {
+    property: 'border',
+    adds: [
+      'border-image-outset',
+      'border-image-repeat',
+      'border-image-slice',
+      'border-image-source',
+      'border-image-width',
+    ],
+    reason:
+      'CSS Backgrounds and Borders Module Level 3 defines border as resetting border-image to its ' +
+      'initial value, as font resets its reset-only sub-properties: the border syntax cannot set ' +
+      'the border-image longhands, yet a border declaration overrides an earlier declaration of ' +
+      'any of them, and mdn-data lists none of them under border.',
+  },
+  {
     property: 'font-synthesis',
     adds: [
       'font-synthesis-position',
@@ -108,11 +136,96 @@ export const CORRECTIONS: readonly PropertyCorrection[] = [
       'font-synthesis shorthand; mdn-data lists it with no sub-properties.',
   },
   {
+    property: 'grid-gap',
+    aliasOf: 'gap',
+    reason:
+      'CSS Gaps Module Level 1 defines grid-gap as a legacy name alias of gap: the same ' +
+      'property under an old name, so a declaration of one overrides the other. mdn-data lists ' +
+      'it as a shorthand of grid-row-gap and grid-column-gap, which relate to nothing else.',
+  },
+  {
+    property: 'grid-row-gap',
+    aliasOf: 'row-gap',
+    reason:
+      'CSS Gaps Module Level 1 defines grid-row-gap as a legacy name alias of row-gap: the same ' +
+      'property under an old name. mdn-data lists it as a property of its own.',
+  },
+  {
+    property: 'grid-column-gap',
+    aliasOf: 'column-gap',
+    reason:
+      'CSS Gaps Module Level 1 defines grid-column-gap as a legacy name alias of column-gap: the ' +
+      'same property under an old name. mdn-data lists it as a property of its own.',
+  },
+  {
+    property: 'word-wrap',
+    aliasOf: 'overflow-wrap',
+    reason:
+      'CSS Text Module Level 4 defines word-wrap as a legacy name alias of overflow-wrap: the ' +
+      'same property under an old name. mdn-data lists it as a property of its own.',
+  },
+  {
+    property: 'page-break-before',
+    adds: ['break-before'],
+    reason:
+      'CSS Fragmentation Module Level 4 defines page-break-before as a legacy shorthand of ' +
+      'break-before, so a declaration of it sets break-before. The values it maps to are not ' +
+      'part of the table, which holds names and relations. mdn-data lists it as a property of ' +
+      'its own.',
+  },
+  {
+    property: 'page-break-after',
+    adds: ['break-after'],
+    reason:
+      'CSS Fragmentation Module Level 4 defines page-break-after as a legacy shorthand of ' +
+      'break-after, so a declaration of it sets break-after. The values it maps to are not part ' +
+      'of the table, which holds names and relations. mdn-data lists it as a property of its own.',
+  },
+  {
+    property: 'page-break-inside',
+    adds: ['break-inside'],
+    reason:
+      'CSS Fragmentation Module Level 4 defines page-break-inside as a legacy shorthand of ' +
+      'break-inside, so a declaration of it sets break-inside. The values it maps to are not ' +
+      'part of the table, which holds names and relations. mdn-data lists it as a property of ' +
+      'its own.',
+  },
+  {
     property: 'all',
     except: ['direction', 'unicode-bidi'],
     reason:
       'CSS Cascading and Inheritance Module Level 5 defines all as the shorthand that resets every ' +
       'CSS property except direction and unicode-bidi, and not custom properties; mdn-data gives ' +
       'it no sub-properties, because it is defined by exclusion.',
+  },
+]
+
+/**
+ * What the legacy names leave out, as decisions and not as oversights: a name that looks like a
+ * legacy alias and is not recorded above, with the reason.
+ */
+export const LEGACY_NAME_EXCLUSIONS: readonly {
+  readonly names: readonly string[]
+  readonly reason: string
+}[] = [
+  {
+    names: ['vendor-prefixed aliases'],
+    reason:
+      'A vendor-prefixed name stays a property of its own that relates only to itself, because ' +
+      'an engine can give it values or behaviour that differ from the standard property it ' +
+      'resembles.',
+  },
+  {
+    names: ['font-stretch', 'font-width'],
+    reason:
+      'CSS Fonts Module Level 4 names font-width as the new name of font-stretch, but ' +
+      'mdn-data marks font-width experimental and it is not Baseline, so the two stay unrelated ' +
+      'until it is.',
+  },
+  {
+    names: ['app-region', 'window-drag'],
+    reason:
+      'window-drag, the proposed standard name of app-region, is not in the table, so there is ' +
+      'nothing for app-region to relate to; revisit when it is.',
   },
 ]

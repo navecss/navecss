@@ -5,7 +5,7 @@
  * a comment survives every host. A comment that starts `nave-allow-override` and is not a marker is
  * reported, so a typo does not silently allow nothing.
  */
-import { longhandsOf } from './property-relations.ts'
+import { longhandsOf, standardName } from './property-relations.ts'
 import { tokenize } from './tokenizer.ts'
 
 const MARKER_HEAD = 'nave-allow-override'
@@ -71,12 +71,15 @@ export function readMarkers(prelude: string): PreludeMarkers {
 }
 
 /**
- * The longhands a marker name covers. A longhand covers itself, a shorthand its longhands, a
+ * The longhands a marker name covers, each as the property it stands for (a legacy name alias is
+ * the property it is another name for). A longhand covers itself, a shorthand its longhands, a
  * custom or vendor-prefixed property itself; `all` covers nothing here, since it covers only an
  * overrider that itself sets `all`.
  */
 export function longhandsCoveredBy(name: string): readonly string[] {
-  return name.toLowerCase() === 'all' ? [] : longhandsOf(name)
+  return name.toLowerCase() === 'all'
+    ? []
+    : longhandsOf(name).map((longhand) => standardName(longhand))
 }
 
 /**

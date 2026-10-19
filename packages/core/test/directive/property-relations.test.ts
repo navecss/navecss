@@ -175,6 +175,57 @@ describe('AC-native-apply-order-18: propertiesRelate, hand-corrected shorthands'
   })
 })
 
+describe('AC-native-apply-order-19: propertiesRelate, legacy names and the border-image reset', () => {
+  it.each([
+    ['grid-gap', 'gap'],
+    ['grid-gap', 'row-gap'],
+    ['grid-gap', 'column-gap'],
+    ['grid-gap', 'grid-row-gap'],
+    ['grid-row-gap', 'row-gap'],
+    ['grid-column-gap', 'column-gap'],
+    ['word-wrap', 'overflow-wrap'],
+    ['page-break-before', 'break-before'],
+    ['page-break-after', 'break-after'],
+    ['page-break-inside', 'break-inside'],
+    ['border', 'border-image-source'],
+    ['border', 'border-image-slice'],
+    ['border', 'border-image-width'],
+    ['border', 'border-image-outset'],
+    ['border', 'border-image-repeat'],
+  ])('%s relates to %s', (a, b) => {
+    expect(isRelatedBothWays(a, b)).toBe(true)
+  })
+
+  it.each([
+    ['grid-row-gap', 'column-gap'],
+    ['grid-gap', 'grid-template-columns'],
+    ['word-wrap', 'word-break'],
+    ['word-wrap', 'overflow'],
+    ['page-break-before', 'break-after'],
+    ['border-image-source', 'border-color'],
+    ['font-stretch', 'font-width'],
+  ])('%s does not relate to %s', (a, b) => {
+    expect(isRelatedBothWays(a, b)).toBe(false)
+  })
+
+  it.each([
+    'grid-gap',
+    'grid-row-gap',
+    'grid-column-gap',
+    'word-wrap',
+    'page-break-before',
+    'page-break-after',
+    'page-break-inside',
+  ])('%s is a property', (name) => {
+    expect(isCssProperty(name)).toBe(true)
+  })
+
+  it('names the legacy name of a property as that property, in any ASCII case', () => {
+    expect(isRelatedBothWays('GRID-GAP', 'Gap')).toBe(true)
+    expect(isRelatedBothWays('Word-Wrap', 'OVERFLOW-WRAP')).toBe(true)
+  })
+})
+
 describe('AC-native-apply-order-18: propertiesRelate, custom and vendor-prefixed properties', () => {
   it('a custom property relates only to itself, case-sensitively', () => {
     expect(isRelatedBothWays('--a', '--a')).toBe(true)

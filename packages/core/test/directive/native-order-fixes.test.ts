@@ -51,6 +51,11 @@ describe.each(HOSTS)('AC-native-apply-order-26 — fixes and markers (%s)', (_na
     ['.c { @nave hideDesktopUp flex grid; }', '.c { @nave flex grid hideDesktopUp; }', 'display'],
     ['.c { @nave hideDesktopUp; @nave flex; }', '.c { @nave flex hideDesktopUp; }', 'display'],
     [
+      '.c { @nave hideDesktopUp hideDesktopUp flex; }',
+      '.c { @nave flex hideDesktopUp hideDesktopUp; }',
+      'display',
+    ],
+    [
       '.c { @nave hideDesktopUp; display: grid; }',
       '.c { display: grid; @nave hideDesktopUp; }',
       'display',
@@ -109,6 +114,26 @@ describe.each(HOSTS)(
         '@nave flex grid hideDesktopUp textLeft;',
       ],
       ['.c { @nave hideDesktopUp flex; }', 1, '@nave flex hideDesktopUp;'],
+      [
+        '.c { @nave hideDesktopUp hideDesktopUp flex; }',
+        2,
+        '@nave flex hideDesktopUp hideDesktopUp;',
+      ],
+      [
+        '.c { @nave hideDesktopUp flex hideDesktopUp; }',
+        1,
+        '@nave flex hideDesktopUp hideDesktopUp;',
+      ],
+      [
+        '.c { @nave hideDesktopUp flex hideDesktopUp flex; }',
+        3,
+        '@nave flex flex hideDesktopUp hideDesktopUp;',
+      ],
+      [
+        '.c { @nave hideDesktopUp textLeft hideDesktopUp flex; }',
+        2,
+        '@nave textLeft flex hideDesktopUp hideDesktopUp;',
+      ],
     ])('%s', async (css, count, fix) => {
       const warnings = await run(css)
 
