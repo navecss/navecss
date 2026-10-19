@@ -238,11 +238,39 @@ describe('the outlines a module may carry', () => {
     ).rejects.toThrow('baseUiProbe')
   })
 
+  it('refuses OUTLINE: 0 and OUTLINE: none, a property in capitals, even where a ring follows', async () => {
+    for (const value of ['0', 'none']) {
+      await expect(
+        moduleBody(inputs({ OUTLINE: value }, { '&:focus-visible': RING })),
+      ).rejects.toThrow('baseUiProbe')
+    }
+  })
+
   it('refuses outline: none !important, naming the atom and giving !important as the reason', async () => {
     const refused = moduleBody(inputs({ outline: 'none !important' }, { '&:focus-visible': RING }))
     await expect(refused).rejects.toThrow('baseUiProbe')
     await expect(refused).rejects.toThrow('!important')
     await expect(refused).rejects.not.toThrow('no &:focus-visible')
+  })
+
+  it('prints the property as it was written, and names what alone is accepted', async () => {
+    const refused = moduleBody(inputs({ OUTLINE: 'none' }, { '&:focus-visible': RING }))
+    await expect(refused).rejects.toThrow('"OUTLINE: none"')
+    await expect(refused).rejects.toThrow(
+      'the only outline accepted is a lowercase "outline: none"',
+    )
+  })
+
+  it('does not say that a ring is missing from an outline that is not none or 0', async () => {
+    const refused = moduleBody(inputs({ outline: '2px solid red' }, { '&:focus-visible': RING }))
+    await expect(refused).rejects.toThrow('"outline: 2px solid red"')
+    await expect(refused).rejects.not.toThrow('no focus ring')
+  })
+
+  it('prints the property as it was written in the !important refusal, and keeps its reason', async () => {
+    const refused = moduleBody(inputs({ OUTLINE: 'none !important' }, { '&:focus-visible': RING }))
+    await expect(refused).rejects.toThrow('"OUTLINE: none !important"')
+    await expect(refused).rejects.toThrow('!important beats the focus ring')
   })
 
   it.each(['outline-color', 'outline-offset', 'outline-style', 'outline-width'])(

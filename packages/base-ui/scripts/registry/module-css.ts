@@ -97,7 +97,7 @@ const isPaired = (declaration: Declaration): boolean => {
 }
 
 const shown = (declaration: Declaration): string =>
-  `outline: ${declaration.value}${declaration.important ? ' !important' : ''}`
+  `${declaration.prop}: ${declaration.value}${declaration.important ? ' !important' : ''}`
 
 /**
  * Puts the disable comment before each `outline: none` that is paired with the ring that replaces
@@ -122,10 +122,10 @@ const guardOutlines = (root: postcss.Root, atomOf: ReadonlyMap<string, string>):
       return
     }
     throw new RegistryBuildError(
-      `${atom} has "${shown(declaration)}" with no focus ring paired to it: only a lowercase ` +
+      `${atom} has "${shown(declaration)}": the only outline accepted is a lowercase ` +
         '"outline: none", directly in the atom\'s rule or alone in a "&" rule there, followed ' +
         'by a "&:focus-visible" rule that sets outline-style: solid, outline-width, ' +
-        'outline-color and outline-offset, is accepted',
+        'outline-color and outline-offset',
       { file: 'module.css' },
     )
   })

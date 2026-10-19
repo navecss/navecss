@@ -161,6 +161,15 @@ test('main: --latest with no registry exits 1 from 0.3.0 on, comparing numbers a
   }
 })
 
+test('main: a registry that has files but no base-ui-dialog.json exits 1 and names it', async () => {
+  const noDialog = new Map([['registry.json', '{"name":"navecss"}\n']])
+  const { code, logged } = await quietly(() =>
+    main([], stepsFor({ served: new Map(noDialog), tarball: noDialog, written: new Map() })),
+  )
+  assert.equal(code, 1)
+  assert.match(logged.join('\n'), /base-ui-dialog\.json: not in the registry/)
+})
+
 test('main: fetches every file at the exact version it was given', async () => {
   const urls = []
   const steps = {
@@ -252,6 +261,14 @@ test('peerProblem: a range of any other shape is a problem, never a pass', () =>
   }
 })
 
+test('peerProblem: a caret range with a patch above zero is a problem, as the generator does not word it', () => {
+  assert.match(peerProblem('@base-ui/react', '1.3.5', '^1.3.1'), /cannot be read/)
+})
+
+test('peerProblem: a caret range on a 0.x version is a problem, as the generator does not word it', () => {
+  assert.match(peerProblem('@navecss/tokens', '0.4.1', '^0.4.0'), /cannot be read/)
+})
+
 test('peerProblem: a version that is not three numbers is a problem', () => {
   assert.match(peerProblem('react', 'latest', '^18 || ^19'), /react@latest/)
   assert.match(peerProblem('react', '19.0.0-rc.1', '^18 || ^19'), /react@19\.0\.0-rc\.1/)
@@ -287,6 +304,16 @@ test('main: --latest exits 1 and names a peer whose latest version is outside it
   assert.equal(code, 1)
   assert.match(logged.join('\n'), /@base-ui\/react@2\.0\.0/)
   assert.doesNotMatch(logged.join('\n'), /react@19/)
+})
+
+test('main: --latest names a peer outside its range wherever it sits in the item', async () => {
+  const steps = withPeers(
+    { react: '^18 || ^19', '@base-ui/react': '^1.3.0' },
+    { react: '19.2.0', '@base-ui/react': '2.0.0' },
+  )
+  const { code, logged } = await quietly(() => main(['--latest'], steps))
+  assert.equal(code, 1)
+  assert.match(logged.join('\n'), /@base-ui\/react@2\.0\.0/)
 })
 
 test('main: --latest exits 1 when a peer has a range of a shape it cannot read', async () => {

@@ -170,16 +170,16 @@ const writesNoRegistryYet = (version) => {
 
 /**
  * The versions a range admits, as `[lowest, below]` pairs, for exactly the three shapes the
- * registry generator puts into words: `^X.Y.Z`, `>=A.B.C <D.E.F` and `^A || ^B`. Any other shape
- * is `undefined`.
+ * registry generator puts into words: `^X.Y.0` with X above 0, `>=A.B.C <D.E.F` and `^A || ^B`. Any
+ * other shape is `undefined`.
  */
 const bounds = (range) => {
-  const caret = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(range)
+  const caret = /^\^(\d+)\.(\d+)\.0$/.exec(range)
   if (caret !== null && caret[1] !== '0') {
-    const [major, minor, patch] = caret.slice(1).map(Number)
+    const [major, minor] = caret.slice(1).map(Number)
     return [
       [
-        [major, minor, patch],
+        [major, minor, 0],
         [major + 1, 0, 0],
       ],
     ]
@@ -261,7 +261,9 @@ export const main = async (argv = process.argv.slice(2), steps = REAL_STEPS) => 
     }
     const served = await fetchServed(version, [...tarball.keys()], steps.fetchText)
     const problems = servedDifferences(tarball, served)
-    const item = JSON.parse(tarball.get(`${INSTALLED_ITEM}.json`) ?? '{}')
+    const itemText = tarball.get(`${INSTALLED_ITEM}.json`)
+    if (itemText === undefined) problems.push(`${INSTALLED_ITEM}.json: not in the registry`)
+    const item = JSON.parse(itemText ?? '{}')
     if (problems.length === 0) {
       problems.push(...installDifferences(item, steps.install(version, item, cli, scratch)))
     }
