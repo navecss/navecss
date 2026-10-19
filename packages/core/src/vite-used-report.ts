@@ -140,6 +140,25 @@ function reexportRemedy(
 export type HostRemedies = (application: readonly LocatedProblem[]) => readonly string[]
 
 /**
+ * The application's remedy lines, in the fixed order of the kinds present.
+ */
+function applicationLines(
+  application: readonly LocatedProblem[],
+  configured: readonly string[],
+  home: string,
+): string[] {
+  const fixed = remedies(home)
+  const lines: string[] = []
+  for (const kind of PROBLEM_KINDS) {
+    if (application.every((problem) => problem.kind !== kind)) continue
+    lines.push(
+      ...(kind === 'reexport' ? reexportRemedy(application, configured, home) : fixed[kind]),
+    )
+  }
+  return lines
+}
+
+/**
  * The remedy block: the application's lines in the fixed order of the kinds present, then each
  * dependency's line sorted by package name, then `Available:` when a unknown name had no hint.
  */
@@ -150,16 +169,11 @@ function remedyBlock(
   hostRemedies?: HostRemedies,
 ): string[] {
   const configured = withoutRemoved(problems, listed)
-  const fixed = remedies(home)
   const application = problems.filter((problem) => problem.pkg === undefined)
-  const lines: string[] = []
-  for (const kind of PROBLEM_KINDS) {
-    if (application.every((problem) => problem.kind !== kind)) continue
-    lines.push(
-      ...(kind === 'reexport' ? reexportRemedy(application, configured, home) : fixed[kind]),
-    )
-  }
-  lines.push(...(hostRemedies?.(application) ?? []))
+  const lines = [
+    ...applicationLines(application, configured, home),
+    ...(hostRemedies?.(application) ?? []),
+  ]
   const byPackage = new Map<string, LocatedProblem[]>()
   for (const problem of problems) {
     if (problem.pkg !== undefined)
