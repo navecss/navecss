@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Props, Source } from '../support/scenes.ts'
 
+import { disclosureTriggerDisabled } from '../support/disclosure-disabled.ts'
 import { partsNamed } from '../support/dom.ts'
 import { act, cleanup, render, user } from '../support/react.ts'
 import { renderScene } from '../support/rows.ts'
@@ -145,7 +146,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Accordion.Trigger',
     name: 'Accordion.Trigger (Item disabled)',
-    attrs: { aria: true, native: false },
+    attrs: { ...disclosureTriggerDisabled(), tabindex: '0' },
     props: (d, s) => ({
       'Accordion.Item': { disabled: d },
       'Accordion.Root': { onValueChange: s },
@@ -156,7 +157,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Accordion.Trigger',
     name: 'Accordion.Trigger (Root disabled)',
-    attrs: { aria: true, native: false },
+    attrs: { ...disclosureTriggerDisabled(), tabindex: '0' },
     props: (d, s) => ({ 'Accordion.Root': { disabled: d, onValueChange: s } }),
     state: attribute('aria-expanded'),
     subpath: 'accordion',
@@ -164,7 +165,7 @@ const ROWS: readonly Row[] = [
   {
     marker: 'Collapsible.Trigger',
     name: 'Collapsible.Trigger (Root disabled)',
-    attrs: { aria: true, native: false },
+    attrs: { ...disclosureTriggerDisabled(), tabindex: '0' },
     props: (d, s) => ({ 'Collapsible.Root': { disabled: d, onOpenChange: s } }),
     state: attribute('aria-expanded'),
     subpath: 'collapsible',

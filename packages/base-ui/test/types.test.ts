@@ -42,6 +42,30 @@ const EXPECTED_ERRORS: Readonly<Record<BaseUiVersion, readonly string[]>> = {
     // `NavigationMenuRoot.Value<string>` are what the criterion holds, in `feedback-types.test.ts`.
     'NavigationMenu.Root.Props<any> TS2315',
     'NavigationMenu.Root.Value<any> TS2694',
+    // Base UI 1.9.0 added an `OpenChangeEventDetails` to the roots of Select, Combobox and
+    // Autocomplete, and a `HighlightEventDetails` and `HighlightEventReason` to the Menu's, none of
+    // which the floor declares. Each has a flat name from the same subpath
+    // (`SelectRootOpenChangeEventDetails`, `MenuRootHighlightEventDetails`).
+    'Autocomplete.Root.OpenChangeEventDetails TS2724',
+    'Combobox.Root.OpenChangeEventDetails TS2724',
+    'Select.Root.OpenChangeEventDetails TS2724',
+    'Menu.Root.HighlightEventDetails TS2694',
+    'Menu.Root.HighlightEventReason TS2694',
+    // The Menu's filtering parts, which Base UI 1.9.0 added as a preview, are left out of the package
+    // (`support/left-out.ts`), so their dotted type names are not reached through it. Their flat type
+    // names (`MenuInputProps`, `MenuFilter`) still come through.
+    'Menu.Clear.Props TS2694',
+    'Menu.Clear.State TS2694',
+    'Menu.Empty.Props TS2694',
+    'Menu.Empty.State TS2694',
+    'Menu.FilterProvider.ChangeEventDetails TS2694',
+    'Menu.FilterProvider.ChangeEventReason TS2694',
+    'Menu.FilterProvider.Props TS2694',
+    'Menu.FilterProvider.State TS2694',
+    'Menu.Input.Props TS2694',
+    'Menu.Input.State TS2694',
+    'Menu.List.Props TS2694',
+    'Menu.List.State TS2694',
   ],
   // Nothing: every type name the floor Base UI exports compiles through this package.
   floor: [],
@@ -162,7 +186,7 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
     )
 
     it.runIf(version === 'current')(
-      'reaches both dropped types through their flat names, from the same subpath',
+      'reaches the dropped types through their flat names, and the data attribute names as types, from the same subpath',
       { timeout: MINUTES },
       async () => {
         const result = await compile(
@@ -171,14 +195,51 @@ describe.each(VERSIONS)('the wrapper types at the %s Base UI', (version) => {
             'fixture.ts': [
               "import type { ContextMenuRootActions } from '@navecss/base-ui/context-menu'",
               "import type { ComboboxRootProps } from '@navecss/base-ui/combobox'",
+              "import type { AutocompleteRootOpenChangeEventDetails } from '@navecss/base-ui/autocomplete'",
+              "import type { ComboboxRootOpenChangeEventDetails } from '@navecss/base-ui/combobox'",
+              "import type { MenuRootHighlightEventDetails, MenuRootHighlightEventReason } from '@navecss/base-ui/menu'",
+              "import type { SelectRootOpenChangeEventDetails } from '@navecss/base-ui/select'",
+              "import type { DialogPopupDataAttributes } from '@navecss/base-ui/dialog'",
               'export type Actions = ContextMenuRootActions',
               'export type Props = ComboboxRootProps<string, false, { id: string }>',
+              'export type AutocompleteOpen = AutocompleteRootOpenChangeEventDetails',
+              'export type ComboboxOpen = ComboboxRootOpenChangeEventDetails',
+              'export type Highlight = [MenuRootHighlightEventDetails, MenuRootHighlightEventReason]',
+              'export type SelectOpen = SelectRootOpenChangeEventDetails',
+              // The data attribute names come through as a type only (their values are left out).
+              'export type PopupOpen = typeof DialogPopupDataAttributes.open',
             ].join('\n'),
           },
           'current',
         )
         expect(result.output).toBe('')
         expect(result.code).toBe(0)
+      },
+    )
+
+    it.runIf(version === 'current')(
+      'the data attribute and CSS variable names are types only: a use as a value is a compile error',
+      { timeout: MINUTES },
+      async () => {
+        const result = await compile(
+          '02-attributes-as-value',
+          {
+            'fixture.ts': [
+              "import { DialogPopupDataAttributes } from '@navecss/base-ui/dialog'",
+              "import { TabsIndicatorCssVariables } from '@navecss/base-ui'",
+              'export const open = DialogPopupDataAttributes.open',
+              'export const sizes = TabsIndicatorCssVariables',
+            ].join('\n'),
+          },
+          'current',
+        )
+        expect(result.output).toMatch(
+          /fixture\.ts\(3,\d+\): error TS1362: 'DialogPopupDataAttributes' cannot be used as a value/,
+        )
+        expect(result.output).toMatch(
+          /fixture\.ts\(4,\d+\): error TS1362: 'TabsIndicatorCssVariables' cannot be used as a value/,
+        )
+        expect(result.code).not.toBe(0)
       },
     )
   })

@@ -115,6 +115,18 @@ describe('AC-base-ui-bridge-53: the release-time check writes its app and judges
     }
   })
 
+  it('pins the app to the Base UI the package builds against, so the check exercises that version', () => {
+    const app = newApp()
+    writeApp(app, VERSIONS, '/tmp/package.tgz')
+    const written = JSON.parse(readFileSync(path.join(app, 'package.json'), 'utf8')) as {
+      dependencies: Record<string, string>
+    }
+    const own = JSON.parse(
+      readFileSync(path.join(import.meta.dirname, '../package.json'), 'utf8'),
+    ) as { devDependencies: Record<string, string> }
+    expect(written.dependencies['@base-ui/react']).toBe(own.devDependencies['@base-ui/react'])
+  })
+
   it('finds nothing wrong with a package whose builds pass and whose control fails, under both bundlers', () => {
     const { lines, problems } = run(newApp(), working)
     expect(problems).toEqual([])
