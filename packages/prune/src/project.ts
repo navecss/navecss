@@ -12,13 +12,16 @@ import { isInside } from './source-files.ts'
 /**
  * The hand-off with the project directory this run reads: webpack's, when its callback passed it
  * on; otherwise the working directory, when it holds a `next.config`; otherwise the directory
- * `next.config` was loaded from. A root that does not hold the project directory was taken from
- * the same wrong directory, so it becomes the project directory too.
+ * `next.config` was loaded from. A configured root that does not hold the project directory is
+ * dropped, so the root is inferred for the project directory instead.
  * @param handoff What `withNave()` handed over.
  * @param cwd The working directory the bundler runs PostCSS in.
  * @returns The hand-off to read the project with.
  */
 export function projectHandoff(handoff: Handoff, cwd: string = process.cwd()): Handoff {
   if (handoff.isBundlerDir === true || cwd === handoff.dir || !hasNextConfig(cwd)) return handoff
-  return { ...handoff, dir: cwd, root: isInside(handoff.root, cwd) ? handoff.root : cwd }
+  const { root, ...rest } = handoff
+  return root !== undefined && isInside(root, cwd)
+    ? { ...rest, dir: cwd, root }
+    : { ...rest, dir: cwd }
 }

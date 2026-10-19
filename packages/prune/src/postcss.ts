@@ -15,11 +15,13 @@ import type { Handoff } from './handoff.ts'
 import type { DirectiveProblem } from './record.ts'
 
 import { corePluginFor, expandDirectives, hasNaveDirective } from './directive.ts'
-import { loadExtend } from './extend.ts'
+import { extendFileIn, loadExtend } from './extend.ts'
 import { readHandoff } from './handoff.ts'
+import { dependencyMessages } from './messages.ts'
 import { printEachRun, printOnce } from './print.ts'
 import { projectHandoff } from './project.ts'
 import { writeSheetRecord } from './record.ts'
+import { declarationRoot } from './root.ts'
 import { relativeTo } from './source-files.ts'
 import { hasCorePlugin, trimAtomicLayer } from './trim.ts'
 
@@ -144,6 +146,24 @@ async function expandOrRecord(
 }
 
 /**
+ * Declares a path-valued `extend` module to the bundler, so a stylesheet whose `@nave` it expands
+ * runs again when it changes. The run over the atom layer declares it with everything else it
+ * read.
+ */
+function declareExtendFile(result: Result, handoff: Handoff): void {
+  const file = extendFileIn(handoff.options, handoff.dir)
+  if (file === undefined) return
+  result.messages.push(
+    ...dependencyMessages({
+      root: declarationRoot(handoff),
+      parent: result.opts.from,
+      files: [file],
+      directories: [],
+    }),
+  )
+}
+
+/**
  * Says, once, that the plugin is listed and the wrapper is not.
  */
 function sayWrapperIsMissing(): void {
@@ -186,7 +206,10 @@ async function runWithHandoff(
     problems: expansion.problems,
     failures: [...recorded, ...expansionFailures],
   })
-  if (!inspectAtomicLayer(root.toString()).hasLayer) return
+  if (!inspectAtomicLayer(root.toString()).hasLayer) {
+    declareExtendFile(result, handoff)
+    return
+  }
   trimAtomicLayer({
     root,
     result,

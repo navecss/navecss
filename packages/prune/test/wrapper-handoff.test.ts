@@ -53,19 +53,18 @@ describe('AC-nextjs-used-atoms-19: withNave() hands its options over in one envi
     expect(changedVariables(before, { ...before })).toEqual([])
   })
 
-  it('holds JSON with exactly the options, the project directory, distDir and the root', () => {
+  it('holds JSON with exactly the options, the project directory and distDir, and no root the config does not set', () => {
     withNave({}, OPTIONS)
     const handoff = handoffInEnv()
     expect(Object.keys(handoff).toSorted((a, b) => a.localeCompare(b))).toEqual([
       'dir',
       'distDir',
       'options',
-      'root',
     ])
     expect(handoff.options).toMatchObject(OPTIONS)
     expect(handoff.dir).toBe(project.dir)
     expect(handoff.distDir).toBe('.next')
-    expect(handoff.root).toBe(project.dir)
+    expect(handoff.root).toBeUndefined()
   })
 
   it("marks the directory webpack's callback passes on as the bundler's own, and not the one from config load", () => {

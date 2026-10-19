@@ -53,11 +53,12 @@ function setHandoff(
   phase: string | undefined,
 ): void {
   const { dir, isBundlerDir } = project
+  const root = config.turbopack?.root ?? config.outputFileTracingRoot
   const handoff: Handoff = {
     options,
     dir,
     distDir: config.distDir ?? '.next',
-    root: config.turbopack?.root ?? config.outputFileTracingRoot ?? dir,
+    ...(root !== undefined && { root }),
     ...(phase !== undefined && { phase }),
     ...(isBundlerDir && { isBundlerDir }),
   }

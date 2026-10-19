@@ -1,6 +1,6 @@
 /**
  * What `withNave()` hands the PostCSS plugin: one environment variable holding the options, the
- * project directory, `distDir` and the root the bundler resolves paths against, as JSON. No file
+ * project directory, `distDir` and the root the config sets, if any, as JSON. No file
  * carries it: a file needs a path the wrapper cannot reliably know.
  */
 import type { NaveOptions } from './options.ts'
@@ -15,9 +15,10 @@ export interface Handoff {
   readonly dir: string
   readonly distDir: string
   /**
-   * The root the bundler resolves paths against: no file or directory outside it is declared.
+   * The root the config sets (`turbopack.root`, else `outputFileTracingRoot`), absent when it sets
+   * none: the plugin then uses the root Next.js infers, as Turbopack does.
    */
-  readonly root: string
+  readonly root?: string
   /**
    * The phase Next.js called a function config with (`phase-development-server`,
    * `phase-production-build`, ...); absent for an object config, which is given none.
@@ -47,8 +48,8 @@ function isHandoff(value: unknown): value is Handoff {
   return (
     typeof options === 'object' &&
     options !== null &&
-    [dir, distDir, root].every((field) => typeof field === 'string') &&
-    (phase === undefined || typeof phase === 'string') &&
+    [dir, distDir].every((field) => typeof field === 'string') &&
+    [root, phase].every((field) => field === undefined || typeof field === 'string') &&
     (isBundlerDir === undefined || typeof isBundlerDir === 'boolean')
   )
 }

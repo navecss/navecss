@@ -20,11 +20,13 @@ import type { Mode } from './resolve.ts'
 
 import { configFilesIn } from './config-files.ts'
 import { digestOf } from './digest.ts'
+import { extendFileIn } from './extend.ts'
 import { emptyGraph } from './graph-parts.ts'
 import { readGraph } from './graph.ts'
 import { dependencyMessages } from './messages.ts'
 import { printEachRun } from './print.ts'
 import { writeRecord } from './record.ts'
+import { declarationRoot } from './root.ts'
 import { relativeTo } from './source-files.ts'
 import { readStylesheets } from './stylesheets.ts'
 import { emittedAtoms } from './used.ts'
@@ -88,11 +90,13 @@ function digestFileSafely(file: string): string {
 }
 
 /**
- * The files the plugin read: the graph's and the config files.
+ * The files the plugin read: the graph's, the config files and a path-valued `extend` module.
  */
 function filesRead(handoff: Handoff, graphFiles: Map<string, string>): Map<string, string> {
   const files = new Map(graphFiles)
-  for (const file of configFilesIn(handoff.dir)) files.set(file, digestFileSafely(file))
+  const extendFile = extendFileIn(handoff.options, handoff.dir)
+  const read = [...configFilesIn(handoff.dir), ...(extendFile === undefined ? [] : [extendFile])]
+  for (const file of read) files.set(file, digestFileSafely(file))
   return files
 }
 
@@ -209,7 +213,7 @@ function modesOfRun(handoff: Handoff): readonly Mode[] {
  */
 function declarations(run: LayerRun, files: Map<string, string>, graph: Graph): Message[] {
   return dependencyMessages({
-    root: run.handoff.root,
+    root: declarationRoot(run.handoff),
     parent: run.result.opts.from,
     files: files.keys(),
     directories: graph.directories,

@@ -29,6 +29,16 @@ function extendFileOf(specifier: string, dir: string): string {
 }
 
 /**
+ * The file a path-valued `extend` names, when it names one: a file the plugin reads, and so one
+ * it declares to the bundler. `undefined` for an object, or a path that names no file.
+ */
+export function extendFileIn(options: NaveOptions, dir: string): string | undefined {
+  if (typeof options.extend !== 'string') return undefined
+  const file = path.resolve(dir, options.extend)
+  return existsSync(file) && statSync(file).isFile() ? file : undefined
+}
+
+/**
  * The default export of the module in `file`, or the parsed text of a `.json` file.
  */
 async function defaultExportOf(file: string): Promise<unknown> {

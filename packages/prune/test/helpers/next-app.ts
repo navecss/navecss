@@ -26,7 +26,7 @@ import { readRecord } from '../../src/record.ts'
 import { startDev } from './next-dev.ts'
 import { NEXT_ROOT, nextCommand, nextEnvironment, PACKAGE_ROOT } from './next-process.ts'
 
-const CORE_ROOT = path.resolve(PACKAGE_ROOT, '../core')
+export const CORE_ROOT = path.resolve(PACKAGE_ROOT, '../core')
 
 /**
  * Why the real-build tests cannot run here, or `undefined` when they can.

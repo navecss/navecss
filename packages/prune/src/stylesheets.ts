@@ -61,6 +61,15 @@ function urlsOf(root: Root): string[] {
 }
 
 /**
+ * The file a stylesheet URL names: the URL before its query or fragment, without the legacy `~`
+ * that marks a package.
+ */
+export function fileSpecifierOf(url: string): string {
+  const file = url.split(/[#?]/, 1)[0] ?? ''
+  return file.startsWith('~') ? file.slice(1) : file
+}
+
+/**
  * Whether `file` is a file on disk.
  */
 function isFile(file: string): boolean {
@@ -84,7 +93,7 @@ function createStylesheetResolver(dir: string): (importer: string, url: string) 
       }),
   )
   return (importer, url) => {
-    const specifier = url.replace(/^~/, '').replace(/[#?].*$/, '')
+    const specifier = fileSpecifierOf(url)
     if (specifier === '' || isExternal(specifier)) return []
     const directory = path.dirname(importer)
     const found = new Set<string>()
