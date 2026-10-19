@@ -1,6 +1,6 @@
 /**
  * The root the plugin declares files within. Turbopack panics on a declared file outside its own
- * root, which is `turbopack.root`, else `outputFileTracingRoot`, else the workspace root Next.js
+ * root, which is `outputFileTracingRoot`, else `turbopack.root`, else the workspace root Next.js
  * infers from the project directory. The plugin uses the same root, so a workspace package above
  * the app is declared and a file above the workspace is not. Webpack has no such limit, so after
  * webpack's callback ran every file read is declared.

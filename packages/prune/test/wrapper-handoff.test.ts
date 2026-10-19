@@ -96,9 +96,9 @@ describe('AC-nextjs-used-atoms-19: withNave() hands its options over in one envi
     ['turbopack.root', { turbopack: { root: '/work/mono' } }, '/work/mono'],
     ['outputFileTracingRoot', { outputFileTracingRoot: '/work/traced' }, '/work/traced'],
     [
-      'turbopack.root before outputFileTracingRoot',
+      'outputFileTracingRoot before turbopack.root, as Next.js reads them',
       { turbopack: { root: '/work/mono' }, outputFileTracingRoot: '/work/traced' },
-      '/work/mono',
+      '/work/traced',
     ],
   ])('takes the root from %s', (_name, config, root) => {
     withNave(config as ConfigLike, OPTIONS)

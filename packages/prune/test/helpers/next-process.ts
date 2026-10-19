@@ -38,6 +38,8 @@ export function nextEnvironment(): NodeJS.ProcessEnv {
     'NAVECSS_PRUNE',
     'NODE_ENV',
     'TEST',
+    // Next.js sets it for the bundler it runs; an empty value left here would survive --turbopack.
+    'TURBOPACK',
     'VITEST',
     'VITEST_POOL_ID',
     'VITEST_WORKER_ID',

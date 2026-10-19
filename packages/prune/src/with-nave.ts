@@ -53,7 +53,8 @@ function setHandoff(
   phase: string | undefined,
 ): void {
   const { dir, isBundlerDir } = project
-  const root = config.turbopack?.root ?? config.outputFileTracingRoot
+  // Next.js builds from `outputFileTracingRoot` when both are set (and warns), so it comes first.
+  const root = config.outputFileTracingRoot ?? config.turbopack?.root
   const handoff: Handoff = {
     options,
     dir,

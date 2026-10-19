@@ -15,7 +15,7 @@ export interface Handoff {
   readonly dir: string
   readonly distDir: string
   /**
-   * The root the config sets (`turbopack.root`, else `outputFileTracingRoot`), absent when it sets
+   * The root the config sets (`outputFileTracingRoot`, else `turbopack.root`), absent when it sets
    * none: the plugin then uses the root Next.js infers, as Turbopack does.
    */
   readonly root?: string
