@@ -24,7 +24,7 @@ interface Bound {
   readonly isStrict: boolean
 }
 
-const LENGTH = String.raw`[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?[a-z]+`
+const LENGTH = String.raw`[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?[a-z]+`
 const OPERATOR = '(<=|>=|<|>|=)'
 const AXIS = '(width|height)'
 const RANGE_FEATURE = new RegExp(
@@ -136,10 +136,24 @@ function mediaBounds(prelude: string): Bound[] | undefined {
 }
 
 /**
+ * The bounds read from a conjunction, kept for as long as the conjunction (the array a block or a
+ * declaration holds) lives: one conjunction is compared with many others, and reading its text
+ * once is the difference between a check that scales with the pairs and one that pays a parse
+ * for each of them.
+ */
+const BOUNDS_OF = new WeakMap<readonly ConditionRule[], readonly Bound[]>()
+
+/**
  * Every bound the `@media` rules of the given conjunctions put on any axis.
  */
-function collectBounds(rules: readonly ConditionRule[]): Bound[] {
-  return rules.flatMap((rule) => (rule.name === 'media' ? (mediaBounds(rule.prelude) ?? []) : []))
+function collectBounds(rules: readonly ConditionRule[]): readonly Bound[] {
+  const known = BOUNDS_OF.get(rules)
+  if (known !== undefined) return known
+  const bounds = rules.flatMap((rule) =>
+    rule.name === 'media' ? (mediaBounds(rule.prelude) ?? []) : [],
+  )
+  BOUNDS_OF.set(rules, bounds)
+  return bounds
 }
 
 /**

@@ -18,6 +18,7 @@ import type {
 import type { PlanState } from './rule-state.ts'
 
 import { checkOrder } from './order-check.ts'
+import { emittedNodes } from './order-emitted.ts'
 import { findingWarnings, markerWarnings } from './order-warnings.ts'
 import { plan, type PlanResult } from './plan.ts'
 import { directiveFacts, emitAtoms, recordSegments } from './rule-emit.ts'
@@ -150,7 +151,10 @@ function keepNested(state: PlanState, node: ModelNode): void {
  */
 function warningsOf(state: PlanState): PlanWarning[] {
   const amp = ampersandSpecificity(state.input.selector)
-  const findings = checkOrder(state.segments, amp)
+  const { extend, isInsideKeyframes } = state.input
+  const findings = checkOrder(state.segments, amp, (directive) =>
+    emittedNodes(directive, { extend, isInsideKeyframes }),
+  )
   const warnings = [
     ...findingWarnings(findings),
     ...markerWarnings(state.directives, findings, state.input.reportStaleMarkers !== false),

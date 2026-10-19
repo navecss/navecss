@@ -39,6 +39,27 @@ const NTH_PSEUDOS = new Set(['nth-child', 'nth-last-child'])
 const SUBJECT_TRANSPARENT_PSEUDOS = new Set(['is', 'where'])
 
 /**
+ * How many functional pseudo-classes may nest inside one another before a selector is not read.
+ * Weighing one recurses once per level, so a selector nested thousands deep would overflow the
+ * stack of a build that only meant to warn; no stylesheet written by hand comes near this.
+ */
+const MAX_NESTING = 256
+
+/**
+ * Thrown inside this module when a selector nests deeper than `MAX_NESTING`; every exported
+ * function catches it, because an unreadable selector is not compared, never a failure.
+ */
+class UnreadableSelector extends Error {}
+
+/**
+ * The depth one level further in, or an `UnreadableSelector` past the limit.
+ */
+function deeper(depth: number): number {
+  if (depth >= MAX_NESTING) throw new UnreadableSelector('selector nests too deep to be read')
+  return depth + 1
+}
+
+/**
  * Negative when `a` is lighter than `b`, positive when heavier, zero when equal: ids first,
  * then classes, then types.
  */
@@ -66,65 +87,75 @@ export function maxSpecificity(specificities: readonly Specificity[]): Specifici
 /**
  * The specificity of a functional pseudo-element: a type, plus the argument of `::slotted()`.
  */
-function pseudoElementSpecificity(
-  name: string,
-  args: readonly Token[],
-  amp: Specificity,
-): Specificity {
+function pseudoElementSpecificity(name: string, args: readonly Token[], weigh: Weigh): Specificity {
   if (name !== 'slotted') return ONE_TYPE
-  const argument = listSpecificity(parseSelectorTokens(args), amp)
+  const argument = listSpecificity(parseSelectorTokens(args), {
+    ...weigh,
+    depth: deeper(weigh.depth),
+  })
   return addSpecificity(ONE_TYPE, argument)
+}
+
+/**
+ * How `&` weighs while a selector is weighed, and how deep inside functional pseudo-classes the
+ * weighing is.
+ */
+interface Weigh {
+  readonly amp: Specificity
+  readonly depth: number
 }
 
 /**
  * The specificity of a functional pseudo-class from its name and the specificity of its
  * argument selector list.
  */
-function functionSpecificity(name: string, args: readonly Token[], amp: Specificity): Specificity {
+function functionSpecificity(name: string, args: readonly Token[], weigh: Weigh): Specificity {
   if (name === 'where') return ZERO
-  if (ARGUMENT_MAX_PSEUDOS.has(name)) return listSpecificity(parseSelectorTokens(args), amp)
+  const inner = { ...weigh, depth: deeper(weigh.depth) }
+  if (ARGUMENT_MAX_PSEUDOS.has(name)) return listSpecificity(parseSelectorTokens(args), inner)
   if (!NTH_PSEUDOS.has(name)) return ONE_CLASS
-  const argument = listSpecificity(parseSelectorTokens(tokensAfterOf(args)), amp)
+  const argument = listSpecificity(parseSelectorTokens(tokensAfterOf(args)), inner)
   return addSpecificity(ONE_CLASS, argument)
 }
 
 /**
- * The specificity of one simple selector, `&` weighing as `amp`.
+ * The specificity of one simple selector, `&` weighing as `weigh.amp`.
  */
-function simpleSpecificity(simple: Simple, amp: Specificity): Specificity {
-  if (simple.kind === 'nesting') return amp
-  if (simple.kind === 'function') return functionSpecificity(simple.name, simple.args, amp)
+function simpleSpecificity(simple: Simple, weigh: Weigh): Specificity {
+  if (simple.kind === 'nesting') return weigh.amp
+  if (simple.kind === 'function') return functionSpecificity(simple.name, simple.args, weigh)
   if (simple.kind === 'pseudo-element')
-    return pseudoElementSpecificity(simple.name, simple.args, amp)
+    return pseudoElementSpecificity(simple.name, simple.args, weigh)
   return FIXED_WEIGHTS[simple.kind]
 }
 
 /**
  * The specificity of a whole complex selector: every simple selector of every compound.
  */
-function complexSpecificity(complex: Complex, amp: Specificity): Specificity {
+function complexSpecificity(complex: Complex, weigh: Weigh): Specificity {
   return complex
     .flat()
-    .reduce((sum, simple) => addSpecificity(sum, simpleSpecificity(simple, amp)), ZERO)
+    .reduce((sum, simple) => addSpecificity(sum, simpleSpecificity(simple, weigh)), ZERO)
 }
 
 /**
  * The heaviest specificity among the complex selectors of a list.
  */
-function listSpecificity(list: readonly Complex[], amp: Specificity): Specificity {
-  return maxSpecificity(list.map((complex) => complexSpecificity(complex, amp)))
+function listSpecificity(list: readonly Complex[], weigh: Weigh): Specificity {
+  return maxSpecificity(list.map((complex) => complexSpecificity(complex, weigh)))
 }
 
 /**
  * Whether the declarations of a compound apply to the element `&` stands for: it holds `&`
  * directly, or through `:is()`/`:where()` with an argument whose own subject does.
  */
-function isSubjectOnAmpersandElement(compound: Compound): boolean {
+function isSubjectOnAmpersandElement(compound: Compound, depth: number): boolean {
   return compound.some((simple) => {
     if (simple.kind === 'nesting') return true
     if (simple.kind !== 'function' || !SUBJECT_TRANSPARENT_PSEUDOS.has(simple.name)) return false
+    const inner = deeper(depth)
     return parseSelectorTokens(simple.args).some((arm) =>
-      isSubjectOnAmpersandElement(subjectOf(arm)),
+      isSubjectOnAmpersandElement(subjectOf(arm), inner),
     )
   })
 }
@@ -166,20 +197,32 @@ export function ampersandSpecificity(parentSelectorList: string): Specificity {
   const onElement = parseSelectorList(parentSelectorList).filter(
     (complex) => !isComplexEndingInPseudoElement(complex),
   )
-  return listSpecificity(onElement, ONE_CLASS)
+  try {
+    return listSpecificity(onElement, { amp: ONE_CLASS, depth: 0 })
+  } catch (error) {
+    if (error instanceof UnreadableSelector) return ZERO
+    throw error
+  }
 }
 
 /**
  * The specificity of each complex selector of the nested list `selector` whose subject
  * compound is on the same element as `&` (directly, or through `:is()`/`:where()`), given
  * that `&` weighs `amp`. A selector whose subject is elsewhere (a descendant, a sibling, a
- * `&` only inside `:not()` or `:has()`) or is a pseudo-element contributes nothing.
+ * `&` only inside `:not()` or `:has()`) or is a pseudo-element contributes nothing, and neither
+ * does a selector nested too deep to be read (see `MAX_NESTING`).
  */
 export function nestedSpecificities(selector: string, amp: Specificity): readonly Specificity[] {
-  return parseSelectorList(selector)
-    .filter(
-      (complex) =>
-        !isComplexEndingInPseudoElement(complex) && isSubjectOnAmpersandElement(subjectOf(complex)),
-    )
-    .map((complex) => complexSpecificity(complex, amp))
+  try {
+    return parseSelectorList(selector)
+      .filter(
+        (complex) =>
+          !isComplexEndingInPseudoElement(complex) &&
+          isSubjectOnAmpersandElement(subjectOf(complex), 0),
+      )
+      .map((complex) => complexSpecificity(complex, { amp, depth: 0 }))
+  } catch (error) {
+    if (error instanceof UnreadableSelector) return []
+    throw error
+  }
 }

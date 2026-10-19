@@ -16,6 +16,14 @@ import {
 
 const EXTEND: Record<string, AtomDefinition> = {
   ringX: { declarations: {}, pseudos: { ':focus-visible': { outline: '2px solid blue' } } },
+  cx: {
+    declarations: {},
+    media: { '(width >= 75em)': { declarations: { '--gap': '1px', display: 'none' } } },
+  },
+  vx: {
+    declarations: {},
+    media: { '(width >= 75em)': { declarations: { '-webkit-user-select': 'none' } } },
+  },
 }
 
 const HOSTS = [
@@ -138,6 +146,78 @@ describe.each(HOSTS)(
 
       expect(found.length - stale.length).toBe(order)
       expect(stale).toHaveLength(markers)
+    })
+  },
+)
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-29 — a marker names a custom or vendor-prefixed property (%s)',
+  (_name, warn) => {
+    /**
+     * The order warnings and the marker reports a rule draws.
+     */
+    async function counts(css: string): Promise<{ order: string[]; reports: number }> {
+      const found = await warn(css, { extend: EXTEND })
+      const reports = found.filter(
+        (w) => w.text.includes('allows nothing') || w.text.includes('Remove'),
+      )
+      return {
+        order: found.filter((w) => !reports.includes(w)).map((w) => w.text),
+        reports: reports.length,
+      }
+    }
+
+    it.each<readonly [string, number, number]>([
+      ['.c { @nave /* nave-allow-override: display --gap */ cx; --gap: 2px; display: flex }', 0, 0],
+      [
+        '.c { @nave /* nave-allow-override: display -- gap */ cx; --gap: 2px; display: flex }',
+        1,
+        0,
+      ],
+      ['.c { @nave /* nave-allow-override: --gap */ cx; --gap: 2px; display: flex }', 1, 0],
+      [
+        '.c { @nave /* nave-allow-override: -webkit-user-select */ vx; -webkit-user-select: auto }',
+        0,
+        0,
+      ],
+      ['.c { @nave vx; -webkit-user-select: auto }', 1, 0],
+    ])('%s reports %i order warnings and %i marker reports', async (css, order, reports) => {
+      const found = await counts(css)
+
+      expect(found.order).toHaveLength(order)
+      expect(found.reports).toBe(reports)
+    })
+
+    it('names the property the marker leaves, not the reason after `--`', async () => {
+      const found = await counts(
+        '.c { @nave /* nave-allow-override: display -- gap */ cx; --gap: 2px; display: flex }',
+      )
+
+      expect(found.order[0]).toContain('--gap is 2px, not 1px')
+    })
+  },
+)
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-30 — the head of a marker is lower case only (%s)',
+  (_name, warn) => {
+    it.each(['/* NAVE-ALLOW-OVERRIDE: display */', '/* Nave-Allow-Override: display */'])(
+      '%s is not a marker: it allows nothing and is not reported',
+      async (comment) => {
+        const found = await warn(`.c { @nave ${comment} hideDesktopUp; display: grid; }`)
+
+        expect(found).toHaveLength(1)
+        expect(found[0]!.text).toContain('comes after "hideDesktopUp"')
+        expect(found[0]!.text).toContain(
+          `\`@nave /* nave-allow-override: display */ ${comment} hideDesktopUp;\``,
+        )
+      },
+    )
+
+    it('reads the lower case head as a marker (control)', async () => {
+      expect(
+        await warn('.c { @nave /* nave-allow-override: display */ hideDesktopUp; display: grid; }'),
+      ).toEqual([])
     })
   },
 )

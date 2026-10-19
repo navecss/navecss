@@ -12,7 +12,7 @@ import { framedText } from './directive/report-text.ts'
  * Whether the host is Next.js's Turbopack.
  */
 function isTurbopack(): boolean {
-  // eslint-disable-next-line turbo/no-undeclared-env-vars -- read to detect the host at run time; it is not an input of this package's own build
+   
   return (process.env.TURBOPACK ?? '') !== ''
 }
 
@@ -36,7 +36,7 @@ function framedAtNode(node: Node, result: Result, text: string, index: number | 
  */
 export function reportWarning(node: Node, result: Result, text: string, index?: number): void {
   if (isTurbopack()) {
-    // eslint-disable-next-line no-console -- Turbopack drops a PostCSS warning, so the console is the channel left
+     
     console.warn(framedAtNode(node, result, text, index))
     return
   }

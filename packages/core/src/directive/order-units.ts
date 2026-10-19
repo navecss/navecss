@@ -13,47 +13,12 @@ import type {
   Unit,
 } from './order-model.ts'
 import type { AnchoredBlock, Declaration } from './plan.ts'
-import type { ModelNode } from './rule-model.ts'
+import type { DirectiveNode, ModelNode } from './rule-model.ts'
 
+import { toOrderDeclaration } from './order-declaration.ts'
 import { nestedSpecificities, type Specificity } from './selector-specificity.ts'
-import { tokenize } from './tokenizer.ts'
 
 const GROUP_NAMES = new Set(['container', 'media', 'supports'])
-
-/**
- * Nested rules and groups are read this deep; below it a declaration is not compared.
- */
-const MAX_DEPTH = 8
-
-/**
- * The index of the last token that is not whitespace or a comment, or -1.
- */
-function lastSignificant(tokens: ReturnType<typeof tokenize>, before: number): number {
-  let i = before - 1
-  while (i >= 0 && (tokens[i]!.type === 'whitespace-token' || tokens[i]!.type === 'comment')) i--
-  return i
-}
-
-/**
- * A declaration whose value may end in `!important`, as the declaration and the flag.
- */
-function toOrderDeclaration(declaration: Declaration): OrderDeclaration {
-  const tokens = tokenize(declaration.value)
-  const last = lastSignificant(tokens, tokens.length)
-  const ident = tokens[last]
-  if (
-    ident?.type !== 'ident-token' ||
-    String(ident.structured?.value).toLowerCase() !== 'important'
-  ) {
-    return { prop: declaration.prop, value: declaration.value, important: false }
-  }
-  const bang = lastSignificant(tokens, last)
-  if (tokens[bang]?.type !== 'delim-token' || tokens[bang].structured?.value !== '!') {
-    return { prop: declaration.prop, value: declaration.value, important: false }
-  }
-  const value = declaration.value.slice(0, tokens[bang].startIndex).trim()
-  return { prop: declaration.prop, value, important: true }
-}
 
 /**
  * The context an atom's block is read in.
@@ -143,67 +108,122 @@ export function candidatesOfAtomBlock(context: UnitContext, block: AnchoredBlock
   return unitsOfBlock(context, block).flatMap((unit) => candidatesOfUnit(unit, overrider))
 }
 
+/**
+ * What a directive written inside a nested rule emits, as nodes of that rule.
+ */
+export type Emitted = (directive: DirectiveNode) => readonly ModelNode[]
+
+/**
+ * The conditional groups around a declaration, innermost last, kept as a chain so entering a group
+ * costs one link however deep the groups nest. The array a comparison needs is made once, for the
+ * links a declaration is actually under.
+ */
+interface ConditionChain {
+  array?: readonly ConditionRule[]
+  readonly parent: ConditionChain | undefined
+  readonly rule: ConditionRule
+}
+
+const NO_CONDITIONS: readonly ConditionRule[] = []
+
+/**
+ * The conditions of a chain, outermost first.
+ */
+function conditionsOf(chain: ConditionChain | undefined): readonly ConditionRule[] {
+  if (chain === undefined) return NO_CONDITIONS
+  if (chain.array === undefined) {
+    const rules: ConditionRule[] = []
+    for (let link: ConditionChain | undefined = chain; link; link = link.parent) {
+      rules.push(link.rule)
+    }
+    chain.array = rules.toReversed()
+  }
+  return chain.array
+}
+
 interface Walk {
-  readonly conditions: readonly ConditionRule[]
+  readonly chain: ConditionChain | undefined
+  readonly emitted: Emitted
   readonly holderSelector: string
   readonly overrider: Overrider
   readonly specificities: readonly Specificity[]
 }
 
 /**
- * The candidates inside `nodes`: declarations at this level, then those of nested rules whose
- * subject stays on the element and of conditional groups, to a fixed depth.
+ * One level of the walk: the nodes of a nested rule or group, a directive in a nested rule
+ * standing for the nodes it emits, and the declarations written at that level.
  */
-function walkNodes(nodes: readonly ModelNode[], walk: Walk, depth: number): Candidate[] {
-  const found: Candidate[] = []
-  const siblings = nodes.flatMap((node) =>
-    node.kind === 'decl' ? [{ prop: node.prop, value: node.value, important: node.important }] : [],
-  )
-  for (const node of nodes) {
-    if (node.kind === 'decl') {
-      const { prop, value, important } = node
-      found.push({
-        declaration: { prop, value, important },
-        overrider: walk.overrider,
-        conditions: walk.conditions,
-        specificities: walk.specificities,
-        holderSelector: walk.holderSelector,
-        siblings,
-      })
-    } else if (depth < MAX_DEPTH && node.kind === 'rule') {
-      const specificities = walk.specificities.flatMap((s) => nestedSpecificities(node.selector, s))
-      if (specificities.length === 0) continue
-      const inner = { ...walk, specificities, holderSelector: node.selector }
-      found.push(...walkNodes(node.nodes, inner, depth + 1))
-    } else if (depth < MAX_DEPTH && node.kind === 'group' && GROUP_NAMES.has(node.name)) {
-      const conditions = [...walk.conditions, { name: node.name, prelude: node.prelude }]
-      found.push(...walkNodes(node.nodes, { ...walk, conditions }, depth + 1))
-    }
-  }
-  return found
+interface Level {
+  next: number
+  readonly nodes: readonly ModelNode[]
+  readonly siblings: readonly OrderDeclaration[]
+  readonly walk: Walk
 }
 
 /**
- * The candidates one child of the rule contributes, `amp` being what `&` weighs.
+ * The level for `nodes`. `isRule` says they are the content of a style rule, where a directive
+ * is expanded; a directive straight inside a group is refused by the hosts and stays unread.
  */
-export function candidatesOfOwnNode(node: ModelNode, amp: Specificity): Candidate[] {
-  if (node.kind === 'decl') return walkNodes([node], ownWalk(node, { kind: 'declaration' }, amp), 0)
+function levelOf(nodes: readonly ModelNode[], walk: Walk, isRule: boolean): Level {
+  const read = isRule
+    ? nodes.flatMap((node) => (node.kind === 'directive' ? walk.emitted(node) : [node]))
+    : nodes
+  const siblings = read.flatMap((node) =>
+    node.kind === 'decl' ? [{ prop: node.prop, value: node.value, important: node.important }] : [],
+  )
+  return { next: 0, nodes: read, siblings, walk }
+}
+
+/**
+ * The level inside `node`, or nothing when `node` holds no candidate: a rule whose subject stays
+ * on the element, or a conditional group. Candidates of a declaration go to `found`.
+ */
+function enter(node: ModelNode, level: Level, found: Candidate[]): Level | undefined {
+  const { walk } = level
+  if (node.kind === 'decl') {
+    const { prop, value, important } = node
+    found.push({
+      declaration: { prop, value, important },
+      overrider: walk.overrider,
+      conditions: conditionsOf(walk.chain),
+      specificities: walk.specificities,
+      holderSelector: walk.holderSelector,
+      siblings: level.siblings,
+    })
+    return undefined
+  }
   if (node.kind === 'rule') {
-    const top = { kind: 'rule', selector: node.selector } as const
-    const specificities = nestedSpecificities(node.selector, amp)
-    if (specificities.length === 0) return []
-    return walkNodes(
-      node.nodes,
-      { ...ownWalk(node, top, amp), specificities, holderSelector: node.selector },
-      1,
-    )
+    const specificities = walk.specificities.flatMap((s) => nestedSpecificities(node.selector, s))
+    if (specificities.length === 0) return undefined
+    return levelOf(node.nodes, { ...walk, specificities, holderSelector: node.selector }, true)
   }
   if (node.kind === 'group' && GROUP_NAMES.has(node.name)) {
-    const top = { kind: 'group', name: node.name, prelude: node.prelude } as const
-    const conditions = [{ name: node.name, prelude: node.prelude }]
-    return walkNodes(node.nodes, { ...ownWalk(node, top, amp), conditions }, 1)
+    const chain = { rule: { name: node.name, prelude: node.prelude }, parent: walk.chain }
+    return levelOf(node.nodes, { ...walk, chain }, false)
   }
-  return []
+  return undefined
+}
+
+/**
+ * The candidates inside `nodes`, in document order: declarations at each level, then those of
+ * nested rules whose subject stays on the element and of conditional groups, at any depth. The
+ * levels are walked with a stack of their own, so a stylesheet cannot overflow the call stack by
+ * nesting.
+ */
+function walkNodes(nodes: readonly ModelNode[], walk: Walk, isRule: boolean): Candidate[] {
+  const found: Candidate[] = []
+  const stack = [levelOf(nodes, walk, isRule)]
+  while (stack.length > 0) {
+    const level = stack.at(-1)!
+    const node = level.nodes[level.next++]
+    if (node === undefined) {
+      stack.pop()
+      continue
+    }
+    const inner = enter(node, level, found)
+    if (inner !== undefined) stack.push(inner)
+  }
+  return found
 }
 
 /**
@@ -212,12 +232,41 @@ export function candidatesOfOwnNode(node: ModelNode, amp: Specificity): Candidat
 function ownWalk(
   node: ModelNode,
   top: Extract<Overrider, { kind: 'own' }>['top'],
-  amp: Specificity,
+  context: { readonly amp: Specificity; readonly emitted: Emitted },
 ): Walk {
   return {
-    conditions: [],
+    chain: undefined,
+    emitted: context.emitted,
     holderSelector: '&',
     overrider: { kind: 'own', top, topRef: node.ref },
-    specificities: [amp],
+    specificities: [context.amp],
   }
+}
+
+/**
+ * The candidates one child of the rule contributes, `amp` being what `&` weighs and `emitted` what
+ * a directive inside a nested rule expands to.
+ */
+export function candidatesOfOwnNode(
+  node: ModelNode,
+  amp: Specificity,
+  emitted: Emitted,
+): Candidate[] {
+  const context = { amp, emitted }
+  if (node.kind === 'decl') {
+    return walkNodes([node], ownWalk(node, { kind: 'declaration' }, context), false)
+  }
+  if (node.kind === 'rule') {
+    const top = { kind: 'rule', selector: node.selector } as const
+    const specificities = nestedSpecificities(node.selector, amp)
+    if (specificities.length === 0) return []
+    const walk = { ...ownWalk(node, top, context), specificities, holderSelector: node.selector }
+    return walkNodes(node.nodes, walk, true)
+  }
+  if (node.kind === 'group' && GROUP_NAMES.has(node.name)) {
+    const top = { kind: 'group', name: node.name, prelude: node.prelude } as const
+    const chain = { rule: { name: node.name, prelude: node.prelude }, parent: undefined }
+    return walkNodes(node.nodes, { ...ownWalk(node, top, context), chain }, false)
+  }
+  return []
 }

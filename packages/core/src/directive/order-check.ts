@@ -9,6 +9,7 @@ import type {
   Candidate,
   DirectiveFacts,
   Finding,
+  OrderDeclaration,
   RelatedPair,
   Unit,
 } from './order-model.ts'
@@ -21,12 +22,13 @@ import {
   candidatesOfAtomBlock,
   candidatesOfAtomDeclarations,
   candidatesOfOwnNode,
+  type Emitted,
   type UnitContext,
   unitsOfBlock,
 } from './order-units.ts'
-import { propertiesRelate } from './property-relations.ts'
+import { isSameProperty, propertiesRelate } from './property-relations.ts'
 import { compareSpecificity } from './selector-specificity.ts'
-import { declarationValuesEqual } from './value-equality.ts'
+import { normalizeValueForCompare } from './value-equality.ts'
 
 /**
  * A part of the rule's output, in output order.
@@ -53,12 +55,21 @@ interface AtomBlockSegment {
 }
 
 /**
- * Whether two property names are the same property: custom properties by exact name, any other
- * ASCII case-insensitively.
+ * The comparison key of a declaration's value, made once: one declaration is compared with every
+ * other one, and reading its tokens afresh for each pair is a cost per pair.
  */
-function isSameProperty(a: string, b: string): boolean {
-  if (a.startsWith('--') || b.startsWith('--')) return a === b
-  return a.toLowerCase() === b.toLowerCase()
+const VALUE_KEYS = new WeakMap<OrderDeclaration, string>()
+
+/**
+ * The comparison key of `declaration`'s value.
+ */
+function valueKey(declaration: OrderDeclaration): string {
+  let key = VALUE_KEYS.get(declaration)
+  if (key === undefined) {
+    key = normalizeValueForCompare(declaration.value)
+    VALUE_KEYS.set(declaration, key)
+  }
+  return key
 }
 
 /**
@@ -71,9 +82,7 @@ function relatedPairs(unit: Unit, candidate: Candidate): RelatedPair[] {
   return unit.declarations
     .filter((block) => !block.important && propertiesRelate(block.prop, later.prop))
     .filter(
-      (block) =>
-        !isSameProperty(block.prop, later.prop) ||
-        !declarationValuesEqual(block.value, later.value),
+      (block) => !isSameProperty(block.prop, later.prop) || valueKey(block) !== valueKey(later),
     )
     .map((block) => ({ block, later }))
 }
@@ -108,8 +117,8 @@ function contextOf(
 /**
  * The candidates one segment contributes.
  */
-function candidatesOf(segment: Segment, amp: Specificity): Candidate[] {
-  if (segment.kind === 'own') return candidatesOfOwnNode(segment.node, amp)
+function candidatesOf(segment: Segment, amp: Specificity, emitted: Emitted): Candidate[] {
+  if (segment.kind === 'own') return candidatesOfOwnNode(segment.node, amp, emitted)
   const context = contextOf(segment, amp)
   if (segment.kind === 'atom-declarations') {
     return candidatesOfAtomDeclarations(context, segment.declarations)
@@ -130,28 +139,44 @@ function isSameAtom(a: Segment, b: Segment): boolean {
 }
 
 /**
- * The findings of one block segment against every later part of the output.
+ * The findings of one block segment against the candidates of the later parts of the output.
  */
 function findingsOfBlock(
-  segment: AtomBlockSegment,
-  later: readonly Segment[],
+  index: number,
+  segments: readonly Segment[],
+  candidatesOfSegment: (index: number) => readonly Candidate[],
   amp: Specificity,
 ): Finding[] {
+  const segment = segments[index] as AtomBlockSegment
   const units = unitsOfBlock(contextOf(segment, amp), segment.block)
-  const candidates = later
-    .filter((other) => !isSameAtom(segment, other))
-    .flatMap((other) => candidatesOf(other, amp))
+  const candidates = segments.flatMap((other, at) =>
+    at > index && !isSameAtom(segment, other) ? candidatesOfSegment(at) : [],
+  )
   return candidates.flatMap((candidate) =>
     units.map((unit) => compare(unit, candidate)).filter((f) => f !== undefined),
   )
 }
 
 /**
- * Every finding in a rule's output, `segments` being its parts in output order and `amp` what
- * `&` weighs inside it.
+ * Every finding in a rule's output, `segments` being its parts in output order, `amp` what `&`
+ * weighs inside it and `emitted` what a directive inside a nested rule expands to. The candidates
+ * of each part are read once, however many blocks come before it.
  */
-export function checkOrder(segments: readonly Segment[], amp: Specificity): Finding[] {
+export function checkOrder(
+  segments: readonly Segment[],
+  amp: Specificity,
+  emitted: Emitted,
+): Finding[] {
+  const known = new Map<number, readonly Candidate[]>()
+  const candidatesOfSegment = (index: number): readonly Candidate[] => {
+    let candidates = known.get(index)
+    if (candidates === undefined) {
+      candidates = candidatesOf(segments[index]!, amp, emitted)
+      known.set(index, candidates)
+    }
+    return candidates
+  }
   return segments.flatMap((segment, index) =>
-    segment.kind === 'atom-block' ? findingsOfBlock(segment, segments.slice(index + 1), amp) : [],
+    segment.kind === 'atom-block' ? findingsOfBlock(index, segments, candidatesOfSegment, amp) : [],
   )
 }

@@ -41,6 +41,10 @@ const EXTEND: Record<string, AtomDefinition> = {
     declarations: { 'font-size': '16px' },
     media: { '(width >= 48em)': { declarations: { 'font-size': '30px' } } },
   },
+  mLe: {
+    declarations: {},
+    media: { '(width <= 37.5em)': { declarations: { display: 'none' } } },
+  },
 }
 
 /**
@@ -131,6 +135,21 @@ describe.each(HOSTS)('AC-native-apply-order-15 — conditions (%s)', (_name, run
     )
   })
 
+  it.each([
+    ['hideDesktopUp', '@media (max-width: 75em)', 1],
+    ['hideDesktopUp', '@media (min-width: 75em) and (max-width: 75em)', 1],
+    ['hideDesktopUp', '@media (max-width: 74.99em)', 0],
+    ['mLe', '@media (min-width: 37.5em)', 1],
+    ['mLe', '@media (min-width: 37.51em)', 0],
+  ])(
+    '%s then %s reads min- and max- as inclusive and reports %i',
+    async (atom, wrapper, expected) => {
+      expect(await countOf(`.x { @nave ${atom}; ${wrapper} { display: grid } }`, run)).toBe(
+        expected,
+      )
+    },
+  )
+
   it('takes the conjunction of the group rules around the declaration', async () => {
     const css =
       '.x { @nave hidePhoneOnly; @media (width >= 40em) { @media (width < 50em) { display: grid } } }'
@@ -161,6 +180,78 @@ describe.each(HOSTS)('AC-native-apply-order-16 — what counts as later (%s)', (
     expect(warnings[0]).toMatchObject({ column: css.indexOf('mB') + 1 })
   })
 })
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-16 — a directive inside a nested rule counts as what it emits (%s)',
+  (_name, run) => {
+    const WIDE = 'under @media (width >= 75em)'
+    const AFTER = 'comes after "hideDesktopUp"'
+
+    it.each([
+      [
+        '.x { @nave hideDesktopUp; @media (width >= 75em) { & { @nave flex } } }',
+        '@media (width >= 75em) {',
+        `the @media (width >= 75em) block ${AFTER}, so ${WIDE} display is flex, not none.`,
+        '.x { @media (width >= 75em) { & { @nave flex } } @nave hideDesktopUp; }',
+      ],
+      [
+        '.x { @nave hideDesktopUp; @media (width >= 75em) { & { display: flex } } }',
+        '@media (width >= 75em) {',
+        `the @media (width >= 75em) block ${AFTER}, so ${WIDE} display is flex, not none.`,
+        '.x { @media (width >= 75em) { & { display: flex } } @nave hideDesktopUp; }',
+      ],
+      [
+        '.x { @nave hideDesktopUp; & { @nave flex } }',
+        '& {',
+        `the & block ${AFTER}, so ${WIDE} display is flex, not none.`,
+        '.x { & { @nave flex } @nave hideDesktopUp; }',
+      ],
+      [
+        '.x { @nave hideDesktopUp; &:where(.q) { @nave flex } }',
+        '&:where(.q) {',
+        `the &:where(.q) block ${AFTER}, so ${WIDE} while also on :where(.q), display is flex, not none.`,
+        '.x { &:where(.q) { @nave flex } @nave hideDesktopUp; }',
+      ],
+      [
+        '.x { @nave hideDesktopUp; &:where(.q) { @nave flex } @nave textLeft; }',
+        '&:where(.q) {',
+        `the &:where(.q) block ${AFTER}, so ${WIDE} while also on :where(.q), display is flex, not none.`,
+        '.x { &:where(.q) { @nave flex } @nave hideDesktopUp; @nave textLeft; }',
+      ],
+    ])(
+      '%s warns once, at the nested block, and the printed fixes clear it',
+      async (css, at, sentence, fixed) => {
+        const warnings = await run(css)
+
+        expect(warnings).toHaveLength(1)
+        expect(warnings[0]!.text.startsWith(`@nave: ${sentence} `)).toBe(true)
+        expect(warnings[0]).toMatchObject({ line: 1, column: css.indexOf(at) + 1 })
+        expect(await run(fixed)).toEqual([])
+        const marker = /`(@nave [^`]*)`\s*$/.exec(warnings[0]!.text)![1]!
+        expect(marker).toContain('nave-allow-override: display */')
+        expect(await run(css.replace(/@nave hideDesktopUp;/, () => marker))).toEqual([])
+      },
+    )
+
+    it('says the same for the nested directive as for the declaration it emits', async () => {
+      const nested = await run('.x { @nave hideDesktopUp; &:where(.q) { @nave flex } }')
+      const written = await run('.x { @nave hideDesktopUp; &:where(.q) { display: flex } }')
+
+      expect(nested.map((w) => w.text)).toEqual(written.map((w) => w.text))
+    })
+
+    it('reads a marker as used when the override sits in a nested directive', async () => {
+      const css =
+        '.x { @nave /* nave-allow-override: display */ hideDesktopUp; &:where(.q) { @nave flex } @nave textLeft; }'
+
+      expect(await run(css)).toEqual([])
+    })
+
+    it("does not compare a directive inside a nested rule with the outer rule's later content", async () => {
+      expect(await run('.x { & { @nave hideDesktopUp } display: flex }')).toEqual([])
+    })
+  },
+)
 
 describe.each(HOSTS)('AC-native-apply-order-17 — consumer atoms (%s)', (_name, run) => {
   const extend: Record<string, AtomDefinition> = {
@@ -193,24 +284,37 @@ describe.each(HOSTS)('AC-native-apply-order-17 — consumer atoms (%s)', (_name,
 
 describe.each(HOSTS)('AC-native-apply-order-20 — values (%s)', (_name, run) => {
   it.each([
-    ['display', 'none', 'NONE', 0],
-    ['color', 'red', 'Red', 0],
+    ['display', 'none', 'NONE', 1],
+    ['color', 'red', 'Red', 1],
+    ['color', 'red', 'RED', 1],
+    ['font-family', 'Arial', 'arial', 1],
+    ['border', '1px solid red', '1px SOLID RED', 1],
+    ['animation-name', 'Foo', 'foo', 1],
+    ['grid-area', 'Main', 'main', 1],
+    ['container-name', 'Foo', 'foo', 1],
+    ['counter-reset', 'Foo', 'foo', 1],
+    ['transition-property', 'Foo', 'foo', 1],
+    ['--a', 'Foo', 'foo', 1],
     ['margin', '0 auto', '0    auto', 0],
     ['margin', '0 auto', '0 /* c */ auto', 0],
     ['width', 'var(--w)', 'VAR(--w)', 0],
     ['width', 'calc(1px + 2px)', 'CALC(1px + 2px)', 0],
+    ['color', 'rgb(0 0 0)', 'RGB(0 0 0)', 0],
     ['width', 'var(--w)', 'var(--W)', 1],
+    ['width', '--Fn(1px)', '--fn(1px)', 1],
     ['width', 'var(--w, 2px)', 'var(--w)', 1],
     ['width', '0', '0px', 1],
     ['width', '10px', '10PX', 1],
     ['color', '#fff', '#FFF', 1],
     ['content', '"a"', '"A"', 1],
+    ['gap', '1rem', 'grid-gap: 1rem', 0],
   ])('%s: %s then %s reports %i', async (prop, before, after, expected) => {
     const extend = {
       m: { declarations: {}, media: { '(width >= 75em)': { declarations: { [prop]: before } } } },
     }
+    const later = after.includes(':') ? after : `${prop}: ${after}`
 
-    expect(await run(`.x { @nave m; ${prop}: ${after}; }`, { extend })).toHaveLength(expected)
+    expect(await run(`.x { @nave m; ${later}; }`, { extend })).toHaveLength(expected)
   })
 
   it('never calls a shorthand equal to a longhand', async () => {

@@ -2,7 +2,7 @@
  * Reads the items of one stylesheet block, as the block reader sees them, into the host-free
  * model `planRule()` takes. Only what the plan needs is read: a declaration's property, value and
  * `!important`, a rule's selector, a group at-rule's prelude, and the content of nested rules and
- * groups down to a fixed depth.
+ * groups at any depth, each read when the check first enters it.
  */
 import type { Item } from './block-reader.ts'
 import type { ModelNode } from './rule-model.ts'
@@ -11,12 +11,6 @@ import type { Token } from './tokenizer.ts'
 import { isNaveAtKeyword, readItem } from './block-reader.ts'
 
 const GROUP_NAMES = new Set(['container', 'media', 'supports'])
-
-/**
- * Nested rules and groups are read this deep; anything below is treated as one opaque node. The
- * walk stays iterative everywhere else, so a stylesheet cannot overflow the stack by nesting.
- */
-const MAX_READ_DEPTH = 24
 
 export interface ModelSource {
   readonly css: string
@@ -141,68 +135,84 @@ function selectorOf(source: ModelSource, item: Item): string {
 }
 
 /**
- * Reads `items`, with their nested content to `depth` levels, appending each to `itemOf`. An
- * invalid item (stray tokens) is not a node: it is not a nested rule either.
+ * The items that are nodes: an invalid item (stray tokens) is not one, and is not a nested rule
+ * either.
  */
-function readItems(
-  source: ModelSource,
-  items: readonly Item[],
-  itemOf: Item[],
-  depth: number,
-): ModelNode[] {
-  return items
-    .filter((item) => item.kind !== 'invalid')
-    .map((item) => itemNode(source, item, itemOf, depth))
+function usable(items: readonly Item[]): readonly Item[] {
+  return items.filter((item) => item.kind !== 'invalid')
 }
 
 /**
- * The content of a nested block, or nothing past the depth limit.
+ * The content of the block of `item`, read when first asked for and then kept: nobody pays for
+ * the content of a nested rule the order check never enters, however deep the nesting goes, and
+ * nothing recurses to read it.
  */
-function childrenOf(
-  source: ModelSource,
-  item: Item,
-  itemOf: Item[],
-  depth: number,
-): ModelNode[] | undefined {
-  if (item.blockStart === undefined || depth >= MAX_READ_DEPTH) return undefined
-  const children = readBlockItems(source, item.blockStart, item.blockEnd!)
-  return readItems(source, children, itemOf, depth + 1)
-}
-
-/**
- * One item as a model node.
- */
-function itemNode(source: ModelSource, item: Item, itemOf: Item[], depth: number): ModelNode {
-  const ref = itemOf.length
-  itemOf.push(item)
-  if (item.kind === 'declaration') return declarationNode(source, item, ref)
-  if (item.kind === 'rule') {
-    const nodes = childrenOf(source, item, itemOf, depth)
-    if (nodes === undefined) return { kind: 'opaque', ref, name: '', prelude: '' }
-    return { kind: 'rule', ref, selector: selectorOf(source, item), nodes }
+function contentOf(source: ModelSource, item: Item, itemOf: Item[]): () => readonly ModelNode[] {
+  let nodes: readonly ModelNode[] | undefined
+  return () => {
+    nodes ??= readItems(source, readBlockItems(source, item.blockStart!, item.blockEnd!), itemOf)
+    return nodes
   }
-  if (item.kind === 'at-rule') return atRuleNode(source, item, ref, { itemOf, depth })
+}
+
+/**
+ * A rule item with a block as a node whose content is read on demand.
+ */
+function ruleNode(source: ModelSource, item: Item, ref: number, itemOf: Item[]): ModelNode {
+  const content = contentOf(source, item, itemOf)
+  return {
+    kind: 'rule',
+    ref,
+    selector: selectorOf(source, item),
+    get nodes() {
+      return content()
+    },
+  }
+}
+
+/**
+ * An at-rule item as a directive, a group whose content is read on demand, or an opaque node.
+ */
+function atRuleNode(source: ModelSource, item: Item, ref: number, itemOf: Item[]): ModelNode {
+  const prelude = source.css.slice(item.preludeOffset ?? 0, item.preludeEndOffset ?? 0)
+  if (isNaveAtKeyword(source.tokens[item.start]!)) return { kind: 'directive', ref, prelude }
+  const name = item.atKeyword ?? ''
+  if (!GROUP_NAMES.has(name) || item.blockStart === undefined) {
+    return { kind: 'opaque', ref, name, prelude: prelude.trim() }
+  }
+  const content = contentOf(source, item, itemOf)
+  return {
+    kind: 'group',
+    ref,
+    name,
+    prelude: prelude.trim(),
+    get nodes() {
+      return content()
+    },
+  }
+}
+
+/**
+ * One item as a node.
+ */
+function itemNode(source: ModelSource, item: Item, ref: number, itemOf: Item[]): ModelNode {
+  if (item.kind === 'declaration') return declarationNode(source, item, ref)
+  if (item.kind === 'rule' && item.blockStart !== undefined) {
+    return ruleNode(source, item, ref, itemOf)
+  }
+  if (item.kind === 'at-rule') return atRuleNode(source, item, ref, itemOf)
   return { kind: 'opaque', ref, name: '', prelude: '' }
 }
 
 /**
- * An at-rule item as a directive, a group whose content is read, or an opaque nested node.
+ * `items` as nodes, appending each to `itemOf` in document order.
  */
-function atRuleNode(
-  source: ModelSource,
-  item: Item,
-  ref: number,
-  where: { depth: number; itemOf: Item[] },
-): ModelNode {
-  const prelude = source.css.slice(item.preludeOffset ?? 0, item.preludeEndOffset ?? 0)
-  if (isNaveAtKeyword(source.tokens[item.start]!)) return { kind: 'directive', ref, prelude }
-  const nodes = GROUP_NAMES.has(item.atKeyword ?? '')
-    ? childrenOf(source, item, where.itemOf, where.depth)
-    : undefined
-  if (nodes === undefined) {
-    return { kind: 'opaque', ref, name: item.atKeyword ?? '', prelude: prelude.trim() }
-  }
-  return { kind: 'group', ref, name: item.atKeyword!, prelude: prelude.trim(), nodes }
+function readItems(source: ModelSource, items: readonly Item[], itemOf: Item[]): ModelNode[] {
+  return usable(items).map((item) => {
+    const ref = itemOf.length
+    itemOf.push(item)
+    return itemNode(source, item, ref, itemOf)
+  })
 }
 
 /**
@@ -210,6 +220,6 @@ function atRuleNode(
  */
 export function readBlockModel(source: ModelSource, items: readonly Item[]): BlockModel {
   const itemOf: Item[] = []
-  const nodes = readItems(source, items, itemOf, 0)
+  const nodes = readItems(source, items, itemOf)
   return { nodes, itemOf }
 }

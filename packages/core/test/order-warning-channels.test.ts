@@ -4,6 +4,9 @@
  * problem, and under Next.js's Turbopack (which drops every PostCSS warning) is printed with
  * `console.warn` instead, framed as the Lightning CSS adapter frames a problem.
  */
+import { readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import postcss, { type Result } from 'postcss'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -178,5 +181,38 @@ describe('AC-native-apply-order-24: no switch, and the fixture prints under ever
     const result = await run('.c { @nave wide flex; }', { extend })
 
     expect(result.warnings()).toHaveLength(1)
+  })
+})
+
+describe('AC-native-apply-order-24: the PostCSS host reports through one function', () => {
+  const sources = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src')
+
+  it('raises a PostCSS warning in postcss-warn.ts only, and has no second reporting function', () => {
+    const files = readdirSync(sources).filter((name) => /^postcss.*\.ts$/.test(name))
+    const raising = files.filter((name) =>
+      /\b(?:atRule|decl|node|rule)\.warn\(/.test(readFileSync(path.join(sources, name), 'utf8')),
+    )
+
+    expect(files.length).toBeGreaterThan(1)
+    expect(raising).toEqual(['postcss-warn.ts'])
+    const everySource = readdirSync(sources, { recursive: true, encoding: 'utf8' })
+    for (const name of everySource) {
+      if (!name.endsWith('.ts')) continue
+      expect(readFileSync(path.join(sources, name), 'utf8'), name).not.toContain('warnDirective')
+    }
+  })
+
+  it('frames a problem and an order warning with the same file under Turbopack', async () => {
+    vi.stubEnv('TURBOPACK', '1')
+    const printed = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await postcss([navePlugin({ onUnknown: 'warn' })]).process(
+      '.x { @nave nope; }\n.c { @nave hideDesktopUp flex; }',
+      { from: 'rel/app.css' },
+    )
+
+    const lines = printed.mock.calls.map((call) => String(call[0]))
+    expect(lines).toHaveLength(2)
+    for (const line of lines) expect(line).toMatch(/^rel\/app\.css:\d+:\d+: /)
   })
 })

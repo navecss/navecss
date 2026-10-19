@@ -29,40 +29,56 @@ const GROUP_NAMES = new Set(['container', 'media', 'supports'])
 type NodeTable = ChildNode[]
 
 /**
- * One at-rule child of the rule as a model node: a directive, a conditional group whose content is
- * read, or an opaque nested node.
+ * The model of the children of `container`, read when first asked for and then kept: nobody pays
+ * for the content of a nested rule the order check never enters, however deep the nesting goes,
+ * and nothing recurses to read it.
  */
-function atRuleToModel(atRule: PostCSSAtRule, table: NodeTable): ModelNode {
-  const ref = table.length
-  table.push(atRule)
-  const match = matchNaveAtRule(atRule)
-  if (match.isNave) return { kind: 'directive', ref, prelude: match.prelude }
-  const name = atRule.name.toLowerCase()
-  if (!GROUP_NAMES.has(name) || atRule.nodes === undefined) {
-    return { kind: 'opaque', ref, name, prelude: atRule.params }
+function contentOf(container: Rule | PostCSSAtRule, table: NodeTable): () => readonly ModelNode[] {
+  let nodes: readonly ModelNode[] | undefined
+  return () => {
+    nodes ??= (container.nodes ?? []).map((child) => toModel(child, table))
+    return nodes
   }
-  return { kind: 'group', ref, name, prelude: atRule.params, nodes: childrenToModel(atRule, table) }
 }
 
 /**
- * One child of a rule as a model node.
+ * One child of a rule as a model node: a directive, a declaration, a comment, a rule or a
+ * conditional group whose content is read on demand, or an opaque nested node.
  */
 function toModel(node: ChildNode, table: NodeTable): ModelNode {
-  if (node.type === 'atrule') return atRuleToModel(node, table)
   const ref = table.length
   table.push(node)
   if (node.type === 'decl') {
     return { kind: 'decl', ref, prop: node.prop, value: node.value, important: node.important }
   }
   if (node.type === 'comment') return { kind: 'comment', ref }
-  return { kind: 'rule', ref, selector: node.selector, nodes: childrenToModel(node, table) }
-}
-
-/**
- * Every child of `container` as a model node, in order.
- */
-function childrenToModel(container: Rule | PostCSSAtRule, table: NodeTable): ModelNode[] {
-  return (container.nodes ?? []).map((child) => toModel(child, table))
+  if (node.type === 'rule') {
+    const content = contentOf(node, table)
+    return {
+      kind: 'rule',
+      ref,
+      selector: node.selector,
+      get nodes() {
+        return content()
+      },
+    }
+  }
+  const match = matchNaveAtRule(node)
+  if (match.isNave) return { kind: 'directive', ref, prelude: match.prelude }
+  const name = node.name.toLowerCase()
+  if (!GROUP_NAMES.has(name) || node.nodes === undefined) {
+    return { kind: 'opaque', ref, name, prelude: node.params }
+  }
+  const content = contentOf(node, table)
+  return {
+    kind: 'group',
+    ref,
+    name,
+    prelude: node.params,
+    get nodes() {
+      return content()
+    },
+  }
 }
 
 /**
@@ -70,7 +86,7 @@ function childrenToModel(container: Rule | PostCSSAtRule, table: NodeTable): Mod
  */
 function readRule(rule: Rule): { nodes: ModelNode[]; table: NodeTable } {
   const table: NodeTable = []
-  return { table, nodes: childrenToModel(rule, table) }
+  return { table, nodes: rule.nodes.map((child) => toModel(child, table)) }
 }
 
 /**
@@ -161,19 +177,77 @@ function handleRule(rule: Rule, ctx: RuleContext): void {
 }
 
 /**
- * Whether no `@nave` follows `atRule` in its parent.
+ * Whether `node` is a directive directly in a style rule: the kind whose visit expands a rule.
  */
-function isLastDirective(parent: Rule, atRule: PostCSSAtRule): boolean {
-  return parent.nodes
-    .slice(parent.index(atRule) + 1)
-    .every((node) => !(node.type === 'atrule' && matchNaveAtRule(node).isNave))
+function isRuleDirective(node: ChildNode): boolean {
+  return node.type === 'atrule' && node.parent?.type === 'rule' && matchNaveAtRule(node).isNave
+}
+
+/**
+ * Whether `node` or anything under it is a directive directly in a style rule.
+ */
+function isOrHoldsRuleDirective(node: ChildNode): boolean {
+  const stack: ChildNode[] = [node]
+  while (stack.length > 0) {
+    const next = stack.pop()!
+    if (isRuleDirective(next)) return true
+    if (next.type === 'rule' || next.type === 'atrule') stack.push(...(next.nodes ?? []))
+  }
+  return false
+}
+
+/**
+ * Whether no directive directly in a style rule follows `atRule` anywhere under `root`.
+ */
+function isLastDirectiveUnder(root: Rule, atRule: PostCSSAtRule): boolean {
+  let node: ChildNode = atRule
+  for (;;) {
+    const parent = node.parent as Rule | PostCSSAtRule
+    const later = (parent.nodes ?? []).slice(parent.index(node) + 1)
+    if (later.some((child) => isOrHoldsRuleDirective(child))) {
+      return false
+    }
+    if (parent === root) return true
+    node = parent
+  }
+}
+
+/**
+ * The outermost style rule that holds `rule`, `rule` itself when none does.
+ */
+function outermostRule(rule: Rule): Rule {
+  let outer = rule
+  let node: unknown = rule.parent
+  while (node !== undefined && node !== null) {
+    const container = node as { parent?: unknown; type: string }
+    if (container.type === 'rule') outer = node as Rule
+    node = container.parent
+  }
+  return outer
+}
+
+/**
+ * Expands `root` and then every style rule under it, each before the rules inside it: an outer
+ * rule is read while a directive in a rule nested in it is still a directive, which is how the
+ * text expander reads it, so the order check sees the same output from both hosts.
+ */
+function handleRuleTree(root: Rule, ctx: RuleContext): void {
+  const stack: (PostCSSAtRule | Rule)[] = [root]
+  while (stack.length > 0) {
+    const container = stack.pop()!
+    if (container.type === 'rule') handleRule(container, ctx)
+    const inner = (container.nodes ?? []).filter(
+      (child) => child.type === 'rule' || child.type === 'atrule',
+    )
+    stack.push(...inner.toReversed())
+  }
 }
 
 /**
  * The plugin's `AtRule` visitor. A directive directly in a style rule is expanded together with
- * its siblings, once every one of them has been visited, so a plugin ahead of this one that
- * rewrites a directive's prelude on its visit has done so before the rule is read. Any other
- * directive is refused.
+ * its siblings, and with the rules nested in its rule, once every directive in them has been
+ * visited, so a plugin ahead of this one that rewrites a directive's prelude on its visit has done
+ * so before the rule is read. Any other directive is refused.
  */
 export function handleDirective(atRule: PostCSSAtRule, ctx: RuleContext): void {
   const parent = atRule.parent
@@ -181,5 +255,7 @@ export function handleDirective(atRule: PostCSSAtRule, ctx: RuleContext): void {
     handleAtRule(atRule, ctx)
     return
   }
-  if (matchNaveAtRule(atRule).isNave && isLastDirective(parent, atRule)) handleRule(parent, ctx)
+  if (!matchNaveAtRule(atRule).isNave) return
+  const root = outermostRule(parent)
+  if (isLastDirectiveUnder(root, atRule)) handleRuleTree(root, ctx)
 }
