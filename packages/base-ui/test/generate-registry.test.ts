@@ -238,6 +238,10 @@ describe('the outlines a module may carry', () => {
     ).rejects.toThrow('baseUiProbe')
   })
 
+  it('says an outline: none that no ring follows has no &:focus-visible ring paired to it', async () => {
+    await expect(moduleBody(inputs({ outline: 'none' }))).rejects.toThrow('no &:focus-visible')
+  })
+
   it('refuses outline: 2px solid red, even where a full ring follows, naming the atom', async () => {
     await expect(
       moduleBody(inputs({ outline: '2px solid red' }, { '&:focus-visible': RING })),

@@ -121,11 +121,16 @@ const guardOutlines = (root: postcss.Root, atomOf: ReadonlyMap<string, string>):
       declaration.before(postcss.comment({ raws: { before: '\n    ' }, text: comment }))
       return
     }
+    const hasNoRing = declaration.prop === 'outline' && declaration.value === 'none'
+    const found = `${atom} has "${shown(declaration)}"`
+    const accepted =
+      'the only outline accepted is a lowercase "outline: none", directly in the atom\'s rule ' +
+      'or alone in a "&" rule there, followed by a "&:focus-visible" rule that sets ' +
+      'outline-style: solid, outline-width, outline-color and outline-offset'
     throw new RegistryBuildError(
-      `${atom} has "${shown(declaration)}": the only outline accepted is a lowercase ` +
-        '"outline: none", directly in the atom\'s rule or alone in a "&" rule there, followed ' +
-        'by a "&:focus-visible" rule that sets outline-style: solid, outline-width, ' +
-        'outline-color and outline-offset',
+      hasNoRing
+        ? `${found} with no &:focus-visible ring paired to it: ${accepted}`
+        : `${found}: ${accepted}`,
       { file: 'module.css' },
     )
   })
