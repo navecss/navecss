@@ -130,8 +130,8 @@ describe('AC-astro-34 — the dev server does not phone home', () => {
       const dev = await serve({
         integrations: `{ name: 'record', hooks: { 'astro:config:setup': async ({ config }) => { (await import('node:fs')).appendFileSync(config.root.pathname.replace(/\\/?$/, '/') + '${log}', \`\${globalThis.process.env.ASTRO_TELEMETRY_DISABLED}\\n\`) } } }`,
       })
-      // One line per start: a dev server that restarts, as Astro's does when it hears its config
-      // file change, starts again, and that start must have telemetry off too.
+      // One line per start. serveDev watches no file, so the server does not restart when its
+      // config file changes; a start it made again would have to have telemetry off too.
       const starts = readFileSync(path.join(dev.app.root, log), 'utf8').trim().split('\n')
       expect(starts.length).toBeGreaterThan(0)
       expect(new Set(starts)).toEqual(new Set(['1']))
