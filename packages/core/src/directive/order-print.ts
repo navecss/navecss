@@ -6,23 +6,59 @@
 import type { AtomFacts } from './order-model.ts'
 
 import { type PreludeMarkers, readMarkers } from './order-marker.ts'
-import { tokenize } from './tokenizer.ts'
+import { type Token, tokenize } from './tokenizer.ts'
 
 const MARKER_HEAD = 'nave-allow-override'
 
+const WORD_LIKE = new Set([
+  'dimension-token',
+  'function-token',
+  'hash-token',
+  'ident-token',
+  'number-token',
+  'percentage-token',
+])
+const OPENING = new Set(['(-token', '[-token', 'function-token'])
+const CLOSING = new Set([')-token', ']-token', 'comma-token', 'semicolon-token'])
+
 /**
- * A value as a warning prints it, the same in every host: comments dropped, each run of
- * whitespace one space, none at either end. A host hands over a value as it read it (PostCSS
- * keeps the whitespace around a comment it took out of the value), so this is the one place the
- * printed form is decided.
+ * Whether the gap between two printed tokens is a space. Whitespace is one space. A comment that
+ * was dropped leaves none before a closer or after an opener, and where it touched both tokens it
+ * leaves one only between two words, which would run together without it.
+ */
+function isSpaced(
+  gap: { readonly hasComment: boolean; readonly hasWhitespace: boolean },
+  previous: Token,
+  next: Token,
+): boolean {
+  if (!gap.hasComment) return gap.hasWhitespace
+  if (CLOSING.has(next.type) || OPENING.has(previous.type)) return false
+  return gap.hasWhitespace || (WORD_LIKE.has(previous.type) && WORD_LIKE.has(next.type))
+}
+
+/**
+ * A value as a warning prints it, the same in every host: comments dropped, each gap between two
+ * tokens one space or none, none at either end, and a string exactly as written. A host hands
+ * over a value as it read it (PostCSS keeps the whitespace around a comment it took out of the
+ * value), so this is the one place the printed form is decided.
  */
 export function printedValue(value: string): string {
-  const parts: string[] = []
+  let printed = ''
+  let previous: Token | undefined
+  let gap = { hasComment: false, hasWhitespace: false }
   for (const token of tokenize(value)) {
-    if (token.type === 'comment') continue
-    parts.push(token.type === 'whitespace-token' ? ' ' : token.raw)
+    if (token.type === 'whitespace-token') {
+      gap = { ...gap, hasWhitespace: true }
+    } else if (token.type === 'comment') {
+      gap = { ...gap, hasComment: true }
+    } else {
+      if (previous !== undefined && isSpaced(gap, previous, token)) printed += ' '
+      printed += token.raw
+      previous = token
+      gap = { hasComment: false, hasWhitespace: false }
+    }
   }
-  return parts.join('').replaceAll(/ {2,}/g, ' ').trim()
+  return printed
 }
 
 /**

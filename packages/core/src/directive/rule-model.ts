@@ -75,6 +75,10 @@ export interface RuleInput {
   Whether a marker that covers nothing is reported (the default). A host that cannot tell whether an earlier stage moved a rule's content turns it off.
    */
   readonly reportStaleMarkers?: boolean | undefined
+  /**
+  What a directive written inside a nested rule emits, kept by the host across the rules of one stylesheet so each directive is planned once however many rules around it read it. Keyed by `emittedKey()`.
+   */
+  readonly emittedCache?: Map<string, readonly ModelNode[]> | undefined
 }
 
 /**

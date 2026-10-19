@@ -195,7 +195,9 @@ function enter(node: ModelNode, level: Level, found: Candidate[]): Level | undef
   if (node.kind === 'rule') {
     const specificities = walk.specificities.flatMap((s) => nestedSpecificities(node.selector, s))
     if (specificities.length === 0) return undefined
-    return levelOf(node.nodes, { ...walk, specificities, holderSelector: node.selector }, true)
+    // A bare `&` is the element the enclosing rule already names, so it keeps that rule's holder.
+    const holderSelector = node.selector.trim() === '&' ? walk.holderSelector : node.selector
+    return levelOf(node.nodes, { ...walk, specificities, holderSelector }, true)
   }
   if (node.kind === 'group' && GROUP_NAMES.has(node.name)) {
     const chain = { rule: { name: node.name, prelude: node.prelude }, parent: walk.chain }

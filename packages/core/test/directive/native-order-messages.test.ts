@@ -82,3 +82,66 @@ describe('AC-native-apply-order-25 — the text of a warning is the same in both
     expect(await warningsViaPostcss(css)).toEqual(warningsViaText(css))
   })
 })
+
+const PRINTED: Record<string, AtomDefinition> = {
+  cq: {
+    declarations: {},
+    media: { '(width >= 75em)': { declarations: { content: '"a  b"' } } },
+  },
+  layoutA: {
+    declarations: {},
+    media: {
+      '(width >= 75em)': {
+        declarations: { 'grid-template-areas': '"header  header" "side    main"' },
+      },
+    },
+  },
+  ff: {
+    declarations: {},
+    media: { '(width >= 75em)': { declarations: { 'font-family': 'Foo, serif' } } },
+  },
+  mm: {
+    declarations: {},
+    media: { '(width >= 75em)': { declarations: { margin: '0 auto' } } },
+  },
+}
+
+describe('AC-native-apply-order-25 — a printed value keeps its strings and its tokens apart', () => {
+  it.each([
+    [
+      '.x { @nave cq; content: "a   b"; }',
+      'content: "a   b" comes after "cq", so under @media (width >= 75em) content is "a   b", not "a  b".',
+    ],
+    [
+      '.x { @nave cq; content: "a b"; }',
+      'content: "a b" comes after "cq", so under @media (width >= 75em) content is "a b", not "a  b".',
+    ],
+    [
+      '.x { @nave layoutA; grid-template-areas: "header header" "side main"; }',
+      'grid-template-areas: "header header" "side main" comes after "layoutA", so under @media (width >= 75em) grid-template-areas is "header header" "side main", not "header  header" "side    main".',
+    ],
+    [
+      '.x { @nave ff; font-family: Arial /* c */, serif; }',
+      'font-family: Arial, serif comes after "ff", so under @media (width >= 75em) font-family is Arial, serif, not Foo, serif.',
+    ],
+    [
+      '.x { @nave ff; font-family: Arial/* c */, serif; }',
+      'font-family: Arial, serif comes after "ff", so under @media (width >= 75em) font-family is Arial, serif, not Foo, serif.',
+    ],
+    [
+      '.x { @nave ff; font-family: Arial, /* c */ serif; }',
+      'font-family: Arial, serif comes after "ff", so under @media (width >= 75em) font-family is Arial, serif, not Foo, serif.',
+    ],
+    [
+      '.x { @nave mm; margin: 0/* c */auto; }',
+      'margin: 0 auto comes after "mm", so under @media (width >= 75em) margin is 0 auto, not 0 auto.',
+    ],
+  ])('%s prints %s', async (css, sentence) => {
+    const viaPostcss = await warningsViaPostcss(css, { extend: PRINTED })
+    const viaText = warningsViaText(css, { extend: PRINTED })
+
+    expect(viaText).toHaveLength(1)
+    expect(viaText[0]!.text.startsWith(`@nave: ${sentence}`)).toBe(true)
+    expect(viaPostcss).toEqual(viaText)
+  })
+})

@@ -2,9 +2,15 @@
  * Expands the `@nave` directives of one PostCSS style rule: reads the rule into the host-free
  * model, has the core plan it (`planRule()`), and applies the plan to the tree.
  */
-import type { ChildNode, AtRule as PostCSSAtRule, Rule } from 'postcss'
+import type { ChildNode, AtRule as PostCSSAtRule, Root, Rule } from 'postcss'
 
-import type { ModelNode, PlanItem, PlanWarning, RulePlan } from './directive/rule-model.ts'
+import type {
+  ModelNode,
+  PlanItem,
+  PlanWarning,
+  RuleInput,
+  RulePlan,
+} from './directive/rule-model.ts'
 import type { DirectiveContext } from './postcss-at-rule.ts'
 
 import { DirectiveFailure, planRule } from './directive/rule-plan.ts'
@@ -17,6 +23,7 @@ import {
 } from './postcss-at-rule.ts'
 import { insertEmissions, wrapRun } from './postcss-emit.ts'
 import { isInsideKeyframes } from './postcss-node-utils.ts'
+import { isLastDirectiveUnder, isRuleDirective, outermostRule } from './postcss-rule-nesting.ts'
 import { reportWarning } from './postcss-warn.ts'
 
 type RuleContext = Omit<DirectiveContext, 'atRule'>
@@ -49,7 +56,11 @@ function toModel(node: ChildNode, table: NodeTable): ModelNode {
   const ref = table.length
   table.push(node)
   if (node.type === 'decl') {
-    return { kind: 'decl', ref, prop: node.prop, value: node.value, important: node.important }
+    // The value as written, comments included, when PostCSS kept it (it keeps it only while the
+    // cleaned value is untouched): a comment between two tokens is part of how they are read.
+    const raw = node.raws.value
+    const value = raw?.value === node.value ? raw.raw : node.value
+    return { kind: 'decl', ref, prop: node.prop, value, important: node.important }
   }
   if (node.type === 'comment') return { kind: 'comment', ref }
   if (node.type === 'rule') {
@@ -97,22 +108,45 @@ function hasDirective(rule: Rule): boolean {
 }
 
 /**
- * Reports the order warnings on the nodes they sit on, before any node is replaced. They never
- * fail a build and are not governed by `onUnknown`; under Turbopack they are printed, not attached.
+ * An order warning waiting to be reported on the node it sits on, at `index` within it.
  */
-function reportWarnings(
-  warnings: readonly PlanWarning[],
-  table: NodeTable,
-  ctx: RuleContext,
-): void {
-  for (const { anchor, text } of warnings) {
+interface PendingWarning {
+  readonly index: number | undefined
+  readonly node: ChildNode
+  readonly text: string
+}
+
+/**
+ * The order warnings of a plan, each with the node and the place within it that it sits at.
+ */
+function pendingWarnings(warnings: readonly PlanWarning[], table: NodeTable): PendingWarning[] {
+  return warnings.map(({ anchor, text }) => {
     const node = table[anchor.ref]!
-    if (anchor.offset === undefined) {
-      reportWarning(node, ctx.result, text)
-      continue
-    }
+    if (anchor.offset === undefined) return { node, text, index: undefined }
     const { preludeStartIndex } = matchNaveAtRule(node as PostCSSAtRule)
-    reportWarning(node, ctx.result, text, preludeStartIndex + anchor.offset)
+    return { node, text, index: preludeStartIndex + anchor.offset }
+  })
+}
+
+/**
+ * Where a warning sits in the stylesheet, a node with no source last.
+ */
+function placeOf(warning: PendingWarning): readonly [number, number] {
+  if (warning.node.source === undefined) return [Number.MAX_SAFE_INTEGER, 0]
+  const { column, line } = warning.node.positionInside(warning.index ?? 0)
+  return [line, column]
+}
+
+/**
+ * Reports order warnings, before any node is replaced, in the order they sit in the stylesheet.
+ * They never fail a build and are not governed by `onUnknown`; under Turbopack they are printed,
+ * not attached.
+ */
+function reportInSourceOrder(warnings: readonly PendingWarning[], ctx: RuleContext): void {
+  const placed = warnings.map((warning) => ({ warning, place: placeOf(warning) }))
+  const ordered = placed.toSorted((a, b) => a.place[0] - b.place[0] || a.place[1] - b.place[1])
+  for (const { warning } of ordered) {
+    reportWarning(warning.node, ctx.result, warning.text, warning.index)
   }
 }
 
@@ -149,98 +183,88 @@ function applyItem(item: PlanItem, table: NodeTable, ctx: RuleContext): void {
 /**
  * The plan for `rule`, a directive that cannot be planned reported as an error at its own place.
  */
-function planOrThrow(rule: Rule, nodes: ModelNode[], table: NodeTable, ctx: RuleContext): RulePlan {
+function planOrThrow(
+  rule: Rule,
+  read: { readonly nodes: ModelNode[]; readonly table: NodeTable },
+  ctx: RuleContext & { readonly emittedCache: RuleInput['emittedCache'] },
+): RulePlan {
   try {
     return planRule({
       selector: rule.selector,
-      nodes,
+      nodes: read.nodes,
       isInsideKeyframes: isInsideKeyframes(rule),
       extend: ctx.extend,
+      emittedCache: ctx.emittedCache,
     })
   } catch (error) {
     if (error instanceof DirectiveFailure) {
-      return throwMalformedAtom(table[error.ref] as PostCSSAtRule, error.cause)
+      return throwMalformedAtom(read.table[error.ref] as PostCSSAtRule, error.cause)
     }
     throw error
   }
 }
 
 /**
- * Expands every `@nave` directly in `rule`.
+ * A style rule's plan and the table that turns the refs in it back into nodes.
  */
-function handleRule(rule: Rule, ctx: RuleContext): void {
-  if (!hasDirective(rule)) return
-  const { table, nodes } = readRule(rule)
-  const plan = planOrThrow(rule, nodes, table, ctx)
-  reportWarnings(plan.warnings, table, ctx)
-  for (const item of plan.items) applyItem(item, table, ctx)
+interface Planned {
+  readonly plan: RulePlan
+  readonly table: NodeTable
 }
 
 /**
- * Whether `node` is a directive directly in a style rule: the kind whose visit expands a rule.
+ * Plans `root` and every style rule under it, each before the rules inside it, nothing yet
+ * changed: an outer rule is read while a directive in a rule nested in it is still a directive,
+ * which is how the text expander reads it, so the order check sees the same output from both
+ * hosts.
  */
-function isRuleDirective(node: ChildNode): boolean {
-  return node.type === 'atrule' && node.parent?.type === 'rule' && matchNaveAtRule(node).isNave
-}
-
-/**
- * Whether `node` or anything under it is a directive directly in a style rule.
- */
-function isOrHoldsRuleDirective(node: ChildNode): boolean {
-  const stack: ChildNode[] = [node]
-  while (stack.length > 0) {
-    const next = stack.pop()!
-    if (isRuleDirective(next)) return true
-    if (next.type === 'rule' || next.type === 'atrule') stack.push(...(next.nodes ?? []))
-  }
-  return false
-}
-
-/**
- * Whether no directive directly in a style rule follows `atRule` anywhere under `root`.
- */
-function isLastDirectiveUnder(root: Rule, atRule: PostCSSAtRule): boolean {
-  let node: ChildNode = atRule
-  for (;;) {
-    const parent = node.parent as Rule | PostCSSAtRule
-    const later = (parent.nodes ?? []).slice(parent.index(node) + 1)
-    if (later.some((child) => isOrHoldsRuleDirective(child))) {
-      return false
-    }
-    if (parent === root) return true
-    node = parent
-  }
-}
-
-/**
- * The outermost style rule that holds `rule`, `rule` itself when none does.
- */
-function outermostRule(rule: Rule): Rule {
-  let outer = rule
-  let node: unknown = rule.parent
-  while (node !== undefined && node !== null) {
-    const container = node as { parent?: unknown; type: string }
-    if (container.type === 'rule') outer = node as Rule
-    node = container.parent
-  }
-  return outer
-}
-
-/**
- * Expands `root` and then every style rule under it, each before the rules inside it: an outer
- * rule is read while a directive in a rule nested in it is still a directive, which is how the
- * text expander reads it, so the order check sees the same output from both hosts.
- */
-function handleRuleTree(root: Rule, ctx: RuleContext): void {
+function planTree(root: Rule, ctx: RuleContext): Planned[] {
+  const emittedCache: RuleInput['emittedCache'] = new Map()
+  const planned: Planned[] = []
   const stack: (PostCSSAtRule | Rule)[] = [root]
   while (stack.length > 0) {
     const container = stack.pop()!
-    if (container.type === 'rule') handleRule(container, ctx)
+    if (container.type === 'rule' && hasDirective(container)) {
+      const read = readRule(container)
+      planned.push({
+        table: read.table,
+        plan: planOrThrow(container, read, { ...ctx, emittedCache }),
+      })
+    }
     const inner = (container.nodes ?? []).filter(
       (child) => child.type === 'rule' || child.type === 'atrule',
     )
     stack.push(...inner.toReversed())
   }
+  return planned
+}
+
+/**
+ * Expands `root` and every style rule under it. The warnings of the whole tree are reported
+ * together, in source order, before the first node is replaced.
+ */
+function handleRuleTree(root: Rule, ctx: RuleContext): void {
+  const planned = planTree(root, ctx)
+  reportInSourceOrder(
+    planned.flatMap(({ plan, table }) => pendingWarnings(plan.warnings, table)),
+    ctx,
+  )
+  for (const { plan, table } of planned) {
+    for (const item of plan.items) applyItem(item, table, ctx)
+  }
+}
+
+/**
+ * Expands every directive that is still directly in a style rule once the stylesheet has been
+ * visited: one a plugin moved or added after the rule it sits in was due is not left behind as an
+ * at-rule a browser drops.
+ */
+export function expandLeftovers(root: Root, ctx: RuleContext): void {
+  const outer = new Set<Rule>()
+  root.walkAtRules((atRule) => {
+    if (isRuleDirective(atRule)) outer.add(outermostRule(atRule.parent as Rule))
+  })
+  for (const rule of outer) handleRuleTree(rule, ctx)
 }
 
 /**

@@ -126,12 +126,16 @@ describe('AC-native-apply-order-36: ADR 0011 holds the full reasoning', () => {
  */
 const FOCUS_REPORT_PARAGRAPH = `Each warning is positioned at the overrider and names the atom, the condition, the property with
 both values, the fix and the directive with a marker inserted. Where the later value, as written,
-hides \`focusRing\`'s outline (a style of \`none\`, a zero width, \`transparent\`, an \`outline\` with no
-style keyword, or \`initial\` or \`unset\`), or puts back over \`srOnlyFocusable\`'s reveal what hid the
-element (\`clip-path: inset(50%)\`, or all of \`width: 1px\`, \`height: 1px\` and \`overflow: hidden\` in
-one later block), it says so: that it hides the keyboard focus indicator \`focusRing\` draws, or
-hides again what \`srOnlyFocusable\` reveals. A value it cannot read (\`var()\`, \`env()\`, \`attr()\`),
-or one another rule decides (\`inherit\`, \`revert\`, \`revert-layer\`), gets no such sentence.`
+hides \`focusRing\`'s outline (a style of \`none\`; a width written as \`0\` or as a zero length; the
+keyword \`transparent\`; an \`outline\` with no style keyword; or \`initial\` or \`unset\` on \`outline\`,
+\`outline-style\` or \`all\`), or puts back over \`srOnlyFocusable\`'s reveal what hid the element
+(\`clip-path: inset(50%)\`, or all of \`width: 1px\`, \`height: 1px\` and \`overflow: hidden\` in one
+later block), it says so: that it hides the keyboard focus indicator \`focusRing\` draws, or hides
+again what \`srOnlyFocusable\` reveals. It reads only what is written outside a function and computes
+nothing, so a zero inside \`calc()\` or \`rgb()\` is not a zero width, and a colour made transparent by
+its alpha (\`rgb(0 0 0 / 0)\`, \`#0000\`) is not read as \`transparent\`. A value it cannot read
+(\`var()\`, \`env()\`, \`attr()\`), or one another rule decides (\`inherit\`, \`revert\`, \`revert-layer\`),
+gets no such sentence.`
 const FOCUS_CONSEQUENCE_BULLET = `- The focus atoms are in scope. After \`@nave focusRing;\`, a later \`&:focus { outline: none }\` or
   \`&:focus-visible { outline: none }\` now removes the ring where it used to leave it, and a later
   \`&:focus-visible { outline-color: ... }\` now applies. The warning says when the ring, or the

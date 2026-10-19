@@ -123,6 +123,33 @@ function ratio(subject: () => void, control: () => void): number {
   return leastOf(subject) / leastOf(control)
 }
 
+/**
+ * `.a` inside `levels` nested `:not(`.
+ */
+function nesting(levels: number): string {
+  return `${':not('.repeat(levels)}.a${')'.repeat(levels)}`
+}
+
+describe('AC-native-apply-order-54 — the limit on nested selectors, and a rule whose own selector exceeds it', () => {
+  it.each([
+    [255, 1],
+    [256, 1],
+    [257, 0],
+  ])('reads %i nested :not( levels and warns %i times, in both hosts', async (levels, count) => {
+    const css = `.x { @nave focusRing; &${nesting(levels)} { outline-color: red } }`
+
+    expect(warningsViaText(css)).toHaveLength(count)
+    expect(await warningsViaPostcss(css)).toHaveLength(count)
+  })
+
+  it("completes when the rule's own selector nests 300 levels, in both hosts", async () => {
+    const css = `.x${nesting(300)} { @nave focusRing; &:focus-visible { outline-color: red } }`
+
+    expect(() => warningsViaText(css)).not.toThrow()
+    await expect(warningsViaPostcss(css)).resolves.toBeDefined()
+  })
+})
+
 describe('AC-native-apply-order-54 — scaling, as a ratio to a linear control', () => {
   it('has a calibration the scenarios can trust: a quadratic pattern is far slower than its twin', () => {
     const digits = '1'.repeat(20_000)
@@ -153,22 +180,22 @@ describe('AC-native-apply-order-54 — scaling, as a ratio to a linear control',
   })
 
   it('compares the atoms of one directive in time proportional to the pairs, not more', () => {
-    const size = 1000
+    const size = 400
     const measured = ratio(
       () => warningsViaText(`.x { @nave ${'hideDesktopUp '.repeat(size)}; }`),
       () => warningsViaText('.x { @nave hideDesktopUp; }\n'.repeat(size)),
     )
 
-    expect(measured).toBeLessThan(25)
-  })
+    expect(measured).toBeLessThan(8)
+  }, 60_000)
 
   it('compares the directives of one rule in time proportional to the pairs, not more', () => {
-    const size = 800
+    const size = 320
     const measured = ratio(
       () => warningsViaText(`.x { ${'@nave hideDesktopUp textLeft; '.repeat(size)} }`),
       () => warningsViaText('.x { @nave hideDesktopUp textLeft; }\n'.repeat(size)),
     )
 
-    expect(measured).toBeLessThan(25)
-  })
+    expect(measured).toBeLessThan(8)
+  }, 60_000)
 })

@@ -240,6 +240,24 @@ describe.each(HOSTS)(
       expect(nested.map((w) => w.text)).toEqual(written.map((w) => w.text))
     })
 
+    it('keeps the enclosing pseudo-class when the media block is written inside a bare &', async () => {
+      const nested = await run(
+        '.x { @nave srOnlyFocusable; &:focus-visible { @nave wFullPhoneOnly } }',
+      )
+      const viaBare = await run(
+        '.x { @nave srOnlyFocusable; &:focus-visible { @media (width < 37.5em) { & { width: 100% } } } }',
+      )
+      const direct = await run(
+        '.x { @nave srOnlyFocusable; &:focus-visible { @media (width < 37.5em) { width: 100% } } }',
+      )
+      const clause =
+        'so on :focus-within while also on :focus-visible under @media (width < 37.5em), width is 100%, not auto.'
+
+      expect(nested.at(-1)!.text).toContain(clause)
+      expect(viaBare.map((w) => w.text)).toEqual(nested.map((w) => w.text))
+      expect(direct.map((w) => w.text)).toEqual(nested.map((w) => w.text))
+    })
+
     it('reads a marker as used when the override sits in a nested directive', async () => {
       const css =
         '.x { @nave /* nave-allow-override: display */ hideDesktopUp; &:where(.q) { @nave flex } @nave textLeft; }'

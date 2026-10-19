@@ -56,9 +56,29 @@ function blockNode(ref: number, block: AnchoredBlock): ModelNode {
 
 /**
  * The nodes `directive` expands to in a style rule, atom by atom: an atom's declarations, then its
- * blocks. A directive that cannot be planned emits nothing here; its own rule reports it.
+ * blocks. A directive that cannot be planned emits nothing here; its own rule reports it. With a
+ * `cache`, a directive written the same way is planned once; the nodes it gives are shared and
+ * never changed.
  */
-export function emittedNodes(directive: DirectiveNode, context: EmitContext): ModelNode[] {
+export function emittedNodes(
+  directive: DirectiveNode,
+  context: EmitContext,
+  cache?: Map<string, readonly ModelNode[]>,
+): readonly ModelNode[] {
+  if (cache === undefined) return planEmitted(directive, context)
+  const key = `${context.isInsideKeyframes ? 'k' : 'r'}${directive.prelude}`
+  let nodes = cache.get(key)
+  if (nodes === undefined) {
+    nodes = planEmitted(directive, context)
+    cache.set(key, nodes)
+  }
+  return nodes
+}
+
+/**
+ * The nodes `directive` expands to, planned now.
+ */
+function planEmitted(directive: DirectiveNode, context: EmitContext): ModelNode[] {
   try {
     const { atoms } = plan(
       directive.prelude,

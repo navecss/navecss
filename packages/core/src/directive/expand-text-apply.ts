@@ -153,6 +153,7 @@ export function applyRuleFrame(w: Walker, facts: RuleFrameFacts): void {
       isInsideKeyframes: facts.isInsideKeyframes,
       extend: w.options.extend,
       reportStaleMarkers: w.options.reportStaleMarkers,
+      emittedCache: w.emittedCache,
     })
   } catch (error) {
     throw error instanceof DirectiveFailure ? error.cause : error

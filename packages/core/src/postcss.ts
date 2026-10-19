@@ -53,7 +53,7 @@ import type { FoldEntry } from './postcss-fold.ts'
 
 import { applyExtendModule, resolveExtendSpecifier } from './postcss-extend-module.ts'
 import { foldMessage, sortFoldBySourceOrder } from './postcss-fold.ts'
-import { handleDirective } from './postcss-rule.ts'
+import { expandLeftovers, handleDirective } from './postcss-rule.ts'
 import { snapshotExtendMap } from './snapshot-extend-atoms.ts'
 import { validateExtendAtoms } from './validate-extend-atoms.ts'
 
@@ -147,7 +147,8 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
           handleDirective(atRule, { onUnknown, result, extend, fold })
         },
 
-        OnceExit() {
+        OnceExit(root) {
+          expandLeftovers(root, { onUnknown, result, extend, fold })
           if (fold.length === 0) return
           const ordered = sortFoldBySourceOrder(fold)
           const first = ordered[0]!

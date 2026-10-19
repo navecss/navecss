@@ -5,6 +5,7 @@
 import type { Diagnostic } from './diagnostics-types.ts'
 import type { AppendPart, Edit } from './expand-text-output.ts'
 import type { ExpandTextOptions } from './expand-text.ts'
+import type { ModelNode } from './rule-model.ts'
 import type { Position } from './source-map.ts'
 
 import { isNaveAtKeyword, type Item, matchBrackets } from './block-reader.ts'
@@ -24,6 +25,7 @@ export class Walker {
   readonly css: string
   readonly diagnostics: Diagnostic[] = []
   readonly edits: Edit[] = []
+  readonly emittedCache = new Map<string, readonly ModelNode[]>()
   // Built once per call, not once per query: `positionAt` runs once per
   // output token, and a fresh linear scan on every call made the whole
   // pass quadratic in the stylesheet's size. Not private: this

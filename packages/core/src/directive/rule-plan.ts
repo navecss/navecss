@@ -151,9 +151,9 @@ function keepNested(state: PlanState, node: ModelNode): void {
  */
 function warningsOf(state: PlanState): PlanWarning[] {
   const amp = ampersandSpecificity(state.input.selector)
-  const { extend, isInsideKeyframes } = state.input
+  const { emittedCache, extend, isInsideKeyframes } = state.input
   const findings = checkOrder(state.segments, amp, (directive) =>
-    emittedNodes(directive, { extend, isInsideKeyframes }),
+    emittedNodes(directive, { extend, isInsideKeyframes }, emittedCache),
   )
   const warnings = [
     ...findingWarnings(findings),

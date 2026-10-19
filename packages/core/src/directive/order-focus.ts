@@ -59,14 +59,34 @@ function isZero(token: Token): boolean {
   )
 }
 
+const BLOCK_OPENERS = new Set(['(-token', '[-token', 'function-token', '{-token'])
+const BLOCK_CLOSERS = new Set([')-token', ']-token', '}-token'])
+
+/**
+ * The tokens of a value that stand at its top level: outside every function and every
+ * parenthesis, bracket or brace, through its matching close. A zero channel in `rgb(255 0 0)` or
+ * a zero term in `calc(0px + 2px)` is not a zero width, and nothing inside them is read.
+ */
+function topLevelTokens(tokens: readonly Token[]): Token[] {
+  let depth = 0
+  const kept: Token[] = []
+  for (const token of tokens) {
+    if (BLOCK_OPENERS.has(token.type)) depth += 1
+    else if (BLOCK_CLOSERS.has(token.type)) depth = Math.max(0, depth - 1)
+    else if (depth === 0) kept.push(token)
+  }
+  return kept
+}
+
 /**
  * Whether an `outline` shorthand leaves no visible outline: no style other than `none`, or a zero
- * width, or `transparent`.
+ * width, or `transparent`, each read from the shorthand's top level.
  */
 function isOutlineShorthandHiding(tokens: readonly Token[]): boolean {
-  const idents = tokens.map((token) => identOf(token))
+  const top = topLevelTokens(tokens)
+  const idents = top.map((token) => identOf(token))
   if (idents.every((ident) => ident === undefined || !STYLE_KEYWORDS.has(ident))) return true
-  return tokens.some((token) => isZero(token)) || idents.includes('transparent')
+  return top.some((token) => isZero(token)) || idents.includes('transparent')
 }
 
 /**
