@@ -14,6 +14,7 @@
  *   navePlugin()                         // Nave atoms only, fails build on unknown atom
  *   navePlugin({ extend: myAtoms })      // Nave + consumer atoms
  *   navePlugin({ onUnknown: 'warn' })    // Log and skip instead of failing the build
+ *   navePlugin({ onUnknown: 'warn', printWarnings: false }) // Raise warnings only, never print
  *
  * `extend` is trusted, consumer-authored code (your build config, or the module a path names),
  * which can already run arbitrary JavaScript at build time: it is not sanitised input. Every
@@ -85,10 +86,19 @@ export interface NavePluginOptions {
    * 'ignore' — silently skip
    */
   onUnknown?: 'warn' | 'error' | 'ignore'
+
+  /**
+   * Whether a 'warn'-mode problem may be printed. Under Turbopack (`TURBOPACK`
+   * set), which shows no PostCSS warning, the plugin prints each one with
+   * `console.warn` instead of raising it (default `true`). `false` raises it
+   * as a PostCSS warning only, whatever `TURBOPACK` says: for a tool that
+   * runs the plugin itself and reports the warnings it raises.
+   */
+  printWarnings?: boolean
 }
 
 export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
-  const { onUnknown = 'error', extend: extendOption } = options
+  const { onUnknown = 'error', printWarnings = true, extend: extendOption } = options
   // A string `extend` resolves to an absolute path at construction, so
   // an unresolvable specifier fails when the host's config loads rather than
   // on the first stylesheet.
@@ -144,11 +154,11 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
         },
 
         AtRule(atRule: PostCSSAtRule) {
-          handleDirective(atRule, { onUnknown, result, extend, fold })
+          handleDirective(atRule, { onUnknown, printWarnings, result, extend, fold })
         },
 
         OnceExit(root) {
-          expandLeftovers(root, { onUnknown, result, extend, fold })
+          expandLeftovers(root, { onUnknown, printWarnings, result, extend, fold })
           if (fold.length === 0) return
           const ordered = sortFoldBySourceOrder(fold)
           const first = ordered[0]!

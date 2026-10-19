@@ -102,9 +102,10 @@ describe('AC-base-ui-bridge-50: every sentence and config this release makes fal
     expect(existsSync(path.join(ROOT, 'packages/bridge/package.json'))).toBe(false)
   })
 
-  it('leaves Changesets ignoring the CLI only', () => {
+  it('leaves Changesets ignoring the CLI and no longer the retired bridge', () => {
     const config = JSON.parse(read('.changeset/config.json')) as { ignore: string[] }
-    expect(config.ignore).toEqual(['@navecss/cli'])
+    expect(config.ignore).toContain('@navecss/cli')
+    expect(config.ignore).not.toContain('@navecss/bridge')
   })
 
   it('names the new package in the publishable-set docblock, not the bridge', () => {

@@ -133,6 +133,39 @@ function escapedText(node: AstNode): { decoded: string; raw: string } | undefine
   return { raw, decoded: cooked }
 }
 
+/**
+ * A character reference as Vite's JSX compiler decodes one in an attribute string: `&#` and
+ * decimal digits, or `&#x` and hexadecimal ones, then `;`. A named reference stays as written:
+ * none names a character an atom's class can hold, so the class scan reads it the same either way.
+ */
+const CHARACTER_REFERENCE = /&#(?:(\d+)|x([\dA-Fa-f]+));/g
+
+/**
+ * `text` with each character reference that names a Unicode scalar value replaced by it; any
+ * other is left as written, as JSX leaves it.
+ */
+function decodeCharacterReferences(text: string): string {
+  return text.replaceAll(CHARACTER_REFERENCE, (reference, decimal?: string, hex?: string) => {
+    const codePoint = decimal === undefined ? Number.parseInt(hex!, 16) : Number(decimal)
+    const isScalar = codePoint <= 0x10_ff_ff && (codePoint < 0xd8_00 || codePoint > 0xdf_ff)
+    return isScalar ? String.fromCodePoint(codePoint) : reference
+  })
+}
+
+/**
+ * The text a JSX attribute string holds at run time, when it is written with a character
+ * reference (`className="nave&#45;flex"` is `nave-flex`), or `undefined` for any other node. The
+ * parsers leave the reference undecoded in the tree, so it is decoded here, from the text as
+ * written.
+ */
+function jsxAttributeText(node: AstNode): string | undefined {
+  if (node.type !== 'JSXAttribute') return undefined
+  const value = nodeAt(node, 'value')
+  if (value?.type !== 'Literal' || typeof value.value !== 'string') return undefined
+  const written = typeof value.raw === 'string' ? value.raw.slice(1, -1) : value.value
+  return written.includes('&#') ? decodeCharacterReferences(written) : undefined
+}
+
 const PARENTHESES_KEPT =
   "readModule reads a syntax tree with no node for a pair of parentheses, as Vite's parser returns it. This tree keeps one (a ParenthesizedExpression): parse with the parentheses dropped, for example oxc-parser with preserveParens: false."
 
@@ -140,8 +173,9 @@ const PARENTHESES_KEPT =
  * The one pass over the whole tree that `readModule` makes before it reads anything, whichever key
  * holds a node. It refuses a tree that keeps a node for a pair of parentheses, which would read a
  * class built from pieces as whole, with a `TypeError`; and it gathers the atoms whose class a
- * string written with escapes spells once decoded (`'nave-\x66lex'`), which the text scan cannot
- * see because it reads the source as written. One pass does both, so the refusal adds no walk.
+ * string written with escapes spells once decoded (`'nave-\x66lex'`), or a JSX attribute string
+ * written with a character reference (`"nave&#45;flex"`), which the text scan cannot see because
+ * it reads the source as written. One pass does both, so the refusal adds no walk.
  */
 export function refuseParenthesesAndFindEscapedAtoms(program: AstNode): Set<string> {
   const found = new Set<string>()
@@ -150,8 +184,9 @@ export function refuseParenthesesAndFindEscapedAtoms(program: AstNode): Set<stri
     const node = stack.pop()!
     if (node.type === 'ParenthesizedExpression') throw new TypeError(PARENTHESES_KEPT)
     const text = escapedText(node)
-    if (text?.raw.includes('\\')) {
-      for (const atom of atomsWrittenIn(text.decoded)) found.add(atom)
+    const decoded = text?.raw.includes('\\') ? text.decoded : jsxAttributeText(node)
+    if (decoded !== undefined) {
+      for (const atom of atomsWrittenIn(decoded)) found.add(atom)
     }
     pushAll(stack, childrenOf(node))
   }

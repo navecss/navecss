@@ -2,7 +2,9 @@
  * The one place the PostCSS host reports a warning: `node.warn()`, except under Next.js's
  * Turbopack, which drops every PostCSS warning. There (detected by `process.env.TURBOPACK` being
  * set) the text is printed with `console.warn` behind the same `file:line:column: ` frame the
- * Lightning CSS adapter prints, and `node.warn()` is not called as well.
+ * Lightning CSS adapter prints, and `node.warn()` is not called as well. A tool that runs the
+ * plugin itself and reports its warnings turns the printing off (`printWarnings: false`): every
+ * warning is then raised, whatever `TURBOPACK` says.
  */
 import type { Node, Result } from 'postcss'
 
@@ -31,10 +33,25 @@ function framedAtNode(node: Node, result: Result, text: string, index: number | 
 }
 
 /**
+ * Where a warning is reported: the character of the node it sits at, when it sits at one, and
+ * whether it may be printed.
+ */
+export interface WarnPlace {
+  readonly index?: number | undefined
+  readonly printWarnings?: boolean | undefined
+}
+
+/**
  * Reports `text` on `node`, at the character `index` of it when given.
  */
-export function reportWarning(node: Node, result: Result, text: string, index?: number): void {
-  if (isTurbopack()) {
+export function reportWarning(
+  node: Node,
+  result: Result,
+  text: string,
+  place: WarnPlace = {},
+): void {
+  const { index } = place
+  if (place.printWarnings !== false && isTurbopack()) {
     console.warn(framedAtNode(node, result, text, index))
     return
   }

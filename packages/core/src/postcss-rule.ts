@@ -145,7 +145,10 @@ function reportInSourceOrder(warnings: readonly PendingWarning[], ctx: RuleConte
   const placed = warnings.map((warning) => ({ warning, place: placeOf(warning) }))
   const ordered = placed.toSorted((a, b) => a.place[0] - b.place[0] || a.place[1] - b.place[1])
   for (const { warning } of ordered) {
-    reportWarning(warning.node, ctx.result, warning.text, warning.index)
+    reportWarning(warning.node, ctx.result, warning.text, {
+      index: warning.index,
+      printWarnings: ctx.printWarnings,
+    })
   }
 }
 
