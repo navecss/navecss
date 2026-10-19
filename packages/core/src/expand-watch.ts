@@ -42,6 +42,18 @@ function digestOf(file: string): string {
   }
 }
 
+/**
+ * Whether `file` was last modified in the second `ms` falls in, or later. On a filesystem that
+ * keeps whole seconds, only such a file can take an edit of the same size without its time moving.
+ */
+function isModifiedSince(file: string, ms: number): boolean {
+  try {
+    return Math.floor(statSync(file).mtimeMs / 1000) >= Math.floor(ms / 1000)
+  } catch {
+    return false
+  }
+}
+
 interface Seen {
   readonly isStampChanged: () => boolean
   readonly isContentChanged: (named: Iterable<string>) => boolean
@@ -53,13 +65,17 @@ interface Seen {
  * event or a read of the files reports it first. The stamp is cheap and is what the poll reads.
  * A file event also compares the bytes of the file it names when the stamp has not moved: a
  * filesystem that keeps whole seconds gives two edits of one size in the same second the same
- * stamp. Bytes are read only for that, and for a file whose stamp moved in a run, so the next event
- * has something to compare with; never at start, and never for a read that finds no change.
+ * stamp. Bytes are read only for that, for a file whose stamp moved in a run, so the next event
+ * has something to compare with, and at start for a file modified in the second the watch starts
+ * (`startMs`), which could still take such an edit; never for a read that finds no change.
  */
-function seenFiles(files: ReadonlySet<string>): Seen {
+function seenFiles(files: ReadonlySet<string>, startMs: number): Seen {
   const stamps = new Map<string, string>()
   const digests = new Map<string, string>()
-  for (const file of files) stamps.set(file, stampOf(file))
+  for (const file of files) {
+    stamps.set(file, stampOf(file))
+    if (isModifiedSince(file, startMs)) digests.set(file, digestOf(file))
+  }
   return {
     isStampChanged: () => [...files].some((file) => stampOf(file) !== stamps.get(file)),
     isContentChanged: (named) => {
@@ -89,7 +105,7 @@ function seenFiles(files: ReadonlySet<string>): Seen {
  */
 export function watchFiles(files: readonly string[], onChange: () => void): () => void {
   const wanted = new Set(files.map((file) => path.resolve(file)))
-  const seen = seenFiles(wanted)
+  const seen = seenFiles(wanted, Date.now())
   let timer: NodeJS.Timeout | undefined
   // The watched files the file events since the last settle named.
   const named = new Set<string>()

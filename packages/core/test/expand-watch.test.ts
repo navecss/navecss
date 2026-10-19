@@ -28,6 +28,8 @@ const standIns = vi.hoisted(() => ({
   // in the same second.
   isCoarse: false,
   kept: new Map<string, unknown>(),
+  // The modification time `statSync` reports for every file, when set.
+  mtimeMs: undefined as number | undefined,
   opened: [] as {
     close: ReturnType<typeof vi.fn>
     closed: boolean
@@ -42,10 +44,9 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     statSync: (file: string) => {
       const stats = actual.statSync(file)
-      if (!standIns.isCoarse) return stats
-      const kept = standIns.kept.get(file) ?? stats
-      standIns.kept.set(file, kept)
-      return kept
+      const kept = standIns.isCoarse ? (standIns.kept.get(file) ?? stats) : stats
+      if (standIns.isCoarse) standIns.kept.set(file, kept)
+      return standIns.mtimeMs === undefined ? kept : { ...kept, mtimeMs: standIns.mtimeMs }
     },
     watch: (directory: string, listener: Listener) => {
       const standIn = { close: vi.fn(), closed: false, directory, listener }
@@ -78,6 +79,10 @@ beforeEach(() => {
   standIns.digests = 0
   standIns.isCoarse = false
   standIns.kept.clear()
+  standIns.mtimeMs = undefined
+  // A clock well past every file the rows write, so no file counts as modified in the second the
+  // watch starts unless a row says so.
+  vi.setSystemTime(new Date('2100-01-01T00:00:00.500Z'))
   standIns.opened.length = 0
   const made = mkdtempSync(path.join(tmpdir(), 'nave-expand-watch-files-'))
   project.dir = realpathSync(made)
@@ -319,6 +324,29 @@ describe('watchFiles', () => {
 
     expect(standIns.digests - before).toBe(2)
     expect(changed).toHaveBeenCalledTimes(1)
+    close()
+  })
+
+  it('calls back for an edit of one size in the second the watch started, before any time moved', () => {
+    standIns.mtimeMs = Date.now()
+    standIns.isCoarse = true
+    const watched = write('w/a.css', 'one')
+    const changed = vi.fn()
+    const close = watchFiles([watched], changed)
+
+    writeFileSync(watched, 'two')
+    fire(file('w'), 'a.css')
+    settle()
+
+    expect(changed).toHaveBeenCalledTimes(1)
+    close()
+  })
+
+  it('reads the bytes of no file at start that was last modified in an earlier second', () => {
+    standIns.mtimeMs = Date.now() - 1000
+    const close = watchFiles([write('w/a.css', 'one'), write('w/b.css', 'one')], vi.fn())
+
+    expect(standIns.digests).toBe(0)
     close()
   })
 
