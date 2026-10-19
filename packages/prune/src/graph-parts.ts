@@ -12,7 +12,7 @@ import type { Place } from './lines.ts'
 
 const UNREAD_TEXT = 'the module could not be read, so the atoms it names would not ship: '
 const UNPARSED_REASON = 'it did not parse as JavaScript or TypeScript.'
-const UNRESOLVED_TEXT =
+export const UNRESOLVED_TEXT =
   'the build cannot resolve this import, so it cannot read the cx() calls behind it'
 // The sentences the Vite plugin's build-end check gives a module that reaches cx this way.
 const UNBOUND_CX_TEXT =
@@ -116,5 +116,8 @@ export function emptyGraph(): Graph {
     directories: [],
     stylesheets: new Set(),
     unreadStylesheets: new Set(),
+    edges: new Map(),
+    dynamicFiles: new Set(),
+    pagesDynamicPackages: new Set(),
   }
 }

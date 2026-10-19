@@ -134,6 +134,12 @@ function reexportRemedy(
 }
 
 /**
+ * The remedy lines only a host can write, given the application's problems: they print after the
+ * lines of the application's kinds and before any package's line.
+ */
+export type HostRemedies = (application: readonly LocatedProblem[]) => readonly string[]
+
+/**
  * The remedy block: the application's lines in the fixed order of the kinds present, then each
  * dependency's line sorted by package name, then `Available:` when a unknown name had no hint.
  */
@@ -141,6 +147,7 @@ function remedyBlock(
   problems: readonly LocatedProblem[],
   listed: readonly string[],
   home: string,
+  hostRemedies?: HostRemedies,
 ): string[] {
   const configured = withoutRemoved(problems, listed)
   const fixed = remedies(home)
@@ -152,6 +159,7 @@ function remedyBlock(
       ...(kind === 'reexport' ? reexportRemedy(application, configured, home) : fixed[kind]),
     )
   }
+  lines.push(...(hostRemedies?.(application) ?? []))
   const byPackage = new Map<string, LocatedProblem[]>()
   for (const problem of problems) {
     if (problem.pkg !== undefined)
@@ -214,16 +222,22 @@ function noun(count: number, word: string): string {
 /**
  * The build report for every problem of an environment. `configured` is the `cxModules` list the
  * remedies that print one extend, and `home` is how the host spells where the options are written,
- * the call of its plugin or its wrapper: the one place the report names its host.
+ * the call of its plugin or its wrapper: the one place the report names its host. `hostRemedies`
+ * adds the lines only the host can write.
  */
 export function buildReport(
   problems: readonly LocatedProblem[],
   configured: readonly string[],
   home: string,
+  hostRemedies?: HostRemedies,
 ): string {
   const files = new Set(problems.map((problem) => problem.file)).size
   const first = `${noun(problems.length, 'problem')} in ${noun(files, 'file')}: ${REPORT_CAUSE}`
-  return [first, ...problemLines(problems), ...remedyBlock(problems, configured, home)].join('\n')
+  return [
+    first,
+    ...problemLines(problems),
+    ...remedyBlock(problems, configured, home, hostRemedies),
+  ].join('\n')
 }
 
 /**

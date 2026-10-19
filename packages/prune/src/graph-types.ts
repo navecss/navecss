@@ -46,4 +46,17 @@ export interface Graph {
    * Sass), absolute: what they import is not known.
    */
   readonly unreadStylesheets: Set<string>
+  /**
+   * For each file read, the files it imports (core's own left out), absolute.
+   */
+  readonly edges: Map<string, Set<string>>
+  /**
+   * The files that call `cx.dynamic()`, absolute.
+   */
+  readonly dynamicFiles: Set<string>
+  /**
+   * The packages under `node_modules` that call `cx.dynamic()` in a file a `pages/` entry
+   * reaches.
+   */
+  readonly pagesDynamicPackages: Set<string>
 }

@@ -33,3 +33,12 @@ export function printEachRun(line: string): void {
   // eslint-disable-next-line no-console -- printing to the terminal running Next.js is this package's output
   console.warn(line)
 }
+
+/**
+ * Prints `text` through `console.error` on every run, from the compilation that prints.
+ */
+export function printError(text: string): void {
+  if (!isPrintingCompilation()) return
+  // eslint-disable-next-line no-console -- printing to the terminal running Next.js is this package's output
+  console.error(text)
+}

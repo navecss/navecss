@@ -17,4 +17,4 @@ export { inspectAtomicLayer, pruneAtomicLayer, unprunedAtoms } from './vite-prun
 export type { LayerReading } from './vite-prune.ts'
 export { withRestorers } from './vite-restorers.ts'
 export { buildReport, REPORT_CAUSE } from './vite-used-report.ts'
-export type { LocatedProblem } from './vite-used-report.ts'
+export type { HostRemedies, LocatedProblem } from './vite-used-report.ts'

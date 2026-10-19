@@ -14,15 +14,18 @@ import type { ExtendMap } from './extend.ts'
 import type { Handoff } from './handoff.ts'
 import type { DirectiveProblem } from './record.ts'
 
+import { reportInDev } from './dev-report.ts'
 import { corePluginFor, expandDirectives, hasNaveDirective } from './directive.ts'
 import { extendFileIn, loadExtend } from './extend.ts'
 import { readHandoff } from './handoff.ts'
 import { dependencyMessages } from './messages.ts'
+import { isDevelopmentRun } from './phase.ts'
 import { printEachRun, printOnce } from './print.ts'
 import { projectHandoff } from './project.ts'
 import { writeSheetRecord } from './record.ts'
 import { declarationRoot } from './root.ts'
 import { relativeTo } from './source-files.ts'
+import { BOTH_PLUGINS_DEV } from './texts.ts'
 import { hasCorePlugin, trimAtomicLayer } from './trim.ts'
 
 const PLUGIN = 'postcss-nave-prune'
@@ -177,10 +180,7 @@ function sayWrapperIsMissing(): void {
  * Says, once, that both Nave plugins are listed.
  */
 function sayBothPluginsAreListed(): void {
-  printOnce(
-    'both-plugins',
-    'Nave: both @navecss/prune/postcss and @navecss/core/postcss are in the PostCSS config. Remove @navecss/core/postcss: @navecss/prune/postcss expands @nave as well.',
-  )
+  printOnce('both-plugins', BOTH_PLUGINS_DEV)
 }
 
 /**
@@ -193,7 +193,7 @@ async function runWithHandoff(
   handoff: Handoff,
   entryOptions: object,
 ): Promise<void> {
-  if (hasCorePlugin(result)) sayBothPluginsAreListed()
+  if (hasCorePlugin(result) && isDevelopmentRun(handoff)) sayBothPluginsAreListed()
   const recorded: string[] = []
   const { extend, failure, plugin } = await sheetPluginOf(root, handoff, recorded)
   const expansionFailures: string[] = []
@@ -206,19 +206,20 @@ async function runWithHandoff(
     problems: expansion.problems,
     failures: [...recorded, ...expansionFailures],
   })
-  if (!inspectAtomicLayer(root.toString()).hasLayer) {
+  if (inspectAtomicLayer(root.toString()).hasLayer) {
+    trimAtomicLayer({
+      root,
+      result,
+      handoff,
+      entryOptions,
+      extend,
+      directiveProblems: expansion.problems,
+      blocked: failure,
+    })
+  } else {
     declareExtendFile(result, handoff)
-    return
   }
-  trimAtomicLayer({
-    root,
-    result,
-    handoff,
-    entryOptions,
-    extend,
-    directiveProblems: expansion.problems,
-    blocked: failure,
-  })
+  reportInDev(handoff)
 }
 
 /**

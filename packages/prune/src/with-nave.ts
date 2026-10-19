@@ -6,9 +6,11 @@
 import { atomClassMap } from '@navecss/core/atoms'
 
 import type { Handoff } from './handoff.ts'
+import type { HookMetadata } from './hook.ts'
 import type { NaveOptions } from './options.ts'
 
 import { encodeHandoff, HANDOFF_VARIABLE } from './handoff.ts'
+import { checkBuild } from './hook.ts'
 import { assertNaveOptions } from './options.ts'
 
 /**
@@ -22,7 +24,11 @@ const CORE_PACKAGE = '@navecss/core'
  * What a Next.js config holds that `withNave()` reads or sets. The rest is kept as it is.
  */
 interface ConfigShape {
-  compiler?: Record<string, unknown> & { define?: Record<string, string> }
+  bundlePagesRouterDependencies?: boolean
+  compiler?: Record<string, unknown> & {
+    define?: Record<string, string>
+    runAfterProductionCompile?: (metadata: HookMetadata) => Promise<void> | void
+  }
   distDir?: string
   outputFileTracingRoot?: string
   transpilePackages?: string[]
@@ -86,13 +92,22 @@ function wrapConfig(
 ): ConfigShape {
   setHandoff(config, options, { dir: process.cwd(), isBundlerDir: false }, phase)
   const user = config.webpack
+  const transpilePackages = withName(config.transpilePackages, CORE_PACKAGE)
+  const own = config.compiler?.runAfterProductionCompile
   return {
     ...config,
     compiler: {
       ...config.compiler,
       define: { ...config.compiler?.define, [KEEP_CONSTANT]: keepMapText(options) },
+      runAfterProductionCompile: async (metadata: HookMetadata) => {
+        await own?.(metadata)
+        await checkBuild(metadata, options, {
+          transpilePackages,
+          bundlePagesRouterDependencies: config.bundlePagesRouterDependencies,
+        })
+      },
     },
-    transpilePackages: withName(config.transpilePackages, CORE_PACKAGE),
+    transpilePackages,
     ...(config.turbopack === undefined && { turbopack: {} }),
     webpack: (webpackConfig: unknown, context: { dir?: string }) => {
       if (context.dir !== undefined) {

@@ -160,7 +160,7 @@ function recordOfRun(
     markdown: [...graph.markdown]
       .map((file) => relativeTo(dir, file))
       .toSorted((a, b) => a.localeCompare(b)),
-    pagesDynamicPackages: [],
+    pagesDynamicPackages: [...graph.pagesDynamicPackages].toSorted((a, b) => a.localeCompare(b)),
     stylesheets: [...graph.stylesheets]
       .map((file) => relativeTo(dir, file))
       .toSorted((a, b) => a.localeCompare(b)),

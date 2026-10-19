@@ -37,6 +37,7 @@ import {
 } from './graph-parts.ts'
 import { placerFor } from './lines.ts'
 import { createPackageReader, packageNameOfSpecifier } from './packages.ts'
+import { addPagesDynamicPackages } from './pages-reach.ts'
 import { createResolver } from './resolve.ts'
 import {
   isDependencyPath,
@@ -119,7 +120,11 @@ interface FileFacts {
 function enqueueResolved(walk: Walk, facts: FileFacts, resolution: Resolution): void {
   for (const resolved of resolution.files) {
     const isInMode = facts.isInMode && resolution.filesInMode.includes(resolved)
-    if (!isCoreFile(walk.packageOf, resolved)) enqueue(walk, resolved, isInMode)
+    if (isCoreFile(walk.packageOf, resolved)) continue
+    enqueue(walk, resolved, isInMode)
+    const reached = walk.graph.edges.get(facts.file) ?? new Set<string>()
+    reached.add(resolved)
+    walk.graph.edges.set(facts.file, reached)
   }
 }
 
@@ -177,6 +182,7 @@ function recordUnboundCx(walk: Walk, facts: FileFacts, edge: Edge): void {
 function record(walk: Walk, facts: FileFacts, reading: ModuleReading): void {
   const { graph, options } = walk
   for (const atom of [...reading.atoms, ...reading.classes]) graph.atoms.add(atom)
+  if (reading.dynamicCalls.length > 0) graph.dynamicFiles.add(facts.file)
   if (isStoodInFor(walk, facts)) return
   for (const problem of reading.problems) {
     facts.problems.push({
@@ -289,5 +295,6 @@ export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): G
   }
   for (const file of entries.files) enqueue(walk, file, true)
   while (walk.queue.length > 0) visit(walk, walk.queue.pop()!)
+  addPagesDynamicPackages(graph, entries.pagesFiles, (file) => packageNameOf(walk, file))
   return graph
 }
