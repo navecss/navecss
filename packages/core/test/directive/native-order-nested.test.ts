@@ -490,3 +490,248 @@ describe('AC-native-apply-order-16 — two nested directives, and a nested rule 
     }
   })
 })
+
+const OUTWARD_EXTEND: Record<string, AtomDefinition> = {
+  fx: { declarations: {}, media: { '(width >= 60em)': { declarations: { color: 'blue' } } } },
+  fz: { declarations: {}, media: { '(width >= 30em)': { declarations: { color: 'red' } } } },
+  mp: {
+    declarations: {},
+    media: { '(width >= 60em)': { declarations: {}, pseudos: { ':hover': { color: 'blue' } } } },
+  },
+}
+
+/**
+ * The text of each warning.
+ */
+function textsOf(warnings: readonly { text: string }[]): string[] {
+  return warnings.map((w) => w.text)
+}
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-16 — a nested directive and later content inside one group (%s)',
+  (_name, run) => {
+    it.each([
+      [
+        '.x { @media (width >= 60em) { & { @nave hideDesktopUp } display: flex } }',
+        'display: flex',
+      ],
+      [
+        '.x { @media (width >= 60em) { & { & { @nave hideDesktopUp } } display: flex } }',
+        'display: flex',
+      ],
+      [
+        '.x { & { @media (width >= 60em) { & { @nave hideDesktopUp } display: flex } } }',
+        'display: flex',
+      ],
+      [
+        '.x { @media (width >= 60em) { & { @nave hideDesktopUp } & { display: flex } } }',
+        '& { display',
+      ],
+      [
+        '.x { @supports (display: grid) { & { @nave hideDesktopUp } display: flex } }',
+        'display: flex',
+      ],
+      [
+        '.x { @media (width >= 60em) { & { @nave hideDesktopUp } } @media (width >= 60em) { display: flex } }',
+        '@media (width >= 60em) { display',
+      ],
+    ])('%s warns once, at the later content', async (css, at) => {
+      const warnings = await run(css)
+
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]).toMatchObject({ column: css.lastIndexOf(at) + 1 })
+      expect(warnings[0]!.text).not.toContain('Before @navecss/core')
+    })
+
+    it('names the block inside the group in the fix, never the group', async () => {
+      const [warning] = await run(
+        '.x { @media (width >= 60em) { & { @nave hideDesktopUp } display: flex } }',
+      )
+
+      expect(warning!.text).toContain('move display: flex above the & block.')
+    })
+
+    it.each([
+      '.x { @media (width >= 60em) { & { @nave hideDesktopUp } &.m { display: flex } } }',
+      '.x { @media (width >= 60em) { display: flex; & { @nave hideDesktopUp } } }',
+    ])('%s reports nothing', async (css) => {
+      expect(await run(css)).toEqual([])
+    })
+  },
+)
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-16 — what the outward pairs read, pinned (%s)',
+  (_name, run) => {
+    it("puts the groups on the path into the block's condition, so disjoint ones do not warn", async () => {
+      expect(
+        await run('.x { @media (width < 60em) { & { @nave hideDesktopUp } } display: flex; }'),
+      ).toEqual([])
+    })
+
+    it("reads the pseudo blocks inside a directive's media block", async () => {
+      const [warning] = await run('.x { & { @nave mp } &:hover { color: red } }', {
+        extend: OUTWARD_EXTEND,
+      })
+
+      expect(warning!.text).toContain(
+        'the &:hover block comes after "mp", so on :hover under @media (width >= 60em) color is red, not blue',
+      )
+    })
+
+    it('names the later directive in the fix', async () => {
+      const [warning] = await run('.x { & { @nave hideDesktopUp } @nave flex; }')
+
+      expect(warning!.text).toContain('move the directive that names "flex" above the & block.')
+    })
+
+    it('does not read an auto inside a function as the style keyword', async () => {
+      const warnings = await run('.x { @nave focusRing; &:focus { outline: 0 foo(auto) } }')
+
+      expect(warnings.some((w) => w.text.includes('keyboard focus indicator'))).toBe(true)
+    })
+  },
+)
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-26 — a fix that cannot clear a pair is not printed (%s)',
+  (_name, run) => {
+    it('prints the marker only where the later directive carries blocks that overlap with a different value', async () => {
+      const [warning] = await run('.x { & { @nave fx } @nave fz }', { extend: OUTWARD_EXTEND })
+
+      expect(warning!.text).toContain('"fz" comes after "fx"')
+      expect(warning!.text).not.toContain('To let')
+      expect(warning!.text).toContain('If "fz" is meant to win, mark the directive')
+    })
+
+    const CONTAINERS = [
+      '& { @nave fx }',
+      '&.m { @nave fx }',
+      '@media (width >= 60em) { & { @nave fx } }',
+    ]
+    const LATER = [
+      'color: red;',
+      '@nave fz;',
+      '@nave textLeft;',
+      '@media (width >= 30em) { color: red }',
+      '& { color: red }',
+      '@nave textLeft fz;',
+    ]
+
+    /**
+     * The warnings of "comes after" kind in `css`.
+     */
+    async function pairsIn(css: string): Promise<string[]> {
+      const warnings = await run(css, { extend: OUTWARD_EXTEND })
+      return textsOf(warnings).filter((text) => text.includes('comes after'))
+    }
+
+    it.each(CONTAINERS.flatMap((container) => LATER.map((later) => [container, later] as const)))(
+      'applying every printed fix of %s then %s clears its warning',
+      async (container, later) => {
+        const css = `.x { ${container} ${later} }`
+        const [text] = await pairsIn(css)
+        const marker = /`(@nave [^`]*)`\s*$/.exec(text ?? '')?.[1] ?? ''
+        const directive = /@nave [^}]*/.exec(container)![0].trim()
+        const hasMove = (text ?? '').includes('To let')
+        const moved = hasMove ? `.x { ${later} ${container} }` : '.x { }'
+        const markedCss = css.split(directive).join(marker.replace(/;$/, ''))
+
+        expect(await pairsIn(moved)).toEqual([])
+        expect(await pairsIn(text === undefined ? '.x { }' : markedCss)).toEqual([])
+      },
+    )
+  },
+)
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-25 — an outward warning names its blocks and its place (%s)',
+  (_name, run) => {
+    const OPEN = 'so under @media (width >= 75em) display is flex, not none.'
+    const MARKED =
+      'If it is meant to win, mark the directive that names "hideDesktopUp": `@nave /* nave-allow-override: display */ hideDesktopUp;`'
+
+    it.each([
+      [
+        '.x { & { @nave hideDesktopUp } & { display: flex } }',
+        `@nave: the second & block comes after "hideDesktopUp", ${OPEN} To let "hideDesktopUp" win, move the second & block above the first & block. ${MARKED}`,
+      ],
+      [
+        '.x { & { @nave hideDesktopUp } & { color: red } display: flex; }',
+        `@nave: display: flex comes after "hideDesktopUp", ${OPEN} To let "hideDesktopUp" win, move display: flex above the first & block. ${MARKED}`,
+      ],
+      [
+        '.x {\n  :where(.dark)\n  & { @nave hideDesktopUp }\n  display: flex;\n}',
+        `@nave: display: flex comes after "hideDesktopUp", so on :where(.dark) & under @media (width >= 75em) display is flex, not none. To let "hideDesktopUp" win, move display: flex above the :where(.dark) & block. ${MARKED}`,
+      ],
+      [
+        '.x { &:where(.q) { @nave hideDesktopUp } display: flex; }',
+        `@nave: display: flex comes after "hideDesktopUp", so on :where(.q) under @media (width >= 75em) display is flex, not none. To let "hideDesktopUp" win, move display: flex above the &:where(.q) block. ${MARKED}`,
+      ],
+      [
+        '.x { &.q { @nave hideDesktopUp } &.open { display: flex } }',
+        `@nave: the &.open block comes after "hideDesktopUp", so on .q under @media (width >= 75em) while also on .open, display is flex, not none. To let "hideDesktopUp" win, move the &.open block above the &.q block. ${MARKED}`,
+      ],
+      [
+        '.x { &:where(.q) { &:where(.r) { @nave hideDesktopUp } } display: flex; }',
+        `@nave: display: flex comes after "hideDesktopUp", so on :where(.q):where(.r) under @media (width >= 75em) display is flex, not none. To let "hideDesktopUp" win, move display: flex above the &:where(.q) block. ${MARKED}`,
+      ],
+      [
+        '.x { @media (width >= 30em) { & { @nave hideDesktopUp } } @media (width >= 30em) { & { display: flex } } }',
+        `@nave: the second @media (width >= 30em) block comes after "hideDesktopUp", so under @media (width >= 75em) and @media (width >= 30em) display is flex, not none. To let "hideDesktopUp" win, move the second @media (width >= 30em) block above the first @media (width >= 30em) block. ${MARKED}`,
+      ],
+    ])('%j prints one text, byte for byte', async (css, text) => {
+      const warnings = await run(css)
+
+      expect(warnings.map((w) => w.text)).toEqual([text])
+    })
+
+    it('names each of two sibling containers by its place', async () => {
+      const warnings = await run(
+        '.x { & { @nave hideDesktopUp } & { @nave hideDesktopUp } display: flex; }',
+      )
+
+      expect(warnings).toHaveLength(2)
+      expect(warnings[0]!.text).toContain('move display: flex above the first & block.')
+      expect(warnings[1]!.text).toContain('move display: flex above the second & block.')
+    })
+
+    it('says "while also" for a state only once, through a path and a list', async () => {
+      const ring = await run('.x { &:where(.q) { @nave focusRing } &:focus { outline: none } }')
+      const list = await run(
+        '.x { &:where(.a), &:where(.b) { @nave focusRing } &:focus { outline: none } }',
+      )
+
+      expect(ring[0]!.text).toContain(
+        'the &:focus block comes after "focusRing", so on :where(.q):focus-visible outline: none replaces',
+      )
+      expect(ring[0]!.text).toContain('move the &:focus block above the &:where(.q) block.')
+      expect(list[0]!.text).toContain(
+        'so on :is(&:where(.a), &:where(.b)):focus-visible outline: none replaces',
+      )
+      expect(list[0]!.text).not.toContain('while also')
+    })
+
+    it('leaves a same-rule pair with two blocks of one selector as it was', async () => {
+      const [warning] = await run(
+        '.x { @nave hideDesktopUp; & { color: red } & { display: flex } }',
+      )
+
+      expect(warning!.text).toContain('the & block comes after "hideDesktopUp"')
+      expect(warning!.text).toContain('move the & block above the directive.')
+      expect(textsOf([warning!])[0]).not.toContain('first')
+    })
+  },
+)
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-16 — a pseudo-element rule has no outward pair (%s)',
+  (_name, run) => {
+    it.each([
+      '.x::before { & { @nave hideDesktopUp } display: flex; }',
+      '.x::before, .y::after { & { @nave hideDesktopUp } display: flex; }',
+    ])('%s reports nothing', async (css) => {
+      expect(await run(css)).toEqual([])
+    })
+  },
+)

@@ -45,6 +45,14 @@ export interface Unit {
   readonly conditions: readonly ConditionRule[]
   readonly declarations: readonly OrderDeclaration[]
   readonly directive: DirectiveFacts
+  /**
+  Where the block holds, as a warning says it, when the selector alone does not say it: the selector with the rules around the directive folded in. Specificity is read from `selector`.
+   */
+  readonly placeSelector?: string
+  /**
+  The states of `placeSelector` that are already said: those of the block's own selector and of the rules on the path that are one compound.
+   */
+  readonly placeStates?: readonly string[]
   readonly selector: string
   readonly specificities: readonly Specificity[]
 }
@@ -112,9 +120,13 @@ export interface RelatedPair {
 export interface Finding {
   readonly candidate: Candidate
   /**
-  Set for a directive written inside a nested rule and paired with what the enclosing rule holds after it: the block of that rule that holds the directive, as a warning names it.
+  Set for a directive written inside a nested rule and paired with what an enclosing rule holds after it: how the warning names the block of that rule that holds the directive (`above`), the later block that overrides it (`overrider`, when the overrider is a block), and whether moving the overrider above that block can clear the pair (`canMove`).
    */
-  readonly outward?: { readonly above: string }
+  readonly outward?: {
+    readonly above: string
+    readonly canMove: boolean
+    readonly overrider: string | undefined
+  }
   readonly pairs: readonly RelatedPair[]
   readonly unit: Unit
 }

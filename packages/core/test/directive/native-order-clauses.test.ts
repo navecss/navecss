@@ -108,6 +108,85 @@ describe.each(HOSTS)('AC-native-apply-order-28 — focus clauses (%s)', (_name, 
     },
   )
 
+  it.each([
+    ['.x { & { @nave focusRing } &:focus-visible { outline: none } }', 1, RING],
+    ['.x { & { @nave focusRing } &:hover { outline: none } }', 1, RING],
+    ['.x { & { & { @nave focusRing } } &:focus { outline-width: 0 } }', 1, RING],
+    [
+      '.x { @media (width >= 1px) { & { @nave focusRing } } &:focus-visible { all: unset } }',
+      1,
+      RING,
+    ],
+    ['.x { & { @nave focusRing } & { &:focus-visible { outline-color: transparent } } }', 1, RING],
+    ['.x { & { @nave focusRing } &:focus-visible { outline-color: red } }', 1, undefined],
+    ['.x { & { @nave focusRing } &:focus-visible { outline: 0 auto } }', 1, undefined],
+    [
+      '.x { & { @nave focusRing } &:focus-visible { outline: 2px solid rgb(255 0 0) } }',
+      1,
+      undefined,
+    ],
+    ['.x { & { @nave focusRing } &:focus-visible { outline-style: var(--s) } }', 1, undefined],
+    ['.x { &:hover { @nave focusRing } &:focus-visible { outline: none } }', 0, undefined],
+    ['.x { & { @nave srOnlyFocusable } &:focus-visible { clip-path: inset(50%) } }', 2, REVEAL],
+    [
+      '.x { & { @nave srOnlyFocusable } &:focus-visible { width: 1px; height: 1px; overflow: hidden } }',
+      6,
+      REVEAL,
+    ],
+    [
+      '.x { & { & { @nave srOnlyFocusable } } &:focus-within { clip-path: inset(50%) } }',
+      2,
+      REVEAL,
+    ],
+    ['.x { & { @nave srOnlyFocusable } &:focus-visible { width: 1px } }', 2, undefined],
+    ['.x { & { @nave srOnlyFocusable } &:focus-visible { clip-path: inset(25%) } }', 2, undefined],
+    ['.x { & { @nave srOnlyFocusable } clip-path: inset(50%); }', 0, undefined],
+  ])(
+    'a directive in a nested rule, then the enclosing rule: %s reports %i with clause %s',
+    async (css, count, clause) => {
+      const warnings = await run(css)
+      const carried = warnings.filter(
+        (w) => w.text.includes(RING_CLAUSE) || w.text.includes(REVEAL_CLAUSE),
+      )
+      const expectedClause = clause === RING ? RING_CLAUSE : REVEAL_CLAUSE
+
+      expect(warnings).toHaveLength(count)
+      expect(carried).toHaveLength(clause === undefined ? 0 : count)
+      for (const warning of carried) expect(warning.text).toContain(expectedClause)
+      for (const warning of warnings) expect(warning.text).not.toContain('Before @navecss/core')
+    },
+  )
+
+  it.each([
+    [
+      '.x { @media (width >= 60em) { & { @nave focusRing } &:focus-visible { outline: none } } }',
+      1,
+      RING,
+    ],
+    ['.x::before { & { @nave focusRing } &:focus-visible { outline: none } }', 0, undefined],
+    [
+      '.x { @media (width >= 60em) { & { @nave srOnlyFocusable } &:focus-visible { clip-path: inset(50%) } } }',
+      2,
+      REVEAL,
+    ],
+    [
+      '.x::before { & { @nave srOnlyFocusable } &:focus-visible { clip-path: inset(50%) } }',
+      0,
+      undefined,
+    ],
+  ])(
+    'a directive in a nested rule, then the same enclosing group or a pseudo-element rule: %s reports %i with clause %s',
+    async (css, count, clause) => {
+      const warnings = await run(css)
+      const carried = warnings.filter(
+        (w) => w.text.includes(RING_CLAUSE) || w.text.includes(REVEAL_CLAUSE),
+      )
+
+      expect(warnings).toHaveLength(count)
+      expect(carried).toHaveLength(clause === undefined ? 0 : count)
+    },
+  )
+
   it('reports none for the atoms srOnlyFocusable shares nothing with', async () => {
     expect(await run('.x { @nave srOnlyFocusable srOnly; }')).toEqual([])
     expect(await run('.x { @nave srOnlyFocusable relative; }')).toEqual([])

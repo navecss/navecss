@@ -94,6 +94,14 @@ function phrase(onText: string | undefined, conditions: readonly ConditionRule[]
 }
 
 /**
+ * The simple selectors after the `&` of a selector that is one compound starting with `&`, and
+ * none for any other selector.
+ */
+export function statesOf(selector: string): readonly string[] {
+  return compoundParts(selector) ?? []
+}
+
+/**
  * Where a selector under some conditions holds.
  */
 export function whereOf(selector: string, conditions: readonly ConditionRule[]): string {
@@ -115,10 +123,14 @@ function isSaid(part: string, said: readonly string[]): boolean {
  * Where the overrider holds beyond what the first place says; empty when it adds nothing.
  */
 export function alsoWhere(
-  first: { readonly conditions: readonly ConditionRule[]; readonly selector: string },
+  first: {
+    readonly conditions: readonly ConditionRule[]
+    readonly said?: readonly string[] | undefined
+    readonly selector: string
+  },
   later: { readonly conditions: readonly ConditionRule[]; readonly selector: string },
 ): string {
-  const firstParts = compoundParts(first.selector) ?? []
+  const firstParts = first.said ?? compoundParts(first.selector) ?? []
   const laterParts = compoundParts(later.selector)
   const seen = new Set(first.conditions.map((c) => conditionText(c)))
   const conditions = later.conditions.filter((c) => !seen.has(conditionText(c)))

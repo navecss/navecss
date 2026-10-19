@@ -13,7 +13,7 @@ import type { PlanState } from './rule-state.ts'
 
 import { checkOrder } from './order-check.ts'
 import { plannedDirective } from './order-emitted.ts'
-import { nestedText } from './order-outward.ts'
+import { nestedText } from './order-outward-names.ts'
 import { findingWarnings, markerWarnings } from './order-warnings.ts'
 import { plan, type PlanResult } from './plan.ts'
 import { directiveFacts, emitAtoms, recordSegments } from './rule-emit.ts'
@@ -137,8 +137,11 @@ function keepNested(state: PlanState, node: ModelNode): void {
 function warningsOf(state: PlanState): Pick<RulePlan, 'outwardFindings' | 'warnings'> {
   const amp = ampersandSpecificity(state.input.selector)
   const { emittedCache, extend, isInsideKeyframes, outward } = state.input
-  const findings = checkOrder(state.segments, amp, (directive) =>
-    plannedDirective(directive, { extend, isInsideKeyframes }, emittedCache),
+  const findings = checkOrder(
+    state.segments,
+    amp,
+    (directive) => plannedDirective(directive, { extend, isInsideKeyframes }, emittedCache),
+    state.isPseudoElementRule,
   )
   const knownFor = (directive: DirectiveFacts): readonly Finding[] =>
     outward?.known.get(outward.identityOf(directive.ref)) ?? []

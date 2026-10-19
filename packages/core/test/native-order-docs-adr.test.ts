@@ -140,9 +140,9 @@ gets no such sentence. No warning from a later block that sets the outline style
 else that block writes: \`auto\` asks for the browser's own ring, which the check does not judge.`
 
 const FOCUS_CONSEQUENCE_BULLET = `- The focus atoms are in scope. After \`@nave focusRing;\`, a later \`&:focus { outline: none }\` or
-  \`&:focus-visible { outline: none }\` now removes the ring where it used to leave it, and a later
-  \`&:focus-visible { outline-color: ... }\` now applies. The warning says when the ring, or the
-  reveal of \`srOnlyFocusable\`, is lost to a value it can read.`
+  \`&:focus-visible { outline: none }\` in the same rule now removes the ring where it used to leave
+  it, and a later \`&:focus-visible { outline-color: ... }\` there now applies. The warning says when
+  the ring, or the reveal of \`srOnlyFocusable\`, is lost to a value it can read.`
 const RELATIONS_ALTERNATIVE_BULLET = `- **A runtime dependency, or a published package, for the property relations.** Rejected. A
   generated first-party table, built from CC0 data and from the CSS specifications, with the credit
   in the package's \`LICENSE\`, adds nothing to install and nothing to load.`

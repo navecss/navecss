@@ -229,46 +229,61 @@ function walkNodes(nodes: readonly ModelNode[], walk: Walk, isRule: boolean): Ca
 }
 
 /**
- * The starting walk for a child of the rule.
+ * Where a child is reached from: the specificities of the rule it sits in and the conditional
+ * groups around it. A child of the rule itself is reached from `&` and no group.
+ */
+export interface Reach {
+  readonly chain: ConditionChain | undefined
+  readonly specificities: readonly Specificity[]
+}
+
+/**
+ * The starting walk for a child.
  */
 function ownWalk(
   node: ModelNode,
   top: Extract<Overrider, { kind: 'own' }>['top'],
-  context: { readonly amp: Specificity; readonly emitted: Emitted },
+  emitted: Emitted,
+  reach: Reach,
 ): Walk {
   return {
-    chain: undefined,
-    emitted: context.emitted,
+    chain: reach.chain,
+    emitted,
     holderSelector: '&',
     overrider: { kind: 'own', top, topRef: node.ref },
-    specificities: [context.amp],
+    specificities: reach.specificities,
   }
 }
 
 /**
- * The candidates one child of the rule contributes, `amp` being what `&` weighs and `emitted` what
- * a directive inside a nested rule expands to.
+ * The candidates one child contributes, reached as `reach` says (the rule's own child, reached from
+ * `amp`, unless told otherwise), `emitted` being what a directive inside a nested rule expands to.
  */
 export function candidatesOfOwnNode(
   node: ModelNode,
   amp: Specificity,
   emitted: Emitted,
+  reach?: Reach,
 ): Candidate[] {
-  const context = { amp, emitted }
+  const from = reach ?? { chain: undefined, specificities: [amp] }
   if (node.kind === 'decl') {
-    return walkNodes([node], ownWalk(node, { kind: 'declaration' }, context), false)
+    return walkNodes([node], ownWalk(node, { kind: 'declaration' }, emitted, from), false)
   }
   if (node.kind === 'rule') {
     const top = { kind: 'rule', selector: node.selector } as const
-    const specificities = nestedSpecificities(node.selector, amp)
+    const specificities = from.specificities.flatMap((s) => nestedSpecificities(node.selector, s))
     if (specificities.length === 0) return []
-    const walk = { ...ownWalk(node, top, context), specificities, holderSelector: node.selector }
+    const walk = {
+      ...ownWalk(node, top, emitted, from),
+      specificities,
+      holderSelector: node.selector,
+    }
     return walkNodes(node.nodes, walk, true)
   }
   if (node.kind === 'group' && GROUP_NAMES.has(node.name)) {
     const top = { kind: 'group', name: node.name, prelude: node.prelude } as const
-    const chain = { rule: { name: node.name, prelude: node.prelude }, parent: undefined }
-    return walkNodes(node.nodes, { ...ownWalk(node, top, context), chain }, false)
+    const chain = { rule: { name: node.name, prelude: node.prelude }, parent: from.chain }
+    return walkNodes(node.nodes, { ...ownWalk(node, top, emitted, from), chain }, false)
   }
   return []
 }

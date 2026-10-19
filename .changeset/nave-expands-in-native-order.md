@@ -34,8 +34,11 @@ says what the result was before: `Before @navecss/core 0.5.0 "hideDesktopUp" won
 blocks were placed last in the rule.` It never fails the build, `onUnknown` does not change it, and
 no option turns it off. Where the later declaration is meant to win, mark the directive:
 `@nave /* nave-allow-override: display */ hideDesktopUp;`. The marker covers the properties it
-names on that directive only, and is reported once nothing overrides them. See "Order inside a
-rule" in the package README.
+names on that directive only, and is reported once nothing overrides them. A directive written
+inside a nested rule is checked against what follows it in that rule and also against what each
+enclosing rule holds after it, as in `.card { & { @nave hideDesktopUp } display: flex; }`. A
+warning of that second kind does not say what the result was before, because the later content
+won before this release as well. See "Order inside a rule" in the package README.
 
 Declarations that now follow a nested block are written inside `& { }`, the wrapper Nave already
 used for a directive written after a nested rule. Under a selector list, `&` matches with the

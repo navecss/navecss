@@ -100,13 +100,15 @@ function findingsOfBlock(
 /**
  * Every finding in a rule's output, `segments` being its parts in output order, `amp` what `&`
  * weighs inside it and `emitted` what a directive inside a nested rule expands to, which is also
- * compared with what the rule holds after it (`order-outward.ts`). The candidates
+ * compared with what the rule holds after it (`order-outward.ts`), unless every selector of the rule
+ * ends in a pseudo-element, where a nested `&` matches nothing. The candidates
  * of each part are read once, however many blocks come before it.
  */
 export function checkOrder(
   segments: readonly Segment[],
   amp: Specificity,
   emitted: Emitted,
+  isPseudoElementRule = false,
 ): Finding[] {
   const known = new Map<number, readonly Candidate[]>()
   const candidatesOfSegment = (index: number): readonly Candidate[] => {
@@ -120,5 +122,6 @@ export function checkOrder(
   const inner = segments.flatMap((segment, index) =>
     segment.kind === 'atom-block' ? findingsOfBlock(index, segments, candidatesOfSegment, amp) : [],
   )
+  if (isPseudoElementRule) return inner
   return [...inner, ...outwardFindings(segments, amp, emitted, candidatesOfSegment)]
 }

@@ -32,8 +32,8 @@ a reader of a stylesheet:
 The difference matters beyond style. A project that writes `@nave` today is rehearsing for native
 mixins, and the day Nave emits `@apply` instead of expanding (ADR 0006, decision 6), every place
 where the two orders disagree would flip silently. It also reaches focus: after `@nave focusRing;`,
-a later `&:focus-visible { outline-color: ... }` was ignored, and a later
-`&:focus { outline: none }` left the ring in place, so a rule that read as removing the focus
+a later `&:focus-visible { outline-color: ... }` in the same rule was ignored, and a later
+`&:focus { outline: none }` there left the ring in place, so a rule that read as removing the focus
 indicator did not, and one that read as recolouring it did not either.
 
 Measured over the 48 built-in atoms, 22 of the 2,256 ordered pairs change outcome under native
@@ -96,6 +96,12 @@ change that); the two conditions are not provably disjoint; the properties relat
 property, a shorthand and a longhand it sets, shared longhands, `all`, or a logical and a physical
 member of one group); and the values differ. "Later" covers a later atom in the same directive, a
 later directive in the rule, and the rule's own declarations and nested blocks after the directive.
+A directive written inside a nested rule is checked as content of that rule, and its atoms' blocks
+are also compared with what each enclosing rule holds after the block that contains the directive,
+where the way down to the directive passes only through nested rules whose subject is `&` and
+conditional group rules; such a pair warns under the same tests. Where that warning offers a move,
+it moves the later content above the block, not above the directive, which would put the content
+inside the block and under its selector.
 An atom's own blocks are not compared with each other. The relation between properties comes from a
 first-party table generated from `mdn-data` by a development script, so the check adds no runtime
 dependency.
@@ -160,7 +166,10 @@ decision, three kinds of warning carry one more sentence naming the previous res
 warning whose overrider is not itself an atom's block ("Before @navecss/core 0.5.0 "hideDesktopUp"
 won, because an atom's blocks were placed last in the rule."), and the wrap and pseudo-element
 warnings for a run that the previous release left outside `& { }`. They are true by construction:
-the previous release placed every block last, so every pair the check reports was won by the block.
+the previous release placed every block last in the rule that held its directive, so every pair of
+a block and later content of that same rule was won by the block. A pair with what an enclosing
+rule holds after a nested rule (decision 3) gets no such sentence: the nested rule ended before
+that content, so the content won then as it does now.
 The sentences, and the constant holding the release they name, live in one module,
 `src/directive/migration.ts`. The warnings themselves stay. A test fails when this release's
 changeset is still pending and the constant is not the next minor after the package's version, and
@@ -185,9 +194,9 @@ the floor decisions in ADR 0001 and [ADR 0005](0005-browser-floor.md).
   directive now wins over an atom's block of equal specificity. Each is reported by the build with
   its fix, and the changeset names both.
 - The focus atoms are in scope. After `@nave focusRing;`, a later `&:focus { outline: none }` or
-  `&:focus-visible { outline: none }` now removes the ring where it used to leave it, and a later
-  `&:focus-visible { outline-color: ... }` now applies. The warning says when the ring, or the
-  reveal of `srOnlyFocusable`, is lost to a value it can read.
+  `&:focus-visible { outline: none }` in the same rule now removes the ring where it used to leave
+  it, and a later `&:focus-visible { outline-color: ... }` there now applies. The warning says when
+  the ring, or the reveal of `srOnlyFocusable`, is lost to a value it can read.
 - Consumer nested rules authored before a directive are still overridden by the atom's nested
   rules, now because of position and not because of appending: an atom's block comes at the
   directive, so what the rule says after it wins at equal specificity.
