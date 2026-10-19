@@ -228,7 +228,6 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           page,
           async () => Object.hasOwn(await framesOf(page), 'nave-block'),
           'the new class',
-          30_000,
         )
         await page.waitForTimeout(isReloading ? 0 : 500)
         const frames = await framesOf(page)

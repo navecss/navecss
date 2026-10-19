@@ -100,7 +100,7 @@ describe('AC-used-atoms-42 — HTML read after the stylesheet was first transfor
         await page.goto(url)
         await until(page, () => hasRuleNow(page, 'nave-flex'), 'the first page')
         edit(server, path.join(app.root, 'index.html'), GRID_PAGE)
-        await until(page, () => hasElement(page, '#g'), 'the reload with the edited page', 30_000)
+        await until(page, () => hasElement(page, '#g'), 'the reload with the edited page')
         await page.waitForTimeout(3000)
         const isRuled = await hasRuleNow(page, 'nave-grid')
         await page.close()
@@ -349,7 +349,6 @@ describe('AC-used-atoms-41 — the first frame after an update, for a module the
           page,
           async () => Object.hasOwn(await framesOf(page), 'nave-block'),
           'the new module’s element',
-          30_000,
         )
 
         const frames = await framesOf(page)
@@ -813,8 +812,8 @@ async function loadsAfterTheReload(
           document.documentElement.dataset.mark = '1'
         })
         edit(server, path.join(app.root, settling.edit.file), settling.edit.text)
-        await until(page, () => isReloaded(page), 'the reload for the edit', 30_000)
-        await until(page, () => hasElement(page, '#f'), 'the element of the edited page', 30_000)
+        await until(page, () => isReloaded(page), 'the reload for the edit')
+        await until(page, () => hasElement(page, '#f'), 'the element of the edited page')
         await reconnection
       }
       let loads = 0

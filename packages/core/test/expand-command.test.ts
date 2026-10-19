@@ -88,10 +88,15 @@ function tree(): string[] {
     .toSorted((a, b) => a.localeCompare(b))
 }
 
-async function until(isDone: () => boolean, what: string): Promise<void> {
-  const deadline = Date.now() + 10_000
+/**
+ * Waits until `isDone` is true, for as long as the test may run. The test's own timeout is the
+ * bound: on a busy machine a file event can reach the watcher many seconds late, and a shorter
+ * deadline of its own here would fail a watcher that was only slow. `signal` is the test's, so
+ * the wait stops once the test has timed out.
+ */
+async function until(isDone: () => boolean, what: string, signal: AbortSignal): Promise<void> {
   while (!isDone()) {
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`)
+    if (signal.aborted) throw new Error(`timed out waiting for ${what}`)
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
 }
@@ -344,7 +349,10 @@ describe('AC-directive-core-42 — --watch', () => {
     children.length = 0
   })
 
-  it('rewrites --out when the source changes, and keeps running after a diagnostic', async () => {
+  // Four waits on the watcher, each of which can take many seconds on a busy machine: 60 s.
+  it('rewrites --out when the source changes, and keeps running after a diagnostic', async ({
+    signal,
+  }) => {
     const source = write('src/app.css', '.a { @nave flex; }\n')
     const child = spawn(
       process.execPath,
@@ -359,20 +367,25 @@ describe('AC-directive-core-42 — --watch', () => {
     await until(
       () => existsSync(out) && readFileSync(out, 'utf8').includes('display: flex'),
       'the first write',
+      signal,
     )
 
     writeFileSync(source, '.a { @nave block; }\n')
-    await until(() => readFileSync(out, 'utf8').includes('display: block'), 'the rewrite')
+    await until(() => readFileSync(out, 'utf8').includes('display: block'), 'the rewrite', signal)
 
     writeFileSync(source, '.a { @nave nope; }\n')
-    await until(() => stderr.includes('unknown atom "nope"'), 'the diagnostic')
+    await until(() => stderr.includes('unknown atom "nope"'), 'the diagnostic', signal)
     expect(child.exitCode, 'the process stopped after a diagnostic').toBeNull()
     expect(readFileSync(out, 'utf8')).toContain('display: block')
 
     writeFileSync(source, '.a { @nave grid; }\n')
-    await until(() => readFileSync(out, 'utf8').includes('display: grid'), 'the recovery write')
+    await until(
+      () => readFileSync(out, 'utf8').includes('display: grid'),
+      'the recovery write',
+      signal,
+    )
     expect(child.exitCode).toBeNull()
-  }, 30_000)
+  }, 60_000)
 })
 
 describe('AC-directive-core-43 — a bare @import is reported, with the stylesheet to link instead', () => {

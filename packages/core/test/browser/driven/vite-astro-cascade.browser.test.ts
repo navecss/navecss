@@ -55,12 +55,7 @@ async function displayOf(url: string, route: string): Promise<string> {
   const page = await browser.newPage()
   try {
     await page.goto(`${url}${route}`)
-    await until(
-      page,
-      () => readSettled(page, () => isPresent(page, '#c')),
-      `#c on ${route}`,
-      20_000,
-    )
+    await until(page, () => readSettled(page, () => isPresent(page, '#c')), `#c on ${route}`)
     await page.waitForTimeout(300)
     return await readSettled(page, () => styleOf(page, '#c', 'display'))
   } finally {
