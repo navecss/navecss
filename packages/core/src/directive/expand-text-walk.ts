@@ -5,7 +5,8 @@
 import type { Diagnostic } from './diagnostics-types.ts'
 import type { AppendPart, Edit } from './expand-text-output.ts'
 import type { ExpandTextOptions } from './expand-text.ts'
-import type { ModelNode } from './rule-model.ts'
+import type { Finding } from './order-model.ts'
+import type { PlannedDirective } from './rule-model.ts'
 import type { Position } from './source-map.ts'
 
 import { isNaveAtKeyword, type Item, matchBrackets } from './block-reader.ts'
@@ -24,8 +25,10 @@ export class Walker {
   readonly closerFor: Int32Array
   readonly css: string
   readonly diagnostics: Diagnostic[] = []
+  // The index of every `@nave` token, in order: whether a block holds a directive anywhere inside.
+  readonly directiveTokens: readonly number[]
   readonly edits: Edit[] = []
-  readonly emittedCache = new Map<string, readonly ModelNode[]>()
+  readonly emittedCache = new Map<string, PlannedDirective>()
   // Built once per call, not once per query: `positionAt` runs once per
   // output token, and a fresh linear scan on every call made the whole
   // pass quadratic in the stylesheet's size. Not private: this
@@ -40,6 +43,9 @@ export class Walker {
   eofScanLimit: number
   readonly findPosition: (offset: number) => Position
   readonly options: ExpandTextOptions
+  // What an enclosing rule found for a directive written in a rule nested in it, by the directive's
+  // first token, for the plan of that rule.
+  readonly outwardKnown = new Map<unknown, readonly Finding[]>()
   readonly tokens: readonly Token[]
   readonly warnings: { readonly offset: number; readonly text: string }[] = []
 
@@ -50,6 +56,24 @@ export class Walker {
     this.options = options
     this.findPosition = createPositionFinder(css)
     this.eofScanLimit = this.tokens.length
+    this.directiveTokens = this.tokens.flatMap((token, index) =>
+      isNaveAtKeyword(token) ? [index] : [],
+    )
+  }
+
+  /**
+   * Whether a `@nave` stands between the tokens `start` and `limit`, at any depth.
+   */
+  hasDirectiveWithin(start: number, limit: number): boolean {
+    let low = 0
+    let high = this.directiveTokens.length
+    while (low < high) {
+      const middle = (low + high) >> 1
+      if (this.directiveTokens[middle]! <= start) low = middle + 1
+      else high = middle
+    }
+    const next = this.directiveTokens[low]
+    return next !== undefined && next < limit
   }
 
   positionAt(offset: number): Position {
@@ -145,13 +169,23 @@ function isDirective(w: Walker, item: Item): boolean {
 }
 
 /**
+ * Whether a block has a directive in it, directly or in anything nested in it: the rules whose
+ * content the order check reads against a directive written deeper in are planned too.
+ */
+function hasDirectiveInside(w: Walker, items: readonly Item[], bounds: BlockBounds): boolean {
+  return (
+    items.some((item) => isDirective(w, item)) || w.hasDirectiveWithin(bounds.start, bounds.limit)
+  )
+}
+
+/**
  * A block's frame. A style rule holding a directive is expanded here, once, before its children
  * are walked: the plan needs the rule's whole content, not one item at a time.
  */
 function toWalkFrame(w: Walker, bounds: BlockBounds): WalkFrame {
   const items = readBlockItems(w, bounds.start, bounds.limit)
   const frame: Frame = { parts: [] }
-  if (bounds.context.isStyleRuleParent && items.some((item) => isDirective(w, item))) {
+  if (bounds.context.isStyleRuleParent && hasDirectiveInside(w, items, bounds)) {
     applyRuleFrame(w, {
       items,
       model: readBlockModel(w, items),

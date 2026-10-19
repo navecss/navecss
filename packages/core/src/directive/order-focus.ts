@@ -101,6 +101,18 @@ function isOutlineShorthandHiding(tokens: readonly Token[]): boolean {
 }
 
 /**
+ * Whether a declaration sets the outline style to `auto`, which asks for the browser's own ring:
+ * `outline-style: auto`, or `auto` at the top level of an `outline`.
+ */
+function isAutoStyle(declaration: OrderDeclaration): boolean {
+  const property = declaration.prop.toLowerCase()
+  const tokens = significantTokens(declaration.value)
+  if (property === 'outline-style') return identOf(tokens[0]) === 'auto'
+  if (property !== 'outline') return false
+  return topLevelTokens(tokens).some((token) => identOf(token) === 'auto')
+}
+
+/**
  * Whether a single keyword value (`initial`, `unset`) hides the ring on `property`; `undefined`
  * when the value is not one of them, `false` for the ones another rule decides.
  */
@@ -140,6 +152,17 @@ function isRingHidden(declaration: OrderDeclaration): boolean {
   const keyword = tokens.length === 1 ? identOf(tokens[0]) : undefined
   const judged = keyword === undefined ? undefined : keywordHides(property, keyword)
   return judged ?? isRingHiddenByValue(property, tokens)
+}
+
+/**
+ * Whether a declaration of a later block hides the ring: its value hides it, and no declaration of
+ * its block sets the style to `auto`.
+ */
+function isRingHiddenInBlock(
+  declaration: OrderDeclaration,
+  siblings: readonly OrderDeclaration[],
+): boolean {
+  return isRingHidden(declaration) && siblings.every((sibling) => !isAutoStyle(sibling))
 }
 
 /**
@@ -188,7 +211,7 @@ function isRevealHidden(
 export function focusClauseOf(finding: Finding): string | undefined {
   const { atom } = finding.unit
   const { declaration, siblings } = finding.candidate
-  if (atom.name === 'focusRing' && isRingHidden(declaration)) return RING_CLAUSE
+  if (atom.name === 'focusRing' && isRingHiddenInBlock(declaration, siblings)) return RING_CLAUSE
   if (atom.name === 'srOnlyFocusable' && isRevealHidden(declaration, siblings)) return REVEAL_CLAUSE
   return undefined
 }

@@ -125,6 +125,13 @@ function fixSentence(finding: Finding, context: TextContext): string {
   const { unit, candidate } = finding
   const atom = `"${unit.atom.name}"`
   const { overrider } = candidate
+  if (finding.outward !== undefined) {
+    const moved =
+      overrider.kind === 'own'
+        ? overriderName(finding)
+        : `the directive that names "${overrider.atom.name}"`
+    return `To let ${atom} win, move ${moved} above ${finding.outward.above}.`
+  }
   if (overrider.kind === 'own')
     return `To let ${atom} win, move ${overriderName(finding)} above the directive.`
   const later = `"${overrider.atom.name}"`
@@ -158,12 +165,14 @@ function markerSentence(finding: Finding, context: TextContext): string {
 
 /**
  * The sentence about how the result was before this release, for an overrider that is not itself
- * an atom's block (the blocks used to be placed last, so the atom won).
+ * an atom's block (the blocks used to be placed last, so the atom won). A directive in a nested
+ * rule paired with what the enclosing rule holds after it has none: the later content won then too.
  */
 function migrationSentence(finding: Finding): string | undefined {
   const { overrider } = finding.candidate
   const isBlock = overrider.kind === 'atom' && overrider.isBlock
-  return isBlock ? undefined : overriderSentence(finding.unit.atom.name)
+  if (isBlock || finding.outward !== undefined) return undefined
+  return overriderSentence(finding.unit.atom.name)
 }
 
 /**

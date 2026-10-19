@@ -5,7 +5,8 @@
  * its own table of nodes) and gets the same `ref` back, so the core never touches a host node.
  */
 import type { Diagnostic } from './diagnostics-types.ts'
-import type { AnchoredBlock, Declaration } from './plan.ts'
+import type { Finding } from './order-model.ts'
+import type { AnchoredBlock, Declaration, PlannedAtom } from './plan.ts'
 import type { ExtendMap } from './resolve.ts'
 
 export type NodeRef = number
@@ -78,7 +79,24 @@ export interface RuleInput {
   /**
   What a directive written inside a nested rule emits, kept by the host while it plans one tree of rules (the text expander keeps it for the whole stylesheet) so a directive written the same way is planned once however many rules around it read it. Keyed by the directive's prelude and whether it sits inside `@keyframes`.
    */
-  readonly emittedCache?: Map<string, readonly ModelNode[]> | undefined
+  readonly emittedCache?: Map<string, PlannedDirective> | undefined
+  /**
+  What the rules around this one already found: the host's identity for a node (the same value for the same directive in every plan of one stylesheet), and, by that identity, the warnings an enclosing rule found for a directive written in this one (R4's outward pairs), so a marker on that directive is not called stale for covering them.
+   */
+  readonly outward?: OutwardContext | undefined
+}
+
+export interface OutwardContext {
+  readonly identityOf: (ref: NodeRef) => unknown
+  readonly known: ReadonlyMap<unknown, readonly Finding[]>
+}
+
+/**
+ * A directive planned for the order check: its atoms, and the nodes it emits in a style rule.
+ */
+export interface PlannedDirective {
+  readonly atoms: readonly PlannedAtom[]
+  readonly nodes: readonly ModelNode[]
 }
 
 /**
@@ -146,6 +164,10 @@ export interface PlanWarning {
 }
 
 export interface RulePlan {
+  /**
+  The findings of this rule's pairs for a directive written inside a nested rule (R4's outward pairs), for the host to hand on to the plan of the rule that holds that directive.
+   */
+  readonly outwardFindings: readonly Finding[]
   /**
   Every child of the rule exactly once, in authored order.
    */

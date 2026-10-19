@@ -111,7 +111,9 @@ again what `srOnlyFocusable` reveals. It reads only what is written outside a fu
 nothing, so a zero inside `calc()` or `rgb()` is not a zero width, and a colour made transparent by
 its alpha (`rgb(0 0 0 / 0)`, `#0000`) is not read as `transparent`. A value it cannot read
 (`var()`, `env()`, `attr()`), or one another rule decides (`inherit`, `revert`, `revert-layer`),
-gets no such sentence.
+gets no such sentence. No warning from a later block that sets the outline style to `auto`
+(`outline-style: auto`, or `auto` in an `outline`) gets the sentence about `focusRing`, whatever
+else that block writes: `auto` asks for the browser's own ring, which the check does not judge.
 
 The warning is always a warning that never fails the build, never through `onUnknown`, and no
 option turns it off for the whole project, for these reasons. `onUnknown` governs a problem in a directive, and every host derives a severity from

@@ -265,8 +265,95 @@ describe.each(HOSTS)(
       expect(await run(css)).toEqual([])
     })
 
-    it("does not compare a directive inside a nested rule with the outer rule's later content", async () => {
-      expect(await run('.x { & { @nave hideDesktopUp } display: flex }')).toEqual([])
+    it("compares a directive inside a nested rule with the outer rule's later content", async () => {
+      expect(await run('.x { & { @nave hideDesktopUp } display: flex }')).toHaveLength(1)
+    })
+  },
+)
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-16 — a nested directive is compared with what the enclosing rules hold after it (%s)',
+  (_name, run) => {
+    const SENTENCE =
+      'comes after "hideDesktopUp", so under @media (width >= 75em) display is flex, not none.'
+
+    it.each([
+      [
+        '.x { & { @nave hideDesktopUp } display: flex; }',
+        'display: flex',
+        'To let "hideDesktopUp" win, move display: flex above the & block.',
+      ],
+      [
+        '.x { @media (width >= 75em) { & { @nave hideDesktopUp } } display: flex; }',
+        'display: flex',
+        'To let "hideDesktopUp" win, move display: flex above the @media (width >= 75em) block.',
+      ],
+      [
+        '.x { & { & { @nave hideDesktopUp } } display: flex; }',
+        'display: flex',
+        'To let "hideDesktopUp" win, move display: flex above the & block.',
+      ],
+      [
+        '.x { & { & { @nave hideDesktopUp } display: flex; } }',
+        'display: flex',
+        'To let "hideDesktopUp" win, move display: flex above the & block.',
+      ],
+    ])(
+      '%s warns once, at the later declaration, without the sentence about the previous release',
+      async (css, at, fix) => {
+        const warnings = await run(css)
+
+        expect(warnings).toHaveLength(1)
+        expect(warnings[0]!.text.startsWith(`@nave: ${at} ${SENTENCE}`)).toBe(true)
+        expect(warnings[0]!.text).toContain(fix)
+        expect(warnings[0]!.text).not.toContain('Before @navecss/core')
+        expect(warnings[0]).toMatchObject({ line: 1, column: css.indexOf(at) + 1 })
+      },
+    )
+
+    it.each([
+      '.x { &:hover { @nave hideDesktopUp } display: flex; }',
+      '.x { display: flex; & { @nave hideDesktopUp } }',
+      '.x { & { @nave hideDesktopUp } color: red; }',
+    ])('%s reports nothing', async (css) => {
+      expect(await run(css)).toEqual([])
+    })
+
+    it('pairs the blocks with a later directive of the enclosing rule too', async () => {
+      const warnings = await run('.x { & { @nave hideDesktopUp } @nave flex; }')
+
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]!.text).toContain('"flex" comes after "hideDesktopUp"')
+      expect(warnings[0]!.text).not.toContain('Before @navecss/core')
+    })
+
+    it('lets the marker on the inner directive silence it, and does not call that marker stale', async () => {
+      const css =
+        '.x { & { @nave /* nave-allow-override: display */ hideDesktopUp } display: flex; }'
+
+      expect(await run(css)).toEqual([])
+    })
+
+    it('prints that marker in the warning, and the printed marker silences it', async () => {
+      const css = '.x { & { @nave hideDesktopUp; } display: flex; }'
+      const [warning] = await run(css)
+      const marked = /`(@nave [^`]*)`\s*$/.exec(warning!.text)![1]!
+
+      expect(marked).toBe('@nave /* nave-allow-override: display */ hideDesktopUp;')
+      expect(await run(css.replace('@nave hideDesktopUp;', () => marked))).toEqual([])
+    })
+
+    it('still calls a marker on the inner directive stale when nothing overrides it', async () => {
+      const found = await run(
+        '.x { & { @nave /* nave-allow-override: display */ hideDesktopUp } color: red; }',
+      )
+
+      expect(found).toHaveLength(1)
+      expect(found[0]!.text).toContain('names display, but nothing after the directive overrides')
+    })
+
+    it('reports nothing once the declaration is moved above the block', async () => {
+      expect(await run('.x { display: flex; & { @nave hideDesktopUp } }')).toEqual([])
     })
   },
 )

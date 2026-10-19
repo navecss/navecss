@@ -13,12 +13,12 @@ import type {
   Unit,
 } from './order-model.ts'
 import type { AnchoredBlock, Declaration } from './plan.ts'
-import type { DirectiveNode, ModelNode } from './rule-model.ts'
+import type { DirectiveNode, ModelNode, PlannedDirective } from './rule-model.ts'
 
 import { toOrderDeclaration } from './order-declaration.ts'
 import { nestedSpecificities, type Specificity } from './selector-specificity.ts'
 
-const GROUP_NAMES = new Set(['container', 'media', 'supports'])
+export const GROUP_NAMES = new Set(['container', 'media', 'supports'])
 
 /**
  * The context an atom's block is read in.
@@ -111,14 +111,14 @@ export function candidatesOfAtomBlock(context: UnitContext, block: AnchoredBlock
 /**
  * What a directive written inside a nested rule emits, as nodes of that rule.
  */
-export type Emitted = (directive: DirectiveNode) => readonly ModelNode[]
+export type Emitted = (directive: DirectiveNode) => PlannedDirective
 
 /**
  * The conditional groups around a declaration, innermost last, kept as a chain so entering a group
  * costs one link however deep the groups nest. The array a comparison needs is made once, for the
  * links a declaration is actually under.
  */
-interface ConditionChain {
+export interface ConditionChain {
   array?: readonly ConditionRule[]
   readonly parent: ConditionChain | undefined
   readonly rule: ConditionRule
@@ -129,7 +129,7 @@ const NO_CONDITIONS: readonly ConditionRule[] = []
 /**
  * The conditions of a chain, outermost first.
  */
-function conditionsOf(chain: ConditionChain | undefined): readonly ConditionRule[] {
+export function conditionsOf(chain: ConditionChain | undefined): readonly ConditionRule[] {
   if (chain === undefined) return NO_CONDITIONS
   if (chain.array === undefined) {
     const rules: ConditionRule[] = []
@@ -166,7 +166,7 @@ interface Level {
  */
 function levelOf(nodes: readonly ModelNode[], walk: Walk, isRule: boolean): Level {
   const read = isRule
-    ? nodes.flatMap((node) => (node.kind === 'directive' ? walk.emitted(node) : [node]))
+    ? nodes.flatMap((node) => (node.kind === 'directive' ? walk.emitted(node).nodes : [node]))
     : nodes
   const siblings = read.flatMap((node) =>
     node.kind === 'decl' ? [{ prop: node.prop, value: node.value, important: node.important }] : [],

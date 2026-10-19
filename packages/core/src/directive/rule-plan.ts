@@ -7,18 +7,13 @@
  * declarations (the Baseline 2024 floor). The rule's own declarations before its first directive
  * are not touched.
  */
-import type {
-  DirectiveNode,
-  ModelNode,
-  NodeRef,
-  PlanWarning,
-  RuleInput,
-  RulePlan,
-} from './rule-model.ts'
+import type { DirectiveFacts, Finding } from './order-model.ts'
+import type { DirectiveNode, ModelNode, NodeRef, RuleInput, RulePlan } from './rule-model.ts'
 import type { PlanState } from './rule-state.ts'
 
 import { checkOrder } from './order-check.ts'
-import { emittedNodes } from './order-emitted.ts'
+import { plannedDirective } from './order-emitted.ts'
+import { nestedText } from './order-outward.ts'
 import { findingWarnings, markerWarnings } from './order-warnings.ts'
 import { plan, type PlanResult } from './plan.ts'
 import { directiveFacts, emitAtoms, recordSegments } from './rule-emit.ts'
@@ -39,17 +34,6 @@ export class DirectiveFailure extends Error {
     this.ref = ref
     this.cause = cause
   }
-}
-
-/**
- * How a warning names a nested node of the rule's own.
- */
-function nestedText(node: ModelNode): string {
-  if (node.kind === 'rule') return `the ${node.selector} block`
-  if (node.kind === 'group' || node.kind === 'opaque') {
-    return ['the', `@${node.name}`, node.prelude, 'block'].filter((part) => part !== '').join(' ')
-  }
-  return ''
 }
 
 /**
@@ -147,22 +131,33 @@ function keepNested(state: PlanState, node: ModelNode): void {
 
 /**
  * The warnings about the rule: where later content overrides an atom's block, what is wrong with
- * a marker, and what the shape of the output costs a selector list.
+ * a marker, and what the shape of the output costs a selector list; and the findings that concern
+ * a directive written in a nested rule, for the plan of that rule to know.
  */
-function warningsOf(state: PlanState): PlanWarning[] {
+function warningsOf(state: PlanState): Pick<RulePlan, 'outwardFindings' | 'warnings'> {
   const amp = ampersandSpecificity(state.input.selector)
-  const { emittedCache, extend, isInsideKeyframes } = state.input
+  const { emittedCache, extend, isInsideKeyframes, outward } = state.input
   const findings = checkOrder(state.segments, amp, (directive) =>
-    emittedNodes(directive, { extend, isInsideKeyframes }, emittedCache),
+    plannedDirective(directive, { extend, isInsideKeyframes }, emittedCache),
   )
+  const knownFor = (directive: DirectiveFacts): readonly Finding[] =>
+    outward?.known.get(outward.identityOf(directive.ref)) ?? []
   const warnings = [
     ...findingWarnings(findings),
-    ...markerWarnings(state.directives, findings, state.input.reportStaleMarkers !== false),
+    ...markerWarnings(
+      state.directives,
+      findings,
+      state.input.reportStaleMarkers !== false,
+      knownFor,
+    ),
     ...shapeWarnings(state),
   ]
-  return warnings.toSorted(
-    (a, b) => a.anchor.ref - b.anchor.ref || (a.anchor.offset ?? -1) - (b.anchor.offset ?? -1),
-  )
+  return {
+    outwardFindings: findings.filter((finding) => finding.outward !== undefined),
+    warnings: warnings.toSorted(
+      (a, b) => a.anchor.ref - b.anchor.ref || (a.anchor.offset ?? -1) - (b.anchor.offset ?? -1),
+    ),
+  }
 }
 
 /**
@@ -180,5 +175,5 @@ export function planRule(input: RuleInput): RulePlan {
     }
   }
   flushRun(state)
-  return { items: state.items, warnings: warningsOf(state) }
+  return { items: state.items, ...warningsOf(state) }
 }

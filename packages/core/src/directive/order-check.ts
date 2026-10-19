@@ -4,20 +4,13 @@
  * specificity, in the same layer and neither `!important`; their conditions must not be provably
  * disjoint; and their properties must relate and not be the same property with equal values.
  */
-import type {
-  AtomFacts,
-  Candidate,
-  DirectiveFacts,
-  Finding,
-  OrderDeclaration,
-  RelatedPair,
-  Unit,
-} from './order-model.ts'
+import type { AtomFacts, Candidate, DirectiveFacts, Finding } from './order-model.ts'
 import type { AnchoredBlock, Declaration } from './plan.ts'
 import type { ModelNode } from './rule-model.ts'
 import type { Specificity } from './selector-specificity.ts'
 
-import { conditionsMayOverlap } from './condition-overlap.ts'
+import { compare } from './order-compare.ts'
+import { outwardFindings } from './order-outward.ts'
 import {
   candidatesOfAtomBlock,
   candidatesOfAtomDeclarations,
@@ -26,9 +19,6 @@ import {
   type UnitContext,
   unitsOfBlock,
 } from './order-units.ts'
-import { isSameProperty, propertiesRelate } from './property-relations.ts'
-import { compareSpecificity } from './selector-specificity.ts'
-import { normalizeValueForCompare } from './value-equality.ts'
 
 /**
  * A part of the rule's output, in output order.
@@ -52,56 +42,6 @@ interface AtomBlockSegment {
   readonly block: AnchoredBlock
   readonly directive: DirectiveFacts
   readonly kind: 'atom-block'
-}
-
-/**
- * The comparison key of a declaration's value, made once: one declaration is compared with every
- * other one, and reading its tokens afresh for each pair is a cost per pair.
- */
-const VALUE_KEYS = new WeakMap<OrderDeclaration, string>()
-
-/**
- * The comparison key of `declaration`'s value.
- */
-function valueKey(declaration: OrderDeclaration): string {
-  let key = VALUE_KEYS.get(declaration)
-  if (key === undefined) {
-    key = normalizeValueForCompare(declaration.value)
-    VALUE_KEYS.set(declaration, key)
-  }
-  return key
-}
-
-/**
- * The declarations of `unit` and `candidate` that the candidate overrides: related properties,
- * neither `!important`, and not the same property with an equal value.
- */
-function relatedPairs(unit: Unit, candidate: Candidate): RelatedPair[] {
-  const later = candidate.declaration
-  if (later.important) return []
-  return unit.declarations
-    .filter((block) => !block.important && propertiesRelate(block.prop, later.prop))
-    .filter(
-      (block) => !isSameProperty(block.prop, later.prop) || valueKey(block) !== valueKey(later),
-    )
-    .map((block) => ({ block, later }))
-}
-
-/**
- * Whether some specificity of `a` equals some specificity of `b`.
- */
-function haveEqualSpecificity(a: readonly Specificity[], b: readonly Specificity[]): boolean {
-  return a.some((x) => b.some((y) => compareSpecificity(x, y) === 0))
-}
-
-/**
- * The finding for `unit` and `candidate`, if the later declaration wins by order alone.
- */
-function compare(unit: Unit, candidate: Candidate): Finding | undefined {
-  if (!haveEqualSpecificity(unit.specificities, candidate.specificities)) return undefined
-  if (!conditionsMayOverlap(unit.conditions, candidate.conditions)) return undefined
-  const pairs = relatedPairs(unit, candidate)
-  return pairs.length === 0 ? undefined : { unit, candidate, pairs }
 }
 
 /**
@@ -159,7 +99,8 @@ function findingsOfBlock(
 
 /**
  * Every finding in a rule's output, `segments` being its parts in output order, `amp` what `&`
- * weighs inside it and `emitted` what a directive inside a nested rule expands to. The candidates
+ * weighs inside it and `emitted` what a directive inside a nested rule expands to, which is also
+ * compared with what the rule holds after it (`order-outward.ts`). The candidates
  * of each part are read once, however many blocks come before it.
  */
 export function checkOrder(
@@ -176,7 +117,8 @@ export function checkOrder(
     }
     return candidates
   }
-  return segments.flatMap((segment, index) =>
+  const inner = segments.flatMap((segment, index) =>
     segment.kind === 'atom-block' ? findingsOfBlock(index, segments, candidatesOfSegment, amp) : [],
   )
+  return [...inner, ...outwardFindings(segments, amp, emitted, candidatesOfSegment)]
 }

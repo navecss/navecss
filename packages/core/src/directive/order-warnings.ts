@@ -121,9 +121,13 @@ function nameReport(
 function markerReports(
   directive: DirectiveFacts,
   findings: readonly Finding[],
-  isStaleReported: boolean,
+  options: MarkerOptions,
 ): PlanWarning[] {
-  const mine = findings.filter((finding) => finding.unit.directive.ref === directive.ref)
+  const { isStaleReported, outwardFor } = options
+  const mine = [
+    ...findings.filter((finding) => finding.unit.directive.ref === directive.ref),
+    ...outwardFor(directive),
+  ]
   const { markers, malformed } = readMarkers(directive.prelude)
   const reports: { readonly start: number; readonly text: string }[] = []
   for (const marker of markers) {
@@ -150,12 +154,23 @@ function markerReports(
 }
 
 /**
+ * How the markers of a rule are judged: whether one that covers nothing is reported, and the
+ * findings an enclosing rule found for a directive of this one, which its marker may cover.
+ */
+interface MarkerOptions {
+  readonly isStaleReported: boolean
+  readonly outwardFor: (directive: DirectiveFacts) => readonly Finding[]
+}
+
+/**
  * The reports about the markers of every directive of a rule.
  */
 export function markerWarnings(
   directives: readonly DirectiveFacts[],
   findings: readonly Finding[],
   isStaleReported: boolean,
+  outwardFor: MarkerOptions['outwardFor'],
 ): PlanWarning[] {
-  return directives.flatMap((directive) => markerReports(directive, findings, isStaleReported))
+  const options = { isStaleReported, outwardFor }
+  return directives.flatMap((directive) => markerReports(directive, findings, options))
 }

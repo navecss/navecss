@@ -56,3 +56,31 @@ export function outermostRule(rule: Rule): Rule {
   }
   return outer
 }
+
+/**
+ * Marks `directive` and every ancestor of it up to `root`, stopping at one already marked: the
+ * ancestors above it were marked with an earlier directive.
+ */
+function markAncestors(directive: ChildNode, root: Rule, marked: Set<unknown>): void {
+  let up: unknown = directive.parent
+  while (up !== undefined && up !== null && !marked.has(up)) {
+    marked.add(up)
+    up = up === root ? undefined : (up as { parent?: unknown }).parent
+  }
+}
+
+/**
+ * Every style rule at or under `root` that has a directive directly in it or anywhere below it:
+ * the rules whose own content the order check pairs with a directive written deeper in. One pass
+ * over the tree; each ancestor is marked once, however many directives lie below it.
+ */
+export function rulesAboveDirectives(root: Rule): Set<unknown> {
+  const marked = new Set<unknown>()
+  const stack: ChildNode[] = [root]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    if (isRuleDirective(node)) markAncestors(node, root, marked)
+    if (node.type === 'rule' || node.type === 'atrule') stack.push(...(node.nodes ?? []))
+  }
+  return marked
+}

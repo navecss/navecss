@@ -4,6 +4,7 @@
  */
 import type { ChildNode, AtRule as PostCSSAtRule, Root, Rule } from 'postcss'
 
+import type { Finding } from './directive/order-model.ts'
 import type {
   ModelNode,
   PlanItem,
@@ -23,7 +24,12 @@ import {
 } from './postcss-at-rule.ts'
 import { insertEmissions, wrapRun } from './postcss-emit.ts'
 import { isInsideKeyframes } from './postcss-node-utils.ts'
-import { isLastDirectiveUnder, isRuleDirective, outermostRule } from './postcss-rule-nesting.ts'
+import {
+  isLastDirectiveUnder,
+  isRuleDirective,
+  outermostRule,
+  rulesAboveDirectives,
+} from './postcss-rule-nesting.ts'
 import { reportWarning } from './postcss-warn.ts'
 
 type RuleContext = Omit<DirectiveContext, 'atRule'>
@@ -98,13 +104,6 @@ function toModel(node: ChildNode, table: NodeTable): ModelNode {
 function readRule(rule: Rule): { nodes: ModelNode[]; table: NodeTable } {
   const table: NodeTable = []
   return { table, nodes: rule.nodes.map((child) => toModel(child, table)) }
-}
-
-/**
- * Whether `rule` has a `@nave` directive among its own children.
- */
-function hasDirective(rule: Rule): boolean {
-  return rule.nodes.some((node) => node.type === 'atrule' && matchNaveAtRule(node).isNave)
 }
 
 /**
@@ -186,7 +185,7 @@ function applyItem(item: PlanItem, table: NodeTable, ctx: RuleContext): void {
 function planOrThrow(
   rule: Rule,
   read: { readonly nodes: ModelNode[]; readonly table: NodeTable },
-  ctx: RuleContext & { readonly emittedCache: RuleInput['emittedCache'] },
+  ctx: Pick<RuleInput, 'emittedCache' | 'outward'> & RuleContext,
 ): RulePlan {
   try {
     return planRule({
@@ -195,6 +194,7 @@ function planOrThrow(
       isInsideKeyframes: isInsideKeyframes(rule),
       extend: ctx.extend,
       emittedCache: ctx.emittedCache,
+      outward: ctx.outward,
     })
   } catch (error) {
     if (error instanceof DirectiveFailure) {
@@ -220,16 +220,21 @@ interface Planned {
  */
 function planTree(root: Rule, ctx: RuleContext): Planned[] {
   const emittedCache: RuleInput['emittedCache'] = new Map()
+  const known = new Map<unknown, Finding[]>()
+  const holders = rulesAboveDirectives(root)
   const planned: Planned[] = []
   const stack: (PostCSSAtRule | Rule)[] = [root]
   while (stack.length > 0) {
     const container = stack.pop()!
-    if (container.type === 'rule' && hasDirective(container)) {
+    if (container.type === 'rule' && holders.has(container)) {
       const read = readRule(container)
-      planned.push({
-        table: read.table,
-        plan: planOrThrow(container, read, { ...ctx, emittedCache }),
-      })
+      const outward = { identityOf: (ref: number) => read.table[ref], known }
+      const plan = planOrThrow(container, read, { ...ctx, emittedCache, outward })
+      for (const finding of plan.outwardFindings) {
+        const key = read.table[finding.unit.directive.ref]
+        known.set(key, [...(known.get(key) ?? []), finding])
+      }
+      planned.push({ table: read.table, plan })
     }
     const inner = (container.nodes ?? []).filter(
       (child) => child.type === 'rule' || child.type === 'atrule',

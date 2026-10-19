@@ -101,7 +101,7 @@ describe('AC-native-apply-order-25 — a tree of rules reports its warnings in s
   it.each([
     [
       '.x { @nave hideDesktopUp; &:hover { @nave hidePhoneOnly flex } &:focus { @nave hidePhoneOnly block } }',
-      [57, 94],
+      [57, 64, 94],
     ],
     ['.x { &:hover { @nave hidePhoneOnly block } @nave hideDesktopUp flex; }', [36, 64]],
     ['.x { @nave hideDesktopUp flex; &:hover { @nave hidePhoneOnly block } }', [26, 62]],

@@ -51,6 +51,12 @@ describe.each(HOSTS)('AC-native-apply-order-28 — focus clauses (%s)', (_name, 
     ['focusRing', '&:hover { outline: none }', 1, RING],
     ['focusRing', '&:focus { outline: 2px dashed red }', 1, undefined],
     ['focusRing', '&:focus { outline: auto }', 1, undefined],
+    ['focusRing', '&:focus { outline: 0 auto }', 1, undefined],
+    ['focusRing', '&:focus-visible { outline: auto 0 }', 1, undefined],
+    ['focusRing', '&:focus { outline: 0 auto red }', 1, undefined],
+    ['focusRing', '&:focus { outline: 2px AUTO transparent }', 1, undefined],
+    ['focusRing', '&:focus { outline-style: auto }', 1, undefined],
+    ['focusRing', '&:focus { outline: 0 dotted }', 1, RING],
     ['focusRing', '&:focus-visible { outline-offset: -2px }', 1, undefined],
     ['focusRing', '&:focus { outline-style: var(--s) }', 1, undefined],
     ['focusRing', '&:focus { outline-width: env(--w) }', 1, undefined],
@@ -85,6 +91,22 @@ describe.each(HOSTS)('AC-native-apply-order-28 — focus clauses (%s)', (_name, 
     expect(carried).toHaveLength(clause === undefined ? 0 : count)
     for (const warning of carried) expect(warning.text).toContain(expectedClause)
   })
+
+  it.each([
+    ['&:focus { outline-style: auto; outline-width: 0 }', 2, 0],
+    ['&:focus { outline-width: 0; outline-style: AUTO }', 2, 0],
+    ['&:focus { outline: auto; outline-color: transparent }', 2, 0],
+    ['&:focus { outline-style: dotted; outline-width: 0 }', 2, 1],
+    ['&:focus { outline-width: 0 } &:hover { outline-style: auto }', 2, 1],
+  ])(
+    'focusRing then %s reports %i, %i of them with the ring clause',
+    async (later, count, ring) => {
+      const warnings = await run(`.x { @nave focusRing; ${later} }`)
+
+      expect(warnings).toHaveLength(count)
+      expect(warnings.filter((w) => w.text.includes(RING_CLAUSE))).toHaveLength(ring)
+    },
+  )
 
   it('reports none for the atoms srOnlyFocusable shares nothing with', async () => {
     expect(await run('.x { @nave srOnlyFocusable srOnly; }')).toEqual([])

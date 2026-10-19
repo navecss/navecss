@@ -111,6 +111,10 @@ export interface RelatedPair {
  */
 export interface Finding {
   readonly candidate: Candidate
+  /**
+  Set for a directive written inside a nested rule and paired with what the enclosing rule holds after it: the block of that rule that holds the directive, as a warning names it.
+   */
+  readonly outward?: { readonly above: string }
   readonly pairs: readonly RelatedPair[]
   readonly unit: Unit
 }

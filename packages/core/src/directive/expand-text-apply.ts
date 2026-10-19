@@ -154,9 +154,14 @@ export function applyRuleFrame(w: Walker, facts: RuleFrameFacts): void {
       extend: w.options.extend,
       reportStaleMarkers: w.options.reportStaleMarkers,
       emittedCache: w.emittedCache,
+      outward: { identityOf: (ref) => facts.model.itemOf[ref]!.start, known: w.outwardKnown },
     })
   } catch (error) {
     throw error instanceof DirectiveFailure ? error.cause : error
+  }
+  for (const finding of plan.outwardFindings) {
+    const key = facts.model.itemOf[finding.unit.directive.ref]!.start
+    w.outwardKnown.set(key, [...(w.outwardKnown.get(key) ?? []), finding])
   }
   recordWarnings(w, plan.warnings, facts.model.itemOf)
   for (const item of plan.items) applyItem(w, item, facts)
