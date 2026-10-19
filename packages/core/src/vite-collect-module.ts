@@ -43,13 +43,14 @@ const ESCAPED_SPECIFIER = /(?:\bfrom|\bimport)[\s(]*(?:'[^'\\\n]*\\|"[^"\\\n]*\\
 
 /**
  * Whether the text could name an atom at all: it imports from `cx` (as written, or with an escape
- * in the specifier), it holds `nave-`, or it is a Vue template reading its component's bindings
- * off `$setup`; a module that is only a stylesheet a host serialised into JavaScript does not.
+ * in the specifier), it holds `nave-` or a character reference (`&#`, which a JSX attribute can
+ * spell a class with), or it is a Vue template reading its component's bindings off `$setup`; a
+ * module that is only a stylesheet a host serialised into JavaScript does not.
  */
 export function isMentioningAtoms(code: string): boolean {
   if (code.includes(CX_SOURCE) || ESCAPED_SPECIFIER.test(code)) return true
   if (isSerialisedStylesheet(code)) return false
-  return code.includes('nave-') || code.includes('$setup') || code.includes('vue&type=')
+  return ['nave-', '&#', '$setup', 'vue&type='].some((mention) => code.includes(mention))
 }
 
 /**

@@ -9,6 +9,7 @@
 export function classifyBucketB(
   license: string,
   policy: unknown,
+  name?: string,
 ): { allowed: boolean; reason: string }
 
 export function classifyBucketC(

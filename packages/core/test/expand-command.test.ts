@@ -349,7 +349,8 @@ describe('AC-directive-core-42 — --watch', () => {
     children.length = 0
   })
 
-  // Four waits on the watcher, each of which can take many seconds on a busy machine: 60 s.
+  // Three edits, each seen through a file event, which a busy machine can deliver seconds late,
+  // or by the next read of the files when the event never comes.
   it('rewrites --out when the source changes, and keeps running after a diagnostic', async ({
     signal,
   }) => {

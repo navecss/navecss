@@ -13,7 +13,8 @@ import type { UsedContext } from './vite-used.ts'
 
 import { handshakePath, readHandshake, writeHandshake } from './vite-handshake.ts'
 import { compareText } from './vite-problems.ts'
-import { collectedAtoms, recordsOf, withRestorers } from './vite-state.ts'
+import { withRestorers } from './vite-restorers.ts'
+import { collectedAtoms, recordsOf } from './vite-state.ts'
 import { hasStylesheet } from './vite-writers.ts'
 
 /**
