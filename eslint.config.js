@@ -200,6 +200,11 @@ export default defineConfig([
       // JavaScript parser, which cannot parse TypeScript: every such import then reports a
       // parse error instead of a result.
       'import-x/extensions': ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.tsx'],
+      // A stylesheet export names `dist/css.d.ts` as its `types` condition, so the resolver now
+      // returns that file for `@navecss/tokens/css?raw`. The file exports nothing, and the import
+      // is Vite's string import, which the `*?raw` declaration types. The rules that read a
+      // module's exports (`named`, `default`) would report both, so the file is left unparsed.
+      'import-x/ignore': [String.raw`[\\/]dist[\\/]css\.d\.ts$`],
     },
   },
 
