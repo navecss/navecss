@@ -101,9 +101,13 @@ first-party table generated from `mdn-data` by a development script, so the chec
 dependency.
 
 Each warning is positioned at the overrider and names the atom, the condition, the property with
-both values, the fix and the directive with a marker inserted. Where the later value takes away
-what a focus atom provides, it says so: that it hides the keyboard focus indicator `focusRing`
-draws, or hides again what `srOnlyFocusable` reveals.
+both values, the fix and the directive with a marker inserted. Where the later value, as written,
+hides `focusRing`'s outline (a style of `none`, a zero width, `transparent`, an `outline` with no
+style keyword, or `initial` or `unset`), or puts back over `srOnlyFocusable`'s reveal what hid the
+element (`clip-path: inset(50%)`, or all of `width: 1px`, `height: 1px` and `overflow: hidden` in
+one later block), it says so: that it hides the keyboard focus indicator `focusRing` draws, or
+hides again what `srOnlyFocusable` reveals. A value it cannot read (`var()`, `env()`, `attr()`),
+or one another rule decides (`inherit`, `revert`, `revert-layer`), gets no such sentence.
 
 The warning is always a warning that never fails the build, never through `onUnknown`, and no
 option turns it off for the whole project, for these reasons. `onUnknown` governs a problem in a directive, and every host derives a severity from
@@ -176,8 +180,8 @@ the floor decisions in ADR 0001 and [ADR 0005](0005-browser-floor.md).
   its fix, and the changeset names both.
 - The focus atoms are in scope. After `@nave focusRing;`, a later `&:focus { outline: none }` or
   `&:focus-visible { outline: none }` now removes the ring where it used to leave it, and a later
-  `&:focus-visible { outline-color: ... }` now applies. The warning says when the ring or the
-  reveal of `srOnlyFocusable` is lost.
+  `&:focus-visible { outline-color: ... }` now applies. The warning says when the ring, or the
+  reveal of `srOnlyFocusable`, is lost to a value it can read.
 - Consumer nested rules authored before a directive are still overridden by the atom's nested
   rules, now because of position and not because of appending: an atom's block comes at the
   directive, so what the rule says after it wins at equal specificity.
@@ -221,5 +225,5 @@ the floor decisions in ADR 0001 and [ADR 0005](0005-browser-floor.md).
   written, so the only remedy would be the marker, which is the shape of warning that trains people
   to paste markers.
 - **A runtime dependency, or a published package, for the property relations.** Rejected. A
-  generated first-party table, built from CC0 data with the credit in the package's `LICENSE`, adds
-  nothing to install and nothing to load.
+  generated first-party table, built from CC0 data and from the CSS specifications, with the credit
+  in the package's `LICENSE`, adds nothing to install and nothing to load.

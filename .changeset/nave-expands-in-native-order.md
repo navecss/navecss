@@ -32,8 +32,7 @@ The build reports each such place as a warning naming the atom, the condition, t
 both values, and the fix. Where the later content is not itself an atom's block, the warning also
 says what the result was before: `Before @navecss/core 0.5.0 "hideDesktopUp" won, because an atom's
 blocks were placed last in the rule.` It never fails the build, `onUnknown` does not change it, and
-no option turns it off. The result of `expandText()` carries the warnings in a new field,
-`warnings`, beside `diagnostics`. Where the later declaration is meant to win, mark the directive:
+no option turns it off. Where the later declaration is meant to win, mark the directive:
 `@nave /* nave-allow-override: display */ hideDesktopUp;`. The marker covers the properties it
 names on that directive only, and is reported once nothing overrides them. See "Order inside a
 rule" in the package README.

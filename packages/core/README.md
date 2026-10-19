@@ -205,6 +205,9 @@ silences the warning for those properties on this directive and nothing else: an
 override of another property, or of another directive's atoms, still warns. A
 shorthand covers its longhands (`outline` covers `outline-color`). You can add a
 reason after `--`: `/* nave-allow-override: display -- a grid on wide screens */`.
+The head `nave-allow-override:` is matched in lower case only, as `eslint-disable`
+is, so a comment that writes it in another case is not a marker: it allows nothing,
+and the warning it was meant to silence still prints.
 The comment never reaches your CSS. Only a comment inside the directive is read,
 because some build steps remove the others before Nave sees the stylesheet (Vite
 under `css.transformer: 'lightningcss'`, for one). A marker naming a property that
