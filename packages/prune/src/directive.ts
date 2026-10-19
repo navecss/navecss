@@ -39,6 +39,8 @@ export function hasNaveDirective(root: postcss.Root): boolean {
  * Core's PostCSS plugin for one stylesheet, with the consumer's own atoms `extend`, already read.
  * Making it validates the map, so a stylesheet makes one and uses it for the expansion too.
  * Under `'ignore'` a problem is skipped; otherwise it is a warning, which the expansion returns.
+ * Core prints a warning instead under Turbopack unless told not to, and then this package would
+ * see no problem and core would print its own line beside this package's report.
  */
 export function corePluginFor(
   extend: ExtendMap | undefined,
@@ -47,6 +49,7 @@ export function corePluginFor(
   return navePlugin({
     ...(extend !== undefined && { extend }),
     onUnknown: onUnknown === 'ignore' ? 'ignore' : 'warn',
+    printWarnings: false,
   })
 }
 
