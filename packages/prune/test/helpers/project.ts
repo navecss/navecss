@@ -91,6 +91,10 @@ export interface RunOptions {
   readonly distDir?: string
   readonly root?: string
   /**
+   * The phase Next.js called a function config with; absent for an object config.
+   */
+  readonly phase?: string
+  /**
    * The stylesheet to process; core's `atomic.css` when omitted.
    */
   readonly css?: string
@@ -118,6 +122,7 @@ function handoffFor(project: Project, run: RunOptions): Handoff {
     dir: project.dir,
     distDir: run.distDir ?? '.next',
     root: run.root ?? project.dir,
+    ...(run.phase !== undefined && { phase: run.phase }),
   }
 }
 

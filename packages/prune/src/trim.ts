@@ -114,7 +114,14 @@ function runFields(
   run: LayerRun,
 ): Omit<
   StoredRecord,
-  'atoms' | 'directories' | 'failures' | 'files' | 'markdown' | 'problems' | 'readsNoCode'
+  | 'atoms'
+  | 'directories'
+  | 'failures'
+  | 'files'
+  | 'markdown'
+  | 'pagesDynamicPackages'
+  | 'problems'
+  | 'readsNoCode'
 > {
   return {
     version: 1,
@@ -153,6 +160,7 @@ function recordOfRun(
     markdown: [...graph.markdown]
       .map((file) => relativeTo(dir, file))
       .toSorted((a, b) => a.localeCompare(b)),
+    pagesDynamicPackages: [],
     stylesheets: [...graph.stylesheets]
       .map((file) => relativeTo(dir, file))
       .toSorted((a, b) => a.localeCompare(b)),
@@ -177,6 +185,7 @@ function recordOfStoppedRun(run: LayerRun, failure: string): StoredRecord {
     files: {},
     directories: {},
     markdown: [],
+    pagesDynamicPackages: [],
     readsNoCode: false,
     failures: [failure],
   }

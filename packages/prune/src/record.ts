@@ -58,6 +58,12 @@ export interface PruneRecord {
    */
   readonly markdown: readonly string[]
   /**
+   * The packages under `node_modules` that call `cx.dynamic()` in a file a `pages/` entry
+   * reaches, sorted: Pages Router server code sees `cx.dynamic()`'s map only for a package the
+   * build bundles.
+   */
+  readonly pagesDynamicPackages: readonly string[]
+  /**
    * The stylesheets the build can still hold, relative like `files`, sorted: the ones the code
    * imports and every one an `@import` or a `composes ... from` reaches from those. When the list
    * is complete, a stylesheet's own record counts only while its stylesheet is listed here.
@@ -199,7 +205,9 @@ function readSheetRecords(
  * folded in, or `undefined` when no run left one.
  */
 export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneRecord | undefined {
-  let stored: Stored<Omit<PruneRecord, 'readsNoUse'>>
+  let stored: Omit<Stored<Omit<PruneRecord, 'readsNoUse'>>, 'pagesDynamicPackages'> & {
+    readonly pagesDynamicPackages?: readonly string[]
+  }
   try {
     stored = JSON.parse(readFileSync(recordPath(handoff), 'utf8')) as typeof stored
   } catch {
@@ -216,6 +224,7 @@ export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneReco
   return {
     ...stored,
     directiveProblems,
+    pagesDynamicPackages: stored.pagesDynamicPackages ?? [],
     readsNoUse: stored.readsNoCode && sheets.every((sheet) => !sheet.hasDirective),
     failures: [...(stored.failures ?? []), ...sheets.flatMap((sheet) => sheet.failures)],
   }
