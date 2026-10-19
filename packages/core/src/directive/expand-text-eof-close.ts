@@ -8,6 +8,7 @@ import type { Walker } from './expand-text-walk.ts'
 import type { Token } from './tokenizer.ts'
 
 import { OPENERS } from './bracket-match.ts'
+import { endOfToken } from './expand-text-terminator.ts'
 
 /**
  * Whether `raw`'s own last character is `char`, genuinely — not an escaped
@@ -33,8 +34,9 @@ function trailingBackslashCount(raw: string): number {
 /**
  * What follows a lone trailing backslash. At the end of input a backslash
  * is a valid escape that decodes to U+FFFD, so `fffd` after it spells that
- * same escape out (`\fffd`, the very value it already had) and frees the
- * `;`, `)` or `}` written next from being swallowed as the escaped character.
+ * same escape out (`\fffd`, which decodes to that same code point) and frees
+ * the `;`, `)` or `}` written next from being swallowed as the escaped
+ * character.
  */
 const ESCAPE_CLOSER = 'fffd'
 
@@ -168,7 +170,8 @@ function eofClosers(w: Walker, start: number, limit: number, last: Token | undef
  * last token in `[frameStart, scanLimit)` is an unclosed comment, which
  * (having nowhere to end) consumes every byte to that limit: placed at the
  * comment's own start instead, so the appended block lands before it, as
- * real syntax. What the input left open ahead of that comment (a nested
+ * real syntax; an outer frame, whose own scan stops short of that comment, writes at the same
+ * place. What the input left open ahead of that comment (a nested
  * rule, a function, the last declaration) is still closed, by closers
  * written right after the last real token, ahead of the comment too. Any
  * OTHER unterminated construct reaching that limit (a string, a url, an
@@ -197,14 +200,36 @@ export function closeInfoFor(
   if (closer) return { position: closer.startIndex, prefix: '', prefixPosition: closer.startIndex }
 
   const last = scanLimit > frameStart ? w.tokens[scanLimit - 1] : undefined
+  const trailing = unclosedTrailingComment(w)
+  if (trailing !== undefined && last !== trailing) {
+    // An outer frame whose scan stops short of the comment still writes ahead of it.
+    const prefix = eofClosers(w, frameStart, scanLimit, last)
+    return { position: trailing.startIndex, prefix, prefixPosition: trailing.startIndex }
+  }
   if (last?.type === 'comment') {
-    const isClosed = last.raw.length >= 4 && last.raw.endsWith('*/')
-    const position = isClosed ? w.css.length : last.startIndex
+    const position = isClosedComment(last) ? w.css.length : last.startIndex
     return { position, ...closersBeforeComment(w, frameStart, scanLimit, position) }
   }
 
   const prefix = eofClosers(w, frameStart, scanLimit, last)
   return { position: w.css.length, prefix, prefixPosition: w.css.length }
+}
+
+/**
+ * Whether the comment `token` is closed. It takes at least four bytes to end in a closer of its
+ * own: the closing bytes of a bare opener-and-slash comment overlap the opener.
+ */
+function isClosedComment(token: Token): boolean {
+  return token.raw.length >= 4 && token.raw.endsWith('*/')
+}
+
+/**
+ * The input's very last token when it is a comment that never closes: it runs to the end of the
+ * input, so anything written after it would be inside it.
+ */
+function unclosedTrailingComment(w: Walker): Token | undefined {
+  const token = w.tokens.at(-1)
+  return token?.type === 'comment' && !isClosedComment(token) ? token : undefined
 }
 
 /**
@@ -217,9 +242,10 @@ function isInert(token: Token): boolean {
 /**
  * The closers a frame that ends in a comment needs, and where they go: right
  * after the last token that is neither whitespace nor a comment, so they land
- * ahead of the comment and not after it. No lexical closer is needed, since a
- * trailing comment token proves no string or url is still open. Nothing is
- * written when no such token exists or the frame needs no closers.
+ * ahead of the comment and not after it. After a lone backslash they go after the line break
+ * that follows it, since written right after the backslash they would be read as the escaped
+ * character. No lexical closer is needed, since a trailing comment token proves no string or
+ * url is still open. Nothing is written when no such token exists or the frame needs no closers.
  */
 function closersBeforeComment(
   w: Walker,
@@ -232,6 +258,6 @@ function closersBeforeComment(
   if (i < frameStart) return { prefix: '', prefixPosition: fallback }
   return {
     prefix: eofClosers(w, frameStart, scanLimit, undefined),
-    prefixPosition: w.tokens[i]!.endIndex,
+    prefixPosition: endOfToken(w.tokens, i, scanLimit),
   }
 }

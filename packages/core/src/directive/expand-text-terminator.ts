@@ -25,7 +25,9 @@ export function unterminatedEnd(
   if (item === undefined || item.blockStart !== undefined) return undefined
   if (item.kind === 'at-rule' && isNaveAtKeyword(tokens[item.start]!)) return undefined
   const lastAt = lastRealTokenIndex(tokens, item)
-  return tokens[lastAt]!.type === 'semicolon-token' ? undefined : endOfLast(tokens, item, lastAt)
+  return tokens[lastAt]!.type === 'semicolon-token'
+    ? undefined
+    : endOfToken(tokens, lastAt, item.end)
 }
 
 /**
@@ -43,11 +45,13 @@ function lastRealTokenIndex(tokens: readonly Token[], item: Item): number {
 }
 
 /**
- * The offset a `;` goes at after the token at `lastAt`, which is after the line break that
- * follows it when that token is a lone backslash.
+ * The offset text that must follow the token at `lastAt` goes at, where `limit` is one past the
+ * last token that may be read: after the line break that follows the token when it is a lone
+ * backslash, otherwise right after the token itself. Text written between a backslash and its
+ * line break would be read as the escaped character.
  */
-function endOfLast(tokens: readonly Token[], item: Item, lastAt: number): number {
+export function endOfToken(tokens: readonly Token[], lastAt: number, limit: number): number {
   const last = tokens[lastAt]!
   const isLoneBackslash = last.type === 'delim-token' && last.raw === '\\'
-  return isLoneBackslash && lastAt + 1 < item.end ? tokens[lastAt + 1]!.endIndex : last.endIndex
+  return isLoneBackslash && lastAt + 1 < limit ? tokens[lastAt + 1]!.endIndex : last.endIndex
 }

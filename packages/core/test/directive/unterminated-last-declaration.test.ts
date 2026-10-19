@@ -358,6 +358,47 @@ describe('input that ends in a comment or a backslash before the rule closes', (
     expect(readRule(parsed, '&:hover').rules).not.toContain(FOCUS)
   })
 
+  it.each([
+    ['a closed comment', CLOSED_COMMENT],
+    ['an unclosed comment', UNCLOSED_COMMENT],
+  ])('two nested rules that both use @nave keep both rings ahead of %s', (_n, comment) => {
+    const { css } = expandText(
+      `.x { @nave focusRing; &:hover { @nave focusRing; color: red ${comment}`,
+      {},
+    )
+    const parsed = closedForTheParser(css)
+
+    expect(readRule(parsed).rules).toContain(FOCUS)
+    expect(readRule(parsed, '&:hover').rules).toContain(FOCUS)
+  })
+
+  describe.each([
+    ['a line feed', '\n'],
+    ['a carriage return and a line feed', '\r\n'],
+  ])('a backslash before %s, then a comment', (_name, lineBreak) => {
+    it.each([
+      ['a closed comment', CLOSED_COMMENT],
+      ['an unclosed comment', UNCLOSED_COMMENT],
+    ])('does not escape the inserted semicolon when it is %s', (_n, comment) => {
+      const { css } = expandText(`.x { @nave focusRing; color: red\\${lineBreak}${comment}`, {})
+
+      expect(readRule(closedForTheParser(css)).rules).toContain(FOCUS)
+    })
+  })
+
+  it('does not spell an escape out after an escaped backslash', () => {
+    const { css } = expandText('.x { @nave focusRing; color: red\\\\', {})
+
+    expect(css).toContain(String.raw`red\\;`)
+    expect(css).not.toContain('fffd')
+  })
+
+  it('writes the escape ahead of the bracket it leaves open', () => {
+    const { css } = expandText('.x { @nave focusRing; width: calc(1px\\', {})
+
+    expect(css).toContain(String.raw`calc(1px\fffd);`)
+  })
+
   it('closes the function ahead of a closed comment', () => {
     const { css } = expandText(`.x { @nave focusRing; width: calc(1px ${CLOSED_COMMENT}`, {})
     const parsed = closedForTheParser(css)
@@ -408,6 +449,8 @@ describe('a trailing comment changes nothing but the comment itself', () => {
     '.x { @nave focusRing; color: red;',
     '.x { @nave focusRing; .y',
     '.x { @nave focusRing; &:hover { color: red }',
+    '.x { @nave focusRing; &:hover { @nave focusRing; color: red',
+    '.x { @nave focusRing; &:hover { @nave focusRing; color: red }',
     '.x { color: red; @nave focusRing',
     '@media (x) { .x { @nave focusRing; color: red',
   ]
@@ -429,5 +472,16 @@ describe('a trailing comment changes nothing but the comment itself', () => {
     const withoutComment = commented.replace(comment.trim(), '')
 
     expect(norm(withoutComment)).toBe(norm(bare))
+  })
+
+  // Nothing is written after an unclosed comment: it runs to the end of the input, so text
+  // after it would be inside it. A directive that swallows the comment leaves none to check.
+  it.each(SOURCES)('%s, then an unclosed comment: nothing follows the comment', (source) => {
+    const commented = expandText(`${source} ${UNCLOSED_COMMENT}`, {}).css
+
+    const at = commented.lastIndexOf(UNCLOSED_COMMENT)
+    const after = at === -1 ? '' : commented.slice(at + UNCLOSED_COMMENT.length)
+
+    expect(after).toBe('')
   })
 })
