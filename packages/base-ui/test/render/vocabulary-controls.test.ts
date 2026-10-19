@@ -3,15 +3,23 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Props, Source } from '../support/scenes.ts'
 
-import { cleanup, render } from '../support/react.ts'
+import {
+  disclosureDivTabindex,
+  disclosureTriggerDisabled,
+  disclosureTriggerDisabledSelectors,
+} from '../support/disclosure-disabled.ts'
+import { cleanup, render, user } from '../support/react.ts'
 import { recordCarried, recordRelated, unrecordedPairs } from '../support/row-pairs.ts'
 import { hasClass, hasItem, part, renderScene } from '../support/rows.ts'
-import { loadNave } from '../support/sources.ts'
+import { loadBare, loadNave } from '../support/sources.ts'
 import { topName } from '../support/subpaths.ts'
 import { tableP } from '../support/table-p.ts'
 import { CONTROL_PAIRS, pair } from '../support/vocabulary-pairs.ts'
+import { menuTree, openByClick } from '../support/w6-menus.ts'
+import { need, settle } from '../support/w6-render.ts'
 
 const nave: Source = await loadNave()
+const bare: Source = await loadBare()
 afterEach(cleanup)
 
 const C = 'nave-base-ui-'
@@ -214,17 +222,15 @@ const DISABLED: readonly {
     subpath: 'tabs',
   },
   {
-    aria: true,
+    ...disclosureTriggerDisabled(),
     disable: { 'Accordion.Item': { disabled: true } },
     marker: 'Accordion.Trigger',
-    native: false,
     subpath: 'accordion',
   },
   {
-    aria: true,
+    ...disclosureTriggerDisabled(),
     disable: { 'Collapsible.Root': { disabled: true } },
     marker: 'Collapsible.Trigger',
-    native: false,
     subpath: 'collapsible',
   },
   {
@@ -354,6 +360,82 @@ describe('AC-base-ui-overlay-completion-29 and AC-base-ui-bridge-22: every disab
       recordCarried(trigger, 'aria-disabled', 'true')
       await cleanup()
     }
+  })
+  it('Accordion.Trigger and Collapsible.Trigger carry aria-disabled when they are not a native button', async () => {
+    const asDiv = { nativeButton: false, render: createElement('div') }
+    const routes: readonly (readonly [string, string, Record<string, Props>])[] = [
+      [
+        'accordion',
+        'Accordion.Trigger',
+        { 'Accordion.Item': { disabled: true }, 'Accordion.Trigger': asDiv },
+      ],
+      [
+        'collapsible',
+        'Collapsible.Trigger',
+        { 'Collapsible.Root': { disabled: true }, 'Collapsible.Trigger': asDiv },
+      ],
+    ]
+    for (const [subpath, marker, props] of routes) {
+      await renderScene(nave, subpath, props)
+      const trigger = part(marker)
+      expect(trigger?.tagName, `${marker} is a div`).toBe('DIV')
+      expect(hasItem(trigger, 'aria-disabled', 'true'), marker).toBe(true)
+      expect(trigger?.hasAttribute('disabled')).toBe(false)
+      expect(trigger?.getAttribute('tabindex'), `${marker} tabindex`).toBe(disclosureDivTabindex())
+      expect(hasClass(trigger, `${C}disclosure-trigger`)).toBe(true)
+      recordCarried(trigger, 'aria-disabled', 'true')
+      await cleanup()
+    }
+  })
+
+  // On Base UI 1.9.0 a disabled Accordion or Collapsible trigger that is a native button carries
+  // the `disabled` attribute and no `aria-disabled`, and the trigger's disabled rule keys only
+  // `aria-disabled`, so the trigger keeps the colour and cursor of an enabled one. The README tells
+  // the reader to style `:disabled` themselves. The change that adds `:disabled` to the rule turns
+  // this row around, and deletes that README sentence and its pin in the same commit.
+  it('a disabled Accordion.Trigger and Collapsible.Trigger, as the default native button, are reached by the trigger disabled rule up to 1.8.0 and not at 1.9.0', async () => {
+    const selectors = disclosureTriggerDisabledSelectors()
+    expect(selectors.length, 'the trigger has a disabled rule').toBeGreaterThan(0)
+    const routes: readonly (readonly [string, string, Record<string, Props>])[] = [
+      ['accordion', 'Accordion.Trigger', { 'Accordion.Item': { disabled: true } }],
+      ['collapsible', 'Collapsible.Trigger', { 'Collapsible.Root': { disabled: true } }],
+    ]
+    for (const [subpath, marker, props] of routes) {
+      await renderScene(nave, subpath, props)
+      const trigger = part(marker)
+      expect(trigger?.tagName, `${marker} is a button`).toBe('BUTTON')
+      expect(trigger?.hasAttribute('disabled')).toBe(disclosureTriggerDisabled().native)
+      const isReached = selectors.some((selector) => trigger?.matches(selector) === true)
+      expect(isReached, `${marker}: the disabled rule reaches it`).toBe(
+        disclosureTriggerDisabled().aria,
+      )
+      await cleanup()
+    }
+  })
+})
+
+describe('Menu.LinkItem has no disabled state', () => {
+  // The README says so for Base UI 1.8.0 and 1.9.0; the floor behaves the same.
+  it('a disabled Menu.LinkItem reaches the <a> as an attribute, carries no aria-disabled, and still activates', async () => {
+    let activated = 0
+    await render(
+      menuTree(nave, bare, {
+        LinkItem: {
+          disabled: true,
+          onClick: () => {
+            activated += 1
+          },
+        },
+      }),
+    )
+    await openByClick('Menu.Trigger')
+    const link = need('Menu.LinkItem')
+    await user().click(link)
+    await settle()
+    expect(link.tagName).toBe('A')
+    expect(link.hasAttribute('disabled')).toBe(true)
+    expect(link.getAttribute('aria-disabled')).toBeNull()
+    expect(activated).toBe(1)
   })
 })
 

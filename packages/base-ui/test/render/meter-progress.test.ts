@@ -63,7 +63,7 @@ const EXPECTED_CLASSES = {
 } as const
 
 describe('AC-base-ui-feedback-navigation-31: one value bar; indeterminate shows only the trough (Tier A, the minor runs)', () => {
-  it('has a minor of the run installed for each of the six, so none is skipped', () => {
+  it('has a minor of the run installed for each of the seven, so none is skipped', () => {
     expect(MINORS.map(({ version }) => version)).toEqual([
       '1.3.0',
       '1.4.0',
@@ -71,6 +71,7 @@ describe('AC-base-ui-feedback-navigation-31: one value bar; indeterminate shows 
       '1.6.0',
       '1.7.0',
       '1.8.0',
+      '1.9.0',
     ])
     expect(minorsOfRun().every((minor) => isInstalled(minor))).toBe(true)
     expect(minorsOfRun().length).toBeGreaterThan(0)
