@@ -44,6 +44,12 @@ const loadersOf = (alias: string): Loaders => {
         toast: () => import('base-ui-react-1.7.0/toast'),
       }
     }
+    case 'base-ui-react-1.8.0': {
+      return {
+        'navigation-menu': () => import('base-ui-react-1.8.0/navigation-menu'),
+        toast: () => import('base-ui-react-1.8.0/toast'),
+      }
+    }
     default: {
       throw new Error(`no loader for ${alias}: add it here and install ${alias}`)
     }

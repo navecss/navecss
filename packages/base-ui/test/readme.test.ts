@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { COLOR_KEYWORDS } from './support/colors.ts'
 import { manifest } from './support/dist.ts'
+import { LEFT_OUT } from './support/left-out.ts'
 import {
   fencesOf,
   FIXED_SENTENCES,
@@ -389,6 +390,31 @@ describe('AC-base-ui-overlay-completion-39: the README carries each listed item,
     expect(proseOf(passage).trim()).not.toContain('\n\n')
     expect(fencesOf(passage)).toHaveLength(1)
     expect(readme.split('createItems').length - 1).toBe(passage.split('createItems').length - 1)
+  })
+
+  it('names the nine dotted type names that do not come through, each left-out Menu part, and the constants that are types only', () => {
+    const spellings = [
+      'ContextMenu.Root.Actions',
+      'Combobox.Root.Props',
+      'NavigationMenu.Root.Props',
+      'NavigationMenu.Root.Value',
+      'OpenChangeEventDetails',
+      'Menu.Root.HighlightEventDetails',
+      'Menu.Root.HighlightEventReason',
+    ]
+    expect(
+      hasProseSentenceWith([
+        /nine that Base UI added up to 1\.9\.0/,
+        ...spellings.map((spelling) => new RegExp(spelling.replaceAll('.', String.raw`\.`))),
+      ]),
+    ).toBe(true)
+    // `Combobox.createItems` has its own passage, held above.
+    const menuParts = LEFT_OUT.filter((name) => name !== 'Combobox.createItems')
+    for (const member of menuParts) {
+      expect(readme, member).toContain(`\`${member}\``)
+    }
+    expect(hasProseSentenceWith([/DialogPopupDataAttributes/, /types only/])).toBe(true)
+    expect(hasProseSentenceWith([/flat type names/, /`MenuInputProps`/, /`MenuFilter`/])).toBe(true)
   })
 
   it('no longer says parts younger than the floor are exported as whatever the installed Base UI provides, or that a bundler may warn about one', () => {

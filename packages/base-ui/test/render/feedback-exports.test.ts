@@ -14,6 +14,7 @@ import {
   FEEDBACK_TOP,
   type FeedbackSubpath,
 } from '../support/feedback-subpaths.ts'
+import { isLeftOutConstants } from '../support/left-out.ts'
 import { isInstalled, type Minor, MINORS, runMinor } from '../support/w6-minors.ts'
 
 const byCodeUnit = (a: string, b: string): number => a.localeCompare(b)
@@ -27,7 +28,8 @@ const minorsOfRun = (): readonly Minor[] =>
 
 /**
 What differs between a wrapper module's exports and Base UI's for one subpath: names only in one,
-and, for a namespace, the keys only in one of the two.
+and, for a namespace, the keys only in one of the two. The namespaces of data attribute and CSS
+variable names Base UI added in 1.9.0 are left out, as `left-out.ts` says.
  */
 const differences = (subpath: string, nave: Module, base: Module): string[] => {
   const top = FEEDBACK_TOP[subpath] ?? ''
@@ -35,11 +37,14 @@ const differences = (subpath: string, nave: Module, base: Module): string[] => {
   const baseNames = Object.keys(base)
   const found = [
     ...baseNames
-      .filter((key) => !naveNames.includes(key))
+      .filter((key) => !naveNames.includes(key) && !isLeftOutConstants(top, key))
       .map((key) => `${subpath}: ${key} is missing`),
     ...naveNames
       .filter((key) => !baseNames.includes(key))
       .map((key) => `${subpath}: ${key} is extra`),
+    ...naveNames
+      .filter((key) => isLeftOutConstants(top, key))
+      .map((key) => `${subpath}: ${key} is left out and still carried`),
   ]
   const [naveTop, baseTop] = [nave[top], base[top]]
   if (
@@ -127,7 +132,7 @@ describe('AC-base-ui-feedback-navigation-01 (supersedes AC-base-ui-overlay-compl
     })
   }
 
-  it('names the six minors of the criterion, and runs each one that is installed', () => {
+  it('names the seven minors from the floor to the devDependency, and runs each one that is installed', () => {
     expect(MINORS.map(({ version }) => version)).toEqual([
       '1.3.0',
       '1.4.0',
@@ -135,6 +140,7 @@ describe('AC-base-ui-feedback-navigation-01 (supersedes AC-base-ui-overlay-compl
       '1.6.0',
       '1.7.0',
       '1.8.0',
+      '1.9.0',
     ])
     expect(minorsOfRun().every(isInstalled)).toBe(true)
   })
