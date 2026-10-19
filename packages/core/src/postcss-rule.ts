@@ -147,6 +147,7 @@ function reportInSourceOrder(warnings: readonly PendingWarning[], ctx: RuleConte
   for (const { warning } of ordered) {
     reportWarning(warning.node, ctx.result, warning.text, {
       index: warning.index,
+      isOrder: true,
       printWarnings: ctx.printWarnings,
     })
   }

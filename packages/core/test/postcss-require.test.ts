@@ -131,7 +131,7 @@ describe('require(@navecss/core/postcss) from a CommonJS file', () => {
       flagged: true,
       sameAsNamed: true,
       sameAsDefault: true,
-      namespaceKeys: ['default', 'navePlugin'],
+      namespaceKeys: ['default', 'isOrderWarning', 'navePlugin'],
     })
   })
 

@@ -916,7 +916,14 @@ to the terminal instead, as `file:line:column:` and the message
 ([where Next.js shows them](#nextjs)). It knows Turbopack by the `TURBOPACK` environment
 variable, which Next.js sets for it, so wherever that variable is set and not empty, under Vite
 or the PostCSS CLI as well, it does the same and raises no PostCSS warning. The Vite plugin and
-the Lightning CSS adapter do not read the variable.
+the Lightning CSS adapter do not read the variable. The PostCSS plugin also takes
+`printWarnings` (default `true`): with `printWarnings: false` it raises each problem under
+`'warn'` and each order warning as a PostCSS warning and prints none of them, whatever
+`TURBOPACK` holds, for a tool that runs the plugin itself and reports the warnings it raises.
+Such a tool can import `isOrderWarning(warning)` from `@navecss/core/postcss` to tell them
+apart: it is `true` for an order warning and `false` for each of these problems, so the tool
+can report an order warning as the plugin does, whatever `onUnknown` says, and never fail a
+build on one.
 
 To add atoms of your own to `@nave`, pass them as `extend`: see
 [CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md). An `extend` object written inline in

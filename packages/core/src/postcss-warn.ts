@@ -6,7 +6,7 @@
  * plugin itself and reports its warnings turns the printing off (`printWarnings: false`): every
  * warning is then raised, whatever `TURBOPACK` says.
  */
-import type { Node, Result } from 'postcss'
+import type { Node, Result, Warning } from 'postcss'
 
 import { framedText } from './directive/report-text.ts'
 
@@ -38,7 +38,26 @@ function framedAtNode(node: Node, result: Result, text: string, index: number | 
  */
 export interface WarnPlace {
   readonly index?: number | undefined
+  /**
+  Whether the warning is an order warning, which carries `ORDER_MARK` for `isOrderWarning()`.
+   */
+  readonly isOrder?: boolean | undefined
   readonly printWarnings?: boolean | undefined
+}
+
+/**
+ * The property an order warning carries: PostCSS copies the options of `node.warn()` onto the
+ * `Warning` it makes.
+ */
+const ORDER_MARK = 'naveOrderWarning'
+
+/**
+ * Whether `warning` is an order warning (one `order-warnings.ts` or `shape-warnings.ts` makes)
+ * and not an `onUnknown` problem. No `onUnknown` governs it and it never fails a build, so a tool
+ * running the plugin with `printWarnings: false` reports it as a warning, never as a problem.
+ */
+export function isOrderWarning(warning: Warning): boolean {
+  return (warning as unknown as Record<string, unknown>)[ORDER_MARK] === true
 }
 
 /**
@@ -55,5 +74,8 @@ export function reportWarning(
     console.warn(framedAtNode(node, result, text, index))
     return
   }
-  node.warn(result, text, index === undefined ? {} : { index })
+  node.warn(result, text, {
+    ...(index !== undefined && { index }),
+    ...(place.isOrder === true && { [ORDER_MARK]: true }),
+  })
 }
