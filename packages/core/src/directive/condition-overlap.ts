@@ -35,7 +35,7 @@ const FEATURE_GROUP = /\(([^()]*)\)/g
 const FEATURE_CHAIN = /^G(?:\s+and\s+G)*$/
 const FLIPPED: Record<Operator, Operator> = { '<': '>', '<=': '>=', '=': '=', '>': '<', '>=': '<=' }
 const LEGACY_OPERATORS: Record<string, Operator> = { 'max-': '<=', 'min-': '>=' }
-const LENGTH_PARTS = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)([a-z]+)$/
+const LENGTH_PARTS = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)([a-z]+)$/
 
 /**
  * The bounds the relation `axis operator length` puts on `axis`: one side for an inequality,

@@ -98,8 +98,16 @@ function resolveLonghands(
 The names in code-unit order, so the output never depends on a locale.
  */
 function sorted(names: Iterable<string>): string[] {
-  // eslint-disable-next-line unicorn/require-array-sort-compare -- the default order is UTF-16 code units: the same on every machine, which a locale compare is not
-  return [...names].toSorted()
+  return [...names].toSorted(compareCodeUnits)
+}
+
+/**
+ * Compares two strings by UTF-16 code unit, which is the same on every machine, where a locale
+ * compare is not.
+ */
+function compareCodeUnits(a: string, b: string): number {
+  if (a < b) return -1
+  return a > b ? 1 : 0
 }
 
 /**

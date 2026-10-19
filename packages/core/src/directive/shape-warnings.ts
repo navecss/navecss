@@ -16,6 +16,7 @@ import {
   ampersandSpecificity,
   compareSpecificity,
   endsInPseudoElement,
+  maxSpecificity,
   type Specificity,
 } from './selector-specificity.ts'
 
@@ -114,7 +115,7 @@ function groupsText(selectors: Selectors, specificities: readonly Specificity[])
  */
 function wrapText(run: DirectiveRunFact | OwnRunFact, selectors: Selectors): string {
   const specificities = selectors.others.map((selector) => ampersandSpecificity(selector))
-  const highest = specificities.reduce((a, b) => (compareSpecificity(a, b) >= 0 ? a : b))
+  const highest = maxSpecificity(specificities)
   const mostIndex = specificities.findIndex((s) => compareSpecificity(s, highest) === 0)
   const most = selectors.others[mostIndex]!
   const less = selectors.others.filter(
