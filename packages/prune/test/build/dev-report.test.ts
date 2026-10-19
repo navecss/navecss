@@ -63,7 +63,9 @@ describe.skipIf(SKIP_REASON !== undefined)(
         await pause(3000)
         expect(occurrences(server.output(), FIRST_LINE)).toBe(1)
         app.write({ 'app/page.jsx': page("cx('flex')") })
-        while (!server.output().includes(FIXED)) {
+        for (let attempt = 1; !server.output().includes(FIXED); attempt += 1) {
+          // A busy machine can lose the watcher's event for an edit: writing the file again sends another.
+          if (attempt % 10 === 0) app.write({ 'app/page.jsx': page("cx('flex')") })
           await server.get('/')
           await pause(1000)
         }
