@@ -64,12 +64,13 @@ const conditions = (directory: string): ExportsMap => ({
 
 /**
  * The `exports` map the package has had since its components shipped, rebuilt from the package's
- * own roster of subpaths: the root, one entry per subpath, the stylesheet and the manifest.
+ * own roster of subpaths: the root, one entry per subpath, the stylesheet (with the types file that
+ * lets a side-effect import of it type-check) and the manifest.
  */
 export const rosterExports = (): ExportsMap => ({
   '.': conditions(''),
   ...Object.fromEntries(SUBPATHS.map((subpath) => [`./${subpath}`, conditions(`${subpath}/`)])),
-  './styles.css': './dist/styles.css',
+  './styles.css': { types: './dist/css.d.ts', default: './dist/styles.css' },
   './package.json': './package.json',
 })
 
