@@ -12,7 +12,6 @@ import { framedText } from './directive/report-text.ts'
  * Whether the host is Next.js's Turbopack.
  */
 function isTurbopack(): boolean {
-   
   return (process.env.TURBOPACK ?? '') !== ''
 }
 
@@ -36,7 +35,6 @@ function framedAtNode(node: Node, result: Result, text: string, index: number | 
  */
 export function reportWarning(node: Node, result: Result, text: string, index?: number): void {
   if (isTurbopack()) {
-     
     console.warn(framedAtNode(node, result, text, index))
     return
   }
