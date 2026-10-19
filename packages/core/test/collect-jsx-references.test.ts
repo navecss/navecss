@@ -16,7 +16,11 @@ import { describe, expect, it } from 'vitest'
 
 import type { AstNode } from '../src/vite-ast.ts'
 
+import { recordModule } from '../src/vite-collect-module.ts'
 import { CX_SOURCE, type ModuleReading, readModule, type ReadOptions } from '../src/vite-collect.ts'
+import { createExtendSource } from '../src/vite-extend.ts'
+import { resolveUsedOptions } from '../src/vite-options.ts'
+import { createUsedContext } from '../src/vite-used.ts'
 
 const OPTIONS: ReadOptions = {
   cxSources: new Set([CX_SOURCE]),
@@ -83,5 +87,38 @@ describe('the built @navecss/core/collect entry', () => {
     expect(
       classesIn('export const A = () => <div className="nave&#45;flex" />\n', collect.readModule),
     ).toEqual(['flex'])
+  })
+})
+
+/**
+ * The atoms the Vite plugin records for `code`, a JSX module the host has not compiled, or
+ * `undefined` when it skips the module as naming none.
+ */
+async function recordedAtoms(code: string): Promise<string[] | undefined> {
+  const context = createUsedContext(resolveUsedOptions({}), createExtendSource(undefined))
+  context.root = '/app'
+  const ctx = {
+    environment: { name: 'client', config: { consumer: 'client' }, plugins: [] },
+    parse: (text: string, options?: { lang?: 'jsx' }) => parseAst(text, options),
+    getCombinedSourcemap: () => ({ sources: [], mappings: '' }),
+    addWatchFile() {},
+  } as never
+  const record = await recordModule(context, ctx, {
+    code,
+    id: '/app/src/page.jsx',
+    moduleType: 'jsx',
+  })
+  return record && [...record.atoms].toSorted((a, b) => a.localeCompare(b))
+}
+
+describe('the Vite plugin reads a module whose only mention of an atom is a character reference', () => {
+  it('ships grid for className="&#110;ave-grid"', async () => {
+    expect(
+      await recordedAtoms('export const A = () => <div className="&#110;ave-grid" />\n'),
+    ).toEqual(['grid'])
+  })
+
+  it('control: a module that names no atom at all is still skipped', async () => {
+    expect(await recordedAtoms('export const A = () => <div className="card" />\n')).toBeUndefined()
   })
 })
