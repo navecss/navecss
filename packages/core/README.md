@@ -786,7 +786,10 @@ that bundler, Turbopack, by the `TURBOPACK` environment variable, which Next.js
 sets for it, so wherever that variable is set and not empty, under Vite or the
 PostCSS CLI as well, the plugin prints each problem to the terminal and raises
 no PostCSS warning. The Vite plugin and the Lightning CSS adapter do not read
-the variable.
+the variable. The PostCSS plugin also takes `printWarnings` (default `true`):
+with `printWarnings: false` it raises each `'warn'`-mode problem as a PostCSS
+warning and never prints it, whatever `TURBOPACK` holds, for a tool that runs
+the plugin itself and reports the warnings it raises.
 
 To add atoms of your own to `@nave`, pass them as `extend`: see
 [CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md). An `extend` object written inline in

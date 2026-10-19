@@ -22,6 +22,10 @@ import { warnDirective } from './postcss-warn.ts'
 export interface DirectiveContext {
   atRule: PostCSSAtRule
   onUnknown: 'warn' | 'error' | 'ignore'
+  /**
+  Whether a `'warn'`-mode problem may be printed under Turbopack instead of raised as a warning.
+   */
+  printWarnings: boolean
   result: Result
   extend: ExtendMap
   /**
@@ -127,7 +131,7 @@ function reportDiagnostic(
   )
   const index = atRuleErrorIndex(preludeStartIndex, diagnostic)
   if (ctx.onUnknown === 'warn') {
-    warnDirective(ctx.atRule, ctx.result, text, index)
+    warnDirective(ctx, text, index)
     return
   }
   if (ctx.onUnknown === 'ignore') return
