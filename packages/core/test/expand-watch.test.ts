@@ -286,7 +286,7 @@ describe('watchFiles', () => {
     close()
   })
 
-  it('reads no file’s bytes when it starts, nor on a read of the files that finds no change', () => {
+  it('reads the bytes of no file modified before the start window when it starts, nor on a read of the files that finds no change', () => {
     const close = watchFiles([write('w/a.css', 'one'), write('w/b.css', 'one')], vi.fn())
     expect(standIns.digests).toBe(0)
 
@@ -342,13 +342,46 @@ describe('watchFiles', () => {
     close()
   })
 
-  it('reads the bytes of no file at start that was last modified in an earlier second', () => {
-    standIns.mtimeMs = Date.now() - 1000
-    const close = watchFiles([write('w/a.css', 'one'), write('w/b.css', 'one')], vi.fn())
+  // A filesystem that keeps two-second times rounds down to an even second, and one whose clock
+  // runs a little behind this machine's records an earlier second: the edit is still seen when
+  // the file's time is up to two seconds before the second the watch starts.
+  it.each([
+    ['in the first millisecond of the start second', '00:00:00.999', '00:00:00.000'],
+    ['in the start second', '00:00:01.200', '00:00:01.000'],
+    ['one second before the start second', '00:00:01.200', '00:00:00.000'],
+    ['two seconds before the start second', '00:00:02.200', '00:00:00.000'],
+  ])(
+    'calls back for an edit of one size when the file was last modified %s, before any time moved',
+    (_name, clock, modified) => {
+      vi.setSystemTime(new Date(`2100-01-01T${clock}Z`))
+      standIns.mtimeMs = Date.parse(`2100-01-01T${modified}Z`)
+      standIns.isCoarse = true
+      const watched = write('w/a.css', 'one')
+      const changed = vi.fn()
+      const close = watchFiles([watched], changed)
 
-    expect(standIns.digests).toBe(0)
-    close()
-  })
+      writeFileSync(watched, 'two')
+      fire(file('w'), 'a.css')
+      settle()
+
+      expect(changed).toHaveBeenCalledTimes(1)
+      close()
+    },
+  )
+
+  it.each([
+    ['three seconds', 3000],
+    ['a minute', 60_000],
+  ])(
+    'reads the bytes of no file at start that was last modified %s or more before it starts',
+    (_name, before) => {
+      standIns.mtimeMs = Date.now() - before
+      const close = watchFiles([write('w/a.css', 'one'), write('w/b.css', 'one')], vi.fn())
+
+      expect(standIns.digests).toBe(0)
+      close()
+    },
+  )
 
   it('reads the files again no more after it is closed', () => {
     const watched = write('w/a.css', 'one')
