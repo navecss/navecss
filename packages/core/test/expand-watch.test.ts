@@ -3,7 +3,9 @@
  * by a stand-in the test fires: it watches the directory of each file, and of a symlink's target;
  * it listens for the names it was asked about and for an event that carries no name; a burst of
  * events becomes one call once it settles; a change no event reported is still seen, once the files
- * are read again; and closing it stops the calls and closes every watcher. The operating system's
+ * are read again; an edit an event reports is seen even where the file's time and size do not
+ * move (a filesystem that keeps whole seconds); and closing it stops the calls and closes every
+ * watcher. The operating system's
  * file events can arrive seconds late when the machine is busy, or not at all, so nothing here
  * waits on them; the real watcher end to end is covered by the `--watch` row of
  * `expand-command.test.ts` (AC-directive-core-42).
@@ -18,6 +20,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 type Listener = (event: string, name: string | null) => void
 
 const standIns = vi.hoisted(() => ({
+  // Whether `statSync` reports one time and size for every file, whatever it holds, as a
+  // filesystem that keeps whole seconds does for two edits of one size in the same second.
+  isCoarse: false,
   opened: [] as {
     close: ReturnType<typeof vi.fn>
     closed: boolean
@@ -30,6 +35,10 @@ vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof Fs>()
   return {
     ...actual,
+    statSync: (file: string) => {
+      const stats = actual.statSync(file)
+      return standIns.isCoarse ? { ...stats, mtimeMs: 0, size: 0 } : stats
+    },
     watch: (directory: string, listener: Listener) => {
       const standIn = { close: vi.fn(), closed: false, directory, listener }
       standIn.close.mockImplementation(() => {
@@ -47,6 +56,7 @@ const project = { dir: '' }
 
 beforeEach(() => {
   vi.useFakeTimers()
+  standIns.isCoarse = false
   standIns.opened.length = 0
   const made = mkdtempSync(path.join(tmpdir(), 'nave-expand-watch-files-'))
   project.dir = realpathSync(made)
@@ -204,6 +214,45 @@ describe('watchFiles', () => {
     settle()
 
     expect(changed).toHaveBeenCalledTimes(1)
+    close()
+  })
+
+  it('calls back for an edit an event reports when the time and size the files show stay the same', () => {
+    standIns.isCoarse = true
+    const watched = write('w/a.css', 'one')
+    const changed = vi.fn()
+    const close = watchFiles([watched], changed)
+
+    writeFileSync(watched, 'two')
+    fire(file('w'), 'a.css')
+    settle()
+
+    expect(changed).toHaveBeenCalledTimes(1)
+    close()
+  })
+
+  it('does not call back for such an edit from a read of the files alone', () => {
+    standIns.isCoarse = true
+    const watched = write('w/a.css', 'one')
+    const changed = vi.fn()
+    const close = watchFiles([watched], changed)
+
+    writeFileSync(watched, 'two')
+    vi.advanceTimersByTime(POLL_AND_SETTLE_MS * 3)
+
+    expect(changed).not.toHaveBeenCalled()
+    close()
+  })
+
+  it('does not call back for an event with no edit behind it when the time and size stay the same', () => {
+    standIns.isCoarse = true
+    const changed = vi.fn()
+    const close = watchFiles([write('w/a.css', 'one')], changed)
+
+    fire(file('w'), 'a.css')
+    settle()
+
+    expect(changed).not.toHaveBeenCalled()
     close()
   })
 

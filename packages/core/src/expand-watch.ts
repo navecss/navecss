@@ -4,7 +4,8 @@
  * an editor that saves by writing a new file and renaming it over the old one leaves a watcher on
  * the file itself watching nothing.
  */
-import { type FSWatcher, realpathSync, statSync, watch } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { type FSWatcher, readFileSync, realpathSync, statSync, watch } from 'node:fs'
 import path from 'node:path'
 
 const SETTLE_MS = 40
@@ -31,31 +32,64 @@ function stampOf(file: string): string {
 }
 
 /**
+ * A digest of a file's bytes, or the empty string while it does not exist.
+ */
+function digestOf(file: string): string {
+  try {
+    return createHash('sha256').update(readFileSync(file)).digest('hex')
+  } catch {
+    return ''
+  }
+}
+
+interface Seen {
+  readonly isStampChanged: () => boolean
+  readonly isContentChanged: () => boolean
+  readonly record: () => void
+}
+
+/**
+ * What each of `files` was at the last call back, so one edit calls back once, whether its file
+ * event or a read of the files reports it first. The stamp is cheap and is what the poll reads.
+ * A file event also compares the bytes when the stamp has not moved: a filesystem that keeps whole
+ * seconds gives two edits of one size in the same second the same stamp.
+ */
+function seenFiles(files: ReadonlySet<string>): Seen {
+  const stamps = new Map<string, string>()
+  const digests = new Map<string, string>()
+  const record = (): void => {
+    for (const file of files) {
+      stamps.set(file, stampOf(file))
+      digests.set(file, digestOf(file))
+    }
+  }
+  record()
+  return {
+    isStampChanged: () => [...files].some((file) => stampOf(file) !== stamps.get(file)),
+    isContentChanged: () => [...files].some((file) => digestOf(file) !== digests.get(file)),
+    record,
+  }
+}
+
+/**
  * Starts watching, and returns the function that stops it. The watchers keep the process alive
  * until then.
  */
 export function watchFiles(files: readonly string[], onChange: () => void): () => void {
   const wanted = new Set(files.map((file) => path.resolve(file)))
-  // What each file was at the last call back, so one edit calls back once, whether its file event
-  // or a read of the files reports it first.
-  const stamps = new Map<string, string>()
-  // Whether any file changed since the last call back; records what each file is now.
-  const isChangedSinceLastCall = (): boolean => {
-    let isChanged = false
-    for (const file of wanted) {
-      const stamp = stampOf(file)
-      if (stamp !== stamps.get(file)) isChanged = true
-      stamps.set(file, stamp)
-    }
-    return isChanged
-  }
-  isChangedSinceLastCall()
+  const seen = seenFiles(wanted)
   let timer: NodeJS.Timeout | undefined
+  let isEventPending = false
+  const settle = (): void => {
+    const isEvent = isEventPending
+    isEventPending = false
+    if (!seen.isStampChanged() && !(isEvent && seen.isContentChanged())) return
+    seen.record()
+    onChange()
+  }
   const schedule = (): void => {
     clearTimeout(timer)
-    timer = setTimeout(() => {
-      if (isChangedSinceLastCall()) onChange()
-    }, SETTLE_MS)
+    timer = setTimeout(settle, SETTLE_MS)
   }
   const watchedNames = new Set(wanted)
   const directories = new Set([...wanted].map((file) => path.dirname(file)))
@@ -74,7 +108,9 @@ export function watchFiles(files: readonly string[], onChange: () => void): () =
     for (const directory of directories) {
       watchers.push(
         watch(directory, (_event, name) => {
-          if (name === null || watchedNames.has(path.join(directory, name))) schedule()
+          if (name !== null && !watchedNames.has(path.join(directory, name))) return
+          isEventPending = true
+          schedule()
         }),
       )
     }
@@ -84,7 +120,7 @@ export function watchFiles(files: readonly string[], onChange: () => void): () =
     throw error
   }
   const poll = setInterval(() => {
-    if ([...wanted].some((file) => stampOf(file) !== stamps.get(file))) schedule()
+    if (seen.isStampChanged()) schedule()
   }, POLL_MS)
   return () => {
     clearTimeout(timer)
