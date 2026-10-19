@@ -12,6 +12,7 @@ import { childContext, type WalkContext } from './expand-text-context.ts'
 import { createPositionFinder } from './expand-text-diagnostics.ts'
 import { closeInfoFor } from './expand-text-eof-close.ts'
 import { renderBlock, renderInline } from './expand-text-render.ts'
+import { unterminatedEnd } from './expand-text-terminator.ts'
 import { plan } from './plan.ts'
 import { type Token, tokenize } from './tokenizer.ts'
 
@@ -99,6 +100,8 @@ function markNestedGroup(diagnostics: Diagnostic[]): void {
 
 interface Frame {
   parts: AppendPart[]
+  // The block's last item so far: what the appended text follows, and so whether it needs a `;`.
+  lastItem: Item | undefined
 }
 
 interface DirectiveSite {
@@ -161,14 +164,29 @@ function isNestedNode(tokens: readonly Token[], item: Item): boolean {
 function flushFrame(w: Walker, frameStart: number, blockEndIndex: number, frame: Frame): void {
   if (frame.parts.length === 0) return
   const close = closeInfoFor(w, frameStart, blockEndIndex, w.eofScanLimit)
+  const isClosedForReal = w.tokens[blockEndIndex] !== undefined
   // A real closer (not the EOF fallback) needs no bound update: this frame
   // closed cleanly, so it never entered the still-open chain at all.
-  if (w.tokens[blockEndIndex] === undefined) w.eofScanLimit = frameStart
-  const parts =
-    close.prefix === ''
-      ? frame.parts
-      : [{ text: close.prefix, source: w.positionAt(close.position) }, ...frame.parts]
-  w.edits.push({ start: close.position, end: close.position, parts })
+  if (!isClosedForReal) w.eofScanLimit = frameStart
+  // At end of input the closers end an open declaration themselves; a real `}` leaves the last
+  // item as it was written, and a declaration with no `;` would swallow the text after it.
+  const semicolonAt = isClosedForReal ? unterminatedEnd(w.tokens, frame.lastItem) : undefined
+  if (semicolonAt !== undefined) {
+    w.edits.push({
+      start: semicolonAt,
+      end: semicolonAt,
+      parts: [{ text: ';', source: w.positionAt(semicolonAt) }],
+    })
+  }
+  if (close.prefix !== '') {
+    const source = w.positionAt(close.prefixPosition)
+    w.edits.push({
+      start: close.prefixPosition,
+      end: close.prefixPosition,
+      parts: [{ text: close.prefix, source }],
+    })
+  }
+  w.edits.push({ start: close.position, end: close.position, parts: frame.parts })
 }
 
 export interface BlockBounds {
@@ -199,7 +217,7 @@ function toWalkFrame(w: Walker, bounds: BlockBounds): WalkFrame {
     limit: bounds.limit,
     start: bounds.start,
     context: bounds.context,
-    frame: { parts: [] },
+    frame: { parts: [], lastItem: undefined },
   }
 }
 
@@ -238,6 +256,7 @@ export function walkBlock(w: Walker, bounds: BlockBounds): void {
 
     const item = readItem(w.tokens, top.i, top.limit, w.closerFor)
     top.i = skipInert(w.tokens, item.end, top.limit)
+    top.frame.lastItem = item
 
     if (item.kind === 'at-rule' && isNaveAtKeyword(w.tokens[item.start]!)) {
       processDirective(w, {
