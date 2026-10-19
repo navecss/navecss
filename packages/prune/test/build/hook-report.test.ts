@@ -63,6 +63,26 @@ describe.skipIf(SKIP_REASON !== undefined)(
     )
 
     it.each(BUNDLERS)(
+      'AC-nextjs-used-atoms-03: %s: an @nave problem is counted beside a call it cannot read, at its stylesheet position',
+      async (_bundler, flags) => {
+        const app = createNextApp()
+        apps.push(app)
+        app.write({
+          'app/page.jsx': BAD_PAGE,
+          'app/globals.css':
+            "@import url('@navecss/core/layers');\n@import url('@navecss/core');\n\n.card {\n  @nave interactve;\n}\n",
+        })
+        const run = await app.next(['build', ...flags])
+        expect(run.code, run.output).not.toBe(0)
+        expect(run.output).toContain(`2 problems in 2 files: ${REPORT_CAUSE}`)
+        expect(run.output).toMatch(/^app\/globals\.css:5:3: @nave: unknown atom "interactve"/mu)
+        expect(run.output).toMatch(/^app\/page\.jsx:4:/mu)
+        expect(run.output).toContain('Nave stopped the build: 2 problems, listed above.')
+      },
+      TIMEOUT,
+    )
+
+    it.each(BUNDLERS)(
       'AC-nextjs-used-atoms-27: %s: a build that reads every call prints nothing of the package and exits 0',
       async (_bundler, flags) => {
         const app = createNextApp()
