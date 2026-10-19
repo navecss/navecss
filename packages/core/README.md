@@ -739,7 +739,7 @@ build would, as far as it has read. The build is unaffected. As on any Vite proj
 checks, keyboard, screen-reader and automated accessibility checks included, against a production
 build as well as in dev: `astro build`, then `astro preview` or however you serve production.
 
-A fixture measures this on Astro 7.3.8, with Vite 8.3.4 underneath: `@nave` expanded in `.css`
+A fixture measures this on Astro 7.4.0, with Vite 8.3.4 underneath: `@nave` expanded in `.css`
 files and in `<style>` and `<style is:global>` blocks, and `cx()` read in frontmatter, in templates
 and in React islands, in `astro build` for a static site and for `output: 'server'`, and in
 `astro dev`. Islands in Vue, Svelte or Solid were not measured.
@@ -801,6 +801,9 @@ Nave's colours included, into `--lightningcss-light` and `--lightningcss-dark` v
 the floor out as above: Next 15 rejects the shorter `baseline 2024` with `Unknown browser baseline`.
 
 **Where Nave's warnings show.** With webpack (`next build --webpack`), `next build` prints them under `Compiled with warnings`, once for each compilation that reads the stylesheet, so a CSS Module imported from a Server Component can show the same warning twice; `next dev --webpack` may not print a global stylesheet's, so read them from `next build`. Turbopack does not print PostCSS warnings, so under Turbopack the plugin prints them itself on standard error, with the file, line and column, in `next build` and `next dev` alike. Neither bundler shows them in the browser console or Next's error overlay.
+A problem that [`onUnknown`](#options) covers is a warning only under `'warn'`; under the
+default, `'error'`, it fails the build on either bundler. Where the warnings show was measured
+on Next 16.4.1, not on Next 15.
 
 **If your Vite config sets `css.transformer: 'lightningcss'`, this plugin never
 runs.** That option replaces Vite's CSS pipeline with Lightning CSS, which does
@@ -882,7 +885,13 @@ others. The report covers one stylesheet, so a bundler that stops at the first
 failing file reports one file per build. Under `'warn'`, each problem is a
 warning of its own.
 The [order warning](#order-inside-a-rule) is not one of these problems: it is printed as a
-warning whatever `onUnknown` says.
+warning whatever `onUnknown` says. On Turbopack, Next 16's default bundler, which shows no
+PostCSS warning, the PostCSS plugin prints each problem under `'warn'` and each order warning
+to the terminal instead, as `file:line:column:` and the message
+([where Next.js shows them](#nextjs)). It knows Turbopack by the `TURBOPACK` environment
+variable, which Next.js sets for it, so wherever that variable is set and not empty, under Vite
+or the PostCSS CLI as well, it does the same and raises no PostCSS warning. The Vite plugin and
+the Lightning CSS adapter do not read the variable.
 
 To add atoms of your own to `@nave`, pass them as `extend`: see
 [CONSUMER-ATOMS.md](./CONSUMER-ATOMS.md). An `extend` object written inline in

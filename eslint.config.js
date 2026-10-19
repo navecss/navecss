@@ -280,6 +280,17 @@ export default defineConfig([
       'no-restricted-syntax': 'off',
     },
   },
+  // ── postcss-warn.ts — where a `'warn'`-mode problem goes. Turbopack shows no PostCSS warning,
+  // so under it `console.warn` is the output channel. `TURBOPACK` is read in the host's process
+  // while a stylesheet is built; the one turbo task that runs this code, `test`, pins it empty in
+  // vitest.config.ts, so turbo has no cache key to add it to. ──────────────────────────────
+  {
+    files: ['**/src/postcss-warn.ts'],
+    rules: {
+      'no-console': 'off',
+      'turbo/no-undeclared-env-vars': 'off',
+    },
+  },
   // The post-order half is the second plugin object `navePlugin()` returns, and the plugin a
   // worker's build runs is its sibling: the same host convention, hooks whose `this` is the
   // host's plugin context.

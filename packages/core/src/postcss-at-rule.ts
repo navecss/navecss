@@ -13,6 +13,7 @@ import { formatDiagnostic } from './directive/diagnostics-format.ts'
 import { plan } from './directive/plan.ts'
 import { tokenize } from './directive/tokenizer.ts'
 import { hasWorkaroundSentence, isInsideKeyframes } from './postcss-node-utils.ts'
+import { reportWarning } from './postcss-warn.ts'
 
 export interface DirectiveContext {
   atRule: PostCSSAtRule
@@ -125,7 +126,7 @@ export function reportDiagnostic(
   )
   const index = atRuleErrorIndex(preludeStartIndex, diagnostic)
   if (ctx.onUnknown === 'warn') {
-    ctx.atRule.warn(ctx.result, text, index === undefined ? {} : { index })
+    reportWarning(ctx.atRule, ctx.result, text, index)
     return
   }
   if (ctx.onUnknown === 'ignore') return

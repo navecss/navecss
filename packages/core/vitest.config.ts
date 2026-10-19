@@ -6,6 +6,10 @@ export default defineConfig({
     // A V8 garbage-collector crash in Node 24's baseline compiler (nodejs/node#62393) can kill a
     // test worker with SIGSEGV. Remove this once the pinned Node carries the fix.
     execArgv: ['--no-sparkplug'],
+    // The PostCSS plugin prints instead of warning when TURBOPACK is set (postcss-warn.ts), so a
+    // shell that exports it would turn every such row that expects a warning red. The rows that
+    // want it set it themselves.
+    env: { TURBOPACK: '' },
     // A test that builds a real Vite app, the used-atoms ones most of all, takes well under a
     // second alone but queues behind other runs when several share a loaded machine: 20 s each.
     testTimeout: 20_000,
