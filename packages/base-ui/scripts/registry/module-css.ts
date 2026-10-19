@@ -116,44 +116,48 @@ const refuseRemovedStyle = (declaration: Declaration, atom: string): void => {
 }
 
 /**
- * Puts the disable comment before each `outline: none` that is paired with the ring that replaces
- * it, and refuses every other `outline`, naming the atom. An `outline: none` is paired when it is a
- * lowercase `none` without `!important`, sits directly in the atom's class rule or alone in a `&`
- * rule directly in it, and the class rule has an `&:focus-visible` rule after it that sets
- * `outline-style: solid`, `outline-width`, `outline-color` and `outline-offset`. An `outline-style`
- * of `none`, `initial` or `unset` is refused as well.
+ * Puts the disable comment before an `outline: none` that is paired with the ring that replaces
+ * it, and refuses any other `outline` shorthand, naming the atom. An `outline: none` is paired when
+ * it is a lowercase `none` without `!important`, sits directly in the atom's class rule or alone in
+ * a `&` rule directly in it, and the class rule has an `&:focus-visible` rule after it that sets
+ * `outline-style: solid`, `outline-width`, `outline-color` and `outline-offset`.
+ */
+const guardShorthand = (declaration: Declaration, atom: string): void => {
+  if (declaration.important) {
+    throw new RegistryBuildError(
+      `${atom} has "${shown(declaration)}": !important beats the focus ring, so it is refused`,
+      { file: 'module.css' },
+    )
+  }
+  const isNone = declaration.prop === 'outline' && declaration.value === 'none'
+  if (isNone && isPaired(declaration)) {
+    const comment = OUTLINE_COMMENT.slice(3, -3)
+    declaration.before(postcss.comment({ raws: { before: '\n    ' }, text: comment }))
+    return
+  }
+  const found = `${atom} has "${shown(declaration)}"`
+  const accepted =
+    'the only outline accepted is a lowercase "outline: none", directly in the atom\'s rule ' +
+    'or alone in a "&" rule there, followed by a "&:focus-visible" rule that sets ' +
+    'outline-style: solid, outline-width, outline-color and outline-offset'
+  throw new RegistryBuildError(
+    isNone
+      ? `${found} with no &:focus-visible ring paired to it: ${accepted}`
+      : `${found}: ${accepted}`,
+    { file: 'module.css' },
+  )
+}
+
+/**
+ * Guards every outline in the module: the `outline` shorthand through `guardShorthand`, and an
+ * `outline-style` of `none`, `initial` or `unset`, which is refused.
  */
 const guardOutlines = (root: postcss.Root, atomOf: ReadonlyMap<string, string>): void => {
-  const comment = OUTLINE_COMMENT.slice(3, -3)
   root.walkDecls(/^outline(?:-style)?$/i, (declaration) => {
     const named = classRuleOf(declaration)?.selector ?? (declaration.parent as Rule).selector
     const atom = atomOf.get(named.replace(/^\./, '')) ?? named
-    if (declaration.prop.toLowerCase() === 'outline-style') {
-      refuseRemovedStyle(declaration, atom)
-      return
-    }
-    if (declaration.important) {
-      throw new RegistryBuildError(
-        `${atom} has "${shown(declaration)}": !important beats the focus ring, so it is refused`,
-        { file: 'module.css' },
-      )
-    }
-    if (declaration.prop === 'outline' && declaration.value === 'none' && isPaired(declaration)) {
-      declaration.before(postcss.comment({ raws: { before: '\n    ' }, text: comment }))
-      return
-    }
-    const hasNoRing = declaration.prop === 'outline' && declaration.value === 'none'
-    const found = `${atom} has "${shown(declaration)}"`
-    const accepted =
-      'the only outline accepted is a lowercase "outline: none", directly in the atom\'s rule ' +
-      'or alone in a "&" rule there, followed by a "&:focus-visible" rule that sets ' +
-      'outline-style: solid, outline-width, outline-color and outline-offset'
-    throw new RegistryBuildError(
-      hasNoRing
-        ? `${found} with no &:focus-visible ring paired to it: ${accepted}`
-        : `${found}: ${accepted}`,
-      { file: 'module.css' },
-    )
+    if (declaration.prop.toLowerCase() === 'outline-style') refuseRemovedStyle(declaration, atom)
+    else guardShorthand(declaration, atom)
   })
 }
 

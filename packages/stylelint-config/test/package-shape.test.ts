@@ -87,9 +87,9 @@ function scratchReleaseRoot(): string {
  */
 function removeChangesetsNaming(scratch: string, name: string): void {
   const directory = path.join(scratch, '.changeset')
-  for (const file of readdirSync(directory).filter((entry) => entry.endsWith('.md'))) {
+  for (const file of readdirSync(directory)) {
     const changesetPath = path.join(directory, file)
-    if (readFileSync(changesetPath, 'utf8').includes(`'${name}'`)) {
+    if (file.endsWith('.md') && readFileSync(changesetPath, 'utf8').includes(`'${name}'`)) {
       rmSync(changesetPath, { force: true })
     }
   }
