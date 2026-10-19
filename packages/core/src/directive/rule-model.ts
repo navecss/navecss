@@ -86,7 +86,7 @@ export interface RuleInput {
   readonly outward?: OutwardContext | undefined
 }
 
-export interface OutwardContext {
+interface OutwardContext {
   readonly identityOf: (ref: NodeRef) => unknown
   readonly known: ReadonlyMap<unknown, readonly Finding[]>
 }
