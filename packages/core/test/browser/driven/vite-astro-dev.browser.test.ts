@@ -83,7 +83,7 @@ async function load(url: string, route: '/' | '/about'): Promise<Page> {
       () => document.querySelector('#s')?.className.includes('nave-truncate') === true,
     ))
   const readiness = route === '/' ? isIndexReady : () => isPresent(page, '#r')
-  await until(page, () => readSettled(page, readiness), `the scripts of ${route}`, 30_000)
+  await until(page, () => readSettled(page, readiness), `the scripts of ${route}`)
   return page
 }
 

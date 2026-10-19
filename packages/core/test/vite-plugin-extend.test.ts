@@ -38,13 +38,22 @@ afterEach(async () => {
   for (const cleanup of pending) await cleanup()
 })
 
-async function until(isMet: () => Promise<boolean>, what: string): Promise<void> {
-  const deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
-    if (await isMet()) return
+/**
+ * Waits until `isMet` is true, for as long as the test may run. The test's own timeout is the
+ * bound: `vite build --watch` hears an edit through the operating system's file events, which can
+ * arrive many seconds late on a busy machine, and a shorter deadline of its own here would fail a
+ * watcher that was only slow. `signal` is the test's, so the wait stops once the test has timed
+ * out.
+ */
+async function until(
+  isMet: () => Promise<boolean>,
+  what: string,
+  signal: AbortSignal,
+): Promise<void> {
+  while (!(await isMet())) {
+    if (signal.aborted) throw new Error(`timed out waiting for ${what}`)
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
-  throw new Error(`timed out waiting for ${what}`)
 }
 
 /**
@@ -70,7 +79,9 @@ function spyOnClient(server: Awaited<ReturnType<typeof startDev>>): { type: stri
 }
 
 describe('AC-directive-core-37 — the Vite plugin watches the extend module', () => {
-  it('the dev server serves the new value after the module changes, with no restart', async () => {
+  it('the dev server serves the new value after the module changes, with no restart', async ({
+    signal,
+  }) => {
     const app: ScratchApp = makeApp(FILES)
     cleanups.push(() => app.dispose())
     const server = await startDev(
@@ -83,13 +94,19 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
 
     edit(server, path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
 
-    await until(async () => {
-      const next = await server.transformRequest('/src/app.css')
-      return next?.code.includes('margin: 2px') === true
-    }, 'the dev server to serve margin: 2px')
+    await until(
+      async () => {
+        const next = await server.transformRequest('/src/app.css')
+        return next?.code.includes('margin: 2px') === true
+      },
+      'the dev server to serve margin: 2px',
+      signal,
+    )
   }, 60_000)
 
-  it('a module that failed on its first load tells the client to reload once it is fixed', async () => {
+  it('a module that failed on its first load tells the client to reload once it is fixed', async ({
+    signal,
+  }) => {
     const app: ScratchApp = makeApp({ ...FILES, 'atoms.mjs': "throw new Error('not ready')\n" })
     cleanups.push(() => app.dispose())
     const server = await startDev(
@@ -104,12 +121,15 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     await until(
       () => Promise.resolve(sent.some((payload) => payload.type === 'full-reload')),
       'a full-reload payload for the client',
+      signal,
     )
     const next = await server.transformRequest('/src/app.css')
     expect(next?.code).toContain('margin: 2px')
   }, 60_000)
 
-  it('a stylesheet whose first load failed while another stylesheet already used the module is reloaded once the module is fixed', async () => {
+  it('a stylesheet whose first load failed while another stylesheet already used the module is reloaded once the module is fixed', async ({
+    signal,
+  }) => {
     const app: ScratchApp = makeApp({ ...FILES, 'src/late.css': '.late { @nave brand; }\n' })
     cleanups.push(() => app.dispose())
     const server = await startDev(
@@ -122,7 +142,11 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     edit(server, path.join(app.root, 'atoms.mjs'), "throw new Error('not ready')\n")
     await expect(server.transformRequest('/src/late.css')).rejects.toThrow()
     // Let the dev server finish with the throwing edit before the fix lands.
-    await until(() => Promise.resolve(sent.length > 0), 'the dev server to see the throwing module')
+    await until(
+      () => Promise.resolve(sent.length > 0),
+      'the dev server to see the throwing module',
+      signal,
+    )
     await new Promise((resolve) => setTimeout(resolve, 300))
     // The client that was told to reload asks for the stylesheet again, and it fails again.
     await expect(server.transformRequest('/src/late.css')).rejects.toThrow()
@@ -132,6 +156,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     await until(
       () => Promise.resolve(sent.some((payload) => payload.type === 'full-reload')),
       'a full-reload payload for the client',
+      signal,
     )
   }, 60_000)
 
@@ -160,7 +185,9 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     expect(sent.filter((payload) => payload.type === 'full-reload')).toEqual([])
   }, 60_000)
 
-  it('an edit to a module that loaded fine sends no full reload: Vite’s own update serves it', async () => {
+  it('an edit to a module that loaded fine sends no full reload: Vite’s own update serves it', async ({
+    signal,
+  }) => {
     const app: ScratchApp = makeApp(FILES)
     cleanups.push(() => app.dispose())
     const server = await startDev(
@@ -171,16 +198,20 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     await server.transformRequest('/src/app.css')
 
     edit(server, path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
-    await until(async () => {
-      const next = await server.transformRequest('/src/app.css')
-      return next?.code.includes('margin: 2px') === true
-    }, 'the dev server to serve margin: 2px')
+    await until(
+      async () => {
+        const next = await server.transformRequest('/src/app.css')
+        return next?.code.includes('margin: 2px') === true
+      },
+      'the dev server to serve margin: 2px',
+      signal,
+    )
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     expect(sent.filter((payload) => payload.type === 'full-reload')).toEqual([])
   }, 60_000)
 
-  it('vite build --watch rebuilds with the new value', async () => {
+  it('vite build --watch rebuilds with the new value', async ({ signal }) => {
     const app = makeApp(FILES)
     cleanups.push(() => app.dispose())
     const outDir = path.join(app.root, 'out')
@@ -207,9 +238,14 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     await until(
       () => Promise.resolve(outputs().includes('margin:1px')),
       'the first build to write 1px',
+      signal,
     )
     writeFileSync(path.join(app.root, 'atoms.mjs'), atomsModule('2px'))
-    await until(() => Promise.resolve(outputs().includes('margin:2px')), 'the rebuild to write 2px')
+    await until(
+      () => Promise.resolve(outputs().includes('margin:2px')),
+      'the rebuild to write 2px',
+      signal,
+    )
 
     expect(outputs()).toMatch(/margin:2px/)
   }, 60_000)
