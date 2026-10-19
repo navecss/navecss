@@ -72,7 +72,7 @@ describe('AC-consumer-constraints-17 covers: R11c, R12, R10', () => {
   )
 
   it('does not report an outline-style other than none', async () => {
-    for (const value of ['solid', 'dotted', 'auto', 'hidden', 'var(--style)']) {
+    for (const value of ['solid', 'dotted', 'auto', 'hidden', 'initial', 'unset', 'var(--style)']) {
       const result = await stylelint.lint({ code: `.a { outline-style: ${value}; }`, config })
       const rules = result.results[0]!.warnings.map((w) => w.rule)
       expect(rules, value).not.toContain('declaration-property-value-disallowed-list')

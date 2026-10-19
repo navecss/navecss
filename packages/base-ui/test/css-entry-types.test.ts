@@ -5,7 +5,7 @@
  * `types` condition is refused with TS2882.
  */
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 
@@ -21,6 +21,8 @@ const CSS_ENTRY_POINTS = [
   '@navecss/core/standalone',
   '@navecss/base-ui/styles.css',
 ]
+
+const byName = (left: string, right: string): number => left.localeCompare(right)
 
 const scratch: string[] = []
 
@@ -62,6 +64,18 @@ describe('the CSS entry points of the published packages, imported for their sid
     const { code, output } = compile("import './plain.css'\n")
     expect(code).not.toBe(0)
     expect(output).toContain('TS2882')
+  })
+
+  it('lists every CSS export of the three packages', () => {
+    const found = ['tokens', 'core', 'base-ui'].flatMap((name) => {
+      const manifest = JSON.parse(
+        readFileSync(path.join(PACKAGE_DIR, '..', name, 'package.json'), 'utf8'),
+      ) as { exports: Record<string, unknown> }
+      return Object.entries(manifest.exports)
+        .filter(([, target]) => JSON.stringify(target).includes('.css"'))
+        .map(([key]) => `@navecss/${name}${key.slice(1)}`)
+    })
+    expect(found.toSorted(byName)).toEqual([...CSS_ENTRY_POINTS].toSorted(byName))
   })
 
   it.each(CSS_ENTRY_POINTS)('%s compiles under the default side-effect import check', (entry) => {

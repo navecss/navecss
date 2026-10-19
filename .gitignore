@@ -48,6 +48,7 @@ packages/core/tsup.config.bundled_*.mjs
 # `react`, Base UI and the CSS Modules transform through its node_modules. Each test removes its
 # own; this only guards against a killed run leaving one behind untracked.
 packages/base-ui/test/.registry-*/
+packages/base-ui/test/.css-entry-types-*/
 packages/base-ui/test/render/.registry-copies-*/
 
 # OS
