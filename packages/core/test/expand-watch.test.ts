@@ -10,6 +10,7 @@
  * waits on them; the real watcher end to end is covered by the `--watch` row of
  * `expand-command.test.ts` (AC-directive-core-42).
  */
+import type * as Crypto from 'node:crypto'
 import type * as Fs from 'node:fs'
 
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -20,9 +21,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 type Listener = (event: string, name: string | null) => void
 
 const standIns = vi.hoisted(() => ({
-  // Whether `statSync` reports one time and size for every file, whatever it holds, as a
-  // filesystem that keeps whole seconds does for two edits of one size in the same second.
+  // How many digests of a file's bytes the watcher has started.
+  digests: 0,
+  // Whether `statSync` keeps reporting what it first reported for a file once this is on, whatever
+  // the file holds since, as a filesystem that keeps whole seconds does for two edits of one size
+  // in the same second.
   isCoarse: false,
+  kept: new Map<string, unknown>(),
   opened: [] as {
     close: ReturnType<typeof vi.fn>
     closed: boolean
@@ -37,7 +42,10 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     statSync: (file: string) => {
       const stats = actual.statSync(file)
-      return standIns.isCoarse ? { ...stats, mtimeMs: 0, size: 0 } : stats
+      if (!standIns.isCoarse) return stats
+      const kept = standIns.kept.get(file) ?? stats
+      standIns.kept.set(file, kept)
+      return kept
     },
     watch: (directory: string, listener: Listener) => {
       const standIn = { close: vi.fn(), closed: false, directory, listener }
@@ -50,13 +58,26 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof Crypto>()
+  return {
+    ...actual,
+    createHash: (algorithm: string) => {
+      standIns.digests += 1
+      return actual.createHash(algorithm)
+    },
+  }
+})
+
 import { watchFiles } from '../src/expand-watch.ts'
 
 const project = { dir: '' }
 
 beforeEach(() => {
   vi.useFakeTimers()
+  standIns.digests = 0
   standIns.isCoarse = false
+  standIns.kept.clear()
   standIns.opened.length = 0
   const made = mkdtempSync(path.join(tmpdir(), 'nave-expand-watch-files-'))
   project.dir = realpathSync(made)
@@ -217,17 +238,21 @@ describe('watchFiles', () => {
     close()
   })
 
-  it('calls back for an edit an event reports when the time and size the files show stay the same', () => {
-    standIns.isCoarse = true
+  it('calls back for a second edit of one size whose time and size stay the same', () => {
     const watched = write('w/a.css', 'one')
     const changed = vi.fn()
     const close = watchFiles([watched], changed)
+    writeFileSync(watched, 'two, longer')
+    fire(file('w'), 'a.css')
+    settle()
+    expect(changed).toHaveBeenCalledTimes(1)
 
-    writeFileSync(watched, 'two')
+    standIns.isCoarse = true
+    writeFileSync(watched, 'three, long')
     fire(file('w'), 'a.css')
     settle()
 
-    expect(changed).toHaveBeenCalledTimes(1)
+    expect(changed).toHaveBeenCalledTimes(2)
     close()
   })
 
@@ -253,6 +278,47 @@ describe('watchFiles', () => {
     settle()
 
     expect(changed).not.toHaveBeenCalled()
+    close()
+  })
+
+  it('reads no file’s bytes when it starts, nor on a read of the files that finds no change', () => {
+    const close = watchFiles([write('w/a.css', 'one'), write('w/b.css', 'one')], vi.fn())
+    expect(standIns.digests).toBe(0)
+
+    vi.advanceTimersByTime(POLL_AND_SETTLE_MS * 3)
+
+    expect(standIns.digests).toBe(0)
+    close()
+  })
+
+  it('reads the bytes of only a file whose time and size moved, when a read of the files sees it', () => {
+    const watched = write('w/a.css', 'one')
+    const close = watchFiles([watched, write('w/b.css', 'one')], vi.fn())
+
+    writeFileSync(watched, 'two, longer')
+    vi.advanceTimersByTime(POLL_AND_SETTLE_MS)
+
+    expect(standIns.digests).toBe(1)
+    close()
+  })
+
+  it('reads the bytes of only the file an event names, once per event, when its time and size stay the same', () => {
+    const watched = write('w/a.css', 'one')
+    const changed = vi.fn()
+    const close = watchFiles([watched, write('w/b.css', 'one')], changed)
+    writeFileSync(watched, 'two, longer')
+    fire(file('w'), 'a.css')
+    settle()
+    standIns.isCoarse = true
+    const before = standIns.digests
+
+    fire(file('w'), 'a.css')
+    settle()
+    fire(file('w'), 'a.css')
+    settle()
+
+    expect(standIns.digests - before).toBe(2)
+    expect(changed).toHaveBeenCalledTimes(1)
     close()
   })
 

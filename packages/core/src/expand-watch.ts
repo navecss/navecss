@@ -44,30 +44,42 @@ function digestOf(file: string): string {
 
 interface Seen {
   readonly isStampChanged: () => boolean
-  readonly isContentChanged: () => boolean
+  readonly isContentChanged: (named: Iterable<string>) => boolean
   readonly record: () => void
 }
 
 /**
  * What each of `files` was at the last call back, so one edit calls back once, whether its file
  * event or a read of the files reports it first. The stamp is cheap and is what the poll reads.
- * A file event also compares the bytes when the stamp has not moved: a filesystem that keeps whole
- * seconds gives two edits of one size in the same second the same stamp.
+ * A file event also compares the bytes of the file it names when the stamp has not moved: a
+ * filesystem that keeps whole seconds gives two edits of one size in the same second the same
+ * stamp. Bytes are read only for that, and for a file whose stamp moved in a run, so the next event
+ * has something to compare with; never at start, and never for a read that finds no change.
  */
 function seenFiles(files: ReadonlySet<string>): Seen {
   const stamps = new Map<string, string>()
   const digests = new Map<string, string>()
-  const record = (): void => {
-    for (const file of files) {
-      stamps.set(file, stampOf(file))
-      digests.set(file, digestOf(file))
-    }
-  }
-  record()
+  for (const file of files) stamps.set(file, stampOf(file))
   return {
     isStampChanged: () => [...files].some((file) => stampOf(file) !== stamps.get(file)),
-    isContentChanged: () => [...files].some((file) => digestOf(file) !== digests.get(file)),
-    record,
+    isContentChanged: (named) => {
+      let isChanged = false
+      for (const file of named) {
+        const before = digests.get(file)
+        if (before === undefined || stampOf(file) !== stamps.get(file)) continue
+        const digest = digestOf(file)
+        if (digest !== before) isChanged = true
+        digests.set(file, digest)
+      }
+      return isChanged
+    },
+    record: () => {
+      for (const file of files) {
+        const stamp = stampOf(file)
+        if (stamp !== stamps.get(file)) digests.set(file, digestOf(file))
+        stamps.set(file, stamp)
+      }
+    },
   }
 }
 
@@ -79,11 +91,12 @@ export function watchFiles(files: readonly string[], onChange: () => void): () =
   const wanted = new Set(files.map((file) => path.resolve(file)))
   const seen = seenFiles(wanted)
   let timer: NodeJS.Timeout | undefined
-  let isEventPending = false
+  // The watched files the file events since the last settle named.
+  const named = new Set<string>()
   const settle = (): void => {
-    const isEvent = isEventPending
-    isEventPending = false
-    if (!seen.isStampChanged() && !(isEvent && seen.isContentChanged())) return
+    const files = [...named]
+    named.clear()
+    if (!seen.isStampChanged() && !seen.isContentChanged(files)) return
     seen.record()
     onChange()
   }
@@ -91,13 +104,14 @@ export function watchFiles(files: readonly string[], onChange: () => void): () =
     clearTimeout(timer)
     timer = setTimeout(settle, SETTLE_MS)
   }
-  const watchedNames = new Set(wanted)
+  // Each name an event can carry, with the watched file it stands for.
+  const watchedNames = new Map([...wanted].map((file) => [file, file]))
   const directories = new Set([...wanted].map((file) => path.dirname(file)))
   // A file that is a symlink changes where it points: watch that file's directory too.
   for (const file of wanted) {
     try {
       const target = realpathSync(file)
-      watchedNames.add(target)
+      if (!watchedNames.has(target)) watchedNames.set(target, file)
       directories.add(path.dirname(target))
     } catch {
       // Not there yet: the lexical directory below sees it appear.
@@ -108,8 +122,10 @@ export function watchFiles(files: readonly string[], onChange: () => void): () =
     for (const directory of directories) {
       watchers.push(
         watch(directory, (_event, name) => {
-          if (name !== null && !watchedNames.has(path.join(directory, name))) return
-          isEventPending = true
+          const file = name === null ? undefined : watchedNames.get(path.join(directory, name))
+          if (name !== null && file === undefined) return
+          const files = file === undefined ? wanted : [file]
+          for (const each of files) named.add(each)
           schedule()
         }),
       )

@@ -23,7 +23,7 @@ export interface DirectiveContext {
   atRule: PostCSSAtRule
   onUnknown: 'warn' | 'error' | 'ignore'
   /**
-  Whether a `'warn'`-mode problem may be printed under Turbopack instead of raised as a warning.
+   * Whether a `'warn'`-mode problem may be printed under Turbopack instead of raised as a warning.
    */
   printWarnings: boolean
   result: Result
