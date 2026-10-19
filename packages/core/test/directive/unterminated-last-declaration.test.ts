@@ -17,6 +17,7 @@ import postcss from 'postcss'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { expandText } from '../../src/directive/expand-text.ts'
+import { tokenize } from '../../src/directive/tokenizer.ts'
 import { runExpand } from '../../src/expand-command.ts'
 import { navePlugin as lightningAdapter } from '../../src/lightningcss.ts'
 import { navePlugin } from '../../src/postcss.ts'
@@ -143,11 +144,12 @@ interface Found {
 }
 
 /**
- * What the `.x` rule of `css` still holds once a CSS parser has read it.
+ * What the rule `selector` (the `.x` rule unless told otherwise) of `css` still holds once a CSS
+ * parser has read it.
  */
-function readRule(css: string): Found {
+function readRule(css: string, selector = '.x'): Found {
   const found: Found = { atRules: [], declarations: {}, rules: [] }
-  postcss.parse(css).walkRules('.x', (rule) => {
+  postcss.parse(css).walkRules(selector, (rule) => {
     rule.each((child) => {
       switch (child.type) {
         case 'atrule': {
@@ -314,5 +316,118 @@ describe('a trailing backslash before the line break', () => {
     const { css } = expandText('.x { @nave focusRing; color: red\\\n }', {})
 
     expect(readRule(css).rules).toContain(FOCUS)
+  })
+})
+
+/**
+ * `css` closed for the parser, and for nothing else: `postcss.parse()` refuses an unclosed comment
+ * and an unclosed rule, which is what an expansion of input that ends early is allowed to print.
+ * The closing text is derived from the tokenizer, not from a pattern over the text, so a brace
+ * inside a string or a comment is not counted. It only ever adds closers after the last byte, so
+ * it cannot move a block into or out of another rule: a wrong nesting stays wrong.
+ */
+function closedForTheParser(css: string): string {
+  const tokens = tokenize(css)
+  const last = tokens.at(-1)
+  const isInUnclosedComment =
+    last?.type === 'comment' && !(last.raw.length >= 4 && last.raw.endsWith('*/'))
+  let depth = 0
+  for (const token of tokens) {
+    if (token.type === '{-token') depth++
+    else if (token.type === '}-token') depth--
+  }
+  return `${css}${isInUnclosedComment ? '*/' : ''}${'}'.repeat(Math.max(depth, 0))}`
+}
+
+const UNCLOSED_COMMENT = '/* c'
+const CLOSED_COMMENT = '/* c */'
+
+describe('input that ends in a comment or a backslash before the rule closes', () => {
+  it.each([
+    ['a closed comment', CLOSED_COMMENT],
+    ['an unclosed comment', UNCLOSED_COMMENT],
+  ])("closes the nested rule ahead of %s, so the block is the outer rule's own", (_n, comment) => {
+    const { css } = expandText(`.x { @nave focusRing; &:hover { color: red ${comment}`, {})
+    const parsed = closedForTheParser(css)
+
+    expect(readRule(parsed, '&:hover')).toMatchObject({
+      declarations: { color: 'red' },
+      rules: [],
+    })
+    expect(readRule(parsed).rules).toContain(FOCUS)
+    expect(readRule(parsed, '&:hover').rules).not.toContain(FOCUS)
+  })
+
+  it('closes the function ahead of a closed comment', () => {
+    const { css } = expandText(`.x { @nave focusRing; width: calc(1px ${CLOSED_COMMENT}`, {})
+    const parsed = closedForTheParser(css)
+
+    expect(readRule(parsed).declarations).toMatchObject({ width: 'calc(1px)' })
+    expect(readRule(parsed).rules).toContain(FOCUS)
+  })
+
+  it('keeps a trailing backslash from escaping the semicolon after a declaration value', () => {
+    const { css } = expandText('.x { @nave focusRing; color: red\\', {})
+
+    expect(css).toContain(String.raw`red\fffd;`)
+    expect(readRule(closedForTheParser(css)).rules).toContain(FOCUS)
+  })
+
+  it('does the same for a custom property', () => {
+    const { css } = expandText('.x { @nave focusRing; --x: a\\', {})
+
+    expect(css).toContain(String.raw`--x: a\fffd;`)
+    expect(readRule(closedForTheParser(css)).rules).toContain(FOCUS)
+  })
+
+  it('still gives a bare prelude that ends in a backslash its empty block', () => {
+    const { css } = expandText('.x { @nave focusRing; .y\\', {})
+
+    expect(css).toContain(String.raw`.y\fffd{}`)
+    expect(readRule(closedForTheParser(css)).rules).toContain(FOCUS)
+  })
+
+  it.each([
+    ['a closed comment', CLOSED_COMMENT],
+    ['an unclosed comment', UNCLOSED_COMMENT],
+  ])('writes the last directive once when %s follows it', (_n, comment) => {
+    const { css } = expandText(`.x { @nave focusRing ${comment}`, {})
+    const parsed = closedForTheParser(css)
+
+    expect(css.split('outline: none')).toHaveLength(2)
+    expect(readRule(parsed).declarations).toMatchObject({ outline: 'none' })
+    expect(readRule(parsed).rules).toContain(FOCUS)
+  })
+})
+
+describe('a trailing comment changes nothing but the comment itself', () => {
+  const SOURCES = [
+    '.x { @nave focusRing; color: red',
+    '.x { @nave focusRing; &:hover { color: red',
+    '.x { @nave focusRing; width: calc(1px',
+    '.x { @nave focusRing; color: red;',
+    '.x { @nave focusRing; .y',
+    '.x { @nave focusRing; &:hover { color: red }',
+    '.x { color: red; @nave focusRing',
+    '@media (x) { .x { @nave focusRing; color: red',
+  ]
+  const COMMENTS: readonly (readonly [string, string])[] = [
+    ['closed', ` ${CLOSED_COMMENT}`],
+    ['unclosed', ` ${UNCLOSED_COMMENT}`],
+  ]
+  const CASES = SOURCES.flatMap((source) =>
+    COMMENTS.map(([kind, comment]): [string, string, string] => [source, kind, comment]),
+  )
+
+  // The comment itself is kept (or dropped with a directive that swallows it) wherever the
+  // expander left it; taking its first occurrence out must leave exactly what the source gave
+  // without it.
+  it.each(CASES)('%s, then a %s comment', (source, _kind, comment) => {
+    const bare = expandText(source, {}).css
+    const commented = expandText(`${source}${comment}`, {}).css
+
+    const withoutComment = commented.replace(comment.trim(), '')
+
+    expect(norm(withoutComment)).toBe(norm(bare))
   })
 })

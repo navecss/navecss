@@ -164,12 +164,13 @@ function isNestedNode(tokens: readonly Token[], item: Item): boolean {
 function flushFrame(w: Walker, frameStart: number, blockEndIndex: number, frame: Frame): void {
   if (frame.parts.length === 0) return
   const close = closeInfoFor(w, frameStart, blockEndIndex, w.eofScanLimit)
+  const isClosedForReal = w.tokens[blockEndIndex] !== undefined
   // A real closer (not the EOF fallback) needs no bound update: this frame
   // closed cleanly, so it never entered the still-open chain at all.
-  if (w.tokens[blockEndIndex] === undefined) w.eofScanLimit = frameStart
-  // The end-of-input closers end an open declaration themselves; any other close leaves the
-  // last item as it was written, and a declaration with no `;` would swallow the text after it.
-  const semicolonAt = close.prefix === '' ? unterminatedEnd(w.tokens, frame.lastItem) : undefined
+  if (!isClosedForReal) w.eofScanLimit = frameStart
+  // At end of input the closers end an open declaration themselves; a real `}` leaves the last
+  // item as it was written, and a declaration with no `;` would swallow the text after it.
+  const semicolonAt = isClosedForReal ? unterminatedEnd(w.tokens, frame.lastItem) : undefined
   if (semicolonAt !== undefined) {
     w.edits.push({
       start: semicolonAt,
@@ -177,11 +178,15 @@ function flushFrame(w: Walker, frameStart: number, blockEndIndex: number, frame:
       parts: [{ text: ';', source: w.positionAt(semicolonAt) }],
     })
   }
-  const parts =
-    close.prefix === ''
-      ? frame.parts
-      : [{ text: close.prefix, source: w.positionAt(close.position) }, ...frame.parts]
-  w.edits.push({ start: close.position, end: close.position, parts })
+  if (close.prefix !== '') {
+    const source = w.positionAt(close.prefixPosition)
+    w.edits.push({
+      start: close.prefixPosition,
+      end: close.prefixPosition,
+      parts: [{ text: close.prefix, source }],
+    })
+  }
+  w.edits.push({ start: close.position, end: close.position, parts: frame.parts })
 }
 
 export interface BlockBounds {

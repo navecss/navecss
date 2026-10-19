@@ -43,3 +43,17 @@ describe.each([
     expect(getComputedStyle(element).outlineStyle).toBe('solid')
   })
 })
+
+describe.each([
+  ['a nested rule and a closed comment', '.x { @nave focusRing; &:hover { color: red /* c */'],
+  ['a trailing backslash', '.x { @nave focusRing; color: red\\'],
+])('input that ends early with %s', (_name, source) => {
+  it('draws the focus ring under keyboard focus', async () => {
+    const element = mount(source)
+
+    await userEvent.tab()
+
+    expect(document.activeElement).toBe(element)
+    expect(getComputedStyle(element).outlineStyle).toBe('solid')
+  })
+})
