@@ -69,10 +69,10 @@
   "devDependencies": {
     "@navecss/core": "workspace:*",
     "@types/node": "^26.6.5",
-    "@vitest/coverage-v8": "5.0.4",
+    "@vitest/coverage-v8": "5.0.5",
     "postcss": "^8.5.28",
     "typescript": "6.0.3",
-    "vitest": "5.0.4"
+    "vitest": "5.0.5"
   },
   "engines": {
     "node": ">=22.18"
