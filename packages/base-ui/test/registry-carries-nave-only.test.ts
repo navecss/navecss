@@ -52,7 +52,7 @@ describe("AC-base-ui-registry-15: The copies carry Nave's code only", () => {
   beforeAll(() => {
     baseUi = baseUiFiles()
     vendored = navePackageFiles()
-  }, 60_000)
+  }, HEAVY_MS)
 
   it('reads non-empty sources: the installed Base UI and the built tokens and core', () => {
     expect(baseUi.length).toBeGreaterThan(0)
