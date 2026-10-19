@@ -238,6 +238,12 @@ describe('the outlines a module may carry', () => {
     ).rejects.toThrow('baseUiProbe')
   })
 
+  it('refuses outline: 2px solid red, even where a full ring follows, naming the atom', async () => {
+    await expect(
+      moduleBody(inputs({ outline: '2px solid red' }, { '&:focus-visible': RING })),
+    ).rejects.toThrow('baseUiProbe')
+  })
+
   it('refuses OUTLINE: 0 and OUTLINE: none, a property in capitals, even where a ring follows', async () => {
     for (const value of ['0', 'none']) {
       await expect(
