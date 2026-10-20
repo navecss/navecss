@@ -151,8 +151,8 @@ const RING =
 /**
  * A module with the atom's class rule holding two leading nodes and then `body`.
  */
-const planted = (body: string): string =>
-  `@layer components.consumer {\n  .a { color: red; &:hover { color: blue; } ${body} }\n}\n`
+const planted = (body: string, group = '@layer components.consumer'): string =>
+  `${group} {\n  .a { color: red; &:hover { color: blue; } ${body} }\n}\n`
 
 describe('AC-base-ui-registry-22: a ring follows an outline: none only as the build reads it', () => {
   it.each([
@@ -201,6 +201,41 @@ describe('AC-base-ui-registry-22: a ring follows an outline: none only as the bu
     expect(declarations.length).toBeGreaterThan(0)
     expect(declarations.map((declaration) => hasRingAfter(declaration))).toEqual(
       declarations.map(() => expected),
+    )
+  })
+
+  it.each([
+    [
+      'N11 a ring whose outline style is dashed',
+      `& { outline: none; } &:focus-visible { outline-style: dashed; }`,
+      '@layer components.consumer',
+    ],
+    [
+      'N12 the atom rule in a group, not in the layer',
+      `& { outline: none; } ${RING}`,
+      '@media (hover: hover)',
+    ],
+    [
+      'N13 a ring selector with a space after the &',
+      `& { outline: none; } & :focus-visible { outline-style: solid; }`,
+      '@layer components.consumer',
+    ],
+    [
+      'N13b a ring selector in a list',
+      `& { outline: none; } &:focus-visible, &:hover { outline-style: solid; }`,
+      '@layer components.consumer',
+    ],
+    [
+      'N13c a ring selector that negates the state',
+      `& { outline: none; } &:not(:focus-visible) { outline-style: solid; }`,
+      '@layer components.consumer',
+    ],
+  ])('%s', (_name, body, group) => {
+    const declarations = outlineNoneDeclarations(planted(body, group))
+
+    expect(declarations.length).toBeGreaterThan(0)
+    expect(declarations.map((declaration) => hasRingAfter(declaration))).toEqual(
+      declarations.map(() => false),
     )
   })
 })

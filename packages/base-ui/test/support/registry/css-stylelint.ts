@@ -204,8 +204,12 @@ const isRing = (node: postcss.ChildNode): boolean =>
   )
 
 /**
- * Whether a ring follows the declaration as the build reads it: a later child of the atom's class
- * rule, at that level only, than the one that holds the declaration.
+ * Whether a ring follows the declaration, read after the disable comment is written: the holder is
+ * the declaration, or the `&` rule that holds it and comments alone, directly in the atom's class
+ * rule; the ring is a later child of that class rule that is exactly `&:focus-visible` and sets
+ * `outline-style: solid`. It is not the build's `isPaired` (`scripts/registry/module-css.ts`): it
+ * allows comments in the wrapper; asks only `outline-style: solid` of the ring, the counts holding
+ * the other three longhands; does not refuse `!important`; and needs an `@layer` parent.
  */
 export const hasRingAfter = (declaration: Declaration): boolean => {
   const holder = holderOf(declaration)

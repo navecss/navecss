@@ -184,10 +184,12 @@ describe('AC-native-apply-order-54 — scaling, as a ratio to a linear control',
   })
 
   // The two rows below compare a subject whose cost is its pairs with a control that has none, so
-  // the ratio moves with the control. A rule now costs under half of what it did before a plain
-  // object stopped throwing five errors to be recognised, and the measured ratio went from 3 to 4
-  // up to 7 to 8. A cost that grew with the square of the pairs measured 12 to 15 against the
-  // dearer control, which is 2.5 times that against this one.
+  // the ratio moves with the control: a rule costs under half of what it did before a plain object
+  // stopped throwing five errors to be recognised, and the ratio went from 3 to 4 up to 7 to 8
+  // (4 to 5 under coverage). They guard the growth. They cannot guard the constant: the check as it
+  // was before the first memoisation grows the same way, at about four times the cost per pair, and
+  // measures 12 to 16 here, which a loaded machine reaches too. The cost per pair is counted in
+  // native-order-counts.test.ts instead.
   it('compares the atoms of one directive in time proportional to the pairs, not more', () => {
     const size = 400
     const measured = ratio(
@@ -281,19 +283,22 @@ describe('AC-native-apply-order-54 — the move check costs what the pairs cost,
   }, 300_000)
 })
 
+// The bounds are coarse on purpose: 40 samples on a machine running 12 busy loops, under coverage,
+// measured up to 4.6, 10.5 and 5.9 (unloaded 1.6, 5 and 3). What each speedup of the check saves is
+// counted exactly in native-order-counts.test.ts, which a loaded machine cannot move.
 describe('AC-native-apply-order-54 — a small rule with a directive costs what a small rule costs', () => {
   const size = 300
 
-  it('expands 300 rules of one atom in the text host no slower than 5 times 300 plain ones', () => {
+  it('expands 300 rules of one atom in the text host no slower than 8 times 300 plain ones', () => {
     const measured = ratio(
       () => expandText('.a { @nave flex; }\n'.repeat(size)),
       () => expandText('.a { display: flex; }\n'.repeat(size)),
     )
 
-    expect(measured).toBeLessThan(5)
+    expect(measured).toBeLessThan(8)
   }, 120_000)
 
-  it('expands 300 rules of one atom in the PostCSS host no slower than 10 times 300 plain ones', () => {
+  it('expands 300 rules of one atom in the PostCSS host no slower than 20 times 300 plain ones', () => {
     const plugin = navePlugin()
     const process = (css: string): void => {
       postcss([plugin]).process(css, { from: undefined }).sync()
@@ -303,10 +308,10 @@ describe('AC-native-apply-order-54 — a small rule with a directive costs what 
       () => process('.a { display: flex; }\n'.repeat(size)),
     )
 
-    expect(measured).toBeLessThan(10)
+    expect(measured).toBeLessThan(20)
   }, 120_000)
 
-  it('makes a plugin from 80 atoms in no more than 15 times the time of parsing them as a stylesheet', () => {
+  it('makes a plugin from 80 atoms in no more than 30 times the time of parsing them as a stylesheet', () => {
     const atoms: Record<string, AtomDefinition> = {}
     for (let i = 0; i < 80; i++) {
       atoms[`a${i}`] = {
@@ -326,6 +331,6 @@ describe('AC-native-apply-order-54 — a small rule with a directive costs what 
       () => postcss.parse(css),
     )
 
-    expect(measured).toBeLessThan(15)
+    expect(measured).toBeLessThan(30)
   }, 120_000)
 })
