@@ -11,7 +11,7 @@ import type { DirectiveFacts, Finding } from './order-model.ts'
 import type { DirectiveNode, ModelNode, NodeRef, RuleInput, RulePlan } from './rule-model.ts'
 import type { PlanState } from './rule-state.ts'
 
-import { checkOrder } from './order-check.ts'
+import { canHoldPair, checkOrder } from './order-check.ts'
 import { plannedDirective } from './order-emitted.ts'
 import { nestedText } from './order-outward-names.ts'
 import { findingWarnings, markerWarnings } from './order-warnings.ts'
@@ -135,14 +135,15 @@ function keepNested(state: PlanState, node: ModelNode): void {
  * a directive written in a nested rule, for the plan of that rule to know.
  */
 function warningsOf(state: PlanState): Pick<RulePlan, 'outwardFindings' | 'warnings'> {
-  const amp = ampersandSpecificity(state.input.selector)
   const { emittedCache, extend, isInsideKeyframes, outward } = state.input
-  const findings = checkOrder(
-    state.segments,
-    amp,
-    (directive) => plannedDirective(directive, { extend, isInsideKeyframes }, emittedCache),
-    state.isPseudoElementRule,
-  )
+  const findings = canHoldPair(state.segments)
+    ? checkOrder(
+        state.segments,
+        ampersandSpecificity(state.input.selector),
+        (directive) => plannedDirective(directive, { extend, isInsideKeyframes }, emittedCache),
+        state.isPseudoElementRule,
+      )
+    : []
   const knownFor = (directive: DirectiveFacts): readonly Finding[] =>
     outward?.known.get(outward.identityOf(directive.ref)) ?? []
   const warnings = [

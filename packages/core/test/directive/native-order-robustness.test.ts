@@ -10,9 +10,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import postcss from 'postcss'
 import { afterAll, describe, expect, it } from 'vitest'
 
+import type { AtomDefinition } from '../../src/atoms.ts'
+
 import { expandText } from '../../src/directive/expand-text.ts'
+import { navePlugin } from '../../src/postcss.ts'
 import { warningsViaPostcss, warningsViaText } from '../helpers/native-order.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -179,6 +183,11 @@ describe('AC-native-apply-order-54 — scaling, as a ratio to a linear control',
     expect(measured).toBeLessThan(20)
   })
 
+  // The two rows below compare a subject whose cost is its pairs with a control that has none, so
+  // the ratio moves with the control. A rule now costs under half of what it did before a plain
+  // object stopped throwing five errors to be recognised, and the measured ratio went from 3 to 4
+  // up to 7 to 8. A cost that grew with the square of the pairs measured 12 to 15 against the
+  // dearer control, which is 2.5 times that against this one.
   it('compares the atoms of one directive in time proportional to the pairs, not more', () => {
     const size = 400
     const measured = ratio(
@@ -186,7 +195,7 @@ describe('AC-native-apply-order-54 — scaling, as a ratio to a linear control',
       () => warningsViaText('.x { @nave hideDesktopUp; }\n'.repeat(size)),
     )
 
-    expect(measured).toBeLessThan(8)
+    expect(measured).toBeLessThan(16)
   }, 60_000)
 
   it('compares the directives of one rule in time proportional to the pairs, not more', () => {
@@ -196,7 +205,7 @@ describe('AC-native-apply-order-54 — scaling, as a ratio to a linear control',
       () => warningsViaText('.x { @nave hideDesktopUp textLeft; }\n'.repeat(size)),
     )
 
-    expect(measured).toBeLessThan(8)
+    expect(measured).toBeLessThan(16)
   }, 60_000)
 })
 
@@ -270,4 +279,53 @@ describe('AC-native-apply-order-54 — the move check costs what the pairs cost,
     expect(result.status, result.stderr.slice(-300)).toBe(0)
     expect(JSON.parse(result.stdout.trim().split('\n').at(-1)!)).toEqual({ warnings: 6400 })
   }, 300_000)
+})
+
+describe('AC-native-apply-order-54 — a small rule with a directive costs what a small rule costs', () => {
+  const size = 300
+
+  it('expands 300 rules of one atom in the text host no slower than 5 times 300 plain ones', () => {
+    const measured = ratio(
+      () => expandText('.a { @nave flex; }\n'.repeat(size)),
+      () => expandText('.a { display: flex; }\n'.repeat(size)),
+    )
+
+    expect(measured).toBeLessThan(5)
+  }, 120_000)
+
+  it('expands 300 rules of one atom in the PostCSS host no slower than 10 times 300 plain ones', () => {
+    const plugin = navePlugin()
+    const process = (css: string): void => {
+      postcss([plugin]).process(css, { from: undefined }).sync()
+    }
+    const measured = ratio(
+      () => process('.a { @nave flex; }\n'.repeat(size)),
+      () => process('.a { display: flex; }\n'.repeat(size)),
+    )
+
+    expect(measured).toBeLessThan(10)
+  }, 120_000)
+
+  it('makes a plugin from 80 atoms in no more than 15 times the time of parsing them as a stylesheet', () => {
+    const atoms: Record<string, AtomDefinition> = {}
+    for (let i = 0; i < 80; i++) {
+      atoms[`a${i}`] = {
+        declarations: { color: 'red', margin: '1px' },
+        pseudos: { ':hover': { color: 'blue' } },
+        media: { '(width >= 40em)': { declarations: { color: 'green' } } },
+      }
+    }
+    const css = Object.keys(atoms)
+      .map(
+        (name) =>
+          `.${name}{color:red;margin:1px}.${name}:hover{color:blue}@media (width >= 40em){.${name}{color:green}}`,
+      )
+      .join('\n')
+    const measured = ratio(
+      () => navePlugin({ extend: atoms }),
+      () => postcss.parse(css),
+    )
+
+    expect(measured).toBeLessThan(15)
+  }, 120_000)
 })

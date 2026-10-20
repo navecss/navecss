@@ -90,12 +90,13 @@ function findingsOfBlock(
 ): Finding[] {
   const { amp, moved } = rule
   const segment = segments[index] as AtomBlockSegment
-  const units = unitsOfBlock(contextOf(segment, amp), segment.block)
   const isRead = (other: Segment): boolean =>
     moved === undefined || moved.has(segment) || moved.has(other)
   const candidates = segments.flatMap((other, at) =>
     at > index && !isSameAtom(segment, other) && isRead(other) ? candidatesOfSegment(at) : [],
   )
+  if (candidates.length === 0) return []
+  const units = unitsOfBlock(contextOf(segment, amp), segment.block)
   return candidates.flatMap((candidate) =>
     units.map((unit) => compare(unit, candidate)).filter((f) => f !== undefined),
   )
@@ -129,6 +130,19 @@ function pairsIn(
         )
   if (isPseudoElementRule) return inner
   return [...inner, ...outwardFindings(segments, { amp, emitted, scope }, candidatesOfSegment)]
+}
+
+/**
+ * Whether the parts of a rule's output can hold a pair at all: an atom's conditional block to be
+ * overridden, or a nested rule or group that may hold a directive with one. A rule of bare
+ * declarations alone cannot, and is not read.
+ */
+export function canHoldPair(segments: readonly Segment[]): boolean {
+  return segments.some(
+    (segment) =>
+      segment.kind === 'atom-block' ||
+      (segment.kind === 'own' && (segment.node.kind === 'rule' || segment.node.kind === 'group')),
+  )
 }
 
 /**

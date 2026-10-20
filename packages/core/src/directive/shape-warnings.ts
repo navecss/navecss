@@ -166,6 +166,7 @@ function droppedWarning(fact: DroppedFact): PlanWarning {
  */
 export function shapeWarnings(state: PlanState): PlanWarning[] {
   if (state.isPseudoElementRule) return state.dropped.map((fact) => droppedWarning(fact))
+  if (state.runs.length === 0) return []
   const selectors = splitSelectors(state.input.selector)
   const isMixed = selectors.pseudoElements.length > 0 && selectors.others.length > 0
   const hasUnequal = isUnequal(selectors)
