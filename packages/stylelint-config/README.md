@@ -75,7 +75,7 @@ Use stylelint's own `overrides` to phase it in by path, rather than fixing every
 
 ## The outline guard
 
-This package flags `outline: none` and `outline: 0`, through stylelint's
+This package flags `outline: none`, `outline: 0` and `outline-style: none`, through stylelint's
 `declaration-property-value-disallowed-list` rule. To turn it off, set that rule to `null` in
 your own config, or disable it for one declaration with a stylelint disable comment. Setting that
 rule to anything else in your own config also replaces this check, as described above.

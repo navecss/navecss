@@ -256,7 +256,11 @@ describe('AC-used-atoms-54 — in dev, the markup warning is evaluated when the 
       const app = backend({
         'vitest.config.ts': [
           `import { navePlugin } from ${JSON.stringify(path.join(CORE_ROOT, 'src/vite.ts'))}`,
-          'export default { plugins: [navePlugin()], test: { css: { include: /.+/ } } }',
+          "import path from 'node:path'",
+          'export default {',
+          '  plugins: [navePlugin()],',
+          "  test: { css: { include: /.+/ }, fsModuleCachePath: path.join(import.meta.dirname, '.vitest-cache') },",
+          '}',
           '',
         ].join('\n'),
         'src/a.test.ts': test,

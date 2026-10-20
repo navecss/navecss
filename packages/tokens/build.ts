@@ -4,6 +4,7 @@
  * Input:  tokens.json  (W3C DTCG format)
  * Output:
  *   dist/tokens.css   — @layer tokens with @property declarations + CSS custom properties
+ *   dist/css.d.ts     — `export {}`: the types of a side-effect import of `tokens.css`
  *   dist/tokens.js    — ESM export of all tokens as a typed const object
  *   dist/tokens.d.ts  — TypeScript declarations for the JS export
  *
@@ -42,6 +43,12 @@ const config: BuildConfig = {
           format: formatCssTokens,
           // No filter here — isPublic is applied inside the format function
           // so @property blocks and :root vars stay in sync automatically.
+        },
+        {
+          // A stylesheet exports nothing. This declaration is the `types` condition of the
+          // `./css` export, so a side-effect import of it type-checks.
+          destination: 'css.d.ts',
+          format: () => 'export {}\n',
         },
       ],
     },

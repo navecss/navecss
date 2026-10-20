@@ -1,0 +1,1 @@
+On this page: [Install](#install) · [Use it](#use-it) · [The stylesheet](#the-stylesheet) · [Variants](#variants) · [Overriding](#overriding) · [Copy a component](#copy-a-component-into-your-project) · [What is styled](#what-is-styled) · [Feedback and navigation](#feedback-and-navigation) · [Things to know](#things-to-know) · [License](#license)

@@ -61,6 +61,20 @@ function manifest(): Record<string, unknown> {
 }
 
 /**
+ * A stylesheet export later gained a `types` condition naming one declaration file that exports
+ * nothing, so a side-effect import of it type-checks. Its `default` is still the 0.1.0 file, so the
+ * guard compares that file. An entry with any other condition, or any other `types` target, is
+ * kept as it is and fails the comparison.
+ */
+function stylesheetView(entry: unknown): unknown {
+  if (typeof entry !== 'object' || entry === null) return entry
+  const { default: target, types, ...extra } = entry as Record<string, unknown>
+  const isStylesheetEntry =
+    types === './dist/css.d.ts' && typeof target === 'string' && Object.keys(extra).length === 0
+  return isStylesheetEntry ? target : entry
+}
+
+/**
  * `./postcss` later nested its conditions (`import: { types, default }` beside a `require`
  * condition) so each loader gets its own declarations. Resolved through `import`, that is still
  * the 0.1.0 pair of files, so the guard compares what the `import` condition reaches, not the
@@ -73,6 +87,8 @@ function manifest(): Record<string, unknown> {
  * `types` ahead of `import`, which TypeScript reads first) is not overwritten by it.
  */
 function importView(entry: unknown): unknown {
+  const stylesheet = stylesheetView(entry)
+  if (stylesheet !== entry) return stylesheet
   const importEntry = (entry as { import?: unknown } | null)?.import
   if (typeof importEntry !== 'object' || importEntry === null) return entry
   const { import: _import, require: _require, ...siblings } = entry as Record<string, unknown>

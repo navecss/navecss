@@ -33,9 +33,10 @@ name: dependency-review
 # from the licence the package declares. `allow-dependencies-licenses` names the packages whose
 # declared licence is on the list but whose GitHub reading adds one that is not, where adding
 # that licence to the list would widen it for every other package: vscode-css-languageservice
-# (declared MIT, read as also CC-BY-SA-2.5 for documentation data it bundles) and
-# parse-statements (declared MIT, read as also JSON). The local allow-list still classifies both
-# on the licence they declare.
+# (declared MIT, read as also CC-BY-SA-2.5 for documentation data it bundles), parse-statements
+# (declared MIT, read as also JSON) and json-schema-typed (declared BSD-2-Clause, read as also
+# JSON). The action matches an entry by package name alone, so each one covers every version of
+# that package. The local allow-list still classifies all three on the licence they declare.
 #
 # `actions/dependency-review-action` is public-repository-only without GitHub Advanced Security
 # and runs only on `pull_request` (or `merge_group`, unused here — this repo has no merge queue).
@@ -68,4 +69,5 @@ jobs:
             BlueOak-1.0.0, Python-2.0, PSF-2.0, Zlib, WTFPL, Artistic-2.0, MPL-1.1, MPL-2.0,
             LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later
           allow-dependencies-licenses: >-
-            pkg:npm/vscode-css-languageservice, pkg:npm/parse-statements
+            pkg:npm/vscode-css-languageservice, pkg:npm/parse-statements,
+            pkg:npm/json-schema-typed

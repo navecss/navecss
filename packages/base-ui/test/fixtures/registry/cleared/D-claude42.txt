@@ -1,0 +1,1 @@
+packages/cli/      → navecss CLI, unpublished and not implemented (every command is a stub); components from base-ui's registry are copied with shadcn's CLI, which needs nothing from this package

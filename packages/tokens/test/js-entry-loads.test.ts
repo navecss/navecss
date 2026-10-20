@@ -63,7 +63,8 @@ function resolveImportTarget(entry: ExportTarget | string): string | undefined {
 
 /**
  * The `import` target of every subpath in the real export map that declares one, resolved
- * via `resolveImportTarget`. A subpath whose resolution ends in no string is skipped.
+ * via `resolveImportTarget`. A subpath whose resolution ends in no string is skipped, and so is a
+ * stylesheet (`./css`, whose `default` is a `.css` file that Node does not load as a module).
  */
 function importTargets(): ImportTarget[] {
   const manifest = JSON.parse(readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')) as {
@@ -72,7 +73,7 @@ function importTargets(): ImportTarget[] {
   const targets: ImportTarget[] = []
   for (const [subpath, entry] of Object.entries(manifest.exports)) {
     const target = resolveImportTarget(entry)
-    if (target === undefined) continue
+    if (target === undefined || target.endsWith('.css')) continue
     const file = path.join(PACKAGE_ROOT, target)
     const rel = path.relative(PACKAGE_ROOT, file).split(path.sep).join('/')
     targets.push({ subpath, file, rel })

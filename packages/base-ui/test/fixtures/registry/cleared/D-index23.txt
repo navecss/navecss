@@ -1,0 +1,1 @@
+How the packages work and why: the `@layer` model, the DTCG 2025.10 token pipeline, the `@nave` directive (core implements it; PostCSS is one adapter), the Base UI package and its registry.

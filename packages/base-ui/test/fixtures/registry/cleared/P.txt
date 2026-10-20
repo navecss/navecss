@@ -1,0 +1,2 @@
+  Each component `@navecss/base-ui` styles can also be copied into your project from Nave's
+  shadcn registry ([how](packages/base-ui/README.md#copy-a-component-into-your-project)).

@@ -1,0 +1,1 @@
+- **[packages/cli](../packages/cli/)** (`@navecss/cli`): the `navecss` command. Its commands are stubs. `@navecss/base-ui`'s components are copied from that package's registry with shadcn's CLI, which needs nothing from this one.

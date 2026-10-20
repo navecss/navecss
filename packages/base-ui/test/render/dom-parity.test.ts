@@ -6,6 +6,7 @@ import type { Props } from '../support/scenes.ts'
 
 import { describeDocument, marked, parityViolations, partsNamed } from '../support/dom.ts'
 import { EARLIER_SUBPATHS } from '../support/feedback.ts'
+import { VARIANT_PARTS } from '../support/parity-lists.ts'
 import { act, cleanup, render, user } from '../support/react.ts'
 import { partOf, scenes } from '../support/scenes.ts'
 import { loadBare, loadNave } from '../support/sources.ts'
@@ -17,19 +18,6 @@ const bare = await loadBare()
 const nave = await loadNave()
 
 afterEach(cleanup)
-
-const VARIANT_PARTS = [
-  'Button',
-  'Toolbar.Button',
-  'Dialog.Trigger',
-  'Dialog.Close',
-  'Popover.Trigger',
-  'Popover.Close',
-  'Menu.Trigger',
-  'Tooltip.Trigger',
-  'AlertDialog.Trigger',
-  'AlertDialog.Close',
-]
 
 const HIGHLIGHT_ATTRIBUTE = '[data-highlighted]'
 

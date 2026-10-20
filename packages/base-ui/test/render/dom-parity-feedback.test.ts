@@ -12,6 +12,7 @@ import {
   underSetups,
 } from '../support/feedback-render.ts'
 import { FEEDBACK_SUBPATHS, feedbackBare, feedbackNave } from '../support/feedback.ts'
+import { FEEDBACK_PARITY_STATES } from '../support/parity-lists.ts'
 import { cleanup, render, user } from '../support/react.ts'
 import { scenes } from '../support/scenes.ts'
 import { navigationMenuOpenProps } from '../support/states.ts'
@@ -36,45 +37,6 @@ const variantProps = (variant: 'ghost' | 'primary'): Record<string, Props> => ({
   'Toast.Close': { size: 'sm', variant },
 })
 
-interface State {
-  /**
-  What the wrapper alone is given: the props the bare part has no use for.
-   */
-  readonly extra?: Record<string, Props>
-  readonly label: string
-  readonly props: Record<string, Props>
-}
-
-const STATES: Readonly<Record<string, readonly State[]>> = {
-  avatar: [
-    { label: 'rendered', props: {} },
-    { extra: { 'Avatar.Root': { size: 'lg' } }, label: 'rendered, with size="lg"', props: {} },
-    { extra: { 'Avatar.Root': { size: 'sm' } }, label: 'rendered, with size="sm"', props: {} },
-  ],
-  meter: [{ label: 'rendered', props: {} }],
-  'navigation-menu': [
-    { label: 'closed', props: {} },
-    { label: 'open', props: navigationMenuOpenProps() },
-  ],
-  progress: [
-    { label: 'rendered', props: {} },
-    { label: 'indeterminate', props: { 'Progress.Root': { value: INDETERMINATE } } },
-  ],
-  'scroll-area': [{ label: 'rendered', props: {} }],
-  separator: [
-    { label: 'horizontal', props: {} },
-    { label: 'vertical', props: { Separator: { orientation: 'vertical' } } },
-  ],
-  toast: [
-    { label: 'two toasts', props: {} },
-    { label: 'four toasts open', props: { 'Toast.Adder': { count: 4 } } },
-    {
-      label: 'four toasts open, one over the limit',
-      props: { 'Toast.Adder': { count: 4 }, 'Toast.Provider': { limit: 3 } },
-    },
-  ],
-}
-
 const VARIANT_SETS = [
   { label: '', props: {} },
   { label: ', with variant and size', props: variantProps('primary') },
@@ -86,7 +48,7 @@ const VARIANT_SETS = [
  * props only mean something on the Toast's buttons.
  */
 const CASES = FEEDBACK_SUBPATHS.flatMap((subpath) =>
-  (STATES[subpath] ?? []).flatMap(({ extra, label, props }) =>
+  (FEEDBACK_PARITY_STATES[subpath] ?? []).flatMap(({ extra, label, props }) =>
     VARIANT_SETS.filter(
       ({ label: variantLabel }) => subpath === 'toast' || variantLabel === '',
     ).map(({ label: variantLabel, props: variantSet }) => ({
@@ -111,7 +73,7 @@ describe("AC-base-ui-feedback-navigation-46 (AC-12): a wrapper renders exactly t
   })
 
   it('lists a state for each of the seven, so none is skipped', () => {
-    expect(Object.keys(STATES).toSorted((a, b) => a.localeCompare(b))).toEqual(
+    expect(Object.keys(FEEDBACK_PARITY_STATES).toSorted((a, b) => a.localeCompare(b))).toEqual(
       [...FEEDBACK_SUBPATHS].toSorted((a, b) => a.localeCompare(b)),
     )
   })

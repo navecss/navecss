@@ -19,11 +19,26 @@
     "access": "public"
   },
   "exports": {
-    ".": "./dist/index.css",
-    "./layers": "./dist/layers.css",
-    "./no-tokens": "./dist/no-tokens.css",
-    "./reset": "./dist/reset.css",
-    "./atomic": "./dist/atomic.css",
+    ".": {
+      "types": "./dist/css.d.ts",
+      "default": "./dist/index.css"
+    },
+    "./layers": {
+      "types": "./dist/css.d.ts",
+      "default": "./dist/layers.css"
+    },
+    "./no-tokens": {
+      "types": "./dist/css.d.ts",
+      "default": "./dist/no-tokens.css"
+    },
+    "./reset": {
+      "types": "./dist/css.d.ts",
+      "default": "./dist/reset.css"
+    },
+    "./atomic": {
+      "types": "./dist/css.d.ts",
+      "default": "./dist/atomic.css"
+    },
     "./cx": {
       "types": "./dist/cx.d.ts",
       "import": "./dist/cx.js"
@@ -50,7 +65,10 @@
       "types": "./dist/lightningcss.d.ts",
       "import": "./dist/lightningcss.js"
     },
-    "./standalone": "./dist/standalone.css",
+    "./standalone": {
+      "types": "./dist/css.d.ts",
+      "default": "./dist/standalone.css"
+    },
     "./check": {
       "types": "./dist/check.d.ts",
       "import": "./dist/check.js"
@@ -80,7 +98,7 @@
     "lint:fix": "eslint src scripts \"test/**/*.ts\" --fix && stylelint \"src/**/*.css\" --fix",
     "test": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && vitest run",
     "test:browser": "node scripts/generate-consumer-theming-fixtures.ts && node scripts/generate-vite-plugin-fixtures.ts && node scripts/generate-lightningcss-fixtures.ts && node scripts/generate-no-bundler-fixture.ts && vitest run --config vitest.browser.config.ts && vitest run --config vitest.chromium.config.ts",
-    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints . layers no-tokens reset atomic standalone",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
   "peerDependencies": {

@@ -130,14 +130,19 @@ describe('AC-consumer-constraints-22 covers: R13', () => {
   })
 
   it('no custom message names a repository path', () => {
+    const strictValue = (
+      config.rules?.['scale-unlimited/declaration-strict-value'] as unknown[]
+    )[1] as {
+      message: string
+    }
+    const outline = (
+      config.rules?.['declaration-property-value-disallowed-list'] as unknown[]
+    )[1] as { message: (property: string) => string }
     const messages = [
-      (config.rules?.['scale-unlimited/declaration-strict-value'] as unknown[])[1] as {
-        message: string
-      },
-      (config.rules?.['declaration-property-value-disallowed-list'] as unknown[])[1] as {
-        message: string
-      },
-    ].map((options) => options.message)
+      strictValue.message,
+      outline.message('outline'),
+      outline.message('outline-style'),
+    ]
     for (const message of messages) {
       expect(message).not.toMatch(/packages\/|src\/|dist\/|\.test\./)
       expect(message).not.toMatch(/\.(ts|mjs|js|css|json)\b/)

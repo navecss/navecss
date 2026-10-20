@@ -20,7 +20,7 @@ Branching, Conventional Commits, Changesets, the CI check set, and how a change 
 
 ## 🧑‍🚀 Technical documentation
 
-How the packages work and why: the `@layer` model, the DTCG 2025.10 token pipeline, the `@nave` directive (core implements it; PostCSS is one adapter), the Base UI package, the CLI registry.
+How the packages work and why: the `@layer` model, the DTCG 2025.10 token pipeline, the `@nave` directive (core implements it; PostCSS is one adapter), the Base UI package and its registry.
 
 [Let's dive in!](./03-tech-docs/index.md)
 
@@ -44,4 +44,4 @@ Published to npm:
 
 In the repository but not published (`private: true`):
 
-- **[packages/cli](../packages/cli/)** (`@navecss/cli`): the `navecss` component-registry command; its commands are stubs until the registry exists.
+- **[packages/cli](../packages/cli/)** (`@navecss/cli`): the `navecss` command. Its commands are stubs. `@navecss/base-ui`'s components are copied from that package's registry with shadcn's CLI, which needs nothing from this one.

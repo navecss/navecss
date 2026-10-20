@@ -9,7 +9,7 @@
 - **The `@nave` directive** — the host-free directive core (resolution, CSS placement) that inlines atomic utilities at build time, and its adapters (PostCSS today); the zero-runtime guarantee.
 - **`cx()` and consumer atoms** — static atom mapping and the consumer-atoms story.
 - **The Base UI package** — how `@navecss/base-ui` wraps Base UI's components and builds its one stylesheet from Nave's tokens, and what it does NOT redistribute.
-- **The CLI registry** — the component-registry format and the `navecss add` flow.
+- **The Base UI registry**: how `@navecss/base-ui` generates a shadcn registry item for each component it styles from the package source, where the items ship (`dist/registry/` in the tarball) and the addresses that reach them, and what keeps a copy equal to the package at the release it came from.
 - **CI/CD and release topology** — the Turborepo graph, Changesets, and the publish flow.
 
 Where a subsystem's design rests on an architectural decision, the reasoning is in that decision's [ADR](../04-adr/index.md), and the page here links it rather than restating it.

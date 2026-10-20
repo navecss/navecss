@@ -1,9 +1,9 @@
+import path from 'node:path'
 import type { BrowserCommand, BrowserConfigOptions } from 'vitest/node'
 
 import { playwright } from '@vitest/browser-playwright'
 import { createReadStream, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import path from 'node:path'
 import { defineConfig, type Plugin } from 'vitest/config'
 
 const FIXTURES = path.resolve(import.meta.dirname, 'test/browser/fixtures')
@@ -174,6 +174,9 @@ const MINORS = [
 export default defineConfig({
   plugins: [serveFixturesAsTheyAre()],
   test: {
+    // Vitest's own default is one directory at the workspace root that every package deletes at
+    // once when the lockfile changes, which fails a package with ENOTEMPTY. Each config keeps its own.
+    fsModuleCachePath: path.resolve(import.meta.dirname, 'node_modules/.vitest-cache/browser'),
     // The pointer, the focus and the frame clock belong to the page, so two files never run at once:
     // one file's hover or Escape would land in another's scene.
     fileParallelism: false,
@@ -186,7 +189,10 @@ export default defineConfig({
         test: {
           name: 'current',
           include: ['test/browser/**/*.browser.test.ts'],
-          globalSetup: ['test/browser/support/consumer-app.global-setup.ts'],
+          globalSetup: [
+            'test/browser/support/consumer-app.global-setup.ts',
+            'test/browser/support/registry-consumer-app.global-setup.ts',
+          ],
           provide: { baseUi: installedVersion('@base-ui/react') },
           browser: browser(),
         },
