@@ -93,8 +93,10 @@ and a Base UI major is a major of this package; the peer floor is the oldest Bas
 whose declarations type-check against ours. A visual change is a `minor`.
 
 **6. A registry is a later delivery from the same source, not part of this record's shipped
-state.** The plan is a shadcn-format registry generated from the same source, as the way to own
-a copy of one component. It does not exist yet, and nothing here depends on it.
+state.** The plan is a shadcn-format registry generated from the same source, as the way to copy
+one component into a project and change it there. It did not exist when this was decided, and
+nothing here depends on it.
+It now ships: see [Update: the registry now exists](#update-the-registry-now-exists).
 
 ## Consequences
 
@@ -120,4 +122,34 @@ a copy of one component. It does not exist yet, and nothing here depends on it.
   delivery: it leaves the per-part wiring, which is the work to be removed, with every team.
   The atoms survive underneath the stylesheet.
 - **Copying component source into the consumer's project as the only delivery.** Kept as a
-  later, second delivery (decision 6): it gives ownership, but not updates.
+  later, second delivery (decision 6): a team can change the copy, but gets no updates.
+
+## Update: the registry now exists
+
+Decision 6 named a registry as a later delivery from the same source. `@navecss/base-ui` now
+ships it: a team can copy one component's files into its project and change the rules there.
+
+**How it is generated.** `scripts/generate-registry.ts` runs in the package build after the
+stylesheet is built, from the inputs the wrappers and the stylesheet are built from: the wrapper
+generator's output for each subpath, the role atoms expanded through the PostCSS adapter,
+`src/part.ts` and `LICENSE`. Nothing in the registry is written by hand, so each release's items
+follow that release's roster and atoms, and the package's tests hold every item to the package:
+the same DOM, the same rules and the same computed styles.
+
+**What it is.** One shadcn registry item per styled subpath (35 components today; Form styles no part and
+has none). Every item is a universal item: each file is a `registry:file` with a plain
+`components/nave/` target, so shadcn's CLI installs it into a project with no Tailwind, no
+`components.json` and no `init`. An item has five files: the entry, the parts, the wrap helper, a
+CSS Module and `NAVECSS-LICENSE`. It names no dependency version and no other item.
+
+**Where it is served.** Inside the package tarball under `dist/registry/`, reached by path from
+the installed package and, at an exact version, from jsDelivr
+(`https://cdn.jsdelivr.net/npm/@navecss/base-ui@<version>/dist/registry/<item>.json`). Nothing
+else is hosted.
+
+**Decision: a copy's class scoping uses CSS Modules.** A copy's rules sit in
+`@layer components.consumer`, under class names that a CSS Module renames per file. A copy that
+kept the package's class names would collide with the package's stylesheet, and an edit to one
+would reach the other. CSS Modules are a bundler convention, not a standard, because no standard
+isolates class names per file. The decision takes the convention knowingly: the alternative is a
+naming scheme each team keeps unique by hand. A host without CSS Modules uses the package.

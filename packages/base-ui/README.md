@@ -6,7 +6,7 @@ This package is not affiliated with, endorsed by or sponsored by MUI or the Base
 
 `@base-ui/react` is a separately installed peer, built and maintained by its own maintainers; this package does not include it. You change `@base-ui/react/<component>` to `@navecss/base-ui/<component>` in your imports, add one stylesheet, and every part keeps Base UI's props, refs and behaviour while gaining Nave's styling. The styling is zero-runtime styling: static classes and one static stylesheet, with all behaviour still Base UI's.
 
-On this page: [Install](#install) · [Use it](#use-it) · [The stylesheet](#the-stylesheet) · [Variants](#variants) · [Overriding](#overriding) · [What is styled](#what-is-styled) · [Feedback and navigation](#feedback-and-navigation) · [Things to know](#things-to-know) · [License](#license)
+On this page: [Install](#install) · [Use it](#use-it) · [The stylesheet](#the-stylesheet) · [Variants](#variants) · [Overriding](#overriding) · [Copy a component](#copy-a-component-into-your-project) · [What is styled](#what-is-styled) · [Feedback and navigation](#feedback-and-navigation) · [Things to know](#things-to-know) · [License](#license)
 
 ## Install
 
@@ -101,11 +101,12 @@ export default function SaveButton() {
 
 ## Overriding
 
-There are three steps, from the lightest:
+There are four steps, from the lightest:
 
 1. **Tokens.** Re-theme with Nave's tokens and every part follows. Nothing else is needed for a different palette, radius or spacing.
 2. **`className`.** Pass a class to any part, as a string or as Base UI's function of the part's state. Put its rules in `@layer components.consumer`: that layer comes after Nave's, so your class wins in every state, whatever the specificity of Nave's rule. It also means that restyling a property restyles it in every state: set `background-color` on a Button and your colour replaces the `primary` variant's hover and active colours and a disabled button's too, so write the states you want yourself.
-3. **The raw Base UI part.** Import the part from `@base-ui/react/<component>` and style it from scratch. It mixes freely with wrapped parts.
+3. **A copy of the component.** To change Nave's rules for a component rather than override them, copy its files into your project with shadcn's CLI and change the copy: see [Copy a component into your project](#copy-a-component-into-your-project).
+4. **The raw Base UI part.** Import the part from `@base-ui/react/<component>` and style it from scratch. It mixes freely with wrapped parts.
 
 ```css
 /* menu.module.css */
@@ -137,6 +138,51 @@ export default function ActionsMenu() {
 ```
 
 Behaviour is Base UI's. Parts Nave does not style, such as `Portal`, `Positioner`, `Provider` and `Form`, are Base UI's own parts, passed through unchanged.
+
+## Copy a component into your project
+
+Every component this package styles is also in Nave's shadcn registry: one command copies the component's files into your project, and you then change its rules in the copy instead of overriding them.
+
+With `@navecss/base-ui` installed, add a component from the files of the version you have:
+
+```bash
+npx shadcn@latest add ./node_modules/@navecss/base-ui/dist/registry/base-ui-dialog.json
+```
+
+Replace `dialog` with the subpath of the component you want, from [What is styled](#what-is-styled), and list several paths to add several components. The copy then comes from the same release as the components you still import from the package, with no version to type: `add` reads the files it copies from `node_modules` instead of downloading them. The command needs no Tailwind, no `components.json` and no `shadcn init`: every file in the registry says where it goes, so `add` installs it into a project that has none of them. Run `add` for Nave's components alone, with no item from another registry in the same command: shadcn's CLI decides from the first item it is given whether the project needs that setup.
+
+The registry is also served at an exact version of `@navecss/base-ui`. Use that address in a project without the package installed, or with Yarn Plug'n'Play, which has no `node_modules`:
+
+```bash
+npx shadcn@latest add https://cdn.jsdelivr.net/npm/@navecss/base-ui@<version>/dist/registry/base-ui-dialog.json
+```
+
+Replace `<version>` with the version of `@navecss/base-ui` your project has, if it has one (`npm ls @navecss/base-ui` or `pnpm list @navecss/base-ui` prints it), so the copy matches the components you still import from the package; if not, use the latest version.
+
+For shadcn's MCP server, which agents use, and for `shadcn search`, map the `@navecss` namespace to that address once. shadcn's CLI writes the mapping into your `package.json`, under `registries`, with the version in the address, so change the version there when you upgrade:
+
+```bash
+npx shadcn@latest registry add '@navecss=https://cdn.jsdelivr.net/npm/@navecss/base-ui@<version>/dist/registry/{name}.json'
+npx shadcn@latest add @navecss/base-ui-dialog
+```
+
+`add` writes the files to `components/nave/`, or to `src/components/nave/` in a project with a `src` folder; `--path <folder>` writes them to that folder instead. For Dialog, in the order `add` writes them:
+
+- `nave-dialog.ts`, the module you import;
+- `nave-dialog.parts.ts`, its parts;
+- `nave-dialog.wrap.ts`, the code that adds the classes to those parts;
+- `nave-dialog.module.css`, the rules for those parts;
+- `NAVECSS-LICENSE`.
+
+Then import the component from the copy instead of from the package, with a path relative to the importing file, for example `import { Dialog } from './components/nave/nave-dialog'`. The copy's parts take the same props as the package's, `variant` and `size` included.
+
+The copied rules read Nave's tokens, so keep `@navecss/tokens/css` imported as [The stylesheet](#the-stylesheet) shows. The copy imports neither `@navecss/base-ui` nor its `styles.css`: keep those while you still import any component from the package; a copy and the package's components work side by side. The first rule of each `.module.css` is Nave's `@layer` order statement, as in `styles.css`, and your build has to support CSS Modules, as Vite and Next.js do without setup. A change to one copy reaches no other copy and no component from the package.
+
+A component added this way keeps its rules in `@layer components.consumer`, the layer your classes use, so a class you pass to one of its parts no longer wins in every state as it does on the package's components: the copied rules for hover, focus, disabled and the other states are more specific than one class, and still apply. A change to those states takes effect in the copied rules.
+
+No later release of `@navecss/base-ui` changes the copied files. To take a later release's version of a component, upgrade the package and run `add` again, or use that release's address. `add` asks before it replaces a copied file whose content differs from the new one, whether you changed it or the release did, and `--overwrite` replaces them without asking. In a run with no terminal to answer, such as an agent or a CI job, it stops at the first such file and still exits with success, so that file and the ones after it stay as they were. The exit status does not show that it stopped, but the output does: it ends with the question about that file.
+
+The registry names no versions for the packages a copy depends on, so `add` leaves the versions in your `package.json` as they are, and installs the latest version of any that is missing. A copy needs `@base-ui/react` 1.3 or later in the 1.x line, `@navecss/tokens` 0.4.0 or later before 1.0, and React 18 or 19.
 
 ## What is styled
 

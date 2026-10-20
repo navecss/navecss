@@ -29,18 +29,20 @@ if (!guardEntry) {
 const [pattern] = guardEntry
 
 const HOUSE_MESSAGE =
-  "'outline: none'/'0' removes the focus indicator Nave's reset deliberately leaves to the " +
-  'user agent, with nothing shipped to replace it. Change the rule you are writing, not this ' +
-  'guard. No selector carve-out is needed, and the ground is what this check can see rather ' +
-  'than what the codebase contains: stylelint here reads only hand-authored CSS under src, so ' +
-  "the focus-ring utility's own outline base, authored in TypeScript and reaching CSS only as " +
-  'generated output under dist, sits outside this guard by construction and is asserted from ' +
-  'built output by packages/core/test/focus-ring-forced-colors.test.ts instead. Do not add an ' +
-  'exemption for it, and do not widen this rule to reach it. If you think the guard itself is ' +
-  'wrong, open an issue rather than changing it here. (A parallel text-decoration:none guard ' +
-  'was probed here too and removed: probed red-first against a real violation, it caught ' +
-  'nothing the built-output test packages/core/test/reset-link-decoration.test.ts did not, and ' +
-  'that test alone stays.)'
+  "'outline: none'/'0' or 'outline-style: none' removes the focus indicator Nave's " +
+  'reset deliberately leaves to the user agent, with nothing shipped to replace it. ' +
+  'Change the rule you are writing, not this guard. No selector carve-out is needed, ' +
+  'and the ground is what this check can see rather than what the codebase contains: ' +
+  "stylelint here reads only hand-authored CSS under src, so the focus-ring utility's " +
+  'own outline base, authored in TypeScript and reaching CSS only as generated output ' +
+  'under dist, sits outside this guard by construction and is asserted from built ' +
+  'output by packages/core/test/focus-ring-forced-colors.test.ts instead. Do not add ' +
+  'an exemption for it, and do not widen this rule to reach it. If you think the guard ' +
+  'itself is wrong, open an issue rather than changing it here. (A parallel ' +
+  'text-decoration:none guard was probed here too and removed: probed red-first ' +
+  'against a real violation, it caught nothing the built-output test ' +
+  'packages/core/test/reset-link-decoration.test.ts did not, and that test alone ' +
+  'stays.)'
 
 export default {
   rules: {

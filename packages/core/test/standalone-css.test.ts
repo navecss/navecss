@@ -98,7 +98,10 @@ describe('AC-directive-core-45 — the self-contained stylesheet', () => {
       exports: Record<string, unknown>
     }
 
-    expect(manifest.exports['./standalone']).toBe('./dist/standalone.css')
+    expect(manifest.exports['./standalone']).toEqual({
+      default: './dist/standalone.css',
+      types: './dist/css.d.ts',
+    })
     expect(requireFromCore.resolve('@navecss/core/standalone')).toBe(
       path.join(DIST, 'standalone.css'),
     )

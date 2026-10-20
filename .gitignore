@@ -49,6 +49,13 @@ packages/core/test/.consumer-atoms-doc-fixture-*/
 packages/core/test/fixtures/zero-runtime-vite/.vite/
 packages/core/tsup.config.bundled_*.mjs
 
+# Scratch the registry tests write inside the package, so that the copies they load resolve
+# `react`, Base UI and the CSS Modules transform through its node_modules. Each test removes its
+# own; this only guards against a killed run leaving one behind untracked.
+packages/base-ui/test/.registry-*/
+packages/base-ui/test/.css-entry-types-*/
+packages/base-ui/test/render/.registry-copies-*/
+
 # OS
 .DS_Store
 Thumbs.db

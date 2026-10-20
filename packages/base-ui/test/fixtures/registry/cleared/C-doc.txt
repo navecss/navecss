@@ -1,0 +1,3 @@
+ * Not implemented: every command is a stub. @navecss/base-ui's components are copied with
+ * shadcn's CLI from the registry that package ships, so nothing here is needed for that.
+ * The package stays unpublished (ignored in .changeset/config.json).

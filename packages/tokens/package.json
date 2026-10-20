@@ -24,7 +24,10 @@
       "import": "./dist/tokens.js",
       "default": "./dist/tokens.js"
     },
-    "./css": "./dist/tokens.css",
+    "./css": {
+      "types": "./dist/css.d.ts",
+      "default": "./dist/tokens.css"
+    },
     "./js": {
       "types": "./dist/tokens.d.ts",
       "import": "./dist/tokens.js",
@@ -58,7 +61,7 @@
     "lint": "eslint build.ts generate-tokens-doc.ts src test --max-warnings 0",
     "lint:fix": "eslint build.ts generate-tokens-doc.ts src test --fix",
     "test": "vitest run",
-    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only --exclude-entrypoints css",
+    "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile esm-only",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
   "devDependencies": {

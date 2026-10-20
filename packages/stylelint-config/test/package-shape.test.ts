@@ -2,7 +2,7 @@
  * AC-consumer-constraints-25 covers: R16.
  */
 import { execFileSync } from 'node:child_process'
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -80,6 +80,19 @@ function scratchReleaseRoot(): string {
     path.join(scratch, 'packages/stylelint-config/package.json'),
   )
   return scratch
+}
+
+/**
+ * Deletes every changeset file in a scratch root that names the package, whatever its file name.
+ */
+function removeChangesetsNaming(scratch: string, name: string): void {
+  const directory = path.join(scratch, '.changeset')
+  for (const file of readdirSync(directory)) {
+    const changesetPath = path.join(directory, file)
+    if (file.endsWith('.md') && readFileSync(changesetPath, 'utf8').includes(`'${name}'`)) {
+      rmSync(changesetPath, { force: true })
+    }
+  }
 }
 
 function pluginsOf(config: { plugins?: unknown }): unknown[] {
@@ -228,7 +241,7 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
   it('at version 0.0.0 with no changeset naming the package, the first-release clauses fail', async () => {
     const scratch = scratchReleaseRoot()
     try {
-      rmSync(path.join(scratch, '.changeset/ship-stylelint-config.md'), { force: true })
+      removeChangesetsNaming(scratch, '@navecss/stylelint-config')
       writeFileSync(
         path.join(scratch, 'packages/stylelint-config/package.json'),
         JSON.stringify({ ...manifest(), version: '0.0.0' }, undefined, 2),
@@ -242,7 +255,7 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
   it('once that changeset has been released (removed, version 0.1.0), the first-release clauses no longer apply, even with a later changeset for the package pending', async () => {
     const scratch = scratchReleaseRoot()
     try {
-      rmSync(path.join(scratch, '.changeset/ship-stylelint-config.md'), { force: true })
+      removeChangesetsNaming(scratch, '@navecss/stylelint-config')
       const manifestPath = path.join(scratch, 'packages/stylelint-config/package.json')
       const manifestBefore = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<
         string,

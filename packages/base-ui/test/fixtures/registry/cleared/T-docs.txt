@@ -1,0 +1,4 @@
+Import { <Export> } from the nave-<subpath> file just written, not from @navecss/base-ui/<subpath>.
+Keep @navecss/tokens/css imported: the copied rules read Nave's tokens. They sit in a CSS Module, so your build needs CSS Modules.
+The copy needs @base-ui/react <base-ui floor>, @navecss/tokens <tokens floor>, and React <react floor>. A version already in your package.json is kept; a missing package is installed at its latest version.
+Generated from @navecss/base-ui <version>. No later release changes these files.

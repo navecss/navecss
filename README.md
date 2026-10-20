@@ -41,6 +41,8 @@ Nave takes a different path:
 - **Headless components** (Base UI, Radix, or your own) handle behaviour, and Nave handles
   style. [`@navecss/base-ui`](packages/base-ui#readme) is Base UI's own components, styled with
   Nave's tokens and reached by changing an import path; Radix has no Nave package yet.
+  Each component `@navecss/base-ui` styles can also be copied into your project from Nave's
+  shadcn registry ([how](packages/base-ui/README.md#copy-a-component-into-your-project)).
 - **Components that do not own your styles.** The styling `@navecss/base-ui` adds sits in a
   layer your CSS always wins over, so there is nothing to fight and nothing to configure.
 
@@ -738,6 +740,11 @@ accessibility audit, this is the part you can act on.
    roles resolve to one shared value, and so do their `-foreground` roles; only
    `danger` is a separate family. What separates those three states on a page is
    whatever else you render, not the token.
+9. **A component you added from the registry.** Its files are generated from
+   the release you added them from, with the rules `@navecss/base-ui` ships
+   moved into `@layer components.consumer`, and no later release changes them,
+   accessibility fixes included. What Nave says about the components
+   `@navecss/base-ui` styles describes the package, not those files.
 
 ## Stability and maintenance
 

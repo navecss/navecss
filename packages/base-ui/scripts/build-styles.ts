@@ -82,4 +82,7 @@ export const buildStyles = async (options: BuildOptions = {}): Promise<string> =
 if (isMain) {
   mkdirSync(path.dirname(OUTPUT), { recursive: true })
   writeFileSync(OUTPUT, await buildStyles())
+  // A stylesheet exports nothing. This declaration is the `types` condition of the `./styles.css`
+  // export, so a side-effect import of it type-checks under TypeScript 6's defaults.
+  writeFileSync(path.join(path.dirname(OUTPUT), 'css.d.ts'), 'export {}\n')
 }

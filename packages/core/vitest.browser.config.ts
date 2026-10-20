@@ -1,6 +1,6 @@
 import { createReadStream, statSync } from 'node:fs'
-import path from 'node:path'
 import { playwright } from '@vitest/browser-playwright'
+import path from 'node:path'
 import { defaultExclude, defineConfig, type Plugin } from 'vitest/config'
 
 const FIXTURES = path.resolve(import.meta.dirname, 'test/browser/fixtures')
@@ -49,6 +49,9 @@ function serveFixturesAsTheyAre(): Plugin {
 export default defineConfig({
   plugins: [serveFixturesAsTheyAre()],
   test: {
+    // Vitest's own default is one directory at the workspace root that every package deletes at
+    // once when the lockfile changes, which fails a package with ENOTEMPTY. Each config keeps its own.
+    fsModuleCachePath: path.resolve(import.meta.dirname, 'node_modules/.vitest-cache/browser'),
     include: ['test/browser/**/*.browser.test.ts'],
     // These drive a browser from Node, so they run under vitest.chromium.config.ts.
     exclude: [...defaultExclude, 'test/browser/driven/**'],
