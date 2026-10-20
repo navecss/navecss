@@ -146,6 +146,28 @@ JavaScript under dist/: the member names of a version 3 source map, the
 layout of its mappings string, the base64 VLQ encoding of each field in it,
 and the base64 alphabet. The code implementing them is this package's own, and
 everything in this package is offered under the MIT licence above.
+
+This package also includes material copied from or derived from mdn-data
+(css/properties.json in the mdn/data repository, version 2.29.0,
+https://github.com/mdn/data), which its authors dedicated to the public domain
+under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/),
+and from CSS Logical Properties and Values Module Level 1, CSS Overflow Module
+Level 3, CSS Overscroll Behavior Module Level 1, CSS Scroll Snap Module Level 1,
+CSS Box Sizing Module Level 4, CSS Fonts Module Level 4, CSS Text Module Level
+4, CSS Gaps Module Level 1, CSS Fragmentation Module Level 4, CSS Backgrounds
+and Borders Module Level 3, and CSS Cascading and Inheritance Module Level 5 (in
+the w3c/csswg-drafts repository, at commit
+40527902c4d0840cdb7a808c8cd42302be1c3bc8). Copyright (c) 2026 World Wide Web
+Consortium. Those specifications, and the repository carrying them, are
+published under the W3C Software and Document License
+(https://www.w3.org/copyright/software-license-2023/).
+
+What is copied or derived is implemented in
+src/directive/property-table.generated.ts, built into the JavaScript under
+dist/: the names of CSS properties, the properties each shorthand sets, which
+names are legacy name aliases of another property, and which logical and
+physical properties belong to one group. The code using them is this package's
+own, and everything in this package is offered under the MIT licence above.
 `
 
 /**
@@ -1412,7 +1434,8 @@ test('packages/tokens/LICENSE is the root LICENSE text verbatim followed by the 
 
 // Same rationale as the tokens row above, for packages/core/LICENSE's own cleared block
 // (the CSS Syntax Level 3 credit for the directive tokenizer, then the ECMA-426 and RFC 4648
-// credit for the source-map encoder).
+// credit for the source-map encoder, then the mdn-data and CSS specifications credit for the
+// table of property names behind the order warning).
 test('packages/core/LICENSE is the root LICENSE text verbatim followed by the cleared third-party section, byte for byte', () => {
   const rootLicense = readFileSync(path.join(ROOT, 'LICENSE'))
   const coreLicense = readFileSync(path.join(ROOT, 'packages', 'core', 'LICENSE'))
@@ -1421,5 +1444,5 @@ test('packages/core/LICENSE is the root LICENSE text verbatim followed by the cl
     'packages/core/LICENSE must begin with the root LICENSE text, byte for byte',
   )
   assert.equal(coreLicense.subarray(rootLicense.length).toString('utf8'), CORE_THIRD_PARTY_SECTION)
-  assert.equal(coreLicense.length, rootLicense.length + 2130)
+  assert.equal(coreLicense.length, rootLicense.length + 3551)
 })

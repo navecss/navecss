@@ -7,7 +7,7 @@
  * Vite passed, with a closing line that says so. `loc.column` is 0-based, as Rollup reports one;
  * the message states the 1-based column itself.
  */
-import type { ExpandedDiagnostic } from './directive/expand-text-diagnostics.ts'
+import type { ExpandedDiagnostic, ExpandedWarning } from './directive/expand-text-diagnostics.ts'
 import type { ExtendMap } from './directive/resolve.ts'
 import type { IncomingMap } from './directive/source-map.ts'
 import type { PluginLog, TransformContext } from './vite-types.ts'
@@ -52,17 +52,26 @@ function withSourceRoot(source: string, sourceRoot: string | undefined): string 
 }
 
 /**
- * A diagnostic's text and position, mapped back through the incoming map when there is one.
+ * A text and the position it sits at in the processed stylesheet, mapped back through the incoming
+ * map when there is one.
  */
-function locate(diagnostic: ExpandedDiagnostic, input: ReportInput): Located {
-  const text = formatDiagnostic(diagnostic, { extend: input.extend })
+function locateAt(
+  position: { readonly column: number; readonly line: number },
+  text: string,
+  input: Pick<ReportInput, 'file' | 'incoming'>,
+): Located {
   const origin = input.incoming?.originalPositionFor({
-    line: diagnostic.line,
-    column: diagnostic.column - 1,
+    line: position.line,
+    column: position.column - 1,
   })
   if (origin === undefined) {
-    const position = { line: diagnostic.line, column: diagnostic.column }
-    return { text, file: input.file, isProcessed: true, ...position }
+    return {
+      text,
+      file: input.file,
+      isProcessed: true,
+      line: position.line,
+      column: position.column,
+    }
   }
   return {
     text,
@@ -74,11 +83,22 @@ function locate(diagnostic: ExpandedDiagnostic, input: ReportInput): Located {
 }
 
 /**
+ * A diagnostic's text and position, mapped back through the incoming map when there is one.
+ */
+function locate(diagnostic: ExpandedDiagnostic, input: ReportInput): Located {
+  return locateAt(diagnostic, formatDiagnostic(diagnostic, { extend: input.extend }), input)
+}
+
+/**
  * `body` with, when the position is the processed file's own, a line saying so, kept ahead of a
  * closing `Available:` line so that line stays last. The line says why: Vite supplied no map, or
  * its map does not reach this line.
  */
-function withNoMapNote(body: string, input: ReportInput, at: Located): string {
+function withNoMapNote(
+  body: string,
+  input: Pick<ReportInput, 'file' | 'incoming'>,
+  at: Located,
+): string {
   if (!at.isProcessed) return body
   const reason = input.incoming === undefined ? 'no source map' : 'the source map does not cover it'
   const note = `(position in ${input.file} as processed; ${reason})`
@@ -91,7 +111,7 @@ function withNoMapNote(body: string, input: ReportInput, at: Located): string {
 /**
  * The log object Rollup takes: `message`, the module id, and the position (0-based column).
  */
-function logFor(message: string, input: ReportInput, at: Located): PluginLog {
+function logFor(message: string, input: Pick<ReportInput, 'id'>, at: Located): PluginLog {
   return {
     message,
     id: input.id,
@@ -123,4 +143,37 @@ export function reportDiagnostics(input: ReportInput): void {
   const first = located[0]!
   const message = withNoMapNote(`${frame(first)}${foldLocated(located)}`, input, first)
   input.ctx.error(logFor(message, input, first))
+}
+
+export interface OrderWarningInput {
+  readonly ctx: TransformContext
+  readonly file: string
+  readonly id: string
+  readonly incoming: IncomingMap | undefined
+  readonly warnings: readonly ExpandedWarning[]
+}
+
+export interface PlacedWarning {
+  /**
+   * What identifies the warning across environments: the file, the position and the text.
+   */
+  readonly key: string
+  readonly print: () => void
+}
+
+/**
+ * Each order warning as Vite prints a problem: positioned through the incoming map, with the
+ * note that says so when it could not be.
+ */
+export function placeOrderWarnings(input: OrderWarningInput): PlacedWarning[] {
+  return input.warnings.map((warning) => {
+    const at = locateAt(warning, warning.text, input)
+    const message = withNoMapNote(`${frame(at)}${at.text}`, input, at)
+    return {
+      key: `${at.file}\0${at.line}\0${at.column}\0${at.text}`,
+      print: () => {
+        input.ctx.warn(logFor(message, input, at))
+      },
+    }
+  })
 }

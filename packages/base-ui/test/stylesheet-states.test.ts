@@ -128,6 +128,8 @@ describe('AC-base-ui-feedback-navigation-42 (first scenario), AC-base-ui-overlay
     expect(nodes.filter(({ inside }) => !inside)).toEqual([])
     expect(selectors).toEqual([
       `.${TRIGGER}`,
+      // focusRing's `outline: none`, alone in a `& { }` after the role's blocks.
+      `.${TRIGGER}`,
       `.${TRIGGER}:active:not(:disabled, [aria-disabled="true"])`,
       // focusRing, composed because the trigger is in Table T2; it names no disabled state.
       `.${TRIGGER}:focus-visible`,

@@ -41,6 +41,19 @@ function trailingBackslashCount(raw: string): number {
 const ESCAPE_CLOSER = 'fffd'
 
 /**
+ * Whether `token` is a string left open by a lone backslash at the very end of input. A closing
+ * quote written after that backslash would be escaped by it, and a backslash added to pair it
+ * would change the string's value, so the closers go before it and it stays the last byte.
+ */
+function isStringEndingInLoneBackslash(token: Token): boolean {
+  return (
+    token.type === 'string-token' &&
+    !hasUnescapedTrailingChar(token.raw, token.raw[0] ?? '') &&
+    trailingBackslashCount(token.raw) % 2 === 1
+  )
+}
+
+/**
  * The one piece of text EOF closed early on `token`, had the input kept
  * going: a string's own opening quote, a url's closing paren, or the
  * `fffd` that completes a trailing backslash. `undefined` when `token` is
@@ -54,12 +67,9 @@ function lexicalEofCloser(token: Token): string | undefined {
   if (token.type === 'string-token') {
     const quote = token.raw[0]
     if (quote === undefined || hasUnescapedTrailingChar(token.raw, quote)) return undefined
-    // A dangling, unpaired trailing backslash (itself "consumed, contributes
-    // nothing" at EOF per the tokenizer) would otherwise escape the very
-    // quote meant to close the string: one more backslash first pairs it
-    // into a literal backslash, so the quote after it closes for real.
-    const hasDanglingEscape = trailingBackslashCount(token.raw) % 2 === 1
-    return hasDanglingEscape ? `\\${quote}` : quote
+    // A lone trailing backslash is "consumed, contributes nothing" at EOF, so the string's value
+    // ends before it; the closers are written before it (`isStringEndingInLoneBackslash`).
+    return quote
   }
   if (token.type === 'url-token' || token.type === 'bad-url-token') {
     if (token.raw.endsWith(')')) return undefined
@@ -102,29 +112,42 @@ interface FrameTailScan {
  * still-open frame at EOF and a stylesheet can nest arbitrarily many.
  */
 function scanFrameTail(w: Walker, start: number, limit: number): FrameTailScan {
-  const unmatchedOpeners: number[] = []
-  let hasDanglingText = false
-  let hasOpenColon = false
+  const scan = { unmatchedOpeners: [] as number[], hasDanglingText: false, hasOpenColon: false }
   let i = start
-  while (i < limit) {
-    const token = w.tokens[i]!
-    const type = token.type
-    if (type !== 'whitespace-token' && type !== 'comment') hasDanglingText = true
-    if (type === 'semicolon-token') {
-      hasOpenColon = false
-    } else if (type === 'colon-token') {
-      hasOpenColon = true
-    } else if (OPENERS.has(type)) {
-      const closeIndex = w.closerFor[i]!
-      if (closeIndex === -1 || closeIndex >= limit) {
-        unmatchedOpeners.push(i)
-      } else {
-        i = closeIndex
-      }
+  while (i < limit) i = scanToken(w, i, limit, scan) + 1
+  return { ...scan, unmatchedOpeners: scan.unmatchedOpeners.toReversed() }
+}
+
+interface TailState {
+  readonly unmatchedOpeners: number[]
+  hasDanglingText: boolean
+  hasOpenColon: boolean
+}
+
+/**
+ * Reads the token at `i` into `scan`, a matched bracket whole, and answers the index of the last
+ * token it read.
+ */
+function scanToken(w: Walker, i: number, limit: number, scan: TailState): number {
+  const type = w.tokens[i]!.type
+  if (type !== 'whitespace-token' && type !== 'comment') scan.hasDanglingText = true
+  if (type === 'semicolon-token') {
+    // A `;` ends the item before it, so nothing before it is a prelude waiting for a block.
+    scan.hasOpenColon = false
+    scan.hasDanglingText = false
+  } else if (type === 'colon-token') {
+    scan.hasOpenColon = true
+  } else if (OPENERS.has(type)) {
+    const closeIndex = w.closerFor[i]!
+    if (closeIndex === -1 || closeIndex >= limit) {
+      scan.unmatchedOpeners.push(i)
+      return i
     }
-    i++
+    // A block that closes ends the rule whose prelude it follows.
+    if (type === '{-token') scan.hasDanglingText = false
+    return closeIndex
   }
-  return { unmatchedOpeners: unmatchedOpeners.toReversed(), hasDanglingText, hasOpenColon }
+  return i
 }
 
 export interface EofClose {
@@ -212,6 +235,10 @@ export function closeInfoFor(
   }
 
   const prefix = eofClosers(w, frameStart, scanLimit, last)
+  if (last !== undefined && isStringEndingInLoneBackslash(last)) {
+    const position = last.endIndex - 1
+    return { position, prefix, prefixPosition: position }
+  }
   return { position: w.css.length, prefix, prefixPosition: w.css.length }
 }
 

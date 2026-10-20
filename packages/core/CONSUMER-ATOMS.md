@@ -122,19 +122,21 @@ Compiles to:
     user-select: none;
     -webkit-tap-highlight-color: transparent;
     outline: none;
-    transition-property: color, background-color, border-color, opacity, box-shadow;
-    transition-duration: var(--nave-motion-duration-base);
-    transition-timing-function: var(--nave-motion-easing-standard);
-    background: var(--nave-color-action-primary);
-    color: var(--nave-color-on-action-primary);
-    padding: var(--nave-spacing-control-md) var(--nave-spacing-control-lg);
-    border-radius: var(--nave-radius-control);
-    font-weight: var(--nave-font-weight-medium);
     &:focus-visible {
       outline-style: solid;
       outline-width: var(--nave-border-width-focus, 2px);
       outline-color: var(--nave-color-border-focus, currentColor);
       outline-offset: 2px;
+    }
+    & {
+      transition-property: color, background-color, border-color, opacity, box-shadow;
+      transition-duration: var(--nave-motion-duration-base);
+      transition-timing-function: var(--nave-motion-easing-standard);
+      background: var(--nave-color-action-primary);
+      color: var(--nave-color-on-action-primary);
+      padding: var(--nave-spacing-control-md) var(--nave-spacing-control-lg);
+      border-radius: var(--nave-radius-control);
+      font-weight: var(--nave-font-weight-medium);
     }
     &:hover {
       background: var(--nave-color-action-primary-hover);
@@ -293,14 +295,16 @@ Compiles to:
     display: flex;
     flex-direction: column;
     gap: var(--nave-spacing-content-md);
-    background: var(--nave-color-surface-raised);
-    border-radius: var(--nave-radius-card);
-    padding: var(--nave-spacing-content-md);
     @container (width >= 28rem) {
       & {
         flex-direction: row;
         align-items: center;
       }
+    }
+    & {
+      background: var(--nave-color-surface-raised);
+      border-radius: var(--nave-radius-card);
+      padding: var(--nave-spacing-content-md);
     }
   }
 }

@@ -732,8 +732,9 @@ describe('AC-base-ui-bridge-42: the button paints content.primary on action.seco
   })
 
   it('has exactly one base rule on the button', () => {
+    // `focusRing`'s `& { outline: none }` also resolves to the button, but it nests in the base rule.
     const base = flattenRules(readStylesheet()).filter(
-      (item) => item.selectors[0] === `.${PREFIX}button`,
+      (item) => item.selectors[0] === `.${PREFIX}button` && item.rule.parent?.type !== 'rule',
     )
 
     expect(base).toHaveLength(1)

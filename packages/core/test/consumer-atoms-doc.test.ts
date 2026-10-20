@@ -49,7 +49,10 @@ function extractCompilesToFence(): string {
 }
 
 /**
- * The fence's first `.root { ... }` rule — the atoms' base `declarations`, not a pseudo/media block.
+ * The declarations of the fence's first `.root { ... }` rule, in document order: the atoms' base
+ * `declarations`, not a pseudo/media block. A run of declarations that follows a nested block sits
+ * in an `& { }` wrapper (the directive expands in place, so a later atom's declarations follow an
+ * earlier atom's blocks), and it is read as part of the rule.
  */
 function extractRootDeclarations(fenceCss: string): { prop: string; value: string }[] {
   const root = postcss.parse(fenceCss)
@@ -59,9 +62,16 @@ function extractRootDeclarations(fenceCss: string): { prop: string; value: strin
   })
   expect(rootRule, 'the fence has no top-level .root rule').toBeDefined()
 
-  return rootRule!.nodes
-    .filter((n): n is postcss.Declaration => n.type === 'decl')
-    .map((decl) => ({ prop: decl.prop, value: decl.value }))
+  const found: { prop: string; value: string }[] = []
+  for (const node of rootRule!.nodes) {
+    if (node.type === 'decl') found.push({ prop: node.prop, value: node.value })
+    if (node.type === 'rule' && node.selector === '&') {
+      node.walkDecls((decl) => {
+        found.push({ prop: decl.prop, value: decl.value })
+      })
+    }
+  }
+  return found
 }
 
 describe('CONSUMER-ATOMS.md "Compiles to:" fence stays in sync with the atom map', () => {

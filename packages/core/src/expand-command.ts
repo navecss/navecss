@@ -39,11 +39,12 @@ async function loadExtend(
 }
 
 /**
- * Says what a pass did: each file written on stdout, each problem, unreadable source and failed
- * write on stderr.
+ * Says what a pass did: each file written on stdout; each order warning, problem, unreadable
+ * source and failed write on stderr. An order warning is not a problem: it changes no exit code.
  */
 function print(result: PassResult): void {
   for (const { source, out } of result.expanded) console.log(`Expanded ${source} to ${out}.`)
+  for (const warning of result.warnings) console.error(warning)
   for (const report of result.reports) console.error(report)
   for (const source of result.unreadable) {
     console.error(`Could not read ${source}, so no file was written.`)

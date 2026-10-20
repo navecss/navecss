@@ -28,7 +28,8 @@ export interface NaveOptions {
   extend?: Readonly<Record<string, AtomDefinition>> | string
   /**
    * What a problem in a `@nave` directive does: `'error'` (default) fails `next build`, `'warn'`
-   * prints it, `'ignore'` skips it.
+   * prints it, `'ignore'` skips it. An order warning is not such a problem: it is printed
+   * whatever this option says, and never fails the build.
    */
   onUnknown?: 'error' | 'ignore' | 'warn'
 }

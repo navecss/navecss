@@ -175,8 +175,10 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
 
-      - name: Install Playwright's browser engine
-        run: pnpm --filter @navecss/core exec playwright install --with-deps chromium
+      # Chromium runs the browser suite; Firefox and WebKit run the rows of the three-engine test
+      # (packages/core, vitest.browser.engines.config.ts), which `test:browser` ends with.
+      - name: Install Playwright's browser engines
+        run: pnpm --filter @navecss/core exec playwright install --with-deps chromium firefox webkit
 
       - name: Browser tests
         run: pnpm run test:browser

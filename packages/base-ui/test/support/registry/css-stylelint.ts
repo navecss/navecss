@@ -1,7 +1,8 @@
 /**
  * Running `@navecss/stylelint-config` over the registry's CSS Modules the way a consumer does, with
  * every disable report on, and reading what the copied `outline: none` declarations promise: each is
- * preceded on a line of its own by the cleared disable comment, and a ring follows it in the rule.
+ * preceded on a line of its own by the cleared disable comment, and a ring follows it in the atom's
+ * rule.
  */
 import type { Declaration, Rule } from 'postcss'
 
@@ -169,19 +170,52 @@ const commentProblems = (module: ModuleText): string[] => {
   })
 }
 
-const hasRingAfter = (declaration: Declaration): boolean => {
+/**
+ * Whether `node` is an atom's class rule: a rule whose selector starts with `.` directly in the
+ * module's `@layer` block.
+ */
+const isClassRule = (node: postcss.Node | postcss.Document | undefined): boolean =>
+  node?.type === 'rule' &&
+  (node as Rule).selector.startsWith('.') &&
+  node.parent?.type === 'atrule' &&
+  (node.parent as postcss.AtRule).name === 'layer'
+
+/**
+ * The child of the atom's class rule that holds the declaration: the declaration itself, or the
+ * `&` rule directly in the class rule that holds it and nothing but comments beside it. Comments
+ * are allowed because this reads the module after the disable comment is written.
+ */
+const holderOf = (declaration: Declaration): postcss.ChildNode | undefined => {
   const rule = declaration.parent as Rule | undefined
-  if (rule?.type !== 'rule') return false
-  const later = rule.nodes.slice(rule.nodes.indexOf(declaration) + 1)
-  return later.some(
-    (node) =>
-      node.type === 'rule' &&
-      node.selector.trim() === '&:focus-visible' &&
-      node.nodes.some(
-        (child) =>
-          child.type === 'decl' && child.prop === 'outline-style' && child.value === 'solid',
-      ),
+  if (rule?.type !== 'rule') return undefined
+  if (isClassRule(rule)) return declaration
+  const isAlone =
+    rule.selector.trim() === '&' &&
+    isClassRule(rule.parent) &&
+    rule.nodes.every((node) => node === declaration || node.type === 'comment')
+  return isAlone ? rule : undefined
+}
+
+const isRing = (node: postcss.ChildNode): boolean =>
+  node.type === 'rule' &&
+  node.selector.trim() === '&:focus-visible' &&
+  node.nodes.some(
+    (child) => child.type === 'decl' && child.prop === 'outline-style' && child.value === 'solid',
   )
+
+/**
+ * Whether a ring follows the declaration, read after the disable comment is written: the holder is
+ * the declaration, or the `&` rule that holds it and comments alone, directly in the atom's class
+ * rule; the ring is a later child of that class rule that is exactly `&:focus-visible` and sets
+ * `outline-style: solid`. It is not the build's `isPaired` (`scripts/registry/module-css.ts`): it
+ * allows comments in the wrapper; asks only `outline-style: solid` of the ring, the counts holding
+ * the other three longhands; does not refuse `!important`; and needs an `@layer` parent.
+ */
+export const hasRingAfter = (declaration: Declaration): boolean => {
+  const holder = holderOf(declaration)
+  const classRule = holder?.parent as Rule | undefined
+  if (holder === undefined || classRule === undefined || !isClassRule(classRule)) return false
+  return classRule.nodes.slice(classRule.nodes.indexOf(holder) + 1).some((node) => isRing(node))
 }
 
 const ringProblems = (module: ModuleText): string[] =>

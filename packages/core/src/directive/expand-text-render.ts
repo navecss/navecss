@@ -1,9 +1,10 @@
 /**
- * Renders `plan()`'s already-anchored declarations and blocks into the CSS
+ * Renders `planRule()`'s emissions into the CSS
  * text `expandText()` splices in — split out of `expand-text.ts` to keep
  * that file under the project's file-length lint.
  */
 import type { AnchoredBlock, Declaration } from './plan.ts'
+import type { Emission } from './rule-model.ts'
 
 /**
  * Every line terminator (a CRLF pair as one) becomes a single space: an
@@ -33,7 +34,7 @@ function renderRule(selector: string, decls: readonly Declaration[]): string {
 /**
  *
  */
-export function renderBlock(block: AnchoredBlock): string {
+function renderBlock(block: AnchoredBlock): string {
   if (block.kind === 'pseudo') return renderRule(block.selector, block.declarations)
   const inner: string[] = []
   if (block.declarations.length > 0) inner.push(renderRule('&', block.declarations))
@@ -42,10 +43,15 @@ export function renderBlock(block: AnchoredBlock): string {
 }
 
 /**
- *
+ * The text a directive's emissions stand for, on one line: bare declarations each ended by `;`,
+ * wrapped declarations inside `& { }`, and each block as a rule or at-rule.
  */
-export function renderInline(declarations: readonly Declaration[], isWrapped: boolean): string {
-  if (declarations.length === 0) return ''
-  if (isWrapped) return renderRule('&', declarations)
-  return `${renderDeclarations(declarations)};`
+export function renderEmissions(emissions: readonly Emission[]): string {
+  return emissions
+    .map((emission) => {
+      if (emission.kind === 'block') return renderBlock(emission.block)
+      if (emission.isWrapped) return renderRule('&', emission.declarations)
+      return `${renderDeclarations(emission.declarations)};`
+    })
+    .join(' ')
 }

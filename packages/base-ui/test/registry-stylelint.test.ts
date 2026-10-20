@@ -8,6 +8,7 @@ import {
   disableProblems,
   focusableAtomsOf,
   GUARD_RULE,
+  hasRingAfter,
   lintModule,
   moduleTexts,
   outlineNoneDeclarations,
@@ -142,4 +143,99 @@ describe('AC-base-ui-registry-22: the stylelint config passes the modules as gen
     },
     GENERATOR_TIMEOUT,
   )
+})
+
+const RING =
+  '&:focus-visible { outline-style: solid; outline-width: 2px; outline-color: red; outline-offset: 2px; }'
+
+/**
+ * A module with the atom's class rule holding two leading nodes and then `body`.
+ */
+const planted = (body: string, group = '@layer components.consumer'): string =>
+  `${group} {\n  .a { color: red; &:hover { color: blue; } ${body} }\n}\n`
+
+describe('AC-base-ui-registry-22: a ring follows an outline: none only as the build reads it', () => {
+  it.each([
+    [
+      'P1 a comment beside the declaration in the wrapper',
+      `& { /* comment */ outline: none; } ${RING}`,
+      true,
+    ],
+    ['P2 the declaration bare in the atom rule', `outline: none; ${RING}`, true],
+    [
+      'P3 the wrapper, another rule, then the ring',
+      `& { outline: none; } &:active { color: green; } ${RING}`,
+      true,
+    ],
+    ['N1 no ring after', '& { outline: none; }', false],
+    ['N2 a second declaration in the wrapper', `& { outline: none; color: red; } ${RING}`, false],
+    [
+      'N2b a nested rule in the wrapper',
+      `& { outline: none; &:hover { color: red; } } ${RING}`,
+      false,
+    ],
+    ['N3 a wrapper in a wrapper', `& { & { outline: none; } } ${RING}`, false],
+    ['N3b a wrapper in another state', `&:hover { & { outline: none; } } ${RING}`, false],
+    ['N4 the ring before the wrapper', `${RING} & { outline: none; }`, false],
+    ['N5 the declaration in another state', `&:hover { outline: none; } ${RING}`, false],
+    ['N6 the ring in another state beside it', `&:hover { outline: none; ${RING} }`, false],
+    ['N7 the ring inside the wrapper', `& { outline: none; ${RING} }`, false],
+    [
+      'N8 the wrapper in a group, the ring beside it',
+      `@media (hover: hover) { & { outline: none; } ${RING} }`,
+      false,
+    ],
+    [
+      'N9 the declaration in a group, the ring beside it',
+      `@media (hover: hover) { outline: none; ${RING} }`,
+      false,
+    ],
+    [
+      'N10 a ring that sets no solid style',
+      '& { outline: none; } &:focus-visible { outline-width: 2px; }',
+      false,
+    ],
+  ])('%s', (_name, body, expected) => {
+    const declarations = outlineNoneDeclarations(planted(body))
+
+    expect(declarations.length).toBeGreaterThan(0)
+    expect(declarations.map((declaration) => hasRingAfter(declaration))).toEqual(
+      declarations.map(() => expected),
+    )
+  })
+
+  it.each([
+    [
+      'N11 a ring whose outline style is dashed',
+      `& { outline: none; } &:focus-visible { outline-style: dashed; }`,
+      '@layer components.consumer',
+    ],
+    [
+      'N12 the atom rule in a group, not in the layer',
+      `& { outline: none; } ${RING}`,
+      '@media (hover: hover)',
+    ],
+    [
+      'N13 a ring selector with a space after the &',
+      `& { outline: none; } & :focus-visible { outline-style: solid; }`,
+      '@layer components.consumer',
+    ],
+    [
+      'N13b a ring selector in a list',
+      `& { outline: none; } &:focus-visible, &:hover { outline-style: solid; }`,
+      '@layer components.consumer',
+    ],
+    [
+      'N13c a ring selector that negates the state',
+      `& { outline: none; } &:not(:focus-visible) { outline-style: solid; }`,
+      '@layer components.consumer',
+    ],
+  ])('%s', (_name, body, group) => {
+    const declarations = outlineNoneDeclarations(planted(body, group))
+
+    expect(declarations.length).toBeGreaterThan(0)
+    expect(declarations.map((declaration) => hasRingAfter(declaration))).toEqual(
+      declarations.map(() => false),
+    )
+  })
 })

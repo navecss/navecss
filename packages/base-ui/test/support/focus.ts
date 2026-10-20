@@ -2,6 +2,8 @@
  * What counts as a focus declaration the stylesheet may carry: core's `focusRing` on the focusable
  * parts it styles, and the Slider thumb's own rule, byte for byte.
  */
+import type { ChildNode } from 'postcss'
+
 import { atoms as coreAtoms } from '@navecss/core/atoms'
 
 import type { FlatDeclaration } from './stylesheet.ts'
@@ -74,13 +76,39 @@ export const THUMB_RING: Readonly<Record<string, string>> = {
 export const ringBlock: Readonly<Record<string, string>> =
   coreAtoms.focusRing.pseudos[':focus-visible']
 
+/**
+ * The declaration core's `focusRing` puts on the element itself, read from the workspace atoms at run time.
+ */
+export const ringBase: Readonly<Record<string, string>> = coreAtoms.focusRing.declarations
+
 const isOwnRoot = (item: FlatDeclaration): boolean => item.selectors[0] === `.${item.owner}`
+
+const isRingBlockRule = (node: ChildNode): boolean =>
+  node.type === 'rule' &&
+  node.selector === '&:focus-visible' &&
+  node.nodes.length === Object.keys(ringBlock).length &&
+  node.nodes.every((child) => child.type === 'decl' && ringBlock[child.prop] === child.value)
+
+/**
+ * Whether a declaration sits alone in a `& { }` that is a direct child of its class's rule, with
+ * the ring block written after it in that same rule: the place `focusRing`'s `outline: none` takes
+ * when the role has blocks of its own.
+ */
+const isWrappedAlone = (item: FlatDeclaration): boolean => {
+  const wrapper = item.node.parent
+  if (wrapper?.type !== 'rule' || wrapper.selector !== '&' || wrapper.nodes.length !== 1) {
+    return false
+  }
+  const classRule = wrapper.parent
+  if (classRule?.type !== 'rule' || classRule.selector !== `.${item.owner}`) return false
+  return classRule.nodes.slice(classRule.index(wrapper) + 1).some((node) => isRingBlockRule(node))
+}
 
 const isBase = (item: FlatDeclaration): boolean =>
   isOwnRoot(item) &&
-  item.selectors.length === 1 &&
   item.property === 'outline' &&
-  item.value === coreAtoms.focusRing.declarations.outline
+  item.value === coreAtoms.focusRing.declarations.outline &&
+  (item.selectors.length === 1 || (item.selectors.length === 2 && isWrappedAlone(item)))
 
 const isBlock = (item: FlatDeclaration): boolean =>
   isOwnRoot(item) &&
@@ -95,7 +123,8 @@ export const isFocusRingDeclaration = (item: FlatDeclaration): boolean =>
   focusRingClasses.includes(item.owner) && (isBase(item) || isBlock(item))
 
 /**
- * Whether a declaration is the base declaration of `focusRing` (its own `outline`).
+ * Whether a declaration is the base declaration of `focusRing` (its own `outline`), among the
+ * class's declarations or, where the role has blocks, alone in a `& { }` before the ring block.
  */
 export const isFocusRingBase = (item: FlatDeclaration): boolean =>
   focusRingClasses.includes(item.owner) && isBase(item)

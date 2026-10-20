@@ -1,23 +1,19 @@
 /**
- * Turns `plan()`'s per-directive answer into PostCSS nodes for one `@nave`
- * at-rule — split out of `postcss.ts`, one level further than the
- * resolver/PostCSS-emitter split this refactor is built around, to keep
- * that file under the project's file-length lint.
+ * Finding `@nave` at-rules in a PostCSS tree and reporting what is wrong with one, and the whole
+ * handling of a directive that sits anywhere but directly in a style rule (those are all
+ * refused; a directive directly in a style rule is expanded with its rule, `postcss-rule.ts`).
  */
 import type { AtRule as PostCSSAtRule, Result } from 'postcss'
-
-import postcss from 'postcss'
 
 import type { Diagnostic } from './directive/diagnostics-types.ts'
 import type { ExtendMap } from './directive/resolve.ts'
 import type { FoldEntry } from './postcss-fold.ts'
 
 import { formatDiagnostic } from './directive/diagnostics-format.ts'
-import { type AnchoredBlock, type Declaration, plan, type PlanResult } from './directive/plan.ts'
+import { plan } from './directive/plan.ts'
 import { tokenize } from './directive/tokenizer.ts'
-import { isFollowingNestedNode } from './postcss-nested-builders.ts'
-import { hasWorkaroundSentence, isInsideKeyframes, stampSource } from './postcss-node-utils.ts'
-import { warnDirective } from './postcss-warn.ts'
+import { hasWorkaroundSentence, isInsideKeyframes } from './postcss-node-utils.ts'
+import { reportWarning } from './postcss-warn.ts'
 
 export interface DirectiveContext {
   atRule: PostCSSAtRule
@@ -34,17 +30,17 @@ export interface DirectiveContext {
   fold: FoldEntry[]
 }
 
-interface NaveMatch {
+export interface NaveMatch {
   /**
   Whether `atRule` is a `@nave` directive — case-insensitive on the unescaped value (`@NAVE`, `@n\61ve`). PostCSS's own `.name` keeps escapes literal, and worse: its name/params split is a naive, escape-unaware character scan, so an escape spanning what PostCSS thinks is that boundary (`@n\61ve flex;` splits `"n"` / `"\61ve flex"`) makes it miss a directive whose real, unescaped name is "nave".
    */
   readonly isNave: boolean
   /**
-  The prelude text, as authored, starting right after the directive's real name — identical to `atRule.raws.params?.raw ?? atRule.params` when PostCSS's own split already lands on that boundary (the common case), and only different when an escape crosses it.
+  The prelude text, as authored, starting right after the directive's real name and running to its end: the comments PostCSS keeps in `raws.afterName`, `raws.params.raw` and `raws.between` included.
    */
   readonly prelude: string
   /**
-  Where `prelude` starts within `'@' + atRule.name + (raws.afterName ?? ' ') + params` — for repositioning a diagnostic's own prelude-relative offset back onto `atRule` (`atRuleErrorIndex`).
+  Where `prelude` starts within `'@' + atRule.name + (raws.afterName ?? ' ') + params + between` — for repositioning a diagnostic's own prelude-relative offset back onto `atRule` (`atRuleErrorIndex`).
    */
   readonly preludeStartIndex: number
 }
@@ -65,22 +61,25 @@ function currentParams(atRule: PostCSSAtRule): string {
 }
 
 /**
- * Re-tokenizes `'@' + atRule.name + afterName + params` with the core
+ * Re-tokenizes `'@' + atRule.name + afterName + params + between` with the core
  * tokenizer to find the directive's real name across a boundary PostCSS's
- * own parser draws in the wrong place whenever an escape spans it.
+ * own parser draws in the wrong place whenever an escape spans it. The prelude
+ * is everything between the name and the end of the directive: PostCSS keeps a
+ * comment there in `raws.afterName` (right after the name), in `raws.params.raw`
+ * (between names) or in `raws.between` (before the `;`), so the three are joined.
  */
-function matchNaveAtRule(atRule: PostCSSAtRule): NaveMatch {
+export function matchNaveAtRule(atRule: PostCSSAtRule): NaveMatch {
   const afterName = atRule.raws.afterName ?? ' '
   const paramsRaw = currentParams(atRule)
+  const between = atRule.raws.between ?? ''
   const nameBoundary = 1 + atRule.name.length
-  const full = `@${atRule.name}${afterName}${paramsRaw}`
+  const full = `@${atRule.name}${afterName}${paramsRaw}${between}`
   const token = tokenize(full)[0]
-  const commonPrelude = { prelude: paramsRaw, preludeStartIndex: nameBoundary + afterName.length }
+  const commonPrelude = { prelude: full.slice(nameBoundary), preludeStartIndex: nameBoundary }
   if (token?.type !== 'at-keyword-token') return { isNave: false, ...commonPrelude }
   const isNave = (token.structured?.value as string).toLowerCase() === 'nave'
   // The common case: PostCSS's own name already ends exactly where the real
-  // token does, so the prelude PostCSS itself hands out (params, comments
-  // preserved via raws.params.raw) is used unchanged. Only when an escape
+  // token does, so the text after it is the prelude. Only when an escape
   // pushed the real name past that boundary is the prelude recomputed from
   // the re-tokenized text instead.
   if (token.endIndex === nameBoundary) return { isNave, ...commonPrelude }
@@ -106,7 +105,7 @@ function atRuleErrorIndex(preludeStartIndex: number, diagnostic: Diagnostic): nu
  * `ctx.fold` first, so the fold covers every directive, not just the one
  * that happened to be walked first (AC-directive-core-16).
  */
-function reportDiagnostic(
+export function reportDiagnostic(
   diagnostic: Diagnostic,
   ctx: DirectiveContext,
   preludeStartIndex: number,
@@ -131,109 +130,14 @@ function reportDiagnostic(
   )
   const index = atRuleErrorIndex(preludeStartIndex, diagnostic)
   if (ctx.onUnknown === 'warn') {
-    warnDirective(ctx, text, index)
+    reportWarning(ctx.atRule, ctx.result, text, {
+      index,
+      printWarnings: ctx.printWarnings,
+    })
     return
   }
   if (ctx.onUnknown === 'ignore') return
   ctx.fold.push({ atRule: ctx.atRule, text, index })
-}
-
-/**
-One rendered declaration, stamped with the directive's own source.
- */
-function declNode(atRule: PostCSSAtRule, decl: Declaration): ReturnType<typeof postcss.decl> {
-  const node = postcss.decl({ prop: decl.prop, value: decl.value })
-  if (atRule.source) node.source = atRule.source
-  return node
-}
-
-/**
- * Inserts the inline declarations at the directive's authored position:
- * bare when nothing precedes them that requires nesting, or wrapped in a
- * single `& { … }` when `wrapInAmpersand` is true.
- */
-function insertDeclarations(
-  atRule: PostCSSAtRule,
-  declarations: readonly Declaration[],
-  isWrapped: boolean,
-): void {
-  if (declarations.length === 0) return
-  if (!isWrapped) {
-    for (const decl of declarations) atRule.before(declNode(atRule, decl))
-    return
-  }
-  const wrapper = postcss.rule({ selector: '&' })
-  if (atRule.source) wrapper.source = atRule.source
-  for (const decl of declarations) wrapper.append(declNode(atRule, decl))
-  atRule.before(wrapper)
-}
-
-/**
-A rule node with `selector`, holding `declarations`.
- */
-function buildRule(
-  selector: string,
-  declarations: readonly Declaration[],
-): ReturnType<typeof postcss.rule> {
-  const rule = postcss.rule({ selector })
-  for (const decl of declarations) rule.append(postcss.decl({ prop: decl.prop, value: decl.value }))
-  return rule
-}
-
-/**
-The PostCSS nodes one appended block contributes, in `plan()`'s already-anchored, already-ordered shape.
- */
-function buildAppendedNode(
-  block: AnchoredBlock,
-): ReturnType<typeof postcss.rule> | ReturnType<typeof postcss.atRule> {
-  if (block.kind === 'pseudo') return buildRule(block.selector, block.declarations)
-  const node = postcss.atRule({ name: block.kind, params: block.condition })
-  if (block.declarations.length > 0) node.append(buildRule('&', block.declarations))
-  for (const pseudo of block.pseudos) node.append(buildRule(pseudo.selector, pseudo.declarations))
-  return node
-}
-
-/**
-Converts a `resolve()` malformed-atom throw into a positioned PostCSS error (a registration defect, outside onUnknown and outside the fold).
- */
-function throwMalformedAtom(atRule: PostCSSAtRule, error: unknown): never {
-  const message = error instanceof Error ? error.message : String(error)
-  throw atRule.error(message)
-}
-
-interface PlanAtRuleResult {
-  readonly isStyleRuleParent: boolean
-  readonly parent: PostCSSAtRule['parent']
-  readonly result: PlanResult
-}
-
-/**
-`plan()`'s three facts, answered from the PostCSS AST, plus the call itself (a malformed atom's throw is repositioned onto the at-rule).
- */
-function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap, prelude: string): PlanAtRuleResult {
-  const parent = atRule.parent
-  const isStyleRuleParent = parent?.type === 'rule'
-  const isFollowingNestedNodeHere = isStyleRuleParent
-    ? isFollowingNestedNode(parent, atRule)
-    : false
-
-  try {
-    return {
-      isStyleRuleParent,
-      parent,
-      result: plan(
-        prelude,
-        {
-          isStyleRuleParent,
-          isInsideKeyframes: parent !== undefined && isInsideKeyframes(parent),
-          isFollowingNestedNode: isFollowingNestedNodeHere,
-        },
-        { extend },
-      ),
-    }
-  } catch (error) {
-    return throwMalformedAtom(atRule, error)
-  }
 }
 
 /**
@@ -243,26 +147,39 @@ function planAtRule(atRule: PostCSSAtRule, extend: ExtendMap, prelude: string): 
  * adapter's own structural fact to report, mirroring `expandText()`'s own
  * `item.blockStart !== undefined` check on its own item shape.
  */
-function hasBlock(atRule: PostCSSAtRule): boolean {
+export function hasBlock(atRule: PostCSSAtRule): boolean {
   return atRule.nodes !== undefined
 }
 
 /**
- * Walks one `@nave` at-rule against this run's resolved `extend` and folds
- * its diagnostics.
+ * Converts a `resolve()` malformed-atom throw into a positioned PostCSS error (a registration
+ * defect, outside onUnknown and outside the fold).
+ */
+export function throwMalformedAtom(atRule: PostCSSAtRule, error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error)
+  throw atRule.error(message)
+}
+
+/**
+ * Reports a `@nave` that is not directly in a style rule: refused, with the reason `plan()` gives.
+ * A directive directly in a style rule is the rule's to expand, not this function's.
  */
 export function handleAtRule(atRule: PostCSSAtRule, ctx: Omit<DirectiveContext, 'atRule'>): void {
   const match = matchNaveAtRule(atRule)
   if (!match.isNave) return
+  const parent = atRule.parent
+  if (parent?.type === 'rule') return
 
   const fullCtx: DirectiveContext = { ...ctx, atRule }
-  const {
-    isStyleRuleParent,
-    parent,
-    result: planResult,
-  } = planAtRule(atRule, ctx.extend, match.prelude)
-
-  for (const diagnostic of planResult.diagnostics) {
+  const diagnostics = plan(
+    match.prelude,
+    {
+      isStyleRuleParent: false,
+      isInsideKeyframes: parent !== undefined && isInsideKeyframes(parent),
+    },
+    { extend: ctx.extend },
+  ).diagnostics
+  for (const diagnostic of diagnostics) {
     reportDiagnostic(diagnostic, fullCtx, match.preludeStartIndex)
   }
   if (hasBlock(atRule)) {
@@ -272,15 +189,5 @@ export function handleAtRule(atRule: PostCSSAtRule, ctx: Omit<DirectiveContext, 
       match.preludeStartIndex,
     )
   }
-
-  insertDeclarations(atRule, planResult.declarations, planResult.wrapInAmpersand)
   atRule.remove()
-
-  if (isStyleRuleParent && parent) {
-    for (const block of planResult.blocks) {
-      const node = buildAppendedNode(block)
-      stampSource(node, atRule.source)
-      parent.append(node)
-    }
-  }
 }

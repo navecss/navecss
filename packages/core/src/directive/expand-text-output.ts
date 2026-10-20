@@ -81,10 +81,13 @@ function appendMappedRange(
     // it): leave it a generated-only gap rather than mark it, so a reader
     // of the map gets no source for it instead of an invented one.
     if (source) builder.mark(source)
-    const body = text.slice(token.startIndex, token.endIndex)
+    // A token that runs past the end of the range (an edit lands inside it, as closers do before
+    // the lone backslash a string ends in) is written up to that end; the rest is the next range's.
+    const end = Math.min(token.endIndex, rangeEnd)
+    const body = text.slice(token.startIndex, end)
     output.push(body)
     builder.advance(body)
-    cursor = token.endIndex
+    cursor = end
   }
   const rest = text.slice(cursor, rangeEnd)
   output.push(rest)

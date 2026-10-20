@@ -118,3 +118,38 @@ export function reportDiagnostics(
     }
   })
 }
+
+/**
+ * A warning of the order check, positioned in the authored file's own line/column space. It is
+ * not a diagnostic: it never fails a build and is not governed by `onUnknown`.
+ */
+export interface ExpandedWarning {
+  readonly column: number
+  readonly file?: string
+  readonly line: number
+  readonly offset: number
+  readonly text: string
+}
+
+/**
+ * The order warnings of one stylesheet, each with its 1-based `line` and `column`, in source order.
+ */
+export function positionWarnings(
+  warnings: readonly { readonly offset: number; readonly text: string }[],
+  css: string,
+  file: string | undefined,
+): ExpandedWarning[] {
+  const positionAt = createPositionFinder(css)
+  return warnings
+    .toSorted((a, b) => a.offset - b.offset)
+    .map(({ offset, text }) => {
+      const position = positionAt(offset)
+      return {
+        text,
+        offset,
+        line: position.line,
+        column: position.column + 1,
+        ...(file !== undefined && { file }),
+      }
+    })
+}

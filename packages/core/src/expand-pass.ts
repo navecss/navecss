@@ -14,7 +14,7 @@ import { splitByteOrderMark } from './byte-order-mark.ts'
 import { findBareImports } from './directive/bare-imports.ts'
 import { createPositionFinder } from './directive/expand-text-diagnostics.ts'
 import { expandText } from './directive/expand-text.ts'
-import { foldedText } from './directive/report-text.ts'
+import { foldedText, orderWarningTexts } from './directive/report-text.ts'
 
 export interface PassResult {
   /**
@@ -27,6 +27,11 @@ export interface PassResult {
   readonly reports: readonly string[]
   readonly status: 0 | 1 | 2
   /**
+   * The order warnings of every file that was expanded, as `file:line:column: text`, in the order
+   * the files were given. They never change `status` or an output.
+   */
+  readonly warnings: readonly string[]
+  /**
    * Every `--source` that could not be read.
    */
   readonly unreadable: readonly string[]
@@ -38,8 +43,8 @@ export interface PassResult {
 }
 
 type Outcome =
-  | { readonly css: string; readonly kind: 'expanded' }
-  | { readonly kind: 'problems'; readonly report: string }
+  | { readonly css: string; readonly kind: 'expanded'; readonly warnings: readonly string[] }
+  | { readonly kind: 'problems'; readonly report: string; readonly warnings: readonly string[] }
   | { readonly kind: 'unreadable' }
 
 /**
@@ -92,12 +97,13 @@ function expandOne(pair: ExpandPair, extend: ExtendMap, outputs: ReadonlySet<str
       ...bareImportDiagnostics(text, source, pair.out, outputs),
     ]
     const report = foldedText(problems, source, extend)
+    const warnings = orderWarningTexts(result.warnings, source)
     return report === undefined
-      ? { kind: 'expanded', css: bom + result.css }
-      : { kind: 'problems', report }
+      ? { kind: 'expanded', css: bom + result.css, warnings }
+      : { kind: 'problems', report, warnings }
   } catch (error) {
     // An atom registered without a declarations object is a throw, outside `onUnknown`.
-    return { kind: 'problems', report: `${source}: ${(error as Error).message}` }
+    return { kind: 'problems', report: `${source}: ${(error as Error).message}`, warnings: [] }
   }
 }
 
@@ -140,23 +146,31 @@ function writeOutputs(outputs: readonly { css: string; pair: ExpandPair }[]): {
  */
 export function expandPass(job: ExpandJob, extend: ExtendMap): PassResult {
   const reports: string[] = []
+  const warnings: string[] = []
   const unreadable: string[] = []
   const outputs: { css: string; pair: ExpandPair }[] = []
   const outPaths = new Set(job.pairs.map((pair) => path.resolve(pair.out)))
   for (const pair of job.pairs) {
     const outcome = expandOne(pair, extend, outPaths)
-    if (outcome.kind === 'unreadable') unreadable.push(pair.source)
-    else if (outcome.kind === 'problems') reports.push(outcome.report)
+    if (outcome.kind === 'unreadable') {
+      unreadable.push(pair.source)
+      continue
+    }
+    warnings.push(...outcome.warnings)
+    if (outcome.kind === 'problems') reports.push(outcome.report)
     else outputs.push({ css: outcome.css, pair })
   }
   const status = statusOf(unreadable, reports)
-  if (status !== 0) return { expanded: [], reports, status, unreadable, writeFailure: undefined }
+  if (status !== 0) {
+    return { expanded: [], reports, status, unreadable, warnings, writeFailure: undefined }
+  }
   const { written, writeFailure } = writeOutputs(outputs)
   return {
     expanded: written,
     reports,
     status: writeFailure === undefined ? 0 : 2,
     unreadable,
+    warnings,
     writeFailure,
   }
 }
