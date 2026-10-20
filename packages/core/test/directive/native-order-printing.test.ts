@@ -176,3 +176,36 @@ describe.each(HOSTS)(
     })
   },
 )
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-25 — a condition is kept apart inside a string and spaced round a dropped comment (%s)',
+  (_name, run) => {
+    it('names two conditions that differ only inside a string as two', async () => {
+      const [text] = await textsOf(
+        run,
+        '.x { @supports (content: "a, b") { & { @nave hideDesktopUp } } @supports (content: "a,b") { & { display: flex } } }',
+      )
+
+      expect(text).toContain(
+        'so under @media (width >= 75em) and @supports (content: "a, b") while also under @supports (content: "a,b"), display is flex, not none.',
+      )
+    })
+
+    it.each([
+      ['and', '@media (width >= 60em) and (width < 99em)'],
+      ['not', '@media (width >= 60em) and not (width < 99em)'],
+      ['or', '(@media (width >= 60em) or (width < 99em))'],
+    ])('keeps the space a comment after %s stood for', async (word, printed) => {
+      const [text] = await textsOf(
+        run,
+        `.x { & { @nave hideDesktopUp } @media (width >= 60em) ${word === 'not' ? 'and not' : word}/**/(width < 99em) { display: flex } }`,
+      )
+      const block = printed.replace(/^\((.*)\)$/, '$1')
+
+      expect(text).toContain(`the ${block} block comes after`)
+      expect(text).toContain(`while also under ${printed},`)
+      expect(text).toContain(`move the ${block} block above the & block.`)
+      expect(text).not.toMatch(/(?:and|not|or)\(width/)
+    })
+  },
+)

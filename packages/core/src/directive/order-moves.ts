@@ -4,10 +4,22 @@
  * an atom named after another) only where the arrangement the move makes, checked again, no longer
  * has that pair and has no pair the rule did not already have. Otherwise it prints no move, and
  * its fix is the directive with the marker, which always clears the pair.
+ *
+ * The check is made for a warning that is printed, never for a pair a marker covers, and reads only
+ * the pairs the move can change: those that involve a part that moved. A rule that holds more than
+ * `MOVE_LIMIT` pairs prints no move at all, so the cost of a rule stays in proportion to its pairs.
  */
 import type { Segment } from './order-check.ts'
 import type { Finding } from './order-model.ts'
+import type { Scope } from './order-outward.ts'
 import type { ModelNode, NodeRef } from './rule-model.ts'
+
+/**
+ * The most pairs a rule can hold and still have its moves checked. The rules of `@navecss/base-ui`
+ * hold none, and the largest rule the tests of this package print a move for holds six; a rule
+ * beyond this prints the marker alone, which always clears the pair.
+ */
+const MOVE_LIMIT = 50
 
 /**
  * A segment of the output, chosen.
@@ -27,6 +39,15 @@ type Place = { readonly before: Choice } | { readonly after: Choice }
 interface Move {
   readonly arranged: readonly Segment[]
   readonly key: string
+  readonly scope: Scope
+}
+
+/**
+ * The segments after a move, and the ones that moved.
+ */
+interface Relocation {
+  readonly arranged: Segment[]
+  readonly moved: ReadonlySet<Segment>
 }
 
 /**
@@ -79,7 +100,7 @@ function relocated(
   segments: readonly Segment[],
   isMoved: Choice,
   place: Place,
-): Segment[] | undefined {
+): Relocation | undefined {
   const moved = segments.filter((segment) => isMoved(segment))
   const rest = segments.filter((segment) => !isMoved(segment))
   const index =
@@ -88,7 +109,23 @@ function relocated(
       : rest.findLastIndex((segment) => place.after(segment))
   if (index === -1 || moved.length === 0) return undefined
   const at = 'before' in place ? index : index + 1
-  return [...rest.slice(0, at), ...moved, ...rest.slice(at)]
+  return {
+    arranged: [...rest.slice(0, at), ...moved, ...rest.slice(at)],
+    moved: new Set(moved),
+  }
+}
+
+/**
+ * The move that `relocation` makes.
+ */
+function moveOf(relocation: Relocation | undefined, key: string): Move | undefined {
+  return (
+    relocation && {
+      arranged: relocation.arranged,
+      key,
+      scope: { kind: 'moved', segments: relocation.moved },
+    }
+  )
 }
 
 /**
@@ -179,8 +216,7 @@ function outwardMove(finding: Finding, segments: readonly Segment[]): Move | und
   if (level === undefined) {
     const moving =
       overrider.kind === 'own' ? ownNode(overrider.topRef) : ofDirective(overrider.directive.ref)
-    const arranged = relocated(segments, moving, { before: ownNode(top) })
-    return arranged && { arranged, key }
+    return moveOf(relocated(segments, moving, { before: ownNode(top) }), key)
   }
   const holder = segments.find(ownNode(top))
   if (holder?.kind !== 'own' || overrider.kind !== 'own') return undefined
@@ -190,10 +226,9 @@ function outwardMove(finding: Finding, segments: readonly Segment[]): Move | und
     moving: overrider.topRef,
   })
   if (rebuilt === undefined) return undefined
-  const arranged = segments.map((segment) =>
-    segment === holder ? { ...holder, node: rebuilt } : segment,
-  )
-  return { arranged, key }
+  const regrouped = { ...holder, node: rebuilt }
+  const arranged = segments.map((segment) => (segment === holder ? regrouped : segment))
+  return { arranged, key, scope: { child: overrider.topRef, kind: 'child', top: regrouped } }
 }
 
 /**
@@ -208,45 +243,49 @@ function ruleMove(
   const { candidate, unit } = finding
   const { overrider } = candidate
   if (overrider.kind === 'own') {
-    const arranged = relocated(segments, ownNode(overrider.topRef), {
+    const relocation = relocated(segments, ownNode(overrider.topRef), {
       before: ofDirective(unit.directive.ref),
     })
-    return arranged && { arranged, key: `own:${overrider.topRef}:${unit.directive.ref}` }
+    return moveOf(relocation, `own:${overrider.topRef}:${unit.directive.ref}`)
   }
   const index = lastOverriderIndex(finding, all) ?? overrider.atom.atomIndex
-  const arranged = relocated(segments, namedAtom(unit.directive.ref, unit.atom.name), {
+  const relocation = relocated(segments, namedAtom(unit.directive.ref, unit.atom.name), {
     after: ofAtom(overrider.directive.ref, index),
   })
-  return (
-    arranged && {
-      arranged,
-      key: `atom:${unit.directive.ref}:${unit.atom.name}:${overrider.directive.ref}:${index}`,
-    }
-  )
+  const key = `atom:${unit.directive.ref}:${unit.atom.name}:${overrider.directive.ref}:${index}`
+  return moveOf(relocation, key)
 }
 
 /**
  * The findings with `canMove` set: whether the move each one's warning would print is made
- * without that pair and without any the rule did not have. `recheck` finds the pairs of an
- * arrangement.
+ * without that pair and without any the rule did not have. The answer is worked out when it is
+ * asked for, which is for a warning that is printed. `recheck` finds the pairs of an arrangement
+ * that its scope reads.
  */
 export function markMoves(
   findings: readonly Finding[],
   segments: readonly Segment[],
-  recheck: (arranged: readonly Segment[]) => readonly Finding[],
+  recheck: (arranged: readonly Segment[], scope: Scope) => readonly Finding[],
 ): Finding[] {
-  const before = new Set(findings.map((finding) => pairKey(finding)))
+  if (findings.length > MOVE_LIMIT)
+    return findings.map((finding) => ({ ...finding, canMove: () => false }))
+  let before: ReadonlySet<string> | undefined
   const after = new Map<string, ReadonlySet<string>>()
-  return findings.map((finding) => {
+  const isClear = (finding: Finding): boolean => {
     const move = finding.outward
       ? outwardMove(finding, segments)
       : ruleMove(finding, segments, findings)
-    if (move === undefined) return { ...finding, canMove: false }
+    if (move === undefined) return false
+    before ??= new Set(findings.map((found) => pairKey(found)))
     if (!after.has(move.key)) {
-      after.set(move.key, new Set(recheck(move.arranged).map((found) => pairKey(found))))
+      const found = recheck(move.arranged, move.scope)
+      after.set(move.key, new Set(found.map((pair) => pairKey(pair))))
     }
     const pairs = after.get(move.key)!
-    const canMove = !pairs.has(pairKey(finding)) && [...pairs].every((key) => before.has(key))
-    return { ...finding, canMove }
+    return !pairs.has(pairKey(finding)) && [...pairs].every((key) => before!.has(key))
+  }
+  return findings.map((finding) => {
+    let known: boolean | undefined
+    return { ...finding, canMove: () => (known ??= isClear(finding)) }
   })
 }

@@ -120,9 +120,9 @@ export interface RelatedPair {
 export interface Finding {
   readonly candidate: Candidate
   /**
-  Whether the move this finding's warning would print, made and checked again, no longer finds this pair and finds no new one. Set by the order check; a move is printed only where it holds.
+  Whether the move this finding's warning would print, made and checked again, no longer finds this pair and finds no new one. Set by the order check, and asked only for a warning that is printed; a move is printed only where it holds.
    */
-  readonly canMove?: boolean
+  readonly canMove?: () => boolean
   /**
   Set for a directive written inside a nested rule and paired with what an enclosing rule holds after it: how the warning names the block of that rule that holds the directive (`above`), the later block that overrides it (`overrider`, when the overrider is a block), the child of the rule that holds the directive (`top`) and, when the pair is read inside a conditional group, that group and the child of it that holds the directive (`level`).
    */

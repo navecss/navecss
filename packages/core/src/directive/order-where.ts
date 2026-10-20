@@ -112,11 +112,52 @@ function conditionText(condition: ConditionRule): string {
 }
 
 /**
+ * Whether no space is needed between this token and the one before it: a comparison operator, a
+ * colon, a comma or a closing parenthesis.
+ */
+function isTightAfter(token: Token): boolean {
+  return (
+    token.type === ')-token' ||
+    token.type === 'colon-token' ||
+    token.type === 'comma-token' ||
+    (token.type === 'delim-token' && '<>='.includes(token.raw))
+  )
+}
+
+/**
+ * Whether no space is needed between this token and the one after it.
+ */
+function isTightBefore(token: Token): boolean {
+  return (
+    token.type === '(-token' ||
+    token.type === 'function-token' ||
+    token.type === 'colon-token' ||
+    token.type === 'comma-token' ||
+    (token.type === 'delim-token' && '<>='.includes(token.raw))
+  )
+}
+
+/**
  * A condition as two are compared: the same group at-rule, whatever whitespace or comments lie
- * between the tokens of its prelude and around its operators.
+ * between the tokens of its prelude and around its operators. A string is compared exactly as
+ * written.
  */
 export function conditionKey(condition: ConditionRule): string {
-  return `${condition.name} ${printedValue(condition.prelude).replaceAll(/\s*([<>=:(),])\s*/g, '$1')}`
+  let key = `${condition.name} `
+  let previous: Token | undefined
+  let hasGap = false
+  for (const token of tokenize(condition.prelude)) {
+    if (token.type === 'whitespace-token' || token.type === 'comment') {
+      hasGap = true
+      continue
+    }
+    const isSpaced =
+      previous !== undefined && hasGap && !isTightBefore(previous) && !isTightAfter(token)
+    key += isSpaced ? ` ${token.raw}` : token.raw
+    previous = token
+    hasGap = false
+  }
+  return key
 }
 
 /**

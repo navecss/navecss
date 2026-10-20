@@ -11,7 +11,7 @@ import type { Specificity } from './selector-specificity.ts'
 
 import { compare } from './order-compare.ts'
 import { markMoves } from './order-moves.ts'
-import { outwardFindings } from './order-outward.ts'
+import { outwardFindings, type Scope } from './order-outward.ts'
 import {
   candidatesOfAtomBlock,
   candidatesOfAtomDeclarations,
@@ -85,13 +85,16 @@ function isSameAtom(a: Segment, b: Segment): boolean {
 function findingsOfBlock(
   index: number,
   segments: readonly Segment[],
+  rule: { readonly amp: Specificity; readonly moved: ReadonlySet<Segment> | undefined },
   candidatesOfSegment: (index: number) => readonly Candidate[],
-  amp: Specificity,
 ): Finding[] {
+  const { amp, moved } = rule
   const segment = segments[index] as AtomBlockSegment
   const units = unitsOfBlock(contextOf(segment, amp), segment.block)
+  const isRead = (other: Segment): boolean =>
+    moved === undefined || moved.has(segment) || moved.has(other)
   const candidates = segments.flatMap((other, at) =>
-    at > index && !isSameAtom(segment, other) ? candidatesOfSegment(at) : [],
+    at > index && !isSameAtom(segment, other) && isRead(other) ? candidatesOfSegment(at) : [],
   )
   return candidates.flatMap((candidate) =>
     units.map((unit) => compare(unit, candidate)).filter((f) => f !== undefined),
@@ -99,7 +102,8 @@ function findingsOfBlock(
 }
 
 /**
- * The pairs in an arrangement of a rule's output, before any move is checked.
+ * The pairs in an arrangement of a rule's output, before any move is checked; with a `scope`, only
+ * the pairs a move can change.
  */
 function pairsIn(
   segments: readonly Segment[],
@@ -107,17 +111,24 @@ function pairsIn(
     readonly amp: Specificity
     readonly emitted: Emitted
     readonly isPseudoElementRule: boolean
+    readonly scope?: Scope | undefined
   },
   candidatesOfPart: (segment: Segment) => readonly Candidate[],
 ): Finding[] {
-  const { amp, emitted, isPseudoElementRule } = rule
+  const { amp, emitted, isPseudoElementRule, scope } = rule
   const candidatesOfSegment = (index: number): readonly Candidate[] =>
     candidatesOfPart(segments[index]!)
-  const inner = segments.flatMap((segment, index) =>
-    segment.kind === 'atom-block' ? findingsOfBlock(index, segments, candidatesOfSegment, amp) : [],
-  )
+  const moved = scope?.kind === 'moved' ? scope.segments : undefined
+  const inner =
+    scope?.kind === 'child'
+      ? []
+      : segments.flatMap((segment, index) =>
+          segment.kind === 'atom-block'
+            ? findingsOfBlock(index, segments, { amp, moved }, candidatesOfSegment)
+            : [],
+        )
   if (isPseudoElementRule) return inner
-  return [...inner, ...outwardFindings(segments, amp, emitted, candidatesOfSegment)]
+  return [...inner, ...outwardFindings(segments, { amp, emitted, scope }, candidatesOfSegment)]
 }
 
 /**
@@ -145,5 +156,7 @@ export function checkOrder(
     return candidates
   }
   const findings = pairsIn(segments, rule, candidatesOfPart)
-  return markMoves(findings, segments, (arranged) => pairsIn(arranged, rule, candidatesOfPart))
+  return markMoves(findings, segments, (arranged, scope) =>
+    pairsIn(arranged, { ...rule, scope }, candidatesOfPart),
+  )
 }

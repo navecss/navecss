@@ -128,7 +128,7 @@ function overriderName(finding: Finding): string {
  * The sentence that says what to do to let the atom win.
  */
 function fixSentence(finding: Finding, context: TextContext): string | undefined {
-  if (finding.canMove !== true) return undefined
+  if (finding.canMove?.() !== true) return undefined
   const { unit, candidate } = finding
   const atom = `"${unit.atom.name}"`
   const { overrider } = candidate

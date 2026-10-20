@@ -175,3 +175,66 @@ describe.each(HOSTS)(
     })
   },
 )
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-26 — each outward pair is checked on its own move (%s)',
+  (_name, run) => {
+    it('prints the move for the later declaration and none for the block that turns the pair round', async () => {
+      const texts = await textsOf(
+        run,
+        '.x { & { @nave mA } & { display: flex } & { @nave mB } color: blue; }',
+      )
+      const declaration = texts.find((text) =>
+        text.startsWith('@nave: color: blue comes after "mA"'),
+      )
+      const block = texts.find((text) =>
+        text.startsWith('@nave: the third & block comes after "mA"'),
+      )
+
+      expect(declaration).toContain('To let "mA" win, move color: blue above the first & block.')
+      expect(block).toBeDefined()
+      expect(block).not.toContain('To let')
+    })
+
+    it.each([
+      ['.x { & { @nave hideDesktopUp } & { color: blue } @nave flex; display: flex; }', 2],
+      [
+        '.x { & { @nave hideDesktopUp } & { @nave hideDesktopUp } @media (width >= 60em) { display: flex } @nave flex; }',
+        4,
+      ],
+    ])('%s keeps the move of every pair that has one', async (css, count) => {
+      const texts = await textsOf(run, css)
+
+      expect(texts).toHaveLength(count)
+      for (const text of texts) expect(text).toContain('To let')
+    })
+  },
+)
+
+/**
+ * `count` nested rules that each hold a directive, then one declaration that overrides them all.
+ */
+function overridden(count: number): string {
+  const blocks = Array.from({ length: count }, () => '& { @nave hideDesktopUp }')
+  return `.x { ${blocks.join(' ')} display: flex; }`
+}
+
+describe.each(HOSTS)(
+  'AC-native-apply-order-54 — a rule with more than 50 pairs prints the marker alone (%s)',
+  (_name, run) => {
+    it.each([
+      [50, true],
+      [51, false],
+    ])('a declaration over %i blocks: the move is printed is %s', async (count, hasMove) => {
+      const texts = await textsOf(run, overridden(count))
+
+      expect(texts).toHaveLength(count)
+      for (const text of texts) {
+        expect(text.includes('To let')).toBe(hasMove)
+        expect(text).toContain(
+          'If it is meant to win, mark the directive that names "hideDesktopUp"',
+        )
+      }
+    })
+  },
+)

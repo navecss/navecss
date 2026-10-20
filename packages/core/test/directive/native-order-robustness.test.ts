@@ -199,3 +199,75 @@ describe('AC-native-apply-order-54 — scaling, as a ratio to a linear control',
     expect(measured).toBeLessThan(8)
   }, 60_000)
 })
+
+/**
+ * `.x` holding `size` nested rules that each carry a directive, then `size` rules that override
+ * it, inside `wrap` (a group, or nothing), the directives marked or not.
+ */
+function grid(
+  size: number,
+  options: { readonly isMarked?: boolean; readonly wrap?: string } = {},
+): string {
+  const marker = options.isMarked ? '/* nave-allow-override: display */ ' : ''
+  const directives = Array.from(
+    { length: size },
+    (_, i) => `&.a${i} { @nave ${marker}hideDesktopUp }`,
+  )
+  const overrides = Array.from({ length: size }, (_, i) => `&.b${i} { display: flex }`)
+  const inner = `${directives.join(' ')} ${overrides.join(' ')}`
+  return `.x { ${options.wrap === undefined ? inner : `${options.wrap} { ${inner} }`} }`
+}
+
+/**
+ * `size` rules that each hold one directive and one override: the same pairs, none of them n by n.
+ */
+function control(
+  size: number,
+  options: { readonly isMarked?: boolean; readonly wrap?: string } = {},
+): string {
+  const marker = options.isMarked ? '/* nave-allow-override: display */ ' : ''
+  const body = `&.a0 { @nave ${marker}hideDesktopUp } &.b0 { display: flex }`
+  const rule = `.x { ${options.wrap === undefined ? body : `${options.wrap} { ${body} }`} }`
+  return `${rule}\n`.repeat(size)
+}
+
+describe('AC-native-apply-order-54 — the move check costs what the pairs cost, not their square', () => {
+  it('reads 40 nested directives against 40 later blocks as it reads 40 small rules', () => {
+    const measured = ratio(
+      () => warningsViaText(grid(40)),
+      () => warningsViaText(control(40)),
+    )
+
+    expect(measured).toBeLessThan(25)
+  }, 300_000)
+
+  it('reads the same shape inside a group, 20 by 20', () => {
+    const wrap = '@media (width >= 60em)'
+    const measured = ratio(
+      () => warningsViaText(grid(20, { wrap })),
+      () => warningsViaText(control(20, { wrap })),
+    )
+
+    expect(measured).toBeLessThan(25)
+  }, 300_000)
+
+  it('reads 40 marked directives against 40 later blocks as it reads 40 small rules', () => {
+    const measured = ratio(
+      () => warningsViaText(grid(40, { isMarked: true })),
+      () => warningsViaText(control(40, { isMarked: true })),
+    )
+
+    expect(measured).toBeLessThan(25)
+  }, 300_000)
+
+  it('completes 80 by 80 in a process of its own, with every warning', () => {
+    const result = spawnSync(
+      process.execPath,
+      ['--max-old-space-size=1024', path.resolve(HERE, '../helpers/order-scale-probe.ts'), '80'],
+      { encoding: 'utf8', timeout: 240_000 },
+    )
+
+    expect(result.status, result.stderr.slice(-300)).toBe(0)
+    expect(JSON.parse(result.stdout.trim().split('\n').at(-1)!)).toEqual({ warnings: 6400 })
+  }, 300_000)
+})

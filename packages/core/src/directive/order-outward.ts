@@ -76,9 +76,25 @@ interface Enclosing {
   readonly amp: Specificity
   readonly emitted: Emitted
   readonly later: readonly Candidate[]
+  readonly levels: Levels
   readonly names: ReadonlyMap<number, string>
   readonly top: ModelNode
 }
+
+/**
+ * Which levels of a nested block are read: all of them, only what the enclosing rule holds after
+ * it, or only the groups, and in them only what involves one child.
+ */
+type Levels = 'all' | 'enclosing' | { readonly child: NodeRef }
+
+/**
+ * What the check of a moved arrangement reads, because a move changes the order of the moved parts
+ * alone: the pairs that involve one of the moved segments, or, for a move inside a conditional
+ * group, the pairs of that group that involve the moved child.
+ */
+export type Scope =
+  | { readonly child: NodeRef; readonly kind: 'child'; readonly top: Segment }
+  | { readonly kind: 'moved'; readonly segments: ReadonlySet<Segment> }
 
 /**
  * Where an outward pair is read and how its warning names the blocks in it.
@@ -117,9 +133,12 @@ function pairs(units: readonly Unit[], candidates: readonly Candidate[], how: Ho
  */
 function groupCandidates(group: GroupLevelFact, enclosing: Enclosing): Candidate[] {
   const reach: Reach = { chain: group.chain, specificities: group.specificities }
-  return group.later.flatMap((node) =>
-    candidatesOfOwnNode(node, enclosing.amp, enclosing.emitted, reach),
-  )
+  const { levels } = enclosing
+  const nodes =
+    typeof levels === 'object' && group.container !== levels.child
+      ? group.later.filter((node) => node.ref === levels.child)
+      : group.later
+  return nodes.flatMap((node) => candidatesOfOwnNode(node, enclosing.amp, enclosing.emitted, reach))
 }
 
 /**
@@ -132,9 +151,14 @@ function findingsBelow(enclosing: Enclosing): Finding[] {
   return directivesBelow(top, amp).flatMap((found) => {
     const { atoms } = emitted(found.directive)
     const facts = directiveFacts(found.directive, { atoms, diagnostics: [] })
+    const own = {
+      candidates: enclosing.later,
+      how: { above, names: enclosing.names, top: top.ref },
+    }
+    const groupLevels = enclosing.levels === 'enclosing' ? [] : found.groups
     const levels = [
-      { candidates: enclosing.later, how: { above, names: enclosing.names, top: top.ref } },
-      ...found.groups.map((group) => ({
+      ...(typeof enclosing.levels === 'object' ? [] : [own]),
+      ...groupLevels.map((group) => ({
         candidates: groupCandidates(group, enclosing),
         how: {
           above: group.above,
@@ -155,16 +179,37 @@ function findingsBelow(enclosing: Enclosing): Finding[] {
 }
 
 /**
+ * What the check reads of one nested rule or group of the rule: the levels, and, when only the
+ * moved segments count, the segments after it that do. Nothing when the check reads none of it.
+ */
+function readOf(
+  segment: Segment,
+  scope: Scope | undefined,
+): { readonly levels: Levels; readonly only?: ReadonlySet<Segment> } | undefined {
+  if (scope === undefined) return { levels: 'all' }
+  if (scope.kind === 'child') {
+    return segment === scope.top ? { levels: { child: scope.child } } : undefined
+  }
+  return scope.segments.has(segment)
+    ? { levels: 'all' }
+    : { levels: 'enclosing', only: scope.segments }
+}
+
+/**
  * The outward findings of a rule: for each nested rule or group it holds, the blocks of the
  * directives written inside against what the rule holds after it, and what a group holds after
- * the block that contains the directive.
+ * the block that contains the directive. A `scope` limits them to the pairs a move can change.
  */
 export function outwardFindings(
   segments: readonly Segment[],
-  amp: Specificity,
-  emitted: Emitted,
+  rule: {
+    readonly amp: Specificity
+    readonly emitted: Emitted
+    readonly scope?: Scope | undefined
+  },
   candidatesOfSegment: (index: number) => readonly Candidate[],
 ): Finding[] {
+  const { amp, emitted, scope } = rule
   const names = namesOf(
     segments.flatMap((segment) => (segment.kind === 'own' ? [segment.node] : [])),
   )
@@ -172,8 +217,16 @@ export function outwardFindings(
     if (segment.kind !== 'own') return []
     const top = segment.node
     if (top.kind !== 'rule' && top.kind !== 'group') return []
-    const later = segments.flatMap((_other, at) => (at > index ? candidatesOfSegment(at) : []))
-    if (later.length === 0 && top.kind === 'rule') return []
-    return findingsBelow({ amp, emitted, later, names, top })
+    const read = readOf(segment, scope)
+    if (read === undefined) return []
+    const isCounted = (other: Segment): boolean => read.only === undefined || read.only.has(other)
+    const later =
+      typeof read.levels === 'object'
+        ? []
+        : segments.flatMap((other, at) =>
+            at > index && isCounted(other) ? candidatesOfSegment(at) : [],
+          )
+    if (later.length === 0 && (top.kind === 'rule' || read.levels === 'enclosing')) return []
+    return findingsBelow({ amp, emitted, later, levels: read.levels, names, top })
   })
 }

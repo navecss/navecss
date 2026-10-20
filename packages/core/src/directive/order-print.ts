@@ -25,7 +25,8 @@ const CLOSING = new Set([')-token', ']-token', 'comma-token', 'semicolon-token']
 /**
  * Whether the gap between two printed tokens is a space. Whitespace is one space. A comment that
  * was dropped leaves none before a closer or after an opener, and where it touched both tokens it
- * leaves one only between two words, which would run together without it.
+ * leaves one only between two words, which would run together without it, and between a word and
+ * an opening parenthesis, which would read as a function.
  */
 function isSpaced(
   gap: { readonly hasComment: boolean; readonly hasWhitespace: boolean },
@@ -34,7 +35,12 @@ function isSpaced(
 ): boolean {
   if (!gap.hasComment) return gap.hasWhitespace
   if (CLOSING.has(next.type) || OPENING.has(previous.type)) return false
-  return gap.hasWhitespace || (WORD_LIKE.has(previous.type) && WORD_LIKE.has(next.type))
+  const isWordBeforeParenthesis = previous.type === 'ident-token' && next.type === '(-token'
+  return (
+    gap.hasWhitespace ||
+    isWordBeforeParenthesis ||
+    (WORD_LIKE.has(previous.type) && WORD_LIKE.has(next.type))
+  )
 }
 
 /**
