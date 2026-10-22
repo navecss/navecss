@@ -65,7 +65,7 @@
     "postcss": "^8"
   },
   "dependencies": {
-    "oxc-parser": "0.150.0",
+    "oxc-parser": "0.154.0",
     "oxc-resolver": "11.24.2"
   },
   "devDependencies": {
