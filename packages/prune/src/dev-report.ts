@@ -6,8 +6,8 @@
 import type { Handoff } from './handoff.ts'
 
 import { isDevelopmentRun } from './phase.ts'
-import { printEachRun, printError, printOnce } from './print.ts'
-import { readRecord } from './record.ts'
+import { isPrintingCompilation, printEachRun, printError, printOnce } from './print.ts'
+import { readRecord, recordWrittenAt } from './record.ts'
 import { reportOf } from './report.ts'
 import { DEV_CLOSING_LINE, DEV_FIXED_LINE, markdownWarning } from './texts.ts'
 
@@ -17,12 +17,20 @@ import { DEV_CLOSING_LINE, DEV_FIXED_LINE, markdownWarning } from './texts.ts'
 const printed: { report?: string } = {}
 
 /**
+ * When the plugin was loaded in this process, in milliseconds since the epoch: a record written
+ * before it is an earlier dev server's, and says nothing about the code now.
+ */
+const STARTED_AT = performance.timeOrigin + performance.now()
+
+/**
  * Prints what the record holds that the terminal has not seen, when the run is the development
- * server's.
+ * server's and prints, and the record was written since the plugin was loaded.
  * @param handoff What `withNave()` handed over, with the project directory this run reads.
  */
 export function reportInDev(handoff: Handoff): void {
-  if (!isDevelopmentRun(handoff)) return
+  if (!isDevelopmentRun(handoff) || !isPrintingCompilation()) return
+  const writtenAt = recordWrittenAt(handoff)
+  if (writtenAt === undefined || writtenAt < STARTED_AT) return
   const record = readRecord(handoff)
   if (record === undefined) return
   if (record.markdown.length > 0) {

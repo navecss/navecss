@@ -4,7 +4,7 @@ import type { LocatedProblem } from '@navecss/core/collect'
  * What the plugin leaves under `<project>/<distDir>/cache/` for the build's own check to read:
  * its problems, the atoms it emitted, a digest of everything it read and of the options.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 import type { Handoff } from './handoff.ts'
@@ -170,6 +170,18 @@ export function writeRecord(handoff: Handoff, record: StoredRecord): void {
   const file = recordPath(handoff)
   mkdirSync(path.dirname(file), { recursive: true })
   writeFileSync(file, JSON.stringify(record, undefined, 2))
+}
+
+/**
+ * When the record was last written, in milliseconds since the epoch, or `undefined` when there is
+ * none.
+ */
+export function recordWrittenAt(handoff: Pick<Handoff, 'dir' | 'distDir'>): number | undefined {
+  try {
+    return statSync(recordPath(handoff)).mtimeMs
+  } catch {
+    return undefined
+  }
 }
 
 /**
