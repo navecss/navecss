@@ -95,17 +95,33 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     )
   })
 
-  it('AC-nextjs-used-atoms-04: dir-dependency messages name the directories the files were selected from', async () => {
+  it('AC-nextjs-used-atoms-04: the dependency messages include the resolver config and each package.json the plugin read', async () => {
     const project = appProject()
     const { messages } = await runAtomic(project)
-    const recorded = Object.keys(recordOf(project).directories)
-      .map((key) => path.resolve(project.dir, key))
-      .toSorted((a, b) => a.localeCompare(b))
-    const named = messagesOf(messages, 'dir-dependency')
-      .map((message) => path.resolve(message.dir as string))
-      .toSorted((a, b) => a.localeCompare(b))
-    expect(recorded).toContain(path.join(project.dir, 'app'))
-    expect(named).toEqual(recorded)
+    const recorded = Object.keys(recordOf(project).files)
+    const named = dependencyFiles(messages)
+    for (const file of ['tsconfig.json', 'package.json', 'node_modules/ok-lib/package.json']) {
+      expect(recorded).toContain(file)
+      expect(named).toContain(path.join(project.dir, file))
+    }
+  })
+
+  it('AC-nextjs-used-atoms-04: dir-dependency messages name the directories the files were selected from and the ones a specifier could have matched in', async () => {
+    const project = appProject()
+    const { messages } = await runAtomic(project)
+    const selected = Object.keys(recordOf(project).directories).map((key) =>
+      path.resolve(project.dir, key),
+    )
+    const named = messagesOf(messages, 'dir-dependency').map((message) =>
+      path.resolve(message.dir as string),
+    )
+    expect(selected).toContain(path.join(project.dir, 'app'))
+    expect(named).toEqual(expect.arrayContaining(selected))
+    // `@/components/Card` could have matched a file beside `Card.tsx`.
+    expect(named).toContain(path.join(project.dir, 'components'))
+    for (const directory of named) {
+      expect(directory === project.dir || isInside(project.dir, directory)).toBe(true)
+    }
   })
 
   it('AC-nextjs-used-atoms-04: no dependency message names a directory', async () => {

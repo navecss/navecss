@@ -73,6 +73,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
         // A `@nave` problem stops the build from the hook; the record is what these rows read.
         const first = await app.next(['build', ...flags])
         expect(first.code, first.output).not.toBe(0)
+        expect(first.output).toMatch(/^app\/kept\.css:\d+:\d+: /mu)
         expect(problemSheets(app)).toEqual(['app/kept.css', 'app/old.css'])
         app.write({ 'app/page.jsx': PAGE })
         const second = await app.next(['build', ...flags])

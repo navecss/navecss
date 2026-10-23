@@ -47,7 +47,7 @@ describe('a run over the atom layer that stops before reading the code', () => {
 })
 
 describe('a run over the atom layer that stops after reading the code', () => {
-  it('declares every file it read and every directory it selected files from', async () => {
+  it('declares every file it read, the resolver config and package.json among them, and every directory it selected files from', async () => {
     const project = makeProject({
       'app/page.tsx': "import { Card } from '../components/Card'\n\nexport default Card\n",
       'components/Card.tsx': pageCalling("'grid'"),
@@ -60,7 +60,9 @@ describe('a run over the atom layer that stops after reading the code', () => {
       'app/page.tsx',
       'components/Card.tsx',
       'next.config.ts',
+      'package.json',
       'postcss.config.mjs',
+      'tsconfig.json',
     ])
     expect(declared(project, result.messages, 'dir-dependency')).toEqual(
       expect.arrayContaining(['.', 'app']),

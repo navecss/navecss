@@ -288,3 +288,69 @@ describe('AC-nextjs-used-atoms-03: in dev, @nave problems with onUnknown "warn" 
     )
   })
 })
+
+describe('AC-nextjs-used-atoms-29: a dev server prints what it found itself', () => {
+  it('AC-nextjs-used-atoms-29: a new dev server does not print the problems an earlier one recorded for code that is now fixed', async () => {
+    const project = brokenProject()
+    watchConsole()
+    await runSheets(project, [ATOMIC_SHEET], { phase: DEV })
+    expect(recordOf(project).problems).toHaveLength(1)
+    project.write({ 'app/page.tsx': pageCalling("'flex'") })
+    const seen = watchConsole()
+
+    await runSheets(project, [FIXED_GLOBALS], { phase: DEV })
+
+    expect(textsOf(seen())).toEqual([])
+  })
+
+  it('AC-nextjs-used-atoms-29: control, the same dev server prints the report a stylesheet-only run meets after its own atom-layer run', async () => {
+    const project = brokenProject()
+    const seen = watchConsole()
+
+    await runSheets(project, [ATOMIC_SHEET, FIXED_GLOBALS], { phase: DEV })
+
+    expect(errorsIn(seen())).toHaveLength(1)
+  })
+})
+
+/**
+ * The atom layer, processed as the named webpack compilation.
+ */
+function asCompilation(name: string): Sheet {
+  return {
+    file: ATOMIC_SHEET.file,
+    get css() {
+      vi.stubEnv('NEXT_COMPILER_NAME', name)
+      return ATOMIC_SHEET.css
+    },
+  }
+}
+
+/**
+ * How many times the report's first line was printed.
+ */
+function reportsIn(calls: readonly Call[]): number {
+  return errorsIn(calls).filter((call) =>
+    textOf(call).startsWith(`1 problem in 1 file: ${REPORT_CAUSE}`),
+  ).length
+}
+
+describe('AC-nextjs-used-atoms-29: a compilation that does not print does not use up the report', () => {
+  it('AC-nextjs-used-atoms-29: the "server" compilation first, then the "client" one, prints the report once', async () => {
+    const project = brokenProject()
+    const seen = watchConsole()
+
+    await runSheets(project, [asCompilation('server'), asCompilation('client')], { phase: DEV })
+
+    expect(reportsIn(seen())).toBe(1)
+  })
+
+  it('AC-nextjs-used-atoms-29: control, the "client" compilation first, then the "server" one, prints the report once', async () => {
+    const project = brokenProject()
+    const seen = watchConsole()
+
+    await runSheets(project, [asCompilation('client'), asCompilation('server')], { phase: DEV })
+
+    expect(reportsIn(seen())).toBe(1)
+  })
+})

@@ -1,7 +1,8 @@
 /**
  * Warnings the check prints when the record is current: the build read no use of an atom, and the
  * build met Markdown or MDX files it does not read. Each is one call, printed before the check
- * fails or passes, and none is printed for a record that stopped the build earlier.
+ * fails or passes, and none is printed for a record that stopped the build earlier. The warning
+ * that the build read no use is not printed beside a report that stops the build.
  */
 import { REPORT_CAUSE } from '@navecss/core/collect'
 import { appendFileSync } from 'node:fs'
@@ -246,17 +247,18 @@ describe('AC-nextjs-used-atoms-30: when the warnings print', () => {
     expect(printed.errors).toHaveLength(1)
   })
 
-  it('AC-nextjs-used-atoms-30: the warning is printed before the report that fails the build', async () => {
+  it('AC-nextjs-used-atoms-30: the report that fails the build is printed without the warning', async () => {
     // The library's call cannot be read and nothing is listed for it: a problem, and no use read.
     const project = contentProject()
     await built(project, {})
     expect(recordOf(project).problems.length).toBeGreaterThan(0)
+    expect(recordOf(project).readsNoUse).toBe(true)
 
     const printed = await check(project, {})
     expect(printed.error).toBeInstanceOf(Error)
-    expectReadsNoUseWarning(printed)
+    expect(printed.warnings).toEqual([])
     expect(printed.errors).toHaveLength(1)
     expect(printed.errors[0]).toContain(REPORT_CAUSE)
-    expect(printed.order).toEqual(['warn', 'error'])
+    expect(printed.order).toEqual(['error'])
   })
 })

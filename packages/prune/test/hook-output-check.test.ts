@@ -223,3 +223,23 @@ describe('AC-nextjs-used-atoms-36: only CSS files under the static directory of 
     expect(message).toContain('build/static/css/app.css')
   })
 })
+
+describe('AC-nextjs-used-atoms-36: the message names the directory it read', () => {
+  it('AC-nextjs-used-atoms-36: with no stylesheet under static at all, it still names the directory', async () => {
+    const { project } = await trimmedProject()
+    const printed = await check(project)
+    expect(printed.error).toBeInstanceOf(Error)
+    const [message = ''] = printed.errors
+    expect(message).toContain(
+      'the CSS in .next/static does not match the atoms this build keeps: it has no rule for flex, grid, which this build keeps',
+    )
+    expect(message).not.toMatch(/withNave\(\):\s{2,}/u)
+  })
+
+  it('AC-nextjs-used-atoms-36: with distDir build it names build/static', async () => {
+    const { css, project } = await trimmedProject('build')
+    writeBuildCss(project, withoutRule(css, 'flex'), { distDir: 'build' })
+    const message = expectStopped(await check(project, 'build'), 'flex')
+    expect(message).toContain('the CSS in build/static does not match the atoms this build keeps')
+  })
+})

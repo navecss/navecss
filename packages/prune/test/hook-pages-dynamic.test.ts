@@ -115,6 +115,23 @@ describe('AC-nextjs-used-atoms-39: a package that calls cx.dynamic() for the Pag
     expect(printed.warnings).toEqual([])
   })
 
+  it('AC-nextjs-used-atoms-39: with keep alone, the dependency call is a problem the report names, so the fixture lists keepFor', async () => {
+    const project = makeProject(pages)
+    project.install('dyn-pages', dynamicPackage('dyn-pages'))
+    const options: NaveOptions = { keep: ['interactive'] }
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = await runAtomic(project, [], { options })
+    writeBuildCss(project, result.css)
+    errors.mockClear()
+
+    await expect(
+      checkBuild(hookMetadata(project), options, { transpilePackages: ['dyn-pages'] }),
+    ).rejects.toThrow('Nave stopped the build')
+
+    expect(linesOf(errors.mock.calls).join('\n')).toContain('keepFor lists no atoms for it')
+  })
+
   it('AC-nextjs-used-atoms-39: with the package in transpilePackages the check passes and prints nothing', async () => {
     const project = await builtProject(pages, ['dyn-pages'])
     const printed = await check(project, { transpilePackages: ['dyn-pages'] })

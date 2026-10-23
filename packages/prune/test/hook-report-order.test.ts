@@ -210,12 +210,12 @@ describe('AC-nextjs-used-atoms-27: a failure of the record stops the check befor
   })
 })
 
-describe('AC-nextjs-used-atoms-27: warnings are printed before the report', () => {
-  it('AC-nextjs-used-atoms-27: the build that read no use warns once and then prints the report', async () => {
+describe('AC-nextjs-used-atoms-27: a report that stops the build is not preceded by the warning that reads no use', () => {
+  it('AC-nextjs-used-atoms-27: the build that read no use and has a problem prints the report alone', async () => {
     const { printed } = await buildAndCheck(projectWithProblemAndNoUse())
-    expect(levels(printed)).toEqual(['warn', 'error'])
-    expect(printed[0]!.text).toContain('read no use')
-    expect(printed[1]!.text.startsWith(`1 problem in 1 file: ${REPORT_CAUSE}`)).toBe(true)
+    expect(levels(printed)).toEqual(['error'])
+    expect(printed[0]!.text.startsWith(`1 problem in 1 file: ${REPORT_CAUSE}`)).toBe(true)
+    expect(printed[0]!.text).not.toContain('read no use')
   })
 
   it('AC-nextjs-used-atoms-27: a build that reads a use prints the report without that warning', async () => {
