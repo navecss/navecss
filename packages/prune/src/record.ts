@@ -59,6 +59,19 @@ export interface PruneRecord {
    */
   readonly directories: Readonly<Record<string, string>>
   /**
+   * Digest of the entries of each directory that a specifier could have matched in, named like the
+   * specifier's path with a trailing `*`, keyed by a relative path: `components/card*` is the
+   * entries of `components/` called `card` or `card.` and an extension. Creating a file beside
+   * the one a specifier resolved to changes one.
+   */
+  readonly listings: Readonly<Record<string, string>>
+  /**
+   * Where each package the graph entered through `node_modules` was looked for, by the path of the
+   * link (or directory) relative to the project, and the real path it led to, or an empty text
+   * where nothing was. A link re-pointed at another version changes one.
+   */
+  readonly links: Readonly<Record<string, string>>
+  /**
    * Every `.md` and `.mdx` file the graph met, sorted.
    */
   readonly markdown: readonly string[]
@@ -244,7 +257,9 @@ function byPlace(a: DirectiveProblem, b: DirectiveProblem): number {
  * folded in, or `undefined` when no run left one.
  */
 export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneRecord | undefined {
-  let stored: Omit<Stored<StoredRecord>, 'pagesDynamicPackages'> & {
+  let stored: Omit<Stored<StoredRecord>, 'links' | 'listings' | 'pagesDynamicPackages'> & {
+    readonly links?: Readonly<Record<string, string>>
+    readonly listings?: Readonly<Record<string, string>>
     readonly pagesDynamicPackages?: readonly string[]
   }
   try {
@@ -261,6 +276,8 @@ export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneReco
     ...stored,
     directiveProblems: sheets.flatMap((sheet) => sheet.problems).toSorted(byPlace),
     directiveWarnings: sheets.flatMap((sheet) => sheet.warnings).toSorted(byPlace),
+    links: stored.links ?? {},
+    listings: stored.listings ?? {},
     pagesDynamicPackages: stored.pagesDynamicPackages ?? [],
     readsNoUse: stored.readsNoCode && sheets.every((sheet) => !sheet.hasDirective),
     failures: [...(stored.failures ?? []), ...sheets.flatMap((sheet) => sheet.failures)],

@@ -274,7 +274,7 @@ function visit(walk: Walk, { file, isInMode }: Queued): void {
 export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): Graph {
   const entries = findEntries(options.dir)
   graph.directories.push(...entries.directories)
-  const resolver = createResolver(options.dir, options.modes)
+  const resolver = createResolver(options.dir, options.modes, graph.inputs)
   const declared = declaredModules(options.dir, options.cxModules, resolver)
   const naveNames = new Set([
     CORE_PACKAGE,
@@ -285,8 +285,8 @@ export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): G
   const walk: Walk = {
     options,
     resolver,
-    packageOf: createPackageReader(naveNames),
-    isCxFile: createCxFileTest(),
+    packageOf: createPackageReader(naveNames, graph.inputs.files),
+    isCxFile: createCxFileTest(graph.inputs.files),
     declaredFiles: declared.files,
     declaredEntries: declared.entries,
     queue: [],

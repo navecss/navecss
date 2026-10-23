@@ -4,6 +4,7 @@
 import type { LocatedProblem } from '@navecss/core/collect'
 
 import type { SelectedDirectory } from './entries.ts'
+import type { ResolutionInputs } from './resolution-inputs.ts'
 import type { Mode } from './resolve.ts'
 
 export interface GraphOptions {
@@ -46,6 +47,10 @@ export interface Graph {
    * Sass), absolute: what they import is not known.
    */
   readonly unreadStylesheets: Set<string>
+  /**
+   * What the resolution of the files' imports depended on besides the files themselves.
+   */
+  readonly inputs: ResolutionInputs
   /**
    * For each file read, the files it imports (core's own left out), absolute.
    */

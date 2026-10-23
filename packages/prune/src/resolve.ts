@@ -8,6 +8,10 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { ResolverFactory } from 'oxc-resolver'
 
+import type { ResolutionInputs } from './resolution-inputs.ts'
+
+import { resolverConfigFiles } from './config-chain.ts'
+import { emptyInputs, noteResolution } from './resolution-inputs.ts'
 import { isDependencyPath } from './source-files.ts'
 
 const EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.json']
@@ -105,9 +109,15 @@ function resolversFor(dir: string, isProject: boolean, modes: readonly Mode[]): 
 }
 
 /**
- * The resolver for the project in `dir`, for a build whose problems count under `modes`.
+ * The resolver for the project in `dir`, for a build whose problems count under `modes`. What each
+ * resolution depends on besides the files it returns is noted in `inputs`.
  */
-export function createResolver(dir: string, modes: readonly Mode[]): Resolver {
+export function createResolver(
+  dir: string,
+  modes: readonly Mode[],
+  inputs: ResolutionInputs = emptyInputs(),
+): Resolver {
+  for (const file of resolverConfigFiles(dir)) inputs.files.add(file)
   const project = resolversFor(dir, true, modes)
   const dependency = resolversFor(dir, false, modes)
   const cache = new Map<string, Resolution>()
@@ -132,6 +142,7 @@ export function createResolver(dir: string, modes: readonly Mode[]): Resolver {
         }
       }
       const resolution = { files: [...files], filesInMode: [...filesInMode], isBuiltin }
+      noteResolution(inputs, importer, specifier, resolution.files)
       cache.set(key, resolution)
       return resolution
     },

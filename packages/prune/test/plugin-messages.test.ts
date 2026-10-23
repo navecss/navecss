@@ -72,7 +72,10 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     const project = appProject()
     const { messages } = await runAtomic(project)
     const record = recordOf(project)
-    const recorded = Object.keys(record.files).map((key) => path.join(project.dir, key))
+    // A file outside the root is recorded and declared to no bundler.
+    const recorded = Object.keys(record.files)
+      .map((key) => path.join(project.dir, key))
+      .filter((file) => isInside(project.dir, file))
     const configs = [
       path.join(project.dir, 'postcss.config.mjs'),
       path.join(project.dir, 'next.config.ts'),

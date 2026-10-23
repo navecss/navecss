@@ -1,6 +1,7 @@
 /**
  * Whether what the plugin read is still what is on disk: each file's content digest, each
- * selected directory's listing digest, and the options digest.
+ * selected directory's listing digest, the entries a specifier could have matched, where each
+ * package was found through `node_modules`, and the options digest.
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -10,6 +11,7 @@ import type { PruneRecord } from './record.ts'
 
 import { digestOf } from './digest.ts'
 import { findEntries } from './entries.ts'
+import { directoryReader, linkTarget, listingName, listingNow } from './input-records.ts'
 import { relativeTo } from './source-files.ts'
 import { staleFile, staleOptions } from './texts.ts'
 
@@ -47,19 +49,39 @@ function listingsNow(dir: string): Map<string, string> {
 }
 
 /**
- * The files and directories of the record that differ from the disk, in path order.
+ * The names of the entries, in path order.
+ */
+function inOrder(names: readonly string[]): string[] {
+  return names.toSorted(byPath)
+}
+
+/**
+ * The files and directories of the record that differ from the disk, in path order; when none
+ * does, the directories whose entries a specifier could have matched, then the links through
+ * `node_modules`, which the files that changed with them have already explained.
  */
 function differences(dir: string, record: PruneRecord): string[] {
   const listings = listingsNow(dir)
-  const changed = [
+  const changed = inOrder([
     ...Object.entries(record.files)
       .filter(([key, digest]) => digestOfFile(path.join(dir, key)) !== digest)
       .map(([key]) => key),
     ...Object.entries(record.directories)
       .filter(([key, digest]) => listings.get(key) !== digest)
       .map(([key]) => key),
-  ]
-  return changed.toSorted(byPath)
+  ])
+  const entriesOf = directoryReader()
+  const matched = inOrder(
+    Object.entries(record.listings)
+      .filter(([key, digest]) => listingNow(dir, key, entriesOf) !== digest)
+      .map(([key]) => listingName(key)),
+  )
+  const linked = inOrder(
+    Object.entries(record.links)
+      .filter(([link, target]) => linkTarget(dir, path.join(dir, link)) !== target)
+      .map(([link]) => link),
+  )
+  return [...changed, ...matched, ...linked]
 }
 
 /**

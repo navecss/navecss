@@ -8,7 +8,6 @@ import type { LocatedProblem } from '@navecss/core/collect'
 import type { Message, Result, Root } from 'postcss'
 
 import { inspectAtomicLayer, pruneAtomicLayer } from '@navecss/core/collect'
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import postcss from 'postcss'
 
@@ -18,11 +17,11 @@ import type { Handoff } from './handoff.ts'
 import type { DirectiveProblem, StoredRecord } from './record.ts'
 import type { Mode } from './resolve.ts'
 
-import { configFilesIn } from './config-files.ts'
 import { digestOf } from './digest.ts'
-import { extendFileIn } from './extend.ts'
+import { filesRead } from './files-read.ts'
 import { emptyGraph } from './graph-parts.ts'
 import { readGraph } from './graph.ts'
+import { recordedInputs, stemDirectories } from './input-records.ts'
 import { dependencyMessages } from './messages.ts'
 import { printEachRun } from './print.ts'
 import { writeRecord } from './record.ts'
@@ -78,28 +77,6 @@ function entryProblemsOf(entryOptions: object): string[] {
 }
 
 /**
- * The digest of a file's text, or of nothing when it cannot be read.
- */
-function digestFileSafely(file: string): string {
-  try {
-    return digestOf(readFileSync(file))
-  } catch {
-    return digestOf('')
-  }
-}
-
-/**
- * The files the plugin read: the graph's, the config files and a path-valued `extend` module.
- */
-function filesRead(handoff: Handoff, graphFiles: Map<string, string>): Map<string, string> {
-  const files = new Map(graphFiles)
-  const extendFile = extendFileIn(handoff.options, handoff.dir)
-  const read = [...configFilesIn(handoff.dir), ...(extendFile === undefined ? [] : [extendFile])]
-  for (const file of read) files.set(file, digestFileSafely(file))
-  return files
-}
-
-/**
  * Orders problems by file, then line, then column.
  */
 function byPlace(a: LocatedProblem, b: LocatedProblem): number {
@@ -117,6 +94,8 @@ function runFields(
   | 'directories'
   | 'failures'
   | 'files'
+  | 'links'
+  | 'listings'
   | 'markdown'
   | 'pagesDynamicPackages'
   | 'problems'
@@ -156,6 +135,7 @@ function recordOfRun(
         digestOf(directory.names.join('\n')),
       ]),
     ),
+    ...recordedInputs(dir, graph.inputs),
     markdown: [...graph.markdown]
       .map((file) => relativeTo(dir, file))
       .toSorted((a, b) => a.localeCompare(b)),
@@ -183,6 +163,8 @@ function recordOfStoppedRun(run: LayerRun, failure: string): StoredRecord {
     problems: [],
     files: {},
     directories: {},
+    listings: {},
+    links: {},
     markdown: [],
     pagesDynamicPackages: [],
     readsNoCode: false,
@@ -224,7 +206,7 @@ function declarations(run: LayerRun, files: Map<string, string>, graph: Graph): 
     root: declarationRoot(run.handoff),
     parent: run.result.opts.from,
     files: files.keys(),
-    directories: graph.directories,
+    directories: [...graph.directories, ...stemDirectories(graph.inputs)],
   })
 }
 
@@ -251,7 +233,7 @@ function trim(run: LayerRun, graph: Graph): void {
   const from = result.opts.from
   readStylesheets(graph, dir, from === undefined ? undefined : path.resolve(from))
   const atoms = emittedAtoms(graph, { keep, keepFor })
-  const files = filesRead(handoff, graph.files)
+  const files = filesRead(handoff, graph)
   const messages = declarations(run, files, graph)
   const trimmed = pruneAtomicLayer(root.toString(), new Set(atoms))
   // The record goes first: the layer is trimmed only once the build's check can read the run.
@@ -268,7 +250,7 @@ function trim(run: LayerRun, graph: Graph): void {
 function stopWithoutTrimming(run: LayerRun, reason: string, graph: Graph): void {
   const failure = `${LISTED_NAME} stopped without trimming: ${reason}`
   printEachRun(`Nave: ${failure}`)
-  run.result.messages.push(...declarations(run, filesRead(run.handoff, graph.files), graph))
+  run.result.messages.push(...declarations(run, filesRead(run.handoff, graph), graph))
   try {
     writeRecord(run.handoff, recordOfStoppedRun(run, failure))
   } catch {

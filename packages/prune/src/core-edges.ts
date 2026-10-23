@@ -50,14 +50,17 @@ function cxFilesOfPackage(dir: string): ReadonlySet<string> {
  * Returns a test of whether a file is the `./cx` module of a copy of core, wherever that copy
  * lives (nested in a package, vendored, installed under another name): the nearest
  * `package.json` above the file is core's, and its `./cx` export names the file under some
- * condition.
+ * condition. Each `package.json` it opens is added to `read`.
  */
-export function createCxFileTest(): (file: string) => boolean {
+export function createCxFileTest(read = new Set<string>()): (file: string) => boolean {
   const byPackage = new Map<string, ReadonlySet<string>>()
   return (file) => {
     for (let dir = path.dirname(file); ; dir = path.dirname(dir)) {
       if (existsSync(path.join(dir, 'package.json'))) {
-        if (!byPackage.has(dir)) byPackage.set(dir, cxFilesOfPackage(dir))
+        if (!byPackage.has(dir)) {
+          read.add(path.join(dir, 'package.json'))
+          byPackage.set(dir, cxFilesOfPackage(dir))
+        }
         return byPackage.get(dir)?.has(file) === true
       }
       if (path.dirname(dir) === dir) return false

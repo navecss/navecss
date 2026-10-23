@@ -10,6 +10,8 @@ import type { Edge } from './edges.ts'
 import type { Graph } from './graph-types.ts'
 import type { Place } from './lines.ts'
 
+import { emptyInputs } from './resolution-inputs.ts'
+
 const UNREAD_TEXT = 'the module could not be read, so the atoms it names would not ship: '
 const UNPARSED_REASON = 'it did not parse as JavaScript or TypeScript.'
 export const UNRESOLVED_TEXT =
@@ -114,6 +116,7 @@ export function emptyGraph(): Graph {
     files: new Map(),
     markdown: new Set(),
     directories: [],
+    inputs: emptyInputs(),
     stylesheets: new Set(),
     unreadStylesheets: new Set(),
     edges: new Map(),

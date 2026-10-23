@@ -110,7 +110,9 @@ describe('the project directory, when next was started in a directory above the 
     expect(declaredFiles(result, project)).toEqual([
       'app/page.tsx',
       'next.config.ts',
+      'package.json',
       'postcss.config.mjs',
+      'tsconfig.json',
     ])
   })
 
