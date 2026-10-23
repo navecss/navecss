@@ -5,12 +5,12 @@
  */
 import type { DevEnvironmentLike, GraphModuleLike } from './vite-types.ts'
 
-import { isStylesheetId } from './vite-css-id.ts'
+import { isUnreadStylesheet } from './vite-css-id.ts'
 
 /**
- * Every module of the environment's graph that no module imports, a stylesheet apart: the entry
- * scripts of every page the browser has asked for, whether or not the stylesheet's own graph
- * holds them.
+ * Every module of the environment's graph that no module imports, a stylesheet apart (a CSS
+ * Module is read, so it is not apart): the entry scripts of every page the browser has asked for,
+ * whether or not the stylesheet's own graph holds them.
  */
 export function graphRoots(
   environment: Pick<DevEnvironmentLike, 'moduleGraph'>,
@@ -18,7 +18,8 @@ export function graphRoots(
   return environment.moduleGraph.idToModuleMap
     .values()
     .filter(
-      (module) => module.importers.size === 0 && (module.id === null || !isStylesheetId(module.id)),
+      (module) =>
+        module.importers.size === 0 && (module.id === null || !isUnreadStylesheet(module.id)),
     )
     .toArray()
 }
@@ -39,7 +40,8 @@ export async function transformQuietly(
 
 /**
  * Transforms every module reachable from `roots`, a level at a time. A stylesheet is never
- * requested (the one being served is mid-transform, and requesting it would wait on itself).
+ * requested (the one being served is mid-transform, and requesting it would wait on itself), a CSS
+ * Module apart: it is read for the Nave classes it composes, and is never held.
  */
 export async function transformReachable(
   environment: Pick<DevEnvironmentLike, 'transformRequest'>,
@@ -51,7 +53,7 @@ export async function transformReachable(
     const next: GraphModuleLike[] = []
     await Promise.all(
       level.map(async (module) => {
-        if (module.id !== null && isStylesheetId(module.id)) return
+        if (module.id !== null && isUnreadStylesheet(module.id)) return
         await transformQuietly(environment, module.url)
         for (const imported of module.importedModules) {
           if (seen.has(imported)) continue
