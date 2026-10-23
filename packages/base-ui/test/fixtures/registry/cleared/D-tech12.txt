@@ -1,0 +1,1 @@
+- **The Base UI registry**: how `@navecss/base-ui` generates a shadcn registry item for each component it styles from the package source, where the items ship (`dist/registry/` in the tarball) and the addresses that reach them, and what keeps a copy equal to the package at the release it came from.

@@ -1,0 +1,1 @@
+/* stylelint-disable-next-line declaration-property-value-disallowed-list -- the outline the &:focus-visible rule for this class draws replaces the browser's default focus indicator; keep that rule while this declaration stays. */

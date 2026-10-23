@@ -162,6 +162,13 @@ function readRule(css: string, selector = '.x'): Found {
         }
         case 'rule': {
           found.rules.push(...child.selectors)
+          // The declarations a directive's rule writes after a nested block sit inside `& { }`,
+          // which is still the rule's own content.
+          if (child.selector === '&') {
+            child.each((inner) => {
+              if (inner.type === 'decl') found.declarations[inner.prop] = inner.value.trim()
+            })
+          }
           break
         }
         default: {
@@ -253,12 +260,12 @@ describe('the shapes that were already correct stay as they were', () => {
     [
       'a last declaration that has its semicolon',
       '.x { @nave focusRing; color: red; }',
-      `.x { outline: none; color: red; ${RING} }`,
+      `.x { outline: none; ${RING} & { color: red; } }`,
     ],
     [
       'a nested rule as the last item',
       '.x { @nave focusRing; &:hover { color: blue } }',
-      `.x { outline: none; &:hover { color: blue } ${RING} }`,
+      `.x { outline: none; ${RING} &:hover { color: blue } }`,
     ],
     [
       'a directive that is itself the last item',
@@ -273,14 +280,14 @@ describe('the shapes that were already correct stay as they were', () => {
   it('input that ends before the rule closes is still closed once', () => {
     const { css } = expandText('.x { @nave focusRing; color: red', {})
 
-    expect(norm(css)).toBe(norm(`.x { outline: none; color: red; ${RING}`))
+    expect(norm(css)).toBe(norm(`.x { outline: none; ${RING} & { color: red; }`))
   })
 })
 
 describe('input that ends before the rule closes', () => {
   it.each([
     ['a closed comment', '.x { @nave focusRing; color: red /* c */', 'color: red; /* c */'],
-    ['an unclosed comment', '.x { @nave focusRing; color: red /* c', 'color: red; &:focus-visible'],
+    ['an unclosed comment', '.x { @nave focusRing; color: red /* c', 'color: red; }/* c'],
   ])('keeps the last declaration when it ends in %s', (_name, css, expected) => {
     expect(norm(expandText(css, {}).css)).toContain(expected)
   })
@@ -421,11 +428,15 @@ describe('input that ends in a comment or a backslash before the rule closes', (
     expect(readRule(closedForTheParser(css)).rules).toContain(FOCUS)
   })
 
-  it('still gives a bare prelude that ends in a backslash its empty block', () => {
+  it('leaves a bare prelude that ends in a backslash as written, the ring ahead of it', () => {
     const { css } = expandText('.x { @nave focusRing; .y\\', {})
 
-    expect(css).toContain(String.raw`.y\fffd{}`)
-    expect(readRule(closedForTheParser(css)).rules).toContain(FOCUS)
+    // Nothing is written after the prelude: the ring sits where the directive was.
+    expect(css.endsWith('.y\\')).toBe(true)
+    expect(css.indexOf(FOCUS)).toBeGreaterThan(-1)
+    expect(css.indexOf(FOCUS)).toBeLessThan(css.indexOf('.y'))
+    const beforePrelude = css.slice(0, css.indexOf('.y'))
+    expect(readRule(`${beforePrelude}}`).rules).toContain(FOCUS)
   })
 
   it.each([

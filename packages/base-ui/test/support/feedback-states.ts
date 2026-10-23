@@ -163,17 +163,23 @@ export const expectedSheet = (
   unsignedFeedback: readonly DraftFeedback[] = [],
 ): string => composeSheet(deriveState(sheetOverlay(), unsignedOverlay), unsignedFeedback)
 
-// What `focusRing` contributes to a class that takes it, as it stands in the built text: the base
-// `outline: none;` among the class's own declarations, and one nested `:focus-visible` rule.
-const RING_BASE = 'outline: none; '
+// What `focusRing` contributes to a class that takes it, as it stands in the built text: one nested
+// `:focus-visible` rule, and the base `outline: none;`, which sits in one of two places. Where the
+// role has blocks of its own it is alone in a `& { }` written after them and before the ring rule;
+// where the role has none it stays among the class's own declarations.
+const RING_BASE_INLINE = 'outline: none; '
+const RING_BASE_WRAPPED = '&{ outline: none;\n    } '
 const RING_RULE =
   '&:focus-visible{ outline-style: solid; outline-width: var(--nave-border-width-focus, 2px); outline-color: var(--nave-color-border-focus, currentColor); outline-offset: 2px;\n    } '
 
 /**
  * A built sheet with the `focusRing` block left out (the form Appendix C counts), and how many
- * classes had it.
+ * classes had it. The wrapped form goes whole, so no empty `& { }` is left behind.
  */
 export const withoutRing = (css: string): { count: number; text: string } => ({
   count: css.split(RING_RULE).length - 1,
-  text: css.replaceAll(RING_RULE, '').replaceAll(RING_BASE, ''),
+  text: css
+    .replaceAll(RING_RULE, '')
+    .replaceAll(RING_BASE_WRAPPED, '')
+    .replaceAll(RING_BASE_INLINE, ''),
 })

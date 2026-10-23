@@ -50,13 +50,13 @@ const BLOCK_SHA256 = '028c71ff36e6e4546bc4ad90a767a2fae8fb83ca00f5c4df235cb0309b
 const BLOCK_BYTES = 6899
 const COMBINED_SHA256 = '5b918c4b5551f0c4c9d2999f11d60fd2c5132698b7b559a55a5ae93a9d146d40'
 const COMBINED_BYTES = 37_300
-const GOLDEN_BYTES = 40_210
+const GOLDEN_BYTES = 40_336
 // The parent contract's stylesheet alone, which is what the independent build holds once the ghost
 // keys and the 14 new rules are taken out.
 const PARENT_STYLESHEET_SHA256 = '59cd8bad1cd24eab84fc9a7cae856d18b4193284d387d5872baa517df2caa8bb'
 
 // The golden is the combined package's sheet (Appendix C.4's all-signed 37,300 B plus the 15
-// `focusRing` blocks of Table T2 as amended, 40,210 B). It is written from the spec text by a
+// `focusRing` blocks of Table T2 as amended, 40,336 B). It is written from the spec text by a
 // script and is never a copy of `dist/styles.css`: a change to the stylesheet that is intended is
 // a change to the spec's bytes first.
 

@@ -57,16 +57,12 @@ describe('a nested extend-atom media block keeps its own pseudo', () => {
       const extend = {
         b: { declarations: {}, media: { '(x)': { pseudos: { ':hover': { c: 'd' } } } } },
       }
-      const result = plan(
-        'b',
-        { isStyleRuleParent: true, isInsideKeyframes: false, isFollowingNestedNode: false },
-        { extend },
-      )
+      const result = plan('b', { isStyleRuleParent: true, isInsideKeyframes: false }, { extend })
 
       // The mutant drops every conditional block's pseudos, so an atom whose
       // only content in that block WAS a pseudo now emits nothing at all —
       // the opposite of the pinned shape above.
-      expect(result.blocks).toEqual([])
+      expect(result.atoms.flatMap((atom) => atom.blocks)).toEqual([])
     } finally {
       rmSync(scratch, { recursive: true, force: true })
     }

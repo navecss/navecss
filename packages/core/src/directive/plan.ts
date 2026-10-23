@@ -1,14 +1,18 @@
 /**
- * Placement lives in the core, once. `plan()` takes the directive's
- * prelude as authored and the three facts any host can answer, and returns
- * the inline declarations with their wrap flag, the blocks to append (already
- * positioned and anchored — no adapter re-implements a placement rule), and
- * the diagnostics.
+ * What one directive expands to, once, for every host. `plan()` takes the directive's prelude as
+ * authored and the two facts any host can answer (is the parent a style rule, is it inside
+ * `@keyframes`), and returns each named atom's declarations and its blocks (already anchored, so
+ * no adapter re-implements an anchoring rule), in the order the prelude names them, plus the
+ * diagnostics. Where each atom's body sits in the rule is `planRule()`'s job (`rule-plan.ts`).
  */
 import type { Diagnostic } from './diagnostics-types.ts'
 
 import { anchorSelectorList } from '../selector-utils.ts'
-import { type PreludeComponent, readPreludeComponents } from './prelude-components.ts'
+import {
+  type IdentComponent,
+  type PreludeComponent,
+  readPreludeComponents,
+} from './prelude-components.ts'
 import {
   type Declaration,
   type ExtendMap,
@@ -22,7 +26,6 @@ export type { Declaration } from './resolve.ts'
 export interface PlanContext {
   readonly isStyleRuleParent: boolean
   readonly isInsideKeyframes: boolean
-  readonly isFollowingNestedNode: boolean
 }
 
 export interface PlanOptions {
@@ -53,10 +56,20 @@ export interface AnchoredConditionalBlock {
 
 export type AnchoredBlock = AnchoredPseudoBlock | AnchoredConditionalBlock
 
-export interface PlanResult {
+/**
+ * One atom the prelude named: where its name sits in the prelude, its own declarations and its
+ * blocks, in `resolve()`'s order (pseudo blocks, then `@media`, then `@container`).
+ */
+export interface PlannedAtom {
+  readonly name: string
+  readonly offset: number
+  readonly endOffset: number
   readonly declarations: readonly Declaration[]
-  readonly wrapInAmpersand: boolean
   readonly blocks: readonly AnchoredBlock[]
+}
+
+export interface PlanResult {
+  readonly atoms: readonly PlannedAtom[]
   readonly diagnostics: readonly Diagnostic[]
 }
 
@@ -80,24 +93,24 @@ function anchorBlock(block: ResolvedBlock): AnchoredBlock {
 }
 
 /**
-A `plan()` short-circuit: no declarations, no blocks, just the one diagnostic that stopped it.
+A `plan()` short-circuit: no atoms, just the one diagnostic that stopped it.
  */
 function emptyResult(diagnostics: readonly Diagnostic[]): PlanResult {
-  return { declarations: [], wrapInAmpersand: false, blocks: [], diagnostics }
+  return { atoms: [], diagnostics }
 }
 
 /**
-The candidate atom names, plus one `bad-token` diagnostic per non-ident component.
+The ident components (candidate atom names), plus one `bad-token` diagnostic per non-ident component.
  */
 function readNames(components: readonly PreludeComponent[]): {
   diagnostics: Diagnostic[]
-  names: string[]
+  idents: IdentComponent[]
 } {
-  const names: string[] = []
+  const idents: IdentComponent[] = []
   const diagnostics: Diagnostic[] = []
   for (const component of components) {
     if (component.kind === 'ident') {
-      names.push(component.name)
+      idents.push(component)
       continue
     }
     diagnostics.push({
@@ -107,7 +120,7 @@ function readNames(components: readonly PreludeComponent[]): {
       endOffset: component.endOffset,
     })
   }
-  return { names, diagnostics }
+  return { idents, diagnostics }
 }
 
 /**
@@ -135,7 +148,29 @@ function readUnknownAtomDiagnostics(
 }
 
 /**
-The declarations, blocks and diagnostics for `prelude`'s names, before the wrap flag is known.
+Each resolved ident as a planned atom, in the prelude's own order (a name written twice is planned twice).
+ */
+function toPlannedAtoms(
+  idents: readonly IdentComponent[],
+  resolved: ResolveResult['resolved'],
+): PlannedAtom[] {
+  const planned: PlannedAtom[] = []
+  for (const ident of idents) {
+    const atom = Object.hasOwn(resolved, ident.name) ? resolved[ident.name] : undefined
+    if (!atom) continue
+    planned.push({
+      name: ident.name,
+      offset: ident.offset,
+      endOffset: ident.endOffset,
+      declarations: atom.declarations,
+      blocks: atom.blocks.map((block) => anchorBlock(block)),
+    })
+  }
+  return planned
+}
+
+/**
+The atoms and diagnostics for `prelude`'s names.
  */
 function planNames(prelude: string, options: PlanOptions): PlanResult {
   const components = readPreludeComponents(prelude)
@@ -143,8 +178,11 @@ function planNames(prelude: string, options: PlanOptions): PlanResult {
     return emptyResult([{ code: 'no-atom', offset: 0, endOffset: prelude.length }])
   }
 
-  const { names, diagnostics } = readNames(components)
-  const { resolved } = resolve(names, { extend: options.extend })
+  const { idents, diagnostics } = readNames(components)
+  const { resolved } = resolve(
+    idents.map((ident) => ident.name),
+    { extend: options.extend },
+  )
   diagnostics.push(...readUnknownAtomDiagnostics(components, resolved))
   // `bad-token` diagnostics were read in one pass and `unknown-atom` ones in
   // a second, so the array above is not yet in source order — sorted here
@@ -153,16 +191,7 @@ function planNames(prelude: string, options: PlanOptions): PlanResult {
   // problems, not in visitation order).
   diagnostics.sort((a, b) => a.offset - b.offset)
 
-  const declarations: Declaration[] = []
-  const blocks: AnchoredBlock[] = []
-  for (const name of names) {
-    const atom = Object.hasOwn(resolved, name) ? resolved[name] : undefined
-    if (!atom) continue
-    declarations.push(...atom.declarations)
-    blocks.push(...atom.blocks.map((block) => anchorBlock(block)))
-  }
-
-  return { declarations, wrapInAmpersand: false, blocks, diagnostics }
+  return { atoms: toPlannedAtoms(idents, resolved), diagnostics }
 }
 
 /**
@@ -180,6 +209,5 @@ export function plan(prelude: string, context: PlanContext, options: PlanOptions
     return emptyResult([{ code: 'in-keyframes', offset: 0, endOffset: prelude.length }])
   }
 
-  const result = planNames(prelude, options)
-  return { ...result, wrapInAmpersand: context.isFollowingNestedNode }
+  return planNames(prelude, options)
 }

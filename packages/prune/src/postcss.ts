@@ -60,8 +60,9 @@ function sayFinding(file: string, finding: Finding): void {
 }
 
 /**
- * Expands `@nave` and returns what the stylesheet found: problems to record under `'error'`,
- * printed lines under `'warn'`.
+ * Expands `@nave`. Every order warning is printed, whatever `onUnknown` says, and is never a
+ * problem. A problem in a directive is printed under `'warn'` and returned to record otherwise
+ * (under `'ignore'` core raises none).
  */
 async function expand(
   root: Root,
@@ -73,6 +74,7 @@ async function expand(
   const expansion = await expandDirectives(root, { plugin, from: result.opts.from })
   const file = sheetPathIn(handoff.dir, result)
   const problems: DirectiveProblem[] = []
+  for (const warning of expansion.orderWarnings) sayFinding(file, warning)
   for (const finding of expansion.findings) {
     if (onUnknown === 'warn') sayFinding(file, finding)
     else problems.push({ file, ...finding })
@@ -86,9 +88,12 @@ async function expand(
  */
 async function expandWithoutOptions(root: Root, result: Result): Promise<void> {
   const plugin = hasNaveDirective(root) ? corePluginFor(undefined, 'warn') : undefined
-  const { findings } = await expandDirectives(root, { plugin, from: result.opts.from })
+  const { findings, orderWarnings } = await expandDirectives(root, {
+    plugin,
+    from: result.opts.from,
+  })
   const file = sheetPathIn(process.cwd(), result)
-  for (const finding of findings) sayFinding(file, finding)
+  for (const finding of [...orderWarnings, ...findings]) sayFinding(file, finding)
 }
 
 interface SheetPlugin {

@@ -9,6 +9,7 @@
  * importing this module never touches the filesystem.
  */
 import type { AtomName } from '@navecss/core/atoms'
+import type { Result } from 'postcss'
 
 import { toClassName } from '@navecss/core/atoms'
 import { navePlugin } from '@navecss/core/postcss'
@@ -57,9 +58,9 @@ export interface BuildOptions {
 }
 
 /**
-The built stylesheet, as the string `dist/styles.css` holds.
+The result of building the stylesheet: its text in `css`, and in `warnings()` whatever core's check of the expansion reported while building it.
  */
-export const buildStyles = async ({ unsigned = [] }: BuildOptions = {}): Promise<string> => {
+export const buildStylesResult = async ({ unsigned = [] }: BuildOptions = {}): Promise<Result> => {
   const atoms = atomsFor(unsigned)
   // `toClassName` is typed for core's own atom names; it is a plain camelCase-to-kebab mapping
   // with the `nave-` prefix, which is exactly the class an extend atom's name resolves to.
@@ -67,11 +68,21 @@ export const buildStyles = async ({ unsigned = [] }: BuildOptions = {}): Promise
     (name) => `  .${toClassName(name as AtomName)} { @nave ${directive(name)}; }`,
   )
   const source = `${readOrderStatement()}\n\n@layer components.nave {\n${rules.join('\n')}\n}\n`
-  const result = await postcss([navePlugin({ extend: atoms })]).process(source, { from: undefined })
+  return postcss([navePlugin({ extend: atoms })]).process(source, { from: undefined })
+}
+
+/**
+The built stylesheet, as the string `dist/styles.css` holds.
+ */
+export const buildStyles = async (options: BuildOptions = {}): Promise<string> => {
+  const result = await buildStylesResult(options)
   return result.css
 }
 
 if (isMain) {
   mkdirSync(path.dirname(OUTPUT), { recursive: true })
   writeFileSync(OUTPUT, await buildStyles())
+  // A stylesheet exports nothing. This declaration is the `types` condition of the `./styles.css`
+  // export, so a side-effect import of it type-checks under TypeScript 6's defaults.
+  writeFileSync(path.join(path.dirname(OUTPUT), 'css.d.ts'), 'export {}\n')
 }

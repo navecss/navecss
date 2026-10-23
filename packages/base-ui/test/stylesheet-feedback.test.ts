@@ -13,7 +13,7 @@ import type { Draft } from '../styles/drafts.ts'
 import type { Entry, RuleBlock } from './support/w11-rules.ts'
 
 import { buildStyles } from '../scripts/build-styles.ts'
-import { ringBlock } from './support/focus.ts'
+import { ringBase, ringBlock } from './support/focus.ts'
 import { attributeReads, requiresDisabled } from './support/selector.ts'
 import { flatten, flattenRules, PACKAGE_DIR } from './support/stylesheet.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
@@ -524,11 +524,20 @@ const FORBIDDEN_ATTRIBUTES = new Set([
   'data-pressed',
 ])
 const RING_LINES = sortedLines(Object.entries(ringBlock))
+const RING_BASE_LINES = sortedLines(Object.entries(ringBase))
 
 const isRingBlock = (block: RuleBlock): boolean =>
   block.selectors.length === 1 &&
   block.selectors[0] === '&:focus-visible' &&
   sortedLines(block.entries).join('|') === RING_LINES.join('|')
+
+// Where the role has blocks, focusRing's own declaration sits alone in a `& { }` after them.
+const isRingBase = (block: RuleBlock): boolean =>
+  block.path.length === 2 &&
+  block.atRules.length === 0 &&
+  block.selectors.length === 1 &&
+  block.selectors[0] === '&' &&
+  sortedLines(block.entries).join('|') === RING_BASE_LINES.join('|')
 
 const triggerMetricProblems = (css: string): string[] => {
   const button = effective(blocksOf(css, BUTTON))
@@ -554,11 +563,11 @@ const triggerSelectorProblems = (selector: string): string[] => [
 ]
 
 // focusRing, composed on the trigger as a Table T2 class, is the one thing besides the hover
-// rule: its block is told by its exact declarations.
+// rule: its two rules are told by their exact declarations.
 const triggerProblems = (css: string): string[] => {
   const others = blocksOf(css, NAV_TRIGGER)
     .filter((block) => block.path.length > 1 || block.atRules.length > 0)
-    .filter((block) => !isRingBlock(block))
+    .filter((block) => !isRingBlock(block) && !isRingBase(block))
   const wanted = [
     {
       atRules: [],

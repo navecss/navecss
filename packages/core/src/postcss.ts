@@ -52,9 +52,9 @@ import type { AtomDefinition } from './atoms.ts'
 import type { ExtendMap } from './directive/resolve.ts'
 import type { FoldEntry } from './postcss-fold.ts'
 
-import { handleAtRule } from './postcss-at-rule.ts'
 import { applyExtendModule, resolveExtendSpecifier } from './postcss-extend-module.ts'
 import { foldMessage, sortFoldBySourceOrder } from './postcss-fold.ts'
+import { expandLeftovers, handleDirective } from './postcss-rule.ts'
 import { snapshotExtendMap } from './snapshot-extend-atoms.ts'
 import { validateExtendAtoms } from './validate-extend-atoms.ts'
 
@@ -88,11 +88,11 @@ export interface NavePluginOptions {
   onUnknown?: 'warn' | 'error' | 'ignore'
 
   /**
-   * Whether a 'warn'-mode problem may be printed. Under Turbopack (`TURBOPACK`
-   * set), which shows no PostCSS warning, the plugin prints each one with
-   * `console.warn` instead of raising it (default `true`). `false` raises it
-   * as a PostCSS warning only, whatever `TURBOPACK` says: for a tool that
-   * runs the plugin itself and reports the warnings it raises.
+   * Whether a warning may be printed: a problem under 'warn', or an order warning. Under
+   * Turbopack (`TURBOPACK` set), which shows no PostCSS warning, the plugin prints each one with
+   * `console.warn` instead of raising it (default `true`). `false` raises it as a PostCSS warning
+   * only, whatever `TURBOPACK` says: for a tool that runs the plugin itself and reports the
+   * warnings it raises, telling the two apart with `isOrderWarning()`.
    */
   printWarnings?: boolean
 }
@@ -154,10 +154,11 @@ export const navePlugin = (options: NavePluginOptions = {}): Plugin => {
         },
 
         AtRule(atRule: PostCSSAtRule) {
-          handleAtRule(atRule, { onUnknown, printWarnings, result, extend, fold })
+          handleDirective(atRule, { onUnknown, printWarnings, result, extend, fold })
         },
 
-        OnceExit() {
+        OnceExit(root) {
+          expandLeftovers(root, { onUnknown, printWarnings, result, extend, fold })
           if (fold.length === 0) return
           const ordered = sortFoldBySourceOrder(fold)
           const first = ordered[0]!
@@ -182,3 +183,5 @@ navePlugin.postcss = true
 export default navePlugin
 
 export { type AtomDefinition } from './atoms.ts'
+
+export { isOrderWarning } from './postcss-warn.ts'

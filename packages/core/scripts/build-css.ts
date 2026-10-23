@@ -8,6 +8,8 @@
  *   no-tokens.css  → dist/no-tokens.css  (copied)
  *   reset.css      → dist/reset.css      (transformed, not copied verbatim — see the
  *                                          comment at this file's reset-handling code below)
+ *   (nothing)      → dist/css.d.ts       (`export {}`: the `types` condition of every CSS-only
+ *                                          export, so a side-effect import of one type-checks)
  *
  * The entry point ships from dist/ so that its relative imports resolve
  * against the generated atomic.css sitting next to it. Shipping index.css
@@ -44,10 +46,10 @@ const OUTPUT = path.resolve(DIST, 'atomic.css')
 // absolute path (macOS's `/tmp` -> `/private/tmp`, for one) made the two disagree: this script
 // exited 0 having written nothing, and `@navecss/core`'s `.`, `./no-tokens`, `./reset`,
 // `./layers` and `./atomic` exports all resolve to the five CSS files it is the sole writer of.
-// `check:pack` cannot catch that: it runs `attw --exclude-entrypoints . layers no-tokens reset
-// atomic`, excluding exactly those five by name. `pnpm build` invokes this script relatively (`node
-// scripts/build-css.ts`, cwd `packages/core`), which Node resolves to a realpath, so CI was
-// never affected and the defect was latent rather than live.
+// `check:pack` did not catch that: it ran `attw` with exactly those five entry points excluded by
+// name. `pnpm build` invokes this script relatively (`node scripts/build-css.ts`, cwd
+// `packages/core`), which Node resolves to a realpath, so CI was never affected and the defect
+// was latent rather than live.
 //
 // The `process.argv[1] !== undefined` limb is load-bearing, not padding: with `argv[1]`
 // undefined (this module IMPORTED for its `renderNested`/`renderAtBlock` exports, as
@@ -269,10 +271,15 @@ if (isMain) {
    */
   writeFileSync(path.join(DIST, 'standalone.css'), renderStandalone(), 'utf8')
 
+  // A stylesheet exports nothing. TypeScript 6 refuses a side-effect import of a module it cannot
+  // resolve to a declaration, so the CSS-only exports name this one in their `types` condition.
+  writeFileSync(path.join(DIST, 'css.d.ts'), 'export {}\n', 'utf8')
+
   console.log(`✓ Generated dist/atomic.css (${atomNames.length} atoms)`)
   console.log('✓ Generated dist/reset.css (self-layered)')
   console.log('✓ Copied index.css to dist/')
   console.log('✓ Copied no-tokens.css to dist/')
   console.log('✓ Copied layers.css to dist/')
   console.log('✓ Generated dist/standalone.css (no @import)')
+  console.log('✓ Generated dist/css.d.ts')
 }

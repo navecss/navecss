@@ -32,10 +32,21 @@ export default defineConfig([
     // Written by packages/base-ui/scripts/generate-wrappers.ts, one generated module per Base UI
     // subpath; the generator and the roster it reads are what get linted and reviewed.
     'packages/base-ui/src/**/*.generated.ts',
+    // Written by packages/core/scripts/generate-property-table.ts, one entry per line, so a
+    // change to one property is a change to one line; the generator and the corrections it reads
+    // are what get linted and reviewed. Prettier ignores `*.generated.*` for the same reason.
+    'packages/core/src/**/*.generated.ts',
     // The one JSON file inside a linted test tree. ESLint computes a config for every file it
     // walks past, JSON included, and for this one it hits the same unicorn-versus-jsonc language
     // error as above, which fails the whole package lint before any test file is read.
     'packages/core/test/browser/tsconfig.json',
+    // The `tsconfig.app.json` a `create-vite` react-ts project is written with, recorded for the
+    // registry's type-check test: the same one JSON file in a linted test tree, the same error.
+    'packages/base-ui/test/fixtures/registry/tsconfig.app.json',
+    // Scratch the registry tests write inside the package while they run (gitignored, removed by
+    // each test): copies of the generated items, which are linted by the test that wrote them.
+    'packages/base-ui/test/.registry-*/**',
+    'packages/base-ui/test/render/.registry-copies-*/**',
     // The consumer app the base-ui browser tests build with a real `vite build` before every run:
     // generated, gitignored, and bundled JavaScript that is not ours to lint.
     'packages/base-ui/test/browser/fixtures/**',
@@ -193,6 +204,11 @@ export default defineConfig([
       // JavaScript parser, which cannot parse TypeScript: every such import then reports a
       // parse error instead of a result.
       'import-x/extensions': ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.tsx'],
+      // A stylesheet export names `dist/css.d.ts` as its `types` condition, so the resolver now
+      // returns that file for `@navecss/tokens/css?raw`. The file exports nothing, and the import
+      // is Vite's string import, which the `*?raw` declaration types. The rules that read a
+      // module's exports (`named`, `default`) would report both, so the file is left unparsed.
+      'import-x/ignore': [String.raw`[\\/]dist[\\/]css\.d\.ts$`],
     },
   },
 
@@ -421,6 +437,7 @@ export default defineConfig([
       // own terminal, never imported for their output.
       '**/scripts/generate-atoms-doc.ts',
       '**/scripts/generate-css-data.ts',
+      '**/scripts/generate-property-table.ts',
       '**/scripts/generate-skill.ts',
       'packages/tokens/generate-tokens-doc.ts',
     ],

@@ -64,6 +64,33 @@ const CORPUS: readonly string[] = [
   '.a { @media (width >= 37.5em) { @nave flex; } }',
   '.a { @supports (display: grid) { @nave flex; } }',
   '.a { @container (width > 1px) { @nave flex; } }',
+  // The native-order rows: placement, wrapping and the shapes that follow a selector list
+  '.x { @nave focusRing hideDesktopUp flex; }',
+  '.x { @nave srOnlyFocusable flex; }',
+  '.x { @nave hideDesktopUp; color: red; /* c */ gap: 1px; }',
+  '.x { @nave hideDesktopUp; color: red; &:hover { color: blue } gap: 1px; }',
+  '.x { @nave focusRing flex; color: red; }',
+  '.x { &:hover { color: blue } @nave flex; color: red; }',
+  '.x { @nave flex; &:hover { color: blue } color: red; }',
+  '.x { color: red; @nave hideDesktopUp; }',
+  '.x { @nave flex textLeft; color: red; }',
+  '.x { @nave hideDesktopUp; @media (x) { color: red } gap: 1px; }',
+  '.x { @nave hideDesktopUp; color: red; @nave focusRing; gap: 1px; }',
+  '.x { @nave hideDesktopUp; color: red }',
+  '.x { @nave focusRing; &:hover { color: blue } color: red }',
+  '.p::before { content: "x"; @nave hideDesktopUp; display: block; width: 10px }',
+  '.badge::after { content: ""; @nave focusRing hideDesktopUp; }',
+  '.p:before { @nave focusRing flex; width: 10px }',
+  '.p::after, .q::marker { @nave hideDesktopUp wFullPhoneOnly; }',
+  '.p::before { &:hover { color: red } @nave flex; width: 10px }',
+  '.icon, .link::before { @nave hideDesktopUp; width: 1em; height: 1em; }',
+  '.a, .b::before { @nave hideDesktopUp textLeft; width: 10px }',
+  '.a, .b::before { &:hover { color: blue } @nave flex; }',
+  '.s1, #x .s2 { @nave hideDesktopUp; color: red }',
+  '.s1, #x .s2 { &:hover { color: blue } @nave flex; }',
+  '.x { @nave focusRing; color: red !important }',
+  '.x { color: red; @nave hideDesktopUp }',
+  '.x { @nave hideDesktopUp }',
 ]
 
 async function throughPostcss(css: string): Promise<string> {
@@ -128,8 +155,9 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
 
   it.each(CORPUS)('diagnostics agree between expandText() and the Vite leg: %s', async (css) => {
     const id = '/proj/app.css'
-    const expected = expandText(css, { onUnknown: 'warn', extend: EXTEND, from: id })
-      .diagnostics.map((d) => ({ file: d.file, line: d.line, column: d.column }))
+    const expanded = expandText(css, { onUnknown: 'warn', extend: EXTEND, from: id })
+    const expected = [...expanded.diagnostics, ...expanded.warnings]
+      .map((d) => ({ file: d.file, line: d.line, column: d.column }))
       .toSorted((a, b) => a.line - b.line || a.column - b.column)
     const run = await runHook({ code: css, id, options: { onUnknown: 'warn', extend: EXTEND } })
     const actual = run.warnings
@@ -148,8 +176,9 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
 
     it.each(CORPUS)('diagnostics agree with expandText(): %s', (css) => {
       const file = '/proj/app.css'
-      const expected = expandText(css, { onUnknown: 'warn', extend: EXTEND, from: file })
-        .diagnostics.map((d) => `${d.file}:${d.line}:${d.column}`)
+      const expanded = expandText(css, { onUnknown: 'warn', extend: EXTEND, from: file })
+      const expected = [...expanded.diagnostics, ...expanded.warnings]
+        .map((d) => `${d.file}:${d.line}:${d.column}`)
         .toSorted((a, b) => a.localeCompare(b))
 
       throughLightning(lib, css)
@@ -183,6 +212,24 @@ describe('AC-directive-core-19 — one corpus, every leg, one equivalence', () =
   it('the Vite leg really transforms: a directive row changes, a directive-free row does not', async () => {
     expect(await throughVite('.a { @nave flex; }')).toContain('display: flex')
     expect(await throughVite('.a { color: red; }')).toBe('.a { color: red; }')
+  })
+
+  it('AC-native-apply-order-02: the last node of the rule is the wrapper, in every leg', async () => {
+    const css = '.x { @nave hideDesktopUp; color: red; }'
+    const outputs = [
+      await throughPostcss(css),
+      throughExpandText(css),
+      await throughVite(css),
+      ...LIGHTNING_RELEASES.map(({ lib }) => throughLightning(lib, css)),
+    ]
+
+    for (const output of outputs) {
+      const nodes = postcss.parse(output).first as postcss.Rule
+      const last = nodes.nodes.at(-1)!
+      expect(last.type).toBe('rule')
+      expect((last as postcss.Rule).selector).toBe('&')
+      expect((last as postcss.Rule).nodes.map((node) => node.toString())).toEqual(['color: red'])
+    }
   })
 
   it('asserts the corpus is non-empty', () => {

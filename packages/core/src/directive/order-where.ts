@@ -1,0 +1,220 @@
+/**
+ * How a warning says where a value holds: `on :focus-visible`, `under @media (width >= 75em)`, or
+ * both. A selector that is one compound starting with `&` is named by what follows the `&`; any
+ * other selector is named as written. When a second place is named after the first (the overrider
+ * has a state or condition of its own), what the first already says is left out.
+ */
+import type { ConditionRule } from './condition-overlap.ts'
+
+import { printedValue } from './order-print.ts'
+import { type Token, tokenize } from './tokenizer.ts'
+
+/**
+ * What a state implies: an element matching `:focus-visible` matches `:focus` and `:focus-within`.
+ */
+const IMPLIED_STATES = new Map<string, readonly string[]>([
+  [':focus', [':focus-within']],
+  [':focus-visible', [':focus', ':focus-within']],
+])
+
+const OPENING = new Set(['(-token', '[-token', 'function-token'])
+const CLOSING = new Set([')-token', ']-token'])
+
+interface Scan {
+  depth: number
+  quote: string | undefined
+}
+
+/**
+ * Advances the scan over one character; true when the character is code (outside a string).
+ */
+function isCodeChar(scan: Scan, text: string, i: number): boolean {
+  const char = text[i]!
+  if (scan.quote) {
+    if (char === scan.quote && text[i - 1] !== '\\') scan.quote = undefined
+    return false
+  }
+  if (char === '"' || char === "'") {
+    scan.quote = char
+    return false
+  }
+  if ('(['.includes(char)) scan.depth++
+  else if (')]'.includes(char)) scan.depth--
+  return true
+}
+
+/**
+ * Whether the character starts a new simple selector of a compound.
+ */
+function isPartStart(text: string, i: number): boolean {
+  return '.#[:'.includes(text[i]!) && text[i - 1] !== ':'
+}
+
+/**
+ * The simple selectors after the `&` of a selector that is one compound starting with `&`, or
+ * `undefined` when the selector is anything else (a combinator, a list, a second `&`).
+ */
+function compoundParts(selector: string): readonly string[] | undefined {
+  const text = selector.trim()
+  if (!text.startsWith('&')) return undefined
+  const parts: string[] = []
+  const scan: Scan = { depth: 0, quote: undefined }
+  for (let i = 1; i < text.length; i++) {
+    const isTopLevel = scan.depth === 0 && scan.quote === undefined
+    const isCode = isCodeChar(scan, text, i)
+    const isSeparator = isTopLevel && isCode && /[\s,>+~&]/.test(text[i]!)
+    if (isSeparator || !isCharAppended(parts, text, i, isTopLevel && isCode)) return undefined
+  }
+  return parts
+}
+
+/**
+ * Writes the character at `i` onto the compound's last simple selector, starting a new one first
+ * where it begins one; false when there is no simple selector to write it onto.
+ */
+function isCharAppended(parts: string[], text: string, i: number, isCodeAtTop: boolean): boolean {
+  if (isCodeAtTop && isPartStart(text, i)) parts.push('')
+  const current = parts.pop()
+  if (current === undefined) return false
+  parts.push(current + text[i]!)
+  return true
+}
+
+/**
+ * Whether a token is the word `or`, in any case.
+ */
+function isOr(token: Token): boolean {
+  return token.type === 'ident-token' && String(token.structured?.value).toLowerCase() === 'or'
+}
+
+/**
+ * Whether a prelude holds a comma or the word `or` outside parentheses, brackets and strings: a
+ * list of queries or a disjunction, which `and` would read as binding tighter than it does.
+ */
+function isListOrDisjunction(prelude: string): boolean {
+  let depth = 0
+  for (const token of tokenize(prelude)) {
+    if (OPENING.has(token.type)) depth += 1
+    else if (CLOSING.has(token.type)) depth -= 1
+    else if (depth === 0 && (token.type === 'comma-token' || isOr(token))) return true
+  }
+  return false
+}
+
+/**
+ * A condition as a warning names it: its at-rule and prelude in printed form, in parentheses where
+ * the prelude is a list or holds an `or`, so that the conditions joined by `and` and the comma
+ * after the last one read as what they are.
+ */
+function conditionText(condition: ConditionRule): string {
+  const text = `@${condition.name} ${printedValue(condition.prelude)}`
+  return isListOrDisjunction(condition.prelude) ? `(${text})` : text
+}
+
+/**
+ * Whether no space is needed between this token and the one before it: a comparison operator, a
+ * colon, a comma or a closing parenthesis.
+ */
+function isTightAfter(token: Token): boolean {
+  return (
+    token.type === ')-token' ||
+    token.type === 'colon-token' ||
+    token.type === 'comma-token' ||
+    (token.type === 'delim-token' && '<>='.includes(token.raw))
+  )
+}
+
+/**
+ * Whether no space is needed between this token and the one after it.
+ */
+function isTightBefore(token: Token): boolean {
+  return (
+    token.type === '(-token' ||
+    token.type === 'function-token' ||
+    token.type === 'colon-token' ||
+    token.type === 'comma-token' ||
+    (token.type === 'delim-token' && '<>='.includes(token.raw))
+  )
+}
+
+/**
+ * A condition as two are compared: the same group at-rule, whatever whitespace or comments lie
+ * between the tokens of its prelude and around its operators. A string is compared exactly as
+ * written.
+ */
+export function conditionKey(condition: ConditionRule): string {
+  let key = `${condition.name} `
+  let previous: Token | undefined
+  let hasGap = false
+  for (const token of tokenize(condition.prelude)) {
+    if (token.type === 'whitespace-token' || token.type === 'comment') {
+      hasGap = true
+      continue
+    }
+    const isSpaced =
+      previous !== undefined && hasGap && !isTightBefore(previous) && !isTightAfter(token)
+    key += isSpaced ? ` ${token.raw}` : token.raw
+    previous = token
+    hasGap = false
+  }
+  return key
+}
+
+/**
+ * `on <selector part>` and `under <conditions>`, whichever there are, in that order.
+ */
+function phrase(onText: string | undefined, conditions: readonly ConditionRule[]): string {
+  const on = onText === undefined || onText === '' ? [] : [`on ${onText}`]
+  const under =
+    conditions.length === 0
+      ? []
+      : [`under ${conditions.map((c) => conditionText(c)).join(' and ')}`]
+  return [...on, ...under].join(' ')
+}
+
+/**
+ * The simple selectors after the `&` of a selector that is one compound starting with `&`, and
+ * none for any other selector.
+ */
+export function statesOf(selector: string): readonly string[] {
+  return compoundParts(selector) ?? []
+}
+
+/**
+ * Where a selector under some conditions holds.
+ */
+export function whereOf(selector: string, conditions: readonly ConditionRule[]): string {
+  const printed = printedValue(selector)
+  const parts = compoundParts(printed)
+  return phrase(parts === undefined ? printed : parts.join(''), conditions)
+}
+
+/**
+ * Whether the states of `place` say `part` already, by naming it or by implying it.
+ */
+function isSaid(part: string, said: readonly string[]): boolean {
+  const lower = part.toLowerCase()
+  return said.some(
+    (s) => s.toLowerCase() === lower || (IMPLIED_STATES.get(s.toLowerCase()) ?? []).includes(lower),
+  )
+}
+
+/**
+ * Where the overrider holds beyond what the first place says; empty when it adds nothing.
+ */
+export function alsoWhere(
+  first: {
+    readonly conditions: readonly ConditionRule[]
+    readonly said?: readonly string[] | undefined
+    readonly selector: string
+  },
+  later: { readonly conditions: readonly ConditionRule[]; readonly selector: string },
+): string {
+  const firstParts = first.said ?? compoundParts(printedValue(first.selector)) ?? []
+  const laterSelector = printedValue(later.selector)
+  const laterParts = compoundParts(laterSelector)
+  const seen = new Set(first.conditions.map((c) => conditionKey(c)))
+  const conditions = later.conditions.filter((c) => !seen.has(conditionKey(c)))
+  if (laterParts === undefined) return phrase(laterSelector, conditions)
+  return phrase(laterParts.filter((part) => !isSaid(part, firstParts)).join(''), conditions)
+}

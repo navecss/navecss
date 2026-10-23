@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 /**
  * Nave CLI — @navecss/cli
- * Component registry client. The commands are stubs until the registry exists;
- * the package stays unpublished (ignored in .changeset/config.json) until then.
+ * Not implemented: every command is a stub. @navecss/base-ui's components are copied with
+ * shadcn's CLI from the registry that package ships, so nothing here is needed for that.
+ * The package stays unpublished (ignored in .changeset/config.json).
  */
 
 const [command, ...args] = process.argv.slice(2)
 
-const NOT_YET = 'not implemented yet — the component registry does not exist'
+const NOT_YET =
+  "not implemented. @navecss/base-ui's components are copied with shadcn's CLI: see packages/base-ui/README.md#copy-a-component-into-your-project"
 
 switch (command) {
   case 'add': {
@@ -29,8 +31,7 @@ switch (command) {
 
   Commands:
     init            Initialise Nave in your project
-    add [component] Add a component from the registry
-    eject           Export full token config for manual editing
+    add [component] Not implemented: see packages/base-ui/README.md
 
   Run \`navecss [command] --help\` for details.
     `.trim(),

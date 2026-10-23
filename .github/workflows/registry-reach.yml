@@ -1,0 +1,47 @@
+name: registry-reach
+
+# Checks that the registry the latest release of @navecss/base-ui ships is the registry readers
+# receive: every file jsDelivr serves for that version is the tarball's file byte for byte, and one
+# component installs from that address with the newest shadcn CLI (the one the package README
+# tells readers to type) into a project with no Tailwind and no components.json. It also fails
+# when the latest version of a package the components depend on is outside the range the registry
+# states for it. Quiet until the first release that writes a registry (0.3.0); from then on a
+# release without one fails. After a release that serves the registry, run it by hand with that
+# version, as "Check it is live" in docs/02-contribute/releasing.md says.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1' # every Monday, 07:00 UTC
+  workflow_dispatch:
+    inputs:
+      version:
+        description: A published @navecss/base-ui version to check instead of the latest
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  reach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install mise-pinned toolchain (node + pnpm)
+        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
+        with:
+          version: 2026.8.3
+
+      - name: Check the served registry
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$VERSION" ]; then
+            node scripts/check-registry-reach.mjs --version "$VERSION" --cli latest
+          else
+            node scripts/check-registry-reach.mjs --latest --cli latest
+          fi

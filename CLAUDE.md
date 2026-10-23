@@ -39,7 +39,7 @@ For multi-step tasks, state a brief plan with a verify step per item before exec
 packages/tokens/   → DTCG token source (tokens.json) + first-party DTCG reader (build.ts); emits CSS custom properties + JS/TS
 packages/core/     → reset.css, @layer stack (index.css), generated atomic utilities, cx()/atoms, implements @nave (PostCSS is one adapter)
 packages/base-ui/  → Base UI's components styled with Nave's tokens: one React wrapper subpath per component that adds Nave's classes to the Base UI parts it styles, plus one stylesheet (dist/styles.css) of role atoms built through @nave; builds on core; peers on tokens, @base-ui/react and react
-packages/cli/      → navecss CLI (component registry: `navecss add ...`); thin registry client
+packages/cli/      → navecss CLI, unpublished and not implemented (every command is a stub); components from base-ui's registry are copied with shadcn's CLI, which needs nothing from this package
 packages/stylelint-config/ → published stylelint rules for a consumer's project (`@nave` known, `var()`-or-keyword values on listed properties, the outline guard, declared `--nave-*` names); peer on tokens
 packages/eslint-plugin/   → published ESLint rules for a consumer's project (a declared/atom class channel in JSX, a reasoned `cx.raw()` escape, its count, tokenized `style` values); peer on core
 ```

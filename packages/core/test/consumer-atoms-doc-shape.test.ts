@@ -14,19 +14,19 @@
  * definition fence without regenerating its "Compiles to" fence reds this test (see the last
  * `it` below), where a hand-typed copy could not have noticed.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
-import postcss from 'postcss'
 import { format } from 'prettier'
 import { describe, expect, it } from 'vitest'
 
 import type { AtomDefinition } from '../src/atoms.ts'
 
-import { navePlugin } from '../src/postcss.ts'
-
-const HERE = path.dirname(fileURLToPath(import.meta.url))
-const docSrc = readFileSync(path.resolve(HERE, '../CONSUMER-ATOMS.md'), 'utf8')
+import {
+  docSrc,
+  extractFenceAfter,
+  extractInputFenceBefore,
+  extractTsFenceAfter,
+  loadMyAtoms,
+} from './helpers/consumer-atoms-doc.ts'
+import { expandedByPlugin } from './helpers/native-order-docs.ts'
 
 const PRETTIER_OPTIONS = {
   parser: 'css' as const,
@@ -37,78 +37,8 @@ const PRETTIER_OPTIONS = {
   tabWidth: 2,
 }
 
-/**
- * The ```css fence immediately following the first "Compiles to:" label at or after `from`.
- */
-function extractFenceAfter(from: number): { end: number; fence: string } {
-  const compilesToIndex = docSrc.indexOf('Compiles to:', from)
-  expect(compilesToIndex, 'expected a "Compiles to:" label').not.toBe(-1)
-  const fenceStart = docSrc.indexOf('```css', compilesToIndex)
-  expect(fenceStart, 'no ```css fence follows "Compiles to:"').not.toBe(-1)
-  const contentStart = docSrc.indexOf('\n', fenceStart) + 1
-  const fenceEnd = docSrc.indexOf('```', contentStart)
-  expect(fenceEnd, 'the ```css fence is never closed').not.toBe(-1)
-  return { fence: docSrc.slice(contentStart, fenceEnd), end: fenceEnd }
-}
-
-/**
- * The ```css input fence immediately preceding `beforeIndex` (the nearest one above it).
- */
-function extractInputFenceBefore(beforeIndex: number): string {
-  const fenceEnd = docSrc.lastIndexOf('```', beforeIndex)
-  const fenceStartMarker = docSrc.lastIndexOf('```css', fenceEnd)
-  expect(fenceStartMarker, 'expected a ```css input fence before this example').not.toBe(-1)
-  const contentStart = docSrc.indexOf('\n', fenceStartMarker) + 1
-  return docSrc.slice(contentStart, fenceEnd)
-}
-
-/**
- * The ```ts fence immediately following `heading` — one of the doc's own atom definitions.
- */
-function extractTsFenceAfter(heading: string): string {
-  const headingIndex = docSrc.indexOf(heading)
-  expect(headingIndex, `expected the heading "${heading}"`).not.toBe(-1)
-  const fenceStart = docSrc.indexOf('```ts', headingIndex)
-  expect(fenceStart, `no \`\`\`ts fence follows "${heading}"`).not.toBe(-1)
-  const contentStart = docSrc.indexOf('\n', fenceStart) + 1
-  const fenceEnd = docSrc.indexOf('```', contentStart)
-  expect(fenceEnd, 'the ```ts fence is never closed').not.toBe(-1)
-  return docSrc.slice(contentStart, fenceEnd)
-}
-
-/**
- * Writes `tsSource` to a throwaway file beside this test (so its bare-specifier imports
- * resolve through the workspace's real `node_modules`) and imports it, returning its
- * `myAtoms` export. This is how the doc's own definitions are read rather than retyped: the
- * doc's fence IS the module under test.
- */
-async function loadMyAtoms(tsSource: string): Promise<Record<string, AtomDefinition>> {
-  const dir = mkdtempSync(path.join(HERE, '.consumer-atoms-doc-fixture-'))
-  const file = path.join(dir, 'atoms.ts')
-  writeFileSync(file, tsSource)
-  try {
-    const mod = (await import(pathToFileURL(file).href)) as {
-      myAtoms: Record<string, AtomDefinition>
-    }
-    return mod.myAtoms
-  } finally {
-    rmSync(dir, { recursive: true, force: true })
-  }
-}
-
-/**
- * Strips the doc's leading filename comment (e.g. "button.module.css"): it is a label for
- * the reader, not part of the CSS the plugin is meant to transform.
- */
-function stripFilenameComment(css: string): string {
-  return css.replace(/^\s*\/\*[^*]*\*\/\s*\n/, '')
-}
-
 async function compile(input: string, extend: Record<string, AtomDefinition>): Promise<string> {
-  const result = await postcss([navePlugin({ extend })]).process(stripFilenameComment(input), {
-    from: undefined,
-  })
-  const formatted = await format(result.css, PRETTIER_OPTIONS)
+  const formatted = await format(await expandedByPlugin(input, extend), PRETTIER_OPTIONS)
   return formatted.trimEnd()
 }
 

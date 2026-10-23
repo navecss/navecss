@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 import { aliasesFor, REACT_18_HOOKS, runs } from './test/support/matrix.ts'
@@ -7,6 +8,9 @@ const preload = (react: string): string[] => (react === '18' ? ['--import', REAC
 
 export default defineConfig({
   test: {
+    // Vitest's own default is one directory at the workspace root that every package deletes at
+    // once when the lockfile changes, which fails a package with ENOTEMPTY. Each config keeps its own.
+    fsModuleCachePath: path.resolve(import.meta.dirname, 'node_modules/.vitest-cache/default'),
     testTimeout: 20_000,
     projects: [
       {
