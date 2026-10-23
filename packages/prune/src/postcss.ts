@@ -25,7 +25,7 @@ import { projectHandoff } from './project.ts'
 import { writeSheetRecord } from './record.ts'
 import { declarationRoot } from './root.ts'
 import { relativeTo } from './source-files.ts'
-import { BOTH_PLUGINS_DEV, LISTED_NAME } from './texts.ts'
+import { BOTH_PLUGINS_DEV, directiveLine, LISTED_NAME } from './texts.ts'
 import { hasCorePlugin, trimAtomicLayer } from './trim.ts'
 
 const PLUGIN = 'postcss-nave-prune'
@@ -39,6 +39,10 @@ interface Finding {
 interface SheetExpansion {
   readonly hasDirective: boolean
   readonly problems: DirectiveProblem[]
+  /**
+   * The `@nave` lines that are not problems.
+   */
+  readonly warnings: DirectiveProblem[]
 }
 
 /**
@@ -50,19 +54,20 @@ function sheetPathIn(dir: string, result: Result): string {
 }
 
 /**
- * Prints a `@nave` problem once, placed in its stylesheet.
+ * Prints a `@nave` line once, placed in its stylesheet.
  */
 function sayFinding(file: string, finding: Finding): void {
   printOnce(
     `directive:${file}:${finding.line}:${finding.column}:${finding.text}`,
-    `${file}:${finding.line}:${finding.column}: ${finding.text}`,
+    directiveLine({ file, ...finding }),
   )
 }
 
 /**
- * Expands `@nave`. Every order warning is printed, whatever `onUnknown` says, and is never a
- * problem. A problem in a directive is printed under `'warn'` and returned to record otherwise
- * (under `'ignore'` core raises none).
+ * Expands `@nave`. Every order warning is a warning, whatever `onUnknown` says, and is never a
+ * problem. A problem in a directive is a warning under `'warn'` and a problem otherwise (under
+ * `'ignore'` core raises none). The warnings are returned to record, and printed here only in the
+ * development server: in a build the hook prints them.
  */
 async function expand(
   root: Root,
@@ -74,12 +79,16 @@ async function expand(
   const expansion = await expandDirectives(root, { plugin, from: result.opts.from })
   const file = sheetPathIn(handoff.dir, result)
   const problems: DirectiveProblem[] = []
-  for (const warning of expansion.orderWarnings) sayFinding(file, warning)
+  const warnings: DirectiveProblem[] = expansion.orderWarnings.map((warning) => ({
+    file,
+    ...warning,
+  }))
   for (const finding of expansion.findings) {
-    if (onUnknown === 'warn') sayFinding(file, finding)
+    if (onUnknown === 'warn') warnings.push({ file, ...finding })
     else problems.push({ file, ...finding })
   }
-  return { hasDirective: expansion.hasDirective, problems }
+  if (isDevelopmentRun(handoff)) for (const warning of warnings) sayFinding(file, warning)
+  return { hasDirective: expansion.hasDirective, problems, warnings }
 }
 
 /**
@@ -149,7 +158,7 @@ async function expandOrRecord(
     return await expand(root, result, input.handoff, input.plugin)
   } catch (error) {
     failures.push(`${LISTED_NAME} could not expand @nave: ${String(error)}`)
-    return { hasDirective: hasNaveDirective(root), problems: [] }
+    return { hasDirective: hasNaveDirective(root), problems: [], warnings: [] }
   }
 }
 
@@ -209,6 +218,7 @@ async function runWithHandoff(
     isOnDisk: result.opts.from !== undefined && existsSync(result.opts.from),
     hasDirective: expansion.hasDirective,
     problems: expansion.problems,
+    warnings: expansion.warnings,
     failures: [...recorded, ...expansionFailures],
   })
   if (inspectAtomicLayer(root.toString()).hasLayer) {

@@ -16,6 +16,7 @@ import { reportOf } from './report.ts'
 import { staleMessage } from './stale.ts'
 import {
   BOTH_PLUGINS,
+  directiveLine,
   incomplete,
   markdownWarning,
   NO_RECORD,
@@ -42,6 +43,12 @@ export interface HookMetadata {
 export interface HookConfig {
   readonly transpilePackages?: readonly string[]
   readonly bundlePagesRouterDependencies?: boolean | undefined
+  /**
+   * The `distDir` the plugin was told, relative to the project: where it wrote its record. A
+   * wrapper applied outside `withNave()` can set another one, which is where Next.js writes the
+   * CSS and what `HookMetadata` carries; the record stays where the plugin put it.
+   */
+  readonly recordDistDir?: string
 }
 
 /**
@@ -74,9 +81,10 @@ function setupMessage(input: {
   readonly distDir: string
   readonly options: NaveOptions
   readonly record: PruneRecord
+  readonly recordDistDir: string
 }): string | undefined {
-  const { dir, distDir, record, options } = input
-  const cache = `${distDir}/cache`
+  const { dir, distDir, record, recordDistDir, options } = input
+  const cache = `${recordDistDir}/cache`
   const stale = staleMessage({ dir, cache, record, options })
   if (stale !== undefined) return stale
   if (record.hasCorePlugin) return BOTH_PLUGINS
@@ -105,6 +113,19 @@ function warn(record: PruneRecord, report: Report | undefined): void {
   if (report === undefined && record.readsNoUse) console.warn(READS_NO_USE)
   // eslint-disable-next-line no-console -- warnings go to the terminal running the build
   if (record.markdown.length > 0) console.warn(markdownWarning(record.markdown))
+  for (const warning of record.directiveWarnings) {
+    // eslint-disable-next-line no-console -- warnings go to the terminal running the build
+    console.warn(directiveLine(warning))
+  }
+}
+
+/**
+ * The directory Next.js wrote the build to, relative to the project.
+ */
+function builtDistDir(metadata: HookMetadata): string {
+  return path.isAbsolute(metadata.distDir)
+    ? path.relative(metadata.projectDir, metadata.distDir)
+    : metadata.distDir
 }
 
 /**
@@ -120,15 +141,14 @@ export async function checkBuild(
   config: HookConfig = {},
 ): Promise<void> {
   const dir = metadata.projectDir
-  const distDir = path.isAbsolute(metadata.distDir)
-    ? path.relative(dir, metadata.distDir)
-    : metadata.distDir
-  const record = readRecord({ dir, distDir })
+  const distDir = builtDistDir(metadata)
+  const recordDistDir = config.recordDistDir ?? distDir
+  const record = readRecord({ dir, distDir: recordDistDir })
   if (record === undefined) {
     if (hasAtomRules(builtStylesheets(dir, distDir))) stop([NO_RECORD])
     return
   }
-  const setup = setupMessage({ dir, distDir, record, options })
+  const setup = setupMessage({ dir, distDir, record, recordDistDir, options })
   if (setup !== undefined) stop([setup])
   const report = reportOf(record, options, dir)
   warn(record, report)

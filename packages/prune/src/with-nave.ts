@@ -49,6 +49,14 @@ function keepMapText(options: NaveOptions): string {
 }
 
 /**
+ * The build directory the config names, relative to the project; Next.js's default when it names
+ * none.
+ */
+function distDirOf(config: ConfigShape): string {
+  return config.distDir ?? '.next'
+}
+
+/**
  * Puts the hand-off for `config` in the environment, for the PostCSS plugin to read, with the
  * phase Next.js called a function config with.
  */
@@ -64,7 +72,7 @@ function setHandoff(
   const handoff: Handoff = {
     options,
     dir,
-    distDir: config.distDir ?? '.next',
+    distDir: distDirOf(config),
     ...(root !== undefined && { root }),
     ...(phase !== undefined && { phase }),
     ...(isBundlerDir && { isBundlerDir }),
@@ -104,6 +112,7 @@ function wrapConfig(
         await checkBuild(metadata, options, {
           transpilePackages,
           bundlePagesRouterDependencies: config.bundlePagesRouterDependencies,
+          recordDistDir: distDirOf(config),
         })
       },
     },

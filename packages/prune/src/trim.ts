@@ -15,7 +15,7 @@ import postcss from 'postcss'
 import type { ExtendMap } from './extend.ts'
 import type { Graph } from './graph-types.ts'
 import type { Handoff } from './handoff.ts'
-import type { DirectiveProblem, PruneRecord } from './record.ts'
+import type { DirectiveProblem, StoredRecord } from './record.ts'
 import type { Mode } from './resolve.ts'
 
 import { configFilesIn } from './config-files.ts'
@@ -34,8 +34,6 @@ import { emittedAtoms } from './used.ts'
 
 const PLUGIN = 'postcss-nave-prune'
 const CORE_PLUGIN = 'postcss-nave'
-
-type StoredRecord = Omit<PruneRecord, 'readsNoUse'>
 
 /**
  * One run over the stylesheet that holds the atom layer.

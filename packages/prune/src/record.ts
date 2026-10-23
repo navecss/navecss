@@ -41,6 +41,11 @@ export interface PruneRecord {
   readonly problems: readonly LocatedProblem[]
   readonly directiveProblems: readonly DirectiveProblem[]
   /**
+   * The `@nave` lines that are not problems: an unknown atom under `onUnknown: 'warn'` and every
+   * order warning, in path order. The hook prints them as warnings; they are never counted.
+   */
+  readonly directiveWarnings: readonly DirectiveProblem[]
+  /**
    * Configuration problems found on the PostCSS entry (options that belong to `withNave()`).
    */
   readonly entryProblems: readonly string[]
@@ -98,8 +103,14 @@ export interface PruneRecord {
 }
 
 /**
- * What a stylesheet without the atom layer leaves: its `@nave` problems, and whether it used the
- * directive at all. One file each, so stylesheets processed at the same time never write the same
+ * What a run over the atom layer stores: the record without what is read from the stylesheets'
+ * own records when it is read back.
+ */
+export type StoredRecord = Omit<PruneRecord, 'directiveWarnings' | 'readsNoUse'>
+
+/**
+ * What a stylesheet without the atom layer leaves: its `@nave` problems and warnings, and whether
+ * it used the directive at all. One file each, so stylesheets processed at the same time never write the same
  * file.
  */
 export interface SheetRecord {
@@ -115,6 +126,10 @@ export interface SheetRecord {
   readonly hasDirective: boolean
   readonly problems: readonly DirectiveProblem[]
   /**
+   * The `@nave` lines in it that are not problems.
+   */
+  readonly warnings: readonly DirectiveProblem[]
+  /**
    * What stopped the plugin before it finished with this stylesheet.
    */
   readonly failures: readonly string[]
@@ -125,6 +140,13 @@ export interface SheetRecord {
  */
 type Stored<Shape extends { readonly failures: readonly string[] }> = Omit<Shape, 'failures'> & {
   readonly failures?: readonly string[]
+}
+
+/**
+ * A stylesheet's record as read from disk: one written before `warnings` existed has none.
+ */
+type StoredSheet = Omit<Stored<SheetRecord>, 'warnings'> & {
+  readonly warnings?: readonly DirectiveProblem[]
 }
 
 /**
@@ -144,7 +166,7 @@ function sheetsDirectory(handoff: Pick<Handoff, 'dir' | 'distDir'>): string {
 /**
  * Writes the record, creating the cache directory.
  */
-export function writeRecord(handoff: Handoff, record: Omit<PruneRecord, 'readsNoUse'>): void {
+export function writeRecord(handoff: Handoff, record: StoredRecord): void {
   const file = recordPath(handoff)
   mkdirSync(path.dirname(file), { recursive: true })
   writeFileSync(file, JSON.stringify(record, undefined, 2))
@@ -187,11 +209,9 @@ function readSheetRecords(
   const sheets: SheetRecord[] = []
   for (const name of readdirSync(directory)) {
     try {
-      const stored = JSON.parse(
-        readFileSync(path.join(directory, name), 'utf8'),
-      ) as Stored<SheetRecord>
-      // A record written before `failures` existed has none.
-      const sheet = { ...stored, failures: stored.failures ?? [] }
+      const stored = JSON.parse(readFileSync(path.join(directory, name), 'utf8')) as StoredSheet
+      // A record written before `failures` or `warnings` existed has none.
+      const sheet = { ...stored, failures: stored.failures ?? [], warnings: stored.warnings ?? [] }
       if (isStillCounted(handoff, sheet, stylesheets)) sheets.push(sheet)
     } catch {
       // A file another run is writing: that run's own record will be read next time.
@@ -201,11 +221,18 @@ function readSheetRecords(
 }
 
 /**
+ * Orders by file, then line, then column.
+ */
+function byPlace(a: DirectiveProblem, b: DirectiveProblem): number {
+  return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column
+}
+
+/**
  * The record a plugin run left, with the stylesheets' `@nave` problems and use of the directive
  * folded in, or `undefined` when no run left one.
  */
 export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneRecord | undefined {
-  let stored: Omit<Stored<Omit<PruneRecord, 'readsNoUse'>>, 'pagesDynamicPackages'> & {
+  let stored: Omit<Stored<StoredRecord>, 'pagesDynamicPackages'> & {
     readonly pagesDynamicPackages?: readonly string[]
   }
   try {
@@ -218,12 +245,10 @@ export function readRecord(handoff: Pick<Handoff, 'dir' | 'distDir'>): PruneReco
       ? new Set(stored.stylesheets)
       : undefined
   const sheets = readSheetRecords(handoff, listed)
-  const directiveProblems = sheets
-    .flatMap((sheet) => sheet.problems)
-    .toSorted((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column)
   return {
     ...stored,
-    directiveProblems,
+    directiveProblems: sheets.flatMap((sheet) => sheet.problems).toSorted(byPlace),
+    directiveWarnings: sheets.flatMap((sheet) => sheet.warnings).toSorted(byPlace),
     pagesDynamicPackages: stored.pagesDynamicPackages ?? [],
     readsNoUse: stored.readsNoCode && sheets.every((sheet) => !sheet.hasDirective),
     failures: [...(stored.failures ?? []), ...sheets.flatMap((sheet) => sheet.failures)],

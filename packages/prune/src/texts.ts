@@ -3,6 +3,18 @@
  */
 
 /**
+ * A `@nave` line placed in its stylesheet, as both the development server and the hook print it.
+ */
+export function directiveLine(line: {
+  readonly column: number
+  readonly file: string
+  readonly line: number
+  readonly text: string
+}): string {
+  return `${line.file}:${line.line}:${line.column}: ${line.text}`
+}
+
+/**
  * The plugin as the PostCSS config lists it, which is how a failure line names it.
  */
 export const LISTED_NAME = '@navecss/prune/postcss'
