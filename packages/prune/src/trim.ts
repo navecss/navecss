@@ -29,6 +29,7 @@ import { writeRecord } from './record.ts'
 import { declarationRoot } from './root.ts'
 import { relativeTo } from './source-files.ts'
 import { readStylesheets } from './stylesheets.ts'
+import { LISTED_NAME } from './texts.ts'
 import { emittedAtoms } from './used.ts'
 
 const PLUGIN = 'postcss-nave-prune'
@@ -267,7 +268,7 @@ function trim(run: LayerRun, graph: Graph): void {
  * written.
  */
 function stopWithoutTrimming(run: LayerRun, reason: string, graph: Graph): void {
-  const failure = `${PLUGIN} stopped without trimming: ${reason}`
+  const failure = `${LISTED_NAME} stopped without trimming: ${reason}`
   printEachRun(`Nave: ${failure}`)
   run.result.messages.push(...declarations(run, filesRead(run.handoff, graph.files), graph))
   try {

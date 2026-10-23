@@ -8,6 +8,7 @@ import path from 'node:path'
 
 import type { NaveOptions } from './options.ts'
 import type { PruneRecord } from './record.ts'
+import type { Report } from './report.ts'
 
 import { builtStylesheets, hasAtomRules, mismatchOf } from './output-check.ts'
 import { readRecord } from './record.ts'
@@ -82,7 +83,7 @@ function setupMessage(input: {
   if (record.failures.length > 0) return incomplete(record.failures, cache)
   const mismatch = mismatchOf(builtStylesheets(dir, distDir), record.atoms)
   if (mismatch === undefined) return undefined
-  return outputMismatch({ ...mismatch, cache })
+  return outputMismatch({ ...mismatch, cache, output: `${distDir}/static` })
 }
 
 /**
@@ -95,11 +96,13 @@ function unbundledPackages(record: PruneRecord, config: HookConfig): string[] {
 }
 
 /**
- * Prints the warnings the record asks for.
+ * Prints the warnings the record asks for. The warning that the build read no use is for a build
+ * that goes on to pass: beside a report of a problem in application code, it would offer a way
+ * back that is not the remedy.
  */
-function warn(record: PruneRecord): void {
+function warn(record: PruneRecord, report: Report | undefined): void {
   // eslint-disable-next-line no-console -- warnings go to the terminal running the build
-  if (record.readsNoUse) console.warn(READS_NO_USE)
+  if (report === undefined && record.readsNoUse) console.warn(READS_NO_USE)
   // eslint-disable-next-line no-console -- warnings go to the terminal running the build
   if (record.markdown.length > 0) console.warn(markdownWarning(record.markdown))
 }
@@ -127,8 +130,8 @@ export async function checkBuild(
   }
   const setup = setupMessage({ dir, distDir, record, options })
   if (setup !== undefined) stop([setup])
-  warn(record)
   const report = reportOf(record, options, dir)
+  warn(record, report)
   const unbundled = unbundledPackages(record, config).map((name) => pagesNotBundled(name))
   const messages = [...(report ? [report.text] : []), ...unbundled]
   if (messages.length > 0) stop(messages, (report?.count ?? 0) + unbundled.length)

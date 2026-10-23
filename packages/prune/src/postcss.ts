@@ -25,7 +25,7 @@ import { projectHandoff } from './project.ts'
 import { writeSheetRecord } from './record.ts'
 import { declarationRoot } from './root.ts'
 import { relativeTo } from './source-files.ts'
-import { BOTH_PLUGINS_DEV } from './texts.ts'
+import { BOTH_PLUGINS_DEV, LISTED_NAME } from './texts.ts'
 import { hasCorePlugin, trimAtomicLayer } from './trim.ts'
 
 const PLUGIN = 'postcss-nave-prune'
@@ -130,7 +130,7 @@ async function sheetPluginOf(
     }
   } catch (error) {
     const failure = `the extend option could not be used: ${String(error)}`
-    failures.push(`${PLUGIN} expanded @nave with Nave's own atoms only, because ${failure}`)
+    failures.push(`${LISTED_NAME} expanded @nave with Nave's own atoms only, because ${failure}`)
     const plugin = hasNaveDirective(root) ? corePluginFor(undefined, onUnknown) : undefined
     return { extend: undefined, failure, plugin }
   }
@@ -148,7 +148,7 @@ async function expandOrRecord(
   try {
     return await expand(root, result, input.handoff, input.plugin)
   } catch (error) {
-    failures.push(`${PLUGIN} could not expand @nave: ${String(error)}`)
+    failures.push(`${LISTED_NAME} could not expand @nave: ${String(error)}`)
     return { hasDirective: hasNaveDirective(root), problems: [] }
   }
 }
@@ -262,7 +262,7 @@ export function prunePlugin(entryOptions: object = {}): Plugin {
       try {
         await run(root, result, entryOptions)
       } catch (error) {
-        printEachRun(`Nave: ${PLUGIN} stopped without trimming: ${String(error)}`)
+        printEachRun(`Nave: ${LISTED_NAME} stopped without trimming: ${String(error)}`)
       }
     },
   }
