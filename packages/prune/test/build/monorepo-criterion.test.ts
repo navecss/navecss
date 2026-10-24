@@ -113,7 +113,7 @@ function expectFirstState(app: WorkspaceApp, cell: Cell, place: Place): void {
     const isTurbopack = cell.bundler === 'turbopack'
     const isFromTop = place === 'the top'
     const expectedWorker = isTurbopack || !isFromTop ? app.dir : app.top
-    // R8's variable holds the top on Turbopack run from the top; webpack's callback replaces it
+    // The hand-off variable holds the top on Turbopack run from the top; webpack's callback replaces it
     // with its own project directory.
     const expectedVariable = isTurbopack && isFromTop ? app.top : app.dir
     expect(probe.handoff?.dir, 'the hand-off variable').toBe(expectedVariable)
