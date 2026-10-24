@@ -22,6 +22,10 @@ export default defineConfig({
           // SIGSEGV. Remove this once the pinned Node carries the fix.
           execArgv: ['--no-sparkplug'],
           include: ['test/*.test.ts'],
+          // A row that runs the registry generator took 21.5 s in a `ci:check` beside other
+          // sessions' suites, against the 20 s every row gets. No row asserts how long it takes, so
+          // the budget only has to outlast a loaded machine.
+          testTimeout: 240_000,
         },
       },
       ...runs.map((run) => ({

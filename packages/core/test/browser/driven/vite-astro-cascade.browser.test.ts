@@ -26,7 +26,9 @@ afterAll(async () => {
   await browser.close()
 }, 60_000)
 
-const SECOND = 180_000
+// A row here builds or serves a whole Astro project and loads pages from it. A machine running
+// other suites took longer than 180 s for one, and no row asserts how long it takes.
+const SECOND = 600_000
 
 /**
  * The shapes' project, built and previewed, or served by the dev server.

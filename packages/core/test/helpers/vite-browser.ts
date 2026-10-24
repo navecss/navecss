@@ -101,10 +101,19 @@ export async function previewBuild(
 }
 
 /**
- *
+ * Starts Chromium. A page it opens waits for what a test asks of it (a navigation, a selector)
+ * for as long as the test itself may run, and not for Playwright's own 30 s: the test's timeout is
+ * the one deadline, and on a machine running other suites a navigation took longer than 30 s.
  */
 export async function launchChromium(): Promise<Browser> {
-  return chromium.launch()
+  const browser = await chromium.launch()
+  const openPage = browser.newPage.bind(browser)
+  browser.newPage = async (options) => {
+    const page = await openPage(options)
+    page.setDefaultTimeout(0)
+    return page
+  }
+  return browser
 }
 
 /**

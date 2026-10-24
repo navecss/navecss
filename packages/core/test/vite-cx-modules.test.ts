@@ -623,12 +623,15 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
   }
 
   /**
-   * The time one call of `work` takes, from `reps` calls in a row.
+   * The CPU time one call of `work` takes, from `reps` calls in a row. It is the process's CPU time
+   * and not the clock, so the time the machine spends on other processes in the middle of a run is
+   * not counted as the pattern's work.
    */
   function perCall(work: () => void, reps: number): number {
-    const start = performance.now()
+    const start = process.cpuUsage()
     for (let rep = 0; rep < reps; rep += 1) work()
-    return (performance.now() - start) / reps
+    const used = process.cpuUsage(start)
+    return (used.user + used.system) / 1000 / reps
   }
 
   /**
