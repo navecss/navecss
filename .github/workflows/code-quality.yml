@@ -157,7 +157,10 @@ jobs:
   test-browser:
     name: test:browser
     needs: build
-    runs-on: ubuntu-latest
+    # Not `ubuntu-latest`, which became Ubuntu 26.04 on 2026-10-24: the WebKit build Playwright
+    # 1.64.1 downloads needs libicu 74 (Ubuntu 24.04) and will not start without it. Move this
+    # when Playwright ships a WebKit for the newer image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

@@ -12,6 +12,10 @@ export default defineConfig({
     // once when the lockfile changes, which fails a package with ENOTEMPTY. Each config keeps its own.
     fsModuleCachePath: path.resolve(import.meta.dirname, 'node_modules/.vitest-cache/default'),
     testTimeout: 20_000,
+    // Vitest gives a test worker 60 s to start and offers no setting for that. Every project here
+    // starts its own workers, so on a machine running other suites a dozen of them starting at
+    // once each missed it; fewer at a time start in time.
+    maxWorkers: 3,
     projects: [
       {
         extends: true,

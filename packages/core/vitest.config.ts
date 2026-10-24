@@ -15,8 +15,10 @@ export default defineConfig({
     // want it set it themselves.
     env: { TURBOPACK: '' },
     // A test that builds a real Vite app, the used-atoms ones most of all, takes well under a
-    // second alone but queues behind other runs when several share a loaded machine: 20 s each.
-    testTimeout: 20_000,
+    // second alone but queues behind other runs when several share a loaded machine, where one
+    // took longer than 20 s. No row asserts how long it takes, so the budget only has to outlast
+    // a loaded machine; a hang is still bounded by the job's own timeout.
+    testTimeout: 240_000,
     include: ['test/**/*.test.ts'],
     // test/browser/**/*.browser.test.ts is this same glob's problem too
     // (it also ends in .test.ts): those fixtures need real browser globals
