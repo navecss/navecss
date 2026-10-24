@@ -169,11 +169,13 @@ jobs:
         with:
           name: build-output-pinned
 
+      # The runner image is in the key: WebKit is built against the image's system libraries, so an
+      # engine cached on one image does not start on another.
       - name: Cache Playwright's browser engine
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ env.ImageOS }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
 
       # Chromium runs the browser suite; Firefox and WebKit run the rows of the three-engine test
       # (packages/core, vitest.browser.engines.config.ts), which `test:browser` ends with.
