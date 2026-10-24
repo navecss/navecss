@@ -23,6 +23,7 @@ import { emptyGraph } from './graph-parts.ts'
 import { readGraph } from './graph.ts'
 import { recordedInputs, stemDirectories } from './input-records.ts'
 import { dependencyMessages } from './messages.ts'
+import { serverIdOfRun } from './phase.ts'
 import { printEachRun } from './print.ts'
 import { writeRecord } from './record.ts'
 import { declarationRoot } from './root.ts'
@@ -100,8 +101,10 @@ function runFields(
   | 'pagesDynamicPackages'
   | 'problems'
   | 'readsNoCode'
+  const serverId = serverIdOfRun()
 > {
   return {
+    ...(serverId !== undefined && { serverId }),
     version: 1,
     optionsDigest: digestOf(JSON.stringify(run.handoff.options)),
     directiveProblems: run.directiveProblems,
