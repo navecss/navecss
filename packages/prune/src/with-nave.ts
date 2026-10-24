@@ -6,9 +6,11 @@
 import { atomClassMap } from '@navecss/core/atoms'
 
 import type { Handoff } from './handoff.ts'
+import type { HookMetadata } from './hook.ts'
 import type { NaveOptions } from './options.ts'
 
 import { encodeHandoff, HANDOFF_VARIABLE } from './handoff.ts'
+import { checkBuild } from './hook.ts'
 import { assertNaveOptions } from './options.ts'
 
 /**
@@ -22,7 +24,11 @@ const CORE_PACKAGE = '@navecss/core'
  * What a Next.js config holds that `withNave()` reads or sets. The rest is kept as it is.
  */
 interface ConfigShape {
-  compiler?: Record<string, unknown> & { define?: Record<string, string> }
+  bundlePagesRouterDependencies?: boolean
+  compiler?: Record<string, unknown> & {
+    define?: Record<string, string>
+    runAfterProductionCompile?: (metadata: HookMetadata) => Promise<void> | void
+  }
   distDir?: string
   outputFileTracingRoot?: string
   transpilePackages?: string[]
@@ -43,6 +49,14 @@ function keepMapText(options: NaveOptions): string {
 }
 
 /**
+ * The build directory the config names, relative to the project; Next.js's default when it names
+ * none.
+ */
+function distDirOf(config: ConfigShape): string {
+  return config.distDir ?? '.next'
+}
+
+/**
  * Puts the hand-off for `config` in the environment, for the PostCSS plugin to read, with the
  * phase Next.js called a function config with.
  */
@@ -58,7 +72,7 @@ function setHandoff(
   const handoff: Handoff = {
     options,
     dir,
-    distDir: config.distDir ?? '.next',
+    distDir: distDirOf(config),
     ...(root !== undefined && { root }),
     ...(phase !== undefined && { phase }),
     ...(isBundlerDir && { isBundlerDir }),
@@ -86,13 +100,23 @@ function wrapConfig(
 ): ConfigShape {
   setHandoff(config, options, { dir: process.cwd(), isBundlerDir: false }, phase)
   const user = config.webpack
+  const transpilePackages = withName(config.transpilePackages, CORE_PACKAGE)
+  const own = config.compiler?.runAfterProductionCompile
   return {
     ...config,
     compiler: {
       ...config.compiler,
       define: { ...config.compiler?.define, [KEEP_CONSTANT]: keepMapText(options) },
+      runAfterProductionCompile: async (metadata: HookMetadata) => {
+        await own?.(metadata)
+        await checkBuild(metadata, options, {
+          transpilePackages,
+          bundlePagesRouterDependencies: config.bundlePagesRouterDependencies,
+          recordDistDir: distDirOf(config),
+        })
+      },
     },
-    transpilePackages: withName(config.transpilePackages, CORE_PACKAGE),
+    transpilePackages,
     ...(config.turbopack === undefined && { turbopack: {} }),
     webpack: (webpackConfig: unknown, context: { dir?: string }) => {
       if (context.dir !== undefined) {

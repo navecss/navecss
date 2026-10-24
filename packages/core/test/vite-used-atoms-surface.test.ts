@@ -369,10 +369,12 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
 })
 
 // Each type-check builds a TypeScript program over Vite's own types, which a loaded runner
-// (every test file of the package running at once) takes well past the default timeout to do.
+// (every test file of the package running at once) takes well past the default timeout to do: the
+// first row checks every snippet in one program, 4 s alone and 136 s beside other suites. No row
+// asserts how long it takes, so the budget only has to outlast a loaded machine.
 describe(
   'AC-used-atoms-02 — one signature: every call has the same tuple type',
-  { timeout: 120_000 },
+  { timeout: 600_000 },
   () => {
     it('compiles a config-time choice, assigns to Plugin[] and keeps one type for every call', () => {
       const diagnostics = diagnosticsFor('configTime')

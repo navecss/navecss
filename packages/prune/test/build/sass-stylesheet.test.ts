@@ -52,7 +52,9 @@ describe.skipIf(SKIP !== undefined)(
           'app/extra.css': '.extra {\n  @nave interactve;\n}\n',
         })
         const run = await app.next(['build', ...flags])
-        expect(run.code, run.output).toBe(0)
+        // The problem stops the build from the hook, and the record names its stylesheet.
+        expect(run.code, run.output).not.toBe(0)
+        expect(run.output).toMatch(/^app\/extra\.css:\d+:\d+: /mu)
         const files = app.record()?.directiveProblems.map((problem) => problem.file) ?? []
         expect(files).toContain('app/extra.css')
       },

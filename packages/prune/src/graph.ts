@@ -3,7 +3,7 @@
  * names and the calls it cannot read, and followed to the files it imports. Nothing here throws
  * for a problem in the code it reads; each becomes a problem in the result.
  */
-import type { LocatedProblem, ModuleReading } from '@navecss/core/collect'
+import type { ModuleReading } from '@navecss/core/collect'
 
 import { CX_SOURCE, readModule } from '@navecss/core/collect'
 import { readFileSync } from 'node:fs'
@@ -11,8 +11,7 @@ import { isBuiltin } from 'node:module'
 import { parseSync } from 'oxc-parser'
 
 import type { Edge } from './edges.ts'
-import type { Graph, GraphOptions } from './graph-types.ts'
-import type { Place } from './lines.ts'
+import type { FileFacts, Graph, GraphOptions } from './graph-types.ts'
 import type { PackageInfo } from './packages.ts'
 import type { Resolution, Resolver } from './resolve.ts'
 
@@ -37,6 +36,7 @@ import {
 } from './graph-parts.ts'
 import { placerFor } from './lines.ts'
 import { createPackageReader, packageNameOfSpecifier } from './packages.ts'
+import { addPagesDynamicPackages } from './pages-reach.ts'
 import { createResolver } from './resolve.ts'
 import {
   isDependencyPath,
@@ -98,20 +98,6 @@ function isNamingDeclared(walk: Walk, edge: Edge, files: readonly string[]): boo
   return files.some((resolved) => walk.declaredFiles.has(resolved))
 }
 
-interface FileFacts {
-  readonly code: string
-  readonly file: string
-  readonly rel: string
-  readonly pkg: string | undefined
-  readonly place: (offset: number) => Place
-  readonly isInMode: boolean
-  /**
-   * Where the file's problems go: the graph's when the build's mode reaches the file, nowhere
-   * otherwise.
-   */
-  readonly problems: LocatedProblem[]
-}
-
 /**
  * Queues the files an edge resolves to, but core's own: in the build's mode when the importer is
  * and a set of that mode found the file.
@@ -119,7 +105,11 @@ interface FileFacts {
 function enqueueResolved(walk: Walk, facts: FileFacts, resolution: Resolution): void {
   for (const resolved of resolution.files) {
     const isInMode = facts.isInMode && resolution.filesInMode.includes(resolved)
-    if (!isCoreFile(walk.packageOf, resolved)) enqueue(walk, resolved, isInMode)
+    if (isCoreFile(walk.packageOf, resolved)) continue
+    enqueue(walk, resolved, isInMode)
+    const reached = walk.graph.edges.get(facts.file) ?? new Set<string>()
+    reached.add(resolved)
+    walk.graph.edges.set(facts.file, reached)
   }
 }
 
@@ -138,7 +128,11 @@ function followEdges(walk: Walk, facts: FileFacts, edges: readonly Edge[]): Set<
     }
     enqueueResolved(walk, facts, resolution)
     if (isNamingDeclared(walk, edge, resolution.files)) declared.add(edge.specifier)
-    if (resolution.files.length === 0 && isCheckedImport(walk, facts.file)) {
+    if (
+      resolution.files.length === 0 &&
+      !resolution.isConfigCause &&
+      isCheckedImport(walk, facts.file)
+    ) {
       const found = unresolvedProblem(facts.code, edge, facts.place(edge.offset))
       facts.problems.push({
         kind: 'unreadable',
@@ -177,6 +171,7 @@ function recordUnboundCx(walk: Walk, facts: FileFacts, edge: Edge): void {
 function record(walk: Walk, facts: FileFacts, reading: ModuleReading): void {
   const { graph, options } = walk
   for (const atom of [...reading.atoms, ...reading.classes]) graph.atoms.add(atom)
+  if (reading.dynamicCalls.length > 0) graph.dynamicFiles.add(facts.file)
   if (isStoodInFor(walk, facts)) return
   for (const problem of reading.problems) {
     facts.problems.push({
@@ -268,7 +263,8 @@ function visit(walk: Walk, { file, isInMode }: Queued): void {
 export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): Graph {
   const entries = findEntries(options.dir)
   graph.directories.push(...entries.directories)
-  const resolver = createResolver(options.dir, options.modes)
+  const resolver = createResolver(options.dir, options.modes, graph.inputs)
+  graph.problems.push(...resolver.configProblems)
   const declared = declaredModules(options.dir, options.cxModules, resolver)
   const naveNames = new Set([
     CORE_PACKAGE,
@@ -279,8 +275,8 @@ export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): G
   const walk: Walk = {
     options,
     resolver,
-    packageOf: createPackageReader(naveNames),
-    isCxFile: createCxFileTest(),
+    packageOf: createPackageReader(naveNames, graph.inputs.files),
+    isCxFile: createCxFileTest(graph.inputs.files),
     declaredFiles: declared.files,
     declaredEntries: declared.entries,
     queue: [],
@@ -289,5 +285,6 @@ export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): G
   }
   for (const file of entries.files) enqueue(walk, file, true)
   while (walk.queue.length > 0) visit(walk, walk.queue.pop()!)
+  addPagesDynamicPackages(graph, entries.pagesFiles, (file) => packageNameOf(walk, file))
   return graph
 }

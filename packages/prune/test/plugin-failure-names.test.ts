@@ -1,0 +1,107 @@
+/**
+ * The failure lines the plugin prints and records name it the way the reader listed it in the
+ * PostCSS config, `@navecss/prune/postcss`, because the hook quotes them inside a message that
+ * stops the build. The name the plugin gives PostCSS stays what the bundler's messages carry.
+ */
+import { mkdirSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import postcss from 'postcss'
+import { describe, expect, it, vi } from 'vitest'
+
+import { HANDOFF_VARIABLE } from '../src/handoff.ts'
+import {
+  capturePrinted,
+  makeProject,
+  pageCalling,
+  registerIsolation,
+} from './helpers/plugin-fixtures.ts'
+import { ATOMIC_SHEET, freshPrunePlugin, runSheets } from './helpers/plugin-run.ts'
+import { recordOf } from './helpers/project.ts'
+
+registerIsolation()
+
+const SHEET = { css: '.card {\n  @nave flex;\n}\n', file: 'app/globals.css' }
+const INTERNAL_NAME = 'postcss-nave-prune'
+const PUBLIC_NAME = '@navecss/prune/postcss'
+
+describe('AC-nextjs-used-atoms-06: the failure lines name the plugin as the reader listed it', () => {
+  it('a run that stops before trimming prints and records its failure under the listed name', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
+    const printed = capturePrinted()
+
+    await runSheets(project, [ATOMIC_SHEET], { options: { extend: './nope.mjs' } })
+
+    const lines = printed().filter((line) => line.includes('stopped without trimming'))
+    expect(lines.length).toBeGreaterThan(0)
+    for (const line of lines) {
+      expect(line).toContain(`Nave: ${PUBLIC_NAME} stopped without trimming: `)
+      expect(line).not.toContain(INTERNAL_NAME)
+    }
+    const failures = recordOf(project).failures.filter((failure) =>
+      failure.includes('stopped without trimming'),
+    )
+    expect(failures.length).toBeGreaterThan(0)
+    for (const failure of failures) {
+      expect(failure.startsWith(`${PUBLIC_NAME} stopped without trimming: `)).toBe(true)
+    }
+  })
+
+  it('a stylesheet that expanded @nave without the extend atoms records its failure under the listed name', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
+    capturePrinted()
+
+    await runSheets(project, [SHEET, ATOMIC_SHEET], { options: { extend: './nope.mjs' } })
+
+    const failures = recordOf(project).failures.filter((failure) =>
+      failure.includes('expanded @nave'),
+    )
+    expect(failures.length).toBeGreaterThan(0)
+    for (const failure of failures) {
+      expect(failure).toContain(
+        `${PUBLIC_NAME} expanded @nave with Nave's own atoms only, because the extend option could not be used`,
+      )
+      expect(failure).not.toContain(INTERNAL_NAME)
+    }
+  })
+
+  it('a PostCSS entry given options records its problem under the listed name', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
+    capturePrinted()
+
+    await runSheets(project, [ATOMIC_SHEET], { entryOptions: { keep: ['hidden'] } })
+
+    const { entryProblems } = recordOf(project)
+    expect(entryProblems).toHaveLength(1)
+    expect(entryProblems[0]).toContain(`The PostCSS entry for ${PUBLIC_NAME} takes no options`)
+    expect(entryProblems[0]).not.toContain(INTERNAL_NAME)
+  })
+
+  it('a hand-off the plugin cannot read prints its line under the listed name', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
+    const printed = capturePrinted()
+    vi.stubEnv(HANDOFF_VARIABLE, 'not what withNave() writes')
+    const create = await freshPrunePlugin()
+
+    await postcss([create()]).process(SHEET.css, { from: path.join(project.dir, SHEET.file) })
+
+    const lines = printed().filter((line) => line.includes('cannot read what withNave() handed it'))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain(`Nave: ${PUBLIC_NAME} cannot read what withNave() handed it`)
+    expect(lines[0]).not.toContain(INTERNAL_NAME)
+  })
+
+  it('a run that throws outside the trim prints its failure under the listed name', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
+    mkdirSync(path.join(project.dir, '.next/cache'), { recursive: true })
+    // A file where the stylesheets' records go: writing a stylesheet's record throws.
+    writeFileSync(path.join(project.dir, '.next/cache/navecss-prune-sheets'), 'not a directory')
+    const printed = capturePrinted()
+
+    await runSheets(project, [SHEET], { options: {} })
+
+    const lines = printed().filter((line) => line.includes('stopped without trimming'))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain(`Nave: ${PUBLIC_NAME} stopped without trimming: `)
+    expect(lines[0]).not.toContain(INTERNAL_NAME)
+  })
+})

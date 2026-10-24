@@ -46,10 +46,13 @@ describe('AC-nextjs-used-atoms-03: an @nave problem is recorded where applicatio
     await expect(coreThrown(GLOBALS.css, inProject(project, GLOBALS.file))).resolves.toBeDefined()
   })
 
-  it('AC-nextjs-used-atoms-03: onUnknown "warn" records nothing for it and prints its line once', async () => {
+  it('AC-nextjs-used-atoms-03: onUnknown "warn" records nothing for it and prints its line once in the development server', async () => {
     const project = makeProject({ 'app/page.tsx': PAGE_WITH_PROP })
     const warn = capturePrinted()
-    await runAtomic(project, [GLOBALS], { options: { onUnknown: 'warn' } })
+    await runAtomic(project, [GLOBALS], {
+      options: { onUnknown: 'warn' },
+      phase: 'phase-development-server',
+    })
     const thrown = await coreThrown(GLOBALS.css, inProject(project, GLOBALS.file))
     expect(recordOf(project).directiveProblems).toEqual([])
     const lines = warn().filter((line) => line.includes(thrown.text))

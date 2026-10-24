@@ -32,3 +32,15 @@ export function hasNextConfig(dir: string): boolean {
     return false
   }
 }
+
+/**
+ * The name of the PostCSS config file found directly in `dir`, or a stand-in for one that is not a
+ * file there (a `postcss` key in `package.json`).
+ */
+export function postcssConfigIn(dir: string): string {
+  try {
+    return readdirSync(dir).find((name) => POSTCSS_CONFIG.test(name)) ?? 'package.json'
+  } catch {
+    return 'package.json'
+  }
+}
