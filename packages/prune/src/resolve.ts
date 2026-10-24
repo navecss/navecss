@@ -10,7 +10,8 @@ import { ResolverFactory } from 'oxc-resolver'
 
 import type { ResolutionInputs } from './resolution-inputs.ts'
 
-import { resolverConfigFiles } from './config-chain.ts'
+import { resolverConfigs } from './config-chain.ts'
+import { pathAliasesOf } from './path-aliases.ts'
 import { emptyInputs, noteResolution } from './resolution-inputs.ts'
 import { isDependencyPath } from './source-files.ts'
 
@@ -117,7 +118,9 @@ export function createResolver(
   modes: readonly Mode[],
   inputs: ResolutionInputs = emptyInputs(),
 ): Resolver {
-  for (const file of resolverConfigFiles(dir)) inputs.files.add(file)
+  const configs = resolverConfigs(dir)
+  for (const { file } of configs) inputs.files.add(file)
+  const aliases = pathAliasesOf(configs)
   const project = resolversFor(dir, true, modes)
   const dependency = resolversFor(dir, false, modes)
   const cache = new Map<string, Resolution>()
@@ -142,7 +145,7 @@ export function createResolver(
         }
       }
       const resolution = { files: [...files], filesInMode: [...filesInMode], isBuiltin }
-      noteResolution(inputs, importer, specifier, resolution.files)
+      noteResolution(inputs, { importer, specifier, resolved: resolution.files, aliases })
       cache.set(key, resolution)
       return resolution
     },

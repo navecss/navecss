@@ -9,7 +9,10 @@ import { existsSync, realpathSync, statSync } from 'node:fs'
 import { isBuiltin } from 'node:module'
 import path from 'node:path'
 
+import type { PathAlias } from './path-aliases.ts'
+
 import { packageNameOfSpecifier } from './packages.ts'
+import { aliasCandidates } from './path-aliases.ts'
 import { isDependencyPath } from './source-files.ts'
 
 const MODULE_EXTENSIONS = new Set([
@@ -44,8 +47,10 @@ export interface ResolutionInputs {
    */
   readonly stems: Map<string, Stem>
   /**
-   * Where a package was looked for through `node_modules`, absolute, nearest first: each is a
-   * link or a directory when the package is there, and nothing when it is not.
+   * Where a package was looked for through `node_modules`, absolute, nearest first: in a
+   * directory that has a `node_modules`, the package's place in it (a link or a directory when the
+   * package is there, nothing when it is not); in one that has none, the `node_modules` itself,
+   * which a later install would create.
    */
   readonly links: Set<string>
   /**
@@ -72,15 +77,22 @@ export function emptyInputs(): ResolutionInputs {
 }
 
 /**
- * The nearest `package.json` at or above `directory`, or `undefined`.
+ * The nearest `package.json` at or above `directory`, or `undefined`. Each directory searched
+ * that has none is noted with its absent `package.json`, since creating one changes which
+ * `package.json` governs the files below.
  */
 function nearestManifest(inputs: ResolutionInputs, directory: string): string | undefined {
   if (inputs.manifests.has(directory)) return inputs.manifests.get(directory)
   const file = path.join(directory, 'package.json')
   const parent = path.dirname(directory)
   let found: string | undefined
-  if (existsSync(file)) found = file
-  else if (parent !== directory) found = nearestManifest(inputs, parent)
+  if (existsSync(file)) {
+    found = file
+  } else {
+    // A `package.json` created here would be the nearest one.
+    inputs.files.add(file)
+    if (parent !== directory) found = nearestManifest(inputs, parent)
+  }
   inputs.manifests.set(directory, found)
   return found
 }
@@ -153,9 +165,10 @@ function noteResolvedFile(inputs: ResolutionInputs, file: string): void {
 }
 
 /**
- * Notes each place a package named by `specifier` was looked for from `importerDirectory`: the
- * `node_modules` of every directory up to the one that holds it. A name no `node_modules` holds
- * (an alias, a typo) notes nothing.
+ * Notes each place a package named by `specifier` was looked for from `importerDirectory`, in
+ * every directory up to the one that holds it: the package's place in a `node_modules` that is
+ * there, and the `node_modules` of a directory that has none, which one entry per directory
+ * covers whatever the package. A name no `node_modules` holds (an alias, a typo) notes nothing.
  */
 function noteLinks(inputs: ResolutionInputs, importerDirectory: string, specifier: string): void {
   const name = packageNameOfSpecifier(specifier)
@@ -164,8 +177,9 @@ function noteLinks(inputs: ResolutionInputs, importerDirectory: string, specifie
   inputs.probed.add(key)
   const candidates: string[] = []
   for (let directory = importerDirectory; ; directory = path.dirname(directory)) {
-    const candidate = path.join(directory, 'node_modules', name)
-    candidates.push(candidate)
+    const modules = path.join(directory, 'node_modules')
+    const candidate = path.join(modules, name)
+    candidates.push(existsSync(modules) ? candidate : modules)
     if (existsSync(candidate)) {
       for (const looked of candidates) inputs.links.add(looked)
       noteManifestIn(inputs, candidate)
@@ -176,21 +190,41 @@ function noteLinks(inputs: ResolutionInputs, importerDirectory: string, specifie
 }
 
 /**
- * Notes what resolving `specifier` from `importer` depended on, given the files it resolved to.
+ * Notes where a specifier an alias could have sent elsewhere was looked for: each path the
+ * aliases list for it, as a relative specifier is noted.
+ */
+function noteAliasTargets(
+  inputs: ResolutionInputs,
+  aliases: readonly PathAlias[],
+  specifier: string,
+): void {
+  for (const candidate of aliasCandidates(aliases, specifier)) {
+    noteRelative(inputs, path.dirname(candidate), candidate)
+  }
+}
+
+/**
+ * Notes what resolving `specifier` from `importer` depended on, given the files it resolved to and
+ * the `paths` aliases of the project's config.
  */
 export function noteResolution(
   inputs: ResolutionInputs,
-  importer: string,
-  specifier: string,
-  resolved: readonly string[],
+  input: {
+    readonly aliases: readonly PathAlias[]
+    readonly importer: string
+    readonly resolved: readonly string[]
+    readonly specifier: string
+  },
 ): void {
+  const { importer, specifier, resolved, aliases } = input
   const importerDirectory = path.dirname(importer)
   noteManifestOf(inputs, importerDirectory)
   const isRelative = specifier.startsWith('.') || path.isAbsolute(specifier)
-  if (isRelative && !isDependencyPath(importerDirectory)) {
+  if (isRelative) {
     noteRelative(inputs, importerDirectory, specifier)
-  } else if (!isRelative && !specifier.startsWith('#') && !isBuiltin(specifier)) {
+  } else if (!specifier.startsWith('#') && !isBuiltin(specifier)) {
     noteLinks(inputs, importerDirectory, specifier)
+    if (!isDependencyPath(importerDirectory)) noteAliasTargets(inputs, aliases, specifier)
   }
   for (const file of resolved) {
     noteManifestOf(inputs, path.dirname(file))

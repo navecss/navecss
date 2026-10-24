@@ -1,9 +1,10 @@
 /**
  * The files the resolver reads its config from: `tsconfig.json`, else `jsconfig.json`, and every
  * config either names, through `extends` and `references`. A file the resolver looked for and did
- * not find is in the list all the same, since creating it changes the resolution.
+ * not find is in the list all the same, since creating it changes the resolution; a directory is
+ * never in it, since a bundler cannot depend on one as a file.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
@@ -49,12 +50,20 @@ function withoutComments(text: string): string {
 }
 
 /**
- * The value of a tsconfig, which allows comments and trailing commas, or `undefined` when the
- * text is not one.
+ * `text` without the byte order mark that Windows editors put in front of a file.
+ */
+function withoutByteOrderMark(text: string): string {
+  return text.startsWith('\u{FEFF}') ? text.slice(1) : text
+}
+
+/**
+ * The value of a tsconfig, which allows a byte order mark, comments and trailing commas, or
+ * `undefined` when the text is not one.
  */
 function parseConfig(text: string): unknown {
   try {
-    return JSON.parse(withoutComments(text).replaceAll(/,(\s*[\]}])/gu, '$1')) as unknown
+    const plain = withoutComments(withoutByteOrderMark(text))
+    return JSON.parse(plain.replaceAll(/,(\s*[\]}])/gu, '$1')) as unknown
   } catch {
     return undefined
   }
@@ -112,33 +121,54 @@ function namedConfigs(file: string, config: unknown): string[] {
   ]
 }
 
-/**
- * Adds the config file and everything it names, recursively, to `found`.
- */
-function addChain(found: Set<string>, file: string): void {
-  if (found.has(file)) return
-  found.add(file)
-  if (!existsSync(file)) return
-  let text: string
-  try {
-    text = readFileSync(file, 'utf8')
-  } catch {
-    return
-  }
-  const named = namedConfigs(file, parseConfig(text))
-  for (const next of named) addChain(found, next)
+export interface ConfigFile {
+  readonly file: string
+  /**
+   * The parsed config, or `undefined` for a file that is not there or is not a config.
+   */
+  readonly config: unknown
 }
 
 /**
- * The config files the resolver reads for the project in `dir`, absolute: the one it uses, and
- * the `tsconfig.json` ahead of a `jsconfig.json` or of nothing, which is not there.
+ * Whether a path is a directory.
  */
-export function resolverConfigFiles(dir: string): string[] {
-  const found = new Set<string>()
+function isDirectory(file: string): boolean {
+  return statSync(file, { throwIfNoEntry: false })?.isDirectory() === true
+}
+
+/**
+ * The config at `file`, parsed, or `undefined`.
+ */
+function readConfig(file: string): unknown {
+  if (!existsSync(file)) return undefined
+  try {
+    return parseConfig(readFileSync(file, 'utf8'))
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Adds the config file and everything it names, recursively, to `found`.
+ */
+function addChain(found: Map<string, ConfigFile>, file: string): void {
+  if (found.has(file) || isDirectory(file)) return
+  const config = readConfig(file)
+  found.set(file, { file, config })
+  for (const next of namedConfigs(file, config)) addChain(found, next)
+}
+
+/**
+ * The config files the resolver reads for the project in `dir`, absolute, each with its parsed
+ * value: the one it uses, and the `tsconfig.json` ahead of a `jsconfig.json` or of nothing, which
+ * is not there.
+ */
+export function resolverConfigs(dir: string): ConfigFile[] {
+  const found = new Map<string, ConfigFile>()
   for (const name of CONFIG_NAMES) {
     const file = path.join(dir, name)
     addChain(found, file)
     if (existsSync(file)) break
   }
-  return [...found]
+  return found.values().toArray()
 }

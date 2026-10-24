@@ -71,9 +71,10 @@ export interface PruneRecord {
    */
   readonly listings: Readonly<Record<string, string>>
   /**
-   * Where each package the graph entered through `node_modules` was looked for, by the path of the
-   * link (or directory) relative to the project, and the real path it led to, or an empty text
-   * where nothing was. A link re-pointed at another version changes one.
+   * Where each package the graph entered through `node_modules` was looked for, by the path
+   * relative to the project, and the real path it led to, or an empty text where nothing was: the
+   * package's own link where its directory has a `node_modules`, else that `node_modules`, so a
+   * directory made later changes one. A link re-pointed at another version changes one.
    */
   readonly links: Readonly<Record<string, string>>
   /**
