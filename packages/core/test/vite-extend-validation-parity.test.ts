@@ -96,7 +96,10 @@ describe('the host-free extend validator agrees with the PostCSS-backed one', ()
     expect(verdicts).toContain(false)
   })
 
-  it('refuses at least every string the PostCSS-backed validator refuses, over every short injection', () => {
+  // Every string up to three fragments long, in each shape of atom: some 64,000 pairs, one row per
+  // shape so that no single row has to outlast a slow runner on its own (the whole set in one row
+  // took 116 to 135 s on a CI runner and up to 253 s on another, against a budget of 240 s).
+  describe('over every short injection', () => {
     const fragments = [
       'red',
       ';',
@@ -122,25 +125,38 @@ describe('the host-free extend validator agrees with the PostCSS-backed one', ()
       '&',
       ':hover',
     ]
-    const shapes = [decl, pseudo, media, container, (v: string) => decl(v, '--x')]
-    const unsafe: string[] = []
     const build = function* (depth: number, prefix = ''): Generator<string> {
       yield prefix
       if (depth === 0) return
       for (const fragment of fragments) yield* build(depth - 1, prefix + fragment)
     }
-    const texts = new Set(build(3))
-    for (const text of texts) {
-      for (const shape of shapes) {
-        const extend = shape(text)
-        const isRefusedByPostcss = verdict(validateExtendAtoms, extend).refused
-        const isRefusedHostFree = verdict(validateExtendAtomsHostFree, extend).refused
-        if (isRefusedByPostcss && !isRefusedHostFree) unsafe.push(JSON.stringify(text))
-      }
-    }
+    const texts = [...new Set(build(3))]
 
-    expect(unsafe).toEqual([])
-  }, 240_000)
+    it.each([
+      ['a declaration value', decl],
+      ['a pseudo key', pseudo],
+      ['a media condition', media],
+      ['a container condition', container],
+      ['a custom property value', (v: string) => decl(v, '--x')],
+    ] as const)(
+      'refuses at least every string the PostCSS-backed validator refuses, as %s',
+      (_name, shape) => {
+        const unsafe: string[] = []
+        for (const text of texts) {
+          const extend = shape(text)
+          // The host-free verdict first: only a string it lets through can be the unsafe one, so
+          // the PostCSS-backed validator is asked about those alone.
+          const isUnsafe =
+            !verdict(validateExtendAtomsHostFree, extend).refused &&
+            verdict(validateExtendAtoms, extend).refused
+          if (isUnsafe) unsafe.push(JSON.stringify(text))
+        }
+
+        expect(unsafe).toEqual([])
+      },
+      240_000,
+    )
+  })
 })
 
 describe('the host-free extend validator refuses strings only a browser or an HTML host can misread', () => {

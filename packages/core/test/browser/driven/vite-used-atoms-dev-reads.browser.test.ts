@@ -35,6 +35,11 @@ afterAll(async () => {
   await browser.close()
 }, 60_000)
 
+// What a row here may take is 480 s, and a wait inside one holds out for the same: the row's own
+// timeout is the one deadline. A row loads pages from a dev server in a real browser, and on a
+// machine running other suites one took longer than the 20 s to 120 s these used to allow.
+const ROW_TIMEOUT = 480_000
+
 const PAGE = (body: string): string =>
   `<!doctype html><html><body>${body}<script type="module" src="/src/main.ts"></script></body></html>`
 
@@ -79,7 +84,7 @@ async function untilSheetTransformed(
   root: string,
   file = 'src/app.css',
 ): Promise<void> {
-  const deadline = Date.now() + 20_000
+  const deadline = Date.now() + ROW_TIMEOUT
   while (Date.now() < deadline && !isSheetTransformed(server, root, file)) {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
@@ -115,11 +120,11 @@ describe('AC-used-atoms-42 — HTML read after the stylesheet was first transfor
 
   it('an edit of index.html that adds a class gives it a rule once the page has reloaded', async () => {
     expect(await isRuledAfterHtmlEdit({})).toBe(true)
-  }, 120_000)
+  }, 480_000)
 
   it('control: with the atom in keep it has one', async () => {
     expect(await isRuledAfterHtmlEdit({ keep: ['grid'] })).toBe(true)
-  }, 120_000)
+  }, 480_000)
 
   async function isAboutPageRuled(visits: readonly string[]): Promise<boolean> {
     const app = makeUsedApp(
@@ -151,11 +156,11 @@ describe('AC-used-atoms-42 — HTML read after the stylesheet was first transfor
 
   it('the second page of the app, visited after the first, has the rule for its class', async () => {
     expect(await isAboutPageRuled(['/', '/about.html'])).toBe(true)
-  }, 120_000)
+  }, 480_000)
 
   it('control: the same page visited first has it', async () => {
     expect(await isAboutPageRuled(['/about.html'])).toBe(true)
-  }, 120_000)
+  }, 480_000)
 })
 
 describe('AC-used-atoms-42 and -54 — a server that warms the entry up before any page is read', () => {
@@ -193,13 +198,13 @@ describe('AC-used-atoms-42 and -54 — a server that warms the entry up before a
     const { isRuled, warned } = await warmedPage(true)
 
     expect({ isRuled, warned: pluginWarnings(warned) }).toEqual({ isRuled: true, warned: [] })
-  }, 120_000)
+  }, 480_000)
 
   it('control: without the warm-up the same app has the rule and no warning', async () => {
     const { isRuled, warned } = await warmedPage(false)
 
     expect({ isRuled, warned: pluginWarnings(warned) }).toEqual({ isRuled: true, warned: [] })
-  }, 120_000)
+  }, 480_000)
 
   it('AC-used-atoms-54: a backend app under a warm-up logs nothing at start and one warning after the first request for its stylesheet', async () => {
     const app = makeUsedApp({ 'src/app.css': APP_CSS, 'src/main.ts': MAIN })
@@ -231,7 +236,7 @@ describe('AC-used-atoms-42 and -54 — a server that warms the entry up before a
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  }, 480_000)
 })
 
 describe('AC-used-atoms-54 — a backend under a warm-up is warned when the stylesheet is requested, however the request spells it', () => {
@@ -292,7 +297,7 @@ describe('AC-used-atoms-54 — a backend under a warm-up is warned when the styl
     async (_name, request, options) => {
       expect(await warningsAround(request, options)).toEqual({ afterRequest: 1, atStart: 0 })
     },
-    120_000,
+    480_000,
   )
 
   it('notes no request whose path does not decode, which Vite refuses, and the server still answers', async () => {
@@ -300,7 +305,7 @@ describe('AC-used-atoms-54 — a backend under a warm-up is warned when the styl
       afterRequest: 0,
       atStart: 0,
     })
-  }, 120_000)
+  }, 480_000)
 })
 
 /**
@@ -360,7 +365,7 @@ describe('AC-used-atoms-41 — the first frame after an update, for a module the
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  }, 480_000)
 })
 
 /**
@@ -384,7 +389,7 @@ function slowAfterFirst(file: string, asked: string): PluginOption {
         await new Promise((resolve) => setTimeout(resolve, 400))
         return
       }
-      const deadline = Date.now() + 30_000
+      const deadline = Date.now() + ROW_TIMEOUT
       while (!hasModule(server, asked)) {
         if (Date.now() > deadline) throw new Error(`the dev server was never asked for ${asked}`)
         await new Promise((resolve) => setTimeout(resolve, 20))
@@ -415,10 +420,10 @@ const LINKED_APP = {
 }
 
 /**
- * Waits until `isDone` is true, and fails naming `what` after 30 s.
+ * Waits until `isDone` is true, and fails naming `what` when the row's time is out.
  */
 async function untilServer(isDone: () => boolean, what: string): Promise<void> {
-  const deadline = Date.now() + 30_000
+  const deadline = Date.now() + ROW_TIMEOUT
   while (!isDone()) {
     if (Date.now() > deadline) throw new Error(`the dev server never reached ${what}`)
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -563,7 +568,7 @@ describe('AC-used-atoms-40 — what the first stylesheet response has read', () 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  }, 480_000)
 
   it('a stylesheet a link names, which no module imports, is answered at once with the classes of the page', async () => {
     const app = makeUsedApp(LINKED_APP)
@@ -588,20 +593,20 @@ describe('AC-used-atoms-40 — what the first stylesheet response has read', () 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  }, 480_000)
 })
 
 describe('AC-used-atoms-41 — a set that grew before the page was listening', () => {
   it('the class a script adds to that page gets its rule with no page reload, though the set grew before the page was listening', async () => {
     expect(await scriptClassAfterGrowth({})).toEqual({ isRuled: true, isSamePage: true })
-  }, 120_000)
+  }, 480_000)
 
   it('control: with the atom in keep it has one', async () => {
     expect(await scriptClassAfterGrowth({ keep: ['flex'] })).toEqual({
       isRuled: true,
       isSamePage: true,
     })
-  }, 120_000)
+  }, 480_000)
 })
 
 /**
@@ -671,7 +676,7 @@ async function lateClassOfInlineStyle(
         async () => (await hasElement(page, '#g')) || (await isReloaded(page)),
         'the late element or the reload',
       )
-      await untilQuietly(page, () => isRuledNow(page, 'nave-grid'), 'the rule for nave-grid')
+      await until(page, () => isRuledNow(page, 'nave-grid'), 'the rule for nave-grid')
       await page.waitForLoadState('load')
       const isRuled = await isRuledNow(page, 'nave-grid')
       const isSamePage = await page.evaluate(() => document.documentElement.dataset.mark === '1')
@@ -821,7 +826,7 @@ async function loadsAfterTheReload(
         loads += 1
       })
       await page.addScriptTag({ type: 'module', content: "import '/src/late.ts'" })
-      await untilQuietly(page, () => isRuledNow(page, 'nave-grid'), 'the rule for nave-grid')
+      await until(page, () => isRuledNow(page, 'nave-grid'), 'the rule for nave-grid')
       await page.waitForTimeout(3000)
       const isRuled = await isRuledNow(page, 'nave-grid')
       await page.close()
@@ -839,14 +844,14 @@ describe.each(Object.entries(VITE_APIS))(
   (_name, api) => {
     it('the class a module adds once the page is listening gets its rule, the page having reloaded', async () => {
       expect(await lateClassOfInlineStyle({}, api)).toEqual({ isRuled: true, isSamePage: false })
-    }, 120_000)
+    }, 480_000)
 
     it('control: with the atom in keep it has one, and nothing reloads', async () => {
       expect(await lateClassOfInlineStyle({ keep: ['grid'] }, api)).toEqual({
         isRuled: true,
         isSamePage: true,
       })
-    }, 120_000)
+    }, 480_000)
 
     it.each(Object.entries(SETTLING_APPS))(
       'in %s, the page reloads for the class and then stays loaded',
@@ -857,7 +862,7 @@ describe.each(Object.entries(VITE_APIS))(
         // that reloads each time it connects loads dozens of times in this window.
         expect(loads).toBeLessThanOrEqual(2)
       },
-      120_000,
+      480_000,
     )
   },
 )

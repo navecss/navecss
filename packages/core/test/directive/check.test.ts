@@ -36,9 +36,12 @@ beforeEach(async () => {
   ctx.dir = await mkdtemp(path.join(tmpdir(), 'nave-check-'))
 })
 
+// Removing the mesh the linear-time row builds (thousands of directories and links) is the
+// slowest cleanup here, and on a machine running other suites it took longer than the 10 s a hook
+// gets by default.
 afterEach(async () => {
   await rm(ctx.dir, { recursive: true, force: true })
-})
+}, 300_000)
 
 async function writeCss(name: string, content: string): Promise<string> {
   const filePath = path.join(ctx.dir, name)
@@ -247,10 +250,12 @@ const SCALING_ROW_TIMEOUT = 45_000
 // entries, is a large enough share of the larger walk to move the ratio past its bound.
 // The row's own timeout is longer than the others': the meshes are large, and a walk that is
 // quadratic in the entries takes the whole of three attempts to be called one, and the row
-// should fail on the ratio, which names the problem, not on the clock.
+// should fail on the ratio, which names the problem, not on the clock. It takes about 15 s alone,
+// and a machine running other suites at ten times its cores took more than 300 s: the budget only
+// has to outlast a loaded machine, since the walk's work is bounded by the counts it asserts.
 const MESH_ENTRIES = 2304
 const MESH_WALKS = 2
-const MESH_ROW_TIMEOUT = 300_000
+const MESH_ROW_TIMEOUT = 900_000
 
 // The mesh is built from clusters of this many directories, each linked to every other one in its
 // cluster. A cluster is small, so a chain of links followed in one path stays short, far under

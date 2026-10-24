@@ -15,7 +15,9 @@ import { appConfig, VITE_APIS } from './helpers/vite-app.ts'
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 
 // Each Vite builds, rebuilds and writes a page's inline stylesheet by its own code, so this row
-// runs on each Vite measured.
+// runs on each Vite measured. It waits on the watcher's own events, which on a busy macOS machine
+// reach it many seconds after an edit and sometimes after a minute, so it has no deadline of its
+// own and the row's timeout only has to outlast a loaded machine.
 describe.each(Object.entries(VITE_APIS))(
   'Vite %s: AC-used-atoms-27 - rebuilds in watch mode',
   (_version, api) => {
@@ -90,6 +92,6 @@ describe.each(Object.entries(VITE_APIS))(
         await closing?.close()
         app.dispose()
       }
-    }, 120_000)
+    }, 480_000)
   },
 )

@@ -67,7 +67,9 @@ const STYLED: (readonly [string, string])[] = [
   ['#media', 'flexWrap'],
   ['#visible', 'itemsEnd'],
 ]
-const SECOND = 180_000
+// A row here builds or serves a whole Astro project and loads pages from it. A machine running
+// other suites took longer than 180 s for one, and no row asserts how long it takes.
+const SECOND = 600_000
 
 /**
  * Loads `/` and waits until the islands hydrated and the code only the browser runs has acted.
