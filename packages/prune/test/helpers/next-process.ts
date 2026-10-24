@@ -21,11 +21,15 @@ function installedNext(): string | undefined {
 export const NEXT_ROOT = installedNext()
 
 /**
- * The arguments that run `next` with `args` from this process's Node.js.
+ * The arguments that run `next` with `args` from this process's Node.js: the workspace's `next`, or
+ * the one installed at `root`.
  */
-export function nextCommand(args: readonly string[]): string[] {
-  if (NEXT_ROOT === undefined) throw new Error('next is not installed for this package')
-  return [path.join(NEXT_ROOT, 'dist/bin/next'), ...args]
+export function nextCommand(
+  args: readonly string[],
+  root: string | undefined = NEXT_ROOT,
+): string[] {
+  if (root === undefined) throw new Error('next is not installed for this package')
+  return [path.join(root, 'dist/bin/next'), ...args]
 }
 
 /**

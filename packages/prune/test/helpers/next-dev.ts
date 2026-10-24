@@ -10,6 +10,10 @@ const STYLESHEET_LINK = /<link[^>]+href="([^"]+\.css[^"]*)"/g
 
 export interface DevServer {
   /**
+   * The server's origin, such as `http://127.0.0.1:3000`.
+   */
+  readonly origin: string
+  /**
    * What the server printed so far.
    */
   readonly output: () => string
@@ -50,17 +54,27 @@ function freePort(): Promise<number> {
 }
 
 /**
- * Starts `next dev` with `args` in `cwd`, on a free port.
+ * Starts `next dev` (or `next start`, for a built app) with `args` in `cwd`, on a free port, with
+ * the `next` installed at `nextRoot` or the workspace's.
  */
-export async function startDev(args: readonly string[], cwd: string): Promise<DevServer> {
+export async function startDev(
+  args: readonly string[],
+  cwd: string,
+  options: { readonly command?: 'dev' | 'start'; readonly nextRoot?: string } = {},
+): Promise<DevServer> {
+  const { command = 'dev', nextRoot } = options
   const port = await freePort()
-  const child = spawn(process.execPath, nextCommand(['dev', ...args, '--port', String(port)]), {
-    cwd,
-    env: nextEnvironment(),
-    stdio: ['ignore', 'pipe', 'pipe'],
-    // Its own process group, so the server and the workers it starts stop together.
-    detached: true,
-  })
+  const child = spawn(
+    process.execPath,
+    nextCommand([command, ...args, '--port', String(port)], nextRoot),
+    {
+      cwd,
+      env: nextEnvironment(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // Its own process group, so the server and the workers it starts stop together.
+      detached: true,
+    },
+  )
   let output = ''
   child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
   child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
@@ -99,5 +113,5 @@ export async function startDev(args: readonly string[], cwd: string): Promise<De
     process.kill(-child.pid, 'SIGTERM')
     await exited
   }
-  return { output: () => output, get, css, untilCss, stop }
+  return { origin: `http://127.0.0.1:${port}`, output: () => output, get, css, untilCss, stop }
 }

@@ -52,7 +52,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src test --max-warnings 0",
     "lint:fix": "eslint src test --fix",
-    "test": "vitest run",
+    "test": "vitest run --project node --project turbopack",
+    "test:browser": "vitest run --project chromium --coverage.enabled=false",
     "check:pack": "node ../../scripts/without-dry-run.mjs publint && node ../../scripts/without-dry-run.mjs attw --pack . --profile node16",
     "prepublishOnly": "node ../../scripts/check-no-orphaned-chunks.mjs && pnpm run check:pack"
   },
@@ -69,6 +70,7 @@
     "@navecss/core": "workspace:*",
     "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "5.0.5",
+    "playwright": "1.64.1",
     "postcss": "^8.5.28",
     "typescript": "6.0.3",
     "vitest": "5.0.5"

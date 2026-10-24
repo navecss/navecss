@@ -36,11 +36,21 @@ export default defineConfig({
       // A shell that exports TURBOPACK would otherwise decide which way every row runs.
       {
         extends: true,
-        test: { name: 'node', include: ['test/**/*.test.ts'], env: { TURBOPACK: '' } },
+        test: {
+          name: 'node',
+          include: ['test/**/*.test.ts'],
+          exclude: ['test/chromium/**'],
+          env: { TURBOPACK: '' },
+        },
       },
       {
         extends: true,
         test: { name: 'turbopack', include: DIRECTIVE_ROWS, env: { TURBOPACK: '1' } },
+      },
+      // The rows that read what a browser computes, run by `test:browser` where Chromium is installed.
+      {
+        extends: true,
+        test: { name: 'chromium', include: ['test/chromium/**/*.test.ts'], env: { TURBOPACK: '' } },
       },
     ],
   },
