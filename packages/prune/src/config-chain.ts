@@ -50,6 +50,31 @@ function withoutComments(text: string): string {
 }
 
 /**
+ * Whether the first character of `text` after `index` that is not white space closes an array or
+ * an object.
+ */
+function isBeforeClosing(text: string, index: number): boolean {
+  let next = index + 1
+  while (next < text.length && text[next]?.trim() === '') next += 1
+  return text[next] === ']' || text[next] === '}'
+}
+
+/**
+ * `text` without the commas that sit before a closing bracket or brace, which a tsconfig allows,
+ * and leaving every string as written.
+ */
+function withoutTrailingCommas(text: string): string {
+  let plain = ''
+  let index = 0
+  while (index < text.length) {
+    const end = text[index] === '"' ? stringEnd(text, index) : index + 1
+    if (text[index] !== ',' || !isBeforeClosing(text, index)) plain += text.slice(index, end)
+    index = end
+  }
+  return plain
+}
+
+/**
  * `text` without the byte order mark that Windows editors put in front of a file.
  */
 function withoutByteOrderMark(text: string): string {
@@ -63,7 +88,7 @@ function withoutByteOrderMark(text: string): string {
 function parseConfig(text: string): unknown {
   try {
     const plain = withoutComments(withoutByteOrderMark(text))
-    return JSON.parse(plain.replaceAll(/,(\s*[\]}])/gu, '$1')) as unknown
+    return JSON.parse(withoutTrailingCommas(plain)) as unknown
   } catch {
     return undefined
   }
