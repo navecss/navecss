@@ -92,8 +92,8 @@ describe('AC-nextjs-used-atoms-26: in dev the line naming @navecss/core/postcss 
     expect(recordOf(project).hasCorePlugin).toBe(true)
   })
 
-  it('AC-nextjs-used-atoms-26: with no phase, NODE_ENV "development" prints it once across runs', async () => {
-    vi.stubEnv('NODE_ENV', 'development')
+  it('AC-nextjs-used-atoms-26: with no phase, the variable next dev sets in its server prints it once across runs', async () => {
+    vi.stubEnv('__NEXT_DEV_SERVER', '1')
     const project = makeProject({ 'app/page.tsx': pageCalling("'flex'") })
     const printed = watchPrinted()
     await runSheets(project, [ATOMIC_SHEET, ATOMIC_SHEET], { before: [navePlugin()] })
@@ -111,10 +111,11 @@ describe('AC-nextjs-used-atoms-26: in dev the line naming @navecss/core/postcss 
     expect(naming(printed(), CORE_ENTRY)).toHaveLength(1)
   })
 
-  it.each(['production', undefined])(
-    'AC-nextjs-used-atoms-26: with no phase and NODE_ENV %s nothing names it',
+  it.each(['development', 'production', undefined])(
+    'AC-nextjs-used-atoms-26: with no phase and no dev server variable, NODE_ENV %s nothing names it',
     async (value) => {
       vi.stubEnv('NODE_ENV', value)
+      vi.stubEnv('__NEXT_DEV_SERVER', undefined)
       const project = makeProject({ 'app/page.tsx': pageCalling("'flex'") })
       const printed = watchPrinted()
       await runSheets(project, [ATOMIC_SHEET], { before: [navePlugin()] })

@@ -35,6 +35,21 @@ const BUNDLERS: [string, string[]][] = [
 ]
 
 /**
+ * The builds the check runs in: each bundler, and with `--debug-prerender`, which sets `NODE_ENV`
+ * to `development` for the build.
+ */
+const BUILDS: [string, string[]][] = [
+  ...BUNDLERS,
+  ['Turbopack with --debug-prerender', ['--debug-prerender']],
+  ['webpack with --debug-prerender', ['--webpack', '--debug-prerender']],
+]
+
+/**
+ * What the development server's report ends with: a build never prints it.
+ */
+const DEV_CLOSING = 'The dev server keeps serving'
+
+/**
  * How many times `text` occurs in `output`.
  */
 function occurrences(output: string, text: string): number {
@@ -44,7 +59,7 @@ function occurrences(output: string, text: string): number {
 describe.skipIf(SKIP_REASON !== undefined)(
   `the build hook on a real next build${SKIP_REASON === undefined ? '' : ` (skipped: ${SKIP_REASON})`}`,
   () => {
-    it.each(BUNDLERS)(
+    it.each(BUILDS)(
       'AC-nextjs-used-atoms-27: %s: a call it cannot read fails the build, the report once, then one short line',
       async (_bundler, flags) => {
         const app = createNextApp()
@@ -53,6 +68,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
         const run = await app.next(['build', ...flags])
         expect(run.code, run.output).not.toBe(0)
         expect(occurrences(run.output, FIRST_LINE)).toBe(1)
+        expect(run.output).not.toContain(DEV_CLOSING)
         expect(run.output).toMatch(/^app\/page\.jsx:4:/mu)
         expect(run.output).toContain(STOP_LINE)
         expect(run.output.indexOf(FIRST_LINE)).toBeLessThan(run.output.indexOf(STOP_LINE))

@@ -130,6 +130,24 @@ describe('AC-nextjs-used-atoms-03: the hook prints an order warning, whatever on
   )
 })
 
+describe('AC-nextjs-used-atoms-03: the hook prints the warnings of several stylesheets in path order', () => {
+  it('prints the order warnings of six stylesheets sorted by stylesheet path', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'flex'") })
+    const names = ['m', 'c', 'x', 'a', 'q', 'f']
+    const sheets: Sheet[] = names.map((name) => ({ css: ORDER.css, file: `app/${name}.css` }))
+    listen()
+    await built(project, sheets, {})
+
+    const printed = await runCheck(project, {})
+
+    expect(printed.error).toBeUndefined()
+    const files = printed.warnings.map((line) => /^(app\/[a-z]\.css):/u.exec(line)?.[1])
+    expect(files).toEqual(
+      names.toSorted((a, b) => a.localeCompare(b)).map((name) => `app/${name}.css`),
+    )
+  })
+})
+
 describe('AC-nextjs-used-atoms-03: the plugin prints these lines in the development server only', () => {
   it('prints nothing about them in a build, where the hook prints them', async () => {
     const project = makeProject({ 'app/page.tsx': pageCalling("'flex'") })

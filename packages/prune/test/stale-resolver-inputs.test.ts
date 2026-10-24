@@ -245,8 +245,242 @@ describe('AC-nextjs-used-atoms-31: a change to what steers the resolver stops th
     project.write({ 'components/ui/node_modules/dep/index.js': moduleOf('grid') })
 
     expect(await stoppedWith(project)).toContain(
-      'withNave(): components/ui/node_modules/dep changed after',
+      'withNave(): components/ui/node_modules changed after',
     )
+  })
+
+  it('a node_modules directory created above an importer, below the one the package was found in, stops it naming the directory', async () => {
+    const project = makeProject({
+      'components/ui/Button.tsx': "export { value } from 'dep'\n",
+      'app/page.tsx': pageImporting('../components/ui/Button'),
+    })
+    project.install('dep', { 'index.js': moduleOf('flex') })
+    await built(project)
+    expect(await runCheck(project)).toEqual(NOTHING)
+
+    project.write({ 'components/node_modules/dep/index.js': moduleOf('grid') })
+
+    expect(await stoppedWith(project)).toContain(
+      'withNave(): components/node_modules changed after',
+    )
+  })
+
+  it('a file created earlier in a paths fallback list than the one the alias resolved through stops it naming that directory', async () => {
+    const project = makeProject({
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: { jsx: 'preserve', baseUrl: '.', paths: { '@/*': ['./a/*', './b/*'] } },
+      }),
+      'b/ui/Card.tsx': moduleOf('grid'),
+      'app/page.tsx': pageImporting('@/ui/Card'),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['grid'])
+    expect(await runCheck(project)).toEqual(NOTHING)
+
+    project.write({ 'a/ui/Card.tsx': moduleOf('flex') })
+
+    expect(await stoppedWith(project)).toContain('withNave(): a/ui/ changed after')
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['flex'])
+  })
+
+  it('a file created earlier in a paths fallback list of a config without baseUrl stops it naming that directory', async () => {
+    const project = makeProject({
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: { jsx: 'preserve', paths: { '@/*': ['./a/*', './b/*'] } },
+      }),
+      'b/ui/Card.tsx': moduleOf('grid'),
+      'app/page.tsx': pageImporting('@/ui/Card'),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['grid'])
+    expect(await runCheck(project)).toEqual(NOTHING)
+
+    project.write({ 'a/ui/Card.tsx': moduleOf('flex') })
+
+    expect(await stoppedWith(project)).toContain('withNave(): a/ui/ changed after')
+  })
+
+  it('a file created earlier in a paths fallback list that an extended config sets stops it naming that directory', async () => {
+    const project = makeProject({
+      'tsconfig.json': JSON.stringify({ extends: './tsconfig.base.json' }),
+      'tsconfig.base.json': JSON.stringify({
+        compilerOptions: { baseUrl: '.', paths: { '@/*': ['./a/*', './b/*'] } },
+      }),
+      'b/ui/Card.tsx': moduleOf('grid'),
+      'app/page.tsx': pageImporting('@/ui/Card'),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['grid'])
+    expect(await runCheck(project)).toEqual(NOTHING)
+
+    project.write({ 'a/ui/Card.tsx': moduleOf('flex') })
+
+    expect(await stoppedWith(project)).toContain('withNave(): a/ui/ changed after')
+  })
+
+  it('a file created beside one that a relative import inside node_modules resolved to stops it naming the directory', async () => {
+    const project = makeProject({ 'app/page.tsx': pageImporting('dep') })
+    project.install('dep', {
+      'package.json': JSON.stringify({
+        name: 'dep',
+        version: '1.0.0',
+        type: 'module',
+        main: 'index.js',
+        dependencies: { '@navecss/core': '*' },
+      }),
+      'index.js': "export { value } from './val'\n",
+      'val.js': moduleOf('flex'),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['flex'])
+    expect(await runCheck(project)).toEqual(NOTHING)
+
+    project.write({ 'node_modules/dep/val.ts': moduleOf('grid') })
+
+    expect(await stoppedWith(project)).toContain('withNave(): node_modules/dep/ changed after')
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['grid'])
+  })
+
+  it('a package.json created between an importer and the nearest one stops it naming that file', async () => {
+    const project = makeProject({
+      'package.json': manifestImporting('./a/*.ts'),
+      'a/y.ts': moduleOf('flex'),
+      'app/b/y.ts': moduleOf('grid'),
+      'app/page.tsx': pageImporting('#ui/y'),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['flex'])
+    expect(await runCheck(project)).toEqual(NOTHING)
+
+    project.write({ 'app/package.json': manifestImporting('./b/*.ts') })
+
+    expect(await stoppedWith(project)).toContain('withNave(): app/package.json changed after')
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['grid'])
+  })
+})
+
+/**
+ * A tsconfig whose `@/*` alias points at `target`, and nothing else.
+ */
+function aliasTo(target: string): string {
+  return aliasConfig(target)
+}
+
+/**
+ * A config a package provides, whose `@/*` alias points at `target`.
+ */
+function packageBase(target: string): string {
+  return JSON.stringify({ compilerOptions: { paths: { '@/*': [target] } } })
+}
+
+/**
+ * The files of a project where `@/ui/Card` is `flex` under `a/` and `grid` under `b/`.
+ */
+function twoTargets(): Record<string, string> {
+  return {
+    'a/ui/Card.tsx': moduleOf('flex'),
+    'b/ui/Card.tsx': moduleOf('grid'),
+    'app/page.tsx': pageImporting('@/ui/Card'),
+  }
+}
+
+describe('AC-nextjs-used-atoms-31: the forms a config chain takes are all followed', () => {
+  it('a base with comments and trailing commas is followed', async () => {
+    const project = makeProject({
+      'tsconfig.json': '{\n  // the base\n  "extends": "./base.json", /* trailing */\n}\n',
+      'base.json': aliasTo('./a/*'),
+      ...twoTargets(),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['flex'])
+
+    project.write({ 'base.json': aliasTo('./b/*') })
+
+    expect(await stoppedWith(project)).toContain('withNave(): base.json changed after')
+  })
+
+  it('an extends without the .json extension is followed', async () => {
+    const project = makeProject({
+      'tsconfig.json': JSON.stringify({ extends: './base' }),
+      'base.json': aliasTo('./a/*'),
+      ...twoTargets(),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['flex'])
+
+    project.write({ 'base.json': aliasTo('./b/*') })
+
+    expect(await stoppedWith(project)).toContain('withNave(): base.json changed after')
+  })
+
+  it('an extends that is a list is followed in every entry', async () => {
+    const project = makeProject({
+      'tsconfig.json': JSON.stringify({ extends: ['./one.json', './base.json'] }),
+      'one.json': '{}',
+      'base.json': aliasTo('./a/*'),
+      ...twoTargets(),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['flex'])
+
+    project.write({ 'base.json': aliasTo('./b/*') })
+
+    expect(await stoppedWith(project)).toContain('withNave(): base.json changed after')
+  })
+
+  it('an extends that names a package is followed to the file the package provides', async () => {
+    const project = makeProject({
+      'tsconfig.json': JSON.stringify({ extends: 'cfg/base.json' }),
+      ...twoTargets(),
+    })
+    project.install('cfg', {
+      'package.json': JSON.stringify({ name: 'cfg', version: '1.0.0' }),
+      'base.json': packageBase('../../a/*'),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['flex'])
+
+    project.write({ 'node_modules/cfg/base.json': packageBase('../../b/*') })
+
+    expect(await stoppedWith(project)).toContain('base.json changed after')
+  })
+
+  it('a project reference to a config file by its name is followed', async () => {
+    const project = makeProject({
+      'tsconfig.json': aliasConfig('./*', {
+        files: [],
+        references: [{ path: './packages/ui/tsconfig.app.json' }],
+      }),
+      'packages/ui/tsconfig.app.json': '{}',
+      'packages/ui/src/Card.tsx': moduleOf('flex'),
+      'app/page.tsx': pageImporting('../packages/ui/src/Card'),
+    })
+    await built(project)
+
+    project.write({
+      'packages/ui/tsconfig.app.json': JSON.stringify({
+        compilerOptions: { paths: { '#x': ['./src/Card.tsx'] } },
+      }),
+    })
+
+    expect(await stoppedWith(project)).toContain('tsconfig.app.json changed after')
+  })
+
+  it('a config that starts with a byte order mark is followed to its base', async () => {
+    const project = makeProject({
+      'tsconfig.json': '\u{FEFF}{"extends": "./base.json"}',
+      'base.json': aliasTo('./a/*'),
+      ...twoTargets(),
+    })
+    await built(project)
+    expect(recordOf(project).atoms).toEqual(['flex'])
+
+    project.write({ 'base.json': aliasTo('./b/*') })
+
+    expect(await stoppedWith(project)).toContain('withNave(): base.json changed after')
   })
 })
 

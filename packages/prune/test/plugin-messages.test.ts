@@ -1,6 +1,6 @@
 import type { Message } from 'postcss'
 
-import { rmSync, statSync } from 'node:fs'
+import { existsSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -109,22 +109,25 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     }
   })
 
-  it('AC-nextjs-used-atoms-04: dir-dependency messages name the directories the files were selected from and the ones a specifier could have matched in', async () => {
+  it('AC-nextjs-used-atoms-04: dir-dependency messages name the directories the files were selected from and the ones a specifier could have matched in, and no other', async () => {
     const project = appProject()
     const { messages } = await runAtomic(project)
-    const selected = Object.keys(recordOf(project).directories).map((key) =>
-      path.resolve(project.dir, key),
+    const record = recordOf(project)
+    const selected = Object.keys(record.directories).map((key) => path.resolve(project.dir, key))
+    // A listing is keyed by the path of the stem, with a trailing `*`: its directory is declared.
+    const matched = Object.keys(record.listings).map((key) =>
+      path.resolve(project.dir, path.posix.dirname(key.slice(0, -1))),
     )
-    const named = messagesOf(messages, 'dir-dependency').map((message) =>
-      path.resolve(message.dir as string),
-    )
+    const expected = [...new Set([...selected, ...matched])]
+      .filter((directory) => directory === project.dir || isInside(project.dir, directory))
+      .toSorted((a, b) => a.localeCompare(b))
+    const named = messagesOf(messages, 'dir-dependency')
+      .map((message) => path.resolve(message.dir as string))
+      .toSorted((a, b) => a.localeCompare(b))
     expect(selected).toContain(path.join(project.dir, 'app'))
-    expect(named).toEqual(expect.arrayContaining(selected))
     // `@/components/Card` could have matched a file beside `Card.tsx`.
-    expect(named).toContain(path.join(project.dir, 'components'))
-    for (const directory of named) {
-      expect(directory === project.dir || isInside(project.dir, directory)).toBe(true)
-    }
+    expect(matched).toContain(path.join(project.dir, 'components'))
+    expect(named).toEqual(expected)
   })
 
   it('AC-nextjs-used-atoms-04: no dependency message names a directory', async () => {
@@ -135,6 +138,22 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     for (const file of named) expect(statSync(file).isFile()).toBe(true)
     // Control: directories exist among the declarations, only under the other message type.
     expect(messagesOf(messages, 'dir-dependency').length).toBeGreaterThan(0)
+  })
+
+  it('AC-nextjs-used-atoms-04: an extends that names a file beside a directory of the same name declares the file, never the directory', async () => {
+    const project = makeProject({
+      'tsconfig.json': JSON.stringify({ extends: './base' }),
+      'base.json': '{}',
+      'base/readme.txt': 'notes\n',
+      'app/page.tsx': pageCalling("'flex'"),
+    })
+    const { messages } = await runAtomic(project)
+    const named = dependencyFiles(messages)
+    expect(named).toContain(path.join(project.dir, 'base.json'))
+    expect(named).not.toContain(path.join(project.dir, 'base'))
+    expect(Object.keys(recordOf(project).files)).not.toContain('base')
+    const existing = named.filter((name) => existsSync(name))
+    for (const file of existing) expect(statSync(file).isFile()).toBe(true)
   })
 
   it('AC-nextjs-used-atoms-04: the messages name the config files that are there, whatever their extension', async () => {

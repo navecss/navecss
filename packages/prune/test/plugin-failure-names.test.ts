@@ -5,15 +5,17 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import postcss from 'postcss'
+import { describe, expect, it, vi } from 'vitest'
 
+import { HANDOFF_VARIABLE } from '../src/handoff.ts'
 import {
   capturePrinted,
   makeProject,
   pageCalling,
   registerIsolation,
 } from './helpers/plugin-fixtures.ts'
-import { ATOMIC_SHEET, runSheets } from './helpers/plugin-run.ts'
+import { ATOMIC_SHEET, freshPrunePlugin, runSheets } from './helpers/plugin-run.ts'
 import { recordOf } from './helpers/project.ts'
 
 registerIsolation()
@@ -60,6 +62,32 @@ describe('AC-nextjs-used-atoms-06: the failure lines name the plugin as the read
       )
       expect(failure).not.toContain(INTERNAL_NAME)
     }
+  })
+
+  it('a PostCSS entry given options records its problem under the listed name', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
+    capturePrinted()
+
+    await runSheets(project, [ATOMIC_SHEET], { entryOptions: { keep: ['hidden'] } })
+
+    const { entryProblems } = recordOf(project)
+    expect(entryProblems).toHaveLength(1)
+    expect(entryProblems[0]).toContain(`The PostCSS entry for ${PUBLIC_NAME} takes no options`)
+    expect(entryProblems[0]).not.toContain(INTERNAL_NAME)
+  })
+
+  it('a hand-off the plugin cannot read prints its line under the listed name', async () => {
+    const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
+    const printed = capturePrinted()
+    vi.stubEnv(HANDOFF_VARIABLE, 'not what withNave() writes')
+    const create = await freshPrunePlugin()
+
+    await postcss([create()]).process(SHEET.css, { from: path.join(project.dir, SHEET.file) })
+
+    const lines = printed().filter((line) => line.includes('cannot read what withNave() handed it'))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain(`Nave: ${PUBLIC_NAME} cannot read what withNave() handed it`)
+    expect(lines[0]).not.toContain(INTERNAL_NAME)
   })
 
   it('a run that throws outside the trim prints its failure under the listed name', async () => {

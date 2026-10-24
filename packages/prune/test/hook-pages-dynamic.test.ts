@@ -167,6 +167,45 @@ describe('AC-nextjs-used-atoms-39: a package that calls cx.dynamic() for the Pag
   })
 })
 
+describe('AC-nextjs-used-atoms-39: a build that stops on the rule does not also warn that it read no use', () => {
+  it('AC-nextjs-used-atoms-39: a package that cannot be bundled stops the build and the warning that no use was read is not printed', async () => {
+    const options: NaveOptions = { keepFor: { 'dyn-pages': ['interactive'] } }
+    const project = makeProject({ 'pages/legacy.tsx': rendering('dyn-pages') })
+    project.install('dyn-pages', dynamicPackage('dyn-pages'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnings = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = await runAtomic(project, [], { options })
+    writeBuildCss(project, result.css)
+    // Control: the record reads no use and lists the package, so the case was reached.
+    expect(recordOf(project).readsNoUse).toBe(true)
+    expect(recordOf(project).pagesDynamicPackages).toEqual(['dyn-pages'])
+    warnings.mockClear()
+
+    await expect(checkBuild(hookMetadata(project), options, {})).rejects.toThrow(
+      'Nave stopped the build',
+    )
+
+    expect(linesOf(warnings.mock.calls)).toEqual([])
+  })
+
+  it('AC-nextjs-used-atoms-39: control, with the package bundled the same record passes and warns that no use was read', async () => {
+    const options: NaveOptions = { keepFor: { 'dyn-pages': ['interactive'] } }
+    const project = makeProject({ 'pages/legacy.tsx': rendering('dyn-pages') })
+    project.install('dyn-pages', dynamicPackage('dyn-pages'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const warnings = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = await runAtomic(project, [], { options })
+    writeBuildCss(project, result.css)
+    warnings.mockClear()
+
+    await checkBuild(hookMetadata(project), options, { transpilePackages: ['dyn-pages'] })
+
+    expect(
+      linesOf(warnings.mock.calls).filter((line) => line.includes('read no use')),
+    ).toHaveLength(1)
+  })
+})
+
 describe('AC-nextjs-used-atoms-39: more than one package, and a report beside the rule', () => {
   it('AC-nextjs-used-atoms-39: one package of two bundled leaves one problem, naming the other', async () => {
     const files = { 'pages/legacy.tsx': rendering('dyn-pages', 'other-dyn') }

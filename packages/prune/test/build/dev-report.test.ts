@@ -58,6 +58,8 @@ describe.skipIf(SKIP_REASON !== undefined)(
         expect(server.output()).toContain(FIRST_LINE)
         expect(server.output()).toContain(CLOSING)
         expect(occurrences(server.output(), FIRST_LINE)).toBe(1)
+        expect(occurrences(server.output(), CLOSING)).toBe(1)
+        expect(server.output()).not.toContain('Nave stopped the build')
         app.write({ 'app/page.jsx': page('cx(variant)', '// a comment') })
         await server.get('/')
         await pause(3000)
@@ -70,6 +72,50 @@ describe.skipIf(SKIP_REASON !== undefined)(
           await pause(1000)
         }
         expect(occurrences(server.output(), FIXED)).toBe(1)
+      },
+      TIMEOUT,
+    )
+
+    it.each([
+      ['Turbopack', []],
+      ['webpack', ['--webpack']],
+    ])(
+      '%s: AC-nextjs-used-atoms-29: after a restart, a stylesheet edit that adds an @nave problem is reported',
+      async (_bundler, flags) => {
+        const app = createNextApp()
+        apps.push(app)
+        app.write({
+          'app/mod.module.css': '.a {\n  color: red;\n}\n',
+          'app/page.jsx': [
+            "import { cx } from '@navecss/core/cx'",
+            "import styles from './mod.module.css'",
+            '',
+            'export default function Page() {',
+            "  return <div id=\"t\" className={cx('flex') + ' ' + styles.a} />",
+            '}',
+            '',
+          ].join('\n'),
+        })
+        const first = await app.dev(flags)
+        await first.get('/')
+        await first.stop()
+        const second = await app.dev(flags)
+        await second.get('/')
+        app.write({ 'app/mod.module.css': '.a {\n  @nave interactve;\n}\n' })
+        for (
+          let attempt = 1;
+          !second.output().includes('unknown atom "interactve"');
+          attempt += 1
+        ) {
+          // A busy machine can lose the watcher's event for an edit: writing the file again sends another.
+          if (attempt % 10 === 0) {
+            app.write({ 'app/mod.module.css': '.a {\n  @nave interactve;\n}\n' })
+          }
+          await second.get('/')
+          await pause(1000)
+        }
+        expect(second.output()).toContain('app/mod.module.css:2:3')
+        expect(occurrences(second.output(), CLOSING)).toBe(1)
       },
       TIMEOUT,
     )

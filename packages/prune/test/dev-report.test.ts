@@ -211,17 +211,18 @@ describe('AC-nextjs-used-atoms-29: the report is cleared when fixed and comes ba
 })
 
 describe('AC-nextjs-used-atoms-29: only a development run prints the report', () => {
-  it('AC-nextjs-used-atoms-29: with no phase, NODE_ENV "development" prints it', async () => {
-    vi.stubEnv('NODE_ENV', 'development')
+  it('AC-nextjs-used-atoms-29: with no phase, the variable next dev sets in its server prints it', async () => {
+    vi.stubEnv('__NEXT_DEV_SERVER', '1')
     const errors = errorsIn(await printedBy(undefined))
     expect(errors).toHaveLength(1)
     expect(textOf(errors[0]!).endsWith(`\n${CLOSING}`)).toBe(true)
   })
 
-  it.each(['production', undefined])(
-    'AC-nextjs-used-atoms-29: with no phase, NODE_ENV %s prints nothing',
+  it.each(['development', 'production', undefined])(
+    'AC-nextjs-used-atoms-29: with no phase and no dev server variable, NODE_ENV %s prints nothing',
     async (value) => {
       vi.stubEnv('NODE_ENV', value)
+      vi.stubEnv('__NEXT_DEV_SERVER', undefined)
       expect(await printedBy(undefined)).toEqual([])
     },
   )
@@ -230,8 +231,9 @@ describe('AC-nextjs-used-atoms-29: only a development run prints the report', ()
     expect(await printedBy(BUILD)).toEqual([])
   })
 
-  it('AC-nextjs-used-atoms-29: a phase decides over NODE_ENV', async () => {
+  it('AC-nextjs-used-atoms-29: a phase decides over the environment', async () => {
     vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('__NEXT_DEV_SERVER', '1')
     expect(await printedBy(BUILD)).toEqual([])
   })
 })
@@ -291,11 +293,13 @@ describe('AC-nextjs-used-atoms-03: in dev, @nave problems with onUnknown "warn" 
 
 describe('AC-nextjs-used-atoms-29: a dev server prints what it found itself', () => {
   it('AC-nextjs-used-atoms-29: a new dev server does not print the problems an earlier one recorded for code that is now fixed', async () => {
+    vi.stubEnv('NEXT_PRIVATE_START_TIME', '1000')
     const project = brokenProject()
     watchConsole()
     await runSheets(project, [ATOMIC_SHEET], { phase: DEV })
     expect(recordOf(project).problems).toHaveLength(1)
     project.write({ 'app/page.tsx': pageCalling("'flex'") })
+    vi.stubEnv('NEXT_PRIVATE_START_TIME', '2000')
     const seen = watchConsole()
 
     await runSheets(project, [FIXED_GLOBALS], { phase: DEV })
@@ -304,10 +308,38 @@ describe('AC-nextjs-used-atoms-29: a dev server prints what it found itself', ()
   })
 
   it('AC-nextjs-used-atoms-29: control, the same dev server prints the report a stylesheet-only run meets after its own atom-layer run', async () => {
+    vi.stubEnv('NEXT_PRIVATE_START_TIME', '1000')
     const project = brokenProject()
     const seen = watchConsole()
 
     await runSheets(project, [ATOMIC_SHEET, FIXED_GLOBALS], { phase: DEV })
+
+    expect(errorsIn(seen())).toHaveLength(1)
+  })
+
+  it('AC-nextjs-used-atoms-29: a worker started after the atom-layer run wrote the record prints what its stylesheet found', async () => {
+    vi.stubEnv('NEXT_PRIVATE_START_TIME', '1000')
+    const project = makeProject({ 'app/page.tsx': pageCalling("'flex'") })
+    const seen = watchConsole()
+    await runSheets(project, [ATOMIC_SHEET], { phase: DEV })
+    expect(textsOf(seen())).toEqual([])
+
+    // A second worker of the same dev server loads the plugin after the record was written.
+    await runSheets(project, [GLOBALS], { phase: DEV })
+
+    const errors = errorsIn(seen())
+    expect(errors).toHaveLength(1)
+    expect(textOf(errors[0]!)).toContain('app/globals.css:3:3: ')
+  })
+
+  it('AC-nextjs-used-atoms-29: a dev server that sets no start time prints the report of the record it finds', async () => {
+    vi.stubEnv('NEXT_PRIVATE_START_TIME', undefined)
+    const project = brokenProject()
+    watchConsole()
+    await runSheets(project, [ATOMIC_SHEET], { phase: DEV })
+    const seen = watchConsole()
+
+    await runSheets(project, [GLOBALS], { phase: DEV })
 
     expect(errorsIn(seen())).toHaveLength(1)
   })
