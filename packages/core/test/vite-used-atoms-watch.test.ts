@@ -118,8 +118,10 @@ describe.each(Object.entries(VITE_APIS))(
           throw new Error(`the build never showed ${atoms.join(', ')}`)
         }
 
-        if (!(await isShownWithin(['flex'], ROW_TIMEOUT))) {
-          throw builds.failed ?? new Error('the first build never ended')
+        // Nothing writes again during the first build, so a failed one is reported at once.
+        while (!(await isShownWithin(['flex'], REWRITE_AFTER))) {
+          if (builds.failed !== undefined) throw builds.failed
+          if (Date.now() >= deadline) throw new Error('the first build never ended')
         }
         const first = written()
         await edit("cx('flex', 'grid')", ['flex', 'grid'])
