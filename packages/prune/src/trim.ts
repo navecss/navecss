@@ -32,7 +32,6 @@ import { readStylesheets } from './stylesheets.ts'
 import { LISTED_NAME } from './texts.ts'
 import { emittedAtoms } from './used.ts'
 
-const PLUGIN = 'postcss-nave-prune'
 const CORE_PLUGIN = 'postcss-nave'
 
 /**
@@ -73,7 +72,7 @@ function entryProblemsOf(entryOptions: object): string[] {
   const keys = Object.keys(entryOptions)
   if (keys.length === 0) return []
   return [
-    `The PostCSS entry for ${PLUGIN} takes no options, but it was given ${keys.join(', ')}. Set options in withNave() in next.config instead.`,
+    `The PostCSS entry for ${LISTED_NAME} takes no options, but it was given ${keys.join(', ')}. Set options in withNave() in next.config instead.`,
   ]
 }
 
@@ -101,11 +100,11 @@ function runFields(
   | 'pagesDynamicPackages'
   | 'problems'
   | 'readsNoCode'
-  const serverId = serverIdOfRun()
 > {
+  const serverId = serverIdOfRun()
   return {
-    ...(serverId !== undefined && { serverId }),
     version: 1,
+    ...(serverId !== undefined && { serverId }),
     optionsDigest: digestOf(JSON.stringify(run.handoff.options)),
     directiveProblems: run.directiveProblems,
     entryProblems: entryProblemsOf(run.entryOptions),

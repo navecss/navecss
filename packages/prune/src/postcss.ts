@@ -246,7 +246,7 @@ async function run(root: Root, result: Result, entryOptions: object): Promise<vo
     handoff = readHandoff()
   } catch (error) {
     printEachRun(
-      `Nave: ${PLUGIN} cannot read what withNave() handed it, so every atom ships and @nave is expanded without its options: ${String(error)}`,
+      `Nave: ${LISTED_NAME} cannot read what withNave() handed it, so every atom ships and @nave is expanded without its options: ${String(error)}`,
     )
     await expandWithoutOptions(root, result)
     return
