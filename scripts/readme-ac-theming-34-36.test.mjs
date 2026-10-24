@@ -172,7 +172,64 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
   }
 })
 
-test('AC-theming-36: rungs 1b, 3, 4 and 5 are each documented as reached through the entry point', () => {
+// RUNG 4's REACH is an AFFIRMATIVE claim, and the phrase "entry point" appearing in the rung does
+// not make it. Rung 4 shows no `navecss-tokens` (the rung's point, R33(c), is that the consumer's
+// own build supplies the inputs), so what it must say is that the consumer's build INVOKES the
+// entry point: the published text says "the script or the task that invokes the entry point".
+// Scanning for the phrase alone passed a rung 4 reduced to "This rung is not reached through the
+// entry point at all.", which says the opposite.
+//
+// Two limbs, because they fail differently. The affirmative limb needs a form of *invoke*
+// governing the entry point. The denial limb reds any sentence that says the rung is not reached
+// through the entry point, does not invoke it, or goes around it, and it is checked on EVERY
+// sentence so a denial placed beside the affirmative still reds. Both read sentences, not the
+// whole body, because a denial is a property of one sentence: "The entry point reads nothing it
+// was not handed" holds "not" and "entry point" and negates nothing about reach.
+//
+// The object is "the entry point" or the pronoun "it", since a denial reads as naturally "does not
+// invoke it". The verbs are listed, not "any word", so "not handed" stays a non-denial.
+const REACH_OBJECT = String.raw`(?:\bentry point\b|\bit\b)`
+const REACH_VERB = String.raw`(?:reach(?:ed|es)?|invok\w*|call(?:s|ed)?|runs?|us(?:es?|ed)|go(?:es)? through)`
+const INVOKES_ENTRY_POINT = /\binvok(?:es?|ing)\b[^.]{0,40}\bthe entry point\b/i
+const DENIES_REACH = [
+  new RegExp(
+    String.raw`\b(?:not|never|n't)\b[^.]{0,40}\b${REACH_VERB}\b[^.]{0,40}${REACH_OBJECT}`,
+    'i',
+  ),
+  new RegExp(
+    String.raw`\bentry point\b[^.]{0,40}\b(?:not|never)\s+(?:be\s+)?(?:invoked|reached|called|run|used)\b`,
+    'i',
+  ),
+  new RegExp(
+    String.raw`\b(?:bypass\w*|go(?:es)? (?:around|past)|circumvent\w*|skips?)\b[^.]{0,40}${REACH_OBJECT}`,
+    'i',
+  ),
+  /\bentry point\b[^.]{0,40}\b(?:bypassed|skipped|circumvented)\b/i,
+]
+
+// Sentences, with a bullet start counting as a boundary: a rung's bullets carry no full stop of
+// their own between them.
+function sentencesOf(text) {
+  return text
+    .replaceAll(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+|\s+-\s+(?=\*\*)/)
+    .filter((sentence) => sentence !== '')
+}
+
+function rung4ReachProblems(text) {
+  const sentences = sentencesOf(text)
+  const problems = sentences
+    .filter((sentence) => DENIES_REACH.some((pattern) => pattern.test(sentence)))
+    .map((sentence) => `rung 4 denies the entry point's reach: ${JSON.stringify(sentence)}`)
+  if (sentences.every((sentence) => !INVOKES_ENTRY_POINT.test(sentence))) {
+    problems.push('rung 4 never says its own build invokes the entry point')
+  }
+  return problems
+}
+
+const PUBLISHED_RUNG_4 = rungBody('4')
+
+test('AC-theming-36: rungs 1b, 3 and 5 show the entry point invoked, and rung 4 says its own build invokes it', () => {
   for (const name of ['1b', '3', '5']) {
     assert.match(
       rungBody(name),
@@ -180,14 +237,44 @@ test('AC-theming-36: rungs 1b, 3, 4 and 5 are each documented as reached through
       `rung ${name} must show the entry point (\`navecss-tokens\`) invoked`,
     )
   }
-  // Rung 4 documents the entry point being invoked FROM the consumer's own build rather than
-  // showing the binary literally, which is the rung's own point (R33(c)): there is no config
-  // file, and what changes is who supplies the inputs.
-  assert.match(
-    rungBody('4'),
-    /\bentry point\b/i,
-    "rung 4 must document the entry point being invoked from the consumer's own build",
+  assert.deepEqual(rung4ReachProblems(rungBody('4')), [])
+})
+
+const RUNG_4_DENIALS = [
+  'This rung is not reached through the entry point at all.',
+  'Your build does not invoke the entry point.',
+  'Your build does not invoke it.',
+  'Your build bypasses the entry point.',
+  'Your build goes around it.',
+  'The entry point is never invoked here.',
+]
+
+test('AC-theming-36: a rung 4 that keeps only a denial of the entry point reds', () => {
+  for (const denial of RUNG_4_DENIALS) {
+    assert.notDeepEqual(rung4ReachProblems(denial), [], `must red: ${denial}`)
+  }
+})
+
+test('AC-theming-36: a denial reds even beside the published rung-4 affirmative', () => {
+  for (const denial of RUNG_4_DENIALS) {
+    assert.notDeepEqual(
+      rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${denial}`),
+      [],
+      `must red even beside the published affirmative: ${denial}`,
+    )
+  }
+})
+
+test('AC-theming-36: "not" and "entry point" in one sentence is not a denial of reach', () => {
+  const sentence = 'The entry point reads nothing it was not handed: no file is discovered.'
+  assert.ok(
+    rung4ReachProblems(sentence).every((problem) => !problem.includes('denies')),
+    'the published sentence holds "not" and "entry point" and negates nothing about reach',
   )
+})
+
+test('AC-theming-36: the published rung 4 says its own build invokes the entry point', () => {
+  assert.deepEqual(rung4ReachProblems(PUBLISHED_RUNG_4), [])
 })
 
 // Deliberately reads the WHOLE rung body, not the `**Across 0.x:**` bullet the posture
