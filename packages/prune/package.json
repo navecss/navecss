@@ -1,7 +1,6 @@
 {
   "name": "@navecss/prune",
   "version": "0.0.0",
-  "private": true,
   "description": "NaveCSS atom pruning for Next.js: a PostCSS plugin and a next.config wrapper that ship only the atoms the build can read a use for.",
   "keywords": [
     "navecss",

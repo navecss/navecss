@@ -237,8 +237,10 @@ describe('AC-used-atoms-36 — the section, the cx() section and the docblocks',
     expect(text).toContain("`@navecss/core/atoms` (`atomClassMap[variant]`, `toClassName('grid')`)")
     expect(text).toContain('list its atom in `keep`')
     expect(text).toContain('by a backend that serves its own templates')
-    expect(text).toContain('on Next.js and webpack alike')
-    expect(text).toContain('a page with no bundler')
+    expect(text).toContain(
+      'A stack with no bundler, webpack, or Next.js on `@navecss/core/postcss` ships every atom',
+    )
+    expect(text).toContain('a page that links the standalone stylesheet')
     expect(text).toContain('build the server first: `vite build --ssr`, then `vite build`')
     expect(text).not.toContain('build the client first')
     expect(text).toContain('`nave-used-atoms.json`')

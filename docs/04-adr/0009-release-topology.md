@@ -97,3 +97,15 @@ development dependency only, because the stylesheet is built from core's atoms w
 is built and nothing of core is loaded at the consumer's runtime. Its build is `tsc` to `dist/`,
 one module per source file, no bundler, so each part's `'use client'` directive survives. A
 visual change to the stylesheet is a `minor`, since a consumer's page looks different.
+
+A sixth published package, `@navecss/prune`, trims Nave's atom layer on Next.js: a PostCSS plugin
+and a `next.config` wrapper that read the same `cx()` calls the Vite plugin reads. It **joins the
+`fixed` group** with `@navecss/tokens` and `@navecss/core`, which is the one place this record's
+reasoning points the other way, and for the reason it gives: the group exists where a version skew
+lands a consumer on an incompatible pair. This package calls core's reader, so a project on
+mismatched versions would have Vite and Next.js read the same code differently, and a build would
+trim atoms the other would keep. It is therefore not `ignore`d and keeps no `"private": true`.
+It peers on `@navecss/core` as `workspace:^`, which publishes as a caret range on the version it
+was released with, and on `next` from `16.2.0` and `postcss` 8. Its parser and resolver
+(`oxc-parser`, `oxc-resolver`) are its own dependencies and never core's, which keeps core free of a
+parser. The first version goes live by hand, like the first versions of the packages above.
