@@ -105,12 +105,21 @@ function capturedBy(pattern: string, specifier: string): string | undefined {
 }
 
 /**
+ * The target with its first `*` replaced by what the pattern captured, as written; a target with
+ * no `*` as it is.
+ */
+function substituted(target: string, captured: string): string {
+  const star = target.indexOf('*')
+  return star === -1 ? target : `${target.slice(0, star)}${captured}${target.slice(star + 1)}`
+}
+
+/**
  * Every path the aliases could send `specifier` to, absolute and without an extension.
  */
 export function aliasCandidates(aliases: readonly PathAlias[], specifier: string): string[] {
   return aliases.flatMap(({ pattern, targets }) => {
     const captured = capturedBy(pattern, specifier)
     if (captured === undefined) return []
-    return targets.map((target) => target.replace('*', () => captured))
+    return targets.map((target) => substituted(target, captured))
   })
 }

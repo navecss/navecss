@@ -172,3 +172,66 @@ export function resolverConfigs(dir: string): ConfigFile[] {
   }
   return found.values().toArray()
 }
+
+export interface UnreadableConfig {
+  /**
+   * The config file the problem is in, absolute.
+   */
+  readonly file: string
+  /**
+   * Why the build cannot read it, as a clause that follows "the build cannot read this config:".
+   */
+  readonly reason: string
+}
+
+/**
+ * Whether a path is a file.
+ */
+function isFile(file: string): boolean {
+  return statSync(file, { throwIfNoEntry: false })?.isFile() === true
+}
+
+/**
+ * The first config of the chain that is there and cannot be read as JSON.
+ */
+function unparsedConfig(configs: readonly ConfigFile[]): UnreadableConfig | undefined {
+  const found = configs.find(({ file, config }) => config === undefined && isFile(file))
+  return found && { file: found.file, reason: 'it could not be read as JSON' }
+}
+
+/**
+ * The first `extends` of a config that names no config the chain read.
+ */
+function unreadExtends(
+  file: string,
+  config: unknown,
+  read: ReadonlySet<string>,
+): UnreadableConfig | undefined {
+  if (typeof config !== 'object' || config === null) return undefined
+  const value = listOf((config as { extends?: unknown }).extends).find(
+    (extended): extended is string =>
+      typeof extended === 'string' &&
+      extendsCandidates(file, extended).every((candidate) => !read.has(candidate)),
+  )
+  return value === undefined
+    ? undefined
+    : { file, reason: `extends '${value}' names no config file it can read` }
+}
+
+/**
+ * The first `extends` of the chain, in order, that names no config the chain read.
+ */
+function unresolvedExtends(configs: readonly ConfigFile[]): UnreadableConfig | undefined {
+  const read = new Set(configs.filter(({ config }) => config !== undefined).map(({ file }) => file))
+  return configs
+    .map(({ file, config }) => unreadExtends(file, config, read))
+    .find((found) => found !== undefined)
+}
+
+/**
+ * The config of the chain TypeScript's rules cannot read, or `undefined` when they read all of it:
+ * a file that is not JSON, or an `extends` that names no file.
+ */
+export function unreadableConfig(configs: readonly ConfigFile[]): UnreadableConfig | undefined {
+  return unparsedConfig(configs) ?? unresolvedExtends(configs)
+}

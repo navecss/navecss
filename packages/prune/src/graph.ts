@@ -3,7 +3,7 @@
  * names and the calls it cannot read, and followed to the files it imports. Nothing here throws
  * for a problem in the code it reads; each becomes a problem in the result.
  */
-import type { LocatedProblem, ModuleReading } from '@navecss/core/collect'
+import type { ModuleReading } from '@navecss/core/collect'
 
 import { CX_SOURCE, readModule } from '@navecss/core/collect'
 import { readFileSync } from 'node:fs'
@@ -11,8 +11,7 @@ import { isBuiltin } from 'node:module'
 import { parseSync } from 'oxc-parser'
 
 import type { Edge } from './edges.ts'
-import type { Graph, GraphOptions } from './graph-types.ts'
-import type { Place } from './lines.ts'
+import type { FileFacts, Graph, GraphOptions } from './graph-types.ts'
 import type { PackageInfo } from './packages.ts'
 import type { Resolution, Resolver } from './resolve.ts'
 
@@ -99,20 +98,6 @@ function isNamingDeclared(walk: Walk, edge: Edge, files: readonly string[]): boo
   return files.some((resolved) => walk.declaredFiles.has(resolved))
 }
 
-interface FileFacts {
-  readonly code: string
-  readonly file: string
-  readonly rel: string
-  readonly pkg: string | undefined
-  readonly place: (offset: number) => Place
-  readonly isInMode: boolean
-  /**
-   * Where the file's problems go: the graph's when the build's mode reaches the file, nowhere
-   * otherwise.
-   */
-  readonly problems: LocatedProblem[]
-}
-
 /**
  * Queues the files an edge resolves to, but core's own: in the build's mode when the importer is
  * and a set of that mode found the file.
@@ -143,7 +128,11 @@ function followEdges(walk: Walk, facts: FileFacts, edges: readonly Edge[]): Set<
     }
     enqueueResolved(walk, facts, resolution)
     if (isNamingDeclared(walk, edge, resolution.files)) declared.add(edge.specifier)
-    if (resolution.files.length === 0 && isCheckedImport(walk, facts.file)) {
+    if (
+      resolution.files.length === 0 &&
+      !resolution.isConfigCause &&
+      isCheckedImport(walk, facts.file)
+    ) {
       const found = unresolvedProblem(facts.code, edge, facts.place(edge.offset))
       facts.problems.push({
         kind: 'unreadable',
@@ -275,6 +264,7 @@ export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): G
   const entries = findEntries(options.dir)
   graph.directories.push(...entries.directories)
   const resolver = createResolver(options.dir, options.modes, graph.inputs)
+  graph.problems.push(...resolver.configProblems)
   const declared = declaredModules(options.dir, options.cxModules, resolver)
   const naveNames = new Set([
     CORE_PACKAGE,

@@ -36,9 +36,8 @@ describe.skipIf(SKIP_REASON !== undefined)(
         const cold = await app.next(['build'])
         const warm = await app.next(['build'])
 
-        // The resolver the plugin reads the code with does not accept this config, so the build
-        // can stop on the plugin's own report. What matters here is that Turbopack is not told to
-        // read the directory as a file.
+        // What matters here is that Turbopack is not told to read the directory as a file. That the
+        // build then ends without a stop is held in config-extends-directory.test.ts.
         for (const run of [cold, warm]) {
           expect(run.output).not.toContain('Is a directory')
           expect(run.output).not.toContain('FATAL')

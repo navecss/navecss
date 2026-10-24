@@ -4,6 +4,7 @@
 import type { LocatedProblem } from '@navecss/core/collect'
 
 import type { SelectedDirectory } from './entries.ts'
+import type { Place } from './lines.ts'
 import type { ResolutionInputs } from './resolution-inputs.ts'
 import type { Mode } from './resolve.ts'
 
@@ -64,4 +65,21 @@ export interface Graph {
    * reaches.
    */
   readonly pagesDynamicPackages: Set<string>
+}
+
+/**
+ * What is known of the file being read.
+ */
+export interface FileFacts {
+  readonly code: string
+  readonly file: string
+  readonly rel: string
+  readonly pkg: string | undefined
+  readonly place: (offset: number) => Place
+  readonly isInMode: boolean
+  /**
+   * Where the file's problems go: the graph's when the build's mode reaches the file, nowhere
+   * otherwise.
+   */
+  readonly problems: LocatedProblem[]
 }

@@ -63,6 +63,23 @@ export function unboundCxProblem(
 }
 
 /**
+ * The problem for a config the build cannot read, at the config's first character: the imports
+ * that depend on it cannot be told apart from the ones that are missing.
+ */
+export function configProblem(rel: string, reason: string): LocatedProblem {
+  return {
+    kind: 'unreadable',
+    offset: 0,
+    construct: '',
+    text: `the build cannot read this config, so it does not know where its paths and baseUrl send an import: ${reason}.`,
+    file: rel,
+    pkg: undefined,
+    line: 1,
+    column: 1,
+  }
+}
+
+/**
  * The atoms that make a `cx.dynamic()` call apply a class where it stands: `keep` in the
  * application, the package's `keepFor` list in a dependency.
  */
