@@ -4,6 +4,7 @@
  */
 import type { Browser, Page } from 'playwright'
 
+import { existsSync } from 'node:fs'
 import { chromium } from 'playwright'
 
 /**
@@ -29,3 +30,8 @@ export function computed(page: Page, selector: string, property: string): Promis
     `getComputedStyle(document.querySelector(${JSON.stringify(selector)})).getPropertyValue(${JSON.stringify(property)})`,
   )
 }
+
+/**
+ * Whether the Chromium Playwright launches is installed, so a row can skip where it is not.
+ */
+export const HAS_CHROMIUM = existsSync(chromium.executablePath())
