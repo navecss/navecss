@@ -1,6 +1,6 @@
 # NaveCSS — Claude Code Context
 
-Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo of `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `stylelint-config` and `eslint-plugin` (rules for a consumer's project), all four published; `prune` (the Next.js route to used-only atoms: a PostCSS plugin and a `next.config` wrapper), publishable; `base-ui` (Base UI's components styled with Nave's tokens), publishable; and, not yet published, `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
+Standards-first, zero-runtime CSS design-system library. pnpm + Turborepo monorepo of `@navecss/*` packages: `tokens` (DTCG 2025.10 token source + first-party build pipeline), `core` (`@layer` architecture, reset, atomic utilities, implements the `@nave` directive, with PostCSS as one adapter), `stylelint-config` and `eslint-plugin` (rules for a consumer's project), all four published; `base-ui` (Base UI's components styled with Nave's tokens), publishable; and, not yet published, `cli` (component-registry CLI). Node >=22.18, ESM-only, Changesets versioning. Package manager: **pnpm**.
 
 ## Principles
 
@@ -39,13 +39,12 @@ For multi-step tasks, state a brief plan with a verify step per item before exec
 packages/tokens/   → DTCG token source (tokens.json) + first-party DTCG reader (build.ts); emits CSS custom properties + JS/TS
 packages/core/     → reset.css, @layer stack (index.css), generated atomic utilities, cx()/atoms, implements @nave (PostCSS is one adapter)
 packages/base-ui/  → Base UI's components styled with Nave's tokens: one React wrapper subpath per component that adds Nave's classes to the Base UI parts it styles, plus one stylesheet (dist/styles.css) of role atoms built through @nave; builds on core; peers on tokens, @base-ui/react and react
-packages/prune/    → @navecss/prune: PostCSS plugin and withNave() that trim the atom layer to the atoms a Next.js build can read a use for (reader and report from core's ./collect; oxc-parser and oxc-resolver are its own dependencies); peers on core, next and postcss
 packages/cli/      → navecss CLI, unpublished and not implemented (every command is a stub); components from base-ui's registry are copied with shadcn's CLI, which needs nothing from this package
 packages/stylelint-config/ → published stylelint rules for a consumer's project (`@nave` known, `var()`-or-keyword values on listed properties, the outline guard, declared `--nave-*` names); peer on tokens
 packages/eslint-plugin/   → published ESLint rules for a consumer's project (a declared/atom class channel in JSX, a reasoned `cx.raw()` escape, its count, tokenized `style` values); peer on core
 ```
 
-Dependency direction: `core` -> `tokens`; `prune` -> `core` (peer); `base-ui` -> `tokens` (peer), `core` (at build time). `cli` orchestrates, owns no styles. Public-API and token-contract changes are deliberate, versioned events (Changesets), not incidental.
+Dependency direction: `core` -> `tokens`; `base-ui` -> `tokens` (peer), `core` (at build time). `cli` orchestrates, owns no styles. Public-API and token-contract changes are deliberate, versioned events (Changesets), not incidental.
 
 ## Before You Start
 

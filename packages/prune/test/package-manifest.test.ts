@@ -128,17 +128,17 @@ describe('AC-nextjs-used-atoms-12: the export map, the peers and the version gro
     expect(isAtLeast(range, '15.5.0')).toBe(false)
   })
 
-  // The package is publishable and joins the tokens/core fixed group, since it calls core's reader
-  // and a version skew would make Vite and Next.js read the same code differently.
-  it('is publishable: not private, off the Changesets ignore list, in the tokens and core fixed group', () => {
+  // The package becomes publishable, and joins the tokens/core fixed group, in the release that
+  // ships the build check its trimming relies on.
+  it('is not published yet: private, ignored by Changesets and in no fixed group', () => {
     const config = readJson<{ fixed: string[][]; ignore: string[] }>(
       path.join(REPO_ROOT, '.changeset/config.json'),
     )
-    expect(manifest.private).toBeUndefined()
-    expect(config.ignore).not.toContain(manifest.name)
-    expect(config.fixed).toContainEqual(['@navecss/tokens', '@navecss/core', manifest.name])
-    // Control: the other package that stays unpublished is still on the list.
-    expect(config.ignore).toContain('@navecss/cli')
+    expect(manifest.private).toBe(true)
+    expect(config.ignore).toContain(manifest.name)
+    expect(config.fixed.flat()).not.toContain(manifest.name)
+    // Control: the group the package will join is there, holding tokens and core.
+    expect(config.fixed).toContainEqual(['@navecss/tokens', '@navecss/core'])
   })
 })
 
@@ -181,13 +181,13 @@ describe('the package check and the words npm shows', () => {
     expect(fingerprintOf(paragraph)).toEqual({ bytes: 221, sha256: '164a9f39337b5f89' })
   })
 
-  it('is publishable, so the README no longer says under Installation that it is not on npm yet', () => {
+  it('while the package is private, the README says under Installation that it is not on npm yet', () => {
     const readme = readFileSync(path.join(PACKAGE_DIR, 'README.md'), 'utf8')
     const installation = readme.slice(readme.indexOf('## Installation'), readme.indexOf('```sh'))
-    // Control: the section is there.
+    // Control: the section is there, and the manifest is private.
     expect(installation).toMatch(/^## Installation/u)
-    expect(manifest.private).toBeUndefined()
-    expect(installation).not.toMatch(/\bnot on npm yet\b/u)
+    expect(manifest.private).toBe(true)
+    expect(installation).toMatch(/\bnot on npm yet\b/u)
   })
 
   it('has the description npm shows, by its size and digest', () => {

@@ -325,8 +325,8 @@ Every custom property Nave declares is in the stylesheet you already installed, 
 ## Setting up `@nave`
 
 On Vite, use the Vite plugin: it is the one route this package teaches for Vite, and for Astro,
-which builds with Vite ([Astro](#astro) has its config). On Next.js, use
-[`@navecss/prune`](https://github.com/navecss/navecss/tree/main/packages/prune#readme) to ship only the atoms the build can read a use for, or the PostCSS plugin to keep every atom. On webpack, or any other pipeline that runs PostCSS plugins, use the PostCSS plugin. A host
+which builds with Vite ([Astro](#astro) has its config). On
+Next.js, webpack, or any other pipeline that runs PostCSS plugins, use the PostCSS plugin. A host
 that runs Lightning CSS directly uses [the Lightning CSS adapter](#lightning-css-adapter-setup),
 and a project with no bundler uses [`navecss-core expand`](#navecss-core-expand).
 
@@ -625,7 +625,9 @@ Nave class and no `@nave` directive. A backend whose scripts call `cx()`, or who
 gets no warning, and the classes in its templates have no rule all the same. List the atoms your
 templates use in `keep`, or, if they are many, ship every atom (below).
 
-A stack with no bundler, webpack, or Next.js on `@navecss/core/postcss` ships every atom; on Next.js, [`@navecss/prune`](https://github.com/navecss/navecss/tree/main/packages/prune#readme) ships only the atoms its build can read a use for. The Lightning CSS adapter reads no `cx()` call either and leaves every atom in the layer, and so does a page that links the standalone stylesheet.
+The PostCSS plugin and the Lightning CSS adapter read no `cx()` call and leave every atom in the
+layer, on Next.js and webpack alike; so does a page with no bundler, which links the standalone
+stylesheet.
 
 A server build leaves packages in `node_modules` external by default, so it does not read their
 code. For such a package that depends on `@navecss/core`, the build warns, naming it, unless it is
@@ -802,8 +804,6 @@ module.exports = {
 If you are using only `cx()` or tokens, you do not need to install it.
 
 #### Next.js
-
-To ship only the atoms the build can read a use for, use [`@navecss/prune`](https://github.com/navecss/navecss/tree/main/packages/prune#readme) in place of this plugin. The setup below keeps every atom.
 
 Next.js reads a PostCSS plugin by its package name, so give it the name as a key and do not
 call `navePlugin()`:
@@ -1133,7 +1133,3 @@ Consumers of `@navecss/tokens` alone get no guide: it ships only in this package
 | `@navecss/core/postcss`      | PostCSS plugin — `navePlugin()`                                                                                   |
 | `@navecss/core/check`        | The survival check as a function — `check({ source })`                                                            |
 | `@navecss/core/collect`      | Reads which atoms a module uses and trims the atom layer to them, for build tools; not meant for application code |
-
-This package is not affiliated with, endorsed by or sponsored by Vercel or the Next.js project.
-
-Vercel, the Vercel design, Next.js and related marks, designs and logos are trademarks or registered trademarks of Vercel, Inc. or its affiliates in the US and other countries.

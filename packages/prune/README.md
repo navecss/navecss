@@ -4,6 +4,8 @@ NaveCSS atom pruning for Next.js: a PostCSS plugin and a `next.config` wrapper t
 
 ## Installation
 
+This package is not on npm yet.
+
 ```sh
 npm install @navecss/core @navecss/prune
 ```

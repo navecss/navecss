@@ -1,5 +1,0 @@
----
-'@navecss/prune': minor
----
-
-New package: `@navecss/prune` ships only the atoms a Next.js build can read a use for, on Next.js 16.2 or later with the App Router or the Pages Router, on Turbopack or webpack. Put `'@navecss/prune/postcss': {}` in your PostCSS config in place of `'@navecss/core/postcss'`, and wrap your Next.js config in `withNave()`. The PostCSS plugin expands `@nave` as `@navecss/core/postcss` does. It reads the `cx()` calls in every module your entry files import, dependencies included, and keeps in Nave's atom layer the atoms those calls name, the atom of each Nave class written as text, and the atoms in `keep` and `keepFor`, and `srOnlyFocusable` whenever `srOnly` is kept. A `cx()` call whose atoms the build cannot read, or an import it cannot resolve, fails `next build`, which lists every such use once, then says how to fix them. `next dev` serves the same atoms and prints the same list in its terminal, not in the browser. The options `keep`, `keepFor`, `cxModules`, `extend` and `onUnknown` go in `withNave()`. `@navecss/core/postcss` is unchanged and still ships every atom.

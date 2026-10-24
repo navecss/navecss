@@ -63,7 +63,6 @@ without claiming conformance, certification or endorsement.
 | [`@navecss/stylelint-config`](packages/stylelint-config#readme) | `@nave` known to stylelint, `var()`-or-keyword values on listed properties, an `outline: none` / `outline: 0` check, declared `--nave-*` names           |
 | [`@navecss/eslint-plugin`](packages/eslint-plugin#readme)       | A literal class in `className` unless declared, or a literal value on a tokenized `style` property, reported                                             |
 | [`@navecss/base-ui`](packages/base-ui#readme)                   | Base UI's components wrapped and styled with Nave's tokens: the same parts, props and behaviour, plus one stylesheet and `variant` and `size` on buttons |
-| [`@navecss/prune`](packages/prune#readme)                       | Next.js: a PostCSS plugin and a `next.config` wrapper that ship only the atoms the build can read a use for                                              |
 
 ## Who this is for
 
@@ -95,7 +94,7 @@ no resolver at all: the page links
 **A build step that resolves `@nave`.** On Vite that is the plugin below, and it
 is the one route this page teaches; on a pipeline that runs PostCSS plugins and
 is not Vite, [the PostCSS plugin](packages/core/README.md#postcss-plugin-setup)
-does the same; on Next.js, [`@navecss/prune`](packages/prune#readme) does that and ships only the atoms its build can read a use for; a host that runs Lightning CSS directly uses
+does the same; a host that runs Lightning CSS directly uses
 [the Lightning CSS adapter](packages/core/README.md#lightning-css-adapter-setup),
 and a project with no build tool at all uses
 [`navecss-core expand`](#without-a-bundler). Either way `@nave` is resolved at
@@ -752,7 +751,7 @@ accessibility audit, this is the part you can act on.
 Nave is at 0.x. Before 1.0, a breaking change ships in a minor release (0.1 to
 0.2) and its release notes say what breaks; a patch release carries fixes. Pin
 an exact version if you need nothing to move, and read the release notes before
-you upgrade. `@navecss/core`, `@navecss/tokens` and `@navecss/prune` are released together, always
+you upgrade. `@navecss/core` and `@navecss/tokens` are released together, always
 at the same version number, so upgrade them together. `@navecss/base-ui` versions
 on its own: a change to how a component looks is a minor release, and so, before
 1.0, is a breaking one.
@@ -782,7 +781,3 @@ MIT © Nave Contributors
 The MIT licence covers the code. The "Nave" and "NaveCSS" names and the Nave mark are trademarks of
 the project and are not covered by it: see [TRADEMARKS.md](./TRADEMARKS.md). Short version: yes, say
 you are built with NaveCSS and show the mark unmodified; no, do not make it your own logo.
-
-NaveCSS is not affiliated with, endorsed by or sponsored by Vercel or the Next.js project.
-
-Vercel, the Vercel design, Next.js and related marks, designs and logos are trademarks or registered trademarks of Vercel, Inc. or its affiliates in the US and other countries.
