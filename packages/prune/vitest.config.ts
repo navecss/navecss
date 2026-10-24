@@ -24,7 +24,10 @@ export default defineConfig({
     // A V8 garbage-collector crash in Node 24's baseline compiler (nodejs/node#62393) can kill a
     // test worker with SIGSEGV. Remove this once the pinned Node carries the fix.
     execArgv: ['--no-sparkplug'],
-    testTimeout: 20_000,
+    // A row here builds or reads a whole app: 24.4 s in a forced `ci:check` at a load of 10 to 20,
+    // against the 20 s it had. No row asserts how long it takes, so the budget only has to outlast a
+    // loaded machine; a hang is still bounded by the job's own timeout.
+    testTimeout: 240_000,
     coverage: {
       // Measure and report only — no thresholds are configured, and none should be added here.
       enabled: true,
