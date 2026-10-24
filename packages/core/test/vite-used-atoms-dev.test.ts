@@ -1652,14 +1652,15 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
             await new Promise((resolve) => setTimeout(resolve, 300))
         },
       }
-      const server = await startDev(devConfig(app.root, [slow, navePlugin()]))
+      const server = await startDev(
+        devConfig(app.root, [slow, navePlugin()], { preTransformRequests: false }),
+      )
       try {
         // Vite's wait for the requests of the first crawl returns at once once the crawl has
-        // ended, and it ends once: it is stood in as settled, so only the read ahead can make the
-        // row green.
+        // ended, and it ends once, so it is stood in as settled; and the server transforms no
+        // import ahead of a request for it. Only main.ts has been requested when the stylesheet
+        // is: the module is read by the read ahead or by nothing.
         server.environments.client.waitForRequestsIdle = () => Promise.resolve()
-        // Only main.ts has been requested when the stylesheet is: the module is read by the
-        // read ahead or by nothing.
         await server.transformRequest('/src/main.ts')
         const css = await server.transformRequest('/src/app.css')
         const served: unknown = JSON.parse(
@@ -1722,10 +1723,18 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
           await server.transformRequest('/src/card.module.css')
           return true
         }
-        const isAnswered = await Promise.race([
-          hasAnswered(),
-          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 15_000)),
-        ])
+        let timer: ReturnType<typeof setTimeout> | undefined
+        let isAnswered: boolean
+        try {
+          isAnswered = await Promise.race([
+            hasAnswered(),
+            new Promise<boolean>((resolve) => {
+              timer = setTimeout(() => resolve(false), 15_000)
+            }),
+          ])
+        } finally {
+          clearTimeout(timer)
+        }
 
         expect(isAnswered).toBe(true)
       } finally {

@@ -230,7 +230,8 @@ export async function serveStylesheet(
   const isPossible = css.includes('\\') || /layer/i.test(css)
   if (!isPossible || !inspectAtomicLayer(css).hasLayer) return undefined
   const dev = environment as unknown as DevEnvironmentLike
-  // A CSS Module is not held: the read ahead requests CSS Modules, so a held one would wait on its own transform.
+  // A CSS Module is not held: the read ahead requests CSS Modules, so a held one would wait on its
+  // own transform.
   if (environment.config.consumer === 'client' && !isCssModuleId(id)) {
     await devServing.hold(dev, id)
   }

@@ -39,9 +39,10 @@ export async function transformQuietly(
 
 /**
  * Whether the read of `module` ends with its own transform. A CSS Module is read for its class
- * map, and what it imports is the client and the files its stylesheet depends on (a module it
- * composes from, a partial it imports): no page runs them, and the build never reads them on their
- * own, so a read that followed them would ship atoms the build does not.
+ * map, and what it imports is Vite's client, which the page loads on its own, and the files its
+ * stylesheet depends on (a module it composes from, a partial it imports), which no page runs and
+ * the build never reads on their own: a read that followed them would ship atoms the build does
+ * not.
  */
 export function isEndOfRead(module: GraphModuleLike): boolean {
   return module.id !== null && isCssModuleId(module.id)

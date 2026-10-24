@@ -83,7 +83,13 @@ function cssModuleRecord(
   try {
     program = ctx.parse(code)
   } catch {
-    return unreadableRecord(context, { code: '', id, pkg }, CLASS_MAP_NOT_PARSED)
+    const unreadable = unreadableRecord(context, { code: '', id, pkg }, CLASS_MAP_NOT_PARSED)
+    // `keepFor` stands in for reading a package's calls, not for a class map: the problem is kept.
+    return {
+      ...unreadable,
+      problems: [...unreadable.problems, ...unreadable.suppressed],
+      suppressed: [],
+    }
   }
   const strings = isNode(program) ? exportedStrings(program) : []
   // One class list to a line, so a name ending one list does not run into the next.

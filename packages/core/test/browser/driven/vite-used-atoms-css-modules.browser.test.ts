@@ -160,25 +160,28 @@ describe.each(LEGS)(
       )
       try {
         const page = await browser.newPage()
-        await page.goto(url)
-        const before = await computedOf(page, 3)
-        expect(before[0]!.display).toBe('flex')
-        expect(before[0]!.flexDirection).toBe('row')
-        edit(
-          server,
-          path.join(app.root, 'src/card.module.css'),
-          cssModuleFiles()['src/card.module.css']!.replace(
-            '.box { composes: nave-flex from global; }',
-            '.box { composes: nave-flex nave-flex-col from global; }',
-          ),
-        )
-        // The edit reloads the page: the module's importer does not accept the update.
-        await until(
-          page,
-          async () => (await directionOf(page)) === 'column',
-          'the column direction',
-        )
-        await page.close()
+        try {
+          await page.goto(url)
+          const before = await computedOf(page, 3)
+          expect(before[0]!.display).toBe('flex')
+          expect(before[0]!.flexDirection).toBe('row')
+          edit(
+            server,
+            path.join(app.root, 'src/card.module.css'),
+            cssModuleFiles()['src/card.module.css']!.replace(
+              '.box { composes: nave-flex from global; }',
+              '.box { composes: nave-flex nave-flex-col from global; }',
+            ),
+          )
+          // The edit reloads the page: the module's importer does not accept the update.
+          await until(
+            page,
+            async () => (await directionOf(page)) === 'column',
+            'the column direction',
+          )
+        } finally {
+          await page.close()
+        }
       } finally {
         await stopDev(server)
         app.dispose()
