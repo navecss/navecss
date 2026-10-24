@@ -160,6 +160,16 @@ function syncThroughAliases(
 }
 
 /**
+ * The path without a query or fragment, which the resolver keeps on a specifier written with one
+ * (`./ui?v=1`) and no file on disk has.
+ */
+function withoutQuery(file: string): string {
+  const base = file.lastIndexOf('/') + 1
+  const mark = file.slice(base).search(/[?#]/u)
+  return mark === -1 ? file : file.slice(0, base + mark)
+}
+
+/**
  * Resolves the specifier with every resolver of the module system, each under its condition set.
  */
 function resolveAcross(
@@ -180,8 +190,9 @@ function resolveAcross(
     const found = syncThroughAliases(resolver.factory, directory, aliases, specifier)
     if (found.builtin) isBuiltin = true
     else if (found.path !== undefined) {
-      files.add(found.path)
-      if (resolver.isInMode) filesInMode.add(found.path)
+      const file = withoutQuery(found.path)
+      files.add(file)
+      if (resolver.isInMode) filesInMode.add(file)
     }
   }
   return { files: [...files], filesInMode: [...filesInMode], isBuiltin }
