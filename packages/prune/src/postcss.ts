@@ -14,15 +14,18 @@ import type { ExtendMap } from './extend.ts'
 import type { Handoff } from './handoff.ts'
 import type { DirectiveProblem } from './record.ts'
 
+import { reportInDev } from './dev-report.ts'
 import { corePluginFor, expandDirectives, hasNaveDirective } from './directive.ts'
 import { extendFileIn, loadExtend } from './extend.ts'
 import { readHandoff } from './handoff.ts'
 import { dependencyMessages } from './messages.ts'
+import { isDevelopmentRun } from './phase.ts'
 import { printEachRun, printOnce } from './print.ts'
 import { projectHandoff } from './project.ts'
 import { writeSheetRecord } from './record.ts'
 import { declarationRoot } from './root.ts'
 import { relativeTo } from './source-files.ts'
+import { BOTH_PLUGINS_DEV, directiveLine, LISTED_NAME } from './texts.ts'
 import { hasCorePlugin, trimAtomicLayer } from './trim.ts'
 
 const PLUGIN = 'postcss-nave-prune'
@@ -36,6 +39,10 @@ interface Finding {
 interface SheetExpansion {
   readonly hasDirective: boolean
   readonly problems: DirectiveProblem[]
+  /**
+   * The `@nave` lines that are not problems.
+   */
+  readonly warnings: DirectiveProblem[]
 }
 
 /**
@@ -47,19 +54,20 @@ function sheetPathIn(dir: string, result: Result): string {
 }
 
 /**
- * Prints a `@nave` problem once, placed in its stylesheet.
+ * Prints a `@nave` line once, placed in its stylesheet.
  */
 function sayFinding(file: string, finding: Finding): void {
   printOnce(
     `directive:${file}:${finding.line}:${finding.column}:${finding.text}`,
-    `${file}:${finding.line}:${finding.column}: ${finding.text}`,
+    directiveLine({ file, ...finding }),
   )
 }
 
 /**
- * Expands `@nave`. Every order warning is printed, whatever `onUnknown` says, and is never a
- * problem. A problem in a directive is printed under `'warn'` and returned to record otherwise
- * (under `'ignore'` core raises none).
+ * Expands `@nave`. Every order warning is a warning, whatever `onUnknown` says, and is never a
+ * problem. A problem in a directive is a warning under `'warn'` and a problem otherwise (under
+ * `'ignore'` core raises none). The warnings are returned to record, and printed here only in the
+ * development server: in a build the hook prints them.
  */
 async function expand(
   root: Root,
@@ -71,12 +79,16 @@ async function expand(
   const expansion = await expandDirectives(root, { plugin, from: result.opts.from })
   const file = sheetPathIn(handoff.dir, result)
   const problems: DirectiveProblem[] = []
-  for (const warning of expansion.orderWarnings) sayFinding(file, warning)
+  const warnings: DirectiveProblem[] = expansion.orderWarnings.map((warning) => ({
+    file,
+    ...warning,
+  }))
   for (const finding of expansion.findings) {
-    if (onUnknown === 'warn') sayFinding(file, finding)
+    if (onUnknown === 'warn') warnings.push({ file, ...finding })
     else problems.push({ file, ...finding })
   }
-  return { hasDirective: expansion.hasDirective, problems }
+  if (isDevelopmentRun(handoff)) for (const warning of warnings) sayFinding(file, warning)
+  return { hasDirective: expansion.hasDirective, problems, warnings }
 }
 
 /**
@@ -127,7 +139,7 @@ async function sheetPluginOf(
     }
   } catch (error) {
     const failure = `the extend option could not be used: ${String(error)}`
-    failures.push(`${PLUGIN} expanded @nave with Nave's own atoms only, because ${failure}`)
+    failures.push(`${LISTED_NAME} expanded @nave with Nave's own atoms only, because ${failure}`)
     const plugin = hasNaveDirective(root) ? corePluginFor(undefined, onUnknown) : undefined
     return { extend: undefined, failure, plugin }
   }
@@ -145,8 +157,8 @@ async function expandOrRecord(
   try {
     return await expand(root, result, input.handoff, input.plugin)
   } catch (error) {
-    failures.push(`${PLUGIN} could not expand @nave: ${String(error)}`)
-    return { hasDirective: hasNaveDirective(root), problems: [] }
+    failures.push(`${LISTED_NAME} could not expand @nave: ${String(error)}`)
+    return { hasDirective: hasNaveDirective(root), problems: [], warnings: [] }
   }
 }
 
@@ -182,10 +194,7 @@ function sayWrapperIsMissing(): void {
  * Says, once, that both Nave plugins are listed.
  */
 function sayBothPluginsAreListed(): void {
-  printOnce(
-    'both-plugins',
-    'Nave: both @navecss/prune/postcss and @navecss/core/postcss are in the PostCSS config. Remove @navecss/core/postcss: @navecss/prune/postcss expands @nave as well.',
-  )
+  printOnce('both-plugins', BOTH_PLUGINS_DEV)
 }
 
 /**
@@ -198,7 +207,7 @@ async function runWithHandoff(
   handoff: Handoff,
   entryOptions: object,
 ): Promise<void> {
-  if (hasCorePlugin(result)) sayBothPluginsAreListed()
+  if (hasCorePlugin(result) && isDevelopmentRun(handoff)) sayBothPluginsAreListed()
   const recorded: string[] = []
   const { extend, failure, plugin } = await sheetPluginOf(root, handoff, recorded)
   const expansionFailures: string[] = []
@@ -209,21 +218,23 @@ async function runWithHandoff(
     isOnDisk: result.opts.from !== undefined && existsSync(result.opts.from),
     hasDirective: expansion.hasDirective,
     problems: expansion.problems,
+    warnings: expansion.warnings,
     failures: [...recorded, ...expansionFailures],
   })
-  if (!inspectAtomicLayer(root.toString()).hasLayer) {
+  if (inspectAtomicLayer(root.toString()).hasLayer) {
+    trimAtomicLayer({
+      root,
+      result,
+      handoff,
+      entryOptions,
+      extend,
+      directiveProblems: expansion.problems,
+      blocked: failure,
+    })
+  } else {
     declareExtendFile(result, handoff)
-    return
   }
-  trimAtomicLayer({
-    root,
-    result,
-    handoff,
-    entryOptions,
-    extend,
-    directiveProblems: expansion.problems,
-    blocked: failure,
-  })
+  reportInDev(handoff)
 }
 
 /**
@@ -235,7 +246,7 @@ async function run(root: Root, result: Result, entryOptions: object): Promise<vo
     handoff = readHandoff()
   } catch (error) {
     printEachRun(
-      `Nave: ${PLUGIN} cannot read what withNave() handed it, so every atom ships and @nave is expanded without its options: ${String(error)}`,
+      `Nave: ${LISTED_NAME} cannot read what withNave() handed it, so every atom ships and @nave is expanded without its options: ${String(error)}`,
     )
     await expandWithoutOptions(root, result)
     return
@@ -261,7 +272,7 @@ export function prunePlugin(entryOptions: object = {}): Plugin {
       try {
         await run(root, result, entryOptions)
       } catch (error) {
-        printEachRun(`Nave: ${PLUGIN} stopped without trimming: ${String(error)}`)
+        printEachRun(`Nave: ${LISTED_NAME} stopped without trimming: ${String(error)}`)
       }
     },
   }

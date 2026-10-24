@@ -11,6 +11,8 @@ import { recordOf } from './helpers/project.ts'
 
 registerIsolation()
 
+const DEV = 'phase-development-server'
+
 /**
  * A stylesheet whose `display: flex` on line 3, column 3 overrides the block of `hideDesktopUp`.
  */
@@ -27,14 +29,14 @@ const BOTH = {
   file: 'app/globals.css',
 }
 
-describe('an order warning is printed by the plugin and is never a problem', () => {
+describe('in the development server an order warning is printed by the plugin and is never a problem', () => {
   it.each(['error', 'warn', 'ignore'] as const)(
     'under onUnknown %j it records no problem and prints the warning once, placed in its stylesheet',
     async (onUnknown) => {
       const project = makeProject({ 'app/page.tsx': PAGE_WITH_PROP })
       const printed = capturePrinted()
 
-      await runAtomic(project, [ORDER], { options: { onUnknown } })
+      await runAtomic(project, [ORDER], { options: { onUnknown }, phase: DEV })
 
       expect(recordOf(project).directiveProblems).toEqual([])
       const lines = printed().filter((line) => line.includes('comes after "hideDesktopUp"'))
@@ -49,7 +51,7 @@ describe('an order warning is printed by the plugin and is never a problem', () 
     const project = makeProject({ 'app/page.tsx': PAGE_WITH_PROP })
     const printed = capturePrinted()
 
-    await runAtomic(project, [BOTH], { options: { onUnknown: 'error' } })
+    await runAtomic(project, [BOTH], { options: { onUnknown: 'error' }, phase: DEV })
 
     const problems = recordOf(project).directiveProblems
     expect(problems.map((problem) => [problem.line, problem.column])).toEqual([[6, 3]])
@@ -61,7 +63,7 @@ describe('an order warning is printed by the plugin and is never a problem', () 
     const project = makeProject({ 'app/page.tsx': PAGE_WITH_PROP })
     const printed = capturePrinted()
 
-    await runAtomic(project, [BOTH], { options: { onUnknown: 'warn' } })
+    await runAtomic(project, [BOTH], { options: { onUnknown: 'warn' }, phase: DEV })
 
     expect(recordOf(project).directiveProblems).toEqual([])
     expect(printed().filter((line) => line.includes('interactve'))).toHaveLength(1)
@@ -77,7 +79,7 @@ describe('an order warning is framed where core frames it', () => {
     await runAtomic(
       project,
       [{ css: '.card {\n  @nave hideDesktopUp flex grid;\n}\n', file: 'app/globals.css' }],
-      { options: { onUnknown: 'warn' } },
+      { options: { onUnknown: 'warn' }, phase: DEV },
     )
 
     const lines = printed().filter((line) => line.includes(' comes after '))

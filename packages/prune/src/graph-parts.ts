@@ -10,9 +10,11 @@ import type { Edge } from './edges.ts'
 import type { Graph } from './graph-types.ts'
 import type { Place } from './lines.ts'
 
+import { emptyInputs } from './resolution-inputs.ts'
+
 const UNREAD_TEXT = 'the module could not be read, so the atoms it names would not ship: '
 const UNPARSED_REASON = 'it did not parse as JavaScript or TypeScript.'
-const UNRESOLVED_TEXT =
+export const UNRESOLVED_TEXT =
   'the build cannot resolve this import, so it cannot read the cx() calls behind it'
 // The sentences the Vite plugin's build-end check gives a module that reaches cx this way.
 const UNBOUND_CX_TEXT =
@@ -57,6 +59,23 @@ export function unboundCxProblem(
     construct: `${quote}${edge.specifier}${quote}`,
     text: UNBOUND_CX_TEXT,
     ...place,
+  }
+}
+
+/**
+ * The problem for a config the build cannot read, at the config's first character: the imports
+ * that depend on it cannot be told apart from the ones that are missing.
+ */
+export function configProblem(rel: string, reason: string): LocatedProblem {
+  return {
+    kind: 'unreadable',
+    offset: 0,
+    construct: '',
+    text: `the build cannot read this config, so it does not know where its paths and baseUrl send an import: ${reason}.`,
+    file: rel,
+    pkg: undefined,
+    line: 1,
+    column: 1,
   }
 }
 
@@ -114,7 +133,11 @@ export function emptyGraph(): Graph {
     files: new Map(),
     markdown: new Set(),
     directories: [],
+    inputs: emptyInputs(),
     stylesheets: new Set(),
     unreadStylesheets: new Set(),
+    edges: new Map(),
+    dynamicFiles: new Set(),
+    pagesDynamicPackages: new Set(),
   }
 }

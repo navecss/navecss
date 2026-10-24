@@ -25,12 +25,17 @@ export function packageNameOfSpecifier(specifier: string): string {
 
 /**
  * Reads `package.json` of the package that holds a file under `node_modules`, caching by directory.
+ * Each `package.json` it opens is added to `read`.
  */
-export function createPackageReader(naveNames: ReadonlySet<string>): (file: string) => PackageInfo {
+export function createPackageReader(
+  naveNames: ReadonlySet<string>,
+  read = new Set<string>(),
+): (file: string) => PackageInfo {
   const cache = new Map<string, PackageInfo>()
   const infoAt = (dir: string): PackageInfo => {
     const manifestFile = path.join(dir, 'package.json')
     if (!existsSync(manifestFile)) return NO_PACKAGE
+    read.add(manifestFile)
     try {
       const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as {
         dependencies?: Record<string, string>

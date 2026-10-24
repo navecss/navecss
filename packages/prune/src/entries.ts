@@ -54,6 +54,10 @@ export interface SelectedDirectory {
 export interface Entries {
   readonly files: string[]
   readonly directories: SelectedDirectory[]
+  /**
+   * The entries under `pages/` or `src/pages/`, which are in `files` too.
+   */
+  readonly pagesFiles: string[]
 }
 
 /**
@@ -117,7 +121,7 @@ function walk(
       glob: '**/*',
     })
   }
-  return { files, directories }
+  return { files, directories, pagesFiles: [] }
 }
 
 /**
@@ -130,6 +134,7 @@ function rootEntries(base: string): Entries {
     .toSorted((a, b) => a.localeCompare(b))
   const extensions = '{cjs,cts,js,jsx,mjs,mts,ts,tsx}'
   return {
+    pagesFiles: [],
     files: names.map((name) => path.join(base, name)),
     directories: [
       {
@@ -147,15 +152,23 @@ function rootEntries(base: string): Entries {
  */
 export function findEntries(dir: string): Entries {
   const parts: Entries[] = []
+  const pagesFiles: string[] = []
   for (const base of [dir, path.join(dir, 'src')]) {
+    const pages = walk(
+      path.join(base, 'pages'),
+      (name) => isSourceFile(name) || isMarkdownFile(name),
+      false,
+    )
+    pagesFiles.push(...pages.files)
     parts.push(
       rootEntries(base),
       walk(path.join(base, 'app'), (name) => isConventionFile(name, APP_CONVENTIONS), true),
-      walk(path.join(base, 'pages'), (name) => isSourceFile(name) || isMarkdownFile(name), false),
+      pages,
     )
   }
   return {
     files: parts.flatMap((part) => part.files),
     directories: parts.flatMap((part) => part.directories),
+    pagesFiles,
   }
 }
