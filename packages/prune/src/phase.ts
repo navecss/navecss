@@ -8,9 +8,8 @@ import type { Handoff } from './handoff.ts'
  * one. An object config is given no phase, and `NODE_ENV` cannot stand in for it, because
  * `next build --debug-prerender` runs with `NODE_ENV` set to `development`. `next dev` sets
  * `__NEXT_DEV_SERVER` in the environment of its server and of the workers that run PostCSS, on
- * Turbopack and on webpack, and a build sets it on neither. A server an app starts itself through
- * Next.js's programmatic API sets none, so an object config there is read as a build: the build
- * check still stops it, and the dev server prints no report.
+ * Turbopack and on webpack, and a build sets it on neither. So does a server an app starts itself
+ * with `next({ dev: true })`, which sets it in `prepare()`.
  */
 export function isDevelopmentRun(handoff: Pick<Handoff, 'phase'>): boolean {
   if (handoff.phase !== undefined) return handoff.phase === 'phase-development-server'

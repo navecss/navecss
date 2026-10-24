@@ -121,9 +121,15 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     const expected = [...new Set([...selected, ...matched])]
       .filter((directory) => directory === project.dir || isInside(project.dir, directory))
       .toSorted((a, b) => a.localeCompare(b))
-    const named = messagesOf(messages, 'dir-dependency')
-      .map((message) => path.resolve(message.dir as string))
-      .toSorted((a, b) => a.localeCompare(b))
+    // The project root is both a directory files were selected from and one a specifier could have
+    // matched in, so it is named once for each.
+    const named = [
+      ...new Set(
+        messagesOf(messages, 'dir-dependency').map((message) =>
+          path.resolve(message.dir as string),
+        ),
+      ),
+    ].toSorted((a, b) => a.localeCompare(b))
     expect(selected).toContain(path.join(project.dir, 'app'))
     // `@/components/Card` could have matched a file beside `Card.tsx`.
     expect(matched).toContain(path.join(project.dir, 'components'))

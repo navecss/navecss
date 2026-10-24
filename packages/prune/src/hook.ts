@@ -103,19 +103,35 @@ function unbundledPackages(record: PruneRecord, config: HookConfig): string[] {
 }
 
 /**
- * Prints the warnings the record asks for. The warning that the build read no use is for a build
- * that goes on to pass: beside a message that stops the build, it would offer a way back that is
- * not the remedy.
+ * Prints the warning that the build read no use, when the record says so. It is for a build that
+ * goes on to pass: beside a message that stops the build, it would offer a way back that is not the
+ * remedy.
  */
-function warn(record: PruneRecord, isStopping: boolean): void {
+function warnOfNoUse(record: PruneRecord): void {
   // eslint-disable-next-line no-console -- warnings go to the terminal running the build
-  if (!isStopping && record.readsNoUse) console.warn(READS_NO_USE)
+  if (record.readsNoUse) console.warn(READS_NO_USE)
+}
+
+/**
+ * Prints the other warnings the record asks for.
+ */
+function warn(record: PruneRecord): void {
   // eslint-disable-next-line no-console -- warnings go to the terminal running the build
   if (record.markdown.length > 0) console.warn(markdownWarning(record.markdown))
   for (const warning of record.directiveWarnings) {
     // eslint-disable-next-line no-console -- warnings go to the terminal running the build
     console.warn(directiveLine(warning))
   }
+}
+
+/**
+ * Prints the warnings, then the messages that stop the build. The warning that the build read no
+ * use comes first, and only when nothing stops the build.
+ */
+function conclude(record: PruneRecord, messages: readonly string[], count: number): void {
+  if (messages.length === 0) warnOfNoUse(record)
+  warn(record)
+  if (messages.length > 0) stop(messages, count)
 }
 
 /**
@@ -152,7 +168,6 @@ export async function checkBuild(
   const report = reportOf(record, options, dir)
   const unbundled = unbundledPackages(record, config).map((name) => pagesNotBundled(name))
   const messages = [...(report ? [report.text] : []), ...unbundled]
-  warn(record, messages.length > 0)
-  if (messages.length > 0) stop(messages, (report?.count ?? 0) + unbundled.length)
+  conclude(record, messages, (report?.count ?? 0) + unbundled.length)
   await Promise.resolve()
 }

@@ -43,21 +43,49 @@ function basesOf(configs: readonly ConfigFile[], definer: ConfigFile): string[] 
   return [...bases]
 }
 
+const CONFIG_DIR = /\$\{configDir\}/gu
+
 /**
- * The `paths` aliases the chain sets, with their targets made absolute.
+ * The directory of the config the project is built from, which `${configDir}` in a `paths` target
+ * stands for.
+ */
+function rootDirectoryOf(configs: readonly ConfigFile[], definer: ConfigFile): string {
+  return path.dirname((configs[0] ?? definer).file)
+}
+
+/**
+ * A `paths` target as absolute path patterns: the one `${configDir}` makes absolute, or the target
+ * relative to each of the `bases`.
+ */
+function absoluteTargets(target: string, bases: readonly string[], root: string): string[] {
+  const expanded = target.replaceAll(CONFIG_DIR, () => root)
+  return path.isAbsolute(expanded) ? [expanded] : bases.map((base) => path.resolve(base, expanded))
+}
+
+/**
+ * The `paths` aliases the chain sets, with their targets made absolute, and for each `baseUrl` the
+ * alias of every bare specifier to that directory, which the resolver tries before `node_modules`
+ * whether or not there is a `paths`.
  */
 export function pathAliasesOf(configs: readonly ConfigFile[]): PathAlias[] {
-  return configs.flatMap((definer) => {
+  const baseUrlAliases = configs.flatMap(({ file, config }) => {
+    const { baseUrl } = compilerOptionsOf(config)
+    if (typeof baseUrl !== 'string') return []
+    return [{ pattern: '*', targets: [path.resolve(path.dirname(file), baseUrl, '*')] }]
+  })
+  const pathsAliases = configs.flatMap((definer) => {
     const { paths } = compilerOptionsOf(definer.config)
     if (typeof paths !== 'object' || paths === null) return []
     const bases = basesOf(configs, definer)
+    const root = rootDirectoryOf(configs, definer)
     return Object.entries(paths).map(([pattern, targets]) => ({
       pattern,
       targets: (Array.isArray(targets) ? targets : [])
         .filter((target): target is string => typeof target === 'string')
-        .flatMap((target) => bases.map((base) => path.resolve(base, target))),
+        .flatMap((target) => absoluteTargets(target, bases, root)),
     }))
   })
+  return [...pathsAliases, ...baseUrlAliases]
 }
 
 /**

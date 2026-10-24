@@ -222,8 +222,8 @@ export function noteResolution(
   const isRelative = specifier.startsWith('.') || path.isAbsolute(specifier)
   if (isRelative) {
     noteRelative(inputs, importerDirectory, specifier)
-  } else if (!specifier.startsWith('#') && !isBuiltin(specifier)) {
-    noteLinks(inputs, importerDirectory, specifier)
+  } else if (!isBuiltin(specifier)) {
+    if (!specifier.startsWith('#')) noteLinks(inputs, importerDirectory, specifier)
     if (!isDependencyPath(importerDirectory)) noteAliasTargets(inputs, aliases, specifier)
   }
   for (const file of resolved) {
