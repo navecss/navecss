@@ -5,12 +5,12 @@
  */
 import type { DevEnvironmentLike, GraphModuleLike } from './vite-types.ts'
 
-import { isUnreadStylesheet } from './vite-css-id.ts'
+import { isCssModuleId, isStylesheetId, isUnreadStylesheet } from './vite-css-id.ts'
 
 /**
- * Every module of the environment's graph that no module imports, a stylesheet apart (a CSS
- * Module is read, so it is not apart): the entry scripts of every page the browser has asked for,
- * whether or not the stylesheet's own graph holds them.
+ * Every module of the environment's graph that no module imports, a stylesheet apart: the entry
+ * scripts of every page the browser has asked for, whether or not the stylesheet's own graph
+ * holds them.
  */
 export function graphRoots(
   environment: Pick<DevEnvironmentLike, 'moduleGraph'>,
@@ -18,8 +18,7 @@ export function graphRoots(
   return environment.moduleGraph.idToModuleMap
     .values()
     .filter(
-      (module) =>
-        module.importers.size === 0 && (module.id === null || !isUnreadStylesheet(module.id)),
+      (module) => module.importers.size === 0 && (module.id === null || !isStylesheetId(module.id)),
     )
     .toArray()
 }
@@ -39,9 +38,20 @@ export async function transformQuietly(
 }
 
 /**
+ * Whether the read of `module` ends with its own transform. A CSS Module is read for its class
+ * map, and what it imports is the client and the files its stylesheet depends on (a module it
+ * composes from, a partial it imports): no page runs them, and the build never reads them on their
+ * own, so a read that followed them would ship atoms the build does not.
+ */
+export function isEndOfRead(module: GraphModuleLike): boolean {
+  return module.id !== null && isCssModuleId(module.id)
+}
+
+/**
  * Transforms every module reachable from `roots`, a level at a time. A stylesheet is never
  * requested (the one being served is mid-transform, and requesting it would wait on itself), a CSS
- * Module apart: it is read for the Nave classes it composes, and is never held.
+ * Module apart: it is transformed for the Nave classes it composes, is never held, and its imports
+ * are not followed.
  */
 export async function transformReachable(
   environment: Pick<DevEnvironmentLike, 'transformRequest'>,
@@ -55,6 +65,7 @@ export async function transformReachable(
       level.map(async (module) => {
         if (module.id !== null && isUnreadStylesheet(module.id)) return
         await transformQuietly(environment, module.url)
+        if (isEndOfRead(module)) return
         for (const imported of module.importedModules) {
           if (seen.has(imported)) continue
           seen.add(imported)

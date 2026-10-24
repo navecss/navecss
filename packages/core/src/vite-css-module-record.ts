@@ -4,7 +4,9 @@
  * resolved class lists (`export const box = "_box_x nave-flex"`, and the same lists as the values
  * of the default export, the only place a class that is no identifier, `my-box`, appears). Only
  * those string values are read. The module's stylesheet text is not: in the dev server Vite
- * inlines it as a string, and a selector in it (`:global(.nave-grid)`) is not a use.
+ * inlines it as a string, and a Nave class the stylesheet names only in a selector
+ * (`:global(.nave-grid)`) is not a use. Under `css.modules.exportGlobals: true`, Vite also writes
+ * that class into the class map, where it is read like any other value.
  */
 import type { AstNode } from './vite-ast.ts'
 import type { ModuleRecord } from './vite-state.ts'
@@ -13,7 +15,12 @@ import type { UsedContext } from './vite-used.ts'
 
 import { isNode, nodeAt, nodesAt } from './vite-ast.ts'
 import { isCssModuleId } from './vite-css-id.ts'
-import { NOT_PARSED, SOURCE_TYPES, textRecord, unreadableRecord } from './vite-unread-record.ts'
+import {
+  CLASS_MAP_NOT_PARSED,
+  SOURCE_TYPES,
+  textRecord,
+  unreadableRecord,
+} from './vite-unread-record.ts'
 
 /**
  * The string `node` is, when it is a string literal.
@@ -60,8 +67,11 @@ function exportedStrings(program: AstNode): string[] {
 
 /**
  * The record of the CSS Module `id`, whose JavaScript is `code`: the Nave classes its exported
- * class lists name, and no problem. A module that does not parse is recorded as one that could not
- * be read, as any other module is: it names an atom, and the atom would ship with no rule.
+ * class lists name, and no problem. A module whose JavaScript does not parse is recorded with no
+ * atoms and one problem, `CLASS_MAP_NOT_PARSED`, which fails the build as any module that could not
+ * be read does. Its text is not scanned for atoms instead: in the dev server it can hold the
+ * inlined stylesheet, whose selectors are not uses. Vite's own output always parses, so only a
+ * plugin that rewrites the module after Vite's CSS step can reach this.
  */
 function cssModuleRecord(
   context: UsedContext,
@@ -73,7 +83,7 @@ function cssModuleRecord(
   try {
     program = ctx.parse(code)
   } catch {
-    return unreadableRecord(context, { code, id, pkg }, NOT_PARSED)
+    return unreadableRecord(context, { code: '', id, pkg }, CLASS_MAP_NOT_PARSED)
   }
   const strings = isNode(program) ? exportedStrings(program) : []
   // One class list to a line, so a name ending one list does not run into the next.

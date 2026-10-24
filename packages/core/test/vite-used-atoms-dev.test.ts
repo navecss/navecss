@@ -26,7 +26,7 @@ import {
 } from './helpers/used-atoms-app.ts'
 import { CARD_MODULE, cssModuleFiles } from './helpers/used-atoms-css-modules.ts'
 import { IMPORT } from './helpers/used-atoms-rows.ts'
-import { appConfig, devCss, startDev, stopDev } from './helpers/vite-app.ts'
+import { appConfig, devCss, startDev, stopDev, type Transformer } from './helpers/vite-app.ts'
 
 /**
  * The dev server's config. Its dependency cache is under `node_modules`, where Vite keeps it by
@@ -36,9 +36,10 @@ function devConfig(
   root: string,
   plugins: PluginOption[],
   server?: InlineConfig['server'],
+  transformer: Transformer = 'postcss',
 ): InlineConfig {
   return {
-    ...appConfig(root, 'postcss', plugins),
+    ...appConfig(root, transformer, plugins),
     cacheDir: path.join(root, 'node_modules', '.vite'),
     ...(server && { server }),
   }
@@ -1653,8 +1654,12 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
       }
       const server = await startDev(devConfig(app.root, [slow, navePlugin()]))
       try {
-        // Only main.ts has been requested when the stylesheet is: the module is read by the wait
-        // or by nothing.
+        // Vite's wait for the requests of the first crawl returns at once once the crawl has
+        // ended, and it ends once: it is stood in as settled, so only the read ahead can make the
+        // row green.
+        server.environments.client.waitForRequestsIdle = () => Promise.resolve()
+        // Only main.ts has been requested when the stylesheet is: the module is read by the
+        // read ahead or by nothing.
         await server.transformRequest('/src/main.ts')
         const css = await server.transformRequest('/src/app.css')
         const served: unknown = JSON.parse(
@@ -1747,6 +1752,37 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
         server.watcher.emit('change', file)
 
         // The update names the module that accepts the CSS Module's, `main.ts`.
+        expect(await updates.isSent(['/src/main.ts', '/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        expect(atomLayerAtoms(await stylesheetServedAgain(server, app.root))).toEqual(
+          atoms(...MAIN_ATOMS, 'flexCol'),
+        )
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('reads a module an edit makes a CSS Module compose from through the CSS Module only, not on its own', async () => {
+    const main = `${cssModuleFiles()['src/main.ts']}import.meta.hot?.accept('./card.module.css', () => {})\n`
+    const app = makeUsedApp(
+      appFiles({
+        ...cssModuleFiles(),
+        'src/main.ts': main,
+        'src/extra.module.css':
+          '.x { composes: nave-flex-col from global; }\n.y { composes: nave-block from global; }\n',
+      }),
+    )
+    try {
+      const server = await startDev(devConfig(app.root, [navePlugin()], NO_WATCHER, 'lightningcss'))
+      try {
+        expect(atomLayerAtoms(await servedLayer(server, app.root))).toEqual(MAIN_ATOMS)
+        const updates = recordUpdates(server)
+        const file = path.join(app.root, 'src/card.module.css')
+        writeFileSync(file, `${CARD_MODULE}.extra { composes: x from './extra.module.css'; }\n`)
+        server.watcher.emit('change', file)
+
         expect(await updates.isSent(['/src/main.ts', '/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
         expect(atomLayerAtoms(await stylesheetServedAgain(server, app.root))).toEqual(
           atoms(...MAIN_ATOMS, 'flexCol'),

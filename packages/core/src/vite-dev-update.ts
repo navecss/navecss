@@ -7,7 +7,7 @@ import type { GraphModuleLike, HotUpdateContext, HotUpdateOptions } from './vite
 import type { UsedContext } from './vite-used.ts'
 
 import { isUnreadStylesheet } from './vite-css-id.ts'
-import { transformQuietly, transformReachable } from './vite-dev-read.ts'
+import { isEndOfRead, transformQuietly, transformReachable } from './vite-dev-read.ts'
 import { noteReloadSent } from './vite-dev-reloads.ts'
 
 type UpdateEnvironment = HotUpdateContext['environment']
@@ -43,6 +43,7 @@ async function readAhead(
       const known = new Set(module.importedModules)
       environment.moduleGraph.invalidateModule(module as never)
       await transformQuietly(reader, module.url)
+      if (isEndOfRead(module)) continue
       const added = [...module.importedModules.difference(known)]
       await transformReachable(reader, added)
     }

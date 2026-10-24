@@ -11,6 +11,7 @@ import vuePlugin from '@vitejs/plugin-vue'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createLogger } from 'vite'
 import { describe, expect, it } from 'vitest'
 
 import { atomsWrittenIn } from '../src/vite-literal-classes.ts'
@@ -50,19 +51,27 @@ interface Leg {
 
 /**
  * The atomic layer's atoms of the stylesheet the dev server serves for `src/app.css`, with the
- * page and its scripts requested as a browser would request them. `config` is merged over the
- * fixture's own.
+ * page and its scripts requested as a browser would request them, and every line the server
+ * logged. `config` is merged over the fixture's own.
  */
-async function devLayerAtoms(
+async function devLayerRead(
   root: string,
   leg: Leg,
   plugins: PluginOption[] = [],
   config: InlineConfig = {},
-): Promise<string[]> {
+): Promise<{ atoms: string[]; logged: string[] }> {
+  const logged: string[] = []
+  const customLogger = createLogger('silent')
+  for (const level of ['error', 'info', 'warn', 'warnOnce'] as const) {
+    customLogger[level] = (message) => {
+      logged.push(message)
+    }
+  }
   const server = await startDev(
     {
       ...appConfig(root, leg.transformer, [...plugins, navePlugin()], config),
       cacheDir: path.join(root, 'node_modules', '.vite'),
+      customLogger,
       optimizeDeps: { noDiscovery: true },
     },
     leg.api,
@@ -76,10 +85,23 @@ async function devLayerAtoms(
     const css = Object.entries(served).find(([url]) => url.startsWith('/src/app.css'))?.[1]
     if (css === undefined)
       throw new Error(`no stylesheet was served: ${Object.keys(served).join(', ')}`)
-    return atomLayerAtoms(css)
+    return { atoms: atomLayerAtoms(css), logged }
   } finally {
     await stopDev(server)
   }
+}
+
+/**
+ * The atomic layer's atoms of the stylesheet the dev server serves for `src/app.css`.
+ */
+async function devLayerAtoms(
+  root: string,
+  leg: Leg,
+  plugins: PluginOption[] = [],
+  config: InlineConfig = {},
+): Promise<string[]> {
+  const { atoms: read } = await devLayerRead(root, leg, plugins, config)
+  return read
 }
 
 /**
@@ -124,9 +146,29 @@ describe.each(LEGS)(
       )
       try {
         const built = await builtAtoms(app, leg)
+        const dev = await devLayerRead(app.root, leg)
 
         expect(built.atoms).toEqual(MAIN_ATOMS)
         expect(pluginWarnings(built.warnings)).toEqual([])
+        expect(dev.atoms).toEqual(MAIN_ATOMS)
+        expect(pluginWarnings(dev.logged)).toEqual([])
+      } finally {
+        app.dispose()
+      }
+    }, 60_000)
+
+    it('does not read a module a CSS Module composes from on its own, in the build or in the dev server', async () => {
+      const app = makeUsedApp(
+        appFiles({
+          ...cssModuleFiles(),
+          'src/base.module.css':
+            '.base { composes: nave-inline-flex from global; }\n.unused { composes: nave-hidden from global; }\n',
+        }),
+      )
+      try {
+        const built = await builtAtoms(app, leg)
+
+        expect(built.atoms).toEqual(MAIN_ATOMS)
         expect(await devLayerAtoms(app.root, leg)).toEqual(MAIN_ATOMS)
       } finally {
         app.dispose()
@@ -298,5 +340,16 @@ describe('AC-used-atoms-61 — the README and the changeset', () => {
     expect(prose).toContain('CSS Module')
     expect(prose).toContain('global')
     expect(prose).not.toMatch(ACCESSIBILITY)
+  })
+
+  it('names the exportGlobals exception wherever the changeset says a global selector is not a use', () => {
+    const prose = shippedChangesetProse(
+      CHANGESET.path,
+      path.join(CORE_ROOT, 'CHANGELOG.md'),
+      CHANGESET.entryStart,
+    )
+
+    expect(prose).toContain(':global(')
+    expect(prose).toContain('exportGlobals')
   })
 })
