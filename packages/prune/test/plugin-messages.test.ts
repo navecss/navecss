@@ -135,7 +135,10 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     const { messages } = await runAtomic(project)
     const named = dependencyFiles(messages)
     expect(named.length).toBeGreaterThan(0)
-    for (const file of named) expect(statSync(file).isFile()).toBe(true)
+    // A declared file that is not there yet (a `package.json` that could be created) is no directory.
+    const existing = named.filter((file) => existsSync(file))
+    expect(existing.length).toBeGreaterThan(0)
+    for (const file of existing) expect(statSync(file).isFile()).toBe(true)
     // Control: directories exist among the declarations, only under the other message type.
     expect(messagesOf(messages, 'dir-dependency').length).toBeGreaterThan(0)
   })

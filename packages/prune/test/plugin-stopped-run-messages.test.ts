@@ -56,9 +56,13 @@ describe('a run over the atom layer that stops after reading the code', () => {
     const printed = capturePrinted()
     const result = await runAtomic(project, [], { options: {} })
     expect(printed().some((line) => line.includes('stopped without trimming'))).toBe(true)
+    // `app/package.json` and `components/package.json` are not there: creating one would change
+    // which `package.json` governs the files below it.
     expect(declared(project, result.messages, 'dependency')).toEqual([
+      'app/package.json',
       'app/page.tsx',
       'components/Card.tsx',
+      'components/package.json',
       'next.config.ts',
       'package.json',
       'postcss.config.mjs',

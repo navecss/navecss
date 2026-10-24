@@ -107,7 +107,9 @@ describe('the project directory, when next was started in a directory above the 
     const top = topDirectory()
     const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
     const result = await runIn(project.dir, project, loadedIn(top))
+    // `app/package.json` is not there: creating it would change which `package.json` governs the page.
     expect(declaredFiles(result, project)).toEqual([
+      'app/package.json',
       'app/page.tsx',
       'next.config.ts',
       'package.json',
