@@ -25,7 +25,6 @@ import {
   listenDev,
   recordFrames,
   until,
-  untilQuietly,
   warningLogger,
 } from '../../helpers/vite-browser.ts'
 
@@ -520,7 +519,7 @@ async function scriptClassAfterGrowth(
       await page.evaluate(() => {
         document.documentElement.dataset.mark = '1'
       })
-      await untilQuietly(page, () => hasRuleNow(page, 'nave-flex'), 'the rule for nave-flex')
+      await until(page, () => hasRuleNow(page, 'nave-flex'), 'the rule for nave-flex')
       const isSamePage = await page.evaluate(() => document.documentElement.dataset.mark === '1')
       const isRuled = await hasRuleNow(page, 'nave-flex')
       await page.close()
@@ -552,11 +551,10 @@ describe('AC-used-atoms-40 — what the first stylesheet response has read', () 
         const page = await browser.newPage()
         await recordFrames(page, ['nave-block'])
         await page.goto(url)
-        await untilQuietly(
+        await until(
           page,
           async () => Object.hasOwn(await framesOf(page), 'nave-block'),
           'the lazy module’s element',
-          6000,
         )
 
         const frames = await framesOf(page)

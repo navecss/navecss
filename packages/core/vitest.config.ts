@@ -16,8 +16,9 @@ export default defineConfig({
     env: { TURBOPACK: '' },
     // A test that builds a real Vite app, the used-atoms ones most of all, takes well under a
     // second alone but queues behind other runs when several share a loaded machine, where one
-    // took longer than 20 s. No row asserts how long it takes, so the budget only has to outlast
-    // a loaded machine; a hang is still bounded by the job's own timeout.
+    // took longer than 20 s. The budget only has to outlast a loaded machine; a hang is still
+    // bounded by the job's own timeout. The rows that assert how time grows keep their own
+    // assertions, which this budget does not touch.
     testTimeout: 240_000,
     include: ['test/**/*.test.ts'],
     // test/browser/**/*.browser.test.ts is this same glob's problem too

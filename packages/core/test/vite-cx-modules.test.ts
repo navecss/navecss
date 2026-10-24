@@ -636,13 +636,12 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
 
   /**
    * How much longer one call of `large` takes than one call of `small`, from the fastest of many
-   * short runs of each, taken in turn. Load only ever adds time, so the fastest run is the one that
-   * says what the pattern costs, and a run of about half a millisecond is short beside the time a
-   * busy machine lets a process run between pauses, so most runs see none. Both sizes run the same
-   * number of calls, set from the fastest of several single calls, and are taken in turn so the
-   * same load and the same compiled code reach both: a run length set by one timed call, or the
-   * two sizes timed one after the other, gives them different numbers of pauses, and the ratio
-   * then measures the machine.
+   * short runs of each, taken in turn. Whatever else the machine is doing (a cold cache, a changed
+   * clock speed) only ever adds to a run, so the fastest run is the one that says what the pattern
+   * costs. Both sizes run the same number of calls, set from the fastest of several single calls,
+   * and are taken in turn so the same load and the same compiled code reach both: a run length set
+   * by one timed call, or the two sizes timed one after the other, puts them under different
+   * conditions, and the ratio then measures the machine.
    */
   function growthOf(small: () => void, large: () => void): number {
     let once = Infinity

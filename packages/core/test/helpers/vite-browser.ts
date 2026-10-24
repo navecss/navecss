@@ -101,7 +101,7 @@ export async function previewBuild(
 }
 
 /**
- * Starts Chromium. A page it opens waits for what a test asks of it (a navigation, a selector)
+ * Starts Chromium. A page it opens with `newPage()` (the only way these tests open one) waits for what a test asks of it (a navigation, a selector)
  * for as long as the test itself may run, and not for Playwright's own 30 s: the test's timeout is
  * the one deadline, and on a machine running other suites a navigation took longer than 30 s.
  */

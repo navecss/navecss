@@ -15,16 +15,18 @@ import { appConfig, VITE_APIS } from './helpers/vite-app.ts'
 
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 
-// What the row may take (the timeout it is declared with), and how long an edit waits to be heard
+// What the row may take (the timeout it is declared with), how long before that the row's own waits
+// give up so that the error names what never happened, and how long an edit waits to be heard
 // before it is written again.
 const ROW_TIMEOUT = 480_000
+const GIVE_UP_BEFORE_TIMEOUT = 30_000
 const REWRITE_AFTER = 10_000
 
 // Each Vite builds, rebuilds and writes a page's inline stylesheet by its own code, so this row
 // runs on each Vite measured. The watcher hears of an edit from the operating system, which on a
 // busy macOS machine tells it many seconds late and sometimes not at all, so the row writes an
-// edit again, to the same effect, until the build's output shows it, and has no deadline of its
-// own: the row's timeout only has to outlast a loaded machine.
+// edit again, to the same effect, until the build's output shows it. Its waits end only a little
+// before the row's timeout, which only has to outlast a loaded machine.
 describe.each(Object.entries(VITE_APIS))(
   'Vite %s: AC-used-atoms-27 - rebuilds in watch mode',
   (_version, api) => {
@@ -42,7 +44,7 @@ describe.each(Object.entries(VITE_APIS))(
       logger.warn = (message) => {
         warnings.push(message)
       }
-      const deadline = Date.now() + ROW_TIMEOUT
+      const deadline = Date.now() + ROW_TIMEOUT - GIVE_UP_BEFORE_TIMEOUT
       try {
         const config = {
           ...appConfig(app.root, 'postcss', [navePlugin()], {
@@ -60,6 +62,8 @@ describe.each(Object.entries(VITE_APIS))(
           switch (event.code) {
             case 'BUNDLE_START': {
               builds.started += 1
+              // A build that follows a failed one is a new try.
+              builds.failed = undefined
               break
             }
             case 'END': {
@@ -95,7 +99,6 @@ describe.each(Object.entries(VITE_APIS))(
         const isShownWithin = async (atoms: string[], ms: number): Promise<boolean> => {
           const end = Math.min(Date.now() + ms, deadline)
           while (Date.now() < end) {
-            if (builds.failed) throw builds.failed
             if (isShown(atoms) && builds.started === builds.ended) return true
             await wait(50)
           }
@@ -109,12 +112,15 @@ describe.each(Object.entries(VITE_APIS))(
               `import './app.css'\nimport { a } from './a.ts'\n${IMPORT}console.log(${call}, a) // ${attempt}\n`,
             )
             if (await isShownWithin(atoms, REWRITE_AFTER)) return
+            // One failed build can be a stray; the same failure after two more tries is not.
+            if (builds.failed !== undefined && attempt >= 2) throw builds.failed
           }
           throw new Error(`the build never showed ${atoms.join(', ')}`)
         }
 
-        if (!(await isShownWithin(['flex'], ROW_TIMEOUT)))
-          throw new Error('the first build never ended')
+        if (!(await isShownWithin(['flex'], ROW_TIMEOUT))) {
+          throw builds.failed ?? new Error('the first build never ended')
+        }
         const first = written()
         await edit("cx('flex', 'grid')", ['flex', 'grid'])
         const second = written()
