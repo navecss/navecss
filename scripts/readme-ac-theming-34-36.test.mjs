@@ -189,19 +189,17 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 // The object is "the entry point" or the pronoun "it", since a denial reads as naturally "does not
 // invoke it". The verbs are listed, not "any word", so "not handed" stays a non-denial.
 const REACH_OBJECT = String.raw`(?:\bentry point\b|\bit\b)`
-const REACH_VERB = String.raw`(?:reach(?:ed|es)?|invok\w*|call(?:s|ed)?|runs?|us(?:es?|ed)|go(?:es)? through)`
+const NEGATOR = String.raw`(?:\bnot\b|\bnever\b|\bcannot\b|n't)`
+const REACH_VERB = String.raw`(?:reach(?:ed|es|ing)?|invok\w*|call(?:s|ed|ing)?|run(?:s|ning)?|us(?:es?|ed|ing)|go(?:es|ing)? through)`
 const INVOKES_ENTRY_POINT = /\binvok(?:es?|ing)\b[^.]{0,40}\bthe entry point\b/i
 const DENIES_REACH = [
+  new RegExp(String.raw`${NEGATOR}[^.]{0,40}\b${REACH_VERB}\b[^.]{0,40}${REACH_OBJECT}`, 'i'),
   new RegExp(
-    String.raw`\b(?:not|never|n't)\b[^.]{0,40}\b${REACH_VERB}\b[^.]{0,40}${REACH_OBJECT}`,
+    String.raw`\bentry point\b[^.]{0,40}${NEGATOR}\s+(?:be\s+)?(?:invoked|reached|called|run|used)\b`,
     'i',
   ),
   new RegExp(
-    String.raw`\bentry point\b[^.]{0,40}\b(?:not|never)\s+(?:be\s+)?(?:invoked|reached|called|run|used)\b`,
-    'i',
-  ),
-  new RegExp(
-    String.raw`\b(?:bypass\w*|go(?:es)? (?:around|past)|circumvent\w*|skips?)\b[^.]{0,40}${REACH_OBJECT}`,
+    String.raw`\b(?:bypass\w*|go(?:es)? (?:around|past)|circumvent\w*|skip\w*)\b[^.]{0,40}${REACH_OBJECT}`,
     'i',
   ),
   /\bentry point\b[^.]{0,40}\b(?:bypassed|skipped|circumvented)\b/i,
@@ -247,6 +245,11 @@ const RUNG_4_DENIALS = [
   'Your build bypasses the entry point.',
   'Your build goes around it.',
   'The entry point is never invoked here.',
+  'The entry point cannot be invoked from your build.',
+  'The entry point is not invoked.',
+  "The entry point isn't invoked by your build.",
+  'Your build is not reaching the entry point.',
+  "Your build can't invoke it.",
 ]
 
 test('AC-theming-36: a rung 4 that keeps only a denial of the entry point reds', () => {
