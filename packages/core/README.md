@@ -1133,3 +1133,7 @@ Consumers of `@navecss/tokens` alone get no guide: it ships only in this package
 | `@navecss/core/postcss`      | PostCSS plugin — `navePlugin()`                                                                                   |
 | `@navecss/core/check`        | The survival check as a function — `check({ source })`                                                            |
 | `@navecss/core/collect`      | Reads which atoms a module uses and trims the atom layer to them, for build tools; not meant for application code |
+
+This package is not affiliated with, endorsed by or sponsored by Vercel or the Next.js project.
+
+Vercel, the Vercel design, Next.js and related marks, designs and logos are trademarks or registered trademarks of Vercel, Inc. or its affiliates in the US and other countries.

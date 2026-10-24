@@ -53,6 +53,44 @@ describe('core’s README', () => {
   })
 })
 
+/**
+ * The two lines every README that names Next.js closes with: the package's own non-affiliation
+ * statement, and Vercel's attribution sentence as its brand page serves it.
+ */
+const NON_AFFILIATION =
+  'This package is not affiliated with, endorsed by or sponsored by Vercel or the Next.js project.'
+const REPOSITORY_NON_AFFILIATION =
+  'NaveCSS is not affiliated with, endorsed by or sponsored by Vercel or the Next.js project.'
+const ATTRIBUTION =
+  'Vercel, the Vercel design, Next.js and related marks, designs and logos are trademarks or registered trademarks of Vercel, Inc. or its affiliates in the US and other countries.'
+
+const fingerprint = (text: string): { bytes: number; sha256: string } => ({
+  bytes: Buffer.byteLength(text),
+  sha256: createHash('sha256').update(text).digest('hex').slice(0, 16),
+})
+
+describe('the two closing lines', () => {
+  it('are the cleared bytes (control for the rows below)', () => {
+    expect(fingerprint(NON_AFFILIATION)).toEqual({ bytes: 95, sha256: '17a46ea5a2975184' })
+    expect(fingerprint(REPOSITORY_NON_AFFILIATION)).toEqual({
+      bytes: 90,
+      sha256: 'e1c8f80df8f1f13a',
+    })
+    expect(fingerprint(ATTRIBUTION)).toEqual({ bytes: 176, sha256: '3866a99ef62f1845' })
+  })
+
+  it('close core’s README, as its last two paragraphs', () => {
+    expect(core.trimEnd().split(/\n\n/u).slice(-2)).toEqual([NON_AFFILIATION, ATTRIBUTION])
+  })
+
+  it('follow the paragraph under Brand and name in the root README, which stays as it was', () => {
+    const headings = headingsOf(root)
+    const section = sectionOf(root, headings, 'Brand and name').trim().split(/\n\n/u)
+    expect(section.slice(-2)).toEqual([REPOSITORY_NON_AFFILIATION, ATTRIBUTION])
+    expect(section.length).toBeGreaterThanOrEqual(3)
+  })
+})
+
 describe('the browser floor', () => {
   it('is the same list in core’s README and the package README', () => {
     const floor = floorOf(core)

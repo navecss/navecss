@@ -185,6 +185,21 @@ describe('Which atoms the build ships', () => {
     expect(section).toContain('Next.js can still order, merge and minify CSS differently')
   })
 
+  it('says, under in next dev, that a file outside Turbopack’s root is not watched there and is caught by the build', () => {
+    const dev = sectionOf(readme, headings, 'In next dev')
+    expect(dev).toMatch(
+      /outside[^.]*root[^.]*(?:not told to watch|not watched|does not re-run|is not re-read)/u,
+    )
+    expect(dev).toMatch(/`next build`[^.]*(?:checks|catches|fails)/u)
+  })
+
+  it('limits the unresolved-import error to your code and the packages that reach cx', () => {
+    const reads = sectionOf(readme, headings, 'What the build reads')
+    expect(reads).toMatch(
+      /In your own code, and in a package that reaches `cx`, an import it cannot resolve is an error/u,
+    )
+  })
+
   it('puts the way back to every atom after every part that fixes an error', () => {
     const order = ['What the build reads', 'Names chosen at run time', 'Code you import']
     const way = headings.find((heading) => heading.title === 'Shipping every atom')!.line

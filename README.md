@@ -782,3 +782,7 @@ MIT © Nave Contributors
 The MIT licence covers the code. The "Nave" and "NaveCSS" names and the Nave mark are trademarks of
 the project and are not covered by it: see [TRADEMARKS.md](./TRADEMARKS.md). Short version: yes, say
 you are built with NaveCSS and show the mark unmodified; no, do not make it your own logo.
+
+NaveCSS is not affiliated with, endorsed by or sponsored by Vercel or the Next.js project.
+
+Vercel, the Vercel design, Next.js and related marks, designs and logos are trademarks or registered trademarks of Vercel, Inc. or its affiliates in the US and other countries.
