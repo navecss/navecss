@@ -5,6 +5,7 @@
  */
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import { createLogger } from 'vite'
 import { describe, expect, it } from 'vitest'
 
@@ -14,10 +15,16 @@ import { appConfig, VITE_APIS } from './helpers/vite-app.ts'
 
 const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 
+// What the row may take (the timeout it is declared with), and how long an edit waits to be heard
+// before it is written again.
+const ROW_TIMEOUT = 480_000
+const REWRITE_AFTER = 10_000
+
 // Each Vite builds, rebuilds and writes a page's inline stylesheet by its own code, so this row
-// runs on each Vite measured. It waits on the watcher's own events, which on a busy macOS machine
-// reach it many seconds after an edit and sometimes after a minute, so it has no deadline of its
-// own and the row's timeout only has to outlast a loaded machine.
+// runs on each Vite measured. The watcher hears of an edit from the operating system, which on a
+// busy macOS machine tells it many seconds late and sometimes not at all, so the row writes an
+// edit again, to the same effect, until the build's output shows it, and has no deadline of its
+// own: the row's timeout only has to outlast a loaded machine.
 describe.each(Object.entries(VITE_APIS))(
   'Vite %s: AC-used-atoms-27 - rebuilds in watch mode',
   (_version, api) => {
@@ -35,6 +42,7 @@ describe.each(Object.entries(VITE_APIS))(
       logger.warn = (message) => {
         warnings.push(message)
       }
+      const deadline = Date.now() + ROW_TIMEOUT
       try {
         const config = {
           ...appConfig(app.root, 'postcss', [navePlugin()], {
@@ -44,21 +52,26 @@ describe.each(Object.entries(VITE_APIS))(
         }
         const watcher = (await api.build(config)) as unknown as {
           close(): Promise<void>
-          off(event: 'event', listener: (event: { code: string; error?: Error }) => void): void
           on(event: 'event', listener: (event: { code: string; error?: Error }) => void): void
         }
         closing = watcher
-        const rebuilt = (): Promise<void> =>
-          new Promise((resolve, reject) => {
-            const listener = (event: { code: string; error?: Error }): void => {
-              if (event.code !== 'END' && event.code !== 'ERROR') return
-              watcher.off('event', listener)
-              if (event.code === 'ERROR')
-                reject(event.error ?? new Error('the watched build reported an error'))
-              else resolve()
+        const builds = { ended: 0, failed: undefined as Error | undefined, started: 0 }
+        watcher.on('event', (event) => {
+          switch (event.code) {
+            case 'BUNDLE_START': {
+              builds.started += 1
+              break
             }
-            watcher.on('event', listener)
-          })
+            case 'END': {
+              builds.ended += 1
+              break
+            }
+            case 'ERROR': {
+              builds.failed = event.error ?? new Error('the watched build reported an error')
+              break
+            }
+          }
+        })
         const written = (): { asset: string[]; page: string[] } => {
           const assets = path.join(app.root, 'dist/assets')
           const css = readdirSync(assets)
@@ -68,26 +81,54 @@ describe.each(Object.entries(VITE_APIS))(
           const html = readFileSync(path.join(app.root, 'dist/index.html'), 'utf8')
           return { page: atomLayerAtoms(html), asset: atomLayerAtoms(css) }
         }
-        const edit = async (call: string): Promise<void> => {
-          const next = rebuilt()
-          writeFileSync(
-            path.join(app.root, 'src/main.ts'),
-            `import './app.css'\nimport { a } from './a.ts'\n${IMPORT}console.log(${call}, a)\n`,
-          )
-          await next
+        const wait = (ms: number): Promise<void> =>
+          new Promise((resolve) => setTimeout(resolve, ms))
+        // Whether the output holds exactly `atoms` for the page and for its stylesheet.
+        const isShown = (atoms: string[]): boolean => {
+          try {
+            return isDeepStrictEqual(written(), { page: atoms, asset: atoms })
+          } catch {
+            return false
+          }
+        }
+        // Waits for up to `ms` for the output to show `atoms` with no build under way.
+        const isShownWithin = async (atoms: string[], ms: number): Promise<boolean> => {
+          const end = Math.min(Date.now() + ms, deadline)
+          while (Date.now() < end) {
+            if (builds.failed) throw builds.failed
+            if (isShown(atoms) && builds.started === builds.ended) return true
+            await wait(50)
+          }
+          return false
+        }
+        const edit = async (call: string, atoms: string[]): Promise<void> => {
+          for (let attempt = 0; Date.now() < deadline; attempt += 1) {
+            // A comment changes no class, so the edit reads the same on every attempt.
+            writeFileSync(
+              path.join(app.root, 'src/main.ts'),
+              `import './app.css'\nimport { a } from './a.ts'\n${IMPORT}console.log(${call}, a) // ${attempt}\n`,
+            )
+            if (await isShownWithin(atoms, REWRITE_AFTER)) return
+          }
+          throw new Error(`the build never showed ${atoms.join(', ')}`)
         }
 
-        await rebuilt()
+        if (!(await isShownWithin(['flex'], ROW_TIMEOUT)))
+          throw new Error('the first build never ended')
         const first = written()
-        await edit("cx('flex', 'grid')")
+        await edit("cx('flex', 'grid')", ['flex', 'grid'])
         const second = written()
-        await edit("cx('block')")
+        await edit("cx('block')", ['block'])
         const third = written()
 
         expect(first).toEqual({ page: ['flex'], asset: ['flex'] })
         expect(second).toEqual({ page: ['flex', 'grid'], asset: ['flex', 'grid'] })
         expect(third).toEqual({ page: ['block'], asset: ['block'] })
-        expect(warnings.filter((message) => message.includes('src/inline.css'))).toHaveLength(3)
+        // One warning for each build, however many builds the edits caused.
+        expect(builds.started).toBe(builds.ended)
+        expect(warnings.filter((message) => message.includes('src/inline.css'))).toHaveLength(
+          builds.ended,
+        )
       } finally {
         await closing?.close()
         app.dispose()
