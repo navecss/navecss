@@ -174,52 +174,248 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 
 // RUNG 4's REACH is an AFFIRMATIVE claim, and the phrase "entry point" appearing in the rung does
 // not make it. Rung 4 shows no `navecss-tokens` (the rung's point, R33(c), is that the consumer's
-// own build supplies the inputs), so what it must say is that the consumer's build INVOKES the
+// own build supplies the inputs), so what it must say is that the consumer's build reaches the
 // entry point: the published text says "the script or the task that invokes the entry point".
 // Scanning for the phrase alone passed a rung 4 reduced to "This rung is not reached through the
 // entry point at all.", which says the opposite.
 //
-// Two limbs, because they fail differently. The affirmative limb needs a form of *invoke*
-// governing the entry point. The denial limb reds any sentence that says the rung is not reached
-// through the entry point, does not invoke it, or goes around it, and it is checked on EVERY
-// sentence so a denial placed beside the affirmative still reds. Both read sentences, not the
-// whole body, because a denial is a property of one sentence: "The entry point reads nothing it
-// was not handed" holds "not" and "entry point" and negates nothing about reach.
+// HOW IT READS. The rung is cut into sentences (a bullet start counts as a boundary, since a
+// rung's bullets carry no full stop between them), each sentence into clauses at `;` and `:`, and
+// each clause into lower-cased words, with the comma-separated segment each word sits in. Every
+// check below compares word POSITIONS inside one clause, so a negation stops where its clause
+// does: "You do not need a config file; your build invokes the entry point." is the affirmative,
+// not a denial. The only patterns run over README text are the sentence and word splitters, and
+// neither can backtrack; every check after them is a comparison of word positions.
 //
-// The object is "the entry point" or the pronoun "it", since a denial reads as naturally "does not
-// invoke it". The verbs are listed, not "any word", so "not handed" stays a non-denial.
-const REACH_OBJECT = String.raw`(?:\bentry point\b|\bit\b)`
-const NEGATOR = String.raw`(?:\bnot\b|\bnever\b|\bcannot\b|n't)`
-const REACH_VERB = String.raw`(?:reach(?:ed|es|ing)?|invok\w*|call(?:s|ed|ing)?|run(?:s|ning)?|us(?:es?|ed|ing)|go(?:es|ing)? through)`
-const INVOKES_ENTRY_POINT = /\binvok(?:es?|ing)\b[^.]{0,40}\bthe entry point\b/i
-const DENIES_REACH = [
-  new RegExp(String.raw`${NEGATOR}[^.]{0,40}\b${REACH_VERB}\b[^.]{0,40}${REACH_OBJECT}`, 'i'),
-  new RegExp(
-    String.raw`\bentry point\b[^.]{0,40}${NEGATOR}\s+(?:be\s+)?(?:invoked|reached|called|run|used)\b`,
-    'i',
-  ),
-  new RegExp(
-    String.raw`\b(?:bypass\w*|go(?:es)? (?:around|past)|circumvent\w*|skip\w*)\b[^.]{0,40}${REACH_OBJECT}`,
-    'i',
-  ),
-  /\bentry point\b[^.]{0,40}\b(?:bypassed|skipped|circumvented)\b/i,
-]
+// THE OBJECT is "the entry point" (also spelled "entrypoint" or "entry-point", and after a
+// possessive such as "Nave's"), `navecss-tokens`, or, for a denial only, the pronoun "it" ("does
+// not invoke it"). Up to four words may sit between the verb and "the entry point", and at most one
+// between the verb and the pronoun or the binary.
+//
+// A CLAUSE DENIES REACH when any of these holds:
+// - a negator is followed, in its scope, by a reach verb (reach, invoke, call, run, use, go
+//   through) whose object follows it: "Nothing invokes the entry point.", "Your build does not, at
+//   any point in the steps described above, invoke the entry point.". A negator is not, never,
+//   cannot, no, nothing, none, nobody, neither, any n't word (either apostrophe), fails to,
+//   without, unlike, instead of or rather than. Its scope runs to the end of the clause or to the
+//   first and / but / so / because (and the like), which start a new clause without punctuation:
+//   "No file is discovered, and your build invokes the entry point." denies nothing. The last four
+//   negators govern a phrase, not a verb, so their scope is their own comma segment plus any that
+//   open with where / which / who / that: "Instead of invoking the entry point, ..." and "Unlike
+//   rung 3, where your build invokes the entry point, ..." deny, while "Instead of a seed you
+//   typed into a script once, your own build invokes the entry point" does not;
+// - "the entry point" is followed by a negator and then, within three words, a reach verb: "The
+//   entry point is not directly invoked.", "... is no longer invoked";
+// - an avoidance verb (bypass, circumvent, skip, avoid, go around / past, stop short of) has the
+//   object after it, or "the entry point" is followed within three words by one: "The entry
+//   point is bypassed.";
+// - the clause ends on a negated auxiliary, in a sentence that names the entry point: "Your build
+//   is meant to invoke the entry point, but it never does.", "...; it does not.".
+// "The entry point reads nothing it was not handed: no file is discovered." holds "not",
+// "nothing" and "no" beside the entry point and denies nothing, because none of them reaches a
+// reach verb.
+//
+// A SENTENCE AFFIRMS REACH when it denies nothing and one clause has invoke, run or call with the
+// object after it ("Your build runs `navecss-tokens`", "invokes Nave's entry point"), or the
+// passive "the entry point is invoked / run / called by ...". Rung 4 must carry one, and every
+// sentence of it is also checked for a denial, so a denial placed beside the affirmative still
+// reds. This reads English with word lists and positions, not a grammar: it closes the forms
+// listed in the rows below and keeps the published sentences green, and a denial phrased outside
+// these lists would still pass.
+const REACH_VERBS = new Set(
+  ['reach', 'invoke', 'call', 'run', 'use'].flatMap((verb) => verbForms(verb)),
+)
+const INVOKING_VERBS = new Set(['invoke', 'call', 'run'].flatMap((verb) => verbForms(verb)))
+const INVOKED_PARTICIPLES = new Set(['invoked', 'called', 'run'])
+const GO = new Set(['go', 'goes', 'going', 'went', 'gone'])
+const STOP = new Set(['stop', 'stops', 'stopped', 'stopping'])
+const FAIL = new Set(['fail', 'fails', 'failed', 'failing'])
+const AVOIDING_STEMS = ['bypass', 'circumvent', 'skip', 'avoid']
+const NEGATORS = new Set(['not', 'never', 'cannot', 'no', 'nothing', 'none', 'nobody', 'neither'])
+const PHRASE_NEGATORS = new Set(['without', 'unlike'])
+const CLAUSE_BREAKERS = new Set([
+  'and',
+  'but',
+  'so',
+  'yet',
+  'because',
+  'since',
+  'while',
+  'whereas',
+  'although',
+  'though',
+  'then',
+])
+const RELATIVES = new Set(['where', 'which', 'who', 'whose', 'that'])
+const AUXILIARIES = new Set(['do', 'does', 'did', 'will', 'would', 'can', 'could', 'is', 'was'])
+const WORD = /[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu
 
-// Sentences, with a bullet start counting as a boundary: a rung's bullets carry no full stop of
-// their own between them.
+function verbForms(verb) {
+  if (verb === 'run') return ['run', 'runs', 'ran', 'running']
+  const stem = verb.endsWith('e') ? verb.slice(0, -1) : verb
+  const third = verb.endsWith('h') ? `${verb}es` : `${verb}s`
+  return [verb, third, `${stem}ed`, `${stem}ing`]
+}
+
+// Sentences, with a bullet start counting as a boundary. The text is whitespace-collapsed first,
+// so each split point is one literal space.
 function sentencesOf(text) {
   return text
     .replaceAll(/\s+/g, ' ')
-    .split(/(?<=[.!?])\s+|\s+-\s+(?=\*\*)/)
-    .filter((sentence) => sentence !== '')
+    .split(/(?<=[.!?]) | - (?=\*\*)/)
+    .filter((sentence) => sentence.trim() !== '')
 }
+
+// A clause's words, lower-cased, each with the index of the comma segment it sits in.
+function wordsOf(clause) {
+  const words = []
+  const segments = clause.replaceAll('’', "'").toLowerCase().split(',')
+  for (const [segment, text] of segments.entries()) {
+    for (const [word] of text.matchAll(WORD)) {
+      if (word === 'entrypoint' || word === 'entry-point') {
+        words.push({ word: 'entry', segment }, { word: 'point', segment })
+      } else {
+        words.push({ word, segment })
+      }
+    }
+  }
+  return words
+}
+
+const isEntryPointAt = (words, i) =>
+  words[i]?.word === 'entry' && ['point', 'points'].includes(words[i + 1]?.word)
+
+// Whether the object starts within the allowed gap after `from` and before `end`.
+function objectFollows(words, from, end, { pronoun }) {
+  for (let i = from; i < Math.min(end, from + 5); i += 1) {
+    if (isEntryPointAt(words, i)) return true
+    const near = i - from <= 1
+    if (near && words[i].word === 'navecss-tokens') return true
+    if (near && pronoun && words[i].word === 'it') return true
+  }
+  return false
+}
+
+// The index after a negator starting at `i` and whether it governs a phrase, or null.
+function negatorAt(words, i) {
+  const word = words[i].word
+  const next = words[i + 1]?.word
+  if (NEGATORS.has(word) || word.endsWith("n't")) return { after: i + 1, phrase: false }
+  if (next === 'to' && FAIL.has(word)) return { after: i + 2, phrase: false }
+  if (PHRASE_NEGATORS.has(word)) return { after: i + 1, phrase: true }
+  const pair = `${word} ${next}`
+  if (pair === 'instead of' || pair === 'rather than') return { after: i + 2, phrase: true }
+  return null
+}
+
+// The index after a reach verb starting at `i`, or null. "go" reaches only as "go through".
+function reachVerbAt(words, i) {
+  if (REACH_VERBS.has(words[i].word)) return i + 1
+  if (GO.has(words[i].word) && words[i + 1]?.word === 'through') return i + 2
+  return null
+}
+
+// The index after an avoidance verb starting at `i`, or null.
+function avoidanceAt(words, i) {
+  const word = words[i].word
+  if (AVOIDING_STEMS.some((stem) => word.startsWith(stem))) return i + 1
+  const next = words[i + 1]?.word
+  if ((next === 'around' || next === 'past') && GO.has(word)) return i + 2
+  if (next === 'short' && words[i + 2]?.word === 'of' && STOP.has(word)) return i + 3
+  return null
+}
+
+// Where a negator's scope ends: the clause end, a clause breaker, or, for a negator that governs
+// a phrase, the first comma segment that does not open with a relative word.
+function scopeEnd(words, from, phrase) {
+  for (let i = from; i < words.length; i += 1) {
+    if (CLAUSE_BREAKERS.has(words[i].word)) return i
+    const opensSegment = i > 0 && words[i].segment !== words[i - 1].segment
+    if (phrase && opensSegment && !RELATIVES.has(words[i].word)) return i
+  }
+  return words.length
+}
+
+function negatedReach(words, at) {
+  const negator = negatorAt(words, at)
+  if (negator === null) return false
+  const end = scopeEnd(words, negator.after, negator.phrase)
+  for (let i = negator.after; i < end; i += 1) {
+    const after = reachVerbAt(words, i)
+    if (after !== null) return objectFollows(words, after, end, { pronoun: true })
+  }
+  return false
+}
+
+// "the entry point" at `at`, then a negator, then a reach verb within three words.
+function entryPointNegated(words, at) {
+  if (!isEntryPointAt(words, at)) return false
+  const end = scopeEnd(words, at + 2, false)
+  for (let i = at + 2; i < end; i += 1) {
+    const negator = negatorAt(words, i)
+    if (negator === null) continue
+    const window = words.slice(negator.after, Math.min(end, negator.after + 3))
+    if (window.some((_, k) => reachVerbAt(words, negator.after + k) !== null)) return true
+  }
+  return false
+}
+
+function avoided(words, at) {
+  const after = avoidanceAt(words, at)
+  if (after !== null) {
+    return objectFollows(words, after, scopeEnd(words, after, false), { pronoun: true })
+  }
+  if (!isEntryPointAt(words, at)) return false
+  const window = words.slice(at + 2, at + 5)
+  return window.some((_, k) => avoidanceAt(words, at + 2 + k) !== null)
+}
+
+function endsOnNegatedAuxiliary(words) {
+  const tail = words.at(-1)?.word === 'so' ? words.slice(0, -1) : words
+  const [before, last] = [tail.at(-2)?.word, tail.at(-1)?.word]
+  if (last === undefined) return false
+  if (last.endsWith("n't")) return true
+  const negated = (word) => word === 'not' || word === 'never'
+  return (negated(before) && AUXILIARIES.has(last)) || (AUXILIARIES.has(before) && negated(last))
+}
+
+function clauseDenies(words) {
+  return words.some(
+    (_, i) => negatedReach(words, i) || entryPointNegated(words, i) || avoided(words, i),
+  )
+}
+
+const clausesOf = (sentence) => sentence.split(/[;:]/).map((clause) => wordsOf(clause))
+
+function deniesReach(sentence) {
+  const clauses = clausesOf(sentence)
+  const namesEntryPoint = clauses.some((words) => words.some((_, i) => isEntryPointAt(words, i)))
+  return clauses.some(
+    (words) => clauseDenies(words) || (namesEntryPoint && endsOnNegatedAuxiliary(words)),
+  )
+}
+
+function clauseAffirms(words) {
+  return words.some((_, i) => {
+    if (INVOKING_VERBS.has(words[i].word)) {
+      return objectFollows(words, i + 1, scopeEnd(words, i + 1, false), { pronoun: false })
+    }
+    if (!isEntryPointAt(words, i)) return false
+    const window = words.slice(i + 2, i + 5)
+    return window.some(
+      ({ word }, k) => INVOKED_PARTICIPLES.has(word) && words[i + 3 + k]?.word === 'by',
+    )
+  })
+}
+
+const affirmsReach = (sentence) => !deniesReach(sentence) && clausesOf(sentence).some(clauseAffirms)
 
 function rung4ReachProblems(text) {
   const sentences = sentencesOf(text)
   const problems = sentences
-    .filter((sentence) => DENIES_REACH.some((pattern) => pattern.test(sentence)))
+    .filter((sentence) => deniesReach(sentence))
     .map((sentence) => `rung 4 denies the entry point's reach: ${JSON.stringify(sentence)}`)
-  if (sentences.every((sentence) => !INVOKES_ENTRY_POINT.test(sentence))) {
+  if (sentences.every((sentence) => !affirmsReach(sentence))) {
     problems.push('rung 4 never says its own build invokes the entry point')
   }
   return problems
@@ -250,22 +446,111 @@ const RUNG_4_DENIALS = [
   "The entry point isn't invoked by your build.",
   'Your build is not reaching the entry point.',
   "Your build can't invoke it.",
+  // The subject is the negation: nothing, no step, neither ... nor.
+  'Nothing invokes the entry point.',
+  'No step of your build invokes the entry point.',
+  'Neither your build nor its scripts invoke the entry point.',
+  // A long way between the negator and the verb, or an adverb between the negator and the
+  // participle.
+  'Your build does not, at any point in the steps described above, invoke the entry point.',
+  'Your build never once, at any stage of the pipeline that it owns, in any form, calls the entry point.',
+  'The entry point is not directly invoked.',
+  'The entry point is never actually called.',
+  'The entry point is no longer invoked at this rung.',
+  'The entry point, with no seed of its own, is never invoked.',
+  // The verb left out after the negator.
+  'Your build is meant to invoke the entry point, but it never does.',
+  'Your build should call the entry point; it does not.',
+  // A gerund negated by a preposition, or a contrast.
+  'Instead of invoking the entry point, your build writes the file itself.',
+  'Rather than invoking the entry point, your build writes the file itself.',
+  'Your build produces tokens.css without invoking the entry point.',
+  'Unlike rung 3, where your build invokes the entry point, this rung reads its inputs from a file Nave discovers.',
+  // A typographic apostrophe, and verbs that deny reach without a negator.
+  'Your build doesn’t invoke the entry point.',
+  'Your build fails to reach the entry point.',
+  'Your build stops short of the entry point.',
+  'Your build avoids the entry point.',
+  'Your build does not go through the entry point.',
+  // Other spellings of the object.
+  'Your build does not invoke the entrypoint.',
+  'Your build does not invoke the entry-point.',
+  'Your build does not invoke Nave’s entry point.',
+  'Your build does not invoke the token build’s entry point.',
+  'Your build never runs `navecss-tokens`.',
 ]
 
 test('AC-theming-36: a rung 4 that keeps only a denial of the entry point reds', () => {
-  for (const denial of RUNG_4_DENIALS) {
-    assert.notDeepEqual(rung4ReachProblems(denial), [], `must red: ${denial}`)
-  }
+  assert.deepEqual(
+    RUNG_4_DENIALS.filter((denial) => rung4ReachProblems(denial).length === 0),
+    [],
+    'each of these must red on its own',
+  )
 })
 
 test('AC-theming-36: a denial reds even beside the published rung-4 affirmative', () => {
-  for (const denial of RUNG_4_DENIALS) {
-    assert.notDeepEqual(
-      rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${denial}`),
-      [],
-      `must red even beside the published affirmative: ${denial}`,
-    )
-  }
+  assert.deepEqual(
+    RUNG_4_DENIALS.filter(
+      (denial) => rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${denial}`).length === 0,
+    ),
+    [],
+    'each of these must red even beside the published affirmative',
+  )
+})
+
+// A sentence that denies reach is never also read as the affirmative, so a rung 4 made only of a
+// negated gerund or a contrast is reported as saying nothing affirmative, not just as a denial.
+test('AC-theming-36: a negated gerund or a contrast is not read as the affirmative', () => {
+  const contrasts = [
+    'Instead of invoking the entry point, your build writes the file itself.',
+    'Your build produces tokens.css without invoking the entry point.',
+    'Unlike rung 3, where your build invokes the entry point, this rung reads its inputs from a file Nave discovers.',
+  ]
+  assert.deepEqual(
+    contrasts.filter(
+      (sentence) =>
+        !rung4ReachProblems(sentence).includes(
+          'rung 4 never says its own build invokes the entry point',
+        ),
+    ),
+    [],
+  )
+})
+
+// Lawful rung-4 text, each sentence the whole rung: it says the consumer's build reaches the entry
+// point, so it must stay green.
+const RUNG_4_LAWFUL = [
+  // Forms of run and call, the passive, the past tense, and a possessive or hyphenated object.
+  'Your build script runs the entry point with your inputs.',
+  'Your build calls the entry point with your inputs.',
+  'The entry point is invoked by your own build.',
+  'Your build invoked the entry point, and it does so on every run.',
+  'Your build invokes Nave’s entry point with your inputs.',
+  'Your build invokes the token build’s entry point with your inputs.',
+  'Your build runs `navecss-tokens` with your inputs.',
+  'The script or the task that invokes the entry-point.',
+  // A negation in one clause does not reach into the next.
+  'Do not use a config file; it is read from what your build hands it, and the script or the task that invokes the entry point supplies it.',
+  'You do not run a separate step: it happens inside the script or the task that invokes the entry point.',
+  'You do not need a config file; your build invokes the entry point.',
+  'There is no Nave configuration file, and you do not need one; your build invokes the entry point.',
+  'Nothing else is needed: your build invokes the entry point, and nothing is discovered.',
+  'No file is discovered; your own build invokes the entry point with what it has.',
+  'No file is discovered, and your own build invokes the entry point with what it has.',
+  'Your build skips ahead and invokes the entry point.',
+  // "Instead of" negates the noun it governs here, not the build's invocation.
+  'Instead of a seed you typed into a script once, your own build invokes the entry point with them.',
+  'Without a config file, your build invokes the entry point with its own inputs.',
+]
+
+test('AC-theming-36: a lawful rung 4 that says its build reaches the entry point stays green', () => {
+  assert.deepEqual(
+    RUNG_4_LAWFUL.map((sentence) => [sentence, rung4ReachProblems(sentence)]).filter(
+      ([, problems]) => problems.length > 0,
+    ),
+    [],
+    'each of these must stay green on its own',
+  )
 })
 
 test('AC-theming-36: "not" and "entry point" in one sentence is not a denial of reach', () => {
