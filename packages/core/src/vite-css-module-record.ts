@@ -14,13 +14,9 @@ import type { TransformContext } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
 import { isNode, nodeAt, nodesAt } from './vite-ast.ts'
+import { CLASS_MAP_NOT_PARSED } from './vite-class-map-message.ts'
 import { isCssModuleId } from './vite-css-id.ts'
-import {
-  CLASS_MAP_NOT_PARSED,
-  SOURCE_TYPES,
-  textRecord,
-  unreadableRecord,
-} from './vite-unread-record.ts'
+import { SOURCE_TYPES, textRecord, unreadableRecord } from './vite-unread-record.ts'
 
 /**
  * The string `node` is, when it is a string literal.

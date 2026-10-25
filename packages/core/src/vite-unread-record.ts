@@ -19,8 +19,6 @@ export function isListed(context: UsedContext, pkg: string | undefined): boolean
 
 export const NOT_PARSED =
   "the module could not be read, so the atoms it names would not ship: it did not parse as JavaScript. TypeScript and JSX must be compiled by Vite's own transform first, so leave oxc on for this file."
-export const CLASS_MAP_NOT_PARSED =
-  "the module could not be read, so the atoms it names would not ship: it is a CSS Module, and the JavaScript Vite wrote for its class map did not parse. A plugin that runs after Vite's CSS step has changed that JavaScript: have that plugin leave a CSS Module's JavaScript valid."
 export const TOO_DEEP =
   'the module could not be read, so the atoms it names would not ship: it is nested too deeply.'
 

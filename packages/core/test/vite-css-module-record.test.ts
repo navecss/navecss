@@ -6,10 +6,12 @@ import { describe, expect, it } from 'vitest'
 
 import type { TransformContext } from '../src/vite-types.ts'
 
+import { CLASS_MAP_NOT_PARSED } from '../src/vite-class-map-message.ts'
 import { recordWithoutCalls } from '../src/vite-css-module-record.ts'
 import { createExtendSource } from '../src/vite-extend.ts'
 import { resolveUsedOptions } from '../src/vite-options.ts'
-import { CLASS_MAP_NOT_PARSED } from '../src/vite-unread-record.ts'
+import { NOT_PARSED } from '../src/vite-unread-record.ts'
+import { buildReport } from '../src/vite-used-report.ts'
 import { createUsedContext } from '../src/vite-used.ts'
 
 // The stand-in parse throws on it, as on a class map a later plugin broke.
@@ -46,5 +48,18 @@ describe('AC-used-atoms-61 — a CSS Module whose JavaScript does not parse', ()
 
     expect(record!.problems).toHaveLength(1)
     expect(record!.suppressed).toHaveLength(0)
+  })
+
+  it('fails a package’s build on its class map with no keepFor line, since keepFor does not stand in for one', () => {
+    const context = createUsedContext(
+      resolveUsedOptions({ keepFor: { '@acme/ui': ['flex'] } }),
+      createExtendSource(undefined),
+    )
+
+    const record = recordWithoutCalls(context, ctx, { ...CLASS_MAP, pkg: '@acme/ui' })
+    const script = { ...record!.problems[0]!, text: NOT_PARSED }
+
+    expect(buildReport(record!.problems, [], 'navePlugin()')).not.toContain('keepFor')
+    expect(buildReport([script], [], 'navePlugin()')).toContain("keepFor: { '@acme/ui'")
   })
 })
