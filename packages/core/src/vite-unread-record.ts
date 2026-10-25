@@ -62,7 +62,6 @@ export function unreadableRecord(
 export const SOURCE_TYPES: ReadonlySet<string> = new Set(['js', 'jsx', 'ts', 'tsx'])
 
 /**
-/**
  * The strings a JSON text holds, as the host will decode them (`"nave-\u0066lex"` is `nave-flex`),
  * or none when it is no JSON.
  */

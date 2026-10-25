@@ -8,6 +8,7 @@
  */
 import type { LocatedProblem } from './vite-used-report.ts'
 
+import { CLASS_MAP_NOT_PARSED } from './vite-class-map-message.ts'
 import { compareText, cxModulesArray } from './vite-problems.ts'
 import { callsThroughLine, forwardLine, takenLine } from './vite-used-take-lines.ts'
 
@@ -193,8 +194,13 @@ export function packageLines(
   )
   const renamed = reexports.filter((problem) => problem.isRenamed === true)
   const declared = problems.filter((problem) => problem.kind === 'declared')
+  // A CSS Module's class map holds no call: its problem names its own fix, and keepFor does not
+  // stand in for it.
   const rest = problems.filter(
-    (problem) => !isListableReexport(problem) && problem.kind !== 'declared',
+    (problem) =>
+      !isListableReexport(problem) &&
+      problem.kind !== 'declared' &&
+      problem.text !== CLASS_MAP_NOT_PARSED,
   )
   const named = [...new Set(reexports.flatMap((problem) => problem.specifier ?? []))].toSorted(
     compareText,

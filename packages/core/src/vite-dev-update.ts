@@ -6,8 +6,8 @@
 import type { GraphModuleLike, HotUpdateContext, HotUpdateOptions } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
-import { isStylesheetId } from './vite-css-id.ts'
-import { transformQuietly, transformReachable } from './vite-dev-read.ts'
+import { isUnreadStylesheet } from './vite-css-id.ts'
+import { isEndOfRead, transformQuietly, transformReachable } from './vite-dev-read.ts'
 import { noteReloadSent } from './vite-dev-reloads.ts'
 
 type UpdateEnvironment = HotUpdateContext['environment']
@@ -43,6 +43,7 @@ async function readAhead(
       const known = new Set(module.importedModules)
       environment.moduleGraph.invalidateModule(module as never)
       await transformQuietly(reader, module.url)
+      if (isEndOfRead(module)) continue
       const added = [...module.importedModules.difference(known)]
       await transformReachable(reader, added)
     }
@@ -83,7 +84,7 @@ export async function modulesWithGrownStylesheets(
 ): Promise<never[] | undefined> {
   const { environment } = ctx
   if (environment.config?.consumer !== 'client' || context.state.served.size === 0) return
-  const scripts = (hot.modules ?? []).filter((m) => m.id !== null && !isStylesheetId(m.id))
+  const scripts = (hot.modules ?? []).filter((m) => m.id !== null && !isUnreadStylesheet(m.id))
   if (scripts.length === 0) return
   await readAhead(context, environment, scripts)
   const sheets = takeStaleModules(context, environment)
