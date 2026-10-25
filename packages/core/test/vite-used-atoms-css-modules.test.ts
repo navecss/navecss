@@ -174,7 +174,7 @@ describe.each(LEGS)(
       } finally {
         app.dispose()
       }
-    }, 120_000)
+    }, 60_000)
 
     it('does not read a module a CSS Module composes from on its own, in the build or in the dev server', async () => {
       const app = makeUsedApp(
