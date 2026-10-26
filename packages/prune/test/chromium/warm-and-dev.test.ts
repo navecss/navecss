@@ -111,15 +111,35 @@ async function isDoneOrFalse(isDone: () => Promise<boolean>): Promise<boolean> {
 }
 
 /**
- * Waits until `isDone` holds.
+ * Waits until `isDone` holds. Every tenth check, `nudge` runs: a dev server on a busy machine
+ * sometimes drops the file-change event of a single write, so the edit is written again.
  */
-async function until(isDone: () => Promise<boolean>, what: string): Promise<void> {
+async function until(
+  isDone: () => Promise<boolean>,
+  what: string,
+  nudge: () => void = () => {},
+): Promise<void> {
   const end = Date.now() + 240_000
-  while (Date.now() < end) {
+  for (let check = 1; Date.now() < end; check += 1) {
     if (await isDoneOrFalse(isDone)) return
+    if (check % 10 === 0) nudge()
     await pause(1000)
   }
   throw new Error(`timed out waiting for ${what}`)
+}
+
+/**
+ * Writes the page with `cx('flex', 'grid')`.
+ */
+function writePageWithGrid(app: NextApp): void {
+  app.write({ 'app/page.jsx': pageCalling("'flex', 'grid'") })
+}
+
+/**
+ * Writes the route `/new`, which calls `cx('block')`.
+ */
+function writeNewRoute(app: NextApp): void {
+  app.write({ 'app/new/page.jsx': NEW_ROUTE })
 }
 
 const CELLS = cells().map((cell) => [cell.name, cell] as const)
@@ -184,7 +204,7 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
           expect(await isRuleIn(page, 'nave-grid')).toBe(false)
 
           // (a) the page gains `cx('grid')`: the same document gets the rule.
-          app.write({ 'app/page.jsx': pageCalling("'flex', 'grid'") })
+          writePageWithGrid(app)
           await until(
             async () =>
               (await isRuleIn(page, 'nave-grid')) &&
@@ -192,6 +212,7 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
                 "document.querySelector('#t').className.includes('nave-grid')",
               )),
             'the nave-grid rule on #t in the open document',
+            () => writePageWithGrid(app),
           )
           expect(
             await page.evaluate<number>('window.__mark'),
@@ -199,11 +220,15 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
           ).toBe(1)
 
           // (b) a new route is requested and has its rule.
-          app.write({ 'app/new/page.jsx': NEW_ROUTE })
-          await until(async () => {
-            await page.goto(`${origin}/new`, { waitUntil: 'load' })
-            return isRuleIn(page, 'nave-block')
-          }, 'the nave-block rule on /new')
+          writeNewRoute(app)
+          await until(
+            async () => {
+              await page.goto(`${origin}/new`, { waitUntil: 'load' })
+              return isRuleIn(page, 'nave-block')
+            },
+            'the nave-block rule on /new',
+            () => writeNewRoute(app),
+          )
           expect(server.output(), 'the server was not restarted').not.toMatch(/restart/i)
         })
       },
