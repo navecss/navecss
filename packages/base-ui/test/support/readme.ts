@@ -76,12 +76,6 @@ export const FIXED_SENTENCES: readonly FixedSentence[] = [
     prefix: '2b7152fa3f24b8c2',
     text: 'In Base UI 1.8.0 and 1.9.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.',
   },
-  {
-    bytes: 398,
-    name: 'Disclosure trigger on 1.9.0',
-    prefix: '9493767cfc25613f',
-    text: 'In Base UI 1.9.0, outside a Toolbar, `Tabs.List`, Radio Group, Toggle Group, Menubar or Navigation Menu, a disabled `Accordion.Trigger` or `Collapsible.Trigger` that renders a `<button>`, as it does by default, is marked with the `disabled` attribute and not `aria-disabled`, so it keeps the colour and pointer cursor of an enabled trigger; if you disable one, style its `:disabled` state yourself.',
-  },
 ]
 
 /**
