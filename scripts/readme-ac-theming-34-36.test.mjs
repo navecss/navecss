@@ -245,9 +245,10 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 //   words before it and back to its determiner, a word starts with "nave" or the word "token" or
 //   "tokens" appears with no owner ("Nave's build", "the token build"); an owner ("your", "our",
 //   "the consumer's") makes it the consumer's ("your token build"). It is also Nave's when its
-//   determiner is "a" or "its" and the clause names Nave before it ("Nave ships a build that ...").
-//   A word NAMES NAVE when it starts with "nave" (Nave, Nave's, navecss-tokens). A bare "token" or
-//   "tokens" names neither side.
+//   determiner is "a" or "its" and the clause names Nave before it ("Nave ships a build that ..."),
+//   looking back no further than a joining word and skipping an aside between commas. A word NAMES
+//   NAVE when it starts with "nave" (Nave, Nave's, navecss-tokens). A bare "token" or "tokens"
+//   names neither side.
 // - For the active form, the invoker is the first word that names either side, walking back from
 //   the verb through its clause and skipping an aside between commas. A relative clause is walked
 //   through to its antecedent the same way, which is how the published "the script or the task
@@ -571,11 +572,23 @@ function namesConsumer(words, head) {
     if (word.startsWith('nave')) return false
     token ||= isTokenWord(word)
     if (DETERMINERS.has(word)) {
-      const naveBefore = words.slice(0, k).some((w) => w.word.startsWith('nave'))
-      return !token && !(naveBefore && NAVE_OWNED_DETERMINERS.has(word))
+      return !token && !(namesNaveBefore(words, k) && NAVE_OWNED_DETERMINERS.has(word))
     }
   }
   return !token
+}
+
+// Whether the clause names Nave before index `k`, looking back no further than a joining word
+// (and, but, so ...) and skipping an aside between commas, as the invoker walk does: in "Nave ships
+// the tokens, and a build script invokes ...", the build is not Nave's.
+function namesNaveBefore(words, k) {
+  for (let j = k - 1; j >= 0; j -= 1) {
+    const { word, segment } = words[j]
+    if (segment !== words[k].segment && isClosedMiddle(words, segment)) continue
+    if (CLAUSE_BREAKERS.has(word)) return false
+    if (word.startsWith('nave')) return true
+  }
+  return false
 }
 
 // The side the word at `k` names: 'consumer', 'nave', or null for a word that names neither. A
@@ -872,6 +885,11 @@ const RUNG_4_LAWFUL = [
   "The build's generator invokes the entry point.",
   'A build script invokes the entry point and hands the result to Nave.',
   'The entry point is invoked by one of the many tasks in your build.',
+  // Nave named in an earlier clause, or in an aside, does not make a later "a build" Nave's.
+  'Nave ships the tokens, and a build script invokes the entry point.',
+  'Nave writes the defaults, and a build invokes the entry point with your inputs.',
+  'Nave ships the defaults, but a build script invokes the entry point.',
+  'Your repo, not Nave, holds a build script that invokes the entry point.',
 ]
 
 test('AC-theming-36: a lawful rung 4 that says its build reaches the entry point stays green', () => {
