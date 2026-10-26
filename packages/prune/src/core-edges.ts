@@ -92,7 +92,9 @@ export function isUnboundCxEdge(
 
 /**
  * The files `cxModules` lists, resolved from the project directory, and the entries that are not
- * relative, which an import names as written.
+ * relative, which an import counts as naming when it is written the same. An entry that starts
+ * with `#` is bound by file instead: an import of it counts only when the scope of the importing
+ * file maps it to one of the listed files.
  */
 export function declaredModules(
   dir: string,
