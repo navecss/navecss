@@ -9,8 +9,8 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createResolver, withoutQuery } from '../src/resolve.ts'
-import { createProject } from './helpers/project.ts'
 import { installNext, runAndRead, scratchProjects } from './helpers/graph-fixture.ts'
+import { createProject } from './helpers/project.ts'
 
 const FILE = 'export const x = 1\n'
 
@@ -81,13 +81,14 @@ describe('withoutQuery', () => {
   it('cuts at the last mark whose head is a file, with backslashes in the path', () => {
     // On a system whose separator is `/`, a backslash is a character of the name: the path below
     // is one file name, which is how a Windows path reads to a code that splits on `/` alone.
-    const directory = realpathSync(mkdtempSync(path.join(tmpdir(), 'prune-query-')))
-    const name = String.raw`C:\p\h#dir\ui.ts`
+    const made = mkdtempSync(path.join(tmpdir(), 'prune-query-'))
+    const directory = realpathSync(made)
+    const file = path.join(directory, String.raw`C:\p\h#dir\ui.ts`)
     try {
-      writeFileSync(path.join(directory, name), FILE)
+      writeFileSync(file, FILE)
 
-      expect(withoutQuery(path.join(directory, `${name}?v=1`))).toBe(path.join(directory, name))
-      expect(withoutQuery(path.join(directory, name))).toBe(path.join(directory, name))
+      expect(withoutQuery(`${file}?v=1`)).toBe(file)
+      expect(withoutQuery(file)).toBe(file)
     } finally {
       rmSync(directory, { recursive: true, force: true })
     }
