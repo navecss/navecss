@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { cpSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -110,20 +111,46 @@ function stepMismatches(result: PipelineResult): string[] {
 }
 
 /**
- * The text the build emits for a neutral step in one scheme, read from another slot that
- * resolves to the same step, so the comparison is with the build's own writing of it.
+ * The text the build emits for a neutral step in one scheme, read from a probe slot this test
+ * points at that step in a pipeline run over a copy of `base`, so the comparison is with the
+ * build's own writing of the step and does not depend on which other slots happen to resolve
+ * to it.
  */
-function emittedTextFor(result: PipelineResult, step: number, scheme: 'dark' | 'light'): string {
-  const other = result.slots.find(
-    (s) =>
-      !isState(s.slot) &&
-      s.branch === scheme &&
-      s.resolved.scale === 'neutral' &&
-      s.resolved.step === step &&
-      s.resolved.alpha === undefined,
+async function emittedTextFor(
+  step: number,
+  scheme: 'dark' | 'light',
+  base: Record<string, SlotMapping> = CHROMATIC_MAPPING,
+): Promise<string> {
+  const ref = { scale: 'neutral', step } as const
+  vi.resetModules()
+  vi.doMock(
+    '../../src/theming/semantics.ts',
+    semanticsCopy({ ...base, [HOVER]: { light: ref, dark: ref } }),
   )
-  if (!other) throw new Error(`no other slot resolves to neutral ${step} in ${scheme}`)
-  return other.css
+  const pipeline = await import('../../src/theming/pipeline.ts')
+  const probe = pipeline
+    .runPipeline(seeds())
+    .slots.find((s) => s.slot === HOVER && s.branch === scheme)
+  if (!probe) throw new Error(`the probe slot has no ${scheme} entry`)
+  return probe.css
+}
+
+/**
+ * The chromatic mapping with every slot other than the two states moved off the given light
+ * neutral steps, so nothing else in the build resolves to them.
+ */
+function retunedAwayFromLightSteps(steps: readonly number[]): Record<string, SlotMapping> {
+  return Object.fromEntries(
+    Object.entries(CHROMATIC_MAPPING).map(([slot, mapping]) => {
+      const light = mapping.light
+      const isMoved =
+        !isState(slot) &&
+        'scale' in light &&
+        light.scale === 'neutral' &&
+        steps.includes(light.step)
+      return [slot, isMoved ? { ...mapping, light: { scale: 'neutral', step: 300 } } : mapping]
+    }),
+  )
 }
 
 const withoutStateEntries = (adjacency: readonly Adjacency[]): Adjacency[] =>
@@ -193,8 +220,7 @@ describe('AC-secondary-action-states-01 covers: R1', () => {
     ])
   })
 
-  it('dist/tokens.css declares each state once, between the rest and the highlight, as the light-dark() of the text the build emits for its steps', () => {
-    const result = runPipeline(seeds())
+  it('dist/tokens.css declares each state once, between the rest and the highlight, as the light-dark() of the text the build emits for its steps', async () => {
     const lines = dist('tokens.css').split('\n')
     const declaring = (name: string): number[] =>
       lines.flatMap((line, index) => (line.startsWith(`    ${name}:`) ? [index] : []))
@@ -209,10 +235,27 @@ describe('AC-secondary-action-states-01 covers: R1', () => {
       [ACTIVE, ACTIVE_NAME],
     ] as const) {
       const steps = EXPECTED_STEPS[slot] ?? { light: NaN, dark: NaN }
-      expect(lines[declaring(name)[0] ?? -1]).toBe(
-        `    ${name}: light-dark(${emittedTextFor(result, steps.light, 'light')}, ${emittedTextFor(result, steps.dark, 'dark')});`,
-      )
+      const light = await emittedTextFor(steps.light, 'light')
+      const dark = await emittedTextFor(steps.dark, 'dark')
+      expect(lines[declaring(name)[0] ?? -1]).toBe(`    ${name}: light-dark(${light}, ${dark});`)
     }
+  })
+
+  it('the text helper still yields the build text for light neutral 150 and 200 over a copy where no other slot resolves to them', async () => {
+    const retuned = retunedAwayFromLightSteps([150, 200])
+    const others = Object.entries(retuned).filter(
+      ([slot, { light }]) =>
+        !isState(slot) &&
+        'scale' in light &&
+        light.scale === 'neutral' &&
+        [150, 200].includes(light.step),
+    )
+    expect(others).toEqual([])
+    const shipped = runPipeline(seeds())
+    const textOf = (slot: string): string =>
+      shipped.slots.find((s) => s.slot === slot && s.branch === 'light')?.css ?? ''
+    expect(await emittedTextFor(150, 'light', retuned)).toBe(textOf(HOVER))
+    expect(await emittedTextFor(200, 'light', retuned)).toBe(textOf(ACTIVE))
   })
 
   it('the names dist/tokens.css declares are those a copy without the two states declares, plus exactly the two', async () => {
@@ -308,7 +351,7 @@ The two branch-data rows of the theming suite, as predicates over a mapping and 
   })
 
   it('a copy adding action.secondary.hover to ACHROMATIC_MAPPING alone reds both branch rows (the control)', () => {
-    const widened = { ...ACHROMATIC_MAPPING, [HOVER]: EXPECTED_STEPS_MAPPING(HOVER) }
+    const widened = { ...ACHROMATIC_MAPPING, [HOVER]: expectedStepsMapping(HOVER) }
     expect(branchRowsHold(widened, ACHROMATIC_BRANCH_SLOTS)).toEqual([
       'ACHROMATIC_MAPPING is not exactly the six',
       "ACHROMATIC_BRANCH_SLOTS is not the mapping's keys",
@@ -316,7 +359,7 @@ The two branch-data rows of the theming suite, as predicates over a mapping and 
   })
 })
 
-function EXPECTED_STEPS_MAPPING(slot: string): SlotMapping {
+function expectedStepsMapping(slot: string): SlotMapping {
   const steps = EXPECTED_STEPS[slot] ?? { light: NaN, dark: NaN }
   return {
     light: { scale: 'neutral', step: steps.light },
@@ -510,6 +553,26 @@ async function buildFailure(file: string, removed: readonly Guard[]): Promise<st
   }
 }
 
+/**
+ * The real build entry, `node build.ts`, run as a child process over a copy of the package that
+ * carries the given `tokens.json`: the entry, its sources and the manifest are copied, and
+ * `packages/core` is linked beside it because the build reads it. The exit code and what the
+ * run wrote to either stream.
+ */
+function realBuildOver(file: string): { output: string; status: number | null } {
+  const root = mkdtempSync(path.join(tmpdir(), 'nave-secondary-states-build-'))
+  scratchDirectories.push(root)
+  const packageRoot = path.resolve(here, '../..')
+  const copy = path.join(root, 'packages', 'tokens')
+  for (const entry of ['build.ts', 'src', 'package.json', 'core-contract.recorded.json']) {
+    cpSync(path.join(packageRoot, entry), path.join(copy, entry), { recursive: true })
+  }
+  cpSync(file, path.join(copy, 'tokens.json'))
+  symlinkSync(path.resolve(packageRoot, '../core'), path.join(root, 'packages', 'core'))
+  const run = spawnSync(process.execPath, ['build.ts'], { cwd: copy, encoding: 'utf8' })
+  return { output: `${run.stdout}${run.stderr}`, status: run.status }
+}
+
 const ORPHAN_MESSAGE = (slot: string): string =>
   `Adjacency coverage: the semantic slot "${slot}" carries no adjacency declaration`
 
@@ -530,12 +593,14 @@ describe('AC-secondary-action-states-07 covers: R4 (the build fails closed witho
 
   it.each(INPUTS)(
     'with %s, the build exits non-zero naming the category (or the slot, should the orphan guard ever run first)',
-    async (_label, slot, kept) => {
-      const message = await buildFailure(tokensJsonDeclaring(kept).file, [])
-      expect(message).toMatch(
+    (_label, slot, kept) => {
+      const { output, status } = realBuildOver(tokensJsonDeclaring(kept).file)
+      expect(status).toBeGreaterThan(0)
+      expect(output).toMatch(
         new RegExp(`"secondaryForegroundOnStates"|"${slot.replaceAll('.', String.raw`\.`)}"`),
       )
     },
+    60_000,
   )
 
   it.each(INPUTS)(
@@ -605,6 +670,18 @@ describe('AC-secondary-action-states-08 covers: R4', () => {
       expect(() => assertCoverageFloor(narrowed)).toThrow(`"${category}"`)
     },
   )
+
+  it('a copy declaring the two secondary foreground state pairs as non-text fails the floor, naming the new category', () => {
+    const asNonText = ADJACENCY.map((pair) =>
+      pair.subject === FOREGROUND && isState(pair.against)
+        ? { ...pair, class: 'non-text' as const }
+        : pair,
+    )
+    expect(
+      asNonText.filter((pair) => pair.class === 'non-text' && isState(pair.against)),
+    ).toHaveLength(2)
+    expect(() => assertCoverageFloor(asNonText)).toThrow('"secondaryForegroundOnStates"')
+  })
 
   it('a copy adding a pair beyond the minimum still passes (widening is ungated)', () => {
     expect(() =>
