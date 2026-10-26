@@ -55,12 +55,19 @@ function freePort(): Promise<number> {
 }
 
 /**
+ * Whether the server process has ended, by its own exit or by a signal.
+ */
+function hasEnded(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null
+}
+
+/**
  * Stops the server by its process group's id, waiting for it to exit, then stops what its workers
- * left running. Stopping it again does nothing.
+ * left running.
  */
 async function stopGroup(child: ChildProcess, exited: Promise<void>): Promise<void> {
   if (child.pid === undefined) return
-  if (child.exitCode === null) {
+  if (!hasEnded(child)) {
     signalGroup(child.pid, 'SIGTERM')
     await exited
   }
@@ -102,7 +109,7 @@ export async function startDev(
   let isStopped = false
   const get = async (route: string): Promise<{ status: number; text: string }> => {
     for (;;) {
-      if (child.exitCode !== null) throw new Error(`next dev exited:\n${output}`)
+      if (hasEnded(child)) throw new Error(`next dev exited:\n${output}`)
       try {
         const response = await fetch(`http://127.0.0.1:${port}${route}`)
         return { status: response.status, text: await response.text() }
@@ -127,9 +134,12 @@ export async function startDev(
       await pause(1000)
     }
   }
-  const stop = async (): Promise<void> => {
+  let stopping: Promise<void> | undefined
+  const stop = (): Promise<void> => {
     isStopped = true
-    await stopGroup(child, exited)
+    // Once: stopping it again waits for the first stop and signals nothing.
+    stopping ??= stopGroup(child, exited)
+    return stopping
   }
   return { origin: `http://127.0.0.1:${port}`, output: () => output, get, css, untilCss, stop }
 }

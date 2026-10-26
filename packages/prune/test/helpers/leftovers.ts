@@ -8,6 +8,7 @@ import { rmSync } from 'node:fs'
 
 const groups = new Set<number>()
 const directories = new Set<string>()
+const startedBefore = new Set<number>()
 const armed = { isDone: false }
 
 /**
@@ -90,10 +91,33 @@ export function removeDirectory(directory: string): void {
 }
 
 /**
- * Sends `signal` to every tracked group.
+ * Sends `signal` to every tracked group, and stops tracking each, since it is signalled once.
  */
 export function killGroups(signal: NodeJS.Signals): void {
-  for (const pid of groups) signalGroup(pid, signal)
+  for (const pid of groups) {
+    signalGroup(pid, signal)
+    groups.delete(pid)
+  }
+}
+
+/**
+ * Notes the groups that are tracked now, as the ones that started before the row that begins.
+ */
+export function beginRow(): void {
+  startedBefore.clear()
+  for (const pid of groups) startedBefore.add(pid)
+}
+
+/**
+ * Sends `signal` to the groups tracked since the row began, and stops tracking them. A server a
+ * file started before its rows, in `beforeAll`, is left for the rows that follow.
+ */
+export function killGroupsStartedInRow(signal: NodeJS.Signals): void {
+  for (const pid of groups) {
+    if (startedBefore.has(pid)) continue
+    signalGroup(pid, signal)
+    groups.delete(pid)
+  }
 }
 
 /**

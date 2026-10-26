@@ -329,7 +329,8 @@ describe('stopping a server started through startDev', () => {
 
     await server.stop()
 
-    expect(existsSync(path.join(scratch.directory(), 'helper-finished'))).toBe(true)
+    const finished = path.join(scratch.directory(), 'helper-finished')
+    expect(existsSync(finished)).toBe(true)
   })
 
   it('does nothing the second time: it signals no process', async () => {

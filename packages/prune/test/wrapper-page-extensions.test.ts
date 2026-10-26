@@ -101,7 +101,7 @@ describe('AC-nextjs-used-atoms-13: the build hook withNave() installs reads page
     installNext(made)
     const { result } = await runAndRead(made, { pageExtensions: ['page.tsx'] })
     writeBuildCss(made, result.css)
-    const config = (await settle(withNave(configWith(['page.tsx'])))) as {
+    const config = (await settle(withNave(configWith(['page.tsx'])))) as unknown as {
       compiler: { runAfterProductionCompile: (metadata: unknown) => Promise<void> }
     }
     const { errors } = listen()

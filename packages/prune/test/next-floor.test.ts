@@ -8,9 +8,9 @@ import { spawn, spawnSync } from 'node:child_process'
 import {
   chmodSync,
   existsSync,
-  readFileSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -179,8 +179,9 @@ describe('the Next.js floor install', () => {
 async function raceTrial(
   callers: number,
   isLocked: boolean,
-): Promise<{ readonly answers: string[]; readonly starts: number; readonly isWhole: boolean }> {
-  const directory = realpathSync(mkdtempSync(path.join(tmpdir(), 'prune-floor-race-')))
+): Promise<{ readonly answers: string[]; readonly isWhole: boolean; readonly starts: number }> {
+  const made = mkdtempSync(path.join(tmpdir(), 'prune-floor-race-'))
+  const directory = realpathSync(made)
   try {
     const floorDir = path.join(directory, 'floor')
     const npm = script(directory, 'npm', [

@@ -6,7 +6,16 @@
  * would refuse the older one.
  */
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 
 import { removeDirectory, trackDirectory } from './leftovers.ts'
@@ -63,23 +72,72 @@ function isRunning(pid: number): boolean {
 }
 
 /**
- * Whether the installer that wrote `lockFile` is still running. A lock with no readable id yet is
- * being written, so it is held.
+ * How long a lock can stand before it is not believed: an install takes minutes, so a lock this old
+ * was left by an installer whose id another process has since taken.
+ */
+const MAX_LOCK_AGE_MS = 15 * 60_000
+
+/**
+ * Whether the installer that wrote `lockFile` is still running. A lock that cannot be read, or
+ * holds no process id yet, is held until it is old.
  */
 function isHeld(lockFile: string): boolean {
-  let pid: number
+  let holder: number
+  let age: number
   try {
-    pid = Number(readFileSync(lockFile, 'utf8'))
+    holder = Number(readFileSync(lockFile, 'utf8'))
+    age = Date.now() - statSync(lockFile).mtimeMs
+  } catch {
+    return true
+  }
+  if (age > MAX_LOCK_AGE_MS) return false
+  return !(Number.isSafeInteger(holder) && holder > 0) || isRunning(holder)
+}
+
+/**
+ * Removes the lock of an installer that is gone. Only one process does it at a time, and it asks
+ * again whether the lock is held once it is the one, so a lock a faster process has just made is
+ * never removed. The lock goes by being renamed to a name of its own, so no other process can
+ * reach it by its old name.
+ */
+function takeOver(lockFile: string): void {
+  const taking = `${lockFile}.takeover`
+  try {
+    writeFileSync(taking, String(process.pid), { flag: 'wx' })
+  } catch {
+    // Another process is taking it over, or died doing so: a takeover standing for a minute is not believed.
+    if (isOlderThan(taking, 60_000)) rmSync(taking, { force: true })
+    return
+  }
+  try {
+    if (!isHeld(lockFile)) {
+      const removed = `${lockFile}.removed-${process.pid}`
+      renameSync(lockFile, removed)
+      rmSync(removed, { force: true })
+    }
+  } catch {
+    // The lock is gone already.
+  } finally {
+    rmSync(taking, { force: true })
+  }
+}
+
+/**
+ * Whether `file` was last written more than `ms` ago; a file that is not there is not.
+ */
+function isOlderThan(file: string, ms: number): boolean {
+  try {
+    return Date.now() - statSync(file).mtimeMs > ms
   } catch {
     return false
   }
-  return !Number.isSafeInteger(pid) || isRunning(pid)
 }
 
 /**
  * Takes the install lock, a file holding the id of the process that made it, waiting for another
- * test file's worker that holds it. A lock left by an installer that is gone is removed. Resolves
- * to the function that releases the lock, or to nothing when `isDone` turns true while waiting.
+ * test file's worker that holds it. A lock left by an installer that is gone is taken over.
+ * Resolves to the function that releases the lock, or to nothing when `isDone` turns true while
+ * waiting.
  */
 async function takeLock(
   lockFile: string,
@@ -92,19 +150,34 @@ async function takeLock(
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
       if (isDone()) return undefined
+      if (!existsSync(lockFile)) continue
       if (isHeld(lockFile)) await pause(500)
-      else rmSync(lockFile, { force: true })
+      else takeOver(lockFile)
     }
   }
 }
 
 /**
- * Installs Next.js into a staging directory beside `floorDir` and moves it into place once npm has
- * finished, so `floorDir` exists only when the install is whole. Whatever an earlier installer
- * left, a staging directory or a tree it did not finish, is replaced.
+ * Removes the staging directories of installers that are gone.
+ */
+function removeAbandonedStaging(floorDir: string): void {
+  const prefix = `${path.basename(floorDir)}.staging-`
+  const names = readdirSync(path.dirname(floorDir))
+  for (const name of names) {
+    if (name.startsWith(prefix) && !isRunning(Number(name.slice(prefix.length)))) {
+      rmSync(path.join(path.dirname(floorDir), name), { recursive: true, force: true })
+    }
+  }
+}
+
+/**
+ * Installs Next.js into a staging directory of this process beside `floorDir` and moves it into
+ * place once npm has finished, so `floorDir` exists only when the install is whole. A tree an
+ * earlier installer did not finish is replaced.
  */
 async function installInto(floorDir: string, npm: string): Promise<void> {
-  const staging = `${floorDir}.staging`
+  removeAbandonedStaging(floorDir)
+  const staging = `${floorDir}.staging-${process.pid}`
   rmSync(staging, { recursive: true, force: true })
   mkdirSync(staging, { recursive: true })
   trackDirectory(staging)
