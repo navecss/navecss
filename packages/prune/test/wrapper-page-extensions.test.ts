@@ -7,8 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { HANDOFF_VARIABLE } from '../src/handoff.ts'
 import { withNave } from '../src/index.ts'
+import { hookMetadata, writeBuildCss } from './helpers/build-output.ts'
+import { installNext, moduleSource, runAndRead, scratchProjects } from './helpers/graph-fixture.ts'
+import { listen } from './helpers/hook-run.ts'
 import { createProject, type Project } from './helpers/project.ts'
-import { type ConfigLike, handoffInEnv } from './helpers/wrapper-config.ts'
+import { type ConfigLike, handoffInEnv, settle } from './helpers/wrapper-config.ts'
 
 /**
  * A config with a `pageExtensions` list, which Next.js's own types allow and ConfigLike leaves out.
@@ -74,4 +77,44 @@ describe('AC-nextjs-used-atoms-13: withNave() and pageExtensions', () => {
       expect(() => withNave(configWith(list))).toThrow(`"${bad}"`)
     },
   )
+})
+
+describe('AC-nextjs-used-atoms-13: the build hook withNave() installs reads pageExtensions', () => {
+  const make = scratchProjects()
+  let saved: string | undefined
+
+  beforeEach(() => {
+    saved = process.env[HANDOFF_VARIABLE]
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    if (saved === undefined) delete process.env[HANDOFF_VARIABLE]
+    else process.env[HANDOFF_VARIABLE] = saved
+  })
+
+  it('passes a clean build of an app whose entries carry the extension, and stops on a new entry', async () => {
+    const made = make({
+      'app/layout.page.tsx': moduleSource('app/layout.tsx', ['srOnlyFocusable']),
+      'app/page.page.tsx': moduleSource('app/page.tsx', ['flex']),
+    })
+    installNext(made)
+    const { result } = await runAndRead(made, { pageExtensions: ['page.tsx'] })
+    writeBuildCss(made, result.css)
+    const config = (await settle(withNave(configWith(['page.tsx'])))) as {
+      compiler: { runAfterProductionCompile: (metadata: unknown) => Promise<void> }
+    }
+    const { errors } = listen()
+
+    await expect(
+      config.compiler.runAfterProductionCompile(hookMetadata(made)),
+    ).resolves.toBeUndefined()
+    expect(errors).not.toHaveBeenCalled()
+
+    made.write({ 'app/loading.page.tsx': moduleSource('app/loading.tsx', ['block']) })
+    await expect(config.compiler.runAfterProductionCompile(hookMetadata(made))).rejects.toThrow(
+      'Nave stopped the build',
+    )
+    expect(String(errors.mock.calls[0]?.[0])).toContain('app/')
+  })
 })

@@ -17,8 +17,10 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { forgetGroup, killGroups, trackGroup } from './helpers/leftovers.ts'
+import { startDev } from './helpers/next-dev.ts'
 import { nextEnvironment, PACKAGE_ROOT } from './helpers/next-process.ts'
 
 const HELPERS = path.join(import.meta.dirname, 'helpers')
@@ -43,10 +45,18 @@ interface Scratch {
 }
 
 /**
+ * The helper process of the stand-in `next`: on SIGTERM it takes a second and a half to write
+ * `finishedFile` and end, as a worker finishing what it writes does.
+ */
+function helperScript(finishedFile: string): string {
+  return `process.on('SIGTERM', () => setTimeout(() => { require('node:fs').writeFileSync(${JSON.stringify(finishedFile)}, 'done'); process.exit(0) }, 1500)); setInterval(() => {}, 1000)`
+}
+
+/**
  * The stand-in `next`: it listens on `--port`, starts a helper that outlives nothing but its
  * group, and prints both process ids.
  */
-function writeFakeNext(root: string): void {
+function writeFakeNext(root: string, finishedFile: string): void {
   const bin = path.join(root, 'dist/bin')
   mkdirSync(bin, { recursive: true })
   writeFileSync(
@@ -55,7 +65,7 @@ function writeFakeNext(root: string): void {
       "const { spawn } = require('node:child_process')",
       "const http = require('node:http')",
       "const port = Number(process.argv[process.argv.indexOf('--port') + 1])",
-      "const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })",
+      `const helper = spawn(process.execPath, ['-e', ${JSON.stringify(helperScript(finishedFile))}], { stdio: 'ignore' })`,
       "http.createServer((_, res) => res.end('ok')).listen(port, '127.0.0.1', () => {",
       '  console.log(`PIDS ${process.pid} ${helper.pid}`)',
       '})',
@@ -76,7 +86,7 @@ function useScratch(): Scratch {
     const made = mkdtempSync(path.join(tmpdir(), 'prune-leftovers-'))
     directory = realpathSync(made)
     fakeNext = path.join(directory, 'node_modules/next')
-    writeFakeNext(fakeNext)
+    writeFakeNext(fakeNext, path.join(directory, 'helper-finished'))
   })
   afterEach(() => {
     for (const pid of started) {
@@ -307,4 +317,110 @@ describe('a test file that makes an app and starts a server', () => {
     },
     120_000,
   )
+})
+
+describe('stopping a server started through startDev', () => {
+  const scratch = useScratch()
+
+  it('waits for its workers to finish what they write', async () => {
+    const server = await startDev([], scratch.directory(), { nextRoot: scratch.fakeNext() })
+    await server.get('/')
+    scratch.track(pidsIn(server.output()))
+
+    await server.stop()
+
+    expect(existsSync(path.join(scratch.directory(), 'helper-finished'))).toBe(true)
+  })
+
+  it('does nothing the second time: it signals no process', async () => {
+    const server = await startDev([], scratch.directory(), { nextRoot: scratch.fakeNext() })
+    await server.get('/')
+    scratch.track(pidsIn(server.output()))
+    await server.stop()
+    const kill = vi.spyOn(process, 'kill')
+
+    await server.stop()
+
+    expect(kill).not.toHaveBeenCalled()
+    kill.mockRestore()
+  })
+})
+
+describe('the groups the cleanup tracks', () => {
+  // An id no process group has, so nothing real can be signalled by a mistake.
+  const GROUP = 2_147_000_000
+
+  it('forgets a group it has signalled: it is not signalled again', () => {
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      trackGroup(GROUP)
+
+      killGroups('SIGKILL')
+      killGroups('SIGKILL')
+
+      expect(kill.mock.calls.filter(([pid]) => pid === -GROUP)).toHaveLength(1)
+    } finally {
+      kill.mockRestore()
+      forgetGroup(GROUP)
+    }
+  })
+})
+
+/**
+ * The text of a test file, under this package's cleanup, whose server starts once in `beforeAll`
+ * and is used by two rows.
+ */
+function sharedServerFile(scratch: Scratch): string {
+  const report = JSON.stringify(path.join(scratch.directory(), 'report.json'))
+  return [
+    "import { writeFileSync } from 'node:fs'",
+    "import { beforeAll, expect, it } from 'vitest'",
+    `import { createNextApp } from ${JSON.stringify(NEXT_APP)}`,
+    '',
+    "let server: Awaited<ReturnType<ReturnType<typeof createNextApp>['dev']>>",
+    '',
+    'beforeAll(async () => {',
+    `  const app = createNextApp(undefined, { nextRoot: ${JSON.stringify(scratch.fakeNext())} })`,
+    '  server = await app.dev([])',
+    "  await server.get('/')",
+    `  writeFileSync(${report}, JSON.stringify({ top: app.top, output: server.output() }))`,
+    '})',
+    '',
+    "it('uses the server', () => {",
+    "  expect(server.origin).toContain('http')",
+    '})',
+    '',
+    "it('finds the server of the file still answering', async () => {",
+    "  expect((await server.get('/')).status).toBe(200)",
+    '})',
+    '',
+  ].join('\n')
+}
+
+describe('a server a file starts for all its rows', () => {
+  const scratch = useScratch()
+
+  it('survives the rows, and is gone with the file', async () => {
+    const dir = scratch.directory()
+    writeFileSync(
+      path.join(dir, 'vitest.config.mjs'),
+      `export default { test: { root: ${JSON.stringify(dir)}, include: ['file.test.ts'], setupFiles: [${JSON.stringify(HOOKS)}], testTimeout: 60000 } }\n`,
+    )
+    writeFileSync(path.join(dir, 'file.test.ts'), sharedServerFile(scratch))
+
+    const run = await finished(process.execPath, [VITEST, 'run', '--config', 'vitest.config.mjs'], {
+      cwd: dir,
+      env: nextEnvironment(),
+    })
+
+    const seen = JSON.parse(readFileSync(path.join(dir, 'report.json'), 'utf8')) as {
+      output: string
+      top: string
+    }
+    const pids = pidsIn(seen.output)
+    scratch.track(pids)
+    expect(run.code, run.output).toBe(0)
+    expect(existsSync(seen.top), 'the app is removed').toBe(false)
+    expect(await untilGone(pids, 10_000), 'the server and its helper are gone').toEqual([])
+  }, 120_000)
 })

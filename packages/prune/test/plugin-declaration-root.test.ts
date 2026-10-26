@@ -1,9 +1,9 @@
 /**
  * The root the plugin declares files within. Turbopack panics on a declared file outside its own
  * root, which is `outputFileTracingRoot`, else `turbopack.root`, else the workspace root Next.js
- * infers from the project directory. The plugin uses the same root, so a workspace package above
- * the app is declared and a file above the workspace is not. Webpack has no such limit, so after
- * webpack's callback ran every file read is declared.
+ * infers from the project directory. The plugin uses the same root for both bundlers, so a
+ * workspace package above the app is declared and a file above the workspace is not, also after
+ * webpack's callback ran.
  */
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -146,11 +146,21 @@ describe('the root the plugin declares files within', () => {
     expect(files).toContain('packages/ui/look.ts')
   })
 
-  it('does not apply once webpack ran the callback: a file beside the workspace is declared', async () => {
+  it('bounds the declarations once webpack ran the callback too: a file beside the workspace is not declared', async () => {
     const repo = monorepo(WORKSPACE)
     const files = await declaredFrom(repo, {}, { webpackDir: repo.web })
-    expect(files).toEqual(
-      expect.arrayContaining(['packages/ui/look.ts', path.relative(repo.top, repo.outside)]),
+    expect(files).toContain('packages/ui/look.ts')
+    expect(files).not.toContain(path.relative(repo.top, repo.outside))
+  })
+
+  it('is the configured root after webpack’s callback, as before it', async () => {
+    const repo = monorepo(WORKSPACE)
+    const files = await declaredFrom(
+      repo,
+      { turbopack: { root: repo.web } },
+      { webpackDir: repo.web },
     )
+    expect(files).toContain('apps/web/app/page.tsx')
+    expect(files).not.toContain('packages/ui/look.ts')
   })
 })

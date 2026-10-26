@@ -212,13 +212,14 @@ describe('Which atoms the build ships', () => {
     expect(section).toContain('Next.js can still order, merge and minify CSS differently')
   })
 
-  it('says, under in next dev, that a file outside Turbopack’s root is not watched there and is caught by the build', () => {
+  it('says, under in next dev, that a file outside Next.js’s workspace root does not re-run the plugin there and is caught by the build', () => {
     const dev = sectionOf(readme, headings, 'In next dev')
     expect(dev).toMatch(
       /outside[^.]*root[^.]*(?:not told to watch|not watched|does not re-run|is not re-read)/u,
     )
     expect(dev).toMatch(/`next build`[^.]*(?:checks|catches|fails)/u)
     expect(dev).toMatch(/reads that no bundler compiles/u)
+    expect(dev).toMatch(/on webpack, a module your app imports/u)
   })
 
   it('limits the unresolved-import error to your code and the packages that reach cx', () => {

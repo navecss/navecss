@@ -4,10 +4,11 @@
  * is a script that writes `next` first, waits, then writes `react`, as the real one extracts them
  * one after another.
  */
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import {
   chmodSync,
   existsSync,
+  readFileSync,
   mkdtempSync,
   readdirSync,
   realpathSync,
@@ -168,4 +169,90 @@ describe('the Next.js floor install', () => {
 
     expect(isReactInstalled(scratch.floorDir())).toBe(true)
   }, 30_000)
+})
+
+/**
+ * One trial of the race: `callers` processes ask for the floor at once, a lock of an installer
+ * that is gone is in place when `isLocked` is set, and a shim `npm` logs each start. Resolves to
+ * how many times npm started and what each caller answered.
+ */
+async function raceTrial(
+  callers: number,
+  isLocked: boolean,
+): Promise<{ readonly answers: string[]; readonly starts: number; readonly isWhole: boolean }> {
+  const directory = realpathSync(mkdtempSync(path.join(tmpdir(), 'prune-floor-race-')))
+  try {
+    const floorDir = path.join(directory, 'floor')
+    const npm = script(directory, 'npm', [
+      `echo $$ >> ${directory}/starts.log`,
+      'mkdir -p node_modules/next node_modules/react',
+      `printf '{"version":"${FLOOR_VERSION}"}' > node_modules/next/package.json`,
+      'sleep 1',
+      `printf '{"version":"19.2.0"}' > node_modules/react/package.json`,
+    ])
+    const asking = path.join(directory, 'ask.mjs')
+    writeFileSync(
+      asking,
+      [
+        `import { floorNextRootIn } from ${JSON.stringify(FLOOR_HELPER)}`,
+        'try {',
+        '  await floorNextRootIn(process.argv[2], process.argv[3])',
+        "  console.log('ok')",
+        '} catch (error) {',
+        "  console.log(`ERR ${String(error.message).split('\\n')[0]}`)",
+        '}',
+        '',
+      ].join('\n'),
+    )
+    // A process that has ended: its id names no installer that is running.
+    if (isLocked)
+      writeFileSync(`${floorDir}.installing`, String(spawnSync(process.execPath, ['-e', '']).pid))
+    const answers = await Promise.all(
+      Array.from({ length: callers }, () => answerOf(asking, floorDir, npm)),
+    )
+    const log = path.join(directory, 'starts.log')
+    return {
+      answers,
+      starts: existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').length : 0,
+      isWhole: isReactInstalled(floorDir),
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+/**
+ * What one process running `script` with `args` printed.
+ */
+function answerOf(file: string, ...args: string[]): Promise<string> {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [file, ...args], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let output = ''
+    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
+    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
+    child.once('close', () => resolve(output.trim()))
+  })
+}
+
+describe('the Next.js floor install asked by several processes at once', () => {
+  it('runs npm once and answers every caller, with no lock in place', async () => {
+    const trial = await raceTrial(8, false)
+
+    expect(trial.starts).toBe(1)
+    expect(trial.answers).toEqual(Array.from({ length: 8 }, () => 'ok'))
+    expect(trial.isWhole).toBe(true)
+  }, 60_000)
+
+  it('runs npm once and answers every caller, when a lock of an installer that is gone is in place, 20 of 20 times', async () => {
+    const trials: Awaited<ReturnType<typeof raceTrial>>[] = []
+    for (let batch = 0; batch < 4; batch += 1) {
+      trials.push(...(await Promise.all(Array.from({ length: 5 }, () => raceTrial(8, true)))))
+    }
+
+    expect(trials.map((trial) => trial.starts)).toEqual(Array.from({ length: 20 }, () => 1))
+    expect(trials.flatMap((trial) => trial.answers)).toEqual(
+      Array.from({ length: 160 }, () => 'ok'),
+    )
+    expect(trials.every((trial) => trial.isWhole)).toBe(true)
+  }, 300_000)
 })

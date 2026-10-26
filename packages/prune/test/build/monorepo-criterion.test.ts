@@ -1,7 +1,7 @@
 /**
- * AC-nextjs-used-atoms-07 on real builds: in a pnpm workspace the root is Turbopack's, a workspace
- * package re-runs the plugin, a file outside the root is caught in the build, and paths are the
- * app's. The app is `apps/web`; `packages/ui` is a workspace package that calls `cx('gap')`.
+ * AC-nextjs-used-atoms-07 on real builds: in a pnpm workspace the root is the one Next.js infers
+ * (Turbopack's own), a workspace package re-runs the plugin, a file outside the root is caught in
+ * the build, and paths are the app's. The app is `apps/web`; `packages/ui` is a workspace package that calls `cx('gap')`.
  * Three states: the workspace as it is; with `bad-lib`, a dependency holding three calls nothing
  * can read, installed in the store at the top; and with a module outside the workspace that a
  * tsconfig `paths` entry reaches. Every row runs on all four cells, cold and then warm.
@@ -107,7 +107,7 @@ function expectFirstState(app: WorkspaceApp, cell: Cell, place: Place): void {
   expect(files).toContain(app.uiModule)
   expect(
     files.filter((file) => !isInside(app.root, file)),
-    "nothing outside Turbopack's root is declared",
+    'nothing outside the root is declared',
   ).toEqual([])
   for (const probe of probes) {
     const isTurbopack = cell.bundler === 'turbopack'
@@ -135,10 +135,8 @@ function linesOpening(output: string, prefix: string): string[] {
   return output.split('\n').filter((line) => line.startsWith(prefix))
 }
 
-// Next.js 16.2.0 on webpack now and then dies with an uncaught `Cannot read properties of
-// undefined (reading 'length')` right after it starts the production build, and did not repeat in
-// ten plain builds of the same fixture, so a failed row runs again before it counts (the `retry`
-// option below).
+// A row that fails runs again before it counts (the `retry` option below), except the webpack rows
+// of the third state: there a crash followed by a green run must not pass.
 describe.skipIf(SKIP_REASON !== undefined)(
   `a pnpm workspace on real builds${SKIP_REASON === undefined ? '' : ` (skipped: ${SKIP_REASON})`}`,
   { retry: 2 },
@@ -263,6 +261,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
 
     describe.each(PLACES)(
       'third state: a module outside the workspace behind a tsconfig paths entry, build run from %s',
+      { retry: 0 },
       (place) => {
         // Turbopack compiles nothing outside its root ("files outside of the workspace root are not
         // compiled", its own note), so a page cannot import a module there at all: the cold build
@@ -287,10 +286,11 @@ describe.skipIf(SKIP_REASON !== undefined)(
           TIMEOUT,
         )
 
-        // Webpack has no root to stay inside, so the plugin declares what it read, the module
-        // outside the workspace included, and the warm build re-runs the plugin instead of failing.
+        // Webpack compiles and reads the module outside the workspace, but the package declares
+        // nothing outside the root Next.js infers, as on Turbopack, so an edit to the module does not
+        // re-run the plugin and the warm build stops on the stale check, naming the file.
         it.each(webpackCells().map((cell) => [cell.name, cell] as const))(
-          'AC-nextjs-used-atoms-07: %s: the module is read and ships its atom, webpack has no root so it is declared, and the warm build after its call changes ships the new atom',
+          'AC-nextjs-used-atoms-07: %s: the module is read, declared nowhere, and the warm build after its call changes fails from the stale check naming it',
           async (_name, cell) => {
             const app = await newApp(cell)
             app.useExternal('hidden')
@@ -301,19 +301,23 @@ describe.skipIf(SKIP_REASON !== undefined)(
             expect(app.builtCss()).toContain('.nave-hidden')
             const key = relativeToApp(app, app.external)
             expect(Object.keys(app.record()?.files ?? {}), 'x.ts is read').toContain(key)
-            expect(declared(app)).toContain(app.external)
+            const named = declared(app)
+            expect(named, 'the package declared what is inside the root').toContain(app.uiModule)
+            expect(named, 'x.ts is declared nowhere').not.toContain(app.external)
+            expect(
+              named.filter((file) => !isInside(app.root, file)),
+              'nothing outside the root is declared, a directory included',
+            ).toEqual([])
 
-            // Next.js 16.2.0 on webpack dies on the warm build once a module outside the workspace
-            // changes (an uncaught `Cannot read properties of undefined (reading 'length')`, every
-            // time, from the top and from the app). It does so only while the package declares that
-            // module to the bundler: the same workspace built without the package is green. So the
-            // row ends with the cold build.
-            if (cell.version === 'floor') return
             app.externalAt('block')
             const warm = await app.next(args, cwd)
-            expect(warm.code, warm.output).toBe(0)
-            expect(app.builtCss()).toContain('.nave-block')
-            expect(app.builtCss()).not.toContain('.nave-hidden')
+            expect(warm.code, warm.output).not.toBe(0)
+            expect(warm.output).toContain(
+              `withNave(): ${key} changed after @navecss/prune/postcss read it`,
+            )
+            expect(warm.output).not.toMatch(
+              /uncaughtException|Cannot read properties of undefined/u,
+            )
           },
           TIMEOUT,
         )
