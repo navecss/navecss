@@ -212,7 +212,7 @@ test('a MALFORMED numbered item fails closed rather than truncating the list sil
     '2. The **`lint`** step runs next.',
   )
   // Ending the section at item 1 would make items 2 and 3 invisible, and a chain that happens
-  // to BE that surviving prefix would then read as agreeing with an 11-item documented list.
+  // to BE that surviving prefix would then read as agreeing with a 12-item documented list.
   assert.equal(extractContributingChain(restyled), null)
   assert.equal(runMain(fixtureRoot(restyled), ['typecheck']).code, 1)
 })
