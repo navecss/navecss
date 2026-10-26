@@ -30,6 +30,10 @@ export interface Handoff {
    * `next` was started: `next build apps/web` run from a repository's top loads it from the top.
    */
   readonly isBundlerDir?: boolean
+  /**
+   * The config's `pageExtensions`, absent when it sets none.
+   */
+  readonly pageExtensions?: readonly string[]
 }
 
 /**

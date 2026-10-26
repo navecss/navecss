@@ -48,6 +48,10 @@ export interface HookConfig {
    * CSS and what `HookMetadata` carries; the record stays where the plugin put it.
    */
   readonly recordDistDir?: string
+  /**
+   * The config's `pageExtensions`, absent when it sets none.
+   */
+  readonly pageExtensions?: readonly string[]
 }
 
 /**

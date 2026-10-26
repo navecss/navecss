@@ -15,7 +15,6 @@ export const FLOOR_VERSION = '16.2.0'
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, '../..')
 const FLOOR_DIR = path.join(PACKAGE_ROOT, `.nave-next-floor-${FLOOR_VERSION}`)
-const LOCK_DIR = `${FLOOR_DIR}.lock`
 
 /**
  * The version of the `next` installed under `directory`, or `undefined` when none is.
@@ -34,9 +33,9 @@ function installedVersion(directory: string): string | undefined {
 /**
  * Runs npm in `cwd` to its exit, rejecting with its output on a non-zero code.
  */
-function runNpm(args: readonly string[], cwd: string): Promise<void> {
+function runNpm(npm: string, args: readonly string[], cwd: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn('npm', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(npm, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
     let output = ''
     child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
     child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
@@ -44,7 +43,7 @@ function runNpm(args: readonly string[], cwd: string): Promise<void> {
     child.once('close', (code) =>
       code === 0
         ? resolve()
-        : reject(new Error(`npm ${args.join(' ')} exited ${code}:\n${output}`)),
+        : reject(new Error(`${npm} ${args.join(' ')} exited ${code}:\n${output}`)),
     )
   })
 }
@@ -52,31 +51,31 @@ function runNpm(args: readonly string[], cwd: string): Promise<void> {
 /**
  * Takes the install lock, waiting for another test file's worker that holds it.
  */
-async function lock(): Promise<void> {
+async function lock(floorDir: string): Promise<void> {
   for (;;) {
     try {
-      mkdirSync(LOCK_DIR)
+      mkdirSync(`${floorDir}.lock`)
       return
     } catch {
-      if (installedVersion(FLOOR_DIR) === FLOOR_VERSION) return
+      if (installedVersion(floorDir) === FLOOR_VERSION) return
       await pause(1000)
     }
   }
 }
 
 /**
- * The directory of Next.js 16.2.0, installed beside React and React DOM, installing it first when
- * this package has no copy.
+ * The directory of Next.js 16.2.0 installed under `floorDir` (beside React and React DOM) by the
+ * command `npm`, installing it first when `floorDir` has no copy.
  */
-export async function floorNextRoot(): Promise<string> {
-  const root = path.join(FLOOR_DIR, 'node_modules/next')
-  if (installedVersion(FLOOR_DIR) === FLOOR_VERSION) return root
-  await lock()
+export async function floorNextRootIn(floorDir: string, npm = 'npm'): Promise<string> {
+  const root = path.join(floorDir, 'node_modules/next')
+  if (installedVersion(floorDir) === FLOOR_VERSION) return root
+  await lock(floorDir)
   try {
-    if (installedVersion(FLOOR_DIR) !== FLOOR_VERSION) {
-      mkdirSync(FLOOR_DIR, { recursive: true })
+    if (installedVersion(floorDir) !== FLOOR_VERSION) {
+      mkdirSync(floorDir, { recursive: true })
       writeFileSync(
-        path.join(FLOOR_DIR, 'package.json'),
+        path.join(floorDir, 'package.json'),
         JSON.stringify({
           name: 'nave-next-floor',
           private: true,
@@ -84,15 +83,23 @@ export async function floorNextRoot(): Promise<string> {
         }),
       )
       await runNpm(
+        npm,
         ['install', '--no-audit', '--no-fund', '--ignore-scripts', '--loglevel=error'],
-        FLOOR_DIR,
+        floorDir,
       )
     }
   } finally {
-    rmSync(LOCK_DIR, { recursive: true, force: true })
+    rmSync(`${floorDir}.lock`, { recursive: true, force: true })
   }
-  if (!existsSync(root) || installedVersion(FLOOR_DIR) !== FLOOR_VERSION) {
-    throw new Error(`could not install next@${FLOOR_VERSION} under ${FLOOR_DIR}`)
+  if (!existsSync(root) || installedVersion(floorDir) !== FLOOR_VERSION) {
+    throw new Error(`could not install next@${FLOOR_VERSION} under ${floorDir}`)
   }
   return root
+}
+
+/**
+ * The directory of Next.js 16.2.0 this package keeps, installed first when it has no copy.
+ */
+export function floorNextRoot(): Promise<string> {
+  return floorNextRootIn(FLOOR_DIR)
 }

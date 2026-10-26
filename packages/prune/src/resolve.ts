@@ -163,7 +163,7 @@ function syncThroughAliases(
  * The path without a query or fragment, which the resolver keeps on a specifier written with one
  * (`./ui?v=1`) and no file on disk has.
  */
-function withoutQuery(file: string): string {
+export function withoutQuery(file: string): string {
   const base = file.lastIndexOf('/') + 1
   const mark = file.slice(base).search(/[?#]/u)
   return mark === -1 ? file : file.slice(0, base + mark)

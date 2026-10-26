@@ -2,6 +2,8 @@
 import type { AtomName } from '@navecss/core/atoms'
 
 import { atoms as builtInAtoms } from '@navecss/core/atoms'
+import { rmSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -11,6 +13,8 @@ import {
   scratchProjects,
   sorted,
 } from './helpers/graph-fixture.ts'
+import { writeBuildCss } from './helpers/build-output.ts'
+import { runCheck } from './helpers/hook-run.ts'
 import { atomsIn } from './helpers/layer.ts'
 import { ATOMIC_CSS } from './helpers/project.ts'
 
@@ -157,4 +161,174 @@ describe.each([
       expect(Object.keys(record.files)).toContain(locate(row, isUnderSrc))
     },
   )
+})
+
+/**
+ * `file` with `.page` before its last extension: `app/p/page.tsx` becomes `app/p/page.page.tsx`.
+ */
+function withPageSuffix(file: string): string {
+  const dot = file.lastIndexOf('.')
+  return `${file.slice(0, dot)}.page${file.slice(dot)}`
+}
+
+const PAGE_EXTENSIONS = ['page.tsx', 'page.ts']
+
+/**
+ * The convention files of ROWS, and the root layout and page, all written with the `.page`
+ * extension a project that sets `pageExtensions: ['page.tsx', 'page.ts']` uses.
+ */
+function pageSuffixed(isUnderSrc: boolean, rows: readonly EntryRow[]): Record<string, string> {
+  const base = isUnderSrc ? 'src/app' : 'app'
+  const files: Record<string, string> = {
+    [withPageSuffix(`${base}/layout.tsx`)]: LAYOUT,
+    [withPageSuffix(`${base}/page.tsx`)]: PAGE,
+  }
+  for (const row of rows) {
+    const file = locate(row, isUnderSrc)
+    files[row.moves ? withPageSuffix(file) : file] = moduleSource(row.file, [row.atom])
+  }
+  return files
+}
+
+describe.each([
+  { variant: 'app/', isUnderSrc: false },
+  { variant: 'src/app/', isUnderSrc: true },
+])(
+  'AC-nextjs-used-atoms-13: every convention is read with the pageExtensions extension under $variant',
+  ({ isUnderSrc }) => {
+    const make = scratchProjects()
+
+    /**
+     * A project whose convention files all carry `.page` before the extension.
+     */
+    function build(rows: readonly EntryRow[]): ReturnType<typeof make> {
+      const project = make(pageSuffixed(isUnderSrc, rows))
+      installNext(project)
+      return project
+    }
+
+    it('AC-nextjs-used-atoms-13: the layer holds exactly flex and each row atom', async () => {
+      const { atoms, record } = await runAndRead(build(ROWS), {
+        pageExtensions: PAGE_EXTENSIONS,
+      })
+      expect(atoms).toEqual(expectedFor(ROWS))
+      expect(record.atoms).toEqual(expectedFor(ROWS))
+    })
+
+    it.each(ROWS.filter((row) => row.moves))(
+      'AC-nextjs-used-atoms-13: control, the $entry atom is absent when its file is removed',
+      async (row) => {
+        const others = ROWS.filter((other) => other !== row)
+        const { atoms } = await runAndRead(build(others), { pageExtensions: PAGE_EXTENSIONS })
+        expect(atoms).toEqual(expectedFor(others))
+        expect(atoms).not.toContain(row.atom)
+      },
+    )
+
+    it('AC-nextjs-used-atoms-13: control, without the extension in pageExtensions the files are not entries', async () => {
+      const { atoms } = await runAndRead(build(ROWS), { pageExtensions: ['tsx', 'ts'] })
+      expect(atoms).toEqual([])
+    })
+  },
+)
+
+describe('AC-nextjs-used-atoms-13: pageExtensions in the spec’s row and for the page shell', () => {
+  const make = scratchProjects()
+
+  /**
+   * A project with a page and a nested page written with `.page.tsx`, beside a layout.
+   */
+  function project(layout = 'layout.page.tsx'): ReturnType<typeof make> {
+    const made = make({
+      [`app/${layout}`]: moduleSource('app/layout.tsx', ['srOnlyFocusable']),
+      'app/page.page.tsx': moduleSource('app/page.tsx', ['flex']),
+      'app/q/page.page.tsx': moduleSource('app/q/page.tsx', ['grid']),
+    })
+    installNext(made)
+    return made
+  }
+
+  it('AC-nextjs-used-atoms-13: app/q/page.page.tsx with pageExtensions page.tsx, tsx and ts puts grid in the layer', async () => {
+    const { atoms } = await runAndRead(project(), { pageExtensions: ['page.tsx', 'tsx', 'ts'] })
+    expect(atoms).toContain('grid')
+    expect(atoms).toContain('flex')
+  })
+
+  it('AC-nextjs-used-atoms-13: control, with the file removed grid is not in the layer', async () => {
+    const made = project()
+    rmSync(path.join(made.dir, 'app/q/page.page.tsx'))
+    const { atoms } = await runAndRead(made, { pageExtensions: ['page.tsx', 'tsx', 'ts'] })
+    expect(atoms).not.toContain('grid')
+  })
+
+  it('AC-nextjs-used-atoms-13: control, with page.tsx left out of pageExtensions grid is not in the layer', async () => {
+    const { atoms } = await runAndRead(project(), { pageExtensions: ['tsx', 'ts'] })
+    expect(atoms).not.toContain('grid')
+  })
+
+  it('reads the layout that holds the skip link, so the atom ships whole', async () => {
+    const { atoms } = await runAndRead(project(), { pageExtensions: ['page.tsx', 'tsx', 'ts'] })
+    expect(atoms).toContain('srOnlyFocusable')
+    expect(atoms).toContain('srOnly')
+  })
+
+  it('control: with page.tsx left out of pageExtensions the layout is not read', async () => {
+    const { atoms } = await runAndRead(project(), { pageExtensions: ['tsx', 'ts'] })
+    expect(atoms).not.toContain('srOnlyFocusable')
+  })
+
+  it('reads an extension of Markdown the way it reads a file of that kind: named, not parsed', async () => {
+    const made = project()
+    made.write({ 'app/notes/page.mdx': '# Notes\n' })
+    const { record } = await runAndRead(made, { pageExtensions: ['page.tsx', 'tsx', 'mdx'] })
+    expect(record.markdown).toEqual(['app/notes/page.mdx'])
+  })
+})
+
+describe('AC-nextjs-used-atoms-13: what the bundler is told to watch with pageExtensions', () => {
+  const make = scratchProjects()
+
+  /**
+   * The patterns declared for the directory holding `next.config`, from a run with `pageExtensions`.
+   */
+  async function rootGlobs(pageExtensions?: readonly string[]): Promise<string[]> {
+    const made = make({ 'app/page.tsx': moduleSource('app/page.tsx', ['flex']) })
+    installNext(made)
+    const { result } = await runAndRead(made, { ...(pageExtensions && { pageExtensions }) })
+    return result.messages.flatMap((message) =>
+      message.type === 'dir-dependency' && message['dir'] === made.dir
+        ? [String(message['glob'])]
+        : [],
+    )
+  }
+
+  it('keeps the pattern of the default extensions when the config sets none', async () => {
+    expect(await rootGlobs()).toEqual([
+      '{instrumentation,instrumentation-client,mdx-components,proxy}.{cjs,cts,js,jsx,mjs,mts,ts,tsx}',
+    ])
+  })
+
+  it('adds the extensions the config sets to the pattern for the root conventions', async () => {
+    const [glob] = await rootGlobs(['page.tsx', 'tsx'])
+    expect(glob).toContain('page.tsx')
+    expect(glob).toContain('mjs')
+  })
+
+  it('the build check sees a new convention file with the configured extension', async () => {
+    const made = make({
+      'app/layout.page.tsx': moduleSource('app/layout.tsx', ['srOnlyFocusable']),
+      'app/page.page.tsx': moduleSource('app/page.tsx', ['flex']),
+      'app/q/page.page.tsx': moduleSource('app/q/page.tsx', ['grid']),
+    })
+    installNext(made)
+    const config = { pageExtensions: ['page.tsx'] }
+    const { result } = await runAndRead(made, config)
+    writeBuildCss(made, result.css)
+    made.write({ 'app/q/loading.page.tsx': moduleSource('app/q/loading.tsx', ['block']) })
+
+    const printed = await runCheck(made, {}, config)
+
+    expect(printed.error?.message).toMatch(/Nave stopped the build/u)
+    expect(printed.errors.join('\n')).toContain('app/q/')
+  })
 })

@@ -311,6 +311,27 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-44, keepFor reaches packages un
     expect(outcome.remedies.some((line) => line.startsWith('@acme/ui is a dependency'))).toBe(true)
   })
 
+  it('a nested manifest with an empty name is no more the package than one with no name', async () => {
+    const emptyName: Scenario = {
+      ...scenario,
+      setup(project) {
+        scenario.setup!(project)
+        writeFileSync(
+          path.join(
+            project.dir,
+            'node_modules/.pnpm/@acme+ui@1.2.0/node_modules/@acme/ui/dist/package.json',
+          ),
+          '{ "name": "", "type": "module" }',
+        )
+      },
+    }
+    const outcome = await read(emptyName)
+    const listed = await read({ ...emptyName, options: { keepFor: { '@acme/ui': ['flex'] } } })
+
+    expect(outcome.remedies.some((line) => line.startsWith('@acme/ui is a dependency'))).toBe(true)
+    expect(listed.problems.some((line) => line.includes('/dist/'))).toBe(false)
+  })
+
   it('listing all three stops the two dependencies’ problems and never the workspace package’s', async () => {
     const listed = await read({
       ...scenario,

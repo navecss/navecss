@@ -4,9 +4,11 @@
  * subpath and export.
  */
 import { REPORT_CAUSE } from '@navecss/core/collect'
+import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -40,9 +42,51 @@ const fingerprint = (text: string): { bytes: number; sha256: string } => ({
   sha256: createHash('sha256').update(text).digest('hex').slice(0, 16),
 })
 
+const PARTS = [
+  'What it does',
+  'What the build reads',
+  'Names chosen at run time',
+  'Code you import',
+  'In next dev',
+  'What it cannot see',
+  'Shipping every atom',
+  'For package authors',
+]
+
 const LINK = '[What it cannot see](#what-it-cannot-see)'
 const PLACEHOLDER_LINK = '[<SECTION>](#<ANCHOR>)'
 const FILLED_PRODUCTION_CHECK = PRODUCTION_CHECK.replace(PLACEHOLDER_LINK, () => LINK)
+
+/**
+ * The titles of the third-level headings under "Which atoms the build ships".
+ */
+function partTitles(text: string): string[] {
+  const all = headingsOf(text)
+  return all
+    .slice(all.findIndex((heading) => heading.title === 'Which atoms the build ships') + 1)
+    .filter((heading) => heading.level === 3)
+    .slice(0, 8)
+    .map((heading) => heading.title)
+}
+
+/**
+ * Whether the text directly after Setup's two fences is the production check.
+ */
+function holdsProductionCheck(text: string): boolean {
+  const setup = sectionOf(text, headingsOf(text), 'Setup')
+  const afterSecondFence = setup.slice(
+    setup.indexOf('```', setup.indexOf('withNave(nextConfig)')) + 3,
+  )
+  return afterSecondFence.trimStart().startsWith(FILLED_PRODUCTION_CHECK)
+}
+
+/**
+ * Whether the paragraph that closes "What it cannot see" is the residual paragraph.
+ */
+function holdsResidualParagraph(text: string): boolean {
+  const part = sectionOf(text, headingsOf(text), 'What it cannot see')
+  return part.trimEnd().endsWith(RESIDUAL_PARAGRAPH)
+}
 
 describe('the passages cleared as fixed text', () => {
   // Control: the support file holds what it says it holds, so the README comparison below cannot
@@ -114,10 +158,7 @@ describe('Setup', () => {
   })
 
   it('puts the production check directly after those two fences, before anything about options', () => {
-    const afterSecondFence = setup.slice(
-      setup.indexOf('```', setup.indexOf('withNave(nextConfig)')) + 3,
-    )
-    expect(afterSecondFence.trimStart().startsWith(FILLED_PRODUCTION_CHECK)).toBe(true)
+    expect(holdsProductionCheck(readme)).toBe(true)
     const check = setup.indexOf(FILLED_PRODUCTION_CHECK)
     const options = setup.search(/every option|all go in `withNave\(\)`|goes in `withNave\(\)`/u)
     expect(check).toBeGreaterThan(-1)
@@ -126,8 +167,7 @@ describe('Setup', () => {
 
   it('links the production check to the section that holds the residual paragraph (control: a renamed heading breaks it)', () => {
     expect(readme).toContain(LINK)
-    const part = sectionOf(readme, headings, 'What it cannot see')
-    expect(part.trimEnd().endsWith(RESIDUAL_PARAGRAPH)).toBe(true)
+    expect(holdsResidualParagraph(readme)).toBe(true)
     expect(slugOf('What it cannot see')).toBe('what-it-cannot-see')
     expect(brokenAnchors(readme.replace('### What it cannot see', '### Not seen'))).toContain(
       'what-it-cannot-see',
@@ -147,23 +187,8 @@ describe('Setup', () => {
 })
 
 describe('Which atoms the build ships', () => {
-  const parts = headings
-    .slice(headings.findIndex((heading) => heading.title === 'Which atoms the build ships') + 1)
-    .filter((heading) => heading.level === 3)
-    .slice(0, 8)
-    .map((heading) => heading.title)
-
   it('has its parts, in order, as third-level headings', () => {
-    expect(parts).toEqual([
-      'What it does',
-      'What the build reads',
-      'Names chosen at run time',
-      'Code you import',
-      'In next dev',
-      'What it cannot see',
-      'Shipping every atom',
-      'For package authors',
-    ])
+    expect(partTitles(readme)).toEqual(PARTS)
   })
 
   const section = sectionOf(readme, headings, 'Which atoms the build ships')
@@ -191,6 +216,7 @@ describe('Which atoms the build ships', () => {
       /outside[^.]*root[^.]*(?:not told to watch|not watched|does not re-run|is not re-read)/u,
     )
     expect(dev).toMatch(/`next build`[^.]*(?:checks|catches|fails)/u)
+    expect(dev).toMatch(/reads that no bundler compiles/u)
   })
 
   it('limits the unresolved-import error to your code and the packages that reach cx', () => {
@@ -267,6 +293,132 @@ describe('the fences', () => {
       'no name withEverything',
     ])
     expect(problemsIn("import { withNave } from '@navecss/prune'")).toEqual([])
+  })
+
+  it('reads an import renamed with as by the name it imports (control)', () => {
+    expect(problemsIn("import { withNave as wrap } from '@navecss/prune'")).toEqual([])
+    expect(problemsIn("import { type NaveOptions as Options } from '@navecss/prune'")).toEqual([])
+    expect(problemsIn("import { withEverything as w } from '@navecss/prune'")).toEqual([
+      'no name withEverything',
+    ])
+  })
+})
+
+describe('the checks on the README see what they are for (controls)', () => {
+  /**
+   * The README with `from` replaced by `to`; throws unless `from` is there exactly once and the
+   * text changes, so a change to the README cannot turn a control into one that changes nothing.
+   */
+  function mutated(from: string, to: string): string {
+    expect(readme.split(from), `${from.slice(0, 40)} is in the README once`).toHaveLength(2)
+    const result = readme.replace(from, () => to)
+    expect(result).not.toBe(readme)
+    return result
+  }
+
+  /**
+   * The README with the part "For package authors" and its text moved under "Options".
+   */
+  function movedUnderOptions(): string {
+    const lines = readme.split('\n')
+    const from = headings.find((heading) => heading.title === 'For package authors')!
+    const next = headings.find((heading) => heading.line > from.line && heading.level <= 3)!
+    const cut = lines.splice(from.line, next.line - from.line)
+    const migrating = headingsOf(lines.join('\n')).find((heading) =>
+      heading.title.startsWith('Migrating from'),
+    )!
+    lines.splice(migrating.line, 0, ...cut)
+    return lines.join('\n')
+  }
+
+  it('see a part moved out of the section that holds it', () => {
+    expect(partTitles(movedUnderOptions())).not.toEqual(PARTS)
+  })
+
+  it('see a part added after the eighth', () => {
+    expect(
+      partTitles(mutated('\n## Options\n', '\n### An extra part\n\nWords.\n\n## Options\n')),
+    ).not.toEqual(PARTS)
+  })
+
+  it('see a sentence added to the end of the production check', () => {
+    const added = mutated(
+      FILLED_PRODUCTION_CHECK,
+      `${FILLED_PRODUCTION_CHECK} Dev and build never differ.`,
+    )
+    expect(holdsProductionCheck(added)).toBe(false)
+  })
+
+  it('see a sentence added to the start of the production check', () => {
+    const added = mutated(
+      FILLED_PRODUCTION_CHECK,
+      `Ignore the following. ${FILLED_PRODUCTION_CHECK}`,
+    )
+    expect(holdsProductionCheck(added)).toBe(false)
+  })
+
+  it('see a sentence added to the start of the residual paragraph', () => {
+    const added = mutated(RESIDUAL_PARAGRAPH, `Ignore the following. ${RESIDUAL_PARAGRAPH}`)
+    expect(holdsResidualParagraph(added)).toBe(false)
+  })
+
+  it('see a sentence added to the end of the residual paragraph', () => {
+    const added = mutated(RESIDUAL_PARAGRAPH, `${RESIDUAL_PARAGRAPH} Dev and build never differ.`)
+    expect(holdsResidualParagraph(added)).toBe(false)
+  })
+
+  it('read the unaltered README as holding both passages', () => {
+    expect(holdsProductionCheck(readme)).toBe(true)
+    expect(holdsResidualParagraph(readme)).toBe(true)
+    expect(partTitles(readme)).toEqual(PARTS)
+  })
+})
+
+describe('the fence reader', () => {
+  /**
+   * The fences `fencesOf` finds in `text`, read in a process of its own that is stopped after ten
+   * seconds: a reader that never ends would otherwise stop the worker, and no timeout can.
+   */
+  function fencesInOwnProcess(text: string): { status: number | null; fences: unknown } {
+    const reader = pathToFileURL(path.join(PACKAGE_DIR, 'test/support/readme.ts')).href
+    const run = spawnSync(
+      process.execPath,
+      [
+        '--max-old-space-size=200',
+        '--input-type=module',
+        '--eval',
+        `import { fencesOf } from ${JSON.stringify(reader)}\nconsole.log(JSON.stringify(fencesOf(process.argv[1])))`,
+        text,
+      ],
+      { encoding: 'utf8', timeout: 10_000 },
+    )
+    return { status: run.status, fences: run.status === 0 ? JSON.parse(run.stdout) : run.stderr }
+  }
+
+  it('reads a fence that is never closed as running to the end of the text', () => {
+    const { status, fences } = fencesInOwnProcess('one\n```ts\nconst a = 1\n')
+
+    expect(status).toBe(0)
+    expect(fences).toEqual([{ language: 'ts', body: 'const a = 1\n', line: 1 }])
+  })
+
+  it('reads the closed fence before one that is never closed, and each once', () => {
+    const { status, fences } = fencesInOwnProcess('a\n```ts\nx\n```\nb\n```js\ny\n')
+
+    expect(status).toBe(0)
+    expect(fences).toEqual([
+      { language: 'ts', body: 'x', line: 1 },
+      { language: 'js', body: 'y\n', line: 5 },
+    ])
+  })
+
+  it('reads two closed fences as two', () => {
+    const { fences } = fencesInOwnProcess('```ts\nx\n```\n\n```js\ny\n```\n')
+
+    expect(fences).toEqual([
+      { language: 'ts', body: 'x', line: 0 },
+      { language: 'js', body: 'y', line: 4 },
+    ])
   })
 })
 
