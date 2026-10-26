@@ -6,8 +6,7 @@
  * sees the mark disappear. The server holds the inline stylesheet, as it holds an imported one,
  * until the modules the page loads have been read.
  */
-import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { navePlugin } from '../src/vite.ts'
 import { APP_CSS, appFiles, makeUsedApp } from './helpers/used-atoms-app.ts'
@@ -24,10 +23,7 @@ const INLINE_PAGE = `<!doctype html><html><head><style>${APP_CSS}</style></head>
  * last in the chain, is where the stylesheet is seen to have been served.
  */
 function scriptAfterStylesheet(ms: number): { readonly first: object; readonly last: object } {
-  let release!: () => void
-  const released = new Promise<void>((resolve) => {
-    release = resolve
-  })
+  const { promise: released, resolve: release } = Promise.withResolvers<void>()
   const timer = setTimeout(release, ms)
   return {
     first: {
@@ -35,18 +31,15 @@ function scriptAfterStylesheet(ms: number): { readonly first: object; readonly l
       enforce: 'pre',
       async transform(_code: string, id: string) {
         if (id.endsWith('src/main.ts')) await released
-        return undefined
       },
     },
     last: {
       name: 'test:stylesheet-served',
       enforce: 'post',
       transform(_code: string, id: string) {
-        if (id.includes('html-proxy')) {
-          clearTimeout(timer)
-          release()
-        }
-        return undefined
+        if (!id.includes('html-proxy')) return
+        clearTimeout(timer)
+        release()
       },
     },
   }
@@ -70,20 +63,15 @@ async function reloadsOf(api: ViteApi): Promise<string[]> {
     api,
   )
   try {
-    const { hot } = server.environments.client
-    const reloads: string[] = []
-    const send = hot.send.bind(hot) as (...args: unknown[]) => void
-    hot.send = ((...args: unknown[]) => {
-      const payload = args[0] as { type?: string } | undefined
-      if (payload?.type === 'full-reload') reloads.push('full-reload')
-      send(...args)
-    }) as never
+    const send = vi.spyOn(server.environments.client.hot, 'send')
 
     await fetch(url)
     await fetch(`${url}src/main.ts`)
     // The reload, if one is owed, goes out on the next turn of the event loop.
     await new Promise((resolve) => setTimeout(resolve, 200))
-    return reloads
+    return send.mock.calls
+      .filter(([payload]) => JSON.stringify(payload).includes('"type":"full-reload"'))
+      .map(() => 'full-reload')
   } finally {
     await stopDev(server)
     app.dispose()
