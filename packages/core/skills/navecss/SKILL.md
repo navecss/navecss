@@ -206,6 +206,8 @@ renders nothing.
 - `--nave-color-action-primary-active`
 - `--nave-color-action-primary-hover`
 - `--nave-color-action-secondary`
+- `--nave-color-action-secondary-active`
+- `--nave-color-action-secondary-hover`
 - `--nave-color-backdrop-modal`: Translucent layer between a modal panel and the page, which it recedes. Only behind a fully modal panel; never under text, a control or a focus indicator the reader can reach.
 - `--nave-color-border-control`: Identifying boundary for a control (inputs, form boundaries, and the secondary action control).
 - `--nave-color-border-default`: Decorative dividers and card edges.

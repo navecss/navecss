@@ -167,6 +167,8 @@ non-colour value is exactly what its name says.
 | `--nave-color-action-primary-active`       | no                          |
 | `--nave-color-on-action-primary`           | yes                         |
 | `--nave-color-action-secondary`            | yes                         |
+| `--nave-color-action-secondary-hover`      | yes                         |
+| `--nave-color-action-secondary-active`     | yes                         |
 | `--nave-color-action-highlight`            | yes                         |
 | `--nave-color-feedback-danger`             | no                          |
 | `--nave-color-feedback-danger-foreground`  | no                          |
