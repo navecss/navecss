@@ -41,13 +41,20 @@ export default defineConfig({
         test: {
           name: 'node',
           include: ['test/**/*.test.ts'],
-          exclude: ['test/chromium/**'],
+          exclude: ['test/chromium/**', 'test/build/**'],
           env: { TURBOPACK: '' },
         },
       },
       {
         extends: true,
         test: { name: 'turbopack', include: DIRECTIVE_ROWS, env: { TURBOPACK: '1' } },
+      },
+      // The rows that run a real `next build`, `next dev` or `next start`, run by `test:build` on
+      // their own: each starts Next.js workers, and beside the other suites they slow those
+      // past their timeouts.
+      {
+        extends: true,
+        test: { name: 'build', include: ['test/build/**/*.test.ts'], env: { TURBOPACK: '' } },
       },
       // The rows that read what a browser computes, run by `test:browser` where Chromium is installed.
       {
