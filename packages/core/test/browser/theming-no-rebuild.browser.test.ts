@@ -19,8 +19,9 @@
  * achromatic value (chroma 0, such as the white `1 0 h`) carries no hue, so it follows any tint
  * trivially and is asserted neither way: whether Chromium's serialisation of it still changes
  * with the hue is an engine detail. Step 2's set is every `--nave-color-*` property the mounted
- * `tokens.css` declares, read through the CSSOM, so a declaration nested in another block or
- * wrapped onto a second line is in it.
+ * `tokens.css` declares, read through the CSSOM, so a declaration nested in an at-rule block or
+ * inside a style rule (CSS nesting), or wrapped onto a second line, is in it. The record and that
+ * set must name the same slots, the tint aside, in both directions.
  *
  * Each step has controls that red on a mutant of the imported `tokens.css`, made by a string
  * edit in the test (the file on disk is never touched): slots baked to literals, in one scheme or
@@ -78,11 +79,13 @@ function recordedSlots(record: PaletteRecord): RecordedSlot[] {
 
 /**
  * Whether a recorded value follows the tint: a relative colour of it, with a chroma other than 0.
- * A value that names the tint in any other form fails loudly rather than leaving the set.
+ * The channel keyword `c` keeps the tint's own chroma, so it follows. A value that names the tint
+ * in any other form, or a chroma this cannot read, fails loudly rather than leaving the set.
  */
 function isTintFollower({ name, scheme, value }: RecordedSlot): boolean {
   if (!value.includes(TINT)) return false
   const chroma = value.startsWith(FROM_TINT) ? value.slice(FROM_TINT.length).split(' ', 2)[1] : ''
+  if (chroma === 'c') return true
   if (chroma === undefined || chroma === '' || Number.isNaN(Number(chroma))) {
     throw new Error(`cannot read the chroma of ${keyOf(name, scheme)}: ${value}`)
   }
@@ -111,10 +114,20 @@ function addColourProperties(style: CSSStyleDeclaration, into: Set<string>): voi
   }
 }
 
+/**
+ * Reads the declarations of every rule that carries them (a style rule, and the nested
+ * declarations CSS nesting puts inside one) and descends into every rule that holds rules (an
+ * at-rule block, and a style rule with nested rules: in Chromium a `CSSStyleRule` is not a
+ * `CSSGroupingRule`, so the walk keys on the property rather than the class).
+ */
 function collectColourSlots(rules: CSSRuleList, into: Set<string>): void {
   for (const rule of rules) {
-    if (rule instanceof CSSStyleRule) addColourProperties(rule.style, into)
-    if (rule instanceof CSSGroupingRule) collectColourSlots(rule.cssRules, into)
+    if ('style' in rule && rule.style instanceof CSSStyleDeclaration) {
+      addColourProperties(rule.style, into)
+    }
+    if ('cssRules' in rule && rule.cssRules instanceof CSSRuleList) {
+      collectColourSlots(rule.cssRules, into)
+    }
   }
 }
 
@@ -151,8 +164,10 @@ function probesFor(names: readonly string[]): Map<string, HTMLElement> {
 }
 
 /**
- * The resolved `background-color` of each probe, keyed `name|scheme`. The browser normalises it,
- * unlike a custom property's own serialisation.
+ * The resolved `background-color` of each probe, keyed `name|scheme`. The browser resolves `var()`
+ * and `light-dark()` in it, which a custom property's own serialisation does not, but it does not
+ * normalise the colour space: Chromium keeps an achromatic value's hue (`oklch(1 0 300)`), which
+ * is why achromatic values are asserted neither way.
  */
 function snapshot(probes: Map<string, HTMLElement>): Map<string, string> {
   return new Map(
@@ -237,18 +252,32 @@ function edited(needle: string, replacement: string): string {
   return result
 }
 
+/**
+ * Where a stylesheet's colour slots, the tint aside, and a record's slots disagree, in either
+ * direction.
+ */
+function coverageProblems(slots: readonly string[], record: PaletteRecord): string[] {
+  const recorded = new Set(recordedSlots(record).map(({ name }) => name))
+  const declared = slots.filter((name) => name !== TINT)
+  return [
+    ...[...recorded]
+      .filter((name) => !declared.includes(name))
+      .map((name) => `${name} is in the record but not declared`),
+    ...declared
+      .filter((name) => !recorded.has(name))
+      .map((name) => `${name} is declared but not in the record`),
+  ]
+}
+
 const ALL_COLOUR_SLOTS = colourSlotsOf(NAVE_TOKENS_CSS)
 const FOLLOWERS = tintFollowers(PALETTE_RECORD)
 const FOLLOWING_SLOTS = [...new Set(FOLLOWERS.map((key) => slotOfKey(key)))]
 
 describe('AC-theming-36 — rungs 1a and 2 take effect in a real engine with no rebuild', () => {
-  it('reads the tint-following set from the emitted record, every slot of which tokens.css declares', () => {
+  it('reads the tint-following set from the emitted record, which names the slots tokens.css declares', () => {
     expect(FOLLOWERS.length).toBeGreaterThan(0)
     expect(FOLLOWING_SLOTS).not.toContain(TINT)
-    const undeclared = recordedSlots(PALETTE_RECORD).filter(
-      ({ name }) => !ALL_COLOUR_SLOTS.includes(name),
-    )
-    expect(undeclared).toEqual([])
+    expect(coverageProblems(ALL_COLOUR_SLOTS, PALETTE_RECORD)).toEqual([])
     // Every probe resolves to a colour: an unresolved `var()` computes to transparent black, which
     // would make "this slot did not move" true of a slot that was never read.
     const probes = probesFor(ALL_COLOUR_SLOTS)
@@ -362,5 +391,39 @@ describe('AC-theming-36: each step reds on a tokens.css that breaks it', () => {
     const end = '    --nave-color-backdrop-modal:'
     const css = edited(end, `    ${ALIAS.replace(' var(', '\n      var(')}\n${end}`)
     expect(step2Problems(css)).toEqual(ALIASED)
+  })
+
+  it('step 2: an alias nested inside a style rule is caught', () => {
+    const css = `${NAVE_TOKENS_CSS}\n@layer tokens.defaults {\n  :root {\n    @media all {\n      ${ALIAS}\n    }\n  }\n}\n`
+    expect(step2Problems(css)).toEqual(ALIASED)
+  })
+
+  it('a slot declared in tokens.css but absent from the record is caught', () => {
+    const end = '    --nave-color-backdrop-modal:'
+    const extra = `    --nave-color-surface-hover: light-dark(oklch(from var(${TINT}) 0.95 0.0067 h / 1), oklch(0.2 0.0067 186.17 / 1));`
+    const css = edited(end, `${extra}\n${end}`)
+    expect(coverageProblems(colourSlotsOf(css), PALETTE_RECORD)).toEqual([
+      '--nave-color-surface-hover is declared but not in the record',
+    ])
+  })
+
+  it('a chroma written as the channel keyword c is read as following the tint', () => {
+    const key = 'color.surface.sunken.light'
+    const record = {
+      ...PALETTE_RECORD,
+      [key]: { $type: 'color', $value: `oklch(from var(${TINT}) 0.985 c h / 1)` },
+    }
+    expect(tintFollowers(record)).toContain(keyOf(SUNKEN, 'light'))
+  })
+
+  it('a chroma it cannot read still fails loudly', () => {
+    const key = 'color.surface.sunken.light'
+    const record = {
+      ...PALETTE_RECORD,
+      [key]: { $type: 'color', $value: `oklch(from var(${TINT}) 0.985 calc(c / 2) h / 1)` },
+    }
+    expect(() => tintFollowers(record)).toThrow(
+      /cannot read the chroma of --nave-color-surface-sunken\|light/,
+    )
   })
 })
