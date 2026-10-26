@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -454,6 +454,11 @@ describe('AC-secondary-action-states-07 covers: R4', () => {
 type Guard = 'assertCoverageFloor' | 'assertNoOrphanedSemanticSlot'
 
 /**
+The scratch directories `tokensJsonDeclaring` creates, removed after each test.
+ */
+const scratchDirectories: string[] = []
+
+/**
  * A copy of `tokens.json` whose secondary foreground declares only the given state fills, on
  * disk, so the build reads it as it reads the shipped file.
  */
@@ -467,6 +472,7 @@ function tokensJsonDeclaring(states: readonly string[]): { file: string; source:
     (p) => !isState(p.against) || states.includes(p.against),
   )
   const directory = mkdtempSync(path.join(tmpdir(), 'nave-secondary-states-'))
+  scratchDirectories.push(directory)
   const file = path.join(directory, 'tokens.json')
   writeFileSync(file, `${JSON.stringify(source, undefined, 2)}\n`)
   return { file, source }
@@ -511,6 +517,10 @@ describe('AC-secondary-action-states-07 covers: R4 (the build fails closed witho
   afterEach(() => {
     vi.doUnmock('../../src/theming/tokens-source.ts')
     vi.doUnmock('../../src/theming/adjacency.ts')
+    for (const directory of scratchDirectories) {
+      rmSync(directory, { force: true, recursive: true })
+    }
+    scratchDirectories.length = 0
   })
 
   const INPUTS = [
