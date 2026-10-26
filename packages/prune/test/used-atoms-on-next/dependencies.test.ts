@@ -160,7 +160,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-19, cx.dynamic() with no list i
     expect(keepOnly.problems.every((line) => line.startsWith('node_modules/dyn-lib/'))).toBe(true)
     expect(keepOnly.text).not.toContain('lasting fix')
     expect(keepOnly.text).not.toContain('in your code')
-    expect(keepForOnly.text).toContain(app.replace('Tone', 'Tone'))
+    expect(keepForOnly.text).toContain(app)
     expect(keepForOnly.text).not.toContain('dyn-lib calls')
     expect(both.report).toBeUndefined()
   })

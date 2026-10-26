@@ -46,9 +46,9 @@ export function createPackageReader(
         ...Object.keys(manifest.dependencies ?? {}),
         ...Object.keys(manifest.peerDependencies ?? {}),
       ])
-      // A manifest with no name, such as the `{ "type": "module" }` a package keeps in `dist`, is
-      // not the package: the search goes on to the directory above.
-      if (typeof manifest.name !== 'string') return NO_PACKAGE
+      // A manifest with no name, or an empty one, such as the `{ "type": "module" }` a package keeps
+      // in `dist`, is not the package: the search goes on to the directory above.
+      if (typeof manifest.name !== 'string' || manifest.name === '') return NO_PACKAGE
       const isNaveAware = [...naveNames].some((name) => listed.has(name))
       return { name: manifest.name, isNaveAware }
     } catch {
