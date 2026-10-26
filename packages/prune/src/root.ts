@@ -1,9 +1,11 @@
 /**
- * The root the plugin declares files within. Turbopack panics on a declared file outside its root,
- * which Next.js sets to `outputFileTracingRoot` or `turbopack.root` from the config, and otherwise
- * to the workspace root it infers from the project directory (after `next.config` has run, so the
- * wrapper cannot read it). The plugin infers it the same way, with Next.js's own function. Webpack
- * has no such limit: after webpack's callback ran, nothing is filtered.
+ * The root the plugin declares files within, the same for both bundlers. Turbopack panics on a
+ * declared file outside its root, which Next.js sets to `outputFileTracingRoot` or
+ * `turbopack.root` from the config, and otherwise to the workspace root it infers from the project
+ * directory (after `next.config` has run, so the wrapper cannot read it). The plugin infers it the
+ * same way, with Next.js's own function. Webpack has no such panic, but a stylesheet that declares
+ * a file outside that root made Next.js 16.2.0 crash on the next build, so webpack gets the same
+ * limit: a file read outside the root is declared to neither, and the build's own check catches it.
  */
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -45,14 +47,13 @@ function inferredRoot(dir: string): string | undefined {
 }
 
 /**
- * The root no declared path may leave, or `undefined` when nothing is filtered (webpack): the
- * configured root, else `NEXT_PRIVATE_OUTPUT_TRACE_ROOT` (which Next.js reads in place of its
- * search), else the root Next.js infers, else the project directory.
+ * The root no declared path may leave: the configured root, else `NEXT_PRIVATE_OUTPUT_TRACE_ROOT`
+ * (which Next.js reads in place of its search), else the root Next.js infers, else the project
+ * directory.
  * @param handoff The hand-off, with the project directory this run reads.
- * @returns The root, or `undefined`.
+ * @returns The root.
  */
-export function declarationRoot(handoff: Handoff): string | undefined {
-  if (handoff.isBundlerDir === true) return undefined
+export function declarationRoot(handoff: Handoff): string {
   if (handoff.root !== undefined) return handoff.root
   // eslint-disable-next-line turbo/no-undeclared-env-vars -- read by Next.js in the process that runs the plugin, not a build input
   const traced = process.env.NEXT_PRIVATE_OUTPUT_TRACE_ROOT
