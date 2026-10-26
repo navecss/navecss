@@ -265,7 +265,7 @@ function visit(walk: Walk, { file, isInMode }: Queued): void {
  * if reading stops.
  */
 export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): Graph {
-  const entries = findEntries(options.dir)
+  const entries = findEntries(options.dir, options.pageExtensions)
   graph.directories.push(...entries.directories)
   const resolver = createResolver(options.dir, options.modes, graph.inputs)
   graph.problems.push(...resolver.configProblems)

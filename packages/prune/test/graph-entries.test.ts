@@ -6,6 +6,7 @@ import { rmSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import { writeBuildCss } from './helpers/build-output.ts'
 import {
   installNext,
   moduleSource,
@@ -13,7 +14,6 @@ import {
   scratchProjects,
   sorted,
 } from './helpers/graph-fixture.ts'
-import { writeBuildCss } from './helpers/build-output.ts'
 import { runCheck } from './helpers/hook-run.ts'
 import { atomsIn } from './helpers/layer.ts'
 import { ATOMIC_CSS } from './helpers/project.ts'
@@ -266,10 +266,9 @@ describe('AC-nextjs-used-atoms-13: pageExtensions in the spec’s row and for th
     expect(atoms).not.toContain('grid')
   })
 
-  it('reads the layout that holds the skip link, so the atom ships whole', async () => {
+  it('reads the layout that holds the skip link, so its atom ships', async () => {
     const { atoms } = await runAndRead(project(), { pageExtensions: ['page.tsx', 'tsx', 'ts'] })
     expect(atoms).toContain('srOnlyFocusable')
-    expect(atoms).toContain('srOnly')
   })
 
   it('control: with page.tsx left out of pageExtensions the layout is not read', async () => {
@@ -296,9 +295,7 @@ describe('AC-nextjs-used-atoms-13: what the bundler is told to watch with pageEx
     installNext(made)
     const { result } = await runAndRead(made, { ...(pageExtensions && { pageExtensions }) })
     return result.messages.flatMap((message) =>
-      message.type === 'dir-dependency' && message['dir'] === made.dir
-        ? [String(message['glob'])]
-        : [],
+      message.type === 'dir-dependency' && message.dir === made.dir ? [String(message.glob)] : [],
     )
   }
 

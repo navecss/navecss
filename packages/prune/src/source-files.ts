@@ -22,6 +22,16 @@ export function isMarkdownFile(file: string): boolean {
 }
 
 /**
+ * Whether files with this extension are ones the graph reads or names: JavaScript, TypeScript,
+ * Markdown or MDX. The extension is what follows the first dot of a file name, so it may hold a
+ * dot of its own (`page.tsx`).
+ */
+export function isReadableExtension(extension: string): boolean {
+  const file = `x.${extension}`
+  return isSourceFile(file) || isMarkdownFile(file)
+}
+
+/**
  * Whether the file is a stylesheet Next.js runs PostCSS over.
  */
 export function isStylesheetFile(file: string): boolean {

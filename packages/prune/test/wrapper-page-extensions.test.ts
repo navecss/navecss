@@ -10,6 +10,12 @@ import { withNave } from '../src/index.ts'
 import { createProject, type Project } from './helpers/project.ts'
 import { type ConfigLike, handoffInEnv } from './helpers/wrapper-config.ts'
 
+/**
+ * A config with a `pageExtensions` list, which Next.js's own types allow and ConfigLike leaves out.
+ */
+const configWith = (pageExtensions: string[]): ConfigLike =>
+  ({ pageExtensions }) as unknown as ConfigLike
+
 describe('AC-nextjs-used-atoms-13: withNave() and pageExtensions', () => {
   let project: Project
   let saved: string | undefined
@@ -27,12 +33,6 @@ describe('AC-nextjs-used-atoms-13: withNave() and pageExtensions', () => {
     else process.env[HANDOFF_VARIABLE] = saved
     project.remove()
   })
-
-  /**
-   * A config with a `pageExtensions` list, which Next.js's own types allow and ConfigLike leaves out.
-   */
-  const configWith = (pageExtensions: string[]): ConfigLike =>
-    ({ pageExtensions }) as unknown as ConfigLike
 
   it('hands the list the config sets to the plugin', () => {
     withNave(configWith(['page.tsx', 'tsx', 'ts']))

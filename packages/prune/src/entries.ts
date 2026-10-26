@@ -7,7 +7,7 @@
 import { readdirSync } from 'node:fs'
 import path from 'node:path'
 
-import { isMarkdownFile, isSourceFile } from './source-files.ts'
+import { isMarkdownFile, isReadableExtension, isSourceFile } from './source-files.ts'
 
 const APP_CONVENTIONS = new Set([
   'default',
@@ -23,6 +23,8 @@ const APP_CONVENTIONS = new Set([
   'template',
   'unauthorized',
 ])
+
+const ROOT_EXTENSIONS = ['cjs', 'cts', 'js', 'jsx', 'mjs', 'mts', 'ts', 'tsx']
 
 const ROOT_CONVENTIONS = new Set([
   'instrumentation',
@@ -75,12 +77,25 @@ function listing(dir: string): { isDirectory: boolean; name: string }[] {
 }
 
 /**
- * Whether a file name is a convention file (`page.tsx`), judged by the name before its extension.
+ * Whether a file name is a convention file (`page.tsx`), judged by the name before its extension,
+ * or before one of the configured page extensions (`page.page.tsx` for `page.tsx`).
  */
-function isConventionFile(name: string, conventions: ReadonlySet<string>): boolean {
+function isConventionFile(
+  name: string,
+  conventions: ReadonlySet<string>,
+  pageExtensions: readonly string[],
+): boolean {
   const extension = path.extname(name)
-  if (!isSourceFile(name) && !isMarkdownFile(name)) return false
-  return conventions.has(name.slice(0, -extension.length))
+  if (
+    (isSourceFile(name) || isMarkdownFile(name)) &&
+    conventions.has(name.slice(0, -extension.length))
+  ) {
+    return true
+  }
+  return pageExtensions.some(
+    (configured) =>
+      name.endsWith(`.${configured}`) && conventions.has(name.slice(0, -(configured.length + 1))),
+  )
 }
 
 /**
@@ -127,12 +142,15 @@ function walk(
 /**
  * The root conventions of `base`: only the files directly in it.
  */
-function rootEntries(base: string): Entries {
+function rootEntries(base: string, pageExtensions: readonly string[]): Entries {
   const names = listing(base)
-    .filter((entry) => !entry.isDirectory && isConventionFile(entry.name, ROOT_CONVENTIONS))
+    .filter(
+      (entry) =>
+        !entry.isDirectory && isConventionFile(entry.name, ROOT_CONVENTIONS, pageExtensions),
+    )
     .map((entry) => entry.name)
     .toSorted((a, b) => a.localeCompare(b))
-  const extensions = '{cjs,cts,js,jsx,mjs,mts,ts,tsx}'
+  const extensions = `{${[...new Set([...ROOT_EXTENSIONS, ...pageExtensions])].join(',')}}`
   return {
     pagesFiles: [],
     files: names.map((name) => path.join(base, name)),
@@ -148,9 +166,12 @@ function rootEntries(base: string): Entries {
 }
 
 /**
- * Every entry of the project in `dir`.
+ * Every entry of the project in `dir`. `pageExtensions` are the config's, matched beside the
+ * default extensions; one the package cannot read as code or Markdown is left out here, since
+ * `withNave()` refuses it before a build gets this far.
  */
-export function findEntries(dir: string): Entries {
+export function findEntries(dir: string, pageExtensions: readonly string[] = []): Entries {
+  const extensions = pageExtensions.filter((extension) => isReadableExtension(extension))
   const parts: Entries[] = []
   const pagesFiles: string[] = []
   for (const base of [dir, path.join(dir, 'src')]) {
@@ -161,8 +182,12 @@ export function findEntries(dir: string): Entries {
     )
     pagesFiles.push(...pages.files)
     parts.push(
-      rootEntries(base),
-      walk(path.join(base, 'app'), (name) => isConventionFile(name, APP_CONVENTIONS), true),
+      rootEntries(base, extensions),
+      walk(
+        path.join(base, 'app'),
+        (name) => isConventionFile(name, APP_CONVENTIONS, extensions),
+        true,
+      ),
       pages,
     )
   }

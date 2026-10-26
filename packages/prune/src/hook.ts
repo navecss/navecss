@@ -83,12 +83,19 @@ function setupMessage(input: {
   readonly dir: string
   readonly distDir: string
   readonly options: NaveOptions
+  readonly pageExtensions?: readonly string[]
   readonly record: PruneRecord
   readonly recordDistDir: string
 }): string | undefined {
-  const { dir, distDir, record, recordDistDir, options } = input
+  const { dir, distDir, record, recordDistDir, options, pageExtensions } = input
   const cache = `${recordDistDir}/cache`
-  const stale = staleMessage({ dir, cache, record, options })
+  const stale = staleMessage({
+    dir,
+    cache,
+    record,
+    options,
+    ...(pageExtensions !== undefined && { pageExtensions }),
+  })
   if (stale !== undefined) return stale
   if (record.hasCorePlugin) return BOTH_PLUGINS
   if (record.failures.length > 0) return incomplete(record.failures, cache)
@@ -167,7 +174,14 @@ export async function checkBuild(
     if (hasAtomRules(builtStylesheets(dir, distDir))) stop([NO_RECORD])
     return
   }
-  const setup = setupMessage({ dir, distDir, record, recordDistDir, options })
+  const setup = setupMessage({
+    dir,
+    distDir,
+    record,
+    recordDistDir,
+    options,
+    ...(config.pageExtensions !== undefined && { pageExtensions: config.pageExtensions }),
+  })
   if (setup !== undefined) stop([setup])
   const report = reportOf(record, options, dir)
   const unbundled = unbundledPackages(record, config).map((name) => pagesNotBundled(name))
