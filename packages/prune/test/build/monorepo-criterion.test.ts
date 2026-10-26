@@ -280,6 +280,9 @@ describe.skipIf(SKIP_REASON !== undefined)(
 
             expect(cold.code, cold.output).not.toBe(0)
             expect(cold.output).toMatch(/Can't resolve '@ext\/x'|outside of the workspace root/u)
+            // The package declares nothing outside the root, so Turbopack does not stop on it.
+            expect(cold.output).not.toMatch(OUTSIDE_ROOT_ERROR)
+            expect(cold.output).not.toMatch(INTERNAL_ERROR)
           },
           TIMEOUT,
         )
@@ -302,7 +305,9 @@ describe.skipIf(SKIP_REASON !== undefined)(
 
             // Next.js 16.2.0 on webpack dies on the warm build once a module outside the workspace
             // changes (an uncaught `Cannot read properties of undefined (reading 'length')`, every
-            // time, from the top and from the app), so its row ends with the cold build.
+            // time, from the top and from the app). It does so only while the package declares that
+            // module to the bundler: the same workspace built without the package is green. So the
+            // row ends with the cold build.
             if (cell.version === 'floor') return
             app.externalAt('block')
             const warm = await app.next(args, cwd)

@@ -58,10 +58,14 @@ const FILES: Record<string, string> = {
   ].join('\n'),
 }
 
+let order: readonly string[] | undefined
+
 /**
- * Nave's layer order statement, as the list of layers core's `layers.css` declares.
+ * Nave's layer order statement, as the list of layers core's `layers.css` declares, read when a
+ * row first asks: the file is core's build output, which a run that skips these rows may not have.
  */
-const ORDER: readonly string[] = (() => {
+function layerOrder(): readonly string[] {
+  if (order !== undefined) return order
   const text = readFileSync(path.join(CORE_ROOT, 'dist/layers.css'), 'utf8')
   const statement = postcss
     .parse(text)
@@ -69,8 +73,10 @@ const ORDER: readonly string[] = (() => {
       (node) => node.type === 'atrule' && node.name === 'layer' && node.nodes === undefined,
     )
   if (statement?.type !== 'atrule') throw new Error('core has no layer order statement')
-  return statement.params.split(',').map((layer) => layer.trim())
-})()
+  // eslint-disable-next-line unicorn/no-top-level-assignment-in-function -- a lazy memo: the first row reads the file and later rows reuse the list
+  order = statement.params.split(',').map((layer) => layer.trim())
+  return order
+}
 
 /**
  * Whether the node sits inside a block `@layer atomic { ... }`.
@@ -96,7 +102,7 @@ function isAtomicBlock(node: AnyNode): node is AtRule {
 function isOrderStatement(node: AnyNode): node is AtRule {
   if (node.type !== 'atrule' || node.name !== 'layer' || node.nodes !== undefined) return false
   const layers = node.params.split(',').map((layer) => layer.trim())
-  return layers.join(',') === ORDER.join(',')
+  return layers.join(',') === layerOrder().join(',')
 }
 
 /**

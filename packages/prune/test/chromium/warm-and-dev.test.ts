@@ -256,20 +256,22 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
         const isSameName = after.names.join(',') === before.names.join(',')
         // On Turbopack the stylesheet runs again on every build once the hand-off variable is set
         // (measured on 16.2.0 and on 16.4.1, with every message dropped), so there the control
-        // cannot show a stale layer: the row accepts either outcome, as long as the file name and
-        // the layer agree with whether the plugin ran. Webpack serves the stylesheet from its
+        // cannot show a stale layer: the row asserts the re-run, so a Next.js that serves the
+        // stylesheet from its cache again turns it red. Webpack serves the stylesheet from its
         // cache, and the control shows the stale layer there.
-        const isRerunCell = cell.bundler === 'turbopack'
         expect(isStale, 'the layer is the previous one exactly when the plugin did not run').toBe(
           !isRanAgain,
         )
         expect(isSameName, 'the CSS file name is the previous one exactly when the layer is').toBe(
           isStale,
         )
+        const isRerunCell = cell.bundler === 'turbopack'
         expect(
-          isRanAgain && !isRerunCell,
-          'the stylesheet was served from the bundler cache, so the plugin did not run again',
-        ).toBe(false)
+          isRanAgain,
+          isRerunCell
+            ? 'Turbopack ran the stylesheet again after the edit'
+            : 'the stylesheet was served from the bundler cache, so the plugin did not run again',
+        ).toBe(isRerunCell)
       },
       TIMEOUT,
     )

@@ -56,7 +56,7 @@ export function headingsOf(readme: string): Heading[] {
 }
 
 /**
- *
+ * The fenced blocks of `readme`. A fence that is never closed runs to the end of the text.
  */
 export function fencesOf(readme: string): Fence[] {
   const lines = readme.split('\n')
@@ -64,7 +64,8 @@ export function fencesOf(readme: string): Fence[] {
   for (let at = 0; at < lines.length; at += 1) {
     const open = /^```(\S*)/u.exec(lines[at]!)
     if (open === null) continue
-    const close = lines.findIndex((text, index) => index > at && text.startsWith('```'))
+    const closing = lines.findIndex((text, index) => index > at && text.startsWith('```'))
+    const close = closing === -1 ? lines.length : closing
     fences.push({ language: open[1]!, body: lines.slice(at + 1, close).join('\n'), line: at })
     at = close
   }

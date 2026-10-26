@@ -640,6 +640,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-51, cxModules entries resolve f
       })
 
       expect(outcome.report).toBeUndefined()
+      expect(outcome.printed).toEqual({ errors: [], warnings: [] })
       expect(outcome.atoms).toEqual(['grid'])
     })
 

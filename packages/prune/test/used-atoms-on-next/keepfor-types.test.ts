@@ -76,21 +76,27 @@ function diagnosticsFor(name: SnippetName): string[] {
   return checked.get(name) ?? []
 }
 
-describe('AC-nextjs-used-atoms-17: AC-used-atoms-45, keepFor entries are typed readonly', () => {
-  it('a list written as const satisfies readonly AtomName[] compiles for keepFor and for keep', () => {
-    expect(diagnosticsFor('keepFor')).toEqual([])
-    expect(diagnosticsFor('keep')).toEqual([])
-  })
+// The first row builds the TypeScript program over the standard library, which a loaded runner
+// takes well past the default timeout to do.
+describe(
+  'AC-nextjs-used-atoms-17: AC-used-atoms-45, keepFor entries are typed readonly',
+  { timeout: 120_000 },
+  () => {
+    it('a list written as const satisfies readonly AtomName[] compiles for keepFor and for keep', () => {
+      expect(diagnosticsFor('keepFor')).toEqual([])
+      expect(diagnosticsFor('keep')).toEqual([])
+    })
 
-  it('a keepFor list naming an unknown atom fails tsc', () => {
-    expect(diagnosticsFor('unknown')).not.toEqual([])
-  })
+    it('a keepFor list naming an unknown atom fails tsc', () => {
+      expect(diagnosticsFor('unknown')).not.toEqual([])
+    })
 
-  it('control: a scratch declaration typing keepFor as a mutable list makes the same line fail with TS4104', () => {
-    expect(diagnosticsFor('mutableControl').join('\n')).toContain('TS4104')
-  })
+    it('control: a scratch declaration typing keepFor as a mutable list makes the same line fail with TS4104', () => {
+      expect(diagnosticsFor('mutableControl').join('\n')).toContain('TS4104')
+    })
 
-  it('control: the check reports an ordinary error', () => {
-    expect(diagnosticsFor('brokenControl')).not.toEqual([])
-  })
-})
+    it('control: the check reports an ordinary error', () => {
+      expect(diagnosticsFor('brokenControl')).not.toEqual([])
+    })
+  },
+)

@@ -11,23 +11,32 @@ const core = readmeOf(path.join(REPO_ROOT, 'packages/core'))
 const own = readmeOf(PACKAGE_DIR)
 
 /**
- * The list a `browserslist` fence holds, or `undefined` when the README has none.
+ * The list the first `browserslist` fence in `text` holds, or `undefined` when there is none.
  */
-function floorOf(readme: string): string[] | undefined {
-  const list = /"browserslist":\s*(\[[^\]]*\])/u.exec(readme)?.[1]
+function listIn(text: string): string[] | undefined {
+  const list = /"browserslist":\s*(\[[^\]]*\])/u.exec(text)?.[1]
   return list === undefined ? undefined : (JSON.parse(list) as string[])
+}
+
+/**
+ * Core's floor for Next.js: the list in the section "Next.js", where a Next.js project copies it
+ * from, and not the first list elsewhere in the README.
+ */
+function coreFloor(): string[] | undefined {
+  const start = core.indexOf('#### Next.js')
+  return start === -1 ? undefined : listIn(core.slice(start))
 }
 
 describe('the browser floor', () => {
   it('is the same list in core’s README and the package README', () => {
-    const floor = floorOf(core)
-    // Control: core's README has one.
+    const floor = coreFloor()
+    // Control: core's README has one in that section.
     expect(floor?.length).toBeGreaterThan(0)
-    expect(floorOf(own)).toEqual(floor)
+    expect(listIn(own)).toEqual(floor)
   })
 
   it('is read as different when one entry changes (control)', () => {
     const changed = own.replace('"chrome 125"', '"chrome 126"')
-    expect(floorOf(changed)).not.toEqual(floorOf(core))
+    expect(listIn(changed)).not.toEqual(coreFloor())
   })
 })
