@@ -35,41 +35,41 @@ describe('a missing precondition', () => {
   })
 })
 
-describe('the Chromium rows', () => {
-  /**
-   * Reads `HAS_CHROMIUM` in a process whose Playwright looks for browsers in an empty directory,
-   * with `CI` set to `ci` or removed.
-   */
-  function hasChromium(ci: string | undefined): ReturnType<typeof spawnSync> {
-    const browsers = mkdtempSync(path.join(tmpdir(), 'prune-no-browsers-'))
-    try {
-      const chromium = pathToFileURL(path.join(import.meta.dirname, 'helpers/chromium.ts')).href
-      const env: NodeJS.ProcessEnv = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsers }
-      if (ci === undefined) delete env['CI']
-      else env['CI'] = ci
-      return spawnSync(
-        process.execPath,
-        [
-          '--input-type=module',
-          '--eval',
-          `import { HAS_CHROMIUM } from ${JSON.stringify(chromium)}\nconsole.log(HAS_CHROMIUM)`,
-        ],
-        { encoding: 'utf8', env },
-      )
-    } finally {
-      rmSync(browsers, { recursive: true, force: true })
-    }
+/**
+ * Reads `HAS_CHROMIUM` in a process whose Playwright looks for browsers in an empty directory,
+ * with `CI` set to `ci` or removed.
+ */
+function readInEmptyBrowserDirectory(ci: string | undefined): ReturnType<typeof spawnSync> {
+  const browsers = mkdtempSync(path.join(tmpdir(), 'prune-no-browsers-'))
+  try {
+    const chromium = pathToFileURL(path.join(import.meta.dirname, 'helpers/chromium.ts')).href
+    const env: NodeJS.ProcessEnv = { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsers }
+    if (ci === undefined) delete env.CI
+    else env.CI = ci
+    return spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        `import { HAS_CHROMIUM } from ${JSON.stringify(chromium)}\nconsole.log(HAS_CHROMIUM)`,
+      ],
+      { encoding: 'utf8', env },
+    )
+  } finally {
+    rmSync(browsers, { recursive: true, force: true })
   }
+}
 
+describe('the Chromium rows', () => {
   it('are skipped where CI is not set and Chromium is not installed', () => {
-    const run = hasChromium(undefined)
+    const run = readInEmptyBrowserDirectory(undefined)
 
     expect(run.status, String(run.stderr)).toBe(0)
     expect(String(run.stdout).trim()).toBe('false')
   })
 
   it('fail the file where CI is set and Chromium is not installed', () => {
-    const run = hasChromium('true')
+    const run = readInEmptyBrowserDirectory('true')
 
     expect(run.status).not.toBe(0)
     expect(String(run.stderr)).toContain('Chromium is not installed')

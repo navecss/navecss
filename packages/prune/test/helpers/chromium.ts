@@ -7,6 +7,8 @@ import type { Browser, Page } from 'playwright'
 import { existsSync } from 'node:fs'
 import { chromium } from 'playwright'
 
+import { skipReason } from './preconditions.ts'
+
 /**
  * Launches Chromium, runs `body` with a new page and closes the browser, whatever `body` does.
  */
@@ -32,6 +34,9 @@ export function computed(page: Page, selector: string, property: string): Promis
 }
 
 /**
- * Whether the Chromium Playwright launches is installed, so a row can skip where it is not.
+ * Whether the Chromium Playwright launches is installed, so a row can skip where it is not. Where
+ * CI is set, its absence fails the file that asks.
  */
-export const HAS_CHROMIUM = existsSync(chromium.executablePath())
+export const HAS_CHROMIUM =
+  skipReason(existsSync(chromium.executablePath()) ? undefined : 'Chromium is not installed') ===
+  undefined

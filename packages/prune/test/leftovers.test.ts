@@ -23,13 +23,24 @@ import { nextEnvironment, PACKAGE_ROOT } from './helpers/next-process.ts'
 
 const HELPERS = path.join(import.meta.dirname, 'helpers')
 const NEXT_DEV = pathToFileURL(path.join(HELPERS, 'next-dev.ts')).href
-const NEXT_APP = pathToFileURL(path.join(HELPERS, 'next-app.ts')).href
+const NEXT_APP = path.join(HELPERS, 'next-app.ts')
 const HOOKS = path.join(HELPERS, 'leftovers-hooks.ts')
 const VITEST = path.join(PACKAGE_ROOT, 'node_modules/vitest/vitest.mjs')
 
-let scratch = ''
-let fakeNext = ''
-const started: number[] = []
+interface Scratch {
+  /**
+   * The directory of the stand-in `next` package.
+   */
+  readonly fakeNext: () => string
+  /**
+   * The scratch directory of the row.
+   */
+  readonly directory: () => string
+  /**
+   * Notes processes to stop after the row, whatever it did.
+   */
+  readonly track: (pids: readonly number[]) => void
+}
 
 /**
  * The stand-in `next`: it listens on `--port`, starts a helper that outlives nothing but its
@@ -54,6 +65,40 @@ function writeFakeNext(root: string): void {
 }
 
 /**
+ * A scratch directory holding the stand-in `next`, made before each row and removed after it,
+ * with the processes the row noted stopped.
+ */
+function useScratch(): Scratch {
+  let directory = ''
+  let fakeNext = ''
+  const started: number[] = []
+  beforeEach(() => {
+    const made = mkdtempSync(path.join(tmpdir(), 'prune-leftovers-'))
+    directory = realpathSync(made)
+    fakeNext = path.join(directory, 'node_modules/next')
+    writeFakeNext(fakeNext)
+  })
+  afterEach(() => {
+    for (const pid of started) {
+      try {
+        process.kill(pid, 'SIGKILL')
+      } catch {
+        // Already gone.
+      }
+    }
+    started.length = 0
+    rmSync(directory, { recursive: true, force: true })
+  })
+  return {
+    directory: () => directory,
+    fakeNext: () => fakeNext,
+    track: (pids) => {
+      started.push(...pids)
+    },
+  }
+}
+
+/**
  * Whether a process with this id is running.
  */
 function isRunning(pid: number): boolean {
@@ -66,7 +111,7 @@ function isRunning(pid: number): boolean {
 }
 
 /**
- * Waits until none of `pids` is running, for at most `ms`.
+ * Waits until none of `pids` is running, for at most `ms`, and returns those that still are.
  */
 async function untilGone(pids: readonly number[], ms: number): Promise<number[]> {
   const deadline = Date.now() + ms
@@ -86,64 +131,69 @@ function pidsIn(output: string): number[] {
   return line === null ? [] : [Number(line[1]), Number(line[2])]
 }
 
-beforeEach(() => {
-  scratch = realpathSync(mkdtempSync(path.join(tmpdir(), 'prune-leftovers-')))
-  fakeNext = path.join(scratch, 'node_modules/next')
-  writeFakeNext(fakeNext)
-})
+/**
+ * Starts `command` with `args` and resolves to its output once it has ended, with its exit code.
+ */
+async function finished(
+  command: string,
+  args: readonly string[],
+  options: { readonly cwd?: string; readonly env?: NodeJS.ProcessEnv },
+): Promise<{ readonly code: number | null; readonly output: string }> {
+  const child = spawn(command, args, { ...options, stdio: ['ignore', 'pipe', 'pipe'] })
+  let output = ''
+  child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
+  child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
+  const code = await new Promise<number | null>((resolve) => child.once('close', resolve))
+  return { code, output }
+}
 
-afterEach(() => {
-  // Whatever a row left running is stopped here, so a failing row does not leak into the next.
-  for (const pid of started.splice(0)) {
-    try {
-      process.kill(pid, 'SIGKILL')
-    } catch {
-      // Already gone.
-    }
+/**
+ * Runs a process that starts the stand-in server through `startDev`, waits until it answers, then
+ * ends as `ending` says, or is sent `signal`. Resolves to the process ids of the server and of its
+ * helper.
+ */
+async function runStarter(
+  scratch: Scratch,
+  ending: 'exit' | 'throw' | 'wait',
+  signal?: NodeJS.Signals,
+): Promise<number[]> {
+  const script = path.join(scratch.directory(), 'start.mjs')
+  writeFileSync(
+    script,
+    [
+      `import { startDev } from ${JSON.stringify(NEXT_DEV)}`,
+      `const server = await startDev([], ${JSON.stringify(scratch.directory())}, { nextRoot: ${JSON.stringify(scratch.fakeNext())} })`,
+      "await server.get('/')",
+      'console.log(server.output())',
+      `if (${JSON.stringify(ending)} === 'exit') process.exit(0)`,
+      `if (${JSON.stringify(ending)} === 'throw') throw new Error('the process ended with an error')`,
+      'setInterval(() => {}, 1000)',
+      '',
+    ].join('\n'),
+  )
+  const child = spawn(process.execPath, [script], { stdio: ['ignore', 'pipe', 'pipe'] })
+  let output = ''
+  child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
+  child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
+  const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
+  for (let tries = 0; pidsIn(output).length === 0 && tries < 300; tries += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  rmSync(scratch, { recursive: true, force: true })
-})
+  const pids = pidsIn(output)
+  scratch.track(pids)
+  expect(pids, `the server started:\n${output}`).toHaveLength(2)
+  if (signal !== undefined) child.kill(signal)
+  await exited
+  return pids
+}
 
 describe('a process that started a server through startDev', () => {
-  /**
-   * Runs a process that starts the stand-in server, waits until it answers, then ends as `ending`
-   * says. Resolves to the server's and its helper's process ids and how the process ended.
-   */
-  async function runStarter(ending: 'exit' | 'throw' | 'wait', signal?: NodeJS.Signals) {
-    const script = path.join(scratch, 'start.mjs')
-    writeFileSync(
-      script,
-      [
-        `import { startDev } from ${JSON.stringify(NEXT_DEV)}`,
-        `const server = await startDev([], ${JSON.stringify(scratch)}, { nextRoot: ${JSON.stringify(fakeNext)} })`,
-        "await server.get('/')",
-        'console.log(server.output())',
-        `if (${JSON.stringify(ending)} === 'exit') process.exit(0)`,
-        `if (${JSON.stringify(ending)} === 'throw') throw new Error('the process ended with an error')`,
-        'setInterval(() => {}, 1000)',
-        '',
-      ].join('\n'),
-    )
-    const child = spawn(process.execPath, [script], { stdio: ['ignore', 'pipe', 'pipe'] })
-    let output = ''
-    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
-    for (let tries = 0; pidsIn(output).length === 0 && tries < 300; tries += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    }
-    const pids = pidsIn(output)
-    started.push(...pids)
-    expect(pids, `the server started:\n${output}`).toHaveLength(2)
-    if (signal !== undefined) child.kill(signal)
-    await exited
-    return pids
-  }
+  const scratch = useScratch()
 
   it.each(['SIGTERM', 'SIGINT'] as const)(
     'leaves neither the server nor its helper running when it is sent %s',
     async (signal) => {
-      const pids = await runStarter('wait', signal)
+      const pids = await runStarter(scratch, 'wait', signal)
 
       expect(await untilGone(pids, 10_000)).toEqual([])
     },
@@ -152,55 +202,92 @@ describe('a process that started a server through startDev', () => {
   it.each(['exit', 'throw'] as const)(
     'leaves neither the server nor its helper running when it ends by %s',
     async (ending) => {
-      const pids = await runStarter(ending)
+      const pids = await runStarter(scratch, ending)
 
       expect(await untilGone(pids, 10_000)).toEqual([])
     },
   )
 })
 
-describe('a test file that makes an app and starts a server', () => {
-  /**
-   * Runs one test file, under this package's cleanup, whose single row makes an app, starts the
-   * stand-in server and then does `ending`. Resolves to the app's directory, the processes it
-   * started and the run's exit code.
-   */
-  async function runFile(ending: 'fails' | 'forgets') {
-    const report = path.join(scratch, 'report.json')
-    writeFileSync(
-      path.join(scratch, 'vitest.config.mjs'),
-      `export default { test: { root: ${JSON.stringify(scratch)}, include: ['file.test.ts'], setupFiles: [${JSON.stringify(HOOKS)}], testTimeout: 60000 } }\n`,
-    )
-    writeFileSync(
-      path.join(scratch, 'file.test.ts'),
-      [
-        "import { writeFileSync } from 'node:fs'",
-        "import { expect, it } from 'vitest'",
-        `import { createNextApp } from ${JSON.stringify(NEXT_APP)}`,
-        "it('makes an app and starts a server', async () => {",
-        `  const app = createNextApp(undefined, { nextRoot: ${JSON.stringify(fakeNext)} })`,
-        '  const server = await app.dev([])',
-        "  await server.get('/')",
-        `  writeFileSync(${JSON.stringify(report)}, JSON.stringify({ top: app.top, output: server.output() }))`,
-        `  ${ending === 'fails' ? 'expect(1).toBe(2)' : ''}`,
-        '})',
-        '',
-      ].join('\n'),
-    )
-    const child = spawn(process.execPath, [VITEST, 'run', '--config', 'vitest.config.mjs'], {
-      cwd: scratch,
-      env: nextEnvironment(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    let output = ''
-    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    const code = await new Promise<number | null>((resolve) => child.once('close', resolve))
-    const seen = JSON.parse(readFileSync(report, 'utf8')) as { top: string; output: string }
-    const pids = pidsIn(seen.output)
-    started.push(...pids)
-    return { code, output, pids, top: seen.top }
+/**
+ * The text of a test file, under this package's cleanup, whose first row makes an app, starts the
+ * stand-in server and then does `ending`, and whose second row records whether that server is
+ * still running.
+ */
+function leakyFile(scratch: Scratch, ending: 'fails' | 'forgets'): string {
+  const dir = scratch.directory()
+  return [
+    "import { readFileSync, writeFileSync } from 'node:fs'",
+    "import { expect, it } from 'vitest'",
+    `import { createNextApp } from ${JSON.stringify(NEXT_APP)}`,
+    '',
+    'const isRunning = (pid: number): boolean => {',
+    '  try {',
+    '    process.kill(pid, 0)',
+    '    return true',
+    '  } catch {',
+    '    return false',
+    '  }',
+    '}',
+    '',
+    "it('makes an app and starts a server', async () => {",
+    `  const app = createNextApp(undefined, { nextRoot: ${JSON.stringify(scratch.fakeNext())} })`,
+    '  const server = await app.dev([])',
+    "  await server.get('/')",
+    `  writeFileSync(${JSON.stringify(path.join(dir, 'report.json'))}, JSON.stringify({ top: app.top, output: server.output() }))`,
+    `  ${ending === 'fails' ? 'expect(1).toBe(2)' : ''}`,
+    '})',
+    '',
+    "it('finds the server of the row before it gone', async () => {",
+    `  const seen = JSON.parse(readFileSync(${JSON.stringify(path.join(dir, 'report.json'))}, 'utf8')) as { output: string }`,
+    String.raw`  const pids = [...seen.output.matchAll(/PIDS (\d+) (\d+)/gu)].flatMap((match) => [Number(match[1]), Number(match[2])])`,
+    '  // A killed process is gone once its parent has noticed, which takes a few turns.',
+    '  for (let tries = 0; tries < 30 && pids.some((pid) => isRunning(pid)); tries += 1) {',
+    '    await new Promise((resolve) => setTimeout(resolve, 100))',
+    '  }',
+    `  writeFileSync(${JSON.stringify(path.join(dir, 'after.json'))}, JSON.stringify({ isGone: pids.length === 2 && pids.every((pid) => !isRunning(pid)) }))`,
+    '})',
+    '',
+  ].join('\n')
+}
+
+/**
+ * Runs the test file of `leakyFile` with vitest and resolves to what the run left behind.
+ */
+async function runFile(
+  scratch: Scratch,
+  ending: 'fails' | 'forgets',
+): Promise<{
+  readonly code: number | null
+  readonly isGone: boolean
+  readonly output: string
+  readonly pids: number[]
+  readonly top: string
+}> {
+  const dir = scratch.directory()
+  writeFileSync(
+    path.join(dir, 'vitest.config.mjs'),
+    `export default { test: { root: ${JSON.stringify(dir)}, include: ['file.test.ts'], setupFiles: [${JSON.stringify(HOOKS)}], testTimeout: 60000 } }\n`,
+  )
+  writeFileSync(path.join(dir, 'file.test.ts'), leakyFile(scratch, ending))
+  const run = await finished(process.execPath, [VITEST, 'run', '--config', 'vitest.config.mjs'], {
+    cwd: dir,
+    env: nextEnvironment(),
+  })
+  const seen = JSON.parse(readFileSync(path.join(dir, 'report.json'), 'utf8')) as {
+    output: string
+    top: string
   }
+  const pids = pidsIn(seen.output)
+  scratch.track(pids)
+  const after = JSON.parse(readFileSync(path.join(dir, 'after.json'), 'utf8')) as {
+    isGone: boolean
+  }
+  return { ...run, isGone: after.isGone, pids, top: seen.top }
+}
+
+describe('a test file that makes an app and starts a server', () => {
+  const scratch = useScratch()
 
   it.each([
     ['an assertion fails', 'fails', 1],
@@ -208,9 +295,13 @@ describe('a test file that makes an app and starts a server', () => {
   ] as const)(
     'leaves no app and no server once the file has ended, where %s',
     async (_row, ending, code) => {
-      const run = await runFile(ending)
+      const run = await runFile(scratch, ending)
 
       expect(run.code, run.output).toBe(code)
+      expect(
+        run.isGone,
+        `the next row finds the server of the row before it gone:\n${run.output}`,
+      ).toBe(true)
       expect(existsSync(run.top), 'the app is removed').toBe(false)
       expect(await untilGone(run.pids, 10_000), 'the server and its helper are gone').toEqual([])
     },

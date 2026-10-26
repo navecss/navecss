@@ -21,6 +21,7 @@ import path from 'node:path'
 import type { NextApp } from './next-app.ts'
 import type { PageState, Probe } from './workspace-parts.ts'
 
+import { removeDirectory, trackDirectory } from './leftovers.ts'
 import { CORE_ROOT, createNextApp } from './next-app.ts'
 import {
   installBadLib,
@@ -145,6 +146,7 @@ export function createWorkspaceApp(nextRoot?: string): WorkspaceApp {
   const app = createNextApp(CONFIG, nextRoot === undefined ? {} : { nextRoot })
   const made = mkdtempSync(path.join(tmpdir(), 'prune-outside-'))
   const outside = realpathSync(made)
+  trackDirectory(outside)
   const modules = path.join(app.dir, 'node_modules')
   const log = path.join(app.dir, 'probe.log')
   const uiModule = path.join(app.top, 'packages/ui/index.js')
@@ -193,7 +195,7 @@ export function createWorkspaceApp(nextRoot?: string): WorkspaceApp {
     },
     remove: async () => {
       await app.remove()
-      rmSync(outside, { recursive: true, force: true })
+      removeDirectory(outside)
     },
   }
 }

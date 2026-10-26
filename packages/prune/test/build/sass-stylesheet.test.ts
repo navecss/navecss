@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NextApp } from '../helpers/next-app.ts'
 
 import { createNextApp, isBesideNext, SKIP_REASON } from '../helpers/next-app.ts'
+import { skipReason } from '../helpers/preconditions.ts'
 
 const TIMEOUT = 900_000
 
@@ -18,7 +19,8 @@ afterEach(async () => {
   apps.length = 0
 })
 
-const SKIP = SKIP_REASON ?? (isBesideNext('sass') ? undefined : 'sass is not installed beside next')
+const SKIP =
+  SKIP_REASON ?? skipReason(isBesideNext('sass') ? undefined : 'sass is not installed beside next')
 
 const LAYOUT = [
   "import './globals.css'",

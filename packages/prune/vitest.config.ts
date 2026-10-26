@@ -25,6 +25,8 @@ export default defineConfig({
     // test worker with SIGSEGV. Remove this once the pinned Node carries the fix.
     execArgv: ['--no-sparkplug'],
     testTimeout: 20_000,
+    // Stops what a row left running and removes what a file left on disk, as each ends.
+    setupFiles: ['test/helpers/leftovers-hooks.ts'],
     coverage: {
       // Measure and report only — no thresholds are configured, and none should be added here.
       enabled: true,

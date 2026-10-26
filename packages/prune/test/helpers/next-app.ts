@@ -23,21 +23,29 @@ import type { PruneRecord } from '../../src/record.ts'
 import type { DevServer } from './next-dev.ts'
 
 import { readRecord } from '../../src/record.ts'
+import { removeDirectory, trackDirectory } from './leftovers.ts'
 import { startDev } from './next-dev.ts'
 import { NEXT_ROOT, nextCommand, nextEnvironment, PACKAGE_ROOT } from './next-process.ts'
+import { skipReason } from './preconditions.ts'
 
 export const CORE_ROOT = path.resolve(PACKAGE_ROOT, '../core')
 
 /**
- * Why the real-build tests cannot run here, or `undefined` when they can.
+ * What is missing for the real-build tests, or `undefined` when nothing is.
  */
-export const SKIP_REASON: string | undefined = (() => {
+function missingForRealBuilds(): string | undefined {
   if (NEXT_ROOT === undefined) return 'next is not installed for this package'
   if (!existsSync(path.join(NEXT_ROOT, '..', 'react'))) return 'react is not installed beside next'
   if (!existsSync(path.join(PACKAGE_ROOT, 'dist/postcss.js'))) return 'this package is not built'
   if (!existsSync(path.join(CORE_ROOT, 'dist/atomic.css'))) return '@navecss/core is not built'
   return
-})()
+}
+
+/**
+ * Why the real-build tests cannot run here, or `undefined` when they can. Where CI is set, what is
+ * missing fails the file that asks.
+ */
+export const SKIP_REASON: string | undefined = skipReason(missingForRealBuilds())
 
 /**
  * Whether a package is installed beside `next`, as its optional peers are.
@@ -208,6 +216,7 @@ export function createNextApp(
   options: { readonly nextRoot?: string } = {},
 ): NextApp {
   const top = realpathSync(mkdtempSync(path.join(PACKAGE_ROOT, '.nave-next-')))
+  trackDirectory(top)
   const dir = path.join(top, 'apps/web')
   const write = (files: Record<string, string>): void => {
     for (const [name, text] of Object.entries(files)) {
@@ -248,7 +257,7 @@ export function createNextApp(
     builtCss: () => cssUnder(path.join(dir, '.next/static')),
     remove: async () => {
       for (const server of servers) await server.stop()
-      rmSync(top, { recursive: true, force: true })
+      removeDirectory(top)
     },
   }
 }

@@ -1,9 +1,10 @@
 /**
  * A running `next dev`, driven over HTTP and stopped by its process group's id.
  */
-import { spawn } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 
+import { forgetGroup, signalGroup, trackGroup } from './leftovers.ts'
 import { nextCommand, nextEnvironment, pause } from './next-process.ts'
 
 const STYLESHEET_LINK = /<link[^>]+href="([^"]+\.css[^"]*)"/g
@@ -54,6 +55,21 @@ function freePort(): Promise<number> {
 }
 
 /**
+ * Stops the server by its process group's id, waiting for it to exit, then stops what its workers
+ * left running. Stopping it again does nothing.
+ */
+async function stopGroup(child: ChildProcess, exited: Promise<void>): Promise<void> {
+  if (child.pid === undefined) return
+  if (child.exitCode === null) {
+    signalGroup(child.pid, 'SIGTERM')
+    await exited
+  }
+  // The workers `next` starts can outlive it.
+  signalGroup(child.pid, 'SIGKILL')
+  forgetGroup(child.pid)
+}
+
+/**
  * Starts `next dev` (or `next start`, for a built app) with `args` in `cwd`, on a free port, with
  * the `next` installed at `nextRoot` or the workspace's.
  */
@@ -75,6 +91,8 @@ export async function startDev(
       detached: true,
     },
   )
+  // Stopped with this process, whatever ends it.
+  if (child.pid !== undefined) trackGroup(child.pid)
   let output = ''
   child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
   child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
@@ -109,9 +127,7 @@ export async function startDev(
   }
   const stop = async (): Promise<void> => {
     isStopped = true
-    if (child.exitCode !== null || child.pid === undefined) return
-    process.kill(-child.pid, 'SIGTERM')
-    await exited
+    await stopGroup(child, exited)
   }
   return { origin: `http://127.0.0.1:${port}`, output: () => output, get, css, untilCss, stop }
 }
