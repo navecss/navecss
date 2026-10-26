@@ -246,7 +246,8 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 //   "tokens" appears with no owner ("Nave's build", "the token build"); an owner ("your", "our",
 //   "the consumer's") makes it the consumer's ("your token build"). It is also Nave's when its
 //   determiner is "a" or "its" and the clause names Nave before it ("Nave ships a build that ..."),
-//   looking back no further than a joining word and skipping an aside between commas. A word NAMES
+//   looking back no further than a joining word that starts a new clause and skipping an aside
+//   between commas. A word NAMES
 //   NAVE when it starts with "nave" (Nave, Nave's, navecss-tokens). A bare "token" or "tokens"
 //   names neither side.
 // - For the active form, the invoker is the first word that names either side, walking back from
@@ -302,6 +303,8 @@ const CLAUSE_BREAKERS = new Set([
   'then',
 ])
 const RELATIVES = new Set(['where', 'which', 'who', 'whose', 'that'])
+// Joining words that are more often adverbs inside a clause.
+const ADVERB_JOINERS = new Set(['then', 'since'])
 const PRONOUNS = new Set(['it', 'they', 'this', 'that'])
 const AUXILIARIES = new Set(['do', 'does', 'did', 'will', 'would', 'can', 'could', 'is', 'was'])
 const ENTRY_POINT_HEADS = new Set(['point', 'points', "point's", "points'"])
@@ -572,21 +575,38 @@ function namesConsumer(words, head) {
     if (word.startsWith('nave')) return false
     token ||= isTokenWord(word)
     if (DETERMINERS.has(word)) {
-      return !token && !(namesNaveBefore(words, k) && NAVE_OWNED_DETERMINERS.has(word))
+      return !token && !(namesNaveBefore(words, k, head) && NAVE_OWNED_DETERMINERS.has(word))
     }
   }
   return !token
 }
 
-// Whether the clause names Nave before index `k`, looking back no further than a joining word
-// (and, but, so ...) and skipping an aside between commas, as the invoker walk does: in "Nave ships
-// the tokens, and a build script invokes ...", the build is not Nave's.
-function namesNaveBefore(words, k) {
+// Whether the clause names Nave before index `k`, skipping an aside between commas as the invoker
+// walk does, and looking back no further than a joining word (and, but, so ...) that starts a new
+// clause. It starts one only when the build noun at `head` is the direct subject of the invoking
+// verb after it, with no relative word between them: in "Nave ships the tokens and a build script
+// invokes ..." the build is not Nave's, while in "Nave ships the defaults and a build script that
+// invokes ..." it is the object of Nave's verb. "then" and "since" are adverbs inside a clause
+// ("Nave then ships ..."), so they end the look back only right after a comma.
+function namesNaveBefore(words, k, head) {
+  const newClause = isDirectSubject(words, head)
   for (let j = k - 1; j >= 0; j -= 1) {
     const { word, segment } = words[j]
     if (segment !== words[k].segment && isClosedMiddle(words, segment)) continue
-    if (CLAUSE_BREAKERS.has(word)) return false
+    const afterComma = words[j - 1]?.segment !== segment
+    const joins = CLAUSE_BREAKERS.has(word) && (!ADVERB_JOINERS.has(word) || afterComma)
+    if (newClause && joins) return false
     if (word.startsWith('nave')) return true
+  }
+  return false
+}
+
+// Whether the noun at `head` is the direct subject of the invoking verb that follows it: the verb
+// comes before any relative word.
+function isDirectSubject(words, head) {
+  for (let j = head + 1; j < words.length; j += 1) {
+    if (RELATIVES.has(words[j].word)) return false
+    if (INVOKING_VERBS.has(words[j].word)) return true
   }
   return false
 }
@@ -793,6 +813,12 @@ test("AC-theming-36: an invoker that is not the consumer's build is not the affi
     'Nave is the invoker: it invokes the entry point.',
     'It invokes the entry point.',
     'Your build is ready; the CLI invokes the entry point.',
+    // A joining word or an adverb inside Nave's own clause does not end Nave's ownership.
+    'Nave then ships a build script that invokes the entry point.',
+    'Nave since 0.1.0 ships a build script that invokes the entry point.',
+    'Nave writes and ships a build script that invokes the entry point.',
+    'Nave ships the defaults and a build script that invokes the entry point.',
+    'Nave then has a build script invoke the entry point.',
   ]
   assert.deepEqual(
     naveSide.filter(
@@ -890,6 +916,8 @@ const RUNG_4_LAWFUL = [
   'Nave writes the defaults, and a build invokes the entry point with your inputs.',
   'Nave ships the defaults, but a build script invokes the entry point.',
   'Your repo, not Nave, holds a build script that invokes the entry point.',
+  'Nave ships the tokens and a build script invokes the entry point.',
+  'Nave ships the defaults, then a build script invokes the entry point.',
 ]
 
 test('AC-theming-36: a lawful rung 4 that says its build reaches the entry point stays green', () => {
