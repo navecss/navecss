@@ -569,7 +569,11 @@ function realBuildOver(file: string): { output: string; status: number | null } 
   }
   cpSync(file, path.join(copy, 'tokens.json'))
   symlinkSync(path.resolve(packageRoot, '../core'), path.join(root, 'packages', 'core'))
-  const run = spawnSync(process.execPath, ['build.ts'], { cwd: copy, encoding: 'utf8' })
+  const run = spawnSync(process.execPath, ['build.ts'], {
+    cwd: copy,
+    encoding: 'utf8',
+    timeout: 50_000,
+  })
   return { output: `${run.stdout}${run.stderr}`, status: run.status }
 }
 
