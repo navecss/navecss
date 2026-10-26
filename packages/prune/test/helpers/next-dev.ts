@@ -4,7 +4,7 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import { createServer } from 'node:net'
 
-import { forgetGroup, signalGroup, trackGroup } from './leftovers.ts'
+import { forgetGroup, isGroupRunning, signalGroup, trackGroup } from './leftovers.ts'
 import { nextCommand, nextEnvironment, pause } from './next-process.ts'
 
 const STYLESHEET_LINK = /<link[^>]+href="([^"]+\.css[^"]*)"/g
@@ -64,7 +64,9 @@ async function stopGroup(child: ChildProcess, exited: Promise<void>): Promise<vo
     signalGroup(child.pid, 'SIGTERM')
     await exited
   }
-  // The workers `next` starts can outlive it.
+  // The workers `next` starts got the same signal and need a moment to finish what they write;
+  // what is still running after that is stopped.
+  for (let tries = 0; isGroupRunning(child.pid) && tries < 50; tries += 1) await pause(100)
   signalGroup(child.pid, 'SIGKILL')
   forgetGroup(child.pid)
 }

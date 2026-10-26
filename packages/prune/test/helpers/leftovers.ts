@@ -22,6 +22,19 @@ export function signalGroup(pid: number, signal: NodeJS.Signals): void {
 }
 
 /**
+ * Whether any process is left in the group `pid` leads. macOS answers EPERM, not ESRCH, when the
+ * only members left have exited and not yet been reaped, and those are gone for this purpose.
+ */
+export function isGroupRunning(pid: number): boolean {
+  try {
+    process.kill(-pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Stops every tracked server, and removes every tracked directory.
  */
 function cleanUpNow(): void {
