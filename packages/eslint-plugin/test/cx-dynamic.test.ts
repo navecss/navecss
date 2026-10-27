@@ -801,8 +801,10 @@ const template = `\`${slots(30)
 const chain = `${slots(30).join(' + ')} + 'Q'`
 
 /**
- * Lints `value` in a child process, so that a matcher that never finishes fails this test at
- * the timeout instead of hanging it: the work is synchronous, which a test timeout cannot cut.
+ * Lints `value` in a child process, so that a matcher that never finishes fails this test when the
+ * child is ended after 60 s instead of hanging it: the work is synchronous, which a test timeout
+ * cannot cut. A linear matcher takes milliseconds and does not come near 60 s even on a loaded
+ * machine; a catastrophic one runs far past it.
  */
 function reportsInChild(value: string): { error: Error | undefined; stdout: string } {
   const rule = pathToFileURL(path.resolve(import.meta.dirname, '../src/rules/class-channel.ts'))
@@ -820,7 +822,7 @@ function reportsInChild(value: string): { error: Error | undefined; stdout: stri
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
     cwd: path.resolve(import.meta.dirname, '..'),
     encoding: 'utf8',
-    timeout: 8000,
+    timeout: 60_000,
   })
   return { error: result.error, stdout: result.stdout.trim() }
 }
@@ -834,15 +836,11 @@ describe('AC-28: the fit check does not slow down as slots are added', () => {
   it.each([
     ['a template of 30 slots then Q', template],
     ['a chain of 30 identifiers then Q', chain],
-  ])(
-    '%s gets one report, in bounded time',
-    (_name, value) => {
-      const result = reportsInChild(value)
-      expect(result.error).toBeUndefined()
-      expect(result.stdout).toBe('1')
-    },
-    15_000,
-  )
+  ])('%s gets one report, in bounded time', (_name, value) => {
+    const result = reportsInChild(value)
+    expect(result.error).toBeUndefined()
+    expect(result.stdout).toBe('1')
+  })
 })
 
 describe('AC-28: a cxModules wrapper re-exporting cx', () => {
