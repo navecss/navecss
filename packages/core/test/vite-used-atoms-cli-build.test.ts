@@ -160,7 +160,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(0)
       expect(atomLayerAtoms(builtCss(app))).toEqual(atoms('flex', 'gap'))
-    }, 120_000)
+    })
 
     it('prints none under --app either, which builds through a builder', async () => {
       writeConfig(app, '')
@@ -170,7 +170,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(0)
       expect(atomLayerAtoms(builtCss(app))).toEqual(atoms('flex', 'gap'))
-    }, 120_000)
+    })
 
     it('prints none when the builder shares one config across the environments and uses Vite’s own buildApp', async () => {
       writeConfig(app, 'builder: { sharedConfigBuild: true }')
@@ -179,7 +179,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(0)
-    }, 120_000)
+    })
   })
 
   describe('a backend that renders its own templates', () => {
@@ -202,7 +202,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(1)
-    }, 120_000)
+    })
 
     it('prints none when a server environment of the same build transformed a module', async () => {
       writeConfig(app, `${INPUT}, builder: {}, ${SERVER_ENVIRONMENT}`)
@@ -211,7 +211,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(0)
-    }, 120_000)
+    })
 
     it('prints none when the builder’s own buildApp builds the environments and shares the config', async () => {
       writeConfig(
@@ -223,7 +223,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(0)
-    }, 120_000)
+    })
 
     it('prints none when the builder’s own buildApp builds the environments and each has a config of its own', async () => {
       writeConfig(app, `${INPUT}, builder: { ${SERVER_FIRST} }, ${SERVER_ENVIRONMENT}`)
@@ -232,7 +232,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(0)
-    }, 120_000)
+    })
 
     it('prints exactly one when the builder’s own buildApp builds the client alone', async () => {
       writeConfig(
@@ -244,7 +244,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(1)
-    }, 120_000)
+    })
 
     it('prints exactly one when the builder builds the client alone', async () => {
       writeConfig(app, `${INPUT}, builder: {}`)
@@ -253,7 +253,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(1)
-    }, 120_000)
+    })
 
     it('prints exactly one when the builder shares one config across the environments and uses Vite’s own buildApp', async () => {
       writeConfig(app, `${INPUT}, builder: { sharedConfigBuild: true }`)
@@ -262,7 +262,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(1)
-    }, 120_000)
+    })
 
     it('prints exactly one for the first build of vite build --watch, and the process stops when asked', async () => {
       writeConfig(app, INPUT)
@@ -271,7 +271,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(markupWarnings(output)).toBe(1)
       expect(signal).toBe('SIGTERM')
-    }, 120_000)
+    })
 
     it('prints none when Vite’s own buildApp builds a server environment too, with one config shared', async () => {
       writeConfig(app, `${INPUT}, builder: { sharedConfigBuild: true }, ${SERVER_ENVIRONMENT}`)
@@ -280,7 +280,7 @@ describe('AC-used-atoms-53 — the markup warning under the vite build command',
 
       expect(outcome({ exitCode, output })).toBe('exited 0')
       expect(markupWarnings(output)).toBe(0)
-    }, 120_000)
+    })
   })
 })
 
@@ -313,7 +313,6 @@ describe('AC-used-atoms-13 — an atom only a server environment names, under th
       expect(output).toContain('src/entry-server.ts: names grid')
       expect(output).toContain('build the server environments first')
     },
-    120_000,
   )
 
   it.each(SHARED)(
@@ -327,7 +326,6 @@ describe('AC-used-atoms-13 — an atom only a server environment names, under th
       expect(atomLayerAtoms(builtCss(app))).toEqual(['grid'])
       expect(markupWarnings(output)).toBe(0)
     },
-    120_000,
   )
 })
 
@@ -368,7 +366,7 @@ describe('AC-used-atoms-12 — two builds of one root in one process keep their 
 
     expect(atomLayerAtoms(first.css)).toEqual(['flex'])
     expect(atomLayerAtoms(second.css)).toEqual(['grid'])
-  }, 120_000)
+  })
 
   it('does not carry the first builder’s atoms into the second when a config file’s plugin is made afresh for each environment and one inline config builds twice', async () => {
     writeConfig(app, `${INPUT}, builder: { ${SERVER_FIRST} }, ${SERVER_ENVIRONMENT}`)
@@ -390,7 +388,7 @@ describe('AC-used-atoms-12 — two builds of one root in one process keep their 
 
     expect(first).toEqual(atoms('block', 'flex'))
     expect(second).toEqual(atoms('gap', 'grid'))
-  }, 120_000)
+  })
 
   it.each([
     ['gives each environment a config of its own', false],
@@ -430,7 +428,6 @@ describe('AC-used-atoms-12 — two builds of one root in one process keep their 
       expect(first).toEqual(atoms('block', 'flex'))
       expect(second).toEqual(atoms('gap', 'grid'))
     },
-    120_000,
   )
 
   it('keeps the atoms of two concurrent builders of one root apart when a config file’s plugin is made afresh for each environment', async () => {
@@ -465,5 +462,5 @@ describe('AC-used-atoms-12 — two builds of one root in one process keep their 
 
     expect(a).toEqual(['flex'])
     expect(b).toEqual(['grid'])
-  }, 120_000)
+  })
 })

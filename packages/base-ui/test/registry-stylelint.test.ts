@@ -20,7 +20,6 @@ import {
 import { loadRegistry } from './support/registry/load.ts'
 import { styledSubpaths } from './support/registry/styled-subpaths.ts'
 
-const GENERATOR_TIMEOUT = 180_000
 const PLANTED_ATOM = 'baseUiSelectIcon'
 
 const loadedModules = (): ReturnType<typeof moduleTexts>['found'] => {
@@ -34,7 +33,7 @@ describe('AC-base-ui-registry-22: the stylelint config passes the modules as gen
     const modules = loadedModules()
     expect(modules.length).toBe(styledSubpaths().length)
     expect(await reportedProblems(modules)).toEqual([])
-  }, 120_000)
+  })
 
   it('reports nothing over the modules after prettier with its default options', async () => {
     const modules = loadedModules()
@@ -42,7 +41,7 @@ describe('AC-base-ui-registry-22: the stylelint config passes the modules as gen
       modules.map(async (module) => ({ ...module, text: await prettified(module.text) })),
     )
     expect(await reportedProblems(formatted)).toEqual([])
-  }, 120_000)
+  })
 
   it('has the cleared comment alone on its line before each outline: none, and counts that agree', () => {
     const modules = loadedModules()
@@ -66,7 +65,7 @@ describe('AC-base-ui-registry-22: the stylelint config passes the modules as gen
       modules.reduce((sum, module) => sum + disableCommentLines(module.text).length, 0),
     ).toBeGreaterThan(0)
     expect(await strippedProblems(modules)).toEqual([])
-  }, 120_000)
+  })
 
   it('reports outline: 0 planted on its own line inside a copied :focus-visible rule, with the comments in place', async () => {
     const [module] = loadedModules()
@@ -91,58 +90,46 @@ describe('AC-base-ui-registry-22: the stylelint config passes the modules as gen
     expect(reports.map((report) => report.rule).join(',')).toContain('needless')
   })
 
-  it(
-    'makes the build exit non-zero, naming the atom and writing no item, when one atom gains outline: none with no ring',
-    () => {
-      const temp = copyPackage()
-      try {
-        addDeclarationToAtom(temp, PLANTED_ATOM, 'outline', 'none')
-        const run = runGenerator(temp)
-        expect(run.status).not.toBe(0)
-        expect(run.status).not.toBeNull()
-        expect(run.output).toMatch(/baseUiSelectIcon|nave-base-ui-select-icon|selectIcon/)
-        expect(run.itemFiles).toEqual([])
-      } finally {
-        temp.remove()
-      }
-    },
-    GENERATOR_TIMEOUT,
-  )
+  it('makes the build exit non-zero, naming the atom and writing no item, when one atom gains outline: none with no ring', () => {
+    const temp = copyPackage()
+    try {
+      addDeclarationToAtom(temp, PLANTED_ATOM, 'outline', 'none')
+      const run = runGenerator(temp)
+      expect(run.status).not.toBe(0)
+      expect(run.status).not.toBeNull()
+      expect(run.output).toMatch(/baseUiSelectIcon|nave-base-ui-select-icon|selectIcon/)
+      expect(run.itemFiles).toEqual([])
+    } finally {
+      temp.remove()
+    }
+  })
 
-  it(
-    'makes the build exit non-zero, naming the atom and writing no item, when one atom gains outline: 0',
-    () => {
-      const temp = copyPackage()
-      try {
-        addDeclarationToAtom(temp, PLANTED_ATOM, 'outline', '0')
-        const run = runGenerator(temp)
-        expect(run.status).not.toBe(0)
-        expect(run.status).not.toBeNull()
-        expect(run.output).toMatch(/baseUiSelectIcon|nave-base-ui-select-icon|selectIcon/)
-        expect(run.itemFiles).toEqual([])
-      } finally {
-        temp.remove()
-      }
-    },
-    GENERATOR_TIMEOUT,
-  )
+  it('makes the build exit non-zero, naming the atom and writing no item, when one atom gains outline: 0', () => {
+    const temp = copyPackage()
+    try {
+      addDeclarationToAtom(temp, PLANTED_ATOM, 'outline', '0')
+      const run = runGenerator(temp)
+      expect(run.status).not.toBe(0)
+      expect(run.status).not.toBeNull()
+      expect(run.output).toMatch(/baseUiSelectIcon|nave-base-ui-select-icon|selectIcon/)
+      expect(run.itemFiles).toEqual([])
+    } finally {
+      temp.remove()
+    }
+  })
 
-  it(
-    'builds the unedited temp copy, so the refusals above are the edits and not the copy',
-    () => {
-      const temp = copyPackage()
-      try {
-        const run = runGenerator(temp)
-        expect(run.output).not.toMatch(/Cannot find|ERR_MODULE_NOT_FOUND/)
-        expect(run.status).toBe(0)
-        const expected = styledSubpaths().map((subpath) => `base-ui-${subpath}.json`)
-        expect(run.itemFiles.toSorted(byCodeUnit)).toEqual(expected.toSorted(byCodeUnit))
-      } finally {
-        temp.remove()
-      }
-    },
-    GENERATOR_TIMEOUT,
-  )
+  it('builds the unedited temp copy, so the refusals above are the edits and not the copy', () => {
+    const temp = copyPackage()
+    try {
+      const run = runGenerator(temp)
+      expect(run.output).not.toMatch(/Cannot find|ERR_MODULE_NOT_FOUND/)
+      expect(run.status).toBe(0)
+      const expected = styledSubpaths().map((subpath) => `base-ui-${subpath}.json`)
+      expect(run.itemFiles.toSorted(byCodeUnit)).toEqual(expected.toSorted(byCodeUnit))
+    } finally {
+      temp.remove()
+    }
+  })
 })
 
 const RING =

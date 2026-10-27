@@ -91,27 +91,23 @@ function hasClassMap(text: string): boolean {
 }
 
 describe('AC-astro-23 — zero runtime on Astro: no Nave module and no class map in any output', () => {
-  it.each(OUTPUTS)(
-    '%s',
-    async (_name, settings) => {
-      const { app, result } = await built({ ...settings, options: BROWSER_KEEP })
-      expect(result.error).toBeUndefined()
-      const directories = [result.client, ...(result.server ? [result.server] : [])]
-      const client = javascriptUnder(result.client)
-      for (const directory of directories) {
-        const scripts = Object.entries(javascriptUnder(directory))
-        for (const [file, text] of scripts) {
-          expect(text, file).not.toMatch(/@navecss\/core\/cx/)
-          expect(hasClassMap(text), file).toBe(false)
-        }
+  it.each(OUTPUTS)('%s', async (_name, settings) => {
+    const { app, result } = await built({ ...settings, options: BROWSER_KEEP })
+    expect(result.error).toBeUndefined()
+    const directories = [result.client, ...(result.server ? [result.server] : [])]
+    const client = javascriptUnder(result.client)
+    for (const directory of directories) {
+      const scripts = Object.entries(javascriptUnder(directory))
+      for (const [file, text] of scripts) {
+        expect(text, file).not.toMatch(/@navecss\/core\/cx/)
+        expect(hasClassMap(text), file).toBe(false)
       }
-      const joined = Object.values(client).join('\n')
-      for (const name of ['nave-grid', 'nave-inline-flex', 'nave-w-full'])
-        expect(joined).toContain(name)
-      expect(app.root).toBeTruthy()
-    },
-    SECOND,
-  )
+    }
+    const joined = Object.values(client).join('\n')
+    for (const name of ['nave-grid', 'nave-inline-flex', 'nave-w-full'])
+      expect(joined).toContain(name)
+    expect(app.root).toBeTruthy()
+  })
 
   it('control: the same per-file check finds the class map in the files the package’s cx module imports, in either spelling', () => {
     const dist = path.join(CORE_ROOT, 'dist')
@@ -382,49 +378,41 @@ const LAYER_STATEMENT_FIRST = (styles: readonly PageStyle[]): string | undefined
 }
 
 describe('AC-astro-33 — every copy of the layer, linked or inlined, sits inside @layer atomic after Nave’s order statement', () => {
-  it.each(OUTPUTS)(
-    '%s',
-    async (_name, settings) => {
-      const { app, result } = await built({
-        ...settings,
-        options: BROWSER_KEEP,
-        files: { ...settings.files, ...LEAN_FILES },
-      })
-      expect(result.error).toBeUndefined()
-      const routes = [
-        '/',
-        '/about',
-        '/lean',
-        ...(settings.server ? ['/dyn'] : []),
-        ...(settings.prerendered ? ['/pre'] : []),
-      ]
-      const isServer = settings.server === true
-      expect(isServer || app.root).toBeTruthy()
-      const pageStyles = await stylesOfPages(app, result, routes)
-      for (const [route, styles] of Object.entries(pageStyles)) {
-        expect(LAYER_STATEMENT_FIRST(styles), route).toBe(normalized(layersStatement()))
-        for (const style of styles) {
-          expect(withoutAtomicLayer(style.css), route).not.toMatch(
-            new RegExp(String.raw`\.(?:${CLASS_NAMES.join('|')})(?![\w-])`),
-          )
-        }
+  it.each(OUTPUTS)('%s', async (_name, settings) => {
+    const { app, result } = await built({
+      ...settings,
+      options: BROWSER_KEEP,
+      files: { ...settings.files, ...LEAN_FILES },
+    })
+    expect(result.error).toBeUndefined()
+    const routes = [
+      '/',
+      '/about',
+      '/lean',
+      ...(settings.server ? ['/dyn'] : []),
+      ...(settings.prerendered ? ['/pre'] : []),
+    ]
+    const isServer = settings.server === true
+    expect(isServer || app.root).toBeTruthy()
+    const pageStyles = await stylesOfPages(app, result, routes)
+    for (const [route, styles] of Object.entries(pageStyles)) {
+      expect(LAYER_STATEMENT_FIRST(styles), route).toBe(normalized(layersStatement()))
+      for (const style of styles) {
+        expect(withoutAtomicLayer(style.css), route).not.toMatch(
+          new RegExp(String.raw`\.(?:${CLASS_NAMES.join('|')})(?![\w-])`),
+        )
       }
-    },
-    SECOND,
-  )
+    }
+  })
 
-  it(
-    'control: a layout without the order statement and a component’s consumer layer ahead of the stylesheet fails the first clause',
-    async () => {
-      const { app, result } = await built({ options: BROWSER_KEEP, files: shapeFiles(false) })
-      expect(result.error).toBeUndefined()
-      const pageStyles = await stylesOfPages(app, result, ['/c/p6'])
-      const first = LAYER_STATEMENT_FIRST(pageStyles['/c/p6']!)
-      expect(first).not.toBe(normalized(layersStatement()))
-      expect(first).toContain('@layer components.consumer')
-    },
-    SECOND,
-  )
+  it('control: a layout without the order statement and a component’s consumer layer ahead of the stylesheet fails the first clause', async () => {
+    const { app, result } = await built({ options: BROWSER_KEEP, files: shapeFiles(false) })
+    expect(result.error).toBeUndefined()
+    const pageStyles = await stylesOfPages(app, result, ['/c/p6'])
+    const first = LAYER_STATEMENT_FIRST(pageStyles['/c/p6']!)
+    expect(first).not.toBe(normalized(layersStatement()))
+    expect(first).toContain('@layer components.consumer')
+  })
 })
 
 /**
@@ -449,60 +437,52 @@ async function stylesOfPages(
 }
 
 describe('AC-astro-34 — the fixture’s output stays test output, and its builds do not phone home', () => {
-  it(
-    'ignores its build output, packs none of it, and builds with telemetry off',
-    async () => {
-      const log = 'telemetry.log'
-      const { app, result } = await built({
-        options: BROWSER_KEEP,
-        integrations: `{ name: 'record', hooks: { 'astro:config:setup': async ({ config }) => { (await import('node:fs')).appendFileSync(config.root.pathname.replace(/\\/?$/, '/') + '${log}', \`\${globalThis.process.env.ASTRO_TELEMETRY_DISABLED}\\n\`) } } }`,
-      })
-      expect(result.error).toBeUndefined()
-      expect(readFileSync(path.join(app.root, log), 'utf8').trim().split('\n')).toEqual(['1'])
-      const rootRelative = path.relative(path.resolve(CORE_ROOT, '../..'), app.root)
-      for (const directory of ['dist', '.astro']) {
-        const target = path.join(rootRelative, directory)
-        if (!existsSync(path.join(app.root, directory))) continue
-        expect(() =>
-          execFileSync('git', ['check-ignore', '-q', target], {
-            cwd: path.resolve(CORE_ROOT, '../..'),
-          }),
-        ).not.toThrow()
-      }
-      const tracked = execFileSync('git', ['ls-files', rootRelative], {
-        cwd: path.resolve(CORE_ROOT, '../..'),
-        encoding: 'utf8',
-      })
-      expect(tracked).toBe('')
-      const packed = packCoreTarball().files
-      expect(packed.filter((file) => /astro|\.nave-/.test(file))).toEqual([])
-    },
-    SECOND,
-  )
+  it('ignores its build output, packs none of it, and builds with telemetry off', async () => {
+    const log = 'telemetry.log'
+    const { app, result } = await built({
+      options: BROWSER_KEEP,
+      integrations: `{ name: 'record', hooks: { 'astro:config:setup': async ({ config }) => { (await import('node:fs')).appendFileSync(config.root.pathname.replace(/\\/?$/, '/') + '${log}', \`\${globalThis.process.env.ASTRO_TELEMETRY_DISABLED}\\n\`) } } }`,
+    })
+    expect(result.error).toBeUndefined()
+    expect(readFileSync(path.join(app.root, log), 'utf8').trim().split('\n')).toEqual(['1'])
+    const rootRelative = path.relative(path.resolve(CORE_ROOT, '../..'), app.root)
+    for (const directory of ['dist', '.astro']) {
+      const target = path.join(rootRelative, directory)
+      if (!existsSync(path.join(app.root, directory))) continue
+      expect(() =>
+        execFileSync('git', ['check-ignore', '-q', target], {
+          cwd: path.resolve(CORE_ROOT, '../..'),
+        }),
+      ).not.toThrow()
+    }
+    const tracked = execFileSync('git', ['ls-files', rootRelative], {
+      cwd: path.resolve(CORE_ROOT, '../..'),
+      encoding: 'utf8',
+    })
+    expect(tracked).toBe('')
+    const packed = packCoreTarball().files
+    expect(packed.filter((file) => /astro|\.nave-/.test(file))).toEqual([])
+  })
 })
 
 describe('AC-astro-37 — the README’s position claim for a @nave error in an .astro <style> block is true on the fixture', () => {
-  it(
-    'counts the line from the start of the <style> block',
-    async () => {
-      const page = `---\nimport Layout from '../layouts/Layout.astro'\n---\n<Layout><p class="b">b</p></Layout>\n<style>\n  .a {\n    color: red;\n  }\n  .b {\n    @nave inlin;\n  }\n</style>\n`
-      const lines = page.split('\n')
-      const tag = lines.indexOf('<style>') + 1
-      const at = lines.findIndex((line) => line.includes('@nave inlin')) + 1
-      expect(at - tag).toBeGreaterThanOrEqual(3)
-      const { result } = await built({
-        options: BROWSER_KEEP,
-        files: { 'src/pages/badstyle.astro': page },
-      })
-      expect(result.error).toBeDefined()
-      const reported = new RegExp(String.raw`src/pages/badstyle\.astro:(\d+):`).exec(result.output)
-      expect(reported, 'the report names the page').not.toBeNull()
-      expect(Number(reported![1])).toBe(at - tag + 1)
-      expect(Number(reported![1])).toBeLessThan(at)
-      expect(result.output).toMatch(/\(position in .* as processed; /)
-    },
-    SECOND,
-  )
+  it('counts the line from the start of the <style> block', async () => {
+    const page = `---\nimport Layout from '../layouts/Layout.astro'\n---\n<Layout><p class="b">b</p></Layout>\n<style>\n  .a {\n    color: red;\n  }\n  .b {\n    @nave inlin;\n  }\n</style>\n`
+    const lines = page.split('\n')
+    const tag = lines.indexOf('<style>') + 1
+    const at = lines.findIndex((line) => line.includes('@nave inlin')) + 1
+    expect(at - tag).toBeGreaterThanOrEqual(3)
+    const { result } = await built({
+      options: BROWSER_KEEP,
+      files: { 'src/pages/badstyle.astro': page },
+    })
+    expect(result.error).toBeDefined()
+    const reported = new RegExp(String.raw`src/pages/badstyle\.astro:(\d+):`).exec(result.output)
+    expect(reported, 'the report names the page').not.toBeNull()
+    expect(Number(reported![1])).toBe(at - tag + 1)
+    expect(Number(reported![1])).toBeLessThan(at)
+    expect(result.output).toMatch(/\(position in .* as processed; /)
+  })
 })
 
 const SKIP_LAYOUT = (body: string): string =>
@@ -524,26 +504,22 @@ describe('AC-astro-30 — a skip link in an .astro layout: the lone class ships 
       true,
     ],
     ['L3, nave-sr-only and no link', '<span class="nave-sr-only">hidden</span>', true],
-  ])(
-    '%s',
-    async (_name, body, hasBoth) => {
-      const files = { 'src/layouts/Layout.astro': SKIP_LAYOUT(body) }
-      const used = await built({ options: BROWSER_KEEP, files })
-      const all = await built({ options: "{ atomic: 'all' }", files })
-      expect(used.result.error).toBeUndefined()
-      const pages = await layerStylesOfRoutes(used.app, used.result, ['/', '/about'])
-      const allPages = await layerStylesOfRoutes(all.app, all.result, ['/', '/about'])
-      for (const route of ['/', '/about']) {
-        const styles = pages[route]!.entries().toArray()
-        for (const [index, style] of styles) {
-          const set = setOfCss(style.css)
-          expect(set).toContain('srOnlyFocusable')
-          expect(set.includes('srOnly')).toBe(hasBoth)
-          expect(parityProblems(style.css, allPages[route]![index]!.css)).toEqual([])
-          expect(/\.nave-sr-only(?![\w-])/.test(style.css)).toBe(hasBoth)
-        }
+  ])('%s', async (_name, body, hasBoth) => {
+    const files = { 'src/layouts/Layout.astro': SKIP_LAYOUT(body) }
+    const used = await built({ options: BROWSER_KEEP, files })
+    const all = await built({ options: "{ atomic: 'all' }", files })
+    expect(used.result.error).toBeUndefined()
+    const pages = await layerStylesOfRoutes(used.app, used.result, ['/', '/about'])
+    const allPages = await layerStylesOfRoutes(all.app, all.result, ['/', '/about'])
+    for (const route of ['/', '/about']) {
+      const styles = pages[route]!.entries().toArray()
+      for (const [index, style] of styles) {
+        const set = setOfCss(style.css)
+        expect(set).toContain('srOnlyFocusable')
+        expect(set.includes('srOnly')).toBe(hasBoth)
+        expect(parityProblems(style.css, allPages[route]![index]!.css)).toEqual([])
+        expect(/\.nave-sr-only(?![\w-])/.test(style.css)).toBe(hasBoth)
       }
-    },
-    SECOND,
-  )
+    }
+  })
 })

@@ -63,23 +63,19 @@ describe('AC-used-atoms-34: an inline script of an HTML file is never told to as
   const page =
     '<!doctype html><html><body><script type="module">import { cx } from "@navecss/core/cx"\nexport const f = (v) => cx(v)</script></body></html>'
 
-  it.each([false, true])(
-    'ends with the second sentence with sourcemap %s',
-    async (sourcemap) => {
-      const app = makeUsedApp({ 'index.html': page })
-      try {
-        const built = await buildUsed(app, { build: { sourcemap } })
+  it.each([false, true])('ends with the second sentence with sourcemap %s', async (sourcemap) => {
+    const app = makeUsedApp({ 'index.html': page })
+    try {
+      const built = await buildUsed(app, { build: { sourcemap } })
 
-        const line = built.error!.split('\n').find((text) => text.startsWith('index.html: '))!
+      const line = built.error!.split('\n').find((text) => text.startsWith('index.html: '))!
 
-        expect(line.endsWith(`the argument is not a literal atom name.${UNMAPPED}`)).toBe(true)
-        expect(line).not.toContain(WITHOUT_MAP)
-      } finally {
-        app.dispose()
-      }
-    },
-    60_000,
-  )
+      expect(line.endsWith(`the argument is not a literal atom name.${UNMAPPED}`)).toBe(true)
+      expect(line).not.toContain(WITHOUT_MAP)
+    } finally {
+      app.dispose()
+    }
+  })
 })
 
 /**
@@ -94,44 +90,40 @@ describe('AC-used-atoms-31: an empty value ends a class only when what follows i
     "`nave-flex${''}-col`",
     "'nave-flex' + (on ? '' : ' x') + '-col'",
     "`nave-flex${on ? '' : ' x'}-col`",
-  ])(
-    'fails %s with one concatenation problem',
-    async (expression) => {
-      const built = await build(module(expression))
+  ])('fails %s with one concatenation problem', async (expression) => {
+    const built = await build(module(expression))
 
-      expect(built.error).toMatch(/^1 problem in 1 file/)
-      expect(built.error).toContain('src/a.js')
-    },
-    60_000,
-  )
+    expect(built.error).toMatch(/^1 problem in 1 file/)
+    expect(built.error).toContain('src/a.js')
+  })
 
   it('fails a template that ends in the prefix and an empty substitution when the chain goes on with a name', async () => {
     const built = await build(module("`nave-${''}` + tone"))
 
     expect(built.error).toMatch(/^1 problem in 1 file/)
     expect(built.error).toContain('src/a.js')
-  }, 60_000)
+  })
 
   it('is green when what follows the empty value ends the class, and holds flex', async () => {
     const built = await build(module("'nave-flex' + (on ? '' : ' x') + ' y'"))
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(['flex'])
-  }, 60_000)
+  })
 
   it('stays green when nothing follows the empty value', async () => {
     const built = await build(module("`nave-flex${on ? ' nave-grid' : ''}`"))
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(['flex', 'grid'])
-  }, 60_000)
+  })
 
   it("is green for a known string left operand that decides || ('nave-flex' + (' ' || suffix()))", async () => {
     const built = await build(module("'nave-flex' + (' ' || suffix())"))
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(['flex'])
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-46: the cache file records no position it does not have', () => {
@@ -158,7 +150,7 @@ describe('AC-used-atoms-46: the cache file records no position it does not have'
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-02: a module the host compiles from TypeScript is parsed as TypeScript', () => {
@@ -180,7 +172,7 @@ describe('AC-used-atoms-02: a module the host compiles from TypeScript is parsed
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(['grid'])
-  }, 60_000)
+  })
 
   it('reads TypeScript that Vite does not compile (oxc off)', async () => {
     const built = await build(
@@ -190,7 +182,7 @@ describe('AC-used-atoms-02: a module the host compiles from TypeScript is parsed
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(['grid'])
-  }, 60_000)
+  })
 })
 
 /**
@@ -216,7 +208,7 @@ describe('AC-used-atoms-03: an expression nested deeper than a call stack is rea
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(['flex'])
-  }, 60_000)
+  })
 
   it('reads a chain of || in time proportional to its length', async () => {
     await assertScalesLinearly((size) => {
@@ -287,7 +279,7 @@ describe('a specifier is judged from the module that writes it', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('fails a relative import of the installed cx file in a module that also imports the package', async () => {
     const app = makeUsedApp(
@@ -305,7 +297,7 @@ describe('a specifier is judged from the module that writes it', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 /**
@@ -364,7 +356,7 @@ describe('AC-used-atoms-17: a module the build cannot read still writes its clas
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(['flex'])
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-17: a data module of any size is read', () => {
@@ -386,7 +378,7 @@ describe('AC-used-atoms-17: a data module of any size is read', () => {
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(['flex'])
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-31: a long chain that goes on after the prefix is read once', () => {
@@ -415,29 +407,25 @@ describe('AC-used-atoms-34: a map that differs from the file only by a byte orde
     ['a byte order mark', bom, '\n'],
     ['CRLF line breaks', '', '\r\n'],
     ['both', bom, '\r\n'],
-  ])(
-    'still leads to the file when it differs by %s',
-    async (_name, prefix, lineBreak) => {
-      const normalizing: PluginOption = {
-        name: 'normalizing-load',
-        enforce: 'pre',
-        load(id) {
-          if (!id.endsWith('src/a.js')) return
-          return readFileSync(id, 'utf8')
-            .replace(/^\u{FEFF}/u, '')
-            .replaceAll('\r\n', '\n')
-        },
-      }
-      const app = makeUsedApp(appFiles({ 'src/a.js': source('', '\n') }))
-      writeFileSync(path.join(app.root, 'src/a.js'), source(prefix, lineBreak))
-      try {
-        const built = await buildUsed(app, { plugins: [normalizing], build: { sourcemap: true } })
+  ])('still leads to the file when it differs by %s', async (_name, prefix, lineBreak) => {
+    const normalizing: PluginOption = {
+      name: 'normalizing-load',
+      enforce: 'pre',
+      load(id) {
+        if (!id.endsWith('src/a.js')) return
+        return readFileSync(id, 'utf8')
+          .replace(/^\u{FEFF}/u, '')
+          .replaceAll('\r\n', '\n')
+      },
+    }
+    const app = makeUsedApp(appFiles({ 'src/a.js': source('', '\n') }))
+    writeFileSync(path.join(app.root, 'src/a.js'), source(prefix, lineBreak))
+    try {
+      const built = await buildUsed(app, { plugins: [normalizing], build: { sourcemap: true } })
 
-        expect(built.error).toContain('src/a.js:2:28: cx(v)')
-      } finally {
-        app.dispose()
-      }
-    },
-    60_000,
-  )
+      expect(built.error).toContain('src/a.js:2:28: cx(v)')
+    } finally {
+      app.dispose()
+    }
+  })
 })

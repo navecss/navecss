@@ -181,7 +181,7 @@ describe('extractFences and extractCoreImports cover every fence and import shap
     expect(fences.flatMap((f) => extractCoreImports(f.body))).toHaveLength(1)
   })
 
-  // A generous per-row timeout, well above the runner's own default: `assertScalesLinearly`
+  // These rows measure time, so each keeps a per-row timeout of its own: `assertScalesLinearly`
   // can run its subject up to 21 times, and a slow shared runner's per-call time can be an
   // order of magnitude past a fast local machine's. The ratio assertion inside decides pass or fail.
   it('stays roughly linear on an opener followed by a long unterminated run of word characters', async () => {

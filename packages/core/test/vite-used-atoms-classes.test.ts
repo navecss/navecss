@@ -44,15 +44,6 @@ import { appConfig, startDev } from './helpers/vite-app.ts'
 const TRANSFORMERS: Transformer[] = ['postcss', 'lightningcss']
 const CORE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-/**
- * The budget of a test that runs `recordCssBuild`. The work is one `node` child started from a
- * fresh copy of `src/`, a cold start of the whole module graph. Under load the time goes to the
- * operating system starting many short child processes, not to work the test does, so a test's
- * budget scales with the children it starts. Each row therefore carries the 60 s the file's other
- * real builds carry, not the default every other test here gets.
- */
-const CSS_BUILD_TEST_TIMEOUT_MS = 60_000
-
 interface CssBuildRecording {
   names: string[]
   pluginFiles: string[]
@@ -167,7 +158,6 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
           app.dispose()
         }
       },
-      60_000,
     )
 
     it('reads the page in a hook of order pre, and a hook at default order would miss it', async () => {
@@ -189,7 +179,7 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('only reads the page: the dev server serves index.html byte for byte as it would without the hook', async () => {
       const app = makeUsedApp(appFiles({ 'index.html': page('\n') }))
@@ -212,7 +202,7 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 
   describe('AC-used-atoms-30 — literal classes match on CSS identifier boundaries', () => {
@@ -261,7 +251,7 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 })
 
@@ -291,24 +281,19 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
           app.dispose()
         }
       },
-      60_000,
     )
 
-    it.each(greens)(
-      'allows %s with no warning',
-      async (expression) => {
-        const app = makeUsedApp(appFiles({ 'src/row.js': pieceModule(expression).text }))
-        try {
-          const built = await buildUsed(app, { transformer })
+    it.each(greens)('allows %s with no warning', async (expression) => {
+      const app = makeUsedApp(appFiles({ 'src/row.js': pieceModule(expression).text }))
+      try {
+        const built = await buildUsed(app, { transformer })
 
-          expect(built.error).toBeUndefined()
-          expect(built.warnings).toEqual([])
-        } finally {
-          app.dispose()
-        }
-      },
-      60_000,
-    )
+        expect(built.error).toBeUndefined()
+        expect(built.warnings).toEqual([])
+      } finally {
+        app.dispose()
+      }
+    })
 
     it.each(EXEMPT_PIECE_ROWS)(
       'allows %s, with no warning, and the layer holds exactly its atoms',
@@ -324,7 +309,6 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
           app.dispose()
         }
       },
-      60_000,
     )
 
     it('refuses it in a Svelte component, and in a dependency that imports cx but not in one that does not', async () => {
@@ -362,7 +346,7 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
         svelteApp.dispose()
         depApp.dispose()
       }
-    }, 60_000)
+    })
   })
 
   describe('AC-used-atoms-32 — every route to the atom layer is filtered by content', () => {
@@ -383,29 +367,25 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       ['the Quick start’s app.css', QUICK_START_ROUTE],
     ]
 
-    it.each(routes)(
-      'route: %s',
-      async (_name, extra) => {
-        const app = makeUsedApp({
-          ...appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }),
-          ...extra,
-        })
-        try {
-          const options = { transformer, build: { cssMinify: false } }
-          const used = await buildUsed(app, options)
-          const all = await buildUsed(app, { ...options, options: { atomic: 'all' } })
+    it.each(routes)('route: %s', async (_name, extra) => {
+      const app = makeUsedApp({
+        ...appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }),
+        ...extra,
+      })
+      try {
+        const options = { transformer, build: { cssMinify: false } }
+        const used = await buildUsed(app, options)
+        const all = await buildUsed(app, { ...options, options: { atomic: 'all' } })
 
-          expect(used.error).toBeUndefined()
-          expect(atomLayerAtoms(used.css)).toEqual(atoms('flex'))
-          const consumer = (css: string): string =>
-            css.match(/\.brand-x\s*\{[^}]*\}|\.card\s*\{[^}]*\}/g)?.join('|') ?? ''
-          expect(consumer(used.css)).toBe(consumer(all.css))
-        } finally {
-          app.dispose()
-        }
-      },
-      60_000,
-    )
+        expect(used.error).toBeUndefined()
+        expect(atomLayerAtoms(used.css)).toEqual(atoms('flex'))
+        const consumer = (css: string): string =>
+          css.match(/\.brand-x\s*\{[^}]*\}|\.card\s*\{[^}]*\}/g)?.join('|') ?? ''
+        expect(consumer(used.css)).toBe(consumer(all.css))
+      } finally {
+        app.dispose()
+      }
+    })
 
     it('the Quick start’s app.css keeps its own atom rules whole when every atom is asked for, and prunes them otherwise', async () => {
       const app = makeUsedApp({
@@ -437,7 +417,7 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('keeps a rule that selects an emitted atom’s class among other selectors, byte for byte', async () => {
       const app = makeUsedApp(
@@ -458,7 +438,7 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('ships no changed published CSS: dist/index.css still imports the atomic file', () => {
       const index = readFileSync(path.join(CORE_ROOT, 'dist/index.css'), 'utf8')
@@ -467,37 +447,29 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
       for (const className of Object.values(atomClassMap)) expect(atomic).toContain(`.${className}`)
     })
 
-    it(
-      'builds the published stylesheets from files no module of the Vite plugin can reach',
-      () => {
-        // A lawful change to a stylesheet leaves this green; a module of the plugin getting into the
-        // build of a published file does not, however the script reaches it.
-        const run = recordCssBuild('')
+    it('builds the published stylesheets from files no module of the Vite plugin can reach', () => {
+      // A lawful change to a stylesheet leaves this green; a module of the plugin getting into the
+      // build of a published file does not, however the script reaches it.
+      const run = recordCssBuild('')
 
-        expect(run.status, run.stderr).toBe(0)
-        // The recording sees the build: its inputs and the modules it imports.
-        expect(run.names).toContain('src/reset.css')
-        expect(run.names).toContain('src/atoms.ts')
-        expect(run.names).toContain('src/directive/resolve.ts')
-        expect(run.pluginFiles).toEqual([])
-        expect(run.wroteAtomic).toBe(true)
-      },
-      CSS_BUILD_TEST_TIMEOUT_MS,
-    )
+      expect(run.status, run.stderr).toBe(0)
+      // The recording sees the build: its inputs and the modules it imports.
+      expect(run.names).toContain('src/reset.css')
+      expect(run.names).toContain('src/atoms.ts')
+      expect(run.names).toContain('src/directive/resolve.ts')
+      expect(run.pluginFiles).toEqual([])
+      expect(run.wroteAtomic).toBe(true)
+    })
 
     it.each([
       ['a relative import', "import '../src/vite-handshake.ts'\n"],
       ['a read of a plugin file', "import '../src/vite-emit.ts'\n"],
       ['a dynamic import', "await import('../src/vite-prune.ts')\n"],
       ['the package’s own name', "import '@navecss/core/vite'\n"],
-    ])(
-      'sees a plugin module the script reaches through %s',
-      (_name, line) => {
-        const run = recordCssBuild(line)
+    ])('sees a plugin module the script reaches through %s', (_name, line) => {
+      const run = recordCssBuild(line)
 
-        expect(run.pluginFiles).not.toEqual([])
-      },
-      CSS_BUILD_TEST_TIMEOUT_MS,
-    )
+      expect(run.pluginFiles).not.toEqual([])
+    })
   })
 })

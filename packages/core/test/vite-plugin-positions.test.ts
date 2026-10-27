@@ -42,7 +42,7 @@ describe('AC-directive-core-17 — whose line and column, through Vite', () => {
     expect(message).toContain('[plugin nave]')
     expect(message).toMatch(/entry\.css:\d+:\d+: @nave: unknown atom "nope"/)
     expect(message).toMatch(/\(position in \S+entry\.css as processed; no source map\)/)
-  }, 30_000)
+  })
 
   it('the dev server with css.devSourcemap reports an @import-reached file at its authored line', async () => {
     const server = await startDev(
@@ -56,7 +56,7 @@ describe('AC-directive-core-17 — whose line and column, through Vite', () => {
     } finally {
       await server.close()
     }
-  }, 30_000)
+  })
 
   it('a Sass file reports the .scss line when Vite supplies a map', async () => {
     const server = await startDev(
@@ -69,7 +69,7 @@ describe('AC-directive-core-17 — whose line and column, through Vite', () => {
     } finally {
       await server.close()
     }
-  }, 30_000)
+  })
 
   it('without devSourcemap the dev server says the position is as processed', async () => {
     const server = await startDev(appConfig(app.root, 'postcss', [navePlugin()]))
@@ -80,7 +80,7 @@ describe('AC-directive-core-17 — whose line and column, through Vite', () => {
     } finally {
       await server.close()
     }
-  }, 30_000)
+  })
 })
 
 describe('AC-directive-core-16 — the fold is per stylesheet, so two stylesheets are two failing modules', () => {
@@ -96,5 +96,5 @@ describe('AC-directive-core-16 — the fold is per stylesheet, so two stylesheet
     } finally {
       await server.close()
     }
-  }, 30_000)
+  })
 })

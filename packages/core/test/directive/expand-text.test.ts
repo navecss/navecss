@@ -362,8 +362,8 @@ describe('an unterminated declaration at EOF is given its own semicolon before t
   })
 })
 
-// A generous per-row timeout throughout this block, well above the test runner's own
-// default: `assertScalesLinearly` can run its measured subject up to 21 times (a warm-up
+// These rows measure time, so each keeps a per-row timeout of its own:
+// `assertScalesLinearly` can run its measured subject up to 21 times (a warm-up
 // plus 3+3 samples, across up to three attempts), and a slow or shared runner's own per-call
 // time can be an order of magnitude past a fast local machine's — the wall-clock ceiling
 // on how long the ROW is allowed to take is deliberately loose, since the scaling ratio
@@ -401,15 +401,11 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
     SCALING_ROW_TIMEOUT,
   )
 
-  it(
-    'does not overflow the call stack on 20000 levels of nesting',
-    () => {
-      const css = '.a{'.repeat(20_000) + '}'.repeat(20_000)
+  it('does not overflow the call stack on 20000 levels of nesting', () => {
+    const css = '.a{'.repeat(20_000) + '}'.repeat(20_000)
 
-      expect(() => expandText(css)).not.toThrow()
-    },
-    SCALING_ROW_TIMEOUT,
-  )
+    expect(() => expandText(css)).not.toThrow()
+  })
 
   it(
     'stays roughly linear closing levels left open at EOF (none of them closed for real)',

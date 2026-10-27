@@ -66,7 +66,7 @@ describe('AC-consumer-constraints-06: the packed tarball ships the file at the p
 
   beforeAll(() => {
     tarball = packCoreTarball()
-  }, 120_000)
+  }, 240_000)
 
   it('lists package/nave.css-data.json, and it parses declaring @nave', () => {
     expect(tarball.files).toContain('package/nave.css-data.json')

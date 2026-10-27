@@ -54,7 +54,7 @@ describe('AC-consumer-constraints-31: the guide packs at the documented path', (
 
   beforeAll(() => {
     tarball = packCoreTarball()
-  }, 120_000)
+  }, 240_000)
 
   it('is present in the tarball, with valid frontmatter and no AGENTS.md file anywhere', () => {
     expect(tarball.files).toContain('package/skills/navecss/SKILL.md')
@@ -212,7 +212,7 @@ describe('AC-consumer-constraints-01 (scoped to this slice): immune to a package
 
   beforeAll(async () => {
     output = await generate()
-  }, 120_000)
+  }, 240_000)
 
   it('the generator embeds neither package.json version string', () => {
     const corePkg = JSON.parse(readFileSync(path.resolve(HERE, '../package.json'), 'utf8')) as {

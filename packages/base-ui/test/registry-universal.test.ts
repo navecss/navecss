@@ -115,7 +115,7 @@ describe('AC-base-ui-registry-04: every item is a universal item', () => {
       expect(run.output).not.toContain('PLANT-FAILED')
       expect(run.status).toBe(0)
       expect(writtenItems(run.directory)).toContain('base-ui-dialog.json')
-    }, 180_000)
+    })
 
     it('exits non-zero, naming base-ui-dialog and the file, when one file is typed registry:ui', () => {
       const run = runPlanted('retype')
@@ -125,7 +125,7 @@ describe('AC-base-ui-registry-04: every item is a universal item', () => {
       expect(run.output).toContain('base-ui-dialog')
       expect(run.output).toContain('nave-dialog.wrap.ts')
       expect(writtenItems(run.directory)).toEqual([])
-    }, 180_000)
+    })
 
     it('exits non-zero, naming base-ui-dialog and the file, when one target is @components/nave/x.ts', () => {
       const run = runPlanted('retarget')
@@ -138,6 +138,6 @@ describe('AC-base-ui-registry-04: every item is a universal item', () => {
           run.output.includes('@components/nave/x.ts'),
       ).toBe(true)
       expect(writtenItems(run.directory)).toEqual([])
-    }, 180_000)
+    })
   })
 })

@@ -38,7 +38,7 @@ describe('AC-base-ui-bridge-40: the tarball', () => {
     ).toEqual([])
     expect(entries.some((entry) => entry.startsWith('package/dist/'))).toBe(true)
     expect(unwanted(entries)).toEqual([])
-  }, 120_000)
+  })
 
   it('control: a planted test file and a planted test directory are reported', () => {
     expect(unwanted(['package/dist/a.js', 'package/dist/a.test.js', 'package/test/x.js'])).toEqual([

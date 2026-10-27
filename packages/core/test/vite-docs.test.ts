@@ -245,12 +245,14 @@ describe('AC-directive-core-36 — the README’s Vite fence, built', () => {
     } finally {
       rmSync(root, { force: true, recursive: true })
     }
-  }, 60_000)
+  })
 })
 
+// Each type-check builds a TypeScript program, which a loaded runner (every test file of the package
+// running at once) takes well past 120 s to do. No row asserts how long it takes.
 describe(
   'AC-directive-core-39 — CONSUMER-ATOMS.md needs no PostCSS to type-check',
-  { timeout: 120_000 },
+  { timeout: 600_000 },
   () => {
     it('imports AtomDefinition from @navecss/core/atoms, in every fence', () => {
       const imports = extractFences('CONSUMER-ATOMS.md', consumerAtoms)

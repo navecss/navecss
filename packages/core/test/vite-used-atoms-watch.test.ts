@@ -140,6 +140,9 @@ describe.each(Object.entries(VITE_APIS))(
           editing += 1
           for (let attempt = 0; Date.now() < deadline; attempt += 1) {
             throwIfFailed()
+            // A build reads main.ts only once its BUNDLE_START has been heard, so writing while none
+            // is under way keeps a build from reading the file between its truncation and its write.
+            while (builds.started !== builds.ended && Date.now() < deadline) await wait(50)
             // A comment changes no class, so the edit reads the same on every attempt.
             writeFileSync(
               path.join(app.root, 'src/main.ts'),

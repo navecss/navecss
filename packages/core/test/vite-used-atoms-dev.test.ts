@@ -135,7 +135,7 @@ describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('writes the cache file with exactly the emitted set after a green build', async () => {
     const app = makeFixture()
@@ -150,7 +150,7 @@ describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('reports no error naming bad-lib in dev with its keepFor entry removed, while the build fails on it', async () => {
     const app = makeFixture()
@@ -169,7 +169,7 @@ describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('gives a per-module error for each application module the build cannot read, with keep empty', async () => {
     const app = makeUsedApp(
@@ -194,7 +194,7 @@ describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-39 — a dependency’s calls are read in dev, on a cold and a warm optimizer cache', () => {
@@ -235,7 +235,7 @@ describe('AC-used-atoms-39 — a dependency’s calls are read in dev, on a cold
     } finally {
       app.dispose()
     }
-  }, 180_000)
+  })
 
   it('control: without core excluded from prebundling the layer holds no wFull rule in either run', async () => {
     const app = makeFixture()
@@ -262,7 +262,7 @@ describe('AC-used-atoms-39 — a dependency’s calls are read in dev, on a cold
     } finally {
       app.dispose()
     }
-  }, 180_000)
+  })
 })
 
 interface Update {
@@ -470,7 +470,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('sends the stylesheet in the same update as the script whose edit grew the set', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': ACCEPTING("cx('flex')") }))
@@ -490,7 +490,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('batches: several modules adding atoms in one burst send one reload of app.css, and none from inside the transform that grew the set', async () => {
     const app = makeUsedApp(
@@ -550,7 +550,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('control: without the stylesheet reload nothing is sent when the set grows', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -573,7 +573,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
       Object.assign(devServing, saved)
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('a page that connects after a reload was sent to no one is sent the reload again', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -607,7 +607,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a connection when no reload went unheard sends nothing, though a served stylesheet is outgrown', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -639,7 +639,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a page that disconnects and connects again, with no reload unheard, is sent nothing', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -670,7 +670,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a page that disconnected before a reload was sent is not counted: the next connection is sent the reload again', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -704,7 +704,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a connection when no reload went unheard sends nothing, though a served stylesheet is outgrown and its reload no longer holds the next back', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -736,7 +736,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a page that connects after a file change sent the stylesheet to no one is sent its reload again', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': ACCEPTING("cx('flex')") }))
@@ -760,7 +760,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('control: a page that connects when the stylesheet it was served is current is sent nothing', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -784,7 +784,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 /**
@@ -837,7 +837,7 @@ describe('AC-used-atoms-41 — a stylesheet inlined in index.html, after the set
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 /**
@@ -929,7 +929,7 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
   it('serves a stylesheet requested before the modules that name atoms with those atoms', async () => {
     // The wait has to outlast a slow read of the last module, so the read is slowed.
     expect(await atomsServedAtOnce(slow('src/C.ts', 300))).toEqual(atoms('flex', 'gap', 'grid'))
-  }, 60_000)
+  })
 
   it('control: with the wait removed the stylesheet is served with what had been read', async () => {
     const saved = { ...devServing }
@@ -945,7 +945,7 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
     } finally {
       Object.assign(devServing, saved)
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-40 — what the wait reaches', () => {
@@ -973,7 +973,7 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   // Taken here, before any row replaces `devServing.hold`: a stand-in that called `devServing.hold`
   // while a row's replacement is in place would reach the replacement, and so itself.
@@ -1065,30 +1065,30 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
 
   it('holds a stylesheet requested before the module that imports it has registered the import', async () => {
     expect(await atomsServedBeforeImporter()).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('holds that stylesheet when the first crawl has already spent the wait for the client to be idle', async () => {
     // The row above also passes for a hold that reads nothing: the first crawl's wait reads for it.
     expect(await atomsServedBeforeImporter({ idle: () => Promise.resolve() })).toEqual(
       atoms('flex'),
     )
-  }, 60_000)
+  })
 
   it('holds a stylesheet whose importer is not a root of the graph, while that importer is being read', async () => {
     expect(
       await atomsServedBeforeImporter({ files: IMPORTED_BY_APP, heldModule: 'src/App.ts' }),
     ).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('control: a hold that returns at once when no importer is registered serves that stylesheet with what had been read', async () => {
     expect(await atomsServedBeforeImporter({ hold: atOnceWithoutImporter })).toEqual([])
-  }, 60_000)
+  })
 
   it('control: that hold waits as the real one does when the importer is registered by the time it is held', async () => {
     expect(
       await atomsServedBeforeImporter({ heldModule: 'src/App.ts', hold: atOnceWithoutImporter }),
     ).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   /**
    * Requests each of `urls` together, as modules, from an app whose page names `hidden` and whose
@@ -1132,14 +1132,14 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     expect(waits).toHaveLength(1)
     expect(codes[0]).toContain('__vite__css')
     expect(layerAtomsOf(codes[0]!)).toEqual(atoms('hidden'))
-  }, 60_000)
+  })
 
   it('answers two stylesheets requested together as modules that no module imports, each with the atoms of the page', async () => {
     const { codes, waits } = await requestedWithoutImporter(['/src/a.css', '/src/b.css'])
 
     expect(waits).toHaveLength(2)
     expect(codes.map((code) => layerAtomsOf(code))).toEqual([atoms('hidden'), atoms('hidden')])
-  }, 60_000)
+  })
 
   it('a stylesheet a page links, requested as `?direct`, is answered at once, with the atoms of the pages read so far', async () => {
     const app = makeUsedApp({
@@ -1177,7 +1177,7 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-42 — what dev shows as the build will, and the divergences', () => {
@@ -1222,7 +1222,7 @@ describe('AC-used-atoms-42 — what dev shows as the build will, and the diverge
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a branch that holds only an import of a dev-only module is read by the build too: dev and the build agree', async () => {
     const app = makeUsedApp(
@@ -1248,7 +1248,7 @@ describe('AC-used-atoms-42 — what dev shows as the build will, and the diverge
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('control: with inlineFlex added to the package’s list, the dev layer has its rule', async () => {
     const app = makeFixture()
@@ -1264,7 +1264,7 @@ describe('AC-used-atoms-42 — what dev shows as the build will, and the diverge
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 /**
@@ -1435,7 +1435,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('a server render takes a listed atom through the same map', async () => {
     const app = makeFixture()
@@ -1450,7 +1450,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   const render = async (server: DevServer, file: string): Promise<string> =>
     ((await server.ssrLoadModule(file)) as { default: string }).default
@@ -1472,7 +1472,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('with two dev servers in one process, closing the second leaves the first its own map', async () => {
     const first = makeFixture()
@@ -1492,7 +1492,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
       first.dispose()
       second.dispose()
     }
-  }, 120_000)
+  })
 
   it('closing the servers in the order they started leaves the second its own map, and then gives the global back what it held', async () => {
     const first = makeFixture()
@@ -1515,7 +1515,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
       first.dispose()
       second.dispose()
     }
-  }, 120_000)
+  })
 
   it('closing the only dev server gives the global back what it held before it started', async () => {
     const app = makeFixture()
@@ -1532,7 +1532,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
       Reflect.deleteProperty(globalThis, '__NAVE_KEEP_CLASSES__')
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('a server whose close fails in a plugin of its own still gives the global back what it held', async () => {
     const app = makeFixture()
@@ -1556,7 +1556,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
       Reflect.deleteProperty(globalThis, '__NAVE_KEEP_CLASSES__')
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it(
     'dyn-lib’s prebundled chunk keeps core’s import and holds no keep map',

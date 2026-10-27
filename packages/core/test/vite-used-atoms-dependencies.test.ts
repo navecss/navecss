@@ -94,7 +94,7 @@ describe('AC-used-atoms-08 — well-formed minified dependencies build', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it.each(['esb-falsy-lib', 'vite-falsy-lib'])(
     'builds green and collects flex, grid, block and gap from %s, which prints false as !1 and undefined as void 0',
@@ -121,7 +121,6 @@ describe('AC-used-atoms-08 — well-formed minified dependencies build', () => {
         app.dispose()
       }
     },
-    60_000,
   )
 
   it('control: assigning the let that holds an atom fails with one problem naming min-lib', async () => {
@@ -140,7 +139,7 @@ describe('AC-used-atoms-08 — well-formed minified dependencies build', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-16 — a problem in dependency code names the package and prints the keepFor line', () => {
@@ -174,7 +173,7 @@ describe('AC-used-atoms-16 — a problem in dependency code names the package an
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('keep is not the remedy, and the pasted line clears it once its placeholder is filled', async () => {
     const app = appUsing(['bad-lib'])
@@ -193,7 +192,7 @@ describe('AC-used-atoms-16 — a problem in dependency code names the package an
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split by owner', () => {
@@ -241,7 +240,7 @@ describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('gives dyn-lib the consumer’s remedy alone, and clears each half with its own list', async () => {
     const app = dynamicApp()
@@ -265,7 +264,7 @@ describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('reads an empty keepFor list as no entry: the dependency problem stays, and the application’s is cleared by keep', async () => {
     const app = dynamicApp()
@@ -282,7 +281,7 @@ describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-43 — what listing a package in keepFor covers, and what stays an error', () => {
@@ -317,7 +316,7 @@ describe('AC-used-atoms-43 — what listing a package in keepFor covers, and wha
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('still fails a keepFor entry that names an unknown atom', () => {
     expect(() => navePlugin({ keepFor: { 'wide-lib': ['interactve' as never] } })).toThrow(
@@ -378,7 +377,7 @@ describe('AC-used-atoms-44 — keepFor reaches packages under node_modules only'
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('lists stop the two dependencies’ problems and never the workspace package’s', async () => {
     const app = threePackages()
@@ -397,7 +396,7 @@ describe('AC-used-atoms-44 — keepFor reaches packages under node_modules only'
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-38 - keepFor is still validated under all', () => {
@@ -444,7 +443,7 @@ describe('AC-used-atoms-45 — keepFor entries are validated as keep is, under b
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('documents an empty list as adding no atom, not as shipping none for the package', () => {
     const declaration = viteDeclaration()
@@ -469,7 +468,7 @@ describe('AC-used-atoms-45 — keepFor entries are validated as keep is, under b
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-46 — the cacheDir file records what the build saw of each listed package', () => {
@@ -499,7 +498,7 @@ describe('AC-used-atoms-46 — the cacheDir file records what the build saw of e
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-55 — the remedy block is split by owner', () => {
@@ -533,7 +532,7 @@ describe('AC-used-atoms-55 — the remedy block is split by owner', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('a report with only dependency problems opens its remedy block with the package’s line', async () => {
     const app = appUsing(['zz-lib'])
@@ -547,5 +546,5 @@ describe('AC-used-atoms-55 — the remedy block is split by owner', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })

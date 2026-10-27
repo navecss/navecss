@@ -71,7 +71,7 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('control: under all the full map applies and nothing is folded', async () => {
     const app = dynamicApp()
@@ -89,7 +89,7 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('adds exactly one define key under the default, and no built asset names it', async () => {
     const app = dynamicApp()
@@ -110,7 +110,7 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('bundles core into a server build, so keep applies there to the application’s own calls', async () => {
     // Core is a real directory under node_modules, as a registry install makes it: a linked
@@ -152,7 +152,7 @@ describe('AC-used-atoms-20 — the define hands keep and the keepFor lists to cx
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('decides a server environment the way Vite does: by consumer, else by name', () => {
     const [nave] = navePlugin({ keep: ['flex'] })

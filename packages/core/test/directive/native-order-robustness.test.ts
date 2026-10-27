@@ -76,7 +76,6 @@ describe.each(['not', 'is'])('AC-native-apply-order-54 — a selector nested %s(
       expect(new Set(counts).size).toBe(1)
       expect(counts[0]).toBeLessThanOrEqual(1)
     },
-    60_000,
   )
 })
 
@@ -102,7 +101,7 @@ describe('AC-native-apply-order-54 — a nested group is read however deep it is
     expect(() => warningsViaText(css)).not.toThrow()
     expect(() => expandText(css)).not.toThrow()
     await expect(warningsViaPostcss(css)).resolves.toBeDefined()
-  }, 60_000)
+  })
 })
 
 /**

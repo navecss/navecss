@@ -46,9 +46,10 @@ export default defineConfig({
           setupFiles: ['test/support/setup-render.ts'],
           // A render test renders whole scenes, a hook can render them too (the minor-version
           // files render in `beforeAll`), and a run shares the machine with every other package's
-          // tests in `ci:check`.
-          testTimeout: 60_000,
-          hookTimeout: 60_000,
+          // tests in `ci:check`, where a render row took longer than 60 s beside other suites. No
+          // row asserts how long it takes, so the budget only has to outlast a loaded machine.
+          testTimeout: 240_000,
+          hookTimeout: 240_000,
         },
       })),
     ],

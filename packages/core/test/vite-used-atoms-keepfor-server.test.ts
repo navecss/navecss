@@ -100,7 +100,7 @@ describe('AC-used-atoms-53 - a take a server environment makes from a listed pac
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('lists several files and modules in the one warning', async () => {
     const ui = acme('', { 'f.js': CN, 'g.js': CN })
@@ -120,7 +120,7 @@ describe('AC-used-atoms-53 - a take a server environment makes from a listed pac
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   describe.each(ORDERS)('with %s', (_, order) => {
     it('fails with the line the client would print, naming the server file, and is green once cx comes from Nave', async () => {
@@ -140,7 +140,7 @@ describe('AC-used-atoms-53 - a take a server environment makes from a listed pac
       } finally {
         app.dispose()
       }
-    }, 120_000)
+    })
 
     it('prints nothing for a server that imports only Menu', async () => {
       const app = serverApp({
@@ -155,7 +155,7 @@ describe('AC-used-atoms-53 - a take a server environment makes from a listed pac
       } finally {
         app.dispose()
       }
-    }, 120_000)
+    })
 
     it('gives the cxModules line for a readable take of a module that has a clearing specifier', async () => {
       const ui = acme("export { cx } from '@navecss/core/cx'\n")
@@ -178,7 +178,7 @@ describe('AC-used-atoms-53 - a take a server environment makes from a listed pac
       } finally {
         app.dispose()
       }
-    }, 120_000)
+    })
   })
 
   it('judges a take of a module that the client read and found no cx export in as nothing', async () => {
@@ -196,7 +196,7 @@ describe('AC-used-atoms-53 - a take a server environment makes from a listed pac
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-53 - a take a server invocation makes is judged by the client invocation', () => {
@@ -217,7 +217,7 @@ describe('AC-used-atoms-53 - a take a server invocation makes is judged by the c
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('judges the take one run late when the client goes first', async () => {
     const app = serverApp({ server, ui: known })
@@ -232,7 +232,7 @@ describe('AC-used-atoms-53 - a take a server invocation makes is judged by the c
     } finally {
       app.dispose()
     }
-  }, 180_000)
+  })
 })
 
 describe('AC-used-atoms-53 - the warning for a listed package no environment transforms', () => {

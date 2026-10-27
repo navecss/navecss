@@ -29,7 +29,6 @@ import {
 import { BASE, compile, EQUAL, NAVE } from './support/type-fixtures.ts'
 
 const VERSIONS: readonly BaseUiVersion[] = ['current', 'floor']
-const MINUTES = 180_000
 
 // The flat names Base UI exports beside its namespace, named with a type argument (the dotted
 // `NavigationMenu.Root.Props` cannot carry one: a part's types are declared from Base UI 1.3, which
@@ -66,100 +65,83 @@ describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) 
       expect(infos.find(({ subpath }) => subpath === 'progress')?.typeMembers).toEqual(['Status'])
     })
 
-    it(
-      'control: the unrewritten fixture, with the specifiers of @base-ui/react, compiles',
-      { timeout: MINUTES },
-      async () => {
-        const fixture = importSwapFixture(infos, {
+    it('control: the unrewritten fixture, with the specifiers of @base-ui/react, compiles', async () => {
+      const fixture = importSwapFixture(infos, {
+        navigationMenuRootProps: isNavigationMenuGeneric ? 'string' : 'none',
+      })
+      const result = await compile(`fn-02-control-${version}`, { 'fixture.ts': fixture }, version)
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    })
+
+    it('compiles the rewritten fixture, with the specifiers of @navecss/base-ui, and exits 0', async () => {
+      const fixture = swapSpecifiers(
+        importSwapFixture(infos, {
           navigationMenuRootProps: isNavigationMenuGeneric ? 'string' : 'none',
-        })
-        const result = await compile(`fn-02-control-${version}`, { 'fixture.ts': fixture }, version)
-        expect(result.output).toBe('')
-        expect(result.code).toBe(0)
-      },
-    )
+        }),
+      )
+      expect(fixture).toContain(`${NAVE}/toast`)
+      expect(fixture).not.toContain(BASE)
+      const result = await compile(`fn-02-${version}`, { 'fixture.ts': fixture }, version)
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    })
 
-    it(
-      'compiles the rewritten fixture, with the specifiers of @navecss/base-ui, and exits 0',
-      { timeout: MINUTES },
-      async () => {
-        const fixture = swapSpecifiers(
-          importSwapFixture(infos, {
-            navigationMenuRootProps: isNavigationMenuGeneric ? 'string' : 'none',
-          }),
-        )
-        expect(fixture).toContain(`${NAVE}/toast`)
-        expect(fixture).not.toContain(BASE)
-        const result = await compile(`fn-02-${version}`, { 'fixture.ts': fixture }, version)
-        expect(result.output).toBe('')
-        expect(result.code).toBe(0)
-      },
-    )
+    it('resolves Progress.Status through the wrapper, as the type Base UI declares, and a member Base UI lacks does not resolve', async () => {
+      const status = await compile(
+        `fn-02-status-${version}`,
+        {
+          'fixture.ts': [
+            `import { Progress as N } from '${NAVE}/progress'`,
+            `import { Progress as B } from '${BASE}/progress'`,
+            EQUAL,
+            'export type Same_ = Assert<Equal<N.Status, B.Status>>',
+            "export const progressing: N.Status = 'progressing'",
+            "export const complete: N.Status = 'complete'",
+            "export const indeterminate: N.Status = 'indeterminate'",
+            '// @ts-expect-error a status Base UI does not declare',
+            "export const bogus: N.Status = 'finished'",
+          ].join('\n'),
+        },
+        version,
+      )
+      expect(status.output).toBe('')
+      expect(status.code).toBe(0)
+      const absent = await compile(
+        `fn-02-status-absent-${version}`,
+        {
+          'fixture.ts': [
+            `import { Progress as N } from '${NAVE}/progress'`,
+            'export type Nope = N.NotAMember',
+          ].join('\n'),
+        },
+        version,
+      )
+      expect(absent.output).toContain('TS2694')
+      expect(absent.code).not.toBe(0)
+    })
 
-    it(
-      'resolves Progress.Status through the wrapper, as the type Base UI declares, and a member Base UI lacks does not resolve',
-      { timeout: MINUTES },
-      async () => {
-        const status = await compile(
-          `fn-02-status-${version}`,
-          {
-            'fixture.ts': [
-              `import { Progress as N } from '${NAVE}/progress'`,
-              `import { Progress as B } from '${BASE}/progress'`,
-              EQUAL,
-              'export type Same_ = Assert<Equal<N.Status, B.Status>>',
-              "export const progressing: N.Status = 'progressing'",
-              "export const complete: N.Status = 'complete'",
-              "export const indeterminate: N.Status = 'indeterminate'",
-              '// @ts-expect-error a status Base UI does not declare',
-              "export const bogus: N.Status = 'finished'",
-            ].join('\n'),
-          },
-          version,
-        )
-        expect(status.output).toBe('')
-        expect(status.code).toBe(0)
-        const absent = await compile(
-          `fn-02-status-absent-${version}`,
-          {
-            'fixture.ts': [
-              `import { Progress as N } from '${NAVE}/progress'`,
-              'export type Nope = N.NotAMember',
-            ].join('\n'),
-          },
-          version,
-        )
-        expect(absent.output).toContain('TS2694')
-        expect(absent.code).not.toBe(0)
-      },
-    )
-
-    it(
-      'reads Separator.Props and Separator.State through the wrapper',
-      { timeout: MINUTES },
-      async () => {
-        const result = await compile(
-          `fn-02-separator-${version}`,
-          {
-            'fixture.ts': [
-              `import { Separator as N } from '${NAVE}/separator'`,
-              `import { Separator as B } from '${BASE}/separator'`,
-              EQUAL,
-              'export type PropsSame = Assert<Equal<N.Props, B.Props>>',
-              'export type StateSame = Assert<Equal<N.State, B.State>>',
-              "export const state: N.State = { orientation: 'vertical' }",
-            ].join('\n'),
-          },
-          version,
-        )
-        expect(result.output).toBe('')
-        expect(result.code).toBe(0)
-      },
-    )
+    it('reads Separator.Props and Separator.State through the wrapper', async () => {
+      const result = await compile(
+        `fn-02-separator-${version}`,
+        {
+          'fixture.ts': [
+            `import { Separator as N } from '${NAVE}/separator'`,
+            `import { Separator as B } from '${BASE}/separator'`,
+            EQUAL,
+            'export type PropsSame = Assert<Equal<N.Props, B.Props>>',
+            'export type StateSame = Assert<Equal<N.State, B.State>>',
+            "export const state: N.State = { orientation: 'vertical' }",
+          ].join('\n'),
+        },
+        version,
+      )
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    })
 
     it.runIf(isNavigationMenuGeneric)(
       'names NavigationMenuRootProps<string> and NavigationMenuRoot.Value<string> through the wrapper and through Base UI, and both compile',
-      { timeout: MINUTES },
       async () => {
         for (const [from, label] of [
           [NAVE, 'wrapper'],
@@ -181,7 +163,6 @@ describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) 
 
     it.runIf(!isNavigationMenuGeneric)(
       'control: NavigationMenuRootProps<string> fails with TS2315 and NavigationMenuRoot.Value<string> with TS2694 at 1.3.0, under the rewritten specifier and the unrewritten one',
-      { timeout: MINUTES },
       async () => {
         for (const [from, label] of [
           [NAVE, 'wrapper'],
@@ -217,42 +198,33 @@ describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) 
   })
 
   describe('AC-base-ui-feedback-navigation-03 (extends AC-base-ui-overlay-completion-03): each export of the seven is typed from its own namespace', () => {
-    it(
-      'types every part outside the Button family and outside Avatar.Root as the Base UI part, and Separator as Base UI Separator',
-      { timeout: MINUTES },
-      async () => {
-        const fixture = feedbackEqualityFixture(infos)
-        // The fixture is not empty: it asserts a part of each namespace, the functions and the component.
-        expect(fixture).toContain('E_toast_Root =')
-        expect(fixture).toContain('E_toast_useToastManager =')
-        expect(fixture).toContain('E_toast_createToastManager =')
-        expect(fixture).toContain('E_separator_self =')
-        expect(fixture).not.toContain('E_toast_Action =')
-        expect(fixture).not.toContain('E_toast_Close =')
-        expect(fixture).not.toContain('E_avatar_Root =')
-        const result = await compile(`fn-03-${version}`, { 'fixture.ts': fixture }, version)
-        expect(result.output).toBe('')
-        expect(result.code).toBe(0)
-      },
-    )
+    it('types every part outside the Button family and outside Avatar.Root as the Base UI part, and Separator as Base UI Separator', async () => {
+      const fixture = feedbackEqualityFixture(infos)
+      // The fixture is not empty: it asserts a part of each namespace, the functions and the component.
+      expect(fixture).toContain('E_toast_Root =')
+      expect(fixture).toContain('E_toast_useToastManager =')
+      expect(fixture).toContain('E_toast_createToastManager =')
+      expect(fixture).toContain('E_separator_self =')
+      expect(fixture).not.toContain('E_toast_Action =')
+      expect(fixture).not.toContain('E_toast_Close =')
+      expect(fixture).not.toContain('E_avatar_Root =')
+      const result = await compile(`fn-03-${version}`, { 'fixture.ts': fixture }, version)
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    })
 
-    it(
-      'control: the instantiated stand-in compares with itself and compiles, so the equality can pass',
-      { timeout: MINUTES },
-      async () => {
-        const result = await compile(
-          `fn-03-instantiated-control-${version}`,
-          { 'fixture.ts': instantiatedRootControlFixture() },
-          version,
-        )
-        expect(result.output).toBe('')
-        expect(result.code).toBe(0)
-      },
-    )
+    it('control: the instantiated stand-in compares with itself and compiles, so the equality can pass', async () => {
+      const result = await compile(
+        `fn-03-instantiated-control-${version}`,
+        { 'fixture.ts': instantiatedRootControlFixture() },
+        version,
+      )
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    })
 
     it.runIf(isNavigationMenuGeneric)(
       'control: the generic NavigationMenu.Root fixture compiles against Base UI itself',
-      { timeout: MINUTES },
       async () => {
         const result = await compile(
           `fn-03-generic-control-${version}`,
@@ -266,7 +238,6 @@ describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) 
 
     it.runIf(isNavigationMenuGeneric)(
       'keeps the type parameter of NavigationMenu.Root: a value of type string is the callback argument, as string',
-      { timeout: MINUTES },
       async () => {
         const result = await compile(
           `fn-03-generic-${version}`,
@@ -280,7 +251,6 @@ describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) 
 
     it.runIf(isNavigationMenuGeneric)(
       'control: a wrapper that types NavigationMenu.Root as typeof Base.NavigationMenu.Root<any> reds the equality',
-      { timeout: MINUTES },
       async () => {
         const result = await compile(
           `fn-03-instantiated-${version}`,
@@ -304,57 +274,41 @@ describe.each(VERSIONS)('the seven subpaths typed at the %s Base UI', (version) 
   })
 
   describe('AC-base-ui-feedback-navigation-05 (supersedes AC-base-ui-overlay-completion-05): the variant and size types', () => {
-    it(
-      'gives Toast.Action and Toast.Close the props of Base UI plus exactly variant and size, and Avatar.Root the props of Base UI plus exactly size sm, md or lg, with no Base UI size on any Avatar part',
-      { timeout: MINUTES },
-      async () => {
-        const fixture = feedbackVariantFixture(infos)
-        const result = await compile(`fn-05-${version}`, { 'fixture.ts': fixture }, version)
-        expect(result.output).toBe('')
-        expect(result.code).toBe(0)
-      },
-    )
+    it('gives Toast.Action and Toast.Close the props of Base UI plus exactly variant and size, and Avatar.Root the props of Base UI plus exactly size sm, md or lg, with no Base UI size on any Avatar part', async () => {
+      const fixture = feedbackVariantFixture(infos)
+      const result = await compile(`fn-05-${version}`, { 'fixture.ts': fixture }, version)
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    })
 
-    it(
-      'accepts a ref to the button element on Toast.Action and Toast.Close',
-      { timeout: MINUTES },
-      async () => {
-        const result = await compile(
-          `fn-05-ref-${version}`,
-          { 'fixture.ts': feedbackRefFixture(infos) },
-          version,
-        )
-        expect(result.output).toBe('')
-        expect(result.code).toBe(0)
-      },
-    )
+    it('accepts a ref to the button element on Toast.Action and Toast.Close', async () => {
+      const result = await compile(
+        `fn-05-ref-${version}`,
+        { 'fixture.ts': feedbackRefFixture(infos) },
+        version,
+      )
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    })
 
-    it(
-      'control: a variant and a size are errors on NavigationMenu.Trigger and on Avatar.Root, and size lg is an error on Avatar.Root, when the types come from Base UI',
-      { timeout: MINUTES },
-      async () => {
-        const result = await compile(
-          `fn-05-rejections-control-${version}`,
-          { 'fixture.ts': feedbackRejectionFixture(infos, BASE) },
-          version,
-        )
-        expect(result.output).toBe('')
-        expect(result.code).toBe(0)
-      },
-    )
+    it('control: a variant and a size are errors on NavigationMenu.Trigger and on Avatar.Root, and size lg is an error on Avatar.Root, when the types come from Base UI', async () => {
+      const result = await compile(
+        `fn-05-rejections-control-${version}`,
+        { 'fixture.ts': feedbackRejectionFixture(infos, BASE) },
+        version,
+      )
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    })
 
-    it(
-      'rejects a variant and a size on NavigationMenu.Trigger, a variant and size xs on Avatar.Root, size lg on both Toast parts, and accepts size lg on Avatar.Root in the same file',
-      { timeout: MINUTES },
-      async () => {
-        const result = await compile(
-          `fn-05-rejections-${version}`,
-          { 'fixture.ts': feedbackRejectionFixture(infos, NAVE) },
-          version,
-        )
-        expect(result.output).toBe('')
-        expect(result.code).toBe(0)
-      },
-    )
+    it('rejects a variant and a size on NavigationMenu.Trigger, a variant and size xs on Avatar.Root, size lg on both Toast parts, and accepts size lg on Avatar.Root in the same file', async () => {
+      const result = await compile(
+        `fn-05-rejections-${version}`,
+        { 'fixture.ts': feedbackRejectionFixture(infos, NAVE) },
+        version,
+      )
+      expect(result.output).toBe('')
+      expect(result.code).toBe(0)
+    })
   })
 })

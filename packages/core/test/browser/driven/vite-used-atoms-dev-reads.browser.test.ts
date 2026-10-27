@@ -10,7 +10,7 @@ import type { PluginOption, ViteDevServer } from 'vite'
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { navePlugin, type NaveViteOptions } from '../../../src/vite.ts'
 import { APP_CSS, appFiles, makeUsedApp } from '../../helpers/used-atoms-app.ts'
@@ -40,9 +40,15 @@ afterAll(async () => {
 // to allow.
 const ROW_TIMEOUT = 480_000
 const GIVE_UP_BEFORE_TIMEOUT = 30_000
-const row = { ends: 0 }
+const row = { ends: 0, failed: undefined as Error | undefined }
 beforeEach(() => {
   row.ends = Date.now() + ROW_TIMEOUT - GIVE_UP_BEFORE_TIMEOUT
+  row.failed = undefined
+})
+// A wait inside a scratch plugin's hook fails only the request it holds up, and these servers log
+// nothing, so the hook keeps its error here and the row reports it once it has ended.
+afterEach(() => {
+  if (row.failed !== undefined) throw row.failed
 })
 
 const PAGE = (body: string): string =>
@@ -93,7 +99,9 @@ async function untilSheetTransformed(
   while (Date.now() < deadline && !isSheetTransformed(server, root, file)) {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  expect(isSheetTransformed(server, root, file)).toBe(true)
+  expect(isSheetTransformed(server, root, file), `the dev server never transformed ${file}`).toBe(
+    true,
+  )
 }
 
 describe('AC-used-atoms-42 — HTML read after the stylesheet was first transformed', () => {
@@ -396,7 +404,10 @@ function slowAfterFirst(file: string, asked: string): PluginOption {
       }
       const deadline = row.ends
       while (!hasModule(server, asked)) {
-        if (Date.now() > deadline) throw new Error(`the dev server was never asked for ${asked}`)
+        if (Date.now() > deadline) {
+          row.failed = new Error(`the dev server was never asked for ${asked}`)
+          throw row.failed
+        }
         await new Promise((resolve) => setTimeout(resolve, 20))
       }
     },
@@ -430,7 +441,10 @@ const LINKED_APP = {
 async function untilServer(isDone: () => boolean, what: string): Promise<void> {
   const deadline = row.ends
   while (!isDone()) {
-    if (Date.now() > deadline) throw new Error(`the dev server never reached ${what}`)
+    if (Date.now() > deadline) {
+      row.failed = new Error(`the dev server never reached ${what}`)
+      throw row.failed
+    }
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
 }

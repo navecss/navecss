@@ -62,7 +62,6 @@ describe('AC-used-atoms-52 - a dependency that only re-exports a cx export is no
         expect(followed.error).toBeUndefined()
         expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex'))
       },
-      120_000,
     )
   })
 
@@ -80,7 +79,7 @@ describe('AC-used-atoms-52 - a dependency that only re-exports a cx export is no
 
     expect(pasted.error).toBeUndefined()
     expect(atomLayerAtoms(pasted.css)).toEqual(atoms('flex', 'grid'))
-  }, 120_000)
+  })
 
   it('takes nothing for a forward that nothing takes', async () => {
     const built = await run(
@@ -92,7 +91,7 @@ describe('AC-used-atoms-52 - a dependency that only re-exports a cx export is no
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
     expect(built.warnings ?? []).toEqual([])
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-52 - a dependency that re-exports the cx of a module cxModules lists is judged by what takes it', () => {
@@ -123,7 +122,6 @@ describe('AC-used-atoms-52 - a dependency that re-exports the cx of a module cxM
       expect(followed.error).toBeUndefined()
       expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex', 'grid'))
     },
-    120_000,
   )
 
   it('reports nothing for a forward that nothing takes', async () => {
@@ -136,7 +134,7 @@ describe('AC-used-atoms-52 - a dependency that re-exports the cx of a module cxM
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'grid'))
     expect(built.warnings ?? []).toEqual([])
-  }, 60_000)
+  })
 
   it('gives the forwarding package the keepFor line when another dependency calls through it', async () => {
     const withCaller = {
@@ -159,7 +157,7 @@ describe('AC-used-atoms-52 - a dependency that re-exports the cx of a module cxM
 
     expect(listed.error).toBeUndefined()
     expect(atomLayerAtoms(listed.css)).toEqual(atoms('block', 'flex', 'grid'))
-  }, 120_000)
+  })
 
   it('prints the position of a forward once when it has an application take and a calling dependency', async () => {
     const withCaller = {
@@ -179,5 +177,5 @@ describe('AC-used-atoms-52 - a dependency that re-exports the cx of a module cxM
     ).toHaveLength(1)
     expect(lines).toContain(forwardLine('@other/ui', { listed: 'src/App.ts (cx)' }))
     expect(lines).toContain(callsThroughLine('@other/ui', ['node_modules/@third/ui/index.js']))
-  }, 60_000)
+  })
 })

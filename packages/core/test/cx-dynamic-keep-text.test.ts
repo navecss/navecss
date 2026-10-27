@@ -121,7 +121,7 @@ describe('AC-nextjs-used-atoms-21 — Vite folds the map as an object literal, n
     expect(js).toContain('{flex:`nave-flex`}')
     expect(js).not.toContain(MAP_TEXT)
     expect(js).not.toContain('JSON.parse')
-  }, 60_000)
+  })
 
   it('control: a define that hands over the map as JSON text puts that text in the JS', async () => {
     const asText: Plugin = {
@@ -133,7 +133,7 @@ describe('AC-nextjs-used-atoms-21 — Vite folds the map as an object literal, n
     const js = await builtJs([asText])
     expect(js).toContain(MAP_TEXT)
     expect(js).toContain('JSON.parse')
-  }, 60_000)
+  })
 })
 
 /**

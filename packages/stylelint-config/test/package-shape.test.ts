@@ -166,8 +166,8 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
 
   // This test runs `tsc` over the package on every run, so no hook can pay for it ahead of time.
   // Measured: 1.2 s alone, 6.4 s beside 70 busy processes, 14 s beside 160, 18 s beside 240 and
-  // 22 s beside 320, where it timed out at the default 20 s. Its own budget is 120 s, about five
-  // times the worst measured; the default stays 20 s for every other test.
+  // 22 s beside 320, where it timed out at the 20 s default it had then. The package default is
+  // now 240 s, about ten times the worst measured.
   it('a variable typed Config from stylelint compiles against the default export under tsc', () => {
     expect(() =>
       execFileSync(
@@ -176,7 +176,7 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
         { cwd: PACKAGE_DIR, encoding: 'utf8' },
       ),
     ).not.toThrow()
-  }, 120_000)
+  })
 
   it('LICENSE is byte-identical to the root LICENSE', () => {
     const rootLicense = readFileSync(path.join(ROOT, 'LICENSE'), 'utf8')

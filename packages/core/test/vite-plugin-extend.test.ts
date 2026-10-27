@@ -112,7 +112,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
       'the dev server to serve margin: 2px',
       signal,
     )
-  }, 60_000)
+  })
 
   it('a module that failed on its first load tells the client to reload once it is fixed', async ({
     signal,
@@ -135,7 +135,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     )
     const next = await server.transformRequest('/src/app.css')
     expect(next?.code).toContain('margin: 2px')
-  }, 60_000)
+  })
 
   it('a stylesheet whose first load failed while another stylesheet already used the module is reloaded once the module is fixed', async ({
     signal,
@@ -168,7 +168,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
       'a full-reload payload for the client',
       signal,
     )
-  }, 60_000)
+  })
 
   it('a stylesheet that failed and was then edited to hold no directive is not reloaded when the module is fixed', async () => {
     const app: ScratchApp = makeApp({ ...FILES, 'atoms.mjs': "throw new Error('not ready')\n" })
@@ -193,7 +193,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     }
 
     expect(sent.filter((payload) => payload.type === 'full-reload')).toEqual([])
-  }, 60_000)
+  })
 
   it('an edit to a module that loaded fine sends no full reload: Vite’s own update serves it', async ({
     signal,
@@ -219,7 +219,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     expect(sent.filter((payload) => payload.type === 'full-reload')).toEqual([])
-  }, 60_000)
+  })
 
   it('vite build --watch rebuilds with the new value', async ({ signal }) => {
     const app = makeApp(FILES)
@@ -258,7 +258,7 @@ describe('AC-directive-core-37 — the Vite plugin watches the extend module', (
     )
 
     expect(outputs()).toMatch(/margin:2px/)
-  }, 60_000)
+  })
 
   it('registers the module with addWatchFile for a stylesheet that uses a directive', async () => {
     const app = makeApp(FILES)

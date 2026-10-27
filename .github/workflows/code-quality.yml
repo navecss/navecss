@@ -20,10 +20,10 @@ name: code-quality
 # Every job sets `timeout-minutes` (scripts/workflow-timeouts.test.mjs fails otherwise), a multiple
 # of its longest recent run with room for a cold dependency cache, so that a hung step fails in
 # minutes instead of holding a runner for GitHub's six-hour default. `test` and `test:browser` get
-# 30: a browser row's own budget (up to twenty minutes for one Astro row) has to be able to end
-# before its job does, so that a hang fails naming the row. `scripts-test` gets 20 so that a
-# slowed-down pattern fails on its own scaling assertion rather than on the timeout. Every other
-# job gets 10.
+# 30: one hung browser row's own budget (up to twenty minutes for one Astro row) has to be able to
+# end before its job does, so that it fails naming the row; several hung rows can still outlast the
+# job. `scripts-test` gets 20 so that a slowed-down pattern fails on its own scaling assertion
+# rather than on the timeout. Every other job gets 10.
 
 on:
   pull_request:

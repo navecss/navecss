@@ -27,7 +27,7 @@ describe('AC-consumer-constraints-05: the packed file is what it claims to an ed
 
   beforeAll(() => {
     packed = readPackedCssData()
-  }, 120_000)
+  }, 240_000)
 
   it('silences the unknown-at-rule diagnostic for @nave, and only with the file loaded', () => {
     const withData = getCSSLanguageService({

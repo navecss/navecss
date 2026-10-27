@@ -106,7 +106,7 @@ describe('AC-directive-core-45 — the self-contained stylesheet', () => {
       path.join(DIST, 'standalone.css'),
     )
     expect(packCoreTarball().files).toContain('package/dist/standalone.css')
-  }, 60_000)
+  })
 
   it('its token stream has no @import at-rule and no url token', () => {
     const tokens = tokenize(dist('standalone.css'))

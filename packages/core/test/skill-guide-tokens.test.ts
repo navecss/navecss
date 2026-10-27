@@ -186,7 +186,7 @@ describe('AC-consumer-constraints-33: description fidelity', () => {
         readFileSync(path.join(outDir, 'palette-record.json'), 'utf8'),
       ) as Record<string, unknown>
       descriptions = derivePaletteDescriptions(record)
-    }, 120_000)
+    }, 240_000)
 
     afterAll(async () => {
       const { rmSync } = await import('node:fs')

@@ -52,64 +52,56 @@ async function built(settings: AstroAppSettings): Promise<{ app: AstroApp; resul
 const SECOND = 120_000
 
 describe('AC-astro-01 — a static Astro build ships, in every stylesheet holding the layer, exactly the atoms it read', () => {
-  it(
-    'ships E, expands the directive, and the all build ships every atom',
-    async () => {
-      const { result } = await built({ options: BROWSER_KEEP })
-      expect(result.error).toBeUndefined()
-      const sheets = layerSheets(result)
-      expect(sheets.length).toBeGreaterThan(0)
-      for (const sheet of sheets) expect(setOf(sheet), sheet.name).toEqual(eSet())
+  it('ships E, expands the directive, and the all build ships every atom', async () => {
+    const { result } = await built({ options: BROWSER_KEEP })
+    expect(result.error).toBeUndefined()
+    const sheets = layerSheets(result)
+    expect(sheets.length).toBeGreaterThan(0)
+    for (const sheet of sheets) expect(setOf(sheet), sheet.name).toEqual(eSet())
 
-      const html = prerenderedHtml(result, '/')
-      expect(classOf(html, 'fm')).toBe('nave-block')
-      expect(classOf(html, 't')).toBe('nave-flex')
-      expect(classOf(html, 'raw')).toBe('nave-text-center')
+    const html = prerenderedHtml(result, '/')
+    expect(classOf(html, 'fm')).toBe('nave-block')
+    expect(classOf(html, 't')).toBe('nave-flex')
+    expect(classOf(html, 'raw')).toBe('nave-text-center')
 
-      for (const file of filesUnder(result.client)) {
-        if (!/\.(?:css|html|m?js)$/.test(file)) continue
-        expect(readFileSync(path.join(result.client, file), 'utf8'), file).not.toMatch(
-          /@nave(?![a-z])/,
-        )
-      }
-      const css = sheets.map((sheet) => sheet.css).join('\n')
-      expect(css).toMatch(/\.card\s*\{[^}]*overflow-wrap:\s*break-word/)
-      expect(setOfCss(css)).not.toContain('breakWord')
+    for (const file of filesUnder(result.client)) {
+      if (!/\.(?:css|html|m?js)$/.test(file)) continue
+      expect(readFileSync(path.join(result.client, file), 'utf8'), file).not.toMatch(
+        /@nave(?![a-z])/,
+      )
+    }
+    const css = sheets.map((sheet) => sheet.css).join('\n')
+    expect(css).toMatch(/\.card\s*\{[^}]*overflow-wrap:\s*break-word/)
+    expect(setOfCss(css)).not.toContain('breakWord')
 
-      const all = await built({ options: "{ atomic: 'all' }" })
-      expect(all.result.error).toBeUndefined()
-      for (const sheet of layerSheets(all.result)) expect(setOf(sheet)).toEqual(ALL_ATOMS)
-      expect(eSet()).not.toEqual(ALL_ATOMS)
-    },
-    SECOND,
-  )
+    const all = await built({ options: "{ atomic: 'all' }" })
+    expect(all.result.error).toBeUndefined()
+    for (const sheet of layerSheets(all.result)) expect(setOf(sheet)).toEqual(ALL_ATOMS)
+    expect(eSet()).not.toEqual(ALL_ATOMS)
+  })
 })
 
 describe('AC-astro-02 — server output with no prerendered page prunes fully, linked and inlined alike', () => {
-  it(
-    'ships E plus absolute and minW0 in every stylesheet, an inlined one included',
-    async () => {
-      const { app, result } = await built({
-        server: true,
-        options: BROWSER_KEEP,
-        files: LEAN_FILES,
-        probe: {},
-      })
-      expect(result.error).toBeUndefined()
-      // No earlier server environment wrote a stylesheet holding the layer, so nothing is left whole.
-      const writers = probeRecords(app).filter((record) => record.holdsLayer)
-      expect(unique(writers.map((record) => record.environment))).toEqual(['ssr'])
-      const pages = await layerStylesOfRoutes(app, result, ['/', '/about', '/dyn', '/lean'])
-      expect(pages['/lean']!.map((style) => style.kind)).toEqual(['inline'])
-      for (const [route, styles] of Object.entries(pages)) {
-        expect(styles.length, route).toBeGreaterThan(0)
-        for (const style of styles) {
-          expect(setOfCss(style.css), `${route} ${style.name}`).toEqual(eSet('absolute', 'minW0'))
-        }
+  it('ships E plus absolute and minW0 in every stylesheet, an inlined one included', async () => {
+    const { app, result } = await built({
+      server: true,
+      options: BROWSER_KEEP,
+      files: LEAN_FILES,
+      probe: {},
+    })
+    expect(result.error).toBeUndefined()
+    // No earlier server environment wrote a stylesheet holding the layer, so nothing is left whole.
+    const writers = probeRecords(app).filter((record) => record.holdsLayer)
+    expect(unique(writers.map((record) => record.environment))).toEqual(['ssr'])
+    const pages = await layerStylesOfRoutes(app, result, ['/', '/about', '/dyn', '/lean'])
+    expect(pages['/lean']!.map((style) => style.kind)).toEqual(['inline'])
+    for (const [route, styles] of Object.entries(pages)) {
+      expect(styles.length, route).toBeGreaterThan(0)
+      for (const style of styles) {
+        expect(setOfCss(style.css), `${route} ${style.name}`).toEqual(eSet('absolute', 'minW0'))
       }
-    },
-    SECOND,
-  )
+    }
+  })
 })
 
 const PAGES = ['/', '/about']
@@ -145,69 +137,61 @@ describe('AC-astro-04 — on Astro, each emitted atom ships whole and nothing ou
         (vite) => [name, vite ?? 'postcss', settings, routes, vite] as const,
       ),
     ),
-  )(
-    '%s under %s: every stylesheet is the full layer pruned to its set',
-    async (...row) => {
-      const { 2: settings, 3: routes, 4: vite } = row
-      const common = {
-        ...settings,
-        files: { ...settings.files, 'src/pages/about.astro': FOCUS_PAGE },
-        ...(vite && { vite }),
+  )('%s under %s: every stylesheet is the full layer pruned to its set', async (...row) => {
+    const { 2: settings, 3: routes, 4: vite } = row
+    const common = {
+      ...settings,
+      files: { ...settings.files, 'src/pages/about.astro': FOCUS_PAGE },
+      ...(vite && { vite }),
+    }
+    const used = await built({ ...common, options: BROWSER_KEEP })
+    const all = await built({ ...common, options: "{ atomic: 'all' }" })
+    expect(used.result.error).toBeUndefined()
+    expect(all.result.error).toBeUndefined()
+    const usedPages = await layerStylesOfRoutes(used.app, used.result, routes)
+    const allPages = await layerStylesOfRoutes(all.app, all.result, routes)
+    for (const route of routes) {
+      const styles = usedPages[route]!
+      expect(styles.length, route).toBeGreaterThan(0)
+      for (const [index, style] of styles.entries()) {
+        expect(parityProblems(style.css, allPages[route]![index]!.css), route).toEqual([])
       }
-      const used = await built({ ...common, options: BROWSER_KEEP })
-      const all = await built({ ...common, options: "{ atomic: 'all' }" })
-      expect(used.result.error).toBeUndefined()
-      expect(all.result.error).toBeUndefined()
-      const usedPages = await layerStylesOfRoutes(used.app, used.result, routes)
-      const allPages = await layerStylesOfRoutes(all.app, all.result, routes)
-      for (const route of routes) {
-        const styles = usedPages[route]!
-        expect(styles.length, route).toBeGreaterThan(0)
-        for (const [index, style] of styles.entries()) {
-          expect(parityProblems(style.css, allPages[route]![index]!.css), route).toEqual([])
-        }
-      }
-      const about = usedPages['/about']!.flatMap((style) => setOfCss(style.css))
-      expect(about).toEqual(expect.arrayContaining(['focusRing', 'srOnlyFocusable']))
-    },
-    SECOND,
-  )
+    }
+    const about = usedPages['/about']!.flatMap((style) => setOfCss(style.css))
+    expect(about).toEqual(expect.arrayContaining(['focusRing', 'srOnlyFocusable']))
+  })
 
-  it(
-    'control: a filter that keeps only rules whose selector is exactly an emitted class drops the pseudo-class rules',
-    async () => {
-      const { app, result } = await built({
-        options: BROWSER_KEEP,
-        vite: LIGHTNING,
-        files: { 'src/pages/about.astro': FOCUS_PAGE },
+  it('control: a filter that keeps only rules whose selector is exactly an emitted class drops the pseudo-class rules', async () => {
+    const { app, result } = await built({
+      options: BROWSER_KEEP,
+      vite: LIGHTNING,
+      files: { 'src/pages/about.astro': FOCUS_PAGE },
+    })
+    const all = await built({
+      options: "{ atomic: 'all' }",
+      vite: LIGHTNING,
+      files: { 'src/pages/about.astro': FOCUS_PAGE },
+    })
+    expect(app.root).toBeTruthy()
+    const usedAbout = await layerStylesOfRoutes(app, result, ['/about'])
+    const allAbout = await layerStylesOfRoutes(all.app, all.result, ['/about'])
+    const [style] = usedAbout['/about']!
+    const [full] = allAbout['/about']!
+    const set = setOfCss(style!.css)
+    const classes = classesOf(...set)
+    const exactly = (nodes: Node[]): Node[] =>
+      nodes.flatMap((node) => {
+        if (node.children) {
+          const children = exactly(node.children)
+          return children.length > 0 ? [{ prelude: node.prelude, children }] : []
+        }
+        return [...classes].some((name) => node.prelude === `.${name}`) ? [node] : []
       })
-      const all = await built({
-        options: "{ atomic: 'all' }",
-        vite: LIGHTNING,
-        files: { 'src/pages/about.astro': FOCUS_PAGE },
-      })
-      expect(app.root).toBeTruthy()
-      const usedAbout = await layerStylesOfRoutes(app, result, ['/about'])
-      const allAbout = await layerStylesOfRoutes(all.app, all.result, ['/about'])
-      const [style] = usedAbout['/about']!
-      const [full] = allAbout['/about']!
-      const set = setOfCss(style!.css)
-      const classes = classesOf(...set)
-      const exactly = (nodes: Node[]): Node[] =>
-        nodes.flatMap((node) => {
-          if (node.children) {
-            const children = exactly(node.children)
-            return children.length > 0 ? [{ prelude: node.prelude, children }] : []
-          }
-          return [...classes].some((name) => node.prelude === `.${name}`) ? [node] : []
-        })
-      const crude = exactly(parseAtomicLayer(full!.css))
-      expect(keepOnly(parseAtomicLayer(full!.css), classes)).toEqual(parseAtomicLayer(style!.css))
-      expect(isDeepStrictEqual(crude, parseAtomicLayer(style!.css))).toBe(false)
-      expect(Object.keys(atomClassMap).length).toBeGreaterThan(0)
-    },
-    SECOND,
-  )
+    const crude = exactly(parseAtomicLayer(full!.css))
+    expect(keepOnly(parseAtomicLayer(full!.css), classes)).toEqual(parseAtomicLayer(style!.css))
+    expect(isDeepStrictEqual(crude, parseAtomicLayer(style!.css))).toBe(false)
+    expect(Object.keys(atomClassMap).length).toBeGreaterThan(0)
+  })
 })
 
 /**
@@ -408,33 +392,25 @@ function fileOf(app: AstroApp): { emitted: string[]; writer: string } {
 }
 
 describe('AC-astro-15 — the cache file records the set the last filtering environment fixed', () => {
-  it(
-    'static: the set of the stylesheet the build wrote, sorted, with a writer',
-    async () => {
-      const { app, result } = await built({ options: BROWSER_KEEP })
-      expect(result.error).toBeUndefined()
-      const file = fileOf(app)
-      expect(file.writer).not.toBe('')
-      expect(file.emitted).toEqual(file.emitted.toSorted(byCodeUnit))
-      expect(atoms2(...file.emitted)).toEqual(
-        unique(layerSheets(result).flatMap((sheet) => setOf(sheet))),
-      )
-    },
-    SECOND,
-  )
+  it('static: the set of the stylesheet the build wrote, sorted, with a writer', async () => {
+    const { app, result } = await built({ options: BROWSER_KEEP })
+    expect(result.error).toBeUndefined()
+    const file = fileOf(app)
+    expect(file.writer).not.toBe('')
+    expect(file.emitted).toEqual(file.emitted.toSorted(byCodeUnit))
+    expect(atoms2(...file.emitted)).toEqual(
+      unique(layerSheets(result).flatMap((sheet) => setOf(sheet))),
+    )
+  })
 
-  it(
-    'rename shape: the set ssr fixed, not every built-in atom',
-    async () => {
-      const { app, result } = await built({ ...RENAME })
-      expect(result.error).toBeUndefined()
-      const file = fileOf(app)
-      expect(file.writer).toBe('ssr')
-      expect(file.emitted.length).toBeLessThan(ALL_ATOMS.length)
-      expect(file.emitted).toEqual(expect.arrayContaining(['absolute', 'minW0', 'roundedFull']))
-    },
-    SECOND,
-  )
+  it('rename shape: the set ssr fixed, not every built-in atom', async () => {
+    const { app, result } = await built({ ...RENAME })
+    expect(result.error).toBeUndefined()
+    const file = fileOf(app)
+    expect(file.writer).toBe('ssr')
+    expect(file.emitted.length).toBeLessThan(ALL_ATOMS.length)
+    expect(file.emitted).toEqual(expect.arrayContaining(['absolute', 'minW0', 'roundedFull']))
+  })
 })
 
 describe('AC-astro-06 — the control: a copy without the whole shared stylesheet changes the bytes of a served name', () => {
@@ -529,20 +505,16 @@ describe('AC-astro-07 — the no-rename shape: who wrote first decides what each
 })
 
 describe('AC-astro-07 — the control: a copy that fixes the later set from its own modules only drops roundedFull from /lean', () => {
-  it(
-    'leaves roundedFull out of the inlined layer',
-    async () => {
-      const { app, result } = await built({
-        ...RENAME,
-        files: { ...NO_RENAME_FILES, ...LEAN_FILES },
-        scratch: [OWN_MODULES_ONLY],
-      })
-      expect(result.error).toBeUndefined()
-      const pages = await layerStylesOfRoutes(app, result, ['/lean'])
-      expect(setOfCss(pages['/lean']![0]!.css)).not.toContain('roundedFull')
-    },
-    SECOND,
-  )
+  it('leaves roundedFull out of the inlined layer', async () => {
+    const { app, result } = await built({
+      ...RENAME,
+      files: { ...NO_RENAME_FILES, ...LEAN_FILES },
+      scratch: [OWN_MODULES_ONLY],
+    })
+    expect(result.error).toBeUndefined()
+    const pages = await layerStylesOfRoutes(app, result, ['/lean'])
+    expect(setOfCss(pages['/lean']![0]!.css)).not.toContain('roundedFull')
+  })
 })
 
 /**

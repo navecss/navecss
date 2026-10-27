@@ -329,7 +329,7 @@ describe('AC-used-atoms-36 — the README’s sample report is the build’s own
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  }, 240_000)
 
   it('prints the same count, problem lines and remedy lines as a build that fails on those two uses', () => {
     expect(report, 'the fixture build did not fail').toContain(REPORT_CAUSE)

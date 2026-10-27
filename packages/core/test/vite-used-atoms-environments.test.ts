@@ -77,7 +77,6 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
         }
       }
     },
-    60_000,
   )
 
   it.each(LEGS)(
@@ -93,42 +92,37 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
         app.dispose()
       }
     },
-    60_000,
   )
 
-  it.each(LEGS)(
-    'builds each environment on the Vite the leg names, %s',
-    async (_version, api) => {
-      const app = ssrApp("cx('grid')")
-      const seen = new Set<string>()
-      // Each Vite puts its own version on the context its plugins run in, so this reads which
-      // Vite's builder ran, not which one the row asked for.
-      const witness: PluginOption = {
-        name: 'record-vite-version',
-        buildStart() {
-          // eslint-disable-next-line unicorn/no-this-outside-of-class -- a plugin hook receives its build context as `this`; there is no other way to read it
-          seen.add(`${this.environment.name} ${this.meta.viteVersion}`)
-        },
-      }
-      try {
-        const built = await buildEnvironments(app, {
-          api,
-          order: ['ssr', 'client'],
-          options: { keep: ['grid'] },
-          plugins: [witness],
-        })
+  it.each(LEGS)('builds each environment on the Vite the leg names, %s', async (_version, api) => {
+    const app = ssrApp("cx('grid')")
+    const seen = new Set<string>()
+    // Each Vite puts its own version on the context its plugins run in, so this reads which
+    // Vite's builder ran, not which one the row asked for.
+    const witness: PluginOption = {
+      name: 'record-vite-version',
+      buildStart() {
+        // eslint-disable-next-line unicorn/no-this-outside-of-class -- a plugin hook receives its build context as `this`; there is no other way to read it
+        seen.add(`${this.environment.name} ${this.meta.viteVersion}`)
+      },
+    }
+    try {
+      const built = await buildEnvironments(app, {
+        api,
+        order: ['ssr', 'client'],
+        options: { keep: ['grid'] },
+        plugins: [witness],
+      })
 
-        expect(built.error).toBeUndefined()
-        expect([...seen].toSorted((a, b) => a.localeCompare(b))).toEqual([
-          `client ${api.version}`,
-          `ssr ${api.version}`,
-        ])
-      } finally {
-        app.dispose()
-      }
-    },
-    60_000,
-  )
+      expect(built.error).toBeUndefined()
+      expect([...seen].toSorted((a, b) => a.localeCompare(b))).toEqual([
+        `client ${api.version}`,
+        `ssr ${api.version}`,
+      ])
+    } finally {
+      app.dispose()
+    }
+  })
 
   it('keeps the state of two projects apart, built one after the other in one process', async () => {
     const a = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
@@ -143,7 +137,7 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
       a.dispose()
       b.dispose()
     }
-  }, 60_000)
+  })
 
   it('keeps the atoms of two projects apart when one plugin instance builds both at once', async () => {
     const a = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
@@ -163,7 +157,7 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
       a.dispose()
       b.dispose()
     }
-  }, 60_000)
+  })
 
   it('keeps the atoms of two concurrent builds of one root apart, each with its own entry', async () => {
     const app = makeUsedApp(
@@ -200,7 +194,7 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('keeps the page atoms of each of two concurrent builds of one root that read different markup', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('block'))\n` }))
@@ -258,7 +252,7 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('keeps the atoms of a page of the outer build when a build of a root inside it ran before', async () => {
     const app = makeUsedApp(
@@ -291,7 +285,7 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('gives a page of /repo/app2 to the build of /repo, not to the build of /repo/app', () => {
     const [nave, collect] = navePlugin()
@@ -340,7 +334,7 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it.each(LEGS)(
     'gives each environment its own plugin instance for one root the same CSS as a shared one on Vite %s',
@@ -366,7 +360,6 @@ describe('AC-used-atoms-12 — every environment in one process, dependencies in
         app.dispose()
       }
     },
-    60_000,
   )
 })
 
@@ -399,7 +392,6 @@ describe('AC-used-atoms-12 - an instance of the plugin for each environment', ()
         app.dispose()
       }
     },
-    60_000,
   )
 
   it.each(LEGS)(
@@ -419,7 +411,6 @@ describe('AC-used-atoms-12 - an instance of the plugin for each environment', ()
         app.dispose()
       }
     },
-    60_000,
   )
 })
 
@@ -439,7 +430,6 @@ describe('AC-used-atoms-13 — an atom collected after the CSS was written fails
         app.dispose()
       }
     },
-    60_000,
   )
 
   it.each(LEGS)(
@@ -463,7 +453,6 @@ describe('AC-used-atoms-13 — an atom collected after the CSS was written fails
         sameAtom.dispose()
       }
     },
-    60_000,
   )
 
   it.each(LEGS)(
@@ -478,7 +467,6 @@ describe('AC-used-atoms-13 — an atom collected after the CSS was written fails
         app.dispose()
       }
     },
-    60_000,
   )
 })
 
@@ -552,7 +540,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('is green in both orders when the server goes first, and the client CSS holds the server’s atom', async () => {
     const app = ssrApp("cx('grid')")
@@ -567,7 +555,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('does not pass silently when a server build run alone names an atom the last client build lacks', async () => {
     const app = ssrApp("cx('grid')")
@@ -584,7 +572,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('prints nothing when a server build run alone names only atoms the last client build holds', async () => {
     const app = ssrApp("cx('grid')")
@@ -598,7 +586,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('runs a server-first pipeline three times with no edit: grid every time, no plugin warning', async () => {
     const app = ssrApp("cx('grid')")
@@ -616,7 +604,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('warns once, on the run that adds block, then is silent, and the CSS holds block from that run', async () => {
     const app = ssrApp("cx('grid')")
@@ -645,7 +633,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   describe.each(['postcss', 'lightningcss'] as const)('under css.transformer %s', (transformer) => {
     it('fails a server build on every miss, records its atoms, and passes once the client build has shipped them', async () => {
@@ -677,7 +665,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
       } finally {
         app.dispose()
       }
-    }, 120_000)
+    })
   })
 
   it('drops what a failed server build left pending once a server build passes without it', async () => {
@@ -695,7 +683,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('does not ship what the server no longer names after the client shipped it', async () => {
     const app = ssrApp("cx('grid')")
@@ -713,7 +701,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it.each([
     ['grid', "cx('grid')"],
@@ -735,7 +723,6 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
         app.dispose()
       }
     },
-    120_000,
   )
 
   it('is green on every run of a client-first pipeline whose server needs nothing the client lacks', async () => {
@@ -752,7 +739,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('fails the server of a client-first pipeline once, then the client ships the atom it missed', async () => {
     const app = ssrApp("cx('grid')")
@@ -773,7 +760,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('ships a kept atom on every run of a client-first pipeline', async () => {
     const app = ssrApp("cx('flex')")
@@ -788,7 +775,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('names the same order in the failure a server build meets and in the stale-file warning', async () => {
     const missApp = ssrApp("cx('grid')")
@@ -809,7 +796,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
       missApp.dispose()
       staleApp.dispose()
     }
-  }, 120_000)
+  })
 
   it('unions a leftover server set into a lone client build, then replaces the file with its own', async () => {
     const app = ssrApp("cx('grid')")
@@ -827,7 +814,7 @@ describe('AC-used-atoms-14 — two invocations share their sets through cacheDir
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 /**
@@ -889,7 +876,6 @@ describe('AC-used-atoms-15 — an untransformed Nave-consuming dependency is war
         app.dispose()
       }
     },
-    60_000,
   )
 
   it('prints nothing with ssr.noExternal, with a keepFor entry, or under all', async () => {
@@ -911,5 +897,5 @@ describe('AC-used-atoms-15 — an untransformed Nave-consuming dependency is war
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
