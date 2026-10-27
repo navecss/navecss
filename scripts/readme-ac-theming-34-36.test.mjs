@@ -191,35 +191,49 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 // negation or contrast word (not, never, no, nothing, any n't word, cannot, no longer, without,
 // instead of, rather than, unlike). Rung 4 must hold one such sentence.
 //
-// A LAWFUL REWORDING OUTSIDE THE LIST FAILS THE INSTRUMENT, NOT THE CRITERION, and it fails
-// loudly: the message lists the accepted shapes and says to add the new wording to the list in
-// the same change as the README edit. Every shape in the list must itself be an affirmative: a
-// consumer-side build, script or task before a form of invoke, run or call, the entry point or
-// `navecss-tokens` after it, no Nave word and no negation. A row checks that, so the remedy cannot
-// add "Nave invokes the entry point".
+// A LAWFUL REWORDING OUTSIDE THE LIST FAILS THE INSTRUMENT, NOT THE CRITERION, and it fails loudly:
+// the message quotes the rung, lists the accepted shapes and says to add the new wording to the
+// list in the same change as the README edit. Every shape in the list must itself be an
+// affirmative: a consumer-side build, script or task, owned by your, your own or the consumer's
+// outside the published sentence, before a form of invoke, run or call, the entry point or
+// `navecss-tokens` after it, no Nave word ("token" counts as one) and no negation. A row checks
+// that, so the remedy cannot add "Nave invokes the entry point", "the token build invokes the entry
+// point" or "its build invokes the entry point".
 //
 // THE DENIAL GUARD is a closed list too, read clause by clause (a clause ends at `;`, `:` or the
-// end of the sentence). A clause denies reach when it holds, in order:
-// - a negator (not, never, cannot, any n't word, no, no longer, nothing, without, instead of,
-//   rather than, unlike, fails to, unable to), then a reach verb (reach, invoke, call, run, use,
-//   go through), then the object (the entry point, `navecss-tokens`, or "it");
-// - an avoidance verb (bypass, skip, avoid, circumvent, go around / past, stop short of), then the
-//   object;
+// end of the sentence) and, for the first two forms, comma segment by comma segment, so a negator
+// never reaches past a comma ("Your build, not Nave, invokes the entry point" denies nothing). A
+// part of a sentence denies reach when it holds:
+// - a negator (not, never, cannot, any n't word, no, nothing, without, instead of, rather than,
+//   unlike, fails to, unable to; "no longer" is caught by "no"), then a reach verb (reach, invoke,
+//   call, run, use, go through), then the object (the entry point, `navecss-tokens`, or "it"), all
+//   in one comma segment;
+// - an avoidance verb (bypass, skip, avoid, circumvent, go around / past, stop short of) with the
+//   object right after it ("skips the entry point", "goes around it");
 // - or "the entry point is / was not / never / no longer (one word) invoked / reached / called /
 //   run / used", with "isn't", "wasn't", "cannot be" and "can't be" read the same way.
-// A denial is reported even beside the affirmative.
+// A denial is reported even beside the affirmative, once per sentence, so a long sentence is quoted
+// once.
 //
-// RESIDUALS, stated rather than discovered later. A denial outside that closed list is not caught
-// by it and is left to whoever reads the change: a negating word that is not listed ("neither ...
-// nor", "impossible", "prevented from"), a verb left out ("but it never does", "; it does not"), a
-// negator after the verb ("invokes no entry point"), a negated passive whose subject is not "the
-// entry point" itself, or not next to it ("The entry point's CLI is never invoked", "The entry
-// point, with no seed of its own, is never invoked"). Each of these still fails when it is the
-// whole rung, because it holds no accepted shape; the rows below pin all of them. In the other
-// direction, the negation scan does not know what a negation governs, so a lawful sentence that
-// also holds one ("Without a config file, your build invokes the entry point") is not read as the
-// affirmative and fails loudly with the shapes message. A sentence reports its first denying clause
-// only, so a long one is quoted once.
+// RESIDUALS, stated rather than discovered later, and each pinned by rows below.
+// - A denial outside that closed list is not caught by it and is left to whoever reads the change:
+//   a negating word that is not listed ("neither ... nor", "impossible", "prevented from"), a
+//   negator that reaches its verb only across a comma ("Your build does not, at any point, invoke
+//   the entry point"), a verb left out ("but it never does"), a negator after the verb ("invokes no
+//   entry point"), a negated passive whose subject is not "the entry point" itself, or not next to
+//   it. Each still fails when it is the whole rung, because it holds no accepted shape or holds a
+//   negation.
+// - A Nave invoker beside the affirmative passes: the rung then holds the affirmative and denies
+//   nothing ("Nave invokes the entry point for you." fails alone).
+// - A sentence holding a shape and contrasted with Nave as the real invoker, in another clause or
+//   sentence and without a listed negation word, passes even alone ("In rung 3 your build invokes
+//   the entry point; here Nave does."). Closing it would also fail lawful conditionals ("If your
+//   build invokes the entry point from a script, pin the version.").
+// - In the other direction, the negation scan does not know what a negation governs, so a lawful
+//   sentence that also holds one ("Without a config file, your build invokes the entry point") is
+//   not read as the affirmative and fails loudly with the shapes message. One such sentence is also
+//   read as a denial, because its negator and verb share a comma segment across "and": "No file is
+//   discovered and your own build invokes the entry point, with what it has."
 
 const WORD = /[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu
 const CLOSED_UP_ENTRY_POINTS = ['entrypoint', 'entry-point']
@@ -409,14 +423,19 @@ function objectAt(words, at) {
   return words[at] === 'it' || words[at] === 'navecss-tokens' ? 1 : 0
 }
 
-// The denial form a clause holds, as the words matched, or null. One pass: a negator then a reach
-// verb then the object, or an avoidance verb then the object, in that order within the clause.
-function denialInClause(words) {
-  const passive = findPhrase(words, PASSIVE_DENIAL_INDEX)
-  if (passive !== null) return passive.join(' ')
+// The denial form a comma segment holds, as the words matched, or null: a negator then a reach
+// verb then the object, in that order, or an avoidance verb with the object right after it. Read
+// per comma segment, so a negator does not reach past a comma ("Your build, not Nave, invokes the
+// entry point" denies nothing).
+function denialInSegment(words) {
   const matched = []
   let wanted = 'opener'
   for (let at = 0; at < words.length;) {
+    const avoided = avoidanceAt(words, at)
+    if (avoided > 0) {
+      const object = objectRightAfter(words, at + avoided)
+      if (object !== null) return `${words.slice(at, at + avoided).join(' ')} … ${object}`
+    }
     const step = wantedAt(words, at, wanted)
     if (step === 0) {
       at += 1
@@ -424,14 +443,21 @@ function denialInClause(words) {
     }
     matched.push(words.slice(at, at + step).join(' '))
     if (wanted === 'object') return matched.join(' … ')
-    wanted = wanted === 'opener' && avoidanceAt(words, at) > 0 ? 'object' : nextWanted(wanted)
+    wanted = nextWanted(wanted)
     at += step
   }
   return null
 }
 
+// The object that starts at `at`, after an optional "the", or null.
+function objectRightAfter(words, at) {
+  const from = words[at] === 'the' ? at + 1 : at
+  const span = objectAt(words, from)
+  return span === 0 ? null : words.slice(from, from + span).join(' ')
+}
+
 function wantedAt(words, at, wanted) {
-  if (wanted === 'opener') return negatorAt(words, at) || avoidanceAt(words, at)
+  if (wanted === 'opener') return negatorAt(words, at)
   if (wanted === 'verb') return reachVerbAt(words, at)
   return objectAt(words, at)
 }
@@ -450,7 +476,7 @@ const render = (shape) =>
 function noShapeMessage(text) {
   const shapes = AFFIRMATIVE_SHAPES.map((shape) => `  ${render(shape)}`).join('\n')
   return (
-    `${NO_SHAPE_START} invokes the entry point (AC-theming-36, clause (1)). It reads: ` +
+    `${NO_SHAPE_START} invokes the entry point (AC-theming-36, rung 4's reach clause). It reads: ` +
     `${JSON.stringify(text.replaceAll(/\s+/g, ' ').trim())}. Accepted shapes:\n${shapes}\n` +
     'If rung 4 says this in other words, add that wording to the shapes list in this file in the ' +
     'same change as the README edit. A shape that names Nave as the invoker, or carries a ' +
@@ -467,8 +493,12 @@ const negatedShapeMessage = (sentence, word) =>
 // sentence is quoted once.
 function denialIn(sentence) {
   for (const clause of sentence.split(/[;:]/)) {
-    const form = denialInClause(wordsOf(clause))
-    if (form !== null) return form
+    const passive = findPhrase(wordsOf(clause), PASSIVE_DENIAL_INDEX)
+    if (passive !== null) return passive.join(' ')
+    for (const segment of clause.split(',')) {
+      const form = denialInSegment(wordsOf(segment))
+      if (form !== null) return form
+    }
   }
   return null
 }
@@ -493,11 +523,17 @@ function rung4ReachProblems(text) {
   return problems
 }
 
-// CLAUSE (1) FOR THE LIST ITSELF. Every phrase a shape stands for must be an affirmative of the
-// consumer's build: a consumer-side build, script or task before a form of invoke, run or call
-// and the entry point (or `navecss-tokens`) after it, or the passive "the entry point is invoked
-// by" one; no Nave word; no negation. Returned as one line per phrase that is not.
+// THE REACH CLAUSE FOR THE LIST ITSELF. Every phrase a shape stands for must be an affirmative of
+// the consumer's build: a consumer-side build, script or task before a form of invoke, run or
+// call and the entry point (or `navecss-tokens`) after it, or the passive "the entry point is
+// invoked by" one; no Nave word ("token" and "tokens" count as Nave's); no negation; and, outside
+// the published sentence, an owner (your, your own or the consumer's) on the invoker, so "the
+// build" or "its build" cannot be added. Returned as one line per phrase that is not.
 const INVOKING_WORDS = new Set(INVOKING_VERBS.flat())
+const SHAPE_OWNERS = new Set(['your', "consumer's"])
+const PUBLISHED_PHRASE = phrasesOf(PUBLISHED_SHAPE)[0].join(' ')
+const isNaveWord = (word) =>
+  (word.startsWith('nave') && word !== 'navecss-tokens') || word === 'token' || word === 'tokens'
 const CONSUMER_WORDS = new Set([
   'your',
   "consumer's",
@@ -518,9 +554,11 @@ function shapeProblems(shapes) {
 }
 
 function affirmativeFlaw(words) {
-  if (words.some((word) => word.startsWith('nave') && word !== 'navecss-tokens'))
-    return 'names Nave'
+  if (words.some((word) => isNaveWord(word))) return 'names Nave'
   if (negationIn(words) !== null) return 'holds a negation'
+  if (words.join(' ') !== PUBLISHED_PHRASE && words.every((word) => !SHAPE_OWNERS.has(word))) {
+    return "has no owner (your, your own or the consumer's)"
+  }
   const verb = words.findIndex((word) => INVOKING_WORDS.has(word))
   if (verb === -1) return 'has no form of invoke, run or call'
   const [before, after] = [words.slice(0, verb), words.slice(verb + 1)]
@@ -565,12 +603,17 @@ test('AC-theming-36: every accepted shape is itself an affirmative, and a Nave i
   assert.deepEqual(shapeProblems([...AFFIRMATIVE_SHAPES, NAVE_SHAPE]), [
     'nave invokes the entry point: names Nave',
   ])
-  // Each other way an entry can fail clause (1), on its own copy of the list.
+  // Each other way an entry can fail the reach clause, on its own copy of the list.
   const flawed = [
     [anyOf('your build does not invoke the entry point'), 'holds a negation'],
     [anyOf('your build the entry point'), 'has no form of invoke, run or call'],
+    [anyOf('a library invokes the entry point'), "has no owner (your, your own or the consumer's)"],
+    [anyOf('the token build invokes the entry point'), 'names Nave'],
+    [anyOf('the build invokes the entry point'), "has no owner (your, your own or the consumer's)"],
+    [anyOf('its build invokes the entry point'), "has no owner (your, your own or the consumer's)"],
+    [anyOf('the entry point is invoked by the token build'), 'names Nave'],
     [
-      anyOf('a library invokes the entry point'),
+      anyOf('the library invokes your entry point'),
       'has no consumer-side invoker with the entry point as its object',
     ],
     [
@@ -579,7 +622,7 @@ test('AC-theming-36: every accepted shape is itself an affirmative, and a Nave i
     ],
     [
       anyOf('the entry point is invoked by a library'),
-      'has no consumer-side invoker with the entry point as its object',
+      "has no owner (your, your own or the consumer's)",
     ],
   ]
   for (const [shape, flaw] of flawed) {
@@ -590,6 +633,8 @@ test('AC-theming-36: every accepted shape is itself an affirmative, and a Nave i
 })
 
 // Denials inside the closed denial list: each reds alone and beside the published rung.
+const DENIES = "rung 4 denies the entry point's reach"
+
 const RUNG_4_DENIALS = [
   'This rung is not reached through the entry point at all.',
   'Your build does not invoke the entry point.',
@@ -604,15 +649,12 @@ const RUNG_4_DENIALS = [
   "Your build can't invoke it.",
   'Nothing invokes the entry point.',
   'No step of your build invokes the entry point.',
-  'Your build does not, at any point in the steps described above, invoke the entry point.',
-  'Your build never once, at any stage of the pipeline that it owns, in any form, calls the entry point.',
   'The entry point is not directly invoked.',
   'The entry point is never actually called.',
   'The entry point is no longer invoked at this rung.',
   'Instead of invoking the entry point, your build writes the file itself.',
   'Rather than invoking the entry point, your build writes the file itself.',
   'Your build produces tokens.css without invoking the entry point.',
-  'Unlike rung 3, where your build invokes the entry point, this rung reads its inputs from a file Nave discovers.',
   'Your build doesn’t invoke the entry point.',
   'Your build fails to reach the entry point.',
   'Your build stops short of the entry point.',
@@ -623,18 +665,7 @@ const RUNG_4_DENIALS = [
   'Your build does not invoke Nave’s entry point.',
   'Your build does not invoke the token build’s entry point.',
   'Your build never runs `navecss-tokens`.',
-  'Your build has never, since 0.1.0, invoked the entry point.',
-  'Your build does not, while it runs, invoke the entry point.',
-  'Your build will not, then, invoke the entry point.',
-  'Your build does not, e.g. via a script, invoke the entry point.',
-  'Your build does not invoke, on every single pass, the entry point.',
   'Your build is unable to invoke the entry point.',
-  'Your build, never once, invokes the entry point.',
-  'Your build, not ever, invokes the entry point.',
-  'Your build, never, invokes the entry point.',
-  'Your build, at no point, invokes the entry point.',
-  'Your build, never at any stage of its run, invokes the entry point.',
-  'Your build, never in any of its steps, invokes the entry point.',
   // One row per entry of the closed denial list that no row above uses.
   'Your build cannot invoke the entry point.',
   'Your build failed to invoke the entry point.',
@@ -656,6 +687,10 @@ const RUNG_4_DENIALS = [
   'The entry point was no longer invoked.',
   "The entry point wasn't invoked.",
   "The entry point can't be invoked.",
+  // Rows that keep each list entry and the sentence splitter in use within one comma segment.
+  'Unlike the CLI that calls the entry point, this rung reads a file.',
+  'Your build never calls the entry point.',
+  'Your build does not e.g. invoke the entry point directly.',
 ]
 
 test('AC-theming-36: a rung 4 that keeps only a denial of the entry point reds', () => {
@@ -670,7 +705,7 @@ test('AC-theming-36: a denial reds even beside the published rung-4 affirmative'
   assert.deepEqual(
     RUNG_4_DENIALS.filter((denial) =>
       rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${denial}`).every(
-        (problem) => !problem.startsWith("rung 4 denies the entry point's reach"),
+        (problem) => !problem.startsWith(DENIES),
       ),
     ),
     [],
@@ -693,6 +728,21 @@ const RUNG_4_DENIAL_RESIDUALS = [
   'Your build is prevented from invoking the entry point.',
   "The entry-point's CLI is never invoked by your build.",
   'The entrypoint’s CLI is never invoked by your build.',
+  // A negator that reaches its verb only across a comma.
+  'Your build does not, at any point in the steps described above, invoke the entry point.',
+  'Your build never once, at any stage of the pipeline that it owns, in any form, calls the entry point.',
+  'Unlike rung 3, where your build invokes the entry point, this rung reads its inputs from a file Nave discovers.',
+  'Your build has never, since 0.1.0, invoked the entry point.',
+  'Your build does not, while it runs, invoke the entry point.',
+  'Your build will not, then, invoke the entry point.',
+  'Your build does not, e.g. via a script, invoke the entry point.',
+  'Your build does not invoke, on every single pass, the entry point.',
+  'Your build, never once, invokes the entry point.',
+  'Your build, not ever, invokes the entry point.',
+  'Your build, never, invokes the entry point.',
+  'Your build, at no point, invokes the entry point.',
+  'Your build, never at any stage of its run, invokes the entry point.',
+  'Your build, never in any of its steps, invokes the entry point.',
 ]
 
 test('AC-theming-36: a denial outside the closed list reds alone, and beside the published rung is left to the reader', () => {
@@ -703,7 +753,7 @@ test('AC-theming-36: a denial outside the closed list reds alone, and beside the
     )
     assert.ok(
       rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${denial}`).every(
-        (problem) => !problem.startsWith("rung 4 denies the entry point's reach"),
+        (problem) => !problem.startsWith(DENIES),
       ),
       `a residual, not caught by the closed denial list: ${denial}`,
     )
@@ -849,6 +899,8 @@ const RUNG_4_LAWFUL = [
   'The entry point was invoked by your build.',
   'The entry point is run by your build.',
   'The entry point is called by your build.',
+  // A bullet start ends a sentence even when the bullet before it has no full stop.
+  '- **What it voids:** nothing about the output\n- **Where it lives:** your build invokes the entry point.',
 ]
 
 test('AC-theming-36: a lawful rung 4 in an accepted shape stays green', () => {
@@ -877,7 +929,6 @@ const RUNG_4_FAILS_LOUDLY = [
   'Your build skips ahead and invokes the entry point.',
   'Instead of a seed you typed into a script once, your own build invokes the entry point with them.',
   'Without a config file, your build invokes the entry point with its own inputs.',
-  'No file is discovered and your own build invokes the entry point, with what it has.',
   'Your build, not Nave, invokes the entry point.',
   'It is your build, not a Nave config file, that invokes the entry point.',
   'The entry point, which reads no file, is invoked by your build.',
@@ -937,18 +988,68 @@ const RUNG_4_FAILS_LOUDLY = [
   'Nave ships the defaults, then your build runs its own script, which invokes the entry point.',
   "A pipeline reads Nave's tokens, and its job invokes the entry point.",
   'The token builds ship, and its task invokes the entry point.',
+  'Your build, because Nave ships no runner, invokes the entry point.',
+  'Your build, since Nave reads nothing, invokes the entry point.',
 ]
 
 test('AC-theming-36: a lawful rewording outside the accepted shapes fails loudly, quoting itself', () => {
   assert.deepEqual(
-    RUNG_4_FAILS_LOUDLY.filter((sentence) =>
-      rung4ReachProblems(sentence).every(
+    RUNG_4_FAILS_LOUDLY.filter((sentence) => {
+      const problems = rung4ReachProblems(sentence)
+      const loud = problems.some(
         (problem) =>
-          !(problem.startsWith(NO_SHAPE_START) && problem.includes(JSON.stringify(sentence))),
-      ),
-    ),
+          problem.startsWith(NO_SHAPE_START) && problem.includes(JSON.stringify(sentence)),
+      )
+      const denied = problems.some((problem) => problem.startsWith(DENIES))
+      const besidePublished = rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${sentence}`)
+      return !loud || denied || besidePublished.length > 0
+    }),
     [],
+    'each fails alone with the shapes message only, and passes beside the published rung',
   )
+})
+
+// The one lawful sentence the denial guard still reads as a denial, stated rather than hidden: a
+// negator and a reach verb with no comma between them, where the negator belongs to another
+// clause joined by "and".
+test('AC-theming-36: residual, a comma-less joined clause is still read as a denial', () => {
+  const sentence =
+    'No file is discovered and your own build invokes the entry point, with what it has.'
+  assert.ok(rung4ReachProblems(sentence).some((problem) => problem.startsWith(DENIES)))
+  assert.ok(
+    rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${sentence}`).some((problem) =>
+      problem.startsWith(DENIES),
+    ),
+  )
+})
+
+// Residual: a Nave invoker beside the published affirmative. The rung then holds the affirmative
+// and does not deny reach, so the check passes it; alone it fails, holding no accepted shape.
+const RUNG_4_NAVE_BESIDE_RESIDUALS = [
+  'Nave invokes the entry point for you.',
+  'The Nave CLI runs the entry point for you.',
+]
+
+test('AC-theming-36: residual, a Nave invoker fails alone and passes beside the published rung', () => {
+  for (const sentence of RUNG_4_NAVE_BESIDE_RESIDUALS) {
+    assert.ok(rung4ReachProblems(sentence).some((problem) => problem.startsWith(NO_SHAPE_START)))
+    assert.deepEqual(rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${sentence}`), [])
+  }
+})
+
+// Residual: a sentence holding a shape, contrasted with Nave as the real invoker in another clause
+// or sentence and without a listed negation word, reads as the affirmative even alone. Closing it
+// would also fail lawful conditionals ("If your build invokes the entry point from a script, pin
+// the version."). These rows pin that the check passes them today.
+const RUNG_4_KNOWN_FALSE_GREENS = [
+  'In rung 3 your build invokes the entry point; here Nave does.',
+  'Does your build invoke the entry point? Nave does.',
+]
+
+test('AC-theming-36: residual, a contrast with Nave as the real invoker passes even alone', () => {
+  for (const sentence of RUNG_4_KNOWN_FALSE_GREENS) {
+    assert.deepEqual(rung4ReachProblems(sentence), [], `a known residual: ${sentence}`)
+  }
 })
 
 test('AC-theming-36: "not" and "entry point" in one sentence is not a denial of reach', () => {
