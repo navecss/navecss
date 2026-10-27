@@ -90,13 +90,23 @@ describe.each(Object.entries(VITE_APIS))(
           }
         }
         const shows = (): string => JSON.stringify(shownNow())
-        const builds = { bundled: 0, ended: 0, failed: undefined as Error | undefined, started: 0 }
+        const builds = {
+          bundled: 0,
+          ended: 0,
+          failed: undefined as Error | undefined,
+          lastEventAt: Date.now(),
+          started: 0,
+        }
+        // What the watcher has done so far, for the error that says what never happened.
+        const progress = (): string =>
+          `builds started ${builds.started}, ended ${builds.ended}, bundled ${builds.bundled}; last watcher event ${Date.now() - builds.lastEventAt} ms ago`
         // What the output shows when each build ends, with the number of the edit whose first write
         // came before the build ended (0 for the first build). No build is under way when an edit is
         // first written, so each of those builds read that edit.
         const outputs: { afterEdit: number; output: unknown }[] = []
         let editing = 0
         watcher.on('event', (event) => {
+          builds.lastEventAt = Date.now()
           switch (event.code) {
             case 'BUNDLE_END': {
               builds.bundled += 1
@@ -152,13 +162,15 @@ describe.each(Object.entries(VITE_APIS))(
             throwIfFailed()
             if (isShownNow) return
           }
-          throw new Error(`the build never showed ${atoms.join(', ')}; it shows ${shows()}`)
+          throw new Error(
+            `the build never showed ${atoms.join(', ')}; it shows ${shows()}; ${progress()}`,
+          )
         }
 
         while (!(await isShownWithin(['flex'], REWRITE_AFTER))) {
           throwIfFailed()
           if (Date.now() >= deadline) {
-            throw new Error(`the first build never showed flex; it shows ${shows()}`)
+            throw new Error(`the first build never showed flex; it shows ${shows()}; ${progress()}`)
           }
         }
         const first = written()
