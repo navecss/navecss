@@ -145,6 +145,23 @@ const SCRATCH_CONFIG = [
 ].join('\n')
 
 /**
+ * The files that put the scratch copy in the app: its package under `node_modules`, and the
+ * PostCSS config that lists it in place of the real plugin.
+ */
+function scratchPluginFiles(app: NextApp, dropped: DroppedMessage): Record<string, string> {
+  const directory = `node_modules/${SCRATCH_PACKAGE}`
+  return {
+    [`${directory}/package.json`]: JSON.stringify({
+      name: SCRATCH_PACKAGE,
+      version: '1.0.0',
+      main: 'index.cjs',
+    }),
+    [`${directory}/index.cjs`]: scratchPluginText(dropped, scratchLogOf(app)),
+    'postcss.config.mjs': `export default { plugins: { '${SCRATCH_PACKAGE}': {} } }\n`,
+  }
+}
+
+/**
  * Turns the app into a scratch copy of the plugin: a PostCSS plugin installed in the app's
  * `node_modules` that runs the real one and returns none of its `dropped` messages (`'both'` is
  * the `dependency` and the `dir-dependency` messages), listed in the
@@ -153,17 +170,15 @@ const SCRATCH_CONFIG = [
  * Everything else (the hand-off, the define, `transpilePackages`) is the real wrapper's.
  */
 export function useScratchPlugin(app: NextApp, dropped: DroppedMessage): void {
-  const directory = `node_modules/${SCRATCH_PACKAGE}`
-  app.write({
-    [`${directory}/package.json`]: JSON.stringify({
-      name: SCRATCH_PACKAGE,
-      version: '1.0.0',
-      main: 'index.cjs',
-    }),
-    [`${directory}/index.cjs`]: scratchPluginText(dropped, scratchLogOf(app)),
-    'postcss.config.mjs': `export default { plugins: { '${SCRATCH_PACKAGE}': {} } }\n`,
-    'next.config.mjs': SCRATCH_CONFIG,
-  })
+  app.write({ ...scratchPluginFiles(app, dropped), 'next.config.mjs': SCRATCH_CONFIG })
+}
+
+/**
+ * Turns the app into the same scratch copy of the plugin, and leaves the app's `next.config`
+ * alone: `withNave({})` as the app has it, so the hook that checks the record stays in place.
+ */
+export function useScratchPluginKeepingHook(app: NextApp, dropped: DroppedMessage): void {
+  app.write(scratchPluginFiles(app, dropped))
 }
 
 /**
