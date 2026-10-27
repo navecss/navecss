@@ -11,7 +11,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import config from '../vitest.config.ts'
-import { isReaching, referencesOf } from './support/test-references.ts'
+import { isStartingNext } from './support/test-references.ts'
 
 const PACKAGE = path.resolve(import.meta.dirname, '..')
 const TEST = path.join(PACKAGE, 'test')
@@ -19,7 +19,11 @@ const TEST = path.join(PACKAGE, 'test')
 /**
  * Files that reach the helpers but start a stand-in for `next` that serves one page, not Next.js.
  */
-const STAND_IN = new Set(['test/dev-until-css.test.ts', 'test/leftovers.test.ts'])
+const STAND_IN = new Set([
+  'test/dev-until-css.test.ts',
+  'test/later-route-retry.test.ts',
+  'test/leftovers.test.ts',
+])
 const STARTERS = ['next-app.ts', 'next-dev.ts'].map((name) => path.join(TEST, 'helpers', name))
 
 /**
@@ -37,21 +41,12 @@ const projects = (config.test?.projects ?? []) as {
 const project = (name: string): (typeof projects)[number] =>
   projects.find((candidate) => candidate.test.name === name)!
 
-/**
- * Whether a test file starts Next.js: it reaches the helpers that do, uses `nextCommand` to run
- * `next` itself, or loads a module by a path it computes, which the guard cannot follow.
- */
-function isStartingNext(file: string, targets: readonly string[]): boolean {
-  const { hasComputedLoad, isUsingNextCommand } = referencesOf(file)
-  return hasComputedLoad || isUsingNextCommand || isReaching(file, targets)
-}
-
 describe('the rows that start Next.js', () => {
   const starting = testFilesUnder(TEST).filter(
     (file) =>
       !file.startsWith('test/chromium/') &&
       !STAND_IN.has(file) &&
-      isStartingNext(path.join(PACKAGE, file), STARTERS),
+      isStartingNext(path.join(PACKAGE, file), STARTERS, TEST),
   )
 
   it('are found (control: the monorepo rows reach the helpers)', () => {
@@ -70,11 +65,13 @@ describe('the rows that start Next.js', () => {
 
   it('reach the helpers only from test/build or test/chromium (the check sees a file that does not: control)', () => {
     const plain = path.join(TEST, 'readme.test.ts')
-    expect(isReaching(plain, STARTERS)).toBe(false)
+    expect(isStartingNext(plain, STARTERS, TEST)).toBe(false)
   })
 
   describe('are found in a planted file outside test/build', () => {
     let planted = ''
+    const isStartingPlanted = (file: string, targets: readonly string[]): boolean =>
+      isStartingNext(file, targets, planted)
     beforeEach(() => {
       const made = mkdtempSync(path.join(tmpdir(), 'prune-planted-'))
       planted = realpathSync(made)
@@ -87,7 +84,7 @@ describe('the rows that start Next.js', () => {
       const file = path.join(planted, 'x.test.ts')
       writeFileSync(file, "const { start } = await import('./helpers/starter.ts')\nvoid start\n")
 
-      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+      expect(isStartingPlanted(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
     })
 
     it('through nextCommand, which a file that runs next itself calls', () => {
@@ -97,21 +94,21 @@ describe('the rows that start Next.js', () => {
         "import { nextCommand } from './helpers/next-process.ts'\nconst args = nextCommand(['build'])\nvoid args\n",
       )
 
-      expect(isStartingNext(file, STARTERS)).toBe(true)
+      expect(isStartingPlanted(file, STARTERS)).toBe(true)
     })
 
     it('through a require() of a path written without its extension', () => {
       const file = path.join(planted, 'a.test.ts')
       writeFileSync(file, "const { start } = require('./helpers/starter')\nvoid start\n")
 
-      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+      expect(isStartingPlanted(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
     })
 
     it('through an import of a path written without its extension', () => {
       const file = path.join(planted, 'b.test.ts')
       writeFileSync(file, "import { start } from './helpers/starter'\nvoid start\n")
 
-      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+      expect(isStartingPlanted(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
     })
 
     it('through an import of a directory whose index reaches it', () => {
@@ -122,14 +119,14 @@ describe('the rows that start Next.js', () => {
       const file = path.join(planted, 'c.test.ts')
       writeFileSync(file, "import { start } from './helpers'\nvoid start\n")
 
-      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+      expect(isStartingPlanted(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
     })
 
     it('through a call of nextCommand on an object', () => {
       const file = path.join(planted, 'd.test.ts')
       writeFileSync(file, "const args = commands.nextCommand(['build'])\nvoid args\n")
 
-      expect(isStartingNext(file, STARTERS)).toBe(true)
+      expect(isStartingPlanted(file, STARTERS)).toBe(true)
     })
 
     it('but not in a file whose strings and comments only name nextCommand (control)', () => {
@@ -145,7 +142,7 @@ describe('the rows that start Next.js', () => {
         ].join('\n'),
       )
 
-      expect(isStartingNext(file, STARTERS)).toBe(false)
+      expect(isStartingPlanted(file, STARTERS)).toBe(false)
     })
 
     it.each([
@@ -181,21 +178,60 @@ describe('the rows that start Next.js', () => {
       const file = path.join(planted, 'f.test.ts')
       writeFileSync(file, source)
 
-      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+      expect(isStartingPlanted(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+    })
+
+    it('through a helper it imports that calls nextCommand', () => {
+      writeFileSync(
+        path.join(planted, 'helpers/runner.ts'),
+        "import { nextCommand } from './next-process.ts'\nexport const run = () => nextCommand(['build'])\n",
+      )
+      writeFileSync(path.join(planted, 'helpers/outer.ts'), "export { run } from './runner.ts'\n")
+      const file = path.join(planted, 'i.test.ts')
+      writeFileSync(file, "import { run } from './helpers/outer.ts'\nvoid run\n")
+
+      expect(isStartingPlanted(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+    })
+
+    it('through a require made by createRequire that is called above where it is made', () => {
+      const file = path.join(planted, 'j.test.ts')
+      writeFileSync(
+        file,
+        [
+          "import { createRequire } from 'node:module'",
+          "function later() {\n  return load('./helpers/starter')\n}",
+          'const load = createRequire(import.meta.url)',
+          'void later',
+          '',
+        ].join('\n'),
+      )
+
+      expect(isStartingPlanted(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+    })
+
+    it('but not through a helper that only defines nextCommand (control)', () => {
+      writeFileSync(
+        path.join(planted, 'helpers/defines.ts'),
+        'export function nextCommand(args: string[]): string[] {\n  return args\n}\nexport const other = 1\n',
+      )
+      const file = path.join(planted, 'k.test.ts')
+      writeFileSync(file, "import { other } from './helpers/defines.ts'\nvoid other\n")
+
+      expect(isStartingPlanted(file, [path.join(planted, 'helpers/starter.ts')])).toBe(false)
     })
 
     it('but not in a file that imports nextCommand and never uses it (control)', () => {
       const file = path.join(planted, 'g.test.ts')
       writeFileSync(file, "import { nextCommand } from './helpers/next-process.ts'\nvoid 1\n")
 
-      expect(isStartingNext(file, STARTERS)).toBe(false)
+      expect(isStartingPlanted(file, STARTERS)).toBe(false)
     })
 
     it('but not in a file whose import() and require() name a file by a plain string (control)', () => {
       const file = path.join(planted, 'h.test.ts')
       writeFileSync(file, "await import('./helpers/starter.ts')\nrequire('node:path')\n")
 
-      expect(isStartingNext(file, STARTERS)).toBe(false)
+      expect(isStartingPlanted(file, STARTERS)).toBe(false)
     })
 
     it('but not in a file that imports neither (control)', () => {
@@ -205,7 +241,7 @@ describe('the rows that start Next.js', () => {
         "import { nextEnvironment } from './helpers/next-process.ts'\nvoid nextEnvironment\n",
       )
 
-      expect(isStartingNext(file, STARTERS)).toBe(false)
+      expect(isStartingPlanted(file, STARTERS)).toBe(false)
     })
   })
 })

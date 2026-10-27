@@ -12,12 +12,13 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   FLOOR_HELPER,
@@ -351,6 +352,64 @@ describe('the install lock of the Next.js floor', () => {
     expect(starts.trim().split('\n')).toHaveLength(1)
     expect(isReactInstalled(scratch.floorDir())).toBe(true)
   }, 30_000)
+
+  /**
+   * An `npm` that logs its start and keeps installing for `seconds`.
+   */
+  function slowNpm(seconds: number): string {
+    return script(scratch.directory(), 'slow-npm', [
+      `echo $$ >> ${scratch.directory()}/starts.log`,
+      'mkdir -p node_modules/next node_modules/react',
+      `printf '{"version":"${FLOOR_VERSION}"}' > node_modules/next/package.json`,
+      `sleep ${seconds}`,
+      `printf '{"version":"19.2.0"}' > node_modules/react/package.json`,
+    ])
+  }
+
+  it('is left to its successor by a holder that lost it: neither its renewal nor its release touches it', async () => {
+    const lock = `${scratch.floorDir()}.installing`
+    const installing = floorNextRootIn(scratch.floorDir(), slowNpm(2), {
+      refreshMs: 100,
+      staleMs: 600,
+    })
+    for (let looks = 0; !existsSync(path.join(scratch.directory(), 'starts.log')); looks += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      if (looks > 200) throw new Error('the install never started')
+    }
+    // A successor took the lock over while the first holder was stalled.
+    writeFileSync(lock, 'successor')
+    const written = new Date(Date.now() - 10 * 60_000)
+    utimesSync(lock, written, written)
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const timeAfterRenewals = statSync(lock).mtimeMs
+    await installing
+
+    expect(timeAfterRenewals, 'the first holder went on renewing').toBe(written.getTime())
+    expect(readFileSync(lock, 'utf8'), 'the first holder released the successor’s lock').toBe(
+      'successor',
+    )
+  }, 30_000)
+
+  it('stops renewing when the holder releases it', async () => {
+    const set = vi.spyOn(globalThis, 'setInterval')
+    const cleared = vi.spyOn(globalThis, 'clearInterval')
+    try {
+      await floorNextRootIn(scratch.floorDir(), loggingNpm(scratch), {
+        refreshMs: 100,
+        staleMs: 600,
+      })
+
+      // The timers the lock made, told from any other by their delay.
+      const timers = set.mock.results
+        .filter((_result, call) => set.mock.calls[call]?.[1] === 100)
+        .map((result) => result.value as unknown)
+      expect(timers).toHaveLength(1)
+      expect(cleared).toHaveBeenCalledWith(timers[0])
+    } finally {
+      set.mockRestore()
+      cleared.mockRestore()
+    }
+  })
 
   it('is taken over when it names no process and was not refreshed for two minutes', async () => {
     writeOldLock(scratch, '', 3)

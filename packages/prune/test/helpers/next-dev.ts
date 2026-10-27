@@ -98,7 +98,7 @@ async function stopGroup(child: ChildProcess, exited: Promise<void>): Promise<vo
  * The result of `request`, or a rejection with `failure` once `deadline` has passed: a server that
  * accepts a request and never answers it cannot hold the wait past its deadline.
  */
-async function before<Value>(
+export async function before<Value>(
   request: Promise<Value>,
   deadline: number,
   failure: () => Error,

@@ -2,6 +2,8 @@ import { expect } from 'vitest'
 
 import type { DevServer } from './next-dev.ts'
 
+import { before } from './next-dev.ts'
+
 /**
  * The dev server, now and then, never builds a route created while it runs: `/later` answers 404
  * and the page's stylesheet never gets the route's atom. A row that waits for the atom runs again,
@@ -21,15 +23,25 @@ export const RETRY_ON_ROUTE_NOT_BUILT = { count: 1, condition: NOT_BUILT }
 const earlier = new Set<string>()
 
 /**
- * Whether the dev server serves `/later` and its HTML carries the atom, as a sentence.
+ * Whether the dev server serves `/later` and its HTML carries the atom, as a sentence. A server
+ * that is alive and answers nothing is given `requestMs` and then reported as such, in words that
+ * are not the 404 sentence, so it is never retried.
  */
-async function laterRouteSentence(server: Pick<DevServer, 'get'>): Promise<string> {
+async function laterRouteSentence(
+  server: Pick<DevServer, 'get'>,
+  requestMs: number,
+): Promise<string> {
+  const silent = new Error(`/later did not answer within ${requestMs} ms.`)
   try {
-    const { status, text } = await server.get('/later')
+    const { status, text } = await before(
+      server.get('/later'),
+      Date.now() + requestMs,
+      () => silent,
+    )
     const carries = text.includes('nave-grid') ? 'carries' : 'does not carry'
     return `/later answers ${status} and its HTML ${carries} nave-grid.`
   } catch (error) {
-    return `/later could not be requested: ${String(error)}`
+    return error === silent ? silent.message : `/later could not be requested: ${String(error)}`
   }
 }
 
@@ -42,6 +54,7 @@ async function laterRouteSentence(server: Pick<DevServer, 'get'>): Promise<strin
 export async function untilLaterRouteGrid(
   server: Pick<DevServer, 'get' | 'untilCss'>,
   rewrite: () => void,
+  { requestMs = 10_000 }: { readonly requestMs?: number } = {},
 ): Promise<void> {
   const row = expect.getState().currentTestName ?? ''
   if (earlier.delete(row)) {
@@ -53,7 +66,7 @@ export async function untilLaterRouteGrid(
   try {
     await server.untilCss('/', '.nave-grid', { rewrite })
   } catch (error) {
-    const sentence = await laterRouteSentence(server)
+    const sentence = await laterRouteSentence(server, requestMs)
     if (sentence.includes('/later answers 404')) earlier.add(row)
     throw new Error(`${(error as Error).message}\n${sentence}`, { cause: error })
   }

@@ -6,6 +6,7 @@
  * would refuse the older one.
  */
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -98,6 +99,18 @@ function isHeld(lockFile: string, lease: Lease): boolean {
 }
 
 /**
+ * Whether the lock at `lockFile` still holds `content`, the text its holder wrote: a lock that is
+ * gone, or that a successor now holds, is not the holder's.
+ */
+function isOwnLock(lockFile: string, content: string): boolean {
+  try {
+    return readFileSync(lockFile, 'utf8') === content
+  } catch {
+    return false
+  }
+}
+
+/**
  * Writes the lock at `lockFile` again, which renews the lease. A lock that is gone is left alone.
  */
 function renew(lockFile: string): void {
@@ -105,7 +118,7 @@ function renew(lockFile: string): void {
     const now = new Date()
     utimesSync(lockFile, now, now)
   } catch {
-    // Taken over or released already.
+    // Gone already.
   }
 }
 
@@ -149,7 +162,7 @@ function isOlderThan(file: string, ms: number): boolean {
 }
 
 /**
- * Takes the install lock, a file holding the id of the process that made it, waiting for another
+ * Takes the install lock, a file holding the id of the process that made it and a token, waiting for another
  * test file's worker that holds it. The holder renews the lock while it keeps it; a lock nobody
  * has renewed for the lease is taken over. Resolves to the function that releases the lock, or to
  * nothing when `isDone` turns true while waiting.
@@ -161,12 +174,18 @@ async function takeLock(
 ): Promise<(() => void) | undefined> {
   for (;;) {
     try {
-      writeFileSync(lockFile, String(process.pid), { flag: 'wx' })
+      // The holder's process id and a token only it knows: only a lock that holds both is its own.
+      const content = `${process.pid} ${randomUUID()}`
+      writeFileSync(lockFile, content, { flag: 'wx' })
       // Not kept alive by it: a process that ends takes the timer with it, and its lock goes stale.
-      const renewing = setInterval(() => renew(lockFile), lease.refreshMs).unref()
+      const renewing = setInterval(() => {
+        if (isOwnLock(lockFile, content)) renew(lockFile)
+        else clearInterval(renewing)
+      }, lease.refreshMs).unref()
       return () => {
         clearInterval(renewing)
-        rmSync(lockFile, { force: true })
+        // A successor's lock is left alone.
+        if (isOwnLock(lockFile, content)) rmSync(lockFile, { force: true })
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error

@@ -60,6 +60,54 @@ function isNamed(callee: Expression, name: string): boolean {
   return callee.type === 'Identifier' && callee.name === name
 }
 
+interface Names {
+  /**
+   * The places that name `nextCommand` without using it: an import's specifier, a declaration.
+   */
+  readonly namedAt: ReadonlySet<number>
+  /**
+   * The names `nextCommand` goes by: itself, and each name an import gives it.
+   */
+  readonly nextNames: ReadonlySet<string>
+  /**
+   * The names `require` goes by: itself, and each name a `createRequire(...)` is kept in.
+   */
+  readonly requires: ReadonlySet<string>
+}
+
+/**
+ * The names a later pass checks calls and uses against, found wherever in the program they are
+ * made: a function above `const load = createRequire(...)` may call `load`.
+ */
+function namesIn(program: Parameters<Visitor['visit']>[0]): Names {
+  const requires = new Set(['require'])
+  const nextNames = new Set(['nextCommand'])
+  const namedAt = new Set<number>()
+  new Visitor({
+    ImportSpecifier: (node) => {
+      namedAt.add(node.imported.start)
+      namedAt.add(node.local.start)
+      const imported =
+        node.imported.type === 'Identifier' ? node.imported.name : node.imported.value
+      if (imported === 'nextCommand') nextNames.add(node.local.name)
+    },
+    FunctionDeclaration: (node) => {
+      if (node.id !== null) namedAt.add(node.id.start)
+    },
+    VariableDeclarator: (node) => {
+      const { id, init } = node
+      if (
+        id.type === 'Identifier' &&
+        init?.type === 'CallExpression' &&
+        isNamed(init.callee, 'createRequire')
+      ) {
+        requires.add(id.name)
+      }
+    },
+  }).visit(program)
+  return { namedAt, nextNames, requires }
+}
+
 const readings = new Map<string, References>()
 
 /**
@@ -77,41 +125,19 @@ function referencesIn(file: string, code: string): References {
   const specifiers: string[] = []
   let hasComputedLoad = false
   let isUsingNextCommand = false
-  // The names `require` goes by: itself, and each name a `createRequire(...)` is kept in.
-  const requires = new Set(['require'])
-  // The names `nextCommand` goes by: itself, and each name an import gives it.
-  const nextNames = new Set(['nextCommand'])
-  // The places an import names it, which are not uses.
-  const importedAt = new Set<number>()
+  const { namedAt, nextNames, requires } = namesIn(parsed.program)
   const note = (specifier: string | undefined): void => {
     if (specifier === undefined) hasComputedLoad = true
     else specifiers.push(specifier)
   }
   new Visitor({
     ImportDeclaration: (node) => note(node.source.value),
-    ImportSpecifier: (node) => {
-      importedAt.add(node.imported.start)
-      importedAt.add(node.local.start)
-      const imported =
-        node.imported.type === 'Identifier' ? node.imported.name : node.imported.value
-      if (imported === 'nextCommand') nextNames.add(node.local.name)
-    },
     ExportAllDeclaration: (node) => note(node.source.value),
     ExportNamedDeclaration: (node) => {
       if (node.source) note(node.source.value)
     },
     ImportExpression: (node) => note(textOf(node.source)),
     TSExternalModuleReference: (node) => note(textOf(node.expression)),
-    VariableDeclarator: (node) => {
-      const { id, init } = node
-      if (
-        id.type === 'Identifier' &&
-        init?.type === 'CallExpression' &&
-        isNamed(init.callee, 'createRequire')
-      ) {
-        requires.add(id.name)
-      }
-    },
     CallExpression: (node) => {
       const { callee } = node
       const isRequiring =
@@ -124,7 +150,7 @@ function referencesIn(file: string, code: string): References {
       )
     },
     Identifier: (node) => {
-      if (nextNames.has(node.name) && !importedAt.has(node.start)) isUsingNextCommand = true
+      if (nextNames.has(node.name) && !namedAt.has(node.start)) isUsingNextCommand = true
     },
   }).visit(parsed.program)
   return { hasComputedLoad, isUsingNextCommand, specifiers }
@@ -170,17 +196,26 @@ function resolveRelative(from: string, specifier: string): string | undefined {
 }
 
 /**
- * Whether `file` reaches one of `targets` through the modules it loads, however it loads them.
+ * Whether `file` starts Next.js: it, or a module it reaches through relative imports that lie
+ * under `within`, is one of `targets`, uses `nextCommand`, or loads a module by a path it computes.
  */
-export function isReaching(
+export function isStartingNext(
   file: string,
   targets: readonly string[],
+  within: string,
   seen = new Set<string>(),
 ): boolean {
   if (targets.includes(file)) return true
   if (seen.has(file) || !EXTENSIONS.includes(path.extname(file))) return false
   seen.add(file)
-  return referencesOf(file)
-    .specifiers.map((specifier) => resolveRelative(file, specifier))
-    .some((reached) => reached !== undefined && isReaching(reached, targets, seen))
+  const { hasComputedLoad, isUsingNextCommand, specifiers } = referencesOf(file)
+  if (hasComputedLoad || isUsingNextCommand) return true
+  return specifiers
+    .map((specifier) => resolveRelative(file, specifier))
+    .some(
+      (reached) =>
+        reached !== undefined &&
+        !path.relative(within, reached).startsWith('..') &&
+        isStartingNext(reached, targets, within, seen),
+    )
 }

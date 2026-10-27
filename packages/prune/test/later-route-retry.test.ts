@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { RETRY_ON_ROUTE_NOT_BUILT, untilLaterRouteGrid } from './helpers/later-route.ts'
 import { PACKAGE_ROOT } from './helpers/next-process.ts'
 
 const HELPER = path.join(import.meta.dirname, 'helpers/later-route.ts')
@@ -118,4 +119,24 @@ describe('the retry of the pages row', () => {
     expect(outcome.code).not.toBe(0)
     expect(outcome.attempts).toBe(2)
   })
+})
+
+describe('the diagnostic of the pages row', () => {
+  it('gives up on a server that is alive and answers nothing, and that is not the 404 case', async () => {
+    const server = {
+      untilCss: () =>
+        Promise.reject(new Error('/ did not serve CSS holding .nave-grid within 240000 ms:')),
+      get: () => new Promise<{ readonly status: number; readonly text: string }>(() => {}),
+    }
+
+    let failure = 'it did not fail'
+    try {
+      await untilLaterRouteGrid(server, () => {}, { requestMs: 300 })
+    } catch (error) {
+      failure = (error as Error).message
+    }
+
+    expect(failure).toContain('/later did not answer within 300 ms')
+    expect(RETRY_ON_ROUTE_NOT_BUILT.condition.test(failure)).toBe(false)
+  }, 5000)
 })
