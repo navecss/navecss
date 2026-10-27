@@ -121,6 +121,10 @@ function expectFirstState(app: WorkspaceApp, cell: Cell, place: Place): void {
     // with its own project directory.
     const expectedVariable = isTurbopack && isFromTop ? app.top : app.dir
     expect(probe.handoff?.dir, 'the hand-off variable').toBe(expectedVariable)
+    expect(
+      probe.handoff?.root,
+      'the config sets no root, so the hand-off carries none',
+    ).toBeUndefined()
     expect(probe.cwd, "the PostCSS worker's directory").toBe(expectedWorker)
   }
 }
