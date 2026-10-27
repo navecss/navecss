@@ -8,33 +8,31 @@ import type { LocatedProblem } from '@navecss/core/collect'
 import type { Message, Result, Root } from 'postcss'
 
 import { inspectAtomicLayer, pruneAtomicLayer } from '@navecss/core/collect'
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import postcss from 'postcss'
 
 import type { ExtendMap } from './extend.ts'
 import type { Graph } from './graph-types.ts'
 import type { Handoff } from './handoff.ts'
-import type { DirectiveProblem, PruneRecord } from './record.ts'
+import type { DirectiveProblem, StoredRecord } from './record.ts'
 import type { Mode } from './resolve.ts'
 
-import { configFilesIn } from './config-files.ts'
 import { digestOf } from './digest.ts'
-import { extendFileIn } from './extend.ts'
+import { filesRead } from './files-read.ts'
 import { emptyGraph } from './graph-parts.ts'
 import { readGraph } from './graph.ts'
+import { recordedInputs, stemDirectories } from './input-records.ts'
 import { dependencyMessages } from './messages.ts'
+import { serverIdOfRun } from './phase.ts'
 import { printEachRun } from './print.ts'
 import { writeRecord } from './record.ts'
 import { declarationRoot } from './root.ts'
 import { relativeTo } from './source-files.ts'
 import { readStylesheets } from './stylesheets.ts'
+import { LISTED_NAME } from './texts.ts'
 import { emittedAtoms } from './used.ts'
 
-const PLUGIN = 'postcss-nave-prune'
 const CORE_PLUGIN = 'postcss-nave'
-
-type StoredRecord = Omit<PruneRecord, 'readsNoUse'>
 
 /**
  * One run over the stylesheet that holds the atom layer.
@@ -74,30 +72,8 @@ function entryProblemsOf(entryOptions: object): string[] {
   const keys = Object.keys(entryOptions)
   if (keys.length === 0) return []
   return [
-    `The PostCSS entry for ${PLUGIN} takes no options, but it was given ${keys.join(', ')}. Set options in withNave() in next.config instead.`,
+    `The PostCSS entry for ${LISTED_NAME} takes no options, but it was given ${keys.join(', ')}. Set options in withNave() in next.config instead.`,
   ]
-}
-
-/**
- * The digest of a file's text, or of nothing when it cannot be read.
- */
-function digestFileSafely(file: string): string {
-  try {
-    return digestOf(readFileSync(file))
-  } catch {
-    return digestOf('')
-  }
-}
-
-/**
- * The files the plugin read: the graph's, the config files and a path-valued `extend` module.
- */
-function filesRead(handoff: Handoff, graphFiles: Map<string, string>): Map<string, string> {
-  const files = new Map(graphFiles)
-  const extendFile = extendFileIn(handoff.options, handoff.dir)
-  const read = [...configFilesIn(handoff.dir), ...(extendFile === undefined ? [] : [extendFile])]
-  for (const file of read) files.set(file, digestFileSafely(file))
-  return files
 }
 
 /**
@@ -114,10 +90,21 @@ function runFields(
   run: LayerRun,
 ): Omit<
   StoredRecord,
-  'atoms' | 'directories' | 'failures' | 'files' | 'markdown' | 'problems' | 'readsNoCode'
+  | 'atoms'
+  | 'directories'
+  | 'failures'
+  | 'files'
+  | 'links'
+  | 'listings'
+  | 'markdown'
+  | 'pagesDynamicPackages'
+  | 'problems'
+  | 'readsNoCode'
 > {
+  const serverId = serverIdOfRun()
   return {
     version: 1,
+    ...(serverId !== undefined && { serverId }),
     optionsDigest: digestOf(JSON.stringify(run.handoff.options)),
     directiveProblems: run.directiveProblems,
     entryProblems: entryProblemsOf(run.entryOptions),
@@ -150,9 +137,11 @@ function recordOfRun(
         digestOf(directory.names.join('\n')),
       ]),
     ),
+    ...recordedInputs(dir, graph.inputs),
     markdown: [...graph.markdown]
       .map((file) => relativeTo(dir, file))
       .toSorted((a, b) => a.localeCompare(b)),
+    pagesDynamicPackages: [...graph.pagesDynamicPackages].toSorted((a, b) => a.localeCompare(b)),
     stylesheets: [...graph.stylesheets]
       .map((file) => relativeTo(dir, file))
       .toSorted((a, b) => a.localeCompare(b)),
@@ -176,7 +165,10 @@ function recordOfStoppedRun(run: LayerRun, failure: string): StoredRecord {
     problems: [],
     files: {},
     directories: {},
+    listings: {},
+    links: {},
     markdown: [],
+    pagesDynamicPackages: [],
     readsNoCode: false,
     failures: [failure],
   }
@@ -216,7 +208,7 @@ function declarations(run: LayerRun, files: Map<string, string>, graph: Graph): 
     root: declarationRoot(run.handoff),
     parent: run.result.opts.from,
     files: files.keys(),
-    directories: graph.directories,
+    directories: [...graph.directories, ...stemDirectories(graph.inputs)],
   })
 }
 
@@ -243,7 +235,7 @@ function trim(run: LayerRun, graph: Graph): void {
   const from = result.opts.from
   readStylesheets(graph, dir, from === undefined ? undefined : path.resolve(from))
   const atoms = emittedAtoms(graph, { keep, keepFor })
-  const files = filesRead(handoff, graph.files)
+  const files = filesRead(handoff, graph)
   const messages = declarations(run, files, graph)
   const trimmed = pruneAtomicLayer(root.toString(), new Set(atoms))
   // The record goes first: the layer is trimmed only once the build's check can read the run.
@@ -258,9 +250,9 @@ function trim(run: LayerRun, graph: Graph): void {
  * written.
  */
 function stopWithoutTrimming(run: LayerRun, reason: string, graph: Graph): void {
-  const failure = `${PLUGIN} stopped without trimming: ${reason}`
+  const failure = `${LISTED_NAME} stopped without trimming: ${reason}`
   printEachRun(`Nave: ${failure}`)
-  run.result.messages.push(...declarations(run, filesRead(run.handoff, graph.files), graph))
+  run.result.messages.push(...declarations(run, filesRead(run.handoff, graph), graph))
   try {
     writeRecord(run.handoff, recordOfStoppedRun(run, failure))
   } catch {

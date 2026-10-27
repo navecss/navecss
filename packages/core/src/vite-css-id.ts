@@ -8,6 +8,9 @@
  */
 const STYLESHEET = /\.(?:css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/
 const SPECIAL_QUERY = /[?&](?:worker|sharedworker|raw|url)\b/
+const CSS_MODULE = /\.module\.(?:css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/
+// The queries whose module is the stylesheet's text, not the JavaScript of its class map.
+const TEXT_QUERY = /[?&](?:inline|direct|transform-only)\b/
 
 /**
  * Whether the module `id` names a stylesheet by its extension, whatever it is imported as.
@@ -21,6 +24,23 @@ export function isStylesheetPath(id: string): boolean {
  */
 export function isStylesheetId(id: string): boolean {
   return STYLESHEET.test(id) && !SPECIAL_QUERY.test(id)
+}
+
+/**
+ * Whether the module `id` is a CSS Module whose JavaScript is a class map: Vite's own test for a
+ * CSS Module (`.module.` before a stylesheet extension, a query allowed), less the imports that
+ * give the stylesheet's text and not its exports (`?inline`, `?direct`, `?transform-only`).
+ */
+export function isCssModuleId(id: string): boolean {
+  return isStylesheetId(id) && CSS_MODULE.test(id) && !TEXT_QUERY.test(id)
+}
+
+/**
+ * Whether the module `id` is a stylesheet whose text the plugin reads for its directives but
+ * whose module it does not read for atoms: a stylesheet, except a CSS Module's class map.
+ */
+export function isUnreadStylesheet(id: string): boolean {
+  return isStylesheetId(id) && !isCssModuleId(id)
 }
 
 /**

@@ -70,12 +70,15 @@ describe.skipIf(SKIP_REASON !== undefined)(
           'app/kept.css': `.kept ${PROBLEM}`,
           'app/old.css': `.old ${PROBLEM}`,
         })
+        // A `@nave` problem stops the build from the hook; the record is what these rows read.
         const first = await app.next(['build', ...flags])
-        expect(first.code, first.output).toBe(0)
+        expect(first.code, first.output).not.toBe(0)
+        expect(first.output).toMatch(/^app\/kept\.css:\d+:\d+: /mu)
         expect(problemSheets(app)).toEqual(['app/kept.css', 'app/old.css'])
         app.write({ 'app/page.jsx': PAGE })
         const second = await app.next(['build', ...flags])
-        expect(second.code, second.output).toBe(0)
+        expect(second.code, second.output).not.toBe(0)
+        expect(second.output).not.toMatch(/^app\/old\.css:/mu)
         expect(problemSheets(app)).toEqual(['app/kept.css'])
       },
       TIMEOUT,

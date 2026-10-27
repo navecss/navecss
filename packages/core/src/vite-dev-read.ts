@@ -5,7 +5,7 @@
  */
 import type { DevEnvironmentLike, GraphModuleLike } from './vite-types.ts'
 
-import { isStylesheetId } from './vite-css-id.ts'
+import { isCssModuleId, isStylesheetId, isUnreadStylesheet } from './vite-css-id.ts'
 
 /**
  * Every module of the environment's graph that no module imports, a stylesheet apart: the entry
@@ -38,8 +38,21 @@ export async function transformQuietly(
 }
 
 /**
+ * Whether the read of `module` ends with its own transform. A CSS Module is read for its class
+ * map, and what it imports is Vite's client, which the page loads on its own, and the files its
+ * stylesheet depends on (a module it composes from, a partial it imports), which no page runs and
+ * the build never reads on their own: a read that followed them would ship atoms the build does
+ * not.
+ */
+export function isEndOfRead(module: GraphModuleLike): boolean {
+  return module.id !== null && isCssModuleId(module.id)
+}
+
+/**
  * Transforms every module reachable from `roots`, a level at a time. A stylesheet is never
- * requested (the one being served is mid-transform, and requesting it would wait on itself).
+ * requested (the one being served is mid-transform, and requesting it would wait on itself), a CSS
+ * Module apart: it is transformed for the Nave classes it composes, is never held, and its imports
+ * are not followed.
  */
 export async function transformReachable(
   environment: Pick<DevEnvironmentLike, 'transformRequest'>,
@@ -51,8 +64,9 @@ export async function transformReachable(
     const next: GraphModuleLike[] = []
     await Promise.all(
       level.map(async (module) => {
-        if (module.id !== null && isStylesheetId(module.id)) return
+        if (module.id !== null && isUnreadStylesheet(module.id)) return
         await transformQuietly(environment, module.url)
+        if (isEndOfRead(module)) return
         for (const imported of module.importedModules) {
           if (seen.has(imported)) continue
           seen.add(imported)

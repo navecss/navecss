@@ -447,8 +447,9 @@ newest 8.x at the time of each release.
 The Vite plugin also chooses which of Nave's atoms reach your stylesheet. It reads the `cx()` calls
 in the code the build compiles, dependencies included, and ships the rules for the atoms those calls
 name, for the atom of each Nave class written as text (`nave-grid` in `index.html` or in a string in
-your code, say), and for the atoms you list in `keep` and `keepFor`; `srOnlyFocusable` also ships
-whenever `srOnly` does. The dev server serves the same atoms, from the code it has read. This is
+your code, say) and each Nave class a CSS Module composes from global (`composes: nave-flex from global`),
+and for the atoms you list in `keep` and `keepFor`; `srOnlyFocusable` also ships whenever `srOnly`
+does. The dev server serves the same atoms, from the code it has read. This is
 what `navePlugin()` does with no options. On the CSS-first path, where `@nave` copies an atom's
 declarations into your own rule, a project that never calls `cx()` and writes no Nave class ships no
 rule from the atom layer.

@@ -2,8 +2,8 @@
 import type { InlineConfig, PluginOption, ViteDevServer } from 'vite'
 
 /**
- * The used-atoms criteria for the dev server (AC-used-atoms-33, -39, -41, -42 and the dev
- * halves of -20 and -38): under the default the dev server filters the atomic layer of every
+ * The used-atoms criteria for the dev server (AC-used-atoms-33, -39, -41, -42, the dev
+ * halves of -20 and -38, and the dev reading of a CSS Module in -61): under the default the dev server filters the atomic layer of every
  * stylesheet it serves to the atoms the build would emit, as far as it has read. The dev server
  * runs in this process; the criteria that need a browser are in `vite-used-atoms-dev-browser`.
  */
@@ -24,8 +24,9 @@ import {
   buildUsed,
   makeUsedApp,
 } from './helpers/used-atoms-app.ts'
+import { CARD_MODULE, cssModuleFiles } from './helpers/used-atoms-css-modules.ts'
 import { IMPORT } from './helpers/used-atoms-rows.ts'
-import { appConfig, devCss, startDev, stopDev } from './helpers/vite-app.ts'
+import { appConfig, devCss, startDev, stopDev, type Transformer } from './helpers/vite-app.ts'
 
 /**
  * The dev server's config. Its dependency cache is under `node_modules`, where Vite keeps it by
@@ -35,9 +36,10 @@ function devConfig(
   root: string,
   plugins: PluginOption[],
   server?: InlineConfig['server'],
+  transformer: Transformer = 'postcss',
 ): InlineConfig {
   return {
-    ...appConfig(root, 'postcss', plugins),
+    ...appConfig(root, transformer, plugins),
     cacheDir: path.join(root, 'node_modules', '.vite'),
     ...(server && { server }),
   }
@@ -1632,4 +1634,173 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     },
     optimizerRowTimeout(),
   )
+})
+
+describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a script', () => {
+  const MAIN_ATOMS = atoms('flex', 'gap', 'grid', 'inlineFlex')
+
+  it('serves a stylesheet requested before the CSS Module with the atoms the module composes', async () => {
+    const app = makeUsedApp(appFiles(cssModuleFiles()))
+    try {
+      // The module is read slowly, so the stylesheet cannot be answered from a read that was
+      // already done when it was asked for.
+      const slow: PluginOption = {
+        name: 'slow-css-module',
+        enforce: 'pre',
+        async transform(_code, id) {
+          if (id.endsWith('card.module.css'))
+            await new Promise((resolve) => setTimeout(resolve, 300))
+        },
+      }
+      const server = await startDev(
+        devConfig(app.root, [slow, navePlugin()], { preTransformRequests: false }),
+      )
+      try {
+        // Vite's wait for the requests of the first crawl returns at once once the crawl has
+        // ended, and it ends once, so it is stood in as settled; and the server transforms no
+        // import ahead of a request for it. Only main.ts has been requested when the stylesheet
+        // is: the module is read by the read ahead or by nothing.
+        server.environments.client.waitForRequestsIdle = () => Promise.resolve()
+        await server.transformRequest('/src/main.ts')
+        const css = await server.transformRequest('/src/app.css')
+        const served: unknown = JSON.parse(
+          /const __vite__css = ("(?:[^"\\]|\\.)*")/.exec(css!.code)![1]!,
+        )
+
+        expect(atomLayerAtoms(served as string)).toEqual(MAIN_ATOMS)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('serves a stylesheet requested before a CSS Module that only a lazily imported script reaches with the atoms it composes', async () => {
+    const app = makeUsedApp(
+      appFiles({
+        ...cssModuleFiles(),
+        'src/main.ts': "import './app.css'\nimport('./Page.ts')\n",
+        'src/Page.ts':
+          "import s from './card.module.css'\nconsole.log(s.box, s['my-box'], s.card)\n",
+      }),
+    )
+    try {
+      const slow: PluginOption = {
+        name: 'slow-css-module',
+        enforce: 'pre',
+        async transform(_code, id) {
+          if (id.endsWith('card.module.css'))
+            await new Promise((resolve) => setTimeout(resolve, 300))
+        },
+      }
+      const server = await startDev(devConfig(app.root, [slow, navePlugin()]))
+      try {
+        await server.transformRequest('/src/main.ts')
+        const css = await server.transformRequest('/src/app.css')
+        const served: unknown = JSON.parse(
+          /const __vite__css = ("(?:[^"\\]|\\.)*")/.exec(css!.code)![1]!,
+        )
+
+        expect(atomLayerAtoms(served as string)).toEqual(MAIN_ATOMS)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('answers a CSS Module that holds the atomic layer itself, without waiting on its own read', async () => {
+    const app = makeUsedApp(
+      appFiles({ ...cssModuleFiles(), 'src/card.module.css': `${APP_CSS}${CARD_MODULE}` }),
+    )
+    try {
+      const server = await startDev(devConfig(app.root, [navePlugin()]))
+      try {
+        await server.transformRequest('/src/main.ts')
+        const hasAnswered = async (): Promise<boolean> => {
+          await server.transformRequest('/src/card.module.css')
+          return true
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined
+        let isAnswered: boolean
+        try {
+          isAnswered = await Promise.race([
+            hasAnswered(),
+            new Promise<boolean>((resolve) => {
+              timer = setTimeout(() => resolve(false), 15_000)
+            }),
+          ])
+        } finally {
+          clearTimeout(timer)
+        }
+
+        expect(isAnswered).toBe(true)
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 60_000)
+
+  it('sends the stylesheet in the same update as the update the CSS Module whose edit grew the set causes', async () => {
+    const main = `${cssModuleFiles()['src/main.ts']}import.meta.hot?.accept('./card.module.css', () => {})\n`
+    const app = makeUsedApp(appFiles({ ...cssModuleFiles(), 'src/main.ts': main }))
+    try {
+      const server = await startDev(devConfig(app.root, [navePlugin()], NO_WATCHER))
+      try {
+        expect(atomLayerAtoms(await servedLayer(server, app.root))).toEqual(MAIN_ATOMS)
+        const updates = recordUpdates(server)
+        const file = path.join(app.root, 'src/card.module.css')
+        writeFileSync(
+          file,
+          CARD_MODULE.replace('nave-flex from global', 'nave-flex nave-flex-col from global'),
+        )
+        server.watcher.emit('change', file)
+
+        // The update names the module that accepts the CSS Module's, `main.ts`.
+        expect(await updates.isSent(['/src/main.ts', '/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        expect(atomLayerAtoms(await stylesheetServedAgain(server, app.root))).toEqual(
+          atoms(...MAIN_ATOMS, 'flexCol'),
+        )
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
+
+  it('reads a module an edit makes a CSS Module compose from through the CSS Module only, not on its own', async () => {
+    const main = `${cssModuleFiles()['src/main.ts']}import.meta.hot?.accept('./card.module.css', () => {})\n`
+    const app = makeUsedApp(
+      appFiles({
+        ...cssModuleFiles(),
+        'src/main.ts': main,
+        'src/extra.module.css':
+          '.x { composes: nave-flex-col from global; }\n.y { composes: nave-block from global; }\n',
+      }),
+    )
+    try {
+      const server = await startDev(devConfig(app.root, [navePlugin()], NO_WATCHER, 'lightningcss'))
+      try {
+        expect(atomLayerAtoms(await servedLayer(server, app.root))).toEqual(MAIN_ATOMS)
+        const updates = recordUpdates(server)
+        const file = path.join(app.root, 'src/card.module.css')
+        writeFileSync(file, `${CARD_MODULE}.extra { composes: x from './extra.module.css'; }\n`)
+        server.watcher.emit('change', file)
+
+        expect(await updates.isSent(['/src/main.ts', '/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+        expect(atomLayerAtoms(await stylesheetServedAgain(server, app.root))).toEqual(
+          atoms(...MAIN_ATOMS, 'flexCol'),
+        )
+      } finally {
+        await stopDev(server)
+      }
+    } finally {
+      app.dispose()
+    }
+  }, 120_000)
 })

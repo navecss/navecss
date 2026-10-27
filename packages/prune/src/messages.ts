@@ -23,7 +23,7 @@ function isWithin(root: string | undefined, file: string): boolean {
  * The messages for the files read and the directories selected from.
  */
 export function dependencyMessages(input: {
-  readonly directories: readonly SelectedDirectory[]
+  readonly directories: readonly Pick<SelectedDirectory, 'glob' | 'path'>[]
   readonly files: Iterable<string>
   readonly parent: string | undefined
   /**

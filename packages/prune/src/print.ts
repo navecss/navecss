@@ -8,7 +8,7 @@ const printed = new Set<string>()
 /**
  * Whether this compilation prints: Next.js names the client one, or none (Turbopack).
  */
-function isPrintingCompilation(): boolean {
+export function isPrintingCompilation(): boolean {
   // eslint-disable-next-line turbo/no-undeclared-env-vars -- set by Next.js in the process that runs the plugin, not a build input
   const name = process.env.NEXT_COMPILER_NAME
   return name === undefined || name === 'client'
@@ -32,4 +32,13 @@ export function printEachRun(line: string): void {
   if (!isPrintingCompilation()) return
   // eslint-disable-next-line no-console -- printing to the terminal running Next.js is this package's output
   console.warn(line)
+}
+
+/**
+ * Prints `text` through `console.error` on every run, from the compilation that prints.
+ */
+export function printError(text: string): void {
+  if (!isPrintingCompilation()) return
+  // eslint-disable-next-line no-console -- printing to the terminal running Next.js is this package's output
+  console.error(text)
 }
