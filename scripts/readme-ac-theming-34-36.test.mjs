@@ -245,22 +245,26 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 //   words before it and back to its determiner, a word starts with "nave" or the word "token" or
 //   "tokens" appears with no owner ("Nave's build", "the token build"); an owner ("your", "our",
 //   "the consumer's") makes it the consumer's ("your token build"). A determiner "its" takes the
-//   side of its antecedent, the nearest singular noun before it in the sentence that names a side
-//   ("Your build reads Nave's defaults, and its script ..." is the consumer's, "Since Nave ships
-//   the defaults, its build script ..." is Nave's). Otherwise the noun is also Nave's when its
-//   determiner is "a" or "its" and the clause names Nave before it ("Nave ships a build that ..."),
-//   looking back no further than a joining word that starts a new clause, or the comma that closes
-//   a leading subordinate clause, and skipping an aside between commas. A word NAMES NAVE when it
-//   starts with "nave" (Nave, Nave's, navecss-tokens). A bare "token" or "tokens" names neither
-//   side.
+//   side of the nearest singular noun before it in the sentence: a Nave word, possessive or not, is
+//   Nave's ("Since Nave ships the defaults, its build script ..."); a consumer noun is the
+//   consumer's; a noun that names neither side ("Add Nave to the project, and its build script
+//   ...") leaves the rule below to decide. A consumer noun phrase anywhere earlier in the sentence
+//   makes it the consumer's whatever is nearer ("Your build pulls in Nave, and its script ...");
+//   the bare pronoun "you" does not. Otherwise the noun is also Nave's when its determiner is "a"
+//   or "its" and the clause names Nave before it ("Nave ships a build that ..."), looking back no
+//   further than a joining word that starts a new clause, or the comma that closes a leading
+//   subordinate clause, and skipping an aside between commas. A word NAMES NAVE when it starts with
+//   "nave" (Nave, Nave's, navecss-tokens). A bare "token" or "tokens" names neither side.
 // - For the active form, the invoker is the first word that names either side, walking back from
-//   the verb through its clause and skipping an aside between commas. A comma segment opened by a
-//   joining word is a coordinate clause, not an aside, so ", and your build runs its own script,
-//   which invokes ..." finds "script". A relative clause is walked through to its antecedent the
-//   same way, which is how the published "the script or the task that invokes the entry point"
-//   finds "task". Past a subject pronoun ("it", "they") the walk continues into the sentence's
-//   earlier clauses, so "Your build is the invoker: it invokes the entry point." affirms and "It
-//   invokes the entry point." alone does not.
+//   the verb through its clause and skipping an aside between commas. A comma segment opened by
+//   and, but, so or yet is a coordinate clause, not an aside, so ", and your build runs its own
+//   script, which invokes ..." finds "script"; one opened by another joining word is an aside ("The
+//   Nave CLI, while your build waits, invokes ..."), except right before a verb segment that opens
+//   with a relative word, whose antecedent it holds. A relative clause is walked through to its
+//   antecedent the same way, which is how the published "the script or the task that invokes the
+//   entry point" finds "task". Past a subject pronoun ("it", "they") the walk continues into the
+//   sentence's earlier clauses, so "Your build is the invoker: it invokes the entry point." affirms
+//   and "It invokes the entry point." alone does not.
 // - For the passive, the invoker is the first word that names either side after "by", read to
 //   the end of its aside or clause.
 // So "Nave invokes the entry point for you." and "The entry point is invoked by Nave." are not the
@@ -351,7 +355,42 @@ const CONSUMER_HEADS = new Set(
   [...CONSUMER_NOUNS].flatMap((noun) => [noun, `${noun}s`, `${noun}'s`, `${noun}s'`]),
 )
 // Words that sit between a possessive and the noun it owns ("Nave's first release").
-const ORDINALS = new Set(['first', 'second', 'third', 'fourth', 'fifth', 'last', 'next'])
+const PHRASE_MODIFIERS = new Set([
+  'own',
+  'latest',
+  'newest',
+  'earliest',
+  'oldest',
+  'best',
+  'worst',
+  'last',
+  'next',
+  'first',
+  'second',
+  'third',
+  'initial',
+  'final',
+])
+// Plural nouns that, right after a possessed noun at the end of a segment, complete it ("release
+// notes") rather than act as its verb.
+const COMPOUND_PLURALS = new Set([
+  'notes',
+  'docs',
+  'files',
+  'settings',
+  'options',
+  'tokens',
+  'defaults',
+  'scripts',
+  'assets',
+])
+// Coordinating conjunctions: a comma segment they open is a clause, not an aside.
+const COORDINATORS = new Set(['and', 'but', 'so', 'yet'])
+// Determiners that introduce a noun of either side or of neither.
+const NOUN_DETERMINERS = new Set(['the', 'a', 'an', 'this', 'that', 'their'])
+// Per-array caches, so repeated questions about one clause cost nothing after the first.
+const SEGMENT_STARTS = new WeakMap()
+const LEADING_CLAUSES = new WeakMap()
 // Words that name the consumer directly.
 const CONSUMER_WORDS = new Set(['you', 'your', 'yourself'])
 // Determiners that make what follows the consumer's own.
@@ -432,9 +471,20 @@ function objectFollows(words, from, end, { pronoun }) {
 function negatesOnlyItsSegment(words, i) {
   const segment = words[i].segment
   if (segment === 0) return false
-  const start = words.findIndex((w) => w.segment === segment)
+  const start = segmentStart(words, segment)
   if (RELATIVES.has(words[start].word)) return true
   return start === i && asideNamesAlternative(words, i)
+}
+
+// The index of the first word of comma segment `segment`.
+function segmentStart(words, segment) {
+  let starts = SEGMENT_STARTS.get(words)
+  if (starts === undefined) {
+    starts = []
+    for (const [i, { segment: at }] of words.entries()) starts[at] ??= i
+    SEGMENT_STARTS.set(words, starts)
+  }
+  return starts[segment]
 }
 
 // Whether the aside the negator at `i` opens names an alternative invoker: the first word after
@@ -454,10 +504,10 @@ function asideNamesAlternative(words, i) {
 function negatorAt(words, i) {
   const word = words[i].word
   const next = words[i + 1]?.word
-  const own = negatesOnlyItsSegment(words, i) ? 'segment' : 'clause'
-  if (isNegatorWord(word)) return { after: i + 1, scope: own }
+  const own = () => (negatesOnlyItsSegment(words, i) ? 'segment' : 'clause')
+  if (isNegatorWord(word)) return { after: i + 1, scope: own() }
   if (PAIRED_NEGATORS.has(word) && PAIRED_NEGATORS.get(word) === next) {
-    return { after: i + 2, scope: own }
+    return { after: i + 2, scope: own() }
   }
   if (PHRASE_NEGATORS.has(word)) return { after: i + 1, scope: 'phrase' }
   const pair = `${word} ${next}`
@@ -563,11 +613,24 @@ function clauseDenies(words) {
   )
 }
 
-// A sentence's clauses, each also carrying the words of the clauses before it, which is where an
-// "its" may find its antecedent.
+// A sentence's clauses. Each one links to the clause before it and knows its word offset in the
+// sentence and where the sentence's first consumer noun phrase is, which is what an "its" needs.
 function clausesOf(sentence) {
   const clauses = sentence.split(/[;:]/).map((clause) => wordsOf(clause))
-  for (const [c, words] of clauses.entries()) words.earlier = clauses.slice(0, c).flat()
+  let offset = 0
+  let consumerAt = Infinity
+  let naveSeen = false
+  for (const [c, words] of clauses.entries()) {
+    words.previous = clauses[c - 1]
+    words.offset = offset
+    for (const [i, { word }] of words.entries()) {
+      if (consumerAt === Infinity && opensConsumerPhrase(words, i, naveSeen))
+        consumerAt = offset + i
+      naveSeen ||= word.startsWith('nave')
+    }
+    offset += words.length
+  }
+  for (const words of clauses) words.consumerAt = consumerAt
   return clauses
 }
 
@@ -598,20 +661,28 @@ const isTokenWord = (word) => word === 'token' || word === 'tokens'
 // makes it the consumer's; a Nave word, or "token" without an owner, makes it Nave's; and "a" or
 // "its" make it Nave's when the clause names Nave before it ("Nave ships a build").
 function namesConsumer(words, head) {
+  const { consumer, its } = modifiersOf(words, head)
+  if (its === -1) return consumer
+  const antecedent = itsAntecedentSide(words, its)
+  return antecedent === null ? consumer : antecedent === 'consumer'
+}
+
+// What the modifiers of the noun at `head` say on their own, with no antecedent search: whether
+// it is the consumer's, and the index of an "its" that determines it (-1 when there is none).
+function modifiersOf(words, head) {
   let token = false
   for (let k = head - 1; k >= Math.max(0, head - 3); k -= 1) {
     const { word, segment } = words[k]
     if (segment !== words[head].segment) break
-    if (OWNERS.has(word)) return true
-    if (word.startsWith('nave')) return false
+    if (OWNERS.has(word)) return { consumer: true, its: -1 }
+    if (word.startsWith('nave')) return { consumer: false, its: -1 }
     token ||= isTokenWord(word)
     if (DETERMINERS.has(word)) {
-      const antecedent = word === 'its' ? itsAntecedentSide(words, k) : null
-      if (antecedent !== null) return !token && antecedent === 'consumer'
-      return !token && !(namesNaveBefore(words, k, head) && NAVE_OWNED_DETERMINERS.has(word))
+      const naveOwned = NAVE_OWNED_DETERMINERS.has(word) && namesNaveBefore(words, k, head)
+      return { consumer: !token && !naveOwned, its: word === 'its' && !token ? k : -1 }
     }
   }
-  return !token
+  return { consumer: !token, its: -1 }
 }
 
 // Whether the clause names Nave before index `k`, skipping an aside between commas as the invoker
@@ -654,24 +725,26 @@ function isNumber(word) {
 }
 
 // A word between a possessive and the noun it owns: "own", an ordinal, a superlative or a number.
-const isPhraseModifier = (word) =>
-  word === 'own' ||
-  ORDINALS.has(word) ||
-  isNumber(word) ||
-  (word?.length > 4 && word.endsWith('est'))
+const isPhraseModifier = (word) => PHRASE_MODIFIERS.has(word) || isNumber(word)
 
 // Whether the clause opens with a subordinate clause closed by a comma ("Since Nave ships the
 // defaults, ..."). Its first segment counts as a clause when it holds a Nave word and, past the
 // noun phrase that word heads, at least one more word that is not a number (a "v0.1.0" version
 // counts as one): a subject and its verb. The phrase a plain Nave word heads is the word itself,
-// or "Nave CSS". The one a possessive heads runs through "own", ordinals, superlatives and
-// numbers to the possessed noun ("Nave's own build" in "Because Nave's own build ships the
-// defaults, ..."), and a single plural word right after that noun at the end of the segment is
-// part of it ("release notes"), not a verb. "Since 0.1.0, ...", "Since Nave
-// v0.1.0, ...", "Since Nave's first release, ..." and "Since Nave's 2.0 release notes, ..." are
-// phrases, so their comma ends nothing. Only a Nave word is looked for, because the look back
-// that uses this only ever looks for Nave.
+// or "Nave CSS". The one a possessive heads runs through "own", a listed ordinal or superlative
+// (first, latest, best ...) and numbers to the possessed noun ("Nave's own build" in "Because
+// Nave's own build ships the defaults, ..."). A single word from a short list of plural nouns
+// (notes, docs, files ...) right after that noun at the end of the segment completes it ("release
+// notes"); any other word there is a verb ("Since Nave's release ships, ..."). "Since 0.1.0,
+// ...", "Since Nave v0.1.0, ...", "Since Nave's first release, ..." and "Since Nave's 2.0 release
+// notes, ..." are phrases, so their comma ends nothing. Only a Nave word is looked for, because
+// the look back that uses this only ever looks for Nave.
 function opensWithSubordinateClause(words) {
+  if (!LEADING_CLAUSES.has(words)) LEADING_CLAUSES.set(words, readsAsLeadingClause(words))
+  return LEADING_CLAUSES.get(words)
+}
+
+function readsAsLeadingClause(words) {
   if (!SUBORDINATORS.has(words[0]?.word)) return false
   const first = words.filter((w) => w.segment === 0).map((w) => w.word)
   const at = first.findIndex((word) => word.startsWith('nave'))
@@ -680,10 +753,10 @@ function opensWithSubordinateClause(words) {
   if (first[at].endsWith("'s")) {
     while (isPhraseModifier(first[next])) next += 1
     next += 1
-    // One plural word right after the possessed noun, ending the segment, is a compound noun
-    // ("release notes"), not a verb.
+    // One word from a short list of plural nouns right after the possessed noun, ending the
+    // segment, completes it ("release notes"); any other word there is its verb.
     const rest = first.slice(next)
-    if (rest.length === 1 && rest[0].endsWith('s')) return false
+    if (rest.length === 1 && COMPOUND_PLURALS.has(rest[0])) return false
   } else if (first[next] === 'css') {
     next += 1
   }
@@ -703,20 +776,65 @@ function isDirectSubject(words, head) {
 const isSingularConsumerHead = (word) =>
   CONSUMER_NOUNS.has(word) || (word.endsWith("'s") && CONSUMER_NOUNS.has(word.slice(0, -2)))
 
-// The side the "its" at `at` points back to: the nearest singular noun before it in the sentence
-// that names a side. A plain Nave word names Nave, "your" or "our" the consumer, and a singular
-// consumer-side noun the side its own modifiers give it ("Nave's build" is Nave's). Plural nouns,
-// pronouns, and a possessive Nave word (which only owns the noun after it) are passed over. Null
-// when nothing before it names a side, in which case the "a"/"its" rule decides as before.
+// The side the "its" at `at` points back to. Walking back through the sentence, the nearest
+// singular noun decides: a Nave word, possessive or not, is Nave's; a singular consumer-side noun
+// takes the side its own modifiers give it; and a
+// singular noun after a determiner that names neither side ("the project") is neutral, which
+// returns null so the "a"/"its" rule decides as before. Plural nouns and pronouns are passed
+// over. Whatever that finds, a consumer noun phrase anywhere earlier in the sentence ("your
+// build", "the pipeline") makes it the consumer's: "Your build pulls in Nave, and its script ..."
+// reads as the consumer's. The bare pronoun "you" does not count, so "Nave writes the defaults
+// and you get its build script ..." stays Nave's.
 function itsAntecedentSide(words, at) {
-  const before = [...(words.earlier ?? []), ...words.slice(0, at)]
-  for (let j = before.length - 1; j >= 0; j -= 1) {
-    const word = before[j].word
-    if (word.startsWith('nave') && !word.endsWith("'s")) return 'nave'
-    if (OWNERS.has(word)) return 'consumer'
-    if (isSingularConsumerHead(word)) return namesConsumer(before, j) ? 'consumer' : 'nave'
+  const side = nearestSide(words, at)
+  if (side !== 'consumer' && words.consumerAt < words.offset + at) return 'consumer'
+  return side === 'neutral' ? null : side
+}
+
+// The side the nearest singular noun before `at` names, across the sentence's earlier clauses:
+// 'nave', 'consumer', 'neutral', or null when there is none.
+function nearestSide(words, at) {
+  for (let clause = words, from = at - 1; clause !== undefined; clause = clause.previous) {
+    for (let j = from; j >= 0; j -= 1) {
+      const side = nounSideAt(clause, j)
+      if (side !== null) return side
+    }
+    from = (clause.previous?.length ?? 0) - 1
   }
   return null
+}
+
+function nounSideAt(words, j) {
+  const word = words[j].word
+  if (word.startsWith('nave')) return 'nave'
+  if (isSingularConsumerHead(word)) return modifiersOf(words, j).consumer ? 'consumer' : 'nave'
+  const next = words[j + 1]?.word
+  if (next !== undefined && NOUN_DETERMINERS.has(word) && !isPlural(next)) return 'neutral'
+  return null
+}
+
+const isPlural = (word) => word.endsWith('s') && !word.endsWith('ss')
+
+// Whether the word at `i` opens a consumer noun phrase: "your" or "our", or a consumer-side noun
+// owned by them, or introduced by "the", "this", "that", "their" or no determiner, with no Nave
+// word or unowned "token" before it. One introduced by "a" or "an" counts when no Nave word comes
+// earlier in the sentence (`naveSeen`); one introduced by "its" never does.
+function opensConsumerPhrase(words, i, naveSeen) {
+  if (OWNERS.has(words[i].word)) return true
+  if (!CONSUMER_HEADS.has(words[i].word)) return false
+  let token = false
+  for (let k = i - 1; k >= Math.max(0, i - 3); k -= 1) {
+    const { word, segment } = words[k]
+    if (segment !== words[i].segment) break
+    if (OWNERS.has(word)) return true
+    if (word.startsWith('nave')) return false
+    token ||= isTokenWord(word)
+    if (DETERMINERS.has(word)) {
+      if (word === 'its') return false
+      return !token && !(naveSeen && (word === 'a' || word === 'an'))
+    }
+  }
+  return !token
 }
 
 // The side the word at `k` names: 'consumer', 'nave', or null for a word that names neither. A
@@ -739,7 +857,7 @@ function invokerSide(clauses, c, verb) {
     const words = clauses[at]
     for (let k = (at === c ? verb : words.length) - 1; k >= 0; k -= 1) {
       const aside = at === c && words[k].segment !== words[verb].segment
-      if (aside && isAside(words, words[k].segment)) continue
+      if (aside && isAside(words, words[k].segment, words[verb].segment)) continue
       pronoun ||= SUBJECT_PRONOUNS.has(words[k].word)
       const side = sideAt(words, k)
       if (side !== null) return side
@@ -749,11 +867,19 @@ function invokerSide(clauses, c, verb) {
   return null
 }
 
-// Whether a comma segment is an aside: closed by commas on both sides, and not a coordinate clause
-// opened by a joining word (", and your build runs its own script, which ...").
-function isAside(words, segment) {
+// Whether a comma segment, walked back over from a verb in segment `verbSegment`, is an aside:
+// closed by commas on both sides and not a clause. A segment opened by a coordinating
+// conjunction is a clause (", and your build runs its own script, which ..."). So is one opened
+// by any other joining word when it sits right before a verb segment that opens with a relative
+// word, since it holds that relative's antecedent (", then your build runs its own script, which
+// invokes ..."). Otherwise a subordinate segment is an aside: "The Nave CLI, while your build
+// waits, invokes ..." is Nave's.
+function isAside(words, segment, verbSegment) {
   if (!isClosedMiddle(words, segment)) return false
-  return !CLAUSE_BREAKERS.has(words.find((w) => w.segment === segment).word)
+  const opener = words[segmentStart(words, segment)].word
+  if (COORDINATORS.has(opener)) return false
+  const relative = RELATIVES.has(words[segmentStart(words, verbSegment)].word)
+  return !(relative && segment === verbSegment - 1 && CLAUSE_BREAKERS.has(opener))
 }
 
 // The side the agent of a passive names: the first naming word after the "by" at `by`, read to
@@ -959,6 +1085,25 @@ test("AC-theming-36: an invoker that is not the consumer's build is not the affi
     'Since Nave CSS 0.1.0, a build script invokes the entry point.',
     'Since Nave v0.1.0, a build script invokes the entry point.',
     'Nave ships the defaults; its build script invokes the entry point.',
+    // A subordinate aside between commas is still an aside.
+    'The Nave CLI, while your build waits, invokes the entry point.',
+    'Nave, since your build asks for it, invokes the entry point.',
+    // A possessive Nave mention is Nave's when nothing nearer names a side.
+    "Since Nave's build ships the defaults, its script invokes the entry point.",
+    "Since Nave's defaults change, its build script invokes the entry point.",
+    "Since Nave's best release, its build script invokes the entry point.",
+    // "its" after a Nave-owned build, after a neutral noun the earlier rule reads as Nave's, and
+    // after "a build" that Nave ships.
+    'The token build ships, and its script invokes the entry point.',
+    'Nave lives in the project with its build script that invokes the entry point.',
+    'Nave ships a build script, and its task invokes the entry point.',
+    // A leading possessive Nave phrase is a phrase, so "a build" after its comma stays Nave's.
+    "Since Nave's release, a build script invokes the entry point.",
+    "Since Nave's own release, a build script invokes the entry point.",
+    "Since Nave's first release, a build script invokes the entry point.",
+    "Since Nave's latest release, a build script invokes the entry point.",
+    "Since Nave's 0.1.0 release, a build script invokes the entry point.",
+    "Since Nave's 2.0 release notes, a build script invokes the entry point.",
   ]
   assert.deepEqual(
     naveSide.filter(
@@ -988,6 +1133,22 @@ test('AC-theming-36: a negated gerund or a contrast is not read as the affirmati
     ),
     [],
   )
+})
+
+// The check reads a rung in time linear in its length, so a long or repetitive rung cannot stall
+// the suite or overflow the stack. Each input is far longer than any rung; the bound is generous.
+test('AC-theming-36: the rung-4 reach check returns quickly on long input', () => {
+  const inputs = [
+    `Your build${' and its script'.repeat(5000)} invokes the entry point.`,
+    `Your build${', and its task'.repeat(1000)}, invokes the entry point.`,
+    `${'Nave ships; '.repeat(5000)}its build script invokes the entry point.`,
+  ]
+  for (const input of inputs) {
+    const started = performance.now()
+    assert.ok(Array.isArray(rung4ReachProblems(input)))
+    const elapsed = performance.now() - started
+    assert.ok(elapsed < 2000, `took ${Math.round(elapsed)} ms on a ${input.length}-character rung`)
+  }
 })
 
 // Lawful rung-4 text, each sentence the whole rung: it says the consumer's build reaches the entry
@@ -1079,6 +1240,26 @@ const RUNG_4_LAWFUL = [
   'Nave writes your config, and its build script invokes the entry point.',
   'Nave ships the defaults to the pipeline, and its task invokes the entry point.',
   "Your build reads Nave's scripts, and its task invokes the entry point.",
+  // A noun that names neither side stops the "its" search; a consumer noun phrase earlier wins.
+  'Add Nave to the project, and its build script invokes the entry point.',
+  'Nave lives in the project, and its build script invokes the entry point.',
+  'Your build pulls in Nave, and its script invokes the entry point.',
+  'Your project depends on Nave, and its build script invokes the entry point.',
+  'Nave ships the defaults to your repo, and its build script invokes the entry point.',
+  // A present-tense verb after a possessive Nave subject, and a noun ending in "est".
+  "Since Nave's release ships, a build script invokes the entry point.",
+  "Because Nave's CLI changes, a build script invokes the entry point.",
+  "When Nave's default changes, a build script invokes the entry point.",
+  "Since Nave's manifest changed, a build script invokes the entry point.",
+  // A subordinate aside between commas is skipped by the invoker walk.
+  'Your build, while Nave waits, invokes the entry point.',
+  // A coordinate clause is walked; so is a subordinate one that holds a relative's antecedent.
+  'Nave ships the defaults, and your build, not Nave, invokes the entry point.',
+  'Nave ships the defaults, then your build runs its own script, which invokes the entry point.',
+  // A consumer noun introduced by "a" before any Nave word counts for "its".
+  "A pipeline reads Nave's tokens, and its job invokes the entry point.",
+  // A plural noun is not the antecedent of "its".
+  'The token builds ship, and its task invokes the entry point.',
 ]
 
 test('AC-theming-36: a lawful rung 4 that says its build reaches the entry point stays green', () => {
