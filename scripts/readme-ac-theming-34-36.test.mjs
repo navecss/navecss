@@ -246,10 +246,10 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 //   "tokens" appears with no owner ("Nave's build", "the token build"); an owner ("your", "our",
 //   "the consumer's") makes it the consumer's ("your token build"). It is also Nave's when its
 //   determiner is "a" or "its" and the clause names Nave before it ("Nave ships a build that ..."),
-//   looking back no further than a joining word that starts a new clause and skipping an aside
-//   between commas. A word NAMES
-//   NAVE when it starts with "nave" (Nave, Nave's, navecss-tokens). A bare "token" or "tokens"
-//   names neither side.
+//   looking back no further than a joining word that starts a new clause, or the comma that closes
+//   a leading subordinate clause, and skipping an aside between commas. A word NAMES NAVE when it
+//   starts with "nave" (Nave, Nave's, navecss-tokens). A bare "token" or "tokens" names neither
+//   side.
 // - For the active form, the invoker is the first word that names either side, walking back from
 //   the verb through its clause and skipping an aside between commas. A relative clause is walked
 //   through to its antecedent the same way, which is how the published "the script or the task
@@ -305,6 +305,21 @@ const CLAUSE_BREAKERS = new Set([
 const RELATIVES = new Set(['where', 'which', 'who', 'whose', 'that'])
 // Joining words that are more often adverbs inside a clause.
 const ADVERB_JOINERS = new Set(['then', 'since'])
+// Words that, right after a joining word, start a clause with the consumer's own subject.
+const NEW_SUBJECTS = new Set(['you', 'we', 'they', 'i', 'one', 'your', 'our'])
+// Words that open a leading subordinate clause.
+const SUBORDINATORS = new Set([
+  'since',
+  'because',
+  'as',
+  'when',
+  'once',
+  'if',
+  'although',
+  'while',
+  'after',
+  'before',
+])
 const PRONOUNS = new Set(['it', 'they', 'this', 'that'])
 const AUXILIARIES = new Set(['do', 'does', 'did', 'will', 'would', 'can', 'could', 'is', 'was'])
 const ENTRY_POINT_HEADS = new Set(['point', 'points', "point's", "points'"])
@@ -586,19 +601,41 @@ function namesConsumer(words, head) {
 // clause. It starts one only when the build noun at `head` is the direct subject of the invoking
 // verb after it, with no relative word between them: in "Nave ships the tokens and a build script
 // invokes ..." the build is not Nave's, while in "Nave ships the defaults and a build script that
-// invokes ..." it is the object of Nave's verb. "then" and "since" are adverbs inside a clause
-// ("Nave then ships ..."), so they end the look back only right after a comma.
+// invokes ..." it is the object of Nave's verb. A joining word followed by a subject of the
+// consumer's ("you", "your" ...) also starts a new clause: "Nave ships the defaults, and you keep
+// a build script that invokes ...". "then" and "since" are adverbs inside a clause ("Nave then
+// ships ..."), so they end the look back only right after a comma. The comma that closes a
+// leading subordinate clause ends it too: "Since Nave ships the defaults, a build script ...".
 function namesNaveBefore(words, k, head) {
   const newClause = isDirectSubject(words, head)
+  const leadingClause = words[k].segment > 0 && opensWithSubordinateClause(words)
   for (let j = k - 1; j >= 0; j -= 1) {
     const { word, segment } = words[j]
+    if (leadingClause && segment === 0) return false
     if (segment !== words[k].segment && isClosedMiddle(words, segment)) continue
     const afterComma = words[j - 1]?.segment !== segment
     const joins = CLAUSE_BREAKERS.has(word) && (!ADVERB_JOINERS.has(word) || afterComma)
-    if (newClause && joins) return false
+    if (joins && (newClause || NEW_SUBJECTS.has(words[j + 1]?.word))) return false
     if (word.startsWith('nave')) return true
   }
   return false
+}
+
+// Whether the clause opens with a subordinate clause closed by a comma ("Since Nave ships the
+// defaults, ..."). Its first segment counts as a clause when it holds a Nave word that is not a
+// possessive followed by a word that is not a number: a subject and its verb. "Since 0.1.0, ..."
+// and "Since Nave's own release, ..." are phrases, so their comma ends nothing. Only a Nave word
+// is looked for, because the look back that uses this only ever looks for Nave.
+function opensWithSubordinateClause(words) {
+  if (!SUBORDINATORS.has(words[0]?.word)) return false
+  return words.some(
+    ({ word, segment }, i) =>
+      segment === 0 &&
+      word.startsWith('nave') &&
+      !word.endsWith("'s") &&
+      words[i + 1]?.segment === 0 &&
+      Number.isNaN(Number(words[i + 1].word)),
+  )
 }
 
 // Whether the noun at `head` is the direct subject of the invoking verb that follows it: the verb
@@ -819,6 +856,14 @@ test("AC-theming-36: an invoker that is not the consumer's build is not the affi
     'Nave writes and ships a build script that invokes the entry point.',
     'Nave ships the defaults and a build script that invokes the entry point.',
     'Nave then has a build script invoke the entry point.',
+    // Nave before a comma aside still owns the build.
+    'Nave, as of 0.1.0, ships a build that invokes the entry point.',
+    'Nave ships, as of 0.1.0, a build that invokes the entry point.',
+    'Nave, which owns the defaults, also ships a build that invokes the entry point.',
+    // A leading phrase with no verb of its own is not a clause, so its comma ends nothing.
+    'Since 0.1.0, Nave ships a build script that invokes the entry point.',
+    "Since Nave's own release, its build script invokes the entry point.",
+    'Since Nave 0.1.0, its build script invokes the entry point.',
   ]
   assert.deepEqual(
     naveSide.filter(
@@ -918,6 +963,14 @@ const RUNG_4_LAWFUL = [
   'Your repo, not Nave, holds a build script that invokes the entry point.',
   'Nave ships the tokens and a build script invokes the entry point.',
   'Nave ships the defaults, then a build script invokes the entry point.',
+  // A new clause with the consumer as its own subject, after Nave's clause.
+  'Nave ships the defaults, and you keep a build script that invokes the entry point.',
+  'Nave ships the defaults, but your repo holds a build script that invokes the entry point.',
+  'Nave ships the defaults and you keep a build script that invokes the entry point.',
+  'Nave ships the defaults, so you write a build script that invokes the entry point.',
+  // Nave named only in a leading subordinate clause.
+  'Since Nave ships the defaults, a build script invokes the entry point.',
+  'Because Nave ships the defaults, a build script invokes the entry point.',
 ]
 
 test('AC-theming-36: a lawful rung 4 that says its build reaches the entry point stays green', () => {
