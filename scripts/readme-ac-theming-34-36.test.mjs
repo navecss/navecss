@@ -526,9 +526,10 @@ function rung4ReachProblems(text) {
 // THE REACH CLAUSE FOR THE LIST ITSELF. Every phrase a shape stands for must be an affirmative of
 // the consumer's build: a consumer-side build, script or task before a form of invoke, run or
 // call and the entry point (or `navecss-tokens`) after it, or the passive "the entry point is
-// invoked by" one; no Nave word ("token" and "tokens" count as Nave's); no negation; and, outside
-// the published sentence, an owner (your, your own or the consumer's) on the invoker, so "the
-// build" or "its build" cannot be added. Returned as one line per phrase that is not.
+// invoked by" one; no Nave word ("token" and "tokens" count as Nave's unless an owner precedes
+// them); no negation; and, outside the published sentence, an owner (your, your own or the
+// consumer's) on the invoker, so "the build" or "its build" cannot be added. Returned as one line
+// per phrase that is not.
 const INVOKING_WORDS = new Set(INVOKING_VERBS.flat())
 const SHAPE_OWNERS = new Set(['your', "consumer's"])
 const PUBLISHED_PHRASE = phrasesOf(PUBLISHED_SHAPE)[0].join(' ')
@@ -553,8 +554,18 @@ function shapeProblems(shapes) {
     .map(([phrase, flaw]) => `${phrase}: ${flaw}`)
 }
 
+// "token" and "tokens" are Nave's unless an owner comes right before them ("your token build",
+// "your own token build"): an owner makes them the consumer's.
+const ownedAt = (words, at) =>
+  SHAPE_OWNERS.has(words[at - 1]) || (words[at - 1] === 'own' && SHAPE_OWNERS.has(words[at - 2]))
+const namesNave = (words) =>
+  words.some(
+    (word, at) =>
+      isNaveWord(word) && !((word === 'token' || word === 'tokens') && ownedAt(words, at)),
+  )
+
 function affirmativeFlaw(words) {
-  if (words.some((word) => isNaveWord(word))) return 'names Nave'
+  if (namesNave(words)) return 'names Nave'
   if (negationIn(words) !== null) return 'holds a negation'
   if (words.join(' ') !== PUBLISHED_PHRASE && words.every((word) => !SHAPE_OWNERS.has(word))) {
     return "has no owner (your, your own or the consumer's)"
@@ -629,6 +640,14 @@ test('AC-theming-36: every accepted shape is itself an affirmative, and a Nave i
     assert.deepEqual(shapeProblems([...AFFIRMATIVE_SHAPES, [shape]]), [
       `${shape[0].join(' ')}: ${flaw}`,
     ])
+  }
+  // An owner makes a token build the consumer's, so the remedy can accept it.
+  for (const entry of [
+    'your token build invokes the entry point',
+    'your own token build runs the entry point',
+    "the entry point is invoked by the consumer's token build",
+  ]) {
+    assert.deepEqual(shapeProblems([...AFFIRMATIVE_SHAPES, [anyOf(entry)]]), [], entry)
   }
 })
 
