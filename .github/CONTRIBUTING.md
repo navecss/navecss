@@ -188,35 +188,40 @@ pnpm ci:check:fix
    CSS and generated output would have coverage percentages measuring the
    wrong thing, and a threshold that has to be gamed to stay green teaches
    the opposite habit.
-4. **`test:browser`** — Vitest browser mode with the Playwright provider,
+4. **`test:build`** — the real builds of `@navecss/prune`: `next build`,
+   `next dev` and `next start` run against a scratch app on the newest Next.js
+   and on the 16.2.0 floor, with both bundlers. They start Next.js workers
+   and run alone for that reason, as `test` does, so they are a step of
+   their own and `test` leaves them out.
+5. **`test:browser`** — Vitest browser mode with the Playwright provider,
    over a small fixture in `packages/core/test/browser/`, in a real
    headless Chromium: `@layer` order resolving as documented and the
    `@nave` directive's nested-output transform cascading correctly are
    cascade behaviour, not text, so this is the one layer of the suite a
    Node-side string or AST assertion cannot cover.
-5. **`build`** — Turbo build graph (`@navecss/tokens` via the
+6. **`build`** — Turbo build graph (`@navecss/tokens` via the
    first-party token build, `@navecss/core` via a CSS build step
    plus `tsup`, `@navecss/cli` via `tsup`).
-6. **`check:pack`** — `publint` and `@arethetypeswrong/cli --pack` against
+7. **`check:pack`** — `publint` and `@arethetypeswrong/cli --pack` against
    the packed tarball of every package (including the still-private
    `@navecss/cli`, so nothing has to be remembered when it goes public).
    Also wired into each publishable package's `prepublishOnly`, so a
    broken export map cannot be published even by a hand-run release.
-7. **`knip`** — dead code, unused exports and unused dependencies,
+8. **`knip`** — dead code, unused exports and unused dependencies,
    repo-wide.
-8. **`deps:lint`** — `syncpack lint`: consistent dependency versions
+9. **`deps:lint`** — `syncpack lint`: consistent dependency versions
    across the workspace (respecting the Changesets `fixed` group for
    tokens + core).
-9. **`deps:dedupe-check`** — `pnpm dedupe --check`: fails when the
-   lockfile holds a duplicate resolution `pnpm dedupe` could collapse
-   (each caret range already satisfied by a single copy). Catches a
-   grouped Dependabot bump that updates the lockfile minimally instead
-   of collapsing it. Needs the npm registry reachable: it re-reads
-   package metadata, so it fails offline even with a warm pnpm cache.
-10. **`scripts:test`** — `node --test` over the repo-root `scripts/`
+10. **`deps:dedupe-check`** — `pnpm dedupe --check`: fails when the
+    lockfile holds a duplicate resolution `pnpm dedupe` could collapse
+    (each caret range already satisfied by a single copy). Catches a
+    grouped Dependabot bump that updates the lockfile minimally instead
+    of collapsing it. Needs the npm registry reachable: it re-reads
+    package metadata, so it fails offline even with a warm pnpm cache.
+11. **`scripts:test`** — `node --test` over the repo-root `scripts/`
     gates' own unit coverage (`scripts/*.test.mjs`), measuring the
     scripts' coverage and writing an lcov report for Sonar.
-11. **`scripts:check`** — the repo-root gates in `scripts/`, run in the
+12. **`scripts:check`** — the repo-root gates in `scripts/`, run in the
     order `package.json` chains them: the licence and provenance gates,
     the packaging and publishable-set gates, the scans over the
     repository's own docs, manifests and generated output, and the
@@ -224,7 +229,7 @@ pnpm ci:check:fix
     failing gate names the file it is unhappy with, so you do not need
     the list to read a failure.
 
-`turbo.json` gives `test`, `test:browser` and `check:pack` a
+`turbo.json` gives `test`, `test:build`, `test:browser` and `check:pack` a
 `dependsOn: ["build"]` at the package level, so each of them, run on its
 own, builds the package first; under `ci:check` and in CI they find that
 build already done.

@@ -21,6 +21,10 @@ export interface GraphOptions {
    * The modes whose files count for problems; files are read for atoms under both.
    */
   readonly modes: readonly Mode[]
+  /**
+   * The config's `pageExtensions`, matched beside the default extensions to find the entries.
+   */
+  readonly pageExtensions?: readonly string[]
 }
 
 export interface Graph {

@@ -9,6 +9,8 @@ import type { AtomDefinition } from '@navecss/core/postcss'
 
 import { assertOptions } from '@navecss/core/collect'
 
+import { isReadableExtension } from './source-files.ts'
+
 export interface NaveOptions {
   /**
    * Atoms always shipped, whether or not the build reads a use of them.
@@ -60,5 +62,20 @@ export function assertNaveOptions(options: NaveOptions): void {
   }
   if (onUnknown !== undefined && !ON_UNKNOWN.has(onUnknown)) {
     throw new Error("withNave(): onUnknown must be 'error', 'warn' or 'ignore'.")
+  }
+}
+
+/**
+ * Throws, naming `withNave()`, the first extension in the config's `pageExtensions` that the
+ * package cannot read: a file the route selects and cannot parse is an error, never a skip.
+ */
+export function assertPageExtensions(pageExtensions: unknown): void {
+  if (!Array.isArray(pageExtensions)) return
+  for (const extension of pageExtensions) {
+    if (typeof extension === 'string' && !isReadableExtension(extension)) {
+      throw new Error(
+        `withNave(): pageExtensions holds "${extension}", a kind of file this package cannot read, so it cannot tell which atoms the pages with that extension use. It reads JavaScript and TypeScript (js, jsx, mjs, cjs, ts, tsx, mts, cts) and Markdown (md, mdx), alone or after a prefix such as "page.".`,
+      )
+    }
   }
 }

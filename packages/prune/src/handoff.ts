@@ -30,6 +30,10 @@ export interface Handoff {
    * `next` was started: `next build apps/web` run from a repository's top loads it from the top.
    */
   readonly isBundlerDir?: boolean
+  /**
+   * The config's `pageExtensions`, absent when it sets none.
+   */
+  readonly pageExtensions?: readonly string[]
 }
 
 /**
@@ -39,18 +43,33 @@ export function encodeHandoff(handoff: Handoff): string {
   return JSON.stringify(handoff)
 }
 
+const isText = (value: unknown): boolean => typeof value === 'string'
+const isTextList = (value: unknown): boolean =>
+  Array.isArray(value) && value.every((item) => isText(item))
+
+/**
+ * Whether `value` is absent or passes `isValid`.
+ */
+function isOptional(value: unknown, isValid: (value: unknown) => boolean): boolean {
+  return value === undefined || isValid(value)
+}
+
 /**
  * Whether a parsed value has the shape the wrapper writes.
  */
 function isHandoff(value: unknown): value is Handoff {
   if (typeof value !== 'object' || value === null) return false
-  const { options, dir, distDir, root, phase, isBundlerDir } = value as Record<string, unknown>
+  const { options, dir, distDir, root, phase, isBundlerDir, pageExtensions } = value as Record<
+    string,
+    unknown
+  >
   return (
     typeof options === 'object' &&
     options !== null &&
-    [dir, distDir].every((field) => typeof field === 'string') &&
-    [root, phase].every((field) => field === undefined || typeof field === 'string') &&
-    (isBundlerDir === undefined || typeof isBundlerDir === 'boolean')
+    [dir, distDir].every((field) => isText(field)) &&
+    [root, phase].every((field) => isOptional(field, isText)) &&
+    isOptional(isBundlerDir, (flag) => typeof flag === 'boolean') &&
+    isOptional(pageExtensions, isTextList)
   )
 }
 
