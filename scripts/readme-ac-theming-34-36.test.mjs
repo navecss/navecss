@@ -1005,7 +1005,7 @@ test('AC-theming-36: a lawful rewording outside the accepted shapes fails loudly
       return !loud || denied || besidePublished.length > 0
     }),
     [],
-    'each fails alone with the shapes message only, and passes beside the published rung',
+    'each fails alone with the shapes message and no denial message, and passes beside the published rung',
   )
 })
 
