@@ -167,7 +167,7 @@ describe('AC-consumer-constraints-25 covers: R16', () => {
   // This test runs `tsc` over the package on every run, so no hook can pay for it ahead of time.
   // Measured: 1.2 s alone, 6.4 s beside 70 busy processes, 14 s beside 160, 18 s beside 240 and
   // 22 s beside 320, where it timed out at the 20 s default it had then. The package default is
-  // now 240 s, about ten times the worst measured.
+  // now 240 s, about eleven times the worst measured.
   it('a variable typed Config from stylelint compiles against the default export under tsc', () => {
     expect(() =>
       execFileSync(

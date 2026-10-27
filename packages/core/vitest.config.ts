@@ -17,8 +17,8 @@ export default defineConfig({
     // A test that builds a real Vite app, the used-atoms ones most of all, takes well under a
     // second alone but queues behind other runs when several share a loaded machine, where one
     // took longer than 20 s. The budget only has to outlast a loaded machine; a hang is still
-    // bounded by the job's own timeout. Rows that assert nothing about time set no budget of their
-    // own, so this one governs them; a row that measures how its time grows keeps its own.
+    // bounded by the job's own timeout. Only a row that measures time sets a budget below this
+    // one; some rows that need longer set their own.
     testTimeout: 240_000,
     include: ['test/**/*.test.ts'],
     // test/browser/**/*.browser.test.ts is this same glob's problem too

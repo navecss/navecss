@@ -196,8 +196,8 @@ describe('AC-consumer-constraints-38: the tsc clause is a real type-check, never
   let notAnAtomDiagnostics: readonly Diagnostic[]
   let realAtomsDiagnostics: readonly Diagnostic[]
 
-  // Each type-check builds a TypeScript program, which a loaded runner (every test file of the
-  // package running at once) takes well past 120 s to do. No row asserts how long it takes.
+  // Each type-check builds a TypeScript program, so these take the budget of the type-check rows
+  // of `vite-plugin-surface.test.ts`. No row asserts how long it takes.
   beforeAll(() => {
     notAnAtomDiagnostics = typeCheckAgainstPublishedCx("cx('not-an-atom')")
     realAtomsDiagnostics = typeCheckAgainstPublishedCx("cx('interactive', 'focusRing')")

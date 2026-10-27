@@ -237,7 +237,7 @@ describe('AC-directive-core-22 — navecss-core check, the exit contract', () =>
   })
 })
 
-// These rows measure time, so each keeps a per-row timeout of its own:
+// The scaling rows measure time, so each keeps a per-row timeout of its own:
 // `assertScalesLinearly` can run its measured subject up to 21 times (a warm-up
 // plus 3+3 samples, across up to three attempts), and a slow or shared runner's own per-call
 // time can be an order of magnitude past a fast local machine's — the wall-clock ceiling
