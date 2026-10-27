@@ -238,26 +238,9 @@ export async function until(
 }
 
 /**
- * Waits up to `ms` for `isDone`, giving up without an error: for a wait whose outcome the test
- * reads afterwards.
- */
-export async function untilQuietly(
-  page: Page,
-  isDone: () => Promise<boolean>,
-  what: string,
-  ms = 8000,
-): Promise<void> {
-  try {
-    await untilWithin(page, isDone, what, ms)
-  } catch {
-    // The test reads what the page holds, whether or not the wait ended.
-  }
-}
-
-/**
  * Waits until `isDone` is true, polling the page, and fails with `what` after `ms`.
  */
-async function untilWithin(
+export async function untilWithin(
   page: Page,
   isDone: () => Promise<boolean>,
   what: string,

@@ -10,7 +10,7 @@ import type { Browser, Page } from 'playwright'
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { build, type InlineConfig, type PluginOption } from 'vite'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { atomClassMap } from '../../../src/atoms.ts'
 import { devServing } from '../../../src/vite-dev.ts'
@@ -28,7 +28,7 @@ import {
   previewBuild,
   recordFrames,
   until,
-  untilQuietly,
+  untilWithin,
 } from '../../helpers/vite-browser.ts'
 
 const browser: Browser = await launchChromium()
@@ -36,6 +36,17 @@ const browser: Browser = await launchChromium()
 afterAll(async () => {
   await browser.close()
 }, 60_000)
+
+// What a row here may take, and how long before that its waits give up, so that the error names
+// what never happened rather than the row's timeout. A row loads a page of 52 components from a
+// dev server in a real browser, and on a machine running other suites that took longer than the
+// 8 s its wait for the page allowed.
+const ROW_TIMEOUT = 480_000
+const GIVE_UP_BEFORE_TIMEOUT = 30_000
+const row = { ends: 0 }
+beforeEach(() => {
+  row.ends = Date.now() + ROW_TIMEOUT - GIVE_UP_BEFORE_TIMEOUT
+})
 
 /**
  * The dev server's config, its dependency cache under `node_modules` where Vite keeps it.
@@ -110,10 +121,11 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
         const page = await browser.newPage()
         await recordFrames(page, classes)
         await page.goto(url)
-        await untilQuietly(
+        await untilWithin(
           page,
           async () => Object.keys(await framesOf(page)).length >= classes.length,
           'every class to render',
+          row.ends - Date.now(),
         )
         const seen = await framesOf(page)
         await page.close()
@@ -127,18 +139,26 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
     }
   }
 
-  it('has a rule for all 38 classes on the first frame an element carries each, and for the lazy route’s', async () => {
-    const seen = await frames(true)
+  it(
+    'has a rule for all 38 classes on the first frame an element carries each, and for the lazy route’s',
+    async () => {
+      const seen = await frames(true)
 
-    expect(Object.keys(seen)).toHaveLength(classes.length)
-    expect(Object.entries(seen).filter(([, ruled]) => !ruled)).toEqual([])
-  }, 120_000)
+      expect(Object.keys(seen)).toHaveLength(classes.length)
+      expect(Object.entries(seen).filter(([, ruled]) => !ruled)).toEqual([])
+    },
+    ROW_TIMEOUT,
+  )
 
-  it('control: without the hold at least one class has no rule on its first frame', async () => {
-    const seen = await frames(false)
+  it(
+    'control: without the hold at least one class has no rule on its first frame',
+    async () => {
+      const seen = await frames(false)
 
-    expect(Object.values(seen).filter((ruled) => !ruled).length).toBeGreaterThan(0)
-  }, 120_000)
+      expect(Object.values(seen).filter((ruled) => !ruled).length).toBeGreaterThan(0)
+    },
+    ROW_TIMEOUT,
+  )
 })
 
 describe('AC-used-atoms-39 — a dependency’s calls are read in dev', () => {
