@@ -324,7 +324,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
               'nothing outside the root is declared, a directory included',
             ).toEqual([])
 
-            // On webpack the plugin runs again on every next build while it declares a directory, edit or not (measured on 16.2.0 and 16.4.1), so the warm build reads the edited module again.
+            // On webpack every directory the plugin declares reaches the bundler as a context dependency without its glob, so a change anywhere under one runs the plugin again. In this workspace a file under `apps/web` changes on every build, so the warm build reads the edited module again (measured on 16.2.0 and 16.4.1); a plain app built again with nothing changed is served from the cache.
             app.externalAt('block')
             const warm = await app.next(args, cwd)
             noteNextCrash(warm.output)

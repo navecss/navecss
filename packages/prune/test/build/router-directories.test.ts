@@ -7,6 +7,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { NextApp } from '../helpers/next-app.ts'
+import type { DevServer } from '../helpers/next-dev.ts'
 
 import { createNextApp, SKIP_REASON } from '../helpers/next-app.ts'
 
@@ -30,6 +31,33 @@ const LATER_ROUTE = {
   ].join('\n'),
 }
 
+/**
+ * Whether the dev server serves `/later` and its HTML carries the atom, as a sentence.
+ */
+async function laterRouteSentence(server: DevServer): Promise<string> {
+  try {
+    const { status, text } = await server.get('/later')
+    const carries = text.includes('nave-grid') ? 'carries' : 'does not carry'
+    return `/later answers ${status} and its HTML ${carries} nave-grid.`
+  } catch (error) {
+    return `/later could not be requested: ${String(error)}`
+  }
+}
+
+/**
+ * Waits for the page's stylesheet to hold the atom of the route created later. When it does not
+ * within the deadline, the failure also says whether the route itself was built.
+ */
+async function untilGridOrExplain(server: DevServer, rewrite: () => void): Promise<void> {
+  try {
+    await server.untilCss('/', '.nave-grid', { rewrite })
+  } catch (error) {
+    throw new Error(`${(error as Error).message}\n${await laterRouteSentence(server)}`, {
+      cause: error,
+    })
+  }
+}
+
 const ABSENT = ['pages/', 'src/', 'src/app/', 'src/pages/']
 
 describe.skipIf(SKIP_REASON !== undefined)(
@@ -44,7 +72,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
         expect(await server.css('/')).toContain('.nave-flex')
         expect(Object.keys(app.record()?.directories ?? {})).toEqual(expect.arrayContaining(ABSENT))
         app.write(LATER_ROUTE)
-        await server.untilCss('/', '.nave-grid', { rewrite: () => app.write(LATER_ROUTE) })
+        await untilGridOrExplain(server, () => app.write(LATER_ROUTE))
         await server.stop()
         expect(server.output()).not.toMatch(/panic/i)
       },
