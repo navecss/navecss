@@ -23,8 +23,8 @@ name: code-quality
 # of its longest recent run with room for a cold dependency cache, so that a hung step fails in
 # minutes instead of holding a runner for GitHub's six-hour default. `test` gets 30, `test:build`
 # gets 45 (its builds run one after another, and the whole of prune's suite took 28 minutes on a
-# loaded runner), `test:browser` gets 15 (its Chromium rows ran 8m44s on a hosted runner, so 10
-# left under 15 percent), and
+# loaded runner), `test:browser` gets 15 (its Chromium rows ran 8m44s on a hosted runner: a cap of
+# 10 minutes left 1m16s, 15 percent of that run, and 15 leaves 6m16s, 72 percent), and
 # `scripts-test` gets 20 so that a slowed-down pattern fails on its own scaling assertion rather
 # than on the timeout. Every other job gets 10.
 
