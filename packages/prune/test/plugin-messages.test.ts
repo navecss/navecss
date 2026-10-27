@@ -181,11 +181,15 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
   })
 
   it.each([
-    ['as Turbopack leaves it', {}],
-    ['as webpack’s callback leaves it', { isBundlerDir: true }],
+    ['as Turbopack leaves it', {}, false],
+    [
+      'as webpack’s callback leaves it, with another project’s next.config in the working directory',
+      { isBundlerDir: true },
+      true,
+    ],
   ])(
     'AC-nextjs-used-atoms-04: a file read outside the root is named in no message, with the hand-off %s',
-    async (_shape, run) => {
+    async (_shape, run, isInOtherProject) => {
       const outside = makeProject({
         'shared.ts': "import { cx } from '@navecss/core/cx'\n\nexport const hide = cx('hidden')\n",
       })
@@ -203,7 +207,14 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
           },
         }),
       })
-      const result = await runAtomic(project, [], run)
+      const startedIn = process.cwd()
+      if (isInOtherProject) process.chdir(makeProject().dir)
+      let result: Awaited<ReturnType<typeof runAtomic>>
+      try {
+        result = await runAtomic(project, [], run)
+      } finally {
+        process.chdir(startedIn)
+      }
       // Control: the file outside the root was read, so its atom is in the layer.
       expect(atomsIn(result.css)).toContain('hidden')
       expect(Object.keys(recordOf(project).files).some((file) => file.endsWith('shared.ts'))).toBe(
