@@ -13,6 +13,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -169,6 +170,64 @@ describe('the Next.js floor install', () => {
 
     expect(isReactInstalled(scratch.floorDir())).toBe(true)
   }, 30_000)
+})
+
+/**
+ * An `npm` that logs each start to `starts.log` beside it and then installs as the usual one does.
+ */
+function loggingNpm(scratch: Scratch): string {
+  return script(scratch.directory(), 'logging-npm', [
+    `echo $$ >> ${scratch.directory()}/starts.log`,
+    'mkdir -p node_modules/next node_modules/react',
+    `printf '{"version":"${FLOOR_VERSION}"}' > node_modules/next/package.json`,
+    `printf '{"version":"19.2.0"}' > node_modules/react/package.json`,
+  ])
+}
+
+/**
+ * Writes the install lock with `content`, last written `minutes` minutes ago.
+ */
+function writeOldLock(scratch: Scratch, content: string, minutes: number): string {
+  const lock = `${scratch.floorDir()}.installing`
+  writeFileSync(lock, content)
+  const written = new Date(Date.now() - minutes * 60_000)
+  utimesSync(lock, written, written)
+  return lock
+}
+
+describe('the install lock of the Next.js floor', () => {
+  const scratch = useScratch()
+
+  it('is held by a running installer however old it is: nothing takes it over', async () => {
+    const lock = writeOldLock(scratch, String(process.pid), 16)
+    const asking = floorNextRootIn(scratch.floorDir(), loggingNpm(scratch))
+
+    // The lock is looked at every half second; a taker would have started npm by now.
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    const hasStarted = existsSync(path.join(scratch.directory(), 'starts.log'))
+    rmSync(lock, { force: true })
+    await asking
+
+    expect(hasStarted, 'npm started while a running installer held the lock').toBe(false)
+    expect(isReactInstalled(scratch.floorDir())).toBe(true)
+  })
+
+  it('is taken over when it was left by an installer that is gone, however old it is', async () => {
+    // A process that has ended: its id names no installer that is running.
+    writeOldLock(scratch, String(spawnSync(process.execPath, ['-e', '']).pid), 16)
+
+    await floorNextRootIn(scratch.floorDir(), loggingNpm(scratch))
+
+    expect(isReactInstalled(scratch.floorDir())).toBe(true)
+  })
+
+  it('is taken over when it names no process and is old', async () => {
+    writeOldLock(scratch, '', 16)
+
+    await floorNextRootIn(scratch.floorDir(), loggingNpm(scratch))
+
+    expect(isReactInstalled(scratch.floorDir())).toBe(true)
+  })
 })
 
 /**

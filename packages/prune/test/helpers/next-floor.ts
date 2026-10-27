@@ -72,14 +72,15 @@ function isRunning(pid: number): boolean {
 }
 
 /**
- * How long a lock can stand before it is not believed: an install takes minutes, so a lock this old
- * was left by an installer whose id another process has since taken.
+ * How long a lock that names no process can stand before it is not believed: a lock is written and
+ * then filled in, so an empty one is only held for the moment between the two.
  */
-const MAX_LOCK_AGE_MS = 15 * 60_000
+const MAX_UNNAMED_LOCK_AGE_MS = 15 * 60_000
 
 /**
- * Whether the installer that wrote `lockFile` is still running. A lock that cannot be read, or
- * holds no process id yet, is held until it is old.
+ * Whether the installer that wrote `lockFile` is still running. A lock names the process that
+ * made it, and is held while that process runs, however long an install takes. A lock that cannot
+ * be read, or names no process yet, is held until it is old.
  */
 function isHeld(lockFile: string): boolean {
   let holder: number
@@ -90,8 +91,8 @@ function isHeld(lockFile: string): boolean {
   } catch {
     return true
   }
-  if (age > MAX_LOCK_AGE_MS) return false
-  return !(Number.isSafeInteger(holder) && holder > 0) || isRunning(holder)
+  if (Number.isSafeInteger(holder) && holder > 0) return isRunning(holder)
+  return age <= MAX_UNNAMED_LOCK_AGE_MS
 }
 
 /**
