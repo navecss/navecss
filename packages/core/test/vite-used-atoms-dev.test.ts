@@ -983,11 +983,13 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
 
   /**
    * The hold as it was before the fix: a stylesheet with no importer in the module graph, or not
-   * in it at all, is answered at once; any other waits as the real hold does.
+   * in it at all, is answered at once and the held module stays held; any other lets the held
+   * module through and waits as the real hold does.
    */
-  const atOnceWithoutImporter: DevServing['hold'] = async (environment, id) => {
+  const atOnceWithoutImporter: StandInHold = async (environment, id, letThrough) => {
     const module = environment.moduleGraph.getModuleById(id)
     if (!module || module.importers.size === 0) return
+    letThrough()
     await realHold(environment, id)
   }
 
@@ -1012,17 +1014,29 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     return atomLayerAtoms(served as string)
   }
 
+  /**
+   * A stand-in for the real hold. It is the stand-in that decides when the held module is let
+   * through, by calling `letThrough`: one that waits for the module has to, and one that answers at
+   * once leaves the module held until the stylesheet has been answered.
+   */
+  type StandInHold = (
+    environment: Parameters<DevServing['hold']>[0],
+    id: string,
+    letThrough: () => void,
+  ) => Promise<void>
+
   interface StylesheetBeforeImporter {
     files?: Readonly<Record<string, string>>
     heldModule?: string
-    hold?: DevServing['hold']
+    hold?: StandInHold
     idle?: () => Promise<void>
   }
 
   /**
    * The atoms in the CSS served for `src/app.css` when it is requested as a module while
    * `heldModule`, a module of `files`, is still being transformed. That module is not let through
-   * its transform until the stylesheet's wait has begun (never a delay): when it is `src/main.ts`,
+   * its transform until the stylesheet's wait has begun (never a delay), or, for a `hold` that
+   * answers at once, until the stylesheet has been answered: when it is `src/main.ts`,
    * which imports the stylesheet, the import is not in the module graph until then, the order a
    * warm-up of the stylesheet reaches under load. Any other module is held after `main.ts` has been
    * read in full. `hold` stands in for the real wait, and `idle` for the client's
@@ -1038,7 +1052,8 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     const gate = held(heldModule, 15_000)
     const saved = { ...devServing }
     devServing.hold = (environment, id) => {
-      const waited = (hold ?? realHold)(environment, id)
+      if (hold) return hold(environment, id, gate.release)
+      const waited = realHold(environment, id)
       gate.release()
       return waited
     }
