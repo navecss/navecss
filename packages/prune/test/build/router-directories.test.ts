@@ -7,8 +7,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { NextApp } from '../helpers/next-app.ts'
-import type { DevServer } from '../helpers/next-dev.ts'
 
+import { RETRY_ON_ROUTE_NOT_BUILT, untilLaterRouteGrid } from '../helpers/later-route.ts'
 import { createNextApp, SKIP_REASON } from '../helpers/next-app.ts'
 
 const BUILD_TIMEOUT = 900_000
@@ -31,40 +31,20 @@ const LATER_ROUTE = {
   ].join('\n'),
 }
 
-/**
- * Whether the dev server serves `/later` and its HTML carries the atom, as a sentence.
- */
-async function laterRouteSentence(server: DevServer): Promise<string> {
-  try {
-    const { status, text } = await server.get('/later')
-    const carries = text.includes('nave-grid') ? 'carries' : 'does not carry'
-    return `/later answers ${status} and its HTML ${carries} nave-grid.`
-  } catch (error) {
-    return `/later could not be requested: ${String(error)}`
-  }
-}
-
-/**
- * Waits for the page's stylesheet to hold the atom of the route created later. When it does not
- * within the deadline, the failure also says whether the route itself was built.
- */
-async function untilGridOrExplain(server: DevServer, rewrite: () => void): Promise<void> {
-  try {
-    await server.untilCss('/', '.nave-grid', { rewrite })
-  } catch (error) {
-    throw new Error(`${(error as Error).message}\n${await laterRouteSentence(server)}`, {
-      cause: error,
-    })
-  }
-}
-
 const ABSENT = ['pages/', 'src/', 'src/app/', 'src/pages/']
 
 describe.skipIf(SKIP_REASON !== undefined)(
   `router directories that do not exist yet${SKIP_REASON === undefined ? '' : ` (skipped: ${SKIP_REASON})`}`,
   () => {
+    // The dev server never builds the route in about 1 run in 50 under heavy load: the row ran
+    // 52 times with the plugin and 52 times with core's plugin alone (every atom, no pruning),
+    // with 9 to 25 busy loops on a 10-core machine and a load average of 170 to 350, and one run
+    // with the plugin, none without, ended with `/later` answering 404 and no recompile printed. No
+    // run served the route without its atom. A run that ends that way runs once more, from a fresh
+    // app; any other red fails at once.
     it(
       'Turbopack: next dev accepts them, and a pages/ route created later ships its atom',
+      { retry: RETRY_ON_ROUTE_NOT_BUILT, timeout: DEV_TIMEOUT },
       async () => {
         const app = createNextApp()
         apps.push(app)
@@ -72,11 +52,10 @@ describe.skipIf(SKIP_REASON !== undefined)(
         expect(await server.css('/')).toContain('.nave-flex')
         expect(Object.keys(app.record()?.directories ?? {})).toEqual(expect.arrayContaining(ABSENT))
         app.write(LATER_ROUTE)
-        await untilGridOrExplain(server, () => app.write(LATER_ROUTE))
+        await untilLaterRouteGrid(server, () => app.write(LATER_ROUTE))
         await server.stop()
         expect(server.output()).not.toMatch(/panic/i)
       },
-      DEV_TIMEOUT,
     )
 
     it(
