@@ -307,6 +307,8 @@ const RELATIVES = new Set(['where', 'which', 'who', 'whose', 'that'])
 const ADVERB_JOINERS = new Set(['then', 'since'])
 // Words that, right after a joining word, start a clause with the consumer's own subject.
 const NEW_SUBJECTS = new Set(['you', 'we', 'they', 'i', 'one', 'your', 'our'])
+// Adverbs that may sit between a joining word and that subject ("and then you ...").
+const CLAUSE_ADVERBS = new Set(['then', 'now', 'also', 'instead', 'still', 'so'])
 // Words that open a leading subordinate clause.
 const SUBORDINATORS = new Set([
   'since',
@@ -615,27 +617,41 @@ function namesNaveBefore(words, k, head) {
     if (segment !== words[k].segment && isClosedMiddle(words, segment)) continue
     const afterComma = words[j - 1]?.segment !== segment
     const joins = CLAUSE_BREAKERS.has(word) && (!ADVERB_JOINERS.has(word) || afterComma)
-    if (joins && (newClause || NEW_SUBJECTS.has(words[j + 1]?.word))) return false
+    if (joins && (newClause || opensWithConsumerSubject(words, j + 1))) return false
     if (word.startsWith('nave')) return true
   }
   return false
 }
 
+// Whether the words from `from` open with a subject of the consumer's own, past any of a few
+// clause adverbs: "and then you write ...", "but now you keep ...".
+function opensWithConsumerSubject(words, from) {
+  let i = from
+  while (CLAUSE_ADVERBS.has(words[i]?.word)) i += 1
+  return NEW_SUBJECTS.has(words[i]?.word)
+}
+
+const isNumber = (word) => !Number.isNaN(Number(word))
+
 // Whether the clause opens with a subordinate clause closed by a comma ("Since Nave ships the
-// defaults, ..."). Its first segment counts as a clause when it holds a Nave word that is not a
-// possessive followed by a word that is not a number: a subject and its verb. "Since 0.1.0, ..."
-// and "Since Nave's own release, ..." are phrases, so their comma ends nothing. Only a Nave word
-// is looked for, because the look back that uses this only ever looks for Nave.
+// defaults, ..."). Its first segment counts as a clause when it holds a Nave word and, past the
+// noun phrase that word heads, at least one more word that is not a number: a subject and its
+// verb. The phrase a plain Nave word heads is the word itself; the one a possessive heads runs
+// through "own" and any number, then the possessed noun ("Nave's own build" in "Because Nave's
+// own build ships the defaults, ..."). "Since 0.1.0, ...", "Since Nave 0.1.0, ..." and "Since
+// Nave's own release, ..." are phrases, so their comma ends nothing. Only a Nave word is looked
+// for, because the look back that uses this only ever looks for Nave.
 function opensWithSubordinateClause(words) {
   if (!SUBORDINATORS.has(words[0]?.word)) return false
-  return words.some(
-    ({ word, segment }, i) =>
-      segment === 0 &&
-      word.startsWith('nave') &&
-      !word.endsWith("'s") &&
-      words[i + 1]?.segment === 0 &&
-      Number.isNaN(Number(words[i + 1].word)),
-  )
+  const first = words.filter((w) => w.segment === 0).map((w) => w.word)
+  const at = first.findIndex((word) => word.startsWith('nave'))
+  if (at === -1) return false
+  let next = at + 1
+  if (first[at].endsWith("'s")) {
+    while (first[next] === 'own' || isNumber(first[next])) next += 1
+    next += 1
+  }
+  return first.slice(next).some((word) => !isNumber(word))
 }
 
 // Whether the noun at `head` is the direct subject of the invoking verb that follows it: the verb
@@ -864,6 +880,8 @@ test("AC-theming-36: an invoker that is not the consumer's build is not the affi
     'Since 0.1.0, Nave ships a build script that invokes the entry point.',
     "Since Nave's own release, its build script invokes the entry point.",
     'Since Nave 0.1.0, its build script invokes the entry point.',
+    "Since Nave's 0.1.0 release, its build script invokes the entry point.",
+    "Since Nave's 0.1.0, its build script invokes the entry point.",
   ]
   assert.deepEqual(
     naveSide.filter(
@@ -971,6 +989,12 @@ const RUNG_4_LAWFUL = [
   // Nave named only in a leading subordinate clause.
   'Since Nave ships the defaults, a build script invokes the entry point.',
   'Because Nave ships the defaults, a build script invokes the entry point.',
+  // An adverb between the joining word and the consumer's subject.
+  'Nave ships the defaults, and then you write a build script that invokes the entry point.',
+  'Nave ships the defaults, but now you keep a build script that invokes the entry point.',
+  // A leading clause whose subject is a possessive Nave phrase.
+  "Since Nave's defaults change, a build script invokes the entry point.",
+  "Because Nave's own build ships the defaults, a build script invokes the entry point.",
 ]
 
 test('AC-theming-36: a lawful rung 4 that says its build reaches the entry point stays green', () => {
