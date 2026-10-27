@@ -70,6 +70,7 @@ describe.each(Object.entries(VITE_APIS))(
         const watcher = (await api.build(config)) as unknown as {
           close(): Promise<void>
           on(event: 'event', listener: (event: { code: string; error?: Error }) => void): void
+          on(event: 'change', listener: () => void): void
         }
         closing = watcher
         const written = (): { asset: string[]; page: string[] } => {
@@ -94,19 +95,26 @@ describe.each(Object.entries(VITE_APIS))(
           bundled: 0,
           ended: 0,
           failed: undefined as Error | undefined,
-          lastEventAt: Date.now(),
+          lastBuildEventAt: undefined as number | undefined,
+          lastChangeAt: undefined as number | undefined,
           started: 0,
         }
-        // What the watcher has done so far, for the error that says what never happened.
+        const ago = (at: number | undefined): string =>
+          at === undefined ? 'none yet' : `${Date.now() - at} ms ago`
+        // What the watcher has done so far, for the error that says what never happened: a write it
+        // never heard leaves the last file change it heard older than that write.
         const progress = (): string =>
-          `builds started ${builds.started}, ended ${builds.ended}, bundled ${builds.bundled}; last watcher event ${Date.now() - builds.lastEventAt} ms ago`
+          `builds started ${builds.started}, ended ${builds.ended}, bundled ${builds.bundled}; last build event ${ago(builds.lastBuildEventAt)}, last file change heard ${ago(builds.lastChangeAt)}`
         // What the output shows when each build ends, with the number of the edit whose first write
         // came before the build ended (0 for the first build). No build is under way when an edit is
         // first written, so each of those builds read that edit.
         const outputs: { afterEdit: number; output: unknown }[] = []
         let editing = 0
+        watcher.on('change', () => {
+          builds.lastChangeAt = Date.now()
+        })
         watcher.on('event', (event) => {
-          builds.lastEventAt = Date.now()
+          builds.lastBuildEventAt = Date.now()
           switch (event.code) {
             case 'BUNDLE_END': {
               builds.bundled += 1

@@ -39,8 +39,8 @@ afterAll(async () => {
 
 // What a row here may take, and how long before that its waits give up, so that the error names
 // what never happened rather than the row's timeout. A row loads a page of 52 components from a
-// dev server in a real browser, and on a machine running other suites that took longer than the
-// 8 s its wait for the page allowed.
+// dev server in a real browser, one to three seconds alone; a loaded machine can take many times
+// that, so the wait for the page ends where the row does rather than at a figure of its own.
 const ROW_TIMEOUT = 480_000
 const GIVE_UP_BEFORE_TIMEOUT = 30_000
 const row = { ends: 0 }

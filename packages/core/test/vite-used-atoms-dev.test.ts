@@ -857,29 +857,32 @@ function slow(file: string, delay: number): PluginOption {
 }
 
 /**
- * A scratch plugin that does not finish reading the module `file` until `release` is called, or
- * until `ceiling` milliseconds have passed, so the module is certain not to have been read by any
- * response that returns before `release` is. The ceiling only bounds a response that is itself
- * waiting for the module: it is set far above what a response that waits for nothing needs.
- * `entered` settles once the module's transform has begun, which is when it is in the module graph,
- * or at the same ceiling, so a transform that never begins fails the row's own assertion.
+ * A scratch plugin that does not finish reading the module `file` until `release` is called, so the
+ * module is certain not to have been read by any response that returns before `release` is, however
+ * slow the machine. `arm` bounds a response that is itself waiting for the module: `ceiling`
+ * milliseconds after it is first called, the module is let through. It is called where the
+ * stylesheet's wait begins and never earlier, because a ceiling counted from before could run out
+ * on a slow machine while the stylesheet was still on its way to the wait, and let the module
+ * through first. `entered` settles once the module's transform has begun, which is when it is in
+ * the module graph, or after `ceiling` if it never begins, so a transform that never begins fails
+ * the row's own assertion; that fallback lets nothing through.
  */
 function held(
   file: string,
   ceiling: number,
-): { entered: Promise<void>; plugin: PluginOption; release: () => void } {
+): { arm: () => void; entered: Promise<void>; plugin: PluginOption; release: () => void } {
   const { promise: entered, resolve: enter } = Promise.withResolvers<void>()
-  let release = (): void => {}
-  const released = new Promise<void>((resolve) => {
-    const timer = setTimeout(() => {
-      enter()
-      resolve()
-    }, ceiling)
-    release = () => {
-      clearTimeout(timer)
-      resolve()
-    }
-  })
+  const { promise: released, resolve: letThrough } = Promise.withResolvers<void>()
+  const neverEntered = setTimeout(enter, ceiling)
+  let armed: NodeJS.Timeout | undefined
+  const release = (): void => {
+    clearTimeout(neverEntered)
+    clearTimeout(armed)
+    letThrough()
+  }
+  const arm = (): void => {
+    armed ??= setTimeout(release, ceiling)
+  }
   const plugin: PluginOption = {
     name: 'held-module',
     async transform(_code: string, id: string) {
@@ -888,7 +891,7 @@ function held(
       await released
     },
   }
-  return { entered, plugin, release }
+  return { arm, entered, plugin, release }
 }
 
 describe('AC-used-atoms-40 — the first stylesheet response waits for the graph', () => {
@@ -936,9 +939,9 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
   it('control: with the wait removed the stylesheet is served with what had been read', async () => {
     const saved = { ...devServing }
     devServing.hold = () => Promise.resolve()
-    // The last module is not read at all until the response is back, however fast the machine,
-    // so the response cannot hold its atom. A response that did wait for it would wait for the
-    // ceiling, and then hold it.
+    // The last module is not read at all until the response is back, however fast or slow the
+    // machine, so the response cannot hold its atom. A response that did wait for it would never
+    // be answered, and the row would end on its timeout.
     const gate = held('src/C.ts', 15_000)
     try {
       expect(await atomsServedAtOnce(gate.plugin, gate.release)).not.toEqual(
@@ -1052,6 +1055,7 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     const gate = held(heldModule, 15_000)
     const saved = { ...devServing }
     devServing.hold = (environment, id) => {
+      gate.arm()
       if (hold) return hold(environment, id, gate.release)
       const waited = realHold(environment, id)
       gate.release()
