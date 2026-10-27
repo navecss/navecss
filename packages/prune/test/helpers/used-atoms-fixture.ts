@@ -257,9 +257,6 @@ export function useUsedAtoms(): {
   readonly read: (scenario: Scenario) => Promise<Read>
   readonly runAgain: (project: Project, scenario?: Scenario) => Promise<Read>
 } {
-  // A scenario reads its project through a freshly loaded plugin; a busy machine needs longer than
-  // the default for a row that runs it several times.
-  vi.setConfig({ testTimeout: 120_000 })
   const create = useScratchProjects()
   const toProject = (scenario: Scenario): Project => {
     const project = create({

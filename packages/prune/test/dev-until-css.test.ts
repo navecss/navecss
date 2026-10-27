@@ -112,7 +112,7 @@ describe('untilCss', () => {
 
     expect(requestsAtRewrite).toEqual([10, 20])
     await server.stop()
-  }, 20_000)
+  })
 
   it('fails at its deadline with what the server printed, when the text never comes', async () => {
     const server = await startStandIn(999)
