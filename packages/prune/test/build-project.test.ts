@@ -5,53 +5,22 @@
  * `test` beside the other suites and slow them past their timeouts, so it has to be under
  * `test/build/`.
  */
-import {
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import config from '../vitest.config.ts'
+import { isReaching, referencesOf } from './support/test-references.ts'
 
 const PACKAGE = path.resolve(import.meta.dirname, '..')
 const TEST = path.join(PACKAGE, 'test')
 
 /**
- * Files that reach the helpers but start a stand-in for `next` that serves one page, not Next.js,
- * and this file, which names `nextCommand` in the files it plants.
+ * Files that reach the helpers but start a stand-in for `next` that serves one page, not Next.js.
  */
-const STAND_IN = new Set(['test/build-project.test.ts', 'test/leftovers.test.ts'])
+const STAND_IN = new Set(['test/leftovers.test.ts'])
 const STARTERS = ['next-app.ts', 'next-dev.ts'].map((name) => path.join(TEST, 'helpers', name))
-
-/**
- * The relative imports of a file, resolved, that are files.
- */
-function importsOf(file: string): string[] {
-  const text = readFileSync(file, 'utf8')
-  return text
-    .matchAll(/(?:from|import)\s*\(?\s*['"](\.[^'"]+)['"]/gu)
-    .map((match) => path.resolve(path.dirname(file), match[1]!))
-    .filter((target) => statSync(target, { throwIfNoEntry: false })?.isFile() === true)
-    .toArray()
-}
-
-/**
- * Whether the file reaches one of `targets` through its imports.
- */
-function isReaching(file: string, targets: readonly string[], seen = new Set<string>()): boolean {
-  if (targets.includes(file)) return true
-  if (seen.has(file)) return false
-  seen.add(file)
-  return importsOf(file).some((imported) => isReaching(imported, targets, seen))
-}
 
 /**
  * The test files under `directory`, as paths relative to the package.
@@ -72,7 +41,7 @@ const project = (name: string): (typeof projects)[number] =>
  * Whether a test file starts Next.js: it reaches the helpers that do, or runs `next` itself.
  */
 function isStartingNext(file: string, targets: readonly string[]): boolean {
-  return readFileSync(file, 'utf8').includes('nextCommand(') || isReaching(file, targets)
+  return referencesOf(file).isCallingNextCommand || isReaching(file, targets)
 }
 
 describe('the rows that start Next.js', () => {
@@ -127,6 +96,54 @@ describe('the rows that start Next.js', () => {
       )
 
       expect(isStartingNext(file, STARTERS)).toBe(true)
+    })
+
+    it('through a require() of a path written without its extension', () => {
+      const file = path.join(planted, 'a.test.ts')
+      writeFileSync(file, "const { start } = require('./helpers/starter')\nvoid start\n")
+
+      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+    })
+
+    it('through an import of a path written without its extension', () => {
+      const file = path.join(planted, 'b.test.ts')
+      writeFileSync(file, "import { start } from './helpers/starter'\nvoid start\n")
+
+      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+    })
+
+    it('through an import of a directory whose index reaches it', () => {
+      writeFileSync(
+        path.join(planted, 'helpers/index.ts'),
+        "export { start } from './starter.ts'\n",
+      )
+      const file = path.join(planted, 'c.test.ts')
+      writeFileSync(file, "import { start } from './helpers'\nvoid start\n")
+
+      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+    })
+
+    it('through a call of nextCommand on an object', () => {
+      const file = path.join(planted, 'd.test.ts')
+      writeFileSync(file, "const args = commands.nextCommand(['build'])\nvoid args\n")
+
+      expect(isStartingNext(file, STARTERS)).toBe(true)
+    })
+
+    it('but not in a file whose strings and comments only name nextCommand (control)', () => {
+      const file = path.join(planted, 'e.test.ts')
+      writeFileSync(
+        file,
+        [
+          'const text = "nextCommand([\'build\'])"',
+          'const template = `nextCommand(${text})`',
+          "// nextCommand(['dev'])",
+          'void [text, template]',
+          '',
+        ].join('\n'),
+      )
+
+      expect(isStartingNext(file, STARTERS)).toBe(false)
     })
 
     it('but not in a file that imports neither (control)', () => {
