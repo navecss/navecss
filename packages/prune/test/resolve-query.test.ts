@@ -3,7 +3,7 @@
  * `ui.ts?v=1`), so the graph cuts it off. It cuts only what is not part of a file's name: a file
  * whose name holds `#` is read as itself, and a query that holds `/` is cut like any other.
  */
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -78,19 +78,44 @@ describe('the graph reads a module whose file name holds a hash', () => {
 })
 
 describe('withoutQuery', () => {
-  it('cuts at the last mark whose head is a file, with backslashes in the path', () => {
-    // On a system whose separator is `/`, a backslash is a character of the name: the path below
-    // is one file name, which is how a Windows path reads to a code that splits on `/` alone.
+  /**
+   * Runs `check` with a scratch directory, removed after it.
+   */
+  function inScratchDirectory(check: (directory: string) => void): void {
     const made = mkdtempSync(path.join(tmpdir(), 'prune-query-'))
     const directory = realpathSync(made)
-    const file = path.join(directory, String.raw`C:\p\h#dir\ui.ts`)
     try {
+      check(directory)
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  }
+
+  it('cuts at the last mark whose head is a file, in a path written with the platform’s separators', () => {
+    inScratchDirectory((directory) => {
+      mkdirSync(path.join(directory, 'h#dir'))
+      const file = path.join(directory, 'h#dir', 'ui.ts')
       writeFileSync(file, FILE)
 
       expect(withoutQuery(`${file}?v=1`)).toBe(file)
       expect(withoutQuery(file)).toBe(file)
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
-    }
+    })
   })
+
+  // A file name cannot hold a backslash where the separator is one, so the name below exists only
+  // where the separator is a slash. A path written with backslashes there is one file name, which
+  // is how a Windows path reads to code that splits on `/` alone; where the separator is a
+  // backslash, the row above holds the same cut.
+  it.skipIf(path.sep === '\\')(
+    'cuts at the last mark whose head is a file, with backslashes in the name',
+    () => {
+      inScratchDirectory((directory) => {
+        const file = path.join(directory, String.raw`C:\p\h#dir\ui.ts`)
+        writeFileSync(file, FILE)
+
+        expect(withoutQuery(`${file}?v=1`)).toBe(file)
+        expect(withoutQuery(file)).toBe(file)
+      })
+    },
+  )
 })
