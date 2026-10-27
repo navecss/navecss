@@ -426,6 +426,8 @@ exports[`dist/tokens.css contract > matches the checked-in snapshot 1`] = `
     --nave-color-action-primary-active: light-dark(oklch(0.27 0.0398 186.17), oklch(0.94 0.0574 186.17));
     --nave-color-on-action-primary: light-dark(oklch(from var(--nave-color-tint) 1 0 h / 1), oklch(from var(--nave-color-tint) 0.18 0.0067 h / 1));
     --nave-color-action-secondary: light-dark(oklch(from var(--nave-color-tint) 0.965 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.27 0.0067 h / 1));
+    --nave-color-action-secondary-hover: light-dark(oklch(from var(--nave-color-tint) 0.94 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.37 0.0067 h / 1));
+    --nave-color-action-secondary-active: light-dark(oklch(from var(--nave-color-tint) 0.905 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.225 0.0067 h / 1));
     --nave-color-action-highlight: light-dark(oklch(from var(--nave-color-tint) 0.965 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.37 0.0067 h / 1));
     --nave-color-feedback-danger: light-dark(oklch(0.47 0.1455 15.02), oklch(0.835 0.0661 15.02));
     --nave-color-feedback-danger-foreground: light-dark(oklch(0.47 0.1455 15.02), oklch(0.835 0.0661 15.02));
