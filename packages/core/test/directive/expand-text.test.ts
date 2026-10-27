@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { expandText } from '../../src/directive/expand-text.ts'
 import { findSurvivors } from '../../src/directive/find-survivors.ts'
 import { tokenize } from '../../src/directive/tokenizer.ts'
-import { assertScalesLinearly } from '../helpers/perf-scaling.ts'
+import { assertScalesLinearly, cpuMillisecondsPerCall } from '../helpers/perf-scaling.ts'
 
 /**
  * Collapses whitespace runs so assertions don't pin the exact spacing expandText happens to choose.
@@ -377,9 +377,9 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
       await expect(
         assertScalesLinearly((n) => {
           const css = '.a { color: red; }\n'.repeat(n)
-          const start = performance.now()
-          expandText(css)
-          return performance.now() - start
+          return cpuMillisecondsPerCall(() => {
+            expandText(css)
+          })
         }, 5000),
       ).resolves.toMatchObject({ n: 5000 })
     },
@@ -392,9 +392,9 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
       await expect(
         assertScalesLinearly((n) => {
           const css = '.a { @nave flex; }\n'.repeat(n)
-          const start = performance.now()
-          expandText(css)
-          return performance.now() - start
+          return cpuMillisecondsPerCall(() => {
+            expandText(css)
+          })
         }, 5000),
       ).resolves.toMatchObject({ n: 5000 })
     },
@@ -413,9 +413,9 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
       await expect(
         assertScalesLinearly((n) => {
           const css = '.a{'.repeat(n)
-          const start = performance.now()
-          expandText(css)
-          return performance.now() - start
+          return cpuMillisecondsPerCall(() => {
+            expandText(css)
+          })
         }, 20_000),
       ).resolves.toMatchObject({ n: 20_000 })
     },
@@ -434,9 +434,9 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
       // blowup here.
       await assertScalesLinearly((n) => {
         const css = '.a{@nave focusRing;'.repeat(n)
-        const start = performance.now()
-        expect(() => expandText(css)).not.toThrow()
-        return performance.now() - start
+        return cpuMillisecondsPerCall(() => {
+          expect(() => expandText(css)).not.toThrow()
+        })
       }, 1250)
     },
     SCALING_ROW_TIMEOUT,
@@ -459,9 +459,9 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
           ).join(';')
           const inputSourceMap = { version: 3 as const, sources: ['a.css'], names: [], mappings }
 
-          const start = performance.now()
-          expandText(css, { inputSourceMap })
-          return performance.now() - start
+          return cpuMillisecondsPerCall(() => {
+            expandText(css, { inputSourceMap })
+          })
         }, 5000),
       ).resolves.toMatchObject({ n: 5000 })
     },

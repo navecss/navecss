@@ -4,8 +4,46 @@
  * and reds on a shared, coverage-instrumented CI runner purely from being slower, not from any
  * regression in the code under test — the ratio between two sizes of the same subject is stable
  * across machines in a way an absolute number never is.
+ *
+ * The rows time their subject in the process's CPU time (`cpuMillisecondsPerCall`, or
+ * `cpuMillisecondsSince` for a subject that is async), not on the clock: the time the machine
+ * spends on other processes in the middle of a run is not work the subject does, and a stall that
+ * lands on one size and not the other moves the ratio as far as a regression would.
  */
 import { expect } from 'vitest'
+
+/**
+ * The CPU time, in milliseconds, the process has used since `start`, a reading of
+ * `process.cpuUsage()`: its user and system time, not the clock. The time the machine spends on
+ * other processes, or with this one stopped, is not counted.
+ */
+export function cpuMillisecondsSince(start: NodeJS.CpuUsage): number {
+  const used = process.cpuUsage(start)
+  return (used.user + used.system) / 1000
+}
+
+/**
+ * The least CPU time one batch of calls should use, in milliseconds, before it is timed. A call
+ * that takes a few microseconds is close to what the CPU clock resolves, and one that takes a
+ * millisecond or two carries the process's other threads (the compiler, the garbage collector)
+ * as a large share of what it uses.
+ */
+const BATCH_MS = 20
+
+/**
+ * The CPU time, in milliseconds, one call of `work` takes, from a batch of calls that together use
+ * at least `BATCH_MS`. A call that takes longer than that is timed alone.
+ */
+export function cpuMillisecondsPerCall(work: () => void): number {
+  let calls = 1
+  for (;;) {
+    const start = process.cpuUsage()
+    for (let call = 0; call < calls; call++) work()
+    const used = cpuMillisecondsSince(start)
+    if (used >= BATCH_MS) return used / calls
+    calls = Math.ceil((calls * BATCH_MS * 1.1) / Math.max(used, 0.001))
+  }
+}
 
 export interface ScalingMeasurement {
   /**
@@ -13,11 +51,11 @@ export interface ScalingMeasurement {
    */
   n: number
   /**
-   * Least elapsed time, in milliseconds, across 3 runs at `n`.
+   * Least time, in milliseconds, across 3 runs at `n`.
    */
   nMs: number
   /**
-   * Least elapsed time, in milliseconds, across 3 runs at `4 * n`.
+   * Least time, in milliseconds, across 3 runs at `4 * n`.
    */
   fourNMs: number
   /**
@@ -37,8 +75,10 @@ function fastest(samples: readonly number[]): number {
 const RATIO_BUDGET = 8
 
 /**
- * One pass: one throwaway warm-up run at `n`, then 3 measured runs at each of `n` and `4 * n` (the
- * least taken of each trio).
+ * One pass: one throwaway warm-up run at `n`, then 3 measured runs at each of `n` and `4 * n`, taken
+ * in turn (the least taken of each trio). Taken in turn, so that whatever the machine is doing
+ * reaches both sizes alike: three runs of one size and then three of the other can put the two
+ * under different conditions, and the ratio then measures the machine.
  */
 async function measureOnce(
   timeAt: (size: number) => number | Promise<number>,
@@ -47,10 +87,11 @@ async function measureOnce(
   await timeAt(n)
 
   const nSamples: number[] = []
-  for (let i = 0; i < 3; i++) nSamples.push(await timeAt(n))
-
   const fourNSamples: number[] = []
-  for (let i = 0; i < 3; i++) fourNSamples.push(await timeAt(4 * n))
+  for (let i = 0; i < 3; i++) {
+    nSamples.push(await timeAt(n))
+    fourNSamples.push(await timeAt(4 * n))
+  }
 
   const nMs = fastest(nSamples)
   const fourNMs = fastest(fourNSamples)
@@ -63,8 +104,9 @@ const MAX_ATTEMPTS = 3
  * Times `timeAt(n)` and `timeAt(4 * n)` (see `measureOnce`) and asserts the ratio of the two
  * fastest runs stays below 8, comfortably above the ~4 a linear subject produces and comfortably
  * below the ~16 a quadratic one does. `timeAt` builds and measures its own input at the given
- * size and returns the elapsed milliseconds; keep the size small enough that the `4 * n` run
- * finishes in well under a second locally, since this function runs it 3 times.
+ * size and returns the milliseconds the subject took (see `cpuMillisecondsSince`); keep the size
+ * small enough that the `4 * n` run finishes in well under a second locally, since this function
+ * runs it 3 times.
  *
  * Up to two retries (a fresh full pass each, warm-up included) run before failing: a lone
  * scheduler stall on a shared machine — several unrelated processes' work landing on the same

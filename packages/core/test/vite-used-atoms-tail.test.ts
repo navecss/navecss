@@ -18,7 +18,7 @@ import { HANDSHAKE_FILE } from '../src/vite-handshake.ts'
 import { resolveUsedOptions } from '../src/vite-options.ts'
 import { NOT_PARSED, textRecord, unreadableRecord } from '../src/vite-unread-record.ts'
 import { createUsedContext } from '../src/vite-used.ts'
-import { assertScalesLinearly } from './helpers/perf-scaling.ts'
+import { assertScalesLinearly, cpuMillisecondsPerCall } from './helpers/perf-scaling.ts'
 import {
   addPackage,
   appFiles,
@@ -213,10 +213,10 @@ describe('AC-used-atoms-03: an expression nested deeper than a call stack is rea
   it('reads a chain of || in time proportional to its length', async () => {
     await assertScalesLinearly((size) => {
       const code = chainOf(size)
-      const start = performance.now()
-      const reading = read(code)
-      const spent = performance.now() - start
-      expect([...reading.atoms]).toEqual(['flex'])
+      const spent = cpuMillisecondsPerCall(() => {
+        read(code)
+      })
+      expect([...read(code).atoms]).toEqual(['flex'])
       return spent
     }, 400)
   }, 120_000)
@@ -237,10 +237,11 @@ describe('AC-used-atoms-03: an expression nested deeper than a call stack is rea
 
   it('reads names that each read the one before twice in time proportional to their number', async () => {
     await assertScalesLinearly((size) => {
-      const start = performance.now()
-      const reading = read(doubleReadChain(size))
-      const spent = performance.now() - start
-      expect(reading.problems.map((problem) => problem.kind)).toEqual(['concatenation'])
+      const code = doubleReadChain(size)
+      const spent = cpuMillisecondsPerCall(() => {
+        read(code)
+      })
+      expect(read(code).problems.map((problem) => problem.kind)).toEqual(['concatenation'])
       return spent
     }, 5)
     const reading = read(doubleReadChain(40))
@@ -385,10 +386,10 @@ describe('AC-used-atoms-31: a long chain that goes on after the prefix is read o
   it('reads "nave-" + "" + ... + tone in time proportional to its length', async () => {
     await assertScalesLinearly((size) => {
       const code = `export const f = (tone) => 'nave-' + ${Array.from({ length: size }, () => "''").join(' + ')} + tone\n`
-      const start = performance.now()
-      const reading = read(code)
-      const spent = performance.now() - start
-      expect(reading.problems.map((problem) => problem.kind)).toContain('concatenation')
+      const spent = cpuMillisecondsPerCall(() => {
+        read(code)
+      })
+      expect(read(code).problems.map((problem) => problem.kind)).toContain('concatenation')
       return spent
     }, 300)
   }, 120_000)

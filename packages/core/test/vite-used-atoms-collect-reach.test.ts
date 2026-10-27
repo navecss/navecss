@@ -19,7 +19,11 @@ import { resolveUsedOptions } from '../src/vite-options.ts'
 import { buildReport } from '../src/vite-used-report.ts'
 import { createUsedContext } from '../src/vite-used.ts'
 import { navePlugin } from '../src/vite.ts'
-import { assertScalesLinearly } from './helpers/perf-scaling.ts'
+import {
+  assertScalesLinearly,
+  cpuMillisecondsPerCall,
+  cpuMillisecondsSince,
+} from './helpers/perf-scaling.ts'
 import {
   appFiles,
   atomLayerAtoms,
@@ -518,15 +522,6 @@ describe('a Svelte template call is quoted as the author wrote it', () => {
 })
 
 /**
- * The milliseconds `work` takes.
- */
-function elapsed(work: () => void): number {
-  const start = performance.now()
-  work()
-  return performance.now() - start
-}
-
-/**
  * A context and a host stand-in to record a module through, as the plugin's transform does; the
  * stand-in parses with `parse` (Vite's own parser by default).
  */
@@ -671,7 +666,7 @@ describe('a call with many unreadable arguments is quoted once', () => {
       assertScalesLinearly((size) => {
         const code = call(size)
         const program = parseAst(code) as unknown as AstNode
-        return elapsed(() => {
+        return cpuMillisecondsPerCall(() => {
           readModule(code, program, OPTIONS)
         })
       }, 2000),
@@ -735,7 +730,7 @@ describe('reading a long module costs time in proportion to its length', () => {
         const chain = Array.from({ length: size }, (_, index) => `'p${index} '`).join(' + ')
         const code = `${IMPORT}export const s = ${chain}\n`
         const program = parseAst(code) as unknown as AstNode
-        return elapsed(() => {
+        return cpuMillisecondsPerCall(() => {
           readModule(code, program, {
             cxSources: new Set([CX_SOURCE]),
             ownAtoms: new Set(),
@@ -756,7 +751,7 @@ describe('reading a long module costs time in proportion to its length', () => {
         )
         const code = `${IMPORT}const c0 = 'flex'\n${chain.join('\n')}\n${calls.join('\n')}\n`
         const program = parseAst(code) as unknown as AstNode
-        return elapsed(() => {
+        return cpuMillisecondsPerCall(() => {
           readModule(code, program, {
             cxSources: new Set([CX_SOURCE]),
             ownAtoms: new Set(),
@@ -775,9 +770,9 @@ describe('reading a long module costs time in proportion to its length', () => {
         (_, index) => `export const v${index} = (v) => cx(v)`,
       )
       const code = `${IMPORT}${lines.join('\n')}\n`
-      const start = performance.now()
+      const start = process.cpuUsage()
       const record = await recordModule(context, ctx, { code, id: '/scale-root/src/many.js' })
-      const took = performance.now() - start
+      const took = cpuMillisecondsSince(start)
       expect(record!.problems).toHaveLength(size)
       return took
     }, 2000)

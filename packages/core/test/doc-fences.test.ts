@@ -21,7 +21,7 @@ import {
   extractFences,
   loadEntryMap,
 } from './doc-fences.ts'
-import { assertScalesLinearly } from './helpers/perf-scaling.ts'
+import { assertScalesLinearly, cpuMillisecondsPerCall } from './helpers/perf-scaling.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const CORE_ROOT = path.resolve(HERE, '..')
@@ -188,9 +188,9 @@ describe('extractFences and extractCoreImports cover every fence and import shap
     await expect(
       assertScalesLinearly((n) => {
         const text = `\`\`\`${'a'.repeat(n)}`
-        const start = performance.now()
-        extractFences('x', text)
-        return performance.now() - start
+        return cpuMillisecondsPerCall(() => {
+          extractFences('x', text)
+        })
       }, 2500),
     ).resolves.toBeDefined()
   }, 45_000)
@@ -199,9 +199,9 @@ describe('extractFences and extractCoreImports cover every fence and import shap
     await expect(
       assertScalesLinearly((n) => {
         const text = '```a\n'.repeat(n)
-        const start = performance.now()
-        extractFences('x', text)
-        return performance.now() - start
+        return cpuMillisecondsPerCall(() => {
+          extractFences('x', text)
+        })
       }, 5000),
     ).resolves.toBeDefined()
   }, 45_000)
@@ -210,9 +210,9 @@ describe('extractFences and extractCoreImports cover every fence and import shap
     await expect(
       assertScalesLinearly((n) => {
         const text = '`'.repeat(n)
-        const start = performance.now()
-        extractFences('x', text)
-        return performance.now() - start
+        return cpuMillisecondsPerCall(() => {
+          extractFences('x', text)
+        })
       }, 5000),
     ).resolves.toBeDefined()
   }, 45_000)

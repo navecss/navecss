@@ -6,7 +6,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { check } from '../../src/directive/check.ts'
-import { assertScalesLinearly } from '../helpers/perf-scaling.ts'
+import { assertScalesLinearly, cpuMillisecondsSince } from '../helpers/perf-scaling.ts'
 
 // Counts the directory walk's own calls into the filesystem (the mesh row below reads them).
 // Every call still reaches the real function.
@@ -270,9 +270,9 @@ describe('check() stays roughly linear, not quadratic, and stack-safe on a large
       await assertScalesLinearly(async (size) => {
         const filePath = await writeCss(`a-${size}.css`, '.b{@nave flex}'.repeat(size))
 
-        const start = performance.now()
+        const start = process.cpuUsage()
         const result = await check({ source: [filePath] })
-        const elapsed = performance.now() - start
+        const elapsed = cpuMillisecondsSince(start)
 
         expect(result.status).toBe(1)
         expect(result.findings).toHaveLength(size)
@@ -297,9 +297,9 @@ describe('check() stays roughly linear, not quadratic, and stack-safe on a large
       await assertScalesLinearly(async (size) => {
         const filePath = await writeCss(`e-${size}.css`, '.a{'.repeat(size) + '}'.repeat(size))
 
-        const start = performance.now()
+        const start = process.cpuUsage()
         const result = await check({ source: [filePath] })
-        const elapsed = performance.now() - start
+        const elapsed = cpuMillisecondsSince(start)
 
         expect(result.status).toBe(0)
 
@@ -434,8 +434,7 @@ describe('a directory --source follows symlinks, loop-safe', () => {
 
           const start = process.cpuUsage()
           const result = await check({ source: [dir] })
-          const used = process.cpuUsage(start)
-          const elapsed = (used.user + used.system) / 1000
+          const elapsed = cpuMillisecondsSince(start)
 
           expect(result.status).toBe(0)
           expect(result.stylesheetsRead).toBe(clusters * MESH_CLUSTER_WIDTH)
