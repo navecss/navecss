@@ -6,7 +6,6 @@
  */
 import { spawn, spawnSync } from 'node:child_process'
 import {
-  chmodSync,
   existsSync,
   mkdtempSync,
   readdirSync,
@@ -18,12 +17,16 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import {
+  FLOOR_HELPER,
+  isReactInstalled,
+  RACE_HELPER,
+  raceTrial,
+  script,
+} from './helpers/floor-fixture.ts'
 import { FLOOR_VERSION, floorNextRootIn } from './helpers/next-floor.ts'
-
-const FLOOR_HELPER = pathToFileURL(path.join(import.meta.dirname, 'helpers/next-floor.ts')).href
 
 interface Scratch {
   /**
@@ -38,16 +41,10 @@ interface Scratch {
    * The scratch directory holding both.
    */
   readonly directory: () => string
-}
-
-/**
- * Writes an executable shell script and returns its path.
- */
-function script(directory: string, name: string, lines: readonly string[]): string {
-  const file = path.join(directory, name)
-  writeFileSync(file, ['#!/bin/sh', ...lines, ''].join('\n'))
-  chmodSync(file, 0o755)
-  return file
+  /**
+   * The file the `npm` writes once it has written `next`, in the staging directory.
+   */
+  readonly stagingStarted: () => string
 }
 
 /**
@@ -63,6 +60,7 @@ function useScratch(): Scratch {
     npm = script(directory, 'npm', [
       'mkdir -p node_modules/next node_modules/react',
       `printf '{"version":"${FLOOR_VERSION}"}' > node_modules/next/package.json`,
+      `touch ${path.join(directory, 'staging-started')}`,
       'sleep 2',
       `printf '{"version":"19.2.0"}' > node_modules/react/package.json`,
     ])
@@ -72,45 +70,100 @@ function useScratch(): Scratch {
     directory: () => directory,
     floorDir: () => path.join(directory, 'floor'),
     npm: () => npm,
+    stagingStarted: () => path.join(directory, 'staging-started'),
   }
 }
 
 /**
- * Whether `react` is installed beside `next` under `floorDir`.
+ * Whether the process `pid` is running.
  */
-function isReactInstalled(floorDir: string): boolean {
-  return existsSync(path.join(floorDir, 'node_modules/react/package.json'))
+function isRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**
- * Starts an installer in a process group of its own whose `npm` stops after writing `next`, waits
- * until it has got that far, then kills the group.
+ * Whether the process `pid` has ended within `ms` milliseconds.
  */
-async function killInstallerMidway(scratch: Scratch): Promise<void> {
-  const started = path.join(scratch.directory(), 'started')
-  const slow = script(scratch.directory(), 'slow', [
+async function isStoppedWithin(pid: number, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms
+  while (isRunning(pid) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  return !isRunning(pid)
+}
+
+/**
+ * An `npm` that writes `next`, notes that it has got that far in the file `started`, and then waits.
+ */
+function midwayNpm(scratch: Scratch): string {
+  return script(scratch.directory(), 'slow', [
     'mkdir -p node_modules/next',
     `printf '{"version":"${FLOOR_VERSION}"}' > node_modules/next/package.json`,
-    `touch ${started}`,
+    `touch ${path.join(scratch.directory(), 'started')}`,
     'sleep 60',
   ])
+}
+
+/**
+ * Starts an installer in a process group of its own that runs `npm`, waits until `npm` has noted
+ * that it got as far as writing `next`, for at most `tries` looks, then kills the group.
+ */
+async function killInstallerMidway(
+  scratch: Scratch,
+  npm: string = midwayNpm(scratch),
+  tries = 200,
+): Promise<void> {
+  const started = path.join(scratch.directory(), 'started')
   const installer = path.join(scratch.directory(), 'install.mjs')
   writeFileSync(
     installer,
     `import { floorNextRootIn } from ${JSON.stringify(FLOOR_HELPER)}\nawait floorNextRootIn(process.argv[2], process.argv[3])\n`,
   )
   // Its own process group, so the kill takes the installer and the npm it started together.
-  const child = spawn(process.execPath, [installer, scratch.floorDir(), slow], {
+  const child = spawn(process.execPath, [installer, scratch.floorDir(), npm], {
     detached: true,
     stdio: 'ignore',
   })
   const exited = new Promise((resolve) => child.once('exit', resolve))
-  for (let tries = 0; !existsSync(started) && tries < 200; tries += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 50))
+  try {
+    for (let looks = 0; !existsSync(started) && looks < tries; looks += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    expect(existsSync(started), 'the installer reached npm').toBe(true)
+  } finally {
+    // Whether or not npm got that far, the group does not outlive the row.
+    process.kill(-child.pid!, 'SIGKILL')
+    await exited
   }
-  expect(existsSync(started), 'the installer reached npm').toBe(true)
-  process.kill(-child.pid!, 'SIGKILL')
-  await exited
+}
+
+/**
+ * Asks for the floor with `npm`, looks at the floor while that `npm` is still running, and waits
+ * for the install to end. Resolves to what the look found.
+ */
+async function lookWhileInstalling(
+  scratch: Scratch,
+  npm: string,
+): Promise<{ readonly hasBegun: boolean; readonly isFloorShown: boolean }> {
+  const installing = floorNextRootIn(scratch.floorDir(), npm)
+  try {
+    // The `npm` notes in a file that it has written `next`; the look waits for that note.
+    for (let looks = 0; !existsSync(scratch.stagingStarted()) && looks < 200; looks += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    const nextManifest = path.join(scratch.floorDir(), 'node_modules/next/package.json')
+    return {
+      hasBegun: existsSync(scratch.stagingStarted()),
+      isFloorShown: existsSync(nextManifest),
+    }
+  } finally {
+    await installing
+  }
 }
 
 describe('the Next.js floor install', () => {
@@ -127,27 +180,37 @@ describe('the Next.js floor install', () => {
     expect(seen).toEqual([true, true, true])
   })
 
-  it('leaves no directory behind but the install itself', async () => {
+  it('leaves no directory behind but the install itself and its marker', async () => {
     await floorNextRootIn(scratch.floorDir(), scratch.npm())
 
     expect(readdirSync(scratch.directory()).toSorted((a, b) => a.localeCompare(b))).toEqual([
       'floor',
       'npm',
+      'staging-started',
     ])
   })
 
   it('shows no installed floor while npm is still running', async () => {
-    const installing = floorNextRootIn(scratch.floorDir(), scratch.npm())
-    try {
-      // npm has written `next` by now and is waiting before it writes `react`.
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+    const seen = await lookWhileInstalling(scratch, scratch.npm())
 
-      const nextManifest = path.join(scratch.floorDir(), 'node_modules/next/package.json')
-      expect(existsSync(nextManifest)).toBe(false)
-    } finally {
-      await installing
-    }
+    expect(seen.isFloorShown).toBe(false)
     expect(isReactInstalled(scratch.floorDir())).toBe(true)
+  })
+
+  it('looks only once npm has begun to write, however slow npm is to begin', async () => {
+    const slow = script(scratch.directory(), 'slow-start', [
+      'sleep 1.5',
+      'mkdir -p node_modules/next node_modules/react',
+      `printf '{"version":"${FLOOR_VERSION}"}' > node_modules/next/package.json`,
+      `touch ${scratch.stagingStarted()}`,
+      'sleep 2',
+      `printf '{"version":"19.2.0"}' > node_modules/react/package.json`,
+    ])
+
+    const seen = await lookWhileInstalling(scratch, slow)
+
+    expect(seen.hasBegun, 'npm had begun to write when the floor was looked at').toBe(true)
+    expect(seen.isFloorShown).toBe(false)
   })
 
   it('leaves nothing installed when npm fails, and installs on the next ask', async () => {
@@ -162,6 +225,24 @@ describe('the Next.js floor install', () => {
     await floorNextRootIn(scratch.floorDir(), scratch.npm())
     expect(isReactInstalled(scratch.floorDir())).toBe(true)
   })
+
+  it('kills the installer it started when npm never gets as far as writing next', async () => {
+    const pidFile = path.join(scratch.directory(), 'npm.pid')
+    const silent = script(scratch.directory(), 'silent', [`echo $$ > ${pidFile}`, 'sleep 60'])
+
+    const killing = killInstallerMidway(scratch, silent, 100)
+    for (let looks = 0; !existsSync(pidFile) && looks < 90; looks += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    const npmPid = Number(readFileSync(pidFile, 'utf8'))
+    try {
+      await expect(killing).rejects.toThrow('the installer reached npm')
+
+      expect(await isStoppedWithin(npmPid, 5000), 'npm is not left running').toBe(true)
+    } finally {
+      if (isRunning(npmPid)) process.kill(npmPid, 'SIGKILL')
+    }
+  }, 30_000)
 
   it('installs afresh after an installer was killed in the middle of it', async () => {
     await killInstallerMidway(scratch)
@@ -230,70 +311,6 @@ describe('the install lock of the Next.js floor', () => {
   })
 })
 
-/**
- * One trial of the race: `callers` processes ask for the floor at once, a lock of an installer
- * that is gone is in place when `isLocked` is set, and a shim `npm` logs each start. Resolves to
- * how many times npm started and what each caller answered.
- */
-async function raceTrial(
-  callers: number,
-  isLocked: boolean,
-): Promise<{ readonly answers: string[]; readonly isWhole: boolean; readonly starts: number }> {
-  const made = mkdtempSync(path.join(tmpdir(), 'prune-floor-race-'))
-  const directory = realpathSync(made)
-  try {
-    const floorDir = path.join(directory, 'floor')
-    const npm = script(directory, 'npm', [
-      `echo $$ >> ${directory}/starts.log`,
-      'mkdir -p node_modules/next node_modules/react',
-      `printf '{"version":"${FLOOR_VERSION}"}' > node_modules/next/package.json`,
-      'sleep 1',
-      `printf '{"version":"19.2.0"}' > node_modules/react/package.json`,
-    ])
-    const asking = path.join(directory, 'ask.mjs')
-    writeFileSync(
-      asking,
-      [
-        `import { floorNextRootIn } from ${JSON.stringify(FLOOR_HELPER)}`,
-        'try {',
-        '  await floorNextRootIn(process.argv[2], process.argv[3])',
-        "  console.log('ok')",
-        '} catch (error) {',
-        "  console.log(`ERR ${String(error.message).split('\\n')[0]}`)",
-        '}',
-        '',
-      ].join('\n'),
-    )
-    // A process that has ended: its id names no installer that is running.
-    if (isLocked)
-      writeFileSync(`${floorDir}.installing`, String(spawnSync(process.execPath, ['-e', '']).pid))
-    const answers = await Promise.all(
-      Array.from({ length: callers }, () => answerOf(asking, floorDir, npm)),
-    )
-    const log = path.join(directory, 'starts.log')
-    return {
-      answers,
-      starts: existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').length : 0,
-      isWhole: isReactInstalled(floorDir),
-    }
-  } finally {
-    rmSync(directory, { recursive: true, force: true })
-  }
-}
-
-/**
- * What one process running `script` with `args` printed.
- */
-function answerOf(file: string, ...args: string[]): Promise<string> {
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, [file, ...args], { stdio: ['ignore', 'pipe', 'pipe'] })
-    let output = ''
-    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
-    child.once('close', () => resolve(output.trim()))
-  })
-}
-
 describe('the Next.js floor install asked by several processes at once', () => {
   it('runs npm once and answers every caller, with no lock in place', async () => {
     const trial = await raceTrial(8, false)
@@ -315,4 +332,32 @@ describe('the Next.js floor install asked by several processes at once', () => {
     )
     expect(trials.every((trial) => trial.isWhole)).toBe(true)
   }, 300_000)
+})
+
+describe('a worker of the race that is stopped in the middle of a trial', () => {
+  const scratch = useScratch()
+
+  it('leaves no directory of the trial behind', async () => {
+    const trial = path.join(scratch.directory(), 'trial.mjs')
+    writeFileSync(
+      trial,
+      `import { raceTrial } from ${JSON.stringify(RACE_HELPER)}\nawait raceTrial(2, false)\n`,
+    )
+    const made = (): string[] =>
+      readdirSync(scratch.directory()).filter((name) => name.startsWith('prune-floor-race-'))
+    const child = spawn(process.execPath, [trial], {
+      env: { ...process.env, TMPDIR: scratch.directory() },
+      stdio: 'ignore',
+    })
+    const exited = new Promise((resolve) => child.once('exit', resolve))
+    for (let looks = 0; made().length === 0 && looks < 200; looks += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    expect(made(), 'the trial made its directory').toHaveLength(1)
+
+    child.kill('SIGTERM')
+    await exited
+
+    expect(made(), 'the directory of the trial').toEqual([])
+  }, 30_000)
 })
