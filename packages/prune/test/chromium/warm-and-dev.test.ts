@@ -83,11 +83,22 @@ async function buildGreen(app: NextApp, cell: Cell): Promise<void> {
 }
 
 /**
- * Whether the document's stylesheets hold a rule for the atom's class, in the browser.
+ * What the page function below reads of the document.
+ */
+interface SheetsOfDocument {
+  readonly document: {
+    readonly styleSheets: Iterable<{ readonly cssRules: Iterable<{ readonly cssText: string }> }>
+  }
+}
+
+/**
+ * Whether the document's stylesheets hold a rule for the atom's class, in the browser. The class
+ * name goes in as the function's argument, so no code is built from it.
  */
 async function isRuleIn(page: Page, className: string): Promise<boolean> {
-  const source = String.raw`(() => {
-    const pattern = new RegExp('\\.' + ${JSON.stringify(className)} + '(?![\\w-])')
+  return await page.evaluate((name) => {
+    const { document } = globalThis as unknown as SheetsOfDocument
+    const pattern = new RegExp(String.raw`\.${name}(?![\w-])`)
     return [...document.styleSheets].some((sheet) => {
       try {
         return [...sheet.cssRules].some((rule) => pattern.test(rule.cssText))
@@ -95,8 +106,7 @@ async function isRuleIn(page: Page, className: string): Promise<boolean> {
         return false
       }
     })
-  })()`
-  return await page.evaluate<boolean>(source)
+  }, className)
 }
 
 /**

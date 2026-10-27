@@ -24,12 +24,27 @@ export async function withPage<Result>(
 }
 
 /**
- * The computed value of `property` on the element matching `selector`.
+ * What a page function reads of the browser's globals. This package's type check has no DOM
+ * library, so the functions below name only what they use.
+ */
+interface PageGlobals {
+  readonly document: { readonly querySelector: (selector: string) => unknown }
+  readonly getComputedStyle: (element: unknown) => {
+    readonly getPropertyValue: (property: string) => string
+  }
+}
+
+/**
+ * The computed value of `property` on the element matching `selector`. The selector and the
+ * property go in as the function's argument, so no code is built from them.
  */
 export function computed(page: Page, selector: string, property: string): Promise<string> {
-  // A string, because this package's type check has no DOM library to name `document` in.
-  return page.evaluate<string>(
-    `getComputedStyle(document.querySelector(${JSON.stringify(selector)})).getPropertyValue(${JSON.stringify(property)})`,
+  return page.evaluate(
+    ([chosen, name]) => {
+      const { document, getComputedStyle } = globalThis as unknown as PageGlobals
+      return getComputedStyle(document.querySelector(chosen)).getPropertyValue(name)
+    },
+    [selector, property] as const,
   )
 }
 
