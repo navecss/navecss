@@ -19,7 +19,7 @@ const TEST = path.join(PACKAGE, 'test')
 /**
  * Files that reach the helpers but start a stand-in for `next` that serves one page, not Next.js.
  */
-const STAND_IN = new Set(['test/leftovers.test.ts'])
+const STAND_IN = new Set(['test/dev-until-css.test.ts', 'test/leftovers.test.ts'])
 const STARTERS = ['next-app.ts', 'next-dev.ts'].map((name) => path.join(TEST, 'helpers', name))
 
 /**

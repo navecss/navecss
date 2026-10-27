@@ -9,6 +9,22 @@ import { nextCommand, nextEnvironment, pause } from './next-process.ts'
 
 const STYLESHEET_LINK = /<link[^>]+href="([^"]+\.css[^"]*)"/g
 
+interface UntilCssOptions {
+  /**
+   * How long to wait for the text, 240 seconds when omitted.
+   */
+  readonly deadlineMs?: number
+  /**
+   * How long to pause between two requests, one second when omitted.
+   */
+  readonly intervalMs?: number
+  /**
+   * Writes the watched file again. A dev server on a busy machine can lose the watcher event of
+   * an edit, and then nothing it serves changes: this runs after every tenth check.
+   */
+  readonly rewrite?: () => void
+}
+
 export interface DevServer {
   /**
    * The server's origin, such as `http://127.0.0.1:3000`.
@@ -27,10 +43,10 @@ export interface DevServer {
    */
   readonly css: (route: string) => Promise<string>
   /**
-   * Requests `route` again until the CSS it links holds `text`, or until the server is stopped,
-   * with no time limit of its own: the test's timeout bounds it.
+   * Requests `route` again until the CSS it links holds `text`, or until the server is stopped.
+   * Fails with what the server printed once `deadlineMs` has passed.
    */
-  readonly untilCss: (route: string, text: string) => Promise<void>
+  readonly untilCss: (route: string, text: string, options?: UntilCssOptions) => Promise<void>
   /**
    * Stops the server by its process group's id. Stopping it again does nothing.
    */
@@ -76,6 +92,34 @@ async function stopGroup(child: ChildProcess, exited: Promise<void>): Promise<vo
   for (let tries = 0; isGroupRunning(child.pid) && tries < 50; tries += 1) await pause(100)
   signalGroup(child.pid, 'SIGKILL')
   forgetGroup(child.pid)
+}
+
+/**
+ * Requests `route` until the CSS it links holds `text`: the body of `DevServer.untilCss`.
+ */
+async function waitForCss(
+  server: {
+    readonly css: (route: string) => Promise<string>
+    readonly isStopped: () => boolean
+    readonly output: () => string
+  },
+  route: string,
+  text: string,
+  options: UntilCssOptions = {},
+): Promise<void> {
+  const { deadlineMs = 240_000, intervalMs = 1000, rewrite } = options
+  const deadline = Date.now() + deadlineMs
+  for (let check = 1; !server.isStopped(); check += 1) {
+    const served = await server.css(route)
+    if (served.includes(text)) return
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `${route} did not serve CSS holding ${text} within ${deadlineMs} ms:\n${server.output()}`,
+      )
+    }
+    if (check % 10 === 0) rewrite?.()
+    await pause(intervalMs)
+  }
 }
 
 /**
@@ -127,13 +171,8 @@ export async function startDev(
     const sheets = await Promise.all(hrefs.map((href) => get(href)))
     return sheets.map((sheet) => sheet.text).join('\n')
   }
-  const untilCss = async (route: string, text: string): Promise<void> => {
-    while (!isStopped) {
-      const served = await css(route)
-      if (served.includes(text)) return
-      await pause(1000)
-    }
-  }
+  const untilCss = (route: string, text: string, options?: UntilCssOptions): Promise<void> =>
+    waitForCss({ css, output: () => output, isStopped: () => isStopped }, route, text, options)
   let stopping: Promise<void> | undefined
   const stop = (): Promise<void> => {
     isStopped = true

@@ -44,7 +44,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
         expect(await server.css('/')).toContain('.nave-flex')
         expect(Object.keys(app.record()?.directories ?? {})).toEqual(expect.arrayContaining(ABSENT))
         app.write(LATER_ROUTE)
-        await server.untilCss('/', '.nave-grid')
+        await server.untilCss('/', '.nave-grid', { rewrite: () => app.write(LATER_ROUTE) })
         await server.stop()
         expect(server.output()).not.toMatch(/panic/i)
       },
