@@ -1674,7 +1674,7 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('serves a stylesheet requested before a CSS Module that only a lazily imported script reaches with the atoms it composes', async () => {
     const app = makeUsedApp(
@@ -1709,7 +1709,7 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('answers a CSS Module that holds the atomic layer itself, without waiting on its own read', async () => {
     const app = makeUsedApp(
@@ -1743,7 +1743,7 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('sends the stylesheet in the same update as the update the CSS Module whose edit grew the set causes', async () => {
     const main = `${cssModuleFiles()['src/main.ts']}import.meta.hot?.accept('./card.module.css', () => {})\n`
@@ -1771,7 +1771,7 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('reads a module an edit makes a CSS Module compose from through the CSS Module only, not on its own', async () => {
     const main = `${cssModuleFiles()['src/main.ts']}import.meta.hot?.accept('./card.module.css', () => {})\n`
@@ -1802,5 +1802,5 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
