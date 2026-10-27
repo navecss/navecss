@@ -140,10 +140,13 @@ function linesOpening(output: string, prefix: string): string[] {
 }
 
 // Next.js 16.2.0 on webpack now and then dies with an uncaught `Cannot read properties of undefined
-// (reading 'length')` right after it starts the production build: about 1 build in 22 here, with
-// the package listed, and not yet attributed. A failed row runs again before it counts (the
-// `retry` option below). The third state's rows run again only when the failed attempt printed that
-// crash, and name it in the output; any other red fails at once.
+// (reading 'length')` right after it starts the production build, and the cause is not known.
+// Measured on this fixture's third state, five builds in a row per app, the two setups taking turns:
+// 1 crash in 60 builds with the package listed and none in 60 with every atom and no package
+// (Fisher's exact test, one-sided p = 0.5), and earlier 1 in 22 against none in 5. That is no
+// evidence the package makes it more likely, and too few crashes to say it does not. A failed row
+// runs again before it counts (the `retry` option below). The third state's rows run again only
+// when the failed attempt printed that crash, and name it in the output; any other red fails at once.
 describe.skipIf(SKIP_REASON !== undefined)(
   `a pnpm workspace on real builds${SKIP_REASON === undefined ? '' : ` (skipped: ${SKIP_REASON})`}`,
   { retry: 2 },
