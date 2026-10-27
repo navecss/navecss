@@ -5,7 +5,7 @@
  * directory (after `next.config` has run, so the wrapper cannot read it). The plugin infers it the
  * same way, with Next.js's own function. Webpack has no such panic, but a stylesheet that declares
  * a file outside that root made Next.js 16.2.0 crash on the next build, so webpack gets the same
- * limit: a file read outside the root is declared to neither, and the build's own check catches it.
+ * limit: a file read outside the root is declared to neither, and the build checks it before it finishes.
  */
 import { createRequire } from 'node:module'
 import path from 'node:path'

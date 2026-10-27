@@ -25,9 +25,10 @@ const PACKAGE = path.resolve(import.meta.dirname, '..')
 const TEST = path.join(PACKAGE, 'test')
 
 /**
- * Files that reach the helpers but start a stand-in for `next` that serves one page, not Next.js.
+ * Files that reach the helpers but start a stand-in for `next` that serves one page, not Next.js,
+ * and this file, which names `nextCommand` in the files it plants.
  */
-const STAND_IN = new Set(['test/leftovers.test.ts'])
+const STAND_IN = new Set(['test/build-project.test.ts', 'test/leftovers.test.ts'])
 const STARTERS = ['next-app.ts', 'next-dev.ts'].map((name) => path.join(TEST, 'helpers', name))
 
 /**
@@ -36,7 +37,7 @@ const STARTERS = ['next-app.ts', 'next-dev.ts'].map((name) => path.join(TEST, 'h
 function importsOf(file: string): string[] {
   const text = readFileSync(file, 'utf8')
   return text
-    .matchAll(/(?:from|import)\s+['"](\.[^'"]+)['"]/gu)
+    .matchAll(/(?:from|import)\s*\(?\s*['"](\.[^'"]+)['"]/gu)
     .map((match) => path.resolve(path.dirname(file), match[1]!))
     .filter((target) => statSync(target, { throwIfNoEntry: false })?.isFile() === true)
     .toArray()
@@ -71,7 +72,7 @@ const project = (name: string): (typeof projects)[number] =>
  * Whether a test file starts Next.js: it reaches the helpers that do, or runs `next` itself.
  */
 function isStartingNext(file: string, targets: readonly string[]): boolean {
-  return isReaching(file, targets)
+  return readFileSync(file, 'utf8').includes('nextCommand(') || isReaching(file, targets)
 }
 
 describe('the rows that start Next.js', () => {

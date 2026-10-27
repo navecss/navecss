@@ -40,7 +40,7 @@ describe('the retry of the webpack third state', () => {
     const log = (name: string): string => JSON.stringify(path.join(directory, `${name}.log`))
     writeFileSync(
       path.join(directory, 'vitest.config.mjs'),
-      `export default { test: { root: ${JSON.stringify(directory)}, include: ['file.test.ts'] } }\n`,
+      `export default { test: { root: ${JSON.stringify(directory)}, include: ['file.test.ts'], reporters: ['verbose'] } }\n`,
     )
     writeFileSync(
       path.join(directory, 'file.test.ts'),
@@ -52,10 +52,9 @@ describe('the retry of the webpack third state', () => {
         "describe('cells', { retry: RETRY_ON_NEXT_CRASH }, () => {",
         "  it('first', () => {",
         `    appendFileSync(${log('first')}, 'x')`,
-        `    if (readFileSync(${log('first')}, 'utf8').length === 1) {`,
-        `      noteNextCrash(${JSON.stringify(first)})`,
-        `      throw new Error(${JSON.stringify(first)})`,
-        '    }',
+        `    const isFirst = readFileSync(${log('first')}, 'utf8').length === 1`,
+        `    noteNextCrash(isFirst ? ${JSON.stringify(first)} : '')`,
+        `    if (isFirst) throw new Error(${JSON.stringify(first)})`,
         '  })',
         "  it('second', () => {",
         `    appendFileSync(${log('second')}, 'x')`,

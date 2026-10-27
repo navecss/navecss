@@ -1,7 +1,8 @@
 /**
  * AC-nextjs-used-atoms-07 on real builds: in a pnpm workspace the root is the one Next.js infers
- * (Turbopack's own), a workspace package re-runs the plugin, a file outside the root is caught in
- * the build, and paths are the app's. The app is `apps/web`; `packages/ui` is a workspace package that calls `cx('gap')`.
+ * (Turbopack's own), a workspace package re-runs the plugin, a file outside the root is declared to
+ * neither bundler, and paths are the app's. The app is `apps/web`; `packages/ui` is a workspace
+ * package that calls `cx('gap')`.
  * Three states: the workspace as it is; with `bad-lib`, a dependency holding three calls nothing
  * can read, installed in the store at the top; and with a module outside the workspace that a
  * tsconfig `paths` entry reaches. Every row runs on all four cells, cold and then warm.
