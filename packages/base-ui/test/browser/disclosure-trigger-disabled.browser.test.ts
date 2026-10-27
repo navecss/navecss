@@ -110,11 +110,58 @@ const FIELDSET_CASES: readonly Case[] = (['accordion', 'collapsible'] as const).
 const fieldsetScene = (): ReturnType<typeof h> =>
   h('fieldset', { disabled: true }, ...FIELDSET_CASES.map((one) => trigger(one)))
 
+// Two enabled triggers a disabled fieldset does not disable: one rendered as a `div`, which is
+// never `:disabled`, and a native one inside the fieldset's first `<legend>`.
+const DIV_IN_FIELDSET: Case = {
+  form: 'div',
+  id: 'collapsible-div-in-disabled-fieldset',
+  isDisabled: false,
+  part: 'collapsible',
+}
+const IN_FIRST_LEGEND: Case = {
+  form: 'native',
+  id: 'collapsible-native-in-first-legend',
+  isDisabled: false,
+  part: 'collapsible',
+}
+const UNDISABLED_IN_FIELDSET: readonly Case[] = [DIV_IN_FIELDSET, IN_FIRST_LEGEND]
+
+const fieldsetLegendScene = (): ReturnType<typeof h> =>
+  h(
+    'fieldset',
+    { disabled: true },
+    h('legend', {}, trigger(IN_FIRST_LEGEND)),
+    trigger(DIV_IN_FIELDSET),
+  )
+
+/**
+A sheet with the trigger's two branches spelled the other way round, so it has no
+`&:disabled, &[aria-disabled="true"]` key to take out.
+ */
+const withBranchesSwapped = (sheet: string): string => {
+  const lines = sheet.split('\n')
+  const at = lines.findIndex((line) => line.startsWith(TRIGGER_RULE))
+  expect(at, 'the trigger rule is in the built stylesheet').toBeGreaterThan(-1)
+  lines[at] = (lines[at] ?? '').replace(NATIVE_BRANCH, '&[aria-disabled="true"], &:disabled{')
+  return lines.join('\n')
+}
+
 describe('AC-base-ui-bridge-55: the control sheet', () => {
   it('reds when the trigger rule has no :disabled branch to take out, so a control cannot pass on the built sheet', () => {
-    const swapped = stylesheet.replace(NATIVE_BRANCH, '&[aria-disabled="true"], &:disabled{')
+    const swapped = withBranchesSwapped(stylesheet)
     expect(swapped, 'the built stylesheet has the key').not.toBe(stylesheet)
     expect(() => withoutNativeBranch(swapped)).toThrow(/the stylesheet has the key to take out/)
+  })
+
+  it('swaps the branches on the trigger rule, not on an earlier rule that spells its key the same way', () => {
+    const lines = stylesheet.split('\n')
+    const at = lines.findIndex((line) => line.startsWith(TRIGGER_RULE))
+    expect(at, 'the trigger rule is in the built stylesheet').toBeGreaterThan(-1)
+    const earlier = `  .nave-base-ui-earlier { color: red; ${NATIVE_BRANCH}color: blue} }`
+    const sheet = [...lines.slice(0, at), earlier, ...lines.slice(at)].join('\n')
+    const swapped = withBranchesSwapped(sheet).split('\n')
+    expect(swapped[at], 'the earlier rule is untouched').toBe(earlier)
+    expect(swapped[at + 1], 'the trigger rule lost its key').not.toContain(NATIVE_BRANCH)
   })
 })
 
@@ -167,6 +214,17 @@ describe('AC-base-ui-bridge-55: disabled disclosure trigger paint', () => {
         await show(scheme, stylesheet, fieldsetScene())
         expect(required(one.id).matches(':disabled'), 'the fieldset disables the button').toBe(true)
         expect(paint(one)).toEqual({ color: colorOf(DISABLED.token), cursor: DISABLED.cursor })
+      },
+    )
+
+    it.each(UNDISABLED_IN_FIELDSET)(
+      '$id keeps the enabled colour and cursor, as the browser does not disable it',
+      async (one) => {
+        await show(scheme, stylesheet, fieldsetLegendScene())
+        expect(required(one.id).matches(':disabled'), 'the fieldset does not disable it').toBe(
+          false,
+        )
+        expect(paint(one)).toEqual({ color: colorOf(ENABLED.token), cursor: ENABLED.cursor })
       },
     )
 
