@@ -38,10 +38,12 @@ const project = (name: string): (typeof projects)[number] =>
   projects.find((candidate) => candidate.test.name === name)!
 
 /**
- * Whether a test file starts Next.js: it reaches the helpers that do, or runs `next` itself.
+ * Whether a test file starts Next.js: it reaches the helpers that do, uses `nextCommand` to run
+ * `next` itself, or loads a module by a path it computes, which the guard cannot follow.
  */
 function isStartingNext(file: string, targets: readonly string[]): boolean {
-  return referencesOf(file).isCallingNextCommand || isReaching(file, targets)
+  const { hasComputedLoad, isUsingNextCommand } = referencesOf(file)
+  return hasComputedLoad || isUsingNextCommand || isReaching(file, targets)
 }
 
 describe('the rows that start Next.js', () => {
@@ -142,6 +144,56 @@ describe('the rows that start Next.js', () => {
           '',
         ].join('\n'),
       )
+
+      expect(isStartingNext(file, STARTERS)).toBe(false)
+    })
+
+    it.each([
+      [
+        'an import of nextCommand under another name',
+        "import { nextCommand as run } from './helpers/next-process.ts'\nrun(['build'])\n",
+      ],
+      [
+        'nextCommand assigned to another name',
+        "import { nextCommand } from './helpers/next-process.ts'\nconst run = nextCommand\nrun(['build'])\n",
+      ],
+      [
+        'nextCommand passed on as a value',
+        "import { nextCommand } from './helpers/next-process.ts'\n[['build']].map(nextCommand)\n",
+      ],
+      [
+        'a require made by createRequire and kept in a name',
+        "import { createRequire } from 'node:module'\nconst load = createRequire(import.meta.url)\nload('./helpers/starter')\n",
+      ],
+      [
+        'a require made by createRequire and called at once',
+        "import { createRequire } from 'node:module'\ncreateRequire(import.meta.url)('./helpers/starter')\n",
+      ],
+      [
+        'an import() whose argument is computed',
+        "const name = './helpers/' + 'starter'\nawait import(name)\n",
+      ],
+      [
+        'a require() whose argument is computed',
+        "const name = './helpers/' + 'starter'\nrequire(name)\n",
+      ],
+    ])('through %s', (_how, source) => {
+      const file = path.join(planted, 'f.test.ts')
+      writeFileSync(file, source)
+
+      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+    })
+
+    it('but not in a file that imports nextCommand and never uses it (control)', () => {
+      const file = path.join(planted, 'g.test.ts')
+      writeFileSync(file, "import { nextCommand } from './helpers/next-process.ts'\nvoid 1\n")
+
+      expect(isStartingNext(file, STARTERS)).toBe(false)
+    })
+
+    it('but not in a file whose import() and require() name a file by a plain string (control)', () => {
+      const file = path.join(planted, 'h.test.ts')
+      writeFileSync(file, "await import('./helpers/starter.ts')\nrequire('node:path')\n")
 
       expect(isStartingNext(file, STARTERS)).toBe(false)
     })

@@ -26,9 +26,15 @@ const SOURCE_OF: Record<string, string> = { '.js': '.ts', '.mjs': '.mts', '.cjs'
 
 interface References {
   /**
-   * Whether the file calls a function named `nextCommand`, on its own or as a property.
+   * Whether the file loads a module by a path it computes: a call of `import()` or `require()`
+   * with an argument that is not a plain string. The guard cannot know where that leads.
    */
-  readonly isCallingNextCommand: boolean
+  readonly hasComputedLoad: boolean
+  /**
+   * Whether the file names `nextCommand` in its code, other than in the import that brings it in:
+   * calling it, calling it under another name, or passing it on as a value.
+   */
+  readonly isUsingNextCommand: boolean
   /**
    * The relative paths the file imports, re-exports, `import()`s or `require()`s, as written.
    */
@@ -48,16 +54,10 @@ function textOf(node: Expression | null | undefined): string | undefined {
 }
 
 /**
- * Whether `callee` is `name`, or a property of that name read off an object.
+ * Whether `callee` is the plain name `name`.
  */
-function isCalling(callee: Expression, name: string): boolean {
-  if (callee.type === 'Identifier') return callee.name === name
-  return (
-    callee.type === 'MemberExpression' &&
-    !callee.computed &&
-    callee.property.type === 'Identifier' &&
-    callee.property.name === name
-  )
+function isNamed(callee: Expression, name: string): boolean {
+  return callee.type === 'Identifier' && callee.name === name
 }
 
 const readings = new Map<string, References>()
@@ -75,25 +75,59 @@ function referencesIn(file: string, code: string): References {
   const failure = parsed.errors.find((error) => isFatalParseError(error))
   if (failure !== undefined) throw new Error(`${file} does not parse: ${failure.message}`)
   const specifiers: string[] = []
-  let isCallingNextCommand = false
+  let hasComputedLoad = false
+  let isUsingNextCommand = false
+  // The names `require` goes by: itself, and each name a `createRequire(...)` is kept in.
+  const requires = new Set(['require'])
+  // The names `nextCommand` goes by: itself, and each name an import gives it.
+  const nextNames = new Set(['nextCommand'])
+  // The places an import names it, which are not uses.
+  const importedAt = new Set<number>()
   const note = (specifier: string | undefined): void => {
-    if (specifier !== undefined) specifiers.push(specifier)
+    if (specifier === undefined) hasComputedLoad = true
+    else specifiers.push(specifier)
   }
   new Visitor({
     ImportDeclaration: (node) => note(node.source.value),
+    ImportSpecifier: (node) => {
+      importedAt.add(node.imported.start)
+      importedAt.add(node.local.start)
+      const imported =
+        node.imported.type === 'Identifier' ? node.imported.name : node.imported.value
+      if (imported === 'nextCommand') nextNames.add(node.local.name)
+    },
     ExportAllDeclaration: (node) => note(node.source.value),
-    ExportNamedDeclaration: (node) => note(node.source?.value),
+    ExportNamedDeclaration: (node) => {
+      if (node.source) note(node.source.value)
+    },
     ImportExpression: (node) => note(textOf(node.source)),
     TSExternalModuleReference: (node) => note(textOf(node.expression)),
-    CallExpression: (node) => {
-      if (isCalling(node.callee, 'require')) {
-        const [argument] = node.arguments
-        if (argument !== undefined && argument.type !== 'SpreadElement') note(textOf(argument))
+    VariableDeclarator: (node) => {
+      const { id, init } = node
+      if (
+        id.type === 'Identifier' &&
+        init?.type === 'CallExpression' &&
+        isNamed(init.callee, 'createRequire')
+      ) {
+        requires.add(id.name)
       }
-      if (isCalling(node.callee, 'nextCommand')) isCallingNextCommand = true
+    },
+    CallExpression: (node) => {
+      const { callee } = node
+      const isRequiring =
+        (callee.type === 'Identifier' && requires.has(callee.name)) ||
+        (callee.type === 'CallExpression' && isNamed(callee.callee, 'createRequire'))
+      if (!isRequiring) return
+      const [argument] = node.arguments
+      note(
+        argument === undefined || argument.type === 'SpreadElement' ? undefined : textOf(argument),
+      )
+    },
+    Identifier: (node) => {
+      if (nextNames.has(node.name) && !importedAt.has(node.start)) isUsingNextCommand = true
     },
   }).visit(parsed.program)
-  return { isCallingNextCommand, specifiers }
+  return { hasComputedLoad, isUsingNextCommand, specifiers }
 }
 
 /**
