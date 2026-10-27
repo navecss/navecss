@@ -8,6 +8,10 @@
  *
  * The control is the stylesheet as it was, the trigger keyed on `[aria-disabled="true"]` alone: a
  * native trigger on 1.9.0 then keeps the enabled colour and cursor, and the floor is unchanged.
+ *
+ * One case changes at every Base UI version, the floor included: an enabled native trigger inside a
+ * `<fieldset disabled>`. The browser disables that button though Base UI does not mark it, so it
+ * matches `:disabled` and takes the disabled paint; the control keeps the enabled paint there.
  */
 import { afterEach, describe, expect, inject, it } from 'vitest'
 
@@ -91,6 +95,17 @@ const paint = (one: Case): { readonly color: string; readonly cursor: string } =
 const scene = (): ReturnType<typeof h> =>
   h('div', { style: { padding: 24 } }, ...CASES.map((one) => trigger(one)))
 
+const FIELDSET_CASES: readonly Case[] = (['accordion', 'collapsible'] as const).map((part) => ({
+  form: 'native',
+  id: `${part}-native-in-disabled-fieldset`,
+  isDisabled: false,
+  part,
+}))
+
+// The triggers are enabled as far as Base UI is concerned; only the fieldset disables them.
+const fieldsetScene = (): ReturnType<typeof h> =>
+  h('fieldset', { disabled: true }, ...FIELDSET_CASES.map((one) => trigger(one)))
+
 describe('AC-base-ui-bridge-55: disabled disclosure trigger paint', () => {
   let page: Page | undefined
   let removeSheets: (() => void) | undefined
@@ -103,16 +118,20 @@ describe('AC-base-ui-bridge-55: disabled disclosure trigger paint', () => {
     page = undefined
   })
 
-  const show = async (scheme: (typeof SCHEMES)[number], css: string): Promise<void> => {
+  const show = async (
+    scheme: (typeof SCHEMES)[number],
+    css: string,
+    content: ReturnType<typeof h>,
+  ): Promise<void> => {
     removeScheme = useScheme(scheme)
     removeSheets = useSheets(tokens, css)
-    page = mount(scene())
+    page = mount(content)
     await framesLater(3)
   }
 
   describe.each(SCHEMES)('in %s', (scheme) => {
     it.each(CASES)('$id computes the colour and cursor of its state', async (one) => {
-      await show(scheme, stylesheet)
+      await show(scheme, stylesheet, scene())
       const wanted = one.isDisabled ? DISABLED : ENABLED
       expect(paint(one)).toEqual({ color: colorOf(wanted.token), cursor: wanted.cursor })
     })
@@ -120,7 +139,7 @@ describe('AC-base-ui-bridge-55: disabled disclosure trigger paint', () => {
     it('control: aria-disabled key alone leaves a native trigger enabled on 1.9.0', async () => {
       const previous = previousStylesheet()
       expect(previous, 'the stylesheet has the key to take out').not.toBe(stylesheet)
-      await show(scheme, previous)
+      await show(scheme, previous, scene())
       expect(colorOf(DISABLED.token), 'the two colours differ, so the row can red').not.toBe(
         colorOf(ENABLED.token),
       )
@@ -128,6 +147,29 @@ describe('AC-base-ui-bridge-55: disabled disclosure trigger paint', () => {
         const isKeepingEnabledPaint = one.form === 'native' && !isFloor
         const wanted = isKeepingEnabledPaint ? ENABLED : DISABLED
         expect(paint(one), one.id).toEqual({ color: colorOf(wanted.token), cursor: wanted.cursor })
+      }
+    })
+
+    it.each(FIELDSET_CASES)(
+      '$id computes the disabled colour and cursor, as the browser treats the button',
+      async (one) => {
+        await show(scheme, stylesheet, fieldsetScene())
+        expect(required(one.id).matches(':disabled'), 'the fieldset disables the button').toBe(true)
+        expect(paint(one)).toEqual({ color: colorOf(DISABLED.token), cursor: DISABLED.cursor })
+      },
+    )
+
+    it('control: aria-disabled key alone leaves a native trigger in a disabled fieldset enabled', async () => {
+      const previous = previousStylesheet()
+      await show(scheme, previous, fieldsetScene())
+      expect(colorOf(DISABLED.token), 'the two colours differ, so the row can red').not.toBe(
+        colorOf(ENABLED.token),
+      )
+      for (const one of FIELDSET_CASES) {
+        expect(paint(one), one.id).toEqual({
+          color: colorOf(ENABLED.token),
+          cursor: ENABLED.cursor,
+        })
       }
     })
   })
