@@ -5,9 +5,19 @@
  * `test` beside the other suites and slow them past their timeouts, so it has to be under
  * `test/build/`.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import config from '../vitest.config.ts'
 
@@ -57,12 +67,19 @@ const projects = (config.test?.projects ?? []) as {
 const project = (name: string): (typeof projects)[number] =>
   projects.find((candidate) => candidate.test.name === name)!
 
+/**
+ * Whether a test file starts Next.js: it reaches the helpers that do, or runs `next` itself.
+ */
+function isStartingNext(file: string, targets: readonly string[]): boolean {
+  return isReaching(file, targets)
+}
+
 describe('the rows that start Next.js', () => {
   const starting = testFilesUnder(TEST).filter(
     (file) =>
       !file.startsWith('test/chromium/') &&
       !STAND_IN.has(file) &&
-      isReaching(path.join(PACKAGE, file), STARTERS),
+      isStartingNext(path.join(PACKAGE, file), STARTERS),
   )
 
   it('are found (control: the monorepo rows reach the helpers)', () => {
@@ -82,5 +99,43 @@ describe('the rows that start Next.js', () => {
   it('reach the helpers only from test/build or test/chromium (the check sees a file that does not: control)', () => {
     const plain = path.join(TEST, 'readme.test.ts')
     expect(isReaching(plain, STARTERS)).toBe(false)
+  })
+
+  describe('are found in a planted file outside test/build', () => {
+    let planted = ''
+    beforeEach(() => {
+      const made = mkdtempSync(path.join(tmpdir(), 'prune-planted-'))
+      planted = realpathSync(made)
+      mkdirSync(path.join(planted, 'helpers'))
+      writeFileSync(path.join(planted, 'helpers/starter.ts'), 'export const start = 1\n')
+    })
+    afterEach(() => rmSync(planted, { recursive: true, force: true }))
+
+    it('through a dynamic import of a helper that starts it', () => {
+      const file = path.join(planted, 'x.test.ts')
+      writeFileSync(file, "const { start } = await import('./helpers/starter.ts')\nvoid start\n")
+
+      expect(isStartingNext(file, [path.join(planted, 'helpers/starter.ts')])).toBe(true)
+    })
+
+    it('through nextCommand, which a file that runs next itself calls', () => {
+      const file = path.join(planted, 'y.test.ts')
+      writeFileSync(
+        file,
+        "import { nextCommand } from './helpers/next-process.ts'\nconst args = nextCommand(['build'])\nvoid args\n",
+      )
+
+      expect(isStartingNext(file, STARTERS)).toBe(true)
+    })
+
+    it('but not in a file that imports neither (control)', () => {
+      const file = path.join(planted, 'z.test.ts')
+      writeFileSync(
+        file,
+        "import { nextEnvironment } from './helpers/next-process.ts'\nvoid nextEnvironment\n",
+      )
+
+      expect(isStartingNext(file, STARTERS)).toBe(false)
+    })
   })
 })

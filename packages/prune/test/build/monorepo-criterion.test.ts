@@ -18,6 +18,7 @@ import type { WorkspaceApp } from '../helpers/workspace-fixture.ts'
 
 import { SKIP_REASON } from '../helpers/next-app.ts'
 import { cells, nextRootOf } from '../helpers/next-cells.ts'
+import { noteNextCrash, RETRY_ON_NEXT_CRASH } from '../helpers/next-crash.ts'
 import { pause } from '../helpers/next-process.ts'
 import { createWorkspaceApp } from '../helpers/workspace-fixture.ts'
 
@@ -82,11 +83,13 @@ function isInside(directory: string, file: string): boolean {
 }
 
 /**
- * Every path the package declared to the bundler, from what the probe saw.
+ * Every path the package declared to the bundler, from what the probe saw, from the run after
+ * `from` runs on.
  */
-function declared(app: WorkspaceApp): string[] {
+function declared(app: WorkspaceApp, from = 0): string[] {
   return app
     .probes()
+    .slice(from)
     .flatMap((probe) => probe.messages)
     .flatMap((message) => [message.file, message.dir])
     .filter((entry): entry is string => entry !== undefined)
@@ -135,8 +138,11 @@ function linesOpening(output: string, prefix: string): string[] {
   return output.split('\n').filter((line) => line.startsWith(prefix))
 }
 
-// A row that fails runs again before it counts (the `retry` option below), except the webpack rows
-// of the third state: there a crash followed by a green run must not pass.
+// Next.js 16.2.0 on webpack now and then dies with an uncaught `Cannot read properties of undefined
+// (reading 'length')` right after it starts the production build: about 1 build in 22 here, with
+// the package listed, and not yet attributed. A failed row runs again before it counts (the
+// `retry` option below). The third state's rows run again only when the failed attempt printed that
+// crash, and name it in the output; any other red fails at once.
 describe.skipIf(SKIP_REASON !== undefined)(
   `a pnpm workspace on real builds${SKIP_REASON === undefined ? '' : ` (skipped: ${SKIP_REASON})`}`,
   { retry: 2 },
@@ -261,7 +267,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
 
     describe.each(PLACES)(
       'third state: a module outside the workspace behind a tsconfig paths entry, build run from %s',
-      { retry: 0 },
+      { retry: RETRY_ON_NEXT_CRASH },
       (place) => {
         // Turbopack compiles nothing outside its root ("files outside of the workspace root are not
         // compiled", its own note), so a page cannot import a module there at all: the cold build
@@ -289,17 +295,19 @@ describe.skipIf(SKIP_REASON !== undefined)(
         // Webpack compiles and reads the module outside the workspace, but the package declares
         // nothing outside the root Next.js infers, as on Turbopack.
         it.each(webpackCells().map((cell) => [cell.name, cell] as const))(
-          'AC-nextjs-used-atoms-07: %s: the module is read and declared nowhere, and the cold build ships its atom',
+          'AC-nextjs-used-atoms-07: %s: the module is read and declared nowhere, and a warm build after its edit runs the plugin again',
           async (_name, cell) => {
             const app = await newApp(cell)
             app.useExternal('hidden')
             const [args, cwd] = buildFrom(app, cell, place)
 
             const cold = await app.next(args, cwd)
+            noteNextCrash(cold.output)
             expect(cold.code, cold.output).toBe(0)
             expect(app.builtCss()).toContain('.nave-hidden')
             const key = relativeToApp(app, app.external)
             expect(Object.keys(app.record()?.files ?? {}), 'x.ts is read').toContain(key)
+            const probesAfterCold = app.probes().length
             const named = declared(app)
             expect(named, 'the package declared what is inside the root').toContain(app.uiModule)
             expect(named, 'x.ts is declared nowhere').not.toContain(app.external)
@@ -307,9 +315,48 @@ describe.skipIf(SKIP_REASON !== undefined)(
               named.filter((file) => !isInside(app.root, file)),
               'nothing outside the root is declared, a directory included',
             ).toEqual([])
-            // The warm build after the module's call changes is not asserted here. Measured on both
-            // versions: it exits 0, runs the plugin again and ships `block`, so webpack does not
-            // serve the stylesheet from its cache when nothing was declared.
+
+            // On webpack the plugin runs again on every next build while it declares a directory, edit or not (measured on 16.2.0 and 16.4.1), so the warm build reads the edited module again.
+            app.externalAt('block')
+            const warm = await app.next(args, cwd)
+            noteNextCrash(warm.output)
+            expect(warm.code, warm.output).toBe(0)
+            expect(app.probes().length, 'the plugin ran once more').toBe(probesAfterCold + 1)
+            expect(app.builtCss()).toContain('.nave-block')
+            expect(app.builtCss()).not.toContain('.nave-hidden')
+            expect(Object.keys(app.record()?.files ?? {}), 'x.ts is still read').toContain(key)
+            expect(app.record()?.atoms).toContain('block')
+            expect(app.record()?.atoms).not.toContain('hidden')
+            expect(
+              [...new Set(declared(app, probesAfterCold))].toSorted((a, b) => a.localeCompare(b)),
+              'the warm run declares what the cold run did',
+            ).toEqual([...new Set(named)].toSorted((a, b) => a.localeCompare(b)))
+            expect(warm.output).not.toContain('changed after @navecss/prune/postcss read it')
+            expect(warm.output).not.toMatch(
+              /uncaughtException|Cannot read properties of undefined/u,
+            )
+          },
+          TIMEOUT,
+        )
+
+        // Control: with no edit at all the warm build runs the plugin again too, so the re-run
+        // above does not come from the module.
+        it.each(webpackCells().map((cell) => [cell.name, cell] as const))(
+          'AC-nextjs-used-atoms-07: %s: control: a warm build with no edit runs the plugin again',
+          async (_name, cell) => {
+            const app = await newApp(cell)
+            app.useExternal('hidden')
+            const [args, cwd] = buildFrom(app, cell, place)
+
+            const cold = await app.next(args, cwd)
+            noteNextCrash(cold.output)
+            expect(cold.code, cold.output).toBe(0)
+            const probesAfterCold = app.probes().length
+            const warm = await app.next(args, cwd)
+            noteNextCrash(warm.output)
+
+            expect(warm.code, warm.output).toBe(0)
+            expect(app.probes().length, 'the plugin ran once more').toBe(probesAfterCold + 1)
           },
           TIMEOUT,
         )

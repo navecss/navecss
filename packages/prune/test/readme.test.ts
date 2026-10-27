@@ -205,18 +205,16 @@ describe('Which atoms the build ships', () => {
     expect(part).toMatch(/`@nave` problem[^.]*report[^.]*`@navecss\/core\/postcss` throws/u)
   })
 
-  it('states the three residuals of next dev', () => {
+  it('states the four residuals of next dev', () => {
     const dev = sectionOf(readme, headings, 'In next dev')
     expect(dev).toMatch(/terminal[^.]*not[^.]*browser/u)
     expect(section).toMatch(/not (?:reported|noticed)[^.]*`next dev`|`next dev`[^.]*not report/u)
     expect(section).toContain('Next.js can still order, merge and minify CSS differently')
   })
 
-  it('says, under in next dev, that a file outside Next.js’s workspace root does not re-run the plugin there and is caught by the build', () => {
+  it('says, under in next dev, that the plugin asks neither bundler to run it again when a file outside Next.js’s workspace root changes, and that such a file is checked by the build', () => {
     const dev = sectionOf(readme, headings, 'In next dev')
-    expect(dev).toMatch(
-      /outside[^.]*root[^.]*(?:not told to watch|not watched|does not re-run|is not re-read)/u,
-    )
+    expect(dev).toMatch(/outside[^.]*root[^.]*asks neither one to run it again/u)
     expect(dev).toMatch(/`next build`[^.]*(?:checks|catches|fails)/u)
     expect(dev).toMatch(/reads that no bundler compiles/u)
     expect(dev).toMatch(/on webpack, a module your app imports/u)
