@@ -172,241 +172,151 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
   }
 })
 
-// RUNG 4's REACH is an AFFIRMATIVE claim, and the phrase "entry point" appearing in the rung does
-// not make it. Rung 4 shows no `navecss-tokens` (the rung's point, R33(c), is that the consumer's
-// own build supplies the inputs), so what it must say is that the consumer's build reaches the
-// entry point: the published text says "the script or the task that invokes the entry point".
-// Scanning for the phrase alone passed a rung 4 reduced to "This rung is not reached through the
-// entry point at all.", which says the opposite.
+// RUNG 4's REACH is an AFFIRMATIVE claim: the consumer's own build invokes the entry point. The
+// phrase "entry point" appearing in the rung does not make it, and a rung 4 that says the entry
+// point is not reached, not invoked or gone around fails, even with the phrase present. Scanning
+// for the phrase alone passed a rung 4 reduced to "This rung is not reached through the entry
+// point at all.", which says the opposite.
 //
-// HOW IT READS. The rung is cut into sentences (a bullet start counts as a boundary, since a
-// rung's bullets carry no full stop between them, and the full stop of "e.g.", "i.e.", "etc." or
-// "vs." does not end one), each sentence into clauses at `;` and `:`, and each clause into
-// lower-cased words, with the comma-separated segment each word sits in. Every check below
-// compares word POSITIONS inside one clause, so a negation stops where its clause does: "You do
-// not need a config file; your build invokes the entry point." is the affirmative, not a denial.
-// The only patterns run over README text are the sentence and word splitters, and neither can
-// backtrack; every check after them is a comparison of word positions.
+// HOW IT READS. The rung is cut into sentences (a bullet start counts as a boundary, and the full
+// stop of "e.g.", "i.e.", "etc." or "vs." does not end one), and each sentence into lower-cased
+// words, with both apostrophes read the same and "entrypoint" / "entry-point" read as "entry
+// point". The only patterns run over README text are the sentence and word splitters, which
+// cannot backtrack; everything after them compares words in order.
 //
-// THE OBJECT is "the entry point" (also spelled "entrypoint" or "entry-point", after a possessive
-// such as "Nave's", or itself possessive, as in "the entry point's CLI" or "the entry-point's
-// CLI"), `navecss-tokens`, or, for a denial only, the pronoun "it" ("does not invoke it"). Up to
-// five words may sit between the verb and "entry point", so four before "the entry point"
-// ("invokes, on every single pass, the entry point"), and at most one between the verb and the
-// pronoun or the binary. A negator in that gap, in the object's own comma segment, negates the
-// object: "invokes no entry point".
+// THE AFFIRMATIVE is a closed list of accepted shapes, kept as data below (`AFFIRMATIVE_SHAPES`):
+// the published "the script or the task that invokes the entry point", the consumer's own build,
+// script or task invoking it, and the passive "the entry point is invoked by" the same. A
+// sentence affirms when its words contain one of those shapes word for word and it holds no
+// negation or contrast word (not, never, no, nothing, any n't word, cannot, no longer, without,
+// instead of, rather than, unlike). Rung 4 must hold one such sentence.
 //
-// A NEGATOR is not, never, cannot, no, nothing, none, nobody, neither, impossible, any n't word
-// (either apostrophe), fails to, unable to, prevented from, without, unlike, instead of or rather
-// than. Its SCOPE depends on where it sits:
-// - one that opens a comma segment after the first, or sits in a segment opening with where /
-//   which / who / whose / that, negates only that segment: "Your build, not Nave, invokes the
-//   entry point." and "The entry point, which reads no file, is invoked by your build." deny
-//   nothing. An aside opened by a negator negates only itself when it names an alternative
-//   invoker, that is when the first word after the negator and any determiners names Nave or the
-//   consumer ("not Nave", "not a Nave config file"). Otherwise it qualifies the verb and negates
-//   the whole clause: "Your build, never once, invokes the entry point." and "Your build, never
-//   in any of its steps, invokes the entry point." deny;
-// - without, unlike, instead of and rather than govern a phrase, so their scope is their own
-//   segment plus any that open with a relative word: "Instead of invoking the entry point, ..."
-//   and "Unlike rung 3, where your build invokes the entry point, ..." deny, while "Instead of a
-//   seed you typed into a script once, your own build invokes the entry point" does not;
-// - any other runs to the end of the clause, or to a joining word (and, but, so, because, since,
-//   while, then and the like) that starts a new clause without punctuation: "No file is
-//   discovered, and your build invokes the entry point." denies nothing. A joining word inside a
-//   middle segment, closed by commas on both sides, is a parenthetical and does not end the scope:
-//   "Your build has never, since 0.1.0, invoked the entry point." denies.
+// A LAWFUL REWORDING OUTSIDE THE LIST FAILS THE INSTRUMENT, NOT THE CRITERION, and it fails
+// loudly: the message lists the accepted shapes and says to add the new wording to the list in
+// the same change as the README edit. Every shape in the list must itself be an affirmative: a
+// consumer-side build, script or task before a form of invoke, run or call, the entry point or
+// `navecss-tokens` after it, no Nave word and no negation. A row checks that, so the remedy cannot
+// add "Nave invokes the entry point".
 //
-// A CLAUSE DENIES REACH when any of these holds:
-// - a negator is followed, in its scope, by a reach verb (reach, invoke, call, run, use, go
-//   through) whose object follows it: "Nothing invokes the entry point.", "Your build does not, at
-//   any point in the steps described above, invoke the entry point.";
-// - a reach verb is followed by a negated object: "Your build calls no entry point.";
-// - "the entry point" is followed by a negator and then, within three words and the negator's
-//   scope, a reach verb: "The entry point is not directly invoked.", "... is no longer invoked";
-// - an avoidance verb (bypass, circumvent, skip, avoid, go around / past, stop short of) has the
-//   object after it, or "the entry point" is followed within three words by one: "The entry
-//   point is bypassed.";
-// - the clause ends on a negated auxiliary after a pronoun subject, in a sentence that names the
-//   entry point: "Your build is meant to invoke the entry point, but it never does.", "...; it does
-//   not.". After another subject it is not a denial of reach: "Your build invokes the entry
-//   point; Nave does not.".
-// "The entry point reads nothing it was not handed: no file is discovered." holds "not",
-// "nothing" and "no" beside the entry point and denies nothing, because none of them reaches a
-// reach verb.
+// THE DENIAL GUARD is a closed list too, read clause by clause (a clause ends at `;`, `:` or the
+// end of the sentence). A clause denies reach when it holds, in order:
+// - a negator (not, never, cannot, any n't word, no, no longer, nothing, without, instead of,
+//   rather than, unlike, fails to, unable to), then a reach verb (reach, invoke, call, run, use,
+//   go through), then the object (the entry point, `navecss-tokens`, or "it");
+// - an avoidance verb (bypass, skip, avoid, circumvent, go around / past, stop short of), then the
+//   object;
+// - or "the entry point is / was not / never / no longer (one word) invoked / reached / called /
+//   run / used", with "isn't", "wasn't", "cannot be" and "can't be" read the same way.
+// A denial is reported even beside the affirmative.
 //
-// A SENTENCE AFFIRMS REACH when it denies nothing and one clause has invoke, run or call with the
-// object after it ("Your build runs `navecss-tokens`", "invokes Nave's entry point"), or the
-// passive "the entry point is invoked / run / called by ...", where an aside between commas after
-// the entry point is skipped. The invoker must be the consumer's side.
-// - A word NAMES THE CONSUMER when it is "you", "your" or "yourself", or a build, script, task,
-//   bundler, pipeline, makefile, runner, job, workflow, CI, toolchain, step or codegen noun (plural
-//   or possessive too) that is the consumer's. Such a noun is Nave's instead when, within three
-//   words before it and back to its determiner, a word starts with "nave" or the word "token" or
-//   "tokens" appears with no owner ("Nave's build", "the token build"); an owner ("your", "our",
-//   "the consumer's") makes it the consumer's ("your token build"). A determiner "its" takes the
-//   side of the nearest singular noun before it in the sentence: a Nave word, possessive or not, is
-//   Nave's ("Since Nave ships the defaults, its build script ..."); a consumer noun is the
-//   consumer's; a noun that names neither side ("Add Nave to the project, and its build script
-//   ...") leaves the rule below to decide. A consumer noun phrase anywhere earlier in the sentence
-//   makes it the consumer's whatever is nearer ("Your build pulls in Nave, and its script ...");
-//   the bare pronoun "you" does not. Otherwise the noun is also Nave's when its determiner is "a"
-//   or "its" and the clause names Nave before it ("Nave ships a build that ..."), looking back no
-//   further than a joining word that starts a new clause, or the comma that closes a leading
-//   subordinate clause, and skipping an aside between commas. A word NAMES NAVE when it starts with
-//   "nave" (Nave, Nave's, navecss-tokens). A bare "token" or "tokens" names neither side.
-// - For the active form, the invoker is the first word that names either side, walking back from
-//   the verb through its clause and skipping an aside between commas. A comma segment opened by
-//   and, but, so or yet is a coordinate clause, not an aside, so ", and your build runs its own
-//   script, which invokes ..." finds "script"; one opened by another joining word is an aside ("The
-//   Nave CLI, while your build waits, invokes ..."), except right before a verb segment that opens
-//   with a relative word, whose antecedent it holds. A relative clause is walked through to its
-//   antecedent the same way, which is how the published "the script or the task that invokes the
-//   entry point" finds "task". Past a subject pronoun ("it", "they") the walk continues into the
-//   sentence's earlier clauses, so "Your build is the invoker: it invokes the entry point." affirms
-//   and "It invokes the entry point." alone does not.
-// - For the passive, the invoker is the first word that names either side after "by", read to
-//   the end of its aside or clause.
-// So "Nave invokes the entry point for you." and "The entry point is invoked by Nave." are not the
-// affirmative. Rung 4 must carry one, and every sentence of it is also checked for a denial, so a
-// denial placed beside the affirmative still reds. This reads English with word lists and
-// positions, not a grammar: it closes the forms listed in the rows below and keeps the published
-// sentences green, and a denial phrased outside these lists would still pass.
+// RESIDUALS, stated rather than discovered later. A denial outside that closed list is not caught
+// by it and is left to whoever reads the change: a negating word that is not listed ("neither ...
+// nor", "impossible", "prevented from"), a verb left out ("but it never does", "; it does not"), a
+// negator after the verb ("invokes no entry point"), a negated passive whose subject is not "the
+// entry point" itself, or not next to it ("The entry point's CLI is never invoked", "The entry
+// point, with no seed of its own, is never invoked"). Each of these still fails when it is the
+// whole rung, because it holds no accepted shape; the rows below pin all of them. In the other
+// direction, the negation scan does not know what a negation governs, so a lawful sentence that
+// also holds one ("Without a config file, your build invokes the entry point") is not read as the
+// affirmative and fails loudly with the shapes message. A sentence reports its first denying clause
+// only, so a long one is quoted once.
+
+const WORD = /[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu
+const CLOSED_UP_ENTRY_POINTS = ['entrypoint', 'entry-point']
+const ENTRY_POINT_HEADS = new Set(['point', 'points', "point's", "points'"])
+
+// A slot's alternatives, each written as a phrase.
+const anyOf = (...phrases) => phrases.map((phrase) => phrase.split(' '))
+
+const CONSUMER_SUBJECTS = anyOf('your', 'your own', "the consumer's")
+const CONSUMER_INVOKERS = anyOf(
+  'build',
+  'build script',
+  'script',
+  'task',
+  'pipeline',
+  'ci',
+  'toolchain',
+  'build system',
+)
+const INVOKING_VERBS = anyOf(
+  'invoke',
+  'invokes',
+  'invoked',
+  'run',
+  'runs',
+  'ran',
+  'call',
+  'calls',
+  'called',
+)
+const OBJECTS = anyOf('the entry point', 'navecss-tokens')
+
+// The published wording, pinned on its own.
+const PUBLISHED_SHAPE = [anyOf('the script or the task that invokes the entry point')]
+
+// The accepted shapes: each a list of slots, each slot a list of alternative word sequences.
+const AFFIRMATIVE_SHAPES = [
+  PUBLISHED_SHAPE,
+  [CONSUMER_SUBJECTS, CONSUMER_INVOKERS, INVOKING_VERBS, OBJECTS],
+  [
+    anyOf('the entry point'),
+    anyOf('is', 'was'),
+    anyOf('invoked', 'run', 'called'),
+    anyOf('by'),
+    CONSUMER_SUBJECTS,
+    CONSUMER_INVOKERS,
+  ],
+]
+
+const NEGATION_WORDS = new Set(['not', 'never', 'no', 'nothing', 'cannot', 'without', 'unlike'])
+// "no longer" is caught by "no".
+const NEGATION_PAIRS = new Set(['instead of', 'rather than'])
+
+const DENIAL_NEGATORS = new Set(['not', 'never', 'cannot', 'no', 'nothing', 'without', 'unlike'])
+const DENIAL_NEGATOR_PAIRS = new Set([
+  'instead of',
+  'rather than',
+  'fails to',
+  'fail to',
+  'failed to',
+  'unable to',
+])
 const REACH_VERBS = new Set(
   ['reach', 'invoke', 'call', 'run', 'use'].flatMap((verb) => verbForms(verb)),
 )
-const INVOKING_VERBS = new Set(['invoke', 'call', 'run'].flatMap((verb) => verbForms(verb)))
-const INVOKED_PARTICIPLES = new Set(['invoked', 'called', 'run'])
 const GO = new Set(['go', 'goes', 'going', 'went', 'gone'])
 const STOP = new Set(['stop', 'stops', 'stopped', 'stopping'])
-const AVOIDING_STEMS = ['bypass', 'circumvent', 'skip', 'avoid']
-const NEGATORS = new Set([
-  'not',
-  'never',
-  'cannot',
-  'no',
-  'nothing',
-  'none',
-  'nobody',
-  'neither',
-  'impossible',
+const AVOIDING_STEMS = ['bypass', 'skip', 'avoid', 'circumvent']
+const PARTICIPLES = anyOf('invoked', 'reached', 'called', 'run', 'used')
+const ANY_WORD = [['*']]
+
+// "the entry point is not (one word) invoked", and its spellings.
+const PASSIVE_DENIALS = [
+  [
+    anyOf('the entry point'),
+    anyOf(
+      'is not',
+      'was not',
+      'is never',
+      'was never',
+      'is no longer',
+      'was no longer',
+      "isn't",
+      "wasn't",
+      'cannot be',
+      "can't be",
+    ),
+  ],
+].flatMap((head) => [
+  [...head, PARTICIPLES],
+  [...head, ANY_WORD, PARTICIPLES],
 ])
-// Two-word negators: the first word, and the word that must follow it.
-const PAIRED_NEGATORS = new Map([
-  ...['fail', 'fails', 'failed', 'failing'].map((word) => [word, 'to']),
-  ['prevented', 'from'],
-  ['unable', 'to'],
-])
-const PHRASE_NEGATORS = new Set(['without', 'unlike'])
-const CLAUSE_BREAKERS = new Set([
-  'and',
-  'but',
-  'so',
-  'yet',
-  'because',
-  'since',
-  'while',
-  'whereas',
-  'although',
-  'though',
-  'then',
-])
-const RELATIVES = new Set(['where', 'which', 'who', 'whose', 'that'])
-// Joining words that are more often adverbs inside a clause.
-const ADVERB_JOINERS = new Set(['then', 'since'])
-// Words that, right after a joining word, start a clause with the consumer's own subject.
-const NEW_SUBJECTS = new Set(['you', 'we', 'they', 'i', 'one', 'your', 'our'])
-// Adverbs that may sit between a joining word and that subject ("and then you ...").
-const CLAUSE_ADVERBS = new Set(['then', 'now', 'also', 'instead', 'still', 'so'])
-// Words that open a leading subordinate clause.
-const SUBORDINATORS = new Set([
-  'since',
-  'because',
-  'as',
-  'when',
-  'once',
-  'if',
-  'although',
-  'while',
-  'after',
-  'before',
-])
-const PRONOUNS = new Set(['it', 'they', 'this', 'that'])
-const AUXILIARIES = new Set(['do', 'does', 'did', 'will', 'would', 'can', 'could', 'is', 'was'])
-const ENTRY_POINT_HEADS = new Set(['point', 'points', "point's", "points'"])
-const CLOSED_UP_ENTRY_POINTS = ['entrypoint', 'entry-point']
-// Words that name what invokes the entry point on the consumer's side.
-const CONSUMER_NOUNS = new Set([
-  'build',
-  'script',
-  'task',
-  'bundler',
-  'pipeline',
-  'makefile',
-  'runner',
-  'job',
-  'workflow',
-  'ci',
-  'toolchain',
-  'step',
-  'codegen',
-])
-const CONSUMER_HEADS = new Set(
-  [...CONSUMER_NOUNS].flatMap((noun) => [noun, `${noun}s`, `${noun}'s`, `${noun}s'`]),
-)
-// Words that sit between a possessive and the noun it owns ("Nave's first release").
-const PHRASE_MODIFIERS = new Set([
-  'own',
-  'latest',
-  'newest',
-  'earliest',
-  'oldest',
-  'best',
-  'worst',
-  'last',
-  'next',
-  'first',
-  'second',
-  'third',
-  'initial',
-  'final',
-])
-// Plural nouns that, right after a possessed noun at the end of a segment, complete it ("release
-// notes") rather than act as its verb.
-const COMPOUND_PLURALS = new Set([
-  'notes',
-  'docs',
-  'files',
-  'settings',
-  'options',
-  'tokens',
-  'defaults',
-  'scripts',
-  'assets',
-])
-// Coordinating conjunctions: a comma segment they open is a clause, not an aside.
-const COORDINATORS = new Set(['and', 'but', 'so', 'yet'])
-// Determiners that introduce a noun of either side or of neither.
-const NOUN_DETERMINERS = new Set(['the', 'a', 'an', 'this', 'that', 'their'])
-// Per-array caches, so repeated questions about one clause cost nothing after the first.
-const SEGMENT_STARTS = new WeakMap()
-const LEADING_CLAUSES = new WeakMap()
-// Words that name the consumer directly.
-const CONSUMER_WORDS = new Set(['you', 'your', 'yourself'])
-// Determiners that make what follows the consumer's own.
-const OWNERS = new Set(['your', 'our', "consumer's"])
-const DETERMINERS = new Set(['the', 'a', 'an', 'its', 'their', 'this', 'that'])
-// After Nave is named in the clause, a build these introduce is Nave's ("Nave ships a build").
-const NAVE_OWNED_DETERMINERS = new Set(['a', 'its'])
-// Subject pronouns, read through to the invoker they stand for.
-const SUBJECT_PRONOUNS = new Set(['it', 'they'])
-const WORD = /[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu
 
 function verbForms(verb) {
   if (verb === 'run') return ['run', 'runs', 'ran', 'running']
   const stem = verb.endsWith('e') ? verb.slice(0, -1) : verb
-  const third = verb.endsWith('h') ? `${verb}es` : `${verb}s`
-  return [verb, third, `${stem}ed`, `${stem}ing`]
+  return [verb, `${verb}s`, `${stem}ed`, `${stem}ing`]
 }
 
 // Sentences, with a bullet start counting as a boundary. The text is whitespace-collapsed first,
@@ -418,517 +328,213 @@ function sentencesOf(text) {
     .filter((sentence) => sentence.trim() !== '')
 }
 
-// "entrypoint", "entry-point" and their plurals and possessives, as the two words "entry" and
-// "point..." the checks read; null for any other word.
-function splitClosedUp(word) {
-  const stem = CLOSED_UP_ENTRY_POINTS.find((spelling) => word.startsWith(spelling))
-  if (stem === undefined) return null
-  const head = `point${word.slice(stem.length)}`
-  return ENTRY_POINT_HEADS.has(head) ? ['entry', head] : null
-}
-
-// A clause's words, lower-cased, each with the index of the comma segment it sits in.
-function wordsOf(clause) {
+// A text's words, lower-cased, with both apostrophes read the same and the closed-up spellings
+// of "entry point" split into two words.
+function wordsOf(text) {
   const words = []
-  const segments = clause.replaceAll('’', "'").toLowerCase().split(',')
-  for (const [segment, text] of segments.entries()) {
-    for (const [word] of text.matchAll(WORD)) {
-      for (const part of splitClosedUp(word) ?? [word]) words.push({ word: part, segment })
-    }
+  for (const [word] of text.replaceAll('’', "'").toLowerCase().matchAll(WORD)) {
+    const stem = CLOSED_UP_ENTRY_POINTS.find((spelling) => word.startsWith(spelling))
+    const head = stem === undefined ? '' : `point${word.slice(stem.length)}`
+    if (ENTRY_POINT_HEADS.has(head)) words.push('entry', head)
+    else words.push(word)
   }
   return words
 }
 
-const isEntryPointAt = (words, i) =>
-  words[i]?.word === 'entry' && ENTRY_POINT_HEADS.has(words[i + 1]?.word)
-
-const isNegatorWord = (word) => NEGATORS.has(word) || word.endsWith("n't")
-
-// A segment after the first that commas close on both sides: a parenthetical.
-const isClosedMiddle = (words, segment) => segment > 0 && segment < (words.at(-1)?.segment ?? 0)
-
-// The object that starts within the allowed gap after `from` and before `end`: 'object', or
-// 'negated' when a negator sits before it in its own comma segment, or null when there is none.
-function objectFollows(words, from, end, { pronoun }) {
-  for (let i = from; i < Math.min(end, from + 6); i += 1) {
-    const near = i - from <= 1
-    const word = words[i].word
-    const found =
-      isEntryPointAt(words, i) ||
-      (near && word === 'navecss-tokens') ||
-      (near && pronoun && word === 'it')
-    if (found) {
-      const gap = words.slice(from, i)
-      const negated = gap.some((w) => w.segment === words[i].segment && isNegatorWord(w.word))
-      return negated ? 'negated' : 'object'
-    }
-  }
-  return null
-}
-
-// Whether the negator at `i` opens a comma segment after the first, or sits in one that opens
-// with a relative word: either way it negates only that segment.
-function negatesOnlyItsSegment(words, i) {
-  const segment = words[i].segment
-  if (segment === 0) return false
-  const start = segmentStart(words, segment)
-  if (RELATIVES.has(words[start].word)) return true
-  return start === i && asideNamesAlternative(words, i)
-}
-
-// The index of the first word of comma segment `segment`.
-function segmentStart(words, segment) {
-  let starts = SEGMENT_STARTS.get(words)
-  if (starts === undefined) {
-    starts = []
-    for (const [i, { segment: at }] of words.entries()) starts[at] ??= i
-    SEGMENT_STARTS.set(words, starts)
-  }
-  return starts[segment]
-}
-
-// Whether the aside the negator at `i` opens names an alternative invoker: the first word after
-// the negator and any determiners names Nave or the consumer ("not Nave", "not a Nave config
-// file"). An aside that names none ("never once", "never in any of its steps") qualifies the verb
-// instead, so it negates the whole clause.
-function asideNamesAlternative(words, i) {
-  let k = i + 1
-  while (k < words.length && (DETERMINERS.has(words[k].word) || OWNERS.has(words[k].word))) {
-    k += 1
-  }
-  if (k >= words.length || words[k].segment !== words[i].segment) return false
-  return sideAt(words, k) !== null
-}
-
-// The index after a negator starting at `i`, and the kind of scope it has, or null.
-function negatorAt(words, i) {
-  const word = words[i].word
-  const next = words[i + 1]?.word
-  const own = () => (negatesOnlyItsSegment(words, i) ? 'segment' : 'clause')
-  if (isNegatorWord(word)) return { after: i + 1, scope: own() }
-  if (PAIRED_NEGATORS.has(word) && PAIRED_NEGATORS.get(word) === next) {
-    return { after: i + 2, scope: own() }
-  }
-  if (PHRASE_NEGATORS.has(word)) return { after: i + 1, scope: 'phrase' }
-  const pair = `${word} ${next}`
-  if (pair === 'instead of' || pair === 'rather than') return { after: i + 2, scope: 'phrase' }
-  return null
-}
-
-// The index after a reach verb starting at `i`, or null. "go" reaches only as "go through".
-function reachVerbAt(words, i) {
-  if (REACH_VERBS.has(words[i].word)) return i + 1
-  if (GO.has(words[i].word) && words[i + 1]?.word === 'through') return i + 2
-  return null
-}
-
-// The index after an avoidance verb starting at `i`, or null.
-function avoidanceAt(words, i) {
-  const word = words[i].word
-  if (AVOIDING_STEMS.some((stem) => word.startsWith(stem))) return i + 1
-  const next = words[i + 1]?.word
-  if ((next === 'around' || next === 'past') && GO.has(word)) return i + 2
-  if (next === 'short' && words[i + 2]?.word === 'of' && STOP.has(word)) return i + 3
-  return null
-}
-
-// Where a scope that starts at `from` ends, for a 'clause', 'phrase' or 'segment' scope.
-function scopeEnd(words, from, scope) {
-  const home = words[from - 1]?.segment ?? 0
-  for (let i = from; i < words.length; i += 1) {
-    const { word, segment } = words[i]
-    if (scope === 'segment' && segment !== home) return i
-    if (CLAUSE_BREAKERS.has(word) && !isClosedMiddle(words, segment)) return i
-    const opensSegment = segment !== words[i - 1]?.segment
-    if (scope === 'phrase' && opensSegment && !RELATIVES.has(word)) return i
-  }
-  return words.length
-}
-
-function negatedReach(words, at) {
-  const negator = negatorAt(words, at)
-  if (negator === null) return false
-  const end = scopeEnd(words, negator.after, negator.scope)
-  for (let i = negator.after; i < end; i += 1) {
-    const after = reachVerbAt(words, i)
-    if (after !== null) return objectFollows(words, after, end, { pronoun: true }) !== null
-  }
-  return false
-}
-
-function reachesNegatedObject(words, at) {
-  const after = reachVerbAt(words, at)
-  if (after === null) return false
-  return (
-    objectFollows(words, after, scopeEnd(words, after, 'clause'), { pronoun: true }) === 'negated'
+// Every word sequence a shape stands for.
+function phrasesOf(shape) {
+  return shape.reduce(
+    (phrases, slot) => phrases.flatMap((phrase) => slot.map((option) => [...phrase, ...option])),
+    [[]],
   )
 }
 
-// "the entry point" at `at`, then a negator, then a reach verb within three words and the
-// negator's scope.
-function entryPointNegated(words, at) {
-  if (!isEntryPointAt(words, at)) return false
-  const end = scopeEnd(words, at + 2, 'clause')
-  for (let i = at + 2; i < end; i += 1) {
-    const negator = negatorAt(words, i)
-    if (negator === null) continue
-    const stop = Math.min(scopeEnd(words, negator.after, negator.scope), negator.after + 3)
-    for (let k = negator.after; k < stop; k += 1) {
-      if (reachVerbAt(words, k) !== null) return true
-    }
+// Whether `phrase` occurs in `words` starting at `at`; "*" stands for any one word.
+const phraseAt = (words, at, phrase) =>
+  phrase.every((word, k) => (word === '*' ? at + k < words.length : words[at + k] === word))
+
+// The phrases of a list of shapes, grouped by first word, so a sentence is scanned once.
+function phraseIndex(shapes) {
+  const index = new Map()
+  for (const phrase of shapes.flatMap((shape) => phrasesOf(shape))) {
+    if (!index.has(phrase[0])) index.set(phrase[0], [])
+    index.get(phrase[0]).push(phrase)
   }
-  return false
+  return index
 }
 
-function avoided(words, at) {
-  const after = avoidanceAt(words, at)
-  if (after !== null) {
-    return objectFollows(words, after, scopeEnd(words, after, 'clause'), { pronoun: true }) !== null
-  }
-  if (!isEntryPointAt(words, at)) return false
-  const window = words.slice(at + 2, at + 5)
-  return window.some((_, k) => avoidanceAt(words, at + 2 + k) !== null)
-}
+const AFFIRMATIVE_INDEX = phraseIndex(AFFIRMATIVE_SHAPES)
+const PUBLISHED_INDEX = phraseIndex([PUBLISHED_SHAPE])
+const PASSIVE_DENIAL_INDEX = phraseIndex(PASSIVE_DENIALS)
 
-// Whether the clause ends on a negated auxiliary ("does not", "never does", "doesn't", an
-// optional trailing "so") whose subject is a pronoun.
-function endsOnNegatedAuxiliary(words) {
-  const tail = (words.at(-1)?.word === 'so' ? words.slice(0, -1) : words).map((w) => w.word)
-  const [third, before, last] = [tail.at(-3), tail.at(-2), tail.at(-1)]
-  if (last === undefined) return false
-  if (last.endsWith("n't")) return PRONOUNS.has(before)
-  const negated = (word) => word === 'not' || word === 'never'
-  const elided =
-    (negated(before) && AUXILIARIES.has(last)) || (AUXILIARIES.has(before) && negated(last))
-  return elided && PRONOUNS.has(third)
-}
-
-function clauseDenies(words) {
-  return words.some(
-    (_, i) =>
-      negatedReach(words, i) ||
-      reachesNegatedObject(words, i) ||
-      entryPointNegated(words, i) ||
-      avoided(words, i),
-  )
-}
-
-// A sentence's clauses. Each one links to the clause before it and knows its word offset in the
-// sentence and where the sentence's first consumer noun phrase is, which is what an "its" needs.
-function clausesOf(sentence) {
-  const clauses = sentence.split(/[;:]/).map((clause) => wordsOf(clause))
-  let offset = 0
-  let consumerAt = Infinity
-  let naveSeen = false
-  for (const [c, words] of clauses.entries()) {
-    words.previous = clauses[c - 1]
-    words.offset = offset
-    for (const [i, { word }] of words.entries()) {
-      if (consumerAt === Infinity && opensConsumerPhrase(words, i, naveSeen))
-        consumerAt = offset + i
-      naveSeen ||= word.startsWith('nave')
-    }
-    offset += words.length
-  }
-  for (const words of clauses) words.consumerAt = consumerAt
-  return clauses
-}
-
-function deniesReach(sentence) {
-  const clauses = clausesOf(sentence)
-  const namesEntryPoint = clauses.some((words) => words.some((_, i) => isEntryPointAt(words, i)))
-  return clauses.some(
-    (words) => clauseDenies(words) || (namesEntryPoint && endsOnNegatedAuxiliary(words)),
-  )
-}
-
-// The first `count` word indexes from `from`, skipping a parenthetical segment that is not the
-// one `from` starts in.
-function nextWords(words, from, count) {
-  const home = words[from - 1]?.segment
-  const picked = []
-  for (let i = from; i < words.length && picked.length < count; i += 1) {
-    const segment = words[i].segment
-    if (segment === home || !isClosedMiddle(words, segment)) picked.push(i)
-  }
-  return picked
-}
-
-const isTokenWord = (word) => word === 'token' || word === 'tokens'
-
-// Whether the consumer-side noun at `head` is the consumer's rather than Nave's, read from the
-// up to three words before it, back to its determiner: an owner ("your", "our", "the consumer's")
-// makes it the consumer's; a Nave word, or "token" without an owner, makes it Nave's; and "a" or
-// "its" make it Nave's when the clause names Nave before it ("Nave ships a build").
-function namesConsumer(words, head) {
-  const { consumer, its } = modifiersOf(words, head)
-  if (its === -1) return consumer
-  const antecedent = itsAntecedentSide(words, its)
-  return antecedent === null ? consumer : antecedent === 'consumer'
-}
-
-// What the modifiers of the noun at `head` say on their own, with no antecedent search: whether
-// it is the consumer's, and the index of an "its" that determines it (-1 when there is none).
-function modifiersOf(words, head) {
-  let token = false
-  for (let k = head - 1; k >= Math.max(0, head - 3); k -= 1) {
-    const { word, segment } = words[k]
-    if (segment !== words[head].segment) break
-    if (OWNERS.has(word)) return { consumer: true, its: -1 }
-    if (word.startsWith('nave')) return { consumer: false, its: -1 }
-    token ||= isTokenWord(word)
-    if (DETERMINERS.has(word)) {
-      const naveOwned = NAVE_OWNED_DETERMINERS.has(word) && namesNaveBefore(words, k, head)
-      return { consumer: !token && !naveOwned, its: word === 'its' && !token ? k : -1 }
-    }
-  }
-  return { consumer: !token, its: -1 }
-}
-
-// Whether the clause names Nave before index `k`, skipping an aside between commas as the invoker
-// walk does, and looking back no further than a joining word (and, but, so ...) that starts a new
-// clause. It starts one only when the build noun at `head` is the direct subject of the invoking
-// verb after it, with no relative word between them: in "Nave ships the tokens and a build script
-// invokes ..." the build is not Nave's, while in "Nave ships the defaults and a build script that
-// invokes ..." it is the object of Nave's verb. A joining word followed by a subject of the
-// consumer's ("you", "your" ...) also starts a new clause: "Nave ships the defaults, and you keep
-// a build script that invokes ...". "then" and "since" are adverbs inside a clause ("Nave then
-// ships ..."), so they end the look back only right after a comma. The comma that closes a
-// leading subordinate clause ends it too: "Since Nave ships the defaults, a build script ...".
-function namesNaveBefore(words, k, head) {
-  const newClause = isDirectSubject(words, head)
-  const leadingClause = words[k].segment > 0 && opensWithSubordinateClause(words)
-  for (let j = k - 1; j >= 0; j -= 1) {
-    const { word, segment } = words[j]
-    if (leadingClause && segment === 0) return false
-    if (segment !== words[k].segment && isClosedMiddle(words, segment)) continue
-    const afterComma = words[j - 1]?.segment !== segment
-    const joins = CLAUSE_BREAKERS.has(word) && (!ADVERB_JOINERS.has(word) || afterComma)
-    if (joins && (newClause || opensWithConsumerSubject(words, j + 1))) return false
-    if (word.startsWith('nave')) return true
-  }
-  return false
-}
-
-// Whether the words from `from` open with a subject of the consumer's own, past any of a few
-// clause adverbs: "and then you write ...", "but now you keep ...".
-function opensWithConsumerSubject(words, from) {
-  let i = from
-  while (CLAUSE_ADVERBS.has(words[i]?.word)) i += 1
-  return NEW_SUBJECTS.has(words[i]?.word)
-}
-
-// A number, or a version written with a leading "v" ("v0.1.0" reads as "v0", "1", "0").
-function isNumber(word) {
-  const digits = word?.length > 1 && word.startsWith('v') ? word.slice(1) : word
-  return !Number.isNaN(Number(digits))
-}
-
-// A word between a possessive and the noun it owns: "own", an ordinal, a superlative or a number.
-const isPhraseModifier = (word) => PHRASE_MODIFIERS.has(word) || isNumber(word)
-
-// Whether the clause opens with a subordinate clause closed by a comma ("Since Nave ships the
-// defaults, ..."). Its first segment counts as a clause when it holds a Nave word and, past the
-// noun phrase that word heads, at least one more word that is not a number (a "v0.1.0" version
-// counts as one): a subject and its verb. The phrase a plain Nave word heads is the word itself,
-// or "Nave CSS". The one a possessive heads runs through "own", a listed ordinal or superlative
-// (first, latest, best ...) and numbers to the possessed noun ("Nave's own build" in "Because
-// Nave's own build ships the defaults, ..."). A single word from a short list of plural nouns
-// (notes, docs, files ...) right after that noun at the end of the segment completes it ("release
-// notes"); any other word there is a verb ("Since Nave's release ships, ..."). "Since 0.1.0,
-// ...", "Since Nave v0.1.0, ...", "Since Nave's first release, ..." and "Since Nave's 2.0 release
-// notes, ..." are phrases, so their comma ends nothing. Only a Nave word is looked for, because
-// the look back that uses this only ever looks for Nave.
-function opensWithSubordinateClause(words) {
-  if (!LEADING_CLAUSES.has(words)) LEADING_CLAUSES.set(words, readsAsLeadingClause(words))
-  return LEADING_CLAUSES.get(words)
-}
-
-function readsAsLeadingClause(words) {
-  if (!SUBORDINATORS.has(words[0]?.word)) return false
-  const first = words.filter((w) => w.segment === 0).map((w) => w.word)
-  const at = first.findIndex((word) => word.startsWith('nave'))
-  if (at === -1) return false
-  let next = at + 1
-  if (first[at].endsWith("'s")) {
-    while (isPhraseModifier(first[next])) next += 1
-    next += 1
-    // One word from a short list of plural nouns right after the possessed noun, ending the
-    // segment, completes it ("release notes"); any other word there is its verb.
-    const rest = first.slice(next)
-    if (rest.length === 1 && COMPOUND_PLURALS.has(rest[0])) return false
-  } else if (first[next] === 'css') {
-    next += 1
-  }
-  return first.slice(next).some((word) => !isNumber(word))
-}
-
-// Whether the noun at `head` is the direct subject of the invoking verb that follows it: the verb
-// comes before any relative word.
-function isDirectSubject(words, head) {
-  for (let j = head + 1; j < words.length; j += 1) {
-    if (RELATIVES.has(words[j].word)) return false
-    if (INVOKING_VERBS.has(words[j].word)) return true
-  }
-  return false
-}
-
-const isSingularConsumerHead = (word) =>
-  CONSUMER_NOUNS.has(word) || (word.endsWith("'s") && CONSUMER_NOUNS.has(word.slice(0, -2)))
-
-// The side the "its" at `at` points back to. Walking back through the sentence, the nearest
-// singular noun decides: a Nave word, possessive or not, is Nave's; a singular consumer-side noun
-// takes the side its own modifiers give it; and a
-// singular noun after a determiner that names neither side ("the project") is neutral, which
-// returns null so the "a"/"its" rule decides as before. Plural nouns and pronouns are passed
-// over. Whatever that finds, a consumer noun phrase anywhere earlier in the sentence ("your
-// build", "the pipeline") makes it the consumer's: "Your build pulls in Nave, and its script ..."
-// reads as the consumer's. The bare pronoun "you" does not count, so "Nave writes the defaults
-// and you get its build script ..." stays Nave's.
-function itsAntecedentSide(words, at) {
-  const side = nearestSide(words, at)
-  if (side !== 'consumer' && words.consumerAt < words.offset + at) return 'consumer'
-  return side === 'neutral' ? null : side
-}
-
-// The side the nearest singular noun before `at` names, across the sentence's earlier clauses:
-// 'nave', 'consumer', 'neutral', or null when there is none.
-function nearestSide(words, at) {
-  for (let clause = words, from = at - 1; clause !== undefined; clause = clause.previous) {
-    for (let j = from; j >= 0; j -= 1) {
-      const side = nounSideAt(clause, j)
-      if (side !== null) return side
-    }
-    from = (clause.previous?.length ?? 0) - 1
+// The first phrase of `index` that `words` contain, or null.
+function findPhrase(words, index) {
+  for (const at of words.keys()) {
+    const phrase = index.get(words[at])?.find((candidate) => phraseAt(words, at, candidate))
+    if (phrase !== undefined) return words.slice(at, at + phrase.length)
   }
   return null
 }
 
-function nounSideAt(words, j) {
-  const word = words[j].word
-  if (word.startsWith('nave')) return 'nave'
-  if (isSingularConsumerHead(word)) return modifiersOf(words, j).consumer ? 'consumer' : 'nave'
-  const next = words[j + 1]?.word
-  if (next !== undefined && NOUN_DETERMINERS.has(word) && !isPlural(next)) return 'neutral'
-  return null
-}
-
-const isPlural = (word) => word.endsWith('s') && !word.endsWith('ss')
-
-// Whether the word at `i` opens a consumer noun phrase: "your" or "our", or a consumer-side noun
-// owned by them, or introduced by "the", "this", "that", "their" or no determiner, with no Nave
-// word or unowned "token" before it. One introduced by "a" or "an" counts when no Nave word comes
-// earlier in the sentence (`naveSeen`); one introduced by "its" never does.
-function opensConsumerPhrase(words, i, naveSeen) {
-  if (OWNERS.has(words[i].word)) return true
-  if (!CONSUMER_HEADS.has(words[i].word)) return false
-  let token = false
-  for (let k = i - 1; k >= Math.max(0, i - 3); k -= 1) {
-    const { word, segment } = words[k]
-    if (segment !== words[i].segment) break
-    if (OWNERS.has(word)) return true
-    if (word.startsWith('nave')) return false
-    token ||= isTokenWord(word)
-    if (DETERMINERS.has(word)) {
-      if (word === 'its') return false
-      return !token && !(naveSeen && (word === 'a' || word === 'an'))
-    }
-  }
-  return !token
-}
-
-// The side the word at `k` names: 'consumer', 'nave', or null for a word that names neither. A
-// bare "token" or "tokens" is not an invoker, so it names neither.
-function sideAt(words, k) {
-  const word = words[k].word
-  if (CONSUMER_WORDS.has(word)) return 'consumer'
-  if (word.startsWith('nave')) return 'nave'
-  if (CONSUMER_HEADS.has(word)) return namesConsumer(words, k) ? 'consumer' : 'nave'
-  return null
-}
-
-// The side that invokes the active verb at `verb` in clause `c` of a sentence: the first word,
-// walking back through the clause and skipping an aside between commas, that names either side.
-// Past a subject pronoun ("it", "they") the walk continues into the sentence's earlier clauses,
-// so the pronoun takes the side of the invoker it stands for.
-function invokerSide(clauses, c, verb) {
-  let pronoun = false
-  for (let at = c; at >= 0; at -= 1) {
-    const words = clauses[at]
-    for (let k = (at === c ? verb : words.length) - 1; k >= 0; k -= 1) {
-      const aside = at === c && words[k].segment !== words[verb].segment
-      if (aside && isAside(words, words[k].segment, words[verb].segment)) continue
-      pronoun ||= SUBJECT_PRONOUNS.has(words[k].word)
-      const side = sideAt(words, k)
-      if (side !== null) return side
-    }
-    if (!pronoun) return null
+// The negation or contrast word a sentence holds, or null.
+function negationIn(words) {
+  for (const [at, word] of words.entries()) {
+    if (NEGATION_WORDS.has(word) || word.endsWith("n't")) return word
+    const pair = `${word} ${words[at + 1]}`
+    if (NEGATION_PAIRS.has(pair)) return pair
   }
   return null
 }
 
-// Whether a comma segment, walked back over from a verb in segment `verbSegment`, is an aside:
-// closed by commas on both sides and not a clause. A segment opened by a coordinating
-// conjunction is a clause (", and your build runs its own script, which ..."). So is one opened
-// by any other joining word when it sits right before a verb segment that opens with a relative
-// word, since it holds that relative's antecedent (", then your build runs its own script, which
-// invokes ..."). Otherwise a subordinate segment is an aside: "The Nave CLI, while your build
-// waits, invokes ..." is Nave's.
-function isAside(words, segment, verbSegment) {
-  if (!isClosedMiddle(words, segment)) return false
-  const opener = words[segmentStart(words, segment)].word
-  if (COORDINATORS.has(opener)) return false
-  const relative = RELATIVES.has(words[segmentStart(words, verbSegment)].word)
-  return !(relative && segment === verbSegment - 1 && CLAUSE_BREAKERS.has(opener))
+// How many words the negator, reach verb, avoidance verb or object at `at` spans, or 0.
+function negatorAt(words, at) {
+  if (DENIAL_NEGATORS.has(words[at]) || words[at].endsWith("n't")) return 1
+  return DENIAL_NEGATOR_PAIRS.has(`${words[at]} ${words[at + 1]}`) ? 2 : 0
 }
 
-// The side the agent of a passive names: the first naming word after the "by" at `by`, read to
-// the end of its aside, or of its clause.
-function agentSide(words, by) {
-  const segment = words[by].segment
-  const inAside = isClosedMiddle(words, segment)
-  const end = inAside ? words.findLastIndex((w) => w.segment === segment) + 1 : words.length
-  for (let k = by + 1; k < Math.min(end, scopeEnd(words, by + 1, 'clause')); k += 1) {
-    const side = sideAt(words, k)
-    if (side !== null) return side
+function reachVerbAt(words, at) {
+  if (REACH_VERBS.has(words[at])) return 1
+  return GO.has(words[at]) && words[at + 1] === 'through' ? 2 : 0
+}
+
+function avoidanceAt(words, at) {
+  if (AVOIDING_STEMS.some((stem) => words[at].startsWith(stem))) return 1
+  const next = words[at + 1]
+  if ((next === 'around' || next === 'past') && GO.has(words[at])) return 2
+  return next === 'short' && words[at + 2] === 'of' && STOP.has(words[at]) ? 3 : 0
+}
+
+function objectAt(words, at) {
+  if (words[at] === 'entry' && ENTRY_POINT_HEADS.has(words[at + 1])) return 2
+  return words[at] === 'it' || words[at] === 'navecss-tokens' ? 1 : 0
+}
+
+// The denial form a clause holds, as the words matched, or null. One pass: a negator then a reach
+// verb then the object, or an avoidance verb then the object, in that order within the clause.
+function denialInClause(words) {
+  const passive = findPhrase(words, PASSIVE_DENIAL_INDEX)
+  if (passive !== null) return passive.join(' ')
+  const matched = []
+  let wanted = 'opener'
+  for (let at = 0; at < words.length;) {
+    const step = wantedAt(words, at, wanted)
+    if (step === 0) {
+      at += 1
+      continue
+    }
+    matched.push(words.slice(at, at + step).join(' '))
+    if (wanted === 'object') return matched.join(' … ')
+    wanted = wanted === 'opener' && avoidanceAt(words, at) > 0 ? 'object' : nextWanted(wanted)
+    at += step
   }
   return null
 }
 
-function clauseAffirms(clauses, c) {
-  const words = clauses[c]
-  return words.some((_, i) => {
-    if (INVOKING_VERBS.has(words[i].word)) {
-      const end = scopeEnd(words, i + 1, 'clause')
-      const object = objectFollows(words, i + 1, end, { pronoun: false })
-      return object === 'object' && invokerSide(clauses, c, i) === 'consumer'
-    }
-    if (!isEntryPointAt(words, i)) return false
-    return nextWords(words, i + 2, 3).some(
-      (k) =>
-        INVOKED_PARTICIPLES.has(words[k].word) &&
-        words[k + 1]?.word === 'by' &&
-        agentSide(words, k + 1) === 'consumer',
+function wantedAt(words, at, wanted) {
+  if (wanted === 'opener') return negatorAt(words, at) || avoidanceAt(words, at)
+  if (wanted === 'verb') return reachVerbAt(words, at)
+  return objectAt(words, at)
+}
+
+const nextWanted = (wanted) => (wanted === 'opener' ? 'verb' : 'object')
+
+const NO_SHAPE_START = "rung 4 never says, in an accepted shape, that the consumer's own build"
+
+const render = (shape) =>
+  shape
+    .map((slot) =>
+      slot.length === 1 ? slot[0].join(' ') : `{${slot.map((o) => o.join(' ')).join(' | ')}}`,
     )
-  })
+    .join(' ')
+
+function noShapeMessage(text) {
+  const shapes = AFFIRMATIVE_SHAPES.map((shape) => `  ${render(shape)}`).join('\n')
+  return (
+    `${NO_SHAPE_START} invokes the entry point (AC-theming-36, clause (1)). It reads: ` +
+    `${JSON.stringify(text.replaceAll(/\s+/g, ' ').trim())}. Accepted shapes:\n${shapes}\n` +
+    'If rung 4 says this in other words, add that wording to the shapes list in this file in the ' +
+    'same change as the README edit. A shape that names Nave as the invoker, or carries a ' +
+    'negation, is rejected by the row that checks the list.'
+  )
 }
 
-function affirmsReach(sentence) {
-  if (deniesReach(sentence)) return false
-  const clauses = clausesOf(sentence)
-  return clauses.some((_, c) => clauseAffirms(clauses, c))
+const negatedShapeMessage = (sentence, word) =>
+  `rung 4's sentence ${JSON.stringify(sentence)} matches an accepted shape but also holds ` +
+  `"${word}"; a sentence with a negation or contrast never counts as the affirmative. State the ` +
+  'affirmative in a sentence of its own.'
+
+// The denial form of a sentence's first denying clause, or null. One per sentence, so a long
+// sentence is quoted once.
+function denialIn(sentence) {
+  for (const clause of sentence.split(/[;:]/)) {
+    const form = denialInClause(wordsOf(clause))
+    if (form !== null) return form
+  }
+  return null
 }
+
+const denialMessage = (sentence, form) =>
+  `rung 4 denies the entry point's reach: ${JSON.stringify(sentence)} (matched: ${form}).`
 
 function rung4ReachProblems(text) {
-  const sentences = sentencesOf(text)
-  const problems = sentences
-    .filter((sentence) => deniesReach(sentence))
-    .map((sentence) => `rung 4 denies the entry point's reach: ${JSON.stringify(sentence)}`)
-  if (sentences.every((sentence) => !affirmsReach(sentence))) {
-    problems.push('rung 4 never says its own build invokes the entry point')
+  const problems = []
+  const negatedShapes = []
+  let affirms = false
+  for (const sentence of sentencesOf(text)) {
+    const form = denialIn(sentence)
+    if (form !== null) problems.push(denialMessage(sentence, form))
+    const words = wordsOf(sentence)
+    if (findPhrase(words, AFFIRMATIVE_INDEX) === null) continue
+    const negation = negationIn(words)
+    if (negation === null) affirms = true
+    else negatedShapes.push(negatedShapeMessage(sentence, negation))
   }
+  if (!affirms) problems.push(noShapeMessage(text), ...negatedShapes)
   return problems
 }
+
+// CLAUSE (1) FOR THE LIST ITSELF. Every phrase a shape stands for must be an affirmative of the
+// consumer's build: a consumer-side build, script or task before a form of invoke, run or call
+// and the entry point (or `navecss-tokens`) after it, or the passive "the entry point is invoked
+// by" one; no Nave word; no negation. Returned as one line per phrase that is not.
+const INVOKING_WORDS = new Set(INVOKING_VERBS.flat())
+const CONSUMER_WORDS = new Set([
+  'your',
+  "consumer's",
+  'build',
+  'script',
+  'task',
+  'pipeline',
+  'ci',
+  'toolchain',
+])
+
+function shapeProblems(shapes) {
+  return shapes
+    .flatMap((shape) => phrasesOf(shape))
+    .map((phrase) => [phrase.join(' '), affirmativeFlaw(phrase)])
+    .filter(([, flaw]) => flaw !== null)
+    .map(([phrase, flaw]) => `${phrase}: ${flaw}`)
+}
+
+function affirmativeFlaw(words) {
+  if (words.some((word) => word.startsWith('nave') && word !== 'navecss-tokens'))
+    return 'names Nave'
+  if (negationIn(words) !== null) return 'holds a negation'
+  const verb = words.findIndex((word) => INVOKING_WORDS.has(word))
+  if (verb === -1) return 'has no form of invoke, run or call'
+  const [before, after] = [words.slice(0, verb), words.slice(verb + 1)]
+  const consumer = (part) => part.some((word) => CONSUMER_WORDS.has(word))
+  const object = (part) => part.some((word, at) => objectAt(part, at) > 0 && word !== 'it')
+  const active = consumer(before) && object(after)
+  const passive = object(before) && after[0] === 'by' && consumer(after)
+  return active || passive
+    ? null
+    : 'has no consumer-side invoker with the entry point as its object'
+}
+
+// An entry a careless remedy could add: the row that checks the list must red on it.
+const NAVE_SHAPE = [anyOf('nave'), anyOf('invokes'), anyOf('the entry point')]
 
 const PUBLISHED_RUNG_4 = rungBody('4')
 
@@ -943,6 +549,47 @@ test('AC-theming-36: rungs 1b, 3 and 5 show the entry point invoked, and rung 4 
   assert.deepEqual(rung4ReachProblems(rungBody('4')), [])
 })
 
+// The published wording is pinned on its own: rung 4 holds it, in a sentence with no negation.
+test('AC-theming-36: rung 4 states the published shape, "the script or the task that invokes the entry point"', () => {
+  const matches = sentencesOf(PUBLISHED_RUNG_4).filter((sentence) => {
+    const words = wordsOf(sentence)
+    return findPhrase(words, PUBLISHED_INDEX) !== null && negationIn(words) === null
+  })
+  assert.equal(matches.length, 1)
+})
+
+// The list guards itself: every accepted shape is an affirmative of the consumer's build, and the
+// check reds on a Nave invoker added to a copy of the list.
+test('AC-theming-36: every accepted shape is itself an affirmative, and a Nave invoker added to the list reds', () => {
+  assert.deepEqual(shapeProblems(AFFIRMATIVE_SHAPES), [])
+  assert.deepEqual(shapeProblems([...AFFIRMATIVE_SHAPES, NAVE_SHAPE]), [
+    'nave invokes the entry point: names Nave',
+  ])
+  // Each other way an entry can fail clause (1), on its own copy of the list.
+  const flawed = [
+    [anyOf('your build does not invoke the entry point'), 'holds a negation'],
+    [anyOf('your build the entry point'), 'has no form of invoke, run or call'],
+    [
+      anyOf('a library invokes the entry point'),
+      'has no consumer-side invoker with the entry point as its object',
+    ],
+    [
+      anyOf('your build invokes a script'),
+      'has no consumer-side invoker with the entry point as its object',
+    ],
+    [
+      anyOf('the entry point is invoked by a library'),
+      'has no consumer-side invoker with the entry point as its object',
+    ],
+  ]
+  for (const [shape, flaw] of flawed) {
+    assert.deepEqual(shapeProblems([...AFFIRMATIVE_SHAPES, [shape]]), [
+      `${shape[0].join(' ')}: ${flaw}`,
+    ])
+  }
+})
+
+// Denials inside the closed denial list: each reds alone and beside the published rung.
 const RUNG_4_DENIALS = [
   'This rung is not reached through the entry point at all.',
   'Your build does not invoke the entry point.',
@@ -955,65 +602,60 @@ const RUNG_4_DENIALS = [
   "The entry point isn't invoked by your build.",
   'Your build is not reaching the entry point.',
   "Your build can't invoke it.",
-  // The subject is the negation: nothing, no step, neither ... nor.
   'Nothing invokes the entry point.',
   'No step of your build invokes the entry point.',
-  'Neither your build nor its scripts invoke the entry point.',
-  // A long way between the negator and the verb, or an adverb between the negator and the
-  // participle.
   'Your build does not, at any point in the steps described above, invoke the entry point.',
   'Your build never once, at any stage of the pipeline that it owns, in any form, calls the entry point.',
   'The entry point is not directly invoked.',
   'The entry point is never actually called.',
   'The entry point is no longer invoked at this rung.',
-  'The entry point, with no seed of its own, is never invoked.',
-  // The verb left out after the negator.
-  'Your build is meant to invoke the entry point, but it never does.',
-  'Your build should call the entry point; it does not.',
-  // A gerund negated by a preposition, or a contrast.
   'Instead of invoking the entry point, your build writes the file itself.',
   'Rather than invoking the entry point, your build writes the file itself.',
   'Your build produces tokens.css without invoking the entry point.',
   'Unlike rung 3, where your build invokes the entry point, this rung reads its inputs from a file Nave discovers.',
-  // A typographic apostrophe, and verbs that deny reach without a negator.
   'Your build doesn’t invoke the entry point.',
   'Your build fails to reach the entry point.',
   'Your build stops short of the entry point.',
   'Your build avoids the entry point.',
   'Your build does not go through the entry point.',
-  // Other spellings of the object.
   'Your build does not invoke the entrypoint.',
   'Your build does not invoke the entry-point.',
   'Your build does not invoke Nave’s entry point.',
   'Your build does not invoke the token build’s entry point.',
   'Your build never runs `navecss-tokens`.',
-  // A negator between the verb and its object.
-  'Your build invokes no entry point at all.',
-  'Your build calls no entry point.',
-  // A joining word inside a parenthetical between commas does not end the negation.
   'Your build has never, since 0.1.0, invoked the entry point.',
   'Your build does not, while it runs, invoke the entry point.',
   'Your build will not, then, invoke the entry point.',
-  // An abbreviation's full stop does not end the sentence.
   'Your build does not, e.g. via a script, invoke the entry point.',
-  // A possessive on the entry point, and four words between the verb and its object.
-  "The entry point's CLI is never invoked by your build.",
   'Your build does not invoke, on every single pass, the entry point.',
-  // Negatives carried by an adjective or a participle.
   'Your build is unable to invoke the entry point.',
-  'It is impossible for your build to invoke the entry point.',
-  'Your build is prevented from invoking the entry point.',
-  // An aside between commas that negates the whole clause, not a noun.
   'Your build, never once, invokes the entry point.',
   'Your build, not ever, invokes the entry point.',
   'Your build, never, invokes the entry point.',
   'Your build, at no point, invokes the entry point.',
-  // A hyphenated or closed-up possessive on the entry point.
-  "The entry-point's CLI is never invoked by your build.",
-  'The entrypoint’s CLI is never invoked by your build.',
-  // A negator-led aside that names no alternative invoker negates the clause.
   'Your build, never at any stage of its run, invokes the entry point.',
   'Your build, never in any of its steps, invokes the entry point.',
+  // One row per entry of the closed denial list that no row above uses.
+  'Your build cannot invoke the entry point.',
+  'Your build failed to invoke the entry point.',
+  'Your build and your task fail to invoke the entry point.',
+  'Your build skips the entry point.',
+  'Your build circumvents the entry point.',
+  'The entry point is not reached.',
+  'The entry point is never run.',
+  'The entry point is not used.',
+  'Your build does not use the entry point.',
+  'Your build went around the entry point.',
+  'Your build is not going through the entry point.',
+  'Your build has not gone through the entry point.',
+  'Your build stopped short of the entry point.',
+  'Your build and your task stop short of the entry point.',
+  'Your build is stopping short of the entry point.',
+  'The entry point was not invoked.',
+  'The entry point was never invoked.',
+  'The entry point was no longer invoked.',
+  "The entry point wasn't invoked.",
+  "The entry point can't be invoked.",
 ]
 
 test('AC-theming-36: a rung 4 that keeps only a denial of the entry point reds', () => {
@@ -1026,122 +668,152 @@ test('AC-theming-36: a rung 4 that keeps only a denial of the entry point reds',
 
 test('AC-theming-36: a denial reds even beside the published rung-4 affirmative', () => {
   assert.deepEqual(
-    RUNG_4_DENIALS.filter(
-      (denial) => rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${denial}`).length === 0,
+    RUNG_4_DENIALS.filter((denial) =>
+      rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${denial}`).every(
+        (problem) => !problem.startsWith("rung 4 denies the entry point's reach"),
+      ),
     ),
     [],
     'each of these must red even beside the published affirmative',
   )
 })
 
-// The affirmative names the consumer's own build, script or task as what invokes the entry point. A
-// sentence where Nave, or a part of Nave, invokes it says nothing about the consumer's build, so a
-// rung 4 made only of one is reported as missing the affirmative.
+// The stated residual: denials outside the closed list. Alone each still reds, because it holds
+// no accepted shape; beside the published rung the denial guard does not see it, and a person
+// reading the change must.
+const RUNG_4_DENIAL_RESIDUALS = [
+  'Neither your build nor its scripts invoke the entry point.',
+  'The entry point, with no seed of its own, is never invoked.',
+  'Your build is meant to invoke the entry point, but it never does.',
+  'Your build should call the entry point; it does not.',
+  'Your build invokes no entry point at all.',
+  'Your build calls no entry point.',
+  "The entry point's CLI is never invoked by your build.",
+  'It is impossible for your build to invoke the entry point.',
+  'Your build is prevented from invoking the entry point.',
+  "The entry-point's CLI is never invoked by your build.",
+  'The entrypoint’s CLI is never invoked by your build.',
+]
+
+test('AC-theming-36: a denial outside the closed list reds alone, and beside the published rung is left to the reader', () => {
+  for (const denial of RUNG_4_DENIAL_RESIDUALS) {
+    assert.ok(
+      rung4ReachProblems(denial).some((problem) => problem.startsWith(NO_SHAPE_START)),
+      `must red alone: ${denial}`,
+    )
+    assert.ok(
+      rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${denial}`).every(
+        (problem) => !problem.startsWith("rung 4 denies the entry point's reach"),
+      ),
+      `a residual, not caught by the closed denial list: ${denial}`,
+    )
+  }
+})
+
+// Rung 4s whose invoker is Nave, a part of it, or no one: none holds an accepted shape.
+const RUNG_4_NOT_THE_CONSUMER = [
+  'Nave invokes the entry point for you.',
+  'The Nave CLI invokes the entry point.',
+  "Nave's build invokes the entry point.",
+  'The token build runs the entry point.',
+  'The entry point is invoked by Nave.',
+  "The entry point is invoked by Nave's build.",
+  'Your build hands its inputs to Nave, which invokes the entry point.',
+  'Nave ships a build that invokes the entry point.',
+  'Nave ships its own build script, which invokes the entry point.',
+  'Nave is the invoker: it invokes the entry point.',
+  'It invokes the entry point.',
+  'Your build is ready; the CLI invokes the entry point.',
+  'Nave then ships a build script that invokes the entry point.',
+  'Nave since 0.1.0 ships a build script that invokes the entry point.',
+  'Nave writes and ships a build script that invokes the entry point.',
+  'Nave ships the defaults and a build script that invokes the entry point.',
+  'Nave then has a build script invoke the entry point.',
+  'Nave, as of 0.1.0, ships a build that invokes the entry point.',
+  'Nave ships, as of 0.1.0, a build that invokes the entry point.',
+  'Nave, which owns the defaults, also ships a build that invokes the entry point.',
+  'Since 0.1.0, Nave ships a build script that invokes the entry point.',
+  "Since Nave's own release, its build script invokes the entry point.",
+  'Since Nave 0.1.0, its build script invokes the entry point.',
+  "Since Nave's 0.1.0 release, its build script invokes the entry point.",
+  "Since Nave's 0.1.0, its build script invokes the entry point.",
+  'Nave writes the defaults and you get its build script that invokes the entry point.',
+  'Since Nave ships the defaults, its build script invokes the entry point.',
+  "Since Nave's build ships, its script invokes the entry point.",
+  'Nave ships the defaults, and now you get its build script that invokes the entry point.',
+  "Since Nave's first release, its build script invokes the entry point.",
+  "As of Nave's latest release, its build script invokes the entry point.",
+  "Since Nave's 2.0 release notes, its build script invokes the entry point.",
+  'Since Nave CSS 0.1.0, its build script invokes the entry point.',
+  'Since Nave v0.1.0, its build script invokes the entry point.',
+  'Since Nave CSS 0.1.0, a build script invokes the entry point.',
+  'Since Nave v0.1.0, a build script invokes the entry point.',
+  'Nave ships the defaults; its build script invokes the entry point.',
+  'The Nave CLI, while your build waits, invokes the entry point.',
+  'Nave, since your build asks for it, invokes the entry point.',
+  "Since Nave's build ships the defaults, its script invokes the entry point.",
+  "Since Nave's defaults change, its build script invokes the entry point.",
+  "Since Nave's best release, its build script invokes the entry point.",
+  'The token build ships, and its script invokes the entry point.',
+  'Nave lives in the project with its build script that invokes the entry point.',
+  'Nave ships a build script, and its task invokes the entry point.',
+  "Since Nave's release, a build script invokes the entry point.",
+  "Since Nave's own release, a build script invokes the entry point.",
+  "Since Nave's first release, a build script invokes the entry point.",
+  "Since Nave's latest release, a build script invokes the entry point.",
+  "Since Nave's 0.1.0 release, a build script invokes the entry point.",
+  "Since Nave's 2.0 release notes, a build script invokes the entry point.",
+  'Instead of invoking the entry point, your build writes the file itself.',
+  'Your build produces tokens.css without invoking the entry point.',
+]
+
 test("AC-theming-36: an invoker that is not the consumer's build is not the affirmative", () => {
-  const naveSide = [
-    'Nave invokes the entry point for you.',
-    'The Nave CLI invokes the entry point.',
-    "Nave's build invokes the entry point.",
-    'The token build runs the entry point.',
-    'The entry point is invoked by Nave.',
-    "The entry point is invoked by Nave's build.",
-    'Your build hands its inputs to Nave, which invokes the entry point.',
-    // A build introduced by "a" or "its" after Nave is named in the same clause is Nave's.
-    'Nave ships a build that invokes the entry point.',
-    'Nave ships its own build script, which invokes the entry point.',
-    // A pronoun subject is read through to the invoker it stands for in the same sentence, and
-    // with none there it names no one.
-    'Nave is the invoker: it invokes the entry point.',
-    'It invokes the entry point.',
-    'Your build is ready; the CLI invokes the entry point.',
-    // A joining word or an adverb inside Nave's own clause does not end Nave's ownership.
-    'Nave then ships a build script that invokes the entry point.',
-    'Nave since 0.1.0 ships a build script that invokes the entry point.',
-    'Nave writes and ships a build script that invokes the entry point.',
-    'Nave ships the defaults and a build script that invokes the entry point.',
-    'Nave then has a build script invoke the entry point.',
-    // Nave before a comma aside still owns the build.
-    'Nave, as of 0.1.0, ships a build that invokes the entry point.',
-    'Nave ships, as of 0.1.0, a build that invokes the entry point.',
-    'Nave, which owns the defaults, also ships a build that invokes the entry point.',
-    // A leading phrase with no verb of its own is not a clause, so its comma ends nothing.
-    'Since 0.1.0, Nave ships a build script that invokes the entry point.',
-    "Since Nave's own release, its build script invokes the entry point.",
-    'Since Nave 0.1.0, its build script invokes the entry point.',
-    "Since Nave's 0.1.0 release, its build script invokes the entry point.",
-    "Since Nave's 0.1.0, its build script invokes the entry point.",
-    // "its" read through to the nearest singular noun before it in the sentence.
-    'Nave writes the defaults and you get its build script that invokes the entry point.',
-    'Since Nave ships the defaults, its build script invokes the entry point.',
-    "Since Nave's build ships, its script invokes the entry point.",
-    'Nave ships the defaults, and now you get its build script that invokes the entry point.',
-    // A leading possessive phrase with a modifier, or a compound noun, is still a phrase.
-    "Since Nave's first release, its build script invokes the entry point.",
-    "As of Nave's latest release, its build script invokes the entry point.",
-    "Since Nave's 2.0 release notes, its build script invokes the entry point.",
-    // "Nave CSS" is one name, and "v0.1.0" is a version.
-    'Since Nave CSS 0.1.0, its build script invokes the entry point.',
-    'Since Nave v0.1.0, its build script invokes the entry point.',
-    'Since Nave CSS 0.1.0, a build script invokes the entry point.',
-    'Since Nave v0.1.0, a build script invokes the entry point.',
-    'Nave ships the defaults; its build script invokes the entry point.',
-    // A subordinate aside between commas is still an aside.
-    'The Nave CLI, while your build waits, invokes the entry point.',
-    'Nave, since your build asks for it, invokes the entry point.',
-    // A possessive Nave mention is Nave's when nothing nearer names a side.
-    "Since Nave's build ships the defaults, its script invokes the entry point.",
-    "Since Nave's defaults change, its build script invokes the entry point.",
-    "Since Nave's best release, its build script invokes the entry point.",
-    // "its" after a Nave-owned build, after a neutral noun the earlier rule reads as Nave's, and
-    // after "a build" that Nave ships.
-    'The token build ships, and its script invokes the entry point.',
-    'Nave lives in the project with its build script that invokes the entry point.',
-    'Nave ships a build script, and its task invokes the entry point.',
-    // A leading possessive Nave phrase is a phrase, so "a build" after its comma stays Nave's.
-    "Since Nave's release, a build script invokes the entry point.",
-    "Since Nave's own release, a build script invokes the entry point.",
-    "Since Nave's first release, a build script invokes the entry point.",
-    "Since Nave's latest release, a build script invokes the entry point.",
-    "Since Nave's 0.1.0 release, a build script invokes the entry point.",
-    "Since Nave's 2.0 release notes, a build script invokes the entry point.",
-  ]
   assert.deepEqual(
-    naveSide.filter(
-      (sentence) =>
-        !rung4ReachProblems(sentence).includes(
-          'rung 4 never says its own build invokes the entry point',
-        ),
+    RUNG_4_NOT_THE_CONSUMER.filter((sentence) =>
+      rung4ReachProblems(sentence).every((problem) => !problem.startsWith(NO_SHAPE_START)),
     ),
     [],
   )
 })
 
-// A sentence that denies reach is never also read as the affirmative, so a rung 4 made only of a
-// negated gerund or a contrast is reported as saying nothing affirmative, not just as a denial.
-test('AC-theming-36: a negated gerund or a contrast is not read as the affirmative', () => {
-  const contrasts = [
-    'Instead of invoking the entry point, your build writes the file itself.',
-    'Your build produces tokens.css without invoking the entry point.',
-    'Unlike rung 3, where your build invokes the entry point, this rung reads its inputs from a file Nave discovers.',
-  ]
+// A sentence that holds an accepted shape and a negation or contrast word never affirms, and says
+// which word it found.
+const RUNG_4_NEGATED_SHAPES = [
+  'Unlike rung 3, where your build invokes the entry point, this rung reads a file.',
+  'Nothing like the script or the task that invokes the entry point exists.',
+  'Instead of the script or the task that invokes the entry point, Nave reads a file.',
+  // One row per negation or contrast word the check knows.
+  'Your build invokes the entry point, not a script of its own.',
+  'Your build invokes the entry point and never a copy.',
+  'Your build invokes the entry point with no flags.',
+  "Your build invokes the entry point, which isn't optional.",
+  'Your build invokes the entry point, which cannot be skipped.',
+  'Your build invokes the entry point without flags.',
+  'Your build invokes the entry point rather than a copy.',
+  'Your build invokes the entry point, no longer a copy.',
+]
+
+test('AC-theming-36: a sentence holding a shape and a negation or contrast is not the affirmative', () => {
   assert.deepEqual(
-    contrasts.filter(
-      (sentence) =>
-        !rung4ReachProblems(sentence).includes(
-          'rung 4 never says its own build invokes the entry point',
-        ),
-    ),
+    RUNG_4_NEGATED_SHAPES.filter((sentence) => {
+      const problems = rung4ReachProblems(sentence)
+      return !(
+        problems.some((problem) => problem.startsWith(NO_SHAPE_START)) &&
+        problems.some((problem) => problem.includes('matches an accepted shape but also holds'))
+      )
+    }),
     [],
   )
 })
 
-// The check reads a rung in time linear in its length, so a long or repetitive rung cannot stall
-// the suite or overflow the stack. Each input is far longer than any rung; the bound is generous.
+// The check reads a rung in time linear in its length. Each input is far longer than any rung.
 test('AC-theming-36: the rung-4 reach check returns quickly on long input', () => {
   const inputs = [
     `Your build${' and its script'.repeat(5000)} invokes the entry point.`,
     `Your build${', and its task'.repeat(1000)}, invokes the entry point.`,
-    `${'Nave ships; '.repeat(5000)}its build script invokes the entry point.`,
+    `${'Nave ships; '.repeat(5000)}your build invokes the entry point.`,
+    `${'Your build does not use it; '.repeat(5000)}the script or the task that invokes the entry point.`,
+    'Your build does not use it. '.repeat(5000),
   ]
   for (const input of inputs) {
     const started = performance.now()
@@ -1151,19 +823,50 @@ test('AC-theming-36: the rung-4 reach check returns quickly on long input', () =
   }
 })
 
-// Lawful rung-4 text, each sentence the whole rung: it says the consumer's build reaches the entry
-// point, so it must stay green.
+// Lawful rung-4 text inside the accepted shapes: each sentence, the whole rung, stays green.
 const RUNG_4_LAWFUL = [
-  // Forms of run and call, the passive, the past tense, and a possessive or hyphenated object.
   'Your build script runs the entry point with your inputs.',
   'Your build calls the entry point with your inputs.',
   'The entry point is invoked by your own build.',
   'Your build invoked the entry point, and it does so on every run.',
-  'Your build invokes Nave’s entry point with your inputs.',
-  'Your build invokes the token build’s entry point with your inputs.',
   'Your build runs `navecss-tokens` with your inputs.',
   'The script or the task that invokes the entry-point.',
-  // A negation in one clause does not reach into the next.
+  "The consumer's build invokes the entry point.",
+  'Your CI invokes the entry point with your inputs.',
+  'Your toolchain runs the entry point with your inputs.',
+  'The entry point is invoked by your CI.',
+  // One sentence per entry of the accepted shapes, so every entry is in use.
+  'Your own build invokes the entry point.',
+  'Your script invokes the entry point.',
+  'Your task invokes the entry point.',
+  'Your pipeline invokes the entry point.',
+  'Your build system invokes the entry point.',
+  'Your build and your task invoke the entry point.',
+  'Your build and your task run the entry point.',
+  'Your build and your task call the entry point.',
+  'Your build ran the entry point.',
+  'Your build called the entry point.',
+  'The entry point was invoked by your build.',
+  'The entry point is run by your build.',
+  'The entry point is called by your build.',
+]
+
+test('AC-theming-36: a lawful rung 4 in an accepted shape stays green', () => {
+  assert.deepEqual(
+    RUNG_4_LAWFUL.map((sentence) => [sentence, rung4ReachProblems(sentence)]).filter(
+      ([, problems]) => problems.length > 0,
+    ),
+    [],
+    'each of these must stay green on its own',
+  )
+})
+
+// Lawful rung-4 text outside the accepted shapes, kept rather than deleted: each fails LOUDLY with
+// the shapes message, quoting what it read. This pins the failure mode: the remedy for any of
+// them is to add its shape to the list in the same change as the README edit.
+const RUNG_4_FAILS_LOUDLY = [
+  'Your build invokes Nave’s entry point with your inputs.',
+  'Your build invokes the token build’s entry point with your inputs.',
   'Do not use a config file; it is read from what your build hands it, and the script or the task that invokes the entry point supplies it.',
   'You do not run a separate step: it happens inside the script or the task that invokes the entry point.',
   'You do not need a config file; your build invokes the entry point.',
@@ -1172,103 +875,79 @@ const RUNG_4_LAWFUL = [
   'No file is discovered; your own build invokes the entry point with what it has.',
   'No file is discovered, and your own build invokes the entry point with what it has.',
   'Your build skips ahead and invokes the entry point.',
-  // "Instead of" negates the noun it governs here, not the build's invocation.
   'Instead of a seed you typed into a script once, your own build invokes the entry point with them.',
   'Without a config file, your build invokes the entry point with its own inputs.',
   'No file is discovered and your own build invokes the entry point, with what it has.',
-  // A negator opening an aside, or inside a relative clause, negates only that aside.
   'Your build, not Nave, invokes the entry point.',
   'It is your build, not a Nave config file, that invokes the entry point.',
   'The entry point, which reads no file, is invoked by your build.',
   'Your build runs, not Nave, the entry point.',
-  // A verb left out after a subject that is not a pronoun is not a denial of reach.
   'Your build invokes the entry point; Nave does not.',
   "Your build invokes the entry point; Nave doesn't.",
-  // A possessive on the entry point, and three or four words between the verb and its object.
   'Your build invokes the entry point’s command-line interface with your inputs.',
   'Your build invokes, on every pass, the entry point.',
   'Your build invokes, on every single pass, the entry point.',
-  // A hyphenated or closed-up possessive on the entry point.
   'Your build invokes the entry-point’s command-line interface.',
   "Your build invokes the entrypoint's CLI.",
-  // Other consumer-side invokers, and an invoker found past an aside or a relative clause.
-  "The consumer's build invokes the entry point.",
   'Your bundler runs the entry point with your inputs.',
   'Nave runs inside your build, which invokes the entry point.',
-  // More consumer-side invokers: the consumer named as "you", other tools, an owned token build.
-  'Your CI invokes the entry point with your inputs.',
-  'Your toolchain runs the entry point with your inputs.',
   "Your build's codegen step invokes the entry point.",
   'You invoke the entry point from your own build.',
   'Your token build invokes the entry point.',
   'Your build loads your tokens and invokes the entry point with them.',
-  // The passive agent read to the end of its by-phrase.
   'The entry point is invoked by a step in your build.',
-  'The entry point is invoked by your CI.',
-  // A pronoun subject read through to its antecedent in the same sentence.
   'Your build is the invoker: it invokes the entry point with your inputs.',
-  // Consumer-side nouns with no "your" to decide them.
   'The CI invokes the entry point with your inputs.',
   "The build's generator invokes the entry point.",
   'A build script invokes the entry point and hands the result to Nave.',
   'The entry point is invoked by one of the many tasks in your build.',
-  // Nave named in an earlier clause, or in an aside, does not make a later "a build" Nave's.
   'Nave ships the tokens, and a build script invokes the entry point.',
   'Nave writes the defaults, and a build invokes the entry point with your inputs.',
   'Nave ships the defaults, but a build script invokes the entry point.',
   'Your repo, not Nave, holds a build script that invokes the entry point.',
   'Nave ships the tokens and a build script invokes the entry point.',
   'Nave ships the defaults, then a build script invokes the entry point.',
-  // A new clause with the consumer as its own subject, after Nave's clause.
   'Nave ships the defaults, and you keep a build script that invokes the entry point.',
   'Nave ships the defaults, but your repo holds a build script that invokes the entry point.',
   'Nave ships the defaults and you keep a build script that invokes the entry point.',
   'Nave ships the defaults, so you write a build script that invokes the entry point.',
-  // Nave named only in a leading subordinate clause.
   'Since Nave ships the defaults, a build script invokes the entry point.',
   'Because Nave ships the defaults, a build script invokes the entry point.',
-  // An adverb between the joining word and the consumer's subject.
   'Nave ships the defaults, and then you write a build script that invokes the entry point.',
   'Nave ships the defaults, but now you keep a build script that invokes the entry point.',
-  // A leading clause whose subject is a possessive Nave phrase.
   "Since Nave's defaults change, a build script invokes the entry point.",
   "Because Nave's own build ships the defaults, a build script invokes the entry point.",
-  // "its" that points back at the consumer's own build, repo or script.
   'Nave ships the defaults, and your build runs its own script, which invokes the entry point.',
   "Your build reads Nave's defaults, and its script invokes the entry point.",
   'Your repo holds a build script, and its task invokes the entry point.',
   'Nave writes your config, and its build script invokes the entry point.',
   'Nave ships the defaults to the pipeline, and its task invokes the entry point.',
   "Your build reads Nave's scripts, and its task invokes the entry point.",
-  // A noun that names neither side stops the "its" search; a consumer noun phrase earlier wins.
   'Add Nave to the project, and its build script invokes the entry point.',
   'Nave lives in the project, and its build script invokes the entry point.',
   'Your build pulls in Nave, and its script invokes the entry point.',
   'Your project depends on Nave, and its build script invokes the entry point.',
   'Nave ships the defaults to your repo, and its build script invokes the entry point.',
-  // A present-tense verb after a possessive Nave subject, and a noun ending in "est".
   "Since Nave's release ships, a build script invokes the entry point.",
   "Because Nave's CLI changes, a build script invokes the entry point.",
   "When Nave's default changes, a build script invokes the entry point.",
   "Since Nave's manifest changed, a build script invokes the entry point.",
-  // A subordinate aside between commas is skipped by the invoker walk.
   'Your build, while Nave waits, invokes the entry point.',
-  // A coordinate clause is walked; so is a subordinate one that holds a relative's antecedent.
   'Nave ships the defaults, and your build, not Nave, invokes the entry point.',
   'Nave ships the defaults, then your build runs its own script, which invokes the entry point.',
-  // A consumer noun introduced by "a" before any Nave word counts for "its".
   "A pipeline reads Nave's tokens, and its job invokes the entry point.",
-  // A plural noun is not the antecedent of "its".
   'The token builds ship, and its task invokes the entry point.',
 ]
 
-test('AC-theming-36: a lawful rung 4 that says its build reaches the entry point stays green', () => {
+test('AC-theming-36: a lawful rewording outside the accepted shapes fails loudly, quoting itself', () => {
   assert.deepEqual(
-    RUNG_4_LAWFUL.map((sentence) => [sentence, rung4ReachProblems(sentence)]).filter(
-      ([, problems]) => problems.length > 0,
+    RUNG_4_FAILS_LOUDLY.filter((sentence) =>
+      rung4ReachProblems(sentence).every(
+        (problem) =>
+          !(problem.startsWith(NO_SHAPE_START) && problem.includes(JSON.stringify(sentence))),
+      ),
     ),
     [],
-    'each of these must stay green on its own',
   )
 })
 
