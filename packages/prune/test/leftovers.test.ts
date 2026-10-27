@@ -42,36 +42,65 @@ interface Scratch {
    * Notes processes to stop after the row, whatever it did.
    */
   readonly track: (pids: readonly number[]) => void
+  /**
+   * Makes the stand-in `next` start a helper that takes `ms` milliseconds to take up SIGTERM.
+   */
+  readonly slowHelper: (ms: number) => void
 }
 
 /**
- * The helper process of the stand-in `next`: on SIGTERM it takes a second and a half to write
- * `finishedFile` and end, as a worker finishing what it writes does.
+ * The helper process of the stand-in `next`, a fixed script: it is given the file to write and the
+ * milliseconds to wait before taking up SIGTERM. Once it has, it prints `ready`; on SIGTERM it
+ * takes a second and a half to write the file and end, as a worker finishing what it writes does.
  */
-function helperScript(finishedFile: string): string {
-  return `process.on('SIGTERM', () => setTimeout(() => { require('node:fs').writeFileSync(${JSON.stringify(finishedFile)}, 'done'); process.exit(0) }, 1500)); setInterval(() => {}, 1000)`
-}
+const HELPER_SOURCE = [
+  "const { writeFileSync } = require('node:fs')",
+  'const [finishedFile, handlerDelayMs] = process.argv.slice(2)',
+  'setTimeout(() => {',
+  "  process.on('SIGTERM', () => {",
+  "    setTimeout(() => { writeFileSync(finishedFile, 'done'); process.exit(0) }, 1500)",
+  '  })',
+  "  console.log('ready')",
+  '}, Number(handlerDelayMs))',
+  'setInterval(() => {}, 1000)',
+  '',
+].join('\n')
 
 /**
- * The stand-in `next`: it listens on `--port`, starts a helper that outlives nothing but its
- * group, and prints both process ids.
+ * The stand-in `next`, a fixed script: it starts the helper beside it, as `next dev` does with its
+ * workers, and listens on `--port` only once the helper has taken up SIGTERM, then prints both
+ * process ids. What it needs to know, it reads from `settings.json` beside it.
  */
-function writeFakeNext(root: string, finishedFile: string): void {
+const FAKE_NEXT_SOURCE = [
+  "const { spawn } = require('node:child_process')",
+  "const { readFileSync } = require('node:fs')",
+  "const http = require('node:http')",
+  "const path = require('node:path')",
+  "const port = Number(process.argv[process.argv.indexOf('--port') + 1])",
+  "const settings = JSON.parse(readFileSync(path.join(__dirname, 'settings.json'), 'utf8'))",
+  'const helper = spawn(',
+  '  process.execPath,',
+  "  [path.join(__dirname, 'helper.cjs'), settings.finishedFile, String(settings.handlerDelayMs)],",
+  "  { stdio: ['ignore', 'pipe', 'ignore'] },",
+  ')',
+  "helper.stdout.once('data', () => {",
+  "  http.createServer((_, res) => res.end('ok')).listen(port, '127.0.0.1', () => {",
+  '    console.log(`PIDS ${process.pid} ${helper.pid}`)',
+  '  })',
+  '})',
+  '',
+].join('\n')
+
+/**
+ * Writes the stand-in `next` into the package at `root`: two fixed scripts and a data file naming
+ * the file the helper writes and how long it waits before taking up SIGTERM.
+ */
+function writeFakeNext(root: string, finishedFile: string, handlerDelayMs: number): void {
   const bin = path.join(root, 'dist/bin')
   mkdirSync(bin, { recursive: true })
-  writeFileSync(
-    path.join(bin, 'next'),
-    [
-      "const { spawn } = require('node:child_process')",
-      "const http = require('node:http')",
-      "const port = Number(process.argv[process.argv.indexOf('--port') + 1])",
-      `const helper = spawn(process.execPath, ['-e', ${JSON.stringify(helperScript(finishedFile))}], { stdio: 'ignore' })`,
-      "http.createServer((_, res) => res.end('ok')).listen(port, '127.0.0.1', () => {",
-      '  console.log(`PIDS ${process.pid} ${helper.pid}`)',
-      '})',
-      '',
-    ].join('\n'),
-  )
+  writeFileSync(path.join(bin, 'next'), FAKE_NEXT_SOURCE)
+  writeFileSync(path.join(bin, 'helper.cjs'), HELPER_SOURCE)
+  writeFileSync(path.join(bin, 'settings.json'), JSON.stringify({ finishedFile, handlerDelayMs }))
 }
 
 /**
@@ -86,7 +115,7 @@ function useScratch(): Scratch {
     const made = mkdtempSync(path.join(tmpdir(), 'prune-leftovers-'))
     directory = realpathSync(made)
     fakeNext = path.join(directory, 'node_modules/next')
-    writeFakeNext(fakeNext, path.join(directory, 'helper-finished'))
+    writeFakeNext(fakeNext, path.join(directory, 'helper-finished'), 0)
   })
   afterEach(() => {
     for (const pid of started) {
@@ -104,6 +133,9 @@ function useScratch(): Scratch {
     fakeNext: () => fakeNext,
     track: (pids) => {
       started.push(...pids)
+    },
+    slowHelper: (ms) => {
+      writeFakeNext(fakeNext, path.join(directory, 'helper-finished'), ms)
     },
   }
 }
@@ -166,13 +198,15 @@ async function runStarter(
   scratch: Scratch,
   ending: 'exit' | 'throw' | 'wait',
   signal?: NodeJS.Signals,
+  options: { readonly nextRoot?: string; readonly tries?: number } = {},
 ): Promise<number[]> {
+  const { nextRoot = scratch.fakeNext(), tries: limit = 300 } = options
   const script = path.join(scratch.directory(), 'start.mjs')
   writeFileSync(
     script,
     [
       `import { startDev } from ${JSON.stringify(NEXT_DEV)}`,
-      `const server = await startDev([], ${JSON.stringify(scratch.directory())}, { nextRoot: ${JSON.stringify(scratch.fakeNext())} })`,
+      `const server = await startDev([], ${JSON.stringify(scratch.directory())}, { nextRoot: ${JSON.stringify(nextRoot)} })`,
       "await server.get('/')",
       'console.log(server.output())',
       `if (${JSON.stringify(ending)} === 'exit') process.exit(0)`,
@@ -186,15 +220,21 @@ async function runStarter(
   child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()))
   child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()))
   const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
-  for (let tries = 0; pidsIn(output).length === 0 && tries < 300; tries += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 50))
+  try {
+    for (let tries = 0; pidsIn(output).length === 0 && tries < limit; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    const pids = pidsIn(output)
+    scratch.track(pids)
+    expect(pids, `the server started:\n${output}`).toHaveLength(2)
+    if (signal !== undefined) child.kill(signal)
+    await exited
+    return pids
+  } finally {
+    // A process still running here, with the server under it, is stopped however the row ended.
+    child.kill('SIGTERM')
+    await exited
   }
-  const pids = pidsIn(output)
-  scratch.track(pids)
-  expect(pids, `the server started:\n${output}`).toHaveLength(2)
-  if (signal !== undefined) child.kill(signal)
-  await exited
-  return pids
 }
 
 describe('a process that started a server through startDev', () => {
@@ -296,6 +336,44 @@ async function runFile(
   return { ...run, isGone: after.isGone, pids, top: seen.top }
 }
 
+/**
+ * A `next` that starts, writes its process id to `next.pid` and never listens, so no `PIDS` line
+ * ever comes. Returns the directory of the package.
+ */
+function writeSilentNext(scratch: Scratch): string {
+  const root = path.join(scratch.directory(), 'silent-next')
+  mkdirSync(path.join(root, 'dist/bin'), { recursive: true })
+  writeFileSync(
+    path.join(root, 'dist/bin/next'),
+    [
+      "require('node:fs').writeFileSync(require('node:path').join(__dirname, 'next.pid'), String(process.pid))",
+      'setInterval(() => {}, 1000)',
+      '',
+    ].join('\n'),
+  )
+  return root
+}
+
+describe('a process that started a server that never answers', () => {
+  const scratch = useScratch()
+
+  it('is stopped with its server when the row fails for the missing answer', async () => {
+    const root = writeSilentNext(scratch)
+    const pidFile = path.join(root, 'dist/bin/next.pid')
+
+    const starting = runStarter(scratch, 'wait', undefined, { nextRoot: root, tries: 120 })
+    for (let tries = 0; !existsSync(pidFile) && tries < 180; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    expect(existsSync(pidFile), 'the server started').toBe(true)
+    const silent = Number(readFileSync(pidFile, 'utf8'))
+    scratch.track([silent])
+    await expect(starting).rejects.toThrow('the server started')
+
+    expect(await untilGone([silent], 10_000), 'the server').toEqual([])
+  }, 40_000)
+})
+
 describe('a test file that makes an app and starts a server', () => {
   const scratch = useScratch()
 
@@ -321,6 +399,18 @@ describe('a test file that makes an app and starts a server', () => {
 
 describe('stopping a server started through startDev', () => {
   const scratch = useScratch()
+
+  it('waits for a worker that is slow to take up SIGTERM, too', async () => {
+    scratch.slowHelper(1000)
+    const server = await startDev([], scratch.directory(), { nextRoot: scratch.fakeNext() })
+    await server.get('/')
+    scratch.track(pidsIn(server.output()))
+
+    await server.stop()
+
+    const finished = path.join(scratch.directory(), 'helper-finished')
+    expect(existsSync(finished)).toBe(true)
+  })
 
   it('waits for its workers to finish what they write', async () => {
     const server = await startDev([], scratch.directory(), { nextRoot: scratch.fakeNext() })

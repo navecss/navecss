@@ -51,7 +51,8 @@ function readInEmptyBrowserDirectory(ci: string | undefined): ReturnType<typeof 
       [
         '--input-type=module',
         '--eval',
-        `import { HAS_CHROMIUM } from ${JSON.stringify(chromium)}\nconsole.log(HAS_CHROMIUM)`,
+        'const { HAS_CHROMIUM } = await import(process.argv[1])\nconsole.log(HAS_CHROMIUM)',
+        chromium,
       ],
       { encoding: 'utf8', env },
     )
