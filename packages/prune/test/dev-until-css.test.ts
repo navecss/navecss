@@ -38,6 +38,7 @@ const STAND_IN_SOURCE = [
   '    return',
   '  }',
   String.raw`  fs.appendFileSync(path.join(process.cwd(), 'css-requests.log'), 'request\n')`,
+  "  if (fs.existsSync(path.join(process.cwd(), 'hang-css'))) return",
   "  const needed = Number(fs.readFileSync(path.join(process.cwd(), 'writes-needed'), 'utf8'))",
   "  response.end(lines('writes.log') >= needed ? '.nave-grid{}' : '.nave-flex{}')",
   "}).listen(port, '127.0.0.1', () => console.log('stand-in next is listening'))",
@@ -116,6 +117,16 @@ describe('untilCss', () => {
   it('fails at its deadline with what the server printed, when the text never comes', async () => {
     const server = await startStandIn(999)
     noteWrite()
+
+    const waiting = server.untilCss('/', '.nave-grid', { deadlineMs: 1500, intervalMs: 50 })
+
+    await expect(waiting).rejects.toThrow(/within 1500 ms[\s\S]*stand-in next is listening/u)
+    await server.stop()
+  }, 20_000)
+
+  it('fails at its deadline too when the server never answers the stylesheet', async () => {
+    const server = await startStandIn(999)
+    writeFileSync(path.join(scratch.directory(), 'hang-css'), '')
 
     const waiting = server.untilCss('/', '.nave-grid', { deadlineMs: 1500, intervalMs: 50 })
 

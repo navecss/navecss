@@ -98,6 +98,18 @@ async function isStoppedWithin(pid: number, ms: number): Promise<boolean> {
 }
 
 /**
+ * What `task` rejects with, or a note that it did not.
+ */
+async function failureOf(task: Promise<void>): Promise<unknown> {
+  try {
+    await task
+    return 'it did not fail'
+  } catch (error) {
+    return error
+  }
+}
+
+/**
  * An `npm` that writes `next`, notes that it has got that far in the file `started`, and then waits.
  */
 function midwayNpm(scratch: Scratch): string {
@@ -230,17 +242,19 @@ describe('the Next.js floor install', () => {
     const pidFile = path.join(scratch.directory(), 'npm.pid')
     const silent = script(scratch.directory(), 'silent', [`echo $$ > ${pidFile}`, 'sleep 60'])
 
-    const killing = killInstallerMidway(scratch, silent, 100)
+    const killing = failureOf(killInstallerMidway(scratch, silent, 100))
     for (let looks = 0; !existsSync(pidFile) && looks < 90; looks += 1) {
       await new Promise((resolve) => setTimeout(resolve, 50))
     }
-    const npmPid = Number(readFileSync(pidFile, 'utf8'))
+    // The installer is awaited whatever the wait for npm found, so it is gone before the row ends.
+    const failure = await killing
+    const npmPid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'utf8')) : 0
     try {
-      await expect(killing).rejects.toThrow('the installer reached npm')
-
+      expect(npmPid, 'npm started').toBeGreaterThan(0)
+      expect(String(failure)).toContain('the installer reached npm')
       expect(await isStoppedWithin(npmPid, 5000), 'npm is not left running').toBe(true)
     } finally {
-      if (isRunning(npmPid)) process.kill(npmPid, 'SIGKILL')
+      if (npmPid > 0 && isRunning(npmPid)) process.kill(npmPid, 'SIGKILL')
     }
   }, 30_000)
 

@@ -95,6 +95,26 @@ async function stopGroup(child: ChildProcess, exited: Promise<void>): Promise<vo
 }
 
 /**
+ * The result of `request`, or a rejection with `failure` once `deadline` has passed: a server that
+ * accepts a request and never answers it cannot hold the wait past its deadline.
+ */
+async function before<Value>(
+  request: Promise<Value>,
+  deadline: number,
+  failure: () => Error,
+): Promise<Value> {
+  let timer: NodeJS.Timeout | undefined
+  const late = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(failure()), Math.max(0, deadline - Date.now()))
+  })
+  try {
+    return await Promise.race([request, late])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * Requests `route` until the CSS it links holds `text`: the body of `DevServer.untilCss`.
  */
 async function waitForCss(
@@ -109,14 +129,14 @@ async function waitForCss(
 ): Promise<void> {
   const { deadlineMs = 240_000, intervalMs = 1000, rewrite } = options
   const deadline = Date.now() + deadlineMs
+  const failure = (): Error =>
+    new Error(
+      `${route} did not serve CSS holding ${text} within ${deadlineMs} ms:\n${server.output()}`,
+    )
   for (let check = 1; !server.isStopped(); check += 1) {
-    const served = await server.css(route)
+    const served = await before(server.css(route), deadline, failure)
     if (served.includes(text)) return
-    if (Date.now() >= deadline) {
-      throw new Error(
-        `${route} did not serve CSS holding ${text} within ${deadlineMs} ms:\n${server.output()}`,
-      )
-    }
+    if (Date.now() >= deadline) throw failure()
     if (check % 10 === 0) rewrite?.()
     await pause(intervalMs)
   }
