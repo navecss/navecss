@@ -29,15 +29,19 @@ const TRIGGER_RULE = '  .nave-base-ui-disclosure-trigger '
 const NATIVE_BRANCH = '&:disabled, &[aria-disabled="true"]{'
 
 /**
-The built stylesheet with the trigger keyed on `[aria-disabled="true"]` alone, as it was.
+A sheet with the trigger keyed on `[aria-disabled="true"]` alone, as it was.
  */
-const previousStylesheet = (): string => {
-  const lines = stylesheet.split('\n')
+const withoutNativeBranch = (sheet: string): string => {
+  const lines = sheet.split('\n')
   const at = lines.findIndex((line) => line.startsWith(TRIGGER_RULE))
   expect(at, 'the trigger rule is in the built stylesheet').toBeGreaterThan(-1)
   lines[at] = (lines[at] ?? '').replace(NATIVE_BRANCH, '&[aria-disabled="true"]{')
-  return lines.join('\n')
+  const previous = lines.join('\n')
+  expect(previous, 'the stylesheet has the key to take out').not.toBe(sheet)
+  return previous
 }
+
+const previousStylesheet = (): string => withoutNativeBranch(stylesheet)
 
 interface Case {
   readonly form: 'div' | 'native'
@@ -106,6 +110,14 @@ const FIELDSET_CASES: readonly Case[] = (['accordion', 'collapsible'] as const).
 const fieldsetScene = (): ReturnType<typeof h> =>
   h('fieldset', { disabled: true }, ...FIELDSET_CASES.map((one) => trigger(one)))
 
+describe('AC-base-ui-bridge-55: the control sheet', () => {
+  it('reds when the trigger rule has no :disabled branch to take out, so a control cannot pass on the built sheet', () => {
+    const swapped = stylesheet.replace(NATIVE_BRANCH, '&[aria-disabled="true"], &:disabled{')
+    expect(swapped, 'the built stylesheet has the key').not.toBe(stylesheet)
+    expect(() => withoutNativeBranch(swapped)).toThrow(/the stylesheet has the key to take out/)
+  })
+})
+
 describe('AC-base-ui-bridge-55: disabled disclosure trigger paint', () => {
   let page: Page | undefined
   let removeSheets: (() => void) | undefined
@@ -138,7 +150,6 @@ describe('AC-base-ui-bridge-55: disabled disclosure trigger paint', () => {
 
     it('control: aria-disabled key alone leaves a native trigger enabled on 1.9.0', async () => {
       const previous = previousStylesheet()
-      expect(previous, 'the stylesheet has the key to take out').not.toBe(stylesheet)
       await show(scheme, previous, scene())
       expect(colorOf(DISABLED.token), 'the two colours differ, so the row can red').not.toBe(
         colorOf(ENABLED.token),
