@@ -13,8 +13,9 @@ export default defineConfig({
     fsModuleCachePath: path.resolve(import.meta.dirname, 'node_modules/.vitest-cache/default'),
     testTimeout: 20_000,
     // Vitest gives a test worker 60 s to start and offers no setting for that. Every project here
-    // starts its own workers, so on a machine running other suites a dozen of them starting at
-    // once each missed it; fewer at a time start in time.
+    // starts its own workers, and on a machine running other suites a dozen of them starting at once
+    // each missed it. Three at a time missed it far less often in a slowed run of this package alone;
+    // beside other packages' suites, at a load of about 80, some still did.
     maxWorkers: 3,
     projects: [
       {

@@ -18,7 +18,9 @@ export default defineConfig({
     // second alone but queues behind other runs when several share a loaded machine, where one
     // took longer than 20 s. The budget only has to outlast a loaded machine; a hang is still
     // bounded by the job's own timeout. The rows that assert how time grows keep their own
-    // assertions, which this budget does not touch.
+    // assertions, which this budget does not touch. A row that sets its own budget keeps it, and
+    // many of the rows that build a Vite app set 60 s or 120 s of their own, which this default
+    // does not raise.
     testTimeout: 240_000,
     include: ['test/**/*.test.ts'],
     // test/browser/**/*.browser.test.ts is this same glob's problem too

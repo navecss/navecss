@@ -660,9 +660,10 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
   }
 
   /**
-   * The least of three measurements of `growthOf`. A pause can still land on every run of one size
-   * in a measurement, and it only ever adds time, while a quadratic pattern is about 4 in every
-   * measurement, so the least of three still tells the two apart.
+   * The least of three measurements of `growthOf`. Contention the process feels while it runs (a
+   * busy sibling core, a cold cache) can still land on every run of one size in a measurement, and
+   * it only ever adds time, while a quadratic pattern is about 4 in every measurement, so the least
+   * of three still tells the two apart.
    */
   function leastGrowth(work: (n: number) => () => void, n: number): number {
     return Math.min(...Array.from({ length: 3 }, () => growthOf(work(n), work(2 * n))))

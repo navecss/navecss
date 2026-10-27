@@ -10,7 +10,7 @@ import type { PluginOption, ViteDevServer } from 'vite'
 
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { navePlugin, type NaveViteOptions } from '../../../src/vite.ts'
 import { APP_CSS, appFiles, makeUsedApp } from '../../helpers/used-atoms-app.ts'
@@ -34,10 +34,16 @@ afterAll(async () => {
   await browser.close()
 }, 60_000)
 
-// What a row here may take is 480 s, and a wait inside one holds out for the same: the row's own
-// timeout is the one deadline. A row loads pages from a dev server in a real browser, and on a
-// machine running other suites one took longer than the 20 s to 120 s these used to allow.
+// What a row here may take, and how long before that its waits give up, so that the error names
+// what never happened rather than the row's timeout. A row loads pages from a dev server in a real
+// browser, and on a machine running other suites one took longer than the 20 s to 120 s these used
+// to allow.
 const ROW_TIMEOUT = 480_000
+const GIVE_UP_BEFORE_TIMEOUT = 30_000
+const row = { ends: 0 }
+beforeEach(() => {
+  row.ends = Date.now() + ROW_TIMEOUT - GIVE_UP_BEFORE_TIMEOUT
+})
 
 const PAGE = (body: string): string =>
   `<!doctype html><html><body>${body}<script type="module" src="/src/main.ts"></script></body></html>`
@@ -83,7 +89,7 @@ async function untilSheetTransformed(
   root: string,
   file = 'src/app.css',
 ): Promise<void> {
-  const deadline = Date.now() + ROW_TIMEOUT
+  const deadline = row.ends
   while (Date.now() < deadline && !isSheetTransformed(server, root, file)) {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
@@ -388,7 +394,7 @@ function slowAfterFirst(file: string, asked: string): PluginOption {
         await new Promise((resolve) => setTimeout(resolve, 400))
         return
       }
-      const deadline = Date.now() + ROW_TIMEOUT
+      const deadline = row.ends
       while (!hasModule(server, asked)) {
         if (Date.now() > deadline) throw new Error(`the dev server was never asked for ${asked}`)
         await new Promise((resolve) => setTimeout(resolve, 20))
@@ -422,7 +428,7 @@ const LINKED_APP = {
  * Waits until `isDone` is true, and fails naming `what` when the row's time is out.
  */
 async function untilServer(isDone: () => boolean, what: string): Promise<void> {
-  const deadline = Date.now() + ROW_TIMEOUT
+  const deadline = row.ends
   while (!isDone()) {
     if (Date.now() > deadline) throw new Error(`the dev server never reached ${what}`)
     await new Promise((resolve) => setTimeout(resolve, 10))

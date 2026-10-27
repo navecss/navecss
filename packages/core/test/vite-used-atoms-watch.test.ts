@@ -21,6 +21,21 @@ const IMPORT = "import { cx } from '@navecss/core/cx'\n"
 const ROW_TIMEOUT = 480_000
 const GIVE_UP_BEFORE_TIMEOUT = 30_000
 const REWRITE_AFTER = 10_000
+const CLOSE_LIMIT = 10_000
+
+// Closing a watcher waits for a build under way, and on a loaded machine that took longer than the
+// time the row had left, so that the row ended on its timeout instead of on its own error.
+async function atMost(ms: number, work: Promise<void> | undefined): Promise<void> {
+  let timer: NodeJS.Timeout | undefined
+  const limit = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms)
+  })
+  try {
+    await Promise.race([work, limit])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 // Each Vite builds, rebuilds and writes a page's inline stylesheet by its own code, so this row
 // runs on each Vite measured. The watcher hears of an edit from the operating system, which on a
@@ -57,13 +72,39 @@ describe.each(Object.entries(VITE_APIS))(
           on(event: 'event', listener: (event: { code: string; error?: Error }) => void): void
         }
         closing = watcher
-        const builds = { ended: 0, failed: undefined as Error | undefined, started: 0 }
+        const written = (): { asset: string[]; page: string[] } => {
+          const assets = path.join(app.root, 'dist/assets')
+          const css = readdirSync(assets)
+            .filter((name) => name.endsWith('.css'))
+            .map((name) => readFileSync(path.join(assets, name), 'utf8'))
+            .join('\n')
+          const html = readFileSync(path.join(app.root, 'dist/index.html'), 'utf8')
+          return { page: atomLayerAtoms(html), asset: atomLayerAtoms(css) }
+        }
+        // What the output shows now, or that it shows nothing yet.
+        const shownNow = (): ReturnType<typeof written> | 'no output' => {
+          try {
+            return written()
+          } catch {
+            return 'no output'
+          }
+        }
+        const shows = (): string => JSON.stringify(shownNow())
+        const builds = { bundled: 0, ended: 0, failed: undefined as Error | undefined, started: 0 }
+        // What the output shows when each build ends, with the number of the edit whose first write
+        // came before the build ended (0 for the first build). No build is under way when an edit is
+        // first written, so each of those builds read that edit.
+        const outputs: { afterEdit: number; output: unknown }[] = []
+        let editing = 0
         watcher.on('event', (event) => {
           switch (event.code) {
+            case 'BUNDLE_END': {
+              builds.bundled += 1
+              outputs.push({ afterEdit: editing, output: shownNow() })
+              break
+            }
             case 'BUNDLE_START': {
               builds.started += 1
-              // A build that follows a failed one is a new try.
-              builds.failed = undefined
               break
             }
             case 'END': {
@@ -76,52 +117,46 @@ describe.each(Object.entries(VITE_APIS))(
             }
           }
         })
-        const written = (): { asset: string[]; page: string[] } => {
-          const assets = path.join(app.root, 'dist/assets')
-          const css = readdirSync(assets)
-            .filter((name) => name.endsWith('.css'))
-            .map((name) => readFileSync(path.join(assets, name), 'utf8'))
-            .join('\n')
-          const html = readFileSync(path.join(app.root, 'dist/index.html'), 'utf8')
-          return { page: atomLayerAtoms(html), asset: atomLayerAtoms(css) }
-        }
         const wait = (ms: number): Promise<void> =>
           new Promise((resolve) => setTimeout(resolve, ms))
-        // Whether the output holds exactly `atoms` for the page and for its stylesheet.
-        const isShown = (atoms: string[]): boolean => {
-          try {
-            return isDeepStrictEqual(written(), { page: atoms, asset: atoms })
-          } catch {
-            return false
-          }
+        // A failed build is reported at once, wherever the row is waiting, not after its budget.
+        const throwIfFailed = (): void => {
+          if (builds.failed !== undefined) throw builds.failed
         }
+        // Whether the output holds exactly `atoms` for the page and for its stylesheet.
+        const isShown = (atoms: string[]): boolean =>
+          isDeepStrictEqual(shownNow(), { page: atoms, asset: atoms })
         // Waits for up to `ms` for the output to show `atoms` with no build under way.
         const isShownWithin = async (atoms: string[], ms: number): Promise<boolean> => {
           const end = Math.min(Date.now() + ms, deadline)
           while (Date.now() < end) {
+            throwIfFailed()
             if (isShown(atoms) && builds.started === builds.ended) return true
             await wait(50)
           }
           return false
         }
         const edit = async (call: string, atoms: string[]): Promise<void> => {
+          editing += 1
           for (let attempt = 0; Date.now() < deadline; attempt += 1) {
+            throwIfFailed()
             // A comment changes no class, so the edit reads the same on every attempt.
             writeFileSync(
               path.join(app.root, 'src/main.ts'),
               `import './app.css'\nimport { a } from './a.ts'\n${IMPORT}console.log(${call}, a) // ${attempt}\n`,
             )
-            if (await isShownWithin(atoms, REWRITE_AFTER)) return
-            // One failed build can be a stray; the same failure after two more tries is not.
-            if (builds.failed !== undefined && attempt >= 2) throw builds.failed
+            const isShownNow = await isShownWithin(atoms, REWRITE_AFTER)
+            throwIfFailed()
+            if (isShownNow) return
           }
-          throw new Error(`the build never showed ${atoms.join(', ')}`)
+          throw new Error(`the build never showed ${atoms.join(', ')}; it shows ${shows()}`)
         }
 
-        // Nothing writes again during the first build, so a failed one is reported at once.
         while (!(await isShownWithin(['flex'], REWRITE_AFTER))) {
-          if (builds.failed !== undefined) throw builds.failed
-          if (Date.now() >= deadline) throw new Error('the first build never ended')
+          throwIfFailed()
+          if (Date.now() >= deadline) {
+            throw new Error(`the first build never showed flex; it shows ${shows()}`)
+          }
         }
         const first = written()
         await edit("cx('flex', 'grid')", ['flex', 'grid'])
@@ -132,13 +167,18 @@ describe.each(Object.entries(VITE_APIS))(
         expect(first).toEqual({ page: ['flex'], asset: ['flex'] })
         expect(second).toEqual({ page: ['flex', 'grid'], asset: ['flex', 'grid'] })
         expect(third).toEqual({ page: ['block'], asset: ['block'] })
-        // One warning for each build, however many builds the edits caused.
+        // A rebuild may only ever show the edit it follows, however late the watcher heard of it.
+        const stages = [first, second, third]
+        for (const { afterEdit, output } of outputs) {
+          expect(output, `a build after edit ${afterEdit}`).toEqual(stages[afterEdit])
+        }
         expect(builds.started).toBe(builds.ended)
+        // One warning for each build that produced output, however many builds the edits caused.
         expect(warnings.filter((message) => message.includes('src/inline.css'))).toHaveLength(
-          builds.ended,
+          builds.bundled,
         )
       } finally {
-        await closing?.close()
+        await atMost(CLOSE_LIMIT, closing?.close())
         app.dispose()
       }
     }, 480_000)
