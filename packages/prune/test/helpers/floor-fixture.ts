@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -74,9 +75,13 @@ export async function raceTrial(
         '',
       ].join('\n'),
     )
-    // A process that has ended: its id names no installer that is running.
-    if (isLocked)
-      writeFileSync(`${floorDir}.installing`, String(spawnSync(process.execPath, ['-e', '']).pid))
+    // A lock nobody has renewed for three minutes, naming a process that has ended.
+    if (isLocked) {
+      const lock = `${floorDir}.installing`
+      writeFileSync(lock, String(spawnSync(process.execPath, ['-e', '']).pid))
+      const written = new Date(Date.now() - 3 * 60_000)
+      utimesSync(lock, written, written)
+    }
     const answers = await Promise.all(
       Array.from({ length: callers }, () => answerOf(asking, floorDir, npm)),
     )

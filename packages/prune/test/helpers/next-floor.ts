@@ -14,6 +14,7 @@ import {
   renameSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs'
 import path from 'node:path'
@@ -72,27 +73,40 @@ function isRunning(pid: number): boolean {
 }
 
 /**
- * How long a lock that names no process can stand before it is not believed: a lock is written and
- * then filled in, so an empty one is only held for the moment between the two.
+ * The lock is a lease: its holder writes it again every `refreshMs` while it installs, and a lock
+ * nobody has written for `staleMs` was left by a holder that is gone, whatever process id it names
+ * and however long the install has run. A holder that crashes stops writing, so its lock frees
+ * itself.
  */
-const MAX_UNNAMED_LOCK_AGE_MS = 15 * 60_000
+export interface Lease {
+  readonly refreshMs: number
+  readonly staleMs: number
+}
+
+const LEASE: Lease = { refreshMs: 15_000, staleMs: 120_000 }
 
 /**
- * Whether the installer that wrote `lockFile` is still running. A lock names the process that
- * made it, and is held while that process runs, however long an install takes. A lock that cannot
- * be read, or names no process yet, is held until it is old.
+ * Whether the lock at `lockFile` is held: its holder wrote it within the lease. A lock that cannot
+ * be read is held, and the next look finds it gone.
  */
-function isHeld(lockFile: string): boolean {
-  let holder: number
-  let age: number
+function isHeld(lockFile: string, lease: Lease): boolean {
   try {
-    holder = Number(readFileSync(lockFile, 'utf8'))
-    age = Date.now() - statSync(lockFile).mtimeMs
+    return Date.now() - statSync(lockFile).mtimeMs <= lease.staleMs
   } catch {
     return true
   }
-  if (Number.isSafeInteger(holder) && holder > 0) return isRunning(holder)
-  return age <= MAX_UNNAMED_LOCK_AGE_MS
+}
+
+/**
+ * Writes the lock at `lockFile` again, which renews the lease. A lock that is gone is left alone.
+ */
+function renew(lockFile: string): void {
+  try {
+    const now = new Date()
+    utimesSync(lockFile, now, now)
+  } catch {
+    // Taken over or released already.
+  }
 }
 
 /**
@@ -101,7 +115,7 @@ function isHeld(lockFile: string): boolean {
  * never removed. The lock goes by being renamed to a name of its own, so no other process can
  * reach it by its old name.
  */
-function takeOver(lockFile: string): void {
+function takeOver(lockFile: string, lease: Lease): void {
   const taking = `${lockFile}.takeover`
   try {
     writeFileSync(taking, String(process.pid), { flag: 'wx' })
@@ -111,7 +125,7 @@ function takeOver(lockFile: string): void {
     return
   }
   try {
-    if (!isHeld(lockFile)) {
+    if (!isHeld(lockFile, lease)) {
       const removed = `${lockFile}.removed-${process.pid}`
       renameSync(lockFile, removed)
       rmSync(removed, { force: true })
@@ -136,24 +150,30 @@ function isOlderThan(file: string, ms: number): boolean {
 
 /**
  * Takes the install lock, a file holding the id of the process that made it, waiting for another
- * test file's worker that holds it. A lock left by an installer that is gone is taken over.
- * Resolves to the function that releases the lock, or to nothing when `isDone` turns true while
- * waiting.
+ * test file's worker that holds it. The holder renews the lock while it keeps it; a lock nobody
+ * has renewed for the lease is taken over. Resolves to the function that releases the lock, or to
+ * nothing when `isDone` turns true while waiting.
  */
 async function takeLock(
   lockFile: string,
   isDone: () => boolean,
+  lease: Lease,
 ): Promise<(() => void) | undefined> {
   for (;;) {
     try {
       writeFileSync(lockFile, String(process.pid), { flag: 'wx' })
-      return () => rmSync(lockFile, { force: true })
+      // Not kept alive by it: a process that ends takes the timer with it, and its lock goes stale.
+      const renewing = setInterval(() => renew(lockFile), lease.refreshMs).unref()
+      return () => {
+        clearInterval(renewing)
+        rmSync(lockFile, { force: true })
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
       if (isDone()) return undefined
       if (!existsSync(lockFile)) continue
-      if (isHeld(lockFile)) await pause(500)
-      else takeOver(lockFile)
+      if (isHeld(lockFile, lease)) await pause(500)
+      else takeOver(lockFile, lease)
     }
   }
 }
@@ -207,11 +227,15 @@ async function installInto(floorDir: string, npm: string): Promise<void> {
  * The directory of Next.js 16.2.0 installed under `floorDir` (beside React and React DOM) by the
  * command `npm`, installing it first when `floorDir` has no copy.
  */
-export async function floorNextRootIn(floorDir: string, npm = 'npm'): Promise<string> {
+export async function floorNextRootIn(
+  floorDir: string,
+  npm = 'npm',
+  lease: Lease = LEASE,
+): Promise<string> {
   const root = path.join(floorDir, 'node_modules/next')
   const isInstalled = (): boolean => installedVersion(floorDir) === FLOOR_VERSION
   if (isInstalled()) return root
-  const release = await takeLock(`${floorDir}.installing`, isInstalled)
+  const release = await takeLock(`${floorDir}.installing`, isInstalled, lease)
   if (release === undefined) return root
   try {
     if (!isInstalled()) await installInto(floorDir, npm)

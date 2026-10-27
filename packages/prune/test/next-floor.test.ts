@@ -258,10 +258,11 @@ describe('the Next.js floor install', () => {
     }
   }, 30_000)
 
-  it('installs afresh after an installer was killed in the middle of it', async () => {
+  it('installs afresh after an installer was killed in the middle of it, once its lock has gone unrefreshed for the lease', async () => {
     await killInstallerMidway(scratch)
 
-    await floorNextRootIn(scratch.floorDir(), scratch.npm())
+    // The killed installer's lock is not renewed again; a short lease stands for the two minutes.
+    await floorNextRootIn(scratch.floorDir(), scratch.npm(), { refreshMs: 100, staleMs: 600 })
 
     expect(isReactInstalled(scratch.floorDir())).toBe(true)
   }, 30_000)
@@ -293,31 +294,66 @@ function writeOldLock(scratch: Scratch, content: string, minutes: number): strin
 describe('the install lock of the Next.js floor', () => {
   const scratch = useScratch()
 
-  it('is held by a running installer however old it is: nothing takes it over', async () => {
-    const lock = writeOldLock(scratch, String(process.pid), 16)
+  it('is taken over when it was not refreshed for two minutes, whatever process it names', async () => {
+    // This test process is running, as a process whose id was reused would be.
+    writeOldLock(scratch, String(process.pid), 3)
     const asking = floorNextRootIn(scratch.floorDir(), loggingNpm(scratch))
 
-    // The lock is looked at every half second; a taker would have started npm by now.
     await new Promise((resolve) => setTimeout(resolve, 1500))
     const hasStarted = existsSync(path.join(scratch.directory(), 'starts.log'))
-    rmSync(lock, { force: true })
+    rmSync(`${scratch.floorDir()}.installing`, { force: true })
     await asking
 
-    expect(hasStarted, 'npm started while a running installer held the lock').toBe(false)
-    expect(isReactInstalled(scratch.floorDir())).toBe(true)
+    expect(hasStarted, 'npm started over a lock nobody refreshed').toBe(true)
   })
 
-  it('is taken over when it was left by an installer that is gone, however old it is', async () => {
+  it('is taken over when it was not refreshed for two minutes and names an installer that is gone', async () => {
     // A process that has ended: its id names no installer that is running.
-    writeOldLock(scratch, String(spawnSync(process.execPath, ['-e', '']).pid), 16)
+    writeOldLock(scratch, String(spawnSync(process.execPath, ['-e', '']).pid), 3)
 
     await floorNextRootIn(scratch.floorDir(), loggingNpm(scratch))
 
     expect(isReactInstalled(scratch.floorDir())).toBe(true)
   })
 
-  it('is taken over when it names no process and is old', async () => {
-    writeOldLock(scratch, '', 16)
+  it('is held while it was refreshed lately, even if it names a process that is gone', async () => {
+    const lock = writeOldLock(scratch, String(spawnSync(process.execPath, ['-e', '']).pid), 1)
+    const asking = floorNextRootIn(scratch.floorDir(), loggingNpm(scratch))
+
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    const hasStarted = existsSync(path.join(scratch.directory(), 'starts.log'))
+    rmSync(lock, { force: true })
+    await asking
+
+    expect(hasStarted, 'npm started over a lock that was refreshed a minute ago').toBe(false)
+  })
+
+  it('is kept by a holder whose install runs for longer than the lease, so no one takes it over', async () => {
+    // A lease of 600 ms renewed every 100 ms stands for two minutes renewed every fifteen seconds,
+    // and an install of 3 s for one past minute sixteen.
+    const lease = { refreshMs: 100, staleMs: 600 }
+    const long = script(scratch.directory(), 'long-npm', [
+      `echo $$ >> ${scratch.directory()}/starts.log`,
+      'mkdir -p node_modules/next node_modules/react',
+      `printf '{"version":"${FLOOR_VERSION}"}' > node_modules/next/package.json`,
+      'sleep 3',
+      `printf '{"version":"19.2.0"}' > node_modules/react/package.json`,
+    ])
+
+    const callers = [1, 2].map(async (caller) => {
+      // The second caller asks once the first has the lock and the lease has run out twice over.
+      await new Promise((resolve) => setTimeout(resolve, caller === 1 ? 0 : 1500))
+      return floorNextRootIn(scratch.floorDir(), long, lease)
+    })
+    await Promise.all(callers)
+
+    const starts = readFileSync(path.join(scratch.directory(), 'starts.log'), 'utf8')
+    expect(starts.trim().split('\n')).toHaveLength(1)
+    expect(isReactInstalled(scratch.floorDir())).toBe(true)
+  }, 30_000)
+
+  it('is taken over when it names no process and was not refreshed for two minutes', async () => {
+    writeOldLock(scratch, '', 3)
 
     await floorNextRootIn(scratch.floorDir(), loggingNpm(scratch))
 
