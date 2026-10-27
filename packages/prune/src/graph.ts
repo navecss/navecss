@@ -94,7 +94,8 @@ function isCheckedImport(walk: Walk, file: string): boolean {
  * Whether the specifier, written in the file, names a module `cxModules` lists.
  */
 function isNamingDeclared(walk: Walk, edge: Edge, files: readonly string[]): boolean {
-  if (walk.declaredEntries.has(edge.specifier)) return true
+  // A `#` specifier means the file the importer's own scope maps it to, so only that file counts.
+  if (!edge.specifier.startsWith('#') && walk.declaredEntries.has(edge.specifier)) return true
   return files.some((resolved) => walk.declaredFiles.has(resolved))
 }
 
@@ -172,15 +173,18 @@ function record(walk: Walk, facts: FileFacts, reading: ModuleReading): void {
   const { graph, options } = walk
   for (const atom of [...reading.atoms, ...reading.classes]) graph.atoms.add(atom)
   if (reading.dynamicCalls.length > 0) graph.dynamicFiles.add(facts.file)
-  if (isStoodInFor(walk, facts)) return
-  for (const problem of reading.problems) {
-    facts.problems.push({
-      ...problem,
-      file: facts.rel,
-      pkg: facts.pkg,
-      ...facts.place(problem.offset),
-    })
+  if (!isStoodInFor(walk, facts)) {
+    for (const problem of reading.problems) {
+      facts.problems.push({
+        ...problem,
+        file: facts.rel,
+        pkg: facts.pkg,
+        ...facts.place(problem.offset),
+      })
+    }
   }
+  // An empty `keepFor` list stands in for the calls the build cannot read and not for a
+  // `cx.dynamic()` call, which needs the atoms it can take in the list.
   if (listedAtomsFor(options, facts.pkg).length > 0) return
   for (const call of reading.dynamicCalls) {
     facts.problems.push({
@@ -261,7 +265,7 @@ function visit(walk: Walk, { file, isInMode }: Queued): void {
  * if reading stops.
  */
 export function readGraph(options: GraphOptions, graph: Graph = emptyGraph()): Graph {
-  const entries = findEntries(options.dir)
+  const entries = findEntries(options.dir, options.pageExtensions)
   graph.directories.push(...entries.directories)
   const resolver = createResolver(options.dir, options.modes, graph.inputs)
   graph.problems.push(...resolver.configProblems)

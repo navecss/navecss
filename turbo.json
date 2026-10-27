@@ -36,6 +36,10 @@
       "dependsOn": ["build"],
       "outputs": ["coverage/**", "test/browser/fixtures/**"]
     },
+    "test:build": {
+      "dependsOn": ["build"],
+      "outputs": []
+    },
     "@navecss/base-ui#typecheck": {
       "dependsOn": ["^build", "build"],
       "outputs": []

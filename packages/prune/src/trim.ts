@@ -229,6 +229,7 @@ function trim(run: LayerRun, graph: Graph): void {
       cxModules: options.cxModules ?? [],
       ownAtoms: new Set(Object.keys(run.extend ?? {})),
       modes: modesOfRun(handoff),
+      ...(handoff.pageExtensions !== undefined && { pageExtensions: handoff.pageExtensions }),
     },
     graph,
   )

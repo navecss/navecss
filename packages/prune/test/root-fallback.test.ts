@@ -36,7 +36,11 @@ function workspace(): { readonly top: string; readonly web: string } {
  * The root the plugin declares within for the app in `dir`, with every `require` that loads
  * Next.js's module answering through `load` (or the real one, when `load` is omitted).
  */
-async function rootFor(dir: string, load?: (id: string) => unknown): Promise<string | undefined> {
+async function rootFor(
+  dir: string,
+  load?: (id: string) => unknown,
+  isBundlerDir = false,
+): Promise<string | undefined> {
   vi.stubEnv('NEXT_PRIVATE_OUTPUT_TRACE_ROOT', '')
   vi.resetModules()
   if (load !== undefined) {
@@ -46,7 +50,12 @@ async function rootFor(dir: string, load?: (id: string) => unknown): Promise<str
     }))
   }
   const { declarationRoot } = await import('../src/root.ts')
-  return declarationRoot({ options: {}, dir, distDir: '.next' })
+  return declarationRoot({
+    options: {},
+    dir,
+    distDir: '.next',
+    ...(isBundlerDir && { isBundlerDir }),
+  })
 }
 
 describe('the root inferred for a project in a workspace', () => {
@@ -80,5 +89,38 @@ describe('the root inferred for a project in a workspace', () => {
   ])('is the project directory when the module answers with %s', async (_case, module) => {
     const { web } = workspace()
     expect(await rootFor(web, () => module)).toBe(web)
+  })
+})
+
+describe('the root inferred for the directory webpack’s callback passes on', () => {
+  it('is the workspace top Next.js’s own search finds', async () => {
+    const { top, web } = workspace()
+    expect(await rootFor(web, undefined, true)).toBe(top)
+  })
+
+  it('is that directory when no module loads', async () => {
+    const { web } = workspace()
+    const root = await rootFor(
+      web,
+      () => {
+        throw new Error('Cannot find module')
+      },
+      true,
+    )
+    expect(root).toBe(web)
+  })
+
+  it('is that directory when the search throws', async () => {
+    const { web } = workspace()
+    const root = await rootFor(
+      web,
+      () => ({
+        findRootDirAndLockFiles: () => {
+          throw new Error('changed internals')
+        },
+      }),
+      true,
+    )
+    expect(root).toBe(web)
   })
 })

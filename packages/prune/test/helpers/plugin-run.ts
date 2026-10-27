@@ -32,6 +32,10 @@ export interface PipelineOptions {
   readonly distDir?: string
   readonly root?: string
   /**
+   * Whether the hand-off is the one webpack's callback leaves: its own project directory.
+   */
+  readonly isBundlerDir?: boolean
+  /**
    * The phase Next.js called a function config with (`phase-development-server` for `next dev`);
    * absent for an object config.
    */
@@ -77,6 +81,7 @@ function handoffFor(project: Project, run: PipelineOptions): Handoff {
     distDir: run.distDir ?? '.next',
     root: run.root ?? project.dir,
     ...(run.phase !== undefined && { phase: run.phase }),
+    ...(run.isBundlerDir === true && { isBundlerDir: true }),
   }
 }
 

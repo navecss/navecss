@@ -295,6 +295,7 @@ test('every step that reads built output waits for build', () => {
     'typecheck',
     'lint',
     'test',
+    'test:build',
     'test:browser',
     'check:pack',
     'scripts:test',
@@ -305,6 +306,21 @@ test('every step that reads built output waits for build', () => {
 })
 
 const waitsFor = (name) => STEPS.find((step) => step.name === name).waitFor ?? []
+
+test('test:build comes right after test and waits for it, and for what test waits for', () => {
+  const names = STEPS.map((step) => step.name)
+  assert.equal(names[names.indexOf('test') + 1], 'test:build')
+  for (const name of ['test', ...waitsFor('test')]) {
+    assert.ok(waitsFor('test:build').includes(name), `test:build must wait for ${name}`)
+  }
+})
+
+test('every step that is not a prerequisite of test:build waits for it', () => {
+  const prerequisites = new Set(['build', 'test', 'test:build', ...waitsFor('test')])
+  for (const step of STEPS.filter((candidate) => !prerequisites.has(candidate.name))) {
+    assert.ok(waitsFor(step.name).includes('test:build'), `${step.name} must wait for test:build`)
+  }
+})
 
 test('test:browser waits for test: both regenerate core’s test/browser/fixtures/', () => {
   assert.ok(waitsFor('test:browser').includes('test'))
@@ -343,6 +359,22 @@ test('a failing test skips nothing: the steps that wait for it still run', async
     'typecheck',
     'lint',
     'check:pack',
+    'test:build',
+    'test:browser',
+    'scripts:test',
+    'scripts:check',
+  ]) {
+    assert.equal(statuses[name], 'passed', `${name} was ${statuses[name]}`)
+  }
+})
+
+test('a failing test:build skips nothing: the steps that wait for it still run', async () => {
+  const statuses = await statusesWhenFailing(['test:build'])
+  for (const name of [
+    'typecheck',
+    'lint',
+    'check:pack',
+    'test',
     'test:browser',
     'scripts:test',
     'scripts:check',
@@ -360,6 +392,7 @@ test('a failing build skips what reads dist/ and still runs knip and the depende
     'typecheck',
     'lint',
     'test',
+    'test:build',
     'test:browser',
     'check:pack',
     'scripts:test',
@@ -386,6 +419,7 @@ async function realSchedule() {
     'scripts:test': 30,
     test: 50,
     'test:browser': 20,
+    'test:build': 50,
     typecheck: 10,
   }
   const spans = new Map()
@@ -411,6 +445,14 @@ test('test runs alone: it saturates the machine and writes scratch files into th
   const spans = await realSchedule()
   const alongside = [...spans]
     .filter(([name, span]) => name !== 'test' && overlaps(span, spans.get('test')))
+    .map(([name]) => name)
+  assert.deepEqual(alongside, [])
+})
+
+test('test:build runs alone: its Next.js workers saturate the machine, as test does', async () => {
+  const spans = await realSchedule()
+  const alongside = [...spans]
+    .filter(([name, span]) => name !== 'test:build' && overlaps(span, spans.get('test:build')))
     .map(([name]) => name)
   assert.deepEqual(alongside, [])
 })
