@@ -9,7 +9,7 @@ import type { InlineConfig, PluginOption, ViteDevServer } from 'vite'
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { atomClassMap } from '../src/atoms.ts'
 import { type DevServing, devServing } from '../src/vite-dev.ts'
@@ -410,6 +410,25 @@ async function servedOnceRead(
 }
 
 /**
+ * Counts the times the plugin is told that the set of atoms may have grown, which it is at the end
+ * of the transform of each module it reads, and passes each on. `stop` ends the count.
+ */
+function noteGrowths(): { readonly count: number; stop: () => void } {
+  const saved = { ...devServing }
+  const counted = {
+    count: 0,
+    stop: () => {
+      Object.assign(devServing, saved)
+    },
+  }
+  devServing.noteGrowth = (context) => {
+    counted.count += 1
+    saved.noteGrowth(context)
+  }
+  return counted
+}
+
+/**
  * A scratch plugin, listed ahead of `navePlugin()`, that keeps what the dev server listens for on
  * the client channel when a page connects or disconnects, so a row can stand a page's connection
  * in without a browser. `connect` and `disconnect` call each of those listeners.
@@ -590,13 +609,29 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
             update.updates?.some((entry) => entry.path === '/src/app.css'),
           )
 
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        // Nothing has asked for the stylesheet since, so the reload may have gone to no one, and
-        // more growth is not announced on top of it.
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        expect(reloads()).toHaveLength(1)
+        // A reload the page has not answered holds the next one back for 2 s of the clock, so a
+        // row that waits for the first update and then edits again is at the mercy of a machine
+        // that takes longer than that between the two. The clock stands still instead: the reload
+        // stays unanswered for as long as the row says.
+        vi.useFakeTimers({ toFake: ['Date'] })
+        const growth = noteGrowths()
+        try {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          // Nothing has asked for the stylesheet since, so the reload may have gone to no one, and
+          // more growth is not announced on top of it. The plugin decides that when the edited
+          // module's transform ends, and anything it then schedules goes out on the next turn of
+          // the event loop: a timer made after it fires after it, so once this one has fired
+          // there is nothing left to wait for.
+          const decided = growth.count
+          await edit(server, app.root, "cx('flex', 'block', 'gap')")
+          expect(growth.count).toBeGreaterThan(decided)
+          await new Promise((resolve) => setTimeout(resolve, 0))
+          expect(reloads()).toHaveLength(1)
+        } finally {
+          growth.stop()
+          vi.useRealTimers()
+        }
 
         const asked = reloadAsked(server, UPDATE_CEILING_MS)
         page.connect()
