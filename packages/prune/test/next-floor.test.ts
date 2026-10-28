@@ -380,11 +380,14 @@ describe('the install lock of the Next.js floor', () => {
     writeFileSync(lock, 'successor')
     const written = new Date(Date.now() - 10 * 60_000)
     utimesSync(lock, written, written)
+    const writtenMs = statSync(lock).mtimeMs
     await new Promise((resolve) => setTimeout(resolve, 500))
-    const timeAfterRenewals = statSync(lock).mtimeMs
     await installing
 
-    expect(timeAfterRenewals, 'the first holder went on renewing').toBe(written.getTime())
+    expect(
+      statSync(lock).mtimeMs,
+      'the first holder renewed or released the successor’s lock',
+    ).toBe(writtenMs)
     expect(readFileSync(lock, 'utf8'), 'the first holder released the successor’s lock').toBe(
       'successor',
     )
