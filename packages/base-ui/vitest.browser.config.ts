@@ -125,6 +125,7 @@ const EXIT_FILE = 'test/browser/navigation-menu-exit.browser.test.ts'
 const STRIP_FILE = 'test/browser/scroll-area-strip.browser.test.ts'
 const TRIGGER_FILE = 'test/browser/navigation-menu-trigger.browser.test.ts'
 const TOAST_FLIP_FILE = 'test/browser/toast-reduced-motion.browser.test.ts'
+const DISCLOSURE_FILE = 'test/browser/disclosure-trigger-disabled.browser.test.ts'
 
 /**
  * The Base UI minors the files run against besides the devDependency, each by the name it is
@@ -134,9 +135,9 @@ const TOAST_FLIP_FILE = 'test/browser/toast-reduced-motion.browser.test.ts'
  */
 const MINORS = [
   {
-    files: [EXIT_FILE, STRIP_FILE, TRIGGER_FILE],
+    files: [EXIT_FILE, STRIP_FILE, TRIGGER_FILE, DISCLOSURE_FILE],
     installedAs: 'floor',
-    subpaths: ['navigation-menu', 'scroll-area'],
+    subpaths: ['accordion', 'collapsible', 'navigation-menu', 'scroll-area'],
     version: '1.3.0',
   },
   {

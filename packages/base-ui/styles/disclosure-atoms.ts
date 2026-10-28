@@ -43,7 +43,10 @@ export const disclosureAtoms: Record<string, AtomDefinition> = {
       cursor: 'pointer',
     },
     pseudos: {
-      '[aria-disabled="true"]': { color: V('color-content-disabled'), cursor: 'not-allowed' },
+      '&:disabled, &[aria-disabled="true"]': {
+        color: V('color-content-disabled'),
+        cursor: 'not-allowed',
+      },
     },
   },
   baseUiDisclosureIcon: {
