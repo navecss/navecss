@@ -429,6 +429,53 @@ function noteGrowths(): { readonly count: number; stop: () => void } {
 }
 
 /**
+ * Resolves on the next turn of the event loop, after the timers made before it: anything the
+ * plugin schedules for its next turn, as its reload is, has gone out by then.
+ */
+function nextTurn(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0)
+  })
+}
+
+/**
+ * Runs `body` with the clock standing still and the plugin's growth notes counted. A reload the
+ * page has not answered holds the next one back for 2 s of the clock, so a row that edits again
+ * after the first update is at the mercy of a machine that takes longer than that between the
+ * two; with the clock still, the reload stays unanswered for as long as the row says. Timers
+ * stay real. `body` moves the clock itself if the row is about what happens after the 2 s.
+ */
+async function withClockStopped(
+  body: (growth: ReturnType<typeof noteGrowths>) => Promise<void>,
+): Promise<void> {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  const growth = noteGrowths()
+  try {
+    await body(growth)
+  } finally {
+    growth.stop()
+    vi.useRealTimers()
+  }
+}
+
+/**
+ * `edit`, then waits until the plugin has decided what the edit's growth means for the reloads:
+ * it is told of the growth at the end of the edited module's transform, and sends what it
+ * decided on the next turn of the event loop.
+ */
+async function editAndDecide(
+  server: DevServer,
+  root: string,
+  body: string,
+  growth: ReturnType<typeof noteGrowths>,
+): Promise<void> {
+  const noted = growth.count
+  await edit(server, root, body)
+  expect(growth.count).toBeGreaterThan(noted)
+  await nextTurn()
+}
+
+/**
  * A scratch plugin, listed ahead of `navePlugin()`, that keeps what the dev server listens for on
  * the client channel when a page connects or disconnects, so a row can stand a page's connection
  * in without a browser. `connect` and `disconnect` call each of those listeners.
@@ -609,29 +656,14 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
             update.updates?.some((entry) => entry.path === '/src/app.css'),
           )
 
-        // A reload the page has not answered holds the next one back for 2 s of the clock, so a
-        // row that waits for the first update and then edits again is at the mercy of a machine
-        // that takes longer than that between the two. The clock stands still instead: the reload
-        // stays unanswered for as long as the row says.
-        vi.useFakeTimers({ toFake: ['Date'] })
-        const growth = noteGrowths()
-        try {
+        await withClockStopped(async (growth) => {
           await edit(server, app.root, "cx('flex', 'block')")
           expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
           // Nothing has asked for the stylesheet since, so the reload may have gone to no one, and
-          // more growth is not announced on top of it. The plugin decides that when the edited
-          // module's transform ends, and anything it then schedules goes out on the next turn of
-          // the event loop: a timer made after it fires after it, so once this one has fired
-          // there is nothing left to wait for.
-          const decided = growth.count
-          await edit(server, app.root, "cx('flex', 'block', 'gap')")
-          expect(growth.count).toBeGreaterThan(decided)
-          await new Promise((resolve) => setTimeout(resolve, 0))
+          // more growth is not announced on top of it.
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
           expect(reloads()).toHaveLength(1)
-        } finally {
-          growth.stop()
-          vi.useRealTimers()
-        }
+        })
 
         const asked = reloadAsked(server, UPDATE_CEILING_MS)
         page.connect()
@@ -660,14 +692,15 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           )
 
         page.connect()
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        // The page was listening, so the reload was heard; the stylesheet has not been asked for
-        // since, so it is still outgrown, and more growth is held back by the reload in flight.
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        page.connect()
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        await withClockStopped(async (growth) => {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          // The page was listening, so the reload was heard; the stylesheet has not been asked for
+          // since, so it is still outgrown, and more growth is held back by the reload in flight.
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
+          page.connect()
+          await nextTurn()
+        })
 
         expect(reloads()).toHaveLength(1)
       } finally {
@@ -692,13 +725,14 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           )
 
         page.connect()
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        page.disconnect()
-        page.connect()
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        await withClockStopped(async (growth) => {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
+          page.disconnect()
+          page.connect()
+          await nextTurn()
+        })
 
         expect(reloads()).toHaveLength(1)
       } finally {
@@ -724,11 +758,12 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
 
         page.connect()
         page.disconnect()
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        expect(reloads()).toHaveLength(1)
+        await withClockStopped(async (growth) => {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
+          expect(reloads()).toHaveLength(1)
+        })
 
         const asked = reloadAsked(server, UPDATE_CEILING_MS)
         page.connect()
@@ -757,14 +792,16 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           )
 
         page.connect()
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        // Longer than the 2 s a reload not yet answered holds the next one back, so what keeps this
-        // outgrown stylesheet from reloading is that a connection reloads only what no page heard.
-        await new Promise((resolve) => setTimeout(resolve, 2100))
-        page.connect()
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        await withClockStopped(async (growth) => {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
+          // Past the 2 s a reload not yet answered holds the next one back, so what keeps this
+          // outgrown stylesheet from reloading is that a connection reloads only what no page heard.
+          vi.setSystemTime(Date.now() + 2100)
+          page.connect()
+          await nextTurn()
+        })
 
         expect(reloads()).toHaveLength(1)
       } finally {
