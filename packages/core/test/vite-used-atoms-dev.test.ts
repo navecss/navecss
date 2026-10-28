@@ -9,7 +9,7 @@ import type { InlineConfig, PluginOption, ViteDevServer } from 'vite'
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { atomClassMap } from '../src/atoms.ts'
 import { type DevServing, devServing } from '../src/vite-dev.ts'
@@ -429,14 +429,22 @@ function noteGrowths(): { readonly count: number; stop: () => void } {
 }
 
 /**
- * Resolves on the next turn of the event loop, after the timers made before it: anything the
- * plugin schedules for its next turn, as its reload is, has gone out by then.
+ * Resolves once a reload the plugin has just decided on has had time to go out. The plugin sends
+ * it on the next turn of the event loop, and the wait is longer than that so that a reload sent a
+ * little later is still counted. With the clock standing still a correct plugin sends nothing
+ * more however long the wait, so its length cannot fail a correct change on a slow machine.
  */
-function nextTurn(): Promise<void> {
+function sendsSettled(): Promise<void> {
   return new Promise((resolve) => {
-    setTimeout(resolve, 0)
+    setTimeout(resolve, 100)
   })
 }
+
+// A row that times out while its clock stands still never reaches the `finally` that starts the
+// clock again, so the rows after it would read a clock that never moves.
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 /**
  * Runs `body` with the clock standing still and the plugin's growth notes counted. A reload the
@@ -472,7 +480,7 @@ async function editAndDecide(
   const noted = growth.count
   await edit(server, root, body)
   expect(growth.count).toBeGreaterThan(noted)
-  await nextTurn()
+  await sendsSettled()
 }
 
 /**
@@ -699,7 +707,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           // since, so it is still outgrown, and more growth is held back by the reload in flight.
           await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
           page.connect()
-          await nextTurn()
+          await sendsSettled()
         })
 
         expect(reloads()).toHaveLength(1)
@@ -731,7 +739,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
           page.disconnect()
           page.connect()
-          await nextTurn()
+          await sendsSettled()
         })
 
         expect(reloads()).toHaveLength(1)
@@ -800,7 +808,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           // outgrown stylesheet from reloading is that a connection reloads only what no page heard.
           vi.setSystemTime(Date.now() + 2100)
           page.connect()
-          await nextTurn()
+          await sendsSettled()
         })
 
         expect(reloads()).toHaveLength(1)

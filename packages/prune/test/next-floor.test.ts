@@ -384,7 +384,12 @@ describe('the install lock of the Next.js floor', () => {
     const timeAfterRenewals = statSync(lock).mtimeMs
     await installing
 
-    expect(timeAfterRenewals, 'the first holder went on renewing').toBe(written.getTime())
+    // A file's time is read back as a fraction of a millisecond that can miss the whole one it
+    // was set to (Node 22.18 reads 1793176482135 back as 1793176482134.999), and a renewal would
+    // move it by minutes, so the time is compared to the millisecond.
+    expect(Math.round(timeAfterRenewals), 'the first holder went on renewing').toBe(
+      written.getTime(),
+    )
     expect(readFileSync(lock, 'utf8'), 'the first holder released the successor’s lock').toBe(
       'successor',
     )

@@ -22,8 +22,10 @@ const ROW_TIMEOUT = 480_000
 const GIVE_UP_BEFORE_TIMEOUT = 30_000
 const REWRITE_AFTER = 10_000
 const CLOSE_LIMIT = 10_000
-// A watcher that has heard no file change through this many rewrites in a row (a minute, longer than
-// any silence measured that ended by itself) is closed and the watched build started again, once.
+// A watcher that has heard no file change through this many rewrites in a row (a minute) is closed
+// and the watched build started again, once. A silence has ended by itself after longer than that,
+// and a new watcher can be as deaf as the old one, so what the restart gives the row is a build
+// that shows the edit without being told of it, not a watcher that hears.
 const UNHEARD_REWRITES_BEFORE_RESTART = 6
 const RESTARTS_ALLOWED = 1
 
