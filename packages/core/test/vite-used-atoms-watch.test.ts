@@ -22,6 +22,10 @@ const ROW_TIMEOUT = 480_000
 const GIVE_UP_BEFORE_TIMEOUT = 30_000
 const REWRITE_AFTER = 10_000
 const CLOSE_LIMIT = 10_000
+// A watcher that has heard no file change through this many rewrites in a row (a minute, longer than
+// any silence measured that ended by itself) is closed and the watched build started again, once.
+const UNHEARD_REWRITES_BEFORE_RESTART = 6
+const RESTARTS_ALLOWED = 1
 
 // Closing a watcher waits for a build under way, and on a loaded machine that took longer than the
 // time the row had left, so that the row ended on its timeout instead of on its own error.
@@ -41,7 +45,11 @@ async function atMost(ms: number, work: Promise<void> | undefined): Promise<void
 // runs on each Vite measured. The watcher hears of an edit from the operating system, which on a
 // busy macOS machine tells it many seconds late and sometimes not at all, so the row writes an
 // edit again, to the same effect, until the build's output shows it. Its waits end only a little
-// before the row's timeout, which only has to outlast a loaded machine.
+// before the row's timeout, which only has to outlast a loaded machine. A watcher that stays deaf
+// through a minute of rewrites is closed and the watched build started again, once. That build's
+// first output is not a rebuild, so the row then requires that a rebuild showed at least one of the
+// first two edits, and the other rules (what each build shows, one warning per build) run across
+// both watchers.
 describe.each(Object.entries(VITE_APIS))(
   'Vite %s: AC-used-atoms-27 - rebuilds in watch mode',
   (_version, api) => {
@@ -67,12 +75,11 @@ describe.each(Object.entries(VITE_APIS))(
           }),
           customLogger: logger,
         }
-        const watcher = (await api.build(config)) as unknown as {
+        interface Watcher {
           close(): Promise<void>
           on(event: 'event', listener: (event: { code: string; error?: Error }) => void): void
           on(event: 'change', listener: () => void): void
         }
-        closing = watcher
         const written = (): { asset: string[]; page: string[] } => {
           const assets = path.join(app.root, 'dist/assets')
           const css = readdirSync(assets)
@@ -93,10 +100,12 @@ describe.each(Object.entries(VITE_APIS))(
         const shows = (): string => JSON.stringify(shownNow())
         const builds = {
           bundled: 0,
+          changes: 0,
           ended: 0,
           failed: undefined as Error | undefined,
           lastBuildEventAt: undefined as number | undefined,
           lastChangeAt: undefined as number | undefined,
+          restarts: 0,
           started: 0,
         }
         const ago = (at: number | undefined): string =>
@@ -104,37 +113,47 @@ describe.each(Object.entries(VITE_APIS))(
         // What the watcher has done so far, for the error that says what never happened: a write it
         // never heard leaves the last file change it heard older than that write.
         const progress = (): string =>
-          `builds started ${builds.started}, ended ${builds.ended}, bundled ${builds.bundled}; last build event ${ago(builds.lastBuildEventAt)}, last file change heard ${ago(builds.lastChangeAt)}`
+          `builds started ${builds.started}, ended ${builds.ended}, bundled ${builds.bundled}; last build event ${ago(builds.lastBuildEventAt)}, last file change heard ${ago(builds.lastChangeAt)}; restarts ${builds.restarts}`
         // What the output shows when each build ends, with the number of the edit whose first write
-        // came before the build ended (0 for the first build). No build is under way when an edit is
-        // first written, so each of those builds read that edit.
-        const outputs: { afterEdit: number; output: unknown }[] = []
+        // came before the build ended (0 for the first build), and whether the build was a rebuild:
+        // one that its watcher ran after it had already ended a build. No build is under way when an
+        // edit is first written, so each of those builds read that edit.
+        const outputs: { afterEdit: number; output: unknown; rebuilt: boolean }[] = []
         let editing = 0
-        watcher.on('change', () => {
-          builds.lastChangeAt = Date.now()
-        })
-        watcher.on('event', (event) => {
-          builds.lastBuildEventAt = Date.now()
-          switch (event.code) {
-            case 'BUNDLE_END': {
-              builds.bundled += 1
-              outputs.push({ afterEdit: editing, output: shownNow() })
-              break
+        // Starts the watched build and listens to it. Every watcher counts into the same totals.
+        const watch = async (): Promise<void> => {
+          const watcher = (await api.build(config)) as unknown as Watcher
+          closing = watcher
+          let hasEndedBuild = false
+          watcher.on('change', () => {
+            builds.changes += 1
+            builds.lastChangeAt = Date.now()
+          })
+          watcher.on('event', (event) => {
+            builds.lastBuildEventAt = Date.now()
+            switch (event.code) {
+              case 'BUNDLE_END': {
+                builds.bundled += 1
+                outputs.push({ afterEdit: editing, output: shownNow(), rebuilt: hasEndedBuild })
+                break
+              }
+              case 'BUNDLE_START': {
+                builds.started += 1
+                break
+              }
+              case 'END': {
+                builds.ended += 1
+                hasEndedBuild = true
+                break
+              }
+              case 'ERROR': {
+                builds.failed = event.error ?? new Error('the watched build reported an error')
+                break
+              }
             }
-            case 'BUNDLE_START': {
-              builds.started += 1
-              break
-            }
-            case 'END': {
-              builds.ended += 1
-              break
-            }
-            case 'ERROR': {
-              builds.failed = event.error ?? new Error('the watched build reported an error')
-              break
-            }
-          }
-        })
+          })
+        }
+        await watch()
         const wait = (ms: number): Promise<void> =>
           new Promise((resolve) => setTimeout(resolve, ms))
         // A failed build is reported at once, wherever the row is waiting, not after its budget.
@@ -154,6 +173,19 @@ describe.each(Object.entries(VITE_APIS))(
           }
           return false
         }
+        // Waits for the build that has just started to show `atoms`, as long as the row may take.
+        const untilBuildShows = async (which: string, atoms: string[]): Promise<void> => {
+          while (!(await isShownWithin(atoms, REWRITE_AFTER))) {
+            throwIfFailed()
+            if (Date.now() >= deadline) {
+              throw new Error(
+                `${which} never showed ${atoms.join(', ')}; it shows ${shows()}; ${progress()}`,
+              )
+            }
+          }
+        }
+        // The rewrites in a row that the watcher has not heard a file change through.
+        let unheardRewrites = 0
         const edit = async (call: string, atoms: string[]): Promise<void> => {
           editing += 1
           for (let attempt = 0; Date.now() < deadline; attempt += 1) {
@@ -161,6 +193,7 @@ describe.each(Object.entries(VITE_APIS))(
             // A build reads main.ts only once its BUNDLE_START has been heard, so writing while none
             // is under way keeps a build from reading the file between its truncation and its write.
             while (builds.started !== builds.ended && Date.now() < deadline) await wait(50)
+            const changesBefore = builds.changes
             // A comment changes no class, so the edit reads the same on every attempt.
             writeFileSync(
               path.join(app.root, 'src/main.ts'),
@@ -168,19 +201,27 @@ describe.each(Object.entries(VITE_APIS))(
             )
             const isShownNow = await isShownWithin(atoms, REWRITE_AFTER)
             throwIfFailed()
+            unheardRewrites = builds.changes === changesBefore ? unheardRewrites + 1 : 0
             if (isShownNow) return
+            if (
+              unheardRewrites >= UNHEARD_REWRITES_BEFORE_RESTART &&
+              builds.started === builds.ended &&
+              builds.restarts < RESTARTS_ALLOWED
+            ) {
+              await atMost(CLOSE_LIMIT, closing?.close())
+              builds.restarts += 1
+              unheardRewrites = 0
+              await watch()
+              await untilBuildShows('the restarted build', atoms)
+              return
+            }
           }
           throw new Error(
             `the build never showed ${atoms.join(', ')}; it shows ${shows()}; ${progress()}`,
           )
         }
 
-        while (!(await isShownWithin(['flex'], REWRITE_AFTER))) {
-          throwIfFailed()
-          if (Date.now() >= deadline) {
-            throw new Error(`the first build never showed flex; it shows ${shows()}; ${progress()}`)
-          }
-        }
+        await untilBuildShows('the first build', ['flex'])
         const first = written()
         await edit("cx('flex', 'grid')", ['flex', 'grid'])
         const second = written()
@@ -195,6 +236,17 @@ describe.each(Object.entries(VITE_APIS))(
         for (const { afterEdit, output } of outputs) {
           expect(output, `a build after edit ${afterEdit}`).toEqual(stages[afterEdit])
         }
+        // The restarted build's first output is not a rebuild, so the rebuilds must still have shown
+        // at least one of the first two edits.
+        const rebuiltEdits = new Set(
+          outputs.filter((entry) => entry.rebuilt).map((entry) => entry.afterEdit),
+        )
+        const isRestartUnproven =
+          builds.restarts > 0 && !rebuiltEdits.has(1) && !rebuiltEdits.has(2)
+        expect(
+          isRestartUnproven,
+          `after the restart, no rebuild showed edit 1 or edit 2; ${progress()}`,
+        ).toBe(false)
         expect(builds.started).toBe(builds.ended)
         // One warning for each build that produced output, however many builds the edits caused.
         expect(warnings.filter((message) => message.includes('src/inline.css'))).toHaveLength(
