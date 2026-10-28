@@ -6,7 +6,7 @@
  */
 import type { LocatedProblem } from '@navecss/core/collect'
 
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { ResolverFactory } from 'oxc-resolver'
 
@@ -160,6 +160,29 @@ function syncThroughAliases(
 }
 
 /**
+ * Whether `file` is a file on disk.
+ */
+function isFileOnDisk(file: string): boolean {
+  return statSync(file, { throwIfNoEntry: false })?.isFile() === true
+}
+
+/**
+ * The path without a query or fragment, which the resolver keeps on a specifier written with one
+ * (`./ui?v=1`) and no file on disk has. A path that is a file is kept whole, since a name may hold
+ * `#`; otherwise it is cut back, mark by mark from the end, to the longest start that is a file.
+ * Only characters of the path are compared, so a query that holds `/` and a path written with `\`
+ * are cut the same way.
+ */
+export function withoutQuery(file: string): string {
+  if (isFileOnDisk(file)) return file
+  for (let at = file.length - 1; at > 0; at -= 1) {
+    const mark = file[at]
+    if ((mark === '?' || mark === '#') && isFileOnDisk(file.slice(0, at))) return file.slice(0, at)
+  }
+  return file
+}
+
+/**
  * Resolves the specifier with every resolver of the module system, each under its condition set.
  */
 function resolveAcross(
@@ -180,8 +203,9 @@ function resolveAcross(
     const found = syncThroughAliases(resolver.factory, directory, aliases, specifier)
     if (found.builtin) isBuiltin = true
     else if (found.path !== undefined) {
-      files.add(found.path)
-      if (resolver.isInMode) filesInMode.add(found.path)
+      const file = withoutQuery(found.path)
+      files.add(file)
+      if (resolver.isInMode) filesInMode.add(file)
     }
   }
   return { files: [...files], filesInMode: [...filesInMode], isBuiltin }

@@ -20,6 +20,7 @@ import type {
 } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
+import { isCssModuleId } from './vite-css-id.ts'
 import { isServedAsStylesheet, judgeWhenServed } from './vite-dev-judge.ts'
 import { graphRoots, transformReachable } from './vite-dev-read.ts'
 import { noteReloadSent } from './vite-dev-reloads.ts'
@@ -229,7 +230,11 @@ export async function serveStylesheet(
   const isPossible = css.includes('\\') || /layer/i.test(css)
   if (!isPossible || !inspectAtomicLayer(css).hasLayer) return undefined
   const dev = environment as unknown as DevEnvironmentLike
-  if (environment.config.consumer === 'client') await devServing.hold(dev, id)
+  // A CSS Module is not held: the read ahead requests CSS Modules, so a held one would wait on its
+  // own transform.
+  if (environment.config.consumer === 'client' && !isCssModuleId(id)) {
+    await devServing.hold(dev, id)
+  }
   judgeWhenServed(context, id)
   if (environment.config.consumer !== 'client') return undefined
   const atoms = servedAtoms(context.state, context.kept)

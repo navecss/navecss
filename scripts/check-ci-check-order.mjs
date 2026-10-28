@@ -63,7 +63,7 @@ const HEADING = '`ci:check` runs these steps:'
  * later numbered bold list in the document: measured, a de-bolded intended list carrying the
  * `a6555fd` transposition plus an unrelated later list printed "matches ... in order" and
  * exited 0. A blank line inside the list is now skipped rather than ending it, so a CommonMark
- * LOOSE list reads correctly instead of reporting three of eleven labels against the chain (a
+ * LOOSE list reads correctly instead of reporting three of twelve labels against the chain (a
  * lesson worth restating: a text-extraction boundary anchors on the structure's marker grammar,
  * never on whitespace).
  *
@@ -73,7 +73,7 @@ const HEADING = '`ci:check` runs these steps:'
  * Ending the section there instead would make every documented step AFTER the stop invisible,
  * leaving the gate comparing a PREFIX of the documented list against the chain, and a chain that
  * happens to BE that surviving prefix then AGREES with it: measured at exit 0 printing
- * "3-step list matches ... in order" over an eleven-step documented list.
+ * "3-step list matches ... in order" over a twelve-step documented list.
  * A silent truncation is the earlier silent SKIP one step further
  * along rather than an improvement on it, which is why this direction is not left to the
  * repository's current proportions to make safe.

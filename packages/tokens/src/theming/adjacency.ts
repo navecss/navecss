@@ -27,7 +27,7 @@ export {
 
 /**
  * C5 (signed ruling, N1 + C5 + N3): R22's coverage
- * list is the referenced MINIMUM declaration set; the nine names below are its categories.
+ * list is the referenced MINIMUM declaration set; the ten names below are its categories.
  * `AC-theming-25`/`AC-theming-53`: a present category going missing is narrowing (gated);
  * adding beyond the minimum is ordinary (ungated).
  */
@@ -41,12 +41,20 @@ const MINIMUM_COVERAGE_CATEGORIES = [
   'borderFocus',
   'filledAction',
   'filledFeedback',
+  'secondaryForegroundOnStates',
 ] as const
+
+/**
+ * The fills `action.secondary`'s declared foreground must be declared on as text, beyond its
+ * rest: its hover and its active fill (write-back 9). Both, so dropping either is the narrowing
+ * the floor refuses.
+ */
+const ACTION_SECONDARY_STATE_FILLS = ['action.secondary.hover', 'action.secondary.active']
 
 export type CoverageCategory = (typeof MINIMUM_COVERAGE_CATEGORIES)[number]
 
 /**
- * Which of the nine minimum categories the given adjacency set covers. Shared by
+ * Which of the ten minimum categories the given adjacency set covers. Shared by
  * `AC-theming-25` (does today's shipped set cover the floor) and `AC-theming-53` (does a
  * proposed set still cover it, C5's narrowing check).
  */
@@ -69,6 +77,12 @@ export function coverageCategories(
     filledFeedback: adjacency.some(
       (a) => a.subject === 'feedback.danger' && a.class === 'non-text',
     ),
+    secondaryForegroundOnStates: ACTION_SECONDARY_STATE_FILLS.every((fill) =>
+      adjacency.some(
+        (a) =>
+          a.subject === 'action.secondary.foreground' && a.against === fill && a.class === 'text',
+      ),
+    ),
   }
 }
 
@@ -89,7 +103,7 @@ const COVERAGE_FLOOR_VIOLATION_REASON =
 
 /**
  * `AC-theming-53` (R22, C5): fails naming the category the moment a proposed adjacency set
- * REMOVES one of the nine minimum categories. Never fails on an ADDITION beyond the minimum:
+ * REMOVES one of the ten minimum categories. Never fails on an ADDITION beyond the minimum:
  * C5 binds narrowing alone, and widening is an ordinary spec edit.
  */
 export function assertCoverageFloor(adjacency: readonly Adjacency[] = ADJACENCY): void {

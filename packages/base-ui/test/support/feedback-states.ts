@@ -118,7 +118,7 @@ export const readOracle = (name: string): string =>
 export const feedbackBlock = (): string => readOracle('feedback-block.css')
 
 /**
- * The all-signed overlay sheet, built independently of this package's atoms (30,401 B).
+ * The all-signed overlay sheet, built independently of this package's atoms (30,413 B).
  */
 export const sheetOverlay = (): string => readOracle('independent-build.css')
 

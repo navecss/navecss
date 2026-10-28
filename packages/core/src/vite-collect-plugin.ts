@@ -20,7 +20,7 @@ import type { UsedContext } from './vite-used.ts'
 import { checkBundle } from './vite-bundle.ts'
 import { isMentioningAtoms, recordModule } from './vite-collect-module.ts'
 import { failDevModule, problemsOf } from './vite-collect-problems.ts'
-import { isStylesheetId } from './vite-css-id.ts'
+import { isUnreadStylesheet } from './vite-css-id.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
 import { declaredImporterError } from './vite-cx-module-importers.ts'
 import { forgetDeclared } from './vite-cx-modules.ts'
@@ -81,10 +81,11 @@ export interface NaveCollectPlugin {
 
 /**
  * Whether the post-order half reads the module `id`: any module that is not a stylesheet and not
- * Nave's own, whether a file of the project, of a dependency, or a module a plugin generates.
+ * Nave's own, whether a file of the project, of a dependency, or a module a plugin generates. A
+ * CSS Module is read although it is a stylesheet: its JavaScript is a class map.
  */
 export function isReadable(context: UsedContext, id: string): boolean {
-  return isUsed(context) && !isStylesheetId(id) && !isNaveOwn(id)
+  return isUsed(context) && !isUnreadStylesheet(id) && !isNaveOwn(id)
 }
 
 /**

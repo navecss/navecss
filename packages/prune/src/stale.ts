@@ -39,9 +39,9 @@ function digestOfFile(file: string): string {
  * The listing digest of each directory the entries are selected from now, by relative path with a
  * trailing slash.
  */
-function listingsNow(dir: string): Map<string, string> {
+function listingsNow(dir: string, pageExtensions: readonly string[]): Map<string, string> {
   return new Map(
-    findEntries(dir).directories.map((directory) => [
+    findEntries(dir, pageExtensions).directories.map((directory) => [
       `${relativeTo(dir, directory.path) || '.'}/`,
       digestOf(directory.names.join('\n')),
     ]),
@@ -60,8 +60,12 @@ function inOrder(names: readonly string[]): string[] {
  * does, the directories whose entries a specifier could have matched, then the links through
  * `node_modules`, which the files that changed with them have already explained.
  */
-function differences(dir: string, record: PruneRecord): string[] {
-  const listings = listingsNow(dir)
+function differences(
+  dir: string,
+  record: PruneRecord,
+  pageExtensions: readonly string[],
+): string[] {
+  const listings = listingsNow(dir, pageExtensions)
   const changed = inOrder([
     ...Object.entries(record.files)
       .filter(([key, digest]) => digestOfFile(path.join(dir, key)) !== digest)
@@ -92,15 +96,17 @@ function differences(dir: string, record: PruneRecord): string[] {
  * @param input.cache The cache directory as the user would delete it.
  * @param input.record What the plugin recorded.
  * @param input.options The options `withNave()` was called with.
+ * @param input.pageExtensions The config's `pageExtensions`, absent when it sets none.
  */
 export function staleMessage(input: {
   readonly cache: string
   readonly dir: string
   readonly options: NaveOptions
+  readonly pageExtensions?: readonly string[]
   readonly record: PruneRecord
 }): string | undefined {
-  const { dir, cache, record, options } = input
-  const [first] = differences(dir, record)
+  const { dir, cache, record, options, pageExtensions = [] } = input
+  const [first] = differences(dir, record, pageExtensions)
   if (first !== undefined) return staleFile(first, cache)
   if (digestOf(JSON.stringify(options)) !== record.optionsDigest) return staleOptions(cache)
   return undefined

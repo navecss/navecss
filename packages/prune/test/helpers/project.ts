@@ -111,6 +111,10 @@ export interface RunOptions {
    * The options object listed on the PostCSS entry.
    */
   readonly entryOptions?: object
+  /**
+   * The config's `pageExtensions`, as `withNave()` hands them over.
+   */
+  readonly pageExtensions?: readonly string[]
 }
 
 /**
@@ -123,6 +127,7 @@ function handoffFor(project: Project, run: RunOptions): Handoff {
     distDir: run.distDir ?? '.next',
     root: run.root ?? project.dir,
     ...(run.phase !== undefined && { phase: run.phase }),
+    ...(run.pageExtensions !== undefined && { pageExtensions: run.pageExtensions }),
   }
 }
 

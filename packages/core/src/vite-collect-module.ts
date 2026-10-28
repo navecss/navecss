@@ -15,6 +15,7 @@ import type { UsedContext } from './vite-used.ts'
 
 import { CX_SOURCE, readModule } from './vite-collect.ts'
 import { filePathOf } from './vite-css-id.ts'
+import { recordWithoutCalls } from './vite-css-module-record.ts'
 import { type DeclaredModules, declaredModulesFor, isAboutListed } from './vite-cx-modules.ts'
 import { declaredReadingOf } from './vite-cx-reading.ts'
 import { keepMap } from './vite-dev-keep.ts'
@@ -23,14 +24,7 @@ import { isSerialisedStylesheet } from './vite-serialised-css.ts'
 import { setupExposuresFor } from './vite-setup-link.ts'
 import { combinedMapOf, placerFor } from './vite-source-map.ts'
 import { moduleKey } from './vite-state.ts'
-import {
-  isListed,
-  NOT_PARSED,
-  SOURCE_TYPES,
-  textRecord,
-  TOO_DEEP,
-  unreadableRecord,
-} from './vite-unread-record.ts'
+import { isListed, NOT_PARSED, TOO_DEEP, unreadableRecord } from './vite-unread-record.ts'
 import { LINE_UNKNOWN_UNMAPPED, LINE_UNKNOWN_WITHOUT_MAP } from './vite-used-report.ts'
 import { ownAtomNames } from './vite-used.ts'
 
@@ -278,11 +272,11 @@ export async function recordModule(
   }
   const isDependency = isDependencyId(id)
   const pkg = isDependency ? await packageNameOf(filePathOf(id), context.packageNames) : undefined
-  if (moduleType !== undefined && !SOURCE_TYPES.has(moduleType)) {
+  const unparsed = recordWithoutCalls(context, ctx, { code, id, moduleType, pkg })
+  if (unparsed) {
     context.state.exposures.delete(key)
-    const record = textRecord(context, { code, id, moduleType, pkg })
-    context.state.modules.set(key, record)
-    return record
+    context.state.modules.set(key, unparsed)
+    return unparsed
   }
   const program = parseOrUndefined(ctx, code, moduleType)
   const record = program

@@ -41,22 +41,22 @@ const INDEPENDENT_BUILD = 'independent-build.css'
 // The same agreed bytes built a second time, independently of this package's atoms: the parent
 // contract's stylesheet with the ghost keys and the 14 new rules in, before `focusRing` is composed
 // in. Held by hash so the copy cannot drift from what was agreed.
-const INDEPENDENT_BUILD_SHA256 = 'e9b54cd0a877debecc18d58ae39cd3d7e1b59182aeb76fe8f209598d0e839ba0'
-const INDEPENDENT_BUILD_BYTES = 30_401
+const INDEPENDENT_BUILD_SHA256 = '6a1066132fbafd9525d812e37b84faa8b785f20a268a36f0636e9d9b2784e44f'
+const INDEPENDENT_BUILD_BYTES = 30_413
 // Appendix C: the block of the 21 rules (C.1) and the whole sheet of the all-signed state (C.4),
 // each held by its full sha256. The golden below is this sheet with `focusRing` composed over
 // Table T2 as amended, written from the spec text by a script and not copied from a build.
 const BLOCK_SHA256 = '028c71ff36e6e4546bc4ad90a767a2fae8fb83ca00f5c4df235cb0309b298ad4'
 const BLOCK_BYTES = 6899
-const COMBINED_SHA256 = '5b918c4b5551f0c4c9d2999f11d60fd2c5132698b7b559a55a5ae93a9d146d40'
-const COMBINED_BYTES = 37_300
-const GOLDEN_BYTES = 40_336
+const COMBINED_SHA256 = '345d7d25fc2abe3bfe620cf79a2c1267f41c211ad3cae658fc2f1b9340e66740'
+const COMBINED_BYTES = 37_312
+const GOLDEN_BYTES = 40_348
 // The parent contract's stylesheet alone, which is what the independent build holds once the ghost
 // keys and the 14 new rules are taken out.
-const PARENT_STYLESHEET_SHA256 = '59cd8bad1cd24eab84fc9a7cae856d18b4193284d387d5872baa517df2caa8bb'
+const PARENT_STYLESHEET_SHA256 = '59f57e328f62d8fa9d190b28a91226450f635340352bf6fc297ececf0f137edf'
 
-// The golden is the combined package's sheet (Appendix C.4's all-signed 37,300 B plus the 15
-// `focusRing` blocks of Table T2 as amended, 40,336 B). It is written from the spec text by a
+// The golden is the combined package's sheet (Appendix C.4's all-signed 37,312 B plus the 15
+// `focusRing` blocks of Table T2 as amended, 40,348 B). It is written from the spec text by a
 // script and is never a copy of `dist/styles.css`: a change to the stylesheet that is intended is
 // a change to the spec's bytes first.
 
@@ -183,9 +183,9 @@ describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06
   it('has the byte count and sha256 prefix Appendix C gives the all-signed state, focusRing left out (a check on the expected value)', () => {
     expect(Buffer.byteLength(expected)).toBe(COMBINED_BYTES)
     expect(sha256(expected)).toBe(COMBINED_SHA256)
-    expect(sha256(expected).slice(0, 16)).toBe('5b918c4b5551f0c4')
+    expect(sha256(expected).slice(0, 16)).toBe('345d7d25fc2abe3b')
     expect(Buffer.byteLength(expectedOverlay)).toBe(INDEPENDENT_BUILD_BYTES)
-    expect(sha256(expectedOverlay).slice(0, 16)).toBe('e9b54cd0a877debe')
+    expect(sha256(expectedOverlay).slice(0, 16)).toBe('6a1066132fbafd95')
   })
 
   it("holds Appendix C's block (6,899 B, 028c71ff), and appends it to the overlay sheet before the layer's closing brace", () => {
@@ -471,7 +471,7 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
   const expected = expectedSheet()
   const expectedOverlay = sheetOverlay()
 
-  it('builds, with every feedback class left out of the atom map, the overlay sheet of 30,401 B, e9b54cd0', async () => {
+  it('builds, with every feedback class left out of the atom map, the overlay sheet of 30,413 B, 6a106613', async () => {
     const without = await buildWithoutClasses(NEW_CLASSES_FEEDBACK)
     const ringless = withoutRing(without)
 
