@@ -224,8 +224,9 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 //   negator that reaches its verb only across a comma ("Your build does not, at any point, invoke
 //   the entry point"), a verb left out ("but it never does"), a negator after the verb ("invokes no
 //   entry point"), a negated passive whose subject is not "the entry point" itself, or not next to
-//   it. Each still fails when it is the whole rung, because it holds no accepted shape or holds a
-//   negation.
+//   it, or a negation shared by a second subject joined with "and" ("Never do Nave and your build
+//   invoke the entry point"), which reads like a new clause starting at "and your". Each still
+//   fails when it is the whole rung, because it holds no accepted shape or holds a negation.
 // - A Nave invoker beside the affirmative passes: the rung then holds the affirmative and denies
 //   nothing ("Nave invokes the entry point for you." fails alone).
 // - A sentence holding a shape and contrasted with Nave as the real invoker, in another clause or
@@ -782,6 +783,10 @@ const RUNG_4_DENIAL_RESIDUALS = [
   'Your build, at no point, invokes the entry point.',
   'Your build, never at any stage of its run, invokes the entry point.',
   'Your build, never in any of its steps, invokes the entry point.',
+  // A negation shared by a second subject joined with "and", read as a new clause.
+  'Nothing in Nave and your build invokes the entry point.',
+  'No step of Nave and your build invokes the entry point.',
+  'Never do Nave and your build invoke the entry point.',
 ]
 
 test('AC-theming-36: a denial outside the closed list reds alone, and beside the published rung is left to the reader', () => {
