@@ -384,7 +384,10 @@ describe('the install lock of the Next.js floor', () => {
     const timeAfterRenewals = statSync(lock).mtimeMs
     await installing
 
-    expect(timeAfterRenewals, 'the first holder went on renewing').toBe(written.getTime())
+    // On the floor Node, utimes then stat can differ by a fraction of a millisecond, so compare whole milliseconds.
+    expect(Math.round(timeAfterRenewals), 'the first holder went on renewing').toBe(
+      written.getTime(),
+    )
     expect(readFileSync(lock, 'utf8'), 'the first holder released the successor’s lock').toBe(
       'successor',
     )
