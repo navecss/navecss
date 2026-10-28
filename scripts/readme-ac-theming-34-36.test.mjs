@@ -202,8 +202,11 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 //
 // THE DENIAL GUARD is a closed list too, read clause by clause (a clause ends at `;`, `:` or the
 // end of the sentence) and, for the first two forms, comma segment by comma segment, so a negator
-// never reaches past a comma ("Your build, not Nave, invokes the entry point" denies nothing). A
-// part of a sentence denies reach when it holds:
+// never reaches past a comma ("Your build, not Nave, invokes the entry point" denies nothing).
+// Inside a segment, a joining word (and, but, so, yet) followed by a subject of the consumer's
+// (your, your own, the consumer's, you, we, they) ends a negator's reach the same way ("No file is
+// discovered and your own build invokes the entry point" denies nothing). A part of a sentence
+// denies reach when it holds:
 // - a negator (not, never, cannot, any n't word, no, nothing, without, instead of, rather than,
 //   unlike, fails to, unable to; "no longer" is caught by "no"), then a reach verb (reach, invoke,
 //   call, run, use, go through), then the object (the entry point, `navecss-tokens`, or "it"), all
@@ -231,9 +234,7 @@ test('AC-theming-34: rungs 4 and 5 document an unbounded-in-0.x, bounded-at-1.0 
 //   build invokes the entry point from a script, pin the version.").
 // - In the other direction, the negation scan does not know what a negation governs, so a lawful
 //   sentence that also holds one ("Without a config file, your build invokes the entry point") is
-//   not read as the affirmative and fails loudly with the shapes message. One such sentence is also
-//   read as a denial, because its negator and verb share a comma segment across "and": "No file is
-//   discovered and your own build invokes the entry point, with what it has."
+//   not read as the affirmative and fails loudly with the shapes message.
 
 const WORD = /[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu
 const CLOSED_UP_ENTRY_POINTS = ['entrypoint', 'entry-point']
@@ -296,6 +297,9 @@ const DENIAL_NEGATOR_PAIRS = new Set([
   'failed to',
   'unable to',
 ])
+// A joining word, and the subjects after it that start a clause of the consumer's.
+const JOINING_WORDS = new Set(['and', 'but', 'so', 'yet'])
+const NEW_SUBJECTS = new Set(['your', 'you', 'we', 'they'])
 const REACH_VERBS = new Set(
   ['reach', 'invoke', 'call', 'run', 'use'].flatMap((verb) => verbForms(verb)),
 )
@@ -428,9 +432,13 @@ function objectAt(words, at) {
 // per comma segment, so a negator does not reach past a comma ("Your build, not Nave, invokes the
 // entry point" denies nothing).
 function denialInSegment(words) {
-  const matched = []
+  let matched = []
   let wanted = 'opener'
   for (let at = 0; at < words.length;) {
+    if (startsNewSubject(words, at)) {
+      matched = []
+      wanted = 'opener'
+    }
     const avoided = avoidanceAt(words, at)
     if (avoided > 0) {
       const object = objectRightAfter(words, at + avoided)
@@ -447,6 +455,14 @@ function denialInSegment(words) {
     at += step
   }
   return null
+}
+
+// Whether a joining word at `at` opens a clause with a subject of the consumer's ("and your own
+// build", "but you"), which ends a negator's reach as a comma does.
+function startsNewSubject(words, at) {
+  if (!JOINING_WORDS.has(words[at])) return false
+  const next = words[at + 1]
+  return NEW_SUBJECTS.has(next) || (next === 'the' && words[at + 2] === "consumer's")
 }
 
 // The object that starts at `at`, after an optional "the", or null.
@@ -710,6 +726,10 @@ const RUNG_4_DENIALS = [
   'Unlike the CLI that calls the entry point, this rung reads a file.',
   'Your build never calls the entry point.',
   'Your build does not e.g. invoke the entry point directly.',
+  // A joining word with no new subject after it leaves the negator's reach as it was.
+  'Your build reads the seed and does not invoke the entry point.',
+  'No file is read and nothing invokes the entry point.',
+  'Your build does not read the seed and invoke the entry point.',
 ]
 
 test('AC-theming-36: a rung 4 that keeps only a denial of the entry point reds', () => {
@@ -1009,6 +1029,16 @@ const RUNG_4_FAILS_LOUDLY = [
   'The token builds ship, and its task invokes the entry point.',
   'Your build, because Nave ships no runner, invokes the entry point.',
   'Your build, since Nave reads nothing, invokes the entry point.',
+  // A joining word with a new subject of the consumer's ends a negator's reach, as a comma does.
+  'No file is discovered and your own build invokes the entry point, with what it has.',
+  'No file is read but your build invokes the entry point.',
+  'Nothing is discovered, so your own build runs the entry point.',
+  'No file is read so your build invokes the entry point.',
+  'No file is read yet your build invokes the entry point.',
+  "No file is read and the consumer's build invokes the entry point.",
+  'No file is read and you invoke the entry point.',
+  'No file is read and we invoke the entry point.',
+  'No file is read and they invoke the entry point.',
 ]
 
 test('AC-theming-36: a lawful rewording outside the accepted shapes fails loudly, quoting itself', () => {
@@ -1025,20 +1055,6 @@ test('AC-theming-36: a lawful rewording outside the accepted shapes fails loudly
     }),
     [],
     'each fails alone with the shapes message and no denial message, and passes beside the published rung',
-  )
-})
-
-// The one lawful sentence the denial guard still reads as a denial, stated rather than hidden: a
-// negator and a reach verb with no comma between them, where the negator belongs to another
-// clause joined by "and".
-test('AC-theming-36: residual, a comma-less joined clause is still read as a denial', () => {
-  const sentence =
-    'No file is discovered and your own build invokes the entry point, with what it has.'
-  assert.ok(rung4ReachProblems(sentence).some((problem) => problem.startsWith(DENIES)))
-  assert.ok(
-    rung4ReachProblems(`${PUBLISHED_RUNG_4}\n\n${sentence}`).some((problem) =>
-      problem.startsWith(DENIES),
-    ),
   )
 })
 
