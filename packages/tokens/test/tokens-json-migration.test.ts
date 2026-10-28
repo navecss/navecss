@@ -141,6 +141,17 @@ const OVERLAY_SLOT_CSS_DECLARATIONS = [
 ]
 
 /**
+ * `action.secondary`'s hover and active fills were added AFTER this migration too, for reasons
+ * that have nothing to do with it (AC-secondary-action-states-16). Each adds one custom property
+ * to the semantic colour layer of `tokens.css`, lifted out after asserting it occurs EXACTLY
+ * ONCE, before the alpha-pinning fold-back below (both lines carry the pinned `/ 1`).
+ */
+const SECONDARY_STATE_CSS_DECLARATIONS = [
+  '    --nave-color-action-secondary-hover: light-dark(oklch(from var(--nave-color-tint) 0.94 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.37 0.0067 h / 1));\n',
+  '    --nave-color-action-secondary-active: light-dark(oklch(from var(--nave-color-tint) 0.905 0.0067 h / 1), oklch(from var(--nave-color-tint) 0.225 0.0067 h / 1));\n',
+]
+
+/**
  * The theming block's header comment names the package whose README it points at, AFTER this
  * migration too, for reasons that have nothing to do with it: the line also ships inside
  * `@navecss/core`'s own stylesheet, where "this package's README" meant a README without a
@@ -161,7 +172,11 @@ function withoutNamedThemingPointer(text: string): string {
  */
 function builtTokensCssBeforeLaterAdditions(): string {
   const withAdditions = withoutNamedThemingPointer(
-    withoutBorderWidthMark(built('tokens.css'), ...OVERLAY_SLOT_CSS_DECLARATIONS),
+    withoutBorderWidthMark(
+      built('tokens.css'),
+      ...OVERLAY_SLOT_CSS_DECLARATIONS,
+      ...SECONDARY_STATE_CSS_DECLARATIONS,
+    ),
   )
   return withoutBorderWidthMark(
     withoutZIndexSyntaxNarrowing(withoutAlphaPinningSuffix(withAdditions)),
@@ -245,11 +260,14 @@ function adjacencyTriples(block: Record<string, AdjacencyPair[] | string>): stri
  * popup, a raised panel and a form control sit on were not part of the set the migration moved.
  * Lifted out of the migrated set before it is compared with the frozen one, after asserting
  * each is present, so the comparison stays about the migration alone. The two `action.highlight` triples
- * are the text pairs the highlight fill is painted under.
+ * are the text pairs the highlight fill is painted under, and the two `action.secondary.foreground`
+ * triples the text pairs on the secondary action's hover and active fills.
  */
 const POST_MIGRATION_ADJACENCY_TRIPLES = new Set([
   'action.primary|surface.overlay|non-text',
   'action.primary|surface.raised|non-text',
+  'action.secondary.foreground|action.secondary.active|text',
+  'action.secondary.foreground|action.secondary.hover|text',
   'content.link|surface.overlay|text',
   'content.link|surface.raised|text',
   'content.primary|action.highlight|text',

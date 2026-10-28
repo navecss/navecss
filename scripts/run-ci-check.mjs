@@ -32,6 +32,10 @@
  *   `deps:lint` and `deps:dedupe-check`.
  * - `knip` waits for `build`: tsup writes a transient `tsup.config.bundled_*.mjs` into
  *   `packages/core` while it builds, and knip would report it as an unused file.
+ * - `test:build` runs alone too: it is the real `next build`, `next dev` and `next start` rows of
+ *   `@navecss/prune`, whose Next.js workers saturate the machine as `test` does. It waits for the
+ *   steps `test` waits for, and for `test` (the two share the machine and are not paired), and
+ *   every step it is not a prerequisite of waits for it.
  * - `test:browser` waits for `test`: both run core's fixture generators, which rewrite
  *   `packages/core/test/browser/fixtures/` while the other suite may be reading it.
  * - `scripts:test` waits for `check:pack`: one of its tests runs core's own `check:pack`, which
@@ -58,22 +62,27 @@ import { fileURLToPath } from 'node:url'
 import { acquireLock } from './ci-check-lock.mjs'
 
 export const STEPS = [
-  { after: ['build'], name: 'typecheck', waitFor: ['test'] },
-  { after: ['build'], name: 'lint', waitFor: ['test'] },
+  { after: ['build'], name: 'typecheck', waitFor: ['test', 'test:build'] },
+  { after: ['build'], name: 'lint', waitFor: ['test', 'test:build'] },
   { after: ['build'], name: 'test', waitFor: ['knip', 'deps:lint', 'deps:dedupe-check'] },
-  { after: ['build'], name: 'test:browser', waitFor: ['test'] },
+  {
+    after: ['build'],
+    name: 'test:build',
+    waitFor: ['knip', 'deps:lint', 'deps:dedupe-check', 'test'],
+  },
+  { after: ['build'], name: 'test:browser', waitFor: ['test', 'test:build'] },
   { after: [], name: 'build' },
-  { after: ['build'], name: 'check:pack', waitFor: ['test'] },
+  { after: ['build'], name: 'check:pack', waitFor: ['test', 'test:build'] },
   { after: [], name: 'knip', waitFor: ['build'] },
   { after: [], name: 'deps:lint' },
   { after: [], name: 'deps:dedupe-check' },
-  { after: ['build'], name: 'scripts:test', waitFor: ['check:pack', 'test'] },
-  { after: ['build'], name: 'scripts:check', waitFor: ['test'] },
+  { after: ['build'], name: 'scripts:test', waitFor: ['check:pack', 'test', 'test:build'] },
+  { after: ['build'], name: 'scripts:check', waitFor: ['test', 'test:build'] },
 ]
 
 /**
  * How many steps run at once. Every step already runs its own work in parallel (turbo across
- * packages, vitest across files), so running all eleven at once does not finish sooner: it
+ * packages, vitest across files), so running all twelve at once does not finish sooner: it
  * overloads the machine until the suites' own timeouts fire. `test` is the exception to even
  * this: it runs alone (see the edges above).
  */

@@ -180,34 +180,54 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     expect(named).not.toContain(path.join(project.dir, 'postcss.config.mjs'))
   })
 
-  it('AC-nextjs-used-atoms-04: a file read outside the root is named in no message', async () => {
-    const outside = makeProject({
-      'shared.ts': "import { cx } from '@navecss/core/cx'\n\nexport const hide = cx('hidden')\n",
-    })
-    const project = makeProject({
-      'app/page.tsx':
-        "import { hide } from '@outside/shared'\n\nexport default function Page() {\n  return <div className={hide} />\n}\n",
-    })
-    const reach = path.relative(project.dir, outside.dir).split(path.sep).join('/')
-    project.write({
-      'tsconfig.json': JSON.stringify({
-        compilerOptions: {
-          jsx: 'preserve',
-          baseUrl: '.',
-          paths: { '@/*': ['./*'], '@outside/*': [`${reach}/*`] },
-        },
-      }),
-    })
-    const result = await runAtomic(project)
-    // Control: the file outside the root was read, so its atom is in the layer.
-    expect(atomsIn(result.css)).toContain('hidden')
-    const named = result.messages.flatMap((message) =>
-      [message.file, message.dir].filter((value): value is string => typeof value === 'string'),
-    )
-    expect(named.length).toBeGreaterThan(0)
-    for (const entry of named) {
-      expect(entry === project.dir || isInside(project.dir, entry)).toBe(true)
-      expect(entry === outside.dir || isInside(outside.dir, entry)).toBe(false)
-    }
-  })
+  it.each([
+    ['as Turbopack leaves it', {}, false],
+    [
+      'as webpack’s callback leaves it, with another project’s next.config in the working directory',
+      { isBundlerDir: true },
+      true,
+    ],
+  ])(
+    'AC-nextjs-used-atoms-04: a file read outside the root is named in no message, with the hand-off %s',
+    async (_shape, run, isInOtherProject) => {
+      const outside = makeProject({
+        'shared.ts': "import { cx } from '@navecss/core/cx'\n\nexport const hide = cx('hidden')\n",
+      })
+      const project = makeProject({
+        'app/page.tsx':
+          "import { hide } from '@outside/shared'\n\nexport default function Page() {\n  return <div className={hide} />\n}\n",
+      })
+      const reach = path.relative(project.dir, outside.dir).split(path.sep).join('/')
+      project.write({
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: {
+            jsx: 'preserve',
+            baseUrl: '.',
+            paths: { '@/*': ['./*'], '@outside/*': [`${reach}/*`] },
+          },
+        }),
+      })
+      const startedIn = process.cwd()
+      if (isInOtherProject) process.chdir(makeProject().dir)
+      let result: Awaited<ReturnType<typeof runAtomic>>
+      try {
+        result = await runAtomic(project, [], run)
+      } finally {
+        process.chdir(startedIn)
+      }
+      // Control: the file outside the root was read, so its atom is in the layer.
+      expect(atomsIn(result.css)).toContain('hidden')
+      expect(Object.keys(recordOf(project).files).some((file) => file.endsWith('shared.ts'))).toBe(
+        true,
+      )
+      const named = result.messages.flatMap((message) =>
+        [message.file, message.dir].filter((value): value is string => typeof value === 'string'),
+      )
+      expect(named.length).toBeGreaterThan(0)
+      for (const entry of named) {
+        expect(entry === project.dir || isInside(project.dir, entry)).toBe(true)
+        expect(entry === outside.dir || isInside(outside.dir, entry)).toBe(false)
+      }
+    },
+  )
 })

@@ -9,9 +9,11 @@ name: code-quality
 # - `test` runs the suites once, with coverage, and `scripts:test` runs the scripts' own tests
 #   with coverage; the `sonar` job scans the pinned leg's reports and the scripts' report rather
 #   than running anything a second time to produce its own.
-# - `build` and `test` each have a second leg on Node 22.18, the package.json "engines" floor.
-#   That is the one deliberate repeat: the same check on a different Node, to prove the floor
-#   the packages claim.
+# - `test:build` runs the real Next.js builds of `@navecss/prune` on their own, so they do not slow
+#   the suites in `test` past their timeouts, as they did when the two ran together.
+# - `build`, `test` and `test:build` each have a second leg on Node 22.18, the package.json
+#   "engines" floor. That is the one deliberate repeat: the same check on a different Node, to
+#   prove the floor the packages claim.
 #
 # scripts/check-ci-jobs-match-ci-check.mjs fails if a ci:check step is run by no job or by more
 # than one, or if a job runs a step twice. Every job installs its toolchain through
@@ -19,7 +21,10 @@ name: code-quality
 #
 # Every job sets `timeout-minutes` (scripts/workflow-timeouts.test.mjs fails otherwise), a multiple
 # of its longest recent run with room for a cold dependency cache, so that a hung step fails in
-# minutes instead of holding a runner for GitHub's six-hour default. `test` gets 30, and
+# minutes instead of holding a runner for GitHub's six-hour default. `test` gets 30, `test:build`
+# gets 45 (its builds run one after another, and the whole of prune's suite took 28 minutes on a
+# loaded runner), `test:browser` gets 15 (its Chromium rows ran 8m44s on a hosted runner: a cap of
+# 10 minutes left 1m16s, 15 percent of that run, and 15 leaves 6m16s, 72 percent), and
 # `scripts-test` gets 20 so that a slowed-down pattern fails on its own scaling assertion rather
 # than on the timeout. Every other job gets 10.
 
@@ -154,11 +159,43 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  test-build:
+    name: test:build (${{ matrix.label }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: pinned
+            label: node from mise.toml
+            node-version: ''
+          - leg: floor
+            label: node 22.18, the engines floor
+            node-version: '22.18.0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: ./.github/actions/setup
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Take the build output
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: build-output-${{ matrix.leg }}
+
+      # Both legs run the builds: the floor leg is where the plugin runs inside a real Next.js on
+      # Node 22.18. They install the Next.js 16.2.0 floor with npm the first time they ask.
+      - name: Real Next.js builds
+        run: pnpm run test:build
+
   test-browser:
     name: test:browser
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

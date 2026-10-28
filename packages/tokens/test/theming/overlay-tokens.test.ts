@@ -158,14 +158,16 @@ const surfaceOverlayWithAlpha = (alpha: number): Record<string, SlotMapping> => 
 })
 
 describe('AC-base-ui-overlay-completion-35 covers: R16 (the tokens release)', () => {
-  it('maps action.highlight to neutral 100 light and neutral 700 dark, directly after action.secondary', () => {
+  it("maps action.highlight to neutral 100 light and neutral 700 dark, directly after action.secondary's active state", () => {
     expect(CHROMATIC_MAPPING['action.highlight']).toEqual({
       light: { scale: 'neutral', step: 100 },
       dark: { scale: 'neutral', step: 700 },
     })
     const at = SEMANTIC_SLOTS.indexOf('action.highlight')
     expect(at).toBeGreaterThan(-1)
-    expect(SEMANTIC_SLOTS[at - 1]).toBe('action.secondary')
+    // AC-secondary-action-states-17: action.secondary's hover and active sit beside their rest,
+    // so the highlight now follows the active state.
+    expect(SEMANTIC_SLOTS[at - 1]).toBe('action.secondary.active')
   })
 
   it('maps backdrop.modal to neutral 950 at alpha 0.3 light and 0.6 dark, last', () => {
@@ -181,7 +183,7 @@ describe('AC-base-ui-overlay-completion-35 covers: R16 (the tokens release)', ()
     expect(cssLines.filter((line) => line === HIGHLIGHT_LINE)).toHaveLength(1)
     expect(cssLines.filter((line) => line === SCRIM_LINE)).toHaveLength(1)
     expect(cssLines[cssLines.indexOf(HIGHLIGHT_LINE) - 1]).toMatch(
-      /^ {4}--nave-color-action-secondary:/,
+      /^ {4}--nave-color-action-secondary-active:/,
     )
     expect(cssLines[cssLines.indexOf(SCRIM_LINE) - 1]).toMatch(
       /^ {4}--nave-color-on-feedback-info:/,

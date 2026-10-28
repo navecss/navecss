@@ -11,7 +11,7 @@ import type { NaveOptions } from './options.ts'
 
 import { encodeHandoff, HANDOFF_VARIABLE } from './handoff.ts'
 import { checkBuild } from './hook.ts'
-import { assertNaveOptions } from './options.ts'
+import { assertNaveOptions, assertPageExtensions } from './options.ts'
 
 /**
  * The constant `cx.dynamic()` reads its map from when a bundler defines it.
@@ -31,6 +31,7 @@ interface ConfigShape {
   }
   distDir?: string
   outputFileTracingRoot?: string
+  pageExtensions?: string[]
   transpilePackages?: string[]
   turbopack?: Record<string, unknown> & { root?: string }
   webpack?: (config: unknown, context: { dir?: string }) => unknown
@@ -74,6 +75,7 @@ function setHandoff(
     dir,
     distDir: distDirOf(config),
     ...(root !== undefined && { root }),
+    ...(config.pageExtensions !== undefined && { pageExtensions: config.pageExtensions }),
     ...(phase !== undefined && { phase }),
     ...(isBundlerDir && { isBundlerDir }),
   }
@@ -98,6 +100,7 @@ function wrapConfig(
   options: NaveOptions,
   phase: string | undefined,
 ): ConfigShape {
+  assertPageExtensions(config.pageExtensions)
   setHandoff(config, options, { dir: process.cwd(), isBundlerDir: false }, phase)
   const user = config.webpack
   const transpilePackages = withName(config.transpilePackages, CORE_PACKAGE)
@@ -113,6 +116,7 @@ function wrapConfig(
           transpilePackages,
           bundlePagesRouterDependencies: config.bundlePagesRouterDependencies,
           recordDistDir: distDirOf(config),
+          ...(config.pageExtensions !== undefined && { pageExtensions: config.pageExtensions }),
         })
       },
     },

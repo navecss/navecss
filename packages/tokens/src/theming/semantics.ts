@@ -97,6 +97,13 @@ export const CHROMATIC_MAPPING: Record<string, SlotMapping> = {
   // recorded separately (ACTION_SECONDARY_FOREGROUND / ACTION_SECONDARY_BORDER below),
   // per R23/R18a round 9, a settled ruling's write-back.
   'action.secondary': { light: ref('neutral', 100), dark: ref('neutral', 800) },
+  // Its hover and active fills (write-back 9). They change the fill only: the declared
+  // foreground and the companion border stay the same in every state, and that one
+  // foreground is verified as text on each state fill on its own, not inferred from the
+  // rest. A press is darker than rest in both schemes; the dark hover takes
+  // action.highlight's step, so a hovered secondary and a hovered ghost match in dark.
+  'action.secondary.hover': { light: ref('neutral', 150), dark: ref('neutral', 700) },
+  'action.secondary.active': { light: ref('neutral', 200), dark: ref('neutral', 850) },
 
   // A transient fill for a control under the pointer, the keyboard or a press (a highlighted
   // list item, a ghost button). It sits in the action family because a control's own focus ring
