@@ -48,10 +48,10 @@ async function atMost(ms: number, work: Promise<void> | undefined): Promise<void
 // busy macOS machine tells it many seconds late and sometimes not at all, so the row writes an
 // edit again, to the same effect, until the build's output shows it. Its waits end only a little
 // before the row's timeout, which only has to outlast a loaded machine. A watcher that stays deaf
-// through a minute of rewrites is closed and the watched build started again, once. That build's
-// first output is not a rebuild, so the row then requires that a rebuild showed at least one of the
-// first two edits, and the other rules (what each build shows, one warning per build) run across
-// both watchers.
+// through a minute of rewrites is closed and the watched build started again, once, and the row logs
+// that it did. That build's first output is not a rebuild, so the row then requires that a rebuild
+// showed at least one of the first two edits, and the other rules (what each build shows, one
+// warning per build) run across both watchers.
 describe.each(Object.entries(VITE_APIS))(
   'Vite %s: AC-used-atoms-27 - rebuilds in watch mode',
   (_version, api) => {
@@ -65,6 +65,9 @@ describe.each(Object.entries(VITE_APIS))(
       })
       const warnings: string[] = []
       let closing: { close(): Promise<void> } | undefined
+      // The close of the watcher that a restart replaced: a close that outlasts its limit is awaited
+      // again before the app is removed, so that it cannot run on past the row unseen.
+      let replacedClosing: Promise<void> | undefined
       const logger = createLogger('silent')
       logger.warn = (message) => {
         warnings.push(message)
@@ -188,6 +191,13 @@ describe.each(Object.entries(VITE_APIS))(
         }
         // The rewrites in a row that the watcher has not heard a file change through.
         let unheardRewrites = 0
+        // Whether the watcher has been deaf long enough to be replaced, with no build under way, a
+        // restart left to spend and time left for the replaced build to show the edit.
+        const isRestartDue = (): boolean =>
+          unheardRewrites >= UNHEARD_REWRITES_BEFORE_RESTART &&
+          builds.started === builds.ended &&
+          builds.restarts < RESTARTS_ALLOWED &&
+          Date.now() < deadline
         const edit = async (call: string, atoms: string[]): Promise<void> => {
           editing += 1
           for (let attempt = 0; Date.now() < deadline; attempt += 1) {
@@ -205,12 +215,14 @@ describe.each(Object.entries(VITE_APIS))(
             throwIfFailed()
             unheardRewrites = builds.changes === changesBefore ? unheardRewrites + 1 : 0
             if (isShownNow) return
-            if (
-              unheardRewrites >= UNHEARD_REWRITES_BEFORE_RESTART &&
-              builds.started === builds.ended &&
-              builds.restarts < RESTARTS_ALLOWED
-            ) {
-              await atMost(CLOSE_LIMIT, closing?.close())
+            if (isRestartDue()) {
+              // A green run's log says that it restarted, and in which edit.
+              // eslint-disable-next-line no-console -- the one line a run that restarted prints, read by whoever reads the CI log
+              console.log(
+                `the watch row restarted its watcher during edit ${editing} on Vite ${api.version}`,
+              )
+              replacedClosing = closing?.close()
+              await atMost(CLOSE_LIMIT, replacedClosing)
               builds.restarts += 1
               unheardRewrites = 0
               await watch()
@@ -255,7 +267,10 @@ describe.each(Object.entries(VITE_APIS))(
           builds.bundled,
         )
       } finally {
-        await atMost(CLOSE_LIMIT, closing?.close())
+        await Promise.all([
+          atMost(CLOSE_LIMIT, replacedClosing),
+          atMost(CLOSE_LIMIT, closing?.close()),
+        ])
         app.dispose()
       }
     }, 480_000)
