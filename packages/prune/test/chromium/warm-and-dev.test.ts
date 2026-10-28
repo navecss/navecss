@@ -251,13 +251,25 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
           // The document holds the page's rule once the browser has applied the stylesheet. Asked
           // at the instant `load` fires, the remote browser job found no `nave-flex` rule in 3 of
           // 9 recent runs, on the webpack cells only, and more than 30 runs on a laptop never did;
-          // so the row waits for it, and says what the document held if it never comes.
+          // so the row waits for it, and says what the document held if it never comes. A run that
+          // had to wait prints what the document held at `load` and whether the rule came to that
+          // document or to a reloaded one: a green run cannot otherwise tell a stylesheet applied
+          // late from one served without the rule and fixed by an update.
+          const atLoad = (await isRuleIn(page, 'nave-flex')) ? '' : await documentState(page)
+          await page.evaluate('window.__loaded = 1')
           await until(
             () => isRuleIn(page, 'nave-flex'),
             'the nave-flex rule in the open document',
             undefined,
             async () => `${await documentState(page)}\n${server.output().slice(-2000)}`,
           )
+          if (atLoad !== '') {
+            const isSameDocument = await page.evaluate<boolean>('window.__loaded === 1')
+            // eslint-disable-next-line no-console -- the one line a run whose rule came after load prints, read by whoever reads the CI log
+            console.log(
+              `the nave-flex rule came after load, to ${isSameDocument ? 'the same' : 'a reloaded'} document; at load: ${atLoad}`,
+            )
+          }
           // The mark is set on the document that has the page's rule: the edit below must not
           // reload this one.
           await page.evaluate('window.__mark = 1')

@@ -454,9 +454,11 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
    * milliseconds a busy machine can overrun (a stall long enough lets the whole fade run out
    * before the page draws anything, and an empty popup that was never drawn is not one a frame can
    * show). The key is a keydown dispatched from that frame's callback: one sent through the test
-   * runner arrives at whatever frame the machine reaches it in. When no frame ever shows the fade
-   * part-way (the page was too slow to draw one, or the fade-in was over), the case did not
-   * happen and the row is skipped through `skip`, which says so, not passed.
+   * runner arrives at whatever frame the machine reaches it in. When the first frame that shows the
+   * popup past opacity 0.01 already shows it at 0.99 or more (the page was too slow to draw a frame
+   * inside the fade, or the fade-in was over), the case did not happen and the row is skipped
+   * through `skip`, which says so, not passed. A popup still at opacity 0.01 or less after
+   * `MAX_FRAMES` frames never started its fade-in, and the row fails saying so.
    *
    * Returns the frames the sampler saw from the Escape on, and the opacity the popup had when it
    * landed.
@@ -472,7 +474,11 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
     await new Promise<void>((resolve, reject) => {
       const look = (frame: number): void => {
         if (frame >= MAX_FRAMES) {
-          reject(new Error('no frame showed the popup part-way through its fade-in'))
+          reject(
+            new Error(
+              `the popup stayed at opacity 0.01 or less for ${String(MAX_FRAMES)} frames: its fade-in never started`,
+            ),
+          )
           return
         }
         const opacity = popupOpacity()
@@ -655,7 +661,7 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
       30_000,
     )
 
-    it('AC-base-ui-feedback-navigation-24 (Tier B, empty-frame control): the fade-in-only form with no exit key shows an empty frame on the Escape 30ms into the fade-in', async ({
+    it('AC-base-ui-feedback-navigation-24 (Tier B, empty-frame control): the fade-in-only form with no exit key shows an empty frame on an Escape mid fade-in', async ({
       skip,
     }) => {
       const fadeInOnly = await printedForm(FADE_IN_ONLY, { bytes: 364, hash: 'ad98077420eeff98' })
