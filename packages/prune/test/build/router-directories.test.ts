@@ -33,6 +33,17 @@ const LATER_ROUTE = {
 
 const ABSENT = ['pages/', 'src/', 'src/app/', 'src/pages/']
 
+/**
+ * Creates the route's directory again. On a busy machine the dev server sometimes misses the event
+ * of the directory's creation (5 of 60 measured runs). Writing the same text again heals most of
+ * those, not all: one run took four writes. Removing the directory and writing the route once more
+ * repeats the creation itself, and healed both runs that needed it on its first try.
+ */
+function recreateLaterRoute(app: NextApp): void {
+  app.delete('pages')
+  app.write(LATER_ROUTE)
+}
+
 describe.skipIf(SKIP_REASON !== undefined)(
   `router directories that do not exist yet${SKIP_REASON === undefined ? '' : ` (skipped: ${SKIP_REASON})`}`,
   () => {
@@ -52,7 +63,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
         expect(await server.css('/')).toContain('.nave-flex')
         expect(Object.keys(app.record()?.directories ?? {})).toEqual(expect.arrayContaining(ABSENT))
         app.write(LATER_ROUTE)
-        await untilLaterRouteGrid(server, () => app.write(LATER_ROUTE))
+        await untilLaterRouteGrid(server, () => recreateLaterRoute(app))
         await server.stop()
         expect(server.output()).not.toMatch(/panic/i)
       },
