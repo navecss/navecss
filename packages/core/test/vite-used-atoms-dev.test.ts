@@ -864,8 +864,9 @@ function slow(file: string, delay: number): PluginOption {
  * stylesheet's wait begins and never earlier, because a ceiling counted from before could run out
  * on a slow machine while the stylesheet was still on its way to the wait, and let the module
  * through first. `entered` settles once the module's transform has begun, which is when it is in
- * the module graph, or after `ceiling` if it never begins, so a transform that never begins fails
- * the row's own assertion; that fallback lets nothing through.
+ * the module graph, and at no other time: a transform that never begins leaves it waiting, and the
+ * row's own timeout ends the row, since a figure counted from before the server has started could
+ * run out while the module was still on its way to its transform.
  */
 function held(
   file: string,
@@ -873,10 +874,8 @@ function held(
 ): { arm: () => void; entered: Promise<void>; plugin: PluginOption; release: () => void } {
   const { promise: entered, resolve: enter } = Promise.withResolvers<void>()
   const { promise: released, resolve: letThrough } = Promise.withResolvers<void>()
-  const neverEntered = setTimeout(enter, ceiling)
   let armed: NodeJS.Timeout | undefined
   const release = (): void => {
-    clearTimeout(neverEntered)
     clearTimeout(armed)
     letThrough()
   }
@@ -1069,8 +1068,10 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
         // Its transform having begun can: until then it is not in the module graph at all, and on
         // a busy machine the stylesheet's own request can reach its wait first.
         if (heldModule === 'src/main.ts') {
-          void server.transformRequest('/src/main.ts').catch(() => {})
-          await gate.entered
+          const requested = server.transformRequest('/src/main.ts')
+          // A request that fails before its transform begins ends the wait with its error; one
+          // that is held settles only after `gate.release`, so this never ends it early.
+          await Promise.race([gate.entered, requested])
         } else await server.transformRequest('/src/main.ts')
         const css = await server.transformRequest('/src/app.css')
         return layerAtomsOf(css!.code)
