@@ -121,13 +121,46 @@ async function isDoneOrFalse(isDone: () => Promise<boolean>): Promise<boolean> {
 }
 
 /**
+ * What the page function below reads of the document: its address, whether it has loaded, and its
+ * stylesheet links.
+ */
+interface LinksOfDocument {
+  readonly document: {
+    readonly querySelectorAll: (selector: string) => Iterable<{
+      readonly getAttribute: (name: string) => string | null
+      readonly sheet: { readonly cssRules: { readonly length: number } } | null
+    }>
+    readonly readyState: string
+  }
+  readonly location: { readonly href: string }
+}
+
+/**
+ * What the open document looks like, as a sentence: where it is, and each stylesheet link with
+ * the number of rules the browser applied from it.
+ */
+async function documentState(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const { document, location } = globalThis as unknown as LinksOfDocument
+    const links = [...document.querySelectorAll('link[rel="stylesheet"]')].map((link) => {
+      const rules = link.sheet === null ? 'not applied' : `${link.sheet.cssRules.length} rules`
+      return `${link.getAttribute('href')} (${rules})`
+    })
+    const held = links.length === 0 ? 'no stylesheet link' : links.join(', ')
+    return `${location.href} is ${document.readyState}, with ${held}`
+  })
+}
+
+/**
  * Waits until `isDone` holds. Every tenth check, `nudge` runs: a dev server on a busy machine
- * sometimes drops the file-change event of a single write, so the edit is written again.
+ * sometimes drops the file-change event of a single write, so the edit is written again. When the
+ * wait runs out, `explain` says what was there instead.
  */
 async function until(
   isDone: () => Promise<boolean>,
   what: string,
   nudge: () => void = () => {},
+  explain: () => Promise<string> = () => Promise.resolve(''),
 ): Promise<void> {
   const end = Date.now() + 240_000
   for (let check = 1; Date.now() < end; check += 1) {
@@ -135,7 +168,13 @@ async function until(
     if (check % 10 === 0) nudge()
     await pause(1000)
   }
-  throw new Error(`timed out waiting for ${what}`)
+  let found: string
+  try {
+    found = await explain()
+  } catch (error) {
+    found = `the state could not be read: ${String(error)}`
+  }
+  throw new Error(`timed out waiting for ${what}${found === '' ? '' : `:\n${found}`}`)
 }
 
 /**
@@ -209,8 +248,19 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
         const origin = server.origin.replace('127.0.0.1', 'localhost')
         await withPage(async (page) => {
           await page.goto(`${origin}/`, { waitUntil: 'load' })
+          // The document holds the page's rule once the browser has applied the stylesheet. Asked
+          // at the instant `load` fires, the remote browser job found no `nave-flex` rule in 3 of
+          // 9 recent runs, on the webpack cells only, and more than 30 runs on a laptop never did;
+          // so the row waits for it, and says what the document held if it never comes.
+          await until(
+            () => isRuleIn(page, 'nave-flex'),
+            'the nave-flex rule in the open document',
+            undefined,
+            async () => `${await documentState(page)}\n${server.output().slice(-2000)}`,
+          )
+          // The mark is set on the document that has the page's rule: the edit below must not
+          // reload this one.
           await page.evaluate('window.__mark = 1')
-          expect(await isRuleIn(page, 'nave-flex')).toBe(true)
           expect(await isRuleIn(page, 'nave-grid')).toBe(false)
 
           // (a) the page gains `cx('grid')`: the same document gets the rule.
