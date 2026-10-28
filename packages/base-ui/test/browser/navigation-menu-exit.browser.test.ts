@@ -262,6 +262,48 @@ const declaredLengthOf = (css: string): number => {
   }
 }
 
+/**
+ * How long the pointer-leaving row gives all its steps together. The row's own timeout is 30
+ * seconds, and a step that is still stuck at this point reports itself by name instead of the row
+ * timing out without saying where.
+ */
+const POINTER_ROW_BUDGET_MS = 24_000
+
+/**
+ * Runs the steps of one row against a shared time budget. A step gets whatever is left of it, so a
+ * slow machine is waited for as long as the budget allows, and the step that is stuck when it runs
+ * out, or that fails, is the one the error names. `act` is told the time left, for the calls that
+ * take a timeout of their own.
+ */
+const stepsWithin = (
+  budget: number,
+): (<Result>(step: string, act: (remaining: number) => Promise<Result>) => Promise<Result>) => {
+  const deadline = performance.now() + budget
+  return async <Result>(step: string, act: (remaining: number) => Promise<Result>) => {
+    const remaining = Math.max(Math.floor(deadline - performance.now()), 1)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const expired = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`${step}: still not done when the row's ${String(budget)} ms ran out`))
+      }, remaining)
+    })
+    const attempt = async (): Promise<Result> => {
+      try {
+        return await act(remaining)
+      } catch (error) {
+        throw new Error(`${step}: ${error instanceof Error ? error.message : String(error)}`, {
+          cause: error,
+        })
+      }
+    }
+    try {
+      return await Promise.race([attempt(), expired])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+}
+
 const scene = (): ReactNode =>
   h(
     'div',
@@ -441,18 +483,25 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
     }, 30_000)
 
     it('AC-base-ui-feedback-navigation-24 (Tier B): the pointer leaving during the fade-in shows no empty frame and focus stays where it was', async () => {
+      const step = stepsWithin(POINTER_ROW_BUDGET_MS)
       start()
-      await settled(() => byTestId('trigger-guides'))
-      await parkPointer()
+      await step('waiting for the Guides trigger to be on the page and still', () =>
+        settled(() => byTestId('trigger-guides')),
+      )
+      await step('parking the pointer in the corner', () => parkPointer())
       const before = document.activeElement
       sampler = sampleFrames()
-      await userEvent.hover(required('trigger-guides'))
-      await appears('popup')
+      await step('moving the pointer onto the Guides trigger', (timeout) =>
+        userEvent.hover(required('trigger-guides'), { timeout }),
+      )
+      await step('waiting for the popup to open under the pointer', () => appears('popup'))
       const actedAt = sampler.frames.length
       // Forced: a hover-opened menu blocks pointer events on the rest of the page at some versions,
       // and a pointer that leaves is what the case is about.
-      await userEvent.hover(required('away'), { force: true })
-      await untilGone()
+      await step('moving the pointer off the trigger', (timeout) =>
+        userEvent.hover(required('away'), { force: true, timeout }),
+      )
+      await step('waiting for the popup to leave after the pointer did', () => untilGone())
       sampler.stop()
       expectClean(summarise(sampler, actedAt))
       expect(document.activeElement, 'after a pointer close focus stays where it was').toBe(before)
