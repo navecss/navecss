@@ -97,6 +97,8 @@ describe('untilCss', () => {
     return log.split('\n').filter(Boolean).length
   }
 
+  // The budget is above `untilCss`'s default 240 s deadline, so a stalled server reports the
+  // deadline and what it printed rather than a timeout of the row.
   it('writes the file again every tenth check, so a lost event does not stop it', async () => {
     const server = await startStandIn(3)
     const requestsAtRewrite: number[] = []
@@ -112,7 +114,7 @@ describe('untilCss', () => {
 
     expect(requestsAtRewrite).toEqual([10, 20])
     await server.stop()
-  })
+  }, 270_000)
 
   it('fails at its deadline with what the server printed, when the text never comes', async () => {
     const server = await startStandIn(999)
