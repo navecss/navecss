@@ -445,6 +445,85 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
     return run
   }
 
+  /**
+   * The Escape for the empty-frame control, sent from inside the first animation frame in which the
+   * popup is part-way through its fade-in, with the fade held there from that moment: its
+   * animations are paused in the same task as the key, and played again once the sampler has had a
+   * frame to read the emptied panel in. So the Escape lands in the fade, and the popup stays in it
+   * for as long as the machine needs to draw a frame, by construction and not by a count of
+   * milliseconds a busy machine can overrun (a stall long enough lets the whole fade run out
+   * before the page draws anything, and an empty popup that was never drawn is not one a frame can
+   * show). The key is a keydown dispatched from that frame's callback: one sent through the test
+   * runner arrives at whatever frame the machine reaches it in. When no frame ever shows the fade
+   * part-way (the page was too slow to draw one, or the fade-in was over), the case did not
+   * happen and the row is skipped through `skip`, which says so, not passed.
+   *
+   * Returns the frames the sampler saw from the Escape on, and the opacity the popup had when it
+   * landed.
+   */
+  const escapeInsideFadeIn = async (
+    skip: (note: string) => never,
+  ): Promise<{ readonly landedAtOpacity: number; readonly seen: readonly Frame[] }> => {
+    await openByKeyboard()
+    required('panel-link-0').focus()
+    const held: Animation[] = []
+    let landedAtOpacity: number | undefined
+    let actedAt = 0
+    await new Promise<void>((resolve, reject) => {
+      const look = (frame: number): void => {
+        if (frame >= MAX_FRAMES) {
+          reject(new Error('no frame showed the popup part-way through its fade-in'))
+          return
+        }
+        const opacity = popupOpacity()
+        if (opacity >= 0.99) {
+          resolve()
+        } else if (opacity > 0.01) {
+          held.push(...byTestId('popup')!.getAnimations())
+          for (const animation of held) {
+            animation.pause()
+          }
+          actedAt = sampler!.frames.length
+          landedAtOpacity = opacity
+          const target = document.activeElement ?? document.body
+          target.dispatchEvent(
+            new KeyboardEvent('keydown', {
+              bubbles: true,
+              cancelable: true,
+              code: 'Escape',
+              key: 'Escape',
+            }),
+          )
+          resolve()
+        } else {
+          requestAnimationFrame(() => {
+            look(frame + 1)
+          })
+        }
+      }
+      requestAnimationFrame(() => {
+        look(0)
+      })
+    })
+    if (landedAtOpacity === undefined) {
+      skip(ESCAPE_CAME_AFTER_THE_FADE)
+    }
+    expect(held.length, 'the fade-in was running when the Escape landed').toBeGreaterThan(0)
+    // Held until the sampler has read the emptied panel, or the popup has gone anyway.
+    await isReachedWithin(
+      () =>
+        byTestId('popup') === undefined ||
+        sampler!.frames.slice(actedAt).some((frame) => isEmptyFrame(frame)),
+      MAX_FRAMES,
+    )
+    for (const animation of held) {
+      animation.play()
+    }
+    await untilGone()
+    sampler!.stop()
+    return { landedAtOpacity, seen: sampler!.frames.slice(actedAt) }
+  }
+
   describe('with panel fade signed', () => {
     it('AC-base-ui-feedback-navigation-24 (Tier B): Escape after a settled open with focus on the trigger shows no empty frame and the popup is gone within two frames', async () => {
       start()
@@ -584,11 +663,13 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
       expect(tokenMilliseconds('--nave-motion-duration-fast'), 'the control fade is in force').toBe(
         CONTROL_FADE_MS,
       )
-      // Skipped, not failed, when the fade-in was already over by the time the Escape came.
-      const run = await escapeDuringFadeIn(30, skip)
-      expect(run.empty.length, 'frames with the popup mounted, visible and empty').toBeGreaterThan(
-        0,
-      )
+      const { landedAtOpacity, seen } = await escapeInsideFadeIn(skip)
+      expect(landedAtOpacity, 'the Escape landed inside the fade-in').toBeGreaterThan(0.01)
+      expect(landedAtOpacity, 'the Escape landed inside the fade-in').toBeLessThan(0.99)
+      expect(
+        seen.filter((frame) => isEmptyFrame(frame)).length,
+        'frames with the popup mounted, visible and empty',
+      ).toBeGreaterThan(0)
     }, 30_000)
   })
 
