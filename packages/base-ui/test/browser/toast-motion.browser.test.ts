@@ -16,7 +16,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
-import { FEW_FRAMES, isReachedWithin, MAX_FRAMES, nextFrame } from './support/frames.ts'
+import {
+  FEW_FRAMES,
+  framesLater,
+  isReachedWithin,
+  MAX_FRAMES,
+  nextFrame,
+} from './support/frames.ts'
 import {
   byTestId,
   emulateReducedMotion,
@@ -132,6 +138,29 @@ const momentsOf = (watch: RootWatch, attribute: string, isPresent: boolean): Mom
   watch.moments.filter((moment) => moment.attribute === attribute && moment.isPresent === isPresent)
 
 /**
+ * Reads the root's computed opacity in every animation frame while it is in the document. A frame
+ * that lands after the root left reads a detached element, whose opacity is empty and so reads 0,
+ * and on a busy machine one can land before the sampler is stopped.
+ */
+const sampleOpacity = (
+  root: HTMLElement,
+): { readonly opacities: number[]; readonly stop: () => void } => {
+  const opacities: number[] = []
+  let handle = requestAnimationFrame(function tick() {
+    if (root.isConnected) {
+      opacities.push(Number(getComputedStyle(root).opacity))
+    }
+    handle = requestAnimationFrame(tick)
+  })
+  return {
+    opacities,
+    stop: () => {
+      cancelAnimationFrame(handle)
+    },
+  }
+}
+
+/**
 The time at which the root left the document, waiting frame by frame for it to.
  */
 const goneAt = async (watch: RootWatch): Promise<number | undefined> => {
@@ -227,11 +256,7 @@ describe('AC-base-ui-feedback-navigation-15: the toast fade', () => {
     watch = await raiseWatched(manager, 'swiped')
     const root = watch.root
     await atRest('toast-swiped')
-    const opacities: number[] = []
-    let handle = requestAnimationFrame(function tick() {
-      opacities.push(Number(getComputedStyle(root).opacity))
-      handle = requestAnimationFrame(tick)
-    })
+    const sampler = sampleOpacity(root)
     const { height, width } = root.getBoundingClientRect()
     // A press on the toast's top padding, away from its buttons, dragged across the toast.
     const y = Math.min(8, height / 4)
@@ -241,15 +266,29 @@ describe('AC-base-ui-feedback-navigation-15: the toast fade', () => {
       targetPosition: { x: 16, y },
     })
     const gone = await goneAt(watch)
-    cancelAnimationFrame(handle)
+    sampler.stop()
     expect(gone, 'the swiped toast left the page').toBeDefined()
     const [ending] = momentsOf(watch, 'data-ending-style', true)
     expect(ending, 'data-ending-style was set').toBeDefined()
     expect(ending?.hasSwipeDirection, 'with data-swipe-direction').toBe(true)
     expect(ending?.animations, 'no opacity transition runs').toEqual([])
     expect(gone! - ending!.time, 'removed within 50ms of the release').toBeLessThanOrEqual(50)
-    expect(Math.min(...opacities), 'the opacity never fell below 1').toBe(1)
+    expect(Math.min(...sampler.opacities), 'the opacity never fell below 1').toBe(1)
   }, 30_000)
+
+  it('AC-base-ui-feedback-navigation-15 (Tier B, control): the opacity sampler reads nothing once its root has left the page', async () => {
+    const root = document.createElement('div')
+    document.body.append(root)
+    const sampler = sampleOpacity(root)
+    await framesLater(2)
+    root.remove()
+    // The frames after the removal, one of which can land between the root leaving and the
+    // sampler being stopped on a machine that is busy: a detached element has no opacity.
+    await framesLater(2)
+    sampler.stop()
+    expect(sampler.opacities.length, 'it sampled while the root was there').toBeGreaterThan(0)
+    expect(Math.min(...sampler.opacities), 'no frame after the removal read 0').toBe(1)
+  })
 
   it('AC-base-ui-feedback-navigation-15 (Tier B, toast fade unsigned): the same close runs no animation and removes the root on the next frame (control)', async () => {
     const manager = await show(withoutClass(stylesheet, 'toast-fade'))
