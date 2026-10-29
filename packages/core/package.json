@@ -116,8 +116,8 @@
     "@navecss/tokens": "workspace:^"
   },
   "devDependencies": {
-    "@astrojs/node": "11.1.8",
-    "@astrojs/react": "7.1.0",
+    "@astrojs/node": "11.1.9",
+    "@astrojs/react": "7.1.1",
     "@rmenke/css-tokenizer-tests": "1.4.0",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@types/node": "^26.6.5",
@@ -134,7 +134,7 @@
     "prettier": "3.9.10",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "sass": "1.105.1",
+    "sass": "1.106.1",
     "source-map": "^0.8.0",
     "stylelint": "17.16.0",
     "stylelint-16-16": "npm:stylelint@16.16.0",
@@ -142,7 +142,7 @@
     "svelte": "5.57.2",
     "tsup": "^9.0.0",
     "typescript": "6.0.3",
-    "vite": "8.3.4",
+    "vite": "8.3.5",
     "vite-floor": "npm:vite@8.2.1",
     "vitest": "5.0.5",
     "vscode-css-languageservice": "6.3.10",
