@@ -283,9 +283,9 @@ describe('AC-base-ui-feedback-navigation-15: the toast fade', () => {
     const sampler = sampleOpacity(root)
     await framesLater(2)
     root.remove()
-    // The frames after the removal, one of which can land between the root leaving and the
-    // sampler being stopped when a frame's callbacks run in another order: a detached element has
-    // no opacity.
+    // The frames after the removal: in the swipe row one of them can land before the sampler is
+    // stopped when a frame's callbacks run in another order, and here both do. A detached element
+    // has no opacity.
     await framesLater(2)
     sampler.stop()
     // The sampler's frame callback is registered before each of `framesLater`'s, so it runs once in
