@@ -82,39 +82,35 @@ afterAll(() => {
   rmSync(scratchDir, { force: true, recursive: true })
 })
 
-// Each check builds a TypeScript program over the standard library, which a loaded runner takes
-// well past the default timeout to do. Run on the installed TypeScript only; the 5.6 run is
-// not covered here.
-describe(
-  'AC-nextjs-used-atoms-20: withNave() options are typed against AtomName',
-  { timeout: 120_000 },
-  () => {
-    it('control: the program reaches the snippets, a wrong line is reported', () => {
-      expect(diagnosticsFor('brokenControl').join('\n')).toContain('not assignable')
-    })
+// Each check builds a TypeScript program over the standard library, which a loaded runner takes a
+// long time to do, so these rows set no budget and the package default governs. Run on the
+// installed TypeScript only; the 5.6 run is not covered here.
+describe('AC-nextjs-used-atoms-20: withNave() options are typed against AtomName', () => {
+  it('control: the program reaches the snippets, a wrong line is reported', () => {
+    expect(diagnosticsFor('brokenControl').join('\n')).toContain('not assignable')
+  })
 
-    it('fails keep: ["nope"], naming the atom', () => {
-      const diagnostics = diagnosticsFor('unknownAtom')
-      expect(diagnostics.length).toBeGreaterThan(0)
-      expect(diagnostics.join('\n')).toContain('nope')
-    })
+  it('fails keep: ["nope"], naming the atom', () => {
+    const diagnostics = diagnosticsFor('unknownAtom')
+    expect(diagnostics.length).toBeGreaterThan(0)
+    expect(diagnostics.join('\n')).toContain('nope')
+  })
 
-    it('compiles keep: ["flex", "srOnly"]', () => {
-      expect(diagnosticsFor('knownAtoms').join('\n')).toBe('')
-    })
+  it('compiles keep: ["flex", "srOnly"]', () => {
+    expect(diagnosticsFor('knownAtoms').join('\n')).toBe('')
+  })
 
-    it('compiles readonly as-const lists in keep and keepFor', () => {
-      expect(diagnosticsFor('constLists').join('\n')).toBe('')
-    })
+  it('compiles readonly as-const lists in keep and keepFor', () => {
+    expect(diagnosticsFor('constLists').join('\n')).toBe('')
+  })
 
-    it('fails the atomic option, which does not exist', () => {
-      const diagnostics = diagnosticsFor('atomicOption')
-      expect(diagnostics.length).toBeGreaterThan(0)
-      expect(diagnostics.join('\n')).toContain('atomic')
-    })
+  it('fails the atomic option, which does not exist', () => {
+    const diagnostics = diagnosticsFor('atomicOption')
+    expect(diagnostics.length).toBeGreaterThan(0)
+    expect(diagnostics.join('\n')).toContain('atomic')
+  })
 
-    it('control: a mutable AtomName[] for keep makes the as-const line fail with TS4104', () => {
-      expect(diagnosticsFor('mutableControl').some((text) => text.startsWith('TS4104'))).toBe(true)
-    })
-  },
-)
+  it('control: a mutable AtomName[] for keep makes the as-const line fail with TS4104', () => {
+    expect(diagnosticsFor('mutableControl').some((text) => text.startsWith('TS4104'))).toBe(true)
+  })
+})

@@ -20,8 +20,9 @@ describe('assertScalesLinearly', () => {
   })
 
   it('takes the fastest of the three runs at each size: load adds time, never removes it', async () => {
-    // One pass makes 7 calls: a warm-up, 3 at n, 3 at 4n. Two runs at 4n are slowed by load.
-    const script = [10, 30, 10, 12, 40, 200, 200]
+    // One pass makes 7 calls: a warm-up, then 3 at n and 3 at 4n in turn. Two runs at 4n and two
+    // at n are slowed by load.
+    const script = [10, 30, 40, 10, 200, 12, 200]
     let call = 0
     const measured = await assertScalesLinearly(() => script[call++ % script.length]!, 100)
 

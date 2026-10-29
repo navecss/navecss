@@ -256,7 +256,7 @@ describe('the CommonJS shim is a pointer, not a second copy of the plugin', () =
     expect(shim.trim()).toBe("module.exports = require('./postcss.js').navePlugin")
   })
 
-  it('packs both CommonJS files into the tarball', { timeout: 120_000 }, () => {
+  it('packs both CommonJS files into the tarball', () => {
     const { files } = packCoreTarball()
 
     expect(files).toContain('package/dist/postcss.cjs')

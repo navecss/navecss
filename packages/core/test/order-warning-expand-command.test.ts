@@ -152,7 +152,7 @@ describe('AC-native-apply-order-21: navecss-core expand --watch', () => {
     expect(errors[1]).toBe(errors[0])
     expect(readFileSync(out, 'utf8')).toBe(firstOutput)
     expect(firstOutput).toBe(expandText(MARKED, { onUnknown: 'error' }).css)
-  }, 15_000)
+  })
 })
 
 describe('AC-native-apply-order-24: navecss-core check has nothing to check', () => {

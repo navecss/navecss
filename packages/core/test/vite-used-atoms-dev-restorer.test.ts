@@ -82,7 +82,7 @@ describe('AC-used-atoms-26 — the srOnly pair, in the dev server as in the buil
       } finally {
         app.dispose()
       }
-    }, 120_000)
+    })
   }
 
   it('control: srOnlyFocusable alone brings no srOnly, in dev or in the build', async () => {
@@ -99,5 +99,5 @@ describe('AC-used-atoms-26 — the srOnly pair, in the dev server as in the buil
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })

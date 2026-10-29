@@ -198,17 +198,13 @@ describe('AC-astro-08 — code only the browser runs fails the build in case (b)
 })
 
 describe('AC-astro-08 — the control: a copy that forgets the set at the client’s start passes the miss in silence', () => {
-  it(
-    'builds green with the three atoms in no stylesheet',
-    async () => {
-      const { app, result } = await built({ scratch: [FORGETS_AT_CLIENT_START] })
-      expect(result.error).toBeUndefined()
-      const pages = await layerStylesOfRoutes(app, result, ['/'])
-      const set = unique(pages['/']!.flatMap((style) => setOfCss(style.css)))
-      for (const atom of BROWSER_ONLY) expect(set).not.toContain(atom)
-    },
-    SECOND,
-  )
+  it('builds green with the three atoms in no stylesheet', async () => {
+    const { app, result } = await built({ scratch: [FORGETS_AT_CLIENT_START] })
+    expect(result.error).toBeUndefined()
+    const pages = await layerStylesOfRoutes(app, result, ['/'])
+    const set = unique(pages['/']!.flatMap((style) => setOfCss(style.css)))
+    for (const atom of BROWSER_ONLY) expect(set).not.toContain(atom)
+  })
 })
 
 const ISLAND_LIB = {
@@ -273,37 +269,33 @@ describe('AC-astro-09 — a dependency the server build left external: its own l
     SECOND * 3,
   )
 
-  it(
-    'names a scoped package whole',
-    async () => {
-      const renamed = await built({
-        options: BROWSER_KEEP,
-        files: {
-          'src/components/Load.tsx': LOAD_WITH_LIB.replace("'island-lib'", "'@acme/island-ui'"),
+  it('names a scoped package whole', async () => {
+    const renamed = await built({
+      options: BROWSER_KEEP,
+      files: {
+        'src/components/Load.tsx': LOAD_WITH_LIB.replace("'island-lib'", "'@acme/island-ui'"),
+      },
+      packages: {
+        '@acme/island-ui': {
+          'package.json': JSON.stringify({
+            name: '@acme/island-ui',
+            version: '1.0.0',
+            type: 'module',
+            main: './index.js',
+            dependencies: { '@navecss/core': '*' },
+          }),
+          'index.js': ISLAND_LIB['island-lib']['index.js'],
         },
-        packages: {
-          '@acme/island-ui': {
-            'package.json': JSON.stringify({
-              name: '@acme/island-ui',
-              version: '1.0.0',
-              type: 'module',
-              main: './index.js',
-              dependencies: { '@navecss/core': '*' },
-            }),
-            'index.js': ISLAND_LIB['island-lib']['index.js'],
-          },
-        },
-      })
-      const lines = renamed.result.output.split('\n')
-      expect(lines.some((line) => line.startsWith('@acme/island-ui is a dependency'))).toBe(true)
-      expect(
-        lines.some((line) =>
-          line.startsWith('node_modules/@acme/island-ui/index.js: names justifyBetween'),
-        ),
-      ).toBe(true)
-    },
-    SECOND,
-  )
+      },
+    })
+    const lines = renamed.result.output.split('\n')
+    expect(lines.some((line) => line.startsWith('@acme/island-ui is a dependency'))).toBe(true)
+    expect(
+      lines.some((line) =>
+        line.startsWith('node_modules/@acme/island-ui/index.js: names justifyBetween'),
+      ),
+    ).toBe(true)
+  })
 })
 
 const SERVER_LIB = {
@@ -355,28 +347,24 @@ describe('AC-astro-11 — in case (b) the untransformed-dependency warning names
 })
 
 describe('AC-astro-12 — on Astro, the keepFor take warning is reached and names resolve.noExternal', () => {
-  it(
-    'prints the case (b) text for a listed package the server leaves external',
-    async () => {
-      const index = BASE_FILES['src/pages/index.astro']!.replace(
-        'import Load from',
-        "import { cls } from 'server-lib'\nimport { x } from 'server-lib/extra.js'\nimport Load from",
-      ).replace('<p id="s">s</p>', '<p id="s" class={cls() + x}>s</p>')
-      const { result } = await built({
-        options:
-          "{ keep: ['inlineFlex', 'wFull', 'truncate'], keepFor: { 'server-lib': ['flexGrow'] } }",
-        files: { 'src/pages/index.astro': index },
-        packages: {
-          'server-lib': { ...SERVER_LIB['server-lib'], 'extra.js': 'export const x = 1\n' },
-        },
-      })
-      expect(result.error).toBeUndefined()
-      expect(result.output).toContain(
-        "server-lib, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/pages/index.astro imports 'server-lib', which the server loads as node_modules/server-lib/index.js, a file no environment of this build transforms; src/pages/index.astro imports 'server-lib/extra.js', which the server loads as node_modules/server-lib/extra.js, a file no environment of this build transforms. Add server-lib to resolve.noExternal in your Vite config (on Astro, under vite in astro.config) so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead.",
-      )
-    },
-    SECOND,
-  )
+  it('prints the case (b) text for a listed package the server leaves external', async () => {
+    const index = BASE_FILES['src/pages/index.astro']!.replace(
+      'import Load from',
+      "import { cls } from 'server-lib'\nimport { x } from 'server-lib/extra.js'\nimport Load from",
+    ).replace('<p id="s">s</p>', '<p id="s" class={cls() + x}>s</p>')
+    const { result } = await built({
+      options:
+        "{ keep: ['inlineFlex', 'wFull', 'truncate'], keepFor: { 'server-lib': ['flexGrow'] } }",
+      files: { 'src/pages/index.astro': index },
+      packages: {
+        'server-lib': { ...SERVER_LIB['server-lib'], 'extra.js': 'export const x = 1\n' },
+      },
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.output).toContain(
+      "server-lib, which keepFor lists, is imported by your server code where the build cannot tell whether that code takes cx from it: src/pages/index.astro imports 'server-lib', which the server loads as node_modules/server-lib/index.js, a file no environment of this build transforms; src/pages/index.astro imports 'server-lib/extra.js', which the server loads as node_modules/server-lib/extra.js, a file no environment of this build transforms. Add server-lib to resolve.noExternal in your Vite config (on Astro, under vite in astro.config) so the build reads the package and checks what your server code takes; where a file takes cx from it, import cx from @navecss/core/cx there instead.",
+    )
+  })
 })
 
 /**
@@ -476,23 +464,19 @@ describe('AC-astro-15 — the check runs on every stylesheet a case (b) environm
 })
 
 describe('AC-astro-19 — the second pass stays, and a stylesheet both passes read counts once', () => {
-  it(
-    'counts the CSS assets of the build once in the survivor report',
-    async () => {
-      const page = `---\nimport Layout from '../layouts/Layout.astro'\n---\n<Layout><p class="surv2">s</p></Layout>\n<style>\n  .surv2 {\n    color: @nave flex;\n  }\n</style>\n`
-      const { result } = await built({
-        options: BROWSER_KEEP,
-        files: { 'src/pages/surv.astro': page },
-      })
-      expect(result.error).toBeDefined()
-      const counted = /Scanned (\d+) CSS assets? this build wrote\./.exec(result.output)
-      expect(counted, 'the report states how many CSS assets the build wrote').not.toBeNull()
-      // The shared stylesheet and the page's own, which Astro inlines between the two passes: each is
-      // one asset the build wrote, though the first pass read both and the second only one.
-      expect(Number(counted![1])).toBe(2)
-    },
-    SECOND,
-  )
+  it('counts the CSS assets of the build once in the survivor report', async () => {
+    const page = `---\nimport Layout from '../layouts/Layout.astro'\n---\n<Layout><p class="surv2">s</p></Layout>\n<style>\n  .surv2 {\n    color: @nave flex;\n  }\n</style>\n`
+    const { result } = await built({
+      options: BROWSER_KEEP,
+      files: { 'src/pages/surv.astro': page },
+    })
+    expect(result.error).toBeDefined()
+    const counted = /Scanned (\d+) CSS assets? this build wrote\./.exec(result.output)
+    expect(counted, 'the report states how many CSS assets the build wrote').not.toBeNull()
+    // The shared stylesheet and the page's own, which Astro inlines between the two passes: each is
+    // one asset the build wrote, though the first pass read both and the second only one.
+    expect(Number(counted![1])).toBe(2)
+  })
 })
 
 describe('AC-astro-17 — a @nave left in a small page <style> fails the build, naming the stylesheet’s asset name before Astro inlined it', () => {
@@ -525,22 +509,18 @@ describe('AC-astro-17 — a @nave left in a small page <style> fails the build, 
 })
 
 describe('AC-astro-17 — the control: a copy with no first pass lets a @nave in a small page style through', () => {
-  it(
-    'builds green and leaves @nave flex in the page',
-    async () => {
-      const page = `---\nimport Layout from '../layouts/Layout.astro'\n---\n<Layout><p class="surv2">s</p></Layout>\n<style>\n  .surv2 {\n    color: @nave flex;\n  }\n</style>\n`
-      const { app, result } = await built({
-        options: BROWSER_KEEP,
-        files: { 'src/pages/surv.astro': page },
-        scratch: [NO_FIRST_PASS],
-      })
-      expect(result.error).toBeUndefined()
-      expect(readFileSync(path.join(app.root, 'dist/surv/index.html'), 'utf8')).toContain(
-        '@nave flex',
-      )
-    },
-    SECOND,
-  )
+  it('builds green and leaves @nave flex in the page', async () => {
+    const page = `---\nimport Layout from '../layouts/Layout.astro'\n---\n<Layout><p class="surv2">s</p></Layout>\n<style>\n  .surv2 {\n    color: @nave flex;\n  }\n</style>\n`
+    const { app, result } = await built({
+      options: BROWSER_KEEP,
+      files: { 'src/pages/surv.astro': page },
+      scratch: [NO_FIRST_PASS],
+    })
+    expect(result.error).toBeUndefined()
+    expect(readFileSync(path.join(app.root, 'dist/surv/index.html'), 'utf8')).toContain(
+      '@nave flex',
+    )
+  })
 })
 
 describe('AC-astro-18 — a pruned atom layer Astro inlines is filtered and checked like a linked one', () => {
@@ -569,19 +549,15 @@ describe('AC-astro-18 — a pruned atom layer Astro inlines is filtered and chec
 })
 
 describe('AC-astro-18 — the control: a copy with no first pass leaves the inlined layer unchecked', () => {
-  it(
-    'builds green with a rule for an atom nobody emitted in /lean',
-    async () => {
-      const { app, result } = await built({
-        options: BROWSER_KEEP,
-        files: LEAN_FILES,
-        probe: { tamper: { css: TAMPER, match: 'lean' } },
-        scratch: [NO_FIRST_PASS],
-      })
-      expect(result.error).toBeUndefined()
-      const pages = await layerStylesOfRoutes(app, result, ['/lean'])
-      expect(setOfCss(pages['/lean']![0]!.css)).toContain('hidden')
-    },
-    SECOND,
-  )
+  it('builds green with a rule for an atom nobody emitted in /lean', async () => {
+    const { app, result } = await built({
+      options: BROWSER_KEEP,
+      files: LEAN_FILES,
+      probe: { tamper: { css: TAMPER, match: 'lean' } },
+      scratch: [NO_FIRST_PASS],
+    })
+    expect(result.error).toBeUndefined()
+    const pages = await layerStylesOfRoutes(app, result, ['/lean'])
+    expect(setOfCss(pages['/lean']![0]!.css)).toContain('hidden')
+  })
 })

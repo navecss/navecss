@@ -110,7 +110,7 @@ describe('AC-consumer-constraints-36', () => {
   // below do not carry it.
   beforeAll(async () => {
     await reportsFor('')
-  }, 60_000)
+  }, 240_000)
 
   it('used verbatim merged over stylelint-config-standard, @nave passes and @nvae is reported', async () => {
     const clean = await reportsFor('.a { @nave interactive; }', { 'at-rule-no-unknown': true })
@@ -138,33 +138,28 @@ describe('AC-consumer-constraints-36', () => {
     expect(section).toContain('^17.0.0')
   })
 
-  it(
-    'at stylelint exactly 16.17.0 the fence gives the same results, while at 16.16.0 @nave is still reported (the floor control)',
-    // The first lint of each version loads it: about a quarter of a second alone, and several
-    // seconds each under heavy load.
-    { timeout: 60_000 },
-    async () => {
-      // `stylelint-config-standard@40` pins a `^17.0.0` stylelint peer, so this enables
-      // `at-rule-no-unknown` directly: stylelint's own built-in rule, the one the fence's
-      // languageOptions declaration is read by. Both versions are installed with the workspace,
-      // under their own names, so nothing is installed while the test runs.
-      const { languageOptions } = JSON.parse(lintFence) as Required<Pick<Config, 'languageOptions'>>
-      const config = { rules: { 'at-rule-no-unknown': true }, languageOptions }
+  // The first lint of each version loads it: about a quarter of a second alone, and several
+  // seconds each under heavy load.
+  it('at stylelint exactly 16.17.0 the fence gives the same results, while at 16.16.0 @nave is still reported (the floor control)', async () => {
+    // `stylelint-config-standard@40` pins a `^17.0.0` stylelint peer, so this enables
+    // `at-rule-no-unknown` directly: stylelint's own built-in rule, the one the fence's
+    // languageOptions declaration is read by. Both versions are installed with the workspace,
+    // under their own names, so nothing is installed while the test runs.
+    const { languageOptions } = JSON.parse(lintFence) as Required<Pick<Config, 'languageOptions'>>
+    const config = { rules: { 'at-rule-no-unknown': true }, languageOptions }
 
-      for (const [release, linter, expectReported] of [
-        [{ name: 'stylelint-16-16', version: '16.16.0' }, stylelintBelowFloor, true],
-        [{ name: 'stylelint-16-17', version: '16.17.0' }, stylelintAtFloor, false],
-      ] as const) {
-        const manifest = path.join(CORE_DIR, 'node_modules', release.name, 'package.json')
-        const installed = (JSON.parse(readFileSync(manifest, 'utf8')) as { version: string })
-          .version
-        expect(installed, release.name).toBe(release.version)
-        const result = await linter.lint({ code: '.a { @nave interactive; }', config })
-        const isReported = result.results[0]!.warnings.some((w) => w.rule === 'at-rule-no-unknown')
-        expect(isReported, `stylelint ${release.version}`).toBe(expectReported)
-      }
-    },
-  )
+    for (const [release, linter, expectReported] of [
+      [{ name: 'stylelint-16-16', version: '16.16.0' }, stylelintBelowFloor, true],
+      [{ name: 'stylelint-16-17', version: '16.17.0' }, stylelintAtFloor, false],
+    ] as const) {
+      const manifest = path.join(CORE_DIR, 'node_modules', release.name, 'package.json')
+      const installed = (JSON.parse(readFileSync(manifest, 'utf8')) as { version: string }).version
+      expect(installed, release.name).toBe(release.version)
+      const result = await linter.lint({ code: '.a { @nave interactive; }', config })
+      const isReported = result.results[0]!.warnings.some((w) => w.rule === 'at-rule-no-unknown')
+      expect(isReported, `stylelint ${release.version}`).toBe(expectReported)
+    }
+  })
 
   it("the root README's linter fence is byte-identical to the section's", () => {
     const rootFence = jsonFencesIn(rootReadme).find((f) => f.includes('languageOptions'))

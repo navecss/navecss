@@ -41,7 +41,6 @@ describe('AC-native-apply-order-21: the Vite plugin, build', () => {
       const [text] = warningTextsOf(FIXTURE)
       expect(occurrences(run.output, text!)).toBe(1)
     },
-    60_000,
   )
 })
 
@@ -56,7 +55,7 @@ describe('AC-native-apply-order-23: Vite build: one print per warning per comman
     expect(occurrences(run.output, text!)).toBe(1)
     expect(run.output).toMatch(/src\/a\.scss:\d+:\d+: @nave: "flex" comes after/)
     expect(run.output).toMatch(/position in \S+a\.scss as processed; no source map/)
-  }, 60_000)
+  })
 
   it('two warnings at one position, one per reveal block, each print exactly once', async () => {
     const run = await build({ 'src/a.css': FIXTURE + PIN })
@@ -66,5 +65,5 @@ describe('AC-native-apply-order-23: Vite build: one print per warning per comman
     expect(new Set(texts).size).toBe(2)
     for (const text of texts) expect(occurrences(run.output, text)).toBe(1)
     expect(occurrences(run.output, warningTextsOf(FIXTURE)[0]!)).toBe(1)
-  }, 60_000)
+  })
 })

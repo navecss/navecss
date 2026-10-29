@@ -623,23 +623,25 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
   }
 
   /**
-   * The time one call of `work` takes, from `reps` calls in a row.
+   * The CPU time one call of `work` takes, from `reps` calls in a row. It is the process's CPU time
+   * and not the clock, so the time the machine spends on other processes in the middle of a run is
+   * not counted as the pattern's work.
    */
   function perCall(work: () => void, reps: number): number {
-    const start = performance.now()
+    const start = process.cpuUsage()
     for (let rep = 0; rep < reps; rep += 1) work()
-    return (performance.now() - start) / reps
+    const used = process.cpuUsage(start)
+    return (used.user + used.system) / 1000 / reps
   }
 
   /**
    * How much longer one call of `large` takes than one call of `small`, from the fastest of many
-   * short runs of each, taken in turn. Load only ever adds time, so the fastest run is the one that
-   * says what the pattern costs, and a run of about half a millisecond is short beside the time a
-   * busy machine lets a process run between pauses, so most runs see none. Both sizes run the same
-   * number of calls, set from the fastest of several single calls, and are taken in turn so the
-   * same load and the same compiled code reach both: a run length set by one timed call, or the
-   * two sizes timed one after the other, gives them different numbers of pauses, and the ratio
-   * then measures the machine.
+   * short runs of each, taken in turn. Whatever else the machine is doing (a cold cache, a changed
+   * clock speed) only ever adds to a run, so the fastest run is the one that says what the pattern
+   * costs. Both sizes run the same number of calls, set from the fastest of several single calls,
+   * and are taken in turn so the same load and the same compiled code reach both: a run length set
+   * by one timed call, or the two sizes timed one after the other, puts them under different
+   * conditions, and the ratio then measures the machine.
    */
   function growthOf(small: () => void, large: () => void): number {
     let once = Infinity
@@ -658,9 +660,13 @@ describe('AC-used-atoms-49 - the text test grows with the text, not with its wor
   }
 
   /**
-   * The least of three measurements of `growthOf`. A pause can still land on every run of one size
-   * in a measurement, and it only ever adds time, while a quadratic pattern is about 4 in every
-   * measurement, so the least of three still tells the two apart.
+   * The least of three measurements of `growthOf`. Contention the process feels while it runs (a
+   * busy sibling core, a cache another process has emptied) can still land on every run of the
+   * larger size in a measurement, and it only ever adds time, so that measurement reads high. A
+   * quadratic pattern is about 4 in every measurement, so taking the least of three drops a
+   * measurement the contention raised and still tells the two apart. A cost on every run of the
+   * smaller size would lower the ratio instead; the fastest of 25 interleaved runs in `growthOf`
+   * makes that unlikely.
    */
   function leastGrowth(work: (n: number) => () => void, n: number): number {
     return Math.min(...Array.from({ length: 3 }, () => growthOf(work(n), work(2 * n))))

@@ -257,13 +257,13 @@ describe('AC-used-atoms-21 — a call becomes the string cx() returns', () => {
 
       expect(result.cases).toBeGreaterThan(100_000)
       expect(result.mismatches).toBe(0)
-    }, 60_000)
+    })
 
     it('control: a rewrite without the falsy filter gives mismatches', () => {
       const control = evaluate<Shape[]>(out.code.replaceAll('.filter(Boolean)', ''), undefined)
 
       expect(mismatches(original, control).mismatches).toBeGreaterThan(0)
-    }, 60_000)
+    })
   })
 
   describe('each argument is evaluated once, in its original order', () => {

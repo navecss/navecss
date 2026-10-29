@@ -137,7 +137,6 @@ describe('AC-astro-40 — Astro’s packages are dev dependencies only, and no s
         expect(forbiddenImports(text), file).toEqual([])
       }
     },
-    120_000,
   )
 
   it('control: a manifest with astro in core’s peerDependencies, and a file with a dynamic import of astro/config, are both seen', () => {

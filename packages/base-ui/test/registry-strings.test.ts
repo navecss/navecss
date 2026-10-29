@@ -358,14 +358,14 @@ describe('AC-base-ui-registry-17: registry-facing strings are the cleared templa
   describe('a range the build cannot word', () => {
     const UNWORDABLE = '>=1.3.0 <1.5.0 || 2.x'
 
-    it('builds the unmodified copy, so a refusal is the range', { timeout: 200_000 }, () => {
+    it('builds the unmodified copy, so a refusal is the range', () => {
       const run = buildWithPeers({})
       expect(run.output).not.toContain('Cannot find module')
       expect(run.status).toBe(0)
       expect(run.items.length).toBeGreaterThan(0)
     })
 
-    it('exits non-zero naming the range and writes no item', { timeout: 200_000 }, () => {
+    it('exits non-zero naming the range and writes no item', () => {
       const run = buildWithPeers({ '@base-ui/react': UNWORDABLE })
       expect(run.status).not.toBe(0)
       expect(run.output).toContain(UNWORDABLE)

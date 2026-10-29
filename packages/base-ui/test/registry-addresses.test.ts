@@ -330,6 +330,6 @@ describe('AC-base-ui-registry-06: the three addresses resolve the same bytes, th
       expect(publicFetch.refused.some((target) => target.split(':', 1)[0] === 'example.com')).toBe(
         true,
       )
-    }, 60_000)
+    })
   })
 })

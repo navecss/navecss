@@ -19,7 +19,11 @@ import { resolveUsedOptions } from '../src/vite-options.ts'
 import { buildReport } from '../src/vite-used-report.ts'
 import { createUsedContext } from '../src/vite-used.ts'
 import { navePlugin } from '../src/vite.ts'
-import { assertScalesLinearly } from './helpers/perf-scaling.ts'
+import {
+  assertScalesLinearly,
+  cpuMillisecondsPerCall,
+  cpuMillisecondsSince,
+} from './helpers/perf-scaling.ts'
 import {
   appFiles,
   atomLayerAtoms,
@@ -116,7 +120,6 @@ describe('AC-used-atoms-06: a template compiled into the module that returns the
       expect(built.error).toBeUndefined()
       expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'grid'))
     },
-    60_000,
   )
 
   it.each(['', ' lang="ts"'])(
@@ -134,7 +137,6 @@ describe('AC-used-atoms-06: a template compiled into the module that returns the
       expect(built.error).toContain('src/Bad.vue:')
       expect(built.error).toContain('cx(props.variant): the argument is not a literal atom name.')
     },
-    60_000,
   )
 
   it.each(['', ' lang="ts"'])(
@@ -162,7 +164,6 @@ describe('AC-used-atoms-06: a template compiled into the module that returns the
         app.dispose()
       }
     },
-    60_000,
   )
 
   const SSR_MODES: [string, string, Record<string, string>][] = [
@@ -190,7 +191,6 @@ describe('AC-used-atoms-06: a template compiled into the module that returns the
       expect(built.error).toContain('src/bad.html:')
       expect(built.error).toContain('cx(props.variant): the argument is not a literal atom name.')
     },
-    60_000,
   )
 
   it('does not take a template-local $setup for the render function’s', async () => {
@@ -206,7 +206,7 @@ describe('AC-used-atoms-06: a template compiled into the module that returns the
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 })
 
 describe('the setup return is the compiler’s own', () => {
@@ -286,7 +286,6 @@ describe('a virtual module', () => {
       expect(built.error).toBeUndefined()
       expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
     },
-    60_000,
   )
 
   it('is read for the Nave classes it writes whole', async () => {
@@ -296,7 +295,7 @@ describe('a virtual module', () => {
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
-  }, 60_000)
+  })
 
   it('has its problem reported under the id the host gave it', async () => {
     const built = await build(entry, {
@@ -305,7 +304,7 @@ describe('a virtual module', () => {
 
     expect(built.error).toMatch(/^1 problem in 1 file/)
     expect(built.error).toMatch(/\\0virtual:ui:2:\d+: cx\(v\): the argument is not a literal/)
-  }, 60_000)
+  })
 })
 
 describe('an import of cx through an alias', () => {
@@ -330,7 +329,6 @@ describe('an import of cx through an alias', () => {
       expect(built.error).toContain(`src/a.js: imports cx from '${specifier}'`)
       expect(built.error).toContain("Import cx from '@navecss/core/cx' directly")
     },
-    60_000,
   )
 
   it('fails the same way for a dynamic import through the alias', async () => {
@@ -340,7 +338,7 @@ describe('an import of cx through an alias', () => {
     )
 
     expect(built.error).toContain("src/a.js: imports cx from '#cx'")
-  }, 60_000)
+  })
 
   const aliasConfig = { resolve: { alias: { '#cx': '@navecss/core/cx' } } }
 
@@ -353,7 +351,7 @@ describe('an import of cx through an alias', () => {
     )
 
     expect(built.error).toContain("src/a.js: imports cx from '#cx'")
-  }, 60_000)
+  })
 
   it('fails when the importer also imports cx by the package specifier', async () => {
     const built = await build(
@@ -365,7 +363,7 @@ describe('an import of cx through an alias', () => {
 
     expect(built.error).toContain("src/a.js: imports cx from '#cx'")
     expect(built.error).not.toContain("from '@navecss/core/cx'.")
-  }, 60_000)
+  })
 
   it('fails when a module worker imports cx through the alias', async () => {
     const built = await build(
@@ -379,7 +377,7 @@ describe('an import of cx through an alias', () => {
     )
 
     expect(built.error).toContain("src/w.js: imports cx from '#cx'")
-  }, 60_000)
+  })
 
   it('control: an import by the package specifier is read and builds', async () => {
     const built = await build({
@@ -388,7 +386,7 @@ describe('an import of cx through an alias', () => {
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
-  }, 60_000)
+  })
 })
 
 describe('a specifier written with an escape', () => {
@@ -400,7 +398,7 @@ describe('a specifier written with an escape', () => {
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
-  }, 60_000)
+  })
 })
 
 describe('a var is written by every loop head that redeclares it', () => {
@@ -520,17 +518,8 @@ describe('a Svelte template call is quoted as the author wrote it', () => {
 
     expect(built.error).toContain('src/Bad.svelte:')
     expect(built.error).toContain('cx(variant): the argument is not a literal atom name.')
-  }, 60_000)
+  })
 })
-
-/**
- * The milliseconds `work` takes.
- */
-function elapsed(work: () => void): number {
-  const start = performance.now()
-  work()
-  return performance.now() - start
-}
 
 /**
  * A context and a host stand-in to record a module through, as the plugin's transform does; the
@@ -612,7 +601,7 @@ describe('a decorator is read like any other expression', () => {
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 })
 
 describe('an auto-accessor is a class member', () => {
@@ -677,7 +666,7 @@ describe('a call with many unreadable arguments is quoted once', () => {
       assertScalesLinearly((size) => {
         const code = call(size)
         const program = parseAst(code) as unknown as AstNode
-        return elapsed(() => {
+        return cpuMillisecondsPerCall(() => {
           readModule(code, program, OPTIONS)
         })
       }, 2000),
@@ -694,9 +683,9 @@ const wide = (value: string): string =>
   `${IMPORT}export const a = cx('flex')\nexport const data = ${value}\n`
 
 // Each row parses and reads a module of `COUNT` elements: about 2 s alone, and 20 s on a busy CI
-// runner, past the shared 20 s budget. The width is the point of the rows (it must stay well past
-// the argument limit of a call, which depends on the stack), so they state their own budget.
-describe('a module wider than the argument limit of a call is read', { timeout: 60_000 }, () => {
+// runner. The width is the point of the rows (it must stay well past the argument limit of a call,
+// which depends on the stack).
+describe('a module wider than the argument limit of a call is read', () => {
   it.each([
     ['an array of elements', `[${'1,'.repeat(COUNT)}]`],
     ['a call of arguments', `String(${'1,'.repeat(COUNT)})`],
@@ -741,7 +730,7 @@ describe('reading a long module costs time in proportion to its length', () => {
         const chain = Array.from({ length: size }, (_, index) => `'p${index} '`).join(' + ')
         const code = `${IMPORT}export const s = ${chain}\n`
         const program = parseAst(code) as unknown as AstNode
-        return elapsed(() => {
+        return cpuMillisecondsPerCall(() => {
           readModule(code, program, {
             cxSources: new Set([CX_SOURCE]),
             ownAtoms: new Set(),
@@ -762,7 +751,7 @@ describe('reading a long module costs time in proportion to its length', () => {
         )
         const code = `${IMPORT}const c0 = 'flex'\n${chain.join('\n')}\n${calls.join('\n')}\n`
         const program = parseAst(code) as unknown as AstNode
-        return elapsed(() => {
+        return cpuMillisecondsPerCall(() => {
           readModule(code, program, {
             cxSources: new Set([CX_SOURCE]),
             ownAtoms: new Set(),
@@ -781,9 +770,9 @@ describe('reading a long module costs time in proportion to its length', () => {
         (_, index) => `export const v${index} = (v) => cx(v)`,
       )
       const code = `${IMPORT}${lines.join('\n')}\n`
-      const start = performance.now()
+      const start = process.cpuUsage()
       const record = await recordModule(context, ctx, { code, id: '/scale-root/src/many.js' })
-      const took = performance.now() - start
+      const took = cpuMillisecondsSince(start)
       expect(record!.problems).toHaveLength(size)
       return took
     }, 2000)
@@ -797,7 +786,7 @@ describe('reading a long module costs time in proportion to its length', () => {
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 120_000)
+  })
 })
 
 /**
@@ -825,7 +814,6 @@ describe('a module that is not JavaScript when the build reads it', () => {
       expect(built.error).toBeUndefined()
       expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
     },
-    60_000,
   )
 
   it('control: a .json import is read the same way', async () => {
@@ -836,7 +824,7 @@ describe('a module that is not JavaScript when the build reads it', () => {
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
-  }, 60_000)
+  })
 })
 
 describe('a long chain of constants resolves', () => {
@@ -888,7 +876,7 @@ describe('AC-used-atoms-34: a position is printed only where the source map lead
       `src/Bad.vue: cx(props.variant): the argument is not a literal atom name.${UNKNOWN_WITHOUT_MAP}`,
     )
     expect(built.error).not.toMatch(/src\/Bad\.vue:\d/)
-  }, 60_000)
+  })
 
   it('the same component built with source maps on is reported at its authored line', async () => {
     process.env.NODE_ENV = 'production'
@@ -899,7 +887,7 @@ describe('AC-used-atoms-34: a position is printed only where the source map lead
 
     expect(built.error).toContain('src/Bad.vue:6:')
     expect(built.error).not.toContain('line unknown')
-  }, 60_000)
+  })
 
   const prepend: PluginOption = {
     name: 'prepend-lines',
@@ -917,7 +905,7 @@ describe('AC-used-atoms-34: a position is printed only where the source map lead
     expect(built.error).toContain(
       `src/a.js: cx(v): the argument is not a literal atom name.${UNKNOWN_WITHOUT_MAP}`,
     )
-  }, 60_000)
+  })
 
   it('a module rewritten by a plugin that returns no map is reported with the second sentence', async () => {
     const built = await build(a, { plugins: [prepend], build: { sourcemap: true } })
@@ -925,7 +913,7 @@ describe('AC-used-atoms-34: a position is printed only where the source map lead
     expect(built.error).toContain(
       `src/a.js: cx(v): the argument is not a literal atom name.${UNKNOWN_UNMAPPED}`,
     )
-  }, 60_000)
+  })
 
   it.each([false, true])(
     'control: an untransformed module is reported at its line and column with sourcemap %s',
@@ -937,7 +925,6 @@ describe('AC-used-atoms-34: a position is printed only where the source map lead
       )
       expect(built.error).not.toContain('line unknown')
     },
-    60_000,
   )
 
   it('sorts a problem with no position after the problems that have one', () => {

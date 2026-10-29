@@ -141,11 +141,11 @@ describe('AC-used-atoms-47 — a declared module re-exporting Nave’s cx, and e
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(UI_ATOMS)
-  }, 60_000)
+  })
 
   it('serves the same atoms in dev', async () => {
     expect(await servedAtoms(UI_FILES, { cxModules: UI_MODULES })).toEqual(UI_ATOMS)
-  }, 60_000)
+  })
 
   it('control: with cxModules empty, one problem on each declared module and none on an importer', async () => {
     const built = await build(UI_FILES)
@@ -155,7 +155,7 @@ describe('AC-used-atoms-47 — a declared module re-exporting Nave’s cx, and e
       expect(built.error).toContain(`${file}:`)
     }
     for (const file of 'abcdef') expect(built.error).not.toContain(`src/${file}.ts:`)
-  }, 60_000)
+  })
 
   it('fails an importer’s unreadable call, and a declared module’s own, in the file that holds it', async () => {
     const importer = await build(
@@ -186,7 +186,7 @@ describe('AC-used-atoms-47 — a declared module re-exporting Nave’s cx, and e
     expect(namespace.error).toContain('src/c.ts:')
     expect(declared.error).toMatch(/^1 problem in 1 file/)
     expect(declared.error).toContain('src/ui3.ts:')
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-47 - an importer reaching its own directory’s barrel, and a query spelling', () => {
@@ -204,7 +204,7 @@ describe('AC-used-atoms-47 - an importer reaching its own directory’s barrel, 
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('inlineFlex', 'relative', ...UI_ATOM_NAMES))
-  }, 60_000)
+  })
 
   it('reads a call made through a query spelling of the barrel, never green without its rule', async () => {
     const built = await build(
@@ -217,7 +217,7 @@ describe('AC-used-atoms-47 - an importer reaching its own directory’s barrel, 
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('fails a dynamic import of the query spelling as one problem in the importer', async () => {
     const built = await build(
@@ -231,7 +231,7 @@ describe('AC-used-atoms-47 - an importer reaching its own directory’s barrel, 
     expect(built.error).toMatch(/^1 problem in 1 file/)
     expect(built.error).toContain('src/q.ts:')
     expect(built.error).not.toContain('src/ui/index.ts:')
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-47 - a namespace import of a declared module read for its other exports', () => {
@@ -246,16 +246,12 @@ describe('AC-used-atoms-47 - a namespace import of a declared module read for it
     ['a destructuring', `${NS}const { Button } = U\nexport const k = Button\n`, []],
   ]
 
-  it.each(reads)(
-    '%s is no use of cx, built alone and green',
-    async (_name, text, expected) => {
-      const built = await build({ 'src/ui/index.ts': BUTTON_BARREL, 'src/h.ts': text }, { options })
+  it.each(reads)('%s is no use of cx, built alone and green', async (_name, text, expected) => {
+    const built = await build({ 'src/ui/index.ts': BUTTON_BARREL, 'src/h.ts': text }, { options })
 
-      expect(built.error).toBeUndefined()
-      expect(atomLayerAtoms(built.css)).toEqual(atoms(...expected))
-    },
-    60_000,
-  )
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms(...expected))
+  })
 
   it('reads a package’s namespace for its component and its cx', async () => {
     const app = makeUsedApp(
@@ -273,7 +269,7 @@ describe('AC-used-atoms-47 - a namespace import of a declared module read for it
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   const refused: [string, string][] = [
     ['passed', `${NS}export const l = f(U)\n`],
@@ -286,17 +282,13 @@ describe('AC-used-atoms-47 - a namespace import of a declared module read for it
     ],
   ]
 
-  it.each(refused)(
-    '%s is one problem in the importer, built alone',
-    async (_name, text) => {
-      const built = await build({ 'src/ui/index.ts': BUTTON_BARREL, 'src/h.ts': text }, { options })
+  it.each(refused)('%s is one problem in the importer, built alone', async (_name, text) => {
+    const built = await build({ 'src/ui/index.ts': BUTTON_BARREL, 'src/h.ts': text }, { options })
 
-      expect(built.error).toMatch(/^1 problem in 1 file/)
-      expect(built.error).toContain('src/h.ts:')
-      expect(built.error).not.toContain('src/ui/index.ts:')
-    },
-    60_000,
-  )
+    expect(built.error).toMatch(/^1 problem in 1 file/)
+    expect(built.error).toContain('src/h.ts:')
+    expect(built.error).not.toContain('src/ui/index.ts:')
+  })
 })
 
 describe('AC-used-atoms-47 — in every environment of one build', () => {
@@ -319,7 +311,7 @@ describe('AC-used-atoms-47 — in every environment of one build', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-48 — what a declared module may not do, and the hidden second hop', () => {
@@ -336,21 +328,17 @@ describe('AC-used-atoms-48 — what a declared module may not do, and the hidden
     ['a second hop', "export { cx } from './ui/index.ts'\n", 1],
   ]
 
-  it.each(rows)(
-    '%s alone fails in the declared module',
-    async (_name, text, count) => {
-      const built = await build(
-        { 'src/ui/index.ts': BARREL, 'src/bad.ts': text },
-        { options: { cxModules: ['./src/ui/index.ts', './src/bad.ts'] } },
-      )
+  it.each(rows)('%s alone fails in the declared module', async (_name, text, count) => {
+    const built = await build(
+      { 'src/ui/index.ts': BARREL, 'src/bad.ts': text },
+      { options: { cxModules: ['./src/ui/index.ts', './src/bad.ts'] } },
+    )
 
-      expect(built.error).toMatch(new RegExp(`^${count} problems? in 1 file`))
-      expect(built.error).toContain('src/bad.ts:')
-      expect(built.error).not.toContain('src/ui/index.ts:')
-      expect(built.warnings).toEqual([])
-    },
-    60_000,
-  )
+    expect(built.error).toMatch(new RegExp(`^${count} problems? in 1 file`))
+    expect(built.error).toContain('src/bad.ts:')
+    expect(built.error).not.toContain('src/ui/index.ts:')
+    expect(built.warnings).toEqual([])
+  })
 
   it('control: each row replaced by the plain re-export builds green', async () => {
     const built = await build(
@@ -359,7 +347,7 @@ describe('AC-used-atoms-48 — what a declared module may not do, and the hidden
     )
 
     expect(built.error).toBeUndefined()
-  }, 60_000)
+  })
 
   it('fails a re-export of a declared module in an undeclared one, and a dynamic import of it', async () => {
     const hop = await build(
@@ -385,7 +373,7 @@ describe('AC-used-atoms-48 — what a declared module may not do, and the hidden
     expect(dynamic.error).toContain('a dynamic import of cx')
     expect(hop.warnings).toEqual([])
     expect(dynamic.warnings).toEqual([])
-  }, 120_000)
+  })
 
   it('control: an undeclared module importing the declared one and calling cx builds green', async () => {
     const built = await build(
@@ -398,7 +386,7 @@ describe('AC-used-atoms-48 — what a declared module may not do, and the hidden
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('words the declared-module problem and its remedy for the reader', async () => {
     const built = await build(
@@ -412,7 +400,7 @@ describe('AC-used-atoms-48 — what a declared module may not do, and the hidden
     expect(built.error).toContain(
       "In a module listed in cxModules, make export { cx } from '@navecss/core/cx' its only export of cx, or remove the module from cxModules and import cx from @navecss/core/cx where it is called.",
     )
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-48 - a star never lets a cx that is not Nave’s through unreported', () => {
@@ -460,7 +448,6 @@ describe('AC-used-atoms-48 - a star never lets a cx that is not Nave’s through
       expect(built.error).not.toContain('src/a.ts:')
       expect(built.warnings).toEqual([])
     },
-    60_000,
   )
 
   it('prints one message for the three export * from rows, and it offers the explicit re-export', async () => {
@@ -478,7 +465,7 @@ describe('AC-used-atoms-48 - a star never lets a cx that is not Nave’s through
 
     expect(new Set(messages).size).toBe(1)
     expect(messages[0]).toContain('this export can give it a cx the build does not follow')
-  }, 120_000)
+  })
 
   it('control: an explicit re-export beside a star is no problem, and the importer’s call is read', async () => {
     const built = await build(
@@ -492,7 +479,7 @@ describe('AC-used-atoms-48 - a star never lets a cx that is not Nave’s through
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-48 - a star from a declared module beside the module’s own Nave cx', () => {
@@ -526,7 +513,6 @@ describe('AC-used-atoms-48 - a star from a declared module beside the module’s
       expect(pasted?.error).toBeUndefined()
       expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('flex'))
     },
-    120_000,
   )
 
   it('control: a barrel whose only export is a star of a second listed barrel is one problem at that star', async () => {
@@ -541,7 +527,7 @@ describe('AC-used-atoms-48 - a star from a declared module beside the module’s
 
     expect(built.error).toMatch(/^1 problem in 1 file/)
     expect(built.error).toMatch(/src\/ui\/index\.ts:1:1: /)
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-48 - a foreign cx reaching an importer through a star is reported at the star only', () => {
@@ -574,7 +560,6 @@ describe('AC-used-atoms-48 - a foreign cx reaching an importer through a star is
         expect(built.error).not.toContain('src/a.ts:')
         expect(built.error).not.toContain('cx.dynamic')
       },
-      60_000,
     )
   })
 
@@ -588,7 +573,7 @@ describe('AC-used-atoms-48 - a foreign cx reaching an importer through a star is
     )
 
     expect(built.error).toContain('src/a.ts:')
-  }, 60_000)
+  })
 
   it('control: a listed module whose problem leaves Nave’s cx exported does not hide a call it cannot read', async () => {
     const built = await build(
@@ -602,7 +587,7 @@ describe('AC-used-atoms-48 - a foreign cx reaching an importer through a star is
     expect(built.error).toMatch(/^2 problems in 2 files/)
     expect(built.error).toContain('src/ui/index.ts:')
     expect(built.error).toContain('src/a.ts:')
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-47 - a directory specifier with more than one dot segment, and a namespace taken apart by assignment', () => {
@@ -612,22 +597,18 @@ describe('AC-used-atoms-47 - a directory specifier with more than one dot segmen
     ['../..', 'src/ui/forms/inputs/text.ts'],
     ['../../', 'src/ui/forms/inputs/text.ts'],
     ['./.', 'src/ui/b.ts'],
-  ])(
-    'reads an importer that writes %s as the listed index file',
-    async (specifier, file) => {
-      const built = await build(
-        {
-          'src/ui/index.ts': BARREL,
-          [file]: `import { cx } from '${specifier}'\nexport const t = cx('flex')\n`,
-        },
-        { options },
-      )
+  ])('reads an importer that writes %s as the listed index file', async (specifier, file) => {
+    const built = await build(
+      {
+        'src/ui/index.ts': BARREL,
+        [file]: `import { cx } from '${specifier}'\nexport const t = cx('flex')\n`,
+      },
+      { options },
+    )
 
-      expect(built.error).toBeUndefined()
-      expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-    },
-    60_000,
-  )
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
+  })
 
   const BUTTON_BARREL = `${BARREL}export const Button = 'b'\n`
   const NS = "import * as U from './ui'\n"
@@ -636,16 +617,12 @@ describe('AC-used-atoms-47 - a directory specifier with more than one dot segmen
     ['a parameter default', `${NS}export const a = ({ Button } = U) => Button\n`],
   ]
 
-  it.each(reads)(
-    'destructuring a namespace by %s is no use of cx',
-    async (_name, text) => {
-      const built = await build({ 'src/ui/index.ts': BUTTON_BARREL, 'src/h.ts': text }, { options })
+  it.each(reads)('destructuring a namespace by %s is no use of cx', async (_name, text) => {
+    const built = await build({ 'src/ui/index.ts': BUTTON_BARREL, 'src/h.ts': text }, { options })
 
-      expect(built.error).toBeUndefined()
-      expect(atomLayerAtoms(built.css)).toEqual([])
-    },
-    60_000,
-  )
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual([])
+  })
 
   it('control: an assignment that names cx is still one problem in the importer', async () => {
     const built = await build(
@@ -658,7 +635,7 @@ describe('AC-used-atoms-47 - a directory specifier with more than one dot segmen
 
     expect(built.error).toMatch(/^1 problem in 1 file/)
     expect(built.error).toContain('src/h.ts:')
-  }, 60_000)
+  })
 
   it.each([
     [
@@ -678,7 +655,6 @@ describe('AC-used-atoms-47 - a directory specifier with more than one dot segmen
       expect(built.error).toContain('src/h.ts:')
       expect(built.error).toContain('U is used other than as U.cx.')
     },
-    60_000,
   )
 })
 
@@ -696,7 +672,7 @@ describe('AC-used-atoms-49 - a specifier the text test reads is recognised in a 
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('reads an untransformed module whatever apostrophe its text holds before the import', async () => {
     const built = await build(
@@ -711,7 +687,7 @@ describe('AC-used-atoms-49 - a specifier the text test reads is recognised in a 
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'grid'))
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-50 — the build-end check finds an importer the text test missed', () => {
@@ -783,14 +759,14 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
     // The control: the check, not the prefilter, found them.
     expect(parsed.filter((id) => id.includes('/pages/'))).toEqual([])
     expect(parsed.some((id) => id.endsWith('/src/ui/index.ts'))).toBe(true)
-  }, 60_000)
+  })
 
   it('is green once the specifier is declared, and the layer holds grid', async () => {
     const built = await buildAliased(files(), ['./src/ui/index.ts', '#ds'])
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
-  }, 60_000)
+  })
 
   it('clears the error when its printed array is pasted', async () => {
     const { first, list, pasted } = await pasteAndRebuild(
@@ -802,7 +778,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
     expect(list).toEqual(['./src/ui/index.ts', '#ds'])
     expect(pasted?.error).toBeUndefined()
     expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('grid'))
-  }, 120_000)
+  })
 
   it('fails a dynamic importer of a declared specifier as an R2(d) problem on it', async () => {
     const built = await buildAliased(
@@ -812,7 +788,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
     expect(built.error).toMatch(/^1 problem in 1 file/)
     expect(built.error).toContain('src/pages/Users.tsx:')
-  }, 60_000)
+  })
 
   it('prints the report and this error in one failure, the report first, neither folded into the other', async () => {
     const built = await buildAliased(
@@ -827,7 +803,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
     expect(report).toBe(0)
     expect(check).toBeGreaterThan(report)
     expect(built.error!.slice(report, check)).not.toContain('cxModules')
-  }, 60_000)
+  })
 
   describe('a relative importer the text test misses', () => {
     // A directory whose manifest names the barrel as its entry: Vite resolves `../shell` to the
@@ -859,7 +835,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
         ].join('\n'),
       )
       expect(built.error).not.toMatch(/cxModules: \[/)
-    }, 60_000)
+    })
 
     it('builds green once the importer writes the spelling the line gives', async () => {
       const built = await buildAliased(
@@ -871,7 +847,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
       expect(built.error).toBeUndefined()
       expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-    }, 60_000)
+    })
 
     it('beside an alias importer, prints the array holding the alias only, and pasting it with the rewrite is green', async () => {
       const mixed = (specifier: string): Record<string, string> => ({
@@ -899,7 +875,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
       expect(pasted.error).toBeUndefined()
       expect(atomLayerAtoms(pasted.css)).toEqual(atoms('flex', 'grid'))
-    }, 120_000)
+    })
 
     describe('an importer that also holds a spelling the build reads', () => {
       const BOTH = "import { cx } from './ui'\n"
@@ -926,7 +902,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
         expect(fixed.error).toBeUndefined()
         expect(atomLayerAtoms(fixed.css)).toEqual(atoms('flex', 'grid'))
-      }, 120_000)
+      })
 
       it('prints an array that adds an alias spelling (R5b), and pasting it builds green with both atoms', async () => {
         const { first, list, pasted } = await pasteAndRebuild(
@@ -938,7 +914,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
         expect(list).toEqual(['./src/ui/index.ts', '#kit'])
         expect(pasted?.error).toBeUndefined()
         expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('flex', 'grid'))
-      }, 120_000)
+      })
 
       it('control: the alias spelling alone fails the same way, and pasting its array builds green', async () => {
         const { first, list, pasted } = await pasteAndRebuild(
@@ -951,7 +927,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
         expect(list).toEqual(['./src/ui/index.ts', '#kit'])
         expect(pasted?.error).toBeUndefined()
         expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('grid'))
-      }, 120_000)
+      })
     })
 
     describe('the spelling the line gives lands on the listed file', () => {
@@ -979,7 +955,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
         expect(fixed.error).toBeUndefined()
         expect(atomLayerAtoms(fixed.css)).toEqual(atoms('flex'))
-      }, 120_000)
+      })
 
       describe('the TypeScript condition beside a replacement that ends in a TypeScript extension', () => {
         const CONDITION =
@@ -1031,7 +1007,6 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
             expect(fixed.error).toBeUndefined()
             expect(atomLayerAtoms(fixed.css)).toEqual(atoms('flex'))
           },
-          120_000,
         )
 
         it('prints it once for the error however many replacements end in one', async () => {
@@ -1046,7 +1021,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
           expect(first.error!.match(/Write '\.\.\/ui\/index\.ts' in its place/g)).toHaveLength(2)
           expect(first.error!.match(/allowImportingTsExtensions/g)).toHaveLength(1)
           expect(first.error!.split('\n').at(-1)).toBe(CONDITION)
-        }, 60_000)
+        })
 
         it('prints none for a declared .jsx file, which needs no TypeScript setting', async () => {
           const modules = beside('jsx', reportsOf('Reports'))
@@ -1059,7 +1034,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
           expect(first.error).toContain("Write '../ui/index.jsx' in its place.")
           expect(first.error).not.toContain('allowImportingTsExtensions')
-        }, 60_000)
+        })
       })
 
       it('keeps the short spelling when it lands on the file: the same directory, another name, an .mts file', async () => {
@@ -1100,7 +1075,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
           expect(first.error).toContain(`Write '${spelling}' in its place.`)
         }
-      }, 120_000)
+      })
 
       it('does not offer a relative specifier with a query as an entry to add', async () => {
         const modules = {
@@ -1117,7 +1092,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
           ].join('\n'),
         )
         expect(first.error).not.toMatch(/cxModules: \[/)
-      }, 60_000)
+      })
     })
 
     describe('an importer inside a dependency', () => {
@@ -1163,7 +1138,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
         const built = await run(button(), { options: { cxModules: ['@acme/ui'] } })
 
         expect(built.error).toBe([FIRST, DEPENDENCY_LINE, PACKAGE_LINE].join('\n'))
-      }, 60_000)
+      })
 
       it.each([
         ['../shell', '#k'],
@@ -1183,7 +1158,6 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
             `node_modules/@acme/ui/dist/button.js: imports '@acme/ui' as '${first}', '${second}'. The file is in @acme/ui`,
           )
         },
-        60_000,
       )
 
       it('is green once the package is listed in keepFor, shipping its atom', async () => {
@@ -1193,14 +1167,14 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
         expect(built.error).toBeUndefined()
         expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-      }, 60_000)
+      })
 
       it('is green once the package imports the module by its own name, with no keepFor, shipping the call it read', async () => {
         const built = await run(button('../index'), { options: { cxModules: ['@acme/ui'] } })
 
         expect(built.error).toBeUndefined()
         expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-      }, 60_000)
+      })
 
       it('lists the application’s lines first, its rewrite remedy counted by its own lines, the package line last', async () => {
         const built = await run(button(), { ...withApp, options })
@@ -1208,13 +1182,13 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
         expect(built.error).toBe(
           [TWO, APP_LINE, DEPENDENCY_LINE, RELATIVE_REMEDY, PACKAGE_LINE].join('\n'),
         )
-      }, 60_000)
+      })
 
       it('leaves only the application’s line once the package is listed in keepFor', async () => {
         const built = await run(button(), { ...withApp, options: { ...options, keepFor: KEEP } })
 
         expect(built.error).toBe([FIRST, APP_LINE, RELATIVE_REMEDY].join('\n'))
-      }, 60_000)
+      })
 
       it('says the keepFor entry the report printed clears this too, so the failure holds one such line', async () => {
         const pkg = {
@@ -1234,7 +1208,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
         expect(listed.error).toBeUndefined()
         expect(atomLayerAtoms(listed.css)).toEqual(atoms('flex'))
-      }, 120_000)
+      })
     })
 
     it('an importer inside a dependency gets the same line, naming a file the reader cannot change', async () => {
@@ -1252,7 +1226,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 
   it('in dev gives no error, and the importers’ atoms are served only once the specifier is declared', async () => {
@@ -1279,7 +1253,7 @@ describe('AC-used-atoms-50 — the build-end check finds an importer the text te
 
     expect(await run(['./src/ui/index.ts'])).toEqual([])
     expect(await run(['./src/ui/index.ts', '#ds'])).toEqual(atoms('grid'))
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-51 — cxModules entries resolve from Vite’s root and a typo surfaces on the barrel', () => {
@@ -1293,7 +1267,7 @@ describe('AC-used-atoms-51 — cxModules entries resolve from Vite’s root and 
     expect(built.error).toBeUndefined()
     expect(built.warnings).toEqual([])
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('(b) a typo fails on the undeclared barrel, whose first remedy prints the whole list with that barrel, and pasting it builds green', async () => {
     const { first, list, pasted } = await pasteAndRebuild(
@@ -1311,7 +1285,7 @@ describe('AC-used-atoms-51 — cxModules entries resolve from Vite’s root and 
     expect(list).toEqual(['./src/ui/indx.ts', './src/ui/index.ts'])
     expect(pasted?.error).toBeUndefined()
     expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('flex'))
-  }, 120_000)
+  })
 
   it('(c) the app moved to apps/web resolves a relative entry from root, whatever the working directory', async () => {
     const moved = Object.entries(appFiles(files)).map(([name, text]): [string, string] => [
@@ -1337,7 +1311,7 @@ describe('AC-used-atoms-51 — cxModules entries resolve from Vite’s root and 
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('(d) the entry written as the barrel’s absolute path', async () => {
     const app = makeUsedApp(appFiles(files))
@@ -1351,7 +1325,7 @@ describe('AC-used-atoms-51 — cxModules entries resolve from Vite’s root and 
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-51 - a relative entry matches by its file only, and Nave’s own module is no entry', () => {
@@ -1375,7 +1349,7 @@ describe('AC-used-atoms-51 - a relative entry matches by its file only, and Nave
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('with the barrel inside src, an entry written as the importer writes it does nothing, and its printed array pastes green', async () => {
     const files = { 'src/ui/index.ts': BARREL, 'src/a.ts': UI_FILES['src/a.ts']! }
@@ -1389,7 +1363,7 @@ describe('AC-used-atoms-51 - a relative entry matches by its file only, and Nave
     expect(list).toEqual(['./ui', './src/ui/index.ts'])
     expect(pasted?.error).toBeUndefined()
     expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('flex'))
-  }, 120_000)
+  })
 
   const files = {
     'src/ui/index.ts': BARREL,
@@ -1405,7 +1379,7 @@ describe('AC-used-atoms-51 - a relative entry matches by its file only, and Nave
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('grid'))
-  }, 60_000)
+  })
 
   it('ignores the entry @navecss/core/cx beside the barrel’s entry', async () => {
     const built = await build(files, {
@@ -1414,7 +1388,7 @@ describe('AC-used-atoms-51 - a relative entry matches by its file only, and Nave
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'grid'))
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-51 - a # entry binds by file, never by its text alone', () => {
@@ -1456,7 +1430,6 @@ describe('AC-used-atoms-51 - a # entry binds by file, never by its text alone', 
         app.dispose()
       }
     },
-    60_000,
   )
 
   it('control: a # import reachable only from src prints an array that adds it, and pasting it builds green', async () => {
@@ -1474,7 +1447,7 @@ describe('AC-used-atoms-51 - a # entry binds by file, never by its text alone', 
     expect(list).toEqual(['./src/ui/index.ts', '#ds'])
     expect(pasted?.error).toBeUndefined()
     expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('grid'))
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-52 — a design-system package that re-exports cx, declared by its specifier', () => {
@@ -1505,7 +1478,7 @@ describe('AC-used-atoms-52 — a design-system package that re-exports cx, decla
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('in dev the layer served holds both', async () => {
     expect(
@@ -1513,7 +1486,7 @@ describe('AC-used-atoms-52 — a design-system package that re-exports cx, decla
         addPackage(app, '@acme/ui', ui())
       }),
     ).toEqual(atoms('flex', 'grid'))
-  }, 60_000)
+  })
 
   it('without the entry the build fails in the package’s index, printing the cxModules line and no keepFor line', async () => {
     const app = installed()
@@ -1529,7 +1502,7 @@ describe('AC-used-atoms-52 — a design-system package that re-exports cx, decla
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('the printed line, pasted, builds green', async () => {
     const { first, list, pasted } = await pasteAndRebuild(async (cxModules) => {
@@ -1544,7 +1517,7 @@ describe('AC-used-atoms-52 — a design-system package that re-exports cx, decla
     expect(first.error).toMatch(/^1 problem in 1 file/)
     expect(list).toEqual(['@acme/ui'])
     expect(pasted?.error).toBeUndefined()
-  }, 120_000)
+  })
 
   it('a re-export reached through a subpath prints that subpath, and pasting it builds green', async () => {
     const { first, list, pasted } = await pasteAndRebuild(async (cxModules) => {
@@ -1570,7 +1543,7 @@ describe('AC-used-atoms-52 — a design-system package that re-exports cx, decla
     expect(list).toEqual(['@acme/ui/cx.js'])
     expect(pasted?.error).toBeUndefined()
     expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('grid'))
-  }, 120_000)
+  })
 
   it('a re-export reached only from inside the package prints the keepFor line, and pasting it builds green', async () => {
     const run = async (keepFor: Record<string, ['flex']> | undefined): Promise<Built> => {
@@ -1603,7 +1576,7 @@ describe('AC-used-atoms-52 — a design-system package that re-exports cx, decla
 
     expect(pasted.error).toBeUndefined()
     expect(atomLayerAtoms(pasted.css)).toEqual(atoms('flex'))
-  }, 120_000)
+  })
 
   it('names no @acme/ui error in dev without the entry', async () => {
     const app = makeUsedApp(appFiles(files))
@@ -1615,7 +1588,7 @@ describe('AC-used-atoms-52 — a design-system package that re-exports cx, decla
       await stopDev(server)
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('with the entry, an unreadable call in the package is a dependency problem with its keepFor line', async () => {
     const app = installed("import { cx } from './index.js'\nexport const Button = (v) => cx(v)\n")
@@ -1628,7 +1601,7 @@ describe('AC-used-atoms-52 — a design-system package that re-exports cx, decla
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-52 - a re-export in a file only the package imports, told to the reader whose code calls the package’s cx', () => {
@@ -1671,7 +1644,6 @@ describe('AC-used-atoms-52 - a re-export in a file only the package imports, tol
 
       expect(built.error!.split('\n')).toContain(INTERNAL)
     },
-    60_000,
   )
 
   it('control: an application that takes cx from @navecss/core/cx and listed keepFor ships both its own call and the listed atom', async () => {
@@ -1683,7 +1655,7 @@ describe('AC-used-atoms-52 - a re-export in a file only the package imports, tol
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'grid'))
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-52 - a listed dependency module that exports a cx the build does not follow', () => {
@@ -1735,7 +1707,7 @@ describe('AC-used-atoms-52 - a listed dependency module that exports a cx the bu
 
     expect(followed.error).toBeUndefined()
     expect(atomLayerAtoms(followed.css)).toEqual(atoms('flex', 'grid'))
-  }, 120_000)
+  })
 
   it('its own function: the line adds that the reader imports cx from Nave, and following it builds green', async () => {
     const built = await run(OWNER, OWN, { cxModules: ['@acme/ui'] })
@@ -1747,7 +1719,7 @@ describe('AC-used-atoms-52 - a listed dependency module that exports a cx the bu
 
     expect(followed.error).toBeUndefined()
     expect(atomLayerAtoms(followed.css)).toEqual(atoms('grid'))
-  }, 120_000)
+  })
 
   it('a wrapper: the declared line first, then the calls line for the wrapper’s own call', async () => {
     const built = await run(OWNER, WRAP, { cxModules: ['@acme/ui'] })
@@ -1760,7 +1732,7 @@ describe('AC-used-atoms-52 - a listed dependency module that exports a cx the bu
 
     expect(followed.error).toBeUndefined()
     expect(atomLayerAtoms(followed.css)).toEqual(atoms('flex', 'grid'))
-  }, 120_000)
+  })
 
   it('two entries naming modules of one package: the plural line names both', async () => {
     const built = await run(OWNER, HOP, { cxModules: ['@acme/ui', '@acme/ui/index.js'] })
@@ -1768,7 +1740,7 @@ describe('AC-used-atoms-52 - a listed dependency module that exports a cx the bu
     expect(remedies(built)[0]).toBe(
       `@acme/ui exports a cx the build does not follow from '@acme/ui', '@acme/ui/index.js', which are listed in cxModules. Remove them from cxModules in navePlugin(). ${LASTING} each module you list.`,
     )
-  }, 60_000)
+  })
 
   it('every cxModules array in the failure leaves out the entry the line says to remove, and the paste builds green', async () => {
     const modules = {
@@ -1792,7 +1764,7 @@ describe('AC-used-atoms-52 - a listed dependency module that exports a cx the bu
 
     expect(pasted.error).toBeUndefined()
     expect(atomLayerAtoms(pasted.css)).toEqual(atoms('block', 'flex', 'grid'))
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-05 — the remedy for an undeclared re-export offers cxModules first', () => {
@@ -1811,7 +1783,7 @@ describe('AC-used-atoms-05 — the remedy for an undeclared re-export offers cxM
     expect(remedies[0]).toBe(
       "To keep a module that re-exports cx, list it in navePlugin() by its path from the project root: cxModules: ['./src/utils.js', './src/utils2.js', './src/utils3.js', './src/utils4.js']. Files that import cx from it are then read as if they imported it from @navecss/core/cx. Or import cx from @navecss/core/cx directly where it is called.",
     )
-  }, 60_000)
+  })
 
   it('with a list already present, one paste is enough and the two barrels no longer alternate', async () => {
     const files = {
@@ -1830,7 +1802,7 @@ describe('AC-used-atoms-05 — the remedy for an undeclared re-export offers cxM
     expect(list).toEqual(['./src/ui/index.ts', './src/other.ts'])
     expect(pasted?.error).toBeUndefined()
     expect(atomLayerAtoms(pasted!.css)).toEqual(atoms('flex', 'grid'))
-  }, 120_000)
+  })
 
   it('builds the first three green once declared, and the namespace row still fails', async () => {
     const built = await build(barrels, {
@@ -1839,7 +1811,7 @@ describe('AC-used-atoms-05 — the remedy for an undeclared re-export offers cxM
 
     expect(built.error).toMatch(/^1 problem in 1 file/)
     expect(built.error).toContain('src/utils4.js:')
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-43 and -55 - a dependency’s re-export gets a line that clears it', () => {
@@ -1864,7 +1836,7 @@ describe('AC-used-atoms-43 and -55 - a dependency’s re-export gets a line that
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('prints the cxModules line alone for a package whose only problem is a re-export in its entry, and pasting it builds green', async () => {
     const { first, list, pasted } = await pasteAndRebuild(async (cxModules) => {
@@ -1883,7 +1855,7 @@ describe('AC-used-atoms-43 and -55 - a dependency’s re-export gets a line that
     expect(first.error).not.toContain('keepFor')
     expect(list).toEqual(['@acme/ds'])
     expect(pasted?.error).toBeUndefined()
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-01 — under all, cxModules is validated and does nothing else', () => {
@@ -1896,5 +1868,5 @@ describe('AC-used-atoms-01 — under all, cxModules is validated and does nothin
 
     expect(listed.error).toBeUndefined()
     expect(listed.css).toBe(plain.css)
-  }, 60_000)
+  })
 })

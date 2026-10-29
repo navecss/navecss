@@ -141,7 +141,7 @@ describe.each(LEGS)(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('row 1: a ?inline import of the module changes nothing, with no warning', async () => {
       const app = makeUsedApp(
@@ -174,7 +174,7 @@ describe.each(LEGS)(
       } finally {
         app.dispose()
       }
-    }, 120_000)
+    })
 
     it('does not read a module a CSS Module composes from on its own, in the build or in the dev server', async () => {
       const app = makeUsedApp(
@@ -192,7 +192,7 @@ describe.each(LEGS)(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('row 2: a ?raw import of the module leaves the set as main has it, the raw text read as any text is', async () => {
       const app = makeUsedApp(
@@ -214,7 +214,7 @@ describe.each(LEGS)(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('row 4: a preprocessed module (.module.scss) is read as a .module.css one is', async () => {
       const app = makeUsedApp(
@@ -235,7 +235,7 @@ describe.each(LEGS)(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('row 5: a dependency’s CSS Module is read, with no plugin message and no keepFor', async () => {
       const app = makeUsedApp(
@@ -264,7 +264,7 @@ describe.each(LEGS)(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('a Vue <style module> block is read the same way, and a selector in it is not a use', async () => {
       const app = makeUsedApp(
@@ -287,7 +287,7 @@ describe.each(LEGS)(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   },
 )
 
@@ -311,7 +311,6 @@ describe('AC-used-atoms-61 — css.modules.exportGlobals (row 6)', () => {
         app.dispose()
       }
     },
-    60_000,
   )
 })
 

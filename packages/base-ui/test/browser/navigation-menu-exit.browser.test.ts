@@ -262,6 +262,48 @@ const declaredLengthOf = (css: string): number => {
   }
 }
 
+/**
+ * How long the pointer-leaving row gives all its steps together. The row's own timeout is 30
+ * seconds, and a step that is still stuck at this point reports itself by name instead of the row
+ * timing out without saying where.
+ */
+const POINTER_ROW_BUDGET_MS = 24_000
+
+/**
+ * Runs the steps of one row against a shared time budget. A step gets whatever is left of it, so a
+ * slow machine is waited for as long as the budget allows, and the step that is stuck when it runs
+ * out, or that fails, is the one the error names. `act` is told the time left, for the calls that
+ * take a timeout of their own.
+ */
+const stepsWithin = (
+  budget: number,
+): (<Result>(step: string, act: (remaining: number) => Promise<Result>) => Promise<Result>) => {
+  const deadline = performance.now() + budget
+  return async <Result>(step: string, act: (remaining: number) => Promise<Result>) => {
+    const remaining = Math.max(Math.floor(deadline - performance.now()), 1)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const expired = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`${step}: still not done when the row's ${String(budget)} ms ran out`))
+      }, remaining)
+    })
+    const attempt = async (): Promise<Result> => {
+      try {
+        return await act(remaining)
+      } catch (error) {
+        throw new Error(`${step}: ${error instanceof Error ? error.message : String(error)}`, {
+          cause: error,
+        })
+      }
+    }
+    try {
+      return await Promise.race([attempt(), expired])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+}
+
 const scene = (): ReactNode =>
   h(
     'div',
@@ -403,6 +445,91 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
     return run
   }
 
+  /**
+   * The Escape for the empty-frame control, sent from inside the first animation frame in which the
+   * popup is part-way through its fade-in, with the fade held there from that moment: its
+   * animations are paused in the same task as the key, and played again once the sampler has had a
+   * frame to read the emptied panel in. So the Escape lands in the fade, and the popup stays in it
+   * for as long as the machine needs to draw a frame, by construction and not by a count of
+   * milliseconds a busy machine can overrun (a stall long enough lets the whole fade run out
+   * before the page draws anything, and an empty popup that was never drawn is not one a frame can
+   * show). The key is a keydown dispatched from that frame's callback: one sent through the test
+   * runner arrives at whatever frame the machine reaches it in. When the first frame that shows the
+   * popup past opacity 0.01 already shows it at 0.99 or more (the page was too slow to draw a frame
+   * inside the fade, or the fade-in was over), the case did not happen and the row is skipped
+   * through `skip`, which says so, not passed. A popup still at opacity 0.01 or less after
+   * `MAX_FRAMES` frames never started its fade-in, and the row fails saying so.
+   *
+   * Returns the frames the sampler saw from the Escape on, and the opacity the popup had when it
+   * landed.
+   */
+  const escapeInsideFadeIn = async (
+    skip: (note: string) => never,
+  ): Promise<{ readonly landedAtOpacity: number; readonly seen: readonly Frame[] }> => {
+    await openByKeyboard()
+    required('panel-link-0').focus()
+    const held: Animation[] = []
+    let landedAtOpacity: number | undefined
+    let actedAt = 0
+    await new Promise<void>((resolve, reject) => {
+      const look = (frame: number): void => {
+        if (frame >= MAX_FRAMES) {
+          reject(
+            new Error(
+              `the popup stayed at opacity 0.01 or less for ${String(MAX_FRAMES)} frames: its fade-in never started`,
+            ),
+          )
+          return
+        }
+        const opacity = popupOpacity()
+        if (opacity >= 0.99) {
+          resolve()
+        } else if (opacity > 0.01) {
+          held.push(...byTestId('popup')!.getAnimations())
+          for (const animation of held) {
+            animation.pause()
+          }
+          actedAt = sampler!.frames.length
+          landedAtOpacity = opacity
+          const target = document.activeElement ?? document.body
+          target.dispatchEvent(
+            new KeyboardEvent('keydown', {
+              bubbles: true,
+              cancelable: true,
+              code: 'Escape',
+              key: 'Escape',
+            }),
+          )
+          resolve()
+        } else {
+          requestAnimationFrame(() => {
+            look(frame + 1)
+          })
+        }
+      }
+      requestAnimationFrame(() => {
+        look(0)
+      })
+    })
+    if (landedAtOpacity === undefined) {
+      skip(ESCAPE_CAME_AFTER_THE_FADE)
+    }
+    expect(held.length, 'the fade-in was running when the Escape landed').toBeGreaterThan(0)
+    // Held until the sampler has read the emptied panel, or the popup has gone anyway.
+    await isReachedWithin(
+      () =>
+        byTestId('popup') === undefined ||
+        sampler!.frames.slice(actedAt).some((frame) => isEmptyFrame(frame)),
+      MAX_FRAMES,
+    )
+    for (const animation of held) {
+      animation.play()
+    }
+    await untilGone()
+    sampler!.stop()
+    return { landedAtOpacity, seen: sampler!.frames.slice(actedAt) }
+  }
+
   describe('with panel fade signed', () => {
     it('AC-base-ui-feedback-navigation-24 (Tier B): Escape after a settled open with focus on the trigger shows no empty frame and the popup is gone within two frames', async () => {
       start()
@@ -441,18 +568,25 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
     }, 30_000)
 
     it('AC-base-ui-feedback-navigation-24 (Tier B): the pointer leaving during the fade-in shows no empty frame and focus stays where it was', async () => {
+      const step = stepsWithin(POINTER_ROW_BUDGET_MS)
       start()
-      await settled(() => byTestId('trigger-guides'))
-      await parkPointer()
+      await step('waiting for the Guides trigger to be on the page and still', () =>
+        settled(() => byTestId('trigger-guides')),
+      )
+      await step('parking the pointer in the corner', () => parkPointer())
       const before = document.activeElement
       sampler = sampleFrames()
-      await userEvent.hover(required('trigger-guides'))
-      await appears('popup')
+      await step('moving the pointer onto the Guides trigger', (timeout) =>
+        userEvent.hover(required('trigger-guides'), { timeout }),
+      )
+      await step('waiting for the popup to open under the pointer', () => appears('popup'))
       const actedAt = sampler.frames.length
       // Forced: a hover-opened menu blocks pointer events on the rest of the page at some versions,
       // and a pointer that leaves is what the case is about.
-      await userEvent.hover(required('away'), { force: true })
-      await untilGone()
+      await step('moving the pointer off the trigger', (timeout) =>
+        userEvent.hover(required('away'), { force: true, timeout }),
+      )
+      await step('waiting for the popup to leave after the pointer did', () => untilGone())
       sampler.stop()
       expectClean(summarise(sampler, actedAt))
       expect(document.activeElement, 'after a pointer close focus stays where it was').toBe(before)
@@ -527,7 +661,7 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
       30_000,
     )
 
-    it('AC-base-ui-feedback-navigation-24 (Tier B, empty-frame control): the fade-in-only form with no exit key shows an empty frame on the Escape 30ms into the fade-in', async ({
+    it('AC-base-ui-feedback-navigation-24 (Tier B, empty-frame control): the fade-in-only form with no exit key shows an empty frame on an Escape mid fade-in', async ({
       skip,
     }) => {
       const fadeInOnly = await printedForm(FADE_IN_ONLY, { bytes: 364, hash: 'ad98077420eeff98' })
@@ -535,11 +669,13 @@ describe(`AC-base-ui-feedback-navigation-24: the panel's exit, at Base UI ${BASE
       expect(tokenMilliseconds('--nave-motion-duration-fast'), 'the control fade is in force').toBe(
         CONTROL_FADE_MS,
       )
-      // Skipped, not failed, when the fade-in was already over by the time the Escape came.
-      const run = await escapeDuringFadeIn(30, skip)
-      expect(run.empty.length, 'frames with the popup mounted, visible and empty').toBeGreaterThan(
-        0,
-      )
+      const { landedAtOpacity, seen } = await escapeInsideFadeIn(skip)
+      expect(landedAtOpacity, 'the Escape landed inside the fade-in').toBeGreaterThan(0.01)
+      expect(landedAtOpacity, 'the Escape landed inside the fade-in').toBeLessThan(0.99)
+      expect(
+        seen.filter((frame) => isEmptyFrame(frame)).length,
+        'frames with the popup mounted, visible and empty',
+      ).toBeGreaterThan(0)
     }, 30_000)
   })
 

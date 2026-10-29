@@ -386,7 +386,7 @@ describe('AC-directive-core-42 — --watch', () => {
       signal,
     )
     expect(child.exitCode).toBeNull()
-  }, 60_000)
+  })
 })
 
 describe('AC-directive-core-43 — a bare @import is reported, with the stylesheet to link instead', () => {

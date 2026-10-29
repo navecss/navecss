@@ -11,7 +11,11 @@ export default defineConfig({
     // test worker with SIGSEGV. Remove this once the pinned Node carries the fix.
     execArgv: ['--no-sparkplug'],
     include: ['test/**/*.test.ts'],
-    testTimeout: 20_000,
+    // A row here compiles or lints a whole file, and `ci:check` runs every package's tests at
+    // once on a machine other sessions share: rows that take seconds alone took 23 to 97 s there.
+    // No row asserts how long it takes, so the budget only has to outlast a loaded machine; a hang
+    // is still bounded by the job's own timeout.
+    testTimeout: 240_000,
     coverage: {
       // Measure and report only — no thresholds are configured, and none
       // should be added here. A library that is mostly CSS and generated

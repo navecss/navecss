@@ -26,7 +26,9 @@ afterAll(async () => {
   await browser.close()
 }, 60_000)
 
-const SECOND = 180_000
+// A row here builds or serves a whole Astro project and loads pages from it. A machine running
+// other suites took longer than 180 s for one, and no row asserts how long it takes.
+const ROW_BUDGET = 600_000
 
 /**
  * The shapes' project, built and previewed, or served by the dev server.
@@ -86,7 +88,7 @@ describe('AC-astro-24 — without the remedy, the shapes the README names invert
       expect(await styleOf(page, '#c', 'display')).toBe('flex')
       await page.close()
     },
-    SECOND,
+    ROW_BUDGET,
   )
 
   it(
@@ -97,7 +99,7 @@ describe('AC-astro-24 — without the remedy, the shapes the README names invert
         expect(await displayOf(dev.url, `/c/${shape}/`), shape).toBe('grid')
       }
     },
-    SECOND,
+    ROW_BUDGET,
   )
 })
 
@@ -132,7 +134,7 @@ describe('AC-astro-25 — with the remedy, every shape holds in the build, in de
       await page.goto(`${built.url}/`)
       await page.close()
     },
-    SECOND,
+    ROW_BUDGET,
   )
 
   it(
@@ -143,6 +145,6 @@ describe('AC-astro-25 — with the remedy, every shape holds in the build, in de
         expect(await displayOf(dev.url, `/c/${shape}/`), shape).toBe('grid')
       }
     },
-    SECOND,
+    ROW_BUDGET,
   )
 })

@@ -59,7 +59,7 @@ describe('AC-consumer-constraints-32: SKILL.md stays in sync with src/atoms.ts',
 
   beforeAll(async () => {
     generated = await generate()
-  }, 120_000)
+  }, 240_000)
 
   it('the committed file matches what the generator produces', () => {
     const committed = readFileSync(OUTPUT_PATH, 'utf8')

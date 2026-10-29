@@ -95,7 +95,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
         expect(error.message).toContain('[plugin nave]')
         expect(error.message).toMatch(/assets\/[\w.-]+\.css:1:\d+: @nave flex \(in \.a\)/)
         expect(error.message).toMatch(/Scanned 1 CSS asset this build wrote\./)
-      }, 30_000)
+      })
 
       it('(b) fails on a stylesheet another plugin emits at the very end, and prints check’s own lines', async () => {
         const config = appConfig(clean.root, 'postcss', [emitSurvivor(), navePlugin(options)])
@@ -106,7 +106,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
         expect(expected).toBe(':1:4: @nave flex (in .b)')
         expect(error.message).toContain(`x.css${expected}`)
         expect(error.message).toMatch(/Scanned \d+ CSS assets? this build wrote\./)
-      }, 30_000)
+      })
     })
 
     it('(b) also fails under css.transformer lightningcss', async () => {
@@ -114,7 +114,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
       const error = await failureOf(buildOutputs(config, api))
 
       expect(error.message).toContain('x.css:1:4: @nave flex (in .b)')
-    }, 30_000)
+    })
 
     it('a CSS file a plugin listed before the Nave one emits from a post-ordered generateBundle fails the build', async () => {
       const config = appConfig(clean.root, 'postcss', [emitterAt('early'), navePlugin()], {
@@ -123,7 +123,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
       const error = await failureOf(buildOutputs(config, api))
 
       expect(error.message).toContain('late.css:1:4: @nave flex (in .b)')
-    }, 60_000)
+    })
 
     it('the count line states how many CSS assets the build wrote', async () => {
       const config = appConfig(clean.root, 'postcss', [emitSurvivor(), navePlugin()])
@@ -133,7 +133,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
 
       expect(written).toBeGreaterThan(0)
       expect(error.message).toMatch(/Scanned 2 CSS assets this build wrote\./)
-    }, 30_000)
+    })
 
     it('with no survivor the build passes and the scan prints nothing', async () => {
       const warnings: string[] = []
@@ -153,7 +153,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
 
       expect(css).toContain('display:flex')
       expect(warnings).toEqual([])
-    }, 30_000)
+    })
 
     it('no option turns the scan off: the options type has no such key', () => {
       // @ts-expect-error — there is no scan switch at first publish

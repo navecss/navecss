@@ -89,7 +89,7 @@ describe('runExpand --watch', () => {
     await vi.waitFor(() => expect(readFileSync(out, 'utf8')).toContain('display: grid'), {
       timeout: 5000,
     })
-  }, 15_000)
+  })
 
   it('puts the watchers up before the first pass writes, so a save made during it is seen', async () => {
     const source = path.join(project.dir, 'a.css')
@@ -100,7 +100,7 @@ describe('runExpand --watch', () => {
     await vi.waitFor(() => expect(existsSync(watching.out)).toBe(true), { timeout: 5000 })
 
     expect(watching.outExisted).toBe(false)
-  }, 15_000)
+  })
 
   it('runs the pass once more for a change that arrives while a pass is running', async () => {
     const source = path.join(project.dir, 'a.css')
@@ -115,5 +115,5 @@ describe('runExpand --watch', () => {
       () => expect(logs.filter((line) => line.startsWith('Expanded'))).toHaveLength(2),
       { timeout: 5000 },
     )
-  }, 15_000)
+  })
 })

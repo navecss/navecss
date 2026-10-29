@@ -12,7 +12,7 @@ import type { Node } from './helpers/css-layer.ts'
 import { atoms } from '../src/atoms.ts'
 import { inspectAtomicLayer, pruneAtomicLayer, unprunedAtoms } from '../src/vite-prune.ts'
 import { classesOf, keepOnly, parseAtomicLayer } from './helpers/css-layer.ts'
-import { assertScalesLinearly } from './helpers/perf-scaling.ts'
+import { assertScalesLinearly, cpuMillisecondsPerCall } from './helpers/perf-scaling.ts'
 
 const NESTED = `
 @layer tokens, reset, atomic, overrides;
@@ -270,12 +270,12 @@ describe('AC-used-atoms-27 - a selector nested in :is() is read in time proporti
   it('prunes and checks :is(.nave-flex:is(.nave-flex:is(...))) at any depth', async () => {
     await assertScalesLinearly((depth) => {
       const css = nested(depth)
-      const start = performance.now()
-      const pruned = pruneAtomicLayer(css, emitted)
-      const needs = unprunedAtoms(css, emitted)
-      const spent = performance.now() - start
-      expect(pruned).not.toContain('nave-flex')
-      expect(needs).toEqual(['flex'])
+      const spent = cpuMillisecondsPerCall(() => {
+        pruneAtomicLayer(css, emitted)
+        unprunedAtoms(css, emitted)
+      })
+      expect(pruneAtomicLayer(css, emitted)).not.toContain('nave-flex')
+      expect(unprunedAtoms(css, emitted)).toEqual(['flex'])
       return spent
     }, 800)
   }, 120_000)
@@ -283,10 +283,13 @@ describe('AC-used-atoms-27 - a selector nested in :is() is read in time proporti
   it('inspects the same layer, and names its atoms, at any depth', async () => {
     await assertScalesLinearly((depth) => {
       const css = nested(depth)
-      const start = performance.now()
-      const seen = inspectAtomicLayer(css)
-      const spent = performance.now() - start
-      expect([...seen.atoms].toSorted((a, b) => a.localeCompare(b))).toEqual(['block', 'flex'])
+      const spent = cpuMillisecondsPerCall(() => {
+        inspectAtomicLayer(css)
+      })
+      expect([...inspectAtomicLayer(css).atoms].toSorted((a, b) => a.localeCompare(b))).toEqual([
+        'block',
+        'flex',
+      ])
       return spent
     }, 800)
   }, 120_000)
@@ -296,12 +299,12 @@ describe('AC-used-atoms-27 - a selector nested in :is() is read in time proporti
       const selector = `${':is('.repeat(depth)}.nave-grid${')'.repeat(depth)}`
       const css = `@layer atomic { ${selector} { color: red } .nave-flex { display: flex } }`
       const only = new Set(['flex'])
-      const start = performance.now()
+      const spent = cpuMillisecondsPerCall(() => {
+        unprunedAtoms(pruneAtomicLayer(css, only), only)
+      })
       const pruned = pruneAtomicLayer(css, only)
-      const left = unprunedAtoms(pruned, only)
-      const spent = performance.now() - start
       expect(pruned).not.toContain('nave-grid')
-      expect(left).toEqual([])
+      expect(unprunedAtoms(pruned, only)).toEqual([])
       return spent
     }, 400)
   }, 120_000)

@@ -192,7 +192,7 @@ describe("AC-base-ui-bridge-39 and AC-base-ui-overlay-completion-43: an unused p
     ])
   })
 
-  it(`keeps the helper at most ${HELPER_CEILING} bytes`, { timeout: 120_000 }, async () => {
+  it(`keeps the helper at most ${HELPER_CEILING} bytes`, async () => {
     expect(await helperCost(DIST_DIR, 'built')).toBeLessThanOrEqual(HELPER_CEILING)
   })
 

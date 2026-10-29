@@ -245,12 +245,14 @@ describe('AC-directive-core-36 — the README’s Vite fence, built', () => {
     } finally {
       rmSync(root, { force: true, recursive: true })
     }
-  }, 60_000)
+  })
 })
 
+// Each type-check builds a TypeScript program, so these take the budget of the type-check rows of
+// `vite-plugin-surface.test.ts`. No row asserts how long it takes.
 describe(
   'AC-directive-core-39 — CONSUMER-ATOMS.md needs no PostCSS to type-check',
-  { timeout: 120_000 },
+  { timeout: 600_000 },
   () => {
     it('imports AtomDefinition from @navecss/core/atoms, in every fence', () => {
       const imports = extractFences('CONSUMER-ATOMS.md', consumerAtoms)

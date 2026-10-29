@@ -268,7 +268,7 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('builds `all` to the build of the directive half alone, for a stylesheet that uses @nave', async () => {
       const app = makeUsedApp(
@@ -291,7 +291,7 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('is inert under all: no define, no noExternal, no re-feed, no worker plugin, no cache file, no module recorded', async () => {
       const cacheDir = mkdtempSync(path.join(tmpdir(), 'nave-inert-'))
@@ -364,7 +364,7 @@ describe('AC-used-atoms-01 — navePlugin() returns two plugin objects for every
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 })
 
@@ -402,112 +402,106 @@ describe(
   },
 )
 
-describe(
-  'AC-used-atoms-17 — keep: always emitted, typed readonly, validated under both values',
-  { timeout: 120_000 },
-  () => {
-    const extend = { brandBox: { declarations: { color: 'red' } } }
+describe('AC-used-atoms-17 — keep: always emitted, typed readonly, validated under both values', () => {
+  const extend = { brandBox: { declarations: { color: 'red' } } }
 
-    it('ships exactly the code’s atoms plus keep', async () => {
-      const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
-      try {
-        const built = await buildUsed(app, { options: { keep: ['grid', 'focusRing'] } })
+  it('ships exactly the code’s atoms plus keep', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
+    try {
+      const built = await buildUsed(app, { options: { keep: ['grid', 'focusRing'] } })
 
-        expect(built.error).toBeUndefined()
-        expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'grid', 'focusRing'))
-      } finally {
-        app.dispose()
-      }
-    }, 60_000)
+      expect(built.error).toBeUndefined()
+      expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'grid', 'focusRing'))
+    } finally {
+      app.dispose()
+    }
+  })
 
-    it('names an atom of the consumer’s own in keep when extend is a module, once it has loaded', async () => {
-      const app = makeUsedApp(
-        appFiles({
-          'atoms.mjs': 'export default { brandBox: { declarations: { color: "red" } } }\n',
-          'src/App.ts': `${IMPORT}console.log(cx('flex'))\n`,
-        }),
-      )
-      try {
-        const built = await buildUsed(app, {
-          options: { extend: './atoms.mjs', keep: ['brandBox' as never] },
-        })
+  it('names an atom of the consumer’s own in keep when extend is a module, once it has loaded', async () => {
+    const app = makeUsedApp(
+      appFiles({
+        'atoms.mjs': 'export default { brandBox: { declarations: { color: "red" } } }\n',
+        'src/App.ts': `${IMPORT}console.log(cx('flex'))\n`,
+      }),
+    )
+    try {
+      const built = await buildUsed(app, {
+        options: { extend: './atoms.mjs', keep: ['brandBox' as never] },
+      })
 
-        expect(built.error).toContain('keep names "brandBox", an atom of your own')
-      } finally {
-        app.dispose()
-      }
-    }, 60_000)
+      expect(built.error).toContain('keep names "brandBox", an atom of your own')
+    } finally {
+      app.dispose()
+    }
+  })
 
-    it.each([
-      ['keep: a string', { keep: 'flex' }],
-      ['keep: a number', { keep: 42 }],
-      ['keep: a Set', { keep: new Set(['flex']) }],
-      ['keepFor: a string', { keepFor: 'x-lib' }],
-      // eslint-disable-next-line unicorn/no-null -- a literal `null` option value is what is under test
-      ['keepFor: null', { keepFor: null }],
-      ['keepFor: an entry that is a string', { keepFor: { a: 'flex' } }],
-    ])(
-      'refuses %s with the same text whether extend is an object or a module path, at the call',
-      (_name, options) => {
-        const message = (extendOption: unknown): string | undefined => {
-          try {
-            navePlugin({ extend: extendOption, ...options } as never)
-          } catch (error) {
-            return (error as Error).message
-          }
-          return undefined
+  it.each([
+    ['keep: a string', { keep: 'flex' }],
+    ['keep: a number', { keep: 42 }],
+    ['keep: a Set', { keep: new Set(['flex']) }],
+    ['keepFor: a string', { keepFor: 'x-lib' }],
+    // eslint-disable-next-line unicorn/no-null -- a literal `null` option value is what is under test
+    ['keepFor: null', { keepFor: null }],
+    ['keepFor: an entry that is a string', { keepFor: { a: 'flex' } }],
+  ])(
+    'refuses %s with the same text whether extend is an object or a module path, at the call',
+    (_name, options) => {
+      const message = (extendOption: unknown): string | undefined => {
+        try {
+          navePlugin({ extend: extendOption, ...options } as never)
+        } catch (error) {
+          return (error as Error).message
         }
-        const withObject = message({})
-
-        expect(withObject).toMatch(/^navePlugin\(\): (keep|keepFor)/)
-        expect(message('./atoms.mjs')).toBe(withObject)
-      },
-    )
-
-    it('leaves the names a module may define to the module: a path accepts any string at the call', () => {
-      expect(() => navePlugin({ extend: './atoms.mjs', keep: ['brandBox' as never] })).not.toThrow()
-      expect(() => navePlugin({ extend: {}, keep: ['brandBox' as never] })).toThrow('unknown atom')
-    })
-
-    it.each(['used', 'all'] as const)(
-      'refuses an unknown name and an atom of the consumer’s own under %s',
-      (atomic) => {
-        expect(() => navePlugin({ atomic, keep: ['sr-only' as never] })).toThrow(
-          'navePlugin(): keep names an unknown atom "sr-only". Did you mean "srOnly"? Atom names are camelCase; "nave-sr-only" is its class.',
-        )
-        expect(() => navePlugin({ atomic, extend, keep: ['brandBox' as never] })).toThrow(
-          'navePlugin(): keep names "brandBox", an atom of your own; those have no class, so there is nothing to keep.',
-        )
-      },
-    )
-
-    it('under all, keep writes a dist byte-identical to the same build without it', async () => {
-      const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
-      try {
-        const plain = await buildUsed(app, { options: { atomic: 'all' } })
-        const kept = await buildUsed(app, { options: { atomic: 'all', keep: ['grid'] } })
-
-        expect(JSON.stringify([kept.assets, kept.js])).toBe(
-          JSON.stringify([plain.assets, plain.js]),
-        )
-      } finally {
-        app.dispose()
+        return undefined
       }
-    }, 60_000)
+      const withObject = message({})
 
-    it('types keep as a readonly list of atom names', () => {
-      const ok = diagnosticsFor('keepOk')
-      const bad = diagnosticsFor('keepBad')
-      const mutable = diagnosticsFor('keepMutable')
+      expect(withObject).toMatch(/^navePlugin\(\): (keep|keepFor)/)
+      expect(message('./atoms.mjs')).toBe(withObject)
+    },
+  )
 
-      expect(ok).toEqual([])
-      expect(bad.filter((message) => message.includes('nope'))).toHaveLength(2)
-      expect(mutable.some((message) => message.startsWith('TS4104'))).toBe(true)
-    })
-  },
-)
+  it('leaves the names a module may define to the module: a path accepts any string at the call', () => {
+    expect(() => navePlugin({ extend: './atoms.mjs', keep: ['brandBox' as never] })).not.toThrow()
+    expect(() => navePlugin({ extend: {}, keep: ['brandBox' as never] })).toThrow('unknown atom')
+  })
 
-describe('AC-used-atoms-18 — cx.dynamic() without the plugin', { timeout: 120_000 }, () => {
+  it.each(['used', 'all'] as const)(
+    'refuses an unknown name and an atom of the consumer’s own under %s',
+    (atomic) => {
+      expect(() => navePlugin({ atomic, keep: ['sr-only' as never] })).toThrow(
+        'navePlugin(): keep names an unknown atom "sr-only". Did you mean "srOnly"? Atom names are camelCase; "nave-sr-only" is its class.',
+      )
+      expect(() => navePlugin({ atomic, extend, keep: ['brandBox' as never] })).toThrow(
+        'navePlugin(): keep names "brandBox", an atom of your own; those have no class, so there is nothing to keep.',
+      )
+    },
+  )
+
+  it('under all, keep writes a dist byte-identical to the same build without it', async () => {
+    const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
+    try {
+      const plain = await buildUsed(app, { options: { atomic: 'all' } })
+      const kept = await buildUsed(app, { options: { atomic: 'all', keep: ['grid'] } })
+
+      expect(JSON.stringify([kept.assets, kept.js])).toBe(JSON.stringify([plain.assets, plain.js]))
+    } finally {
+      app.dispose()
+    }
+  })
+
+  it('types keep as a readonly list of atom names', () => {
+    const ok = diagnosticsFor('keepOk')
+    const bad = diagnosticsFor('keepBad')
+    const mutable = diagnosticsFor('keepMutable')
+
+    expect(ok).toEqual([])
+    expect(bad.filter((message) => message.includes('nope'))).toHaveLength(2)
+    expect(mutable.some((message) => message.startsWith('TS4104'))).toBe(true)
+  })
+})
+
+describe('AC-used-atoms-18 — cx.dynamic() without the plugin', () => {
   it('maps an atom through the full map and returns an empty string for anything else', () => {
     expect(cx.dynamic('grid')).toBe(cx('grid'))
     expect(cx.dynamic('grid')).toBe('nave-grid')
@@ -547,7 +541,7 @@ describe('AC-used-atoms-18 — cx.dynamic() without the plugin', { timeout: 120_
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('is typed as one argument of AtomName or falsy, returning string', () => {
     const diagnostics = diagnosticsFor('dynamicTyped')
@@ -558,7 +552,7 @@ describe('AC-used-atoms-18 — cx.dynamic() without the plugin', { timeout: 120_
   })
 })
 
-describe('AC-used-atoms-20 — the dev define, from the built package', { timeout: 60_000 }, () => {
+describe('AC-used-atoms-20 — the dev define, from the built package', () => {
   it('evaluates in a context with nothing but a console, maps keep, and logs the not-kept line once per hasOwn call', async () => {
     const built = (await import(pathToFileURL(path.join(CORE_ROOT, 'dist/vite.js')).href)) as {
       navePlugin: typeof navePlugin
@@ -624,7 +618,7 @@ describe('AC-used-atoms-20 — the dev define, from the built package', { timeou
       logged.mockRestore()
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-23 — the post-order half changes only the calls it reads, and adds no module', () => {
@@ -680,5 +674,5 @@ describe('AC-used-atoms-23 — the post-order half changes only the calls it rea
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })

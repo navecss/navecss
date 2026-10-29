@@ -176,7 +176,6 @@ describe('AC-used-atoms-52 - a cx export the package gives out through its own r
       expect(followed.error).toBeUndefined()
       expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex'))
     },
-    120_000,
   )
 
   it('keeps failing when only the inner file that holds the plain cx is listed in cxModules', async () => {
@@ -194,7 +193,7 @@ describe('AC-used-atoms-52 - a cx export the package gives out through its own r
 
     expect(followed.error).toBeUndefined()
     expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex'))
-  }, 120_000)
+  })
 
   it('fails for the renamed cx that the entry itself gives out, the same as one an inner file does', async () => {
     const first = await run(
@@ -204,7 +203,7 @@ describe('AC-used-atoms-52 - a cx export the package gives out through its own r
     )
 
     expect(first.error!.split('\n')).toContain(takenLine('src/App.ts (cn)'))
-  }, 60_000)
+  })
 
   it('is green when the application takes only Menu from a barrel that re-exports a renamed cx', async () => {
     const built = await run(
@@ -215,7 +214,7 @@ describe('AC-used-atoms-52 - a cx export the package gives out through its own r
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-52 - an alias that names the file clears it like a package subpath', () => {
@@ -234,7 +233,7 @@ describe('AC-used-atoms-52 - an alias that names the file clears it like a packa
       "@acme/ui re-exports cx in '@ui'. List it in navePlugin(): cxModules: ['@ui'].",
     )
     expect(built.error).not.toContain('your code takes it from the package')
-  }, 60_000)
+  })
 
   it('is green, and holds the atoms of both calls, once that entry is listed', async () => {
     const built = await runWithConfig(
@@ -246,7 +245,7 @@ describe('AC-used-atoms-52 - an alias that names the file clears it like a packa
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('block', 'flex'))
-  }, 60_000)
+  })
 
   it('still tells the application to import cx from Nave for a renamed export behind an alias', async () => {
     const renamed = await runWithConfig(
@@ -265,7 +264,7 @@ describe('AC-used-atoms-52 - an alias that names the file clears it like a packa
     )
 
     expect(entry.error!.split('\n')).toContain(takenLine('src/App.ts (cn)'))
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-52 - a take the build cannot read counts as taking the module whole', () => {
@@ -280,7 +279,7 @@ describe('AC-used-atoms-52 - a take the build cannot read counts as taking the m
     const built = await run(code, { '@acme/ui': withMenu('f.js', CN) }, { keepFor: KEEP_FLEX }, app)
 
     expect(built.error!.split('\n')).toContain(takenLine(UNREADABLE, 'in that file', WHOLE))
-  }, 60_000)
+  })
 
   it('fails for one that requires a plain cx, with no cxModules line and no lasting fix', async () => {
     const plain = {
@@ -297,7 +296,7 @@ describe('AC-used-atoms-52 - a take the build cannot read counts as taking the m
       takenLine(UNREADABLE, 'in that file', WHOLE, WITHOUT_FIX),
     )
     expect(built.error).not.toMatch(/cxModules: \[/)
-  }, 60_000)
+  })
 
   it('fails the same way when the module also has a specifier that clears it', async () => {
     const plain = {
@@ -316,7 +315,7 @@ describe('AC-used-atoms-52 - a take the build cannot read counts as taking the m
       takenLine(UNREADABLE, 'in that file', WHOLE, WITHOUT_FIX),
     )
     expect(built.error).not.toMatch(/cxModules: \[/)
-  }, 60_000)
+  })
 
   describe('and an importer the build has no text for, or cannot parse, reads the same', () => {
     const ID = '/project/node_modules/@acme/ui/f.js'
@@ -413,26 +412,18 @@ describe('AC-used-atoms-52 - an import() read through await or then', () => {
     ],
   ] as const
 
-  it.each(green)(
-    'takes nothing for %s',
-    async (_, body) => {
-      const built = await run(lazy(body), { '@acme/ui': ENTRY }, { keepFor: KEEP_FLEX })
+  it.each(green)('takes nothing for %s', async (_, body) => {
+    const built = await run(lazy(body), { '@acme/ui': ENTRY }, { keepFor: KEEP_FLEX })
 
-      expect(built.error).toBeUndefined()
-      expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-    },
-    60_000,
-  )
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
+  })
 
-  it.each(red)(
-    'takes the module for %s',
-    async (_, body, what) => {
-      const built = await run(lazy(body), { '@acme/ui': ENTRY }, { keepFor: KEEP_FLEX })
+  it.each(red)('takes the module for %s', async (_, body, what) => {
+    const built = await run(lazy(body), { '@acme/ui': ENTRY }, { keepFor: KEEP_FLEX })
 
-      expect(built.error!.split('\n')).toContain(takenLine(what, 'in that file', WHOLE))
-    },
-    60_000,
-  )
+    expect(built.error!.split('\n')).toContain(takenLine(what, 'in that file', WHOLE))
+  })
 })
 
 /**
@@ -453,7 +444,7 @@ describe('AC-used-atoms-52 - the names the printed line spells', () => {
     const error = await errorOfTaking('größe', 'größe')
 
     expect(error.split('\n')).toContain(takenLine('src/App.ts (größe)'))
-  }, 60_000)
+  })
 
   it('quotes a name that is no identifier, escaping the quote and the backslash', async () => {
     const quoted = await errorOfTaking('"it\'s"', '"it\'s"')
@@ -462,7 +453,7 @@ describe('AC-used-atoms-52 - the names the printed line spells', () => {
     const slashed = await errorOfTaking(String.raw`"a\\b"`, String.raw`"a\\b"`)
 
     expect(slashed.split('\n')).toContain(takenLine(String.raw`src/App.ts ('a\\b')`))
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-52 - the worked lines, word for word', () => {
@@ -474,7 +465,7 @@ describe('AC-used-atoms-52 - the worked lines, word for word', () => {
     )
 
     expect(built.error!.split('\n').at(-1)).toBe(P1_LINE)
-  }, 60_000)
+  })
 
   it('prints the line for a plain cx taken through a barrel', async () => {
     const built = await run(
@@ -484,7 +475,7 @@ describe('AC-used-atoms-52 - the worked lines, word for word', () => {
     )
 
     expect(built.error!.split('\n').at(-1)).toBe(P4_LINE)
-  }, 60_000)
+  })
 
   it('prints the line for a take by require()', async () => {
     const built = await run(
@@ -495,7 +486,7 @@ describe('AC-used-atoms-52 - the worked lines, word for word', () => {
     )
 
     expect(built.error!.split('\n').at(-1)).toBe(REQUIRE_LINE)
-  }, 60_000)
+  })
 })
 
 /**
@@ -519,7 +510,7 @@ describe('AC-used-atoms-52 - what the application takes, in shapes that already 
     expect(built.error!.split('\n')).toContain(
       takenLine('src/App.ts (cn)', 'in that file', PASSED_ON),
     )
-  }, 60_000)
+  })
 
   it('counts export * as ns from the package as a take of the namespace', async () => {
     const built = await run(
@@ -532,7 +523,7 @@ describe('AC-used-atoms-52 - what the application takes, in shapes that already 
     expect(built.error!.split('\n')).toContain(
       takenLine('src/App.ts (a namespace import)', 'in that file', WHOLE),
     )
-  }, 60_000)
+  })
 
   it('counts export * as a take only when a cx export other than the default is among them', async () => {
     const star =
@@ -557,7 +548,7 @@ describe('AC-used-atoms-52 - what the application takes, in shapes that already 
     expect(named.error!.split('\n')).toContain(
       takenLine('src/App.ts (export *)', 'in that file', WHOLE),
     )
-  }, 180_000)
+  })
 
   it('counts a namespace read through a computed key as taken', async () => {
     const built = await run(
@@ -569,7 +560,7 @@ describe('AC-used-atoms-52 - what the application takes, in shapes that already 
     expect(built.error!.split('\n')).toContain(
       takenLine('src/App.ts (a namespace import)', 'in that file', WHOLE),
     )
-  }, 60_000)
+  })
 
   it('lists the takers in code-unit order, not locale order', async () => {
     const built = await run(
@@ -585,7 +576,7 @@ describe('AC-used-atoms-52 - what the application takes, in shapes that already 
         'in each of those files',
       ),
     )
-  }, 60_000)
+  })
 
   it('lists what one taker takes in code-unit order, whichever it writes first', async () => {
     const built = await run(
@@ -601,7 +592,7 @@ describe('AC-used-atoms-52 - what the application takes, in shapes that already 
         WHOLE,
       ),
     )
-  }, 60_000)
+  })
 
   it('prints the keepFor line for a plain re-export beside a namespace one in an unlisted package', async () => {
     const mixed = `${PLAIN}import * as ns from '@navecss/core/cx'\nexport { ns }\n`
@@ -612,5 +603,5 @@ describe('AC-used-atoms-52 - what the application takes, in shapes that already 
     )
 
     expect(built.error!.split('\n').at(-1)).toBe(MIXED_LINE)
-  }, 60_000)
+  })
 })

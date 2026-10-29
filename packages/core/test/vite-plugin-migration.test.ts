@@ -36,7 +36,7 @@ describe('AC-directive-core-38 — migrating from css.postcss to plugins', () =>
 
     expect(both.css).toContain('display:flex')
     expect(isEquivalent(both.css, alone.css)).toBe(true)
-  }, 30_000)
+  })
 
   it('prints no diagnostic twice when both are left in place', async () => {
     const messages: string[] = []
@@ -62,5 +62,5 @@ describe('AC-directive-core-38 — migrating from css.postcss to plugins', () =>
     }
 
     expect(messages.filter((m) => m.includes('unknown atom "nope"'))).toHaveLength(1)
-  }, 30_000)
+  })
 })

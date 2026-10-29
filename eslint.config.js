@@ -47,6 +47,11 @@ export default defineConfig([
     // each test): copies of the generated items, which are linted by the test that wrote them.
     'packages/base-ui/test/.registry-*/**',
     'packages/base-ui/test/render/.registry-copies-*/**',
+    // The project the CSS-entry type test compiles. It lives inside the package so that the
+    // published packages resolve through its node_modules, as for a consumer. It holds a
+    // `tsconfig.json`, which the lint cannot read (the same error as above), and a run stopped
+    // before the test removes it would otherwise leave the lint failing.
+    'packages/base-ui/test/.css-entry-types-*/**',
     // The consumer app the base-ui browser tests build with a real `vite build` before every run:
     // generated, gitignored, and bundled JavaScript that is not ours to lint.
     'packages/base-ui/test/browser/fixtures/**',

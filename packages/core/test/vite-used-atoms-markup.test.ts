@@ -88,7 +88,7 @@ describe('AC-used-atoms-53 — the markup warning fires for a build that read no
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   const SILENCERS: readonly (readonly [
     string,
@@ -133,21 +133,17 @@ describe('AC-used-atoms-53 — the markup warning fires for a build that read no
     ['atomic is all', {}, { atomic: 'all' }, INPUT],
   ]
 
-  it.each(SILENCERS)(
-    'prints none when %s',
-    async (_name, files, options, build) => {
-      const app = backend(files)
-      try {
-        const built = await buildUsed(app, { options, build })
+  it.each(SILENCERS)('prints none when %s', async (_name, files, options, build) => {
+    const app = backend(files)
+    try {
+      const built = await buildUsed(app, { options, build })
 
-        expect(built.error).toBeUndefined()
-        expect(pluginWarnings(built.warnings)).toEqual([])
-      } finally {
-        app.dispose()
-      }
-    },
-    60_000,
-  )
+      expect(built.error).toBeUndefined()
+      expect(pluginWarnings(built.warnings)).toEqual([])
+    } finally {
+      app.dispose()
+    }
+  })
 
   it('prints none when a server environment of the same build transformed a module', async () => {
     const app = backend({ 'src/entry-server.ts': 'export const render = () => 1\n' })
@@ -159,7 +155,7 @@ describe('AC-used-atoms-53 — the markup warning fires for a build that read no
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('still prints when the only use is a package’s keepFor list: the emitted set is those lists alone', async () => {
     const app = backend({ 'src/main.ts': "import './app.css'\nimport 'kf-lib'\n" })
@@ -175,7 +171,7 @@ describe('AC-used-atoms-53 — the markup warning fires for a build that read no
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-54 — in dev, the markup warning is evaluated when the first stylesheet holding the layer is served', () => {
@@ -221,7 +217,7 @@ describe('AC-used-atoms-54 — in dev, the markup warning is evaluated when the 
       await server.transformRequest('/src/app.css')
       expect(count(logged)).toBe(1)
     })
-  }, 60_000)
+  })
 
   it('logs none when a server render transformed a module first', async () => {
     await served(async (server, logged) => {
@@ -229,7 +225,7 @@ describe('AC-used-atoms-54 — in dev, the markup warning is evaluated when the 
       await server.transformRequest('/src/app.css')
       expect(count(logged)).toBe(0)
     })
-  }, 60_000)
+  })
 
   it('logs none when an HTML page was requested before the stylesheet', async () => {
     await served(
@@ -243,7 +239,7 @@ describe('AC-used-atoms-54 — in dev, the markup warning is evaluated when the 
       },
       { 'index.html': '<!doctype html><script type="module" src="/src/main.ts"></script>' },
     )
-  }, 60_000)
+  })
 
   describe('under Vitest, which starts the same config as a dev server', () => {
     const requireHere = createRequire(import.meta.url)
@@ -290,7 +286,7 @@ describe('AC-used-atoms-54 — in dev, the markup warning is evaluated when the 
 
       expect(output).toContain('1 passed')
       expect(output).not.toContain(WARNING)
-    }, 120_000)
+    })
 
     it('logs none for a test that imports src/app.css either: a test file is a module of a server environment', async () => {
       const output = await vitestRun(
@@ -299,6 +295,6 @@ describe('AC-used-atoms-54 — in dev, the markup warning is evaluated when the 
 
       expect(output).toContain('1 passed')
       expect(output).not.toContain(WARNING)
-    }, 120_000)
+    })
   })
 })

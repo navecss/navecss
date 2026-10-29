@@ -6,7 +6,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { check } from '../../src/directive/check.ts'
-import { assertScalesLinearly } from '../helpers/perf-scaling.ts'
+import { assertScalesLinearly, cpuMillisecondsSince } from '../helpers/perf-scaling.ts'
 
 // Counts the directory walk's own calls into the filesystem (the mesh row below reads them).
 // Every call still reaches the real function.
@@ -36,9 +36,12 @@ beforeEach(async () => {
   ctx.dir = await mkdtemp(path.join(tmpdir(), 'nave-check-'))
 })
 
+// Removing the mesh the linear-time row builds (thousands of directories and links) is the
+// slowest cleanup here, and on a machine running other suites it took longer than the 10 s a hook
+// gets by default.
 afterEach(async () => {
   await rm(ctx.dir, { recursive: true, force: true })
-})
+}, 300_000)
 
 async function writeCss(name: string, content: string): Promise<string> {
   const filePath = path.join(ctx.dir, name)
@@ -234,8 +237,8 @@ describe('AC-directive-core-22 — navecss-core check, the exit contract', () =>
   })
 })
 
-// A generous per-row timeout throughout this block, well above the test runner's own
-// default: `assertScalesLinearly` can run its measured subject up to 21 times (a warm-up
+// The scaling rows measure time, so each keeps a per-row timeout of its own:
+// `assertScalesLinearly` can run its measured subject up to 21 times (a warm-up
 // plus 3+3 samples, across up to three attempts), and a slow or shared runner's own per-call
 // time can be an order of magnitude past a fast local machine's — the wall-clock ceiling
 // on how long the ROW is allowed to take is deliberately loose, since the scaling ratio
@@ -247,10 +250,12 @@ const SCALING_ROW_TIMEOUT = 45_000
 // entries, is a large enough share of the larger walk to move the ratio past its bound.
 // The row's own timeout is longer than the others': the meshes are large, and a walk that is
 // quadratic in the entries takes the whole of three attempts to be called one, and the row
-// should fail on the ratio, which names the problem, not on the clock.
+// should fail on the ratio, which names the problem, not on the clock. It takes about 15 s alone,
+// and a machine running other suites at ten times its cores took more than 300 s: the budget only
+// has to outlast a loaded machine, since the walk's work is bounded by the counts it asserts.
 const MESH_ENTRIES = 2304
 const MESH_WALKS = 2
-const MESH_ROW_TIMEOUT = 300_000
+const MESH_ROW_TIMEOUT = 900_000
 
 // The mesh is built from clusters of this many directories, each linked to every other one in its
 // cluster. A cluster is small, so a chain of links followed in one path stays short, far under
@@ -265,9 +270,9 @@ describe('check() stays roughly linear, not quadratic, and stack-safe on a large
       await assertScalesLinearly(async (size) => {
         const filePath = await writeCss(`a-${size}.css`, '.b{@nave flex}'.repeat(size))
 
-        const start = performance.now()
+        const start = process.cpuUsage()
         const result = await check({ source: [filePath] })
-        const elapsed = performance.now() - start
+        const elapsed = cpuMillisecondsSince(start)
 
         expect(result.status).toBe(1)
         expect(result.findings).toHaveLength(size)
@@ -278,17 +283,13 @@ describe('check() stays roughly linear, not quadratic, and stack-safe on a large
     SCALING_ROW_TIMEOUT,
   )
 
-  it(
-    'does not overflow the call stack on 5000 levels of nesting',
-    async () => {
-      const filePath = await writeCss('d.css', '.a{'.repeat(5000) + '}'.repeat(5000))
+  it('does not overflow the call stack on 5000 levels of nesting', async () => {
+    const filePath = await writeCss('d.css', '.a{'.repeat(5000) + '}'.repeat(5000))
 
-      const result = await check({ source: [filePath] })
+    const result = await check({ source: [filePath] })
 
-      expect(result.status).toBe(0)
-    },
-    SCALING_ROW_TIMEOUT,
-  )
+    expect(result.status).toBe(0)
+  })
 
   it(
     'stays roughly linear, not quadratic, in nesting depth',
@@ -296,9 +297,9 @@ describe('check() stays roughly linear, not quadratic, and stack-safe on a large
       await assertScalesLinearly(async (size) => {
         const filePath = await writeCss(`e-${size}.css`, '.a{'.repeat(size) + '}'.repeat(size))
 
-        const start = performance.now()
+        const start = process.cpuUsage()
         const result = await check({ source: [filePath] })
-        const elapsed = performance.now() - start
+        const elapsed = cpuMillisecondsSince(start)
 
         expect(result.status).toBe(0)
 
@@ -433,8 +434,7 @@ describe('a directory --source follows symlinks, loop-safe', () => {
 
           const start = process.cpuUsage()
           const result = await check({ source: [dir] })
-          const used = process.cpuUsage(start)
-          const elapsed = (used.user + used.system) / 1000
+          const elapsed = cpuMillisecondsSince(start)
 
           expect(result.status).toBe(0)
           expect(result.stylesheetsRead).toBe(clusters * MESH_CLUSTER_WIDTH)

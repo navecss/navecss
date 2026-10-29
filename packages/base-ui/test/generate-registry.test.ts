@@ -53,7 +53,7 @@ describe('the registry generator, run in this process', () => {
     expect(
       names.every((name) => name === 'registry.json' || /^base-ui-[\w-]+\.json$/.test(name)),
     ).toBe(true)
-  }, 180_000)
+  })
 
   it('builds all 35 modules, the Slider thumb with its outline-style: solid in &:has(:focus-visible)', async () => {
     const out = path.join(directory(), 'registry')
@@ -65,7 +65,7 @@ describe('the registry generator, run in this process', () => {
     }
     const module = slider.files.find((file) => file.target.endsWith('.module.css'))
     expect(module?.content).toMatch(/:has\(:focus-visible\)[^}]*outline-style: solid/)
-  }, 180_000)
+  })
 
   it('refuses an item that is not a universal item and writes none', async () => {
     const out = path.join(directory(), 'registry')
@@ -80,7 +80,7 @@ describe('the registry generator, run in this process', () => {
     expect(code).toBe(1)
     expect(written.join('\n')).toContain('registry:ui')
     expect(existsSync(out) ? readdirSync(out) : []).toEqual([])
-  }, 180_000)
+  })
 
   it('refuses a LICENSE with no copyright line, naming it', async () => {
     const root = directory()
@@ -89,7 +89,7 @@ describe('the registry generator, run in this process', () => {
     const written = refusal()
     expect(await main({ out: path.join(root, 'out'), root })).toBe(1)
     expect(written.join('\n')).toContain('LICENSE')
-  }, 180_000)
+  })
 
   it('writes registry.json in the same order under any locale', () => {
     // Czech sorts "ch" as a letter after "h", so `chip` follows `hover` unless the order is by code unit.
@@ -110,7 +110,7 @@ describe('the registry generator, run in this process', () => {
     expect(readFileSync(path.join(out, 'registry.json'), 'utf8')).toBe(
       loadRegistry().raw.get('registry.json'),
     )
-  }, 180_000)
+  })
 
   it('reads --root and --out from the command line', async () => {
     const root = directory()
@@ -119,7 +119,7 @@ describe('the registry generator, run in this process', () => {
     const out = path.join(root, 'elsewhere')
     expect(await main({ argv: ['--root', root, '--out', out] })).toBe(0)
     expect(existsSync(path.join(out, 'registry.json'))).toBe(true)
-  }, 180_000)
+  })
 })
 
 describe('the wording of an item, from the package manifest', () => {

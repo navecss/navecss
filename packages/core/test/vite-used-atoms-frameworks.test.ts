@@ -88,7 +88,7 @@ describe('AC-used-atoms-06 — Vue templates as plugin-vue compiles them, and Sv
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('(b) builds with production devtools, the template compiled apart from setup()', async () => {
     process.env.NODE_ENV = 'production'
@@ -109,7 +109,7 @@ describe('AC-used-atoms-06 — Vue templates as plugin-vue compiles them, and Sv
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('(c) serves every component in dev with no error, and collects the atoms their calls name', async () => {
     process.env.NODE_ENV = 'development'
@@ -149,7 +149,7 @@ describe('AC-used-atoms-06 — Vue templates as plugin-vue compiles them, and Sv
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('refuses a template call whose argument is a prop, at the template’s authored line', async () => {
     process.env.NODE_ENV = 'production'
@@ -174,5 +174,5 @@ describe('AC-used-atoms-06 — Vue templates as plugin-vue compiles them, and Sv
         app.dispose()
       }
     }
-  }, 120_000)
+  })
 })

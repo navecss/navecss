@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { fencesOf, readReadme } from './support/readme.ts'
 import { compile } from './support/type-fixtures.ts'
 
-const MINUTES = 180_000
-
 const readme = readReadme()
 const tsx = fencesOf(readme).filter(({ language }) => language === 'tsx')
 
@@ -67,7 +65,6 @@ describe("AC-base-ui-feedback-navigation-52: the README's examples are true agai
 
   it.each(['current', 'floor'] as const)(
     'typechecks D1 and D7 under strict against the built package with Base UI at %s',
-    { timeout: MINUTES },
     async (version) => {
       const result = await compile(
         `feedback-readme-examples-${version}`,
@@ -79,47 +76,35 @@ describe("AC-base-ui-feedback-navigation-52: the README's examples are true agai
     },
   )
 
-  it(
-    'control: a fence passing variant="ghost" to NavigationMenu.Trigger fails to typecheck, for that prop',
-    { timeout: MINUTES },
-    async () => {
-      const result = await compile(
-        'feedback-readme-examples-ghost',
-        files(navigationWith(' variant="ghost"')),
-        'current',
-      )
-      expect(result.output).not.toMatch(/Cannot find module/)
-      expect(result.output).toMatch(/variant/)
-      expect(result.code).not.toBe(0)
-    },
-  )
+  it('control: a fence passing variant="ghost" to NavigationMenu.Trigger fails to typecheck, for that prop', async () => {
+    const result = await compile(
+      'feedback-readme-examples-ghost',
+      files(navigationWith(' variant="ghost"')),
+      'current',
+    )
+    expect(result.output).not.toMatch(/Cannot find module/)
+    expect(result.output).toMatch(/variant/)
+    expect(result.code).not.toBe(0)
+  })
 
-  it(
-    'control: the same fence without the prop typechecks, so the planted prop is what reds',
-    { timeout: MINUTES },
-    async () => {
-      const result = await compile(
-        'feedback-readme-examples-plain',
-        files(navigationWith('')),
-        'current',
-      )
-      expect(result.output).toBe('')
-      expect(result.code).toBe(0)
-    },
-  )
+  it('control: the same fence without the prop typechecks, so the planted prop is what reds', async () => {
+    const result = await compile(
+      'feedback-readme-examples-plain',
+      files(navigationWith('')),
+      'current',
+    )
+    expect(result.output).toBe('')
+    expect(result.code).toBe(0)
+  })
 
-  it(
-    'control: a size on NavigationMenu.Trigger fails to typecheck too, since it takes neither prop',
-    { timeout: MINUTES },
-    async () => {
-      const result = await compile(
-        'feedback-readme-examples-size',
-        files(navigationWith(' size="sm"')),
-        'current',
-      )
-      expect(result.output).not.toMatch(/Cannot find module/)
-      expect(result.output).toMatch(/size/)
-      expect(result.code).not.toBe(0)
-    },
-  )
+  it('control: a size on NavigationMenu.Trigger fails to typecheck too, since it takes neither prop', async () => {
+    const result = await compile(
+      'feedback-readme-examples-size',
+      files(navigationWith(' size="sm"')),
+      'current',
+    )
+    expect(result.output).not.toMatch(/Cannot find module/)
+    expect(result.output).toMatch(/size/)
+    expect(result.code).not.toBe(0)
+  })
 })
