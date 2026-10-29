@@ -140,7 +140,8 @@ const momentsOf = (watch: RootWatch, attribute: string, isPresent: boolean): Mom
 /**
  * Reads the root's computed opacity in every animation frame while it is in the document. A frame
  * that lands after the root left reads a detached element, whose opacity is empty and so reads 0,
- * and on a busy machine one can land before the sampler is stopped.
+ * and one can land between the removal and the sampler being stopped when the callbacks of a frame
+ * run in another order than usual.
  */
 const sampleOpacity = (
   root: HTMLElement,
@@ -283,10 +284,16 @@ describe('AC-base-ui-feedback-navigation-15: the toast fade', () => {
     await framesLater(2)
     root.remove()
     // The frames after the removal, one of which can land between the root leaving and the
-    // sampler being stopped on a machine that is busy: a detached element has no opacity.
+    // sampler being stopped when a frame's callbacks run in another order: a detached element has
+    // no opacity.
     await framesLater(2)
     sampler.stop()
-    expect(sampler.opacities.length, 'it sampled while the root was there').toBeGreaterThan(0)
+    // The sampler's frame callback is registered before each of `framesLater`'s, so it runs once in
+    // each of the two frames the root is there, and records nothing in the two after.
+    expect(
+      sampler.opacities.length,
+      'it read the two frames the root was there and none after',
+    ).toBe(2)
     expect(Math.min(...sampler.opacities), 'no frame after the removal read 0').toBe(1)
   })
 
