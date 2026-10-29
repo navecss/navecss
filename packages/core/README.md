@@ -771,7 +771,7 @@ build would, as far as it has read. The build is unaffected. As on any Vite proj
 checks, keyboard, screen-reader and automated accessibility checks included, against a production
 build as well as in dev: `astro build`, then `astro preview` or however you serve production.
 
-A fixture measures this on Astro 7.4.0, with Vite 8.3.4 underneath: `@nave` expanded in `.css`
+A fixture measures this on Astro 7.4.0, with Vite 8.3.5 underneath: `@nave` expanded in `.css`
 files and in `<style>` and `<style is:global>` blocks, and `cx()` read in frontmatter, in templates
 and in React islands, in `astro build` for a static site and for `output: 'server'`, and in
 `astro dev`. Islands in Vue, Svelte or Solid were not measured.
