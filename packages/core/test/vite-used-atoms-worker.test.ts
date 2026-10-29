@@ -35,7 +35,7 @@ describe.each(Object.entries(VITE_APIS))(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('reads a worker next to the atoms the page itself names', async () => {
       const app = makeUsedApp(
@@ -52,7 +52,7 @@ describe.each(Object.entries(VITE_APIS))(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('turns a worker’s cx() call into its class string, and ships no name map in the worker', async () => {
       const app = makeUsedApp(appFiles(WORKER, ['src/a.js']))
@@ -71,7 +71,7 @@ describe.each(Object.entries(VITE_APIS))(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('control: under all the worker is not read and every atom ships', async () => {
       const app = makeUsedApp(appFiles(WORKER, ['src/a.js']))
@@ -82,6 +82,6 @@ describe.each(Object.entries(VITE_APIS))(
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   },
 )

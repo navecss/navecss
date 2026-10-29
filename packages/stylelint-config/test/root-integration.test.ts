@@ -200,6 +200,8 @@ describe('AC-consumer-constraints-21 covers: R10', () => {
     expect(inputs).toContain('$TURBO_ROOT$/packages/stylelint-config/**')
   })
 
+  // Each row copies the tracked files and asks turbo for the task hashes twice, and took 147 s and
+  // 166 s beside other sessions' suites, against the 120 s it had.
   it.each([
     ['.stylelintrc.json', 'every package that runs stylelint'],
     ['packages/stylelint-config/README.md', 'every package that runs stylelint'],
@@ -226,6 +228,6 @@ describe('AC-consumer-constraints-21 covers: R10', () => {
         rmSync(scratch, { recursive: true, force: true })
       }
     },
-    120_000,
+    480_000,
   )
 })

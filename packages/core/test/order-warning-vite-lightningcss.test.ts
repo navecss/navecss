@@ -48,7 +48,7 @@ describe('AC-native-apply-order-44: Lightning CSS below the floor', () => {
     expect(occurrences(output, '"flex" comes after "hideDesktopUp"')).toBe(2)
     expect(output).not.toContain('display: grid comes after')
     expect(output).not.toContain('the &:focus block comes after')
-  }, 60_000)
+  })
 
   it('prints the warnings of c1, c2, d3 and f3 with both floor keys set', async () => {
     const output = await build(PROJECT, FLOOR_KEYS)
@@ -57,7 +57,7 @@ describe('AC-native-apply-order-44: Lightning CSS below the floor', () => {
     expect(output).toContain('display: grid comes after')
     expect(occurrences(output, '"flex" comes after "hideDesktopUp"')).toBe(2)
     expect(output).toContain('the &:focus block comes after')
-  }, 60_000)
+  })
 })
 
 describe('AC-native-apply-order-44: the stale-marker report under Lightning CSS', () => {
@@ -72,14 +72,13 @@ describe('AC-native-apply-order-44: the stale-marker report under Lightning CSS'
 
       expect(output).not.toContain('but nothing after the directive overrides')
     },
-    60_000,
   )
 
   it('control: under the default transformer the stale report prints', async () => {
     const output = await build(STALE, "\n  build: { cssTarget: ['chrome125'] },")
 
     expect(output).toContain('but nothing after the directive overrides display')
-  }, 60_000)
+  })
 
   it('the plugin turns the stale report off under lightningcss only; the other reports stay', async () => {
     const stale = await runHook({ code: STALE, transformer: 'lightningcss' })

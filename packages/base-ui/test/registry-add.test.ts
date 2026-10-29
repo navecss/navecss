@@ -212,7 +212,7 @@ describe('AC-base-ui-registry-05: add installs every item into a Tailwind-free d
       expect(publicFetch.refused.some((target) => target.split(':', 1)[0] === 'example.com')).toBe(
         true,
       )
-    }, 60_000)
+    })
   })
 
   it('control: the comparison reports a changed byte, an absent file and a file nothing expected', () => {

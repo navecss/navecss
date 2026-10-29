@@ -88,7 +88,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
 
     expect(pasted.error).toBeUndefined()
     expect(atomLayerAtoms(pasted.css)).toEqual(atoms('flex', 'block'))
-  }, 120_000)
+  })
 
   describe('case 2: the package’s entry re-exports cx and the app takes it from the package', () => {
     const entry = {
@@ -111,7 +111,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
 
       expect(pasted.error).toBeUndefined()
       expect(atomLayerAtoms(pasted.css)).toEqual(atoms('flex', 'grid'))
-    }, 120_000)
+    })
   })
 
   describe('case 3: the entry names a module that exports the package’s own join function', () => {
@@ -133,7 +133,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
 
       expect(followed.error).toBeUndefined()
       expect(atomLayerAtoms(followed.css)).toEqual(atoms('flex'))
-    }, 120_000)
+    })
   })
 
   describe('case 4: a re-export of cx under another name', () => {
@@ -205,7 +205,6 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
         expect(followed.error).toBeUndefined()
         expect(atomLayerAtoms(followed.css)).toEqual(atoms('flex', 'block'))
       },
-      120_000,
     )
 
     it('beside a package that also makes an unreadable call, the line is the shorter one that points at the keepFor entry above', async () => {
@@ -220,7 +219,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
       expect(first.error).toMatch(/^2 problems in 2 files/)
       expect(lines.slice(lines.indexOf(CALLS))).toEqual([CALLS, ALSO])
       expect(first.error).not.toMatch(/cxModules: \[/)
-    }, 60_000)
+    })
 
     it('beside a package that also makes an unreadable call, a file with a plain and a renamed re-export gets the plural line', async () => {
       const modules = {
@@ -236,7 +235,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
 
       expect(first.error).toMatch(/^3 problems in 2 files/)
       expect(lines.at(-1)).toBe(ALSO_TWO)
-    }, 60_000)
+    })
 
     it('beside a re-export only the package imports, the renamed line comes last and points at the keepFor entry above', async () => {
       const modules = {
@@ -253,7 +252,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
         '@acme/ui re-exports cx in a file that only the package itself imports, so your code has no specifier for it to list in cxModules',
       )
       expect(lines.at(-1)).toBe(ALSO)
-    }, 60_000)
+    })
 
     it('control: listing the renamed module, as the old line said, only turns the problem into the one that says to remove the entry', async () => {
       const modules = withMenu('cn.js', "export { cx as cn } from '@navecss/core/cx'\n")
@@ -262,7 +261,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
       expect(built.error).toContain(
         "@acme/ui exports a cx the build does not follow from '@acme/ui/cn.js', which is listed in cxModules. Remove it from cxModules in navePlugin()",
       )
-    }, 60_000)
+    })
 
     it('is cleared by keepFor when the package is already listed: nothing a cxModules entry could clear', async () => {
       const modules = withMenu('cn.js', "export { cx as cn } from '@navecss/core/cx'\n")
@@ -270,7 +269,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
 
       expect(built.error).toBeUndefined()
       expect(atomLayerAtoms(built.css)).toEqual(atoms('flex', 'block'))
-    }, 60_000)
+    })
 
     it('does not print an entry for the package’s own entry re-exporting cx under another name', async () => {
       const modules = {
@@ -284,7 +283,7 @@ describe('AC-used-atoms-52 - keepFor never clears a problem the consumer’s own
       expect(first.error).toMatch(/^1 problem in 1 file/)
       expect(first.error).not.toMatch(/cxModules: \[/)
       expect(first.error!.split('\n')).toContain(RENAMED)
-    }, 60_000)
+    })
   })
 })
 
@@ -308,7 +307,7 @@ describe('AC-used-atoms-52 - an empty keepFor list says the calls the build cann
     expect(listed.error).toBeUndefined()
     expect((listed.warnings ?? []).filter((message) => message.includes('nave'))).toEqual([])
     expect(atomLayerAtoms(listed.css)).toEqual([])
-  }, 120_000)
+  })
 
   it('ships the atoms of the calls the build does read, as it does with no list', async () => {
     const reading = {
@@ -324,7 +323,7 @@ describe('AC-used-atoms-52 - an empty keepFor list says the calls the build cann
 
     expect(listed.error).toBeUndefined()
     expect(atomLayerAtoms(listed.css)).toEqual(atoms('flex', 'grid'))
-  }, 120_000)
+  })
 
   it('is green under both values of atomic', async () => {
     for (const atomic of ['used', 'all'] as const) {
@@ -332,7 +331,7 @@ describe('AC-used-atoms-52 - an empty keepFor list says the calls the build cann
 
       expect(built.error).toBeUndefined()
     }
-  }, 120_000)
+  })
 
   it('does not clear a re-export that has a clearing specifier', async () => {
     const entry = { 'index.js': `${BARREL}export const Button = 'b'\n` }
@@ -340,5 +339,5 @@ describe('AC-used-atoms-52 - an empty keepFor list says the calls the build cann
     const built = await run(code, entry, { keepFor: { '@acme/ui': [] } })
 
     expect(built.error).toContain("cxModules: ['@acme/ui']")
-  }, 60_000)
+  })
 })

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { expandText } from '../../src/directive/expand-text.ts'
 import { findSurvivors } from '../../src/directive/find-survivors.ts'
 import { tokenize } from '../../src/directive/tokenizer.ts'
-import { assertScalesLinearly } from '../helpers/perf-scaling.ts'
+import { assertScalesLinearly, cpuMillisecondsPerCall } from '../helpers/perf-scaling.ts'
 
 /**
  * Collapses whitespace runs so assertions don't pin the exact spacing expandText happens to choose.
@@ -362,8 +362,8 @@ describe('an unterminated declaration at EOF is given its own semicolon before t
   })
 })
 
-// A generous per-row timeout throughout this block, well above the test runner's own
-// default: `assertScalesLinearly` can run its measured subject up to 21 times (a warm-up
+// The scaling rows measure time, so each keeps a per-row timeout of its own:
+// `assertScalesLinearly` can run its measured subject up to 21 times (a warm-up
 // plus 3+3 samples, across up to three attempts), and a slow or shared runner's own per-call
 // time can be an order of magnitude past a fast local machine's — the wall-clock ceiling
 // on how long the ROW is allowed to take is deliberately loose, since the scaling ratio
@@ -377,9 +377,9 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
       await expect(
         assertScalesLinearly((n) => {
           const css = '.a { color: red; }\n'.repeat(n)
-          const start = performance.now()
-          expandText(css)
-          return performance.now() - start
+          return cpuMillisecondsPerCall(() => {
+            expandText(css)
+          })
         }, 5000),
       ).resolves.toMatchObject({ n: 5000 })
     },
@@ -392,24 +392,20 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
       await expect(
         assertScalesLinearly((n) => {
           const css = '.a { @nave flex; }\n'.repeat(n)
-          const start = performance.now()
-          expandText(css)
-          return performance.now() - start
+          return cpuMillisecondsPerCall(() => {
+            expandText(css)
+          })
         }, 5000),
       ).resolves.toMatchObject({ n: 5000 })
     },
     SCALING_ROW_TIMEOUT,
   )
 
-  it(
-    'does not overflow the call stack on 20000 levels of nesting',
-    () => {
-      const css = '.a{'.repeat(20_000) + '}'.repeat(20_000)
+  it('does not overflow the call stack on 20000 levels of nesting', () => {
+    const css = '.a{'.repeat(20_000) + '}'.repeat(20_000)
 
-      expect(() => expandText(css)).not.toThrow()
-    },
-    SCALING_ROW_TIMEOUT,
-  )
+    expect(() => expandText(css)).not.toThrow()
+  })
 
   it(
     'stays roughly linear closing levels left open at EOF (none of them closed for real)',
@@ -417,9 +413,9 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
       await expect(
         assertScalesLinearly((n) => {
           const css = '.a{'.repeat(n)
-          const start = performance.now()
-          expandText(css)
-          return performance.now() - start
+          return cpuMillisecondsPerCall(() => {
+            expandText(css)
+          })
         }, 20_000),
       ).resolves.toMatchObject({ n: 20_000 })
     },
@@ -438,9 +434,9 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
       // blowup here.
       await assertScalesLinearly((n) => {
         const css = '.a{@nave focusRing;'.repeat(n)
-        const start = performance.now()
-        expect(() => expandText(css)).not.toThrow()
-        return performance.now() - start
+        return cpuMillisecondsPerCall(() => {
+          expect(() => expandText(css)).not.toThrow()
+        })
       }, 1250)
     },
     SCALING_ROW_TIMEOUT,
@@ -463,9 +459,9 @@ describe('expandText() stays roughly linear, not quadratic, on a large styleshee
           ).join(';')
           const inputSourceMap = { version: 3 as const, sources: ['a.css'], names: [], mappings }
 
-          const start = performance.now()
-          expandText(css, { inputSourceMap })
-          return performance.now() - start
+          return cpuMillisecondsPerCall(() => {
+            expandText(css, { inputSourceMap })
+          })
         }, 5000),
       ).resolves.toMatchObject({ n: 5000 })
     },

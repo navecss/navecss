@@ -16,7 +16,7 @@ describe('AC-base-ui-registry-02: the tarball carries the registry inside dist, 
 
   beforeAll(() => {
     entries = packedEntries()
-  }, 120_000)
+  }, 240_000)
 
   it('keeps files in package.json exactly ["dist"]', () => {
     expect(manifestOf().files).toEqual(['dist'])

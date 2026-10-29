@@ -57,7 +57,7 @@ describe('AC-base-ui-registry-11: nothing younger than the floor is copied, and 
 
   beforeAll(() => {
     young = youngParts()
-  }, 180_000)
+  }, 240_000)
 
   const declared = (clone: LoadedRegistry): string[] =>
     problemsAt(youngDeclarationProblems(clone, young), COMBOBOX, COMBOBOX_PARTS)

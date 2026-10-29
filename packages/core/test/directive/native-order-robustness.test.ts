@@ -18,6 +18,7 @@ import type { AtomDefinition } from '../../src/atoms.ts'
 import { expandText } from '../../src/directive/expand-text.ts'
 import { navePlugin } from '../../src/postcss.ts'
 import { warningsViaPostcss, warningsViaText } from '../helpers/native-order.ts'
+import { cpuMillisecondsPerCall } from '../helpers/perf-scaling.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PROBE = path.resolve(HERE, '../helpers/order-depth-probe.ts')
@@ -76,7 +77,6 @@ describe.each(['not', 'is'])('AC-native-apply-order-54 — a selector nested %s(
       expect(new Set(counts).size).toBe(1)
       expect(counts[0]).toBeLessThanOrEqual(1)
     },
-    60_000,
   )
 })
 
@@ -102,29 +102,28 @@ describe('AC-native-apply-order-54 — a nested group is read however deep it is
     expect(() => warningsViaText(css)).not.toThrow()
     expect(() => expandText(css)).not.toThrow()
     await expect(warningsViaPostcss(css)).resolves.toBeDefined()
-  }, 60_000)
+  })
 })
 
 /**
- * The least of `runs` timings of `work`, in milliseconds.
- */
-function leastOf(work: () => void, runs = 5): number {
-  let least = Infinity
-  for (let i = 0; i < runs; i++) {
-    const start = performance.now()
-    work()
-    least = Math.min(least, performance.now() - start)
-  }
-  return least
-}
-
-/**
- * How many times longer `subject` takes than `control`, each by its fastest of five runs.
+ * How many times longer `subject` takes than `control`, each by its fastest of five runs, in CPU
+ * time and taken in turn: the time the machine spends on other processes is not work either one
+ * does, and taken in turn the two meet the same load. Five untimed runs of each come first: the
+ * compiler works on other threads while code is new, that work counts as the process's CPU time,
+ * and the subject has more new code than its control.
  */
 function ratio(subject: () => void, control: () => void): number {
-  subject()
-  control()
-  return leastOf(subject) / leastOf(control)
+  for (let warm = 0; warm < 5; warm++) {
+    subject()
+    control()
+  }
+  let subjectLeast = Infinity
+  let controlLeast = Infinity
+  for (let run = 0; run < 5; run++) {
+    subjectLeast = Math.min(subjectLeast, cpuMillisecondsPerCall(subject))
+    controlLeast = Math.min(controlLeast, cpuMillisecondsPerCall(control))
+  }
+  return subjectLeast / controlLeast
 }
 
 /**

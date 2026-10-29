@@ -56,7 +56,6 @@ describe('AC-astro-14 — the plain Vite builder matrix: verdicts, file names an
       expect(built.output).toContain(FAILURE)
       expect(built.output).not.toMatch(/\[plugin nave[^\]]*\][^\n]*warn/i)
     },
-    SECOND,
   )
 
   it(
@@ -122,15 +121,11 @@ const SERVER_WITH_LIB = {
 describe('AC-astro-11 — on plain Vite the untransformed-dependency warning names the key that reaches the server environment', () => {
   const base = { files: SERVER_WITH_LIB, packages: SSR_LIB, options: "{ keep: ['grid'] }" }
 
-  it(
-    'names ssr.noExternal with the client first, unchanged',
-    async () => {
-      const built = await run({ ...base, order: ['client', 'ssr'] })
-      expect(built.code, built.output).toBe(0)
-      expect(built.output).toContain(LIB_WARNING('ssr.noExternal in your Vite config'))
-    },
-    SECOND,
-  )
+  it('names ssr.noExternal with the client first, unchanged', async () => {
+    const built = await run({ ...base, order: ['client', 'ssr'] })
+    expect(built.code, built.output).toBe(0)
+    expect(built.output).toContain(LIB_WARNING('ssr.noExternal in your Vite config'))
+  })
 
   it(
     'names resolve.noExternal with a server environment that writes assets first, and resolve.noExternal clears it',
@@ -154,26 +149,22 @@ describe('AC-astro-11 — on plain Vite the untransformed-dependency warning nam
     SECOND * 2,
   )
 
-  it(
-    'names ssr.noExternal when the server environment writes assets first but no stylesheet holding the layer, since the client writes the first one',
-    async () => {
-      const built = await run({
-        ...base,
-        order: ['ssr', 'client'],
-        emitAssets: true,
-        files: {
-          'src/entry-server.tsx':
-            "import { cx } from '@navecss/core/cx'\nimport { a } from 'ssr-lib'\nexport const s = [cx('grid'), a]\n",
-        },
-      })
-      expect(built.code, built.output).toBe(0)
-      expect(built.output).toContain(LIB_WARNING('ssr.noExternal in your Vite config'))
-      expect(built.output).not.toContain('resolve.noExternal')
-      expect(Object.keys(built.server)).toEqual([])
-      expect(Object.values(built.client).map((css) => atomLayerAtoms(css))).toEqual([
-        atoms('flex', 'grid'),
-      ])
-    },
-    SECOND,
-  )
+  it('names ssr.noExternal when the server environment writes assets first but no stylesheet holding the layer, since the client writes the first one', async () => {
+    const built = await run({
+      ...base,
+      order: ['ssr', 'client'],
+      emitAssets: true,
+      files: {
+        'src/entry-server.tsx':
+          "import { cx } from '@navecss/core/cx'\nimport { a } from 'ssr-lib'\nexport const s = [cx('grid'), a]\n",
+      },
+    })
+    expect(built.code, built.output).toBe(0)
+    expect(built.output).toContain(LIB_WARNING('ssr.noExternal in your Vite config'))
+    expect(built.output).not.toContain('resolve.noExternal')
+    expect(Object.keys(built.server)).toEqual([])
+    expect(Object.values(built.client).map((css) => atomLayerAtoms(css))).toEqual([
+      atoms('flex', 'grid'),
+    ])
+  })
 })

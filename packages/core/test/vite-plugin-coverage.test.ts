@@ -69,32 +69,24 @@ const oneSheet = (css: string): ScratchApp =>
 
 describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
   describe('AC-directive-core-32 — coverage, every style source, build and dev, both transformers', () => {
-    it.each(TRANSFORMERS)(
-      'vite build under css.transformer %s',
-      async (transformer) => {
-        const config = appConfig(app.root, transformer, vue(navePlugin()))
-        const { css, js } = await buildOutputs(config, api)
+    it.each(TRANSFORMERS)('vite build under css.transformer %s', async (transformer) => {
+      const config = appConfig(app.root, transformer, vue(navePlugin()))
+      const { css, js } = await buildOutputs(config, api)
 
-        expect(() => expectCovered(`${css}\n${js}`)).not.toThrow()
-      },
-      60_000,
-    )
+      expect(() => expectCovered(`${css}\n${js}`)).not.toThrow()
+    })
 
-    it.each(TRANSFORMERS)(
-      'the dev server under css.transformer %s',
-      async (transformer) => {
-        const config = appConfig(app.root, transformer, vue(navePlugin()))
-        const server = await startDev(config, api)
-        try {
-          const served = await devCss(server, '/src/main.js', ['/src/u.css?direct'])
+    it.each(TRANSFORMERS)('the dev server under css.transformer %s', async (transformer) => {
+      const config = appConfig(app.root, transformer, vue(navePlugin()))
+      const server = await startDev(config, api)
+      try {
+        const served = await devCss(server, '/src/main.js', ['/src/u.css?direct'])
 
-          expect(() => expectCovered(Object.values(served).join('\n'))).not.toThrow()
-        } finally {
-          await server.close()
-        }
-      },
-      60_000,
-    )
+        expect(() => expectCovered(Object.values(served).join('\n'))).not.toThrow()
+      } finally {
+        await server.close()
+      }
+    })
   })
 
   describe('a nested rule before a directive, under Lightning CSS at the documented floor', () => {
@@ -138,7 +130,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
       } finally {
         sheet.dispose()
       }
-    }, 60_000)
+    })
   })
 
   describe('AC-directive-core-35 — Lightning CSS’s @nave warning is suppressed, and nothing else', () => {
@@ -179,13 +171,13 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
 
       expect(warnings.filter((w) => w.includes('Unknown at rule: @nave'))).toEqual([])
       expect(warnings.some((w) => w.includes('Unknown at rule: @foo'))).toBe(true)
-    }, 60_000)
+    })
 
     it('control: without the plugin the same fixture does reach the @nave warning', async () => {
       const warnings = await captureWarnings(vue())
 
       expect(warnings.some((w) => w.includes('Unknown at rule: @nave'))).toBe(true)
-    }, 60_000)
+    })
 
     it('with a customLogger passed, the @nave warnings are suppressed and @foo reaches it', async () => {
       const received: string[] = []
@@ -197,7 +189,7 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
 
       expect(warnings.some((w) => w.includes('Unknown at rule: @nave'))).toBe(false)
       expect(received.some((w) => w.includes('Unknown at rule: @foo'))).toBe(true)
-    }, 60_000)
+    })
 
     it('under the default transformer the logger is not wrapped', async () => {
       const seen: unknown[] = []
@@ -221,6 +213,6 @@ describe.each(Object.entries(VITE_APIS))('Vite %s', (_version, api) => {
 
       expect(seen).toHaveLength(2)
       expect(seen[0]).toBe(seen[1])
-    }, 60_000)
+    })
   })
 })

@@ -101,8 +101,9 @@ function diagnosticsFor(source: string): string[] {
 }
 
 // Each type-check builds a TypeScript program over Vite's own types, which a loaded runner
-// (every test file of the package running at once) takes well past the default timeout to do.
-describe('AC-directive-core-31 — the Vite plugin’s surface', { timeout: 120_000 }, () => {
+// (every test file of the package running at once) takes well past the default timeout to do: a
+// row here outlasted 120 s on a CI runner. No row asserts how long it takes.
+describe('AC-directive-core-31 — the Vite plugin’s surface', { timeout: 600_000 }, () => {
   it('is a plain object, named nave, with no enforce key', () => {
     const [plugin] = navePlugin()
 

@@ -127,7 +127,7 @@ describe('AC-used-atoms-21 — each call becomes the string cx() returns, in a b
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('rewrites the calls of a template compiled apart from setup(), and keeps the import its exposure needs', async () => {
     const app = makeUsedApp(FILES)
@@ -150,7 +150,7 @@ describe('AC-used-atoms-21 — each call becomes the string cx() returns, in a b
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('rewrites the calls of a Svelte component', async () => {
     const app = makeUsedApp(
@@ -174,7 +174,7 @@ describe('AC-used-atoms-21 — each call becomes the string cx() returns, in a b
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('rewrites nothing in the dev server, which keeps the run-time functions', async () => {
     process.env.NODE_ENV = 'development'
@@ -208,7 +208,7 @@ describe('AC-used-atoms-21 — each call becomes the string cx() returns, in a b
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-22 — the name map ships nowhere when every cx use is a direct call', () => {
@@ -265,7 +265,7 @@ console.log(a, b(true), c, d('grid'), d('flex'))
     } finally {
       fixture.dispose()
     }
-  }, 120_000)
+  })
 
   it('keeps the map for the aliased cx.raw form, and never errors on it', async () => {
     const fixture = appWith("const r = cx.raw\nconsole.log(r('z'))\n")
@@ -281,7 +281,7 @@ console.log(a, b(true), c, d('grid'), d('flex'))
     } finally {
       fixture.dispose()
     }
-  }, 120_000)
+  })
 })
 
 /**
@@ -332,7 +332,7 @@ describe('AC-used-atoms-23 — no rewrite injects a Nave module or any style com
     } finally {
       fixture.dispose()
     }
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-59 — a keepFor package keeps the map where its calls need it', () => {
@@ -375,5 +375,5 @@ describe('AC-used-atoms-59 — a keepFor package keeps the map where its calls n
     } finally {
       fixture.dispose()
     }
-  }, 120_000)
+  })
 })

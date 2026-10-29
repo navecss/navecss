@@ -95,7 +95,7 @@ describe('AC-used-atoms-53 - what each server build recorded', () => {
     } finally {
       app.dispose()
     }
-  }, 180_000)
+  })
 
   it('says the take comes from an earlier server build, and is green once that build ran again', async () => {
     const app = serverApp({ 'src/entry-server.ts': TAKES_CN }, KNOWN)
@@ -114,7 +114,7 @@ describe('AC-used-atoms-53 - what each server build recorded', () => {
     } finally {
       app.dispose()
     }
-  }, 180_000)
+  })
 
   it('drops a record whose server file no longer exists', async () => {
     const app = serverApp({ 'src/entry-server.ts': TAKES_CN }, KNOWN)
@@ -134,7 +134,7 @@ describe('AC-used-atoms-53 - what each server build recorded', () => {
     } finally {
       app.dispose()
     }
-  }, 180_000)
+  })
 
   it('keeps a record whose server file is named by an absolute path, as on another drive', async () => {
     const app = serverApp({ 'src/entry-server.ts': TAKES_CN }, KNOWN)
@@ -158,7 +158,7 @@ describe('AC-used-atoms-53 - what each server build recorded', () => {
     } finally {
       app.dispose()
     }
-  }, 180_000)
+  })
 
   it('does not say it for a take a server build of the same process produced', async () => {
     const app = serverApp({ 'src/entry-server.ts': TAKES_CN }, KNOWN)
@@ -170,7 +170,7 @@ describe('AC-used-atoms-53 - what each server build recorded', () => {
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-53 - a server file whose import the build cannot read', () => {
@@ -182,21 +182,17 @@ describe('AC-used-atoms-53 - a server file whose import the build cannot read', 
   it.each([
     ['the client first', ['client', 'ssr']],
     ['the server first', ['ssr', 'client']],
-  ] as const)(
-    'warns, and does not fail, with %s',
-    async (_, order) => {
-      const app = serverApp(files, KNOWN)
-      try {
-        const built = await buildEnvironments(app, { options: { keepFor: KEEP_FLEX }, order })
+  ] as const)('warns, and does not fail, with %s', async (_, order) => {
+    const app = serverApp(files, KNOWN)
+    try {
+      const built = await buildEnvironments(app, { options: { keepFor: KEEP_FLEX }, order })
 
-        expect(built.error).toBeUndefined()
-        expect(pluginWarnings(built.warnings)).toEqual([expect.stringContaining(X3_WARNING)])
-      } finally {
-        app.dispose()
-      }
-    },
-    120_000,
-  )
+      expect(built.error).toBeUndefined()
+      expect(pluginWarnings(built.warnings)).toEqual([expect.stringContaining(X3_WARNING)])
+    } finally {
+      app.dispose()
+    }
+  })
 })
 
 describe('AC-used-atoms-53 - a server import resolved with the server conditions', () => {
@@ -222,7 +218,7 @@ describe('AC-used-atoms-53 - a server import resolved with the server conditions
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-53 - the file the server loads, not the file the client does', () => {
@@ -260,7 +256,7 @@ describe('AC-used-atoms-53 - the file the server loads, not the file the client 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('resolves with the require conditions for a server bundle in the CommonJS format', async () => {
     const ui = {
@@ -305,7 +301,7 @@ describe('AC-used-atoms-53 - the file the server loads, not the file the client 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('warns, with words that fit, for a package reached through a # import', async () => {
     const app = serverApp(
@@ -327,7 +323,7 @@ describe('AC-used-atoms-53 - the file the server loads, not the file the client 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-53 - a server that takes nothing prints nothing', () => {
@@ -362,7 +358,7 @@ describe('AC-used-atoms-53 - a server that takes nothing prints nothing', () => 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('does not count a dependency the server bundles as an application module', async () => {
     const app = serverApp(
@@ -383,7 +379,7 @@ describe('AC-used-atoms-53 - a server that takes nothing prints nothing', () => 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-53 - the sentence for several recorded takers', () => {

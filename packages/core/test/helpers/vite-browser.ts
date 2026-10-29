@@ -101,10 +101,19 @@ export async function previewBuild(
 }
 
 /**
- *
+ * Starts Chromium. A page it opens with `newPage()` (the only way these tests open one) waits for what a test asks of it (a navigation, a selector)
+ * for as long as the test itself may run, and not for Playwright's own 30 s: the test's timeout is
+ * the one deadline, and on a machine running other suites a navigation took longer than 30 s.
  */
 export async function launchChromium(): Promise<Browser> {
-  return chromium.launch()
+  const browser = await chromium.launch()
+  const openPage = browser.newPage.bind(browser)
+  browser.newPage = async (options) => {
+    const page = await openPage(options)
+    page.setDefaultTimeout(0)
+    return page
+  }
+  return browser
 }
 
 /**
@@ -229,26 +238,9 @@ export async function until(
 }
 
 /**
- * Waits up to `ms` for `isDone`, giving up without an error: for a wait whose outcome the test
- * reads afterwards.
- */
-export async function untilQuietly(
-  page: Page,
-  isDone: () => Promise<boolean>,
-  what: string,
-  ms = 8000,
-): Promise<void> {
-  try {
-    await untilWithin(page, isDone, what, ms)
-  } catch {
-    // The test reads what the page holds, whether or not the wait ended.
-  }
-}
-
-/**
  * Waits until `isDone` is true, polling the page, and fails with `what` after `ms`.
  */
-async function untilWithin(
+export async function untilWithin(
   page: Page,
   isDone: () => Promise<boolean>,
   what: string,

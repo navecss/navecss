@@ -244,15 +244,11 @@ describe('AC-astro-21 — a stylesheet a host serialised into JavaScript is left
   it.each([
     ['a host’s own id', DEV_CSS_ID],
     ['Astro’s dev CSS id', ASTRO_DEV_CSS_ID],
-  ])(
-    'reads flex and not grid under %s',
-    async (_name, id) => {
-      expect(
-        await servedAtoms({ 'virtual:host-css': CSS_MODULE(id), 'virtual:ordinary': ORDINARY }),
-      ).toEqual(['flex'])
-    },
-    60_000,
-  )
+  ])('reads flex and not grid under %s', async (_name, id) => {
+    expect(
+      await servedAtoms({ 'virtual:host-css': CSS_MODULE(id), 'virtual:ordinary': ORDINARY }),
+    ).toEqual(['flex'])
+  })
 
   it('reads a module that holds a serialised stylesheet and also ordinary code naming a class', async () => {
     const mixed = {
@@ -260,7 +256,7 @@ describe('AC-astro-21 — a stylesheet a host serialised into JavaScript is left
       code: `export const css = new Set([{ content: ".nave-grid{display:grid}" }])\nexport const c = "nave-flex"\n`,
     }
     expect(await servedAtoms({ 'virtual:host-css': mixed })).toContain('flex')
-  }, 60_000)
+  })
 
   it('has neither host id in the built package, and the check finds an id in a file holding it', () => {
     const files = readdirSync(path.join(CORE_ROOT, 'dist')).filter((name) => name.endsWith('.js'))

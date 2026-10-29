@@ -442,7 +442,7 @@ describe('AC-used-atoms-35 — in dev, a per-module error with the same line tex
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('gives an application error for every row of AC-05, AC-10 and AC-31 that is application code, and none under all', async () => {
     const files: Record<string, string> = {}
@@ -470,7 +470,7 @@ describe('AC-used-atoms-35 — in dev, a per-module error with the same line tex
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('reports no error in dev for a dependency’s problem', async () => {
     const app = makeUsedApp(
@@ -490,5 +490,5 @@ describe('AC-used-atoms-35 — in dev, a per-module error with the same line tex
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })

@@ -67,7 +67,9 @@ const STYLED: (readonly [string, string])[] = [
   ['#media', 'flexWrap'],
   ['#visible', 'itemsEnd'],
 ]
-const SECOND = 180_000
+// A row here builds or serves a whole Astro project and loads pages from it. A machine running
+// other suites took longer than 180 s for one, and no row asserts how long it takes.
+const ROW_BUDGET = 600_000
 
 /**
  * Loads `/` and waits until the islands hydrated and the code only the browser runs has acted.
@@ -119,7 +121,7 @@ describe('AC-astro-27 — islands hydrate styled, and ClientRouter keeps styles 
       await page.close()
       await reference.close()
     },
-    SECOND,
+    ROW_BUDGET,
   )
 
   it(
@@ -144,7 +146,7 @@ describe('AC-astro-27 — islands hydrate styled, and ClientRouter keeps styles 
       expect(styled['#card']!['overflow-wrap']).toBe('break-word')
       await page.close()
     },
-    SECOND,
+    ROW_BUDGET,
   )
 })
 
@@ -177,7 +179,7 @@ describe('AC-astro-28 — server output served by @astrojs/node: a dynamic page,
       expect(await styleOf(page, '#fm', 'display')).toBe('block')
       await page.close()
     },
-    SECOND,
+    ROW_BUDGET,
   )
 })
 
@@ -227,7 +229,7 @@ describe('AC-astro-29 and AC-astro-30 — a skip link in an .astro layout is rev
       await page.close()
       await reference.close()
     },
-    SECOND,
+    ROW_BUDGET,
   )
 
   it(
@@ -240,7 +242,7 @@ describe('AC-astro-29 and AC-astro-30 — a skip link in an .astro layout is rev
       expect(await styleOf(page, '#d', 'min-width')).toBe('0px')
       await page.close()
     },
-    SECOND,
+    ROW_BUDGET,
   )
 })
 
@@ -340,6 +342,6 @@ describe('AC-astro-32 — an island transition:persist keeps across a ClientRout
         await page.close()
       }
     },
-    SECOND * 2,
+    ROW_BUDGET * 2,
   )
 })

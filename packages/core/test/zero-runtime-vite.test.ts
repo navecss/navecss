@@ -114,7 +114,7 @@ describe.each(['postcss', 'vite'] as const)(
         rmSync(outWith, { force: true, recursive: true })
         rmSync(outWithout, { force: true, recursive: true })
       }
-    }, 20_000)
+    })
   },
 )
 
@@ -165,5 +165,5 @@ describe('AC-directive-core-26 — the dev server requests the same URLs with th
     }
     // the dev server writes nothing into the fixture it serves
     expect(readdirSync(FIXTURE_ROOT).toSorted(byLocaleOrder)).toEqual(before)
-  }, 20_000)
+  })
 })

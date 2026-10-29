@@ -77,7 +77,7 @@ describe('AC-eslint-plugin-23: core’s cx() docs, the root README, CLAUDE.md an
 
   beforeAll(() => {
     tarball = packCoreTarball()
-  }, 120_000)
+  }, 240_000)
 
   it('core’s README no longer contains any retired claim (whitespace collapsed)', () => {
     const folded = foldWhitespace(coreReadme)

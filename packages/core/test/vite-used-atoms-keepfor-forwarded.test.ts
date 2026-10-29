@@ -71,14 +71,13 @@ describe('AC-used-atoms-52 - a dependency that only re-exports a cx export is pa
       expect(followed.error).toBeUndefined()
       expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex'))
     },
-    120_000,
   )
 
   it('prints the line word for word', async () => {
     const built = await run(appOf('@other/ui'), base, { keepFor: KEEP_FLEX })
 
     expect(built.error!.split('\n').at(-1)).toBe(W4_LINE)
-  }, 60_000)
+  })
 
   it('counts a dependency that calls and forwards on both sides', async () => {
     const both = {
@@ -102,7 +101,7 @@ describe('AC-used-atoms-52 - a dependency that only re-exports a cx export is pa
 
     expect(followed.error).toBeUndefined()
     expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex', 'grid'))
-  }, 120_000)
+  })
 
   it('follows two forwarding hops across packages', async () => {
     const hops = { ...base, '@third/ui': { 'index.js': "export * from '@other/ui'\n" } }
@@ -113,7 +112,7 @@ describe('AC-used-atoms-52 - a dependency that only re-exports a cx export is pa
 
     expect(followed.error).toBeUndefined()
     expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex'))
-  }, 120_000)
+  })
 
   it('is green when the application takes only Menu, though another package forwards a cx export', async () => {
     const built = await run("import { Menu } from '@acme/ui'\nexport const A = Menu\n", base, {
@@ -122,7 +121,7 @@ describe('AC-used-atoms-52 - a dependency that only re-exports a cx export is pa
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('leaves a dependency that calls through what it takes to the package that is listed', async () => {
     const kit = {
@@ -136,7 +135,7 @@ describe('AC-used-atoms-52 - a dependency that only re-exports a cx export is pa
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('block'))
-  }, 60_000)
+  })
 
   it('ends the walk at a dependency that wraps what it takes', async () => {
     const wrapped = {
@@ -149,7 +148,7 @@ describe('AC-used-atoms-52 - a dependency that only re-exports a cx export is pa
     )
 
     expect(built.error).toBeUndefined()
-  }, 60_000)
+  })
 })
 
 /**
@@ -167,7 +166,7 @@ describe('AC-used-atoms-52 - a namespace held in a variable', () => {
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('takes the module whole when the variable that holds it is exported', async () => {
     const built = await run("export const ns = await import('@acme/ui')\n", packages, {
@@ -177,7 +176,7 @@ describe('AC-used-atoms-52 - a namespace held in a variable', () => {
     expect(built.error!.split('\n')).toContain(
       takenLine('src/App.ts (import())', 'in that file', WHOLE),
     )
-  }, 60_000)
+  })
 
   it('takes the cx export it reads, and the module whole for any other use', async () => {
     const read = await run(lazy("return [ns.Menu, ns.cn('block')]"), packages, {
@@ -194,7 +193,7 @@ describe('AC-used-atoms-52 - a namespace held in a variable', () => {
     expect(passed.error!.split('\n')).toContain(
       takenLine('src/App.ts (import())', 'in that file', WHOLE),
     )
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-52 - a specifier that resolves only from the importer', () => {
@@ -217,7 +216,7 @@ describe('AC-used-atoms-52 - a specifier that resolves only from the importer', 
 
     expect(built.error!.split('\n').at(-1)).toBe(H1_LINE)
     expect(built.error).not.toContain('No cxModules entry clears')
-  }, 60_000)
+  })
 
   it('is green once the entries the build asks for are listed', async () => {
     const built = await runScenario({
@@ -230,7 +229,7 @@ describe('AC-used-atoms-52 - a specifier that resolves only from the importer', 
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('block', 'flex'))
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-52 - a name the module exports itself in place of a star-exported one', () => {
@@ -257,16 +256,12 @@ describe('AC-used-atoms-52 - a name the module exports itself in place of a star
     ],
   ] as const
 
-  it.each(local)(
-    'is not a cx export when %s wins over the star',
-    async (_, files) => {
-      const built = await run(app, { '@acme/ui': files }, { keepFor: KEEP_FLEX })
+  it.each(local)('is not a cx export when %s wins over the star', async (_, files) => {
+    const built = await run(app, { '@acme/ui': files }, { keepFor: KEEP_FLEX })
 
-      expect(built.error).toBeUndefined()
-      expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-    },
-    60_000,
-  )
+    expect(built.error).toBeUndefined()
+    expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
+  })
 
   it('is not a cx export when a namespace export of the same name wins over the star', async () => {
     const files = acme("export * from './f.js'\nexport * as cn from './g.js'\n", {
@@ -281,7 +276,7 @@ describe('AC-used-atoms-52 - a name the module exports itself in place of a star
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('is a cx export of neither star when two stars export a name with different bindings', async () => {
     const files = acme("export * from './f.js'\nexport * from './g.js'\n", {
@@ -297,7 +292,7 @@ describe('AC-used-atoms-52 - a name the module exports itself in place of a star
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('stays a cx export when two stars export the same binding of cx', async () => {
     const files = acme("export * from './f.js'\nexport * from './g.js'\n", {
@@ -311,7 +306,7 @@ describe('AC-used-atoms-52 - a name the module exports itself in place of a star
     )
 
     expect(built.error!.split('\n')).toContain(takenLine('src/App.ts (cn)'))
-  }, 60_000)
+  })
 
   it('is not a cx export when a name declared by an array pattern wins over the star', async () => {
     const files = acme("export * from './f.js'\nexport const [, cn] = [0, (x) => x]\n", {
@@ -325,7 +320,7 @@ describe('AC-used-atoms-52 - a name the module exports itself in place of a star
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('keeps the default export of a star-exported module out of the star', async () => {
     const files = acme("export * from './f.js'\nexport default function K(x) { return x }\n", {
@@ -339,7 +334,7 @@ describe('AC-used-atoms-52 - a name the module exports itself in place of a star
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-52 - the cost of following re-exports', () => {
@@ -371,7 +366,7 @@ describe('AC-used-atoms-52 - the cost of following re-exports', () => {
 
     expect(built.error!.split('\n')).toContain(takenLine('src/App.ts (cn0)'))
     expect(resolved).toBeLessThanOrEqual(10 * count)
-  }, 120_000)
+  })
 })
 
 /**
@@ -407,15 +402,11 @@ describe('AC-used-atoms-52 - the walk ends, and the routes a take can be on', ()
     ],
   ] as const
 
-  it.each(cycles)(
-    'ends for %s, and fails with the line that names the file',
-    async (_, files) => {
-      const built = await run(app, { '@acme/ui': files }, { keepFor: KEEP_FLEX })
+  it.each(cycles)('ends for %s, and fails with the line that names the file', async (_, files) => {
+    const built = await run(app, { '@acme/ui': files }, { keepFor: KEEP_FLEX })
 
-      expect(built.error!.split('\n')).toContain(takenLine('src/App.ts (cn)'))
-    },
-    30_000,
-  )
+    expect(built.error!.split('\n')).toContain(takenLine('src/App.ts (cn)'))
+  })
 
   it('visits each module of a cycle of forwards a bounded number of times', async () => {
     const DIR = '/project/node_modules/@acme/ui/'
@@ -447,7 +438,7 @@ describe('AC-used-atoms-52 - the walk ends, and the routes a take can be on', ()
 
     expect(holders.map(({ id }) => id)).toEqual([`${DIR}f.js`, `${DIR}a.js`, `${DIR}b.js`])
     expect(asked).toBeLessThan(50)
-  }, 30_000)
+  })
 
   it('keeps the cxModules line for a dependency that requires a module with a clearing specifier', async () => {
     const other = {
@@ -462,7 +453,7 @@ describe('AC-used-atoms-52 - the walk ends, and the routes a take can be on', ()
 
     expect(built.error).toContain("cxModules: ['@acme/ui']")
     expect(built.error).not.toContain('your code takes that cx')
-  }, 60_000)
+  })
 
   describe('with takes on both routes', () => {
     const packages = {
@@ -495,7 +486,7 @@ describe('AC-used-atoms-52 - the walk ends, and the routes a take can be on', ()
 
       expect(followed.error).toBeUndefined()
       expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex', 'grid'))
-    }, 180_000)
+    })
   })
 
   it('prints the lasting fix when one take is of the module and another through a forward', async () => {
@@ -506,7 +497,7 @@ describe('AC-used-atoms-52 - the walk ends, and the routes a take can be on', ()
     )
 
     expect(built.error!.split('\n')).toContain(takenLine('src/App.ts (cx)'))
-  }, 60_000)
+  })
 
   it('prints the cxModules line for an unlisted package behind an alias, and is green once it is listed', async () => {
     const ui = {
@@ -525,7 +516,7 @@ describe('AC-used-atoms-52 - the walk ends, and the routes a take can be on', ()
 
     expect(pasted.error).toBeUndefined()
     expect(atomLayerAtoms(pasted.css)).toEqual(atoms('block', 'flex'))
-  }, 120_000)
+  })
 })
 
 describe('AC-used-atoms-52 - a file that only passes what it takes on', () => {
@@ -541,7 +532,7 @@ describe('AC-used-atoms-52 - a file that only passes what it takes on', () => {
     )
 
     expect(built.error!.split('\n').at(-1)).toBe(Z1F_LINE)
-  }, 60_000)
+  })
 
   it('is told the same when it imports the export and then exports it unchanged', async () => {
     const built = await run(
@@ -554,5 +545,5 @@ describe('AC-used-atoms-52 - a file that only passes what it takes on', () => {
     expect(built.error!.split('\n')).toContain(
       takenLine('src/App.ts (cn)', 'in that file', PASSED_ON),
     )
-  }, 60_000)
+  })
 })

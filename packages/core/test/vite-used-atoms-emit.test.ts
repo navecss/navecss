@@ -149,7 +149,7 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('control: pruning in generateBundle instead keeps the full set’s file name', async () => {
       const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -176,7 +176,7 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 })
 
@@ -222,7 +222,7 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 
   describe('AC-used-atoms-26 — srOnlyFocusable alone prunes a merged selector list', () => {
@@ -240,7 +240,7 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 
   describe('AC-used-atoms-27 — the emitted set, and nothing outside the layer changes', () => {
@@ -283,7 +283,7 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('keeps both members of the lowered selector list of disabledState', async () => {
       const app = makeUsedApp(
@@ -299,7 +299,7 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 
   describe('AC-used-atoms-27 - a consumer rule in the layer is removed only when it needs an unemitted atom', () => {
@@ -331,7 +331,7 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 
   describe('AC-used-atoms-27 - a plugin listed after Nave keeps what it did to a stylesheet', () => {
@@ -362,7 +362,7 @@ describe.each(LEGS)('Vite $version under css.transformer $transformer', ({ api, 
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('keeps the scope a Vue plugin listed after Nave puts on a style block', async () => {
       const app = makeUsedApp({
@@ -405,7 +405,7 @@ ${IMPORT}const c = cx('flex')
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 
   describe('AC-used-atoms-32 - every route that brings the layer is filtered, or the build says it was not', () => {
@@ -426,7 +426,7 @@ ${IMPORT}const c = cx('flex')
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('filters the layer a style element of an HTML page imports', async () => {
       const app = makeUsedApp({
@@ -443,7 +443,7 @@ ${IMPORT}const c = cx('flex')
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('AC-used-atoms-60: warns once, in the words the build prints, for a layer imported with ?inline, and ships it whole', async () => {
       const app = inlineApp(APP_CSS)
@@ -464,7 +464,7 @@ ${IMPORT}const c = cx('flex')
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('AC-used-atoms-60: prints no warning for an ?inline stylesheet that carries no atomic layer', async () => {
       const app = inlineApp('.x { color: red }\n')
@@ -476,7 +476,7 @@ ${IMPORT}const c = cx('flex')
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('says the same for a stylesheet imported with ?raw, naming it, and not for one with no layer or under all', async () => {
       const layer = readFileSync(path.join(CORE_ROOT, 'dist/atomic.css'), 'utf8')
@@ -496,7 +496,7 @@ ${IMPORT}const c = cx('flex')
         withLayer.dispose()
         without.dispose()
       }
-    }, 60_000)
+    })
 
     it('names a package stylesheet imported with ?raw by its path from the project root', async () => {
       const app = makeUsedApp({
@@ -512,7 +512,7 @@ ${IMPORT}const c = cx('flex')
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('prints no warning for a layer imported without ?inline or ?raw', async () => {
       const plain = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}console.log(cx('flex'))\n` }))
@@ -524,7 +524,7 @@ ${IMPORT}const c = cx('flex')
       } finally {
         plain.dispose()
       }
-    }, 60_000)
+    })
   })
 
   describe('AC-used-atoms-28 — the build fails when the Vite-internal step did not take', () => {
@@ -560,7 +560,7 @@ ${IMPORT}const c = cx('flex')
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
 
     it('(c) names the unemitted atoms when the re-feed of Vite’s CSS step is removed', async () => {
       const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -577,7 +577,7 @@ ${IMPORT}const c = cx('flex')
       } finally {
         app.dispose()
       }
-    }, 60_000)
+    })
   })
 })
 
@@ -604,7 +604,7 @@ describe.each(Object.entries(VITE_APIS))(
         } finally {
           app.dispose()
         }
-      }, 60_000)
+      })
     })
 
     describe('AC-used-atoms-26 - the prune is handed a merged selector list', () => {
@@ -669,7 +669,6 @@ describe.each(Object.entries(VITE_APIS))(
             app.dispose()
           }
         },
-        60_000,
       )
     })
 
@@ -706,7 +705,7 @@ describe.each(Object.entries(VITE_APIS))(
         } finally {
           app.dispose()
         }
-      }, 60_000)
+      })
     })
   },
 )
@@ -741,32 +740,28 @@ describe.each(TRANSFORMERS)('under css.transformer %s', (transformer) => {
         'Vite’s default targets, minifying',
         { build: { cssTarget: undefined }, config: { css: { transformer } } },
       ],
-    ] as const)(
-      'at %s',
-      async (_name, settings) => {
-        const names = Object.keys(atomClassMap)
-        const reference = makeUsedApp(appFiles({ 'src/App.ts': 'console.log(1)\n' }))
-        const mismatches: string[] = []
-        try {
-          const all = await buildUsed(reference, {
-            transformer,
-            options: { atomic: 'all' },
-            ...settings,
-          })
-          const allTree = parseAtomicLayer(all.css)
-          for (const name of names) {
-            if (!(await isBuiltWithOnlyItsRules(name, allTree, { transformer, ...settings }))) {
-              mismatches.push(name)
-            }
+    ] as const)('at %s', async (_name, settings) => {
+      const names = Object.keys(atomClassMap)
+      const reference = makeUsedApp(appFiles({ 'src/App.ts': 'console.log(1)\n' }))
+      const mismatches: string[] = []
+      try {
+        const all = await buildUsed(reference, {
+          transformer,
+          options: { atomic: 'all' },
+          ...settings,
+        })
+        const allTree = parseAtomicLayer(all.css)
+        for (const name of names) {
+          if (!(await isBuiltWithOnlyItsRules(name, allTree, { transformer, ...settings }))) {
+            mismatches.push(name)
           }
-
-          expect(allTree.length).toBeGreaterThanOrEqual(names.length)
-          expect(mismatches).toEqual([])
-        } finally {
-          reference.dispose()
         }
-      },
-      120_000,
-    )
+
+        expect(allTree.length).toBeGreaterThanOrEqual(names.length)
+        expect(mismatches).toEqual([])
+      } finally {
+        reference.dispose()
+      }
+    })
   })
 })

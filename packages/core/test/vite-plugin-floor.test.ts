@@ -99,7 +99,6 @@ describe('AC-directive-core-36 — the plugin leaves the floor keys to the consu
       expect(without.css.length).toBeGreaterThan(0)
       expect(withPlugin.assets).toEqual(without.assets)
     },
-    30_000,
   )
 
   it('the documented floor keeps every light-dark(); build.cssTarget alone rewrites them (README claim)', async () => {
@@ -111,7 +110,7 @@ describe('AC-directive-core-36 — the plugin leaves the floor keys to the consu
 
     expect(tokens(floor.css)).toBeGreaterThan(0)
     expect(tokens(targetOnly.css)).toBe(0)
-  }, 30_000)
+  })
 })
 
 describe('AC-directive-core-36 (amended 2026-10-03) — a project that imports the atom layer', () => {
@@ -147,34 +146,25 @@ describe('AC-directive-core-36 (amended 2026-10-03) — a project that imports t
         quickStart.dispose()
       }
     },
-    60_000,
   )
 })
 
 describe('AC-directive-core-32 — a ?raw import is returned as the file’s text', () => {
-  it.each(TRANSFORMERS)(
-    'in build under %s, @nave is unchanged',
-    async (transformer) => {
-      const { js } = await buildOutputs(appConfig(raw.root, transformer, [navePlugin()]))
+  it.each(TRANSFORMERS)('in build under %s, @nave is unchanged', async (transformer) => {
+    const { js } = await buildOutputs(appConfig(raw.root, transformer, [navePlugin()]))
 
-      expect(js).toContain('@nave flex')
-    },
-    30_000,
-  )
+    expect(js).toContain('@nave flex')
+  })
 
-  it.each(TRANSFORMERS)(
-    'in dev under %s, @nave is unchanged',
-    async (transformer) => {
-      const server = await startDev(appConfig(raw.root, transformer, [navePlugin()]))
-      try {
-        const result = await server.transformRequest('/src/r.css?raw')
-        await devCss(server, '/src/main.js')
+  it.each(TRANSFORMERS)('in dev under %s, @nave is unchanged', async (transformer) => {
+    const server = await startDev(appConfig(raw.root, transformer, [navePlugin()]))
+    try {
+      const result = await server.transformRequest('/src/r.css?raw')
+      await devCss(server, '/src/main.js')
 
-        expect(result?.code).toContain('@nave flex')
-      } finally {
-        await server.close()
-      }
-    },
-    30_000,
-  )
+      expect(result?.code).toContain('@nave flex')
+    } finally {
+      await server.close()
+    }
+  })
 })

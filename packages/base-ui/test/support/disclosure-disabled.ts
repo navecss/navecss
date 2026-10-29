@@ -1,10 +1,9 @@
 /**
  * What a disabled Accordion or Collapsible trigger carries when it is a native button, at the run's
- * Base UI, outside the parts that add `aria-disabled` to a disabled button inside them (Toolbar,
- * `Tabs.List`, Radio Group, Toggle Group, Menubar, Navigation Menu; see
- * `test/render/disclosure-composites.test.ts`). Up to 1.8.0 it is `aria-disabled="true"`, and the
- * button stays in the tab order; from 1.9.0 it is the native `disabled` attribute instead, which
- * takes the button out of the tab order. A trigger rendered as another element carries
+ * Base UI. The floor run (1.3.0) sets `aria-disabled="true"` and the button stays in the tab order;
+ * every other run reads the native `disabled` attribute instead, which is what Base UI sets from
+ * 1.9.0 and takes the button out of the tab order. Only the floor and the current run exist, so the
+ * floor-against-anything-else split is exact. A trigger rendered as another element carries
  * `aria-disabled` at every minor.
  */
 import { atoms } from '../../styles/atoms.ts'

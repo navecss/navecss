@@ -107,7 +107,6 @@ describe.each(LEGS)('AC-used-atoms-26 - srOnly always ships with srOnlyFocusable
         app.dispose()
       }
     },
-    60_000,
   )
 
   it('records both atoms in the cache file after S2, and a use of srOnlyFocusable alone adds no .nave-sr-only', async () => {
@@ -131,7 +130,7 @@ describe.each(LEGS)('AC-used-atoms-26 - srOnly always ships with srOnlyFocusable
       both.dispose()
       alone.dispose()
     }
-  }, 60_000)
+  })
 })
 
 /**

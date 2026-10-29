@@ -12,7 +12,13 @@ export default defineConfig({
     execArgv: ['--no-sparkplug'],
     include: ['test/**/*.test.ts'],
     setupFiles: ['./test/setup/rule-tester.ts'],
-    testTimeout: 20_000,
+    // A row here compiles or lints and parses a whole file, and `ci:check` runs every package's tests at
+    // once on a machine other sessions share: rows that take seconds alone took 23 to 97 s there.
+    // One row bounds time: "gets one report, in bounded time" in `cx-dynamic.test.ts` lints in a
+    // child process that is ended after 60 s, because the work is synchronous and no test timeout
+    // can cut it. No other row asserts how long it takes, so the budget only has to outlast a
+    // loaded machine, and a hang is still bounded by the job's own timeout.
+    testTimeout: 240_000,
     coverage: {
       // Measure and report only — no thresholds are configured, and none
       // should be added here. A number that has to be gamed to stay green

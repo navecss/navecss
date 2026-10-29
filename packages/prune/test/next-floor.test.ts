@@ -380,11 +380,14 @@ describe('the install lock of the Next.js floor', () => {
     writeFileSync(lock, 'successor')
     const written = new Date(Date.now() - 10 * 60_000)
     utimesSync(lock, written, written)
+    const writtenMs = statSync(lock).mtimeMs
     await new Promise((resolve) => setTimeout(resolve, 500))
-    const timeAfterRenewals = statSync(lock).mtimeMs
     await installing
 
-    expect(timeAfterRenewals, 'the first holder went on renewing').toBe(written.getTime())
+    expect(
+      statSync(lock).mtimeMs,
+      'the first holder renewed or released the successor’s lock',
+    ).toBe(writtenMs)
     expect(readFileSync(lock, 'utf8'), 'the first holder released the successor’s lock').toBe(
       'successor',
     )
@@ -427,7 +430,7 @@ describe('the Next.js floor install asked by several processes at once', () => {
     expect(trial.starts).toBe(1)
     expect(trial.answers).toEqual(Array.from({ length: 8 }, () => 'ok'))
     expect(trial.isWhole).toBe(true)
-  }, 60_000)
+  })
 
   it('runs npm once and answers every caller, when a lock of an installer that is gone is in place, 20 of 20 times', async () => {
     const trials: Awaited<ReturnType<typeof raceTrial>>[] = []
@@ -468,5 +471,5 @@ describe('a worker of the race that is stopped in the middle of a trial', () => 
     await exited
 
     expect(made(), 'the directory of the trial').toEqual([])
-  }, 30_000)
+  })
 })

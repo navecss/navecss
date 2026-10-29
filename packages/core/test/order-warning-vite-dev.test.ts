@@ -69,7 +69,7 @@ describe('AC-native-apply-order-23: the dev server', () => {
     expect(naveWarnings()).toHaveLength(1)
     expect(occurrences(naveWarnings()[0]!, warningTextsOf(FIRST)[0]!)).toBe(1)
     expect(naveWarnings()[0]).toMatch(/a\.css:1:26: @nave: "flex" comes after/)
-  }, 60_000)
+  })
 
   it('maps the position through the incoming source map: a Sass rule on line 5 reports src/a.scss line 5', async () => {
     await state.server!.transformRequest('/src/a.scss')
@@ -77,7 +77,7 @@ describe('AC-native-apply-order-23: the dev server', () => {
     expect(naveWarnings()).toHaveLength(1)
     expect(naveWarnings()[0]).toMatch(/a\.scss:5:\d+: @nave: "flex" comes after/)
     expect(naveWarnings()[0]).not.toContain('as processed')
-  }, 60_000)
+  })
 
   it('prints nothing for a save of identical bytes, and the new set when a rule is added', async () => {
     await state.server!.transformRequest(URL)
@@ -87,7 +87,7 @@ describe('AC-native-apply-order-23: the dev server', () => {
     await save(FIRST + SECOND)
     expect(naveWarnings()).toHaveLength(3)
     expect(naveWarnings().slice(1).join('\n')).toContain(warningTextsOf(SECOND)[0]!)
-  }, 60_000)
+  })
 
   it('counts an empty set as printed: remove both rules, then restore the first, and it prints again', async () => {
     await state.server!.transformRequest(URL)
@@ -100,12 +100,12 @@ describe('AC-native-apply-order-23: the dev server', () => {
     await save(FIRST)
     expect(naveWarnings()).toHaveLength(afterTwo + 1)
     expect(naveWarnings().at(-1)).toContain(warningTextsOf(FIRST)[0]!)
-  }, 60_000)
+  })
 
   it('the ssr environment transforming the same set prints nothing more', async () => {
     await state.server!.transformRequest(URL)
     await state.server!.environments.ssr.transformRequest(URL)
 
     expect(naveWarnings()).toHaveLength(1)
-  }, 60_000)
+  })
 })

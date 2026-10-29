@@ -111,7 +111,6 @@ describe('AC-used-atoms-52 - keepFor does not clear a cx export the application 
         expect(followed.error).toBeUndefined()
         expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex'))
       },
-      120_000,
     )
   })
 
@@ -125,7 +124,7 @@ describe('AC-used-atoms-52 - keepFor does not clear a cx export the application 
 
     expect(pasted.error).toContain(takenLine('src/App.ts (cn)'))
     expect(pasted.error).not.toMatch(/cxModules: \[/)
-  }, 120_000)
+  })
 
   it('names every taker and every name, sorted, and points at the files', async () => {
     const modules = withMenu(
@@ -145,7 +144,7 @@ describe('AC-used-atoms-52 - keepFor does not clear a cx export the application 
     expect(first.error!.split('\n')).toContain(
       takenLine('src/App.ts (cn), src/Page.ts (cn, the default export)', 'in each of those files'),
     )
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-52 - the name test: what the application takes, not what it imports a file from', () => {
@@ -161,7 +160,7 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
     expect(built.error).toBeUndefined()
     expect((built.warnings ?? []).filter((message) => message.includes('nave'))).toEqual([])
     expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('is green when a namespace import is read only as ui.Menu, and fails once ui.cn is called', async () => {
     const reading = "import * as ui from '@acme/ui'\nexport const A = ui.Menu\n"
@@ -174,7 +173,7 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
     expect(red.error!.split('\n')).toContain(
       takenLine('src/App.ts (a namespace import reading cn)', 'in that file', WHOLE),
     )
-  }, 120_000)
+  })
 
   it('is green for a namespace destructured without a rest element, and fails with one', async () => {
     const plain = "import * as ui from '@acme/ui'\nconst { Menu } = ui\nexport const A = Menu\n"
@@ -195,7 +194,7 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
     expect(whole.error!.split('\n')).toContain(
       takenLine('src/App.ts (a namespace import)', 'in that file', WHOLE),
     )
-  }, 120_000)
+  })
 
   it('counts a namespace that is passed on as taken', async () => {
     const passed = "import * as ui from '@acme/ui'\nexport const A = [ui.Menu, Object.keys(ui)]\n"
@@ -204,7 +203,7 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
     expect(built.error!.split('\n')).toContain(
       takenLine('src/App.ts (a namespace import)', 'in that file', WHOLE),
     )
-  }, 60_000)
+  })
 
   it('counts export * from the package, and import() of it, as taken', async () => {
     const star = await run(
@@ -225,7 +224,7 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
     expect(lazy.error!.split('\n')).toContain(
       takenLine('src/App.ts (import())', 'in that file', WHOLE),
     )
-  }, 120_000)
+  })
 
   it('reads an import() destructured by static keys: other keys take nothing, a cx key takes it', async () => {
     const other =
@@ -240,7 +239,7 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
     expect(red.error!.split('\n')).toContain(
       takenLine('src/App.ts (import() reading cn)', 'in that file', WHOLE),
     )
-  }, 120_000)
+  })
 
   it('does not count a bare import, or a take of another name through export { Menu } from', async () => {
     const bare = await run(
@@ -250,7 +249,7 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
     )
 
     expect(bare.error).toBeUndefined()
-  }, 60_000)
+  })
 
   it('withdrawn cost: an entry that re-exports cx is cleared when the application takes only Button', async () => {
     const entry = {
@@ -272,7 +271,7 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
     )
 
     expect(control.error).toContain("cxModules: ['@acme/ui']")
-  }, 120_000)
+  })
 
   it('a dependency that takes cx as cx from a module with a clearing specifier keeps the cxModules line', async () => {
     const entry = {
@@ -286,7 +285,7 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
     )
 
     expect(built.error).toContain("cxModules: ['@acme/ui']")
-  }, 60_000)
+  })
 
   it('stated residual: a second dependency that takes a renamed export is the package’s own call', async () => {
     const modules = withMenu('cn.js', CN)
@@ -301,5 +300,5 @@ describe('AC-used-atoms-52 - the name test: what the application takes, not what
 
     expect(built.error).toBeUndefined()
     expect(atomLayerAtoms(built.css)).toEqual(atoms('block'))
-  }, 60_000)
+  })
 })

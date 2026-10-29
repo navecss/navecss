@@ -75,7 +75,7 @@ beforeAll(() => {
     cwd: consumerDir,
     encoding: 'utf8',
   })
-}, 120_000)
+}, 240_000)
 
 /**
  * Packs `packageDir` with `npm pack --json` into `packDestination` and returns the tarball's

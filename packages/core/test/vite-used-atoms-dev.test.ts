@@ -9,7 +9,7 @@ import type { InlineConfig, PluginOption, ViteDevServer } from 'vite'
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { atomClassMap } from '../src/atoms.ts'
 import { type DevServing, devServing } from '../src/vite-dev.ts'
@@ -137,7 +137,7 @@ describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('writes the cache file with exactly the emitted set after a green build', async () => {
     const app = makeFixture()
@@ -152,7 +152,7 @@ describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('reports no error naming bad-lib in dev with its keepFor entry removed, while the build fails on it', async () => {
     const app = makeFixture()
@@ -171,7 +171,7 @@ describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('gives a per-module error for each application module the build cannot read, with keep empty', async () => {
     const app = makeUsedApp(
@@ -196,7 +196,7 @@ describe('AC-used-atoms-33 — dev serves the set the build would emit', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-39 — a dependency’s calls are read in dev, on a cold and a warm optimizer cache', () => {
@@ -237,7 +237,7 @@ describe('AC-used-atoms-39 — a dependency’s calls are read in dev, on a cold
     } finally {
       app.dispose()
     }
-  }, 180_000)
+  })
 
   it('control: without core excluded from prebundling the layer holds no wFull rule in either run', async () => {
     const app = makeFixture()
@@ -264,7 +264,7 @@ describe('AC-used-atoms-39 — a dependency’s calls are read in dev, on a cold
     } finally {
       app.dispose()
     }
-  }, 180_000)
+  })
 })
 
 interface Update {
@@ -410,6 +410,80 @@ async function servedOnceRead(
 }
 
 /**
+ * Counts the times the plugin is told that the set of atoms may have grown, which it is at the end
+ * of the transform of each module it reads, and passes each on. `stop` ends the count.
+ */
+function noteGrowths(): { readonly count: number; stop: () => void } {
+  const saved = { ...devServing }
+  const counted = {
+    count: 0,
+    stop: () => {
+      Object.assign(devServing, saved)
+    },
+  }
+  devServing.noteGrowth = (context) => {
+    counted.count += 1
+    saved.noteGrowth(context)
+  }
+  return counted
+}
+
+/**
+ * Resolves once a reload the plugin has just decided on has had time to go out. The plugin sends
+ * it on the next turn of the event loop, and the wait is longer than that so that a reload sent a
+ * little later is still counted. With the clock standing still a correct plugin sends nothing
+ * more however long the wait, so its length cannot fail a correct change on a slow machine.
+ */
+function sendsSettled(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 100)
+  })
+}
+
+// A row that times out while its clock stands still never reaches the `finally` that starts the
+// clock again, so the rows after it would read a clock that never moves.
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+/**
+ * Runs `body` with the clock standing still and the plugin's growth notes counted. A reload the
+ * page has not answered holds the next one back for 2 s of the clock, so a row that edits again
+ * after the first update is at the mercy of a machine that takes longer than that between the
+ * two; with the clock still, the reload stays unanswered for as long as the row says. Timers
+ * stay real. `body` moves the clock itself if the row is about what happens after the 2 s.
+ */
+async function withClockStopped(
+  body: (growth: ReturnType<typeof noteGrowths>) => Promise<void>,
+): Promise<void> {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  const growth = noteGrowths()
+  try {
+    await body(growth)
+  } finally {
+    growth.stop()
+    vi.useRealTimers()
+  }
+}
+
+/**
+ * `edit`, then waits until the plugin has decided what the edit's growth means for the reloads:
+ * it is told of the growth at the end of the edited module's transform, and sends what it
+ * decided on the next turn of the event loop.
+ */
+async function editAndDecide(
+  server: DevServer,
+  root: string,
+  body: string,
+  growth: ReturnType<typeof noteGrowths>,
+): Promise<void> {
+  const noted = growth.count
+  await edit(server, root, body)
+  expect(growth.count).toBeGreaterThan(noted)
+  await sendsSettled()
+}
+
+/**
  * A scratch plugin, listed ahead of `navePlugin()`, that keeps what the dev server listens for on
  * the client channel when a page connects or disconnects, so a row can stand a page's connection
  * in without a browser. `connect` and `disconnect` call each of those listeners.
@@ -472,7 +546,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('sends the stylesheet in the same update as the script whose edit grew the set', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': ACCEPTING("cx('flex')") }))
@@ -492,7 +566,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('batches: several modules adding atoms in one burst send one reload of app.css, and none from inside the transform that grew the set', async () => {
     const app = makeUsedApp(
@@ -552,7 +626,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('control: without the stylesheet reload nothing is sent when the set grows', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -575,7 +649,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
       Object.assign(devServing, saved)
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('a page that connects after a reload was sent to no one is sent the reload again', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -590,13 +664,14 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
             update.updates?.some((entry) => entry.path === '/src/app.css'),
           )
 
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        // Nothing has asked for the stylesheet since, so the reload may have gone to no one, and
-        // more growth is not announced on top of it.
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        expect(reloads()).toHaveLength(1)
+        await withClockStopped(async (growth) => {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          // Nothing has asked for the stylesheet since, so the reload may have gone to no one, and
+          // more growth is not announced on top of it.
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
+          expect(reloads()).toHaveLength(1)
+        })
 
         const asked = reloadAsked(server, UPDATE_CEILING_MS)
         page.connect()
@@ -609,7 +684,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a connection when no reload went unheard sends nothing, though a served stylesheet is outgrown', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -625,14 +700,15 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           )
 
         page.connect()
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        // The page was listening, so the reload was heard; the stylesheet has not been asked for
-        // since, so it is still outgrown, and more growth is held back by the reload in flight.
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        page.connect()
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        await withClockStopped(async (growth) => {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          // The page was listening, so the reload was heard; the stylesheet has not been asked for
+          // since, so it is still outgrown, and more growth is held back by the reload in flight.
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
+          page.connect()
+          await sendsSettled()
+        })
 
         expect(reloads()).toHaveLength(1)
       } finally {
@@ -641,7 +717,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a page that disconnects and connects again, with no reload unheard, is sent nothing', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -657,13 +733,14 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           )
 
         page.connect()
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        page.disconnect()
-        page.connect()
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        await withClockStopped(async (growth) => {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
+          page.disconnect()
+          page.connect()
+          await sendsSettled()
+        })
 
         expect(reloads()).toHaveLength(1)
       } finally {
@@ -672,7 +749,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a page that disconnected before a reload was sent is not counted: the next connection is sent the reload again', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -689,11 +766,12 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
 
         page.connect()
         page.disconnect()
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        expect(reloads()).toHaveLength(1)
+        await withClockStopped(async (growth) => {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
+          expect(reloads()).toHaveLength(1)
+        })
 
         const asked = reloadAsked(server, UPDATE_CEILING_MS)
         page.connect()
@@ -706,7 +784,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a connection when no reload went unheard sends nothing, though a served stylesheet is outgrown and its reload no longer holds the next back', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -722,14 +800,16 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
           )
 
         page.connect()
-        await edit(server, app.root, "cx('flex', 'block')")
-        expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
-        await edit(server, app.root, "cx('flex', 'block', 'gap')")
-        // Longer than the 2 s a reload not yet answered holds the next one back, so what keeps this
-        // outgrown stylesheet from reloading is that a connection reloads only what no page heard.
-        await new Promise((resolve) => setTimeout(resolve, 2100))
-        page.connect()
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        await withClockStopped(async (growth) => {
+          await edit(server, app.root, "cx('flex', 'block')")
+          expect(await updates.isSent(['/src/app.css'], UPDATE_CEILING_MS)).toBe(true)
+          await editAndDecide(server, app.root, "cx('flex', 'block', 'gap')", growth)
+          // Past the 2 s a reload not yet answered holds the next one back, so what keeps this
+          // outgrown stylesheet from reloading is that a connection reloads only what no page heard.
+          vi.setSystemTime(Date.now() + 2100)
+          page.connect()
+          await sendsSettled()
+        })
 
         expect(reloads()).toHaveLength(1)
       } finally {
@@ -738,7 +818,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a page that connects after a file change sent the stylesheet to no one is sent its reload again', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': ACCEPTING("cx('flex')") }))
@@ -762,7 +842,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('control: a page that connects when the stylesheet it was served is current is sent nothing', async () => {
     const app = makeUsedApp(appFiles({ 'src/App.ts': `${IMPORT}export const a = cx('flex')\n` }))
@@ -786,7 +866,7 @@ describe('AC-used-atoms-41 — a set that grows reloads the stylesheet, with no 
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 /**
@@ -839,7 +919,7 @@ describe('AC-used-atoms-41 — a stylesheet inlined in index.html, after the set
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })
 
 /**
@@ -857,29 +937,31 @@ function slow(file: string, delay: number): PluginOption {
 }
 
 /**
- * A scratch plugin that does not finish reading the module `file` until `release` is called, or
- * until `ceiling` milliseconds have passed, so the module is certain not to have been read by any
- * response that returns before `release` is. The ceiling only bounds a response that is itself
- * waiting for the module: it is set far above what a response that waits for nothing needs.
- * `entered` settles once the module's transform has begun, which is when it is in the module graph,
- * or at the same ceiling, so a transform that never begins fails the row's own assertion.
+ * A scratch plugin that does not finish reading the module `file` until `release` is called, so the
+ * module is certain not to have been read by any response that returns before `release` is, however
+ * slow the machine. `arm` bounds a response that is itself waiting for the module: `ceiling`
+ * milliseconds after it is first called, the module is let through. It is called where the
+ * stylesheet's wait begins and never earlier, because a ceiling counted from before could run out
+ * on a slow machine while the stylesheet was still on its way to the wait, and let the module
+ * through first. `entered` settles once the module's transform has begun, which is when it is in
+ * the module graph, and at no other time: a transform that never begins leaves it waiting, and the
+ * row's own timeout ends the row, since a figure counted from before the server has started could
+ * run out while the module was still on its way to its transform.
  */
 function held(
   file: string,
   ceiling: number,
-): { entered: Promise<void>; plugin: PluginOption; release: () => void } {
+): { arm: () => void; entered: Promise<void>; plugin: PluginOption; release: () => void } {
   const { promise: entered, resolve: enter } = Promise.withResolvers<void>()
-  let release = (): void => {}
-  const released = new Promise<void>((resolve) => {
-    const timer = setTimeout(() => {
-      enter()
-      resolve()
-    }, ceiling)
-    release = () => {
-      clearTimeout(timer)
-      resolve()
-    }
-  })
+  const { promise: released, resolve: letThrough } = Promise.withResolvers<void>()
+  let armed: NodeJS.Timeout | undefined
+  const release = (): void => {
+    clearTimeout(armed)
+    letThrough()
+  }
+  const arm = (): void => {
+    armed ??= setTimeout(release, ceiling)
+  }
   const plugin: PluginOption = {
     name: 'held-module',
     async transform(_code: string, id: string) {
@@ -888,7 +970,7 @@ function held(
       await released
     },
   }
-  return { entered, plugin, release }
+  return { arm, entered, plugin, release }
 }
 
 describe('AC-used-atoms-40 — the first stylesheet response waits for the graph', () => {
@@ -931,14 +1013,14 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
   it('serves a stylesheet requested before the modules that name atoms with those atoms', async () => {
     // The wait has to outlast a slow read of the last module, so the read is slowed.
     expect(await atomsServedAtOnce(slow('src/C.ts', 300))).toEqual(atoms('flex', 'gap', 'grid'))
-  }, 60_000)
+  })
 
   it('control: with the wait removed the stylesheet is served with what had been read', async () => {
     const saved = { ...devServing }
     devServing.hold = () => Promise.resolve()
-    // The last module is not read at all until the response is back, however fast the machine,
-    // so the response cannot hold its atom. A response that did wait for it would wait for the
-    // ceiling, and then hold it.
+    // The last module is not read at all until the response is back, however fast or slow the
+    // machine, so the response cannot hold its atom. A response that did wait for it would never
+    // be answered, and the row would end on its timeout.
     const gate = held('src/C.ts', 15_000)
     try {
       expect(await atomsServedAtOnce(gate.plugin, gate.release)).not.toEqual(
@@ -947,7 +1029,7 @@ describe('AC-used-atoms-40 — the first stylesheet response waits for the graph
     } finally {
       Object.assign(devServing, saved)
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-40 — what the wait reaches', () => {
@@ -975,7 +1057,7 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   // Taken here, before any row replaces `devServing.hold`: a stand-in that called `devServing.hold`
   // while a row's replacement is in place would reach the replacement, and so itself.
@@ -983,11 +1065,13 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
 
   /**
    * The hold as it was before the fix: a stylesheet with no importer in the module graph, or not
-   * in it at all, is answered at once; any other waits as the real hold does.
+   * in it at all, is answered at once and the held module stays held; any other lets the held
+   * module through and waits as the real hold does.
    */
-  const atOnceWithoutImporter: DevServing['hold'] = async (environment, id) => {
+  const atOnceWithoutImporter: StandInHold = async (environment, id, letThrough) => {
     const module = environment.moduleGraph.getModuleById(id)
     if (!module || module.importers.size === 0) return
+    letThrough()
     await realHold(environment, id)
   }
 
@@ -1012,17 +1096,29 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     return atomLayerAtoms(served as string)
   }
 
+  /**
+   * A stand-in for the real hold. It is the stand-in that decides when the held module is let
+   * through, by calling `letThrough`: one that waits for the module has to, and one that answers at
+   * once leaves the module held until the stylesheet has been answered.
+   */
+  type StandInHold = (
+    environment: Parameters<DevServing['hold']>[0],
+    id: string,
+    letThrough: () => void,
+  ) => Promise<void>
+
   interface StylesheetBeforeImporter {
     files?: Readonly<Record<string, string>>
     heldModule?: string
-    hold?: DevServing['hold']
+    hold?: StandInHold
     idle?: () => Promise<void>
   }
 
   /**
    * The atoms in the CSS served for `src/app.css` when it is requested as a module while
    * `heldModule`, a module of `files`, is still being transformed. That module is not let through
-   * its transform until the stylesheet's wait has begun (never a delay): when it is `src/main.ts`,
+   * its transform until the stylesheet's wait has begun (never a delay), or, for a `hold` that
+   * answers at once, until the stylesheet has been answered: when it is `src/main.ts`,
    * which imports the stylesheet, the import is not in the module graph until then, the order a
    * warm-up of the stylesheet reaches under load. Any other module is held after `main.ts` has been
    * read in full. `hold` stands in for the real wait, and `idle` for the client's
@@ -1038,7 +1134,9 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     const gate = held(heldModule, 15_000)
     const saved = { ...devServing }
     devServing.hold = (environment, id) => {
-      const waited = (hold ?? realHold)(environment, id)
+      gate.arm()
+      if (hold) return hold(environment, id, gate.release)
+      const waited = realHold(environment, id)
       gate.release()
       return waited
     }
@@ -1050,8 +1148,10 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
         // Its transform having begun can: until then it is not in the module graph at all, and on
         // a busy machine the stylesheet's own request can reach its wait first.
         if (heldModule === 'src/main.ts') {
-          void server.transformRequest('/src/main.ts').catch(() => {})
-          await gate.entered
+          const requested = server.transformRequest('/src/main.ts')
+          // A request that fails before its transform begins ends the wait with its error; one
+          // that is held settles only after `gate.release`, so this never ends it early.
+          await Promise.race([gate.entered, requested])
         } else await server.transformRequest('/src/main.ts')
         const css = await server.transformRequest('/src/app.css')
         return layerAtomsOf(css!.code)
@@ -1067,30 +1167,30 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
 
   it('holds a stylesheet requested before the module that imports it has registered the import', async () => {
     expect(await atomsServedBeforeImporter()).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('holds that stylesheet when the first crawl has already spent the wait for the client to be idle', async () => {
     // The row above also passes for a hold that reads nothing: the first crawl's wait reads for it.
     expect(await atomsServedBeforeImporter({ idle: () => Promise.resolve() })).toEqual(
       atoms('flex'),
     )
-  }, 60_000)
+  })
 
   it('holds a stylesheet whose importer is not a root of the graph, while that importer is being read', async () => {
     expect(
       await atomsServedBeforeImporter({ files: IMPORTED_BY_APP, heldModule: 'src/App.ts' }),
     ).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   it('control: a hold that returns at once when no importer is registered serves that stylesheet with what had been read', async () => {
     expect(await atomsServedBeforeImporter({ hold: atOnceWithoutImporter })).toEqual([])
-  }, 60_000)
+  })
 
   it('control: that hold waits as the real one does when the importer is registered by the time it is held', async () => {
     expect(
       await atomsServedBeforeImporter({ heldModule: 'src/App.ts', hold: atOnceWithoutImporter }),
     ).toEqual(atoms('flex'))
-  }, 60_000)
+  })
 
   /**
    * Requests each of `urls` together, as modules, from an app whose page names `hidden` and whose
@@ -1134,14 +1234,14 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     expect(waits).toHaveLength(1)
     expect(codes[0]).toContain('__vite__css')
     expect(layerAtomsOf(codes[0]!)).toEqual(atoms('hidden'))
-  }, 60_000)
+  })
 
   it('answers two stylesheets requested together as modules that no module imports, each with the atoms of the page', async () => {
     const { codes, waits } = await requestedWithoutImporter(['/src/a.css', '/src/b.css'])
 
     expect(waits).toHaveLength(2)
     expect(codes.map((code) => layerAtomsOf(code))).toEqual([atoms('hidden'), atoms('hidden')])
-  }, 60_000)
+  })
 
   it('a stylesheet a page links, requested as `?direct`, is answered at once, with the atoms of the pages read so far', async () => {
     const app = makeUsedApp({
@@ -1179,7 +1279,7 @@ describe('AC-used-atoms-40 — what the wait reaches', () => {
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 describe('AC-used-atoms-42 — what dev shows as the build will, and the divergences', () => {
@@ -1224,7 +1324,7 @@ describe('AC-used-atoms-42 — what dev shows as the build will, and the diverge
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('a branch that holds only an import of a dev-only module is read by the build too: dev and the build agree', async () => {
     const app = makeUsedApp(
@@ -1250,7 +1350,7 @@ describe('AC-used-atoms-42 — what dev shows as the build will, and the diverge
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('control: with inlineFlex added to the package’s list, the dev layer has its rule', async () => {
     const app = makeFixture()
@@ -1266,7 +1366,7 @@ describe('AC-used-atoms-42 — what dev shows as the build will, and the diverge
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 })
 
 /**
@@ -1437,7 +1537,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('a server render takes a listed atom through the same map', async () => {
     const app = makeFixture()
@@ -1452,7 +1552,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   const render = async (server: DevServer, file: string): Promise<string> =>
     ((await server.ssrLoadModule(file)) as { default: string }).default
@@ -1474,7 +1574,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('with two dev servers in one process, closing the second leaves the first its own map', async () => {
     const first = makeFixture()
@@ -1494,7 +1594,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
       first.dispose()
       second.dispose()
     }
-  }, 120_000)
+  })
 
   it('closing the servers in the order they started leaves the second its own map, and then gives the global back what it held', async () => {
     const first = makeFixture()
@@ -1517,7 +1617,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
       first.dispose()
       second.dispose()
     }
-  }, 120_000)
+  })
 
   it('closing the only dev server gives the global back what it held before it started', async () => {
     const app = makeFixture()
@@ -1534,7 +1634,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
       Reflect.deleteProperty(globalThis, '__NAVE_KEEP_CLASSES__')
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('a server whose close fails in a plugin of its own still gives the global back what it held', async () => {
     const app = makeFixture()
@@ -1558,7 +1658,7 @@ describe('AC-used-atoms-20 — the define in dev: server renders and the optimiz
       Reflect.deleteProperty(globalThis, '__NAVE_KEEP_CLASSES__')
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it(
     'dyn-lib’s prebundled chunk keeps core’s import and holds no keep map',
@@ -1674,7 +1774,7 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('serves a stylesheet requested before a CSS Module that only a lazily imported script reaches with the atoms it composes', async () => {
     const app = makeUsedApp(
@@ -1709,7 +1809,7 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('answers a CSS Module that holds the atomic layer itself, without waiting on its own read', async () => {
     const app = makeUsedApp(
@@ -1743,7 +1843,7 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 60_000)
+  })
 
   it('sends the stylesheet in the same update as the update the CSS Module whose edit grew the set causes', async () => {
     const main = `${cssModuleFiles()['src/main.ts']}import.meta.hot?.accept('./card.module.css', () => {})\n`
@@ -1771,7 +1871,7 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 
   it('reads a module an edit makes a CSS Module compose from through the CSS Module only, not on its own', async () => {
     const main = `${cssModuleFiles()['src/main.ts']}import.meta.hot?.accept('./card.module.css', () => {})\n`
@@ -1802,5 +1902,5 @@ describe('AC-used-atoms-61 — the dev server reads a CSS Module as it reads a s
     } finally {
       app.dispose()
     }
-  }, 120_000)
+  })
 })

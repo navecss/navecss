@@ -388,29 +388,125 @@ describe('AC-base-ui-overlay-completion-29 and AC-base-ui-bridge-22: every disab
     }
   })
 
-  // On Base UI 1.9.0 a disabled Accordion or Collapsible trigger that is a native button carries
-  // the `disabled` attribute and no `aria-disabled`, and the trigger's disabled rule keys only
-  // `aria-disabled`, so the trigger keeps the colour and cursor of an enabled one. The README tells
-  // the reader to style `:disabled` themselves. The change that adds `:disabled` to the rule turns
-  // this row around, and deletes that README sentence and its pin in the same commit.
-  it('a disabled Accordion.Trigger and Collapsible.Trigger, as the default native button, are reached by the trigger disabled rule up to 1.8.0 and not at 1.9.0', async () => {
-    const selectors = disclosureTriggerDisabledSelectors()
-    expect(selectors.length, 'the trigger has a disabled rule').toBeGreaterThan(0)
-    const routes: readonly (readonly [string, string, Record<string, Props>])[] = [
-      ['accordion', 'Accordion.Trigger', { 'Accordion.Item': { disabled: true } }],
-      ['collapsible', 'Collapsible.Trigger', { 'Collapsible.Root': { disabled: true } }],
-    ]
-    for (const [subpath, marker, props] of routes) {
-      await renderScene(nave, subpath, props)
-      const trigger = part(marker)
-      expect(trigger?.tagName, `${marker} is a button`).toBe('BUTTON')
-      expect(trigger?.hasAttribute('disabled')).toBe(disclosureTriggerDisabled().native)
-      const isReached = selectors.some((selector) => trigger?.matches(selector) === true)
-      expect(isReached, `${marker}: the disabled rule reaches it`).toBe(
-        disclosureTriggerDisabled().aria,
-      )
-      await cleanup()
+  // AC-base-ui-bridge-22: the trigger's disabled rule has to reach every disabled Trigger at the
+  // run, whichever attribute Base UI marks it with. A native button is marked `aria-disabled` up to
+  // 1.8.0 and `disabled` from 1.9.0; a `div` is marked `aria-disabled` at every minor.
+  describe('the disclosure trigger disabled rule reaches the disabled Trigger at the run', () => {
+    interface Reading {
+      readonly isDisabled: boolean
+      readonly matched: readonly string[]
+      readonly name: string
     }
+
+    const asDiv = { nativeButton: false, render: createElement('div') }
+    const readTriggers = async (branches: readonly string[]): Promise<Reading[]> => {
+      const readings: Reading[] = []
+      const places = [
+        ['accordion', 'Accordion.Trigger', 'Accordion.Item', 'Accordion.Root'],
+        ['collapsible', 'Collapsible.Trigger', 'Collapsible.Root', undefined],
+      ] as const
+      for (const [subpath, marker, owner, otherOwner] of places) {
+        const forms: readonly (readonly [string, boolean, Record<string, Props>])[] = [
+          ['native, disabled', true, { [owner]: { disabled: true } }],
+          ['div, disabled', true, { [owner]: { disabled: true }, [marker]: asDiv }],
+          ['native, enabled', false, {}],
+          ['div, enabled', false, { [marker]: asDiv }],
+          ...(otherOwner === undefined
+            ? []
+            : ([
+                [`native, disabled by ${otherOwner}`, true, { [otherOwner]: { disabled: true } }],
+              ] as const)),
+          [`native, disabled by ${marker}`, true, { [marker]: { disabled: true } }],
+        ]
+        for (const [form, isDisabled, props] of forms) {
+          await renderScene(nave, subpath, props)
+          const trigger = part(marker)
+          expect(
+            trigger,
+            `${marker} (${form}) is rendered, so the rule has a node to read`,
+          ).toBeDefined()
+          readings.push({
+            isDisabled,
+            matched: branches.filter((branch) => trigger?.matches(branch) === true),
+            name: `${marker} (${form})`,
+          })
+          await cleanup()
+        }
+      }
+      return readings
+    }
+    const unreached = (readings: readonly Reading[]): string[] =>
+      readings
+        .filter((reading) => reading.isDisabled && reading.matched.length === 0)
+        .map((r) => r.name)
+
+    it('matches every disabled Trigger by at least one branch, and no enabled one', async () => {
+      const branches = disclosureTriggerDisabledSelectors()
+      expect(branches.length, 'the trigger has a disabled rule').toBeGreaterThan(0)
+      const readings = await readTriggers(branches)
+      expect(unreached(readings), 'disabled Triggers the rule does not reach').toEqual([])
+      expect(
+        readings.filter((reading) => !reading.isDisabled && reading.matched.length > 0),
+        'enabled Triggers the rule reaches',
+      ).toEqual([])
+    })
+
+    it('reaches a native button by :disabled from 1.9.0 and by [aria-disabled] before, and a div by [aria-disabled]', async () => {
+      const readings = await readTriggers(disclosureTriggerDisabledSelectors())
+      const byName = (name: string): readonly string[] =>
+        readings.find((reading) => reading.name === name)?.matched ?? []
+      for (const marker of ['Accordion.Trigger', 'Collapsible.Trigger']) {
+        expect(byName(`${marker} (div, disabled)`), `${marker} as a div`).toEqual([
+          '[aria-disabled="true"]',
+        ])
+        expect(byName(`${marker} (native, disabled)`), `${marker} as a native button`).toEqual(
+          disclosureTriggerDisabled().native ? [':disabled'] : ['[aria-disabled="true"]'],
+        )
+      }
+    })
+
+    // Every part that can disable a native trigger reaches it the same way: `Accordion.Root`,
+    // `Accordion.Item` and `Accordion.Trigger`, `Collapsible.Root` and `Collapsible.Trigger`.
+    it('reaches a native Trigger the same way whichever part disables it', async () => {
+      const readings = await readTriggers(disclosureTriggerDisabledSelectors())
+      const reached = disclosureTriggerDisabled().native
+        ? [':disabled']
+        : ['[aria-disabled="true"]']
+      const routes = readings.filter((reading) => reading.name.includes('(native, disabled'))
+      expect(
+        routes.map((reading) => reading.name),
+        'the routes read',
+      ).toEqual([
+        'Accordion.Trigger (native, disabled)',
+        'Accordion.Trigger (native, disabled by Accordion.Root)',
+        'Accordion.Trigger (native, disabled by Accordion.Trigger)',
+        'Collapsible.Trigger (native, disabled)',
+        'Collapsible.Trigger (native, disabled by Collapsible.Trigger)',
+      ])
+      for (const reading of routes) {
+        expect(reading.matched, reading.name).toEqual(reached)
+      }
+    })
+
+    // The control: the key as it was (`[aria-disabled="true"]` alone) leaves the native button
+    // unreached at 1.9.0, naming the Trigger, and reaches it at the floor.
+    it('reds on the key without :disabled, naming the native Triggers at 1.9.0 only', async () => {
+      const withoutNative = disclosureTriggerDisabledSelectors().filter(
+        (branch) => branch !== ':disabled',
+      )
+      expect(withoutNative).toEqual(['[aria-disabled="true"]'])
+      expect(unreached(await readTriggers(withoutNative))).toEqual(
+        disclosureTriggerDisabled().native
+          ? [
+              'Accordion.Trigger (native, disabled)',
+              'Accordion.Trigger (native, disabled by Accordion.Root)',
+              'Accordion.Trigger (native, disabled by Accordion.Trigger)',
+              'Collapsible.Trigger (native, disabled)',
+              'Collapsible.Trigger (native, disabled by Collapsible.Trigger)',
+            ]
+          : [],
+      )
+    })
   })
 })
 

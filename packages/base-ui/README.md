@@ -473,8 +473,6 @@ In a Menubar, moving to the next menu with the arrow keys puts focus on that men
 
 In Base UI 1.8.0 and 1.9.0, `Menu.LinkItem` has no disabled state: a `disabled` prop reaches the `<a>` as a plain attribute, the link still activates, and it does not take the disabled colour Nave gives the other menu items.
 
-In Base UI 1.9.0, outside a Toolbar, `Tabs.List`, Radio Group, Toggle Group, Menubar or Navigation Menu, a disabled `Accordion.Trigger` or `Collapsible.Trigger` that renders a `<button>`, as it does by default, is marked with the `disabled` attribute and not `aria-disabled`, so it keeps the colour and pointer cursor of an enabled trigger; if you disable one, style its `:disabled` state yourself.
-
 When the reader's system asks for reduced motion, this package turns off the popups' fade, the tooltip's fade, the backdrop's fade, the toasts' fade, the turn of the icon in Navigation Menu triggers, the tab indicator's slide, the motion of Accordion and Collapsible panels opening and closing, the turn of the icon in their triggers and the switch's slide, even if you have changed Nave's motion tokens. Motion you add or restyle yourself is yours to switch off.
 
 ## License
