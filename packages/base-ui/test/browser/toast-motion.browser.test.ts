@@ -14,7 +14,8 @@
  * Two stall controls on the close: a page that blocks for 350ms while the exit transition runs, or
  * as it finishes and before the root is removed, must not make a correct close fail. Each checks
  * that its stall landed where it says, and that the run's own close took longer than the fast
- * duration plus 200ms, so a bound in milliseconds would have failed it.
+ * duration plus 200ms (the margin the close rows used to allow), so a bound in milliseconds would
+ * have failed it.
  *
  * The reduced-motion flip in the middle of the exit is `toast-reduced-motion.browser.test.ts`,
  * which runs at 1.6.0 as well.
@@ -239,7 +240,8 @@ const blockFor = (milliseconds: number): void => {
 
 /**
  * How long the stall controls block the page: more than the 200ms the close once had past its
- * fade, so a page stalled that long fails any bound on the close written in milliseconds.
+ * fade, so a page stalled that long fails the bound of the fast duration plus 200ms that the close
+ * rows used to carry.
  */
 const STALL_MILLISECONDS = 350
 
@@ -275,7 +277,10 @@ const expectButtonClose = async (watch: RootWatch, fast: number): Promise<void> 
   const gone = await goneAt(watch)
   expect(gone, 'the root left the page').toBeDefined()
   const frames = watch.framesFromExitToRemoval()
-  expect(frames, 'the exit transition finished before the root left').toBeDefined()
+  expect(
+    frames,
+    'the exit transition ran to its finish before the root left (a cancelled one never counts)',
+  ).toBeDefined()
   expect(
     frames,
     'removed within a few frames of the exit transition finishing',
@@ -433,7 +438,12 @@ describe('AC-base-ui-feedback-navigation-15: the toast fade', () => {
         const [ending] = momentsOf(watching, 'data-ending-style', true)
         if (ending !== undefined) {
           framesAfterTheClose += 1
-          if (ending.running.some((animation) => animation.playState === 'running')) {
+          if (
+            ending.running.some(
+              (animation) =>
+                animation.playState === 'running' && Number(animation.currentTime) >= fast / 2,
+            )
+          ) {
             stalledAt = performance.now()
             blockFor(STALL_MILLISECONDS)
             return
