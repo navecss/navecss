@@ -24,8 +24,14 @@ updates:
         # Base UI's surface (the export map, the generated wrappers, the parts' ARIA semantics)
         # to the version it builds against. A Base UI minor is therefore an upgrade of base-ui,
         # not a routine bump: it gets its own pull request rather than holding the group back.
+        #
+        # mdn-data is core's dev dependency only, but its css/properties.json is the seed of the
+        # property table core generates and ships in dist/ (scripts/generate-property-table.ts),
+        # so a new mdn-data changes which properties @nave knows. That is a change to core that
+        # needs the table regenerated and a changeset, so it too gets its own pull request.
         exclude-patterns:
           - '@base-ui/react'
+          - 'mdn-data'
     ignore:
       # TypeScript 7 breaks the build today: typescript-eslint 8.70 throws "does not support
       # TS 7.0" at plugin load (so nothing can be linted), and tsup's bundled rollup-plugin-dts
@@ -40,6 +46,11 @@ updates:
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: 'github-actions'
-    directory: '/'
+    # '/' covers .github/workflows only. The composite actions under .github/actions/ pin
+    # actions of their own (setup's jdx/mise-action, which every code-quality job runs), and
+    # Dependabot reads them only when their directories are listed.
+    directories:
+      - '/'
+      - '/.github/actions/*'
     schedule:
       interval: 'weekly'

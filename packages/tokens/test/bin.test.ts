@@ -773,7 +773,7 @@ describe(
     )
 
     /**
-     * This uses Node's own `--permission` model, on the pinned runtime (v24.17.0), rather than
+     * This uses Node's own `--permission` model, on the pinned runtime (`mise.toml`), rather than
      * an fs-spy: it
      * refuses any read/write path outside the granted globs at the RUNTIME level, covering every fs
      * API — `readFile`, `readFileSync`, `open`, `createReadStream`, dynamic `import()` — with nothing
