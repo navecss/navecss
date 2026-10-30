@@ -281,6 +281,8 @@ const expectButtonClose = async (watch: RootWatch, fast: number): Promise<void> 
     frames,
     'the exit transition ran to its finish before the root left (a cancelled one never counts)',
   ).toBeDefined()
+  // Removing the root cancels its transition, so it cannot finish afterwards; this pins that.
+  expect(frames, 'removed no earlier than the exit transition finished').toBeGreaterThanOrEqual(0)
   expect(
     frames,
     'removed within a few frames of the exit transition finishing',
