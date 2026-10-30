@@ -292,8 +292,8 @@ importers:
         specifier: npm:lightningcss@1.24.1
         version: lightningcss@1.24.1
       mdn-data:
-        specifier: 2.29.0
-        version: 2.29.0
+        specifier: 2.37.2
+        version: 2.37.2
       playwright:
         specifier: 1.64.1
         version: 1.64.1
@@ -4917,6 +4917,9 @@ packages:
 
   mdn-data@2.29.0:
     resolution: {integrity: sha512-pVxQFCcaYUEAH853+v7yoI/qzhxXSq1bTb9obMYGYAN1c3Hen+XDCEvr296XhstrwlSTNgOR7mCSD4JPjbJe5A==}
+
+  mdn-data@2.37.2:
+    resolution: {integrity: sha512-rz9YOBGItdSbe7HcSArUbhiAv4SB/4DKRYg96CSFS2CcIYMbUvBtZlzA1NCbk2AdgbmYwMqwNblLpR441lLeiQ==}
 
   media-typer@1.1.1:
     resolution: {integrity: sha512-yz3xRaG20c6/BOzvYoDaGtPmGscs7YivItZEEqe6GbwNfHuxu9YNmvnEkMzKldAGY4/80pRcQRZSEnhquk9XuQ==}
@@ -10959,6 +10962,8 @@ snapshots:
   mdn-data@2.27.1: {}
 
   mdn-data@2.29.0: {}
+
+  mdn-data@2.37.2: {}
 
   media-typer@1.1.1: {}
 
