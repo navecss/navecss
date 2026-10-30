@@ -245,7 +245,7 @@
     "react-dom": "^19.3.0",
     "react-dom-18": "npm:react-dom@^18.3.1",
     "rolldown": "1.2.15",
-    "shadcn": "4.22.1",
+    "shadcn": "4.23.0",
     "typescript": "6.0.3",
     "vite": "8.3.5",
     "vitest": "5.0.5"
