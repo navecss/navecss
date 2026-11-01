@@ -29,9 +29,15 @@ updates:
         # property table core generates and ships in dist/ (scripts/generate-property-table.ts),
         # so a new mdn-data changes which properties @nave knows. That is a change to core that
         # needs the table regenerated and a changeset, so it too gets its own pull request.
+        #
+        # astro is core's dev dependency, but core's README states what `astro dev` paints first
+        # and a browser test holds that statement true against the installed Astro, so an Astro
+        # release that changes the first paint changes a documented claim. Astro 7.4.2 did: it
+        # gets its own pull request, where the README and its test move with it.
         exclude-patterns:
           - '@base-ui/react'
           - 'mdn-data'
+          - 'astro'
     ignore:
       # TypeScript 7 breaks the build today: typescript-eslint 8.70 throws "does not support
       # TS 7.0" at plugin load (so nothing can be linted), and tsup's bundled rollup-plugin-dts
