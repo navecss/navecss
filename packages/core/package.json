@@ -125,7 +125,7 @@
     "@vitest/browser": "5.0.5",
     "@vitest/browser-playwright": "5.0.5",
     "@vitest/coverage-v8": "5.0.5",
-    "astro": "7.4.2",
+    "astro": "7.4.0",
     "lightningcss": "1.33.0",
     "lightningcss-1-24": "npm:lightningcss@1.24.1",
     "mdn-data": "2.29.0",
