@@ -28,10 +28,17 @@ interface Attempt {
  * What `openPage` throws for an answer, or `undefined` when it does not throw.
  */
 async function failureOf({ status, printed }: Attempt): Promise<string | undefined> {
-  const page = { goto: () => Promise.resolve({ status: () => status }) }
+  // The server prints while it answers the request: nothing before it.
+  let isAnswered = false
+  const page = {
+    goto: () => {
+      isAnswered = true
+      return Promise.resolve({ status: () => status })
+    },
+  }
   try {
     // The stand-in holds what the row reads of a page.
-    await openPage(page as never, URL, () => printed)
+    await openPage(page as never, URL, () => (isAnswered ? printed : ''))
   } catch (error) {
     return (error as Error).message
   }
@@ -56,6 +63,25 @@ describe('the first load of the dev row', () => {
 
     expect(RETRY_ON_JSON_READ.condition.test(read ?? '')).toBe(true)
     expect(RETRY_ON_JSON_READ.condition.test(other ?? '')).toBe(false)
+  })
+
+  it('AC-nextjs-used-atoms-05: reads only what the server printed during the request, not the log before it', async () => {
+    let log = JSON_READ
+    const page = {
+      goto: () => {
+        log += '\nGET / 500 in 3.1s'
+        return Promise.resolve({ status: () => 500 })
+      },
+    }
+    let failure = 'it did not fail'
+    try {
+      await openPage(page as never, URL, () => log)
+    } catch (error) {
+      failure = (error as Error).message
+    }
+
+    expect(failure).toContain(`${URL} answered 500,`)
+    expect(RETRY_ON_JSON_READ.condition.test(failure)).toBe(false)
   })
 
   it('AC-nextjs-used-atoms-05: does not take the words of a server that printed them without a 500 for a failure', async () => {
@@ -99,8 +125,9 @@ describe('the retry of the dev row', () => {
         `  appendFileSync(process.env.ATTEMPTS_LOG, 'x')`,
         `  const attempt = readFileSync(process.env.ATTEMPTS_LOG, 'utf8').length - 1`,
         `  const step = JSON.parse(readFileSync(process.env.ATTEMPTS_SCRIPT, 'utf8'))[attempt]`,
-        '  const page = { goto: async () => ({ status: () => step.status }) }',
-        `  await openPage(page, ${JSON.stringify(URL)}, () => step.printed)`,
+        '  let isAnswered = false',
+        '  const page = { goto: async () => { isAnswered = true; return { status: () => step.status } } }',
+        `  await openPage(page, ${JSON.stringify(URL)}, () => (isAnswered ? step.printed : ''))`,
         '})',
         '',
       ].join('\n'),
