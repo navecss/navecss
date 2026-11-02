@@ -3,16 +3,16 @@ import { spawnSync } from 'node:child_process'
  * The dev row's first load: a page that answers 500 ends the attempt at once, with the server's
  * output, instead of the wait for a stylesheet an error page cannot link. The row runs again,
  * once and from a fresh app, when the server printed one of the two errors Next.js raises on
- * reading a manifest it is still writing (`Unexpected end of JSON input` and `Manifest file is
- * empty`, seen on 16.2.0 with webpack) and after nothing else. The page here is a stand-in whose
- * answers each attempt scripts.
+ * finding one of its manifests empty (`Unexpected end of JSON input` and `Manifest file is empty`,
+ * seen on 16.2.0 with webpack) and after nothing else. The page here is a stand-in whose answers
+ * each attempt scripts.
  */
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { openPage, RETRY_ON_JSON_READ } from './helpers/dev-error-page.ts'
+import { openPage, RETRY_ON_MANIFEST_READ } from './helpers/dev-error-page.ts'
 import { PACKAGE_ROOT } from './helpers/next-process.ts'
 
 const HELPER = path.join(import.meta.dirname, 'helpers/dev-error-page.ts')
@@ -64,8 +64,8 @@ describe('the first load of the dev row', () => {
     const read = await failureOf({ status: 500, printed: JSON_READ })
     const other = await failureOf({ status: 500, printed: 'Error: something else' })
 
-    expect(RETRY_ON_JSON_READ.condition.test(read ?? '')).toBe(true)
-    expect(RETRY_ON_JSON_READ.condition.test(other ?? '')).toBe(false)
+    expect(RETRY_ON_MANIFEST_READ.condition.test(read ?? '')).toBe(true)
+    expect(RETRY_ON_MANIFEST_READ.condition.test(other ?? '')).toBe(false)
   })
 
   it('AC-nextjs-used-atoms-05: reads only what the server printed during the request, not the log before it', async () => {
@@ -84,13 +84,13 @@ describe('the first load of the dev row', () => {
     }
 
     expect(failure).toContain(`${URL} answered 500,`)
-    expect(RETRY_ON_JSON_READ.condition.test(failure)).toBe(false)
+    expect(RETRY_ON_MANIFEST_READ.condition.test(failure)).toBe(false)
   })
 
   it('AC-nextjs-used-atoms-05: names the empty manifest read when the server printed it, and says which one it was', async () => {
     const failure = await failureOf({ status: 500, printed: MANIFEST_EMPTY })
 
-    expect(RETRY_ON_JSON_READ.condition.test(failure ?? '')).toBe(true)
+    expect(RETRY_ON_MANIFEST_READ.condition.test(failure ?? '')).toBe(true)
     expect(failure).toContain('Next.js printed "Manifest file is empty"')
   })
 
@@ -102,8 +102,8 @@ describe('the first load of the dev row', () => {
     })
     const token = await failureOf({ status: 500, printed: "⨯ SyntaxError: Unexpected token '<'" })
 
-    expect(RETRY_ON_JSON_READ.condition.test(position ?? '')).toBe(false)
-    expect(RETRY_ON_JSON_READ.condition.test(token ?? '')).toBe(false)
+    expect(RETRY_ON_MANIFEST_READ.condition.test(position ?? '')).toBe(false)
+    expect(RETRY_ON_MANIFEST_READ.condition.test(token ?? '')).toBe(false)
   })
 
   it('AC-nextjs-used-atoms-05: ends at once on a 503 or a 502, like a 500', async () => {
@@ -116,6 +116,20 @@ describe('the first load of the dev row', () => {
 
   it('AC-nextjs-used-atoms-05: lets a page that answers 404 through, which is not a server error', async () => {
     expect(await failureOf({ status: 404, printed: 'GET / 404 in 1s' })).toBeUndefined()
+  })
+
+  it('AC-nextjs-used-atoms-05: reports a 503 that follows a manifest read as a 503 and does not retry it', async () => {
+    const failure = await failureOf({ status: 503, printed: MANIFEST_EMPTY })
+
+    expect(failure).toContain(`${URL} answered 503`)
+    expect(failure).not.toContain('answered 500')
+    expect(RETRY_ON_MANIFEST_READ.condition.test(failure ?? '')).toBe(false)
+  })
+
+  it('AC-nextjs-used-atoms-05: does not name a manifest error other than the empty one as the read', async () => {
+    const stale = await failureOf({ status: 500, printed: '⨯ Error: Manifest file is stale' })
+
+    expect(RETRY_ON_MANIFEST_READ.condition.test(stale ?? '')).toBe(false)
   })
 
   it('AC-nextjs-used-atoms-05: does not take the words of a server that printed them without a 500 for a failure', async () => {
@@ -153,9 +167,9 @@ describe('the retry of the dev row', () => {
       [
         "import { appendFileSync, readFileSync } from 'node:fs'",
         "import { it } from 'vitest'",
-        `import { openPage, RETRY_ON_JSON_READ } from ${JSON.stringify(HELPER)}`,
+        `import { openPage, RETRY_ON_MANIFEST_READ } from ${JSON.stringify(HELPER)}`,
         '',
-        "it('the row', { retry: RETRY_ON_JSON_READ }, async () => {",
+        "it('the row', { retry: RETRY_ON_MANIFEST_READ }, async () => {",
         `  appendFileSync(process.env.ATTEMPTS_LOG, 'x')`,
         `  const attempt = readFileSync(process.env.ATTEMPTS_LOG, 'utf8').length - 1`,
         `  const step = JSON.parse(readFileSync(process.env.ATTEMPTS_SCRIPT, 'utf8'))[attempt]`,

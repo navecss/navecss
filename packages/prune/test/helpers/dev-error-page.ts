@@ -4,7 +4,7 @@ import { expect } from 'vitest'
 
 /**
  * Next.js 16.2.0 on webpack sometimes answers the browser's first request for `/` with a 500 after
- * reading one of its own manifests while it is still being written, and printing either
+ * finding one of its own manifests empty, and printing either
  * `SyntaxError: Unexpected end of JSON input` or `Error: Manifest file is empty`. The test's own
  * request for the same route, made just before, got 200. The 500 page has no stylesheet, so a row
  * that waits for a rule in the open document can only wait out its deadline. The row ends there
@@ -18,11 +18,14 @@ const MANIFEST_READS = [
 ] as const
 
 /**
- * The retry of such a row: a failed attempt runs again only when its message opens with the
- * sentence that names one of those reads. The server's own output, which follows the sentence, can
- * never trigger a retry.
+ * The retry of such a row: a failed attempt runs again only when its message holds the sentence
+ * that names one of those reads after a 500. The server's own output, which follows the sentence,
+ * can never trigger a retry.
  */
-export const RETRY_ON_JSON_READ = { count: 1, condition: /answered 500 and Next\.js printed "/u }
+export const RETRY_ON_MANIFEST_READ = {
+  count: 1,
+  condition: /answered 500 and Next\.js printed "/u,
+}
 
 const earlier = new Set<string>()
 
@@ -52,6 +55,6 @@ export async function openPage(
   const read = MANIFEST_READS.find(({ printed: text }) => printed.slice(logged).includes(text))
   if (read) earlier.add(row)
   throw new Error(
-    `${url} ${read ? `answered 500 and Next.js printed "${read.named}"` : `answered ${status}`}, so the browser got an error page with no stylesheet:\n${printed.slice(-2000)}`,
+    `${url} ${read ? `answered ${status} and Next.js printed "${read.named}"` : `answered ${status}`}, so the browser got an error page with no stylesheet:\n${printed.slice(-2000)}`,
   )
 }

@@ -17,7 +17,7 @@ import type { NextApp } from '../helpers/next-app.ts'
 import type { Cell } from '../helpers/next-cells.ts'
 
 import { HAS_CHROMIUM, withPage } from '../helpers/chromium.ts'
-import { openPage, RETRY_ON_JSON_READ } from '../helpers/dev-error-page.ts'
+import { openPage, RETRY_ON_MANIFEST_READ } from '../helpers/dev-error-page.ts'
 import { createNextApp, SKIP_REASON } from '../helpers/next-app.ts'
 import { cells, nextRootOf } from '../helpers/next-cells.ts'
 import { pause } from '../helpers/next-process.ts'
@@ -240,7 +240,7 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
 
     it.each(CELLS)(
       '%s: AC-nextjs-used-atoms-05: next dev gives the open document the new rules, with no reload and no restart',
-      { retry: RETRY_ON_JSON_READ, timeout: TIMEOUT },
+      { retry: RETRY_ON_MANIFEST_READ, timeout: TIMEOUT },
       async (_name, cell) => {
         const app = await newApp(cell)
         const server = await app.dev(cell.flags)
@@ -250,7 +250,7 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
         const origin = server.origin.replace('127.0.0.1', 'localhost')
         await withPage(async (page) => {
           // A page that answers 500 has no stylesheet to wait for: the attempt ends there, with the
-          // server's output, and runs again once when Next.js read a manifest it was still writing.
+          // server's output, and runs again once when Next.js found one of its manifests empty.
           await openPage(page, `${origin}/`, server.output)
           // The document holds the page's rule once the browser has applied the stylesheet. Asked
           // at the instant `load` fires, the remote browser job found no `nave-flex` rule in 3 of
