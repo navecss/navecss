@@ -15,12 +15,18 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { NextApp } from '../helpers/next-app.ts'
 import type { Cell } from '../helpers/next-cells.ts'
+import type { DevServer } from '../helpers/next-dev.ts'
 
 import { HAS_CHROMIUM, withPage } from '../helpers/chromium.ts'
-import { openPage, RETRY_ON_MANIFEST_READ } from '../helpers/dev-error-page.ts'
+import { openPage } from '../helpers/dev-error-page.ts'
+import {
+  noteEarlierRouteNotBuilt,
+  rememberRouteNotBuilt,
+  RETRY_ON_DEV_ROW,
+  serverSentence,
+} from '../helpers/dev-update.ts'
 import { createNextApp, SKIP_REASON } from '../helpers/next-app.ts'
 import { cells, nextRootOf } from '../helpers/next-cells.ts'
-import { pause } from '../helpers/next-process.ts'
 import {
   builtPage,
   layerAtoms,
@@ -29,6 +35,7 @@ import {
   scratchRuns,
   useScratchPlugin,
 } from '../helpers/s3-used-atoms.ts'
+import { until } from '../helpers/until.ts'
 
 const TIMEOUT = 900_000
 
@@ -111,17 +118,6 @@ async function isRuleIn(page: Page, className: string): Promise<boolean> {
 }
 
 /**
- * Whether `isDone` holds; a check that throws (a document that is reloading) does not hold.
- */
-async function isDoneOrFalse(isDone: () => Promise<boolean>): Promise<boolean> {
-  try {
-    return await isDone()
-  } catch {
-    return false
-  }
-}
-
-/**
  * What the page function below reads of the document: its address, whether it has loaded, and its
  * stylesheet links.
  */
@@ -153,29 +149,19 @@ async function documentState(page: Page): Promise<string> {
 }
 
 /**
- * Waits until `isDone` holds. Every tenth check, `nudge` runs: a dev server on a busy machine
- * sometimes drops the file-change event of a single write, so the edit is written again. When the
- * wait runs out, `explain` says what was there instead.
+ * What an edit that never reached the open document leaves to read, as text: the document's own
+ * state, what the server itself serves for `route` (a page that carries `className` and a
+ * stylesheet that holds its rule, or neither), and the tail of the server's output.
  */
-async function until(
-  isDone: () => Promise<boolean>,
-  what: string,
-  nudge: () => void = () => {},
-  explain: () => Promise<string> = () => Promise.resolve(''),
-): Promise<void> {
-  const end = Date.now() + 240_000
-  for (let check = 1; Date.now() < end; check += 1) {
-    if (await isDoneOrFalse(isDone)) return
-    if (check % 10 === 0) nudge()
-    await pause(1000)
-  }
-  let found: string
-  try {
-    found = await explain()
-  } catch (error) {
-    found = `the state could not be read: ${String(error)}`
-  }
-  throw new Error(`timed out waiting for ${what}${found === '' ? '' : `:\n${found}`}`)
+async function explainEdit(
+  page: Page,
+  server: DevServer,
+  route: string,
+  className: string,
+): Promise<string> {
+  const state = await documentState(page)
+  const served = await serverSentence(server, route, className)
+  return `${state}\n${served}\n${server.output().slice(-2000)}`
 }
 
 /**
@@ -240,8 +226,9 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
 
     it.each(CELLS)(
       '%s: AC-nextjs-used-atoms-05: next dev gives the open document the new rules, with no reload and no restart',
-      { retry: RETRY_ON_MANIFEST_READ, timeout: TIMEOUT },
+      { retry: RETRY_ON_DEV_ROW, timeout: TIMEOUT },
       async (_name, cell) => {
+        noteEarlierRouteNotBuilt()
         const app = await newApp(cell)
         const server = await app.dev(cell.flags)
         // The first request waits until the server answers and has compiled `/`.
@@ -264,8 +251,9 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
           await until(
             () => isRuleIn(page, 'nave-flex'),
             'the nave-flex rule in the open document',
-            undefined,
-            async () => `${await documentState(page)}\n${server.output().slice(-2000)}`,
+            {
+              explain: async () => `${await documentState(page)}\n${server.output().slice(-2000)}`,
+            },
           )
           if (atLoad !== '') {
             const isSameDocument = await page.evaluate<boolean>('window.__loaded === 1')
@@ -288,23 +276,35 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
                 "document.querySelector('#t').className.includes('nave-grid')",
               )),
             'the nave-grid rule on #t in the open document',
-            () => writePageWithGrid(app),
+            {
+              nudge: () => writePageWithGrid(app),
+              explain: () => explainEdit(page, server, '/', 'nave-grid'),
+            },
           )
           expect(
             await page.evaluate<number>('window.__mark'),
             'the document was not reloaded',
           ).toBe(1)
 
-          // (b) a new route is requested and has its rule.
+          // (b) a new route is requested and has its rule. A route Next.js never builds answers 404
+          // for the whole wait: the failure says so, and the row runs once more.
           writeNewRoute(app)
-          await until(
-            async () => {
-              await page.goto(`${origin}/new`, { waitUntil: 'load' })
-              return isRuleIn(page, 'nave-block')
-            },
-            'the nave-block rule on /new',
-            () => writeNewRoute(app),
-          )
+          try {
+            await until(
+              async () => {
+                await page.goto(`${origin}/new`, { waitUntil: 'load' })
+                return isRuleIn(page, 'nave-block')
+              },
+              'the nave-block rule on /new',
+              {
+                nudge: () => writeNewRoute(app),
+                explain: () => explainEdit(page, server, '/new', 'nave-block'),
+              },
+            )
+          } catch (error) {
+            rememberRouteNotBuilt(error)
+            throw error
+          }
           expect(server.output(), 'the server was not restarted').not.toMatch(/restart/i)
         })
       },
