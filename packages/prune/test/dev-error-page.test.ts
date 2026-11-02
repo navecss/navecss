@@ -2,9 +2,10 @@ import { spawnSync } from 'node:child_process'
 /**
  * The dev row's first load: a page that answers 500 ends the attempt at once, with the server's
  * output, instead of the wait for a stylesheet an error page cannot link. The row runs again,
- * once and from a fresh app, when the server printed Next.js's truncated JSON read (the failure
- * seen on 16.2.0 with webpack) and after nothing else. The page here is a stand-in whose answers
- * each attempt scripts.
+ * once and from a fresh app, when the server printed one of the two errors Next.js raises on
+ * reading a manifest it is still writing (`Unexpected end of JSON input` and `Manifest file is
+ * empty`, seen on 16.2.0 with webpack) and after nothing else. The page here is a stand-in whose
+ * answers each attempt scripts.
  */
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,6 +18,8 @@ import { PACKAGE_ROOT } from './helpers/next-process.ts'
 const HELPER = path.join(import.meta.dirname, 'helpers/dev-error-page.ts')
 const VITEST = path.join(PACKAGE_ROOT, 'node_modules/vitest/vitest.mjs')
 const JSON_READ = '⨯ SyntaxError: Unexpected end of JSON input\n    at JSON.parse (<anonymous>)'
+const MANIFEST_EMPTY =
+  "⨯ Error: Manifest file is empty\n    at ignore-listed frames {\n  page: '/'\n}"
 const URL = 'http://localhost:3000/'
 
 interface Attempt {
@@ -82,6 +85,37 @@ describe('the first load of the dev row', () => {
 
     expect(failure).toContain(`${URL} answered 500,`)
     expect(RETRY_ON_JSON_READ.condition.test(failure)).toBe(false)
+  })
+
+  it('AC-nextjs-used-atoms-05: names the empty manifest read when the server printed it, and says which one it was', async () => {
+    const failure = await failureOf({ status: 500, printed: MANIFEST_EMPTY })
+
+    expect(RETRY_ON_JSON_READ.condition.test(failure ?? '')).toBe(true)
+    expect(failure).toContain('Next.js printed "Manifest file is empty"')
+  })
+
+  it('AC-nextjs-used-atoms-05: does not name a SyntaxError that is not the truncated JSON read', async () => {
+    const position = await failureOf({
+      status: 500,
+      printed:
+        "⨯ SyntaxError: Unexpected token '}' in JSON at position 3\n    at JSON.parse (<anonymous>)",
+    })
+    const token = await failureOf({ status: 500, printed: "⨯ SyntaxError: Unexpected token '<'" })
+
+    expect(RETRY_ON_JSON_READ.condition.test(position ?? '')).toBe(false)
+    expect(RETRY_ON_JSON_READ.condition.test(token ?? '')).toBe(false)
+  })
+
+  it('AC-nextjs-used-atoms-05: ends at once on a 503 or a 502, like a 500', async () => {
+    const unavailable = await failureOf({ status: 503, printed: 'GET / 503 in 1s' })
+    const gateway = await failureOf({ status: 502, printed: 'GET / 502 in 1s' })
+
+    expect(unavailable).toContain(`${URL} answered 503`)
+    expect(gateway).toContain(`${URL} answered 502`)
+  })
+
+  it('AC-nextjs-used-atoms-05: lets a page that answers 404 through, which is not a server error', async () => {
+    expect(await failureOf({ status: 404, printed: 'GET / 404 in 1s' })).toBeUndefined()
   })
 
   it('AC-nextjs-used-atoms-05: does not take the words of a server that printed them without a 500 for a failure', async () => {

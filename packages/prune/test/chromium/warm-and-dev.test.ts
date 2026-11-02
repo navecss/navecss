@@ -250,7 +250,7 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
         const origin = server.origin.replace('127.0.0.1', 'localhost')
         await withPage(async (page) => {
           // A page that answers 500 has no stylesheet to wait for: the attempt ends there, with the
-          // server's output, and runs again once when Next.js's JSON read failed.
+          // server's output, and runs again once when Next.js read a manifest it was still writing.
           await openPage(page, `${origin}/`, server.output)
           // The document holds the page's rule once the browser has applied the stylesheet. Asked
           // at the instant `load` fires, the remote browser job found no `nave-flex` rule in 3 of
