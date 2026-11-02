@@ -53,7 +53,7 @@ export async function openPage(
   if (status < 500) return
   const printed = output()
   const read = MANIFEST_READS.find(({ printed: text }) => printed.slice(logged).includes(text))
-  if (read) earlier.add(row)
+  if (read && status === 500) earlier.add(row)
   throw new Error(
     `${url} ${read ? `answered ${status} and Next.js printed "${read.named}"` : `answered ${status}`}, so the browser got an error page with no stylesheet:\n${printed.slice(-2000)}`,
   )

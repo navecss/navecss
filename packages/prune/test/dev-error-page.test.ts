@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { openPage, RETRY_ON_MANIFEST_READ } from './helpers/dev-error-page.ts'
 import { PACKAGE_ROOT } from './helpers/next-process.ts'
@@ -124,6 +124,16 @@ describe('the first load of the dev row', () => {
     expect(failure).toContain(`${URL} answered 503`)
     expect(failure).not.toContain('answered 500')
     expect(RETRY_ON_MANIFEST_READ.condition.test(failure ?? '')).toBe(false)
+  })
+
+  it('AC-nextjs-used-atoms-05: a 503 after a manifest read leaves no note for a later run of the same row', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await failureOf({ status: 503, printed: MANIFEST_EMPTY })
+    await failureOf({ status: 200, printed: '' })
+    const calls = warn.mock.calls.length
+    warn.mockRestore()
+
+    expect(calls).toBe(0)
   })
 
   it('AC-nextjs-used-atoms-05: does not name a manifest error other than the empty one as the read', async () => {
