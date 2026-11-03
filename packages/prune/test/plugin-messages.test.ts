@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { Project } from './helpers/project.ts'
 
-import { declaredFiles, declaredTwice } from './helpers/declared-files.ts'
+import { declaredFiles, declaredTwice, isHeld } from './helpers/declared-files.ts'
 import { atomsIn } from './helpers/layer.ts'
 import { makeProject, pageCalling, registerIsolation } from './helpers/plugin-fixtures.ts'
 import { runAtomic } from './helpers/plugin-run.ts'
@@ -110,32 +110,38 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     }
   })
 
-  it('AC-nextjs-used-atoms-04: dir-dependency messages name the directories the files were selected from and the ones a specifier could have matched in, and no other', async () => {
-    const project = appProject()
-    const { messages } = await runAtomic(project)
-    const record = recordOf(project)
-    const selected = Object.keys(record.directories).map((key) => path.resolve(project.dir, key))
-    // A listing is keyed by the path of the stem, with a trailing `*`: its directory is declared.
-    const matched = Object.keys(record.listings).map((key) =>
-      path.resolve(project.dir, path.posix.dirname(key.slice(0, -1))),
-    )
-    const expected = [...new Set([...selected, ...matched])]
-      .filter((directory) => directory === project.dir || isInside(project.dir, directory))
-      .toSorted((a, b) => a.localeCompare(b))
-    // The project root is both a directory files were selected from and one a specifier could have
-    // matched in, so it is named once for each.
-    const named = [
-      ...new Set(
-        messagesOf(messages, 'dir-dependency').map((message) =>
-          path.resolve(message.dir as string),
+  it.each([
+    ['as Turbopack leaves it', {}],
+    ['as webpack’s callback leaves it', { isBundlerDir: true }],
+  ])(
+    'AC-nextjs-used-atoms-04: dir-dependency messages name the directories the files were selected from and the ones a specifier could have matched in, and no other, with the hand-off %s',
+    async (_shape, run) => {
+      const project = appProject()
+      const { messages } = await runAtomic(project, [], run)
+      const record = recordOf(project)
+      const selected = Object.keys(record.directories).map((key) => path.resolve(project.dir, key))
+      // A listing is keyed by the path of the stem, with a trailing `*`: its directory is declared.
+      const matched = Object.keys(record.listings).map((key) =>
+        path.resolve(project.dir, path.posix.dirname(key.slice(0, -1))),
+      )
+      const expected = [...new Set([...selected, ...matched])]
+        .filter((directory) => directory === project.dir || isInside(project.dir, directory))
+        .toSorted((a, b) => a.localeCompare(b))
+      // The project root is both a directory files were selected from and one a specifier could have
+      // matched in, so it is named once for each.
+      const named = [
+        ...new Set(
+          messagesOf(messages, 'dir-dependency').map((message) =>
+            path.resolve(message.dir as string),
+          ),
         ),
-      ),
-    ].toSorted((a, b) => a.localeCompare(b))
-    expect(selected).toContain(path.join(project.dir, 'app'))
-    // `@/components/Card` could have matched a file beside `Card.tsx`.
-    expect(matched).toContain(path.join(project.dir, 'components'))
-    expect(named).toEqual(expected)
-  })
+      ].toSorted((a, b) => a.localeCompare(b))
+      expect(selected).toContain(path.join(project.dir, 'app'))
+      // `@/components/Card` could have matched a file beside `Card.tsx`.
+      expect(matched).toContain(path.join(project.dir, 'components'))
+      expect(named).toEqual(expected)
+    },
+  )
 
   it('AC-nextjs-used-atoms-04: no dependency message names a directory', async () => {
     const project = appProject()
@@ -166,20 +172,33 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     for (const file of existing) expect(statSync(file).isFile()).toBe(true)
   })
 
-  it('AC-nextjs-used-atoms-04: the messages name the config files that are there, whatever their extension', async () => {
-    const project = appProject({
-      'next.config.mjs': 'export default {}\n',
-      'postcss.config.js': 'export default { plugins: {} }\n',
-    })
-    rmSync(path.join(project.dir, 'next.config.ts'))
-    rmSync(path.join(project.dir, 'postcss.config.mjs'))
-    const { messages } = await runAtomic(project)
-    const named = dependencyFiles(messages)
-    expect(named).toContain(path.join(project.dir, 'next.config.mjs'))
-    expect(named).toContain(path.join(project.dir, 'postcss.config.js'))
-    expect(named).not.toContain(path.join(project.dir, 'next.config.ts'))
-    expect(named).not.toContain(path.join(project.dir, 'postcss.config.mjs'))
-  })
+  it.each([
+    ['as Turbopack leaves it', {}, false],
+    ['as webpack’s callback leaves it', { isBundlerDir: true }, true],
+  ])(
+    'AC-nextjs-used-atoms-04: the config files that are there are declared, whatever their extension, with the hand-off %s',
+    async (_shape, run, isWebpack) => {
+      const project = appProject({
+        'next.config.mjs': 'export default {}\n',
+        'postcss.config.js': 'export default { plugins: {} }\n',
+      })
+      rmSync(path.join(project.dir, 'next.config.ts'))
+      rmSync(path.join(project.dir, 'postcss.config.mjs'))
+      const { messages } = await runAtomic(project, [], run)
+      const named = dependencyFiles(messages)
+      const found = [
+        path.join(project.dir, 'next.config.mjs'),
+        path.join(project.dir, 'postcss.config.js'),
+      ]
+      // Turbopack is given both by name; webpack has them named or held by a directory, never both.
+      expect(declaredFiles(messages, found, isWebpack)).toEqual(
+        found.toSorted((a, b) => a.localeCompare(b)),
+      )
+      expect(found.filter((file) => named.includes(file))).toEqual(isWebpack ? [] : found)
+      expect(named).not.toContain(path.join(project.dir, 'next.config.ts'))
+      expect(named).not.toContain(path.join(project.dir, 'postcss.config.mjs'))
+    },
+  )
 
   it('AC-nextjs-used-atoms-04: with the hand-off webpack’s callback leaves, no file is declared both by name and by a directory that holds it', async () => {
     const project = appProject()
@@ -197,6 +216,9 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
       toDeclare.toSorted((a, b) => a.localeCompare(b)),
     )
     expect(declaredTwice(messages, toDeclare)).toEqual([])
+    // The `dependency` messages name exactly the files no declared directory holds.
+    const unheld = toDeclare.filter((file) => !isHeld(messages, file))
+    expect(dependencyFiles(messages)).toEqual(unheld.toSorted((a, b) => a.localeCompare(b)))
   })
 
   it('AC-nextjs-used-atoms-04: with the hand-off Turbopack leaves, a file a declared directory holds is still named too', async () => {

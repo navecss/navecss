@@ -22,7 +22,7 @@ function isBelow(directory: string, file: string): boolean {
 /**
  * Whether a `dir-dependency` message names a directory that holds `file` at any depth.
  */
-function isHeld(messages: readonly Message[], file: string): boolean {
+export function isHeld(messages: readonly Message[], file: string): boolean {
   return ours(messages, 'dir-dependency').some((message) => isBelow(message.dir as string, file))
 }
 
