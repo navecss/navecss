@@ -29,7 +29,9 @@ function isHeld(messages: readonly Message[], file: string): boolean {
 /**
  * The files among `candidates` the messages declare to the bundler. A `dependency` message names
  * a file; on webpack a `dir-dependency` message declares every file below its directory too,
- * since Next.js hands webpack the directory without its glob.
+ * since Next.js hands webpack the directory without its glob. Elsewhere only the named files
+ * count: this helper does not model Turbopack's reading of a directory's glob, because the
+ * package gives Turbopack every file by name.
  */
 export function declaredFiles(
   messages: readonly Message[],
@@ -44,7 +46,8 @@ export function declaredFiles(
 
 /**
  * The files among `candidates` the messages declare in both ways at once: named by a
- * `dependency` message and held by a declared directory.
+ * `dependency` message and held, at any depth and whatever its glob, by a declared directory.
+ * That is the pairing webpack cannot hash; it says nothing about a glob Turbopack would read.
  */
 export function declaredTwice(
   messages: readonly Message[],
