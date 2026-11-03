@@ -1,6 +1,6 @@
 /**
  * The `test:browser` job downloads three browser engines before it runs a test, and that download
- * has stalled until the job's own cap on three heads in one day, each green on a re-run. The step
+ * has stalled to the job's cap on three runs in one day, each passing on a re-run. The step
  * therefore has its own `timeout-minutes`, well under the job's, and runs the install twice, each
  * attempt under `timeout`, so a stalled mirror fails fast and the second attempt gets a chance
  * instead of eating the job. Read as plain text, as `workflow-timeouts.test.mjs` does; the step's
@@ -139,9 +139,9 @@ test('an install that fails twice fails the step after two attempts and no more'
   assert.equal(outcome.runs, 2)
 })
 
-test('each attempt runs under timeout with a limit of a few minutes', () => {
+test('each attempt runs under timeout, cut off after five minutes and killed thirty seconds later', () => {
   const outcome = runScript([124, 0])
 
   assert.equal(outcome.timeouts.length, 2)
-  for (const given of outcome.timeouts) assert.match(given, /(^| )[1-9]m( |$)/)
+  for (const given of outcome.timeouts) assert.match(given, /^--kill-after=30s 5m pnpm /)
 })
