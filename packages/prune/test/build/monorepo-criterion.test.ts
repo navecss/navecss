@@ -11,12 +11,15 @@
  * app's directory while the hand-off variable holds the top, and a declared file outside the root
  * is Turbopack's internal error. Both controls run on the newest Next.js.
  */
+import type { Message } from 'postcss'
+
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Cell, Version } from '../helpers/next-cells.ts'
 import type { WorkspaceApp } from '../helpers/workspace-fixture.ts'
 
+import { declaredFiles } from '../helpers/declared-files.ts'
 import { SKIP_REASON } from '../helpers/next-app.ts'
 import { cells, nextRootOf } from '../helpers/next-cells.ts'
 import { noteNextCrash, RETRY_ON_NEXT_CRASH } from '../helpers/next-crash.ts'
@@ -97,6 +100,15 @@ function declared(app: WorkspaceApp, from = 0): string[] {
 }
 
 /**
+ * Whether the package declared `file` to the bundler, from what the probe saw: by a `dependency`
+ * message naming it, or by a `dir-dependency` message for a directory whose glob matches it.
+ */
+function isDeclared(app: WorkspaceApp, file: string): boolean {
+  const messages = app.probes().flatMap((probe) => probe.messages) as Message[]
+  return declaredFiles(messages, [file]).length > 0
+}
+
+/**
  * Throws unless the first state holds after a green build run from `place`: the record lies in
  * `apps/web/.next/cache`, the package's messages name `packages/ui`'s
  * module and nothing outside the root, and the hand-off variable and the PostCSS worker's directory
@@ -108,7 +120,7 @@ function expectFirstState(app: WorkspaceApp, cell: Cell, place: Place): void {
   const probes = app.probes()
   expect(probes.length, 'the probe saw the package finish with a stylesheet').toBeGreaterThan(0)
   const files = declared(app)
-  expect(files).toContain(app.uiModule)
+  expect(isDeclared(app, app.uiModule), "packages/ui's module is declared").toBe(true)
   expect(
     files.filter((file) => !isInside(app.root, file)),
     'nothing outside the root is declared',
@@ -317,7 +329,10 @@ describe.skipIf(SKIP_REASON !== undefined)(
             expect(Object.keys(app.record()?.files ?? {}), 'x.ts is read').toContain(key)
             const probesAfterCold = app.probes().length
             const named = declared(app)
-            expect(named, 'the package declared what is inside the root').toContain(app.uiModule)
+            expect(
+              isDeclared(app, app.uiModule),
+              'the package declared what is inside the root',
+            ).toBe(true)
             expect(named, 'x.ts is declared nowhere').not.toContain(app.external)
             expect(
               named.filter((file) => !isInside(app.root, file)),
