@@ -92,8 +92,7 @@ const WORKSPACE = { 'pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n", 'pnpm-lo
 /**
  * Loads `config` through `withNave()` as Next.js loads it from `cwd`, runs webpack's callback when
  * `webpackDir` is given, and runs the plugin over core's `atomic.css` in the PostCSS worker's
- * directory `cwd`. Returns the files the messages declare, relative to the top: the three files of the fixture
- * that are declared, by name or by their directory.
+ * directory `cwd`. Returns the files among the fixture's three that the messages declare, relative to the top.
  */
 async function declaredFrom(
   repo: Monorepo,
@@ -108,15 +107,15 @@ async function declaredFrom(
     const create = await freshPrunePlugin()
     const from = path.join(repo.web, 'node_modules/@navecss/core/dist/atomic.css')
     const result = await postcss([create()]).process(ATOMIC_CSS, { from })
-    // A file is declared by a `dependency` message naming it or by the directory that holds it.
+    // A file is declared by a `dependency` message naming it and, where webpack ran its callback,
+    // by a directory that holds it.
     const candidates = [
       path.join(repo.top, 'packages/ui/look.ts'),
       path.join(repo.web, 'app/page.tsx'),
       repo.outside,
     ]
-    // Where webpack's callback ran, webpack takes a directory without its glob.
-    const areGlobsIgnored = run.webpackDir !== undefined
-    return declaredFiles(result.messages, candidates, areGlobsIgnored).map((file) =>
+    const isWebpack = run.webpackDir !== undefined
+    return declaredFiles(result.messages, candidates, isWebpack).map((file) =>
       path.relative(repo.top, file),
     )
   } finally {

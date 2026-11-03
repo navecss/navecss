@@ -5,79 +5,51 @@ import path from 'node:path'
 const PLUGIN = 'postcss-nave-prune'
 
 /**
- * The names a brace glob such as `{layout,page}.{js,jsx}` stands for, or `undefined` for a glob
- * that is not one.
+ * The messages of the plugin of one type.
  */
-function namesOf(glob: string): string[] | undefined {
-  const groups = glob.matchAll(/\{([^}]*)\}/g).toArray()
-  if (groups.length === 0 || glob.includes('*')) return undefined
-  let names = [glob]
-  for (const [group, alternatives] of groups) {
-    names = names.flatMap((name) =>
-      alternatives!.split(',').map((one) => name.replace(group, () => one)),
-    )
-  }
-  return names
+function ours(messages: readonly Message[], type: string): Message[] {
+  return messages.filter((message) => message.plugin === PLUGIN && message.type === type)
 }
 
 /**
- * Whether a `dir-dependency` message stands for `file`, read the way a bundler reads a directory
- * with a glob: `**` then `/*` any file below, `*` a file directly in it, braces the names they
- * list directly in it. A different reading from the package's own, so the two can disagree.
+ * Whether `file` lies anywhere below `directory`.
  */
-function isStoodFor(message: Message, file: string, areGlobsIgnored: boolean): boolean {
-  const relative = path.relative(message.dir as string, file)
-  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) return false
-  if (areGlobsIgnored) return true
-  const isDirect = !relative.includes(path.sep)
-  const glob = message.glob as string
-  if (glob === '**/*') return true
-  if (glob === '*') return isDirect
-  return isDirect && (namesOf(glob)?.includes(relative) ?? false)
+function isBelow(directory: string, file: string): boolean {
+  const relative = path.relative(directory, file)
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
 }
 
 /**
- * The files among `candidates` the messages declare to the bundler: named by a `dependency`
- * message, or inside a directory a `dir-dependency` message names with a glob that matches it.
+ * Whether a `dir-dependency` message names a directory that holds `file` at any depth.
+ */
+function isHeld(messages: readonly Message[], file: string): boolean {
+  return ours(messages, 'dir-dependency').some((message) => isBelow(message.dir as string, file))
+}
+
+/**
+ * The files among `candidates` the messages declare to the bundler. A `dependency` message names
+ * a file; on webpack a `dir-dependency` message declares every file below its directory too,
+ * since Next.js hands webpack the directory without its glob.
  */
 export function declaredFiles(
   messages: readonly Message[],
   candidates: readonly string[],
-  areGlobsIgnored = false,
+  isWebpack = false,
 ): string[] {
-  const ours = messages.filter((message) => message.plugin === PLUGIN)
-  const named = new Set(
-    ours
-      .filter((message) => message.type === 'dependency')
-      .map((message) => message.file as string),
-  )
-  const directories = ours.filter((message) => message.type === 'dir-dependency')
+  const named = new Set(ours(messages, 'dependency').map((message) => message.file as string))
   return candidates
-    .filter(
-      (file) =>
-        named.has(file) ||
-        directories.some((message) => isStoodFor(message, file, areGlobsIgnored)),
-    )
+    .filter((file) => named.has(file) || (isWebpack && isHeld(messages, file)))
     .toSorted((a, b) => a.localeCompare(b))
 }
 
 /**
- * The files among `candidates` the messages declare in both ways at once.
+ * The files among `candidates` the messages declare in both ways at once: named by a
+ * `dependency` message and held by a declared directory.
  */
 export function declaredTwice(
   messages: readonly Message[],
   candidates: readonly string[],
-  areGlobsIgnored = false,
 ): string[] {
-  const named = new Set(
-    messages
-      .filter((message) => message.plugin === PLUGIN && message.type === 'dependency')
-      .map((message) => message.file as string),
-  )
-  const asDirectoryOnly = declaredFiles(
-    messages.filter((message) => message.type !== 'dependency'),
-    candidates,
-    areGlobsIgnored,
-  )
-  return asDirectoryOnly.filter((file) => named.has(file))
+  const named = new Set(ours(messages, 'dependency').map((message) => message.file as string))
+  return candidates.filter((file) => named.has(file) && isHeld(messages, file))
 }

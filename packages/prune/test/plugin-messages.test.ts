@@ -91,28 +91,22 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
         path.join(project.dir, 'node_modules/ok-lib/index.js'),
       ]),
     )
-    // The record lists the config files among the files it read, so both are among the files to
-    // declare. Each is declared once: by a `dependency` message naming it, or by a
-    // `dir-dependency` message whose glob matches it, and never by both.
+    // The record lists the config files among the files it read, so the messages are exactly the
+    // recorded files: both config files are among them.
     expect(recorded).toEqual(expect.arrayContaining(configs))
-    const toDeclare = [...new Set([...recorded, ...configs])].toSorted((a, b) => a.localeCompare(b))
-    expect(declaredFiles(messages, toDeclare)).toEqual(toDeclare)
-    expect(declaredTwice(messages, toDeclare)).toEqual([])
-    // A `dependency` message names only a file to declare, and `app/page.tsx` is declared by `app`.
-    expect(named.filter((file) => !toDeclare.includes(file))).toEqual([])
-    expect(named).not.toContain(path.join(project.dir, 'app/page.tsx'))
-    // Control: at least one file is declared by name, so both routes are in use.
-    expect(named.length).toBeGreaterThan(0)
+    expect(named.toSorted((a, b) => a.localeCompare(b))).toEqual(
+      [...new Set([...recorded, ...configs])].toSorted((a, b) => a.localeCompare(b)),
+    )
   })
 
   it('AC-nextjs-used-atoms-04: the dependency messages include the resolver config and each package.json the plugin read', async () => {
     const project = appProject()
     const { messages } = await runAtomic(project)
     const recorded = Object.keys(recordOf(project).files)
+    const named = dependencyFiles(messages)
     for (const file of ['tsconfig.json', 'package.json', 'node_modules/ok-lib/package.json']) {
-      const absolute = path.join(project.dir, file)
       expect(recorded).toContain(file)
-      expect(declaredFiles(messages, [absolute])).toEqual([absolute])
+      expect(named).toContain(path.join(project.dir, file))
     }
   })
 
@@ -181,16 +175,13 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
     rmSync(path.join(project.dir, 'postcss.config.mjs'))
     const { messages } = await runAtomic(project)
     const named = dependencyFiles(messages)
-    const found = [
-      path.join(project.dir, 'next.config.mjs'),
-      path.join(project.dir, 'postcss.config.js'),
-    ]
-    expect(declaredFiles(messages, found)).toEqual(found.toSorted((a, b) => a.localeCompare(b)))
+    expect(named).toContain(path.join(project.dir, 'next.config.mjs'))
+    expect(named).toContain(path.join(project.dir, 'postcss.config.js'))
     expect(named).not.toContain(path.join(project.dir, 'next.config.ts'))
     expect(named).not.toContain(path.join(project.dir, 'postcss.config.mjs'))
   })
 
-  it('AC-nextjs-used-atoms-04: with the hand-off webpack’s callback leaves, no file is declared twice, a directory covering the files below it at any depth', async () => {
+  it('AC-nextjs-used-atoms-04: with the hand-off webpack’s callback leaves, no file is declared both by name and by a directory that holds it', async () => {
     const project = appProject()
     const { messages } = await runAtomic(project, [], { isBundlerDir: true })
     const recorded = Object.keys(recordOf(project).files)
@@ -201,11 +192,18 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
       path.join(project.dir, 'next.config.ts'),
     ]
     const toDeclare = [...new Set([...recorded, ...configs])]
-    // Control: webpack declares every one of them, by name or by a directory that holds it.
+    // Every file is still declared, by name or by a directory that holds it.
     expect(declaredFiles(messages, toDeclare, true)).toEqual(
       toDeclare.toSorted((a, b) => a.localeCompare(b)),
     )
-    expect(declaredTwice(messages, toDeclare, true)).toEqual([])
+    expect(declaredTwice(messages, toDeclare)).toEqual([])
+  })
+
+  it('AC-nextjs-used-atoms-04: with the hand-off Turbopack leaves, a file a declared directory holds is still named too', async () => {
+    const project = appProject()
+    const { messages } = await runAtomic(project)
+    const page = path.join(project.dir, 'app/page.tsx')
+    expect(declaredTwice(messages, [page])).toEqual([page])
   })
 
   it.each([

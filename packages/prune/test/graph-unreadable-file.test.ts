@@ -8,7 +8,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Project } from './helpers/project.ts'
 
-import { declaredFiles, declaredTwice } from './helpers/declared-files.ts'
 import { moduleSource, runAndRead, scratchProjects } from './helpers/graph-fixture.ts'
 
 const project = scratchProjects()
@@ -44,14 +43,13 @@ describe.skipIf(isRoot)('a selected file that cannot be opened', () => {
     ])
   })
 
-  it('is still declared to the bundler, by the directory that holds it', async () => {
+  it('is still declared to the bundler as a dependency', async () => {
     const app = projectWithLockedCard()
     const { result } = await runAndRead(app)
-    const read = [path.join(app.dir, 'app/page.tsx'), path.join(app.dir, 'app/Card.tsx')]
-    expect(declaredFiles(result.messages, read)).toEqual(
-      read.toSorted((a, b) => a.localeCompare(b)),
-    )
-    // By the directory alone: no `dependency` message names either file.
-    expect(declaredTwice(result.messages, read)).toEqual([])
+    const declared = result.messages
+      .filter((message) => message.type === 'dependency')
+      .map((message) => message.file as string)
+    expect(declared).toContain(path.join(app.dir, 'app/page.tsx'))
+    expect(declared).toContain(path.join(app.dir, 'app/Card.tsx'))
   })
 })

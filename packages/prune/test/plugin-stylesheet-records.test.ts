@@ -13,7 +13,6 @@ import { describe, expect, it } from 'vitest'
 import type { Sheet } from './helpers/plugin-run.ts'
 import type { Project } from './helpers/project.ts'
 
-import { declaredFiles } from './helpers/declared-files.ts'
 import { makeProject, registerIsolation } from './helpers/plugin-fixtures.ts'
 import { ATOMIC_SHEET, runSheets } from './helpers/plugin-run.ts'
 import { recordOf } from './helpers/project.ts'
@@ -42,16 +41,12 @@ function problemSheets(project: Project): string[] {
 }
 
 /**
- * The files among `relative` (paths from the project directory) the messages declare, by name or
- * by the directory that holds them, relative to the project directory.
+ * The paths the `dependency` messages name, relative to the project directory.
  */
-function declaredAmong(
-  project: Project,
-  messages: readonly Message[],
-  relative: string[],
-): string[] {
-  const absolute = relative.map((file) => path.join(project.dir, file))
-  return declaredFiles(messages, absolute).map((file) => path.relative(project.dir, file))
+function declaredFiles(project: Project, messages: readonly Message[]): string[] {
+  return messages
+    .filter((message) => message.type === 'dependency')
+    .map((message) => path.relative(project.dir, message.file as string))
 }
 
 describe('a stylesheet record, once the stylesheet is no longer imported', () => {
@@ -132,10 +127,7 @@ describe('the stylesheets the atom layer run reads', () => {
       'app/base.css': '.b {\n  color: red;\n}\n',
     })
     const results = await runSheets(project, [...sheets, ATOMIC_SHEET], { options: {} })
-    const files = declaredAmong(project, results.at(-1)!.messages, [
-      'app/globals.css',
-      'app/base.css',
-    ])
+    const files = declaredFiles(project, results.at(-1)!.messages)
     expect(files).toEqual(expect.arrayContaining(['app/globals.css', 'app/base.css']))
     expect(Object.keys(recordOf(project).files)).toEqual(
       expect.arrayContaining(['app/globals.css', 'app/base.css']),

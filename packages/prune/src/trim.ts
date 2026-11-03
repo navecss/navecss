@@ -206,7 +206,7 @@ function modesOfRun(handoff: Handoff): readonly Mode[] {
 function declarations(run: LayerRun, files: Map<string, string>, graph: Graph): Message[] {
   return dependencyMessages({
     // Only webpack's callback sets the flag, and webpack takes a directory without its glob.
-    areGlobsIgnored: run.handoff.isBundlerDir === true,
+    isWebpack: run.handoff.isBundlerDir === true,
     root: declarationRoot(run.handoff),
     parent: run.result.opts.from,
     files: files.keys(),

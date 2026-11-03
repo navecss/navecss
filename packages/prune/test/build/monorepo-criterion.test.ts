@@ -101,11 +101,11 @@ function declared(app: WorkspaceApp, from = 0): string[] {
 
 /**
  * Whether the package declared `file` to the bundler, from what the probe saw: by a `dependency`
- * message naming it, or by a `dir-dependency` message for a directory whose glob matches it.
+ * message naming it or, on webpack, by a `dir-dependency` message for a directory above it.
  */
-function isDeclared(app: WorkspaceApp, file: string): boolean {
+function isDeclared(app: WorkspaceApp, file: string, cell: Cell): boolean {
   const messages = app.probes().flatMap((probe) => probe.messages) as Message[]
-  return declaredFiles(messages, [file]).length > 0
+  return declaredFiles(messages, [file], cell.bundler === 'webpack').length > 0
 }
 
 /**
@@ -120,7 +120,7 @@ function expectFirstState(app: WorkspaceApp, cell: Cell, place: Place): void {
   const probes = app.probes()
   expect(probes.length, 'the probe saw the package finish with a stylesheet').toBeGreaterThan(0)
   const files = declared(app)
-  expect(isDeclared(app, app.uiModule), "packages/ui's module is declared").toBe(true)
+  expect(isDeclared(app, app.uiModule, cell), "packages/ui's module is declared").toBe(true)
   expect(
     files.filter((file) => !isInside(app.root, file)),
     'nothing outside the root is declared',
@@ -330,7 +330,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
             const probesAfterCold = app.probes().length
             const named = declared(app)
             expect(
-              isDeclared(app, app.uiModule),
+              isDeclared(app, app.uiModule, cell),
               'the package declared what is inside the root',
             ).toBe(true)
             expect(named, 'x.ts is declared nowhere').not.toContain(app.external)

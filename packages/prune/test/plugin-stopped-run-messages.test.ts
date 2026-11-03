@@ -12,7 +12,6 @@ import { describe, expect, it } from 'vitest'
 
 import type { Project } from './helpers/project.ts'
 
-import { declaredFiles, declaredTwice } from './helpers/declared-files.ts'
 import {
   capturePrinted,
   makeProject,
@@ -59,8 +58,7 @@ describe('a run over the atom layer that stops after reading the code', () => {
     expect(printed().some((line) => line.includes('stopped without trimming'))).toBe(true)
     // `app/package.json` and `components/package.json` are not there: creating one would change
     // which `package.json` governs the files below it.
-    // Each is declared by a `dependency` message or by the directory that holds it, never both.
-    const read = [
+    expect(declared(project, result.messages, 'dependency')).toEqual([
       'app/package.json',
       'app/page.tsx',
       'components/Card.tsx',
@@ -69,11 +67,7 @@ describe('a run over the atom layer that stops after reading the code', () => {
       'package.json',
       'postcss.config.mjs',
       'tsconfig.json',
-    ].map((file) => path.join(project.dir, file))
-    expect(declaredFiles(result.messages, read)).toEqual(
-      read.toSorted((a, b) => a.localeCompare(b)),
-    )
-    expect(declaredTwice(result.messages, read)).toEqual([])
+    ])
     expect(declared(project, result.messages, 'dir-dependency')).toEqual(
       expect.arrayContaining(['.', 'app']),
     )

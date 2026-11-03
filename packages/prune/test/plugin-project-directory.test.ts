@@ -15,7 +15,6 @@ import type { Handoff } from '../src/handoff.ts'
 
 import { encodeHandoff, HANDOFF_VARIABLE } from '../src/handoff.ts'
 import { readRecord } from '../src/record.ts'
-import { declaredFiles } from './helpers/declared-files.ts'
 import { makeProject, pageCalling, registerIsolation } from './helpers/plugin-fixtures.ts'
 import { freshPrunePlugin } from './helpers/plugin-run.ts'
 import { ATOMIC_CSS, createProject, type Project } from './helpers/project.ts'
@@ -70,13 +69,12 @@ function loadedIn(dir: string): Handoff {
 }
 
 /**
- * The files among `relative` (paths from the project directory) the plugin's messages declare,
- * by name or by the directory that holds them, relative to the project directory.
+ * The files the plugin's messages name, relative to the project directory.
  */
-function declaredAmong(result: postcss.Result, project: Project, relative: string[]): string[] {
-  const absolute = relative.map((file) => path.resolve(project.dir, file))
-  return declaredFiles(result.messages, absolute)
-    .map((file) => path.relative(project.dir, file))
+function declaredFiles(result: postcss.Result, project: Project): string[] {
+  return result.messages
+    .filter((message) => message.type === 'dependency')
+    .map((message) => path.relative(project.dir, message.file as string))
     .toSorted((a, b) => a.localeCompare(b))
 }
 
@@ -110,20 +108,14 @@ describe('the project directory, when next was started in a directory above the 
     const project = makeProject({ 'app/page.tsx': pageCalling("'grid'") })
     const result = await runIn(project.dir, project, loadedIn(top))
     // `app/package.json` is not there: creating it would change which `package.json` governs the page.
-    const read = [
+    expect(declaredFiles(result, project)).toEqual([
       'app/package.json',
       'app/page.tsx',
       'next.config.ts',
       'package.json',
       'postcss.config.mjs',
       'tsconfig.json',
-    ]
-    expect(declaredAmong(result, project, read)).toEqual(read)
-    // No file outside that list is named either: nothing is declared that the plugin did not read.
-    const named = result.messages
-      .filter((message) => message.type === 'dependency')
-      .map((message) => path.relative(project.dir, message.file as string))
-    expect(named.filter((file) => !read.includes(file))).toEqual([])
+    ])
   })
 
   it('keeps a hand-off root that holds the project directory, so a file above the project is declared', async () => {
@@ -142,11 +134,10 @@ describe('the project directory, when next was started in a directory above the 
     mkdirSync(path.join(top, 'shared'))
     writeFileSync(path.join(top, 'shared/look.ts'), CX_LOOK)
     const result = await runIn(project.dir, project, { ...loadedIn(top), root: top })
-    const among = ['../shared/look.ts', 'app/page.tsx']
-    expect(declaredAmong(result, project, among)).toContain('../shared/look.ts')
+    expect(declaredFiles(result, project)).toContain('../shared/look.ts')
     // Control: with the project directory as the root, the same file is not declared.
     const narrow = await runIn(project.dir, project, loadedIn(project.dir))
-    expect(declaredAmong(narrow, project, among)).not.toContain('../shared/look.ts')
-    expect(declaredAmong(narrow, project, among)).toContain('app/page.tsx')
+    expect(declaredFiles(narrow, project)).not.toContain('../shared/look.ts')
+    expect(declaredFiles(narrow, project)).toContain('app/page.tsx')
   })
 })
