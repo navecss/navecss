@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { Project } from './helpers/project.ts'
 
-import { declaredFiles } from './helpers/declared-files.ts'
+import { declaredFiles, declaredTwice } from './helpers/declared-files.ts'
 import { moduleSource, runAndRead, scratchProjects } from './helpers/graph-fixture.ts'
 
 const project = scratchProjects()
@@ -51,5 +51,7 @@ describe.skipIf(isRoot)('a selected file that cannot be opened', () => {
     expect(declaredFiles(result.messages, read)).toEqual(
       read.toSorted((a, b) => a.localeCompare(b)),
     )
+    // By the directory alone: no `dependency` message names either file.
+    expect(declaredTwice(result.messages, read)).toEqual([])
   })
 })

@@ -1,9 +1,9 @@
 /**
  * The messages the plugin gives the bundler. A file inside a directory that is already declared
- * with a glob that matches it is not declared a second time: webpack, given a file and the
- * directory that holds it, can fail to hash the directory ("Cannot read properties of undefined
- * (reading 'length')") when the file's timestamp was taken first, which it did in about a quarter
- * of the warm builds of a workspace under load and in none of the builds without the package.
+ * is not declared a second time: with both, the warm webpack build of a workspace on Next.js
+ * 16.2.0 died in webpack's hashing of the directory in 10 of 36 runs under CPU load, and in none
+ * of 36 without the package. Where the bundler reads the directory's glob (Turbopack) the glob
+ * decides which files the directory stands for; where it does not (webpack) every file below it.
  */
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'

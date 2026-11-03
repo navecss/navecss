@@ -119,6 +119,11 @@ describe('the project directory, when next was started in a directory above the 
       'tsconfig.json',
     ]
     expect(declaredAmong(result, project, read)).toEqual(read)
+    // No file outside that list is named either: nothing is declared that the plugin did not read.
+    const named = result.messages
+      .filter((message) => message.type === 'dependency')
+      .map((message) => path.relative(project.dir, message.file as string))
+    expect(named.filter((file) => !read.includes(file))).toEqual([])
   })
 
   it('keeps a hand-off root that holds the project directory, so a file above the project is declared', async () => {

@@ -114,7 +114,11 @@ async function declaredFrom(
       path.join(repo.web, 'app/page.tsx'),
       repo.outside,
     ]
-    return declaredFiles(result.messages, candidates).map((file) => path.relative(repo.top, file))
+    // Where webpack's callback ran, webpack takes a directory without its glob.
+    const areGlobsIgnored = run.webpackDir !== undefined
+    return declaredFiles(result.messages, candidates, areGlobsIgnored).map((file) =>
+      path.relative(repo.top, file),
+    )
   } finally {
     cwd.mockRestore()
     if (previous === undefined) delete process.env[HANDOFF_VARIABLE]
