@@ -4,7 +4,8 @@
  * by `exit`, or by a SIGTERM or SIGINT that would otherwise end it with them still there, and the
  * hooks in `leftovers-hooks.ts` clear them after each row and each file.
  */
-import { rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import path from 'node:path'
 
 const groups = new Set<number>()
 const directories = new Set<string>()
@@ -80,6 +81,18 @@ export function forgetGroup(pid: number): void {
 export function trackDirectory(directory: string): void {
   arm()
   directories.add(directory)
+}
+
+/**
+ * Makes a scratch directory under `parent`, tracked from the moment it exists. The cleanup is armed
+ * first: a signal that arrives while the directory exists and nothing listens for it ends the
+ * process with the directory left behind.
+ */
+export function makeDirectory(parent: string, prefix: string): string {
+  arm()
+  const made = realpathSync(mkdtempSync(path.join(parent, prefix)))
+  directories.add(made)
+  return made
 }
 
 /**

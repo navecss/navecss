@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 /**
  * A pnpm workspace on disk for the real-build rows: the lockfile at the top, the app at
  * `apps/web`, a workspace package `@acme/ui` at `packages/ui` that calls `cx('gap')`, linked into
@@ -21,7 +21,7 @@ import path from 'node:path'
 import type { NextApp } from './next-app.ts'
 import type { PageState, Probe } from './workspace-parts.ts'
 
-import { removeDirectory, trackDirectory } from './leftovers.ts'
+import { makeDirectory, removeDirectory } from './leftovers.ts'
 import { CORE_ROOT, createNextApp } from './next-app.ts'
 import {
   installBadLib,
@@ -144,9 +144,7 @@ function writeWorkspace(top: string, modules: string): void {
  */
 export function createWorkspaceApp(nextRoot?: string): WorkspaceApp {
   const app = createNextApp(CONFIG, nextRoot === undefined ? {} : { nextRoot })
-  const made = mkdtempSync(path.join(tmpdir(), 'prune-outside-'))
-  const outside = realpathSync(made)
-  trackDirectory(outside)
+  const outside = makeDirectory(tmpdir(), 'prune-outside-')
   const modules = path.join(app.dir, 'node_modules')
   const log = path.join(app.dir, 'probe.log')
   const uiModule = path.join(app.top, 'packages/ui/index.js')

@@ -3,20 +3,12 @@
  * several processes asking for the floor at once.
  */
 import { spawn, spawnSync } from 'node:child_process'
-import {
-  chmodSync,
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  utimesSync,
-  writeFileSync,
-} from 'node:fs'
+import { chmodSync, existsSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { removeDirectory, trackDirectory } from './leftovers.ts'
+import { makeDirectory, removeDirectory } from './leftovers.ts'
 import { FLOOR_VERSION } from './next-floor.ts'
 
 export const FLOOR_HELPER = pathToFileURL(path.join(import.meta.dirname, 'next-floor.ts')).href
@@ -48,10 +40,8 @@ export async function raceTrial(
   callers: number,
   isLocked: boolean,
 ): Promise<{ readonly answers: string[]; readonly isWhole: boolean; readonly starts: number }> {
-  const made = mkdtempSync(path.join(tmpdir(), 'prune-floor-race-'))
-  const directory = realpathSync(made)
   // Removed with the process that runs the trial, even when that process is stopped in the middle.
-  trackDirectory(directory)
+  const directory = makeDirectory(tmpdir(), 'prune-floor-race-')
   try {
     const floorDir = path.join(directory, 'floor')
     const npm = script(directory, 'npm', [
