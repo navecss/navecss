@@ -97,6 +97,20 @@ describe('the sentence on the server side of a wait that ran out', () => {
     )
   })
 
+  it('AC-nextjs-used-atoms-05: keeps the page line when only the stylesheet request fails', async () => {
+    const server: Parameters<typeof serverSentence>[0] = {
+      get: () => Promise.resolve({ status: 404, text: '' }),
+      css: () => Promise.reject(new Error('socket hang up')),
+    }
+
+    const sentence = await serverSentence(server, '/new', 'nave-block')
+
+    expect(sentence).toBe(
+      '/new answers 404; its HTML does not carry nave-block; the CSS it links could not be requested: Error: socket hang up.',
+    )
+    expect(RETRY_ON_DEV_ROW.condition.test(sentence)).toBe(true)
+  })
+
   it('AC-nextjs-used-atoms-05: says a server that cannot be requested could not be, and does not throw', async () => {
     const server: Parameters<typeof serverSentence>[0] = {
       get: () => Promise.reject(new Error('next dev exited')),

@@ -38,7 +38,13 @@ export async function serverSentence(
     return `${page} the CSS it links ${holds} .${className}.`
   } catch (error) {
     if (error === silentPage) return silentPage.message
-    if (error === silentCss) return `${page} ${silentCss.message}`
+    if (page !== '') {
+      const failure =
+        error === silentCss
+          ? silentCss.message
+          : `the CSS it links could not be requested: ${String(error)}.`
+      return `${page} ${failure}`
+    }
     return `${route} could not be requested: ${String(error)}`
   }
 }
