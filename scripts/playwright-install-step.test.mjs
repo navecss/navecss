@@ -162,3 +162,43 @@ test('the step’s own limit outlasts both attempts and their kill-after grace',
 test('the step names no shell, so the runner gives it bash -e', () => {
   assert.ok(lines.every((line) => !/^\s+shell:/.test(line)))
 })
+
+/**
+ * The lines nested under `lines[start]`.
+ */
+function nestedUnder(lines, start) {
+  const indent = lines[start].search(/\S/)
+  const rest = lines.slice(start + 1)
+  const end = rest.findIndex((line) => line.trim() !== '' && line.search(/\S/) <= indent)
+  return end === -1 ? rest : rest.slice(0, end)
+}
+
+/**
+ * The `shell:` lines under a `defaults:` block of the workflow, or of its `test-browser` job, in
+ * `text`: the places that would give the step a shell without the step naming one.
+ */
+function shellsInDefaults(text) {
+  const all = text.split(/\r?\n/)
+  const job = all.findIndex((line) => /^ {2}test-browser:\s*$/.test(line))
+  const scopes = [
+    { lines: all, pattern: /^defaults:\s*$/ },
+    { lines: job === -1 ? [] : nestedUnder(all, job), pattern: /^ {4}defaults:\s*$/ },
+  ]
+  return scopes.flatMap(({ lines: scope, pattern }) =>
+    scope
+      .flatMap((line, index) => (pattern.test(line) ? nestedUnder(scope, index) : []))
+      .filter((line) => /^\s+shell:/.test(line)),
+  )
+}
+
+test('control: a defaults block that names a shell is found, at either level', () => {
+  const at = (indent) =>
+    `${' '.repeat(indent - 2)}defaults:\n${' '.repeat(indent)}run:\n${' '.repeat(indent + 2)}shell: bash\n`
+  assert.equal(shellsInDefaults(`${at(2)}jobs:\n  test-browser:\n    steps: []\n`).length, 1)
+  assert.equal(shellsInDefaults(`jobs:\n  test-browser:\n${at(6)}    steps: []\n`).length, 1)
+  assert.deepEqual(shellsInDefaults('jobs:\n  test-browser:\n    steps: []\n'), [])
+})
+
+test('no defaults block of the workflow or of the test-browser job names a shell', () => {
+  assert.deepEqual(shellsInDefaults(readFileSync(WORKFLOW, 'utf8')), [])
+})
