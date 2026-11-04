@@ -2,9 +2,10 @@
  * The messages the plugin gives the bundler. On webpack a file inside a directory that is already
  * declared is not declared a second time: with both, the warm webpack build of a workspace on
  * Next.js 16.2.0 died in webpack's hashing of the directory in 10 of 36 runs under CPU load, and
- * in none of 36 without the package. Next.js hands webpack a directory without its glob, so there
- * the directory covers every file below it. Turbopack reads the glob and was never affected, so
- * it is given every file and every directory, as before.
+ * in none of 36 without the package. Next.js hands webpack a directory without its glob, and webpack
+ * reads it at every depth but skips each entry whose name begins with a dot, so there the directory
+ * covers every file below it with no dot-named segment on the way. Turbopack reads the glob and was
+ * never affected, so it is given every file and every directory, as before.
  */
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -57,6 +58,22 @@ describe('on webpack, a file a declared directory holds is declared by the direc
     expect(
       declared('dependency', { ...webpack, directories: [EVERYTHING], files: [outside, beside] }),
     ).toEqual([outside, beside])
+  })
+
+  it('AC-nextjs-used-atoms-04: still names a file webpack does not read through the directory: one whose name, or a directory on the way to it, begins with a dot', () => {
+    const project = { path: ROOT, glob: '*' }
+    const rc = path.join(ROOT, '.postcssrc.json')
+    const chained = path.join(ROOT, '.config/tsconfig.base.json')
+    const config = path.join(ROOT, 'next.config.mjs')
+    const draft = path.join(APP, '..draft/page.jsx')
+
+    expect(
+      declared('dependency', {
+        ...webpack,
+        directories: [project, EVERYTHING],
+        files: [rc, chained, config, draft],
+      }),
+    ).toEqual([rc, chained, draft])
   })
 
   it('AC-nextjs-used-atoms-04: does not let a directory that gets no message hide a file', () => {

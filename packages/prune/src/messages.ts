@@ -5,19 +5,33 @@
  * either bundler (Turbopack panics on a file outside it, and Next.js 16.2.0 on webpack crashed on
  * the next build).
  *
- * On webpack a file is not also declared when a declared directory holds it. Next.js hands webpack
- * a `dir-dependency` as the directory alone, without its glob, so the directory covers every file
- * below it; given both, webpack can fail to hash the directory, which killed the warm build with
- * "Cannot read properties of undefined (reading 'length')". Turbopack reads the glob and is given
- * every file and every directory.
+ * On webpack a file is not also declared when a declared directory reaches it. Next.js hands
+ * webpack a `dir-dependency` as the directory alone, without its glob, and webpack reads that
+ * directory at every depth but skips each entry whose name begins with a dot, so the directory
+ * covers each file below it with no dot-named segment on the way (`.postcssrc.json` and a file in
+ * `.config/` are still named); given both, webpack can fail to hash the directory, which killed the
+ * warm build with "Cannot read properties of undefined (reading 'length')". Turbopack reads the glob
+ * and is given every file and every directory.
  */
 import type { Message } from 'postcss'
+
+import path from 'node:path'
 
 import type { SelectedDirectory } from './entries.ts'
 
 import { isInside } from './source-files.ts'
 
 const PLUGIN = 'postcss-nave-prune'
+
+/**
+ * Whether webpack's reading of `directory` reaches `file`: webpack reads a directory it is handed
+ * at every depth, but skips each entry whose name begins with a dot.
+ */
+function isReachedByWebpack(directory: string, file: string): boolean {
+  const relative = path.relative(directory, file)
+  if (relative === '' || path.isAbsolute(relative)) return false
+  return relative.split(path.sep).every((segment) => !segment.startsWith('.'))
+}
 
 /**
  * The messages for the files read and the directories selected from.
@@ -41,7 +55,10 @@ export function dependencyMessages(input: {
   const declaredDirectories = directories.filter((directory) => isInside(root, directory.path))
   for (const file of files) {
     if (!isInside(root, file)) continue
-    if (isWebpack && declaredDirectories.some((directory) => isInside(directory.path, file))) {
+    if (
+      isWebpack &&
+      declaredDirectories.some((directory) => isReachedByWebpack(directory.path, file))
+    ) {
       continue
     }
     messages.push({ type: 'dependency', plugin: PLUGIN, file, parent })

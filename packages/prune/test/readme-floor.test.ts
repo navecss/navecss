@@ -27,7 +27,7 @@ function coreFloor(): string[] | undefined {
   return start === -1 ? undefined : listIn(core.slice(start))
 }
 
-describe('the browser floor', () => {
+describe('AC-nextjs-used-atoms-43: the browser floor', () => {
   it('is the same list in core’s README and the package README', () => {
     const floor = coreFloor()
     // Control: core's README has one in that section.

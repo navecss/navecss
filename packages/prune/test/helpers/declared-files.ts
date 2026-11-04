@@ -12,11 +12,13 @@ function ours(messages: readonly Message[], type: string): Message[] {
 }
 
 /**
- * Whether `file` lies anywhere below `directory`.
+ * Whether webpack's reading of `directory` reaches `file`: webpack reads a directory it is handed
+ * at every depth, but skips each entry whose name begins with a dot.
  */
 function isBelow(directory: string, file: string): boolean {
   const relative = path.relative(directory, file)
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+  if (relative === '' || path.isAbsolute(relative)) return false
+  return relative.split(path.sep).every((segment) => !segment.startsWith('.'))
 }
 
 /**
@@ -28,10 +30,11 @@ export function isHeld(messages: readonly Message[], file: string): boolean {
 
 /**
  * The files among `candidates` the messages declare to the bundler. A `dependency` message names
- * a file; on webpack a `dir-dependency` message declares every file below its directory too,
- * since Next.js hands webpack the directory without its glob. Elsewhere only the named files
- * count: this helper does not model Turbopack's reading of a directory's glob, because the
- * package gives Turbopack every file by name.
+ * a file; on webpack a `dir-dependency` message declares every file below its directory that
+ * webpack reads, none of whose path segments below it begins with a dot, too, since Next.js hands
+ * webpack the directory without its glob. Elsewhere only the named files count: this helper does
+ * not model Turbopack's reading of a directory's glob, because the package gives Turbopack every
+ * file by name.
  */
 export function declaredFiles(
   messages: readonly Message[],
