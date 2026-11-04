@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { RETRY_ON_DEV_ROW, serverSentence } from './helpers/dev-update.ts'
+import { explainEdit, RETRY_ON_DEV_ROW, serverSentence } from './helpers/dev-update.ts'
 import { PACKAGE_ROOT } from './helpers/next-process.ts'
 import { until } from './helpers/until.ts'
 
@@ -86,6 +86,17 @@ describe('the sentence on the server side of a wait that ran out', () => {
     )
   })
 
+  it('AC-nextjs-used-atoms-05: names the request that did not answer', async () => {
+    const server: Parameters<typeof serverSentence>[0] = {
+      get: () => Promise.resolve({ status: 404, text: '' }),
+      css: () => new Promise(() => {}),
+    }
+
+    expect(await serverSentence(server, '/new', 'nave-block', { requestMs: 50 })).toBe(
+      '/new answers 404; its HTML does not carry nave-block; the CSS it links did not answer within 50 ms.',
+    )
+  })
+
   it('AC-nextjs-used-atoms-05: says a server that cannot be requested could not be, and does not throw', async () => {
     const server: Parameters<typeof serverSentence>[0] = {
       get: () => Promise.reject(new Error('next dev exited')),
@@ -132,6 +143,26 @@ describe('the wait of the dev row', () => {
     )
 
     expect(message).toContain('the state could not be read: Error: the page is gone')
+  })
+
+  it('AC-nextjs-used-atoms-05: keeps the server side, and the retry, when the document cannot be read', async () => {
+    const server = {
+      ...serving({ html: '', css: '', status: 404 }),
+      output: () => ' GET /new 404 in 9ms\n',
+    }
+
+    const message = await messageOfWait('the nave-block rule on /new', () =>
+      explainEdit(
+        () => Promise.reject(new Error('Execution context was destroyed')),
+        server,
+        '/new',
+        'nave-block',
+      ),
+    )
+
+    expect(message).toContain('/new answers 404;')
+    expect(message).toContain('GET /new 404')
+    expect(RETRY_ON_DEV_ROW.condition.test(message ?? '')).toBe(true)
   })
 })
 

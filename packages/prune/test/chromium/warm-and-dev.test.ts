@@ -15,15 +15,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { NextApp } from '../helpers/next-app.ts'
 import type { Cell } from '../helpers/next-cells.ts'
-import type { DevServer } from '../helpers/next-dev.ts'
 
 import { HAS_CHROMIUM, withPage } from '../helpers/chromium.ts'
 import { openPage } from '../helpers/dev-error-page.ts'
 import {
+  explainEdit,
   noteEarlierRouteNotBuilt,
   rememberRouteNotBuilt,
   RETRY_ON_DEV_ROW,
-  serverSentence,
 } from '../helpers/dev-update.ts'
 import { createNextApp, SKIP_REASON } from '../helpers/next-app.ts'
 import { cells, nextRootOf } from '../helpers/next-cells.ts'
@@ -149,22 +148,6 @@ async function documentState(page: Page): Promise<string> {
 }
 
 /**
- * What an edit that never reached the open document leaves to read, as text: the document's own
- * state, what the server itself serves for `route` (a page that carries `className` and a
- * stylesheet that holds its rule, or neither), and the tail of the server's output.
- */
-async function explainEdit(
-  page: Page,
-  server: DevServer,
-  route: string,
-  className: string,
-): Promise<string> {
-  const state = await documentState(page)
-  const served = await serverSentence(server, route, className)
-  return `${state}\n${served}\n${server.output().slice(-2000)}`
-}
-
-/**
  * Writes the page with `cx('flex', 'grid')`.
  */
 function writePageWithGrid(app: NextApp): void {
@@ -278,7 +261,7 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
             'the nave-grid rule on #t in the open document',
             {
               nudge: () => writePageWithGrid(app),
-              explain: () => explainEdit(page, server, '/', 'nave-grid'),
+              explain: () => explainEdit(() => documentState(page), server, '/', 'nave-grid'),
             },
           )
           expect(
@@ -298,7 +281,7 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
               'the nave-block rule on /new',
               {
                 nudge: () => writeNewRoute(app),
-                explain: () => explainEdit(page, server, '/new', 'nave-block'),
+                explain: () => explainEdit(() => documentState(page), server, '/new', 'nave-block'),
               },
             )
           } catch (error) {
