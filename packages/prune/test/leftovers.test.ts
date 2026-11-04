@@ -546,7 +546,7 @@ describe('the scratch directories the helpers make', () => {
         '  fs[name] = (...args) => {',
         '    const made = real(...args)',
         '    const target = String(args[0])',
-        "    if (/prune-|nave-next-|\\.staging-/u.test(target)) console.log(`MADE ${process.listenerCount('SIGTERM')} ${process.listenerCount('SIGINT')} ${target}`)",
+        "    if (/(?:^|\\/)(?:prune-(?:armed|floor-race|outside)-|\\.nave-next-|[^/]*\\.staging-)[^/]*$/u.test(target)) console.log(`MADE ${process.listenerCount('SIGTERM')} ${process.listenerCount('SIGINT')} ${target}`)",
         '    return made',
         '  }',
         '}',
