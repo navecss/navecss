@@ -202,3 +202,11 @@ test('control: a defaults block that names a shell is found, at either level', (
 test('no defaults block of the workflow or of the test-browser job names a shell', () => {
   assert.deepEqual(shellsInDefaults(readFileSync(WORKFLOW, 'utf8')), [])
 })
+
+test('control: the workflow has the test-browser job the defaults check reads', () => {
+  const jobs = readFileSync(WORKFLOW, 'utf8').split(/\r?\n/)
+  assert.ok(
+    jobs.some((line) => /^ {2}test-browser:\s*$/.test(line)),
+    'no test-browser job',
+  )
+})
