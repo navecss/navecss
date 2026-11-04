@@ -229,7 +229,8 @@ jobs:
       # (packages/core, vitest.browser.engines.config.ts), which `test:browser` ends with.
       # A stalled mirror has held this step to the job's cap, so it has its own limit and tries
       # twice: each attempt is cut off after five minutes, and a download that was cached or
-      # finished in time is not repeated. (scripts/playwright-install-step.test.mjs)
+      # finished in time is not repeated. An attempt does not resume: an install that needs more
+      # than five minutes is cut off and started again. (scripts/playwright-install-step.test.mjs)
       - name: Install Playwright's browser engines
         timeout-minutes: 12
         run: |

@@ -102,9 +102,10 @@ function runScript(codes) {
       'timeout',
       `echo "$*" >> "${directory}/timeouts"\nwhile [[ "$1" == -* ]]; do shift; done\nshift\nexec "$@"`,
     )
-    const result = spawnSync('bash', ['-c', `PATH="${directory}:$PATH"\n${script}`], {
-      encoding: 'utf8',
-    })
+    const file = path.join(directory, 'step.sh')
+    writeFileSync(file, `PATH="${directory}:$PATH"\n${script}`)
+    // The runner's shell for a step with no `shell:` key.
+    const result = spawnSync('bash', ['-e', file], { encoding: 'utf8' })
     const read = (name) => {
       try {
         return readFileSync(path.join(directory, name), 'utf8').split('\n').filter(Boolean)
@@ -144,4 +145,20 @@ test('each attempt runs under timeout, cut off after five minutes and killed thi
 
   assert.equal(outcome.timeouts.length, 2)
   for (const given of outcome.timeouts) assert.match(given, /^--kill-after=30s 5m pnpm /)
+})
+
+test('the step’s own limit outlasts both attempts and their kill-after grace', () => {
+  const given = /timeout --kill-after=(\d+)s (\d+)m /.exec(stepScript(lines) ?? '')
+  assert.ok(given, 'no timeout with --kill-after and a limit in minutes')
+  const [graceSeconds, attemptMinutes] = [Number(given[1]), Number(given[2])]
+  const minutes = stepTimeout(lines)
+  assert.ok(minutes !== undefined, 'the step sets no timeout-minutes')
+  assert.ok(
+    minutes * 60 > 2 * (attemptMinutes * 60 + graceSeconds),
+    `the step's ${minutes} minutes cut off the second attempt (2 x (${attemptMinutes} min + ${graceSeconds} s))`,
+  )
+})
+
+test('the step names no shell, so the runner gives it bash -e', () => {
+  assert.ok(lines.every((line) => !/^\s+shell:/.test(line)))
 })
