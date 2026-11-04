@@ -24,8 +24,8 @@ function isBelow(directory: string, file: string): boolean {
 /**
  * Whether the plugin follows the link at `link` that leads to `target`: its real target lies below
  * a `node_modules/` directory, and the directory holding the link is not inside a package
- * directory (`node_modules/<name>/` or `node_modules/@<scope>/<name>/`, a name not beginning with
- * a dot), which webpack tracks whole.
+ * directory webpack tracks whole: the name after the first `node_modules/` in its path is not a
+ * package's (`<name>/` or `@<scope>/<name>/`, not beginning with a dot).
  */
 function isFollowed(link: string, target: string): boolean {
   if (!target.split(path.sep).slice(0, -1).includes('node_modules')) return false
@@ -93,9 +93,9 @@ export function isHeld(
  * The files among `candidates` the messages declare to the bundler. A `dependency` message names
  * a file; on webpack a `dir-dependency` message declares every file below its directory that
  * webpack reads, none of whose path segments below it begins with a dot, directly or through the
- * links given that the plugin follows, too, since Next.js hands webpack the directory without its glob. Elsewhere only the named files count: this helper does
- * not model Turbopack's reading of a directory's glob, because the package gives Turbopack every
- * file by name.
+ * links given that the plugin follows, too, since Next.js hands webpack the directory without its
+ * glob. Elsewhere only the named files count: this helper does not model Turbopack's reading of a
+ * directory's glob, because the package gives Turbopack every file by name.
  */
 export function declaredFiles(
   messages: readonly Message[],

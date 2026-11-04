@@ -36,12 +36,14 @@ function isReachedByWebpack(directory: string, file: string): boolean {
 
 /**
  * Whether the plugin follows the link at `link` that leads to `target`. Webpack follows every link
- * it meets, except one held inside a package directory it tracks whole (`node_modules/<name>/` or
- * `node_modules/@<scope>/<name>/`, a name not beginning with a dot). The plugin follows the links
- * whose real target lies below a `node_modules/` directory, such as a package pnpm installs under
- * `node_modules/.pnpm/` and links into `node_modules/`. A link to anywhere else, such as a workspace
- * package, is left alone: a file read there that no declared directory covers by its real path
- * stays named.
+ * it meets, except one held inside a package directory it tracks whole: it reads the holding
+ * directory's path from its first `node_modules/`, and tracks it whole when the name after that is
+ * a package's (`<name>/` or `@<scope>/<name>/`, not beginning with a dot), so a store target under
+ * `node_modules/.pnpm/` is read entry by entry and the links in it are followed. The plugin follows
+ * the links whose real target lies below a `node_modules/` directory, such as a package pnpm
+ * installs under `node_modules/.pnpm/` and links into `node_modules/`. A link to anywhere else,
+ * such as a workspace package, is left alone: a file read there that no declared directory covers
+ * by its real path stays named.
  */
 function isFollowed(link: string, target: string): boolean {
   const targetSegments = target.split(path.sep)
@@ -55,28 +57,24 @@ function isFollowed(link: string, target: string): boolean {
 }
 
 /**
- * Whether webpack's reading of `directory` reaches `file`, directly or through the links the
- * plugin follows: a link that reading reaches leads it into the link's real target, which it reads
- * the same way, and so on through the links it meets there. A target is read once, so links that
- * lead back to each other end the search.
+ * The directories webpack's reading of `directory` reads: the directory itself and the real target
+ * of each link the plugin follows that this reading meets, and so on through the links it meets
+ * there. A target is read once, so links that lead back to each other end the search.
  */
-function isReachedThroughLinks(
+function readingsOf(
   directory: string,
-  file: string,
-  links: Readonly<Record<string, string>>,
-): boolean {
-  const followed = Object.entries(links).filter(([link, target]) => isFollowed(link, target))
+  followed: readonly (readonly [string, string])[],
+): readonly string[] {
   const visited = new Set<string>()
   const pending = [directory]
   for (let reading = pending.pop(); reading !== undefined; reading = pending.pop()) {
     if (visited.has(reading)) continue
     visited.add(reading)
-    if (isReachedByWebpack(reading, file)) return true
     for (const [link, target] of followed) {
       if (isReachedByWebpack(reading, link)) pending.push(target)
     }
   }
-  return false
+  return [...visited]
 }
 
 /**
@@ -103,14 +101,15 @@ export function dependencyMessages(input: {
   const messages: Message[] = []
   // Only a directory that is declared can stand for a file: one outside the root gets no message.
   const declaredDirectories = directories.filter((directory) => isInside(root, directory.path))
+  // What webpack reads through the declared directories does not depend on the file, so it is
+  // worked out once.
+  const followed = Object.entries(links).filter(([link, target]) => isFollowed(link, target))
+  const readings = isWebpack
+    ? declaredDirectories.flatMap((directory) => readingsOf(directory.path, followed))
+    : []
   for (const file of files) {
     if (!isInside(root, file)) continue
-    if (
-      isWebpack &&
-      declaredDirectories.some((directory) => isReachedThroughLinks(directory.path, file, links))
-    ) {
-      continue
-    }
+    if (readings.some((reading) => isReachedByWebpack(reading, file))) continue
     messages.push({ type: 'dependency', plugin: PLUGIN, file, parent })
   }
   for (const directory of declaredDirectories) {
