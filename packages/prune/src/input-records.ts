@@ -83,6 +83,23 @@ export function linkTarget(dir: string, link: string): string {
 }
 
 /**
+ * Each link the run met that leads elsewhere, as its absolute path with the absolute real path it
+ * leads to. A path with nothing there, or that is not a link, is left out.
+ */
+export function linkedPaths(inputs: ResolutionInputs): Record<string, string> {
+  const linked: Record<string, string> = {}
+  for (const link of inputs.links) {
+    try {
+      const target = realpathSync(link)
+      if (target !== link) linked[link] = target
+    } catch {
+      // Nothing is there, so there is nothing to follow.
+    }
+  }
+  return linked
+}
+
+/**
  * Orders entries by key.
  */
 function byKey([a]: [string, string], [b]: [string, string]): number {

@@ -16,6 +16,15 @@ const ROOT = path.resolve('/project')
 const APP = path.join(ROOT, 'app')
 const EVERYTHING = { path: APP, glob: '**/*' }
 const STEMS = { path: path.join(ROOT, 'src/ui'), glob: '*' }
+const WEB = path.join(ROOT, 'apps/web')
+const MODULES = path.join(ROOT, 'node_modules')
+
+/**
+ * Where pnpm installs the package `name` under `node_modules`.
+ */
+function stored(name: string): string {
+  return path.join(MODULES, '.pnpm', `${name}@1.0.0`, 'node_modules', name)
+}
 
 /**
  * The paths the messages of `type` name.
@@ -26,6 +35,7 @@ function declared(
     readonly directories: readonly { glob: string; path: string }[]
     readonly files: readonly string[]
     readonly isWebpack: boolean
+    readonly links?: Readonly<Record<string, string>>
   },
 ): string[] {
   return dependencyMessages({ ...input, parent: undefined, root: ROOT }).flatMap((message) => {
@@ -35,7 +45,7 @@ function declared(
   })
 }
 
-describe('on webpack, a file a declared directory holds is declared by the directory alone', () => {
+describe('on webpack, a file webpack reads through a declared directory is declared by the directory alone', () => {
   const webpack = { isWebpack: true }
 
   it('AC-nextjs-used-atoms-04: omits a file at any depth below the directory, whatever its glob', () => {
@@ -74,6 +84,87 @@ describe('on webpack, a file a declared directory holds is declared by the direc
         files: [rc, chained, config, draft],
       }),
     ).toEqual([rc, chained, draft])
+    expect(
+      declared('dependency', {
+        isWebpack: false,
+        directories: [project, EVERYTHING],
+        files: [rc, chained, config, draft],
+      }),
+    ).toEqual([rc, chained, config, draft])
+  })
+
+  it('AC-nextjs-used-atoms-04: leaves to a directory the files of a store link it reaches, also through a second link met in the target, and names an unlinked one', () => {
+    const project = { path: ROOT, glob: '*' }
+    const links = {
+      [path.join(MODULES, 'a')]: stored('a'),
+      [path.join(stored('a'), 'vendor/b')]: stored('b'),
+      // A link back to the first one: following links does not loop.
+      [path.join(stored('b'), 'back')]: stored('a'),
+    }
+    const viaOne = path.join(stored('a'), 'index.js')
+    const viaTwo = path.join(stored('b'), 'index.js')
+    const unlinked = path.join(stored('c'), 'index.js')
+    const files = [viaOne, viaTwo, unlinked]
+
+    expect(declared('dependency', { ...webpack, directories: [project], files, links })).toEqual([
+      unlinked,
+    ])
+    expect(
+      declared('dependency', { isWebpack: false, directories: [project], files, links }),
+    ).toEqual(files)
+  })
+
+  describe('names the file of a link webpack follows but the plugin does not', () => {
+    const hidden = path.join(stored('a'), '.hidden/index.js')
+    const reached = path.join(stored('a'), 'index.js')
+
+    const lib = path.join(stored('lib'), 'index.js')
+    const everything = { path: ROOT, glob: '*' }
+
+    it.each([
+      {
+        name: 'a workspace package linked into node_modules, its real path held by no declared directory',
+        directory: { path: WEB, glob: '*' },
+        links: { [path.join(WEB, 'node_modules/@acme/ui')]: path.join(ROOT, 'packages/ui') },
+        files: [path.join(ROOT, 'packages/ui/look.ts')],
+        named: [path.join(ROOT, 'packages/ui/look.ts')],
+      },
+      {
+        name: 'a link held inside a package directory node_modules/foo/',
+        directory: everything,
+        links: { [path.join(MODULES, 'foo/link')]: stored('x') },
+        files: [path.join(stored('x'), 'index.js')],
+        named: [path.join(stored('x'), 'index.js')],
+      },
+      {
+        name: 'a link below an entry whose name begins with a dot',
+        directory: everything,
+        links: { [path.join(ROOT, '.cache/lib')]: stored('lib') },
+        files: [lib],
+        named: [lib],
+      },
+      {
+        name: 'a file below an entry whose name begins with a dot inside a store target',
+        directory: everything,
+        links: { [path.join(MODULES, 'a')]: stored('a') },
+        files: [reached, hidden],
+        named: [hidden],
+      },
+      {
+        name: 'a link on disk that the record does not hold',
+        directory: everything,
+        links: {},
+        files: [lib],
+        named: [lib],
+      },
+    ])('AC-nextjs-used-atoms-04: $name', ({ directory, links, files, named }) => {
+      expect(
+        declared('dependency', { ...webpack, directories: [directory], files, links }),
+      ).toEqual(named)
+      expect(
+        declared('dependency', { isWebpack: false, directories: [directory], files, links }),
+      ).toEqual(files)
+    })
   })
 
   it('AC-nextjs-used-atoms-04: does not let a directory that gets no message hide a file', () => {

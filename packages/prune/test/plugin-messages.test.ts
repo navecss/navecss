@@ -1,12 +1,12 @@
 import type { Message } from 'postcss'
 
-import { existsSync, rmSync, statSync } from 'node:fs'
+import { existsSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import type { Project } from './helpers/project.ts'
 
-import { declaredFiles, declaredTwice, isHeld } from './helpers/declared-files.ts'
+import { absoluteLinks, declaredFiles, declaredTwice, isHeld } from './helpers/declared-files.ts'
 import { atomsIn } from './helpers/layer.ts'
 import { makeProject, pageCalling, registerIsolation } from './helpers/plugin-fixtures.ts'
 import { runAtomic } from './helpers/plugin-run.ts'
@@ -211,14 +211,41 @@ describe('AC-nextjs-used-atoms-04: the plugin declares every file and directory 
       path.join(project.dir, 'next.config.ts'),
     ]
     const toDeclare = [...new Set([...recorded, ...configs])]
+    const links = absoluteLinks(project.dir, recordOf(project).links)
     // Every file is still declared, by name or by a directory that holds it.
-    expect(declaredFiles(messages, toDeclare, true)).toEqual(
+    expect(declaredFiles(messages, toDeclare, true, links)).toEqual(
       toDeclare.toSorted((a, b) => a.localeCompare(b)),
     )
-    expect(declaredTwice(messages, toDeclare)).toEqual([])
+    expect(declaredTwice(messages, toDeclare, links)).toEqual([])
     // The `dependency` messages name exactly the files no declared directory holds.
-    const unheld = toDeclare.filter((file) => !isHeld(messages, file))
+    const unheld = toDeclare.filter((file) => !isHeld(messages, file, links))
     expect(dependencyFiles(messages)).toEqual(unheld.toSorted((a, b) => a.localeCompare(b)))
+  })
+
+  it('AC-nextjs-used-atoms-04: a dependency installed the pnpm way is declared on webpack through the link webpack follows, and not also by name', async () => {
+    const store = 'node_modules/.pnpm/ok-lib@1.0.0/node_modules/ok-lib'
+    const project = makeProject({
+      'app/page.tsx':
+        "import { gapped } from 'ok-lib'\n\nexport default function Page() {\n  return <div className={gapped} />\n}\n",
+      ...Object.fromEntries(
+        Object.entries(OK_LIB).map(([file, text]) => [`${store}/${file}`, text]),
+      ),
+    })
+    symlinkSync(path.join(project.dir, store), path.join(project.dir, 'node_modules/ok-lib'), 'dir')
+    const stored = [
+      path.join(project.dir, store, 'index.js'),
+      path.join(project.dir, store, 'package.json'),
+    ]
+
+    const webpack = await runAtomic(project, [], { isBundlerDir: true })
+    // Control: the file was read.
+    expect(Object.keys(recordOf(project).files)).toContain(`${store}/index.js`)
+    expect(dependencyFiles(webpack.messages).filter((file) => stored.includes(file))).toEqual([])
+
+    const turbopack = await runAtomic(project)
+    expect(dependencyFiles(turbopack.messages).filter((file) => stored.includes(file))).toEqual(
+      stored.toSorted((a, b) => a.localeCompare(b)),
+    )
   })
 
   it('AC-nextjs-used-atoms-04: with the hand-off Turbopack leaves, a file a declared directory holds is still named too', async () => {

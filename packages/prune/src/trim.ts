@@ -21,7 +21,7 @@ import { digestOf } from './digest.ts'
 import { filesRead } from './files-read.ts'
 import { emptyGraph } from './graph-parts.ts'
 import { readGraph } from './graph.ts'
-import { recordedInputs, stemDirectories } from './input-records.ts'
+import { linkedPaths, recordedInputs, stemDirectories } from './input-records.ts'
 import { dependencyMessages } from './messages.ts'
 import { serverIdOfRun } from './phase.ts'
 import { printEachRun } from './print.ts'
@@ -207,6 +207,7 @@ function declarations(run: LayerRun, files: Map<string, string>, graph: Graph): 
   return dependencyMessages({
     // Only webpack's callback sets the flag, and webpack takes a directory without its glob.
     isWebpack: run.handoff.isBundlerDir === true,
+    links: linkedPaths(graph.inputs),
     root: declarationRoot(run.handoff),
     parent: run.result.opts.from,
     files: files.keys(),
