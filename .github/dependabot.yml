@@ -6,6 +6,14 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    # pnpm-workspace.yaml's minimumReleaseAge (4320 minutes) makes pnpm refuse any release
+    # younger than 3 days, and Dependabot does not read it: on a release that new it pushes the
+    # package.json edit without the lockfile, and every job fails at install. Waiting the same
+    # 3 days (Dependabot counts from the publish time, as pnpm does) keeps that PR from opening.
+    # Security updates skip this cooldown, so one for a release under 3 days old still fails
+    # at install until the release ages.
+    cooldown:
+      default-days: 3
     # commitlint.config.js's scope-enum allows `deps` but not the `deps-dev` Dependabot writes
     # for development-dependency updates by default (`include: scope` would produce that split
     # itself, so this deliberately sets prefix-development to the SAME literal prefix as prefix
