@@ -9,10 +9,8 @@ import { spawn } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
-  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -23,7 +21,7 @@ import type { PruneRecord } from '../../src/record.ts'
 import type { DevServer } from './next-dev.ts'
 
 import { readRecord } from '../../src/record.ts'
-import { removeDirectory, trackDirectory } from './leftovers.ts'
+import { makeDirectory, removeDirectory } from './leftovers.ts'
 import { startDev } from './next-dev.ts'
 import { NEXT_ROOT, nextCommand, nextEnvironment, PACKAGE_ROOT } from './next-process.ts'
 import { skipReason } from './preconditions.ts'
@@ -215,8 +213,7 @@ export function createNextApp(
   nextConfig: string = WRAPPED_CONFIG,
   options: { readonly nextRoot?: string } = {},
 ): NextApp {
-  const top = realpathSync(mkdtempSync(path.join(PACKAGE_ROOT, '.nave-next-')))
-  trackDirectory(top)
+  const top = makeDirectory(PACKAGE_ROOT, '.nave-next-')
   const dir = path.join(top, 'apps/web')
   const write = (files: Record<string, string>): void => {
     for (const [name, text] of Object.entries(files)) {

@@ -219,8 +219,9 @@ async function installInto(floorDir: string, npm: string): Promise<void> {
   removeAbandonedStaging(floorDir)
   const staging = `${floorDir}.staging-${process.pid}`
   rmSync(staging, { recursive: true, force: true })
-  mkdirSync(staging, { recursive: true })
+  // Tracked before it exists, so a signal cannot find it with nothing armed to remove it.
   trackDirectory(staging)
+  mkdirSync(staging, { recursive: true })
   try {
     writeFileSync(
       path.join(staging, 'package.json'),

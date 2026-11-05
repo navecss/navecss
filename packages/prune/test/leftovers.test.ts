@@ -19,7 +19,9 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { script } from './helpers/floor-fixture.ts'
 import { forgetGroup, killGroups, trackGroup } from './helpers/leftovers.ts'
+import { SKIP_REASON } from './helpers/next-app.ts'
 import { startDev } from './helpers/next-dev.ts'
 import { nextEnvironment, PACKAGE_ROOT } from './helpers/next-process.ts'
 
@@ -514,4 +516,128 @@ describe('a server a file starts for all its rows', () => {
     expect(existsSync(seen.top), 'the app is removed').toBe(false)
     expect(await untilGone(pids, 10_000), 'the server and its helper are gone').toEqual([])
   }, 120_000)
+})
+
+describe('the scratch directories the helpers make', () => {
+  let directory = ''
+  beforeEach(() => {
+    const made = mkdtempSync(path.join(tmpdir(), 'prune-leftovers-armed-'))
+    directory = realpathSync(made)
+  })
+  afterEach(() => rmSync(directory, { recursive: true, force: true }))
+
+  /**
+   * Runs `body` in a process that notes, each time a directory is made, how many SIGTERM listeners
+   * the process has for SIGTERM and for SIGINT: a signal that arrives before one is listening ends
+   * the process with the directory left behind. Resolves to the smaller of the two counts, one
+   * per directory made, and the exit code.
+   */
+  async function listenersWhenMade(
+    body: string,
+  ): Promise<{ readonly code: number | null; readonly counts: number[]; readonly output: string }> {
+    const file = path.join(directory, 'worker.mjs')
+    writeFileSync(
+      file,
+      [
+        "import fs from 'node:fs'",
+        "import { syncBuiltinESMExports } from 'node:module'",
+        'for (const name of ["mkdtempSync", "mkdirSync"]) {',
+        '  const real = fs[name]',
+        '  fs[name] = (...args) => {',
+        '    const made = real(...args)',
+        '    const target = String(args[0])',
+        "    if (/(?:^|\\/)(?:prune-(?:armed|floor-race|outside)-|\\.nave-next-|[^/]*\\.staging-)[^/]*$/u.test(target)) console.log(`MADE ${process.listenerCount('SIGTERM')} ${process.listenerCount('SIGINT')} ${target}`)",
+        '    return made',
+        '  }',
+        '}',
+        'syncBuiltinESMExports()',
+        body,
+        'process.exit(0)',
+        '',
+      ].join('\n'),
+    )
+    const run = await finished(process.execPath, [file], { cwd: PACKAGE_ROOT })
+    const counts = run.output
+      .matchAll(/MADE (\d+) (\d+) /gu)
+      .map((made) => Math.min(Number(made[1]), Number(made[2])))
+      .toArray()
+    return { code: run.code, counts, output: run.output }
+  }
+
+  const FIXTURES = pathToFileURL(path.join(HELPERS, 'floor-fixture.ts')).href
+  const LEFTOVERS = pathToFileURL(path.join(HELPERS, 'leftovers.ts')).href
+  const WORKSPACE = pathToFileURL(path.join(HELPERS, 'workspace-fixture.ts')).href
+  const FLOOR = pathToFileURL(path.join(HELPERS, 'next-floor.ts')).href
+
+  it('makeDirectory has the cleanup armed before the directory exists', async () => {
+    const run = await listenersWhenMade(
+      `const { makeDirectory } = await import(${JSON.stringify(LEFTOVERS)})\nmakeDirectory(${JSON.stringify(directory)}, 'prune-armed-')`,
+    )
+
+    expect(run.code, run.output).toBe(0)
+    expect(run.counts).toEqual([1])
+  })
+
+  it.skipIf(SKIP_REASON !== undefined)(
+    'a scratch app has the cleanup armed before its directory exists',
+    async () => {
+      const run = await listenersWhenMade(
+        `const { createNextApp } = await import(${JSON.stringify(pathToFileURL(NEXT_APP).href)})\ncreateNextApp()`,
+      )
+
+      expect(run.code, run.output).toBe(0)
+      expect(run.counts.length).toBeGreaterThan(0)
+      expect(
+        run.counts.every((count) => count >= 1),
+        run.output,
+      ).toBe(true)
+    },
+  )
+
+  it.skipIf(SKIP_REASON !== undefined)(
+    'a workspace app has the cleanup armed before either of its directories exists',
+    async () => {
+      const run = await listenersWhenMade(
+        `const { createWorkspaceApp } = await import(${JSON.stringify(WORKSPACE)})\ncreateWorkspaceApp()`,
+      )
+
+      expect(run.code, run.output).toBe(0)
+      expect(run.counts.length).toBeGreaterThan(1)
+      expect(
+        run.counts.every((count) => count >= 1),
+        run.output,
+      ).toBe(true)
+    },
+  )
+
+  it('a race trial has the cleanup armed before its directory exists', async () => {
+    const run = await listenersWhenMade(
+      `const { raceTrial } = await import(${JSON.stringify(FIXTURES)})\nawait raceTrial(1, false)`,
+    )
+
+    expect(run.code, run.output).toBe(0)
+    expect(run.counts.length).toBeGreaterThan(0)
+    expect(
+      run.counts.every((count) => count >= 1),
+      run.output,
+    ).toBe(true)
+  })
+
+  it('the staging directory of the floor install has the cleanup armed before it exists', async () => {
+    const npm = script(directory, 'npm', [
+      'mkdir -p node_modules/next node_modules/react',
+      'printf \'{"version":"16.2.0"}\' > node_modules/next/package.json',
+      'printf \'{"version":"19.2.0"}\' > node_modules/react/package.json',
+    ])
+    const run = await listenersWhenMade(
+      `const { floorNextRootIn } = await import(${JSON.stringify(FLOOR)})\nawait floorNextRootIn(${JSON.stringify(path.join(directory, 'floor'))}, ${JSON.stringify(npm)})`,
+    )
+
+    expect(run.code, run.output).toBe(0)
+    expect(run.counts.length).toBeGreaterThan(0)
+    expect(
+      run.counts.every((count) => count >= 1),
+      run.output,
+    ).toBe(true)
+  })
 })
