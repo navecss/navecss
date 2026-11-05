@@ -99,6 +99,17 @@ async function isStoppedWithin(pid: number, ms: number): Promise<boolean> {
 }
 
 /**
+ * Whether the file `file` exists within `ms` milliseconds.
+ */
+async function isPresentWithin(file: string, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms
+  while (!existsSync(file) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  return existsSync(file)
+}
+
+/**
  * What `task` rejects with, or a note that it did not.
  */
 async function failureOf(task: Promise<void>): Promise<unknown> {
@@ -300,8 +311,7 @@ describe('the install lock of the Next.js floor', () => {
     writeOldLock(scratch, String(process.pid), 3)
     const asking = floorNextRootIn(scratch.floorDir(), loggingNpm(scratch))
 
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    const hasStarted = existsSync(path.join(scratch.directory(), 'starts.log'))
+    const hasStarted = await isPresentWithin(path.join(scratch.directory(), 'starts.log'), 30_000)
     rmSync(`${scratch.floorDir()}.installing`, { force: true })
     await asking
 
