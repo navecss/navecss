@@ -302,7 +302,11 @@ describe('on webpack, the work of following links grows with the links met, not 
     // Quadratic growth multiplies the work by four when the links double and cubic by eight; the
     // bound sits between them. Measured: 3.9 with the work done once per run, 7.7 when it was
     // done again for every file.
-    expect(comparisonsFor(2 * LINKS) / comparisonsFor(LINKS)).toBeLessThan(6)
+    const once = comparisonsFor(LINKS)
+    // Control: the spy sees the tests of what webpack reaches, not only the root checks, which
+    // alone make one call for each file and one for the directory.
+    expect(once).toBeGreaterThan(LINKS + 1)
+    expect(comparisonsFor(2 * LINKS) / once).toBeLessThan(6)
   })
 })
 
