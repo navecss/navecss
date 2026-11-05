@@ -227,8 +227,18 @@ jobs:
 
       # Chromium runs the browser suite; Firefox and WebKit run the rows of the three-engine test
       # (packages/core, vitest.browser.engines.config.ts), which `test:browser` ends with.
+      # A stalled mirror has held this step to the job's cap, so it has its own limit and tries
+      # twice: each attempt is cut off after five minutes, and a download that was cached or
+      # finished in time is not repeated. An attempt does not resume: an install that needs more
+      # than five minutes is cut off and started again. (scripts/playwright-install-step.test.mjs)
       - name: Install Playwright's browser engines
-        run: pnpm --filter @navecss/core exec playwright install --with-deps chromium firefox webkit
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2; do
+            timeout --kill-after=30s 5m pnpm --filter @navecss/core exec playwright install --with-deps chromium firefox webkit && exit 0
+            echo "::warning::Playwright's browser install did not finish (attempt $attempt of 2)"
+          done
+          exit 1
 
       - name: Browser tests
         run: pnpm run test:browser
