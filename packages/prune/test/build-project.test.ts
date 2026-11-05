@@ -21,6 +21,7 @@ const TEST = path.join(PACKAGE, 'test')
  */
 const STAND_IN = new Set([
   'test/dev-until-css.test.ts',
+  'test/dev-update.test.ts',
   'test/later-route-retry.test.ts',
   'test/leftovers.test.ts',
 ])
