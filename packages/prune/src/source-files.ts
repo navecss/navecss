@@ -53,9 +53,10 @@ export function relativeTo(dir: string, file: string): string {
 }
 
 /**
- * Whether `file` lies inside `root`, or is `root`.
+ * Whether `file` lies inside `root`, or is `root`. A path is outside when its first segment below
+ * the root is `..`, not when it merely begins with two dots.
  */
 export function isInside(root: string, file: string): boolean {
   const relative = path.relative(root, file)
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+  return !(relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
 }

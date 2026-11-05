@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HANDOFF_VARIABLE } from '../src/handoff.ts'
 import { withNave } from '../src/index.ts'
+import { declaredFiles } from './helpers/declared-files.ts'
 import { registerIsolation } from './helpers/plugin-fixtures.ts'
 import { freshPrunePlugin } from './helpers/plugin-run.ts'
 import { ATOMIC_CSS, CORE_ROOT } from './helpers/project.ts'
@@ -91,7 +92,7 @@ const WORKSPACE = { 'pnpm-workspace.yaml': "packages:\n  - 'apps/*'\n", 'pnpm-lo
 /**
  * Loads `config` through `withNave()` as Next.js loads it from `cwd`, runs webpack's callback when
  * `webpackDir` is given, and runs the plugin over core's `atomic.css` in the PostCSS worker's
- * directory `cwd`. Returns the files the `dependency` messages name, relative to the top.
+ * directory `cwd`. Returns the files among the fixture's three that the messages declare, relative to the top.
  */
 async function declaredFrom(
   repo: Monorepo,
@@ -106,10 +107,17 @@ async function declaredFrom(
     const create = await freshPrunePlugin()
     const from = path.join(repo.web, 'node_modules/@navecss/core/dist/atomic.css')
     const result = await postcss([create()]).process(ATOMIC_CSS, { from })
-    return result.messages
-      .filter((message) => message.type === 'dependency')
-      .map((message) => path.relative(repo.top, message.file as string))
-      .toSorted((a, b) => a.localeCompare(b))
+    // A file is declared by a `dependency` message naming it and, where webpack ran its callback,
+    // by a directory that holds it.
+    const candidates = [
+      path.join(repo.top, 'packages/ui/look.ts'),
+      path.join(repo.web, 'app/page.tsx'),
+      repo.outside,
+    ]
+    const isWebpack = run.webpackDir !== undefined
+    return declaredFiles(result.messages, candidates, isWebpack).map((file) =>
+      path.relative(repo.top, file),
+    )
   } finally {
     cwd.mockRestore()
     if (previous === undefined) delete process.env[HANDOFF_VARIABLE]

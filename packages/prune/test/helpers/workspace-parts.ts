@@ -38,6 +38,8 @@ export interface Probe {
   readonly messages: readonly {
     readonly dir?: string
     readonly file?: string
+    readonly glob?: string
+    readonly plugin?: string
     readonly type: string
   }[]
 }
