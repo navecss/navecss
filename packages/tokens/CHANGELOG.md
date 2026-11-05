@@ -1,5 +1,26 @@
 # @navecss/tokens
 
+## 0.5.0
+
+### Minor Changes
+
+- 9e4f9bc: The secondary action fill gains a hover and an active colour, so a secondary button can answer the
+  pointer and a press the way a primary one does.
+
+  `--nave-color-action-secondary-hover` is neutral 150 in light and 700 in dark, and
+  `--nave-color-action-secondary-active` is neutral 200 in light and 850 in dark. A press is darker
+  than rest in both schemes, and in dark the hover is the same step as the highlight fill
+  (`action.highlight`). They change the fill only: the text on them stays `content.primary` and the
+  identifying border stays `border.control`, as on the resting fill. Both follow the tint, and the
+  achromatic branch leaves them as they are. Their text pairs (`content.primary` on each) are
+  declared and checked by the build.
+
+  `ColorPropertyName` gains both names. Nothing that shipped changes.
+
+### Patch Changes
+
+- f32850c: A side-effect import of a CSS entry point, such as `import '@navecss/tokens/css'` or `import '@navecss/core'`, now type-checks under TypeScript's default side-effect import check. TypeScript 6 refused it with error 2882 because the entry point named a stylesheet and no declaration file. Each CSS-only export now names a declaration file that exports nothing, next to the stylesheet it opens.
+
 ## 0.4.0
 
 ### Minor Changes
