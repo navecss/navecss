@@ -148,7 +148,7 @@ and the base64 alphabet. The code implementing them is this package's own, and
 everything in this package is offered under the MIT licence above.
 
 This package also includes material copied from or derived from mdn-data
-(css/properties.json in the mdn/data repository, version 2.29.0,
+(css/properties.json in the mdn/data repository, version 2.37.2,
 https://github.com/mdn/data), which its authors dedicated to the public domain
 under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/),
 and from CSS Logical Properties and Values Module Level 1, CSS Overflow Module
