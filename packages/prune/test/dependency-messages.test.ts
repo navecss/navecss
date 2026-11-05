@@ -8,7 +8,7 @@
  * never affected, so it is given every file and every directory, as before.
  */
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { dependencyMessages } from '../src/messages.ts'
 
@@ -36,9 +36,10 @@ function declared(
     readonly files: readonly string[]
     readonly isWebpack: boolean
     readonly links?: Readonly<Record<string, string>>
+    readonly root?: string
   },
 ): string[] {
-  return dependencyMessages({ ...input, parent: undefined, root: ROOT }).flatMap((message) => {
+  return dependencyMessages({ parent: undefined, root: ROOT, ...input }).flatMap((message) => {
     if (message.type !== type) return []
     const { dir, file } = message as { dir?: string; file?: string }
     return [String(file ?? dir)]
@@ -206,6 +207,43 @@ describe('on webpack, a file webpack reads through a declared directory is decla
     })
   })
 
+  it('AC-nextjs-used-atoms-04: names the file a store link leads to when its target is a file', () => {
+    const target = path.join(stored('x'), 'index.js')
+
+    // Webpack hashes a link's target as a directory, so a file target is reached by no declared
+    // directory.
+    expect(
+      declared('dependency', {
+        ...webpack,
+        directories: [{ path: ROOT, glob: '*' }],
+        files: [target],
+        links: { [path.join(MODULES, 'x.js')]: target },
+      }),
+    ).toEqual([target])
+  })
+
+  it.each([
+    ['the root is the project', ROOT],
+    ['the root is the app directory', APP],
+  ])(
+    'AC-nextjs-used-atoms-04: names a file below a directory whose name begins with two dots, when %s',
+    (_root, root) => {
+      const draft = path.join(APP, '..draft/page.jsx')
+
+      expect(
+        declared('dependency', { ...webpack, directories: [EVERYTHING], files: [draft], root }),
+      ).toEqual([draft])
+      expect(
+        declared('dependency', {
+          isWebpack: false,
+          directories: [EVERYTHING],
+          files: [draft],
+          root,
+        }),
+      ).toEqual([draft])
+    },
+  )
+
   it('AC-nextjs-used-atoms-04: does not let a directory that gets no message hide a file', () => {
     const above = { path: path.dirname(ROOT), glob: '**/*' }
     const file = path.join(APP, 'page.jsx')
@@ -229,46 +267,42 @@ describe('on webpack, a file webpack reads through a declared directory is decla
   })
 })
 
-describe('on webpack, the work of following links grows with the links met, not with their cube', () => {
-  const REPEATS = 3
-  const LINKS = 50
-
-  /**
-   * The least time of a few runs over `count` followed store links, each holding one read file,
-   * with one declared project directory. Every file is reached through its link, so no `dependency`
-   * message is the control that the links were followed.
-   */
-  function leastTime(count: number): number {
-    const names = Array.from({ length: count }, (_, index) => `p${index}`)
-    const links = Object.fromEntries(names.map((name) => [path.join(MODULES, name), stored(name)]))
-    const files = names.map((name) => path.join(stored(name), 'index.js'))
-    const input = {
+/**
+ * How many path comparisons one run makes over `count` followed store links, each holding one
+ * read file, with one declared project directory. Every file is reached through its link, so no
+ * `dependency` message is the control that the links were followed.
+ */
+function comparisonsFor(count: number): number {
+  const names = Array.from({ length: count }, (_, index) => `p${index}`)
+  const links = Object.fromEntries(names.map((name) => [path.join(MODULES, name), stored(name)]))
+  const files = names.map((name) => path.join(stored(name), 'index.js'))
+  // `messages.ts` calls `relative` on this same `node:path` object for every test of whether a
+  // directory webpack reads reaches a path, so the calls are the work done.
+  const relative = vi.spyOn(path, 'relative')
+  try {
+    const messages = dependencyMessages({
       directories: [{ path: ROOT, glob: '*' }],
       files,
       isWebpack: true,
       links,
       parent: undefined,
       root: ROOT,
-    }
-    const times = Array.from({ length: REPEATS }, () => {
-      const start = performance.now()
-      const messages = dependencyMessages(input)
-      const time = performance.now() - start
-      expect(messages.filter((message) => message.type === 'dependency')).toEqual([])
-      return time
     })
-    return Math.min(...times)
+    expect(messages.filter((message) => message.type === 'dependency')).toEqual([])
+    return relative.mock.calls.length
+  } finally {
+    relative.mockRestore()
   }
+}
 
-  it('AC-nextjs-used-atoms-04: doubling the links met does not multiply the time by more than a quadratic growth allows', () => {
-    // Control: a first pass settles the code before anything is timed.
-    leastTime(LINKS)
+describe('on webpack, the work of following links grows with the links met, not with their cube', () => {
+  const LINKS = 30
 
-    const ratio = leastTime(2 * LINKS) / leastTime(LINKS)
-
-    // Quadratic growth doubles the work four times over and cubic eight times; the bound sits
-    // between them, and it is a ratio of two runs of the same machine, never a time budget.
-    expect(ratio).toBeLessThan(6)
+  it('AC-nextjs-used-atoms-04: doubling the links met does not multiply the work by more than a quadratic growth allows', () => {
+    // Quadratic growth multiplies the work by four when the links double and cubic by eight; the
+    // bound sits between them. Measured: 3.9 with the work done once per run, 7.7 when it was
+    // done again for every file.
+    expect(comparisonsFor(2 * LINKS) / comparisonsFor(LINKS)).toBeLessThan(6)
   })
 })
 
