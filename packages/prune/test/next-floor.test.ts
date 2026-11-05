@@ -332,7 +332,11 @@ describe('the install lock of the Next.js floor', () => {
     const asking = floorNextRootIn(scratch.floorDir(), loggingNpm(scratch))
 
     await new Promise((resolve) => setTimeout(resolve, 1500))
-    const hasStarted = existsSync(path.join(scratch.directory(), 'starts.log'))
+    // An asker that took the lock over makes its staging directory before it runs npm, so an npm
+    // that is slow to start cannot hide the takeover behind the window.
+    const hasStarted =
+      existsSync(path.join(scratch.directory(), 'starts.log')) ||
+      existsSync(`${scratch.floorDir()}.staging-${process.pid}`)
     rmSync(lock, { force: true })
     await asking
 
