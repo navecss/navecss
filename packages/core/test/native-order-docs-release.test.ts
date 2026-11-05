@@ -22,6 +22,7 @@ import {
   fold,
   placeholdersIn,
   readCore,
+  REPO_ROOT,
   withoutCodeSpans,
 } from './helpers/native-order-docs.ts'
 import { shippedChangesetProse } from './helpers/released-changeset.ts'
@@ -64,20 +65,23 @@ describe('AC-native-apply-order-40: the agent guide gains the paragraph on order
 })
 
 /**
- * The two changesets the release adds: where each lives and the words its text opens with, which
- * is how its changelog entry is found once the release has consumed the file.
+ * The two changesets the release adds: where each lives, the changelog of the package it bumps
+ * and the words its text opens with, which is how its changelog entry is found once the release
+ * has consumed the file.
  */
 const CORE_CHANGESET = {
   path: path.join(CHANGESET_DIR, 'nave-expands-in-native-order.md'),
+  changelog: CHANGELOG_PATH,
   entryStart: '`@nave` now expands in the order CSS mixins will apply it',
 }
 const BASE_UI_CHANGESET = {
   path: path.join(CHANGESET_DIR, 'base-ui-stylesheet-in-native-order.md'),
+  changelog: path.join(REPO_ROOT, 'packages/base-ui/CHANGELOG.md'),
   entryStart: "The built stylesheet's bytes change and no computed value does.",
 }
 
 const prose = (changeset: typeof CORE_CHANGESET): string =>
-  fold(shippedChangesetProse(changeset.path, CHANGELOG_PATH, changeset.entryStart))
+  fold(shippedChangesetProse(changeset.path, changeset.changelog, changeset.entryStart))
 
 /**
  * The names of the functions a text calls in a code span, as `name()`.
@@ -205,7 +209,7 @@ describe('AC-native-apply-order-41: one minor changeset for core and a patch for
 
   it('holds no private reference, slot or placeholder', () => {
     for (const changeset of [CORE_CHANGESET, BASE_UI_CHANGESET]) {
-      const text = shippedChangesetProse(changeset.path, CHANGELOG_PATH, changeset.entryStart)
+      const text = shippedChangesetProse(changeset.path, changeset.changelog, changeset.entryStart)
       scanForBrainReferences(text, path.basename(changeset.path))
 
       expect(placeholdersIn(text)).toEqual([])
