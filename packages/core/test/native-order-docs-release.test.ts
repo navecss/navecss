@@ -25,7 +25,7 @@ import {
   REPO_ROOT,
   withoutCodeSpans,
 } from './helpers/native-order-docs.ts'
-import { shippedChangesetProse } from './helpers/released-changeset.ts'
+import { changelogEntries, shippedChangesetProse } from './helpers/released-changeset.ts'
 
 const guide = readFileSync(OUTPUT_PATH, 'utf8')
 
@@ -84,6 +84,23 @@ const prose = (changeset: typeof CORE_CHANGESET): string =>
   fold(shippedChangesetProse(changeset.path, changeset.changelog, changeset.entryStart))
 
 /**
+ * The `### ` heading the entry opening with `entryStart` sits under in `changelog`, such as
+ * `Minor Changes`, or undefined when the changelog holds no such entry.
+ */
+const kindIn = (changelog: string, entryStart: string): string | undefined =>
+  changelogEntries(changelog).find((entry) => entry.text.startsWith(entryStart))?.kind
+
+/**
+ * What a changeset's bump reads as now: `Pending` while the file exists, otherwise the heading its
+ * released entry sits under in the changelog of the package it bumps. Once the file is consumed
+ * its front matter is gone, and the heading is the only record of the bump left.
+ */
+const filedUnder = (changeset: typeof CORE_CHANGESET): string | undefined =>
+  existsSync(changeset.path)
+    ? 'Pending'
+    : kindIn(readFileSync(changeset.changelog, 'utf8'), changeset.entryStart)
+
+/**
  * The names of the functions a text calls in a code span, as `name()`.
  */
 function namesCalledIn(text: string): string[] {
@@ -139,9 +156,12 @@ describe('AC-native-apply-order-41: one minor changeset for core and a patch for
       existsSync(CORE_CHANGESET.path) ? [path.basename(CORE_CHANGESET.path)] : [],
     )
     expect(prose(CORE_CHANGESET)).toContain(CORE_CHANGESET.entryStart)
+    expect(filedUnder(CORE_CHANGESET)).toMatch(/^(?:Pending|Minor Changes)$/)
   })
 
   it('names core alone in its front matter', () => {
+    const baseUiChangelog = readFileSync(BASE_UI_CHANGESET.changelog, 'utf8')
+    expect(kindIn(baseUiChangelog, CORE_CHANGESET.entryStart)).toBeUndefined()
     if (!existsSync(CORE_CHANGESET.path)) return
     const head = /^---\n([\s\S]*?)\n---/.exec(readFileSync(CORE_CHANGESET.path, 'utf8'))![1]
 
@@ -197,6 +217,17 @@ describe('AC-native-apply-order-41: one minor changeset for core and a patch for
       existsSync(BASE_UI_CHANGESET.path) ? [path.basename(BASE_UI_CHANGESET.path)] : [],
     )
     expect(prose(BASE_UI_CHANGESET)).toMatch(/bytes change and no computed value does/)
+    expect(filedUnder(BASE_UI_CHANGESET)).toMatch(/^(?:Pending|Patch Changes)$/)
+    expect(
+      kindIn(readFileSync(CORE_CHANGESET.changelog, 'utf8'), BASE_UI_CHANGESET.entryStart),
+    ).toBeUndefined()
+  })
+
+  it('control: an entry released under the wrong heading, or into the wrong changelog, is caught', () => {
+    const planted = `## 0.3.0\n\n### Minor Changes\n\n- 1234567: ${BASE_UI_CHANGESET.entryStart} More.\n`
+
+    expect(kindIn(planted, BASE_UI_CHANGESET.entryStart)).toBe('Minor Changes')
+    expect(kindIn(planted, CORE_CHANGESET.entryStart)).toBeUndefined()
   })
 
   it("says of the base-ui stylesheet that `focusRing`'s `outline: none` moves, and not that every role changes", () => {
