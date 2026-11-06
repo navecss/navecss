@@ -71,11 +71,17 @@ const HELPER_SOURCE = [
 /**
  * The stand-in `next`, a fixed script: it starts the helper beside it, as `next dev` does with its
  * workers, and once the helper has taken up SIGTERM it prints both process ids, then listens on
- * `--port`. The ids come first because a row reads them from the output as soon as the page
- * answers, and the output comes through a pipe: printed after the listen, the line could still be
- * on its way when the answer arrives. What it needs to know, it reads from `settings.json` beside
- * it.
+ * `--port`. The ids come first because a row reads them from the output once the page answers,
+ * and the output comes through a pipe: printed after the listen, the line could still be on its
+ * way when the answer arrives. The rows also wait for the line (`WAIT_FOR_PIDS`) rather than rely
+ * on that order alone. What it needs to know, it reads from `settings.json` beside it.
  */
+/**
+ * A line for a script a row writes, run right after its first request to the stand-in: it waits
+ * until the server's output holds the `PIDS` line, so a snapshot of the output taken next has it.
+ */
+const WAIT_FOR_PIDS = String.raw`while (!/PIDS \d+ \d+/u.test(server.output())) await new Promise((resolve) => setTimeout(resolve, 10))`
+
 const FAKE_NEXT_SOURCE = [
   "const { spawn } = require('node:child_process')",
   "const { readFileSync } = require('node:fs')",
@@ -212,6 +218,7 @@ async function runStarter(
       `import { startDev } from ${JSON.stringify(NEXT_DEV)}`,
       `const server = await startDev([], ${JSON.stringify(scratch.directory())}, { nextRoot: ${JSON.stringify(nextRoot)} })`,
       "await server.get('/')",
+      WAIT_FOR_PIDS,
       'console.log(server.output())',
       `if (${JSON.stringify(ending)} === 'exit') process.exit(0)`,
       `if (${JSON.stringify(ending)} === 'throw') throw new Error('the process ended with an error')`,
@@ -288,6 +295,7 @@ function leakyFile(scratch: Scratch, ending: 'fails' | 'forgets'): string {
     `  const app = createNextApp(undefined, { nextRoot: ${JSON.stringify(scratch.fakeNext())} })`,
     '  const server = await app.dev([])',
     "  await server.get('/')",
+    `  ${WAIT_FOR_PIDS}`,
     `  writeFileSync(${JSON.stringify(path.join(dir, 'report.json'))}, JSON.stringify({ top: app.top, output: server.output() }))`,
     `  ${ending === 'fails' ? 'expect(1).toBe(2)' : ''}`,
     '})',
@@ -478,6 +486,7 @@ function sharedServerFile(scratch: Scratch): string {
     `  const app = createNextApp(undefined, { nextRoot: ${JSON.stringify(scratch.fakeNext())} })`,
     '  server = await app.dev([])',
     "  await server.get('/')",
+    `  ${WAIT_FOR_PIDS}`,
     `  writeFileSync(${report}, JSON.stringify({ top: app.top, output: server.output() }))`,
     '})',
     '',
@@ -514,6 +523,7 @@ describe('a server a file starts for all its rows', () => {
     }
     const pids = pidsIn(seen.output)
     scratch.track(pids)
+    expect(pids, `the server printed its ids:\n${seen.output}`).toHaveLength(2)
     expect(run.code, run.output).toBe(0)
     expect(existsSync(seen.top), 'the app is removed').toBe(false)
     expect(await untilGone(pids, 10_000), 'the server and its helper are gone').toEqual([])
