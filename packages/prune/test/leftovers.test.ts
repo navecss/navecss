@@ -69,6 +69,12 @@ const HELPER_SOURCE = [
 ].join('\n')
 
 /**
+ * A line for a script a row writes, run right after its first request to the stand-in: it waits
+ * until the server's output holds the `PIDS` line, so a snapshot of the output taken next has it.
+ */
+const WAIT_FOR_PIDS = String.raw`while (!/PIDS \d+ \d+/u.test(server.output())) await new Promise((resolve) => setTimeout(resolve, 10))`
+
+/**
  * The stand-in `next`, a fixed script: it starts the helper beside it, as `next dev` does with its
  * workers, and once the helper has taken up SIGTERM it prints both process ids, then listens on
  * `--port`. The ids come first because a row reads them from the output once the page answers,
@@ -76,12 +82,6 @@ const HELPER_SOURCE = [
  * way when the answer arrives. The rows also wait for the line (`WAIT_FOR_PIDS`) rather than rely
  * on that order alone. What it needs to know, it reads from `settings.json` beside it.
  */
-/**
- * A line for a script a row writes, run right after its first request to the stand-in: it waits
- * until the server's output holds the `PIDS` line, so a snapshot of the output taken next has it.
- */
-const WAIT_FOR_PIDS = String.raw`while (!/PIDS \d+ \d+/u.test(server.output())) await new Promise((resolve) => setTimeout(resolve, 10))`
-
 const FAKE_NEXT_SOURCE = [
   "const { spawn } = require('node:child_process')",
   "const { readFileSync } = require('node:fs')",
@@ -336,6 +336,10 @@ async function runFile(
     cwd: dir,
     env: nextEnvironment(),
   })
+  expect(
+    existsSync(path.join(dir, 'report.json')),
+    `the file wrote no report:\n${run.output}`,
+  ).toBe(true)
   const seen = JSON.parse(readFileSync(path.join(dir, 'report.json'), 'utf8')) as {
     output: string
     top: string
@@ -517,6 +521,10 @@ describe('a server a file starts for all its rows', () => {
       env: nextEnvironment(),
     })
 
+    expect(
+      existsSync(path.join(dir, 'report.json')),
+      `the file wrote no report:\n${run.output}`,
+    ).toBe(true)
     const seen = JSON.parse(readFileSync(path.join(dir, 'report.json'), 'utf8')) as {
       output: string
       top: string
