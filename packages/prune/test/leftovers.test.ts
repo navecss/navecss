@@ -70,8 +70,11 @@ const HELPER_SOURCE = [
 
 /**
  * The stand-in `next`, a fixed script: it starts the helper beside it, as `next dev` does with its
- * workers, and listens on `--port` only once the helper has taken up SIGTERM, then prints both
- * process ids. What it needs to know, it reads from `settings.json` beside it.
+ * workers, and once the helper has taken up SIGTERM it prints both process ids, then listens on
+ * `--port`. The ids come first because a row reads them from the output as soon as the page
+ * answers, and the output comes through a pipe: printed after the listen, the line could still be
+ * on its way when the answer arrives. What it needs to know, it reads from `settings.json` beside
+ * it.
  */
 const FAKE_NEXT_SOURCE = [
   "const { spawn } = require('node:child_process')",
@@ -86,9 +89,8 @@ const FAKE_NEXT_SOURCE = [
   "  { stdio: ['ignore', 'pipe', 'ignore'] },",
   ')',
   "helper.stdout.once('data', () => {",
-  "  http.createServer((_, res) => res.end('ok')).listen(port, '127.0.0.1', () => {",
-  '    console.log(`PIDS ${process.pid} ${helper.pid}`)',
-  '  })',
+  '  console.log(`PIDS ${process.pid} ${helper.pid}`)',
+  "  http.createServer((_, res) => res.end('ok')).listen(port, '127.0.0.1')",
   '})',
   '',
 ].join('\n')
