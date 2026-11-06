@@ -1,5 +1,11 @@
 # @navecss/stylelint-config
 
+## 0.2.0
+
+### Minor Changes
+
+- f32850c: `@navecss/stylelint-config` now also flags `outline-style: none`, through the same `declaration-property-value-disallowed-list` rule, with its own message.
+
 ## 0.1.0
 
 ### Minor Changes

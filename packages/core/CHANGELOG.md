@@ -1,5 +1,129 @@
 # @navecss/core
 
+## 0.5.0
+
+### Minor Changes
+
+- 61aca56: Astro: the Vite plugin now ships only the atoms it reads on Astro, where it shipped every atom
+  before, and it checks every stylesheet Astro ships. Add `navePlugin()` under `vite.plugins` in
+  `astro.config`; the README's new Astro section has the setup and what is measured (Astro 7.4.0,
+  Vite 8.3.5).
+
+  - Astro writes its CSS in its server build, before the browser's build runs. The plugin now
+    chooses the atoms there, from everything read so far. An atom named only by code the browser
+    runs, such as a `client:only` component or a `<script>` in an `.astro` file, fails the build
+    and names the module; list the atom in `keep`. A dependency the server build leaves external is
+    named with `resolve.noExternal`, which reaches every environment Astro builds. In
+    `output: 'server'` with prerendered pages, the stylesheet the on-demand pages share still ships
+    every atom.
+  - The end-of-build checks now also read the stylesheets Astro writes into the page instead of as
+    files. A `@nave` left in a small `<style>` block used to ship there with the build green.
+  - In `astro dev`, the dev server serves the build's atoms once the page's scripts have loaded.
+    Until then the first paint holds the stylesheet with every atom and every `@nave` unexpanded.
+  - On plain Vite, a builder whose server environment writes assets and builds before the
+    browser's now writes that server stylesheet with only the atoms read so far, where it shipped
+    every atom, and its two warnings about a dependency the build does not read name
+    `resolve.noExternal` instead of `ssr.noExternal`. The browser's stylesheet and its file name are
+    unchanged.
+
+- 0be82a0: `@navecss/core/collect`: `buildReport()` takes an optional fourth argument, a function that
+  returns the remedy lines only the calling build tool can write. It is given the application's
+  problems, and its lines print after the lines for the application's kinds of problem and before
+  any package's line. Left out, the report is byte for byte what it was. The subpath is not meant
+  for application code.
+- 2fc3054: Adds `pruneAtomicLayer()`, `inspectAtomicLayer()`, `unprunedAtoms()` and `withRestorers()` to the `@navecss/core/collect` subpath. A build tool that is not the Vite plugin can now trim the `@layer atomic` block to whole atoms (a set holding `srOnly` also holds `srOnlyFocusable`) the way `navePlugin()` from `@navecss/core/vite` does, without a copy of the trimming code. Like the rest of the subpath it is not meant for application code, and nothing the Vite plugin does changes.
+- 2fc3054: The PostCSS plugin takes a new option, `printWarnings` (default `true`): with `printWarnings: false`, each problem under `onUnknown: 'warn'` and each order warning is raised as a PostCSS warning and never printed, even on Turbopack, for a tool that runs the plugin itself and reports its warnings. Such a tool can tell the two apart with `isOrderWarning()`, a new export of `@navecss/core/postcss` that is `true` for an order warning: report those whatever `onUnknown` says and never count one as a problem, since the plugin never fails a build on an order warning.
+- 01b7705: `@nave` now expands in the order CSS mixins will apply it: each atom's declarations, then that
+  atom's own pseudo-class, `@media` and `@container` blocks, atom by atom, where the directive is
+  written, and whatever your rule says after the directive comes after all of it. Until this
+  release every atom's blocks were placed at the end of the rule, so they won over anything written
+  after the directive. Now the later declaration wins, as it does elsewhere in CSS, and two shapes
+  change what a page shows:
+
+  - A responsive atom named before an atom that sets the same property. `@nave hideDesktopUp flex;`
+    used to hide the element from 75em up, and now shows it as flex. Name the responsive atom last:
+    `@nave flex hideDesktopUp;`.
+  - A declaration or nested block of your own, after the directive, that sets a property one of the
+    atom's blocks sets. `.panel { @nave hideDesktopUp; display: grid; }` used to hide the panel from
+    75em up, and now shows it as a grid. Move the declaration above the directive to keep the old
+    result.
+
+  This includes focus styles. After `@nave focusRing;`, a later `&:focus { outline: none }` or
+  `&:focus-visible { outline: none }` in the same rule used to leave the ring in place, and now
+  removes it, so the element has no focus indicator from `focusRing` under keyboard focus. Move
+  the block above the directive to keep the ring. A later `&:focus-visible { outline-color: ... }`
+  after `focusRing`, or `&:focus-visible { position: fixed }` after `srOnlyFocusable`, used to be
+  ignored and now applies.
+
+  With Vite's `css.transformer: 'lightningcss'` at targets below the browser floor, Lightning CSS
+  moves what a rule says after a directive into a rule of its own before Nave sees it, so that
+  content already resolved this way there, focus styles included, and the build cannot report it.
+
+  The build reports each such place as a warning naming the atom, the condition, the property with
+  both values, and, where a move lets the atom win without a new warning, that move. Where the later
+  content is not itself an atom's block, the warning also
+  says what the result was before: `Before @navecss/core 0.5.0 "hideDesktopUp" won, because an atom's
+blocks were placed last in the rule.` It never fails the build, `onUnknown` does not change it, and
+  no option turns it off. Where the later declaration is meant to win, mark the directive:
+  `@nave /* nave-allow-override: display */ hideDesktopUp;`. The marker covers the properties it
+  names on that directive only, and is reported once nothing overrides them. A directive written
+  inside a nested rule is checked against what follows it in that rule and also against what each
+  enclosing rule holds after it, as in `.card { & { @nave hideDesktopUp } display: flex; }`. A
+  warning of that second kind does not say what the result was before, because the later content
+  won before this release as well. See "Order inside a rule" in the package README.
+
+  Declarations that now follow a nested block are written inside `& { }`, the wrapper Nave already
+  used for a directive written after a nested rule. Under a selector list, `&` matches with the
+  specificity of the list's most specific selector, so such a declaration can now win over a rule
+  elsewhere that it used to lose to; write it above the directive to keep the old result.
+  `dist/atomic.css` and `cx()` are unchanged.
+
+  `LICENSE` now also credits mdn-data and the CSS specifications that the property table behind the warning is derived from.
+
+### Patch Changes
+
+- 2fc3054: `navecss-core expand --watch` now rewrites `--out` for an edit the operating system never reports, such as one saved in the moment after the watch starts on macOS, by also checking the watched files every second.
+
+  An edit a file event reports now runs even when the file's modification time and size have not moved, on a filesystem that keeps whole-second or two-second times, as long as that filesystem's clock is within a second of this machine's.
+
+- fc27dde: The README now explains why `@nave` copies an atom's declarations into every rule that uses it, what that costs after compression, what reduces it (brotli at level 11, CSS split by route), and why Nave does not merge the copies or turn `@nave` atoms into shared classes. Only the README changes; no code or behaviour does.
+- 2a9930d: A Nave class a CSS Module composes from global now ships its atom. With `composes: nave-flex from global` in a `.module.css` file (or a `.module.scss`, or a Vue `<style module>` block), the Vite plugin's collection reads the class lists the module exports and ships the rule for each Nave class in them, in a build and in the dev server, where before the element was rendered with the class and no rule. Only those exported class lists are read, so a Nave class that the module's stylesheet names only in a selector (`:global(.nave-grid)`) is not a use. The exception is `css.modules.exportGlobals: true`, which writes that class into the class map, where it is read and its rule ships. A `?inline` import of the module brings in its CSS, not its class map, so the collection reads no use from it; the plugin still processes that CSS as it does any stylesheet imported with `?inline`.
+- 2fc3054: The atom reader behind the Vite plugin and `@navecss/core/collect` now reads a class written with a numeric character reference in a JSX attribute, such as `className="nave&#45;flex"`, as the `nave-flex` it is when the page runs, where it used to miss the atom.
+
+  On Vite, a module whose only mention of an atom is such a reference is now read as well, where the plugin used to skip it unread.
+
+- 9e4f9bc: The agent guide's token list (`SKILL.md`) gains `--nave-color-action-secondary-hover` and
+  `--nave-color-action-secondary-active`, the two colours `@navecss/tokens` adds in this release.
+  `@navecss/core` versions together with `@navecss/tokens`, so it moves with that release too.
+- f32850c: A side-effect import of a CSS entry point, such as `import '@navecss/tokens/css'` or `import '@navecss/core'`, now type-checks under TypeScript's default side-effect import check. TypeScript 6 refused it with error 2882 because the entry point named a stylesheet and no declaration file. Each CSS-only export now names a declaration file that exports nothing, next to the stylesheet it opens.
+- a9640e9: `@nave` now knows six more CSS properties, read from mdn-data 2.37.2: `flex-line-count`,
+  `link-parameters`, `path-length`, `scroll-axis-lock`, `text-fit` and `window-drag`. A marker on a
+  directive that names one of them is no longer reported as "not a CSS property", and `all` counts as
+  resetting each of them, as it does every other property it resets. No property was removed or
+  changed, and none of Nave's atoms sets one of the six, so no warning about a later declaration
+  overriding an atom changes.
+- 556ba65: Fix `onUnknown: 'warn'` printing nothing on Next.js's default bundler, Turbopack. Turbopack shows
+  no warning a PostCSS plugin raises, so an unknown atom was dropped from the page with no message,
+  where the README says each problem is logged. The PostCSS plugin now prints each problem to the
+  terminal as `file:line:column:` and the message, and raises no PostCSS warning, whenever the
+  `TURBOPACK` environment variable is set and not empty, which Next.js does for Turbopack;
+  elsewhere it still raises the PostCSS warning. The README's Next.js section now says where the
+  warning shows.
+- cf8c854: Fix `@nave` in the Vite plugin, the Lightning CSS adapter and `navecss-core expand` when the
+  input ends before a rule closes and its last token is a comment or a backslash. The expander now
+  closes what the input left open (a nested rule, a function, the last declaration) ahead of the
+  comment, and keeps a trailing backslash from escaping what it writes after it, so the blocks the
+  atoms add are no longer swallowed by what the input left open.
+- cf8c854: Fix `@nave` in the Vite plugin, the Lightning CSS adapter and `navecss-core expand` when the
+  last declaration in a rule has no semicolon. The first pseudo-class, `@media` or `@container`
+  block the atoms add at the end of the rule was written into that declaration's value, so the
+  declaration and the block were both invalid and dropped: in `.button { @nave focusRing; color: red }`,
+  `color` was lost and the button had no outline under keyboard focus. The PostCSS plugin, and Vite
+  with `css.transformer: 'lightningcss'`, were not affected.
+- Updated dependencies [f32850c]
+- Updated dependencies [9e4f9bc]
+  - @navecss/tokens@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes
