@@ -219,12 +219,12 @@ function declarations(run: LayerRun, files: Map<string, string>, graph: Graph): 
  * Reads the graph into `graph`, writes the record, then trims the layer and declares what was
  * read.
  */
-function trim(run: LayerRun, graph: Graph): void {
+async function trim(run: LayerRun, graph: Graph): Promise<void> {
   const { handoff, root, result } = run
   const { options, dir } = handoff
   const keep = options.keep ?? []
   const keepFor = options.keepFor ?? {}
-  readGraph(
+  await readGraph(
     {
       dir,
       keep,
@@ -268,14 +268,14 @@ function stopWithoutTrimming(run: LayerRun, reason: string, graph: Graph): void 
  * Trims the atom layer of the stylesheet to what the code uses and records the run; when the run
  * cannot finish, the layer is left whole and the failure is recorded.
  */
-export function trimAtomicLayer(run: LayerRun): void {
+export async function trimAtomicLayer(run: LayerRun): Promise<void> {
   const graph = emptyGraph()
   if (run.blocked !== undefined) {
     stopWithoutTrimming(run, run.blocked, graph)
     return
   }
   try {
-    trim(run, graph)
+    await trim(run, graph)
   } catch (error) {
     stopWithoutTrimming(run, String(error), graph)
   }

@@ -82,8 +82,12 @@ export interface FileFacts {
   readonly place: (offset: number) => Place
   readonly isInMode: boolean
   /**
-   * Where the file's problems go: the graph's when the build's mode reaches the file, nowhere
-   * otherwise.
+   * The file's problems, which count when the build's mode reaches the file.
    */
   readonly problems: LocatedProblem[]
+  /**
+   * The problems a `keepFor` entry stands in for, set aside to be judged by who takes the `cx`
+   * the file gives out.
+   */
+  readonly suppressed: LocatedProblem[]
 }

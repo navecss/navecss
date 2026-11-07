@@ -222,7 +222,7 @@ async function runWithHandoff(
     failures: [...recorded, ...expansionFailures],
   })
   if (inspectAtomicLayer(root.toString()).hasLayer) {
-    trimAtomicLayer({
+    await trimAtomicLayer({
       root,
       result,
       handoff,
