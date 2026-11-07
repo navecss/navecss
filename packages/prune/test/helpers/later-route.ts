@@ -70,8 +70,8 @@ export async function untilLaterRouteGrid(
   try {
     await server.untilCss('/', '.nave-grid', {
       rewrite: () => {
-        rewrite()
         rewrites += 1
+        rewrite()
       },
     })
   } catch (error) {

@@ -274,12 +274,15 @@ describe.each(Object.entries(VITE_APIS))(
           atMost(CLOSE_LIMIT, closing?.close()),
         ])
         app.dispose()
-        expect(
-          closes
-            .filter((close) => close.status === 'rejected')
-            .map((close) => String(close.reason)),
-          'a watcher failed to close',
-        ).toEqual([])
+        // Soft: a failed close is reported beside the body's own error, not instead of it.
+        expect
+          .soft(
+            closes
+              .filter((close) => close.status === 'rejected')
+              .map((close) => String(close.reason)),
+            'a watcher failed to close',
+          )
+          .toEqual([])
       }
     }, 480_000)
   },

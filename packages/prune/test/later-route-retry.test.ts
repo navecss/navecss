@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RETRY_ON_ROUTE_NOT_BUILT, untilLaterRouteGrid } from './helpers/later-route.ts'
 import { PACKAGE_ROOT } from './helpers/next-process.ts'
@@ -135,13 +135,18 @@ const givingUpAfter = (times: number): Parameters<typeof untilLaterRouteGrid>[0]
 const failureOf = async (
   server: Parameters<typeof untilLaterRouteGrid>[0],
   options?: Parameters<typeof untilLaterRouteGrid>[2],
+  rewrite: () => void = () => {},
 ): Promise<string> => {
   try {
-    await untilLaterRouteGrid(server, () => {}, options)
+    await untilLaterRouteGrid(server, rewrite, options)
   } catch (error) {
     return (error as Error).message
   }
   return 'it did not fail'
+}
+
+const failingWrite = (): void => {
+  throw new Error('the write failed')
 }
 
 describe('the diagnostic of the pages row', () => {
@@ -173,5 +178,27 @@ describe('the diagnostic of the pages row', () => {
     expect(
       await failureOf(givingUpAfter(2), { rewriteDetail: ' (removing pages/ first)' }),
     ).toContain('The wait wrote the route again 2 times (removing pages/ first).')
+  })
+
+  it('counts a rewrite that threw', async () => {
+    expect(await failureOf(givingUpAfter(1), undefined, failingWrite)).toContain(
+      'The wait wrote the route again once.',
+    )
+  })
+
+  it('calls the rewrite of the row each time the wait writes the route again', async () => {
+    const rewrite = vi.fn()
+    await untilLaterRouteGrid(
+      {
+        untilCss: (_url, _selector, options) => {
+          options?.rewrite?.()
+          options?.rewrite?.()
+          return Promise.resolve()
+        },
+        get: () => Promise.resolve({ status: 200, text: 'nave-grid' }),
+      },
+      rewrite,
+    )
+    expect(rewrite).toHaveBeenCalledTimes(2)
   })
 })

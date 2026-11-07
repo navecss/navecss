@@ -1,9 +1,9 @@
 /**
  * The plugin declares the router directories Next.js reads (`app/`, `pages/`, and both under
  * `src/`) whether or not they exist yet. Both bundlers accept a declaration of a directory that
- * does not exist, and a route created in one later is read. Whether the declaration is what makes
- * Turbopack's dev server run the plugin again is not shown: without it the route's atom shipped in
- * 9 of 9 measured runs.
+ * does not exist, and a route created in one later is read. This Turbopack dev row cannot tell
+ * whether the declaration is needed: without it the route's atom still shipped in 9 of 9
+ * measured runs.
  */
 import { afterEach, describe, expect, it } from 'vitest'
 
