@@ -41,3 +41,11 @@ describe('the path operations written on the text match node:path on POSIX paths
     },
   )
 })
+
+describe('rootEntryOf on a Windows root', () => {
+  it('drops the trailing backslash and joins index.html with a slash', () => {
+    const root = `${String.raw`C:\proj`}\\`
+
+    expect(rootEntryOf(root)).toBe(`${String.raw`C:\proj`}/index.html`)
+  })
+})

@@ -20,6 +20,7 @@ import {
   staticStringOf,
   valueSpecifiersOf,
 } from './vite-ast.ts'
+import { jsxNameOf, namesIn, typeNameOf } from './vite-cx-reference-names.ts'
 import { type CxNames, dynamicKeys, isCxName, referenceTakes } from './vite-cx-take-keys.ts'
 import { analyze, type Reference, type ScopeAnalysis } from './vite-scope.ts'
 
@@ -113,33 +114,11 @@ interface Scan {
    * The names the module's type positions refer to: `typeof name`, `name`, `name.member`.
    */
   readonly typeNames: () => ReadonlySet<string>
-}
-
-/**
- * The leftmost name of a type's reference: `a` of `a`, `a.b` and `a.b.c`.
- */
-function leftmostName(node: AstNode | undefined): string | undefined {
-  let current = node
-  while (current?.type === 'TSQualifiedName') current = nodeAt(current, 'left')
-  return current?.type === 'Identifier' ? (current.name as string) : undefined
-}
-
-/**
- * The names the type positions of `program` refer to: those of `typeof name` and of a type
- * reference.
- */
-function typeNamesIn(program: AstNode): Set<string> {
-  const found = new Set<string>()
-  const stack: AstNode[] = [program]
-  while (stack.length > 0) {
-    const node = stack.pop()!
-    const reference = node.type === 'TSTypeQuery' ? 'exprName' : 'typeName'
-    const isReference = node.type === 'TSTypeQuery' || node.type === 'TSTypeReference'
-    const name = isReference ? leftmostName(nodeAt(node, reference)) : undefined
-    if (name !== undefined) found.add(name)
-    pushAll(stack, childrenOf(node))
-  }
-  return found
+  /**
+   * The names the module's JSX elements are written with, which are uses of a value though
+   * the scope analysis reads no reference there.
+   */
+  readonly jsxNames: () => ReadonlySet<string>
 }
 
 /**
@@ -180,12 +159,14 @@ function passingOf(
 
 /**
  * Whether the import specifier is referenced only in type positions: it has a reference there and
- * none that is a value, so TypeScript leaves it out of the compiled module. An import nothing
- * references at all stays a take.
+ * none that is a value (a JSX element name is one), so TypeScript leaves it out of the compiled
+ * module. An import nothing references at all stays a take.
  */
 function isTypeUseOnly(scan: Scan, source: string, specifier: AstNode): boolean {
   const local = exportNameOf(nodeAt(specifier, 'local'))
-  if (local === undefined || !scan.typeNames().has(local)) return false
+  if (local === undefined || !scan.typeNames().has(local) || scan.jsxNames().has(local)) {
+    return false
+  }
   return usesOf(scan.analysis(), source, specifier).length === 0
 }
 
@@ -267,10 +248,12 @@ export function takesIn(
 ): Taken[] {
   let analysis: ScopeAnalysis | undefined
   let typeNames: ReadonlySet<string> | undefined
+  let jsxNames: ReadonlySet<string> | undefined
   const scan: Scan = {
     ...input,
     analysis: () => (analysis ??= analyze(program)),
-    typeNames: () => (typeNames ??= typeNamesIn(program)),
+    typeNames: () => (typeNames ??= namesIn(program, typeNameOf)),
+    jsxNames: () => (jsxNames ??= namesIn(program, jsxNameOf)),
   }
   const found: Taken[] = []
   const stack: AstNode[] = [program]

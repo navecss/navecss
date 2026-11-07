@@ -93,12 +93,10 @@ function addBelow(found: ExportedNames, below: ExportedNames): void {
 }
 
 /**
- * Adds to `rivals` the names a star exports with a binding that is not Nave's `cx`.
+ * The names a file exports with a binding that is not Nave's `cx`.
  */
-function addRivals(rivals: Set<string>, exported: ExportedNames): void {
-  for (const name of exported.names) {
-    if (!exported.cx.has(name)) rivals.add(name)
-  }
+function rivalsIn(exported: ExportedNames): Set<string> {
+  return new Set([...exported.names].filter((name) => !exported.cx.has(name)))
 }
 
 /**
@@ -134,7 +132,8 @@ async function exportsOf(
 /**
  * The names the stars of the module `program`, other than the ones that reach `reaches`, export
  * with a binding that is not Nave's `cx`: a name two stars export with different bindings is
- * exported by neither.
+ * exported by neither. A specifier that resolves to several files, one per condition, never gives
+ * out more than one of them, so it exports a name with another binding only if every file does.
  */
 export async function rivalsOf(
   ctx: ModuleHost,
@@ -150,9 +149,16 @@ export async function rivalsOf(
   const rivals = new Set<string>()
   const others = starSources(program).filter((text) => !reaches.has(text))
   for (const specifier of others) {
-    const walk = { cxExports, resolutions, seen: new Set<string>() }
     const files = await resolvedFiles(ctx, resolutions, { id, specifier })
-    for (const file of files) addRivals(rivals, await exportsOf(ctx, { file, walk }))
+    const rivalsPerFile: Set<string>[] = []
+    for (const file of files) {
+      const walk = { cxExports, resolutions, seen: new Set<string>() }
+      rivalsPerFile.push(rivalsIn(await exportsOf(ctx, { file, walk })))
+    }
+    const [first = new Set<string>()] = rivalsPerFile
+    for (const name of first) {
+      if (rivalsPerFile.every((found) => found.has(name))) rivals.add(name)
+    }
   }
   return rivals
 }

@@ -29,6 +29,12 @@ type Files = Readonly<Record<string, string>>
 type Entry = () => readonly string[]
 
 /**
+ * Every file a specifier other than the package's name resolves to, as a package resolves to one
+ * file per condition.
+ */
+type Alternatives = Readonly<Record<string, readonly string[]>>
+
+/**
  * The specifiers a file writes: the quoted text after each `from`.
  */
 function specifiersOf(code: string): string[] {
@@ -42,9 +48,14 @@ function specifiersOf(code: string): string[] {
  * A module graph over `files`: `@acme/ui` resolves to the package's entry, a relative specifier to
  * the file it names, and the importers of a file are the files whose specifiers resolve to it.
  */
-function hostOver(files: Files, entryOf: Entry = () => [ENTRY]): ModuleHost {
+function hostOver(
+  files: Files,
+  entryOf: Entry = () => [ENTRY],
+  alternatives: Alternatives = {},
+): ModuleHost {
   const resolveEvery = (source: string, importer: string | undefined): string[] => {
     if (source === '@acme/ui') return [...entryOf()]
+    if (Object.hasOwn(alternatives, source)) return [...alternatives[source]!]
     if (importer === undefined || !source.startsWith('.')) return []
     const file = path.resolve(path.dirname(importer), source)
     return Object.hasOwn(files, file) ? [file] : []
@@ -70,7 +81,7 @@ function hostOver(files: Files, entryOf: Entry = () => [ENTRY]): ModuleHost {
       return Promise.resolve(id === undefined ? null : { id })
     },
     resolveAll: (source, importer) => Promise.resolve(resolveEvery(source, importer)),
-    parseModule: (code) => parseAst(code, { lang: 'ts' }),
+    parseModule: (code) => parseAst(code, { lang: 'tsx' }),
   }
 }
 
@@ -114,14 +125,27 @@ async function judged(
   app: string,
   entryOf: Entry = () => [ENTRY],
 ): Promise<LocatedProblem[]> {
-  const files: Files = {
-    [ENTRY]: entry,
-    [SERVER]: "export { Button } from './button.js'\n",
-    [`${UI}/dist/button.js`]:
-      "import { cx } from './index.js'\nexport const Button = () => cx('flex')\n",
-    [APP]: app,
-  }
-  const outcome = await judgeReexports(hostOver(files, entryOf), CONTEXT, [
+  return judgedOver(
+    {
+      [ENTRY]: entry,
+      [SERVER]: "export { Button } from './button.js'\n",
+      [`${UI}/dist/button.js`]:
+        "import { cx } from './index.js'\nexport const Button = () => cx('flex')\n",
+      [APP]: app,
+    },
+    entryOf,
+  )
+}
+
+/**
+ * What the judgement leaves as errors over the module graph `files`, whose entry is `ENTRY`.
+ */
+async function judgedOver(
+  files: Files,
+  entryOf: Entry = () => [ENTRY],
+  alternatives: Alternatives = {},
+): Promise<LocatedProblem[]> {
+  const outcome = await judgeReexports(hostOver(files, entryOf, alternatives), CONTEXT, [
     { problems: [], suppressed: suppressedIn(files) },
   ])
   return outcome.problems
@@ -228,5 +252,95 @@ describe('AC-nextjs-used-atoms-17: a host-neutral read of who takes a package’
 
       expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
     })
+  })
+})
+
+describe('a JSX element name is a use of the value it names', () => {
+  const CAPITAL =
+    "export { cx as Cx } from '@navecss/core/cx'\nexport { Button } from './button.js'\n"
+  const TYPED = "import { Cx } from '@acme/ui'\nexport type T = typeof Cx\n"
+
+  it.each([
+    ['a typeof and an element', `${TYPED}export const A = <Cx />\n`],
+    ['a typeof and an element with children', `${TYPED}export const A = <Cx>x</Cx>\n`],
+    ['a typeof and the object of a member tag', `${TYPED}export const A = <Cx.Sub />\n`],
+    [
+      'a type reference and an element',
+      "import { Cx } from '@acme/ui'\nlet v: Cx\nexport const A = [v, <Cx />]\n",
+    ],
+    ['an element alone', "import { Cx } from '@acme/ui'\nexport const A = <Cx />\n"],
+  ])('keeps the re-export an error for %s', async (_name, app) => {
+    const problems = await judged(CAPITAL, app)
+
+    expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
+  })
+
+  it('clears the re-export for a type position that is the only use', async () => {
+    expect(await judged(CAPITAL, TYPED)).toEqual([])
+  })
+})
+
+describe('a barrel that stars the module and a package that resolves to a file per condition', () => {
+  const BARREL = `${UI}/dist/barrel.js`
+  const CLIENT = `${UI}/dist/rival-client.js`
+  const SERVER_SIDE = `${UI}/dist/rival-server.js`
+  const MID = `${UI}/dist/mid.js`
+  const EXPORTS_CN = 'export const cn = 1\n'
+  const EXPORTS_OTHER = 'export const other = 1\n'
+  const CALL = "import { cn } from '@acme/ui'\nexport const A = cn('grid')\n"
+
+  const barrel = (rival: Record<string, string>, call: string = CALL): Promise<LocatedProblem[]> =>
+    judgedOver(
+      {
+        [ENTRY]: RENAMED,
+        [BARREL]: "export * from './index.js'\nexport * from '@acme/rival'\n",
+        [APP]: call,
+        ...rival,
+      },
+      () => [BARREL],
+      { '@acme/rival': Object.keys(rival) },
+    )
+
+  it('keeps the call an error when only the file of one condition exports the name', async () => {
+    const problems = await barrel({ [CLIENT]: EXPORTS_OTHER, [SERVER_SIDE]: EXPORTS_CN })
+
+    expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
+  })
+
+  it('keeps the call an error when only the first file exports the name', async () => {
+    const problems = await barrel({ [CLIENT]: EXPORTS_CN, [SERVER_SIDE]: EXPORTS_OTHER })
+
+    expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
+  })
+
+  it('clears the call when every file exports the name with another binding', async () => {
+    expect(await barrel({ [CLIENT]: EXPORTS_CN, [SERVER_SIDE]: EXPORTS_CN })).toEqual([])
+  })
+
+  it('clears the call when the one file exports the name with another binding', async () => {
+    expect(await barrel({ [CLIENT]: EXPORTS_CN })).toEqual([])
+  })
+
+  it('keeps the call an error when no file exports the name', async () => {
+    const problems = await barrel({ [CLIENT]: EXPORTS_OTHER, [SERVER_SIDE]: EXPORTS_OTHER })
+
+    expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
+  })
+
+  it('finds the export of Nave’s cx in the one file of two that a nested star resolves to', async () => {
+    const problems = await judgedOver(
+      {
+        [ENTRY]: RENAMED,
+        [BARREL]: "export * from './index.js'\nexport * from './mid.js'\n",
+        [MID]: "export * from '@acme/inner'\nexport * from './plain.js'\n",
+        [`${UI}/dist/plain.js`]: EXPORTS_CN,
+        [CLIENT]: EXPORTS_CN,
+        [APP]: CALL,
+      },
+      () => [BARREL],
+      { '@acme/inner': [CLIENT, ENTRY] },
+    )
+
+    expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
   })
 })
