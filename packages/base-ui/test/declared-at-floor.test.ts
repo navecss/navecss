@@ -9,7 +9,7 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterAll, describe, expect, it, type TestContext } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
 import { expectedSheet } from './support/feedback-states.ts'
 import { attributeReads } from './support/selector.ts'
@@ -24,9 +24,9 @@ import {
   rowProblems,
 } from './support/w3-base-ui-versions.ts'
 import {
-  firstTokensVersionWithTheHighlight,
   namedTokens,
   publishedTokens,
+  tokensFloorOf,
   undeclaredIn,
 } from './support/w3-tokens-floor.ts'
 
@@ -490,19 +490,6 @@ describe('AC-base-ui-feedback-navigation-38 and AC-base-ui-overlay-completion-28
   })
 })
 
-/**
- * The published tokens release, or a skip that says what unskips the test.
- */
-const publishedOrSkip = (
-  context: TestContext,
-): { declared: ReadonlySet<string>; version: string } => {
-  const published = publishedTokens()
-  if ('reason' in published) {
-    return context.skip(published.reason)
-  }
-  return published
-}
-
 const withdrawn = (name: string): string => `.x { color: var(${name}) }`
 
 const tokensDeclaredByWorkspace = (): Set<string> =>
@@ -517,7 +504,7 @@ const NEW_TOKENS = [
 ]
 
 // The eight names the feedback and navigation block brings to the package (AC-48): the stylesheet
-// names 67 distinct tokens with every draft signed.
+// names 69 distinct tokens with every draft signed.
 const FEEDBACK_TOKENS = [
   '--nave-color-surface-sunken',
   '--nave-font-size-xl',
@@ -530,17 +517,17 @@ const FEEDBACK_TOKENS = [
 ]
 
 describe('AC-base-ui-overlay-completion-31: every Nave token the stylesheet names exists in the workspace and at the new tokens floor', () => {
-  it('names 67 distinct tokens, among them the five this work adds and the eight of the feedback and navigation block', () => {
+  it('names 69 distinct tokens, among them the five this work adds and the eight of the feedback and navigation block', () => {
     const named = namedTokens(readStylesheet())
-    expect(named.size).toBe(67)
+    expect(named.size).toBe(69)
     expect(NEW_TOKENS.filter((name) => !named.has(name))).toEqual([])
     expect(FEEDBACK_TOKENS.filter((name) => !named.has(name))).toEqual([])
   })
 
-  it('names the same 67 in the expected sheet, and the eight are the ones the 59 of the overlay sheet lack (positive control)', () => {
+  it('names the same 69 in the expected sheet, and the eight are the ones the 61 of the overlay sheet lack (positive control)', () => {
     const oracle = namedTokens(expectedSheet())
 
-    expect(oracle.size).toBe(67)
+    expect(oracle.size).toBe(69)
     expect(FEEDBACK_TOKENS.filter((name) => !oracle.has(name))).toEqual([])
   })
 
@@ -548,9 +535,9 @@ describe('AC-base-ui-overlay-completion-31: every Nave token the stylesheet name
     expect(undeclaredIn(readStylesheet(), tokensDeclaredByWorkspace())).toEqual([])
   })
 
-  it('names only tokens the published tokens release declares', (context) => {
-    const published = publishedOrSkip(context)
-    expect(published.version).toBe(firstTokensVersionWithTheHighlight())
+  it('names only tokens the published tokens release declares', () => {
+    const published = publishedTokens()
+    expect(published.version).toBe(tokensFloorOf(readStylesheet()))
     expect(undeclaredIn(readStylesheet(), published.declared)).toEqual([])
   })
 
@@ -564,8 +551,8 @@ describe('AC-base-ui-overlay-completion-31: every Nave token the stylesheet name
     ])
   })
 
-  it('control: the same two planted names are each reported against the published release', (context) => {
-    const published = publishedOrSkip(context)
+  it('control: the same two planted names are each reported against the published release', () => {
+    const published = publishedTokens()
     expect(undeclaredIn(withdrawn('--nave-color-surface-scrim'), published.declared)).toEqual([
       '--nave-color-surface-scrim',
     ])

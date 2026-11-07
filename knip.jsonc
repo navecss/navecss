@@ -43,6 +43,13 @@
       // packages are real, resolved by the project's own `node_modules` lookup up to this one.
       "ignoreDependencies": ["@astrojs/node", "@astrojs/react", "react", "react-dom"],
     },
+    "packages/base-ui": {
+      // The published-floor rows read the release installed under `navecss-tokens-floor` by its
+      // path (`node_modules/navecss-tokens-floor/dist/tokens.css`), never by an import, so knip's
+      // static analysis finds no use of the devDependency that installs it. It is the point of
+      // the alias: the tokens release the peer range names, next to the workspace one.
+      "ignoreDependencies": ["navecss-tokens-floor"],
+    },
     "packages/stylelint-config": {
       // `declared-custom-properties.js` resolves its default stylesheet with
       // `import.meta.resolve('@navecss/tokens/css')`, a runtime string knip's static import

@@ -13,8 +13,8 @@ import { PACKAGE_DIR } from './support/stylesheet.ts'
 
 // The same figure as `COMBINED_SHA256` and `COMBINED_BYTES` in the golden's test: the all-signed
 // sheet without `focusRing`.
-const COMBINED_SHA256 = '345d7d25fc2abe3bfe620cf79a2c1267f41c211ad3cae658fc2f1b9340e66740'
-const COMBINED_BYTES = 37_312
+const COMBINED_SHA256 = '3dc19dfe222e0a2bf5c652257c83af028853d4767b58a4bc4cc30edd048142f0'
+const COMBINED_BYTES = 37_900
 
 const golden = readFileSync(path.join(PACKAGE_DIR, 'test/fixtures/generated/styles.css'), 'utf8')
 
