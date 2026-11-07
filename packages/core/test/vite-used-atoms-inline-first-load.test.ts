@@ -54,10 +54,12 @@ function scriptAfterStylesheet(
 ): { readonly entered: Promise<void>; readonly first: object; readonly last: object } {
   const { promise: released, resolve: release } = Promise.withResolvers<void>()
   const { promise: entered, resolve: enter } = Promise.withResolvers<void>()
-  const timer = setTimeout(release, ms)
+  // The wait for the stylesheet starts when the script is held, not when the server starts.
+  let timer: NodeJS.Timeout | undefined
   const holdAt = (hook: HeldAt, file: string): Promise<void> | undefined => {
     if (hook !== heldAt || !file.endsWith('src/main.ts')) return undefined
     enter()
+    timer ??= setTimeout(release, ms)
     return released
   }
   return {
