@@ -182,7 +182,7 @@ without a new warning, it says what to move, and it always shows how to mark the
 directive if the later value is meant to win:
 
 ```text
-src/panel.css:3:3: @nave: display: grid comes after "hideDesktopUp", so under @media (width >= 75em) display is grid, not none. Before @navecss/core 0.5.0 "hideDesktopUp" won, because an atom's blocks were placed last in the rule. To let "hideDesktopUp" win, move display: grid above the directive. If it is meant to win, mark the directive that names "hideDesktopUp": `@nave /* nave-allow-override: display */ hideDesktopUp;`
+src/panel.css:3:3: @nave: display: grid comes after "hideDesktopUp", so under @media (width >= 75em) display is grid, not none. To let "hideDesktopUp" win, move display: grid above the directive. If it is meant to win, mark the directive that names "hideDesktopUp": `@nave /* nave-allow-override: display */ hideDesktopUp;`
 ```
 
 Where no move clears the warning, as when the later value comes from another atom's

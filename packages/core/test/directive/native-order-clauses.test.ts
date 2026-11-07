@@ -1,12 +1,12 @@
 /**
  * The focus clauses a warning carries where the later declaration takes something from a focus
- * atom, the place a block holds and, when the overrider has a place of its own, that too, and the
- * sentence about the previous release.
+ * atom, the place a block holds and, when the overrider has a place of its own, that too, and
+ * that no warning of any class carries a sentence about an earlier release.
  */
 import { describe, expect, it } from 'vitest'
 
-import { MIGRATION_VERSION } from '../../src/directive/migration.ts'
 import { REVEAL_CLAUSE, RING_CLAUSE } from '../../src/directive/order-focus.ts'
+import { OUTCOME_ROWS } from '../helpers/native-order-outcome-rows.ts'
 import { warningsViaPostcss, warningsViaText } from '../helpers/native-order.ts'
 
 const HOSTS = [
@@ -192,12 +192,14 @@ describe.each(HOSTS)('AC-native-apply-order-28 — focus clauses (%s)', (_name, 
     expect(await run('.x { @nave srOnlyFocusable relative; }')).toEqual([])
   })
 
-  it('puts the clause right after the so sentence and before the previous-release sentence', async () => {
+  it('puts the clause right after the so sentence and before the fix', async () => {
     const [warning] = await run('.x { @nave focusRing; &:focus { outline: none } }')
     const text = warning!.text
 
+    expect(text.indexOf('replaces outline-style')).toBeGreaterThanOrEqual(0)
     expect(text.indexOf(RING_CLAUSE)).toBeGreaterThan(text.indexOf('replaces outline-style'))
-    expect(text.indexOf(RING_CLAUSE)).toBeLessThan(text.indexOf('Before @navecss/core'))
+    expect(text.indexOf(RING_CLAUSE)).toBeLessThan(text.indexOf('To let'))
+    expect(text).toContain(`outline-color. ${RING_CLAUSE} To let "focusRing" win`)
     expect(text).not.toMatch(/marker keeps/)
   })
 })
@@ -267,33 +269,130 @@ describe.each(HOSTS)('AC-native-apply-order-49 — a place of its own (%s)', (_n
   })
 })
 
+/**
+ * Whether `text` carries a sentence about an earlier release: one that opens `Before
+ * @navecss/core`, in any case, or any of the three the opening used to introduce.
+ */
+function hasEarlierReleaseSentence(text: string): boolean {
+  const phrases = [
+    'placed last in the rule',
+    "matched with each selector's own specificity",
+    'they did, because they were left outside',
+  ]
+  return /before @navecss\/core/i.test(text) || phrases.some((phrase) => text.includes(phrase))
+}
+
+const EXTEND = {
+  mA: { declarations: {}, media: { '(width >= 75em)': { declarations: { color: 'red' } } } },
+  mB: { declarations: {}, media: { '(width >= 60em)': { declarations: { color: 'blue' } } } },
+}
+
+/**
+ * One class of warning: inputs that each report at least one, and how many they report in all.
+ */
+const CLASSES: readonly {
+  readonly count: number
+  readonly inputs: readonly string[]
+  readonly name: string
+}[] = [
+  {
+    name: 'R4, an atom block overridden by later content',
+    count: 29,
+    inputs: [
+      ...OUTCOME_ROWS.filter((row) => row.id.startsWith('pair ')).map((row) => row.input),
+      '.x { @nave focusRing; &:focus-visible { outline-color: red } }',
+      '.x { @nave focusRing; &:focus { outline: none } }',
+      '.x { @nave focusRing; &:focus-visible { outline: none } }',
+      '.x { @nave srOnlyFocusable; &:focus-visible { position: fixed } }',
+      '.x { @nave hideDesktopUp; display: grid; }',
+      '.card { @nave wFullPhoneOnly; inline-size: 50%; }',
+    ],
+  },
+  {
+    name: 'R4, an extend atom whose block is the overrider',
+    count: 1,
+    inputs: ['.x { @nave mA mB; }'],
+  },
+  {
+    name: 'R8a, a marker that is stale, empty, not a property or malformed',
+    count: 12,
+    inputs: [
+      '.c { @nave /* nave-allow-override: display */ hideDesktopUp; }',
+      '.c { @nave /* nave-allow-override: */ hideDesktopUp; display: grid; }',
+      '.c { @nave /* nave-allow-override: -- because */ hideDesktopUp; }',
+      '.c { @nave /* nave-allow-override: dispaly */ hideDesktopUp; display: grid; }',
+      '.c { @nave /* nave-allow-override: hideDesktopUp */ hideDesktopUp; display: grid; }',
+      '.c { @nave /* nave-allow-override display */ hideDesktopUp; display: grid; }',
+      '.c { @nave /* nave-allow-overrides: display */ hideDesktopUp; display: grid; }',
+    ],
+  },
+  {
+    name: 'R2b, a pseudo-element rule or a list holding one',
+    count: 10,
+    inputs: [
+      '.p::before { content: "x"; @nave hideDesktopUp; display: block; width: 10px }',
+      '.badge::after { content: ""; @nave focusRing hideDesktopUp; }',
+      '.p::after, .q::marker { @nave hideDesktopUp wFullPhoneOnly; }',
+      '.icon, .link::before { @nave hideDesktopUp; width: 1em; height: 1em; }',
+      '.a, .b::before { @nave hideDesktopUp textLeft; width: 10px }',
+      '.a, .b::before { &:hover { color: blue } @nave flex; }',
+      '.a, .b::before { @nave hideDesktopUp; @nave textLeft; }',
+      '.a, .b::before { @nave hideDesktopUp focusRing; }',
+      '.a, .b::before { &:hover { color: blue } @nave hideDesktopUp textLeft; }',
+    ],
+  },
+  {
+    name: 'R9-wrap, a run wrapped under a list whose selectors differ in specificity',
+    // Eight warnings for seven rows: the one with a `::before` selector also reports its R2b-b1.
+    count: 8,
+    inputs: [
+      '.s1, #x .s2 { @nave hideDesktopUp; color: red }',
+      '.s1, #x .s2 { @nave hideDesktopUp textLeft }',
+      '.s1, #x .s2 { @nave flex; &:hover { color: blue } color: red }',
+      '.s1, #x .s2 { &:hover { color: blue } @nave flex; }',
+      '.s1, #x .s2 { @nave hideDesktopUp; @nave textLeft; }',
+      '.s1, #x .s2, .s3::before { @nave hideDesktopUp; color: red }',
+      '#x .s2, .s1, #y .s3, .s4 .s5 { @nave hideDesktopUp; color: red; }',
+    ],
+  },
+]
+
+describe('AC-native-order-migration-removal-08 — the matcher can tell a sentence from none', () => {
+  it.each([
+    [
+      'S1',
+      'it. Before @navecss/core 0.5.0 "x" won, because an atom\'s blocks were placed last in the rule. To',
+    ],
+    [
+      'S2',
+      "it. Before @navecss/core 0.5.0 they were left outside `& { }`, so they matched with each selector's own specificity. To",
+    ],
+    ['S3', 'it. Before @navecss/core 0.5.0 they did, because they were left outside `& { }`. To'],
+    ['lower case', 'it. before @navecss/core 0.5.0 x'],
+  ])('reds on %s planted in a warning text', (_name, text) => {
+    expect(hasEarlierReleaseSentence(text)).toBe(true)
+  })
+
+  it('does not red on a warning that names no earlier release', () => {
+    expect(
+      hasEarlierReleaseSentence('@nave: "flex" comes after "hideDesktopUp", so it. To let'),
+    ).toBe(false)
+  })
+})
+
 describe.each(HOSTS)(
-  'AC-native-apply-order-32 — the previous-release sentence (%s)',
+  'AC-native-order-migration-removal-08 — no warning of any class carries a sentence about an earlier release (%s)',
   (_name, run) => {
-    const extend = {
-      mA: { declarations: {}, media: { '(width >= 75em)': { declarations: { color: 'red' } } } },
-      mB: { declarations: {}, media: { '(width >= 60em)': { declarations: { color: 'blue' } } } },
-    }
-    const SENTENCE = `Before @navecss/core ${MIGRATION_VERSION} `
+    it.each(CLASSES.map((c) => [c.name, c] as const))('%s', async (_class, probe) => {
+      const texts: string[] = []
+      for (const input of probe.inputs) {
+        const warnings = await run(input, { extend: EXTEND })
+        expect(warnings.length, input).toBeGreaterThan(0)
+        texts.push(...warnings.map((warning) => warning.text))
+      }
 
-    it.each([
-      ['.c { @nave hideDesktopUp flex; }', true],
-      ['.x { @nave hideDesktopUp; display: grid; }', true],
-      ['.x { @nave focusRing; &:focus { outline: none } }', true],
-      ['.card { @nave wFullPhoneOnly; inline-size: 50%; }', true],
-      ['.x { @nave mA mB; }', false],
-    ])('%s carries it: %s', async (css, isCarried) => {
-      const [warning] = await run(css, { extend })
-
-      expect(warning!.text.includes(SENTENCE)).toBe(isCarried)
-    })
-
-    it('puts it after the focus clause and before the fix', async () => {
-      const [warning] = await run('.x { @nave focusRing; &:focus { outline: none } }')
-      const { text } = warning!
-
-      expect(text.indexOf(RING_CLAUSE)).toBeLessThan(text.indexOf(SENTENCE))
-      expect(text.indexOf(SENTENCE)).toBeLessThan(text.indexOf('To let'))
+      expect(texts).toHaveLength(probe.count)
+      expect(texts.filter((text) => hasEarlierReleaseSentence(text))).toEqual([])
     })
   },
 )

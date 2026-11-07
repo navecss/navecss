@@ -148,7 +148,7 @@ describe.each(HOSTS)(
           '.x { @nave mA; @media (width < 30em), (width > 80em) { color: blue } }',
         ),
       ).toEqual([
-        '@nave: the @media (width < 30em), (width > 80em) block comes after "mA", so under @media (width >= 75em) while also under (@media (width < 30em), (width > 80em)), color is blue, not red. Before @navecss/core 0.5.0 "mA" won, because an atom\'s blocks were placed last in the rule. To let "mA" win, move the @media (width < 30em), (width > 80em) block above the directive. If it is meant to win, mark the directive that names "mA": `@nave /* nave-allow-override: color */ mA;`',
+        '@nave: the @media (width < 30em), (width > 80em) block comes after "mA", so under @media (width >= 75em) while also under (@media (width < 30em), (width > 80em)), color is blue, not red. To let "mA" win, move the @media (width < 30em), (width > 80em) block above the directive. If it is meant to win, mark the directive that names "mA": `@nave /* nave-allow-override: color */ mA;`',
       ])
     })
 

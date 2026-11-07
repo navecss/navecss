@@ -1,11 +1,7 @@
 /**
- * The inputs of the first-minor fixtures, with what a real engine is expected to compute for each
- * under the previous release's output and under this one. Lives with the migration module and is
- * removed with it.
- *
- * `migration-old-placement.json` holds what the previous release printed for every `input` here
- * (`scripts/generate-migration-old-placement.ts`); the tests compare it with what the plugin
- * prints now, and the browser test renders both.
+ * The 33 inputs of the native-order outcome rows, with the value a real engine is expected to
+ * compute for each under the output the plugin prints: the 22 pairs, the 4 focus shapes, the 5
+ * shapes and the 2 more. The Chromium test mounts each row's output and reads `now` at `measure`.
  */
 import type { AtomDefinition } from '../../src/atoms.ts'
 
@@ -33,11 +29,7 @@ export interface Measure {
   readonly width: number
 }
 
-export interface MigrationRow {
-  /**
-  Whether the new output is equivalent to the previous release's.
-   */
-  readonly equivalent: boolean
+export interface OutcomeRow {
   readonly extend?: Record<string, AtomDefinition>
   readonly id: string
   readonly input: string
@@ -46,22 +38,7 @@ export interface MigrationRow {
   What the new output computes.
    */
   readonly now: string
-  /**
-  What the previous release's output computes.
-   */
-  readonly was: string
-  /**
-   * What its text expander's output computes where that differs from `was`: it printed a rule
-   * whose last declaration has no semicolon with the moved block glued to that declaration, which
-   * an engine drops.
-   */
-  readonly textWas?: string
 }
-
-/**
-Stands for the element's own `color`, which `currentColor` computes to.
- */
-export const ELEMENT_COLOR = 'the element color'
 
 const HIDERS = [
   ['hidePhoneOnly', 375],
@@ -83,21 +60,18 @@ const FOCUSABLE = '<div class="x" tabindex="0">x</div>'
 const IN_BLOCK_OF_300 = '<div style="position: relative; width: 300px"><div class="x">x</div></div>'
 
 /**
- * The 22 pairs in which the later atom's declaration used to lose to the earlier atom's block.
+ * The 22 pairs in which the later atom's declaration wins over the earlier atom's block.
  */
-function pairRows(): readonly MigrationRow[] {
+function pairRows(): readonly OutcomeRow[] {
   const displays = HIDERS.flatMap(([hider, width]) =>
-    DISPLAYS.map(([atom, value]): MigrationRow => ({
-      equivalent: false,
+    DISPLAYS.map(([atom, value]): OutcomeRow => ({
       id: `pair ${hider} ${atom}`,
       input: `.x { @nave ${hider} ${atom}; }`,
       measure: { focused: false, html: PLAIN, property: 'display', selector: '.x', width },
       now: value,
-      was: 'none',
     })),
   )
-  const widths = ['srOnly', 'srOnlyFocusable'].map((atom): MigrationRow => ({
-    equivalent: false,
+  const widths = ['srOnly', 'srOnlyFocusable'].map((atom): OutcomeRow => ({
     id: `pair wFullPhoneOnly ${atom}`,
     input: `.x { @nave wFullPhoneOnly ${atom}; }`,
     measure: {
@@ -108,41 +82,31 @@ function pairRows(): readonly MigrationRow[] {
       width: 375,
     },
     now: '1px',
-    was: '300px',
   }))
   return [...displays, ...widths]
 }
 
 /**
- * C3, F3, F9 and P4: a nested rule after an atom whose focus block used to be placed after it.
+ * C3, F3, F9 and P4: a nested rule after an atom with a focus block, which the nested rule overrides.
  */
-function focusRows(): readonly MigrationRow[] {
-  const focused = (input: string, property: string, was: string, now: string): MigrationRow => ({
-    equivalent: false,
+function focusRows(): readonly OutcomeRow[] {
+  const focused = (input: string, property: string, now: string): OutcomeRow => ({
     id: input,
     input,
     measure: { focused: true, html: FOCUSABLE, property, selector: '.x', width: 1280 },
     now,
-    was,
   })
   return [
     focused(
       '.x { @nave focusRing; &:focus-visible { outline-color: red } }',
       'outline-color',
-      ELEMENT_COLOR,
       'rgb(255, 0, 0)',
     ),
-    focused('.x { @nave focusRing; &:focus { outline: none } }', 'outline-style', 'solid', 'none'),
-    focused(
-      '.x { @nave focusRing; &:focus-visible { outline: none } }',
-      'outline-style',
-      'solid',
-      'none',
-    ),
+    focused('.x { @nave focusRing; &:focus { outline: none } }', 'outline-style', 'none'),
+    focused('.x { @nave focusRing; &:focus-visible { outline: none } }', 'outline-style', 'none'),
     focused(
       '.x { @nave srOnlyFocusable; &:focus-visible { position: fixed } }',
       'position',
-      'static',
       'fixed',
     ),
   ]
@@ -151,19 +115,13 @@ function focusRows(): readonly MigrationRow[] {
 interface Outcome {
   readonly now: string
   readonly property: string
-  /**
-  What its text expander's output computes where that differs from `was`.
-   */
-  readonly textWas?: string
-  readonly was: string
 }
 
 /**
  * The two mixed-specificity lists, read on the element `.s1.k` that a rival rule also matches.
  */
-function mixedListRows(): readonly MigrationRow[] {
-  const rival = (input: string, { now, property, was }: Outcome): MigrationRow => ({
-    equivalent: false,
+function mixedListRows(): readonly OutcomeRow[] {
+  const rival = (input: string, { now, property }: Outcome): OutcomeRow => ({
     id: input,
     input,
     measure: {
@@ -174,18 +132,15 @@ function mixedListRows(): readonly MigrationRow[] {
       width: 1280,
     },
     now,
-    was,
   })
   return [
     rival('.s1, #x .s2 { @nave hideDesktopUp; color: red } .s1.k { color: blue }', {
       now: 'rgb(255, 0, 0)',
       property: 'color',
-      was: 'rgb(0, 0, 255)',
     }),
     rival('.s1, #x .s2 { @nave hideDesktopUp textLeft } .s1.k { text-align: right }', {
       now: 'left',
       property: 'text-align',
-      was: 'right',
     }),
   ]
 }
@@ -193,13 +148,8 @@ function mixedListRows(): readonly MigrationRow[] {
 /**
  * The three rules with a pseudo-element selector, read on the pseudo-element.
  */
-function pseudoElementRows(): readonly MigrationRow[] {
-  const pseudo = (
-    input: string,
-    selector: string,
-    { now, property, textWas, was }: Outcome,
-  ): MigrationRow => ({
-    equivalent: false,
+function pseudoElementRows(): readonly OutcomeRow[] {
+  const pseudo = (input: string, selector: string, { now, property }: Outcome): OutcomeRow => ({
     id: input,
     input,
     measure: {
@@ -211,26 +161,19 @@ function pseudoElementRows(): readonly MigrationRow[] {
       width: 1280,
     },
     now,
-    was,
-    ...(textWas !== undefined && { textWas }),
   })
   return [
     pseudo('.p::before { content: "x"; @nave hideDesktopUp; display: block; width: 10px }', '.p', {
       now: '10px',
       property: 'width',
-      textWas: '1280px',
-      was: '10px',
     }),
     pseudo('.p::before { content: "x"; &:hover {} @nave flex; width: 10px }', '.p', {
       now: 'flex',
       property: 'display',
-      was: 'inline',
     }),
     pseudo('.a, .b::before { content: "x"; @nave hideDesktopUp; width: 10px }', '.b', {
       now: 'auto',
       property: 'width',
-      textWas: 'auto',
-      was: '10px',
     }),
   ]
 }
@@ -243,19 +186,16 @@ const EXTEND_ATOMS: Record<string, AtomDefinition> = {
 /**
  * The row that stays the same, and the logical variant measured in a block of 400px.
  */
-function otherRows(): readonly MigrationRow[] {
+function otherRows(): readonly OutcomeRow[] {
   return [
     {
-      equivalent: true,
       extend: EXTEND_ATOMS,
       id: 'extend atoms mA mB',
       input: '.x { @nave mA mB; }',
       measure: { focused: false, html: PLAIN, property: 'color', selector: '.x', width: 1280 },
       now: 'rgb(0, 0, 255)',
-      was: 'rgb(0, 0, 255)',
     },
     {
-      equivalent: false,
       id: 'logical variant',
       input: '.card { @nave wFullPhoneOnly; inline-size: 50%; }',
       measure: {
@@ -266,12 +206,11 @@ function otherRows(): readonly MigrationRow[] {
         width: 500,
       },
       now: '200px',
-      was: '400px',
     },
   ]
 }
 
-export const MIGRATION_ROWS: readonly MigrationRow[] = [
+export const OUTCOME_ROWS: readonly OutcomeRow[] = [
   ...pairRows(),
   ...focusRows(),
   ...mixedListRows(),
