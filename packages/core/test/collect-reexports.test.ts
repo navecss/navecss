@@ -280,6 +280,27 @@ describe('a JSX element name is a use of the value it names', () => {
   })
 })
 
+describe('a member tag written on a namespace import takes that member', () => {
+  const CAPITAL =
+    "export { cx as Cx } from '@navecss/core/cx'\nexport { Button } from './button.js'\n"
+  const NAMESPACE = "import * as UI from '@acme/ui'\n"
+
+  it.each([
+    ['a member tag', '<UI.Cx />'],
+    ['a member tag with children', '<UI.Cx>x</UI.Cx>'],
+    ['a member tag of a member', '<UI.Cx.Sub />'],
+    ['a call', "UI.Cx('a')"],
+  ])('keeps the re-export an error for %s', async (_name, use) => {
+    const problems = await judged(CAPITAL, `${NAMESPACE}export const A = ${use}\n`)
+
+    expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
+  })
+
+  it('clears the re-export for a member tag of another member', async () => {
+    expect(await judged(CAPITAL, `${NAMESPACE}export const A = <UI.Menu />\n`)).toEqual([])
+  })
+})
+
 describe('a barrel that stars the module and a package that resolves to a file per condition', () => {
   const BARREL = `${UI}/dist/barrel.js`
   const CLIENT = `${UI}/dist/rival-client.js`
@@ -342,5 +363,61 @@ describe('a barrel that stars the module and a package that resolves to a file p
     )
 
     expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
+  })
+
+  const nested = (inner: Record<string, string>): Promise<LocatedProblem[]> =>
+    judgedOver(
+      {
+        [ENTRY]: RENAMED,
+        [BARREL]: "export * from './index.js'\nexport * from './mid.js'\n",
+        [MID]: "export * from '@acme/inner'\n",
+        [APP]: CALL,
+        ...inner,
+      },
+      () => [BARREL],
+      { '@acme/inner': Object.keys(inner) },
+    )
+
+  it('keeps the call an error when only one file of a nested star exports the name', async () => {
+    const problems = await nested({ [CLIENT]: EXPORTS_CN, [SERVER_SIDE]: EXPORTS_OTHER })
+
+    expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
+  })
+
+  it('clears the call when every file of a nested star exports the name', async () => {
+    expect(await nested({ [CLIENT]: EXPORTS_CN, [SERVER_SIDE]: EXPORTS_CN })).toEqual([])
+  })
+
+  it('clears the call when the one file of a nested star exports the name', async () => {
+    expect(await nested({ [CLIENT]: EXPORTS_CN })).toEqual([])
+  })
+
+  it('clears the call when every file of a specifier stars a module that exports the name', async () => {
+    const shared = `${UI}/dist/shared.js`
+    const problems = await judgedOver(
+      {
+        [ENTRY]: RENAMED,
+        [BARREL]: "export * from './index.js'\nexport * from '@acme/rival'\n",
+        [CLIENT]: "export * from './shared.js'\n",
+        [SERVER_SIDE]: "export * from './shared.js'\n",
+        [shared]: EXPORTS_CN,
+        [APP]: CALL,
+      },
+      () => [BARREL],
+      { '@acme/rival': [CLIENT, SERVER_SIDE] },
+    )
+
+    expect(problems).toEqual([])
+  })
+
+  it('clears the call when every file of a nested star stars a module that exports the name', async () => {
+    const shared = `${UI}/dist/shared.js`
+    const problems = await nested({
+      [CLIENT]: "export * from './shared.js'\n",
+      [SERVER_SIDE]: "export * from './shared.js'\n",
+      [shared]: EXPORTS_CN,
+    })
+
+    expect(problems).toEqual([])
   })
 })

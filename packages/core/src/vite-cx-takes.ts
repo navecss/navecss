@@ -20,7 +20,7 @@ import {
   staticStringOf,
   valueSpecifiersOf,
 } from './vite-ast.ts'
-import { jsxNameOf, namesIn, typeNameOf } from './vite-cx-reference-names.ts'
+import { jsxMembersIn, jsxNameOf, namesIn, typeNameOf } from './vite-cx-reference-names.ts'
 import { type CxNames, dynamicKeys, isCxName, referenceTakes } from './vite-cx-take-keys.ts'
 import { analyze, type Reference, type ScopeAnalysis } from './vite-scope.ts'
 
@@ -119,6 +119,10 @@ interface Scan {
    * the scope analysis reads no reference there.
    */
   readonly jsxNames: () => ReadonlySet<string>
+  /**
+   * The members of a namespace import that the module's JSX member tags read: `Cx` of `<UI.Cx />`.
+   */
+  readonly jsxMembers: (local: string) => ReadonlySet<string>
 }
 
 /**
@@ -171,14 +175,30 @@ function isTypeUseOnly(scan: Scan, source: string, specifier: AstNode): boolean 
 }
 
 /**
+ * What the namespace import that `specifier` declares takes: what its references take, and the
+ * `cx` exports that JSX member tags read off it.
+ */
+function namespaceTakesOf(scan: Scan, source: string, specifier: AstNode): Taken | undefined {
+  const references = referencesTo(scan.analysis(), source, specifier)
+  const taken = namespaceTakes(scan.analysis(), references, scan.names)
+  if (taken?.names.length === 0) return taken
+  const local = exportNameOf(nodeAt(specifier, 'local'))
+  const tags = local === undefined ? [] : [...scan.jsxMembers(local)]
+  const names = new Set([
+    ...(taken?.names ?? []),
+    ...tags.filter((name) => isCxName(scan.names, name)),
+  ])
+  return names.size === 0 ? undefined : { shape: 'namespace', names: [...names] }
+}
+
+/**
  * What an `import` declaration takes.
  */
 function importTakes(node: AstNode, source: string, scan: Scan): Taken[] {
   const found: Taken[] = []
   for (const specifier of valueSpecifiersOf(node)) {
     if (specifier.type === 'ImportNamespaceSpecifier') {
-      const references = referencesTo(scan.analysis(), source, specifier)
-      const taken = namespaceTakes(scan.analysis(), references, scan.names)
+      const taken = namespaceTakesOf(scan, source, specifier)
       const isForward = passingOf(scan.analysis(), source, specifier).isForward
       if (taken) found.push({ ...taken, ...(isForward && { isForward }) })
       continue
@@ -254,6 +274,7 @@ export function takesIn(
     analysis: () => (analysis ??= analyze(program)),
     typeNames: () => (typeNames ??= namesIn(program, typeNameOf)),
     jsxNames: () => (jsxNames ??= namesIn(program, jsxNameOf)),
+    jsxMembers: (local) => jsxMembersIn(program, local),
   }
   const found: Taken[] = []
   const stack: AstNode[] = [program]

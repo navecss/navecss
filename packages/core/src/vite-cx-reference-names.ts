@@ -34,6 +34,31 @@ export function jsxNameOf(node: AstNode): string | undefined {
 }
 
 /**
+ * The member a JSX element name reads off the name `local`: `b` of `<local.b />` and of
+ * `<local.b.c />`.
+ */
+function jsxMemberOf(node: AstNode, local: string): string | undefined {
+  if (node.type !== 'JSXOpeningElement') return undefined
+  let current = nodeAt(node, 'name')
+  while (current?.type === 'JSXMemberExpression') {
+    const object = nodeAt(current, 'object')
+    if (object?.type === 'JSXIdentifier') {
+      const property = nodeAt(current, 'property')
+      return object.name === local ? (property?.name as string | undefined) : undefined
+    }
+    current = object
+  }
+  return undefined
+}
+
+/**
+ * The members of the name `local` that the JSX element names of `program` read.
+ */
+export function jsxMembersIn(program: AstNode, local: string): Set<string> {
+  return namesIn(program, (node) => jsxMemberOf(node, local))
+}
+
+/**
  * The names `nameOf` finds across the nodes of `program`.
  */
 export function namesIn(

@@ -272,6 +272,35 @@ describe('a JSX element name is a use of the value it names', () => {
   })
 })
 
+describe('a member tag written on a namespace import takes that member', () => {
+  const CAPITAL = {
+    'index.js': "export { Menu } from './menu.js'\n",
+    'menu.js': `${IMPORT}export const Menu = (v) => cx('flex', v)\n`,
+    'cx.js': "export { cx as Cx } from '@navecss/core/cx'\n",
+  }
+  const NAMESPACE = "import * as UI from '@acme/ui/cx.js'\n"
+  const onNamespace = (use: string): Promise<Read> => {
+    const code = `${NAMESPACE}export const A = ${use}\n`
+    return app(code, acme(CAPITAL), undefined, { modules: { 'components/App.tsx': code } })
+  }
+
+  it.each([
+    ['a member tag', '<UI.Cx />'],
+    ['a member tag of a member', '<UI.Cx.Sub />'],
+    ['a call', "UI.Cx('a')"],
+  ])('still takes cx in %s', async (_name, use) => {
+    const outcome = await onNamespace(use)
+
+    expect(outcome.report).toBeDefined()
+  })
+
+  it('takes nothing for a member tag of another member', async () => {
+    const outcome = await onNamespace('<UI.Menu />')
+
+    expect(outcome.report).toBeUndefined()
+  })
+})
+
 describe('a barrel that stars the module and a package that resolves to a file per condition', () => {
   const BARREL = "export * from './cn.js'\nexport * from '@acme/rival'\n"
   const EXPORTS_CN = 'export const cn = 1\n'
@@ -308,6 +337,46 @@ describe('a barrel that stars the module and a package that resolves to a file p
     const outcome = await app(CALL, over(rival, extra))
 
     expect(outcome.report).toBeUndefined()
+  })
+
+  describe('through a nested star', () => {
+    const NESTED = "export * from './cn.js'\nexport * from './mid.js'\n"
+    const nested = (rival: Record<string, string>): Packages => ({
+      '@acme/ui': dependency('@acme/ui', {
+        'index.js': NESTED,
+        'cn.js': CN,
+        'mid.js': "export * from '@acme/rival'\n",
+      }),
+      '@acme/rival': dependency('@acme/rival', rival, BY_ENVIRONMENT),
+    })
+
+    it('still takes cx when only one file exports the name', async () => {
+      const outcome = await app(
+        CALL,
+        nested({ 'client.js': EXPORTS_CN, 'server.js': EXPORTS_OTHER }),
+      )
+
+      expect(outcome.report).toBeDefined()
+    })
+
+    it('takes nothing when every file exports the name with another binding', async () => {
+      const outcome = await app(CALL, nested({ 'client.js': EXPORTS_CN, 'server.js': EXPORTS_CN }))
+
+      expect(outcome.report).toBeUndefined()
+    })
+
+    it('takes nothing when every file stars a module that exports the name', async () => {
+      const outcome = await app(
+        CALL,
+        nested({
+          'client.js': "export * from './shared.js'\n",
+          'server.js': "export * from './shared.js'\n",
+          'shared.js': EXPORTS_CN,
+        }),
+      )
+
+      expect(outcome.report).toBeUndefined()
+    })
   })
 })
 

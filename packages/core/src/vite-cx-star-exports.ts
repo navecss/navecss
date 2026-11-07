@@ -83,12 +83,20 @@ function unreadProgram(
 }
 
 /**
- * Adds to `found` the names a star exports, the `cx` ones included.
+ * Adds to `found` the names the files one star specifier resolves to export, the `cx` ones included.
+ * The specifier gives out one of its files per condition, so a `cx` export of any file is added, and
+ * any other name only when every file exports it.
  */
-function addBelow(found: ExportedNames, below: ExportedNames): void {
-  for (const name of below.names) {
-    found.names.add(name)
-    if (below.cx.has(name)) found.cx.add(name)
+function addBelow(found: ExportedNames, belows: readonly ExportedNames[]): void {
+  for (const below of belows) {
+    for (const name of below.cx) {
+      found.names.add(name)
+      found.cx.add(name)
+    }
+  }
+  const first = belows.at(0)?.names ?? new Set<string>()
+  for (const name of first) {
+    if (belows.every((below) => below.names.has(name))) found.names.add(name)
   }
 }
 
@@ -109,7 +117,13 @@ async function addStars(
   const { found, file, program, walk } = input
   for (const specifier of starSources(program)) {
     const stars = await resolvedFiles(ctx, walk.resolutions, { id: file, specifier })
-    for (const star of stars) addBelow(found, await exportsOf(ctx, { file: star, walk }))
+    const belows: ExportedNames[] = []
+    for (const star of stars) {
+      // Each of several files reads on its own, so a module they share is read under each.
+      const branch = stars.length > 1 ? { ...walk, seen: new Set(walk.seen) } : walk
+      belows.push(await exportsOf(ctx, { file: star, walk: branch }))
+    }
+    addBelow(found, belows)
   }
 }
 
