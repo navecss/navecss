@@ -325,8 +325,10 @@ describe('watchFiles', () => {
     const module = path.resolve(import.meta.dirname, '../src/expand-watch.ts')
     const script = `import { watchFiles } from ${JSON.stringify(module)}; try { watchFiles([${JSON.stringify(file('exists/a.css'))}, ${JSON.stringify(file('missing/b.css'))}], () => {}) } catch {}`
 
+    // A process that leaks a watcher never ends, so the limit only has to be longer than the
+    // slowest start of a correct one: on a machine that is not keeping up, ten seconds was not.
     const ran = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-      timeout: 10_000,
+      timeout: 120_000,
     })
 
     expect(ran.signal, 'the process was still alive: a watcher was left open').toBeNull()
