@@ -234,7 +234,7 @@ describe('AC-secondary-action-states-04: the six conditions are held by the ship
 const pseudoKeys = (unsigned: readonly Draft[]): string[] =>
   Object.keys(atomsFor(unsigned).baseUiButton?.pseudos ?? {})
 
-const secondarySpecificity = (key: string, className: string): number[] =>
+const secondarySpecificity = (key: string, className: string): readonly number[] =>
   selectorSpecificity(key.replaceAll('&', () => `:is(.${className})`))
 
 describe('AC-secondary-action-states-09: the Button gains exactly the two keys, last, in every signature state', () => {
