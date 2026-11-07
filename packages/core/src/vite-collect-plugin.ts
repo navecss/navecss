@@ -5,7 +5,9 @@
  * returns each module with its calls turned into the strings they return (`vite-rewrite-*.ts`);
  * in the dev server it changes nothing.
  */
+import type { Prepared } from './vite-listed-takes.ts'
 import type { ResolvedServerImport, ServerImport } from './vite-server-takes.ts'
+import type { TakesContext } from './vite-takes-host.ts'
 import type {
   BundleContext,
   BundleEntry,
@@ -20,20 +22,19 @@ import type { UsedContext } from './vite-used.ts'
 import { checkBundle } from './vite-bundle.ts'
 import { isMentioningAtoms, recordModule } from './vite-collect-module.ts'
 import { failDevModule, problemsOf } from './vite-collect-problems.ts'
-import { isUnreadStylesheet } from './vite-css-id.ts'
+import { filePathOf, isUnreadStylesheet } from './vite-css-id.ts'
 import { checkCxImporters } from './vite-cx-importers.ts'
 import { declaredImporterError } from './vite-cx-module-importers.ts'
 import { forgetDeclared } from './vite-cx-modules.ts'
-import { withoutEchoes } from './vite-declared-echoes.ts'
-import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
 import { devServing } from './vite-dev.ts'
 import { checkServerInvocation } from './vite-emitted.ts'
-import { decideReexports, type Prepared, prepareReexports } from './vite-listed-takes.ts'
+import { decideReexports } from './vite-listed-takes.ts'
 import { atomsWrittenIn } from './vite-literal-classes.ts'
 import { judgeAfterLastEnvironment } from './vite-markup.ts'
-import { isNaveOwn } from './vite-module-kind.ts'
+import { isNaveOwn, moduleLabel, packageNameOf } from './vite-module-kind.ts'
 import { assertOptions } from './vite-options.ts'
 import { checkEnvironmentOrder } from './vite-order.ts'
+import { judgeReexports } from './vite-reexport-judge.ts'
 import { applyEdits } from './vite-rewrite-edit.ts'
 import {
   graphOf,
@@ -46,7 +47,7 @@ import {
 } from './vite-server-takes.ts'
 import { recordsOf } from './vite-state.ts'
 import { noteClientEnded, noteServerExternals } from './vite-untransformed.ts'
-import { isSecondHop, withoutRemoved } from './vite-used-package-lines.ts'
+import { withoutRemoved } from './vite-used-package-lines.ts'
 import { buildReport } from './vite-used-report.ts'
 import { isUsed, ownAtomNames } from './vite-used.ts'
 import { forgetWriters } from './vite-writers.ts'
@@ -89,6 +90,21 @@ export function isReadable(context: UsedContext, id: string): boolean {
 }
 
 /**
+ * What the read of the takes needs of the build: the root and the options, and the lookups that
+ * need the file system.
+ */
+function takesContextOf(context: UsedContext): TakesContext {
+  return {
+    root: context.root,
+    rootName: "Vite's root",
+    options: context.options,
+    state: context.state,
+    packageOf: (id) => packageNameOf(filePathOf(id), context.packageNames),
+    labelOf: (id) => moduleLabel(context.root, id),
+  }
+}
+
+/**
  * The problems the build fails with. Those of a package `keepFor` lists are only the ones its
  * listing does not stand in for: a listed module of the package that exports a `cx` the build does
  * not follow, and a `cx` export that a module the consumer can change takes (`vite-listed-takes.ts`).
@@ -100,27 +116,16 @@ async function problemsOfBuild(
   serverImports: readonly ResolvedServerImport[],
 ): Promise<{ prepared: Prepared[]; problems: LocatedProblem[] }> {
   const records = recordsOf(context.state, ctx.environment.name)
-  const kept = await withClearingSpecifiers(
+  return await judgeReexports(
     ctx,
-    context,
-    withoutEchoes(
-      records.map((record) => ({
-        onlyVia: record.onlyVia,
-        problems: [
-          ...problemsOf(record, context),
-          ...record.suppressed.filter((problem) => problem.kind === 'declared'),
-        ],
-      })),
-    ),
+    takesContextOf(context),
+    records.map((record) => ({
+      onlyVia: record.onlyVia,
+      problems: problemsOf(record, context),
+      suppressed: record.suppressed,
+    })),
+    serverImports,
   )
-  // A dependency's re-export of a listed module's `cx` is judged by what takes it, listed or not.
-  const standingIn = [
-    ...records.flatMap((record) => record.suppressed),
-    ...kept.filter((problem) => isSecondHop(problem)),
-  ]
-  const rest = kept.filter((problem) => !isSecondHop(problem))
-  const prepared = await prepareReexports(ctx, context, standingIn)
-  return { problems: [...rest, ...decideReexports(prepared, serverImports)], prepared }
 }
 
 /**

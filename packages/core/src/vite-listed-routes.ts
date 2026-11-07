@@ -7,16 +7,14 @@ import type { Take, Taken } from './vite-cx-takes.ts'
  * counts in neither; what else a dependency does with the module is a call.
  */
 import type { ResolvedServerImport } from './vite-server-takes.ts'
-import type { RenderContext } from './vite-types.ts'
-import type { UsedContext } from './vite-used.ts'
+import type { ModuleHost, TakesContext } from './vite-takes-host.ts'
 
 import { pushAll } from './vite-ast.ts'
-import { filePathOf } from './vite-css-id.ts'
 import { fileOf } from './vite-cx-modules.ts'
 import { takesIn, UNREADABLE } from './vite-cx-takes.ts'
 import { importersOf } from './vite-dependency-reexports.ts'
 import { type Holder, reachingSpecifiers } from './vite-listed-holders.ts'
-import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
+import { isDependencyId } from './vite-module-id.ts'
 import { compareText } from './vite-problems.ts'
 
 /**
@@ -25,7 +23,7 @@ import { compareText } from './vite-problems.ts'
  * it names the module by no specifier the build resolves to it (a `require()`).
  */
 async function takenBy(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: {
     readonly file: string
     readonly id: string
@@ -77,7 +75,7 @@ export interface Routes {
  * module is one a `cxModules` entry clears and the dependency is not the package itself.
  */
 async function isCounted(
-  context: UsedContext,
+  context: TakesContext,
   input: {
     readonly importer: string
     readonly isEntry: boolean
@@ -88,15 +86,15 @@ async function isCounted(
   const { importer, isEntry, pkg, wantCalls } = input
   if (wantCalls || !isDependencyId(importer)) return true
   if (!isEntry) return false
-  return (await packageNameOf(filePathOf(importer), context.packageNames)) !== pkg
+  return (await context.packageOf(importer)) !== pkg
 }
 
 /**
  * The takes of the `cx` exports of `holder` by one importer, in the two routes (see `takesFrom`).
  */
 async function routesOf(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   input: {
     readonly holder: Holder
     readonly importer: string
@@ -107,7 +105,7 @@ async function routesOf(
 ): Promise<Routes> {
   const { holder, importer, isEntry, resolutions, wantCalls } = input
   const isDependency = isDependencyId(importer)
-  const taker = moduleLabel(context.root, importer)
+  const taker = context.labelOf(importer)
   const taken = await takenBy(ctx, {
     file: fileOf(holder.id),
     id: importer,
@@ -163,8 +161,8 @@ function serverTakesOf(found: ResolvedServerImport, holder: Holder): Take[] {
  * only re-export are followed, not counted; its other takes are `calls` when `wantCalls` is set.
  */
 export async function takesFrom(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   input: {
     readonly holder: Holder
     readonly isEntry: boolean

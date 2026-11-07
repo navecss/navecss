@@ -137,6 +137,7 @@ export function emptyGraph(): Graph {
     stylesheets: new Set(),
     unreadStylesheets: new Set(),
     edges: new Map(),
+    inModeEdges: new Map(),
     dynamicFiles: new Set(),
     pagesDynamicPackages: new Set(),
   }

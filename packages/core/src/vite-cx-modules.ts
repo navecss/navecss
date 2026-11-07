@@ -10,14 +10,22 @@
  * graph's, so an import through a spelling the text test cannot see fails the build instead of
  * shipping every call made through it with no rule.
  */
-import path from 'node:path'
-
 import type { RootState } from './vite-state.ts'
-import type { UsedContext } from './vite-used.ts'
 
 import { CX_SOURCE } from './vite-collect.ts'
 import { filePathOf } from './vite-css-id.ts'
 import { textTestOf } from './vite-cx-text-test.ts'
+import { baseNameOf, directoryOf, extensionOf, rootEntryOf, stemOf } from './vite-path-text.ts'
+
+/**
+ * What the listed modules are resolved from: the project root, the list, and where the answer is
+ * kept for the rest of the environment's build.
+ */
+export interface DeclaredContext {
+  readonly root: string
+  readonly options: { readonly cxModules: readonly string[] }
+  readonly state: { readonly declared: Map<string, Promise<DeclaredModules>> }
+}
 
 export interface Resolver {
   resolve?(source: string, importer?: string): Promise<{ readonly id: string } | null>
@@ -71,8 +79,8 @@ export function fileOf(id: string): string {
  * The names a specifier may end in to name `file`.
  */
 function namesOf(file: string): string[] {
-  const name = path.basename(file, path.extname(file))
-  return name === 'index' ? [name, path.basename(path.dirname(file))] : [name]
+  const name = stemOf(file)
+  return name === 'index' ? [name, baseNameOf(directoryOf(file))] : [name]
 }
 
 /**
@@ -93,7 +101,7 @@ export function entriesNaming(declared: DeclaredModules, id: string): string[] {
  * held until the environment starts building again. `undefined` when none are listed.
  */
 export async function declaredModulesFor(
-  context: UsedContext,
+  context: DeclaredContext,
   resolver: Resolver,
   environment: string,
 ): Promise<DeclaredModules | undefined> {
@@ -125,8 +133,11 @@ export async function resolveOrNull(
  * Resolves every entry from the project root with the host's resolver, leaving out an entry that
  * is, or resolves to, Nave's own `cx` module.
  */
-async function resolveEntries(context: UsedContext, resolver: Resolver): Promise<DeclaredModules> {
-  const from = path.join(context.root, 'index.html')
+async function resolveEntries(
+  context: DeclaredContext,
+  resolver: Resolver,
+): Promise<DeclaredModules> {
+  const from = rootEntryOf(context.root)
   const nave = await resolveOrNull(resolver, CX_SOURCE, from)
   const naveFile = nave === undefined ? undefined : fileOf(nave.id)
   const resolved = await Promise.all(
@@ -189,7 +200,7 @@ function lastSegmentOf(specifier: string): string {
 export function isNamingListed(specifier: string, declared: DeclaredModules): boolean {
   const segment = lastSegmentOf(specifier)
   if (declared.names.has(segment)) return true
-  const extension = path.extname(segment)
+  const extension = extensionOf(segment)
   return extension !== '' && declared.names.has(segment.slice(0, -extension.length))
 }
 

@@ -5,7 +5,6 @@
  * each printed remedy is followed and the plugin run again. The lines' bytes belong to the docs
  * author, so the rows assert what a line names and what it leaves out.
  */
-/* eslint-disable vitest/no-disabled-tests -- the skipped rows are the ones for a part the plugin does not do yet; each is explained where it is skipped */
 import { describe, expect, it } from 'vitest'
 
 import type { NaveOptions } from '../../src/options.ts'
@@ -21,13 +20,6 @@ import {
   useUsedAtoms,
 } from '../helpers/used-atoms-fixture.ts'
 import { BARREL, IMPORT } from '../helpers/used-atoms-rows.ts'
-
-/**
- * Rows for a part the plugin does not do yet: which application files take a `cx` that a package
- * re-exports, so that a package exporting `cx` under another name, as a default or as a namespace,
- * fails the build for the files that take it, and the report offers `cxModules` for a package whose
- * entry re-exports it. They stay in the file, as `it.skip`, until that part is built.
- */
 
 registerIsolation()
 const { read } = useUsedAtoms()
@@ -120,7 +112,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a design-system package tha
     expect(outcome.atoms).toEqual(sorted(['flex', 'grid']))
   })
 
-  it.skip('without the entry the build fails in the package’s index, printing the cxModules line and no keepFor line', async () => {
+  it('without the entry the build fails in the package’s index, printing the cxModules line and no keepFor line', async () => {
     const outcome = await read(scenario(ui()))
 
     expect(outcome.first).toMatch(/^1 problem in 1 file: /u)
@@ -131,7 +123,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a design-system package tha
     expect(outcome.text).not.toContain('keepFor')
   })
 
-  it.skip('the printed line, pasted, builds green', async () => {
+  it('the printed line, pasted, builds green', async () => {
     const first = await read(scenario(ui()))
     const pasted = await read(scenario(ui(), { cxModules: printedList(first.text) ?? [] }))
 
@@ -158,7 +150,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a design-system package tha
     expect(outcome.text).not.toContain("cxModules: ['@acme/ui']")
   })
 
-  it.skip('a re-export reached through a subpath prints that subpath, and pasting it builds green', async () => {
+  it('a re-export reached through a subpath prints that subpath, and pasting it builds green', async () => {
     const subpath = {
       '@acme/ui': { 'index.js': "export const Button = 'b'\n", 'cx.js': BARREL },
     }
@@ -202,7 +194,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a design-system package tha
 })
 
 describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, keepFor never clears a problem the consumer’s own cxModules can clear', () => {
-  it.skip('row 1: a re-export the application imports through a subpath fails beside keepFor, and its printed array pasted ships flex and block', async () => {
+  it('row 1: a re-export the application imports through a subpath fails beside keepFor, and its printed array pasted ships flex and block', async () => {
     const packages = {
       '@acme/ui': {
         'index.js': MENU_ENTRY,
@@ -226,7 +218,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, keepFor never clears a prob
     expect(pasted.atoms).toEqual(sorted(['flex', 'block']))
   })
 
-  it.skip('row 2: the package’s entry re-exports cx and the application takes it from the package; the printed array pasted ships flex and grid', async () => {
+  it('row 2: the package’s entry re-exports cx and the application takes it from the package; the printed array pasted ships flex and grid', async () => {
     const packages = {
       '@acme/ui': {
         'index.js': "export { cx } from '@navecss/core/cx'\nexport { Button } from './button.js'\n",
@@ -248,7 +240,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, keepFor never clears a prob
     expect(pasted.atoms).toEqual(sorted(['flex', 'grid']))
   })
 
-  it.skip('row 3: an entry naming a module that exports the package’s own join function fails telling the consumer to remove the entry, and is green without it', async () => {
+  it('row 3: an entry naming a module that exports the package’s own join function fails telling the consumer to remove the entry, and is green without it', async () => {
     const packages = {
       '@acme/ui': {
         'index.js':
@@ -268,8 +260,14 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, keepFor never clears a prob
     expect(followed.atoms).toEqual(['flex'])
   })
 
-  it.skip('row 4: a re-export under another name prints the package’s keepFor line and no cxModules line, with the reader clause', async () => {
-    const packages = { '@acme/ui': withMenu('cn.js', CN) }
+  it('row 4: a re-export under another name prints the package’s keepFor line and no cxModules line, with the reader clause', async () => {
+    // The package makes no call of its own, so the re-export is the one problem the build finds.
+    const packages = {
+      '@acme/ui': {
+        ...withMenu('cn.js', CN),
+        'menu.js': "import './cn.js'\nexport const Menu = 'm'\n",
+      },
+    }
     const code =
       "import { cn } from '@acme/ui/cn.js'\nimport { Menu } from '@acme/ui'\nexport const A = [Menu, cn('block')]\n"
     const first = await run(code, packages)
@@ -392,7 +390,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
     ['one atom', KEEP_FLEX],
     ['an empty list', KEEP_NONE],
   ] as const)('row 5 under keepFor with %s', (_name, keepFor) => {
-    it.skip.each(forms)(
+    it.each(forms)(
       'for $name the build fails with the line that names the file and the name, no cxModules line, and importing cx from Nave builds green',
       async ({ text, app: usage, takes }) => {
         const packages = { '@acme/ui': withMenu('f.js', text) }
@@ -411,7 +409,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
     )
   })
 
-  it.skip('row 6: row 4 with only the keepFor line pasted and the import unchanged fails with the line that names the application file', async () => {
+  it('row 6: row 4 with only the keepFor line pasted and the import unchanged fails with the line that names the application file', async () => {
     const packages = { '@acme/ui': withMenu('cn.js', CN) }
     const code =
       "import { cn } from '@acme/ui/cn.js'\nimport { Menu } from '@acme/ui'\nexport const A = [Menu, cn('block')]\n"
@@ -442,7 +440,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
       expect(outcome.atoms).toEqual(['flex'])
     })
 
-    it.skip('is green for a namespace import read only as ui.Menu, and fails once ui.cn is called', async () => {
+    it('is green for a namespace import read only as ui.Menu, and fails once ui.cn is called', async () => {
       const green = await run("import * as ui from '@acme/ui'\nexport const A = ui.Menu\n", entry, {
         keepFor: KEEP_FLEX,
       })
@@ -461,7 +459,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
     })
   })
 
-  it.skip('row 8: the withdrawn cost: an entry that re-exports cx is cleared when the application takes only Button; with the application taking cx it still fails with cxModules', async () => {
+  it('row 8: the withdrawn cost: an entry that re-exports cx is cleared when the application takes only Button; with the application taking cx it still fails with cxModules', async () => {
     const packages = {
       '@acme/ui': {
         'index.js': "export { cx } from '@navecss/core/cx'\nexport { Button } from './button.js'\n",
@@ -507,7 +505,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
     const code =
       "import { Menu } from '@acme/ui'\nimport { cn } from '@other/ui'\nexport const A = [Menu, cn('block')]\n"
 
-    it.skip.each([
+    it.each([
       ['the forwarding package is not listed', KEEP_FLEX],
       ['the forwarding package is listed with no atom', { ...KEEP_FLEX, '@other/ui': [] }],
     ] as const)(
@@ -528,11 +526,12 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
       const unlisted = await run(code, packages, { keepFor: KEEP_FLEX })
       const listed = await run(code, packages, { keepFor: { ...KEEP_FLEX, '@other/ui': [] } })
 
+      expect(unlisted.text).toContain('components/App.ts (cn)')
       expect(listed.text).toBe(unlisted.text)
     })
   })
 
-  it.skip('row 11: a dependency that calls and forwards fails with the line that names the application file, and is green once cx comes from Nave', async () => {
+  it('row 11: a dependency that calls and forwards fails with the line that names the application file, and is green once cx comes from Nave', async () => {
     const packages = {
       '@acme/ui': withMenu('f.js', CN),
       '@other/ui': {
@@ -558,7 +557,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
     expect(followed.atoms).toEqual(sorted(['flex', 'grid', 'block']))
   })
 
-  it.skip('row 12: two forwarding hops across packages fail with the line that names the application file', async () => {
+  it('row 12: two forwarding hops across packages fail with the line that names the application file', async () => {
     const packages = {
       '@acme/ui': withMenu('f.js', CN),
       '@other/ui': { 'index.js': "export { cn } from '@acme/ui/f.js'\n" },
@@ -581,7 +580,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
       '@acme/ui': { 'index.js': `${MENU_ENTRY}${CN}`, 'menu.js': MENU_JS },
     }
 
-    it.skip('is green when the application reads Menu from the import(), and fails once ns.cn is called', async () => {
+    it('is green when the application reads Menu from the import(), and fails once ns.cn is called', async () => {
       const green = await run(
         "export const A = async () => { const ns = await import('@acme/ui'); return ns.Menu }\n",
         packages,
@@ -603,7 +602,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
     })
   })
 
-  it.skip('row 14: a workspace package that imports a re-export through a # mapping fails, and does not say that no cxModules entry clears it; the entries it names, pasted, build green', async () => {
+  it('row 14: a workspace package that imports a re-export through a # mapping fails, and does not say that no cxModules entry clears it; the entries it names, pasted, build green', async () => {
     const packages = { '@acme/ui': withMenu('f.js', BARREL) }
     const workspace = {
       'components/ws/package.json': nave('@acme/ws', {
@@ -617,7 +616,8 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
     const first = await run(code, packages, { keepFor: KEEP_FLEX }, workspace)
 
     expect(first.first).toMatch(/^\d+ problems? in /u)
-    expect(first.text).not.toContain('no cxModules entry')
+    expect(first.text).toContain('in components/ws/index.js (cx)')
+    expect(first.text).not.toMatch(/no cxModules entry clears/iu)
     const pasted = await run(
       code,
       packages,
@@ -642,7 +642,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a forward is never a take o
     '@other/ui': { 'index.js': `${entry}${extra.join('')}` },
   })
 
-  it.skip.each([
+  it.each([
     ['listed with no atom', { ...KEEP_FLEX, '@other/ui': [] }],
     ['not listed', KEEP_FLEX],
   ] as const)(
@@ -664,7 +664,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a forward is never a take o
     },
   )
 
-  it.skip('row 16: the same with the origin a subpath', async () => {
+  it('row 16: the same with the origin a subpath', async () => {
     const packages = {
       '@acme/ui': { 'index.js': MENU_ENTRY, 'menu.js': MENU_JS, 'cx.js': BARREL },
       '@other/ui': { 'index.js': "export { cx } from '@acme/ui/cx.js'\n" },
@@ -679,7 +679,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a forward is never a take o
     expect(first.text).not.toMatch(/cxModules: \[/u)
   })
 
-  it.skip('row 17: a dependency that calls through the origin stays on route (i), and its printed cxModules array pasted is green', async () => {
+  it('row 17: a dependency that calls through the origin stays on route (i), and its printed cxModules array pasted is green', async () => {
     const packages = {
       ...FX1,
       '@kit/ui': {
@@ -710,7 +710,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a forward is never a take o
     expect(outcome.atoms).toEqual(['flex'])
   })
 
-  it.skip.each([
+  it.each([
     ['listed with no atom', { ...KEEP_FLEX, '@other/ui': [] }],
     ['not listed', KEEP_FLEX],
   ] as const)(
@@ -738,7 +738,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a forward is never a take o
     },
   )
 
-  it.skip('row 20: row 19 with the application importing only Tag is green with no message', async () => {
+  it('row 20: row 19 with the application importing only Tag is green with no message', async () => {
     const packages = forwarding("export { cx } from '@acme/ui'\n", "export const Tag = 'tag'\n")
     const outcome = await run(
       "import { Menu, cx as k } from '@acme/ui'\nimport { Tag } from '@other/ui'\nexport const A = [Menu, k('grid'), Tag]\n",
@@ -751,7 +751,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a forward is never a take o
     expect(outcome.atoms).toEqual(sorted(['flex', 'grid']))
   })
 
-  it.skip('row 21: a dependency calling through the forward fails with one problem in the forwarding package, its keepFor line, and it does not say the forwarder makes calls', async () => {
+  it('row 21: a dependency calling through the forward fails with one problem in the forwarding package, its keepFor line, and it does not say the forwarder makes calls', async () => {
     const packages = {
       ...forwarding("export { cx } from '@acme/ui'\n"),
       '@third/ui': {

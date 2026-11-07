@@ -78,17 +78,23 @@ function clausesOf(takes: readonly Take[]): { files: string; listed: string; who
  * The line for the takes of a listed package's `cx` exports that only an application module can
  * end, by importing `cx` from Nave instead: a take through a forward (a module of the package or of
  * another dependency that only re-exports the export), a take of a module with no clearing
- * specifier (it gives `cx` out under another name, or no specifier resolving from Vite's root
- * reaches it), and a take the build cannot read. The package's `keepFor` entry stands in only for
+ * specifier (it gives `cx` out under another name, or no specifier resolving from the root the
+ * host names reaches it), and a take the build cannot read. The package's `keepFor` entry stands in only for
  * the package's own calls, and the package is already listed, so the line offers neither that entry
  * nor a `cxModules` one, and says why it prints no `cxModules` entry. `hasPackageFix` is whether a
  * module behind the takes gives `cx` out under another name or is reached through a forward, the
- * cases where a module upstream has a lasting fix to make.
+ * cases where a module upstream has a lasting fix to make; `rootName` is how the host names the
+ * root a specifier resolves from.
  */
-export function takenLine(pkg: string, takes: readonly Take[], hasPackageFix: boolean): string {
+export function takenLine(
+  pkg: string,
+  takes: readonly Take[],
+  input: { readonly hasPackageFix: boolean; readonly rootName: string },
+): string {
   const { files, listed, whole } = clausesOf(takes)
+  const { hasPackageFix, rootName } = input
   const fix = hasPackageFix ? FIX : ''
-  return `${pkg} re-exports cx, and your code takes that cx, from the package or through another package that re-exports it, in ${listed}. The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}. The build prints no cxModules entry for this, since it found none of these takes made, by an import it can read and a specifier that resolves from Vite's root, from a module that re-exports cx from @navecss/core/cx itself and only under the name cx. Once your code makes none of these takes, the keepFor entry clears this.${fix}`
+  return `${pkg} re-exports cx, and your code takes that cx, from the package or through another package that re-exports it, in ${listed}. The build does not read calls made through what your code takes there, and the keepFor entry stands in only for the package's own calls: ${files}, import cx from @navecss/core/cx instead and call cx in its place${whole}. The build prints no cxModules entry for this, since it found none of these takes made, by an import it can read and a specifier that resolves from ${rootName}, from a module that re-exports cx from @navecss/core/cx itself and only under the name cx. Once your code makes none of these takes, the keepFor entry clears this.${fix}`
 }
 
 /**

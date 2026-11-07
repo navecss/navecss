@@ -113,7 +113,7 @@ describe('AC-nextjs-used-atoms-08 — the reader is one public, parser-free subp
     expect(collect.resolveUsedOptions).toBeTypeOf('function')
   })
 
-  it('exports exactly the reader, the report, its cause, the option validation, the layer pruner and the helpers they share', async () => {
+  it('exports exactly the reader, the report, its cause, the option validation, the layer pruner, the judgement of re-exports and the helpers they share', async () => {
     const collect = (await import(pathToFileURL(path.join(DIST, 'collect.js')).href)) as Record<
       string,
       unknown
@@ -124,6 +124,7 @@ describe('AC-nextjs-used-atoms-08 — the reader is one public, parser-free subp
       'assertOptions',
       'buildReport',
       'inspectAtomicLayer',
+      'judgeReexports',
       'keptAtoms',
       'pruneAtomicLayer',
       'readModule',
