@@ -116,7 +116,8 @@ describe('AC-native-apply-order-38: "Order inside a rule" sits in the @nave dire
 
     expect(between(readme)).toContain('A directive written inside a nested rule')
     expect(isLeftover(readme)).toBe(false)
-    expect(isLeftover(pinned)).toBe(true)
+    expect(isLeftover(pinned.replace('second kind', 'x'))).toBe(true)
+    expect(isLeftover(pinned.replace('earlier releases', 'x'))).toBe(true)
   })
 
   it('shows the marker with an example the plugin accepts without a warning', async () => {

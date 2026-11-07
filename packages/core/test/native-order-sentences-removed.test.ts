@@ -42,7 +42,7 @@ const DOCBLOCK_WORDS = new RegExp(
     named('used to be', ' placed'),
     named('first', ' minor'),
     named('256384', 'a7'),
-    named(String.raw`(?<![\d.])0`, String.raw`\.5\.0(?![\d.])`),
+    named(String.raw`(?<![\d.])0`, String.raw`\.5\.0(?!\.?\d)`),
   ].join('|'),
   'i',
 )
@@ -136,6 +136,8 @@ describe('AC-native-order-migration-removal-01 — the source holds no module, n
     expect(nestedFact).toBeDefined()
     expect(nestedFact).not.toMatch(/\bblock\b/)
     expect(emit).not.toMatch(/\bblock: \{ atom/)
+    expect(partsTypeOf(shapes)).toMatch(/\batoms\b/)
+    expect(pseudoElementBody(shapes)).toContain('followsText(')
     expect(partsTypeOf(shapes)).not.toMatch(/\bsentence\b/)
     expect(pseudoElementBody(shapes)).not.toMatch(/\b(?:const|let) sentence\b/)
   })
@@ -154,6 +156,8 @@ describe('AC-native-order-migration-removal-01 — the source holds no module, n
     expect(DOCBLOCK_WORDS.test('it ships in the first minor')).toBe(true)
     expect(DOCBLOCK_WORDS.test('since 0.5.0')).toBe(true)
     expect(DOCBLOCK_WORDS.test('since 10.5.0')).toBe(false)
+    expect(DOCBLOCK_WORDS.test('since 0.5.0.')).toBe(true)
+    expect(DOCBLOCK_WORDS.test('since 0.5.0.1')).toBe(false)
     expect(DOCBLOCK_WORDS.test('First Minor')).toBe(true)
     expect(DOCBLOCK_WORDS.test('the next one')).toBe(false)
   })
