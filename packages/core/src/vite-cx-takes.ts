@@ -269,12 +269,13 @@ export function takesIn(
   let analysis: ScopeAnalysis | undefined
   let typeNames: ReadonlySet<string> | undefined
   let jsxNames: ReadonlySet<string> | undefined
+  let jsxMembers: ReadonlyMap<string, ReadonlySet<string>> | undefined
   const scan: Scan = {
     ...input,
     analysis: () => (analysis ??= analyze(program)),
     typeNames: () => (typeNames ??= namesIn(program, typeNameOf)),
     jsxNames: () => (jsxNames ??= namesIn(program, jsxNameOf)),
-    jsxMembers: (local) => jsxMembersIn(program, local),
+    jsxMembers: (local) => (jsxMembers ??= jsxMembersIn(program)).get(local) ?? new Set(),
   }
   const found: Taken[] = []
   const stack: AstNode[] = [program]

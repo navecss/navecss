@@ -34,17 +34,17 @@ export function jsxNameOf(node: AstNode): string | undefined {
 }
 
 /**
- * The member a JSX element name reads off the name `local`: `b` of `<local.b />` and of
- * `<local.b.c />`.
+ * The name and the member a JSX element name reads off it: `a` and `b` of `<a.b />` and of
+ * `<a.b.c />`.
  */
-function jsxMemberOf(node: AstNode, local: string): string | undefined {
+function jsxMemberOf(node: AstNode): { member: string; name: string } | undefined {
   if (node.type !== 'JSXOpeningElement') return undefined
   let current = nodeAt(node, 'name')
   while (current?.type === 'JSXMemberExpression') {
     const object = nodeAt(current, 'object')
     if (object?.type === 'JSXIdentifier') {
-      const property = nodeAt(current, 'property')
-      return object.name === local ? (property?.name as string | undefined) : undefined
+      const member = nodeAt(current, 'property')?.name
+      return typeof member === 'string' ? { member, name: object.name as string } : undefined
     }
     current = object
   }
@@ -52,10 +52,19 @@ function jsxMemberOf(node: AstNode, local: string): string | undefined {
 }
 
 /**
- * The members of the name `local` that the JSX element names of `program` read.
+ * The members that the JSX element names of `program` read, by the name they read them off, in
+ * one walk of the module.
  */
-export function jsxMembersIn(program: AstNode, local: string): Set<string> {
-  return namesIn(program, (node) => jsxMemberOf(node, local))
+export function jsxMembersIn(program: AstNode): Map<string, Set<string>> {
+  const found = new Map<string, Set<string>>()
+  const stack: AstNode[] = [program]
+  while (stack.length > 0) {
+    const node = stack.pop()!
+    const read = jsxMemberOf(node)
+    if (read) found.set(read.name, (found.get(read.name) ?? new Set()).add(read.member))
+    pushAll(stack, childrenOf(node))
+  }
+  return found
 }
 
 /**
