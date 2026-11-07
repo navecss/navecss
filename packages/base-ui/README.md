@@ -104,7 +104,7 @@ export default function SaveButton() {
 There are four steps, from the lightest:
 
 1. **Tokens.** Re-theme with Nave's tokens and every part follows. Nothing else is needed for a different palette, radius or spacing.
-2. **`className`.** Pass a class to any part, as a string or as Base UI's function of the part's state. Put its rules in `@layer components.consumer`: that layer comes after Nave's, so your class wins in every state, whatever the specificity of Nave's rule. It also means that restyling a property restyles it in every state: set `background-color` on a Button and your colour replaces the `primary` variant's hover and active colours and a disabled button's too, so write the states you want yourself.
+2. **`className`.** Pass a class to any part, as a string or as Base UI's function of the part's state. Put its rules in `@layer components.consumer`: that layer comes after Nave's, so your class wins in every state, whatever the specificity of Nave's rule. It also means that restyling a property restyles it in every state: set `background-color` on a Button, on a trigger or close that Nave styles as a button, or on a Toggle, and your colour replaces its hover and active colours in every variant and a disabled one's too, so write the states you want yourself.
 3. **A copy of the component.** To change Nave's rules for a component rather than override them, copy its files into your project with shadcn's CLI and change the copy: see [Copy a component into your project](#copy-a-component-into-your-project).
 4. **The raw Base UI part.** Import the part from `@base-ui/react/<component>` and style it from scratch. It mixes freely with wrapped parts.
 
@@ -182,7 +182,7 @@ A component added this way keeps its rules in `@layer components.consumer`, the 
 
 No later release of `@navecss/base-ui` changes the copied files. To take a later release's version of a component, upgrade the package and run `add` again, or use that release's address. `add` asks before it replaces a copied file whose content differs from the new one, whether you changed it or the release did, and `--overwrite` replaces them without asking. In a run with no terminal to answer, such as an agent or a CI job, it stops at the first such file and still exits with success, so that file and the ones after it stay as they were. The exit status does not show that it stopped, but the output does: it ends with the question about that file.
 
-The registry names no versions for the packages a copy depends on, so `add` leaves the versions in your `package.json` as they are, and installs the latest version of any that is missing. A copy needs `@base-ui/react` 1.3 or later in the 1.x line, `@navecss/tokens` 0.4.0 or later before 1.0, and React 18 or 19.
+The registry names no versions for the packages a copy depends on, so `add` leaves the versions in your `package.json` as they are, and installs the latest version of any that is missing. A copy needs `@base-ui/react` 1.3 or later in the 1.x line, `@navecss/tokens` 0.5.0 or later before 1.0, and React 18 or 19.
 
 ## What is styled
 

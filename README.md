@@ -468,6 +468,10 @@ instead of at ours:
 @import url('./styles/nave/tokens.css');
 ```
 
+After upgrading `@navecss/base-ui`, re-run `navecss-tokens build` and commit
+what it writes, or a committed tokens file renders the secondary button with a
+transparent fill under the pointer and while pressed.
+
 `@navecss/core/no-tokens` is the same stylesheet as `@navecss/core` without its
 token layer, so your file becomes the sole source of every Nave custom property:
 the spacing, the radii, the type, the motion, not only the colours. Importing
@@ -538,6 +542,13 @@ resulting palette follows from what you set, and checking it is yours.
 - **Across 0.x:** fine. A new semantic slot arrives with a default, so it does
   not break you.
 
+Override a fill together with its state slots: `--nave-color-action-primary`
+with `--nave-color-action-primary-hover` and `--nave-color-action-primary-active`,
+and `--nave-color-action-secondary` with `--nave-color-action-secondary-hover`
+and `--nave-color-action-secondary-active`. Overriding a fill alone keeps the
+states Nave generates, so under the pointer and while pressed the control takes
+Nave's colour, not yours.
+
 #### Worked example: neutral actions
 
 Say you want a monochrome interface but you are seeding with your brand colour,
@@ -601,6 +612,10 @@ slots, and neither will move them.
 Changing this changes everything Nave derives from it. The contrast of the
 resulting palette follows from what you set, and checking it is yours.
 
+After upgrading `@navecss/base-ui`, re-run `navecss-tokens build` and commit
+what it writes, or a committed tokens file renders the secondary button with a
+transparent fill under the pointer and while pressed.
+
 - **What you write:** the chroma you want, for the steps you want to replace, per
   scale. Lightness per step is fixed and is not a tunable.
 - **Where it lives:** a JSON file in your repo, named on the build command. This
@@ -628,6 +643,11 @@ them, and Nave's build becomes one task inside yours.
 
 Changing this changes everything Nave derives from it. The contrast of the
 resulting palette follows from what you set, and checking it is yours.
+
+After upgrading `@navecss/base-ui`, if your build commits or caches what
+`navecss-tokens build` writes, re-run `navecss-tokens build` and commit what it
+writes, or a committed tokens file renders the secondary button with a
+transparent fill under the pointer and while pressed.
 
 - **What you write:** the invocation, inside your own build. Nave's inputs
   become inputs of your build system rather than literals in a script.

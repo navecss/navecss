@@ -163,7 +163,7 @@ describe('AC-base-ui-overlay-completion-37 and AC-base-ui-feedback-navigation-47
   it('reds a combobox-unsigned build that keeps the six Combobox-only rules, in bytes and in classes (control)', () => {
     const kept = withoutRules(allSigned, DRAFT_CLASSES.combobox.slice(0, 1))
 
-    expect(Buffer.byteLength(kept)).toBe(29_986)
+    expect(Buffer.byteLength(kept)).toBe(30_574)
     expect(classesOf(kept).size).toBe(64)
     expect(sha256(kept)).not.toBe(rows.combobox?.sha256)
     expect(classesOf(kept)).not.toEqual(tablePClassesFor(['combobox']))

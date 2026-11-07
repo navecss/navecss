@@ -7,7 +7,7 @@ import type { Declaration, Root, Rule } from 'postcss'
 
 import postcss from 'postcss'
 
-import { selectorNodes } from './selector.ts'
+import { requiresAttributeValue, selectorNodes } from './selector.ts'
 
 export const BUTTON = 'nave-base-ui-button'
 export const TOGGLE = 'nave-base-ui-toggle'
@@ -102,12 +102,16 @@ export const userActions = (selector: string): string[] =>
   )
 
 /**
-The four keys of both classes of a stylesheet, as `[class, selector, rule]`.
+The rules of both classes that a default-variant Button or a Toggle can match under `:hover` or
+`:active`, as `[class, selector, rule]`: the four keys, and any other that reaches them. A rule that
+requires the `primary` or the `ghost` variant is not among them.
  */
 export const secondaryStateRules = (css: string): [string, string, Rule][] =>
   [BUTTON, TOGGLE].flatMap((className) =>
     nestedRules(css, className)
       .filter((rule) => hasUserAction(rule.selector))
+      .filter((rule) => !requiresAttributeValue(rule.selector, 'data-nave-variant', 'primary'))
+      .filter((rule) => !requiresAttributeValue(rule.selector, 'data-nave-variant', 'ghost'))
       .map((rule): [string, string, Rule] => [className, rule.selector, rule]),
   )
 

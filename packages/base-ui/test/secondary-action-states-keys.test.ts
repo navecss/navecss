@@ -168,7 +168,9 @@ const borderColourProblems = (source: string): string[] =>
     nestedRules(source, className)
       .filter(
         (rule) =>
-          declarationsOf(rule).some((decl) => decl.prop.startsWith('border')) &&
+          declarationsOf(rule).some((decl) =>
+            /^border(?:-[a-z-]+)?-color$|^border-color$|^border$/.test(decl.prop),
+          ) &&
           !requiresAttributeValue(rule.selector, 'data-nave-variant', 'primary') &&
           !requiresAttributeValue(rule.selector, 'data-nave-variant', 'ghost') &&
           rule.selector !== '&:disabled, &[aria-disabled="true"]',
