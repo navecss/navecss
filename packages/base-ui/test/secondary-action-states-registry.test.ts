@@ -53,6 +53,18 @@ const stateRulesOf = (css: string, local: string): string[] => {
   return found
 }
 
+/**
+Every declaration in a module that names a state fill, wherever it sits: the expected rules are the
+only ones, so an extra declaration in another rule or layer is counted.
+ */
+const stateDeclarationCount = (css: string): number => {
+  let count = 0
+  postcss.parse(css).walkDecls((decl) => {
+    if (NAMES_A_STATE.test(decl.value)) count += 1
+  })
+  return count
+}
+
 const wanted = (keys: readonly string[]): string[] =>
   keys.map(
     (key, index) => `${normalizeSelector(key)} | ${index === 0 ? HOVER_VALUE : ACTIVE_VALUE}`,
@@ -80,9 +92,9 @@ describe('AC-secondary-action-states-22: the registry regenerates the states for
 
         expect(stateRulesOf(item.content, local), `${item.label} ${local}`).toEqual(expected)
       }
-      const isUses = item.atomNames.some((name) => ATOM_NAMES.includes(name))
+      const used = item.atomNames.filter((name) => ATOM_NAMES.includes(name))
 
-      expect(NAMES_A_STATE.test(item.content), item.label).toBe(isUses)
+      expect(stateDeclarationCount(item.content), item.label).toBe(used.length * 2)
     }
   })
 

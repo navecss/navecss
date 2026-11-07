@@ -254,8 +254,8 @@ describe('AC-secondary-action-states-09: the Button gains exactly the two keys, 
     }
   })
 
-  it("ends the built Button rule's state rules with the two keys, in that order", () => {
-    expect(stateKeysOf(css, BUTTON).slice(-2)).toEqual([...BUTTON_KEYS])
+  it("lists the built Button rule's state rules, the two keys last", () => {
+    expect(stateKeysOf(css, BUTTON)).toEqual([...BUTTON_KEYS_BEFORE, ...BUTTON_KEYS])
   })
 
   it('gives each key the specificity of the primary and ghost state keys', () => {
@@ -288,7 +288,7 @@ describe('AC-secondary-action-states-13: the Toggle gains exactly the two keys, 
   })
 
   it("ends the built Toggle rule's state rules with the two keys, each at (0,3,0)", () => {
-    expect(stateKeysOf(css, TOGGLE).slice(-2)).toEqual([...TOGGLE_KEYS])
+    expect(stateKeysOf(css, TOGGLE)).toEqual([...TOGGLE_KEYS_BEFORE, ...TOGGLE_KEYS])
     expect(TOGGLE_KEYS.map((key) => secondarySpecificity(key, TOGGLE))).toEqual([
       [0, 3, 0],
       [0, 3, 0],

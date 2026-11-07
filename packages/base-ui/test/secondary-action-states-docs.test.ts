@@ -86,6 +86,7 @@ describe("AC-secondary-action-states-23: the three consumer sentences are where 
   it('leaves the rung 1a section without any of these sentences', () => {
     const section = sectionOf(rootReadme, '### Rung 1a')
 
+    expect(section).toContain('### Rung 1a')
     expect(section).not.toContain(CONSEQUENCE)
     expect(section).not.toContain('action-secondary')
   })
@@ -118,14 +119,14 @@ const pendingChangesets = (): PendingChangeset[] =>
 The note that introduced the paint, as a bump and its text: the pending changeset naming base-ui
 and the new names, or, once consumed, the oldest CHANGELOG entry naming them.
  */
-const introducingNote = (): { alone: boolean; bump: string; text: string } => {
+const introducingNote = (): { bump: string; pendingReleases?: string[]; text: string } => {
   const pending = pendingChangesets().find(
     ({ releases, text }) => '@navecss/base-ui' in releases && NAMES_A_STATE.test(text),
   )
   if (pending !== undefined) {
     return {
-      alone: Object.keys(pending.releases).length === 1,
       bump: pending.releases['@navecss/base-ui'] ?? '',
+      pendingReleases: Object.keys(pending.releases),
       text: pending.text,
     }
   }
@@ -141,7 +142,6 @@ const introducingNote = (): { alone: boolean; bump: string; text: string } => {
     .slice(1)
     .find((part) => NAMES_A_STATE.test(part))
   return {
-    alone: true,
     bump: heading.exec(`### ${bump ?? ''}`)?.[1]?.toLowerCase() ?? '',
     text: release,
   }
@@ -151,9 +151,11 @@ describe('AC-secondary-action-states-24: the base-ui changeset', () => {
   const note = introducingNote()
   const text = collapse(note.text)
 
-  it('is one minor naming @navecss/base-ui alone', () => {
+  it('is a minor, and while it is pending it names @navecss/base-ui alone', () => {
     expect(note.bump).toBe('minor')
-    expect(note.alone).toBe(true)
+    // Once the version pull request has consumed the changeset the release notes carry no list of
+    // the packages it named, so only the pending form can be asked.
+    expect(note.pendingReleases ?? ['@navecss/base-ui']).toEqual(['@navecss/base-ui'])
     for (const { releases } of pendingChangesets()) {
       expect('@navecss/base-ui' in releases && '@navecss/tokens' in releases).toBe(false)
     }
