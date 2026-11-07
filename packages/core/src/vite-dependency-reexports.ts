@@ -8,17 +8,14 @@
  * `keepFor` line clears each instead. A deep path to an internal file is not the package's public
  * surface, and an `exports` map may forbid it.
  */
-import path from 'node:path'
-
-import type { RenderContext } from './vite-types.ts'
+import type { ModuleHost, TakesContext } from './vite-takes-host.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
-import type { UsedContext } from './vite-used.ts'
 
-import { filePathOf } from './vite-css-id.ts'
-import { specifiersOf } from './vite-cx-importers.ts'
 import { declaredModulesFor, entriesNaming, fileOf } from './vite-cx-modules.ts'
-import { isDependencyId, packageNameOf } from './vite-module-kind.ts'
+import { isDependencyId } from './vite-module-id.ts'
+import { rootEntryOf } from './vite-path-text.ts'
 import { compareText } from './vite-problems.ts'
+import { specifiersOf } from './vite-specifiers.ts'
 import { isListableReexport } from './vite-used-package-lines.ts'
 
 interface Resolution {
@@ -30,7 +27,7 @@ interface Resolution {
 /**
  * Whether the specifier, written in `from`, resolves to `file`.
  */
-export async function isResolvingTo(ctx: RenderContext, input: Resolution): Promise<boolean> {
+export async function isResolvingTo(ctx: ModuleHost, input: Resolution): Promise<boolean> {
   try {
     const resolved = await ctx.resolve?.(input.specifier, input.from)
     return resolved !== null && resolved !== undefined && fileOf(resolved.id) === input.file
@@ -42,7 +39,7 @@ export async function isResolvingTo(ctx: RenderContext, input: Resolution): Prom
 /**
  * The ids of the modules that import the module `id`, statically or dynamically.
  */
-export function importersOf(ctx: RenderContext, id: string): string[] {
+export function importersOf(ctx: ModuleHost, id: string): string[] {
   const info = ctx.getModuleInfo?.(id)
   return [...new Set([...(info?.importers ?? []), ...(info?.dynamicImporters ?? [])])]
 }
@@ -51,7 +48,7 @@ export function importersOf(ctx: RenderContext, id: string): string[] {
  * The specifiers the module `importer`, written outside the package, uses to import `file`.
  */
 async function specifiersWritten(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: { readonly file: string; readonly importer: string },
 ): Promise<string[]> {
   const { file, importer } = input
@@ -69,15 +66,13 @@ async function specifiersWritten(
  * The specifiers through which a module outside `pkg` imports the module `id`, in code-unit order.
  */
 async function specifiersInto(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   input: { readonly id: string; readonly pkg: string },
 ): Promise<string[]> {
   const found = new Set<string>()
   for (const importer of importersOf(ctx, input.id)) {
-    const owner = isDependencyId(importer)
-      ? await packageNameOf(filePathOf(importer), context.packageNames)
-      : undefined
+    const owner = isDependencyId(importer) ? await context.packageOf(importer) : undefined
     if (owner === input.pkg) continue
     const written = await specifiersWritten(ctx, { file: fileOf(input.id), importer })
     for (const specifier of written) found.add(specifier)
@@ -89,11 +84,11 @@ async function specifiersInto(
  * The specifier that clears a re-export of `cx` held by the module `id` of `pkg`, or `undefined`.
  */
 async function clearingSpecifier(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   input: { readonly id: string; readonly pkg: string },
 ): Promise<string | undefined> {
-  const from = path.join(context.root, 'index.html')
+  const from = rootEntryOf(context.root)
   const file = fileOf(input.id)
   if (await isResolvingTo(ctx, { file, from, specifier: input.pkg })) return input.pkg
   const specifiers = await specifiersInto(ctx, context, input)
@@ -112,8 +107,8 @@ async function clearingSpecifier(
  * listing the module would make it a problem of the listed kind instead.
  */
 export async function withClearingSpecifiers(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   problems: readonly LocatedProblem[],
 ): Promise<LocatedProblem[]> {
   const asked = new Map<string, Promise<string | undefined>>()

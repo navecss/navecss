@@ -9,9 +9,9 @@ import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import type { TakesContext } from '../src/vite-takes-host.ts'
 import type { RenderContext } from '../src/vite-types.ts'
 import type { LocatedProblem } from '../src/vite-used-report.ts'
-import type { UsedContext } from '../src/vite-used.ts'
 
 import { decideReexports, prepareReexports } from '../src/vite-listed-takes.ts'
 import { packageLines } from '../src/vite-used-package-lines.ts'
@@ -334,11 +334,13 @@ describe('AC-used-atoms-52 - a take the build cannot read counts as taking the m
       pkg: '@acme/ui',
       moduleId: ID,
     } as LocatedProblem
-    const context = {
+    const context: TakesContext = {
       options: { cxModules: [], keepFor: {} },
-      packageNames: new Map(),
+      state: { declared: new Map() },
       root: '/project',
-    } as unknown as UsedContext
+      packageOf: () => Promise.resolve(undefined),
+      labelOf: (id) => path.posix.relative('/project', id),
+    }
 
     /**
      * The check's context over a graph of one importer of the module, whose text is `code` and

@@ -15,17 +15,13 @@ import type { RenderContext } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
 import { filePathOf } from './vite-css-id.ts'
-import {
-  candidateOf,
-  type Importer,
-  importerIdsOf,
-  isResolvingToCx,
-  specifiersOf,
-} from './vite-cx-importers.ts'
+import { candidateOf, importerIdsOf, isResolvingToCx } from './vite-cx-importers.ts'
 import { importerErrorOf } from './vite-cx-module-lines.ts'
 import { declaredModulesFor, fileOf, recognisedKey } from './vite-cx-modules.ts'
 import { isResolvingTo } from './vite-dependency-reexports.ts'
-import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
+import { isDependencyId } from './vite-module-id.ts'
+import { moduleLabel, packageNameOf } from './vite-module-kind.ts'
+import { type Importer, specifiersOf } from './vite-specifiers.ts'
 
 /**
  * The extensions Vite's resolver tries when a specifier writes none.

@@ -36,13 +36,6 @@ export function isNaveOwn(id: string): boolean {
 }
 
 /**
- * Whether the module's resolved path lies under `node_modules`.
- */
-export function isDependencyId(id: string): boolean {
-  return pathOfId(id).includes('/node_modules/')
-}
-
-/**
  * The `name` in the nearest `package.json` above `file` that has one, or `undefined`. A nested
  * `package.json` without a name, as some `dist/` folders carry, is skipped.
  */

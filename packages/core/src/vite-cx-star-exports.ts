@@ -3,10 +3,11 @@
  * Nave's `cx` under a name: if they do not, ES exports the name from neither.
  */
 import type { AstNode } from './vite-ast.ts'
-import type { RenderContext } from './vite-types.ts'
+import type { ModuleHost } from './vite-takes-host.ts'
 
 import { fileOf } from './vite-cx-modules.ts'
 import { ownExports, starSources } from './vite-cx-reexported.ts'
+import { parseOf } from './vite-takes-host.ts'
 
 /**
  * The file each specifier resolves to from each importer, asked once: a barrel's specifiers are
@@ -18,7 +19,7 @@ export type Resolutions = Map<string, Promise<string | undefined>>
  * The file `specifier` resolves to from the importer `id`.
  */
 export function resolvedFile(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   resolutions: Resolutions,
   input: { readonly id: string; readonly specifier: string },
 ): Promise<string | undefined> {
@@ -71,21 +72,21 @@ function ownNamesOf(program: AstNode, file: string, cxExports: CxExports): Expor
  * The parse of the module `file`, unless it was read already or has no text.
  */
 function unreadProgram(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: { file: string; seen: Set<string> },
 ): AstNode | undefined {
   const { file, seen } = input
   const code = ctx.getModuleInfo?.(file)?.code
   const isUnread = !seen.has(file) && typeof code === 'string'
   seen.add(file)
-  return isUnread ? (ctx.parse?.(code) as AstNode | undefined) : undefined
+  return isUnread ? (parseOf(ctx, code, file) as AstNode | undefined) : undefined
 }
 
 /**
  * Adds to `found` what the stars of the module `program` of `file` export.
  */
 async function addStars(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: { file: string; found: ExportedNames; program: AstNode; walk: Walk },
 ): Promise<void> {
   const { found, file, program, walk } = input
@@ -105,7 +106,7 @@ async function addStars(
  * stars, and which of them are `cx` exports.
  */
 async function exportsOf(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: { readonly file: string; readonly walk: Walk },
 ): Promise<ExportedNames> {
   const { file, walk } = input
@@ -122,7 +123,7 @@ async function exportsOf(
  * exported by neither.
  */
 export async function rivalsOf(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: {
     readonly cxExports: CxExports
     readonly id: string

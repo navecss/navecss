@@ -36,9 +36,8 @@
  */
 import type { CxExports, Resolutions } from './vite-cx-star-exports.ts'
 import type { ResolvedServerImport } from './vite-server-takes.ts'
-import type { RenderContext } from './vite-types.ts'
+import type { ModuleHost, TakesContext } from './vite-takes-host.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
-import type { UsedContext } from './vite-used.ts'
 
 import { fileOf } from './vite-cx-modules.ts'
 import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
@@ -75,8 +74,8 @@ export interface Prepared {
  * Reads what the importers of the build take of one module that gives out `cx`.
  */
 async function prepareOne(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   input: {
     readonly isHop: boolean
     readonly problems: readonly LocatedProblem[]
@@ -148,8 +147,8 @@ function callersOf(routed: readonly Routes[]): string[] {
  * the problems their listing suppressed and the dependency re-exports of a listed module's `cx`.
  */
 export async function prepareReexports(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   standingIn: readonly LocatedProblem[],
 ): Promise<Prepared[]> {
   const exporting = standingIn.filter((problem) => problem.exportedAs !== undefined)

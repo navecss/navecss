@@ -6,14 +6,15 @@
  * take the build cannot read) end the walk: they are the package's own calls.
  */
 import type { AstNode } from './vite-ast.ts'
-import type { RenderContext } from './vite-types.ts'
+import type { ModuleHost } from './vite-takes-host.ts'
 
-import { specifiersIn } from './vite-cx-importers.ts'
 import { fileOf } from './vite-cx-modules.ts'
 import { reexportedNames } from './vite-cx-reexported.ts'
 import { type CxExports, type Resolutions, resolvedFile, rivalsOf } from './vite-cx-star-exports.ts'
 import { importersOf } from './vite-dependency-reexports.ts'
-import { isDependencyId } from './vite-module-kind.ts'
+import { isDependencyId } from './vite-module-id.ts'
+import { specifiersIn } from './vite-specifiers.ts'
+import { parseOf } from './vite-takes-host.ts'
 
 /**
  * A module that gives out `cx`: the `cx` exports it holds, and whether it holds them by forwarding
@@ -29,7 +30,7 @@ export interface Holder {
  * The specifiers `code` writes that resolve, from the importer `id`, to `file`, and its parse.
  */
 export async function reachingSpecifiers(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: {
     readonly code: string
     readonly file: string
@@ -38,7 +39,7 @@ export async function reachingSpecifiers(
   },
 ): Promise<{ program: AstNode; reaches: Set<string> } | undefined> {
   const { code, file, id, resolutions } = input
-  const program = ctx.parse?.(code) as AstNode | undefined
+  const program = parseOf(ctx, code, id) as AstNode | undefined
   if (!program) return undefined
   const reaches = new Set<string>()
   for (const specifier of specifiersIn(program)) {
@@ -51,7 +52,7 @@ export async function reachingSpecifiers(
  * The names under which the module `id` gives out the `cx` exports `names` of the module `file`.
  */
 async function reexportedBy(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: {
     readonly cxExports: CxExports
     readonly file: string
@@ -78,7 +79,7 @@ async function reexportedBy(
  * under, by module.
  */
 async function reexportsOf(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: {
     readonly cxExports: CxExports
     readonly id: string
@@ -101,7 +102,7 @@ async function reexportsOf(
  * under.
  */
 export async function holdersOf(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   origin: {
     readonly cxExports: CxExports
     readonly id: string
