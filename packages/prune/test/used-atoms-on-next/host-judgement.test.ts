@@ -409,3 +409,64 @@ describe('the stored record of a run', () => {
     expect(outcome.record.problems.filter((problem) => 'moduleId' in problem)).toEqual([])
   })
 })
+
+describe('takes by CommonJS', () => {
+  const WITH_MENU = { ...UI, 'cn.js': `${CN}export { Menu } from './menu.js'\n` }
+  const onMenu = (code: string): Promise<Read> =>
+    app(code, { '@acme/ui': dependency('@acme/ui', WITH_MENU) })
+  const MENU = "import { Menu } from '@acme/ui/cn.js'\nexport const M = Menu\n"
+  const NAVE = `${IMPORT}import { Menu } from '@acme/ui'\nexport const A = [Menu, cx('block')]\n`
+
+  it.each([
+    ['a require()', "const { cn } = require('@acme/ui/cn.js')\nexport const A = cn('block')\n"],
+    [
+      'an import = require()',
+      "import m = require('@acme/ui/cn.js')\nexport const A = m.cn('block')\n",
+    ],
+    [
+      'a createRequire() require',
+      "import { createRequire } from 'node:module'\nexport const A = createRequire(import.meta.url)('@acme/ui/cn.js').cn('block')\n",
+    ],
+  ])(
+    'count %s beside an import of another export as the same file without the import',
+    async (_name, take) => {
+      const alone = await onMenu(take)
+      const beside = await onMenu(`${MENU}${take}`)
+
+      expect(alone.report).toBeDefined()
+      expect(beside.text).toBe(alone.text)
+      const followed = await onMenu(NAVE)
+
+      expect(followed.report).toBeUndefined()
+      expect(followed.atoms).toEqual(['block', 'flex'])
+    },
+  )
+
+  const COMMONJS = JSON.stringify({ name: '@other/ui', version: '1.0.0', main: 'index.js' })
+  const OTHER_APP = "import { cn } from '@other/ui'\nexport const A = cn('block')\n"
+
+  it.each([
+    ['module.exports = require(...)', "module.exports = require('@acme/ui/cn.js')\n"],
+    ['exports.cn = require(...).cn', "exports.cn = require('@acme/ui/cn.js').cn\n"],
+  ])(
+    'follow a dependency that forwards a cx export by %s to the application file that takes it',
+    async (_name, forward) => {
+      const packages = {
+        '@acme/ui': dependency('@acme/ui', WITH_MENU),
+        '@other/ui': { 'package.json': COMMONJS, 'index.js': forward },
+      }
+      for (const keepFor of [KEEP_FLEX, { ...KEEP_FLEX, '@other/ui': [] }]) {
+        const first = await app(OTHER_APP, packages, { keepFor })
+
+        expect(first.report).toBeDefined()
+        expect(first.text).toContain('your code takes that cx')
+        expect(first.text).toContain('components/App.ts (cn)')
+        expect(first.text).not.toContain('cxModules: [')
+      }
+      const followed = await app(NAVE, packages)
+
+      expect(followed.report).toBeUndefined()
+      expect(followed.atoms).toEqual(['block', 'flex'])
+    },
+  )
+})

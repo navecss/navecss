@@ -16,11 +16,14 @@ import { importersOf } from './vite-dependency-reexports.ts'
 import { type Holder, reachingSpecifiers } from './vite-listed-holders.ts'
 import { isDependencyId } from './vite-module-id.ts'
 import { compareText } from './vite-problems.ts'
+import { requireTakesIn } from './vite-require-takes.ts'
 
 /**
  * What the importer `id` takes from the module `file`. An importer the build cannot read counts as
  * taking the whole module, since the build cannot tell: its text is missing or does not parse, or
- * it names the module by no specifier the build resolves to it (a `require()`).
+ * it names the module by no specifier the build resolves to it. So does each CommonJS require of
+ * the module, whatever else the importer imports from it, but for a dependency's forward by
+ * CommonJS, which is followed as an `export ... from` is.
  */
 async function takenBy(
   ctx: ModuleHost,
@@ -38,8 +41,16 @@ async function takenBy(
       code === null || code === undefined
         ? undefined
         : await reachingSpecifiers(ctx, { code, file, id, resolutions })
-    if (!read || read.reaches.size === 0) return [UNREADABLE]
-    return takesIn(read.program, { names, reaches: read.reaches })
+    if (!read) return [UNREADABLE]
+    const { program, reaches, requires } = read
+    if (reaches.size === 0 && requires.size === 0) return [UNREADABLE]
+    const imported = reaches.size === 0 ? [] : takesIn(program, { names, reaches })
+    const required = requireTakesIn(program, {
+      names,
+      reaches: requires,
+      readsForwards: isDependencyId(id),
+    }).takes
+    return [...imported, ...required]
   } catch {
     return [UNREADABLE]
   }

@@ -601,7 +601,9 @@ name `cx` still fails when a file of yours imports `cx` from that module itself,
 and the report gives the `cxModules` entry that lets the build read those calls. Through a module
 that only re-exports it, such as the package's own entry file or another package, a listed module
 would be two steps away, so there the report names each file of yours that takes it: import `cx`
-from `@navecss/core/cx` there instead. A module that gives `cx` out under another name, as a default
+from `@navecss/core/cx` there instead. A CommonJS module that forwards it with
+`module.exports = require(...)` or `exports.cn = require(...).cn` counts as one that only re-exports
+it. A module that gives `cx` out under another name, as a default
 or inside a namespace, still fails when your code takes that export, and the report names each file
 of yours that does: import `cx` from `@navecss/core/cx` there instead. And a module of the package
 that you list in `cxModules` but that does not re-export Nave's `cx` under that name still fails:

@@ -1,7 +1,8 @@
 /**
  * The modules that give out `cx` through one of its `cx` exports: the module that exports Nave's
  * `cx`, and every module of a dependency, of the same package or of another, that only re-exports
- * one of those exports (a forward), however many modules away. A module that takes `cx` from any of
+ * one of those exports (a forward, by `export ... from` or by one of the CommonJS forms
+ * `vite-require-takes.ts` reads), however many modules away. A module that takes `cx` from any of
  * them takes it from the first. A dependency's other takes (a call, an assignment, a wrapper, a
  * take the build cannot read) end the walk: they are the package's own calls.
  */
@@ -18,6 +19,7 @@ import {
 } from './vite-cx-star-exports.ts'
 import { importersOf } from './vite-dependency-reexports.ts'
 import { isDependencyId } from './vite-module-id.ts'
+import { requireSpecifiersIn, requireTakesIn } from './vite-require-takes.ts'
 import { specifiersIn } from './vite-specifiers.ts'
 import { parseOf } from './vite-takes-host.ts'
 
@@ -32,7 +34,8 @@ export interface Holder {
 }
 
 /**
- * The specifiers `code` writes that resolve, from the importer `id`, to `file`, and its parse.
+ * The specifiers `code` writes that resolve, from the importer `id`, to `file`, and its parse:
+ * those it imports or re-exports from, and those it requires by CommonJS.
  */
 export async function reachingSpecifiers(
   ctx: ModuleHost,
@@ -42,16 +45,21 @@ export async function reachingSpecifiers(
     readonly id: string
     readonly resolutions: Resolutions
   },
-): Promise<{ program: AstNode; reaches: Set<string> } | undefined> {
+): Promise<{ program: AstNode; reaches: Set<string>; requires: Set<string> } | undefined> {
   const { code, file, id, resolutions } = input
   const program = parseOf(ctx, code, id) as AstNode | undefined
   if (!program) return undefined
-  const reaches = new Set<string>()
-  for (const specifier of specifiersIn(program)) {
-    const files = await resolvedFiles(ctx, resolutions, { id, specifier })
-    if (files.includes(file)) reaches.add(specifier)
+  const reachingOf = async (specifiers: readonly string[]): Promise<Set<string>> => {
+    const reaching = new Set<string>()
+    for (const specifier of specifiers) {
+      const files = await resolvedFiles(ctx, resolutions, { id, specifier })
+      if (files.includes(file)) reaching.add(specifier)
+    }
+    return reaching
   }
-  return { program, reaches }
+  const reaches = await reachingOf(specifiersIn(program))
+  const requires = await reachingOf(requireSpecifiersIn(program))
+  return { program, reaches, requires }
 }
 
 /**
@@ -71,10 +79,17 @@ async function reexportedBy(
   if (code === null || code === undefined) return []
   try {
     const read = await reachingSpecifiers(ctx, { ...input, code })
-    if (!read || read.reaches.size === 0) return []
-    const { program, reaches } = read
+    if (!read) return []
+    const { program, reaches, requires } = read
+    const forwarded = requireTakesIn(program, {
+      names: input.names,
+      reaches: requires,
+      readsForwards: true,
+    }).given
+    if (reaches.size === 0) return forwarded
     const rivals = await rivalsOf(ctx, { ...input, program, reaches })
-    return reexportedNames(program, { names: input.names, reaches, rivals })
+    const reexported = reexportedNames(program, { names: input.names, reaches, rivals })
+    return [...new Set([...reexported, ...forwarded])]
   } catch {
     return []
   }
