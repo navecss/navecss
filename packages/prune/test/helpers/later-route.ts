@@ -54,7 +54,10 @@ async function laterRouteSentence(
 export async function untilLaterRouteGrid(
   server: Pick<DevServer, 'get' | 'untilCss'>,
   rewrite: () => void,
-  { requestMs = 10_000 }: { readonly requestMs?: number } = {},
+  {
+    requestMs = 10_000,
+    rewriteDetail = '',
+  }: { readonly requestMs?: number; readonly rewriteDetail?: string } = {},
 ): Promise<void> {
   const row = expect.getState().currentTestName ?? ''
   if (earlier.delete(row)) {
@@ -63,11 +66,21 @@ export async function untilLaterRouteGrid(
       'An earlier attempt of this row ended with Next.js not building /later (it answered 404)',
     )
   }
+  let rewrites = 0
   try {
-    await server.untilCss('/', '.nave-grid', { rewrite })
+    await server.untilCss('/', '.nave-grid', {
+      rewrite: () => {
+        rewrites += 1
+        rewrite()
+      },
+    })
   } catch (error) {
     const sentence = await laterRouteSentence(server, requestMs)
     if (sentence.includes('/later answers 404')) earlier.add(row)
-    throw new Error(`${(error as Error).message}\n${sentence}`, { cause: error })
+    const times = rewrites === 1 ? 'once' : `${String(rewrites)} times`
+    throw new Error(
+      `${(error as Error).message}\n${sentence}\nThe wait wrote the route again ${times}${rewriteDetail}.`,
+      { cause: error },
+    )
   }
 }
