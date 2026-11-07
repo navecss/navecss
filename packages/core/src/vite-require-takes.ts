@@ -124,6 +124,13 @@ function isModuleExports(node: AstNode | undefined): boolean {
 }
 
 /**
+ * Whether `node` is the exports object: `exports` or `module.exports`.
+ */
+function isExportsObject(node: AstNode | undefined): boolean {
+  return isName(node, 'exports') || isModuleExports(node)
+}
+
+/**
  * The name a non-computed member expression reads off its object, and that object.
  */
 function memberOf(node: AstNode | undefined): { name: string; object: AstNode } | undefined {
@@ -140,8 +147,7 @@ function memberOf(node: AstNode | undefined): { name: string; object: AstNode } 
 function exportsMemberOf(node: AstNode | undefined): string | undefined {
   const member = memberOf(node)
   if (!member) return undefined
-  const isExports = isName(member.object, 'exports') || isModuleExports(member.object)
-  return isExports ? member.name : undefined
+  return isExportsObject(member.object) ? member.name : undefined
 }
 
 interface Forward {
@@ -210,13 +216,27 @@ function forwardOf(statement: AstNode, input: ForwardInput): Forward | undefined
 }
 
 /**
- * Whether the module marks itself an ES module compiled to CommonJS, whose default import is its
- * `default` export rather than its exports object.
+ * Whether a statement writes the `__esModule` marker on the exports object: `exports.__esModule =`
+ * (or `module.exports.__esModule =`), or `Object.defineProperty(exports, '__esModule', ...)`.
+ */
+function isMarkerWrite(statement: AstNode): boolean {
+  const assignment = assignmentOf(statement)
+  if (assignment) return exportsMemberOf(assignment.left) === '__esModule'
+  const call =
+    statement.type === 'ExpressionStatement' ? nodeAt(statement, 'expression') : undefined
+  if (call?.type !== 'CallExpression') return false
+  const callee = memberOf(nodeAt(call, 'callee'))
+  const isDefine = callee?.name === 'defineProperty' && isName(callee.object, 'Object')
+  const [target, key] = nodesAt(call, 'arguments')
+  return isDefine && isExportsObject(target) && staticStringOf(key) === '__esModule'
+}
+
+/**
+ * Whether the module marks itself an ES module compiled to CommonJS, at its top level, whose
+ * default import is its `default` export rather than its exports object.
  */
 function isMarkedEsModule(program: AstNode): boolean {
-  return nodesIn(program).some(
-    (node) => isName(node, '__esModule') || staticStringOf(node) === '__esModule',
-  )
+  return nodesAt(program, 'body').some((statement) => isMarkerWrite(statement))
 }
 
 /**

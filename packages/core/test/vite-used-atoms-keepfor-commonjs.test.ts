@@ -93,4 +93,20 @@ describe('AC-used-atoms-52 - a dependency that forwards a cx export by CommonJS 
     expect(followed.error).toBeUndefined()
     expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex'))
   })
+
+  it('gives out default when the module only reads __esModule, and does not mark itself', async () => {
+    const forward =
+      "const isMarked = (m) => Boolean(m && m.__esModule)\nexports.cn = require('@acme/ui/cn.js').cn\nexports.isMarked = isMarked\n"
+    const packages = {
+      '@acme/ui': ACME,
+      '@other/ui': { 'package.json': COMMONJS, 'index.js': forward },
+    }
+    const built = await run(
+      "import ui from '@other/ui'\nexport const A = ui.cn('block')\n",
+      packages,
+      { keepFor: KEEP_FLEX },
+    )
+
+    expect(linesOf(built.error)).toContain(takenLine('src/App.ts (the default export)'))
+  })
 })

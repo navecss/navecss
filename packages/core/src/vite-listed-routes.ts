@@ -1,3 +1,4 @@
+import type { AstNode } from './vite-ast.ts'
 import type { Resolutions } from './vite-cx-star-exports.ts'
 import type { Take, Taken } from './vite-cx-takes.ts'
 /**
@@ -17,6 +18,36 @@ import { type Holder, reachingSpecifiers } from './vite-listed-holders.ts'
 import { isDependencyId } from './vite-module-id.ts'
 import { compareText } from './vite-problems.ts'
 import { requireTakesIn } from './vite-require-takes.ts'
+
+/**
+ * What `program` takes by the specifiers in `reaches`, none when there is none.
+ */
+function importTakesOf(
+  program: AstNode,
+  input: { readonly names: ReadonlySet<string>; readonly reaches: ReadonlySet<string> },
+): Taken[] {
+  return input.reaches.size === 0 ? [] : takesIn(program, input)
+}
+
+/**
+ * What the importer `id`, whose parse is `program`, takes by the specifiers it requires in
+ * `requires`; a dependency's forwards by CommonJS are read as forwards.
+ */
+function requireTakesOf(
+  program: AstNode,
+  input: {
+    readonly id: string
+    readonly names: ReadonlySet<string>
+    readonly requires: ReadonlySet<string>
+  },
+): Taken[] {
+  if (input.requires.size === 0) return []
+  return requireTakesIn(program, {
+    names: input.names,
+    reaches: input.requires,
+    readsForwards: isDependencyId(input.id),
+  }).takes
+}
 
 /**
  * What the importer `id` takes from the module `file`. An importer the build cannot read counts as
@@ -44,13 +75,10 @@ async function takenBy(
     if (!read) return [UNREADABLE]
     const { program, reaches, requires } = read
     if (reaches.size === 0 && requires.size === 0) return [UNREADABLE]
-    const imported = reaches.size === 0 ? [] : takesIn(program, { names, reaches })
-    const required = requireTakesIn(program, {
-      names,
-      reaches: requires,
-      readsForwards: isDependencyId(id),
-    }).takes
-    return [...imported, ...required]
+    return [
+      ...importTakesOf(program, { names, reaches }),
+      ...requireTakesOf(program, { id, names, requires }),
+    ]
   } catch {
     return [UNREADABLE]
   }

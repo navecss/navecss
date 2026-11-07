@@ -81,11 +81,11 @@ async function reexportedBy(
     const read = await reachingSpecifiers(ctx, { ...input, code })
     if (!read) return []
     const { program, reaches, requires } = read
-    const forwarded = requireTakesIn(program, {
-      names: input.names,
-      reaches: requires,
-      readsForwards: true,
-    }).given
+    const forwarded =
+      requires.size === 0
+        ? []
+        : requireTakesIn(program, { names: input.names, reaches: requires, readsForwards: true })
+            .given
     if (reaches.size === 0) return forwarded
     const rivals = await rivalsOf(ctx, { ...input, program, reaches })
     const reexported = reexportedNames(program, { names: input.names, reaches, rivals })
