@@ -33,6 +33,12 @@ export interface ModuleHost {
    */
   resolve?(source: string, importer?: string): Promise<{ readonly id: string } | null>
   /**
+   * Every file id the host's build may resolve `source` to, for a host whose build resolves one
+   * specifier to different files (by condition, or by mode). Used instead of `resolve`, which
+   * answers one of them, wherever a resolution is compared to a file.
+   */
+  resolveAll?(source: string, importer?: string): Promise<readonly string[]>
+  /**
    * The host's parse of `code`, an ESTree.
    */
   parse?(code: string): unknown
@@ -50,6 +56,11 @@ export interface ModuleHost {
  */
 export interface TakesContext {
   readonly root: string
+  /**
+   * How the host's messages name `root`, completing the phrase a specifier that resolves from
+   * <rootName>.
+   */
+  readonly rootName: string
   readonly options: {
     readonly cxModules: readonly string[]
     readonly keepFor: Readonly<Record<string, readonly string[]>>
@@ -75,4 +86,18 @@ export function parseOf(
   id: string,
 ): unknown {
   return host.parseModule ? host.parseModule(code, id) : host.parse?.(code)
+}
+
+/**
+ * Every file id `source` resolves to from `importer`: the host's `resolveAll` when it has one,
+ * else the one id `resolve` answers, or none.
+ */
+export async function resolvedIds(
+  host: Pick<ModuleHost, 'resolve' | 'resolveAll'>,
+  source: string,
+  importer?: string,
+): Promise<readonly string[]> {
+  if (host.resolveAll) return await host.resolveAll(source, importer)
+  const resolved = await host.resolve?.(source, importer)
+  return resolved ? [resolved.id] : []
 }

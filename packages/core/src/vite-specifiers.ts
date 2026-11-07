@@ -4,7 +4,15 @@
 import type { AstNode } from './vite-ast.ts'
 import type { ModuleHost } from './vite-takes-host.ts'
 
-import { childrenOf, nodeAt, pushAll, staticStringOf } from './vite-ast.ts'
+import {
+  childrenOf,
+  isTypeOnly,
+  nodeAt,
+  nodesAt,
+  pushAll,
+  staticStringOf,
+  valueSpecifiersOf,
+} from './vite-ast.ts'
 import { parseOf } from './vite-takes-host.ts'
 
 export interface Importer {
@@ -13,15 +21,25 @@ export interface Importer {
 }
 
 /**
+ * Whether the declaration is written for the types only, so the compiled module does not name its
+ * source: `import type`, `export type`, or one whose specifiers are all `type` specifiers.
+ */
+function isTypeOnlyDeclaration(node: AstNode): boolean {
+  if (isTypeOnly(node)) return true
+  return nodesAt(node, 'specifiers').length > 0 && valueSpecifiersOf(node).length === 0
+}
+
+/**
  * Every module specifier written in `program`: imports, re-exports and dynamic imports, each once,
- * in the order it is first written.
+ * in the order it is first written. A declaration written for the types only is left out: the
+ * compiled module does not name its source.
  */
 export function specifiersIn(program: AstNode): string[] {
   const found = new Map<string, number>()
   const stack: AstNode[] = [program]
   while (stack.length > 0) {
     const node = stack.pop()!
-    const where = nodeAt(node, 'source')
+    const where = isTypeOnlyDeclaration(node) ? undefined : nodeAt(node, 'source')
     const source = staticStringOf(where)
     if (where !== undefined && source !== undefined) {
       found.set(source, Math.min(found.get(source) ?? Infinity, where.start))

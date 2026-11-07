@@ -338,6 +338,7 @@ describe('AC-used-atoms-52 - a take the build cannot read counts as taking the m
       options: { cxModules: [], keepFor: {} },
       state: { declared: new Map() },
       root: '/project',
+      rootName: "Vite's root",
       packageOf: () => Promise.resolve(undefined),
       labelOf: (id) => path.posix.relative('/project', id),
     }

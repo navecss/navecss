@@ -96,6 +96,7 @@ export function isReadable(context: UsedContext, id: string): boolean {
 function takesContextOf(context: UsedContext): TakesContext {
   return {
     root: context.root,
+    rootName: "Vite's root",
     options: context.options,
     state: context.state,
     packageOf: (id) => packageNameOf(filePathOf(id), context.packageNames),

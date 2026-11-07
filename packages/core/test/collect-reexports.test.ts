@@ -19,8 +19,14 @@ const ROOT = '/app'
 const UI = '/app/node_modules/@acme/ui'
 const ENTRY = `${UI}/dist/index.js`
 const APP = '/app/components/App.ts'
+const SERVER = `${UI}/dist/server.js`
 
 type Files = Readonly<Record<string, string>>
+
+/**
+ * Every file the package's name resolves to, the first being the one `resolve` answers.
+ */
+type Entry = () => readonly string[]
 
 /**
  * The specifiers a file writes: the quoted text after each `from`.
@@ -36,13 +42,15 @@ function specifiersOf(code: string): string[] {
  * A module graph over `files`: `@acme/ui` resolves to the package's entry, a relative specifier to
  * the file it names, and the importers of a file are the files whose specifiers resolve to it.
  */
-function hostOver(files: Files): ModuleHost {
-  const resolve = (source: string, importer: string | undefined): string | undefined => {
-    if (source === '@acme/ui') return ENTRY
-    if (importer === undefined || !source.startsWith('.')) return undefined
+function hostOver(files: Files, entryOf: Entry = () => [ENTRY]): ModuleHost {
+  const resolveEvery = (source: string, importer: string | undefined): string[] => {
+    if (source === '@acme/ui') return [...entryOf()]
+    if (importer === undefined || !source.startsWith('.')) return []
     const file = path.resolve(path.dirname(importer), source)
-    return Object.hasOwn(files, file) ? file : undefined
+    return Object.hasOwn(files, file) ? [file] : []
   }
+  const resolve = (source: string, importer: string | undefined): string | undefined =>
+    resolveEvery(source, importer)[0]
   return {
     environment: { name: 'client' },
     getModuleInfo: (id) => {
@@ -51,7 +59,7 @@ function hostOver(files: Files): ModuleHost {
       if (code === undefined) return null
       const importers = Object.entries(files)
         .filter(([from, text]) =>
-          specifiersOf(text).some((specifier) => resolve(specifier, from) === id),
+          specifiersOf(text).some((specifier) => resolveEvery(specifier, from).includes(id)),
         )
         .map(([from]) => from)
       return { code, importers, dynamicImporters: [] }
@@ -61,12 +69,14 @@ function hostOver(files: Files): ModuleHost {
       // eslint-disable-next-line unicorn/no-null -- the host answers `null` for a specifier that resolves to nothing
       return Promise.resolve(id === undefined ? null : { id })
     },
+    resolveAll: (source, importer) => Promise.resolve(resolveEvery(source, importer)),
     parseModule: (code) => parseAst(code, { lang: 'ts' }),
   }
 }
 
 const CONTEXT: TakesContext = {
   root: ROOT,
+  rootName: 'the project root',
   options: { cxModules: [], keepFor: { '@acme/ui': ['flex'] } },
   state: { declared: new Map() },
   packageOf: (id) =>
@@ -99,14 +109,19 @@ function suppressedIn(files: Files): LocatedProblem[] {
 /**
  * What the judgement leaves as errors for an application `app` over a package whose entry is `entry`.
  */
-async function judged(entry: string, app: string): Promise<LocatedProblem[]> {
+async function judged(
+  entry: string,
+  app: string,
+  entryOf: Entry = () => [ENTRY],
+): Promise<LocatedProblem[]> {
   const files: Files = {
     [ENTRY]: entry,
+    [SERVER]: "export { Button } from './button.js'\n",
     [`${UI}/dist/button.js`]:
       "import { cx } from './index.js'\nexport const Button = () => cx('flex')\n",
     [APP]: app,
   }
-  const outcome = await judgeReexports(hostOver(files), CONTEXT, [
+  const outcome = await judgeReexports(hostOver(files, entryOf), CONTEXT, [
     { problems: [], suppressed: suppressedIn(files) },
   ])
   return outcome.problems
@@ -156,5 +171,62 @@ describe('AC-nextjs-used-atoms-17: a host-neutral read of who takes a package’
     )
 
     expect(problems).toEqual([])
+  })
+
+  it('clears a re-export when the application takes only other exports, whichever file the package name resolves to first', async () => {
+    const problems = await judged(
+      PLAIN,
+      "import { Button } from '@acme/ui'\nexport const A = [Button]\n",
+      () => [SERVER, ENTRY],
+    )
+
+    expect(problems).toEqual([])
+  })
+
+  it('keeps the re-export an error with its clearing specifier when the package name resolves to another file first', async () => {
+    const problems = await judged(
+      PLAIN,
+      "import { cx } from '@acme/ui'\nexport const A = cx('grid')\n",
+      () => [SERVER, ENTRY],
+    )
+
+    expect(problems.map((problem) => [problem.kind, problem.specifier])).toEqual([
+      ['reexport', '@acme/ui'],
+    ])
+  })
+
+  describe('a take written for the types only is no take', () => {
+    const BUTTON = "import { Button } from '@acme/ui'\nexport const A = [Button]\n"
+
+    it.each([
+      [
+        'an import type declaration',
+        `import type { cn } from '@acme/ui'\n${BUTTON}export type T = typeof cn\n`,
+      ],
+      [
+        'a type-only import specifier',
+        "import { type cn, Button } from '@acme/ui'\nexport const A = [Button]\nexport type T = typeof cn\n",
+      ],
+      ['an export type declaration', `export type { cn } from '@acme/ui'\n${BUTTON}`],
+      ['a type-only export specifier', `export { type cn } from '@acme/ui'\n${BUTTON}`],
+      [
+        'an import used only in a type position',
+        "import { cn } from '@acme/ui'\nexport type T = typeof cn\n",
+      ],
+    ])('clears the renamed re-export for %s', async (_name, app) => {
+      expect(await judged(RENAMED, app)).toEqual([])
+    })
+
+    it.each([
+      [
+        'a value use beside a type use',
+        "import { cn } from '@acme/ui'\nexport const A = cn('grid')\nexport type T = typeof cn\n",
+      ],
+      ['an import that nothing references', "import { cn } from '@acme/ui'\nexport const A = 1\n"],
+    ])('keeps the renamed re-export an error for %s', async (_name, app) => {
+      const problems = await judged(RENAMED, app)
+
+      expect(problems.map((problem) => problem.kind)).toEqual(['reexport'])
+    })
   })
 })

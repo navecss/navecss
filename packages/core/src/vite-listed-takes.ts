@@ -18,7 +18,7 @@
  *
  * Two routes, one per remedy, decided take by take. A take is on the `cxModules` route when it
  * imports the module itself and is not a forward, the module has a clearing specifier (a specifier
- * outside the package that resolves to it from Vite's root, an alias or a tsconfig path included,
+ * outside the package that resolves to it from the root the host names, an alias or a tsconfig path included,
  * while every `cx` export of the module is under the name `cx`), and, for an application module,
  * the build can read the take: the problem keeps its `cxModules` line, whether an application
  * module or a dependency that does more than forward it takes it. Every other take an application
@@ -67,6 +67,10 @@ export interface Prepared {
    */
   readonly hasEntry: boolean
   readonly problems: readonly LocatedProblem[]
+  /**
+   * How the host names its root, for the remedy line of the takes.
+   */
+  readonly rootName: string
   readonly routed: readonly Routes[]
 }
 
@@ -100,7 +104,7 @@ async function prepareOne(
     ),
   )
   const isListed = Object.hasOwn(context.options.keepFor, pkg)
-  return { hasEntry, holders, isHop, isListed, problems, routed }
+  return { hasEntry, holders, isHop, isListed, problems, rootName: context.rootName, routed }
 }
 
 /**
@@ -114,7 +118,7 @@ function decideOne(
   prepared: Prepared,
   serverImports: readonly ResolvedServerImport[],
 ): LocatedProblem[] {
-  const { hasEntry, holders, isHop, isListed, problems, routed } = prepared
+  const { hasEntry, holders, isHop, isListed, problems, rootName, routed } = prepared
   const fromServer = holders.map((holder) =>
     serverRoutes(holder, { isEntry: hasEntry && !holder.isReached, serverImports }),
   )
@@ -128,7 +132,7 @@ function decideOne(
   if (told.length === 0 && callers.length === 0) return []
   return problems.map((problem) => ({
     ...problem,
-    ...(told.length > 0 && { takes: told }),
+    ...(told.length > 0 && { takes: told, rootName }),
     ...(callers.length > 0 && { callers }),
   }))
 }

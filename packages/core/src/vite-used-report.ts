@@ -49,6 +49,11 @@ export interface LocatedProblem extends Problem {
    */
   readonly takes?: readonly Take[] | undefined
   /**
+   * For a problem with `takes`: how the host names the root a `cxModules` specifier resolves from,
+   * in the words the remedy line for those takes uses.
+   */
+  readonly rootName?: string | undefined
+  /**
    * For a dependency module that re-exports the `cx` of a module `cxModules` lists: the modules of
    * other dependencies that call through it, root-relative, which only the package's `keepFor`
    * entry can stand in for.

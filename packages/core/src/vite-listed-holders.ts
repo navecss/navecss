@@ -10,7 +10,12 @@ import type { ModuleHost } from './vite-takes-host.ts'
 
 import { fileOf } from './vite-cx-modules.ts'
 import { reexportedNames } from './vite-cx-reexported.ts'
-import { type CxExports, type Resolutions, resolvedFile, rivalsOf } from './vite-cx-star-exports.ts'
+import {
+  type CxExports,
+  type Resolutions,
+  resolvedFiles,
+  rivalsOf,
+} from './vite-cx-star-exports.ts'
 import { importersOf } from './vite-dependency-reexports.ts'
 import { isDependencyId } from './vite-module-id.ts'
 import { specifiersIn } from './vite-specifiers.ts'
@@ -43,7 +48,8 @@ export async function reachingSpecifiers(
   if (!program) return undefined
   const reaches = new Set<string>()
   for (const specifier of specifiersIn(program)) {
-    if ((await resolvedFile(ctx, resolutions, { id, specifier })) === file) reaches.add(specifier)
+    const files = await resolvedFiles(ctx, resolutions, { id, specifier })
+    if (files.includes(file)) reaches.add(specifier)
   }
   return { program, reaches }
 }

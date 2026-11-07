@@ -16,6 +16,7 @@ import { isDependencyId } from './vite-module-id.ts'
 import { rootEntryOf } from './vite-path-text.ts'
 import { compareText } from './vite-problems.ts'
 import { specifiersOf } from './vite-specifiers.ts'
+import { resolvedIds } from './vite-takes-host.ts'
 import { isListableReexport } from './vite-used-package-lines.ts'
 
 interface Resolution {
@@ -29,8 +30,8 @@ interface Resolution {
  */
 export async function isResolvingTo(ctx: ModuleHost, input: Resolution): Promise<boolean> {
   try {
-    const resolved = await ctx.resolve?.(input.specifier, input.from)
-    return resolved !== null && resolved !== undefined && fileOf(resolved.id) === input.file
+    const resolved = await resolvedIds(ctx, input.specifier, input.from)
+    return resolved.some((id) => fileOf(id) === input.file)
   } catch {
     return false
   }

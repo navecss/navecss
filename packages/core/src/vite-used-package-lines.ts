@@ -160,7 +160,8 @@ function takeLines(pkg: string, all: readonly LocatedProblem[], home: string): s
   if (takes.length > 0) {
     const hasPackageFix =
       plain.some((problem) => isRenamedOrReached(problem)) || takes.some((take) => take.isReached)
-    lines.push(takenLine(pkg, takes, hasPackageFix))
+    const rootName = plain.find((problem) => problem.rootName !== undefined)?.rootName
+    lines.push(takenLine(pkg, takes, { hasPackageFix, rootName: rootName ?? 'the project root' }))
   }
   if (hops.length > 0)
     lines.push(

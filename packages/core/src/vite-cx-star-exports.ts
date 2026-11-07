@@ -7,31 +7,31 @@ import type { ModuleHost } from './vite-takes-host.ts'
 
 import { fileOf } from './vite-cx-modules.ts'
 import { ownExports, starSources } from './vite-cx-reexported.ts'
-import { parseOf } from './vite-takes-host.ts'
+import { parseOf, resolvedIds } from './vite-takes-host.ts'
 
 /**
- * The file each specifier resolves to from each importer, asked once: a barrel's specifiers are
+ * The files each specifier resolves to from each importer, asked once: a barrel's specifiers are
  * resolved once however many modules of it give `cx` out.
  */
-export type Resolutions = Map<string, Promise<string | undefined>>
+export type Resolutions = Map<string, Promise<readonly string[]>>
 
 /**
- * The file `specifier` resolves to from the importer `id`.
+ * The files `specifier` resolves to from the importer `id`, none when it resolves to nothing.
  */
-export function resolvedFile(
+export function resolvedFiles(
   ctx: ModuleHost,
   resolutions: Resolutions,
   input: { readonly id: string; readonly specifier: string },
-): Promise<string | undefined> {
+): Promise<readonly string[]> {
   const key = `${input.id}\0${input.specifier}`
   const known = resolutions.get(key)
   if (known) return known
-  const asked = (async (): Promise<string | undefined> => {
+  const asked = (async (): Promise<readonly string[]> => {
     try {
-      const resolved = await ctx.resolve?.(input.specifier, input.id)
-      return resolved ? fileOf(resolved.id) : undefined
+      const ids = await resolvedIds(ctx, input.specifier, input.id)
+      return ids.map((id) => fileOf(id))
     } catch {
-      return undefined
+      return []
     }
   })()
   resolutions.set(key, asked)
@@ -83,6 +83,25 @@ function unreadProgram(
 }
 
 /**
+ * Adds to `found` the names a star exports, the `cx` ones included.
+ */
+function addBelow(found: ExportedNames, below: ExportedNames): void {
+  for (const name of below.names) {
+    found.names.add(name)
+    if (below.cx.has(name)) found.cx.add(name)
+  }
+}
+
+/**
+ * Adds to `rivals` the names a star exports with a binding that is not Nave's `cx`.
+ */
+function addRivals(rivals: Set<string>, exported: ExportedNames): void {
+  for (const name of exported.names) {
+    if (!exported.cx.has(name)) rivals.add(name)
+  }
+}
+
+/**
  * Adds to `found` what the stars of the module `program` of `file` export.
  */
 async function addStars(
@@ -91,13 +110,8 @@ async function addStars(
 ): Promise<void> {
   const { found, file, program, walk } = input
   for (const specifier of starSources(program)) {
-    const star = await resolvedFile(ctx, walk.resolutions, { id: file, specifier })
-    const below = star ? await exportsOf(ctx, { file: star, walk }) : undefined
-    const names = below ? [...below.names] : []
-    for (const name of names) {
-      found.names.add(name)
-      if (below?.cx.has(name)) found.cx.add(name)
-    }
+    const stars = await resolvedFiles(ctx, walk.resolutions, { id: file, specifier })
+    for (const star of stars) addBelow(found, await exportsOf(ctx, { file: star, walk }))
   }
 }
 
@@ -136,12 +150,9 @@ export async function rivalsOf(
   const rivals = new Set<string>()
   const others = starSources(program).filter((text) => !reaches.has(text))
   for (const specifier of others) {
-    const file = await resolvedFile(ctx, resolutions, { id, specifier })
     const walk = { cxExports, resolutions, seen: new Set<string>() }
-    const exported = file ? await exportsOf(ctx, { file, walk }) : undefined
-    const names = exported ? [...exported.names] : []
-    const own = names.filter((text) => !exported?.cx.has(text))
-    for (const name of own) rivals.add(name)
+    const files = await resolvedFiles(ctx, resolutions, { id, specifier })
+    for (const file of files) addRivals(rivals, await exportsOf(ctx, { file, walk }))
   }
   return rivals
 }
