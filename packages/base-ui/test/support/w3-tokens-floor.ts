@@ -84,3 +84,8 @@ export const publishedTokens = (): PublishedTokens => {
   const css = readFileSync(path.join(dir, 'dist/tokens.css'), 'utf8')
   return { declared: new Set(declaredTokens(css).keys()), version }
 }
+
+/**
+The tokens release the shipped stylesheet's names floor at (a stand-in until the derivation lands).
+ */
+export const tokensFloorOf = (_css: string): string => firstTokensVersionWithTheHighlight()

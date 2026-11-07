@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildStyles } from '../scripts/build-styles.ts'
 import { atoms } from '../styles/atoms.ts'
+import { DATA_NAVE_FORMS } from './support/data-nave-forms.ts'
 import {
   deriveState,
   DRAFT_CLASSES,
@@ -45,15 +46,6 @@ const allSigned = readFileSync(
 )
 
 const planted = (css: string): string => `${readStylesheet()}\n${css}`
-
-// The two expected sets AC-35 names: the attribute forms alone (the check inside the deferred and
-// shipped-with-signature criterion), and the same forms with the class that owns each.
-const DATA_NAVE_FORMS = new Set([
-  '[data-nave-size="lg"]',
-  '[data-nave-size="sm"]',
-  '[data-nave-variant="ghost"]',
-  '[data-nave-variant="primary"]',
-])
 
 /**
  * The `data-nave-*` attribute selectors of a stylesheet, each with the class that owns it.
