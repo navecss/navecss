@@ -13,7 +13,7 @@ import { parseSync } from 'oxc-parser'
 
 import type { Graph, GraphOptions } from './graph-types.ts'
 import type { PackageInfo } from './packages.ts'
-import type { Resolver } from './resolve.ts'
+import type { Resolution, Resolver } from './resolve.ts'
 
 import { languageOf } from './graph-parts.ts'
 import { isDependencyPath, relativeTo } from './source-files.ts'
@@ -44,20 +44,15 @@ function textOf(file: string): string | null {
 }
 
 /**
- * The files `source` resolves to from `importer`: those the build's mode finds, else those any
- * condition set finds.
+ * What `source` resolves to from `importer`: the files any condition set finds, and those among
+ * them the build's mode bundles.
  */
 function resolved(
   resolver: Resolver,
   dir: string,
   input: { readonly importer: string | undefined; readonly source: string },
-): readonly string[] {
-  const found = resolver.resolve(
-    input.importer ?? path.join(dir, 'next.config'),
-    input.source,
-    false,
-  )
-  return found.filesInMode.length > 0 ? found.filesInMode : found.files
+): Resolution {
+  return resolver.resolve(input.importer ?? path.join(dir, 'next.config'), input.source, false)
 }
 
 /**
@@ -73,13 +68,16 @@ function hostOver(graph: Graph, resolver: Resolver, dir: string): ModuleHost {
       dynamicImporters: [],
     }),
     resolve: (source, importer) => {
-      const file = resolved(resolver, dir, { source, importer }).at(0)
+      const found = resolved(resolver, dir, { source, importer })
+      // A specifier no set of the mode finds still names the first file any set finds.
+      const file = (found.filesInMode.length > 0 ? found.filesInMode : found.files).at(0)
       // eslint-disable-next-line unicorn/no-null -- the host answers `null` for a specifier that resolves to nothing
       return Promise.resolve(file === undefined ? null : { id: file })
     },
-    // One specifier can resolve to a file per condition set: every file the build's mode bundles.
+    // One specifier can resolve to a file per condition set: every file the build's mode bundles,
+    // none for a specifier that resolves only under a set the mode does not run.
     resolveAll: (source, importer) =>
-      Promise.resolve(resolved(resolver, dir, { source, importer })),
+      Promise.resolve(resolved(resolver, dir, { source, importer }).filesInMode),
     // The sources are authored: the language follows from the file, as it does for the walk.
     parseModule: (code, id) =>
       parseSync(id, code, {

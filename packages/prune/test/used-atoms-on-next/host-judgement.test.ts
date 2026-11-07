@@ -161,6 +161,33 @@ describe('takes by files the build’s mode does not bundle', () => {
   })
 })
 
+describe('a package name that resolves only under the development condition', () => {
+  const FILES = {
+    'a.js': "export { Button } from './button.js'\n",
+    'b.js': REEXPORT,
+    'button.js': BUTTON,
+  }
+  const BY_DEVELOPMENT = {
+    exports: {
+      '.': { development: { 'react-server': './a.js', default: './b.js' } },
+      './b.js': './b.js',
+    },
+  }
+  const APP = "import '@acme/ui/b.js'\nimport { cx } from '@acme/ui'\nexport const A = cx('grid')\n"
+
+  it('is clear in production, which bundles no file the name resolves to', async () => {
+    const outcome = await app(APP, acme(FILES, BY_DEVELOPMENT))
+
+    expect(outcome.report).toBeUndefined()
+  })
+
+  it('is an error in development, which bundles them', async () => {
+    const outcome = await app(APP, acme(FILES, BY_DEVELOPMENT), undefined, { isDev: true })
+
+    expect(outcome.report).toBeDefined()
+  })
+})
+
 describe('take forms written for the types only', () => {
   it.each([
     [
@@ -206,6 +233,99 @@ describe('take forms written for the types only', () => {
     )
 
     expect(outcome.text).toContain('a require() or other import the build cannot read')
+  })
+})
+
+describe('a JSX element name is a use of the value it names', () => {
+  const CAPITAL = {
+    'index.js': "export { Menu } from './menu.js'\n",
+    'menu.js': `${IMPORT}export const Menu = (v) => cx('flex', v)\n`,
+    'cx.js': "export { cx as Cx } from '@navecss/core/cx'\n",
+  }
+  const onCx = (code: string): Promise<Read> =>
+    app(code, acme(CAPITAL), undefined, { modules: { 'components/App.tsx': code } })
+  const TYPED = "import { Cx } from '@acme/ui/cx.js'\nexport type T = typeof Cx\n"
+
+  it.each([
+    ['an element', `${TYPED}export const A = <Cx />\n`],
+    ['an element with children', `${TYPED}export const A = <Cx>x</Cx>\n`],
+    ['the object of a member tag', `${TYPED}export const A = <Cx.Sub />\n`],
+    [
+      'a type reference beside an element',
+      "import { Cx } from '@acme/ui/cx.js'\nlet v: Cx\nexport const A = [v, <Cx />]\n",
+    ],
+    [
+      'an element with no type position',
+      "import { Cx } from '@acme/ui/cx.js'\nexport const A = <Cx />\n",
+    ],
+    ['a call beside a type position', `${TYPED}export const A = Cx('block')\n`],
+  ])('still takes cx in %s', async (_name, code) => {
+    const outcome = await onCx(code)
+
+    expect(outcome.report).toBeDefined()
+  })
+
+  it('takes nothing when a type position is the only use', async () => {
+    const outcome = await onCx(TYPED)
+
+    expect(outcome.report).toBeUndefined()
+  })
+})
+
+describe('a barrel that stars the module and a package that resolves to a file per condition', () => {
+  const BARREL = "export * from './cn.js'\nexport * from '@acme/rival'\n"
+  const EXPORTS_CN = 'export const cn = 1\n'
+  const EXPORTS_OTHER = 'export const other = 1\n'
+  const BY_ENVIRONMENT = {
+    exports: { '.': { 'react-server': './server.js', default: './client.js' } },
+  }
+  const CALL = "import { cn } from '@acme/ui'\nexport const A = cn('grid')\n"
+  const over = (rival: Record<string, string>, extra: Record<string, unknown>): Packages => ({
+    '@acme/ui': dependency('@acme/ui', { 'index.js': BARREL, 'cn.js': CN }),
+    '@acme/rival': dependency('@acme/rival', rival, extra),
+  })
+
+  it.each([
+    [
+      'only the file of the default condition',
+      { 'client.js': EXPORTS_CN, 'server.js': EXPORTS_OTHER },
+    ],
+    [
+      'only the file of the react-server condition',
+      { 'client.js': EXPORTS_OTHER, 'server.js': EXPORTS_CN },
+    ],
+    ['neither file', { 'client.js': EXPORTS_OTHER, 'server.js': EXPORTS_OTHER }],
+  ])('still takes cx when %s exports the name', async (_name, rival) => {
+    const outcome = await app(CALL, over(rival, BY_ENVIRONMENT))
+
+    expect(outcome.report).toBeDefined()
+  })
+
+  it.each([
+    ['every file', BY_ENVIRONMENT, { 'client.js': EXPORTS_CN, 'server.js': EXPORTS_CN }],
+    ['the one file', { exports: './client.js' }, { 'client.js': EXPORTS_CN }],
+  ])('takes nothing when %s exports the name with another binding', async (_name, extra, rival) => {
+    const outcome = await app(CALL, over(rival, extra))
+
+    expect(outcome.report).toBeUndefined()
+  })
+})
+
+describe('type forms beside a value import of the module', () => {
+  it('takes nothing for an import of cn as a type that nothing references', async () => {
+    const outcome = await onCn(
+      "import { type cn, Menu } from '@acme/ui/cn.js'\nexport const A = [Menu]\n",
+    )
+
+    expect(outcome.report).toBeUndefined()
+  })
+
+  it('takes nothing when cn is used only as the start of a member type query', async () => {
+    const outcome = await onCn(
+      "import { cn, Menu } from '@acme/ui/cn.js'\nexport type T = typeof cn.x\nexport const A = [Menu]\n",
+    )
+
+    expect(outcome.report).toBeUndefined()
   })
 })
 
