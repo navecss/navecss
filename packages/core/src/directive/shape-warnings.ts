@@ -9,7 +9,6 @@ import type { PlanWarning } from './rule-model.ts'
 import type { DirectiveRunFact, DroppedFact, OwnRunFact, PlanState } from './rule-state.ts'
 
 import { splitTopLevel } from '../selector-utils.ts'
-import { wrappedPseudoElementSentence, wrappedSpecificitySentence } from './migration.ts'
 import { directiveWithAtomsBefore } from './order-print.ts'
 import { joinList } from './order-text.ts'
 import {
@@ -64,17 +63,15 @@ function anchorOf(run: DirectiveRunFact | OwnRunFact): PlanWarning['anchor'] {
 function pseudoElementText(run: DirectiveRunFact | OwnRunFact, pseudo: string): string {
   const other = `Or move ${pseudo} to a separate rule, with or without them.`
   if (run.kind === 'own') {
-    return `@nave: the declarations after ${run.nested} are written inside ${WRAP}, which cannot match a pseudo-element, so they do not apply to ${pseudo}. ${wrappedPseudoElementSentence()} To apply them there too, move them above ${run.above}. ${other}`
+    return `@nave: the declarations after ${run.nested} are written inside ${WRAP}, which cannot match a pseudo-element, so they do not apply to ${pseudo}. To apply them there too, move them above ${run.above}. ${other}`
   }
   const atoms = quoted(run.atoms.map((atom) => atom.name))
-  const sentence = run.isWrappedBefore ? '' : ` ${wrappedPseudoElementSentence()}`
   const separate = `Move ${pseudo} to a separate rule, with or without them.`
-  if (run.follows) return followsText(run, { atoms, pseudo, sentence, separate, other })
-  const nestedSentence = run.nested.block && !run.isWrappedBefore ? sentence : ''
+  if (run.follows) return followsText(run, { atoms, pseudo, separate, other })
   const move = run.canMoveDirective
     ? ` To apply them there too, move the directive above ${run.above}. ${other}`
     : ` ${separate}`
-  return `@nave: this directive comes after ${run.nested.text}, so the declarations of ${atoms} are written inside ${WRAP}, which cannot match a pseudo-element: they do not apply to ${pseudo}.${nestedSentence}${move}`
+  return `@nave: this directive comes after ${run.nested.text}, so the declarations of ${atoms} are written inside ${WRAP}, which cannot match a pseudo-element: they do not apply to ${pseudo}.${move}`
 }
 
 /**
@@ -82,10 +79,10 @@ function pseudoElementText(run: DirectiveRunFact | OwnRunFact, pseudo: string): 
  */
 function followsText(
   run: DirectiveRunFact,
-  parts: { atoms: string; other: string; pseudo: string; sentence: string; separate: string },
+  parts: { atoms: string; other: string; pseudo: string; separate: string },
 ): string {
   const { follows } = run
-  const head = `@nave: the declarations of ${parts.atoms} follow the block of "${follows!.atom.name}" ${follows!.where}, so they are written inside ${WRAP}, which cannot match a pseudo-element: they do not apply to ${parts.pseudo}.${parts.sentence}`
+  const head = `@nave: the declarations of ${parts.atoms} follow the block of "${follows!.atom.name}" ${follows!.where}, so they are written inside ${WRAP}, which cannot match a pseudo-element: they do not apply to ${parts.pseudo}.`
   if (!run.canReorder) return `${head} ${parts.separate}`
   const printed = directiveWithAtomsBefore(run.directive.prelude, run.directive.atoms, {
     moving: run.atoms.map((atom) => atom.atomIndex),
@@ -127,9 +124,7 @@ function wrapText(run: DirectiveRunFact | OwnRunFact, selectors: Selectors): str
     run.kind === 'own'
       ? `the declarations after ${run.nested}`
       : `the declarations of ${quoted(run.atoms.map((atom) => atom.name))}`
-  const sentence =
-    run.kind === 'directive' && run.isWrappedBefore ? '' : ` ${wrappedSpecificitySentence()}`
-  return `@nave: ${subject} are written inside ${WRAP}, which under the selector list ${list} matches with the specificity of ${most}, so where ${joinList(less, 'or')} matches they can win over a rule elsewhere that is more specific than ${joinList(less, 'or')}.${sentence} To give each selector its own specificity, write the rule once for each of ${groupsText(selectors, specificities)}. To give the whole rule the specificity of ${most}, write the list as \`${wholeList}\`.`
+  return `@nave: ${subject} are written inside ${WRAP}, which under the selector list ${list} matches with the specificity of ${most}, so where ${joinList(less, 'or')} matches they can win over a rule elsewhere that is more specific than ${joinList(less, 'or')}. To give each selector its own specificity, write the rule once for each of ${groupsText(selectors, specificities)}. To give the whole rule the specificity of ${most}, write the list as \`${wholeList}\`.`
 }
 
 /**

@@ -178,6 +178,10 @@ when the changeset has been consumed and that minor has passed while the module 
 removal falls due on the version commit of the release after this one without anyone having to
 remember it.
 
+- **Correction (2026-11-07):** the release after 0.5.0 removes the three sentences,
+  `src/directive/migration.ts` and the test that made the removal fall due, as this decision
+  planned. The warnings themselves stay, at the same positions, and the CSS is unchanged.
+
 **7. What the browser test proves.** A real-browser test over built output asserts the new
 outcomes in Chromium, Firefox and WebKit as the test runner ships them: the shapes in the changeset,
 a sample of the 22 pairs, the two mixed-list shapes, the pseudo-element shapes, and a rule whose

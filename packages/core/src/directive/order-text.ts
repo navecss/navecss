@@ -5,7 +5,6 @@
  */
 import type { Finding, RelatedPair } from './order-model.ts'
 
-import { overriderSentence } from './migration.ts'
 import { focusClauseOf } from './order-focus.ts'
 import { printedValue, reorderedDirective } from './order-print.ts'
 import { alsoWhere, whereOf } from './order-where.ts'
@@ -171,18 +170,6 @@ function markerSentence(finding: Finding, context: TextContext): string {
 }
 
 /**
- * The sentence about how the result was before this release, for an overrider that is not itself
- * an atom's block (the blocks used to be placed last, so the atom won). A directive in a nested
- * rule paired with what the enclosing rule holds after it has none: the later content won then too.
- */
-function migrationSentence(finding: Finding): string | undefined {
-  const { overrider } = finding.candidate
-  const isBlock = overrider.kind === 'atom' && overrider.isBlock
-  if (isBlock || finding.outward !== undefined) return undefined
-  return overriderSentence(finding.unit.atom.name)
-}
-
-/**
  * The whole warning for `finding`, without the host's frame.
  */
 export function findingText(finding: Finding, context: TextContext): string {
@@ -191,7 +178,6 @@ export function findingText(finding: Finding, context: TextContext): string {
   const sentences = [
     `@nave: ${opening}, ${reason}`,
     focusClauseOf(finding),
-    migrationSentence(finding),
     fixSentence(finding, context),
     markerSentence(finding, context),
   ]

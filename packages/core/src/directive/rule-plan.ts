@@ -124,7 +124,6 @@ function keepNested(state: PlanState, node: ModelNode): void {
   flushRun(state)
   state.items.push({ kind: 'keep', ref: node.ref })
   state.isNested = true
-  state.hasOwnNested = true
   state.lastNested = { text: nestedText(node) }
   state.above ??= nestedText(node)
 }
