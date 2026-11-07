@@ -3,9 +3,10 @@
  * serves the layer filtered to the atoms the build would emit, as far as the dev server has read:
  * the first response waits until every module reachable from the roots of the module graph has
  * been transformed (so the set is complete for what the pages load, whichever script each page
- * starts from), and a set that grows afterwards reloads the stylesheets already served, batched,
- * through Vite's own module reload (the page, for one inlined in its HTML), and, when a page's
- * classes grew it, drops their cached text so the next request filters again. Vite drops a module
+ * starts from; a stylesheet a page links, which nothing imports, is answered at once), and a set
+ * that grows afterwards reloads the stylesheets already served, batched, through Vite's own module
+ * reload (the page, for one inlined in its HTML), and, when a page's classes grew it, drops their
+ * cached text so the next request filters again. Vite drops a module
  * reload sent while no page is connected, so the stylesheets reloaded while none was listening are
  * checked again when a page connects, and only those. `devServing` is an object, so a test can
  * stand a scratch copy of one step in its place.
@@ -22,7 +23,7 @@ import type { UsedContext } from './vite-used.ts'
 
 import { isCssModuleId } from './vite-css-id.ts'
 import { isServedAsStylesheet, judgeWhenServed } from './vite-dev-judge.ts'
-import { graphRoots, transformReachable } from './vite-dev-read.ts'
+import { graphRoots, transformReachable, waitForStartedRequests } from './vite-dev-read.ts'
 import { noteReloadSent } from './vite-dev-reloads.ts'
 import { modulesWithGrownStylesheets } from './vite-dev-update.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from './vite-prune.ts'
@@ -46,13 +47,29 @@ const NO_MAP = JSON.stringify({ mappings: '' })
  */
 const DIRECT = /[?&]direct\b/
 
+/**
+ * The query Vite adds to a `<style>` inlined in an HTML file, which it serves as `<file>.html`
+ * plus this and, like a linked stylesheet, `&direct`.
+ */
+const HTML_PROXY = /[?&]html-proxy\b/
+
 export interface DevServing {
   /**
    * Waits until the modules reachable from the roots of the module graph have been transformed,
-   * for a stylesheet `id` that a script imports, whether or not the import is in the graph yet; a
-   * stylesheet a page links, which nothing imports, is answered at once.
+   * for a stylesheet `id` that a script imports, whether or not the import is in the graph yet, and
+   * for one inlined in the page's HTML, which nothing imports either. A stylesheet a page links,
+   * which nothing imports, is answered at once.
    */
   hold(environment: DevEnvironmentLike, id: string): Promise<void>
+  /**
+   * Waits for the warm-ups Vite has started and not finished, for a stylesheet inlined in a
+   * page's HTML: Vite serves it in the same response that starts the page's scripts, and a
+   * transform it has started is not yet among the requests in flight or in the graph while it
+   * resolves the module's path. Every warm-up counts, not a page's own only: a module's static
+   * imports and the files of `server.warmup` are among them. One started later is left to the
+   * walk of the graph.
+   */
+  startedRequests(environment: DevEnvironmentLike): Promise<void>
   /**
    * Notes that the set of atoms read may have grown, and reloads the served stylesheets it
    * outgrew.
@@ -93,7 +110,7 @@ export interface DevServing {
  * stylesheet for the page to swap.
  */
 function isInlinedInHtml(module: GraphModuleLike): boolean {
-  return module.id !== null && /[?&]html-proxy\b/.test(module.id)
+  return module.id !== null && HTML_PROXY.test(module.id)
 }
 
 /**
@@ -170,16 +187,27 @@ export const devServing: DevServing = {
     const module = environment.moduleGraph.getModuleById(id)
     if (!module) return
     // A stylesheet no module imports (a `<link>` names it, and Vite asks for it as `?direct`) is
-    // answered at once. One asked for as a module is not: its importer may still be in the middle
-    // of its own transform, which is where the graph registers the import, so no importer yet is
-    // no reason to answer.
-    if (module.importers.size === 0 && DIRECT.test(id)) return
+    // answered at once: a set that grows after it was served is repaired by swapping it. One asked
+    // for as a module is not: its importer may still be in the middle of its own transform, which
+    // is where the graph registers the import, so no importer yet is no reason to answer. Nor is
+    // one inlined in the HTML, which Vite asks for as `?direct` too (and `?html-proxy`) while it
+    // starts the page's scripts: its repair is a reload of the page, which would flash it and run
+    // its scripts again on a first load, so it waits like an imported one.
+    if (module.importers.size === 0 && DIRECT.test(id) && !HTML_PROXY.test(id)) return
+    // Vite starts a page's scripts before it reads the inline stylesheet (unless
+    // `server.preTransformRequests` is `false`, when it starts none and there is nothing to wait
+    // for here), but a script is in neither the requests in flight nor the graph while Vite
+    // resolves its path, so the two waits below do not know it is coming: what Vite started is
+    // waited for first.
+    if (HTML_PROXY.test(id)) await devServing.startedRequests(environment)
     // The dependency optimizer holds its first result until the first static imports are done,
     // and the stylesheet being served is one of them. Saying it is not waited on lets the
     // optimizer finish, which the transform of a prebundled dependency below waits for.
     await environment.waitForRequestsIdle(id)
     await transformReachable(environment, graphRoots(environment))
   },
+
+  startedRequests: waitForStartedRequests,
 
   notePages(context) {
     const { state } = context

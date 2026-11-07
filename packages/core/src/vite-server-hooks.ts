@@ -6,6 +6,7 @@ import type { UsedContext } from './vite-used.ts'
 
 import { noteStylesheetRequests } from './vite-dev-judge.ts'
 import { installServerKeepMap, removeServerKeepMap } from './vite-dev-keep.ts'
+import { noteStartedRequests } from './vite-dev-read.ts'
 import { devServing } from './vite-dev.ts'
 import { expectBuilds } from './vite-markup.ts'
 
@@ -22,9 +23,11 @@ function warnThrough(ctx: { warn(message: string): void }): (message: string) =>
  * The hooks of the first plugin object that belong to the dev server and to a builder's process:
  * the map `cx.dynamic()` reads in a server render of this process, put on the global when the dev
  * server starts and taken off when it closes, the note of each page that connects or disconnects
- * (a module reload sent while no page was listening reached no one), and, for a builder's
- * process, the note of which environments are about to build, so the markup warning is judged
- * once the last of them has built (every module it was going to transform has been read).
+ * (a module reload sent while no page was listening reached no one), the note of the warm-ups
+ * Vite starts (a page's scripts and stylesheets, the static imports of the modules it transforms,
+ * the files of `server.warmup`), which a stylesheet inlined in a page waits for, and, for
+ * a builder's process, the note of which environments are about to build, so the markup warning is
+ * judged once the last of them has built (every module it was going to transform has been read).
  */
 export function serverHooks(context: UsedContext): {
   readonly buildApp: {
@@ -39,6 +42,7 @@ export function serverHooks(context: UsedContext): {
       const devServer = server as DevServerLike
       const owner = devServer.environments.client
       installServerKeepMap(context, owner)
+      noteStartedRequests(owner)
       // The map comes off when the server is told to close, not only when its environments finish
       // closing: Vite 8.2.1 skips the close hooks of an environment whose `buildEnd` throws.
       const close = devServer.close.bind(devServer)
