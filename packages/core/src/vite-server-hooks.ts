@@ -23,8 +23,9 @@ function warnThrough(ctx: { warn(message: string): void }): (message: string) =>
  * The hooks of the first plugin object that belong to the dev server and to a builder's process:
  * the map `cx.dynamic()` reads in a server render of this process, put on the global when the dev
  * server starts and taken off when it closes, the note of each page that connects or disconnects
- * (a module reload sent while no page was listening reached no one), the note of the transforms
- * Vite starts for a page's scripts (the stylesheet inlined in that page waits for them), and, for
+ * (a module reload sent while no page was listening reached no one), the note of the warm-ups
+ * Vite starts (a page's scripts and stylesheets, the static imports of the modules it transforms,
+ * the files of `server.warmup`), which a stylesheet inlined in a page waits for, and, for
  * a builder's process, the note of which environments are about to build, so the markup warning is
  * judged once the last of them has built (every module it was going to transform has been read).
  */

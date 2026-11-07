@@ -62,10 +62,12 @@ export interface DevServing {
    */
   hold(environment: DevEnvironmentLike, id: string): Promise<void>
   /**
-   * Waits for the transforms Vite started for the scripts and stylesheets of the pages it has read,
-   * for a stylesheet inlined in a page's HTML: Vite serves it in the same response that starts
-   * them, and a transform it has started is not yet among the requests in flight or in the graph
-   * while it resolves the module's path.
+   * Waits for the warm-ups Vite has started and not finished, for a stylesheet inlined in a
+   * page's HTML: Vite serves it in the same response that starts the page's scripts, and a
+   * transform it has started is not yet among the requests in flight or in the graph while it
+   * resolves the module's path. Every warm-up counts, not a page's own only: a module's static
+   * imports and the files of `server.warmup` are among them. One started later is left to the
+   * walk of the graph.
    */
   startedRequests(environment: DevEnvironmentLike): Promise<void>
   /**
@@ -192,9 +194,11 @@ export const devServing: DevServing = {
     // starts the page's scripts: its repair is a reload of the page, which would flash it and run
     // its scripts again on a first load, so it waits like an imported one.
     if (module.importers.size === 0 && DIRECT.test(id) && !HTML_PROXY.test(id)) return
-    // Vite starts a page's scripts before it reads the inline stylesheet, but a script is in neither
-    // the requests in flight nor the graph while Vite resolves its path, so the two waits below do
-    // not know it is coming: what Vite started is waited for first.
+    // Vite starts a page's scripts before it reads the inline stylesheet (unless
+    // `server.preTransformRequests` is `false`, when it starts none and there is nothing to wait
+    // for here), but a script is in neither the requests in flight nor the graph while Vite
+    // resolves its path, so the two waits below do not know it is coming: what Vite started is
+    // waited for first.
     if (HTML_PROXY.test(id)) await devServing.startedRequests(environment)
     // The dependency optimizer holds its first result until the first static imports are done,
     // and the stylesheet being served is one of them. Saying it is not waited on lets the

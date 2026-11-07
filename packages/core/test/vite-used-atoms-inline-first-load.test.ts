@@ -4,8 +4,8 @@
  * finishes first, the stylesheet must not be sent to the page twice: a reload on a first load is a
  * page that flashes and runs its scripts again, and a test that loads a page and then marks it
  * sees the mark disappear. The server holds the inline stylesheet, as it holds an imported one,
- * until the modules the page loads have been read. That wait has three steps: what Vite has started
- * for the page's scripts, the client's wait for the requests in flight, and a walk of the modules
+ * until the modules the page loads have been read. That wait has three steps: what Vite has started,
+ * the client's wait for the requests in flight, and a walk of the modules
  * reachable from the graph's roots. A script is in none of the last two while Vite resolves its
  * path, and in the graph only from the end of its load, so each step has a row that only it can
  * pass, with the steps before it stood in by ones that return at once.
@@ -114,10 +114,14 @@ async function reloadsOf(page: Page, api: ViteApi): Promise<string[]> {
       await Promise.race([entered, requested])
     }
 
-    await fetch(url)
+    const page = await fetch(url)
+    const html = await page.text()
     await fetch(`${url}src/main.ts`)
     // The reload, if one is owed, goes out on the next turn of the event loop.
     await new Promise((resolve) => setTimeout(resolve, 200))
+    // The kept atom is in the sheet only if core resolved: an unbuilt core serves an error page,
+    // which owes no reload and would pass every row.
+    expect(html).toContain('.nave-grid {')
     return send.mock.calls
       .filter(([payload]) => JSON.stringify(payload).includes('"type":"full-reload"'))
       .map(() => 'full-reload')
@@ -156,6 +160,30 @@ describe.each(Object.entries(VITE_APIS))(
       expect(
         await reloadsOf({ heldAt: 'resolve', isRequestedFirst: false, standIn: [] }, api),
       ).toEqual([])
+    }, 60_000)
+
+    it('does not make an imported stylesheet wait for the transforms Vite started', async () => {
+      const app = makeUsedApp(appFiles({ 'src/x.ts': `${IMPORT}console.log(cx('flex'))\n` }))
+      const { server, url } = await listenDev(
+        devConfig(app.root, [navePlugin({ keep: ['grid'] })] as never),
+        api,
+      )
+      try {
+        // Vite warms up app.css as an import of main.ts, and the stylesheet is that very request.
+        await fetch(`${url}src/main.ts`)
+        const statusOfStylesheet = async (): Promise<number> => {
+          const response = await fetch(`${url}src/app.css`)
+          return response.status
+        }
+        const answer = await Promise.race([
+          statusOfStylesheet(),
+          new Promise<'waited'>((resolve) => setTimeout(resolve, 5000, 'waited')),
+        ])
+        expect(answer).toBe(200)
+      } finally {
+        await Promise.race([stopDev(server), new Promise((resolve) => setTimeout(resolve, 3000))])
+        app.dispose()
+      }
     }, 60_000)
   },
 )
