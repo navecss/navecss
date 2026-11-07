@@ -267,15 +267,19 @@ describe.each(Object.entries(VITE_APIS))(
           builds.bundled,
         )
       } finally {
-        // A close that fails ends the row with its error, and the app is removed all the same.
-        try {
-          await Promise.all([
-            atMost(CLOSE_LIMIT, replacedClosing),
-            atMost(CLOSE_LIMIT, closing?.close()),
-          ])
-        } finally {
-          app.dispose()
-        }
+        // Both closes are waited for, even when one fails, and the app is removed before a failed
+        // close ends the row with its error.
+        const closes = await Promise.allSettled([
+          atMost(CLOSE_LIMIT, replacedClosing),
+          atMost(CLOSE_LIMIT, closing?.close()),
+        ])
+        app.dispose()
+        expect(
+          closes
+            .filter((close) => close.status === 'rejected')
+            .map((close) => String(close.reason)),
+          'a watcher failed to close',
+        ).toEqual([])
       }
     }, 480_000)
   },

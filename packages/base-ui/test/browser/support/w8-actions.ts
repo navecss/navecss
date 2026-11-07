@@ -62,6 +62,9 @@ export const parkPointer = async (timeout?: number): Promise<void> => {
   const corner = document.createElement('div')
   corner.style.cssText = 'position: fixed; right: 0; bottom: 0; width: 8px; height: 8px'
   document.body.append(corner)
-  await userEvent.hover(corner, timeout === undefined ? {} : { timeout })
-  corner.remove()
+  try {
+    await userEvent.hover(corner, timeout === undefined ? {} : { timeout })
+  } finally {
+    corner.remove()
+  }
 }
