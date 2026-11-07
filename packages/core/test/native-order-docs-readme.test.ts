@@ -94,7 +94,7 @@ describe('AC-native-apply-order-38: "Order inside a rule" sits in the @nave dire
     ])
   })
 
-  it('shows the order warning in the house frame, as the plugin prints it at the release', async () => {
+  it('shows the order warning in the house frame, as the plugin prints it at the release (AC-native-order-migration-removal-11)', async () => {
     const sample = extractFences('README.md', sectionOf(SECTION)).find((f) => f.lang === 'text')
     const [printed] = await framedWarnings(
       '.panel {\n  @nave hideDesktopUp;\n  display: grid;\n}\n',
@@ -103,6 +103,20 @@ describe('AC-native-apply-order-38: "Order inside a rule" sits in the @nave dire
 
     expect(sample?.body.trim()).toBe(printed)
     expect(printed).not.toContain('Before @navecss/core')
+  })
+
+  it('the order section and the README keep no contrast with earlier releases (AC-native-order-migration-removal-11)', () => {
+    const between = (text: string): string => {
+      const start = text.indexOf(SECTION)
+      return text.slice(start, text.indexOf('#### Output size', start))
+    }
+    const isLeftover = (text: string): boolean =>
+      /earlier releases/i.test(between(text)) || text.includes('second kind')
+    const pinned = `${SECTION}\nenclosing rule holds after the nested rule. A warning of the second kind says nothing about\nearlier releases, because that later content already won in them.\n#### Output size\n`
+
+    expect(between(readme)).toContain('A directive written inside a nested rule')
+    expect(isLeftover(readme)).toBe(false)
+    expect(isLeftover(pinned)).toBe(true)
   })
 
   it('shows the marker with an example the plugin accepts without a warning', async () => {

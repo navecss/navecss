@@ -213,7 +213,7 @@ describe('AC-native-apply-order-41: one minor changeset for core and a patch for
     )
   })
 
-  it('names no function that no subpath of the package exports, and keeps the sentence the 0.5.0 entry quoted', () => {
+  it('names no function that no subpath of the package exports, and keeps the sentence the 0.5.0 entry quoted (AC-native-order-migration-removal-10)', () => {
     const text = prose(CORE_CHANGESET)
 
     expect(namesCalledIn(text)).toContain('cx')
@@ -225,7 +225,7 @@ describe('AC-native-apply-order-41: one minor changeset for core and a patch for
     expect(hasWonSentence(text)).toBe(true)
   })
 
-  it('control: the sentence check reds when the release or the wording changes', () => {
+  it('control: the sentence check reds when the release or the wording changes (AC-native-order-migration-removal-10)', () => {
     const release = WON_SENTENCE.replace('0.5.0', '0.5.1')
     const wording = WON_SENTENCE.replace('placed last', 'placed first')
 
@@ -295,7 +295,7 @@ describe('AC-native-apply-order-46: nothing the release ships keeps a slot or a 
     for (const text of texts) expect(placeholdersIn(text)).toEqual([])
   })
 
-  it('no source that prints a warning leaves a slot or a placeholder in its text', () => {
+  it('no source that prints a warning leaves a slot or a placeholder in its text (AC-native-order-migration-removal-10)', () => {
     const directory = path.join(path.dirname(OUTPUT_PATH), '../../src/directive')
     const files = readdirSync(directory).filter((name) => /^(order-|marker-names)/.test(name))
 

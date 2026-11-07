@@ -23,6 +23,11 @@ const TITLE =
  */
 const ADR_0006_CORRECTION = '9474c6840eeda7940fb8a43770459e11c0c4a6577559434962b9f936ec62baa7'
 
+/**
+ * The folded digest of decision 6 of ADR 0011, from its lead through its last sentence.
+ */
+const ADR_0011_DECISION_6 = '85808e35b091818d98ee5f3d4866f07900797d7f5a480679534e6534ca6187d1'
+
 const adr = adrRecord('0011')
 
 /**
@@ -47,6 +52,13 @@ function decisionText(lead: string): string {
   const rest = adr.text.slice(start + lead.length)
   const end = rest.search(/\n\*\*\d\. |\n## /)
   return fold(end === -1 ? rest : rest.slice(0, end))
+}
+
+/**
+ * Decision 6 as written: from its lead through its last sentence.
+ */
+function decisionSixSpan(text: string): string {
+  return text.slice(text.indexOf('**6. The first minor'), text.indexOf('remember it.') + 12)
 }
 
 describe('AC-native-apply-order-36: ADR 0011 holds the full reasoning', () => {
@@ -200,7 +212,7 @@ describe('AC-native-apply-order-37: ADR 0001, ADR 0006 and the index point at 00
     return fold(`- ${end === -1 ? rest : rest.slice(0, end)}`)
   }
 
-  it('ADR 0001 has a dated line under decision 1 naming ADR 0011 and the release', () => {
+  it('ADR 0001 has a dated line under decision 1 naming ADR 0011 and the release (AC-native-order-migration-removal-10)', () => {
     const line = bulletAfter(first.text, '1. `@nave` emits **native CSS nesting**')
 
     expect(line).toContain('[ADR 0011](0011-')
@@ -208,7 +220,7 @@ describe('AC-native-apply-order-37: ADR 0001, ADR 0006 and the index point at 00
     expect(first.text.indexOf(dated)).toBeLessThan(first.text.indexOf('2. `scripts/build-css.ts`'))
   })
 
-  it('ADR 0001 has a dated line under its consequence on nested rules authored before a directive', () => {
+  it('ADR 0001 has a dated line under its consequence on nested rules authored before a directive (AC-native-order-migration-removal-10)', () => {
     const line = bulletAfter(first.text, 'Consumer nested rules authored _before_')
 
     expect(line).toContain('[ADR 0011](0011-')
@@ -219,7 +231,7 @@ describe('AC-native-apply-order-37: ADR 0001, ADR 0006 and the index point at 00
     expect(first.text).toMatch(/^- \*\*Status:\*\* accepted$/m)
   })
 
-  it('ADR 0006 holds the correction under its mapping table, date and release filled', () => {
+  it('ADR 0006 holds the correction under its mapping table, date and release filled (AC-native-order-migration-removal-10)', () => {
     const correction = bulletAfter(sixth.text, '| A consumer atom passed to the plugin')
 
     expect(correction.startsWith(`- ${dated} before \`@navecss/core\` 0.5.0,`)).toBe(true)
@@ -228,7 +240,7 @@ describe('AC-native-apply-order-37: ADR 0001, ADR 0006 and the index point at 00
     expect(foldedDigest(correction)).toBe(ADR_0006_CORRECTION)
   })
 
-  describe('AC-native-order-migration-removal-12: decision 6 gains one dated correction under it', () => {
+  describe('AC-native-order-migration-removal-12 — decision 6 gains one dated correction under it', () => {
     const CORRECTION =
       /^- \*\*Correction \((\d{4}-\d{2}-\d{2})\):\*\* the release after 0\.5\.0 removes the three sentences, `src\/directive\/migration\.ts` and the test that made the removal fall due, as this decision planned\. The warnings themselves stay, at the same positions, and the CSS is unchanged\.$/
 
@@ -244,6 +256,13 @@ describe('AC-native-apply-order-37: ADR 0001, ADR 0006 and the index point at 00
       expect(correction).not.toMatch(/[<>]/)
       expect(correction.match(/\d+\.\d+(?:\.\d+)?/g)?.filter((run) => run !== '0.5.0')).toEqual([])
       expect(placeholdersIn(correction)).toEqual([])
+    })
+
+    it('leaves decision 6 itself unchanged', () => {
+      const sentences = decisionSixSpan(adr.text).split('. ')
+
+      expect(foldedDigest(decisionSixSpan(adr.text))).toBe(ADR_0011_DECISION_6)
+      expect(foldedDigest(sentences.slice(1).join('. '))).not.toBe(ADR_0011_DECISION_6)
     })
 
     it('keeps the label the records use for a later event', () => {

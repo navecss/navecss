@@ -198,8 +198,7 @@ changing its exit code. No option turns it off for the whole project.
 A directive written inside a nested rule that applies to the same element, such as
 `.card { & { @nave hideDesktopUp } display: flex; }`, is checked the same way: its atoms' blocks
 are compared with what follows the directive inside that nested rule, and with what each
-enclosing rule holds after the nested rule. A warning of the second kind says nothing about
-earlier releases, because that later content already won in them.
+enclosing rule holds after the nested rule.
 
 **Marking an override you mean.** Name the property in a comment inside the
 directive:

@@ -101,6 +101,22 @@ describe('AC-native-order-migration-removal-06 — the rows are the 33 pinned', 
     ).toHaveLength(2)
   })
 
+  it('every row carries only the fields a row has, and pins the inputs of the two more rows', () => {
+    const allowed = new Set(['extend', 'id', 'input', 'measure', 'now'])
+    const required = ['id', 'input', 'measure', 'now']
+    const isRowShaped = (row: object): boolean => {
+      const keys = Object.keys(row)
+      return keys.every((key) => allowed.has(key)) && required.every((key) => keys.includes(key))
+    }
+    const inputOf = (id: string): string | undefined =>
+      OUTCOME_ROWS.find((row) => row.id === id)?.input
+
+    for (const row of OUTCOME_ROWS) expect(isRowShaped(row), row.id).toBe(true)
+    expect(isRowShaped({ ...OUTCOME_ROWS[0], was: 'rgb(0, 0, 0)' })).toBe(false)
+    expect(inputOf('extend atoms mA mB')).toBe('.x { @nave mA mB; }')
+    expect(inputOf('logical variant')).toBe('.card { @nave wFullPhoneOnly; inline-size: 50%; }')
+  })
+
   it('reds on a row missing, duplicated or renamed', () => {
     const ids = OUTCOME_ROWS.map((row) => row.id)
 

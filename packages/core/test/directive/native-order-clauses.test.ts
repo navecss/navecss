@@ -6,13 +6,15 @@
 import { describe, expect, it } from 'vitest'
 
 import { REVEAL_CLAUSE, RING_CLAUSE } from '../../src/directive/order-focus.ts'
-import { OUTCOME_ROWS } from '../helpers/native-order-outcome-rows.ts'
 import { warningsViaPostcss, warningsViaText } from '../helpers/native-order.ts'
 
 const HOSTS = [
   ['the PostCSS host', warningsViaPostcss],
   ['the text expander', (css: string, o?: object) => Promise.resolve(warningsViaText(css, o))],
 ] as const
+
+const HIDERS = ['hidePhoneOnly', 'hideTabletPortraitUp', 'hideTabletLandscapeUp', 'hideDesktopUp']
+const DISPLAYS = ['flex', 'inlineFlex', 'grid', 'block', 'inlineBlock']
 
 const RING = 'ring'
 const REVEAL = 'reveal'
@@ -299,7 +301,9 @@ const CLASSES: readonly {
     name: 'R4, an atom block overridden by later content',
     count: 29,
     inputs: [
-      ...OUTCOME_ROWS.filter((row) => row.id.startsWith('pair ')).map((row) => row.input),
+      ...HIDERS.flatMap((hider) => DISPLAYS.map((atom) => `.x { @nave ${hider} ${atom}; }`)),
+      '.x { @nave wFullPhoneOnly srOnly; }',
+      '.x { @nave wFullPhoneOnly srOnlyFocusable; }',
       '.x { @nave focusRing; &:focus-visible { outline-color: red } }',
       '.x { @nave focusRing; &:focus { outline: none } }',
       '.x { @nave focusRing; &:focus-visible { outline: none } }',

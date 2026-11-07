@@ -1,7 +1,7 @@
 /**
  * AC-native-order-migration-removal-05, Tier B: in Chromium, the output the plugin prints for
  * each row computes the row's value, from the PostCSS host and from the text expander alike. The
- * rows are the 33 of `helpers/native-order-outcome-rows.ts` (the criterion before this one
+ * rows are the 33 of `helpers/native-order-outcome-rows.ts` (the next criterion
  * pins them); the last test checks the viewport the rows name is the one the media queries read.
  */
 import { describe, expect, it } from 'vitest'
@@ -29,8 +29,8 @@ describe.each(OUTCOME_ROWS.map((row) => [row.id, row] as const))(
   },
 )
 
-describe('AC-native-order-migration-removal-05 - the measurements can tell the outputs apart', () => {
-  it('the viewport the row names is the one the media queries read', async () => {
+describe('AC-native-order-migration-removal-05 - the viewport the rows name is the one the media queries read', () => {
+  it('matches (width < 37.5em) at 375px and not (width >= 75em)', async () => {
     await mountPlacement('', { focused: false, html: '<p>x</p>', selector: 'p', width: 375 })
 
     expect(globalThis.matchMedia('(width < 37.5em)').matches).toBe(true)

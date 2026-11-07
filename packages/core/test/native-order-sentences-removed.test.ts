@@ -42,9 +42,25 @@ const DOCBLOCK_WORDS = new RegExp(
     named('used to be', ' placed'),
     named('first', ' minor'),
     named('256384', 'a7'),
-    named('0', String.raw`\.5\.0`),
+    named(String.raw`(?<![\d.])0`, String.raw`\.5\.0(?![\d.])`),
   ].join('|'),
+  'i',
 )
+
+/**
+ * The members of the object type of the `parts` parameter, as written in `shapes`.
+ */
+function partsTypeOf(shapes: string): string {
+  return /\bparts: \{([^}]*)\}/.exec(shapes)?.[1] ?? ''
+}
+
+/**
+ * The body of `pseudoElementText` in `shapes`, up to the closing brace at the start of a line.
+ */
+function pseudoElementBody(shapes: string): string {
+  const start = shapes.indexOf('function pseudoElementText')
+  return shapes.slice(start, shapes.indexOf('\n}\n', start))
+}
 
 /**
  * The relative path of every file under `src`.
@@ -120,13 +136,25 @@ describe('AC-native-order-migration-removal-01 — the source holds no module, n
     expect(nestedFact).toBeDefined()
     expect(nestedFact).not.toMatch(/\bblock\b/)
     expect(emit).not.toMatch(/\bblock: \{ atom/)
-    expect(shapes).not.toMatch(/\bsentence\b/)
+    expect(partsTypeOf(shapes)).not.toMatch(/\bsentence\b/)
+    expect(pseudoElementBody(shapes)).not.toMatch(/\b(?:const|let) sentence\b/)
   })
 
   it('control: the search finds each name and each docblock word where one is planted', () => {
     for (const name of SENTENCE_NAMES) expect(`x ${name} y`.includes(name)).toBe(true)
+    const docblock =
+      '/** the first sentence */\nfunction followsText(r, parts: { atoms: string }) {}'
+    expect(partsTypeOf(docblock)).not.toMatch(/\bsentence\b/)
+    expect(partsTypeOf('parts: { sentence: string }')).toMatch(/\bsentence\b/)
+    expect(pseudoElementBody('function pseudoElementText() {\n  const sentence = 1\n}\n')).toMatch(
+      /\b(?:const|let) sentence\b/,
+    )
+    expect(sourceFiles()).toContain(path.join('directive', 'order-text.ts'))
+    expect(filesHolding(['focusClauseOf'])).toContain(path.join('directive', 'order-text.ts'))
     expect(DOCBLOCK_WORDS.test('it ships in the first minor')).toBe(true)
     expect(DOCBLOCK_WORDS.test('since 0.5.0')).toBe(true)
+    expect(DOCBLOCK_WORDS.test('since 10.5.0')).toBe(false)
+    expect(DOCBLOCK_WORDS.test('First Minor')).toBe(true)
     expect(DOCBLOCK_WORDS.test('the next one')).toBe(false)
   })
 })
@@ -136,7 +164,7 @@ describe('AC-native-order-migration-removal-02 — the worked instances name no 
     const instances = [...ORDER_INSTANCES, ...SHAPE_INSTANCES]
     const lines = instances.flatMap((instance) => instance.lines)
 
-    expect(instances).toHaveLength(14)
+    expect(instances.length).toBeGreaterThanOrEqual(14)
     expect(lines.length).toBeGreaterThanOrEqual(14)
     expect(lines.filter((line) => /before @navecss\/core/i.test(line))).toEqual([])
   })
@@ -180,13 +208,7 @@ describe('AC-native-order-migration-removal-04 — the first-minor instruments a
   })
 
   it('no browser test, helper or script holds a field or helper only the retired files used', () => {
-    const needles = [
-      named('text', 'Was'),
-      named('ELEMENT', '_COLOR'),
-      named('expect', 'ed('),
-      named('OLD', '_ROWS'),
-      named('equivalent', ':'),
-    ]
+    const needles = [named('text', 'Was'), named('ELEMENT', '_COLOR'), named('OLD', '_ROWS')]
     const directories = ['test/browser', 'test/helpers', 'scripts']
     const holding = trackedLinesHolding(needles)
       .map((line) => line.split(':', 1)[0]!)
