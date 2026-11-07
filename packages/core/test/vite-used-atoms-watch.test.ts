@@ -267,11 +267,15 @@ describe.each(Object.entries(VITE_APIS))(
           builds.bundled,
         )
       } finally {
-        await Promise.all([
-          atMost(CLOSE_LIMIT, replacedClosing),
-          atMost(CLOSE_LIMIT, closing?.close()),
-        ])
-        app.dispose()
+        // A close that fails ends the row with its error, and the app is removed all the same.
+        try {
+          await Promise.all([
+            atMost(CLOSE_LIMIT, replacedClosing),
+            atMost(CLOSE_LIMIT, closing?.close()),
+          ])
+        } finally {
+          app.dispose()
+        }
       }
     }, 480_000)
   },

@@ -1,8 +1,9 @@
 /**
  * The plugin declares the router directories Next.js reads (`app/`, `pages/`, and both under
  * `src/`) whether or not they exist yet. Both bundlers accept a declaration of a directory that
- * does not exist, and a route created in one later is read: on Turbopack's dev server that
- * declaration is what runs the plugin again.
+ * does not exist, and a route created in one later is read. Whether the declaration is what makes
+ * Turbopack's dev server run the plugin again is not shown: without it the route's atom shipped in
+ * 9 of 9 measured runs.
  */
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -63,7 +64,9 @@ describe.skipIf(SKIP_REASON !== undefined)(
         expect(await server.css('/')).toContain('.nave-flex')
         expect(Object.keys(app.record()?.directories ?? {})).toEqual(expect.arrayContaining(ABSENT))
         app.write(LATER_ROUTE)
-        await untilLaterRouteGrid(server, () => recreateLaterRoute(app))
+        await untilLaterRouteGrid(server, () => recreateLaterRoute(app), {
+          rewriteDetail: ' (removing its pages/ directory first)',
+        })
         await server.stop()
         expect(server.output()).not.toMatch(/panic/i)
       },

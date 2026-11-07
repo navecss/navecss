@@ -56,11 +56,12 @@ export const closeBy = async (how: 'close' | 'outside'): Promise<void> => {
  * Moves the pointer to the bottom-right corner of the viewport, where a scene renders nothing. A
  * pointer stays where the last test left it, and a trigger that is rendered under it is hovered
  * the moment it mounts, so a tooltip can already be open before the test has done anything.
+ * `timeout` is how long the move may take, in milliseconds, where the caller has a budget of its own.
  */
-export const parkPointer = async (): Promise<void> => {
+export const parkPointer = async (timeout?: number): Promise<void> => {
   const corner = document.createElement('div')
   corner.style.cssText = 'position: fixed; right: 0; bottom: 0; width: 8px; height: 8px'
   document.body.append(corner)
-  await userEvent.hover(corner)
+  await userEvent.hover(corner, timeout === undefined ? {} : { timeout })
   corner.remove()
 }

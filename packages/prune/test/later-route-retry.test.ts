@@ -121,6 +121,29 @@ describe('the retry of the pages row', () => {
   })
 })
 
+/**
+ * A server whose wait writes the route again `times` times and then gives up.
+ */
+const givingUpAfter = (times: number): Parameters<typeof untilLaterRouteGrid>[0] => ({
+  untilCss: (_url, _selector, options) => {
+    for (let write = 0; write < times; write += 1) options?.rewrite?.()
+    return Promise.reject(new Error('/ did not serve CSS holding .nave-grid within 240000 ms:'))
+  },
+  get: () => Promise.resolve({ status: 200, text: 'nave-grid' }),
+})
+
+const failureOf = async (
+  server: Parameters<typeof untilLaterRouteGrid>[0],
+  options?: Parameters<typeof untilLaterRouteGrid>[2],
+): Promise<string> => {
+  try {
+    await untilLaterRouteGrid(server, () => {}, options)
+  } catch (error) {
+    return (error as Error).message
+  }
+  return 'it did not fail'
+}
+
 describe('the diagnostic of the pages row', () => {
   it('gives up on a server that is alive and answers nothing, and that is not the 404 case', async () => {
     const server = {
@@ -139,4 +162,16 @@ describe('the diagnostic of the pages row', () => {
     expect(failure).toContain('/later did not answer within 300 ms')
     expect(RETRY_ON_ROUTE_NOT_BUILT.condition.test(failure)).toBe(false)
   }, 5000)
+
+  it('says how many times the wait wrote the route again', async () => {
+    expect(await failureOf(givingUpAfter(3))).toContain('The wait wrote the route again 3 times.')
+    expect(await failureOf(givingUpAfter(1))).toContain('The wait wrote the route again once.')
+    expect(await failureOf(givingUpAfter(0))).toContain('The wait wrote the route again 0 times.')
+  })
+
+  it('adds what the row does each time it writes the route again', async () => {
+    expect(
+      await failureOf(givingUpAfter(2), { rewriteDetail: ' (removing pages/ first)' }),
+    ).toContain('The wait wrote the route again 2 times (removing pages/ first).')
+  })
 })
