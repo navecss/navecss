@@ -23,7 +23,7 @@ import type { UsedContext } from './vite-used.ts'
 
 import { isCssModuleId } from './vite-css-id.ts'
 import { isServedAsStylesheet, judgeWhenServed } from './vite-dev-judge.ts'
-import { graphRoots, transformReachable } from './vite-dev-read.ts'
+import { graphRoots, transformReachable, waitForStartedRequests } from './vite-dev-read.ts'
 import { noteReloadSent } from './vite-dev-reloads.ts'
 import { modulesWithGrownStylesheets } from './vite-dev-update.ts'
 import { inspectAtomicLayer, pruneAtomicLayer } from './vite-prune.ts'
@@ -61,6 +61,13 @@ export interface DevServing {
    * which nothing imports, is answered at once.
    */
   hold(environment: DevEnvironmentLike, id: string): Promise<void>
+  /**
+   * Waits for the transforms Vite started for the scripts and stylesheets of the pages it has read,
+   * for a stylesheet inlined in a page's HTML: Vite serves it in the same response that starts
+   * them, and a transform it has started is not yet among the requests in flight or in the graph
+   * while it resolves the module's path.
+   */
+  startedRequests(environment: DevEnvironmentLike): Promise<void>
   /**
    * Notes that the set of atoms read may have grown, and reloads the served stylesheets it
    * outgrew.
@@ -185,12 +192,18 @@ export const devServing: DevServing = {
     // starts the page's scripts: its repair is a reload of the page, which would flash it and run
     // its scripts again on a first load, so it waits like an imported one.
     if (module.importers.size === 0 && DIRECT.test(id) && !HTML_PROXY.test(id)) return
+    // Vite starts a page's scripts before it reads the inline stylesheet, but a script is in neither
+    // the requests in flight nor the graph while Vite resolves its path, so the two waits below do
+    // not know it is coming: what Vite started is waited for first.
+    if (HTML_PROXY.test(id)) await devServing.startedRequests(environment)
     // The dependency optimizer holds its first result until the first static imports are done,
     // and the stylesheet being served is one of them. Saying it is not waited on lets the
     // optimizer finish, which the transform of a prebundled dependency below waits for.
     await environment.waitForRequestsIdle(id)
     await transformReachable(environment, graphRoots(environment))
   },
+
+  startedRequests: waitForStartedRequests,
 
   notePages(context) {
     const { state } = context

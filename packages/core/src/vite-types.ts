@@ -65,6 +65,11 @@ export interface DevEnvironmentLike {
   }
   readonly config: { readonly dev: { readonly warmup: readonly string[] } }
   transformRequest(url: string): Promise<unknown>
+  /**
+   * Starts the transform of `url` and returns when it has ended, however it ended. Vite starts one
+   * for each script and stylesheet a page names, without waiting for it.
+   */
+  warmupRequest(url: string): Promise<void>
   reloadModule(module: GraphModuleLike): Promise<void>
   /**
    * The channel to the environment's pages, which a page reload goes out on.
