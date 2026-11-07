@@ -6,7 +6,6 @@
 import postcss, { type Rule } from 'postcss'
 import { describe, expect, it } from 'vitest'
 
-import { MIGRATION_VERSION } from '../src/directive/migration.ts'
 import { extractFences } from './doc-fences.ts'
 import { readCoreReadme, readmeSection } from './helpers/astro-readme.ts'
 import { scanForBrainReferences } from './helpers/brain-reference-scan.ts'
@@ -103,7 +102,7 @@ describe('AC-native-apply-order-38: "Order inside a rule" sits in the @nave dire
     )
 
     expect(sample?.body.trim()).toBe(printed)
-    expect(printed).toContain(`Before @navecss/core ${MIGRATION_VERSION} "hideDesktopUp" won`)
+    expect(printed).not.toContain('Before @navecss/core')
   })
 
   it('shows the marker with an example the plugin accepts without a warning', async () => {

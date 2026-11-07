@@ -82,6 +82,14 @@ describe.each(HOSTS)(
       expect(await warn(css)).toHaveLength(count)
     })
 
+    it("AC-native-order-migration-removal-09 — pins the b3 warning on a directive after an earlier directive's block", async () => {
+      const css = '.a, .b::before { @nave hideDesktopUp; @nave textLeft; }'
+      const expected =
+        'x.css:1:45: @nave: this directive comes after the block of "hideDesktopUp" under @media (width >= 75em), so the declarations of "textLeft" are written inside `& { }`, which cannot match a pseudo-element: they do not apply to .b::before. To apply them there too, move the directive above the directive that names "hideDesktopUp". Or move .b::before to a separate rule, with or without them.'
+
+      expect(framedWarnings(await warn(css))).toEqual([expected])
+    })
+
     it('names the fix of each row (the move or reorder only where it works)', async () => {
       const [b1] = await warn('.icon, .link::before { @nave hideDesktopUp; width: 1em; }')
       const [b2] = await warn('.a, .b::before { @nave hideDesktopUp focusRing; }')
