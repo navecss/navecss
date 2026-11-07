@@ -23,6 +23,42 @@ export function graphRoots(
     .toArray()
 }
 
+const started = new WeakMap<object, Set<Promise<void>>>()
+
+/**
+ * Starts noting the warm-ups the environment is asked for. Vite asks for one, and does not wait
+ * for it, for each script and stylesheet a page names as it reads the page, for each static local
+ * import of a module it transforms (while `server.preTransformRequests` is on), and for each file
+ * in `server.warmup`; all of them are noted, not only a page's own. Such a request is not among
+ * the requests in flight while Vite resolves the module's path, nor in the graph until the module
+ * has been loaded, so nothing else the plugin can ask knows it is coming. Once is enough for an
+ * environment.
+ */
+export function noteStartedRequests(environment: Pick<DevEnvironmentLike, 'warmupRequest'>): void {
+  if (started.has(environment)) return
+  const open = new Set<Promise<void>>()
+  started.set(environment, open)
+  const warmup = environment.warmupRequest.bind(environment)
+  environment.warmupRequest = async (url) => {
+    const request = warmup(url)
+    open.add(request)
+    try {
+      await request
+    } finally {
+      open.delete(request)
+    }
+  }
+}
+
+/**
+ * Waits until the requests noted for `environment` that are running when it is called have ended,
+ * however they ended. One started afterwards is left to the walk of the graph.
+ */
+export async function waitForStartedRequests(environment: object): Promise<void> {
+  const open = started.get(environment)
+  if (open) await Promise.allSettled(open)
+}
+
 /**
  * Transforms the module at `url`. One that fails is left to say so when the page asks for it.
  */
