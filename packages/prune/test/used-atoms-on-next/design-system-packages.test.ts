@@ -526,6 +526,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
       const unlisted = await run(code, packages, { keepFor: KEEP_FLEX })
       const listed = await run(code, packages, { keepFor: { ...KEEP_FLEX, '@other/ui': [] } })
 
+      expect(unlisted.text).toContain('components/App.ts (cn)')
       expect(listed.text).toBe(unlisted.text)
     })
   })
@@ -615,6 +616,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a cx export is taken by nam
     const first = await run(code, packages, { keepFor: KEEP_FLEX }, workspace)
 
     expect(first.first).toMatch(/^\d+ problems? in /u)
+    expect(first.text).toContain('in components/ws/index.js (cx)')
     expect(first.text).not.toMatch(/no cxModules entry clears/iu)
     const pasted = await run(
       code,

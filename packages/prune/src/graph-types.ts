@@ -61,6 +61,11 @@ export interface Graph {
    */
   readonly edges: Map<string, Set<string>>
   /**
+   * The edges the build's mode follows: a file read in the build's mode, and the files among those
+   * it imports that a condition set of that mode finds, absolute.
+   */
+  readonly inModeEdges: Map<string, Set<string>>
+  /**
    * The files that call `cx.dynamic()`, absolute.
    */
   readonly dynamicFiles: Set<string>

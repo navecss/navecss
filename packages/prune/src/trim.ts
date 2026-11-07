@@ -84,6 +84,16 @@ function byPlace(a: LocatedProblem, b: LocatedProblem): number {
 }
 
 /**
+ * The problem as the record keeps it: the id of the module it is in is an absolute path, which the
+ * judgement of the run needed and the report does not, and the record names files relative to the
+ * project.
+ */
+function withoutModuleId(problem: LocatedProblem): LocatedProblem {
+  const { moduleId: _moduleId, ...kept } = problem
+  return kept
+}
+
+/**
  * The fields every record of a run holds, finished or not.
  */
 function runFields(
@@ -125,7 +135,7 @@ function recordOfRun(
   return {
     ...runFields(run),
     atoms,
-    problems: graph.problems.toSorted(byPlace),
+    problems: graph.problems.map((problem) => withoutModuleId(problem)).toSorted(byPlace),
     files: Object.fromEntries(
       [...files]
         .map(([file, digest]): [string, string] => [relativeTo(dir, file), digest])

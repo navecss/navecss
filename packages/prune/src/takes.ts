@@ -19,9 +19,10 @@ import { languageOf } from './graph-parts.ts'
 import { isDependencyPath, relativeTo } from './source-files.ts'
 
 /**
- * The files that import each file the walk read, from the edges it recorded.
+ * The files that import each file the walk read in the build's mode, from the edges it recorded: a
+ * file the mode does not bundle takes nothing in the build.
  */
-function importersByFile(edges: Graph['edges']): Map<string, string[]> {
+function importersByFile(edges: Graph['inModeEdges']): Map<string, string[]> {
   const importers = new Map<string, string[]>()
   for (const [importer, reached] of edges) {
     for (const file of reached) importers.set(file, [...(importers.get(file) ?? []), importer])
@@ -43,10 +44,27 @@ function textOf(file: string): string | null {
 }
 
 /**
+ * The files `source` resolves to from `importer`: those the build's mode finds, else those any
+ * condition set finds.
+ */
+function resolved(
+  resolver: Resolver,
+  dir: string,
+  input: { readonly importer: string | undefined; readonly source: string },
+): readonly string[] {
+  const found = resolver.resolve(
+    input.importer ?? path.join(dir, 'next.config'),
+    input.source,
+    false,
+  )
+  return found.filesInMode.length > 0 ? found.filesInMode : found.files
+}
+
+/**
  * The module graph the walk read, as core's judgement asks it. An id is a file's absolute path.
  */
 function hostOver(graph: Graph, resolver: Resolver, dir: string): ModuleHost {
-  const importers = importersByFile(graph.edges)
+  const importers = importersByFile(graph.inModeEdges)
   return {
     environment: { name: 'next' },
     getModuleInfo: (id) => ({
@@ -55,11 +73,13 @@ function hostOver(graph: Graph, resolver: Resolver, dir: string): ModuleHost {
       dynamicImporters: [],
     }),
     resolve: (source, importer) => {
-      const found = resolver.resolve(importer ?? path.join(dir, 'next.config'), source, false)
-      const file = found.filesInMode[0] ?? found.files[0]
+      const file = resolved(resolver, dir, { source, importer }).at(0)
       // eslint-disable-next-line unicorn/no-null -- the host answers `null` for a specifier that resolves to nothing
       return Promise.resolve(file === undefined ? null : { id: file })
     },
+    // One specifier can resolve to a file per condition set: every file the build's mode bundles.
+    resolveAll: (source, importer) =>
+      Promise.resolve(resolved(resolver, dir, { source, importer })),
     // The sources are authored: the language follows from the file, as it does for the walk.
     parseModule: (code, id) =>
       parseSync(id, code, {
@@ -77,6 +97,7 @@ function contextFor(options: GraphOptions, packageOf: (file: string) => PackageI
   const { dir, cxModules, keepFor } = options
   return {
     root: dir,
+    rootName: 'the directory that holds next.config',
     options: { cxModules, keepFor },
     state: { declared: new Map() },
     packageOf: (id) => Promise.resolve(isDependencyPath(id) ? packageOf(id).name : undefined),

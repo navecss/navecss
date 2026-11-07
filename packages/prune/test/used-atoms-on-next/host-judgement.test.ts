@@ -1,0 +1,222 @@
+/**
+ * AC-nextjs-used-atoms-17 for AC-used-atoms-52, the judgement of a package's re-exports of `cx` on
+ * the plugin run over core's own `atomic.css`: a package whose `exports` map resolves its name to
+ * different files per condition, the words the take line uses for the directory a specifier
+ * resolves from, takes by files the build's mode does not bundle, take forms written for the types
+ * only, and what the stored record keeps of a problem. The application is `components/App.ts`,
+ * imported by the page.
+ */
+import { describe, expect, it } from 'vitest'
+
+import type { NaveOptions } from '../../src/options.ts'
+import type { Read } from '../helpers/used-atoms-fixture.ts'
+
+import { registerIsolation } from '../helpers/plugin-fixtures.ts'
+import { dependency, printedList, useUsedAtoms } from '../helpers/used-atoms-fixture.ts'
+import { IMPORT } from '../helpers/used-atoms-rows.ts'
+
+registerIsolation()
+const { read } = useUsedAtoms()
+
+const CN = "export { cx as cn } from '@navecss/core/cx'\n"
+const KEEP_FLEX = { '@acme/ui': ['flex'] } as const
+const REEXPORT = "export { cx } from '@navecss/core/cx'\nexport { Button } from './button.js'\n"
+const BUTTON = "export const Button = 'b'\n"
+const BY_CONDITION = {
+  exports: { '.': { 'react-server': './server.js', default: './index.js' } },
+}
+const BY_CONDITION_FILES = {
+  'index.js': REEXPORT,
+  'server.js': "export { Button } from './button.js'\n",
+  'button.js': BUTTON,
+}
+const UI = {
+  'index.js': "export { Menu } from './menu.js'\n",
+  'menu.js': `${IMPORT}export const Menu = (v) => cx('flex', v)\n`,
+  'cn.js': CN,
+}
+
+type Packages = Record<string, Record<string, string>>
+
+function app(
+  code: string,
+  packages: Packages,
+  options?: NaveOptions,
+  extra: Partial<Parameters<typeof read>[0]> = {},
+): Promise<Read> {
+  return read({
+    modules: { 'components/App.ts': code },
+    packages,
+    importsPackages: false,
+    options: options ?? { keepFor: KEEP_FLEX },
+    ...extra,
+  })
+}
+
+const onCn = (code: string): Promise<Read> => app(code, { '@acme/ui': dependency('@acme/ui', UI) })
+
+const acme = (files: Record<string, string>, extra: Record<string, unknown> = {}): Packages => ({
+  '@acme/ui': dependency('@acme/ui', files, extra),
+})
+
+describe('a package whose entry differs by condition', () => {
+  const BUTTON_ONLY = "import { Button } from '@acme/ui'\nexport const A = [Button]\n"
+
+  it('is clear under keepFor when the application takes only Button', async () => {
+    const outcome = await app(BUTTON_ONLY, acme(BY_CONDITION_FILES, BY_CONDITION))
+
+    expect(outcome.text).toBe('')
+    expect(outcome.report).toBeUndefined()
+  })
+
+  it('prints the package name as the cxModules entry when it is not listed', async () => {
+    const outcome = await app(BUTTON_ONLY, acme(BY_CONDITION_FILES, BY_CONDITION), {})
+
+    expect(printedList(outcome.text)).toEqual(['@acme/ui'])
+    expect(outcome.text).not.toContain('only the package itself imports')
+  })
+
+  it('stays an error under keepFor when the application takes cx, with the entry that clears it', async () => {
+    const outcome = await app(
+      "import { cx, Button } from '@acme/ui'\nexport const A = [Button, cx('grid')]\n",
+      acme(BY_CONDITION_FILES, BY_CONDITION),
+    )
+
+    expect(outcome.report).toBeDefined()
+    expect(printedList(outcome.text)).toEqual(['@acme/ui'])
+  })
+})
+
+describe('the take line names the directory the host resolves from', () => {
+  it('says the directory that holds next.config, never Vite', async () => {
+    const outcome = await app(
+      "import { cn } from '@acme/ui'\nexport const A = cn('grid')\n",
+      acme({ 'index.js': CN }),
+    )
+
+    expect(outcome.text).toContain(
+      'a specifier that resolves from the directory that holds next.config, from a module that re-exports cx from @navecss/core/cx itself',
+    )
+    expect(outcome.text).not.toContain('Vite')
+  })
+})
+
+describe('takes by files the build’s mode does not bundle', () => {
+  const MENU_WITH_CX = {
+    ...UI,
+    'menu.js': `${IMPORT}import './cx.js'\nexport const Menu = (v) => cx('flex', v)\n`,
+    'cx.js': "export { cx } from '@navecss/core/cx'\n",
+  }
+  const APP =
+    "import { Menu } from '@acme/ui'\nimport { X } from '@dev/lib'\nexport const A = [Menu, X]\n"
+  const devLib = (source: string): Packages => ({
+    '@acme/ui': dependency('@acme/ui', MENU_WITH_CX),
+    '@dev/lib': {
+      'package.json': JSON.stringify({
+        name: '@dev/lib',
+        version: '1.0.0',
+        type: 'module',
+        exports: { '.': { development: './src/index.js', default: './dist/index.js' } },
+        dependencies: { '@navecss/core': '*' },
+      }),
+      'dist/index.js': "export const X = 'x'\n",
+      'src/index.js': source,
+    },
+  })
+  const TAKES = "import { cx } from '@acme/ui/cx.js'\nexport const X = cx('block')\n"
+
+  it('is clear in production when only the development file of a package takes cx', async () => {
+    const outcome = await app(APP, devLib(TAKES))
+
+    expect(outcome.report).toBeUndefined()
+    expect(outcome.atoms).toEqual(['flex'])
+  })
+
+  it('is clear in production when an application file reached only from the development file takes cx', async () => {
+    const outcome = await app(
+      APP,
+      devLib("import { D } from '../../../../components/devonly.ts'\nexport const X = D\n"),
+      undefined,
+      {
+        files: {
+          'components/devonly.ts':
+            "import { cx } from '@acme/ui/cx.js'\nexport const D = cx('block')\n",
+        },
+      },
+    )
+
+    expect(outcome.report).toBeUndefined()
+  })
+
+  it('is an error in development, which bundles that file', async () => {
+    const outcome = await app(APP, devLib(TAKES), undefined, { isDev: true })
+
+    expect(outcome.report).toBeDefined()
+  })
+
+  it('is clear when no file takes cx at all', async () => {
+    const outcome = await app(APP, devLib("export const X = 'x'\n"))
+
+    expect(outcome.report).toBeUndefined()
+  })
+})
+
+describe('take forms written for the types only', () => {
+  it.each([
+    [
+      'an import type beside a value import of the module',
+      "import type { cn } from '@acme/ui/cn.js'\nimport { Menu } from '@acme/ui/cn.js'\nexport type T = typeof cn\nexport { Menu }\n",
+    ],
+    [
+      'an export type from beside a value import of the module',
+      "export type { cn } from '@acme/ui/cn.js'\nimport { Menu } from '@acme/ui/cn.js'\nexport { Menu }\n",
+    ],
+    [
+      'an import used only in a type position',
+      "import { cn } from '@acme/ui/cn.js'\nexport type T = typeof cn\n",
+    ],
+  ])('takes nothing in %s', async (_name, code) => {
+    const outcome = await onCn(code)
+
+    expect(outcome.report).toBeUndefined()
+    expect(outcome.atoms).toEqual(['flex'])
+  })
+
+  it.each([
+    ['an import', "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n"],
+    ['a require()', "const { cn } = require('@acme/ui/cn.js')\nexport const A = cn('block')\n"],
+    [
+      'a require() beside an import type of the module',
+      "import type { Menu } from '@acme/ui/cn.js'\nconst { cn } = require('@acme/ui/cn.js')\nexport const A = cn('block')\nexport type M = typeof Menu\n",
+    ],
+    [
+      'an import = require() beside an import type of the module',
+      "import type { Menu } from '@acme/ui/cn.js'\nimport k = require('@acme/ui/cn.js')\nexport const A = k.cn('block')\nexport type M = typeof Menu\n",
+    ],
+  ])('still takes cx in %s', async (_name, code) => {
+    const outcome = await onCn(code)
+
+    expect(outcome.report).toBeDefined()
+    expect(outcome.text).toContain('components/App.ts')
+  })
+
+  it('names the take the build cannot read when a require() sits beside an import type', async () => {
+    const outcome = await onCn(
+      "import type { Menu } from '@acme/ui/cn.js'\nconst { cn } = require('@acme/ui/cn.js')\nexport const A = cn('block')\nexport type M = typeof Menu\n",
+    )
+
+    expect(outcome.text).toContain('a require() or other import the build cannot read')
+  })
+})
+
+describe('the stored record of a run', () => {
+  it('keeps no module id on its problems', async () => {
+    const outcome = await app(
+      "import { cn } from '@acme/ui'\nexport const A = cn('grid')\n",
+      acme({ 'index.js': CN }),
+    )
+
+    expect(outcome.record.problems.length).toBeGreaterThan(0)
+    expect(outcome.record.problems.filter((problem) => 'moduleId' in problem)).toEqual([])
+  })
+})

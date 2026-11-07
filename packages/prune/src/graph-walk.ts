@@ -70,6 +70,15 @@ export function isNamingDeclared(walk: Walk, edge: Edge, files: readonly string[
 }
 
 /**
+ * Records that `importer` imports `file` in `edges`.
+ */
+function recordEdge(edges: Map<string, Set<string>>, importer: string, file: string): void {
+  const reached = edges.get(importer) ?? new Set<string>()
+  reached.add(file)
+  edges.set(importer, reached)
+}
+
+/**
  * Queues the files an edge resolves to, but core's own: in the build's mode when the importer is
  * and a set of that mode found the file.
  */
@@ -78,9 +87,8 @@ export function enqueueResolved(walk: Walk, facts: FileFacts, resolution: Resolu
     const isInMode = facts.isInMode && resolution.filesInMode.includes(resolved)
     if (isCoreFile(walk.packageOf, resolved)) continue
     enqueue(walk, resolved, isInMode)
-    const reached = walk.graph.edges.get(facts.file) ?? new Set<string>()
-    reached.add(resolved)
-    walk.graph.edges.set(facts.file, reached)
+    recordEdge(walk.graph.edges, facts.file, resolved)
+    if (isInMode) recordEdge(walk.graph.inModeEdges, facts.file, resolved)
   }
 }
 
