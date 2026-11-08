@@ -304,18 +304,15 @@ describe.each(HOSTS)(
         'display: flex',
         'To let "hideDesktopUp" win, move display: flex above the & block.',
       ],
-    ])(
-      '%s warns once, at the later declaration, without the sentence about the previous release',
-      async (css, at, fix) => {
-        const warnings = await run(css)
+    ])('%s warns once, at the later declaration', async (css, at, fix) => {
+      const warnings = await run(css)
 
-        expect(warnings).toHaveLength(1)
-        expect(warnings[0]!.text.startsWith(`@nave: ${at} ${SENTENCE}`)).toBe(true)
-        expect(warnings[0]!.text).toContain(fix)
-        expect(warnings[0]!.text).not.toContain('Before @navecss/core')
-        expect(warnings[0]).toMatchObject({ line: 1, column: css.indexOf(at) + 1 })
-      },
-    )
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]!.text.startsWith(`@nave: ${at} ${SENTENCE}`)).toBe(true)
+      expect(warnings[0]!.text).toContain(fix)
+      expect(warnings[0]!.text).not.toContain('Before @navecss/core')
+      expect(warnings[0]).toMatchObject({ line: 1, column: css.indexOf(at) + 1 })
+    })
 
     it.each([
       '.x { &:hover { @nave hideDesktopUp } display: flex; }',

@@ -24,10 +24,6 @@ interface PendingRun {
  * The nested node nearest before a point of the output, as a warning names it.
  */
 export interface NestedFact {
-  /**
-  The block of an atom of a directive, when the node is one.
-   */
-  readonly block?: { readonly atom: AtomFacts; readonly directive: DirectiveFacts }
   readonly text: string
 }
 
@@ -63,10 +59,6 @@ export interface DirectiveRunFact {
   The atom of the directive whose block the run follows, with where that block holds.
    */
   readonly follows: { readonly atom: AtomFacts; readonly where: string } | undefined
-  /**
-  Whether the previous release already wrapped the run (a nested node of the rule's own precedes the directive).
-   */
-  readonly isWrappedBefore: boolean
   readonly kind: 'directive'
   readonly nested: NestedFact
 }
@@ -96,10 +88,6 @@ export interface PlanState {
   How many directives the rule holds.
    */
   readonly directiveTotal: number
-  /**
-  Whether a nested node of the rule's own (not one a directive emitted) is in the output.
-   */
-  hasOwnNested: boolean
   readonly input: RuleInput
   /**
   Whether a nested node (a rule, an at-rule, an emitted block) is already in the output.
@@ -127,7 +115,6 @@ export function createState(input: RuleInput): PlanState {
     directives: [],
     dropped: [],
     directiveTotal: input.nodes.filter((node) => node.kind === 'directive').length,
-    hasOwnNested: false,
     input,
     isNested: false,
     isPseudoElementRule: isPseudoElementOnlyList(input.selector),

@@ -130,7 +130,6 @@ function recordRun(state: PlanState, walk: Walk): void {
       !hasBlockOfOwn,
     directive,
     follows,
-    isWrappedBefore: state.hasOwnNested,
     nested,
   })
 }
@@ -174,10 +173,7 @@ function emitAtom(state: PlanState, walk: Walk, index: number): void {
   noteAbove(state, walk)
   const last = planned.blocks.at(-1)!
   walk.follows = { atom, where: blockWhere(last) }
-  state.lastNested = {
-    text: `the block of "${atom.name}" ${blockWhere(last)}`,
-    block: { atom, directive: walk.directive },
-  }
+  state.lastNested = { text: `the block of "${atom.name}" ${blockWhere(last)}` }
   state.isNested = true
 }
 

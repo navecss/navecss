@@ -9,7 +9,6 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { generate, OUTPUT_PATH } from '../scripts/generate-skill.ts'
-import { MIGRATION_VERSION, overriderSentence } from '../src/directive/migration.ts'
 import { extractFences } from './doc-fences.ts'
 import { scanForBrainReferences } from './helpers/brain-reference-scan.ts'
 import { isEquivalent } from './helpers/css-equivalence.ts'
@@ -106,6 +105,24 @@ const filedUnder = (changeset: typeof CORE_CHANGESET): string | undefined =>
     ? 'Pending'
     : kindIn(readFileSync(changeset.changelog, 'utf8'), changeset.entryStart)
 
+const WON_SENTENCE =
+  'Before @navecss/core 0.5.0 "hideDesktopUp" won, because an atom\'s blocks were placed last in the rule.'
+
+/**
+ * Whether the entry, whitespace-folded (it hard-wraps the sentence), holds the sentence 0.5.0
+ * printed for `hideDesktopUp`.
+ */
+function hasWonSentence(entry: string): boolean {
+  return fold(entry).includes(fold(WON_SENTENCE))
+}
+
+/**
+ * A changelog line that wraps `sentence` the way the entry does, at every space.
+ */
+function wrapped(sentence: string): string {
+  return `The entry says ${sentence.replaceAll(' ', '\n  ')} and goes on.`
+}
+
 /**
  * The names of the functions a text calls in a code span, as `name()`.
  */
@@ -196,7 +213,7 @@ describe('AC-native-apply-order-41: one minor changeset for core and a patch for
     )
   })
 
-  it('names no function that no subpath of the package exports, and says what the result was before as the warning does', () => {
+  it('names no function that no subpath of the package exports, and keeps the sentence the 0.5.0 entry quoted (AC-native-order-migration-removal-10)', () => {
     const text = prose(CORE_CHANGESET)
 
     expect(namesCalledIn(text)).toContain('cx')
@@ -205,8 +222,16 @@ describe('AC-native-apply-order-41: one minor changeset for core and a patch for
         name,
       )
     }
-    expect(text).toContain(overriderSentence('hideDesktopUp'))
-    expect(text).toContain(`Before @navecss/core ${MIGRATION_VERSION}`)
+    expect(hasWonSentence(text)).toBe(true)
+  })
+
+  it('control: the sentence check reds when the release or the wording changes (AC-native-order-migration-removal-10)', () => {
+    const release = WON_SENTENCE.replace('0.5.0', '0.5.1')
+    const wording = WON_SENTENCE.replace('placed last', 'placed first')
+
+    expect(hasWonSentence(wrapped(WON_SENTENCE))).toBe(true)
+    expect(hasWonSentence(wrapped(release))).toBe(false)
+    expect(hasWonSentence(wrapped(wording))).toBe(false)
   })
 
   it('control: a sentence naming expandText() is caught, because no subpath exports it', () => {
@@ -270,11 +295,9 @@ describe('AC-native-apply-order-46: nothing the release ships keeps a slot or a 
     for (const text of texts) expect(placeholdersIn(text)).toEqual([])
   })
 
-  it('no source that prints a warning leaves a slot or a placeholder in its text', () => {
+  it('no source that prints a warning leaves a slot or a placeholder in its text (AC-native-order-migration-removal-10)', () => {
     const directory = path.join(path.dirname(OUTPUT_PATH), '../../src/directive')
-    const files = readdirSync(directory).filter((name) =>
-      /^(order-|migration|marker-names)/.test(name),
-    )
+    const files = readdirSync(directory).filter((name) => /^(order-|marker-names)/.test(name))
 
     expect(files.length).toBeGreaterThan(5)
     for (const file of files) {

@@ -5,7 +5,6 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { MIGRATION_VERSION } from '../src/directive/migration.ts'
 import { scanForBrainReferences, syntheticDatedId } from './helpers/brain-reference-scan.ts'
 import {
   adrRecord,
@@ -23,6 +22,11 @@ const TITLE =
  * The folded digest of the correction ADR 0006 holds, the date and the release filled.
  */
 const ADR_0006_CORRECTION = '9474c6840eeda7940fb8a43770459e11c0c4a6577559434962b9f936ec62baa7'
+
+/**
+ * The folded digest of decision 6 of ADR 0011, from its lead through its last sentence.
+ */
+const ADR_0011_DECISION_6 = '85808e35b091818d98ee5f3d4866f07900797d7f5a480679534e6534ca6187d1'
 
 const adr = adrRecord('0011')
 
@@ -48,6 +52,13 @@ function decisionText(lead: string): string {
   const rest = adr.text.slice(start + lead.length)
   const end = rest.search(/\n\*\*\d\. |\n## /)
   return fold(end === -1 ? rest : rest.slice(0, end))
+}
+
+/**
+ * Decision 6 as written: from its lead through its last sentence.
+ */
+function decisionSixSpan(text: string): string {
+  return text.slice(text.indexOf('**6. The first minor'), text.indexOf('remember it.') + 12)
 }
 
 describe('AC-native-apply-order-36: ADR 0011 holds the full reasoning', () => {
@@ -170,6 +181,19 @@ describe('AC-native-apply-order-36: the record states the focus report as it is 
   })
 })
 
+/**
+ * The bullet that follows the last line of decision 6 and a blank line, folded, or `undefined`
+ * where decision 6 is not followed by one before decision 7.
+ */
+function correctionOf(text: string): string | undefined {
+  const end = text.indexOf('remember it.')
+  if (end === -1) return undefined
+  const rest = text.slice(end + 'remember it.'.length)
+  const match =
+    /^\n\n(- [^\n]*(?:\n {2}[^\n]*)*)\n\n\*\*7\. What the browser test proves\.\*\*/.exec(rest)
+  return match === null ? undefined : fold(match[1]!)
+}
+
 describe('AC-native-apply-order-37: ADR 0001, ADR 0006 and the index point at 0011', () => {
   const first = adrRecord('0001')
   const sixth = adrRecord('0006')
@@ -188,34 +212,77 @@ describe('AC-native-apply-order-37: ADR 0001, ADR 0006 and the index point at 00
     return fold(`- ${end === -1 ? rest : rest.slice(0, end)}`)
   }
 
-  it('ADR 0001 has a dated line under decision 1 naming ADR 0011 and the release', () => {
+  it('ADR 0001 has a dated line under decision 1 naming ADR 0011 and the release (AC-native-order-migration-removal-10)', () => {
     const line = bulletAfter(first.text, '1. `@nave` emits **native CSS nesting**')
 
     expect(line).toContain('[ADR 0011](0011-')
-    expect(line).toContain(MIGRATION_VERSION)
+    expect(line).toContain('0.5.0')
     expect(first.text.indexOf(dated)).toBeLessThan(first.text.indexOf('2. `scripts/build-css.ts`'))
   })
 
-  it('ADR 0001 has a dated line under its consequence on nested rules authored before a directive', () => {
+  it('ADR 0001 has a dated line under its consequence on nested rules authored before a directive (AC-native-order-migration-removal-10)', () => {
     const line = bulletAfter(first.text, 'Consumer nested rules authored _before_')
 
     expect(line).toContain('[ADR 0011](0011-')
-    expect(line).toContain(MIGRATION_VERSION)
+    expect(line).toContain('0.5.0')
   })
 
   it('ADR 0001 keeps its own status', () => {
     expect(first.text).toMatch(/^- \*\*Status:\*\* accepted$/m)
   })
 
-  it('ADR 0006 holds the correction under its mapping table, date and release filled', () => {
+  it('ADR 0006 holds the correction under its mapping table, date and release filled (AC-native-order-migration-removal-10)', () => {
     const correction = bulletAfter(sixth.text, '| A consumer atom passed to the plugin')
 
-    expect(correction.startsWith(`- ${dated} before \`@navecss/core\` ${MIGRATION_VERSION},`)).toBe(
-      true,
-    )
+    expect(correction.startsWith(`- ${dated} before \`@navecss/core\` 0.5.0,`)).toBe(true)
     expect(correction.endsWith('See ADR 0011.')).toBe(true)
     expect(placeholdersIn(correction)).toEqual([])
     expect(foldedDigest(correction)).toBe(ADR_0006_CORRECTION)
+  })
+
+  describe('AC-native-order-migration-removal-12 — decision 6 gains one dated correction under it', () => {
+    const CORRECTION =
+      /^- \*\*Correction \((\d{4}-\d{2}-\d{2})\):\*\* the release after 0\.5\.0 removes the three sentences, `src\/directive\/migration\.ts` and the test that made the removal fall due, as this decision planned\. The warnings themselves stay, at the same positions, and the CSS is unchanged\.$/
+
+    it('holds the bullet right after decision 6 and before decision 7', () => {
+      const correction = correctionOf(adr.text)
+
+      expect(correction).toMatch(CORRECTION)
+    })
+
+    it('dates it with a calendar date, names no release but 0.5.0 and holds no placeholder', () => {
+      const correction = correctionOf(adr.text)!
+
+      expect(correction).not.toMatch(/[<>]/)
+      expect(correction.match(/\d+\.\d+(?:\.\d+)?/g)?.filter((run) => run !== '0.5.0')).toEqual([])
+      expect(placeholdersIn(correction)).toEqual([])
+    })
+
+    it('leaves decision 6 itself unchanged', () => {
+      const sentences = decisionSixSpan(adr.text).split('. ')
+
+      expect(foldedDigest(decisionSixSpan(adr.text))).toBe(ADR_0011_DECISION_6)
+      expect(foldedDigest(sentences.slice(1).join('. '))).not.toBe(ADR_0011_DECISION_6)
+    })
+
+    it('keeps the label the records use for a later event', () => {
+      expect(correctionOf(adr.text)).toMatch(/^- \*\*Correction \(/)
+      expect(decisionText('**6. The first minor')).toContain('removal')
+    })
+
+    it('control: the placeholder scan, the label and the position each red on a planted fault', () => {
+      const bullet = correctionOf(adr.text)!
+
+      expect(placeholdersIn(bullet.replace(/\d{4}-\d{2}-\d{2}/, '<date>'))).not.toEqual([])
+      expect(bullet.replace('Correction', 'Update')).not.toMatch(CORRECTION)
+      expect(
+        bullet.replace(
+          'The warnings themselves stay, at the same positions, and the CSS is unchanged.',
+          'The warnings, their positions and the CSS are unchanged.',
+        ),
+      ).not.toMatch(CORRECTION)
+      expect(correctionOf(adr.text.replace('remember it.', 'remember it. '))).toBeUndefined()
+    })
   })
 
   it('the index lists 0011 and marks decision 1 of 0001 superseded by it', () => {

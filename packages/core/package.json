@@ -92,7 +92,6 @@
   "scripts": {
     "build": "node scripts/build-css.ts && tsup",
     "dev": "tsup --watch",
-    "generate:migration-old-placement": "node scripts/generate-migration-old-placement.ts",
     "generate:property-table": "node scripts/generate-property-table.ts",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit && tsc --noEmit -p test/browser/tsconfig.json",
