@@ -10,5 +10,7 @@ cases where a package listed in `keepFor` re-exports `cx` under another name and
   A `createRequire()` require counts the same way. Vite does not bundle one, though, so it only has
   an effect beside an import that puts the module in the build.
 - You take it through a dependency that forwards it in CommonJS, with `module.exports = require(...)`
-  or `exports.cn = require(...).cn`. The report now names your file, as it does for an
+  or `exports.cn = require(...).cn`, or with what TypeScript emits when it compiles
+  `export { cn } from` or `export * from` to CommonJS (a getter defined on `exports`, or
+  `__exportStar`, its own or `tslib`'s). The report now names your file, as it does for an
   `export ... from` forward.

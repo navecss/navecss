@@ -444,10 +444,31 @@ describe('takes by CommonJS', () => {
 
   const COMMONJS = JSON.stringify({ name: '@other/ui', version: '1.0.0', main: 'index.js' })
   const OTHER_APP = "import { cn } from '@other/ui'\nexport const A = cn('block')\n"
+  // TypeScript's CommonJS emit of `export { cn, Menu } from` and of `export * from`.
+  const TS_NAMED = [
+    '"use strict";',
+    'Object.defineProperty(exports, "__esModule", { value: true });',
+    'exports.Menu = exports.cn = void 0;',
+    'var cn_js_1 = require("@acme/ui/cn.js");',
+    'Object.defineProperty(exports, "cn", { enumerable: true, get: function () { return cn_js_1.cn; } });',
+    'Object.defineProperty(exports, "Menu", { enumerable: true, get: function () { return cn_js_1.Menu; } });',
+    '',
+  ].join('\n')
+  const TS_STAR = [
+    '"use strict";',
+    'var __exportStar = (this && this.__exportStar) || function(m, exports) {',
+    '    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) exports[p] = m[p];',
+    '};',
+    'Object.defineProperty(exports, "__esModule", { value: true });',
+    '__exportStar(require("@acme/ui/cn.js"), exports);',
+    '',
+  ].join('\n')
 
   it.each([
     ['module.exports = require(...)', "module.exports = require('@acme/ui/cn.js')\n"],
     ['exports.cn = require(...).cn', "exports.cn = require('@acme/ui/cn.js').cn\n"],
+    ["TypeScript's named re-export", TS_NAMED],
+    ["TypeScript's export *", TS_STAR],
   ])(
     'follow a dependency that forwards a cx export by %s to the application file that takes it',
     async (_name, forward) => {

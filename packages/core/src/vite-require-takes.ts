@@ -2,30 +2,41 @@
  * What a module takes from another by CommonJS: a `require()` call, a call of a name bound to
  * `createRequire()`'s result or of such a call itself, and TypeScript's `import x = require()`, each
  * with a string. The build reads none of these as a take of names, so each counts as taking the
- * module whole, beside whatever the same file imports from it. Two forms a dependency writes at the
- * top of a module are read instead, as forwards: `module.exports = require(...)`, which gives out
- * every export of the module required, and `exports.b = require(...).a` (or `module.exports.b`),
- * which gives out the export `a` under the name `b`. A CommonJS module's default import is its
- * exports object, so either form also gives out `default`, unless the module marks itself
- * `__esModule`, whose default import is its `default` export instead.
+ * module whole, beside whatever the same file imports from it. The forms a dependency writes at the
+ * top of a module to pass another module's exports on are read instead, as forwards:
+ * `module.exports = require(...)`, which gives out every export of the module required;
+ * `exports.b = require(...).a` (or `module.exports.b`), which gives out the export `a` under the
+ * name `b`; and the two TypeScript emits for an ES module compiled to CommonJS, a getter
+ * `Object.defineProperty(exports, 'b', { get: function () { return x.a } })` over `var x = require(...)`
+ * when every use of `x` is such a getter, and `__exportStar(require(...), exports)`, its own helper
+ * or `tslib`'s, which gives out every export but `default`. A CommonJS module's default import is
+ * its exports object, so a forward also gives out `default`, unless the module marks itself
+ * `__esModule`, whose default import is its `default` export instead. Other emits (esbuild's
+ * `__export` and `__reExport`, Babel's `Object.keys(...).forEach` for `export *`) are not read: the
+ * require counts as taking the module whole.
  */
 import type { AstNode } from './vite-ast.ts'
+import type { CxNames } from './vite-cx-take-keys.ts'
 import type { Taken } from './vite-cx-takes.ts'
 
-import { childrenOf, exportNameOf, nodeAt, nodesAt, pushAll, staticStringOf } from './vite-ast.ts'
-import { type CxNames, isCxName } from './vite-cx-take-keys.ts'
+import { childrenOf, nodeAt, nodesAt, pushAll, staticStringOf } from './vite-ast.ts'
+import { boundForwardsOf, starForwardOf } from './vite-commonjs-emits.ts'
+import {
+  definePropertyOf,
+  exportsMemberOf,
+  type Forward,
+  type ForwardInput,
+  isExportsObject,
+  isModuleExports,
+  isName,
+  memberOf,
+} from './vite-commonjs-exports.ts'
+import { isCxName } from './vite-cx-take-keys.ts'
 
 /**
  * A take the build cannot read: the module whole.
  */
 const WHOLE: Taken = { shape: 'unreadable', names: [] }
-
-/**
- * Whether `node` is the name `name`.
- */
-function isName(node: AstNode | undefined, name: string): boolean {
-  return node?.type === 'Identifier' && node.name === name
-}
 
 /**
  * Whether `node` is a `createRequire()` call, by its own name or as a member (`module.createRequire()`).
@@ -116,55 +127,6 @@ export function requireSpecifiersIn(program: AstNode): string[] {
 }
 
 /**
- * Whether `node` is `module.exports`.
- */
-function isModuleExports(node: AstNode | undefined): boolean {
-  if (node?.type !== 'MemberExpression' || node.computed === true) return false
-  return isName(nodeAt(node, 'object'), 'module') && isName(nodeAt(node, 'property'), 'exports')
-}
-
-/**
- * Whether `node` is the exports object: `exports` or `module.exports`.
- */
-function isExportsObject(node: AstNode | undefined): boolean {
-  return isName(node, 'exports') || isModuleExports(node)
-}
-
-/**
- * The name a non-computed member expression reads off its object, and that object.
- */
-function memberOf(node: AstNode | undefined): { name: string; object: AstNode } | undefined {
-  if (node?.type !== 'MemberExpression' || node.computed === true) return undefined
-  const object = nodeAt(node, 'object')
-  const name = exportNameOf(nodeAt(node, 'property'))
-  return object === undefined || name === undefined ? undefined : { name, object }
-}
-
-/**
- * The name of the export a member of the exports object writes to: `b` of `exports.b` and of
- * `module.exports.b`.
- */
-function exportsMemberOf(node: AstNode | undefined): string | undefined {
-  const member = memberOf(node)
-  if (!member) return undefined
-  return isExportsObject(member.object) ? member.name : undefined
-}
-
-interface Forward {
-  /**
-   * The names the module gives the take out under.
-   */
-  readonly given: readonly string[]
-  readonly require: AstNode
-  readonly taken: Taken
-}
-
-interface ForwardInput {
-  readonly names: CxNames
-  readonly requires: ReadonlySet<AstNode>
-}
-
-/**
  * The two sides of a top-level `left = right` statement.
  */
 function assignmentOf(
@@ -186,7 +148,7 @@ function wholeForwardOf(
 ): Forward | undefined {
   if (right === undefined || !input.requires.has(right) || !isModuleExports(left)) return undefined
   const given = input.names === undefined ? [] : input.names.values().toArray()
-  return { given, require: right, taken: { shape: 'star', names: [], isForward: true } }
+  return { given, require: right, takes: [{ shape: 'star', names: [], isForward: true }] }
 }
 
 /**
@@ -202,7 +164,7 @@ function memberForwardOf(
   if (as === undefined || !member || !input.requires.has(member.object)) return undefined
   if (!isCxName(input.names, member.name)) return undefined
   const taken: Taken = { shape: 'names', names: [member.name], isPassedOn: true, isForward: true }
-  return { given: [as], require: member.object, taken }
+  return { given: [as], require: member.object, takes: [taken] }
 }
 
 /**
@@ -210,7 +172,7 @@ function memberForwardOf(
  */
 function forwardOf(statement: AstNode, input: ForwardInput): Forward | undefined {
   const assignment = assignmentOf(statement)
-  if (!assignment) return undefined
+  if (!assignment) return starForwardOf(statement, input)
   const { left, right } = assignment
   return wholeForwardOf(left, right, input) ?? memberForwardOf(left, right, input)
 }
@@ -222,13 +184,8 @@ function forwardOf(statement: AstNode, input: ForwardInput): Forward | undefined
 function isMarkerWrite(statement: AstNode): boolean {
   const assignment = assignmentOf(statement)
   if (assignment) return exportsMemberOf(assignment.left) === '__esModule'
-  const call =
-    statement.type === 'ExpressionStatement' ? nodeAt(statement, 'expression') : undefined
-  if (call?.type !== 'CallExpression') return false
-  const callee = memberOf(nodeAt(call, 'callee'))
-  const isDefine = callee?.name === 'defineProperty' && isName(callee.object, 'Object')
-  const [target, key] = nodesAt(call, 'arguments')
-  return isDefine && isExportsObject(target) && staticStringOf(key) === '__esModule'
+  const define = definePropertyOf(statement)
+  return define !== undefined && isExportsObject(define.target) && define.as === '__esModule'
 }
 
 /**
@@ -240,9 +197,20 @@ function isMarkedEsModule(program: AstNode): boolean {
 }
 
 /**
+ * Every forward `program` writes over the requires `input` names.
+ */
+function forwardsIn(program: AstNode, input: ForwardInput): Forward[] {
+  const written = nodesAt(program, 'body').flatMap((statement) => {
+    const forward = forwardOf(statement, input)
+    return forward ? [forward] : []
+  })
+  return [...written, ...boundForwardsOf(program, input)]
+}
+
+/**
  * What `program` takes by CommonJS from a module that exports `cx` under `names`, `reaches` being
  * the specifiers it requires that resolve to that module. A require counts as taking the module
- * whole, unless `readsForwards` is set and it is one of the two forwards, which `given` then names
+ * whole, unless `readsForwards` is set and it is one of the forwards, which `given` then names
  * the exports of.
  */
 export function requireTakesIn(
@@ -256,14 +224,9 @@ export function requireTakesIn(
   const requires = requireCallsOf(program).filter(({ specifier }) => input.reaches.has(specifier))
   if (requires.length === 0) return { given: [], takes: [] }
   const forwardInput = { names: input.names, requires: new Set(requires.map(({ node }) => node)) }
-  const forwards = input.readsForwards
-    ? nodesAt(program, 'body').flatMap((statement) => {
-        const forward = forwardOf(statement, forwardInput)
-        return forward ? [forward] : []
-      })
-    : []
+  const forwards = input.readsForwards ? forwardsIn(program, forwardInput) : []
   const forwarded = new Set(forwards.map((forward) => forward.require))
-  const takes = forwards.map((forward) => forward.taken)
+  const takes = forwards.flatMap((forward) => forward.takes)
   if (requires.some(({ node }) => !forwarded.has(node))) takes.push(WHOLE)
   const given = new Set(forwards.flatMap((forward) => forward.given))
   if (given.size > 0 && !isMarkedEsModule(program)) given.add('default')
