@@ -739,8 +739,13 @@ const SCOPED_ATTRIBUTES: ReadonlyMap<
   ['aria-current', ({ owner }, node) => isCurrentPage(owner, node)],
   [
     'aria-haspopup',
-    ({ owner }, node) =>
-      owner === `${PREFIX}combobox-trigger` && node.operator === '=' && node.value === 'dialog',
+    ({ owner, selector }, node, inside) =>
+      (owner === `${PREFIX}combobox-trigger` && node.operator === '=' && node.value === 'dialog') ||
+      (owner === `${PREFIX}button` &&
+        selector === OPEN_GHOST_KEY &&
+        inside.includes(':is') &&
+        node.operator === '=' &&
+        POPUP_VALUES.includes(node.value ?? '')),
   ],
   [
     'data-empty',
@@ -784,6 +789,12 @@ const PSEUDO_CLASSES = new Set([
   ':last-child',
   ':not',
 ])
+
+/**
+ * The `aria-haspopup` values R9's open-ghost key names, "menu, popover or dialog" in ARIA's terms.
+ */
+const POPUP_VALUES: readonly string[] = ['menu', 'true', 'dialog']
+const POPUP_ARGUMENTS: readonly string[] = POPUP_VALUES.map((value) => `[aria-haspopup="${value}"]`)
 const PSEUDO_ELEMENTS = new Set(['::after', '::before', '::placeholder'])
 
 const isRingPseudo = (owner: string, inside: readonly string[]): boolean =>
@@ -795,6 +806,7 @@ const isThumbPseudo = (owner: string, inside: readonly string[]): boolean =>
 const isPseudoOutside = (value: string, inside: readonly string[], owner: string): boolean => {
   if (value.startsWith('::')) return !PSEUDO_ELEMENTS.has(value)
   if (PSEUDO_CLASSES.has(value)) return false
+  if (value === ':is') return !(owner === `${PREFIX}button` && inside.length === 0)
   const isFocus = value === ':focus-visible'
   return !(isFocus && (isRingPseudo(owner, inside) || isThumbPseudo(owner, inside)))
 }
@@ -850,7 +862,27 @@ const unadmittedHasArguments = (selector: string, owner: string): string[] => {
   return found
 }
 
-const OPEN_GHOST_KEY = `.${PREFIX}button[data-nave-variant="ghost"][aria-expanded="true"]:not(:disabled, [aria-disabled="true"])`
+const OPEN_GHOST_KEY = `.${PREFIX}button[data-nave-variant="ghost"][aria-expanded="true"]:is(${POPUP_ARGUMENTS.join(', ')}):not(:disabled, [aria-disabled="true"])`
+
+/**
+ * `:is()` appears only in the button's open-ghost key, once, with exactly the three popup arguments.
+ */
+const unadmittedIsUses = (selector: string, owner: string): string[] => {
+  const found: string[] = []
+  selectorParser((root) => {
+    root.walkPseudos((pseudo) => {
+      if (pseudo.value !== ':is') return
+      const texts = pseudo.nodes.map((argument) => String(argument).trim())
+      const isAdmitted =
+        owner === `${PREFIX}button` &&
+        selector === OPEN_GHOST_KEY &&
+        texts.length === POPUP_ARGUMENTS.length &&
+        texts.every((text, index) => text === POPUP_ARGUMENTS[index])
+      if (!isAdmitted) found.push(`:is(${texts.join(', ')}) in ${selector}`)
+    })
+  }).processSync(selector)
+  return found
+}
 
 /**
  * `aria-expanded` on the button, outside the one open-ghost key, and with any value but `true`.
@@ -918,6 +950,7 @@ const vocabularyViolations = (css: string): string[] =>
           .filter((entry) => isNodeOutside(entry, place))
           .map((entry) => `${entry.node.toString().trim()} in ${selector}`),
         ...unadmittedHasArguments(selector, item.owner),
+        ...unadmittedIsUses(selector, item.owner),
         ...buttonExpandedViolations(item.owner, selector),
         ...newClassProblems(item.owner, selector),
         ...iconExpandedViolations(item.owner, selector),
@@ -938,6 +971,9 @@ const ownersKeyedOn = (name: string): string[] =>
     .map((item) => item.owner.replace(PREFIX, ''))
 
 const PLANTED_KEYS = ['[role="menuitem"]', '[dir="rtl"]', '.other']
+
+const plantedKey = (owner: string, key: string): string =>
+  `${readStylesheet()}\n@layer components.nave { .${PREFIX}${owner} { ${key} { color: red } } }`
 
 describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 and AC-base-ui-bridge-20: selectors use only the vocabulary, as the overlay completion and the feedback and navigation spec extend it', () => {
   it('uses only the rule own class, the declared attributes, the admitted pseudo-classes and elements, and the child combinator', () => {
@@ -986,7 +1022,7 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
     )
     expect(new Set(ownersKeyedOn('data-empty'))).toEqual(new Set(['list-empty']))
     expect(new Set(ownersKeyedOn('data-invalid'))).toEqual(new Set(['input-group']))
-    expect(new Set(ownersKeyedOn('aria-haspopup'))).toEqual(new Set(['combobox-trigger']))
+    expect(new Set(ownersKeyedOn('aria-haspopup'))).toEqual(new Set(['button', 'combobox-trigger']))
   })
 
   it('keys data-instant outside the guard only in popup-motion and tooltip-motion', () => {
@@ -1009,6 +1045,42 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
       .filter((selector) => attributeReads(selector).some((read) => read.name === 'aria-expanded'))
 
     expect(keys).toEqual([OPEN_GHOST_KEY])
+  })
+
+  it('keys aria-haspopup in the button only inside the open ghost key :is(), with the values menu, true and dialog, and uses :is() nowhere else', () => {
+    const rules = flattenRules(readStylesheet())
+    const reads = rules
+      .filter((item) => item.owner === `${PREFIX}button`)
+      .flatMap((item) => item.selectors)
+      .flatMap((selector) =>
+        attributeReads(selector)
+          .filter((read) => read.name === 'aria-haspopup')
+          .map((read) => `${selector} | ${read.inside.join(' ')} | ${read.operator}${read.value}`),
+      )
+    const usesOfIs = rules.flatMap((item) =>
+      item.selectors
+        .filter((selector) => selectorNodes(selector).some(({ node }) => node.value === ':is'))
+        .map((selector) => `${item.owner} ${selector}`),
+    )
+
+    expect(reads).toEqual(POPUP_VALUES.map((value) => `${OPEN_GHOST_KEY} | :is | =${value}`))
+    expect(usesOfIs).toEqual([`${PREFIX}button ${OPEN_GHOST_KEY}`])
+  })
+
+  it('reds on a planted listbox, a reordered or a narrower :is() on the button open ghost key, and on a planted :is([data-highlighted]) key on item-highlight (control)', () => {
+    const ghost = '&[data-nave-variant="ghost"][aria-expanded="true"]'
+
+    expect(
+      vocabularyViolations(plantedKey('button', `${ghost}:is([aria-haspopup="listbox"])`)),
+    ).not.toEqual([])
+    expect(
+      vocabularyViolations(
+        plantedKey('button', `${ghost}:is([aria-haspopup="menu"], [aria-haspopup="dialog"])`),
+      ),
+    ).not.toEqual([])
+    expect(
+      vocabularyViolations(plantedKey('item-highlight', '&:is([data-highlighted])')),
+    ).not.toEqual([])
   })
 
   it('names data-popup-open in no selector', () => {

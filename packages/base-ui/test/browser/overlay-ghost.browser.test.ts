@@ -307,6 +307,7 @@ describe('AC-base-ui-overlay-completion-15: the open ghost trigger', () => {
         page = mount(menubar({ ...props, 'aria-expanded': true, disabled: true }))
         const trigger = (await settled(() => byTestId('subject'))) as HTMLElement
         expect(trigger.getAttribute('aria-expanded'), 'forced open').toBe('true')
+        expect(trigger.getAttribute('aria-haspopup'), 'still a menu trigger').toBe('menu')
         expect(trigger.hasAttribute('disabled'), 'disabled').toBe(true)
         expect(getComputedStyle(trigger).backgroundColor).toBe(TRANSPARENT)
       })

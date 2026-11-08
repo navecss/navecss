@@ -81,7 +81,7 @@
     } &[data-nave-variant="ghost"]{ background-color: transparent; border-color: transparent;
     } &[data-nave-variant="ghost"]:hover:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
     } &[data-nave-variant="ghost"]:active:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
-    } &[data-nave-variant="ghost"][aria-expanded="true"]:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
+    } &[data-nave-variant="ghost"][aria-expanded="true"]:is([aria-haspopup="menu"], [aria-haspopup="true"], [aria-haspopup="dialog"]):not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
     } &{ outline: none;
     } &:focus-visible{ outline-style: solid; outline-width: var(--nave-border-width-focus, 2px); outline-color: var(--nave-color-border-focus, currentColor); outline-offset: 2px;
     } }

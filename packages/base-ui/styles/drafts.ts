@@ -47,4 +47,4 @@ export const draftAtoms: Readonly<Record<Draft, readonly string[]>> = {
 The key of `baseUiButton` that unsigned `open-ghost` takes out.
  */
 export const openGhostKey =
-  '&[data-nave-variant="ghost"][aria-expanded="true"]:not(:disabled, [aria-disabled="true"])'
+  '&[data-nave-variant="ghost"][aria-expanded="true"]:is([aria-haspopup="menu"], [aria-haspopup="true"], [aria-haspopup="dialog"]):not(:disabled, [aria-disabled="true"])'
