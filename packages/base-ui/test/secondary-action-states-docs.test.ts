@@ -35,7 +35,7 @@ const baseUiReadme = readFileSync(path.join(PACKAGE_DIR, 'README.md'), 'utf8')
 
 const RUNG_2_SENTENCE =
   "Override a fill together with its state slots: `--nave-color-action-primary` with `--nave-color-action-primary-hover` and `--nave-color-action-primary-active`, and `--nave-color-action-secondary` with `--nave-color-action-secondary-hover` and `--nave-color-action-secondary-active`. Overriding a fill alone keeps the states Nave generates, so under the pointer and while pressed the control takes Nave's colour, not yours."
-const RERUN = /re-run `navecss-tokens build`.*commit what it writes/
+const RERUN = /after upgrading\b[^.]*re-run `navecss-tokens build`[^.]*commit what it writes/i
 const CONSEQUENCE =
   'renders the secondary button with a transparent fill under the pointer and while pressed'
 
@@ -78,7 +78,16 @@ describe("AC-secondary-action-states-23: the three consumer sentences are where 
     const at = section.indexOf(conditional)
 
     expect(at).toBeGreaterThan(-1)
-    expect(section.slice(at)).toMatch(RERUN)
+    expect(section).toMatch(RERUN)
+    const instructions = section
+      .matchAll(/re-run `navecss-tokens build`/gi)
+      .map((match) => match.index)
+      .toArray()
+    expect(instructions.length).toBeGreaterThan(0)
+    for (const index of instructions) {
+      const sentence = section.slice(section.lastIndexOf('. ', index) + 2, index)
+      expect(sentence, 'the sentence before the instruction').toContain(conditional)
+    }
     expect(section.split(CONSEQUENCE)).toHaveLength(2)
     expect(section.slice(0, at)).not.toContain(CONSEQUENCE)
   })
@@ -172,5 +181,14 @@ describe('AC-secondary-action-states-24: the base-ui changeset', () => {
     expect(text).toMatch(RERUN)
     expect(text).toContain(CONSEQUENCE)
     for (const name of NEW_NAMES) expect(text).toContain(`\`${name}\``)
+  })
+
+  it('names exactly the two state names as what a rung 5 colour set must now supply', () => {
+    const rung5 = text
+      .split(/(?<=\.) /)
+      .filter((sentence) => /fifth rung|rung 5|full colou?r set/i.test(sentence))
+
+    expect(rung5, 'the rung 5 sentence').toHaveLength(1)
+    expect(rung5[0]?.match(/--nave-[a-z0-9-]+/g)).toEqual(NEW_NAMES)
   })
 })

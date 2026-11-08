@@ -25,8 +25,8 @@ import {
 } from './support/w3-base-ui-versions.ts'
 import {
   namedTokens,
+  publishedFloorOf,
   publishedTokens,
-  tokensFloorOf,
   undeclaredIn,
 } from './support/w3-tokens-floor.ts'
 
@@ -531,13 +531,26 @@ describe('AC-base-ui-overlay-completion-31: every Nave token the stylesheet name
     expect(FEEDBACK_TOKENS.filter((name) => !oracle.has(name))).toEqual([])
   })
 
+  it('control: active keys naming --nave-color-action-secondary-pressed still count 69, and the workspace check names it (AC-secondary-action-states-17)', () => {
+    const planted = readStylesheet().replaceAll(
+      'var(--nave-color-action-secondary-active)',
+      () => 'var(--nave-color-action-secondary-pressed)',
+    )
+
+    expect(planted).not.toContain('--nave-color-action-secondary-active')
+    expect(namedTokens(planted).size).toBe(69)
+    expect(undeclaredIn(planted, tokensDeclaredByWorkspace())).toEqual([
+      '--nave-color-action-secondary-pressed',
+    ])
+  })
+
   it('names only tokens the workspace declares', () => {
     expect(undeclaredIn(readStylesheet(), tokensDeclaredByWorkspace())).toEqual([])
   })
 
   it('names only tokens the published tokens release declares', () => {
     const published = publishedTokens()
-    expect(published.version).toBe(tokensFloorOf(readStylesheet()))
+    expect(published.version).toBe(publishedFloorOf(readStylesheet(), published))
     expect(undeclaredIn(readStylesheet(), published.declared)).toEqual([])
   })
 

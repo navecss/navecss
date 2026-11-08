@@ -14,6 +14,7 @@ import { flatten, PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
 import {
   namedTokens,
   PUBLISHED_TOKENS_ALIAS,
+  publishedFloorOf,
   publishedTokens,
   tokensFloorOf,
   undeclaredIn,
@@ -39,6 +40,9 @@ const withoutNewNames = (source: string): string => {
 
 const rule = (name: string): string => `.x { color: var(${name}) }`
 
+const tokensChangelog = (): string =>
+  readFileSync(path.join(PACKAGE_DIR, '../tokens/CHANGELOG.md'), 'utf8')
+
 /**
 A dating that matches names as substrings of a release section, which is what the helper must not do.
  */
@@ -52,20 +56,59 @@ const substringFloor = (name: string): string => {
 
 describe('AC-secondary-action-states-19: the floor follows the newest name the sheet uses', () => {
   it('is the release that ships the two new names for the shipped stylesheet', () => {
-    expect(tokensFloorOf(css)).toBe(FLOOR)
+    expect(publishedFloorOf(css, publishedTokens())).toBe(FLOOR)
   })
 
   it('is the release that ships the highlight fill once the two new names are out of the sheet', () => {
-    expect(tokensFloorOf(withoutNewNames(css))).toBe('0.4.0')
+    expect(publishedFloorOf(withoutNewNames(css), publishedTokens())).toBe('0.4.0')
   })
 
   it('is the release that ships the mark width for a sheet naming only that', () => {
-    expect(tokensFloorOf(rule('--nave-border-width-mark'))).toBe('0.3.0')
+    expect(publishedFloorOf(rule('--nave-border-width-mark'), publishedTokens())).toBe('0.3.0')
   })
 
   it('dates a name no release section names as a whole name to 0.1.0, and a prefix of a name is not that name (control)', () => {
-    expect(tokensFloorOf(rule('--nave-color-action-secondary'))).toBe('0.1.0')
+    expect(publishedFloorOf(rule('--nave-color-action-secondary'), publishedTokens())).toBe('0.1.0')
     expect(substringFloor('--nave-color-action-secondary')).not.toBe('0.1.0')
+  })
+
+  it('is not raised by a later release note that mentions a name the release already declares (control)', () => {
+    const mentioned = tokensChangelog().replace(
+      /^## /m,
+      '## 0.6.0\n\n### Patch Changes\n\n- 0000000: `--nave-color-border-control` moves one step darker in dark.\n\n## ',
+    )
+    const published = publishedTokens()
+
+    expect(publishedFloorOf(css, published, mentioned)).toBe(FLOOR)
+    expect(publishedFloorOf(withoutNewNames(css), published, mentioned)).toBe('0.4.0')
+  })
+
+  it('still drops below the release when its own note does not name the names it adds (control)', () => {
+    const unnamed = tokensChangelog()
+      .replace(
+        '`--nave-color-action-secondary-hover` is neutral',
+        '`action.secondary.hover` is neutral',
+      )
+      .replace(
+        '`--nave-color-action-secondary-active` is neutral',
+        '`action.secondary.active` is neutral',
+      )
+
+    expect(unnamed).not.toMatch(/--nave-color-action-secondary-(?:hover|active)/)
+    expect(publishedFloorOf(css, publishedTokens(), unnamed)).toBe('0.4.0')
+  })
+
+  it('dates a name two sections name to the older one (control)', () => {
+    const changelog = [
+      '# @navecss/tokens',
+      '## 0.6.0',
+      '- a: `--nave-border-width-mark` is described again.',
+      '## 0.3.0',
+      '- b: Adds `--nave-border-width-mark`.',
+      '',
+    ].join('\n\n')
+
+    expect(tokensFloorOf(rule('--nave-border-width-mark'), changelog)).toBe('0.3.0')
   })
 
   it('names no --nave-* token as a literal in the helper module', () => {
@@ -75,7 +118,9 @@ describe('AC-secondary-action-states-19: the floor follows the newest name the s
   })
 
   it('gives the tokens peer as ">=<V> <1.0.0" with V that floor, and not the range it had', () => {
-    expect(manifest.peerDependencies['@navecss/tokens']).toBe(`>=${tokensFloorOf(css)} <1.0.0`)
+    expect(manifest.peerDependencies['@navecss/tokens']).toBe(
+      `>=${publishedFloorOf(css, publishedTokens())} <1.0.0`,
+    )
     expect(manifest.peerDependencies['@navecss/tokens']).not.toBe('>=0.4.0 <1.0.0')
   })
 })
@@ -84,13 +129,12 @@ describe('AC-secondary-action-states-20: the published-floor rows run, read ever
   it('installs the alias as a devDependency at the floor, and the installed release is that version', () => {
     expect(manifest.devDependencies[PUBLISHED_TOKENS_ALIAS]).toBe(`npm:@navecss/tokens@${FLOOR}`)
     const published = publishedTokens()
-    expect('reason' in published).toBe(false)
-    expect('version' in published ? published.version : undefined).toBe(FLOOR)
+    expect(published.version).toBe(FLOOR)
   })
 
   it('declares in the alias every name the sheet uses, both new names included', () => {
     const published = publishedTokens()
-    const declared = 'declared' in published ? published.declared : new Set<string>()
+    const declared = published.declared
 
     expect(undeclaredIn(css, declared)).toEqual([])
     expect(NEW_NAMES.filter((name) => !declared.has(name))).toEqual([])
@@ -99,7 +143,7 @@ describe('AC-secondary-action-states-20: the published-floor rows run, read ever
 
   it('reports a planted layer name no release declares, and a deleted new name (controls)', () => {
     const published = publishedTokens()
-    const declared = 'declared' in published ? published.declared : new Set<string>()
+    const declared = published.declared
     const without = new Set(declared)
     without.delete(NEW_NAMES[0] ?? '')
 
@@ -113,7 +157,7 @@ describe('AC-secondary-action-states-20: the published-floor rows run, read ever
     const scratch = mkdtempSync(path.join(os.tmpdir(), 'nave-no-alias-'))
 
     expect(() => publishedTokens(scratch)).toThrow(PUBLISHED_TOKENS_ALIAS)
-    expect(() => publishedTokens(scratch)).toThrow(`@navecss/tokens@${FLOOR}`)
+    expect(() => publishedTokens(scratch)).toThrow(`@navecss/tokens@${tokensFloorOf(css)}`)
   })
 
   it('tells knip the alias is read by path, in the base-ui workspace entry', () => {

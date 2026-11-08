@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
-import { tokensFloorOf } from './support/w3-tokens-floor.ts'
+import { publishedFloorOf, publishedTokens } from './support/w3-tokens-floor.ts'
 
 const ROOT = path.join(PACKAGE_DIR, '../..')
 const readJson = <T>(...segments: string[]): T =>
@@ -100,11 +100,13 @@ describe('AC-base-ui-bridge-38: the manifest', () => {
 describe('AC-base-ui-overlay-completion-31: the manifest floors the tokens peer at the release that ships the highlight fill', () => {
   it('floors the tokens peer at the release that declares the newest name the stylesheet uses, below 1.0.0', () => {
     expect(manifest.peerDependencies['@navecss/tokens']).toBe(
-      `>=${tokensFloorOf(readStylesheet())} <1.0.0`,
+      `>=${publishedFloorOf(readStylesheet(), publishedTokens())} <1.0.0`,
     )
   })
 
   it('control: the previous floor, the release that declared the highlight fill, is not the expected range', () => {
-    expect(`>=0.4.0 <1.0.0`).not.toBe(`>=${tokensFloorOf(readStylesheet())} <1.0.0`)
+    expect(`>=0.4.0 <1.0.0`).not.toBe(
+      `>=${publishedFloorOf(readStylesheet(), publishedTokens())} <1.0.0`,
+    )
   })
 })

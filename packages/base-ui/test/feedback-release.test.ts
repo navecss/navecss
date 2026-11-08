@@ -7,8 +7,8 @@ import { PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
 import {
   namedTokens,
+  publishedFloorOf,
   publishedTokens,
-  tokensFloorOf,
   undeclaredIn,
 } from './support/w3-tokens-floor.ts'
 import {
@@ -202,7 +202,7 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
 
     it('has the published tokens release, installed through an alias, declare the same', () => {
       const published = publishedTokens()
-      expect(published.version).toBe(tokensFloorOf(readStylesheet()))
+      expect(published.version).toBe(publishedFloorOf(readStylesheet(), published))
       expect(NEW_TO_THE_PACKAGE.filter((name) => !published.declared.has(name))).toEqual([])
       expect(undeclaredIn(readStylesheet(), published.declared)).toEqual([])
     })
@@ -230,12 +230,14 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
   describe('the tokens peer', () => {
     it('is given as ">=<V> <1.0.0", V being the release that ships the newest name the stylesheet uses', () => {
       expect(manifest.peerDependencies['@navecss/tokens']).toBe(
-        `>=${tokensFloorOf(readStylesheet())} <1.0.0`,
+        `>=${publishedFloorOf(readStylesheet(), publishedTokens())} <1.0.0`,
       )
     })
 
     it('control: the range that floored the tokens before the secondary states is not the expected one', () => {
-      expect('>=0.4.0 <1.0.0').not.toBe(`>=${tokensFloorOf(readStylesheet())} <1.0.0`)
+      expect('>=0.4.0 <1.0.0').not.toBe(
+        `>=${publishedFloorOf(readStylesheet(), publishedTokens())} <1.0.0`,
+      )
     })
   })
 })

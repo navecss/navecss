@@ -19,7 +19,10 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { userEvent } from 'vitest/browser'
 
 import { Button } from '../../dist/button/index.js'
+import { Toggle } from '../../dist/toggle/index.js'
 import { styledParts } from '../../scripts/wrappers/roster.ts'
+import { requiredCopies } from '../support/registry/browser-injected.ts'
+import { loadCopy } from '../support/registry/browser-load.ts'
 import { isReachedWithin, MAX_FRAMES, nextFrame } from './support/frames.ts'
 import { el as h, mount, type Page, stylesheet, tokens, useSheets } from './support/page.ts'
 import {
@@ -839,6 +842,87 @@ describe.each(SCHEMES)(
           })
         },
       )
+    })
+  },
+)
+
+// ---------------------------------------------------------------------------------------------
+// AC-22 [A3]
+
+const COPIED = [
+  { packaged: Button, subpath: 'button' },
+  { packaged: Toggle, subpath: 'toggle' },
+] as const
+
+const SECONDARY_STATE_RULE_IN_COPY =
+  /[^{}]*\{\s*background-color:\s*var\(--nave-color-action-secondary-(?:hover|active)\);\s*\}/g
+
+const copyScene = (ui: unknown): ReactNode =>
+  h(
+    'div',
+    { style: { padding: 48 } },
+    h(ui, { 'data-testid': 'subject' }, 'Save'),
+    h('div', {
+      'data-testid': 'away',
+      style: { height: 40, left: 0, position: 'fixed', top: 0, width: 40 },
+    }),
+  )
+
+const fills = (observations: Observation<string>[]): string[] =>
+  observations.map(({ value }) => value)
+
+const took = (observations: Observation<string>[]): boolean[] =>
+  observations.map(({ took: hasTaken }) => hasTaken)
+
+const stateFillsOf = async (surface: Surface, ui: unknown): Promise<Observation<string>[]> => {
+  await surface.show(copyScene(ui))
+  const subject = required('subject')
+  return [
+    await observeUnder('hover', subject, (element) => getComputedStyle(element).backgroundColor),
+    await observeUnder(
+      'hover+active',
+      subject,
+      (element) => getComputedStyle(element).backgroundColor,
+    ),
+  ]
+}
+
+describe.each(SCHEMES)(
+  'AC-secondary-action-states-22: the registry copies of the Button and the Toggle take the package fills under hover and while pressed, in %s',
+  (scheme) => {
+    it.each(COPIED)('AC-secondary-action-states-22: $subpath', async ({ packaged, subpath }) => {
+      const folder = requiredCopies().paint.find((entry) => entry.subpath === subpath)?.copyFolder
+      expect(folder, `the registry has a copy of ${subpath}`).toBeDefined()
+      const copy = await loadCopy(folder!, subpath)
+      let removed = 0
+      const stripped = copy.css.replaceAll(SECONDARY_STATE_RULE_IN_COPY, () => {
+        removed += 1
+        return ''
+      })
+      expect(removed, 'the copy carries the two state rules').toBe(2)
+
+      await withSurface({ scheme, sheets: [tokens, stylesheet, copy.css] }, async (surface) => {
+        const ofPackage = await stateFillsOf(surface, packaged)
+        const ofCopy = await stateFillsOf(surface, copy.ui)
+        expect([...took(ofPackage), ...took(ofCopy)], 'each state took').toEqual([
+          true,
+          true,
+          true,
+          true,
+        ])
+        expect(fills(ofPackage)).toEqual([
+          surface.palette['action-secondary-hover'],
+          surface.palette['action-secondary-active'],
+        ])
+        expect(fills(ofCopy), 'the copy equals the package').toEqual(fills(ofPackage))
+      })
+
+      // The control: the copy without its two state rules does not fill.
+      await withSurface({ scheme, sheets: [tokens, stylesheet, stripped] }, async (surface) => {
+        const ofPackage = await stateFillsOf(surface, packaged)
+        const ofCopy = await stateFillsOf(surface, copy.ui)
+        expect(fills(ofCopy), 'a copy without the state rules').not.toEqual(fills(ofPackage))
+      })
     })
   },
 )

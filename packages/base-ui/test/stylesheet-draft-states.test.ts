@@ -235,8 +235,15 @@ describe('AC-base-ui-feedback-navigation-47: each feedback signature removes exa
       '3dc19dfe222e0a2bf5c652257c83af028853d4767b58a4bc4cc30edd048142f0',
     )
     expect(tableFeedback.fullSha256.allUnsigned).toBe(
-      'ff3a9f0f4800e1f7cb68d95574f079a3518fe7441e729ef5cc280b8296a65cc3',
+      '74a82d2529e81aa876cd2381a9775d63dcbca281f65173e849596e31d4ad1c21',
     )
+  })
+
+  it('holds the two full sha256s of Appendix C.4 at the governing overlay state, all signed: every feedback draft signed, and every one unsigned', () => {
+    expect(tableFeedback.fullSha256).toEqual({
+      allSigned: sha256(expectedSheet()),
+      allUnsigned: sha256(expectedSheet([], [...DRAFTS_FEEDBACK])),
+    })
   })
 
   it.each(statesFeedback)(

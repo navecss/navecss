@@ -36,8 +36,10 @@ interface Section {
   readonly version: string
 }
 
-const changelogSections = (): Section[] =>
-  readFileSync(path.join(ROOT, 'packages/tokens/CHANGELOG.md'), 'utf8')
+const CHANGELOG_PATH = path.join(ROOT, 'packages/tokens/CHANGELOG.md')
+
+const changelogSections = (changelog: string): Section[] =>
+  changelog
     .split(/^## /m)
     .slice(1)
     .map((section) => ({ text: section, version: section.split('\n', 1)[0]?.trim() ?? '' }))
@@ -60,17 +62,23 @@ const releaseOf = (name: string, sections: readonly Section[]): string => {
   )
 }
 
+const newestOf = (versions: readonly string[]): string =>
+  versions.reduce(
+    (newest, version) => (compareVersions(version, newest) > 0 ? version : newest),
+    FIRST_RELEASE,
+  )
+
 /**
-The tokens release a stylesheet's names floor at: the newest release that ships any name it uses.
+The tokens release a stylesheet's names floor at, read from the CHANGELOG alone: the newest
+release that ships any name it uses. This is what the alias-absent message names, since without
+the alias nothing else is known.
  */
-export const tokensFloorOf = (css: string): string => {
-  const sections = changelogSections()
-  return [...namedTokens(css)]
-    .map((name) => releaseOf(name, sections))
-    .reduce(
-      (newest, version) => (compareVersions(version, newest) > 0 ? version : newest),
-      FIRST_RELEASE,
-    )
+export const tokensFloorOf = (
+  css: string,
+  changelog: string = readFileSync(CHANGELOG_PATH, 'utf8'),
+): string => {
+  const sections = changelogSections(changelog)
+  return newestOf([...namedTokens(css)].map((name) => releaseOf(name, sections)))
 }
 
 /**
@@ -91,6 +99,27 @@ stylesheet declares.
 export interface PublishedTokens {
   readonly declared: ReadonlySet<string>
   readonly version: string
+}
+
+/**
+The same floor, read against a published release: a name the release declares already existed at
+that release, so it is dated by the sections up to that release only, and a later section that
+mentions it cannot raise the floor. A name the release does not declare is dated by every section.
+ */
+export const publishedFloorOf = (
+  css: string,
+  published: PublishedTokens,
+  changelog: string = readFileSync(CHANGELOG_PATH, 'utf8'),
+): string => {
+  const sections = changelogSections(changelog)
+  const upToRelease = sections.filter(
+    ({ version }) => compareVersions(version, published.version) <= 0,
+  )
+  return newestOf(
+    [...namedTokens(css)].map((name) =>
+      releaseOf(name, published.declared.has(name) ? upToRelease : sections),
+    ),
+  )
 }
 
 /**

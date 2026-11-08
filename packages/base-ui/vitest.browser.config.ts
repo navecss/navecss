@@ -126,6 +126,27 @@ const STRIP_FILE = 'test/browser/scroll-area-strip.browser.test.ts'
 const TRIGGER_FILE = 'test/browser/navigation-menu-trigger.browser.test.ts'
 const TOAST_FLIP_FILE = 'test/browser/toast-reduced-motion.browser.test.ts'
 const DISCLOSURE_FILE = 'test/browser/disclosure-trigger-disabled.browser.test.ts'
+const SECONDARY_FILE = 'test/browser/secondary-action-states.browser.test.ts'
+
+/**
+What the file's registry rows stand on: the registry's copies, written before the page opens.
+ */
+const REGISTRY_SETUP = ['test/browser/support/registry-consumer-app.global-setup.ts']
+
+/**
+What the secondary action states file imports through the wrappers: the twelve button parts' and the Toggle's.
+ */
+const SECONDARY_SUBPATHS = [
+  'alert-dialog',
+  'button',
+  'dialog',
+  'menu',
+  'popover',
+  'toast',
+  'toggle',
+  'toolbar',
+  'tooltip',
+]
 
 /**
  * The Base UI minors the files run against besides the devDependency, each by the name it is
@@ -135,9 +156,9 @@ const DISCLOSURE_FILE = 'test/browser/disclosure-trigger-disabled.browser.test.t
  */
 const MINORS = [
   {
-    files: [EXIT_FILE, STRIP_FILE, TRIGGER_FILE, DISCLOSURE_FILE],
+    files: [EXIT_FILE, STRIP_FILE, TRIGGER_FILE, DISCLOSURE_FILE, SECONDARY_FILE],
     installedAs: 'floor',
-    subpaths: ['accordion', 'collapsible', 'navigation-menu', 'scroll-area'],
+    subpaths: ['accordion', 'collapsible', 'navigation-menu', 'scroll-area', ...SECONDARY_SUBPATHS],
     version: '1.3.0',
   },
   {
@@ -205,6 +226,7 @@ export default defineConfig({
         test: {
           name: `base-ui-${version}`,
           include: [...files],
+          globalSetup: installedAs === 'floor' ? REGISTRY_SETUP : [],
           provide: { baseUi: version },
           browser: browser(),
         },
@@ -215,11 +237,12 @@ export default defineConfig({
         extends: true,
         resolve: { alias: REACT_18 },
         optimizeDeps: {
-          include: optimized('@base-ui/react', ['navigation-menu'], '-18'),
+          include: optimized('@base-ui/react', ['navigation-menu', ...SECONDARY_SUBPATHS], '-18'),
         },
         test: {
           name: 'current-react-18',
-          include: [EXIT_FILE],
+          include: [EXIT_FILE, SECONDARY_FILE],
+          globalSetup: REGISTRY_SETUP,
           provide: { baseUi: installedVersion('@base-ui/react') },
           browser: browser(),
         },
@@ -228,11 +251,18 @@ export default defineConfig({
         extends: true,
         resolve: { alias: [...REACT_18, ...alias(installedAs)] },
         optimizeDeps: {
-          include: optimized(`base-ui-react-${installedAs}`, ['navigation-menu'], '-18'),
+          include: optimized(
+            `base-ui-react-${installedAs}`,
+            installedAs === 'floor'
+              ? ['navigation-menu', ...SECONDARY_SUBPATHS]
+              : ['navigation-menu'],
+            '-18',
+          ),
         },
         test: {
           name: `base-ui-${version}-react-18`,
-          include: [EXIT_FILE],
+          include: installedAs === 'floor' ? [EXIT_FILE, SECONDARY_FILE] : [EXIT_FILE],
+          globalSetup: installedAs === 'floor' ? REGISTRY_SETUP : [],
           provide: { baseUi: version },
           browser: browser(),
         },
