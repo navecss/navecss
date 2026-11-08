@@ -18,6 +18,7 @@
 import type { AstNode } from './vite-ast.ts'
 import type { CxNames } from './vite-cx-take-keys.ts'
 import type { Taken } from './vite-cx-takes.ts'
+import type { ScopeAnalysis } from './vite-scope.ts'
 
 import { childrenOf, nodeAt, nodesAt, pushAll, staticStringOf } from './vite-ast.ts'
 import { boundForwardsOf, starForwardOf } from './vite-commonjs-emits.ts'
@@ -32,6 +33,7 @@ import {
   memberOf,
 } from './vite-commonjs-exports.ts'
 import { isCxName } from './vite-cx-take-keys.ts'
+import { analyze } from './vite-scope.ts'
 
 /**
  * A take the build cannot read: the module whole.
@@ -223,7 +225,12 @@ export function requireTakesIn(
 ): { given: string[]; takes: Taken[] } {
   const requires = requireCallsOf(program).filter(({ specifier }) => input.reaches.has(specifier))
   if (requires.length === 0) return { given: [], takes: [] }
-  const forwardInput = { names: input.names, requires: new Set(requires.map(({ node }) => node)) }
+  let analysis: ScopeAnalysis | undefined
+  const forwardInput = {
+    analysis: () => (analysis ??= analyze(program)),
+    names: input.names,
+    requires: new Set(requires.map(({ node }) => node)),
+  }
   const forwards = input.readsForwards ? forwardsIn(program, forwardInput) : []
   const forwarded = new Set(forwards.map((forward) => forward.require))
   const takes = forwards.flatMap((forward) => forward.takes)

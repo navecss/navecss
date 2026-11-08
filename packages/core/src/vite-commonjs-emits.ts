@@ -2,14 +2,17 @@
  * The two forwards TypeScript emits when it compiles an ES module to CommonJS: a getter
  * `Object.defineProperty(exports, 'b', { get: function () { return x.a } })` over
  * `var x = require(...)`, for `export { a as b } from`, and `__exportStar(require(...), exports)`,
- * its own helper or `tslib`'s, for `export * from`. Babel writes the getter the same way.
+ * its own helper or `tslib`'s, for `export * from`. Babel writes the getter the same way. Each is
+ * read only where the names resolve to what TypeScript writes: the getter's object to a binding of
+ * the require, and `__exportStar` to the helper TypeScript writes at the top of the module or to a
+ * name bound to `require('tslib')`.
  */
 import type { AstNode } from './vite-ast.ts'
 import type { Forward, ForwardInput } from './vite-commonjs-exports.ts'
 import type { Taken } from './vite-cx-takes.ts'
 import type { ScopeAnalysis } from './vite-scope.ts'
 
-import { nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
+import { nodeAt, nodesAt, propertyNameOf, staticStringOf } from './vite-ast.ts'
 import {
   definePropertyOf,
   isExportsObject,
@@ -18,14 +21,74 @@ import {
   statementCallOf,
 } from './vite-commonjs-exports.ts'
 import { type CxNames, isCxName } from './vite-cx-take-keys.ts'
-import { analyze } from './vite-scope.ts'
 
 /**
- * Whether a callee is TypeScript's `__exportStar` helper: its own (`__exportStar`) or `tslib`'s
- * (`tslib_1.__exportStar`).
+ * The value a name is bound to, when it is bound once, to a plain initialiser, and never written.
  */
-function isExportStarCallee(callee: AstNode | undefined): boolean {
-  return isName(callee, '__exportStar') || memberOf(callee)?.name === '__exportStar'
+function initOf(analysis: ScopeAnalysis, name: AstNode): AstNode | undefined {
+  const binding = analysis.referenceOf(name)?.binding
+  return binding?.writes === 0 ? binding.init : undefined
+}
+
+/**
+ * Whether `node` is `this.__exportStar`.
+ */
+function isOwnHelperRead(node: AstNode | undefined): boolean {
+  const member = memberOf(node)
+  return member?.name === '__exportStar' && member.object.type === 'ThisExpression'
+}
+
+/**
+ * Whether `node` is `this && this.__exportStar`.
+ */
+function isThisGuard(node: AstNode | undefined): boolean {
+  if (node?.type !== 'LogicalExpression' || node.operator !== '&&') return false
+  return nodeAt(node, 'left')?.type === 'ThisExpression' && isOwnHelperRead(nodeAt(node, 'right'))
+}
+
+/**
+ * Whether `node` is the helper TypeScript writes at the top of the module:
+ * `(this && this.__exportStar) || function (m, exports) { ... }`.
+ */
+function isOwnHelper(node: AstNode | undefined): boolean {
+  if (node?.type !== 'LogicalExpression' || node.operator !== '||') return false
+  return isThisGuard(nodeAt(node, 'left')) && nodeAt(node, 'right')?.type === 'FunctionExpression'
+}
+
+/**
+ * Whether `node` is `require('tslib')`.
+ */
+function isTslibRequire(node: AstNode | undefined): boolean {
+  if (node?.type !== 'CallExpression' || !isName(nodeAt(node, 'callee'), 'require')) return false
+  const args = nodesAt(node, 'arguments')
+  return args.length === 1 && staticStringOf(args[0]) === 'tslib'
+}
+
+/**
+ * Whether a callee is TypeScript's `__exportStar` helper: its own, a name bound to the helper it
+ * writes, or `tslib`'s, read off a name bound to `require('tslib')`.
+ */
+function isExportStarCallee(callee: AstNode | undefined, analysis: ScopeAnalysis): boolean {
+  if (isName(callee, '__exportStar')) return isOwnHelper(initOf(analysis, callee!))
+  const member = memberOf(callee)
+  if (member?.name !== '__exportStar' || member.object.type !== 'Identifier') return false
+  return isTslibRequire(initOf(analysis, member.object))
+}
+
+/**
+ * The require a top-level `__exportStar(require(...), exports)` statement passes the helper, when
+ * the require is one of `requires` and the callee is TypeScript's helper.
+ */
+function exportStarOf(statement: AstNode, input: ForwardInput): AstNode | undefined {
+  const call = statementCallOf(statement)
+  if (!call) return undefined
+  const [required, target] = nodesAt(call, 'arguments')
+  if (required === undefined || !input.requires.has(required) || !isExportsObject(target)) {
+    return undefined
+  }
+  const analysis = input.analysis()
+  const isHelper = !analysis.hasDirectEval && isExportStarCallee(nodeAt(call, 'callee'), analysis)
+  return isHelper ? required : undefined
 }
 
 /**
@@ -33,12 +96,8 @@ function isExportStarCallee(callee: AstNode | undefined): boolean {
  * but `default`, which the helper skips.
  */
 export function starForwardOf(statement: AstNode, input: ForwardInput): Forward | undefined {
-  const call = statementCallOf(statement)
-  if (!call || !isExportStarCallee(nodeAt(call, 'callee'))) return undefined
-  const [required, target] = nodesAt(call, 'arguments')
-  if (required === undefined || !input.requires.has(required) || !isExportsObject(target)) {
-    return undefined
-  }
+  const required = exportStarOf(statement, input)
+  if (required === undefined) return undefined
   const named = input.names
     ?.values()
     .filter((name) => name !== 'default')
@@ -132,7 +191,7 @@ export function boundForwardsOf(program: AstNode, input: ForwardInput): Forward[
     if (read) reads.set(read.object, read)
   }
   if (reads.size === 0) return []
-  const analysis = analyze(program)
+  const analysis = input.analysis()
   if (analysis.hasDirectEval) return []
   const context = { analysis, names: input.names }
   return [...input.requires].flatMap((require) => {

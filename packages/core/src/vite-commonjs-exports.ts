@@ -6,6 +6,7 @@
 import type { AstNode } from './vite-ast.ts'
 import type { CxNames } from './vite-cx-take-keys.ts'
 import type { Taken } from './vite-cx-takes.ts'
+import type { ScopeAnalysis } from './vite-scope.ts'
 
 import { exportNameOf, nodeAt, nodesAt, staticStringOf } from './vite-ast.ts'
 
@@ -61,6 +62,10 @@ export interface Forward {
 }
 
 export interface ForwardInput {
+  /**
+   * The module's scope analysis, made on first use.
+   */
+  readonly analysis: () => ScopeAnalysis
   readonly names: CxNames
   readonly requires: ReadonlySet<AstNode>
 }

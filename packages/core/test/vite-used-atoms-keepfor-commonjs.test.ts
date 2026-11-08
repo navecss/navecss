@@ -149,6 +149,31 @@ describe('AC-used-atoms-52 - a dependency that forwards a cx export by CommonJS 
     expect(atomLayerAtoms(followed.css)).toEqual(atoms('block', 'flex'))
   })
 
+  it.each([
+    [
+      'a local function named __exportStar',
+      "function __exportStar(m) { m.cn('grid') }\n__exportStar(require('@acme/ui/cn.js'), exports)\n",
+      "function spread(m) { m.cn('grid') }\nspread(require('@acme/ui/cn.js'), exports)\n",
+    ],
+    [
+      'an __exportStar read off a module other than tslib',
+      "const helpers = require('./helpers.js')\nhelpers.__exportStar(require('@acme/ui/cn.js'), exports)\n",
+      "const helpers = require('./helpers.js')\nhelpers.spread(require('@acme/ui/cn.js'), exports)\n",
+    ],
+  ])("does not read %s as TypeScript's export * helper", async (_, spelled, control) => {
+    const helpers =
+      "exports.__exportStar = function (m) { m.cn('grid') }\nexports.spread = exports.__exportStar\n"
+    const packagesOf = (index: string): Record<string, Record<string, string>> => ({
+      '@acme/ui': ACME,
+      '@other/ui': { 'package.json': COMMONJS, 'index.js': index, 'helpers.js': helpers },
+    })
+    const read = await run(APP, packagesOf(spelled), { keepFor: KEEP_FLEX })
+    const unread = await run(APP, packagesOf(control), { keepFor: KEEP_FLEX })
+
+    expect(linesOf(read.error)).not.toContain(takenLine('src/App.ts (cn)'))
+    expect(linesOf(read.error)).toEqual(linesOf(unread.error))
+  })
+
   it('gives out default when the module only reads __esModule, and does not mark itself', async () => {
     const forward =
       "const isMarked = (m) => Boolean(m && m.__esModule)\nexports.cn = require('@acme/ui/cn.js').cn\nexports.isMarked = isMarked\n"
