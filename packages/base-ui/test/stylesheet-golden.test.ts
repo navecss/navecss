@@ -337,7 +337,7 @@ describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06
 const BUTTON = 'nave-base-ui-button'
 const GHOST_KEY = '.nave-base-ui-button > &[data-nave-variant="ghost"]'
 const ENABLED = ':not(:disabled, [aria-disabled="true"])'
-// R9's open key: a ghost whose popup is open, named by the three `aria-haspopup` values of "menu, popover or dialog".
+// R9's open key: a ghost whose popup is open, named by the three `aria-haspopup` values `menu`, `true` and `dialog`.
 const OPEN_POPUP =
   '[aria-expanded="true"]:is([aria-haspopup="menu"], [aria-haspopup="true"], [aria-haspopup="dialog"])'
 const HIGHLIGHT = 'background-color: var(--nave-color-action-highlight)'

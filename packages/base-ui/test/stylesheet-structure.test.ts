@@ -975,6 +975,9 @@ const PLANTED_KEYS = ['[role="menuitem"]', '[dir="rtl"]', '.other']
 const plantedKey = (owner: string, key: string): string =>
   `${readStylesheet()}\n@layer components.nave { .${PREFIX}${owner} { ${key} { color: red } } }`
 
+const plantedIsReports = (owner: string, key: string): string[] =>
+  vocabularyViolations(plantedKey(owner, key)).filter((violation) => violation.startsWith(':is('))
+
 describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 and AC-base-ui-bridge-20: selectors use only the vocabulary, as the overlay completion and the feedback and navigation spec extend it', () => {
   it('uses only the rule own class, the declared attributes, the admitted pseudo-classes and elements, and the child combinator', () => {
     expect(vocabularyViolations(readStylesheet())).toEqual([])
@@ -1070,17 +1073,11 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
   it('reds on a planted listbox, a reordered or a narrower :is() on the button open ghost key, and on a planted :is([data-highlighted]) key on item-highlight (control)', () => {
     const ghost = '&[data-nave-variant="ghost"][aria-expanded="true"]'
 
+    expect(plantedIsReports('button', `${ghost}:is([aria-haspopup="listbox"])`)).not.toEqual([])
     expect(
-      vocabularyViolations(plantedKey('button', `${ghost}:is([aria-haspopup="listbox"])`)),
+      plantedIsReports('button', `${ghost}:is([aria-haspopup="menu"], [aria-haspopup="dialog"])`),
     ).not.toEqual([])
-    expect(
-      vocabularyViolations(
-        plantedKey('button', `${ghost}:is([aria-haspopup="menu"], [aria-haspopup="dialog"])`),
-      ),
-    ).not.toEqual([])
-    expect(
-      vocabularyViolations(plantedKey('item-highlight', '&:is([data-highlighted])')),
-    ).not.toEqual([])
+    expect(plantedIsReports('item-highlight', '&:is([data-highlighted])')).not.toEqual([])
   })
 
   it('names data-popup-open in no selector', () => {
