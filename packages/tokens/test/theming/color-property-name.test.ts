@@ -219,6 +219,13 @@ describe('AC-theming-56 covers: R26a (shipped artifact, both builds)', () => {
 })
 
 /**
+The in-memory path of one compile probe, beside the shipped `dist/tokens.d.ts` it imports.
+ */
+function probeFileName(key: string): string {
+  return path.join(NAVE_DIST, `__probe_${key}__.ts`)
+}
+
+/**
  * The compile-error half of R26a property 1/5: a TypeScript consumer compiling against the
  * SHIPPED `dist/tokens.d.ts` gets a compile error assigning a name that is not an emitted
  * colour property to `ColorPropertyName`, and gets none assigning one that is. Follows
@@ -230,8 +237,8 @@ describe('AC-theming-56 covers: R26a (shipped artifact, both builds)', () => {
 describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => {
   /**
    * `lib` is ES2022 only. This target's default lib adds the DOM lib, which `dist/tokens.d.ts`
-   * never references and which is most of each probe's compile time: enough, under
-   * coverage on a loaded CI runner, to push a probe past vitest's 5 s default. A narrower
+   * never references and which is most of the probes' compile time: enough, under
+   * coverage on a loaded CI runner, to push the probes past vitest's 5 s default. A narrower
    * lib can only add diagnostics, so it cannot hide the "not assignable" errors the negative
    * probes assert; the DOM probe below pins that the DOM lib stays out.
    */
@@ -246,26 +253,40 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
   }
 
   /**
+   * Compiles every probe in ONE program and returns each probe's own semantic diagnostics,
+   * keyed as `probes` is. Each probe is a separate in-memory module beside `dist/tokens.d.ts`
+   * (an `import` makes it a module, so no probe's declarations reach another's scope), and a
+   * file's semantic diagnostics are that file's alone, so the split is what four programs
+   * would have reported. One program loads the lib and `dist/tokens.d.ts` once instead of
+   * four times, which is where nearly all of the time went.
+   *
    * Message text only — a raw `Diagnostic` carries circular AST nodes that blow up any
-   * failure diff, so the probe never returns the objects themselves.
+   * failure diff, so the probes never return the objects themselves.
    */
-  function compileProbe(source: string): string[] {
-    const probeFileName = path.join(NAVE_DIST, '__probe__.ts')
+  function compileProbes<K extends string>(probes: Record<K, string>): Record<K, string[]> {
+    const sources = new Map<string, string>(
+      Object.entries<string>(probes).map(([key, source]) => [probeFileName(key), source]),
+    )
     const host = createCompilerHost(COMPILER_OPTIONS)
     host.getSourceFile = (fileName, languageVersion) => {
-      if (fileName === probeFileName)
-        return createSourceFile(fileName, source, languageVersion, true)
+      const probe = sources.get(fileName)
+      if (probe !== undefined) return createSourceFile(fileName, probe, languageVersion, true)
       if (!sys.fileExists(fileName)) return
       return createSourceFile(fileName, sys.readFile(fileName) ?? '', languageVersion, true)
     }
-    host.fileExists = (fileName) => fileName === probeFileName || sys.fileExists(fileName)
-    host.readFile = (fileName) => (fileName === probeFileName ? source : sys.readFile(fileName))
-    const program = createProgram([probeFileName], COMPILER_OPTIONS, host)
-    const diagnostics = program.getSemanticDiagnostics(program.getSourceFile(probeFileName))
-    return diagnostics.map((d) => flattenDiagnosticMessageText(d.messageText, '\n'))
+    host.fileExists = (fileName) => sources.has(fileName) || sys.fileExists(fileName)
+    host.readFile = (fileName) => sources.get(fileName) ?? sys.readFile(fileName)
+    const program = createProgram(sources.keys().toArray(), COMPILER_OPTIONS, host)
+    const diagnosticsOf = (key: string): string[] =>
+      program
+        .getSemanticDiagnostics(program.getSourceFile(probeFileName(key)))
+        .map((d) => flattenDiagnosticMessageText(d.messageText, '\n'))
+    return Object.fromEntries(
+      Object.keys(probes).map((key) => [key, diagnosticsOf(key)]),
+    ) as Record<K, string[]>
   }
 
-  // Each probe spins up a real `ts.createProgram`, noticeably slower than the rest of this
+  // The probes share one real `ts.createProgram`, noticeably slower than the rest of this
   // file's assertions and, under load, close enough to vitest's 5s default to be worth running
   // once, in `beforeAll` with an explicit timeout, rather than once per `it()`.
   let realEmittedDiagnostics: string[]
@@ -274,22 +295,25 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
   let domProbeDiagnostics: string[]
 
   beforeAll(() => {
-    realEmittedDiagnostics = compileProbe(
-      `import type { ColorPropertyName } from './tokens.js'\n` +
+    ;({
+      realEmitted: realEmittedDiagnostics,
+      rampStep: rampStepDiagnostics,
+      unprefixed: unprefixedDiagnostics,
+      domProbe: domProbeDiagnostics,
+    } = compileProbes({
+      realEmitted:
+        `import type { ColorPropertyName } from './tokens.js'\n` +
         `export const ok: ColorPropertyName = '--nave-color-action-primary'\n`,
-    )
-    rampStepDiagnostics = compileProbe(
-      `import type { ColorPropertyName } from './tokens.js'\n` +
+      rampStep:
+        `import type { ColorPropertyName } from './tokens.js'\n` +
         `export const bad: ColorPropertyName = '--nave-color-primary-500'\n`,
-    )
-    unprefixedDiagnostics = compileProbe(
-      `import type { ColorPropertyName } from './tokens.js'\n` +
+      unprefixed:
+        `import type { ColorPropertyName } from './tokens.js'\n` +
         `export const bad: ColorPropertyName = '--color-surface-base'\n`,
-    )
-    domProbeDiagnostics = compileProbe(
-      `import type { ColorPropertyName } from './tokens.js'\n` +
+      domProbe:
+        `import type { ColorPropertyName } from './tokens.js'\n` +
         `export const el: HTMLElement | ColorPropertyName | undefined = undefined\n`,
-    )
+    }))
   }, 20_000)
 
   it('a real emitted colour property compiles clean', () => {
