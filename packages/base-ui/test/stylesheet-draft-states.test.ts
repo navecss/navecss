@@ -89,11 +89,11 @@ describe('AC-base-ui-overlay-completion-06: the expected stylesheet of every sig
     expect(new Set(Object.keys(rows))).toEqual(new Set(states.map(([key]) => key)))
   })
 
-  it('holds the anchors: 30,490 bytes and 65 classes all signed, 24,151 and 53 none signed', () => {
-    expect(rows.none).toMatchObject({ bytes: 30_490, classes: 65 })
-    expect(rows.none?.sha256.slice(0, 16)).toBe('993cb4aeac3424ec')
+  it('holds the anchors: 31,078 bytes and 65 classes all signed, 24,739 and 53 none signed', () => {
+    expect(rows.none).toMatchObject({ bytes: 31_078, classes: 65 })
+    expect(rows.none?.sha256.slice(0, 16)).toBe('d481806ec84fca38')
     expect(rows['combobox+highlight-fill+open-ghost+popup-fade+tooltip-fade+scrim']).toMatchObject({
-      bytes: 24_151,
+      bytes: 24_739,
       classes: 53,
     })
   })
@@ -168,7 +168,7 @@ describe('AC-base-ui-overlay-completion-37 and AC-base-ui-feedback-navigation-47
   it('reds a combobox-unsigned build that keeps the six Combobox-only rules, in bytes and in classes (control)', () => {
     const kept = withoutRules(allSigned, DRAFT_CLASSES.combobox.slice(0, 1))
 
-    expect(Buffer.byteLength(kept)).toBe(30_063)
+    expect(Buffer.byteLength(kept)).toBe(30_651)
     expect(classesOf(kept).size).toBe(64)
     expect(sha256(kept)).not.toBe(rows.combobox?.sha256)
     expect(classesOf(kept)).not.toEqual(tablePClassesFor(['combobox']))
@@ -221,27 +221,34 @@ const blockOf = (ringless: string): string => ringless.slice(sheetOverlay().leng
 const bytesOf = (text: string): number => Buffer.byteLength(text)
 
 describe('AC-base-ui-feedback-navigation-47: each feedback signature removes exactly its own bytes and nothing else', () => {
-  it('names each of the 16 states once, and holds the anchors: 37,389 B and 86 classes all signed, 36,103 B and 82 none signed', () => {
+  it('names each of the 16 states once, and holds the anchors: 37,977 B and 86 classes all signed, 36,691 B and 82 none signed', () => {
     expect(statesFeedback).toHaveLength(16)
     expect(new Set(statesFeedback.map(([key]) => key)).size).toBe(16)
     expect(new Set(Object.keys(tableFeedback.states))).toEqual(
       new Set(statesFeedback.map(([key]) => key)),
     )
     expect(tableFeedback.states.none).toMatchObject({
-      bytes: 37_389,
+      bytes: 37_977,
       classes: 86,
       blockBytes: 6899,
     })
-    expect(tableFeedback.states.none?.sha256).toBe('abf687ea37888a56')
+    expect(tableFeedback.states.none?.sha256).toBe('ab57114027b9e444')
     expect(
       tableFeedback.states['toast-placement+toast-fade+toast-limit+navigation-menu-fade'],
-    ).toMatchObject({ bytes: 36_103, classes: 82, blockBytes: 5613 })
+    ).toMatchObject({ bytes: 36_691, classes: 82, blockBytes: 5613 })
     expect(tableFeedback.fullSha256.allSigned).toBe(
-      'abf687ea37888a5685df2c010f8ae4168e3d18a935f2f289ca84d133c159f673',
+      'ab57114027b9e444f878089b74ee2990a49726613e9343c7f93233530e3e98ed',
     )
     expect(tableFeedback.fullSha256.allUnsigned).toBe(
-      '61f170fe18ec59c7aab61c5e07fd351e77c49808b57148f37e1018f03df85955',
+      'fa2c3efa4468f1f9016e09b9de44e1bfde1d9d43853b18a77c570fa7e3e0f8d4',
     )
+  })
+
+  it('holds the two full sha256s of Appendix C.4 at the governing overlay state, all signed: every feedback draft signed, and every one unsigned', () => {
+    expect(tableFeedback.fullSha256).toEqual({
+      allSigned: sha256(expectedSheet()),
+      allUnsigned: sha256(expectedSheet([], [...DRAFTS_FEEDBACK])),
+    })
   })
 
   it.each(statesFeedback)(
@@ -366,7 +373,7 @@ const RING_COUNT_OVERLAY_UNSIGNED = 13
 describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () => {
   const corners = tableFeedback.corners
 
-  it('holds the six corners: 30,490 B and 24,151 B for overlay alone, and the four combinations', () => {
+  it('holds the six corners: 31,078 B and 24,739 B for overlay alone, and the four combinations', () => {
     expect(Object.keys(corners).toSorted(byText)).toEqual([
       'overlay-signed',
       'overlay-unsigned',
@@ -376,33 +383,33 @@ describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () =>
       'unsigned+unsigned',
     ])
     expect(corners['overlay-signed']).toEqual({
-      bytes: 30_490,
-      sha256: '993cb4aeac3424ec',
+      bytes: 31_078,
+      sha256: 'd481806ec84fca38',
       classes: 65,
     })
     expect(corners['overlay-unsigned']).toEqual({
-      bytes: 24_151,
-      sha256: '24445ca251ee09e6',
+      bytes: 24_739,
+      sha256: '6392e75b84beb22f',
       classes: 53,
     })
     expect(corners['signed+signed']).toEqual({
-      bytes: 37_389,
-      sha256: 'abf687ea37888a56',
+      bytes: 37_977,
+      sha256: 'ab57114027b9e444',
       classes: 86,
     })
     expect(corners['signed+unsigned']).toEqual({
-      bytes: 36_103,
-      sha256: '61f170fe18ec59c7',
+      bytes: 36_691,
+      sha256: 'fa2c3efa4468f1f9',
       classes: 82,
     })
     expect(corners['unsigned+signed']).toEqual({
-      bytes: 31_050,
-      sha256: '8c3b4b460616211e',
+      bytes: 31_638,
+      sha256: '7a5aa550d279882a',
       classes: 74,
     })
     expect(corners['unsigned+unsigned']).toEqual({
-      bytes: 29_764,
-      sha256: '6f01b2d95122c766',
+      bytes: 30_352,
+      sha256: 'ff3a9f0f4800e1f7',
       classes: 70,
     })
   })
@@ -445,7 +452,7 @@ describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () =>
     },
   )
 
-  it('builds overlay alone, with the 21 new classes out of the atom map, at 30,490 B 993cb4ae and 65 classes, and its all-unsigned state at 24,151 B 24445ca2 and 53', async () => {
+  it('builds overlay alone, with the 21 new classes out of the atom map, at 31,078 B d481806e and 65 classes, and its all-unsigned state at 24,739 B 6392e75b and 53', async () => {
     const without = withoutRing(await buildWithoutClasses(NEW_CLASSES_FEEDBACK))
     const unsigned = deriveState(without.text, ALL_OVERLAY)
 

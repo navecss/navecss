@@ -90,6 +90,14 @@ export const controlAtoms: Record<string, AtomDefinition> = {
         {
           'background-color': V('color-action-highlight'),
         },
+      '&:not([data-nave-variant="primary"], [data-nave-variant="ghost"]):hover:not(:disabled, [aria-disabled="true"])':
+        {
+          'background-color': V('color-action-secondary-hover'),
+        },
+      '&:not([data-nave-variant="primary"], [data-nave-variant="ghost"]):active:not(:disabled, [aria-disabled="true"])':
+        {
+          'background-color': V('color-action-secondary-active'),
+        },
     },
   },
   baseUiToggle: {
@@ -104,6 +112,12 @@ export const controlAtoms: Record<string, AtomDefinition> = {
         'border-block-end': `${V('border-width-lg')} solid currentColor`,
       },
       '&:disabled, &[aria-disabled="true"]': buttonDisabled,
+      '&:hover:not(:disabled, [aria-disabled="true"])': {
+        'background-color': V('color-action-secondary-hover'),
+      },
+      '&:active:not(:disabled, [aria-disabled="true"])': {
+        'background-color': V('color-action-secondary-active'),
+      },
     },
   },
   baseUiToggleGroup: {

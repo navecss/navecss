@@ -1,13 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { describe, expect, it, type TestContext } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { withoutRules } from './support/draft-states.ts'
 import { PACKAGE_DIR, readStylesheet } from './support/stylesheet.ts'
 import { declaredTokens, workspaceTokensCss } from './support/tokens.ts'
 import {
-  firstTokensVersionWithTheHighlight,
   namedTokens,
+  publishedFloorOf,
   publishedTokens,
   undeclaredIn,
 } from './support/w3-tokens-floor.ts'
@@ -52,16 +52,6 @@ const withoutPlacement = (css: string): string =>
   withoutRules(css, ['nave-base-ui-toast-placement'])
 
 const workspaceDeclared = (): Set<string> => new Set(declaredTokens(workspaceTokensCss()).keys())
-
-const publishedOrSkip = (
-  context: TestContext,
-): { declared: ReadonlySet<string>; version: string } => {
-  const published = publishedTokens()
-  if ('reason' in published) {
-    return context.skip(published.reason)
-  }
-  return published
-}
 
 const make = (file: string, frontmatter: string, text: string): Changeset => ({
   file,
@@ -189,16 +179,16 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
   })
 
   describe('every --nave-* name the stylesheet uses is declared', () => {
-    it('names 67 distinct tokens with every draft signed, among them the eight new to the package', () => {
+    it('names 69 distinct tokens with every draft signed, among them the eight new to the package', () => {
       const named = namedTokens(readStylesheet())
-      expect(named.size).toBe(67)
+      expect(named.size).toBe(69)
       expect(NEW_TO_THE_PACKAGE.filter((name) => !named.has(name))).toEqual([])
     })
 
-    it('names 66 with the placement unsigned: the one that goes is --nave-layer-toast', () => {
+    it('names 68 with the placement unsigned: the one that goes is --nave-layer-toast', () => {
       const all = namedTokens(readStylesheet())
       const unsigned = namedTokens(withoutPlacement(readStylesheet()))
-      expect(unsigned.size).toBe(66)
+      expect(unsigned.size).toBe(68)
       expect([...all].filter((name) => !unsigned.has(name))).toEqual(['--nave-layer-toast'])
     })
 
@@ -210,9 +200,9 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
       expect(undeclaredIn(unsigned, declared)).toEqual([])
     })
 
-    it('has the published tokens release, installed through an alias, declare the same', (context) => {
-      const published = publishedOrSkip(context)
-      expect(published.version).toBe(firstTokensVersionWithTheHighlight())
+    it('has the published tokens release, installed through an alias, declare the same', () => {
+      const published = publishedTokens()
+      expect(published.version).toBe(publishedFloorOf(readStylesheet(), published))
       expect(NEW_TO_THE_PACKAGE.filter((name) => !published.declared.has(name))).toEqual([])
       expect(undeclaredIn(readStylesheet(), published.declared)).toEqual([])
     })
@@ -224,8 +214,8 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
       ])
     })
 
-    it('control: the same planted name is reported against the published release', (context) => {
-      const published = publishedOrSkip(context)
+    it('control: the same planted name is reported against the published release', () => {
+      const published = publishedTokens()
       expect(undeclaredIn(planted, published.declared)).toEqual(['--nave-layer-notification'])
     })
 
@@ -238,14 +228,16 @@ describe('AC-base-ui-feedback-navigation-48: the release, its order, and the tok
   })
 
   describe('the tokens peer', () => {
-    it('is given as ">=<V> <1.0.0", V being the release that ships the highlight fill', () => {
+    it('is given as ">=<V> <1.0.0", V being the release that ships the newest name the stylesheet uses', () => {
       expect(manifest.peerDependencies['@navecss/tokens']).toBe(
-        `>=${firstTokensVersionWithTheHighlight()} <1.0.0`,
+        `>=${publishedFloorOf(readStylesheet(), publishedTokens())} <1.0.0`,
       )
     })
 
-    it('control: the range that floored the tokens before the highlight fill is not the expected one', () => {
-      expect('>=0.3.0 <1.0.0').not.toBe(`>=${firstTokensVersionWithTheHighlight()} <1.0.0`)
+    it('control: the range that floored the tokens before the secondary states is not the expected one', () => {
+      expect('>=0.4.0 <1.0.0').not.toBe(
+        `>=${publishedFloorOf(readStylesheet(), publishedTokens())} <1.0.0`,
+      )
     })
   })
 })

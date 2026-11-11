@@ -191,6 +191,9 @@ importers:
       lightningcss:
         specifier: 1.33.0
         version: 1.33.0
+      navecss-tokens-floor:
+        specifier: npm:@navecss/tokens@0.5.0
+        version: '@navecss/tokens@0.5.0'
       playwright:
         specifier: 1.64.1
         version: 1.64.1
@@ -1742,6 +1745,11 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
       '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
+
+  '@navecss/tokens@0.5.0':
+    resolution: {integrity: sha512-hJ8VZZKoT5/SX1YYAKpA+urfWuV1isW25M7zFtE8Qmw/8nfoMw/xPBgmAT/CAWVpwz5Td61y12kW/WQoEB0iqg==}
+    engines: {node: '>=22.18'}
+    hasBin: true
 
   '@next/env@16.4.1':
     resolution: {integrity: sha512-5sUUrrSvs/2/2LnLoesybMGx12EtPB46fdZ6RhAw0XDGSPxU2LFyQBB7yuEiOFFJPKmBY6+q2jTr1/AMbnp0/g==}
@@ -7828,6 +7836,8 @@ snapshots:
       '@emnapi/runtime': 1.11.3
       '@tybys/wasm-util': 0.10.4
     optional: true
+
+  '@navecss/tokens@0.5.0': {}
 
   '@next/env@16.4.1': {}
 

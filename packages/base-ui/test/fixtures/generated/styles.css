@@ -82,12 +82,16 @@
     } &[data-nave-variant="ghost"]:hover:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
     } &[data-nave-variant="ghost"]:active:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
     } &[data-nave-variant="ghost"][aria-expanded="true"]:is([aria-haspopup="menu"], [aria-haspopup="true"], [aria-haspopup="dialog"]):not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
+    } &:not([data-nave-variant="primary"], [data-nave-variant="ghost"]):hover:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-secondary-hover);
+    } &:not([data-nave-variant="primary"], [data-nave-variant="ghost"]):active:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-secondary-active);
     } &{ outline: none;
     } &:focus-visible{ outline-style: solid; outline-width: var(--nave-border-width-focus, 2px); outline-color: var(--nave-color-border-focus, currentColor); outline-offset: 2px;
     } }
   .nave-base-ui-toggle { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: var(--nave-spacing-control-sm); min-block-size: var(--nave-size-control-md); padding-block: 0; padding-inline: var(--nave-spacing-control-lg); border: var(--nave-border-width-sm) solid var(--nave-color-border-control); border-radius: var(--nave-radius-control); background-color: var(--nave-color-action-secondary); color: var(--nave-color-content-primary); font-family: inherit; font-size: var(--nave-font-size-sm); font-weight: var(--nave-font-weight-medium); line-height: var(--nave-line-height-tight); white-space: nowrap; cursor: pointer; user-select: none; position: relative; &[data-nave-size="sm"]{ min-block-size: var(--nave-size-control-sm); padding-inline: var(--nave-spacing-control-md);
     } &[aria-pressed="true"]::after{ content: ""; position: absolute; inset-inline: var(--nave-spacing-control-md); inset-block-end: var(--nave-border-width-sm); border-block-end: var(--nave-border-width-lg) solid currentColor;
     } &:disabled, &[aria-disabled="true"]{ background-color: transparent; border-color: var(--nave-color-border-disabled); color: var(--nave-color-content-disabled); cursor: not-allowed;
+    } &:hover:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-secondary-hover);
+    } &:active:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-secondary-active);
     } &{ outline: none;
     } &:focus-visible{ outline-style: solid; outline-width: var(--nave-border-width-focus, 2px); outline-color: var(--nave-color-border-focus, currentColor); outline-offset: 2px;
     } }
