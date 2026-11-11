@@ -254,5 +254,21 @@ describe('AC-base-ui-overlay-completion-52: the open ghost key fills a popup tri
       expect(trigger.getAttribute('aria-expanded')).toBe('false')
       expect(trigger.matches(openGhostSelector())).toBe(false)
     })
+
+    it('is false when only the disabled attribute excludes it', async () => {
+      const trigger = await button({ 'aria-haspopup': 'menu' })
+      trigger.setAttribute('disabled', '')
+      trigger.removeAttribute('aria-disabled')
+
+      expect(trigger.matches(openGhostSelector())).toBe(false)
+    })
+
+    it('is false when only aria-disabled excludes it', async () => {
+      const trigger = await button({ 'aria-haspopup': 'menu' })
+      trigger.setAttribute('aria-disabled', 'true')
+      trigger.removeAttribute('disabled')
+
+      expect(trigger.matches(openGhostSelector())).toBe(false)
+    })
   })
 })

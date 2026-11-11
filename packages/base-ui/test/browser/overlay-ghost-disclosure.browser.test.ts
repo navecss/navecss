@@ -87,7 +87,7 @@ describe('AC-base-ui-overlay-completion-52: a ghost trigger on an open disclosur
   })
 
   describe.each(SCHEMES)('in %s', (scheme) => {
-    it('AC-base-ui-overlay-completion-52: the open Collapsible and Accordion triggers compute transparent, the open Popover trigger the highlight fill, and the Collapsible trigger fills again on hover', async () => {
+    it('AC-base-ui-overlay-completion-52: the open Collapsible and Accordion triggers compute transparent, the open Popover trigger the highlight fill, and the Collapsible trigger fills again on hover, and the Accordion trigger fills on hover and while pressed', async () => {
       removeScheme = useScheme(scheme)
       page = mount(scene())
       const collapsible = (await settled(() => byTestId('collapsible'))) as HTMLElement
@@ -114,6 +114,19 @@ describe('AC-base-ui-overlay-completion-52: a ghost trigger on an open disclosur
       expect(getComputedStyle(collapsible).backgroundColor).toBe(
         colorOf('var(--nave-color-action-highlight)'),
       )
+      await userEvent.hover(required('away'))
+      await userEvent.hover(accordion)
+      expect(getComputedStyle(accordion).backgroundColor).toBe(
+        colorOf('var(--nave-color-action-highlight)'),
+      )
+      await userEvent.hover(required('away'))
+      accordion.focus()
+      await userEvent.keyboard('{Space>}')
+      expect(accordion.matches(':active'), 'it is pressed').toBe(true)
+      expect(getComputedStyle(accordion).backgroundColor).toBe(
+        colorOf('var(--nave-color-action-highlight)'),
+      )
+      await userEvent.keyboard('{/Space}')
     })
   })
 })

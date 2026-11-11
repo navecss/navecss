@@ -865,7 +865,8 @@ const unadmittedHasArguments = (selector: string, owner: string): string[] => {
 const OPEN_GHOST_KEY = `.${PREFIX}button[data-nave-variant="ghost"][aria-expanded="true"]:is(${POPUP_ARGUMENTS.join(', ')}):not(:disabled, [aria-disabled="true"])`
 
 /**
- * `:is()` appears only in the button's open-ghost key, once, with exactly the three popup arguments.
+ * `:is()` is admitted only in the button's open-ghost key, with exactly the three popup arguments.
+ * That it appears there once is held by the sheet-level row, not here.
  */
 const unadmittedIsUses = (selector: string, owner: string): string[] => {
   const found: string[] = []
@@ -1077,7 +1078,28 @@ describe('AC-base-ui-feedback-navigation-37, AC-base-ui-overlay-completion-27 an
     expect(
       plantedIsReports('button', `${ghost}:is([aria-haspopup="menu"], [aria-haspopup="dialog"])`),
     ).not.toEqual([])
+    expect(
+      plantedIsReports(
+        'button',
+        `${ghost}:is([aria-haspopup="dialog"], [aria-haspopup="true"], [aria-haspopup="menu"])`,
+      ),
+    ).not.toEqual([])
     expect(plantedIsReports('item-highlight', '&:is([data-highlighted])')).not.toEqual([])
+  })
+
+  it('reds on the three popup arguments in a :is() anywhere but the open ghost key (control)', () => {
+    const three = `:is(${POPUP_ARGUMENTS.join(', ')})`
+    const hover = '&[data-nave-variant="ghost"]:hover'
+
+    expect(plantedIsReports('button', `${hover}${three}`)).not.toEqual([])
+    expect(
+      plantedIsReports('button', `&[data-nave-variant="ghost"][aria-expanded="true"]${three}`),
+    ).not.toEqual([])
+    expect(
+      vocabularyViolations(plantedKey('button', `${hover}${three}`)).filter((violation) =>
+        violation.startsWith('[aria-haspopup='),
+      ),
+    ).not.toEqual([])
   })
 
   it('names data-popup-open in no selector', () => {
