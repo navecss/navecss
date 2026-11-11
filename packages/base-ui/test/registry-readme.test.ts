@@ -181,10 +181,10 @@ describe('AC-base-ui-registry-28: the package README documents the copy with the
     it('words the floors from the peer ranges the check is given, not from its own', () => {
       const moved = {
         ...contextFor(built),
-        peerDependencies: { ...manifestOf().peerDependencies, '@navecss/tokens': '>=0.5.0 <1.0.0' },
+        peerDependencies: { ...manifestOf().peerDependencies, '@navecss/tokens': '>=0.6.0 <1.0.0' },
       }
       expect(problemsOf('the floor sentence is worded from peerDependencies', moved)).toEqual([
-        'the floor sentence lacks "`@navecss/tokens` 0.5.0 or later before 1.0"',
+        'the floor sentence lacks "`@navecss/tokens` 0.6.0 or later before 1.0"',
       ])
     })
 

@@ -1,13 +1,12 @@
 /**
  * The tokens release a stylesheet's `--nave-*` names must exist at, and the two places the names
- * are checked against: the workspace's built tokens and, once that release is out, the release
- * itself installed through a devDependency alias.
+ * are checked against: the workspace's built tokens and the release itself, installed through a
+ * devDependency alias.
  */
-import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
-import { expect } from 'vitest'
 
-import { PACKAGE_DIR } from './stylesheet.ts'
+import { PACKAGE_DIR, readStylesheet } from './stylesheet.ts'
 import { declaredTokens } from './tokens.ts'
 
 const byName = (a: string, b: string): number => a.localeCompare(b)
@@ -19,33 +18,67 @@ The alias that installs the published tokens release the peer floor names.
  */
 export const PUBLISHED_TOKENS_ALIAS = 'navecss-tokens-floor'
 
-const TOKEN_NAME = '--nave-color-action-highlight'
-
 /**
-The version of `@navecss/tokens` the stylesheet's peer floor must be: the first release that
-declares the highlight fill. Once a release has written its CHANGELOG section, that section names
-it; until then the pending changeset that adds it names the bump, and the release is that bump of
-the version the workspace carries now.
+The release a name that no CHANGELOG section names (declared before the first one was written) dates to.
  */
-export const firstTokensVersionWithTheHighlight = (): string => {
-  const changelog = readFileSync(path.join(ROOT, 'packages/tokens/CHANGELOG.md'), 'utf8')
-  const section = changelog
+const FIRST_RELEASE = '0.1.0'
+
+const versionParts = (version: string): number[] => version.split('.').map(Number)
+
+const compareVersions = (a: string, b: string): number => {
+  const [left, right] = [versionParts(a), versionParts(b)]
+  const at = left.findIndex((part, index) => part !== right[index])
+  return at === -1 ? 0 : (left[at] ?? 0) - (right[at] ?? 0)
+}
+
+interface Section {
+  readonly text: string
+  readonly version: string
+}
+
+const CHANGELOG_PATH = path.join(ROOT, 'packages/tokens/CHANGELOG.md')
+
+const changelogSections = (changelog: string): Section[] =>
+  changelog
     .split(/^## /m)
     .slice(1)
-    .find((candidate) => candidate.includes(TOKEN_NAME))
-  if (section !== undefined) {
-    return section.split('\n', 1)[0]?.trim() ?? ''
-  }
-  const pending = readdirSync(path.join(ROOT, '.changeset'))
-    .filter((file) => file.endsWith('.md') && file !== 'README.md')
-    .map((file) => readFileSync(path.join(ROOT, '.changeset', file), 'utf8'))
-    .find((text) => text.includes(TOKEN_NAME) && text.includes("'@navecss/tokens': minor"))
-  expect(pending, 'no release and no pending changeset adds the highlight token').toBeDefined()
-  const { version } = JSON.parse(
-    readFileSync(path.join(ROOT, 'packages/tokens/package.json'), 'utf8'),
-  ) as { version: string }
-  const [major = 0, minor = 0] = version.split('.').map(Number)
-  return `${major}.${minor + 1}.0`
+    .map((section) => ({ text: section, version: section.split('\n', 1)[0]?.trim() ?? '' }))
+
+const escapeForRegExp = (text: string): string =>
+  text.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`)
+
+/**
+The release that first ships a name: the oldest CHANGELOG section that names it as a whole name
+(followed by no character of `[a-z0-9-]`, so a prefix of a longer name is not that name), or the
+first release when no section does.
+ */
+const releaseOf = (name: string, sections: readonly Section[]): string => {
+  const whole = new RegExp(`${escapeForRegExp(name)}(?![a-z0-9-])`)
+  return (
+    sections
+      .filter(({ text }) => whole.test(text))
+      .map(({ version }) => version)
+      .toSorted(compareVersions)[0] ?? FIRST_RELEASE
+  )
+}
+
+const newestOf = (versions: readonly string[]): string =>
+  versions.reduce(
+    (newest, version) => (compareVersions(version, newest) > 0 ? version : newest),
+    FIRST_RELEASE,
+  )
+
+/**
+The tokens release a stylesheet's names floor at, read from the CHANGELOG alone: the newest
+release that ships any name it uses. This is what the alias-absent message names, since without
+the alias nothing else is known.
+ */
+export const tokensFloorOf = (
+  css: string,
+  changelog: string = readFileSync(CHANGELOG_PATH, 'utf8'),
+): string => {
+  const sections = changelogSections(changelog)
+  return newestOf([...namedTokens(css)].map((name) => releaseOf(name, sections)))
 }
 
 /**
@@ -61,19 +94,46 @@ export const undeclaredIn = (css: string, declared: ReadonlySet<string>): string
 
 /**
 The published tokens release, as installed through the alias: its version and the names its
-stylesheet declares. A `reason` instead means the alias is not installed yet. An alias that is
-installed but is the workspace itself throws, so it can never stand in for a release.
+stylesheet declares.
  */
-export type PublishedTokens =
-  { readonly declared: ReadonlySet<string>; readonly version: string } | { readonly reason: string }
+export interface PublishedTokens {
+  readonly declared: ReadonlySet<string>
+  readonly version: string
+}
 
-export const publishedTokens = (): PublishedTokens => {
-  const dir = path.join(PACKAGE_DIR, 'node_modules', PUBLISHED_TOKENS_ALIAS)
+/**
+The same floor, read against a published release: a name the release declares already existed at
+that release, so it is dated by the sections up to that release only, and a later section that
+mentions it cannot raise the floor. A name the release does not declare is dated by every section.
+ */
+export const publishedFloorOf = (
+  css: string,
+  published: PublishedTokens,
+  changelog: string = readFileSync(CHANGELOG_PATH, 'utf8'),
+): string => {
+  const sections = changelogSections(changelog)
+  const upToRelease = sections.filter(
+    ({ version }) => compareVersions(version, published.version) <= 0,
+  )
+  return newestOf(
+    [...namedTokens(css)].map((name) =>
+      releaseOf(name, published.declared.has(name) ? upToRelease : sections),
+    ),
+  )
+}
+
+/**
+The release installed under the alias in a package directory. An alias that is not installed
+throws, naming the alias and the version to install, so a row that needs the release fails instead
+of skipping. An alias that is installed but is the workspace itself throws too, so it can never
+stand in for a release.
+ */
+export const publishedTokens = (packageDir: string = PACKAGE_DIR): PublishedTokens => {
+  const dir = path.join(packageDir, 'node_modules', PUBLISHED_TOKENS_ALIAS)
   if (!existsSync(dir)) {
-    const wanted = firstTokensVersionWithTheHighlight()
-    return {
-      reason: `@navecss/tokens@${wanted} is not published yet. It unskips once that release exists and "${PUBLISHED_TOKENS_ALIAS}": "npm:@navecss/tokens@${wanted}" is a devDependency of this package and installed`,
-    }
+    throw new Error(
+      `"${PUBLISHED_TOKENS_ALIAS}" is not installed in ${packageDir}: add "${PUBLISHED_TOKENS_ALIAS}": "npm:@navecss/tokens@${tokensFloorOf(readStylesheet())}" to its devDependencies and install`,
+    )
   }
   if (realpathSync(dir) === realpathSync(path.join(ROOT, 'packages/tokens'))) {
     throw new Error(`"${PUBLISHED_TOKENS_ALIAS}" resolves to the workspace, not to a release`)
