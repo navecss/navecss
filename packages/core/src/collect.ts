@@ -3,7 +3,8 @@
  * tree its caller parsed. The Vite plugin calls it with Vite's parser; this entry exposes it so a
  * host with another parser can read modules the same way, report what it cannot read with the
  * same sentences, validate the same options, trim the atomic layer to the atoms it read and judge
- * the re-exports of `cx` that a package `keepFor` lists gives out over its own module graph. The
+ * the re-exports of `cx` that a package `keepFor` lists gives out over its own module graph, and
+ * tell whether a module hands out the `cx` it imports in a form the reader does not bind. The
  * tree must be the one Vite's parser returns, with no node for a pair of parentheses
  * (`oxc-parser` gives it with `preserveParens: false`); `readModule` throws a `TypeError` on a
  * tree that keeps one. Not meant for application code.
