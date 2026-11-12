@@ -255,9 +255,11 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
   /**
    * Compiles every probe in ONE program and returns each probe's own semantic diagnostics,
    * keyed as `probes` is. Each probe is a separate in-memory module beside `dist/tokens.d.ts`
-   * (an `import` makes it a module, so no probe's declarations reach another's scope), and a
-   * file's semantic diagnostics are that file's alone, so the split is what four programs
-   * would have reported. One program loads the lib and `dist/tokens.d.ts` once instead of
+   * (its `import` makes it a module, so its top-level declarations stay out of the other
+   * probes' scope), and a file's semantic diagnostics are that file's alone. The probes do
+   * share the program's lib set and global scope, so each probe keeps its `import` and never
+   * carries a triple-slash `reference` directive or a `declare global` block: either one would
+   * reach every other probe. One program loads the lib and `dist/tokens.d.ts` once instead of
    * four times, which is where nearly all of the time went.
    *
    * Message text only — a raw `Diagnostic` carries circular AST nodes that blow up any
@@ -322,14 +324,18 @@ describe('AC-theming-56: shipped dist/tokens.d.ts compile-error surface', () => 
 
   it('a ramp step (never emitted, R11) does not compile', () => {
     expect(
-      rampStepDiagnostics.some((m) => m.includes("is not assignable to type 'ColorPropertyName'")),
+      rampStepDiagnostics.some((m) =>
+        m.includes(
+          `Type '"--nave-color-primary-500"' is not assignable to type 'ColorPropertyName'`,
+        ),
+      ),
     ).toBe(true)
   })
 
   it('an unprefixed name does not compile', () => {
     expect(
       unprefixedDiagnostics.some((m) =>
-        m.includes("is not assignable to type 'ColorPropertyName'"),
+        m.includes(`Type '"--color-surface-base"' is not assignable to type 'ColorPropertyName'`),
       ),
     ).toBe(true)
   })
