@@ -59,6 +59,12 @@ export interface LocatedProblem extends Problem {
    * entry can stand in for.
    */
   readonly callers?: readonly string[] | undefined
+  /**
+   * For a dependency's problem that stays an error whatever the application imports, and that no
+   * `keepFor` entry clears: a hand-out of `cx` the build cannot follow to an export, or a take of a
+   * module that gives `cx` out that the build reads neither as calls only nor as a forward.
+   */
+  readonly isHeld?: boolean
 }
 
 export const LINE_UNKNOWN_WITHOUT_MAP =

@@ -164,6 +164,7 @@ function refusedProblem(reading: Reading, use: CxUse): Problem | undefined {
     ...(use.isReexport && { isListable: use.isListable }),
     ...(use.isRenamed === true && { isRenamed: true }),
     ...(use.exportedAs && { exportedAs: use.exportedAs }),
+    ...(use.isUnboundHandOut === true && { isUnboundHandOut: true }),
   }
 }
 
@@ -223,6 +224,7 @@ function readUses(
     code,
     allowsExposure: options.isVueScript === true,
     declaredSources: options.declaredSources,
+    isDependency: options.isDependency,
   }
   for (const reference of analysis.references) {
     const cx = reference.binding && bindings.get(reference.binding)
@@ -271,7 +273,7 @@ export function readModule(code: string, program: AstNode, options: ReadOptions)
           declaredSources: options.declaredSources ?? new Set(),
         })
       : []
-  for (const problem of [...sourceFormProblems(code, program, options), ...listed]) {
+  for (const problem of [...sourceFormProblems(code, program, options, analysis), ...listed]) {
     report(reading, problem)
   }
   for (const atom of atomsWrittenIn(code)) result.classes.add(atom)

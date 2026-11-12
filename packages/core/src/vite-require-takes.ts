@@ -12,8 +12,10 @@
  * or `tslib`'s, which gives out every export but `default`. A CommonJS module's default import is
  * its exports object, so a forward also gives out `default`, unless the module marks itself
  * `__esModule`, whose default import is its `default` export instead. Other emits (esbuild's
- * `__export` and `__reExport`, Babel's `Object.keys(...).forEach` for `export *`) are not read: the
- * require counts as taking the module whole.
+ * `__export` and `__reExport`, Babel's `Object.keys(...).forEach` for `export *`) are not read as
+ * forwards: the require counts as taking the module whole. A dependency's require that is neither
+ * a forward nor used as calls only (`isUsedAsCallsOnly`) is held, since the build cannot tell where
+ * what it takes goes.
  */
 import type { AstNode } from './vite-ast.ts'
 import type { CxNames } from './vite-cx-take-keys.ts'
@@ -33,12 +35,25 @@ import {
   memberOf,
 } from './vite-commonjs-exports.ts'
 import { isCxName } from './vite-cx-take-keys.ts'
+import { isUsedAsCallsOnly } from './vite-require-uses.ts'
 import { analyze } from './vite-scope.ts'
 
 /**
  * A take the build cannot read: the module whole.
  */
 const WHOLE: Taken = { shape: 'unreadable', names: [] }
+
+/**
+ * A dependency's require of `specifier` that the build reads neither as a forward nor as calls
+ * only: the module whole, held.
+ */
+function held(specifier: string): Taken {
+  return {
+    ...WHOLE,
+    isHeld: true,
+    form: `requires ${specifier} and uses what it returns where the build cannot follow it`,
+  }
+}
 
 /**
  * Whether `node` is a `createRequire()` call, by its own name or as a member (`module.createRequire()`).
@@ -234,7 +249,13 @@ export function requireTakesIn(
   const forwards = input.readsForwards ? forwardsIn(program, forwardInput) : []
   const forwarded = new Set(forwards.map((forward) => forward.require))
   const takes = forwards.flatMap((forward) => forward.takes)
-  if (requires.some(({ node }) => !forwarded.has(node))) takes.push(WHOLE)
+  const others = requires.filter(({ node }) => !forwarded.has(node))
+  if (input.readsForwards) {
+    const analysisOf = forwardInput.analysis()
+    for (const { node, specifier } of others) {
+      takes.push(isUsedAsCallsOnly(analysisOf, node) ? WHOLE : held(specifier))
+    }
+  } else if (others.length > 0) takes.push(WHOLE)
   const given = new Set(forwards.flatMap((forward) => forward.given))
   if (given.size > 0 && !isMarkedEsModule(program)) given.add('default')
   return { given: [...given], takes }

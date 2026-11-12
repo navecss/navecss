@@ -54,6 +54,13 @@ export interface Problem {
    */
   readonly exportedAs?: readonly string[]
   /**
+   * For a use in a dependency that hands Nave's `cx` out of its module where the build cannot
+   * follow it to an export (it is assigned to something other than a name of the module, passed
+   * as a value, bound, or imported in a form the build does not read). A hand-out the build can
+   * follow carries `exportedAs` instead.
+   */
+  readonly isUnboundHandOut?: boolean
+  /**
    * For a problem in a module listed in `cxModules`: whether the module also exports Nave's own
    * `cx`. An importer's `cx` is then Nave's, so what the build says of its calls is not an echo of
    * this problem and stays when the problem is reported.

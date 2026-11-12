@@ -39,6 +39,11 @@ export interface CxUse {
    */
   readonly exportedAs?: readonly string[]
   /**
+   * For a refused use in a dependency: whether it hands `cx` out where the build cannot follow it
+   * to an export of the module.
+   */
+  readonly isUnboundHandOut?: boolean
+  /**
    * For an exposure: the name a compiled Vue component's setup return gives the binding.
    */
   readonly exposedAs?: string

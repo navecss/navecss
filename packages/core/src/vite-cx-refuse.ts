@@ -18,6 +18,11 @@ export interface Reading {
    * The import specifiers that name a module listed in `cxModules`, as opposed to Nave's own `cx`.
    */
   readonly declaredSources?: ReadonlySet<string> | undefined
+  /**
+   * Whether the module belongs to a dependency, where a use that hands `cx` out is told apart by
+   * where the value goes.
+   */
+  readonly isDependency?: boolean
 }
 
 type Phrase = (reading: Reading, parent: AstNode, local: string) => string

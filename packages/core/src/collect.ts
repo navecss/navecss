@@ -18,6 +18,7 @@ export { inspectAtomicLayer, pruneAtomicLayer, unprunedAtoms } from './vite-prun
 export type { LayerReading } from './vite-prune.ts'
 export { judgeReexports } from './vite-reexport-judge.ts'
 export type { ModuleOutcome } from './vite-reexport-judge.ts'
+export { isImportedCxHandedOut } from './vite-require-uses.ts'
 export { withRestorers } from './vite-restorers.ts'
 export type { ModuleHost, ModuleInfo, TakesContext } from './vite-takes-host.ts'
 export { buildReport, REPORT_CAUSE } from './vite-used-report.ts'

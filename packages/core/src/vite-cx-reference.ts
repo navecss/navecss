@@ -9,13 +9,8 @@ import type { CxBinding, CxUse } from './vite-cx-use.ts'
 import type { Reference } from './vite-scope.ts'
 
 import { nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
-import {
-  isReexportOf,
-  isRenamedReexportOf,
-  phraseFor,
-  type Reading,
-  reexportNameOf,
-} from './vite-cx-refuse.ts'
+import { handOutOf, reexportedAs, unboundIn } from './vite-cx-hand-out.ts'
+import { isReexportOf, isRenamedReexportOf, phraseFor, type Reading } from './vite-cx-refuse.ts'
 import { isSetupReturn } from './vite-setup-member.ts'
 
 /**
@@ -70,8 +65,24 @@ function memberUse(reading: Reading, member: AstNode, local: string): CxUse {
   if (name === 'call' || name === 'apply') {
     return refused(member, local, `${local} is called through .${name}()`)
   }
-  if (isComputed) return refused(member, local, `${local} is read with a computed member`)
-  return refused(member, local, `${local}.${name ?? '?'} is not a member the build reads`)
+  return otherMemberUse(reading, member, { local, name, isComputed })
+}
+
+/**
+ * The use of a member the build does not read. `cx.bind(...)` returns a callable `cx`, and a
+ * computed key may be `bind`, so those hand `cx` out where the build cannot follow it.
+ */
+function otherMemberUse(
+  reading: Reading,
+  member: AstNode,
+  read: { readonly isComputed: boolean; readonly local: string; readonly name: string | undefined },
+): CxUse {
+  const { isComputed, local, name } = read
+  const phrase = isComputed
+    ? `${local} is read with a computed member`
+    : `${local}.${name ?? '?'} is not a member the build reads`
+  const use = refused(member, local, phrase)
+  return isComputed || name === 'bind' ? unboundIn(reading, use) : use
 }
 
 /**
@@ -167,27 +178,15 @@ export function useOfExpression(reading: Reading, start: AstNode, local: string)
   if (readable) return readable
   const exposedAs = exposureName(reading, expression)
   if (exposedAs !== undefined) return { kind: 'exposure', node: expression, local, exposedAs }
-  const phrase = phraseFor(reading, expression, local)
   const isReexport = isReexportOf(reading, expression)
   const isRenamed = isReexport && isRenamedReexportOf(reading, expression)
-  const exportedAs = reexportedAs(reading, expression)
   return {
-    ...refused(expression, local, phrase),
+    ...refused(expression, local, phraseFor(reading, expression, local)),
     isReexport,
     ...(isRenamed && { isRenamed }),
-    ...exportedAs,
+    ...reexportedAs(reading, expression),
+    ...(!isReexport && handOutOf(reading, expression)),
   }
-}
-
-/**
- * The name a re-export of the binding gives it out under, as the field a use carries.
- */
-function reexportedAs(
-  reading: Reading,
-  expression: AstNode,
-): { readonly exportedAs: readonly string[] } | undefined {
-  const name = reexportNameOf(reading, expression)
-  return name === undefined ? undefined : { exportedAs: [name] }
 }
 
 /**
@@ -278,9 +277,12 @@ function namespaceUse(reading: Reading, expression: AstNode, cx: CxBinding): CxU
   if (isListed && isOtherExport) return undefined
   const use = refused(expression, local, `${local} is used other than as ${local}.cx`)
   // A namespace holding `cx` that the module exports is a `cx` export under another name than `cx`:
-  // an importer reads it as `ns.cx`, which no `cxModules` entry follows.
+  // an importer reads it as `ns.cx`, which no `cxModules` entry follows. One a pattern destructures
+  // may hand out the `cx` it holds.
   const exportedAs = reexportedAs(reading, expression)
-  return exportedAs ? { ...use, ...exportedAs, isRenamed: true } : use
+  if (exportedAs) return { ...use, ...exportedAs, isRenamed: true }
+  if (patternDestructuring(reading, expression)) return unboundIn(reading, use)
+  return { ...use, ...handOutOf(reading, expression) }
 }
 
 /**
