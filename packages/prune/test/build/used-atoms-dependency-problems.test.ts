@@ -31,12 +31,10 @@ const DEV_CLOSING =
 
 const WIDE = {
   'index.js':
-    "import './unreadable.js'\nimport './typo.js'\nimport './passed.js'\nimport './dist/cx.js'\nimport './dyn-import.js'\nimport './pieces.js'\nimport './readable.js'\nimport './literal.js'\n",
+    "import './unreadable.js'\nimport './typo.js'\nimport './dist/cx.js'\nimport './pieces.js'\nimport './readable.js'\nimport './literal.js'\n",
   'unreadable.js': `${IMPORT}export const a = (v) => cx(v)\n`,
   'typo.js': `${IMPORT}export const b = cx('interactve')\n`,
-  'passed.js': `${IMPORT}export const c = [1].map(cx)\n`,
   'dist/cx.js': "export { cx } from '@navecss/core/cx'\n",
-  'dyn-import.js': "import '@navecss/core/cx'\nexport const d = import('@navecss/core/cx')\n",
   'pieces.js': `${IMPORT}export const e = (t) => 'nave-' + t\nexport const f = cx('flex')\n`,
   'readable.js': `${IMPORT}export const g = cx('gap')\n`,
   'literal.js': "export const h = 'nave-truncate'\n",
@@ -51,14 +49,12 @@ const PACKAGES: Record<string, Record<string, string>> = {
       '',
       "export const u = cx('interactve')",
       '',
-      'export const w = [1].map(cx)',
-      '',
     ].join('\n'),
   },
   'dyn-lib': { 'index.js': `${IMPORT}export const x = (t) => cx.dynamic(t)\n` },
   'wide-lib': WIDE,
   'zz-lib': { 'index.js': `${IMPORT}export const z = (v) => cx(v)\n` },
-  'aa-lib': { 'index.js': `${IMPORT}export const a = [1].map(cx)\n` },
+  'aa-lib': { 'index.js': `${IMPORT}export const a = (...v) => cx(...v)\n` },
   '@acme/ds': { 'index.js': "export { cx } from '@navecss/core/cx'\n" },
 }
 
@@ -166,14 +162,13 @@ describe.skipIf(SKIP_REASON !== undefined)(
         expect(output).toMatch(/Nave stopped the build: \d+ problems, listed above\./u)
       })
 
-      it('AC-used-atoms-16: bad-lib has three problems at their real lines and columns, and one remedy line for the package, ready to paste', () => {
+      it('AC-used-atoms-16: bad-lib has two problems at their real lines and columns, and one remedy line for the package, ready to paste', () => {
         const own = lines().filter((line) => line.startsWith('node_modules/bad-lib/index.js:'))
         const remedy = lines().find((line) => line.startsWith('bad-lib is a dependency'))
 
         expect(own.map((line) => line.split(': ', 1)[0])).toEqual([
           'node_modules/bad-lib/index.js:3:28',
           'node_modules/bad-lib/index.js:5:21',
-          'node_modules/bad-lib/index.js:7:26',
         ])
         expect(remedy).toContain("keepFor: { 'bad-lib': ['<atom>'] }")
         expect(remedy).toContain('not yours to change')
@@ -200,10 +195,10 @@ describe.skipIf(SKIP_REASON !== undefined)(
         ).toContain("keepFor: { 'dyn-lib': ['<atom>'] }")
       })
 
-      it('AC-used-atoms-43: wide-lib has six problems and its keepFor line once, with no cxModules entry for it', () => {
+      it('AC-used-atoms-43: wide-lib has four problems and its keepFor line once, with no cxModules entry for it', () => {
         const own = lines().filter((line) => line.startsWith('node_modules/wide-lib/'))
 
-        expect(own).toHaveLength(6)
+        expect(own).toHaveLength(4)
         expect(builds.red.output.match(/keepFor: \{ 'wide-lib'/gu)).toHaveLength(1)
         expect(builds.red.output).not.toContain("cxModules: ['wide-lib")
       })

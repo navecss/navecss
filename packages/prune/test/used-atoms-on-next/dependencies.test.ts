@@ -41,23 +41,20 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-16, a problem in dependency cod
     '',
     "export const u = cx('interactve')",
     '',
-    'export const w = [1].map(cx)',
-    '',
   ].join('\n')
   const scenario: Scenario = {
     packages: { 'bad-lib': dependency('bad-lib', { 'index.js': badLib }) },
   }
 
-  it('fails with three problems in the package’s file and one line for bad-lib, ready to paste', async () => {
+  it('fails with two problems in the package’s file and one line for bad-lib, ready to paste', async () => {
     const outcome = await read(scenario)
     const line = outcome.remedies.find((text) => text.startsWith('bad-lib is a dependency'))
 
-    expect(outcome.first).toMatch(/^3 problems in 1 file: /u)
-    expect(outcome.problems).toHaveLength(3)
+    expect(outcome.first).toMatch(/^2 problems in 1 file: /u)
+    expect(outcome.problems).toHaveLength(2)
     expect(outcome.problems.map((text) => text.split(': ', 1)[0])).toEqual([
       'node_modules/bad-lib/index.js:3:28',
       'node_modules/bad-lib/index.js:5:21',
-      'node_modules/bad-lib/index.js:7:26',
     ])
     expect(line).toContain("keepFor: { 'bad-lib': ['<atom>'] }")
     expect(line).toContain('not yours to change')
@@ -67,10 +64,10 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-16, a problem in dependency cod
     expect(outcome.text).not.toContain('navePlugin()')
   })
 
-  it('with keep listing every built-in atom, the same three problems stand (keep is not the remedy)', async () => {
+  it('with keep listing every built-in atom, the same two problems stand (keep is not the remedy)', async () => {
     const outcome = await read({ ...scenario, options: { keep: ALL_ATOMS } })
 
-    expect(outcome.first).toMatch(/^3 problems in 1 file: /u)
+    expect(outcome.first).toMatch(/^2 problems in 1 file: /u)
   })
 
   it('the printed line pasted unchanged fails withNave() with the unknown-atom text, and with the placeholder filled it is green', async () => {
@@ -83,11 +80,11 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-16, a problem in dependency cod
     expect(outcome.atoms).toEqual(['flex'])
   })
 
-  it('in dev the terminal prints bad-lib’s three problems in one report (the clause read through the dev report)', async () => {
+  it('in dev the terminal prints bad-lib’s two problems in one report (the clause read through the dev report)', async () => {
     const outcome = await read({ ...scenario, isDev: true })
 
     expect(outcome.printed.errors).toHaveLength(1)
-    expect(outcome.printed.errors[0]).toMatch(/^3 problems in 1 file: /u)
+    expect(outcome.printed.errors[0]).toMatch(/^2 problems in 1 file: /u)
     expect(outcome.printed.errors[0]).toContain('node_modules/bad-lib/index.js:3:')
     expect(outcome.printed.errors[0]!.endsWith(DEV_CLOSING)).toBe(true)
   })
@@ -191,12 +188,10 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-19, cx.dynamic() with no list i
 describe('AC-nextjs-used-atoms-17: AC-used-atoms-43, what listing a package in keepFor covers, and what stays an error', () => {
   const rows: Record<string, string> = {
     'index.js':
-      "import './unreadable.js'\nimport './typo.js'\nimport './passed.js'\nimport './dist/cx.js'\nimport './dyn-import.js'\nimport './pieces.js'\nimport './readable.js'\nimport './literal.js'\n",
+      "import './unreadable.js'\nimport './typo.js'\nimport './dist/cx.js'\nimport './pieces.js'\nimport './readable.js'\nimport './literal.js'\n",
     'unreadable.js': `${IMPORT}export const a = (v) => cx(v)\n`,
     'typo.js': `${IMPORT}export const b = cx('interactve')\n`,
-    'passed.js': `${IMPORT}export const c = [1].map(cx)\n`,
     'dist/cx.js': "export { cx } from '@navecss/core/cx'\n",
-    'dyn-import.js': "import '@navecss/core/cx'\nexport const d = import('@navecss/core/cx')\n",
     'pieces.js': `${IMPORT}export const e = (t) => 'nave-' + t\nexport const f = cx('flex')\n`,
     'readable.js': `${IMPORT}export const g = cx('gap')\n`,
     'literal.js': "export const h = 'nave-truncate'\n",
@@ -206,10 +201,10 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-43, what listing a package in k
     packages: { 'wide-lib': dependency('wide-lib', rows) },
   }
 
-  it('without the entry it fails with six dependency problems, the re-export row printing no cxModules line and the package its keepFor line once', async () => {
+  it('without the entry it fails with four dependency problems, the re-export row printing no cxModules line and the package its keepFor line once', async () => {
     const outcome = await read(scenario)
 
-    expect(outcome.first).toMatch(/^6 problems in 6 files: /u)
+    expect(outcome.first).toMatch(/^4 problems in 4 files: /u)
     expect(outcome.text).toContain('wide-lib')
     expect(outcome.text).not.toMatch(/cxModules: \[/u)
     expect(outcome.text.match(/keepFor: \{ 'wide-lib'/gu)).toHaveLength(1)

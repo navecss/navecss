@@ -3,7 +3,7 @@
  * names and the calls it cannot read, and followed to the files it imports. Nothing here throws
  * for a problem in the code it reads; each becomes a problem in the result.
  */
-import type { LocatedProblem, ModuleReading } from '@navecss/core/collect'
+import type { AstNode, LocatedProblem, ModuleReading } from '@navecss/core/collect'
 
 import { CX_SOURCE, readModule } from '@navecss/core/collect'
 import { readFileSync } from 'node:fs'
@@ -23,7 +23,6 @@ import {
   isFatalParseError,
   languageOf,
   listedAtomsFor,
-  unboundCxProblem,
   unreadProblem,
   unresolvedProblem,
 } from './graph-parts.ts'
@@ -34,6 +33,7 @@ import {
   isNamingDeclared,
   isStoodInFor,
   type Queued,
+  recordUnboundCx,
   type Walk,
 } from './graph-walk.ts'
 import { placerFor } from './lines.ts'
@@ -96,14 +96,18 @@ function recordUnresolved(walk: Walk, facts: FileFacts, edge: Edge, resolution: 
  * Resolves each edge of a file: queues what it reaches, records the unresolved ones that are
  * problems, and returns what reaches a listed module.
  */
-function followEdges(walk: Walk, facts: FileFacts, edges: readonly Edge[]): Listed {
+function followEdges(
+  walk: Walk,
+  facts: FileFacts,
+  parsed: { readonly edges: readonly Edge[]; readonly program: AstNode },
+): Listed {
   const listed: Listed = { declared: new Set(), via: new Set(), isOnlyListed: true }
-  for (const edge of edges) {
+  for (const edge of parsed.edges) {
     if (edge.specifier === CX_SOURCE) listed.isOnlyListed = false
     const resolution = walk.resolver.resolve(facts.file, edge.specifier, edge.isRequire)
     if (resolution.isBuiltin || isBuiltin(edge.specifier)) continue
     if (isUnboundCxEdge(walk, facts.file, edge, resolution.files)) {
-      recordUnboundCx(walk, facts, edge)
+      recordUnboundCx(walk, facts, { edge, program: parsed.program })
       continue
     }
     enqueueResolved(walk, facts, resolution)
@@ -113,18 +117,6 @@ function followEdges(walk: Walk, facts: FileFacts, edges: readonly Edge[]): List
     recordUnresolved(walk, facts, edge, resolution)
   }
   return listed
-}
-
-/**
- * Records an import of core's `cx` the reader does not bind.
- */
-function recordUnboundCx(walk: Walk, facts: FileFacts, edge: Edge): void {
-  if (isStoodInFor(walk, facts)) return
-  facts.problems.push({
-    file: facts.rel,
-    pkg: facts.pkg,
-    ...unboundCxProblem(facts.code, edge, facts.place(edge.offset)),
-  })
 }
 
 /**
@@ -176,7 +168,10 @@ function read(walk: Walk, facts: FileFacts): ReadonlySet<string> | undefined {
     return undefined
   }
   const program = parsed.program as unknown as Parameters<typeof readModule>[1]
-  const { declared, via, isOnlyListed } = followEdges(walk, facts, edgesOf(program))
+  const { declared, via, isOnlyListed } = followEdges(walk, facts, {
+    edges: edgesOf(program),
+    program,
+  })
   const reading = readModule(code, program, {
     cxSources: new Set([CX_SOURCE, ...declared]),
     declaredSources: declared,
