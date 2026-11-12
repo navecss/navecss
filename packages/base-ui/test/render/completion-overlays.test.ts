@@ -49,6 +49,7 @@ const C = 'nave-base-ui-'
 const TRIGGERS = [
   {
     name: 'Menu.Trigger standalone',
+    haspopup: 'menu',
     marker: 'Menu.Trigger',
     open: async () => {
       await render(menuTree(nave, bare))
@@ -56,6 +57,7 @@ const TRIGGERS = [
   },
   {
     name: 'Menu.Trigger inside Menubar',
+    haspopup: 'menu',
     marker: 'Menu.Trigger',
     open: async () => {
       await render(menubarTree(nave, bare))
@@ -63,6 +65,7 @@ const TRIGGERS = [
   },
   {
     name: 'Dialog.Trigger',
+    haspopup: 'dialog',
     marker: 'Dialog.Trigger',
     open: async () => {
       await render(dialogTree(nave, 'dialog'))
@@ -70,6 +73,7 @@ const TRIGGERS = [
   },
   {
     name: 'AlertDialog.Trigger',
+    haspopup: 'dialog',
     marker: 'AlertDialog.Trigger',
     open: async () => {
       await render(dialogTree(nave, 'alert-dialog'))
@@ -77,6 +81,7 @@ const TRIGGERS = [
   },
   {
     name: 'Popover.Trigger',
+    haspopup: 'dialog',
     marker: 'Popover.Trigger',
     open: async () => {
       await render(popoverTree(nave))
@@ -84,8 +89,8 @@ const TRIGGERS = [
   },
 ] as const
 
-describe('AC-base-ui-overlay-completion-15: the triggers a ghost key can mark carry aria-expanded', () => {
-  for (const { marker, name, open } of TRIGGERS) {
+describe('AC-base-ui-overlay-completion-15: the triggers a ghost key can mark carry aria-expanded and aria-haspopup', () => {
+  for (const { haspopup, marker, name, open } of TRIGGERS) {
     it(`${name} carries ${C}button and aria-expanded="false" closed, "true" open, "false" closed again`, async () => {
       await open()
       const trigger = need(marker)
@@ -95,6 +100,8 @@ describe('AC-base-ui-overlay-completion-15: the triggers a ghost key can mark ca
       await settle()
       expect(trigger.getAttribute('aria-expanded')).toBe('true')
       recordCarried(trigger, 'aria-expanded', 'true')
+      expect(trigger.getAttribute('aria-haspopup'), 'the popup R9 fills for').toBe(haspopup)
+      recordCarried(trigger, 'aria-haspopup', haspopup)
       await user().keyboard('{Escape}')
       await settle()
       expect(trigger.getAttribute('aria-expanded')).toBe('false')
@@ -106,13 +113,16 @@ describe('AC-base-ui-overlay-completion-15: the triggers a ghost key can mark ca
     const trigger = need('Tooltip.Trigger.1')
     expect(trigger.classList.contains(`${C}button`)).toBe(true)
     expect(trigger.hasAttribute('aria-expanded')).toBe(false)
+    expect(trigger.hasAttribute('aria-haspopup')).toBe(false)
     await user().hover(trigger)
     await settle()
     expect(found('Tooltip.Popup.1'), 'the tooltip opened').toBeDefined()
     expect(trigger.hasAttribute('aria-expanded')).toBe(false)
+    expect(trigger.hasAttribute('aria-haspopup')).toBe(false)
     await user().unhover(trigger)
     await settle()
     expect(trigger.hasAttribute('aria-expanded')).toBe(false)
+    expect(trigger.hasAttribute('aria-haspopup')).toBe(false)
   })
 
   it('names the triggers the criterion names', () => {

@@ -127,7 +127,7 @@ trigger and the transient attributes the motion classes key on.
  */
 export const POPUP_PAIRS: Table = {
   backdrop: pairs('backdrop', 'data-ending-style', 'data-starting-style'),
-  expanded: pairs('button', 'aria-expanded'),
+  expanded: pairs('button', 'aria-expanded', 'aria-haspopup'),
   popupFade: pairs('popup-fade', 'data-ending-style', 'data-starting-style'),
   popupMotion: pairs('popup-motion', 'data-ending-style', 'data-instant', 'data-starting-style'),
   tooltipMotion: pairs(

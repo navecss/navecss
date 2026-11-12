@@ -75,7 +75,7 @@
     } &[data-nave-variant="ghost"]{ background-color: transparent; border-color: transparent;
     } &[data-nave-variant="ghost"]:hover:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
     } &[data-nave-variant="ghost"]:active:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
-    } &[data-nave-variant="ghost"][aria-expanded="true"]:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
+    } &[data-nave-variant="ghost"][aria-expanded="true"]:is([aria-haspopup="menu"], [aria-haspopup="true"], [aria-haspopup="dialog"]):not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-highlight);
     } &:not([data-nave-variant="primary"], [data-nave-variant="ghost"]):hover:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-secondary-hover);
     } &:not([data-nave-variant="primary"], [data-nave-variant="ghost"]):active:not(:disabled, [aria-disabled="true"]){ background-color: var(--nave-color-action-secondary-active);
     } }

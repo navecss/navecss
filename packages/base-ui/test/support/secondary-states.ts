@@ -43,7 +43,7 @@ export const BUTTON_KEYS_BEFORE = [
   '&[data-nave-variant="ghost"]',
   `&[data-nave-variant="ghost"]:hover${NOT_DISABLED}`,
   `&[data-nave-variant="ghost"]:active${NOT_DISABLED}`,
-  `&[data-nave-variant="ghost"][aria-expanded="true"]${NOT_DISABLED}`,
+  `&[data-nave-variant="ghost"][aria-expanded="true"]:is([aria-haspopup="menu"], [aria-haspopup="true"], [aria-haspopup="dialog"])${NOT_DISABLED}`,
 ] as const
 
 /**

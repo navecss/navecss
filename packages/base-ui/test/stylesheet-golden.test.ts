@@ -42,22 +42,22 @@ const INDEPENDENT_BUILD = 'independent-build.css'
 // The same agreed bytes built a second time, independently of this package's atoms: the parent
 // contract's stylesheet with the ghost keys and the 14 new rules in, before `focusRing` is composed
 // in. Held by hash so the copy cannot drift from what was agreed.
-const INDEPENDENT_BUILD_SHA256 = '92e19d9d152bee8c2f8b1813a688d4ece631c28f797297e45fb693fd49e0f5b5'
-const INDEPENDENT_BUILD_BYTES = 31_001
+const INDEPENDENT_BUILD_SHA256 = 'd481806ec84fca389799f7d20eb8d3ba174491b92cd9852376cabe85662b758b'
+const INDEPENDENT_BUILD_BYTES = 31_078
 // Appendix C: the block of the 21 rules (C.1) and the whole sheet of the all-signed state (C.4),
 // each held by its full sha256. The golden below is this sheet with `focusRing` composed over
 // Table T2 as amended, written from the spec text by a script and not copied from a build.
 const BLOCK_SHA256 = '028c71ff36e6e4546bc4ad90a767a2fae8fb83ca00f5c4df235cb0309b298ad4'
 const BLOCK_BYTES = 6899
-const COMBINED_SHA256 = '3dc19dfe222e0a2bf5c652257c83af028853d4767b58a4bc4cc30edd048142f0'
-const COMBINED_BYTES = 37_900
-const GOLDEN_BYTES = 40_936
+const COMBINED_SHA256 = 'ab57114027b9e444f878089b74ee2990a49726613e9343c7f93233530e3e98ed'
+const COMBINED_BYTES = 37_977
+const GOLDEN_BYTES = 41_013
 // The parent contract's stylesheet alone, which is what the independent build holds once the ghost
 // keys and the 14 new rules are taken out.
 const PARENT_STYLESHEET_SHA256 = '3d3641346edc88b17ce8918cc346f678537c212f250c22a766f424c6edc96eb4'
 
-// The golden is the combined package's sheet (Appendix C.4's all-signed 37,900 B plus the 15
-// `focusRing` blocks of Table T2 as amended, 40,936 B). It is written from the spec text by a
+// The golden is the combined package's sheet (Appendix C.4's all-signed 37,977 B plus the 15
+// `focusRing` blocks of Table T2 as amended, 41,013 B). It is written from the spec text by a
 // script and is never a copy of `dist/styles.css`: a change to the stylesheet that is intended is
 // a change to the spec's bytes first.
 
@@ -184,9 +184,9 @@ describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06
   it('has the byte count and sha256 prefix Appendix C gives the all-signed state, focusRing left out (a check on the expected value)', () => {
     expect(Buffer.byteLength(expected)).toBe(COMBINED_BYTES)
     expect(sha256(expected)).toBe(COMBINED_SHA256)
-    expect(sha256(expected).slice(0, 16)).toBe('3dc19dfe222e0a2b')
+    expect(sha256(expected).slice(0, 16)).toBe('ab57114027b9e444')
     expect(Buffer.byteLength(expectedOverlay)).toBe(INDEPENDENT_BUILD_BYTES)
-    expect(sha256(expectedOverlay).slice(0, 16)).toBe('92e19d9d152bee8c')
+    expect(sha256(expectedOverlay).slice(0, 16)).toBe('d481806ec84fca38')
   })
 
   it("holds Appendix C's block (6,899 B, 028c71ff), and appends it to the overlay sheet before the layer's closing brace", () => {
@@ -338,6 +338,9 @@ describe('AC-base-ui-feedback-navigation-06 and AC-base-ui-overlay-completion-06
 const BUTTON = 'nave-base-ui-button'
 const GHOST_KEY = '.nave-base-ui-button > &[data-nave-variant="ghost"]'
 const ENABLED = ':not(:disabled, [aria-disabled="true"])'
+// R9's open key: a ghost whose popup is open, named by the three `aria-haspopup` values `menu`, `true` and `dialog`.
+const OPEN_POPUP =
+  '[aria-expanded="true"]:is([aria-haspopup="menu"], [aria-haspopup="true"], [aria-haspopup="dialog"])'
 const HIGHLIGHT = 'background-color: var(--nave-color-action-highlight)'
 
 // The button's ghost entries in Appendix B's order: the rest key, hover, active, then the open key.
@@ -346,7 +349,7 @@ const GHOST_ENTRIES: readonly string[] = [
   `${LAYER} | ${GHOST_KEY} | border-color: transparent`,
   `${LAYER} | ${GHOST_KEY}:hover${ENABLED} | ${HIGHLIGHT}`,
   `${LAYER} | ${GHOST_KEY}:active${ENABLED} | ${HIGHLIGHT}`,
-  `${LAYER} | ${GHOST_KEY}[aria-expanded="true"]${ENABLED} | ${HIGHLIGHT}`,
+  `${LAYER} | ${GHOST_KEY}${OPEN_POPUP}${ENABLED} | ${HIGHLIGHT}`,
 ]
 
 // The two keys of the secondary action that close the button's rule, after the ghost keys
@@ -489,7 +492,7 @@ describe('AC-base-ui-feedback-navigation-09: nothing earlier changes, the block 
   const expected = expectedSheet()
   const expectedOverlay = sheetOverlay()
 
-  it('builds, with every feedback class left out of the atom map, the overlay sheet of 31,001 B, 92e19d9d', async () => {
+  it('builds, with every feedback class left out of the atom map, the overlay sheet of 31,078 B, d481806e', async () => {
     const without = await buildWithoutClasses(NEW_CLASSES_FEEDBACK)
     const ringless = withoutRing(without)
 

@@ -29,7 +29,7 @@ import {
   stateKeyFeedback,
   withoutRing,
 } from './support/feedback-states.ts'
-import { classesOf, flatten, PACKAGE_DIR } from './support/stylesheet.ts'
+import { classesOf, flatten, flattenRules, PACKAGE_DIR } from './support/stylesheet.ts'
 import { tablePClassesFor } from './support/table-p.ts'
 
 interface StateRow {
@@ -52,7 +52,7 @@ const states = allStates().map((unsigned) => [stateKey(unsigned), unsigned] as c
 const REMOVED_BYTES = {
   combobox: 3736,
   'highlight-fill': 182,
-  'open-ghost': 151,
+  'open-ghost': 228,
   'popup-fade': 1057,
   'tooltip-fade': 572,
   scrim: 564,
@@ -89,9 +89,9 @@ describe('AC-base-ui-overlay-completion-06: the expected stylesheet of every sig
     expect(new Set(Object.keys(rows))).toEqual(new Set(states.map(([key]) => key)))
   })
 
-  it('holds the anchors: 31,001 bytes and 65 classes all signed, 24,739 and 53 none signed', () => {
-    expect(rows.none).toMatchObject({ bytes: 31_001, classes: 65 })
-    expect(rows.none?.sha256.slice(0, 16)).toBe('92e19d9d152bee8c')
+  it('holds the anchors: 31,078 bytes and 65 classes all signed, 24,739 and 53 none signed', () => {
+    expect(rows.none).toMatchObject({ bytes: 31_078, classes: 65 })
+    expect(rows.none?.sha256.slice(0, 16)).toBe('d481806ec84fca38')
     expect(rows['combobox+highlight-fill+open-ghost+popup-fade+tooltip-fade+scrim']).toMatchObject({
       bytes: 24_739,
       classes: 53,
@@ -133,16 +133,21 @@ describe('AC-base-ui-overlay-completion-37 and AC-base-ui-feedback-navigation-47
     expect(isSubsequence(lines(derived), lines(allSigned))).toBe(true)
   })
 
-  it('differs, with open-ghost unsigned, by exactly the open ghost key of 151 bytes in the button', async () => {
+  it('differs, with open-ghost unsigned, by exactly the open ghost key of 228 bytes in the button', async () => {
     const [signed, unsigned] = await Promise.all([
       buildStyles(),
       buildStyles({ unsigned: ['open-ghost'] }),
     ])
     const key = lines(signed).find((line) => line.startsWith(OPEN_GHOST_KEY)) ?? ''
 
-    expect(Buffer.byteLength(`${key}\n`)).toBe(151)
+    expect(Buffer.byteLength(`${key}\n`)).toBe(228)
     expect(unsigned).toBe(withoutOpenGhost(signed))
     expect(lines(signed).length - lines(unsigned).length).toBe(1)
+    const keyed = flattenRules(unsigned)
+      .filter((item) => item.owner === 'nave-base-ui-button')
+      .flatMap((item) => item.selectors)
+      .filter((selector) => /aria-expanded|aria-haspopup/.test(selector))
+    expect(keyed, '`-button` has no rule keyed on aria-expanded or aria-haspopup').toEqual([])
   })
 
   it('leaves every other class of the state with combobox unsigned as it is when all are signed', async () => {
@@ -163,7 +168,7 @@ describe('AC-base-ui-overlay-completion-37 and AC-base-ui-feedback-navigation-47
   it('reds a combobox-unsigned build that keeps the six Combobox-only rules, in bytes and in classes (control)', () => {
     const kept = withoutRules(allSigned, DRAFT_CLASSES.combobox.slice(0, 1))
 
-    expect(Buffer.byteLength(kept)).toBe(30_574)
+    expect(Buffer.byteLength(kept)).toBe(30_651)
     expect(classesOf(kept).size).toBe(64)
     expect(sha256(kept)).not.toBe(rows.combobox?.sha256)
     expect(classesOf(kept)).not.toEqual(tablePClassesFor(['combobox']))
@@ -216,26 +221,26 @@ const blockOf = (ringless: string): string => ringless.slice(sheetOverlay().leng
 const bytesOf = (text: string): number => Buffer.byteLength(text)
 
 describe('AC-base-ui-feedback-navigation-47: each feedback signature removes exactly its own bytes and nothing else', () => {
-  it('names each of the 16 states once, and holds the anchors: 37,900 B and 86 classes all signed, 36,614 B and 82 none signed', () => {
+  it('names each of the 16 states once, and holds the anchors: 37,977 B and 86 classes all signed, 36,691 B and 82 none signed', () => {
     expect(statesFeedback).toHaveLength(16)
     expect(new Set(statesFeedback.map(([key]) => key)).size).toBe(16)
     expect(new Set(Object.keys(tableFeedback.states))).toEqual(
       new Set(statesFeedback.map(([key]) => key)),
     )
     expect(tableFeedback.states.none).toMatchObject({
-      bytes: 37_900,
+      bytes: 37_977,
       classes: 86,
       blockBytes: 6899,
     })
-    expect(tableFeedback.states.none?.sha256).toBe('3dc19dfe222e0a2b')
+    expect(tableFeedback.states.none?.sha256).toBe('ab57114027b9e444')
     expect(
       tableFeedback.states['toast-placement+toast-fade+toast-limit+navigation-menu-fade'],
-    ).toMatchObject({ bytes: 36_614, classes: 82, blockBytes: 5613 })
+    ).toMatchObject({ bytes: 36_691, classes: 82, blockBytes: 5613 })
     expect(tableFeedback.fullSha256.allSigned).toBe(
-      '3dc19dfe222e0a2bf5c652257c83af028853d4767b58a4bc4cc30edd048142f0',
+      'ab57114027b9e444f878089b74ee2990a49726613e9343c7f93233530e3e98ed',
     )
     expect(tableFeedback.fullSha256.allUnsigned).toBe(
-      '74a82d2529e81aa876cd2381a9775d63dcbca281f65173e849596e31d4ad1c21',
+      'fa2c3efa4468f1f9016e09b9de44e1bfde1d9d43853b18a77c570fa7e3e0f8d4',
     )
   })
 
@@ -368,7 +373,7 @@ const RING_COUNT_OVERLAY_UNSIGNED = 13
 describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () => {
   const corners = tableFeedback.corners
 
-  it('holds the six corners: 31,001 B and 24,739 B for overlay alone, and the four combinations', () => {
+  it('holds the six corners: 31,078 B and 24,739 B for overlay alone, and the four combinations', () => {
     expect(Object.keys(corners).toSorted(byText)).toEqual([
       'overlay-signed',
       'overlay-unsigned',
@@ -378,8 +383,8 @@ describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () =>
       'unsigned+unsigned',
     ])
     expect(corners['overlay-signed']).toEqual({
-      bytes: 31_001,
-      sha256: '92e19d9d152bee8c',
+      bytes: 31_078,
+      sha256: 'd481806ec84fca38',
       classes: 65,
     })
     expect(corners['overlay-unsigned']).toEqual({
@@ -388,13 +393,13 @@ describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () =>
       classes: 53,
     })
     expect(corners['signed+signed']).toEqual({
-      bytes: 37_900,
-      sha256: '3dc19dfe222e0a2b',
+      bytes: 37_977,
+      sha256: 'ab57114027b9e444',
       classes: 86,
     })
     expect(corners['signed+unsigned']).toEqual({
-      bytes: 36_614,
-      sha256: '74a82d2529e81aa8',
+      bytes: 36_691,
+      sha256: 'fa2c3efa4468f1f9',
       classes: 82,
     })
     expect(corners['unsigned+signed']).toEqual({
@@ -447,7 +452,7 @@ describe('AC-base-ui-feedback-navigation-47: the corners of Appendix C.4', () =>
     },
   )
 
-  it('builds overlay alone, with the 21 new classes out of the atom map, at 31,001 B 92e19d9d and 65 classes, and its all-unsigned state at 24,739 B 6392e75b and 53', async () => {
+  it('builds overlay alone, with the 21 new classes out of the atom map, at 31,078 B d481806e and 65 classes, and its all-unsigned state at 24,739 B 6392e75b and 53', async () => {
     const without = withoutRing(await buildWithoutClasses(NEW_CLASSES_FEEDBACK))
     const unsigned = deriveState(without.text, ALL_OVERLAY)
 

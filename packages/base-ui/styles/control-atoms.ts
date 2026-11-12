@@ -86,9 +86,10 @@ export const controlAtoms: Record<string, AtomDefinition> = {
       '&[data-nave-variant="ghost"]:active:not(:disabled, [aria-disabled="true"])': {
         'background-color': V('color-action-highlight'),
       },
-      '&[data-nave-variant="ghost"][aria-expanded="true"]:not(:disabled, [aria-disabled="true"])': {
-        'background-color': V('color-action-highlight'),
-      },
+      '&[data-nave-variant="ghost"][aria-expanded="true"]:is([aria-haspopup="menu"], [aria-haspopup="true"], [aria-haspopup="dialog"]):not(:disabled, [aria-disabled="true"])':
+        {
+          'background-color': V('color-action-highlight'),
+        },
       '&:not([data-nave-variant="primary"], [data-nave-variant="ghost"]):hover:not(:disabled, [aria-disabled="true"])':
         {
           'background-color': V('color-action-secondary-hover'),
