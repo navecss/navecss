@@ -6,7 +6,6 @@
  * the dev report: `next dev` prints every problem the build reports, a dependency's included, so the
  * clauses "no dev error names <package>" are inverted here.
  */
-/* eslint-disable vitest/no-disabled-tests -- the skipped rows are the ones for a part the plugin does not do yet; each is explained where it is skipped */
 import { atoms as builtInAtoms } from '@navecss/core/atoms'
 import { cx } from '@navecss/core/cx'
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -26,13 +25,6 @@ import {
   useUsedAtoms,
 } from '../helpers/used-atoms-fixture.ts'
 import { IMPORT } from '../helpers/used-atoms-rows.ts'
-
-/**
- * Rows for a part the plugin does not do yet: which application files take a `cx` that a package
- * re-exports, so that a package exporting `cx` under another name, as a default or as a namespace,
- * fails the build for the files that take it, and the report offers `cxModules` for a package whose
- * entry re-exports it. They stay in the file, as `it.skip`, until that part is built.
- */
 
 registerIsolation()
 const { read } = useUsedAtoms()
@@ -444,7 +436,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-55, the remedy block is split b
     )
   })
 
-  it.skip('a package whose entry re-exports cx gets its cxModules line, not a keepFor line', async () => {
+  it('a package whose entry re-exports cx gets its cxModules line, not a keepFor line', async () => {
     const outcome = await read(scenario)
 
     expect(outcome.remedies.find((line) => line.startsWith('@acme/ds'))).toBe(

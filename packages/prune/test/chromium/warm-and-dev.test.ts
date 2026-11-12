@@ -10,13 +10,14 @@ import type { Page } from 'playwright'
  * - Controls: a scratch copy of the plugin that returns no `dependency` message, and one that
  *   returns no `dir-dependency` message, each with the hook dropped, ship the old layer.
  */
-import { rmSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
+import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { NextApp } from '../helpers/next-app.ts'
 import type { Cell } from '../helpers/next-cells.ts'
 
-import { HAS_CHROMIUM, withPage } from '../helpers/chromium.ts'
+import { computed, HAS_CHROMIUM, withPage } from '../helpers/chromium.ts'
 import { openPage } from '../helpers/dev-error-page.ts'
 import {
   explainEdit,
@@ -147,6 +148,37 @@ async function documentState(page: Page): Promise<string> {
   })
 }
 
+const PROBE = '--nave-hmr-probe'
+
+/**
+ * Waits until an edit of the app's stylesheet reaches the open document, so the browser is known
+ * to receive the stylesheet's updates before the row's own edit. Once the page has loaded, its
+ * hot-reload client asks the server for the updates of the files the page links. Next.js 16.2.0
+ * on Turbopack takes what the server holds when that request arrives as the browser's version and
+ * drops the first result it computes (16.4.1 sends that result when it is an update). An edit that
+ * lands before the request is then never sent: the server serves the new rule to a fresh request,
+ * and the open document keeps the old stylesheet, however often the same text is written again.
+ * Each write here gives a custom property a new value, so a write that came too early is followed
+ * by one the browser receives.
+ */
+async function untilStylesheetUpdatesArrive(app: NextApp, page: Page): Promise<void> {
+  const sheet = readFileSync(path.join(app.dir, 'app/globals.css'), 'utf8')
+  let probe = 0
+  const writeProbe = (): void => {
+    probe += 1
+    app.write({ 'app/globals.css': `${sheet}:root { ${PROBE}: ${probe}; }\n` })
+  }
+  writeProbe()
+  await until(
+    async () => {
+      const value = await computed(page, 'html', PROBE)
+      return value.trim() !== ''
+    },
+    `the ${PROBE} rule in the open document`,
+    { nudge: writeProbe, explain: () => documentState(page) },
+  )
+}
+
 /**
  * Writes the page with `cx('flex', 'grid')`.
  */
@@ -249,6 +281,7 @@ describe.skipIf(SKIP_REASON !== undefined || !HAS_CHROMIUM)(
           // reload this one.
           await page.evaluate('window.__mark = 1')
           expect(await isRuleIn(page, 'nave-grid')).toBe(false)
+          await untilStylesheetUpdatesArrive(app, page)
 
           // (a) the page gains `cx('grid')`: the same document gets the rule.
           writePageWithGrid(app)

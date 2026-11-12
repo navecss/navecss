@@ -1,3 +1,4 @@
+import type { AstNode } from './vite-ast.ts'
 import type { Resolutions } from './vite-cx-star-exports.ts'
 import type { Take, Taken } from './vite-cx-takes.ts'
 /**
@@ -7,25 +8,56 @@ import type { Take, Taken } from './vite-cx-takes.ts'
  * counts in neither; what else a dependency does with the module is a call.
  */
 import type { ResolvedServerImport } from './vite-server-takes.ts'
-import type { RenderContext } from './vite-types.ts'
-import type { UsedContext } from './vite-used.ts'
+import type { ModuleHost, TakesContext } from './vite-takes-host.ts'
 
 import { pushAll } from './vite-ast.ts'
-import { filePathOf } from './vite-css-id.ts'
 import { fileOf } from './vite-cx-modules.ts'
 import { takesIn, UNREADABLE } from './vite-cx-takes.ts'
 import { importersOf } from './vite-dependency-reexports.ts'
 import { type Holder, reachingSpecifiers } from './vite-listed-holders.ts'
-import { isDependencyId, moduleLabel, packageNameOf } from './vite-module-kind.ts'
+import { isDependencyId } from './vite-module-id.ts'
 import { compareText } from './vite-problems.ts'
+import { requireTakesIn } from './vite-require-takes.ts'
+
+/**
+ * What `program` takes by the specifiers in `reaches`, none when there is none.
+ */
+function importTakesOf(
+  program: AstNode,
+  input: { readonly names: ReadonlySet<string>; readonly reaches: ReadonlySet<string> },
+): Taken[] {
+  return input.reaches.size === 0 ? [] : takesIn(program, input)
+}
+
+/**
+ * What the importer `id`, whose parse is `program`, takes by the specifiers it requires in
+ * `requires`; a dependency's forwards by CommonJS are read as forwards.
+ */
+function requireTakesOf(
+  program: AstNode,
+  input: {
+    readonly id: string
+    readonly names: ReadonlySet<string>
+    readonly requires: ReadonlySet<string>
+  },
+): Taken[] {
+  if (input.requires.size === 0) return []
+  return requireTakesIn(program, {
+    names: input.names,
+    reaches: input.requires,
+    readsForwards: isDependencyId(input.id),
+  }).takes
+}
 
 /**
  * What the importer `id` takes from the module `file`. An importer the build cannot read counts as
  * taking the whole module, since the build cannot tell: its text is missing or does not parse, or
- * it names the module by no specifier the build resolves to it (a `require()`).
+ * it names the module by no specifier the build resolves to it. So does each CommonJS require of
+ * the module, whatever else the importer imports from it, but for a dependency's forward by
+ * CommonJS, which is followed as an `export ... from` is.
  */
 async function takenBy(
-  ctx: RenderContext,
+  ctx: ModuleHost,
   input: {
     readonly file: string
     readonly id: string
@@ -40,8 +72,13 @@ async function takenBy(
       code === null || code === undefined
         ? undefined
         : await reachingSpecifiers(ctx, { code, file, id, resolutions })
-    if (!read || read.reaches.size === 0) return [UNREADABLE]
-    return takesIn(read.program, { names, reaches: read.reaches })
+    if (!read) return [UNREADABLE]
+    const { program, reaches, requires } = read
+    if (reaches.size === 0 && requires.size === 0) return [UNREADABLE]
+    return [
+      ...importTakesOf(program, { names, reaches }),
+      ...requireTakesOf(program, { id, names, requires }),
+    ]
   } catch {
     return [UNREADABLE]
   }
@@ -77,7 +114,7 @@ export interface Routes {
  * module is one a `cxModules` entry clears and the dependency is not the package itself.
  */
 async function isCounted(
-  context: UsedContext,
+  context: TakesContext,
   input: {
     readonly importer: string
     readonly isEntry: boolean
@@ -88,15 +125,15 @@ async function isCounted(
   const { importer, isEntry, pkg, wantCalls } = input
   if (wantCalls || !isDependencyId(importer)) return true
   if (!isEntry) return false
-  return (await packageNameOf(filePathOf(importer), context.packageNames)) !== pkg
+  return (await context.packageOf(importer)) !== pkg
 }
 
 /**
  * The takes of the `cx` exports of `holder` by one importer, in the two routes (see `takesFrom`).
  */
 async function routesOf(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   input: {
     readonly holder: Holder
     readonly importer: string
@@ -107,7 +144,7 @@ async function routesOf(
 ): Promise<Routes> {
   const { holder, importer, isEntry, resolutions, wantCalls } = input
   const isDependency = isDependencyId(importer)
-  const taker = moduleLabel(context.root, importer)
+  const taker = context.labelOf(importer)
   const taken = await takenBy(ctx, {
     file: fileOf(holder.id),
     id: importer,
@@ -163,8 +200,8 @@ function serverTakesOf(found: ResolvedServerImport, holder: Holder): Take[] {
  * only re-export are followed, not counted; its other takes are `calls` when `wantCalls` is set.
  */
 export async function takesFrom(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   input: {
     readonly holder: Holder
     readonly isEntry: boolean

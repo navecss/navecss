@@ -8,7 +8,6 @@ import type { DeclaredModules, Resolver } from './vite-cx-modules.ts'
 import type { UsedContext } from './vite-used.ts'
 
 import { CX_SOURCE } from './vite-collect.ts'
-import { specifiersIn } from './vite-cx-importers.ts'
 import {
   fileOf,
   isListedFile,
@@ -16,6 +15,7 @@ import {
   recognisedKey,
   resolveOrNull,
 } from './vite-cx-modules.ts'
+import { specifiersIn } from './vite-specifiers.ts'
 
 interface Reading {
   readonly code: string

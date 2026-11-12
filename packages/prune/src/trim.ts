@@ -84,6 +84,16 @@ function byPlace(a: LocatedProblem, b: LocatedProblem): number {
 }
 
 /**
+ * The problem as the record keeps it: the id of the module it is in is an absolute path, which the
+ * judgement of the run needed and the report does not, and the record names files relative to the
+ * project.
+ */
+function withoutModuleId(problem: LocatedProblem): LocatedProblem {
+  const { moduleId: _moduleId, ...kept } = problem
+  return kept
+}
+
+/**
  * The fields every record of a run holds, finished or not.
  */
 function runFields(
@@ -125,7 +135,7 @@ function recordOfRun(
   return {
     ...runFields(run),
     atoms,
-    problems: graph.problems.toSorted(byPlace),
+    problems: graph.problems.map((problem) => withoutModuleId(problem)).toSorted(byPlace),
     files: Object.fromEntries(
       [...files]
         .map(([file, digest]): [string, string] => [relativeTo(dir, file), digest])
@@ -219,12 +229,12 @@ function declarations(run: LayerRun, files: Map<string, string>, graph: Graph): 
  * Reads the graph into `graph`, writes the record, then trims the layer and declares what was
  * read.
  */
-function trim(run: LayerRun, graph: Graph): void {
+async function trim(run: LayerRun, graph: Graph): Promise<void> {
   const { handoff, root, result } = run
   const { options, dir } = handoff
   const keep = options.keep ?? []
   const keepFor = options.keepFor ?? {}
-  readGraph(
+  await readGraph(
     {
       dir,
       keep,
@@ -268,14 +278,14 @@ function stopWithoutTrimming(run: LayerRun, reason: string, graph: Graph): void 
  * Trims the atom layer of the stylesheet to what the code uses and records the run; when the run
  * cannot finish, the layer is left whole and the failure is recorded.
  */
-export function trimAtomicLayer(run: LayerRun): void {
+export async function trimAtomicLayer(run: LayerRun): Promise<void> {
   const graph = emptyGraph()
   if (run.blocked !== undefined) {
     stopWithoutTrimming(run, run.blocked, graph)
     return
   }
   try {
-    trim(run, graph)
+    await trim(run, graph)
   } catch (error) {
     stopWithoutTrimming(run, String(error), graph)
   }

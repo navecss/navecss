@@ -8,7 +8,6 @@
  * dev error names <package>" are inverted: the terminal prints the dependency's problem too. The
  * floor version is covered by the other real-build files.
  */
-/* eslint-disable vitest/no-disabled-tests -- the skipped rows are the ones for a part the plugin does not do yet; each is explained where it is skipped */
 import { REPORT_CAUSE } from '@navecss/core/collect'
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -229,9 +228,7 @@ describe.skipIf(SKIP_REASON !== undefined)(
         expect(output).not.toContain("atomic: 'all'")
       })
 
-      // Skipped until the plugin tracks which application files take a `cx` a package re-exports:
-      // the report then offers `cxModules` for such a package, where it now offers `keepFor`.
-      it.skip('AC-used-atoms-55: a package whose entry re-exports cx is told to list it in cxModules, with no keepFor line', () => {
+      it('AC-used-atoms-55: a package whose entry re-exports cx is told to list it in cxModules, with no keepFor line', () => {
         const line = lines().find((text) => text.startsWith('@acme/ds'))
 
         expect(line).toBe(

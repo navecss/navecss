@@ -4,11 +4,23 @@
  * takes only `Button` from a module which also exports `cx` as `cn` takes no `cx` from it, so
  * nothing of its own routes calls through `cn`. A take the parse cannot tell apart (a namespace
  * passed on, a computed key, a rest element, an `import()` used any other way) counts as taken, and
- * so does an importer whose text names the module in no way the build reads (a `require()`).
+ * so does an importer whose text names the module in no way the build reads (a `require()`). A
+ * declaration written for the types only (`import type`, `export type`, a `type` specifier), and a
+ * named import that is referenced only in type positions, take nothing: TypeScript leaves them out
+ * of the compiled module.
  */
 import type { AstNode } from './vite-ast.ts'
 
-import { childrenOf, exportNameOf, nodeAt, nodesAt, pushAll, staticStringOf } from './vite-ast.ts'
+import {
+  childrenOf,
+  exportNameOf,
+  isTypeOnly,
+  nodeAt,
+  pushAll,
+  staticStringOf,
+  valueSpecifiersOf,
+} from './vite-ast.ts'
+import { jsxMembersIn, jsxNameOf, namesIn, typeNameOf } from './vite-cx-reference-names.ts'
 import { type CxNames, dynamicKeys, isCxName, referenceTakes } from './vite-cx-take-keys.ts'
 import { analyze, type Reference, type ScopeAnalysis } from './vite-scope.ts'
 
@@ -98,6 +110,19 @@ interface Scan {
   readonly analysis: () => ScopeAnalysis
   readonly names: CxNames
   readonly reaches: ReadonlySet<string>
+  /**
+   * The names the module's type positions refer to: `typeof name`, `name`, `name.member`.
+   */
+  readonly typeNames: () => ReadonlySet<string>
+  /**
+   * The names the module's JSX elements are written with, which are uses of a value though
+   * the scope analysis reads no reference there.
+   */
+  readonly jsxNames: () => ReadonlySet<string>
+  /**
+   * The members of a namespace import that the module's JSX member tags read: `Cx` of `<UI.Cx />`.
+   */
+  readonly jsxMembers: (local: string) => ReadonlySet<string>
 }
 
 /**
@@ -137,14 +162,43 @@ function passingOf(
 }
 
 /**
+ * Whether the import specifier is referenced only in type positions: it has a reference there and
+ * none that is a value (a JSX element name is one), so TypeScript leaves it out of the compiled
+ * module. An import nothing references at all stays a take.
+ */
+function isTypeUseOnly(scan: Scan, source: string, specifier: AstNode): boolean {
+  const local = exportNameOf(nodeAt(specifier, 'local'))
+  if (local === undefined || !scan.typeNames().has(local) || scan.jsxNames().has(local)) {
+    return false
+  }
+  return usesOf(scan.analysis(), source, specifier).length === 0
+}
+
+/**
+ * What the namespace import that `specifier` declares takes: what its references take, and the
+ * `cx` exports that JSX member tags read off it.
+ */
+function namespaceTakesOf(scan: Scan, source: string, specifier: AstNode): Taken | undefined {
+  const references = referencesTo(scan.analysis(), source, specifier)
+  const taken = namespaceTakes(scan.analysis(), references, scan.names)
+  if (taken?.names.length === 0) return taken
+  const local = exportNameOf(nodeAt(specifier, 'local'))
+  const tags = local === undefined ? [] : [...scan.jsxMembers(local)]
+  const names = new Set([
+    ...(taken?.names ?? []),
+    ...tags.filter((name) => isCxName(scan.names, name)),
+  ])
+  return names.size === 0 ? undefined : { shape: 'namespace', names: [...names] }
+}
+
+/**
  * What an `import` declaration takes.
  */
 function importTakes(node: AstNode, source: string, scan: Scan): Taken[] {
   const found: Taken[] = []
-  for (const specifier of nodesAt(node, 'specifiers')) {
+  for (const specifier of valueSpecifiersOf(node)) {
     if (specifier.type === 'ImportNamespaceSpecifier') {
-      const references = referencesTo(scan.analysis(), source, specifier)
-      const taken = namespaceTakes(scan.analysis(), references, scan.names)
+      const taken = namespaceTakesOf(scan, source, specifier)
       const isForward = passingOf(scan.analysis(), source, specifier).isForward
       if (taken) found.push({ ...taken, ...(isForward && { isForward }) })
       continue
@@ -154,6 +208,7 @@ function importTakes(node: AstNode, source: string, scan: Scan): Taken[] {
         ? 'default'
         : exportNameOf(nodeAt(specifier, 'imported'))
     if (imported !== undefined && isCxName(scan.names, imported)) {
+      if (isTypeUseOnly(scan, source, specifier)) continue
       const passing = passingOf(scan.analysis(), source, specifier)
       found.push({ shape: 'names', names: [imported], ...passing })
     }
@@ -174,7 +229,7 @@ function exportTakes(node: AstNode, scan: Scan): Taken[] {
       scan.names === undefined || scan.names.keys().some((name) => name !== 'default')
     return hasNamed ? [{ shape: 'star', names: [], isForward: true }] : []
   }
-  const re = nodesAt(node, 'specifiers')
+  const re = valueSpecifiersOf(node)
     .map((specifier) => exportNameOf(nodeAt(specifier, 'local')))
     .filter((name): name is string => name !== undefined && isCxName(scan.names, name))
   return re.length === 0 ? [] : [{ shape: 'names', names: re, isPassedOn: true, isForward: true }]
@@ -197,6 +252,7 @@ function dynamicTakes(node: AstNode, scan: Scan): Taken[] {
 function takesOf(node: AstNode, scan: Scan): Taken[] {
   const source = staticStringOf(nodeAt(node, 'source'))
   if (source === undefined || !scan.reaches.has(source)) return []
+  if (isTypeOnly(node)) return []
   if (node.type === 'ImportDeclaration') return importTakes(node, source, scan)
   if (node.type === 'ImportExpression') return dynamicTakes(node, scan)
   return exportTakes(node, scan)
@@ -211,9 +267,15 @@ export function takesIn(
   input: { readonly names: CxNames; readonly reaches: ReadonlySet<string> },
 ): Taken[] {
   let analysis: ScopeAnalysis | undefined
+  let typeNames: ReadonlySet<string> | undefined
+  let jsxNames: ReadonlySet<string> | undefined
+  let jsxMembers: ReadonlyMap<string, ReadonlySet<string>> | undefined
   const scan: Scan = {
     ...input,
     analysis: () => (analysis ??= analyze(program)),
+    typeNames: () => (typeNames ??= namesIn(program, typeNameOf)),
+    jsxNames: () => (jsxNames ??= namesIn(program, jsxNameOf)),
+    jsxMembers: (local) => (jsxMembers ??= jsxMembersIn(program)).get(local) ?? new Set(),
   }
   const found: Taken[] = []
   const stack: AstNode[] = [program]

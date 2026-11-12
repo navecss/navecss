@@ -9,20 +9,15 @@
  */
 import path from 'node:path'
 
-import type { AstNode } from './vite-ast.ts'
 import type { RenderContext } from './vite-types.ts'
 import type { UsedContext } from './vite-used.ts'
 
-import { childrenOf, nodeAt, pushAll, staticStringOf } from './vite-ast.ts'
 import { CX_SOURCE } from './vite-collect.ts'
 import { filePathOf } from './vite-css-id.ts'
-import { isDependencyId, isNaveOwn, moduleLabel, packageNameOf } from './vite-module-kind.ts'
+import { isDependencyId } from './vite-module-id.ts'
+import { isNaveOwn, moduleLabel, packageNameOf } from './vite-module-kind.ts'
 import { compareText } from './vite-problems.ts'
-
-export interface Importer {
-  readonly id: string
-  readonly code: string
-}
+import { type Importer, specifiersOf } from './vite-specifiers.ts'
 
 /**
  * The ids of the modules that import `cxId`, statically or dynamically.
@@ -52,36 +47,6 @@ export async function candidateOf(
   const code = ctx.getModuleInfo?.(id)?.code
   if (code === null || code === undefined || isNaveOwn(id)) return undefined
   return (await isStoodInFor(context, id)) ? undefined : { id, code }
-}
-
-/**
- * Every module specifier written in `program`: imports, re-exports and dynamic imports, each once,
- * in the order it is first written.
- */
-export function specifiersIn(program: AstNode): string[] {
-  const found = new Map<string, number>()
-  const stack: AstNode[] = [program]
-  while (stack.length > 0) {
-    const node = stack.pop()!
-    const where = nodeAt(node, 'source')
-    const source = staticStringOf(where)
-    if (where !== undefined && source !== undefined) {
-      found.set(source, Math.min(found.get(source) ?? Infinity, where.start))
-    }
-    pushAll(stack, childrenOf(node))
-  }
-  return [...found].toSorted(([, a], [, b]) => a - b).map(([source]) => source)
-}
-
-/**
- * Every specifier `importer` writes, or `undefined` when its text cannot be read.
- */
-export function specifiersOf(ctx: RenderContext, importer: Importer): string[] | undefined {
-  try {
-    return specifiersIn(ctx.parse?.(importer.code) as AstNode)
-  } catch {
-    return undefined
-  }
 }
 
 /**

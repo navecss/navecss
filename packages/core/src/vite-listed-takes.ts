@@ -18,7 +18,7 @@
  *
  * Two routes, one per remedy, decided take by take. A take is on the `cxModules` route when it
  * imports the module itself and is not a forward, the module has a clearing specifier (a specifier
- * outside the package that resolves to it from Vite's root, an alias or a tsconfig path included,
+ * outside the package that resolves to it from the root the host names, an alias or a tsconfig path included,
  * while every `cx` export of the module is under the name `cx`), and, for an application module,
  * the build can read the take: the problem keeps its `cxModules` line, whether an application
  * module or a dependency that does more than forward it takes it. Every other take an application
@@ -36,9 +36,8 @@
  */
 import type { CxExports, Resolutions } from './vite-cx-star-exports.ts'
 import type { ResolvedServerImport } from './vite-server-takes.ts'
-import type { RenderContext } from './vite-types.ts'
+import type { ModuleHost, TakesContext } from './vite-takes-host.ts'
 import type { LocatedProblem } from './vite-used-report.ts'
-import type { UsedContext } from './vite-used.ts'
 
 import { fileOf } from './vite-cx-modules.ts'
 import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
@@ -68,6 +67,10 @@ export interface Prepared {
    */
   readonly hasEntry: boolean
   readonly problems: readonly LocatedProblem[]
+  /**
+   * How the host names its root, for the remedy line of the takes.
+   */
+  readonly rootName: string
   readonly routed: readonly Routes[]
 }
 
@@ -75,8 +78,8 @@ export interface Prepared {
  * Reads what the importers of the build take of one module that gives out `cx`.
  */
 async function prepareOne(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   input: {
     readonly isHop: boolean
     readonly problems: readonly LocatedProblem[]
@@ -101,7 +104,7 @@ async function prepareOne(
     ),
   )
   const isListed = Object.hasOwn(context.options.keepFor, pkg)
-  return { hasEntry, holders, isHop, isListed, problems, routed }
+  return { hasEntry, holders, isHop, isListed, problems, rootName: context.rootName, routed }
 }
 
 /**
@@ -115,7 +118,7 @@ function decideOne(
   prepared: Prepared,
   serverImports: readonly ResolvedServerImport[],
 ): LocatedProblem[] {
-  const { hasEntry, holders, isHop, isListed, problems, routed } = prepared
+  const { hasEntry, holders, isHop, isListed, problems, rootName, routed } = prepared
   const fromServer = holders.map((holder) =>
     serverRoutes(holder, { isEntry: hasEntry && !holder.isReached, serverImports }),
   )
@@ -129,7 +132,7 @@ function decideOne(
   if (told.length === 0 && callers.length === 0) return []
   return problems.map((problem) => ({
     ...problem,
-    ...(told.length > 0 && { takes: told }),
+    ...(told.length > 0 && { takes: told, rootName }),
     ...(callers.length > 0 && { callers }),
   }))
 }
@@ -148,8 +151,8 @@ function callersOf(routed: readonly Routes[]): string[] {
  * the problems their listing suppressed and the dependency re-exports of a listed module's `cx`.
  */
 export async function prepareReexports(
-  ctx: RenderContext,
-  context: UsedContext,
+  ctx: ModuleHost,
+  context: TakesContext,
   standingIn: readonly LocatedProblem[],
 ): Promise<Prepared[]> {
   const exporting = standingIn.filter((problem) => problem.exportedAs !== undefined)
