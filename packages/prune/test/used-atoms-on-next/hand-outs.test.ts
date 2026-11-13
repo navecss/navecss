@@ -198,6 +198,51 @@ const UNBOUND: readonly (readonly [string, string, string])[] = [
   ],
   ['cx.bind(null)', `${IMPORT}export const cn = cx.bind(null)\n`, APP_CN],
   [
+    'cx.valueOf()',
+    `${IMPORT}export const cn = cx.valueOf()\n`,
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
+  [
+    'const { valueOf } = cx',
+    `${IMPORT}const { valueOf } = cx\nexport const cn = valueOf\n`,
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
+  [
+    'cx.dynamic = f, a write to a member',
+    `${IMPORT}cx.dynamic = (n) => n\n`,
+    "import { Menu } from '@acme/ui'\nexport const A = [Menu]\n",
+  ],
+  [
+    'a tagged template over cx',
+    `${IMPORT}export const box = {}\nconst grab = (s, v) => { box.cn = v }\ngrab\`\${cx}\`\n`,
+    "import { box } from '@acme/ui/cn.js'\nexport const A = box.cn('block')\n",
+  ],
+  [
+    'cx instanceof a class that stores its operand',
+    `${IMPORT}export const box = {}\nclass G { static [Symbol.hasInstance](v) { box.cn = v; return false } }\nexport const t = cx instanceof G\n`,
+    "import { box } from '@acme/ui/cn.js'\nexport const A = box.cn('block')\n",
+  ],
+  [
+    'var cn = cx, then a var cn = 0 under a dead branch',
+    `${IMPORT}var cn = cx\nexport { cn }\nif (globalThis.never) var cn = 0\n`,
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
+  [
+    'var cn = 0, then var cn = cx',
+    `${IMPORT}var cn = 0\nvar cn = cx\nexport { cn }\n`,
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
+  [
+    'import(cx).then((m) => m.valueOf())',
+    "export const p = import('@navecss/core/cx').then((m) => m.valueOf())\n",
+    "import { p } from '@acme/ui/cn.js'\nexport const A = (await p).cx('block')\n",
+  ],
+  [
+    'import(cx).then((m) => m[k]()), a computed key',
+    "export const p = import('@navecss/core/cx').then((m) => m[globalThis.k]())\n",
+    "import { p } from '@acme/ui/cn.js'\nexport const A = (await p).cx('block')\n",
+  ],
+  [
     'await import(cx), the import recorded by the walk',
     "const { cx } = await import('@navecss/core/cx')\nexport const cn = cx\n",
     APP_CN,
@@ -343,6 +388,26 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a hand-out the build cannot
 
       expect(outcome.report).toBeUndefined()
       expect(outcome.atoms).toEqual(['flex'])
+    })
+
+    it.each([
+      [
+        'an alias called through .call()',
+        `${IMPORT}const cn = cx\nexport const Pick = (v) => cn.call(null, 'flex', v)\n`,
+      ],
+      [
+        'raw and dynamic read from an alias',
+        `${IMPORT}const cn = cx\nexport const r = cn.raw\nexport const d = cn.dynamic\n`,
+      ],
+      [
+        'raw and dynamic destructured from an alias',
+        `${IMPORT}const cn = cx\nexport const { raw, dynamic } = cn\n`,
+      ],
+    ])('is green, with no report, for %s', async (_, text) => {
+      const outcome = await run(ONLY_MENU, acme(text, true), { keepFor: KEEP_FLEX })
+
+      expect(outcome.report).toBeUndefined()
+      expect(outcome.printed.warnings).toEqual([])
     })
 
     it('stays an error, as before, for the same form when the package is not listed', async () => {
@@ -551,6 +616,51 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 40, the barrel built to
   )
 })
 
+describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 38, a barrel TypeScript builds with a getter for a name it also calls', () => {
+  it('stays held: the getter reads cn from the module it requires, and the build does not follow it', async () => {
+    const index = compiled(
+      "import { cn } from './cn'\nexport { cn }\ncn('flex')\nexport { Menu } from './menu'\n",
+    )
+    const outcome = await run(ONLY_MENU, commonjs(index), { keepFor: KEEP_FLEX }, MANIFEST)
+
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/index.js')
+  })
+})
+
+describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 41: import x = require(...) in a listed dependency', () => {
+  const entry = { 'index.js': "export { Menu } from './menu.ts'\n" }
+  const REQUIRE = "import x = require('@navecss/core/cx')\n"
+
+  it('is green, with no message, when the dependency only calls through x', async () => {
+    const menu = `${REQUIRE}export const Menu = (v: string) => x.cx('flex', v)\n`
+    const packages = { '@acme/ui': { ...entry, 'menu.ts': menu } }
+    const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX })
+
+    expect(outcome.report).toBeUndefined()
+    expect(outcome.printed.warnings).toEqual([])
+  })
+
+  it.each([
+    ['stored', 'export const all = x\n'],
+    ['passed on', 'export const all = [1].map(x)\n'],
+    ['read for valueOf and called', 'export const all = x.valueOf()\n'],
+  ])('fails when the dependency has x %s', async (_, use) => {
+    const menu = `${REQUIRE}${use}export const Menu = (v: string) => x.cx('flex', v)\n`
+    const packages = { '@acme/ui': { ...entry, 'menu.ts': menu } }
+    const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX })
+
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/menu.ts')
+  })
+
+  it('fails when the dependency exports x', async () => {
+    const menu = `${REQUIRE}export { x }\nexport const Menu = (v: string) => x.cx('flex', v)\n`
+    const packages = { '@acme/ui': { ...entry, 'menu.ts': menu } }
+    const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX })
+
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/menu.ts')
+  })
+})
+
 describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 41, a CommonJS take the build cannot follow', () => {
   const ASSIGN = "module.exports = Object.assign({}, require('./cn.js'), require('./menu.js'))\n"
 
@@ -618,6 +728,26 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 41, a CommonJS take the
       "const { cn } = require('./cn.js')\nexports.f = [1].map(cn)\n",
     ],
     [
+      'a member that returns the module, valueOf, called',
+      "const m = require('./cn.js')\nexports.ns = m.valueOf()\n",
+    ],
+    [
+      'valueOf taken as a name and called',
+      "const v = require('./cn.js').valueOf\nexports.ns = v()\n",
+    ],
+    [
+      'valueOf destructured and called',
+      "const { valueOf } = require('./cn.js')\nexports.ns = valueOf()\n",
+    ],
+    [
+      'a member called by a computed key',
+      "const m = require('./cn.js')\nexports.ns = m[globalThis.k]()\n",
+    ],
+    [
+      'valueOf of the required Nave cx, called',
+      "const m = require('@navecss/core/cx')\nexports.ns = m.valueOf()\n",
+    ],
+    [
       'a result handed out before a var declares its name again',
       "var m = require('./cn.js')\nexports.stored = m\nvar m = 1\n",
     ],
@@ -634,6 +764,10 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 41: a CommonJS take rea
     [
       'a member bound to a name',
       "const cn = require('./cn.js').cn\nexports.Menu = (v) => cn('flex', v)\n",
+    ],
+    [
+      'a module called through a member',
+      "const m = require('./cn.js')\nexports.Menu = (v) => m.cn('flex', v)\n",
     ],
     [
       'a destructured name, beside a parameter of the same name used as a value',

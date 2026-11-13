@@ -776,4 +776,20 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a forward is never a take o
     expect(followed.report).toBeUndefined()
     expect(followed.atoms).toEqual(sorted(['flex', 'grid', 'block']))
   })
+
+  it('row 22: a dependency that holds the forward gets the held line alone, with no keepFor line for the forwarding package', async () => {
+    const packages = {
+      ...forwarding("export { cx } from '@acme/ui'\n"),
+      '@third/ui': {
+        'index.js': "import { cx } from '@other/ui'\nexport const all = [cx]\n",
+      },
+    }
+    const code =
+      "import { Menu } from '@acme/ui'\nimport { all } from '@third/ui'\nexport const A = [Menu, all]\n"
+    const outcome = await run(code, packages, { keepFor: KEEP_FLEX, cxModules: ['@acme/ui'] })
+
+    expect(outcome.first).toMatch(/^1 problem in 1 file: /u)
+    expect(outcome.text).toContain('uses cx in node_modules/@third/ui/index.js')
+    expect(outcome.text).not.toContain("keepFor: { '@other/ui'")
+  })
 })

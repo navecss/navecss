@@ -10,58 +10,26 @@ import type { AstNode } from './vite-ast.ts'
 import type { ScopeAnalysis } from './vite-scope.ts'
 
 import { childrenOf, nodeAt, nodesAt, propertyNameOf, pushAll, staticStringOf } from './vite-ast.ts'
-import { isTslibMember } from './vite-commonjs-emits.ts'
-import { memberOf } from './vite-commonjs-exports.ts'
 import { flowOf } from './vite-cx-flow.ts'
+import { unwrappedFromInterop } from './vite-require-interop.ts'
 import { analyze } from './vite-scope.ts'
 
 /**
- * The helpers the compilers wrap the result of a require in when the importing module takes a
- * default or a namespace.
+ * The names every object and every function inherits, read from the engine so a name the platform
+ * adds later is held too. A key that is one of them does not name an export of the module taken:
+ * some (`valueOf`, `bind`, `__lookupGetter__`) return the module or a function over it.
  */
-const INTEROP_HELPERS: ReadonlySet<string> = new Set([
-  '__importDefault',
-  '__importStar',
-  '__toESM',
-  '_interop_require_default',
-  '_interop_require_wildcard',
-  '_interopRequireDefault',
-  '_interopRequireWildcard',
+const INHERITED_NAMES: ReadonlySet<string> = new Set([
+  ...Object.getOwnPropertyNames(Object.prototype),
+  ...Object.getOwnPropertyNames(Function.prototype),
 ])
 
 /**
- * Whether `callee` is one of those helpers: a name the module declares itself, or a member of the
- * `tslib` it requires.
+ * Whether `key`, a member key of the module taken, names one of its exports: a static string that
+ * is not an inherited name. A key computed from anything but a string may name any member.
  */
-function isInteropCallee(analysis: ScopeAnalysis, callee: AstNode | undefined): boolean {
-  if (callee?.type === 'Identifier') {
-    const binding = analysis.referenceOf(callee)?.binding
-    const isDeclared =
-      binding !== undefined && binding.kind !== 'import' && binding.kind !== 'param'
-    return INTEROP_HELPERS.has(callee.name as string) && isDeclared
-  }
-  const member = memberOf(callee)
-  return member !== undefined && INTEROP_HELPERS.has(member.name) && isTslibMember(callee, analysis)
-}
-
-/**
- * `node`, or the call of an interop helper that wraps it, or the `await` of it, however deeply.
- */
-function unwrappedFromInterop(analysis: ScopeAnalysis, node: AstNode): AstNode {
-  let current = node
-  for (;;) {
-    const parent = analysis.parentOf.get(current)
-    if (parent?.type === 'AwaitExpression') {
-      current = parent
-      continue
-    }
-    const args = parent ? nodesAt(parent, 'arguments') : []
-    const isFirstArgument = parent?.type === 'CallExpression' && args[0] === current
-    if (!parent || !isFirstArgument || !isInteropCallee(analysis, nodeAt(parent, 'callee'))) {
-      return current
-    }
-    current = parent
-  }
+function isExportKey(key: string | undefined): key is string {
+  return key !== undefined && !INHERITED_NAMES.has(key)
 }
 
 /**
@@ -76,17 +44,19 @@ function isCalled(analysis: ScopeAnalysis, node: AstNode): boolean {
 }
 
 /**
- * Whether the use at `node` of a module's exports object is the object of a member that is called.
+ * Whether the use at `node` of a module's exports object is the object of a member that is called,
+ * by a key that names an export.
  */
 function isMemberCall(analysis: ScopeAnalysis, node: AstNode): boolean {
   const member = analysis.parentOf.get(node)
   if (member?.type !== 'MemberExpression' || nodeAt(member, 'object') !== node) return false
-  return isCalled(analysis, member)
+  const key = propertyNameOf(nodeAt(member, 'property'), member.computed === true)
+  return isExportKey(key) && isCalled(analysis, member)
 }
 
 /**
  * The names a plain destructuring `{ a, b: c }` binds, or `undefined` when it holds anything else
- * (a rest element, a computed key, a default, a nested pattern).
+ * (a rest element, a computed key, a default, a nested pattern, a key that is no export's name).
  */
 function destructuredNames(pattern: AstNode): string[] | undefined {
   if (pattern.type !== 'ObjectPattern') return undefined
@@ -94,7 +64,7 @@ function destructuredNames(pattern: AstNode): string[] | undefined {
   for (const property of nodesAt(pattern, 'properties')) {
     const value = nodeAt(property, 'value')
     const key = propertyNameOf(nodeAt(property, 'key'), property.computed === true)
-    if (key === undefined || property.type !== 'Property' || value?.type !== 'Identifier') {
+    if (!isExportKey(key) || property.type !== 'Property' || value?.type !== 'Identifier') {
       return undefined
     }
     names.push(value.name as string)
@@ -164,7 +134,7 @@ function isDeclaredAndCalled(analysis: ScopeAnalysis, declarator: AstNode, top: 
 function isMemberDeclaredAndCalled(analysis: ScopeAnalysis, member: AstNode): boolean {
   const name = propertyNameOf(nodeAt(member, 'property'), member.computed === true)
   const declarator = analysis.parentOf.get(member)
-  if (name === undefined || declarator?.type !== 'VariableDeclarator') return false
+  if (!isExportKey(name) || declarator?.type !== 'VariableDeclarator') return false
   if (isExportedDeclarator(analysis, declarator)) return false
   const id = nodeAt(declarator, 'id')
   if (nodeAt(declarator, 'init') !== member || id?.type !== 'Identifier') return false
@@ -231,11 +201,25 @@ function isResultUsedAsCallsOnly(analysis: ScopeAnalysis, top: AstNode): boolean
 }
 
 /**
+ * Whether the name `import x = require(...)` binds is only called through a member. The statement
+ * is not an expression the result flows out of, so a name it exports leaves the module whole.
+ */
+function isEqualsDeclaredAndCalled(analysis: ScopeAnalysis, declaration: AstNode): boolean {
+  if (analysis.parentOf.get(declaration)?.type === 'ExportNamedDeclaration') return false
+  return isBoundAndCalled(analysis, nodeAt(declaration, 'id'), (names, isUse) =>
+    isOnlyUsedAs(analysis, names, isUse),
+  )
+}
+
+/**
  * Whether the require at `require` is used as calls only. A module that evaluates text can reach
  * any name in it, so it never is.
  */
 export function isUsedAsCallsOnly(analysis: ScopeAnalysis, require: AstNode): boolean {
   if (analysis.hasDirectEval) return false
+  if (require.type === 'TSImportEqualsDeclaration') {
+    return isEqualsDeclaredAndCalled(analysis, require)
+  }
   const top = unwrappedFromInterop(analysis, require)
   if (require.type === 'ImportExpression' && !isAwaitedUpTo(analysis, require, top)) {
     return isPromiseUsedAsCallsOnly(analysis, top)

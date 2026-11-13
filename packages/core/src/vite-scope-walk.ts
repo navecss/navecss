@@ -252,6 +252,10 @@ const HANDLERS: Readonly<Record<string, Handler>> = {
   ImportDeclaration: (node, scope) => {
     declareImport(node, scope)
   },
+  TSImportEqualsDeclaration: (node, scope, walker) => {
+    if (!isTypeOnly(node)) declarePattern(nodeAt(node, 'id'), { kind: 'const' }, scope, walker)
+    visitKeys(node, ['moduleReference'], scope, walker)
+  },
   ExportNamedDeclaration: visitExport,
   VariableDeclaration: visitDeclaration,
   FunctionDeclaration: (node, scope, walker) => {

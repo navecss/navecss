@@ -69,6 +69,7 @@ export function declarePattern(
     if (spec.owner) binding.owner = spec.owner
     const declared = declare(into, binding, isAssigning)
     if (spec.init) declared.init = spec.init
+    walker.declarations.set(pattern, declared)
     return
   }
   DECLARE[pattern.type]?.(pattern, spec, scope, walker)

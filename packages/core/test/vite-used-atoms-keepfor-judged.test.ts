@@ -159,6 +159,28 @@ describe('AC-used-atoms-52 - a dependency that re-exports the cx of a module cxM
     expect(atomLayerAtoms(listed.css)).toEqual(atoms('block', 'flex', 'grid'))
   })
 
+  it('prints only the held line, not the keepFor line for the forwarding package, when the dependency that takes the forward holds it', async () => {
+    const withHolder = {
+      ...packages,
+      '@third/ui': {
+        'index.js': "import { cx } from '@other/ui'\nexport const all = [cx]\n",
+      },
+    }
+    const code =
+      "import { Menu } from '@acme/ui'\nimport { all } from '@third/ui'\nexport const A = [Menu, all]\n"
+    const built = await run(code, withHolder, options)
+    const lines = built.error!.split('\n')
+
+    expect(lines[0]).toMatch(/^1 problem in 1 file/)
+    expect(lines.filter((line) => line.startsWith('node_modules/'))).toEqual([
+      'node_modules/@third/ui/index.js: uses cx from @other/ui where the build cannot follow it.',
+    ])
+    expect(lines.some((line) => line.includes('uses cx in node_modules/@third/ui/index.js'))).toBe(
+      true,
+    )
+    expect(built.error).not.toContain("keepFor: { '@other/ui'")
+  })
+
   it('prints the position of a forward once when it has an application take and a calling dependency', async () => {
     const withCaller = {
       ...packages,

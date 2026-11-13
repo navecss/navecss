@@ -51,11 +51,20 @@ export interface ScopeAnalysis {
    * The resolved reference an identifier node is, if it is one.
    */
   referenceOf(node: AstNode): Reference | undefined
+  /**
+   * The binding an identifier declares, if it declares one: the same binding its references
+   * resolve to, whatever initialiser the last declaration of the name had.
+   */
+  bindingDeclaredBy(node: AstNode): Binding | undefined
 }
 
 export interface Walker {
   readonly references: Reference[]
   readonly parentOf: Map<AstNode, AstNode>
+  /**
+   * The binding each declaring identifier declares.
+   */
+  readonly declarations: Map<AstNode, Binding>
   /**
    * The scopes a direct `eval` call sits in: it can write any binding they can see.
    */

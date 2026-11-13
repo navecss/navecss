@@ -311,6 +311,17 @@ describe('AC-used-atoms-52 - row 40: the barrel built to CommonJS by Babel, esbu
   )
 })
 
+describe('AC-used-atoms-52 - row 38: a barrel TypeScript builds with a getter for a name it also calls', () => {
+  it('stays held: the getter reads cn from the module it requires, and the build does not follow it', async () => {
+    const index = compiled(
+      "import { cn } from './cn'\nexport { cn }\ncn('flex')\nexport { Menu } from './menu'\n",
+    )
+    const built = await run(ONLY_MENU, ui(index), { keepFor: KEEP_FLEX })
+
+    expect(heldLineOf(built.error)).toContain('node_modules/@acme/ui/index.js')
+  })
+})
+
 describe('AC-used-atoms-52 - row 41: a CommonJS take the build cannot follow', () => {
   const ASSIGN = "module.exports = Object.assign({}, require('./cn.js'), require('./menu.js'))\n"
 
@@ -391,6 +402,22 @@ describe('AC-used-atoms-52 - row 41: a CommonJS take the build cannot follow', (
       "const m = require('./cn.js')\nexports.f = register(m)\nfunction register(x) { return x }\n",
     ],
     [
+      'a member that returns the module, valueOf, called',
+      "const m = require('./cn.js')\nexports.ns = m.valueOf()\n",
+    ],
+    [
+      'valueOf taken as a name and called',
+      "const v = require('./cn.js').valueOf\nexports.ns = v()\n",
+    ],
+    [
+      'valueOf destructured and called',
+      "const { valueOf } = require('./cn.js')\nexports.ns = valueOf()\n",
+    ],
+    [
+      'a member called by a computed key',
+      "const m = require('./cn.js')\nexports.ns = m[globalThis.k]()\n",
+    ],
+    [
       'a result handed out before a var declares its name again',
       "var m = require('./cn.js')\nexports.stored = m\nvar m = 1\n",
     ],
@@ -407,6 +434,10 @@ describe('AC-used-atoms-52 - row 41: a CommonJS take read as calls only', () => 
     [
       'a member bound to a name',
       "const cn = require('./cn.js').cn\nexports.Menu = (v) => cn('flex', v)\n",
+    ],
+    [
+      'a module called through a member',
+      "const m = require('./cn.js')\nexports.Menu = (v) => m.cn('flex', v)\n",
     ],
     [
       'a destructured name, beside a parameter of the same name used as a value',

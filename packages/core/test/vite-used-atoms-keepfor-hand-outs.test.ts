@@ -209,6 +209,51 @@ const UNBOUND: readonly (readonly [string, string, string])[] = [
     "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
   ],
   [
+    'cx.valueOf()',
+    `${IMPORT}export const cn = cx.valueOf()\n`,
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
+  [
+    'const { valueOf } = cx',
+    `${IMPORT}const { valueOf } = cx\nexport const cn = valueOf\n`,
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
+  [
+    'cx.dynamic = f, a write to a member',
+    `${IMPORT}cx.dynamic = (n) => n\n`,
+    "import { Menu } from '@acme/ui'\nexport const A = [Menu]\n",
+  ],
+  [
+    'a tagged template over cx',
+    `${IMPORT}export const box = {}\nconst grab = (s, v) => { box.cn = v }\ngrab\`\${cx}\`\n`,
+    "import { box } from '@acme/ui/cn.js'\nexport const A = box.cn('block')\n",
+  ],
+  [
+    'cx instanceof a class that stores its operand',
+    `${IMPORT}export const box = {}\nclass G { static [Symbol.hasInstance](v) { box.cn = v; return false } }\nexport const t = cx instanceof G\n`,
+    "import { box } from '@acme/ui/cn.js'\nexport const A = box.cn('block')\n",
+  ],
+  [
+    'var cn = cx, then a var cn = 0 under a dead branch',
+    `${IMPORT}var cn = cx\nexport { cn }\nif (globalThis.never) var cn = 0\n`,
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
+  [
+    'var cn = 0, then var cn = cx',
+    `${IMPORT}var cn = 0\nvar cn = cx\nexport { cn }\n`,
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
+  [
+    'import(cx).then((m) => m.valueOf())',
+    "export const p = import('@navecss/core/cx').then((m) => m.valueOf())\n",
+    "import { p } from '@acme/ui/cn.js'\nexport const A = (await p).cx('block')\n",
+  ],
+  [
+    'import(cx).then((m) => m[k]()), a computed key',
+    "export const p = import('@navecss/core/cx').then((m) => m[globalThis.k]())\n",
+    "import { p } from '@acme/ui/cn.js'\nexport const A = (await p).cx('block')\n",
+  ],
+  [
     'await import(cx)',
     "const { cx } = await import('@navecss/core/cx')\nexport const cn = cx\n",
     "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
@@ -379,6 +424,26 @@ describe('AC-used-atoms-52 - a hand-out the build cannot read to an export fails
 
       expect(remediesOf(built.error)).toHaveLength(1)
       expect(remediesOf(built.error)[0]).toContain('does not stand in')
+    })
+
+    it.each([
+      [
+        'an alias called through .call()',
+        `${IMPORT}const cn = cx\nexport const Pick = (v) => cn.call(null, 'flex', v)\n`,
+      ],
+      [
+        'raw and dynamic read from an alias',
+        `${IMPORT}const cn = cx\nexport const r = cn.raw\nexport const d = cn.dynamic\n`,
+      ],
+      [
+        'raw and dynamic destructured from an alias',
+        `${IMPORT}const cn = cx\nexport const { raw, dynamic } = cn\n`,
+      ],
+    ])('is green, with no plugin message, for %s', async (_, text) => {
+      const built = await runUnbound(text, ONLY_MENU, { keepFor: KEEP_FLEX })
+
+      expect(built.error).toBeUndefined()
+      expect(built.warnings).toEqual([])
     })
   })
 

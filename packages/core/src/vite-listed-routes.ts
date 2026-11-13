@@ -184,12 +184,12 @@ async function routesOf(
   const takes = taken.map((take) => ({ ...take, taker, isReached: holder.isReached }))
   if (isDependency) {
     // A dependency that only re-exports is followed to what takes it; what else it does is a call,
-    // unless the build cannot tell where what it takes goes.
+    // unless the build cannot tell where what it takes goes, which is held and no call.
     const pkg = (await context.packageOf(importer)) ?? taker
     const held = takes
       .filter((take) => take.isHeld === true)
       .map((take) => ({ form: take.form ?? '', importer, pkg, taker }))
-    const calls = takes.filter((take) => take.isForward !== true)
+    const calls = takes.filter((take) => take.isForward !== true && take.isHeld !== true)
     return { entry: isEntry ? calls : [], told: [], calls: wantCalls ? calls : [], held }
   }
   const isCleared = (take: Take): boolean => isEntry && take.shape !== 'unreadable'

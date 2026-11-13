@@ -10,7 +10,9 @@ import type { Reference } from './vite-scope.ts'
 
 import { nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
 import { handOutOf, reexportedAs, unboundIn } from './vite-cx-hand-out.ts'
+import { isMemberWrite } from './vite-cx-member.ts'
 import { isReexportOf, isRenamedReexportOf, phraseFor, type Reading } from './vite-cx-refuse.ts'
+import { throughUnref } from './vite-cx-unref.ts'
 import { isSetupReturn } from './vite-setup-member.ts'
 
 /**
@@ -51,9 +53,26 @@ function rawMemberUse(parent: AstNode | undefined, member: AstNode, local: strin
 }
 
 /**
- * The use a member read on the binding (`cx.raw`, `cx.dynamic`, ...) makes.
+ * The use a member read on the binding (`cx.raw`, `cx.dynamic`, ...) makes. In a dependency, a
+ * write to a member and a computed key hand `cx` out where the build cannot follow it, whatever
+ * name the member has: `cx.dynamic = f` rewrites what every caller calls.
  */
 function memberUse(reading: Reading, member: AstNode, local: string): CxUse {
+  const use = namedMemberUse(reading, member, local)
+  const isUnbound = member.computed === true || isMemberWrite(reading.analysis, member)
+  if (!isUnbound || reading.isDependency !== true) return use
+  return unboundIn(
+    reading,
+    use.kind === 'refused'
+      ? use
+      : refused(member, local, `${local} is read with a computed member`),
+  )
+}
+
+/**
+ * The use a member on the binding makes by its name.
+ */
+function namedMemberUse(reading: Reading, member: AstNode, local: string): CxUse {
   const parent = reading.analysis.parentOf.get(member)
   const isComputed = member.computed === true
   const name = propertyNameOf(nodeAt(member, 'property'), isComputed)
@@ -69,8 +88,10 @@ function memberUse(reading: Reading, member: AstNode, local: string): CxUse {
 }
 
 /**
- * The use of a member the build does not read. `cx.bind(...)` returns a callable `cx`, and a
- * computed key may be `bind`, so those hand `cx` out where the build cannot follow it.
+ * The use of a member the build does not read. Of the members of `cx` the build reads only `raw`,
+ * `dynamic`, `call` and `apply`; any other member (`bind`, `valueOf`, `toString`, ...) may return
+ * `cx` or a function over it, and a computed key may be any of them, so those hand `cx` out where
+ * the build cannot follow it.
  */
 function otherMemberUse(
   reading: Reading,
@@ -82,35 +103,7 @@ function otherMemberUse(
     ? `${local} is read with a computed member`
     : `${local}.${name ?? '?'} is not a member the build reads`
   const use = refused(member, local, phrase)
-  return isComputed || name === 'bind' ? unboundIn(reading, use) : use
-}
-
-/**
- * Whether the callee of a call is `unref` imported from `vue` under any local name.
- */
-function isVueUnref(reading: Reading, callee: AstNode | undefined): boolean {
-  if (callee?.type !== 'Identifier') return false
-  const binding = reading.analysis.referenceOf(callee)?.binding
-  return binding?.kind === 'import' && binding.source === 'vue' && binding.imported === 'unref'
-}
-
-/**
- * Looks through `unref(cx)`, which `@vitejs/plugin-vue` compiles a template reference into: the
- * call stands for the binding wherever the binding may stand.
- */
-function throughUnref(reading: Reading, expression: AstNode): AstNode {
-  let current = expression
-  for (;;) {
-    const call = reading.analysis.parentOf.get(current)
-    const args = call ? nodesAt(call, 'arguments') : []
-    const isUnref =
-      call?.type === 'CallExpression' &&
-      args.length === 1 &&
-      args[0] === current &&
-      isVueUnref(reading, nodeAt(call, 'callee'))
-    if (!isUnref) return current
-    current = call
-  }
+  return unboundIn(reading, use)
 }
 
 /**

@@ -9,7 +9,8 @@
 import type { AstNode } from './vite-ast.ts'
 import type { ScopeAnalysis } from './vite-scope.ts'
 
-import { exportNameOf, nodeAt, nodesAt, propertyNameOf, pushAll, wrappedBy } from './vite-ast.ts'
+import { exportNameOf, nodeAt, nodesAt, propertyNameOf, pushAll } from './vite-ast.ts'
+import { memberRoleOf, READ_MEMBERS, unwrapped } from './vite-cx-member.ts'
 
 /**
  * Where a value goes: the export names it reaches, whether any use of it is a call, and whether
@@ -22,7 +23,7 @@ export interface Flow {
 }
 
 type Step =
-  | { readonly exportedAs?: string; readonly init: AstNode; readonly kind: 'aliased' }
+  | { readonly exportedAs?: string; readonly id: AstNode; readonly kind: 'aliased' }
   | { readonly kind: 'called' }
   | { readonly kind: 'exported'; readonly name: string }
   | { readonly kind: 'safe' }
@@ -34,14 +35,10 @@ const UNBOUND: Step = { kind: 'unbound' }
 
 /**
  * The parents under which a value is only tested, computed on or printed, so it cannot be carried
- * on: `typeof x`, `x + 1`, `` `${x}` ``, and a statement that is the value alone.
+ * on: `typeof x` and a statement that is the value alone. A binary expression and a template
+ * literal are such parents too, but for the two cases `isHarmlessOperation` tells apart.
  */
-const HARMLESS_PARENTS: ReadonlySet<string> = new Set([
-  'BinaryExpression',
-  'ExpressionStatement',
-  'TemplateLiteral',
-  'UnaryExpression',
-])
+const HARMLESS_PARENTS: ReadonlySet<string> = new Set(['ExpressionStatement', 'UnaryExpression'])
 
 /**
  * The parents whose `test` slot only reads the value.
@@ -55,19 +52,6 @@ const TESTING_PARENTS: ReadonlySet<string> = new Set([
 ])
 
 /**
- * `node`, or the expression above it when it sits inside a parenthesis or a type assertion
- * (`x as T`, `x satisfies T`, `x!`), which leave the value as it is.
- */
-function unwrapped(analysis: ScopeAnalysis, node: AstNode): AstNode {
-  let current = node
-  for (;;) {
-    const parent = analysis.parentOf.get(current)
-    if (!parent || wrappedBy(parent) !== current) return current
-    current = parent
-  }
-}
-
-/**
  * The name `export const name = ...` gives a declarator, when it is one.
  */
 function ownExportOf(analysis: ScopeAnalysis, declarator: AstNode): string | undefined {
@@ -79,38 +63,40 @@ function ownExportOf(analysis: ScopeAnalysis, declarator: AstNode): string | und
 }
 
 /**
- * Whether a destructuring pattern reads members by static keys other than `bind`, and nothing
- * else: no rest element, no computed key. Such a pattern takes members of the value, never the
- * value itself.
+ * Whether a destructuring pattern reads members by the static keys `raw` and `dynamic`, and
+ * nothing else: no rest element, no computed key, no other name. Such a pattern takes members of
+ * the value the build reads, never the value itself.
  */
 function isMemberPattern(pattern: AstNode): boolean {
   if (pattern.type !== 'ObjectPattern') return false
   return nodesAt(pattern, 'properties').every((property) => {
     if (property.type !== 'Property') return false
-    const name = propertyNameOf(nodeAt(property, 'key'), property.computed === true)
-    return name !== undefined && name !== 'bind'
+    if (property.computed === true) return false
+    const name = propertyNameOf(nodeAt(property, 'key'), false)
+    return name !== undefined && READ_MEMBERS.has(name)
   })
 }
 
 /**
  * What a declarator that holds the value does with it.
  */
-function declaredStep(analysis: ScopeAnalysis, declarator: AstNode, init: AstNode): Step {
+function declaredStep(analysis: ScopeAnalysis, declarator: AstNode): Step {
   const id = nodeAt(declarator, 'id')
   if (id?.type === 'Identifier') {
     const exportedAs = ownExportOf(analysis, declarator)
-    return { kind: 'aliased', init, ...(exportedAs !== undefined && { exportedAs }) }
+    return { kind: 'aliased', id, ...(exportedAs !== undefined && { exportedAs }) }
   }
   return id && isMemberPattern(id) ? SAFE : UNBOUND
 }
 
 /**
- * What a member read of the value does with it: `cx.bind` returns a callable `cx`, and a key the
- * build cannot read may be `bind`; every other member is read for itself.
+ * What a member of the value does with it: see `memberRoleOf`. A harmless read is safe, and the
+ * value's own call is a call.
  */
-function memberStep(node: AstNode): Step {
-  const name = propertyNameOf(nodeAt(node, 'property'), node.computed === true)
-  return name === undefined || name === 'bind' ? UNBOUND : SAFE
+function memberStep(analysis: ScopeAnalysis, node: AstNode): Step {
+  const role = memberRoleOf(analysis, node)
+  if (role === 'call') return CALLED
+  return role === 'read' ? SAFE : UNBOUND
 }
 
 /**
@@ -123,6 +109,19 @@ function exportStep(parent: AstNode): Step {
 }
 
 /**
+ * Whether the binary expression or template literal `parent` only computes on the value. A tagged
+ * template passes it to the tag as an argument, and `instanceof` passes it to the right side's
+ * `Symbol.hasInstance`, so those two carry it where the build cannot follow it.
+ */
+function isHarmlessOperation(analysis: ScopeAnalysis, top: AstNode, parent: AstNode): boolean {
+  if (parent.type === 'BinaryExpression') {
+    return !(parent.operator === 'instanceof' && nodeAt(parent, 'left') === top)
+  }
+  const tag = analysis.parentOf.get(parent)
+  return !(tag?.type === 'TaggedTemplateExpression' && nodeAt(tag, 'quasi') === parent)
+}
+
+/**
  * What a parent that only reads the value does with it: it tests it, computes on it, spreads it
  * into an object (which copies only what `cx` carries as properties; any other spread throws), or
  * holds it in a sequence, where the last expression is the value of the whole.
@@ -130,6 +129,9 @@ function exportStep(parent: AstNode): Step {
 function readingStep(analysis: ScopeAnalysis, top: AstNode, parent: AstNode): Step {
   const { type } = parent
   if (TESTING_PARENTS.has(type)) return nodeAt(parent, 'test') === top ? SAFE : UNBOUND
+  if (type === 'BinaryExpression' || type === 'TemplateLiteral') {
+    return isHarmlessOperation(analysis, top, parent) ? SAFE : UNBOUND
+  }
   if (type === 'SpreadElement' || HARMLESS_PARENTS.has(type)) return SAFE
   if (type !== 'SequenceExpression') return UNBOUND
   return nodesAt(parent, 'expressions').at(-1) === top ? stepOf(analysis, parent) : SAFE
@@ -148,10 +150,10 @@ function stepAbove(analysis: ScopeAnalysis, top: AstNode, parent: AstNode): Step
       return exportStep(parent)
     }
     case 'MemberExpression': {
-      return nodeAt(parent, 'object') === top ? memberStep(parent) : SAFE
+      return nodeAt(parent, 'object') === top ? memberStep(analysis, parent) : SAFE
     }
     case 'VariableDeclarator': {
-      return nodeAt(parent, 'init') === top ? declaredStep(analysis, parent, top) : SAFE
+      return nodeAt(parent, 'init') === top ? declaredStep(analysis, parent) : SAFE
     }
     default: {
       return readingStep(analysis, top, parent)
@@ -169,17 +171,19 @@ function stepOf(analysis: ScopeAnalysis, node: AstNode): Step {
 }
 
 /**
- * The uses of the alias declared with `init`, and whether anything writes to it.
+ * The uses of the alias the identifier `id` declares, and whether the build cannot tell what it
+ * holds: anything writes to it (a later declaration of the name with an initialiser included), or
+ * no binding is found for it. The uses are the references that resolve to the binding itself, not
+ * the ones whose declaration had the same initialiser.
  */
 function usesOfAlias(
   analysis: ScopeAnalysis,
-  init: AstNode,
+  id: AstNode,
 ): { readonly isWritten: boolean; readonly nodes: AstNode[] } {
-  const uses = analysis.references.filter(({ binding }) => binding?.init === init)
-  return {
-    isWritten: uses.some(({ binding }) => (binding?.writes ?? 0) > 0),
-    nodes: uses.map(({ node }) => node),
-  }
+  const alias = analysis.bindingDeclaredBy(id)
+  if (!alias) return { isWritten: true, nodes: [] }
+  const uses = analysis.references.filter(({ binding }) => binding === alias)
+  return { isWritten: alias.writes > 0, nodes: uses.map(({ node }) => node) }
 }
 
 /**
@@ -216,7 +220,7 @@ function followStep(step: Step, walk: Walk): void {
   const { analysis, names, stack, state } = walk
   if (step.kind === 'aliased') {
     if (step.exportedAs !== undefined) names.add(step.exportedAs)
-    const alias = usesOfAlias(analysis, step.init)
+    const alias = usesOfAlias(analysis, step.id)
     state.isUnbound = alias.isWritten
     pushAll(stack, alias.nodes)
     return
