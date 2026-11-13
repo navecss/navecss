@@ -116,6 +116,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a hand-out of cx the build 
 
         expect(outcome.first).toMatch(/^1 problem in 1 file: /u)
         expect(line).toContain("keepFor: { '@acme/ui': ['<atom>'] }")
+        expect(line).toContain('@acme/ui also gives cx out under another name')
         expect(line).toContain('import cx from @navecss/core/cx instead and call cx in its place')
       },
     )
@@ -221,8 +222,12 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a hand-out the build cannot
         expect(line).toContain('node_modules/@acme/ui/cn.js')
         expect(line).toContain('the keepFor entry does not stand in for that')
         expect(line).toContain('export it by name')
+        expect(line).toContain('whatever your code takes from @acme/ui')
         expect(line).toContain('patched copy')
-        expect(line).toContain('Which atoms the build ships')
+        expect(line).toMatch(
+          /ship every atom: see "Shipping every atom" under "Which atoms the build ships" in the @navecss\/prune README: https:\/\/github\.com\/navecss\/navecss\/tree\/main\/packages\/prune#shipping-every-atom\.$/u,
+        )
+        expect(line).not.toContain('@navecss/core/README.md')
         expect(outcome.text).not.toContain('keepFor: {')
         expect(outcome.text).not.toContain('cxModules: [')
         expect(outcome.text).not.toContain("atomic: 'all'")
@@ -231,7 +236,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a hand-out the build cannot
 
     it.each(UNBOUND)('%s names the form it found', async (_, text, app) => {
       const outcome = await run(app, acme(text, true), { keepFor: KEEP_FLEX })
-      const form = outcome.problems[0]!.replace(/^[^ ]+ /u, '').replace(/\.$/u, '')
+      const form = outcome.problems[0]!.replace(/^[^ ]+ /u, '').replace(/\.(\s.*)?$/su, '')
 
       expect(packageLines(outcome)[0]).toContain(`(${form})`)
     })
@@ -361,7 +366,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, rows 38 and 39, a barrel Ty
 
       expect(outcome.text).toContain('components/App.ts (cn)')
       expect(outcome.text).not.toMatch(/cxModules: \[/u)
-      expect(outcome.text).not.toContain('passes cx on')
+      expect(outcome.text).not.toContain(' uses cx in ')
       const followed = await run(NAVE_APP, packages, { keepFor: KEEP_FLEX }, MANIFEST)
 
       expect(followed.report).toBeUndefined()
@@ -385,7 +390,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, rows 38 and 39, a barrel Ty
     const packages = commonjs(compiled(STAR), { 'cn.js': compiled(BARREL_CN) })
     const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX }, MANIFEST)
 
-    expect(outcome.text).toContain('passes cx on in node_modules/@acme/ui/cn.js')
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/cn.js')
   })
 })
 
@@ -483,7 +488,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 40, the barrel built to
     async (_, __, barrel) => {
       const outcome = await run(APP_BARREL, commonjs(barrel), { keepFor: KEEP_FLEX }, MANIFEST)
 
-      expect(outcome.text).toContain('passes cx on in node_modules/@acme/ui/index.js')
+      expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/index.js')
       expect(outcome.text).not.toContain('keepFor: {')
       expect(outcome.text).not.toMatch(/cxModules: \[/u)
     },
@@ -494,7 +499,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 40, the barrel built to
     async (_, __, barrel) => {
       const outcome = await run(ONLY_MENU, commonjs(barrel), { keepFor: KEEP_FLEX }, MANIFEST)
 
-      expect(outcome.text).toContain('passes cx on in node_modules/@acme/ui/index.js')
+      expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/index.js')
     },
   )
 })
@@ -523,7 +528,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 41, a CommonJS take the
     )
     const outcome = await run(ONLY_MENU, commonjs(index), { keepFor: KEEP_FLEX }, MANIFEST)
 
-    expect(outcome.text).toContain('passes cx on in node_modules/@acme/ui/index.js')
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/index.js')
   })
 
   it('is green, with no message, when menu.js takes cn and only calls it', async () => {
@@ -569,7 +574,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 41, a CommonJS take the
     const packages = commonjs("exports.Menu = require('./menu.js').Menu\n", { 'menu.js': text })
     const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX }, MANIFEST)
 
-    expect(outcome.text).toContain('passes cx on in node_modules/@acme/ui/menu.js')
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/menu.js')
   })
 })
 
@@ -592,7 +597,7 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a dependency’s import the
     }
     const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX })
 
-    expect(outcome.text).toContain('passes cx on in node_modules/@acme/ui/other.js')
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/other.js')
   })
 
   it('is green when the dependency imports cx and only calls it', async () => {

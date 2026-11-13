@@ -68,7 +68,7 @@ function linesOf(error: string | undefined): string[] {
  * The line a held take prints, or `undefined`.
  */
 function heldLineOf(error: string | undefined): string | undefined {
-  return linesOf(error).find((line) => line.includes('passes cx on in'))
+  return linesOf(error).find((line) => line.includes(' uses cx in '))
 }
 
 const STAR = "export * from './cn'\nexport { Menu } from './menu'\n"
@@ -118,7 +118,7 @@ describe('AC-used-atoms-52 - rows 38 and 39: a barrel TypeScript builds to Commo
     const built = await run(APP_CN, packages, { keepFor: KEEP_FLEX })
 
     expect(built.error).toContain('is not exported under the conditions')
-    expect(built.error).not.toContain('passes cx on')
+    expect(built.error).not.toContain(' uses cx in ')
   })
 })
 

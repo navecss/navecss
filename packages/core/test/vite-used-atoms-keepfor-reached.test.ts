@@ -14,7 +14,7 @@ import type { RenderContext } from '../src/vite-types.ts'
 import type { LocatedProblem } from '../src/vite-used-report.ts'
 
 import { decideReexports, prepareReexports } from '../src/vite-listed-takes.ts'
-import { packageLines } from '../src/vite-used-package-lines.ts'
+import { EVERY_ATOM, packageLines } from '../src/vite-used-package-lines.ts'
 import { atomLayerAtoms, atoms } from './helpers/used-atoms-app.ts'
 import {
   forwardLine,
@@ -370,7 +370,10 @@ describe('AC-used-atoms-52 - a take the build cannot read counts as taking the m
     ] as const)('when the importer %s', async (_, code, parse) => {
       const prepared = await prepareReexports(over(code, parse), context, [problem])
       const kept = decideReexports(prepared, [])
-      const lines = packageLines('@acme/ui', kept, [], 'navePlugin()')
+      const lines = packageLines('@acme/ui', kept, [], {
+        home: 'navePlugin()',
+        everyAtom: EVERY_ATOM,
+      })
 
       expect(lines).toHaveLength(1)
       expect(lines[0]).toContain(

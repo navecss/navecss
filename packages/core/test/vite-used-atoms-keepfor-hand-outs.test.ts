@@ -83,6 +83,7 @@ describe('AC-used-atoms-52 - a hand-out of cx the build reads to its export is j
 
         expect(built.error).toMatch(/^1 problem in 1 file/)
         expect(line).toContain("keepFor: { '@acme/ui': ['<atom>'] }")
+        expect(line).toContain('@acme/ui also gives cx out under another name')
         expect(line).toContain('import cx from @navecss/core/cx instead and call cx in its place')
       },
     )
@@ -252,8 +253,11 @@ describe('AC-used-atoms-52 - a hand-out the build cannot read to an export fails
         expect(line).toContain('node_modules/@acme/ui/cn.js')
         expect(line).toContain('the keepFor entry does not stand in for that')
         expect(line).toContain('export it by name')
+        expect(line).toContain('whatever your code takes from @acme/ui')
         expect(line).toContain('patched copy')
-        expect(line).toContain('Which atoms the build ships')
+        expect(line).toMatch(
+          /ship every atom: see "Which atoms the build ships" in node_modules\/@navecss\/core\/README\.md\.$/,
+        )
         expect(built.error).not.toContain('keepFor: {')
         expect(built.error).not.toContain('cxModules: [')
         expect(built.error).not.toContain("atomic: 'all'")
@@ -272,7 +276,7 @@ describe('AC-used-atoms-52 - a hand-out the build cannot read to an export fails
       const problem = linesOf(built.error).find((one) =>
         one.startsWith('node_modules/@acme/ui/cn.js'),
       )
-      const form = problem!.replace(/^[^ ]+ /, '').replace(/\.$/, '')
+      const form = problem!.replace(/^[^ ]+ /, '').replace(/\.(\s.*)?$/su, '')
 
       expect(line).toContain(`(${form})`)
     })

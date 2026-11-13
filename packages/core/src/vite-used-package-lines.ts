@@ -51,7 +51,7 @@ function isHandedOut(problem: LocatedProblem): boolean {
  * from Nave.
  */
 function handedOutClause(pkg: string): string {
-  return ` The build does not read calls made through what ${pkg} hands out of cx under another name: where your code imports it from ${pkg} or one of its subpaths, import cx from @navecss/core/cx instead and call cx in its place.`
+  return ` ${pkg} also gives cx out under another name, and the build does not read calls made through it: where your code imports it from ${pkg} or one of its subpaths, import cx from @navecss/core/cx instead and call cx in its place.`
 }
 
 /**
@@ -72,20 +72,27 @@ function callsLine(pkg: string, problems: readonly LocatedProblem[], entry: stri
 }
 
 /**
- * The line for the places a dependency passes `cx` on where the build cannot follow it: the
- * `keepFor` entry does not stand in for them, and the routes left are the package's own or
- * shipping every atom.
+ * The line for the places a dependency uses `cx` where the build cannot follow it: the `keepFor`
+ * entry does not stand in for them, and the routes left are the package's own or shipping every
+ * atom, which `everyAtom` points the reader to in the host's own documentation.
  */
-function heldLine(pkg: string, held: readonly LocatedProblem[]): string {
+function heldLine(pkg: string, held: readonly LocatedProblem[], everyAtom: string): string {
   const formOf = (problem: LocatedProblem): string => {
-    const sentence = problem.text.replace(/\.$/, '')
+    const sentence = problem.text.replace(/\.(\s.*)?$/su, '')
     return problem.construct === '' ? sentence : `${cut(problem.construct)}: ${sentence}`
   }
   const places = [
     ...new Set(held.map((problem) => `${problem.file} (${formOf(problem)})`)),
   ].toSorted(compareText)
-  return `${pkg} passes cx on in ${places.join(', ')}, where the build cannot follow it, so it cannot tell which calls of your code go through it, and the keepFor entry does not stand in for that. The package can export it by name instead (export { cx as cn } from '@navecss/core/cx'), which the build then checks against your code, or you can use a patched copy of the package. To ship every atom instead, see "Which atoms the build ships" in the @navecss/core README.`
+  return `${pkg} uses cx in ${places.join(', ')}. From there the build cannot tell whether a call of your code goes through it, and the keepFor entry does not stand in for that, so the build fails whenever these files are part of it, whatever your code takes from ${pkg}. The fix is the package's, in a release of it or a patched copy: export it by name from an ES module, as in export { cx as cn } from '@navecss/core/cx', which the build then checks wherever your code takes it. Until then, ship every atom: ${everyAtom}`
 }
+
+/**
+ * Where the Vite plugin's reader learns to ship every atom, the end of the line for a dependency's
+ * held uses of `cx`. A host with its own documentation passes its own.
+ */
+export const EVERY_ATOM =
+  'see "Which atoms the build ships" in node_modules/@navecss/core/README.md.'
 
 const LASTING_FIX =
   "The lasting fix is the package's: import cx from @navecss/core/cx where it is called, or re-export it from the package's entry."
@@ -213,15 +220,25 @@ function takeLines(pkg: string, all: readonly LocatedProblem[], home: string): s
 }
 
 /**
+ * How the host spells the places a package's lines send the reader: `home`, where its options are
+ * written, and `everyAtom`, where its documentation says how to ship every atom.
+ */
+export interface HostPlaces {
+  readonly home: string
+  readonly everyAtom: string
+}
+
+/**
  * The remedy lines for a dependency's problems, `configured` being the `cxModules` list a line
- * that prints one extends and `home` where the options are written.
+ * that prints one extends.
  */
 export function packageLines(
   pkg: string,
   all: readonly LocatedProblem[],
   configured: readonly string[],
-  home: string,
+  places: HostPlaces,
 ): string[] {
+  const { home, everyAtom } = places
   const isTaken = (problem: LocatedProblem): boolean => (problem.takes?.length ?? 0) > 0
   const kept = all.filter((problem) => !isTaken(problem) && problem.callers === undefined)
   const held = kept.filter((problem) => problem.isHeld === true)
@@ -250,7 +267,7 @@ export function packageLines(
     lines.push(declaredLine(pkg, entries.toSorted(compareText), internal.length > 0, home))
   }
   if (rest.length > 0) lines.push(callsLine(pkg, rest, entry))
-  if (held.length > 0) lines.push(heldLine(pkg, held))
+  if (held.length > 0) lines.push(heldLine(pkg, held, everyAtom))
   const listed = named.length > 0 ? listedLine(pkg, named, configured, home) : undefined
   if (listed !== undefined) lines.push(listed)
   if (internal.length > 0) {

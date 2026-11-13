@@ -11,7 +11,7 @@ import type { PruneRecord } from './record.ts'
 
 import { postcssConfigIn } from './config-files.ts'
 import { UNRESOLVED_TEXT } from './graph-parts.ts'
-import { ALIAS_REMEDY } from './texts.ts'
+import { ALIAS_REMEDY, EVERY_ATOM } from './texts.ts'
 
 const HOME = 'withNave()'
 
@@ -64,6 +64,9 @@ export function reportOf(
 ): Report | undefined {
   const problems = problemsOf(record, dir)
   if (problems.length === 0) return undefined
-  const text = buildReport(problems, options.cxModules ?? [], HOME, hostRemedies)
+  const text = buildReport(problems, options.cxModules ?? [], HOME, {
+    remedies: hostRemedies,
+    everyAtom: EVERY_ATOM,
+  })
   return { text, count: problems.length }
 }
