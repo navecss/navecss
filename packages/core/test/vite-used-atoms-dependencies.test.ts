@@ -152,7 +152,7 @@ describe('AC-used-atoms-16 — a problem in dependency code names the package an
     '',
   ].join('\n')
 
-  it('fails with three problems in the package’s file and one line for bad-lib, ready to paste', async () => {
+  it('fails with two problems in the package’s file and one line for bad-lib, ready to paste', async () => {
     const app = appUsing(['bad-lib'])
     addPackage(app, 'bad-lib', { 'index.js': badLib })
     try {

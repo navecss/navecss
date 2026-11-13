@@ -390,11 +390,34 @@ describe('AC-used-atoms-52 - row 41: a CommonJS take the build cannot follow', (
       'a call result of the module required',
       "const m = require('./cn.js')\nexports.f = register(m)\nfunction register(x) { return x }\n",
     ],
+    [
+      'a result handed out before a var declares its name again',
+      "var m = require('./cn.js')\nexports.stored = m\nvar m = 1\n",
+    ],
   ])('fails for %s', async (_, text) => {
     const packages = ui("exports.Menu = require('./menu.js').Menu\n", { 'menu.js': text })
     const built = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX })
 
     expect(heldLineOf(built.error)).toContain('node_modules/@acme/ui/menu.js')
+  })
+})
+
+describe('AC-used-atoms-52 - row 41: a CommonJS take read as calls only', () => {
+  it.each([
+    [
+      'a member bound to a name',
+      "const cn = require('./cn.js').cn\nexports.Menu = (v) => cn('flex', v)\n",
+    ],
+    [
+      'a destructured name, beside a parameter of the same name used as a value',
+      "const { cn } = require('./cn.js')\nexports.Menu = (v) => cn('flex', v)\nexports.g = function (cn) { return [cn] }\n",
+    ],
+  ])('is green when menu.js takes %s and only calls it', async (_, text) => {
+    const packages = ui("exports.Menu = require('./menu.js').Menu\n", { 'menu.js': text })
+    const built = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX })
+
+    expect(built.error).toBeUndefined()
+    expect(built.warnings).toEqual([])
   })
 })
 
@@ -408,6 +431,14 @@ describe('AC-used-atoms-52 - a dependency’s import the build cannot follow', (
     [
       'a name passed as a value',
       "import { cn } from '@acme/ui/cn.js'\nexport const all = [1].map(cn)\n",
+    ],
+    [
+      'names exported from a dynamic import',
+      "export const { cn } = await import('@acme/ui/cn.js')\n",
+    ],
+    [
+      'a member exported from a dynamic import',
+      "export const cn = (await import('@acme/ui/cn.js')).cn\n",
     ],
   ])('fails for %s, whatever the application imports', async (_, text) => {
     const packages = {

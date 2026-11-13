@@ -19,8 +19,9 @@ export interface Reading {
    */
   readonly declaredSources?: ReadonlySet<string> | undefined
   /**
-   * Whether the module belongs to a dependency, where a use that hands `cx` out is told apart by
-   * where the value goes.
+   * Whether the module belongs to a dependency. There a refused use of `cx` that hands it out is
+   * classified by where the value goes: to an export the build can follow, judged by who takes it,
+   * or anywhere else, held. An application module's refused use is reported as it is.
    */
   readonly isDependency?: boolean
 }

@@ -207,6 +207,31 @@ const UNBOUND: readonly (readonly [string, string, string])[] = [
     "const { cx } = require('@navecss/core/cx')\nexports.cn = cx\n",
     APP_CN,
   ],
+  [
+    'require(cx) before a var declares its name again, the import recorded by the walk',
+    "var m = require('@navecss/core/cx')\nexports.cn = m.cx\nvar m = 1\n",
+    APP_CN,
+  ],
+  [
+    'import(cx).then((m) => m.cx)',
+    "export const p = import('@navecss/core/cx').then((m) => m.cx)\n",
+    "import { p } from '@acme/ui/cn.js'\nexport const A = (await p)('block')\n",
+  ],
+  [
+    'export const d = import(cx)',
+    "export const d = import('@navecss/core/cx')\n",
+    "import { d } from '@acme/ui/cn.js'\nexport const A = (await d).cx('block')\n",
+  ],
+  [
+    'export const m = await import(cx)',
+    "export const m = await import('@navecss/core/cx')\n",
+    "import { m } from '@acme/ui/cn.js'\nexport const A = m.cx('block')\n",
+  ],
+  [
+    'export const { cx: cn } = await import(cx)',
+    "export const { cx: cn } = await import('@navecss/core/cx')\n",
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
 ]
 
 describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a hand-out the build cannot read to an export fails closed in a listed package', () => {
@@ -295,6 +320,26 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a hand-out the build cannot
         ),
         { keepFor: KEEP_FLEX },
       )
+
+      expect(outcome.report).toBeUndefined()
+      expect(outcome.atoms).toEqual(['flex'])
+    })
+
+    it.each([
+      [
+        'a member of require(cx) bound to a name',
+        "const cx = require('@navecss/core/cx').cx\nexports.f = (v) => cx('grid', v)\n",
+      ],
+      [
+        'a then callback of import(cx), through a destructured parameter',
+        "import('@navecss/core/cx').then(({ cx }) => cx('grid'))\n",
+      ],
+      [
+        'a then callback of import(cx), through a parameter',
+        "export const p = import('@navecss/core/cx').then((m) => m.cx('grid'))\n",
+      ],
+    ])('is green when a listed package takes cx as %s and only calls it', async (_, text) => {
+      const outcome = await run(ONLY_MENU, acme(text, true), { keepFor: KEEP_FLEX })
 
       expect(outcome.report).toBeUndefined()
       expect(outcome.atoms).toEqual(['flex'])
@@ -395,7 +440,9 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, rows 38 and 39, a barrel Ty
 })
 
 /**
- * What Babel 7.29.7, esbuild 0.28.2 and Rollup 4.64.7 wrote for the barrel, as in the Vite rows.
+ * The CommonJS that Babel, esbuild and Rollup write for the barrel, condensed by hand from the
+ * Vite rows, which keep each tool's output as it wrote it: the statements the reader keys on are
+ * the same, the line breaks inside them are not.
  */
 const BABEL_STAR = `"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -570,11 +617,33 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 41, a CommonJS take the
       'a destructured name that is passed on',
       "const { cn } = require('./cn.js')\nexports.f = [1].map(cn)\n",
     ],
+    [
+      'a result handed out before a var declares its name again',
+      "var m = require('./cn.js')\nexports.stored = m\nvar m = 1\n",
+    ],
   ])('fails for %s', async (_, text) => {
     const packages = commonjs("exports.Menu = require('./menu.js').Menu\n", { 'menu.js': text })
     const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX }, MANIFEST)
 
     expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/menu.js')
+  })
+})
+
+describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, row 41: a CommonJS take read as calls only', () => {
+  it.each([
+    [
+      'a member bound to a name',
+      "const cn = require('./cn.js').cn\nexports.Menu = (v) => cn('flex', v)\n",
+    ],
+    [
+      'a destructured name, beside a parameter of the same name used as a value',
+      "const { cn } = require('./cn.js')\nexports.Menu = (v) => cn('flex', v)\nexports.g = function (cn) { return [cn] }\n",
+    ],
+  ])('is green when menu.js takes %s and only calls it', async (_, text) => {
+    const packages = commonjs("exports.Menu = require('./menu.js').Menu\n", { 'menu.js': text })
+    const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX }, MANIFEST)
+
+    expect(outcome.report).toBeUndefined()
   })
 })
 
@@ -586,6 +655,8 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a dependency’s import the
     ],
     ['a name stored', "import { cn } from './cn.js'\nexport const table = { cn }\n"],
     ['a name passed as a value', "import { cn } from './cn.js'\nexport const all = [1].map(cn)\n"],
+    ['names exported from a dynamic import', "export const { cn } = await import('./cn.js')\n"],
+    ['a member exported from a dynamic import', "export const cn = (await import('./cn.js')).cn\n"],
   ])('fails for %s, whatever the application imports', async (_, text) => {
     const packages = {
       '@acme/ui': {

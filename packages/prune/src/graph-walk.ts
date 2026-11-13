@@ -104,9 +104,9 @@ export function isStoodInFor(walk: Walk, facts: FileFacts): boolean {
 }
 
 /**
- * Records an import of core's `cx` the reader does not bind. In a package `keepFor` stands in for
- * the calls made through it are the package's own, and it is recorded only when the package hands
- * it out, which no listing clears: the judgement then holds it as an error.
+ * Records an import of core's `cx` the reader does not bind. In a package that `keepFor` stands in
+ * for, the calls made through it are the package's own, so it is recorded only when the package
+ * hands it out, which no listing clears: the judgement then holds it as an error.
  */
 export function recordUnboundCx(
   walk: Walk,

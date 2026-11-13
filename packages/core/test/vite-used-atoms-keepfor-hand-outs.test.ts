@@ -32,7 +32,7 @@ function linesOf(error: string | undefined): string[] {
 }
 
 /**
- * The remedy lines of an error: those after the problem lines.
+ * The remedy lines of an error: those that start with the listed package's name, `@acme/ui`.
  */
 function remediesOf(error: string | undefined): string[] {
   return linesOf(error).filter((line) => line.startsWith('@acme/ui'))
@@ -213,6 +213,26 @@ const UNBOUND: readonly (readonly [string, string, string])[] = [
     "const { cx } = await import('@navecss/core/cx')\nexport const cn = cx\n",
     "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
   ],
+  [
+    'import(cx).then((m) => m.cx)',
+    "export const p = import('@navecss/core/cx').then((m) => m.cx)\n",
+    "import { p } from '@acme/ui/cn.js'\nexport const A = (await p)('block')\n",
+  ],
+  [
+    'export const d = import(cx)',
+    "export const d = import('@navecss/core/cx')\n",
+    "import { d } from '@acme/ui/cn.js'\nexport const A = (await d).cx('block')\n",
+  ],
+  [
+    'export const m = await import(cx)',
+    "export const m = await import('@navecss/core/cx')\n",
+    "import { m } from '@acme/ui/cn.js'\nexport const A = m.cx('block')\n",
+  ],
+  [
+    'export const { cx: cn } = await import(cx)',
+    "export const { cx: cn } = await import('@navecss/core/cx')\n",
+    "import { cn } from '@acme/ui/cn.js'\nexport const A = cn('block')\n",
+  ],
 ]
 
 /**
@@ -336,6 +356,19 @@ describe('AC-used-atoms-52 - a hand-out the build cannot read to an export fails
       expect(built.warnings).toEqual([])
       expect(atomLayerAtoms(built.css)).toEqual(atoms('flex'))
     })
+
+    it.each([
+      ['a destructured parameter', "import('@navecss/core/cx').then(({ cx }) => cx('grid'))\n"],
+      ['a parameter', "export const p = import('@navecss/core/cx').then((m) => m.cx('grid'))\n"],
+    ])(
+      'is green when a listed package imports cx dynamically and only calls it in a then callback, through %s',
+      async (_, text) => {
+        const built = await runUnbound(text, ONLY_MENU, { keepFor: KEEP_FLEX })
+
+        expect(built.error).toBeUndefined()
+        expect(built.warnings).toEqual([])
+      },
+    )
 
     it('fails closed for an alias that is written to after its declaration', async () => {
       const built = await runUnbound(

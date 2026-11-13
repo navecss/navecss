@@ -23,6 +23,7 @@ import {
 import { jsxMembersIn, jsxNameOf, namesIn, typeNameOf } from './vite-cx-reference-names.ts'
 import { type CxNames, dynamicKeys, isCxName, referenceTakes } from './vite-cx-take-keys.ts'
 import { isCarriedOn, passingOf, usesOf, withHeld } from './vite-cx-take-passing.ts'
+import { isUsedAsCallsOnly } from './vite-require-uses.ts'
 import { analyze, type Reference, type ScopeAnalysis } from './vite-scope.ts'
 
 /**
@@ -250,8 +251,13 @@ function takesOf(node: AstNode, scan: Scan): Taken[] {
   if (isTypeOnly(node)) return []
   if (node.type === 'ImportDeclaration') return importTakes(node, source, scan)
   if (node.type === 'ImportExpression') {
-    const taken = dynamicTakes(node, scan)
-    return scan.isDependency ? taken.map((one) => withHeld(one, source)) : taken
+    if (!scan.isDependency) return dynamicTakes(node, scan)
+    // A dependency's names are read no further than the keys it takes, so a result that is not
+    // used as calls only is a take of the whole module, which the build cannot follow.
+    const taken = isUsedAsCallsOnly(scan.analysis(), node)
+      ? dynamicTakes(node, scan)
+      : [{ shape: 'dynamic-import' as const, names: [] }]
+    return taken.map((one) => withHeld(one, source))
   }
   return exportTakes(node, scan)
 }
