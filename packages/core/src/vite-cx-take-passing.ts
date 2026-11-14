@@ -10,6 +10,7 @@ import type { Reference, ScopeAnalysis } from './vite-scope.ts'
 
 import { exportNameOf, nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
 import { type Flow, flowOf } from './vite-cx-flow.ts'
+import { unwrapped } from './vite-cx-member.ts'
 import { memberReadOf, patternDestructuring } from './vite-cx-reference.ts'
 import { type CxNames, isCxName } from './vite-cx-take-keys.ts'
 import { INHERITED_NAMES } from './vite-require-uses.ts'
@@ -113,18 +114,19 @@ function isPatternCarried(analysis: ScopeAnalysis, pattern: AstNode, names: CxNa
 }
 
 /**
- * Whether `member` is called with its object as the receiver: `ns.x()`, `ns.x?.()`, `(ns.x)()` or a
- * tagged template `` ns.x`...` ``. A call through a sequence (`(0, ns.x)()`) has none.
+ * Whether `member` is called with its object as the receiver: `ns.x()`, `ns.x?.()`, `(ns.x)()`, a
+ * tagged template `` ns.x`...` ``, or any of them through parentheses, an optional chain or a type
+ * assertion (`ns.x!()`, `(ns.x as T)()`). A call through a sequence (`(0, ns.x)()`) has none.
  */
 function isCalledWithReceiver(analysis: ScopeAnalysis, member: AstNode): boolean {
-  let node = member
-  let parent = analysis.parentOf.get(node)
-  while (parent?.type === 'ParenthesizedExpression') {
-    node = parent
-    parent = analysis.parentOf.get(node)
+  let top = unwrapped(analysis, member)
+  let parent = analysis.parentOf.get(top)
+  while (parent?.type === 'ChainExpression') {
+    top = unwrapped(analysis, parent)
+    parent = analysis.parentOf.get(top)
   }
-  if (parent?.type === 'CallExpression') return nodeAt(parent, 'callee') === node
-  return parent?.type === 'TaggedTemplateExpression' && nodeAt(parent, 'tag') === node
+  if (parent?.type === 'CallExpression') return nodeAt(parent, 'callee') === top
+  return parent?.type === 'TaggedTemplateExpression' && nodeAt(parent, 'tag') === top
 }
 
 /**

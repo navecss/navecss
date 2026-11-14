@@ -18,6 +18,7 @@ import {
   stringAt,
   valueSpecifiersOf,
 } from './vite-ast.ts'
+import { CX_ONLY } from './vite-cx-take-keys.ts'
 import { isUsedAsCallsOnly } from './vite-require-uses.ts'
 
 export interface SourceFormOptions {
@@ -112,7 +113,7 @@ function dynamicImportProblem(
   options: SourceFormOptions,
   analysis: ScopeAnalysis,
 ): Problem {
-  const isHandedOut = options.isDependency === true && !isUsedAsCallsOnly(analysis, node, undefined)
+  const isHandedOut = options.isDependency === true && !isUsedAsCallsOnly(analysis, node, CX_ONLY)
   return {
     kind: 'reference',
     offset: node.start,

@@ -7,6 +7,7 @@ import type { ScopeAnalysis } from './vite-scope.ts'
 
 import { childrenOf, nodeAt, nodesAt, pushAll, staticStringOf } from './vite-ast.ts'
 import { flowOf } from './vite-cx-flow.ts'
+import { CX_ONLY } from './vite-cx-take-keys.ts'
 import { isUsedAsCallsOnly } from './vite-require-uses.ts'
 import { analyze } from './vite-scope.ts'
 
@@ -63,5 +64,5 @@ export function isImportedCxHandedOut(program: AstNode, offset: number): boolean
   if (!node) return true
   if (node.type === 'ImportDeclaration') return isDeclarationHandedOut(analysis, node)
   if (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') return true
-  return !isUsedAsCallsOnly(analysis, node, undefined)
+  return !isUsedAsCallsOnly(analysis, node, CX_ONLY)
 }

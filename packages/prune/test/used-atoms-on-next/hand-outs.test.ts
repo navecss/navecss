@@ -879,6 +879,8 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a dependency that calls a m
     ['(ns.self)()', `${NS}export const t = (ns.self)()\n`],
     ['a tagged template ns.self`x`', `${NS}export const t = ns.self\`x\`\n`],
     ['a computed key, ns[k]()', `${NS}export const t = ns[globalThis.k]()\n`],
+    ['(ns?.self)()', `${NS}export const t = (ns?.self)()\n`],
+    ['(ns?.self)?.()', `${NS}export const t = (ns?.self)?.()\n`],
   ] as const
 
   it.each(received)('fails for %s, whatever the application imports', async (_, text) => {
@@ -920,6 +922,86 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a dependency that calls a m
       'cn.js': CN_SELF,
     })
     const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX }, MANIFEST)
+
+    expect(outcome.report).toBeUndefined()
+  })
+})
+
+describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a TypeScript dependency calling a member of the module giving out cx through a type assertion', () => {
+  const NS = "import * as ns from './cn.js'\n"
+  const CN_SELF = `${CN}export function self() { return this }\n`
+  const wrapped = [
+    ['ns.self!()', `${NS}export const t = ns.self!()\n`],
+    ['(ns.self as () => unknown)()', `${NS}export const t = (ns.self as () => unknown)()\n`],
+    [
+      '(ns.self satisfies () => unknown)()',
+      `${NS}export const t = (ns.self satisfies () => unknown)()\n`,
+    ],
+    ['ns.self!?.()', `${NS}export const t = ns.self!?.()\n`],
+  ] as const
+
+  function withTs(text: string): Packages {
+    const packages = withOther('', CN_SELF)
+    const files = { ...packages['@acme/ui']!, 'other.ts': text }
+    delete (files as Record<string, string>)['other.js']
+    return {
+      '@acme/ui': {
+        ...files,
+        'index.js': "export { Menu } from './menu.js'\nexport * from './other.ts'\n",
+      },
+    }
+  }
+
+  it.each(wrapped)('fails for %s, whatever the application imports', async (_, text) => {
+    const outcome = await run(ONLY_MENU, withTs(text), { keepFor: KEEP_FLEX })
+
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/other.ts')
+  })
+
+  it('is green for ns.cn!(), a call of a cx member', async () => {
+    const outcome = await run(ONLY_MENU, withTs(`${NS}export const t = ns.cn!('flex')\n`), {
+      keepFor: KEEP_FLEX,
+    })
+
+    expect(outcome.report).toBeUndefined()
+  })
+
+  it('fails for m.self!() on a require result', async () => {
+    const index = "exports.Menu = require('./menu.js').Menu\nexports.o = require('./other.ts')\n"
+    const other = "const m = require('./cn.js')\nexports.t = m.self!()\n"
+    const packages = commonjs(index, { 'cn.js': CN_SELF, 'other.ts': other })
+    const outcome = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX }, MANIFEST)
+
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/other.ts')
+  })
+})
+
+describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a dependency that imports a declared cxModules module dynamically and calls a member of it that is not cx', () => {
+  const DECLARED = "export { cx } from '@navecss/core/cx'\nexport function self() { return this }\n"
+  const FORMS = [
+    ['.then((m) => m.self())', "export const p = import('@acme/ui/cn.js').then((m) => m.self())\n"],
+    [
+      '.then((m) => (m?.self)())',
+      "export const p = import('@acme/ui/cn.js').then((m) => (m?.self)())\n",
+    ],
+  ] as const
+
+  it.each(FORMS)('fails for %s, whatever the application imports', async (_, text) => {
+    const packages = withOther(text, DECLARED)
+    const outcome = await run(ONLY_MENU, packages, {
+      keepFor: KEEP_FLEX,
+      cxModules: ['@acme/ui/cn.js'],
+    })
+
+    expect(outcome.text).toContain('node_modules/@acme/ui/other.js')
+  })
+
+  it('is green for .then((m) => m.cx(...)), a call of the cx export', async () => {
+    const text = "export const p = import('@acme/ui/cn.js').then((m) => m.cx('flex'))\n"
+    const outcome = await run(ONLY_MENU, withOther(text, DECLARED), {
+      keepFor: KEEP_FLEX,
+      cxModules: ['@acme/ui/cn.js'],
+    })
 
     expect(outcome.report).toBeUndefined()
   })

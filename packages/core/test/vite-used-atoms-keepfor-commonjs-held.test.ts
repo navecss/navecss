@@ -567,6 +567,8 @@ describe('AC-used-atoms-52 - a dependency that calls a member of the module givi
     ['(ns.self)()', `${NS}export const t = (ns.self)()\n`],
     ['a tagged template ns.self`x`', `${NS}export const t = ns.self\`x\`\n`],
     ['a computed key, ns[k]()', `${NS}export const t = ns[globalThis.k]()\n`],
+    ['(ns?.self)()', `${NS}export const t = (ns?.self)()\n`],
+    ['(ns?.self)?.()', `${NS}export const t = (ns?.self)?.()\n`],
   ] as const
 
   it.each(received)('fails for %s, whatever the application imports', async (_, text) => {
@@ -613,5 +615,36 @@ describe('AC-used-atoms-52 - a dependency that calls a member of the module givi
 
     expect(built.error).toBeUndefined()
     expect(built.warnings).toEqual([])
+  })
+})
+
+describe('AC-used-atoms-52 - a dependency that imports a declared cxModules module dynamically and calls a member of it that is not cx', () => {
+  const DECLARED = "export { cx } from '@navecss/core/cx'\nexport function self() { return this }\n"
+  const FORMS = [
+    ['.then((m) => m.self())', "export const p = import('@acme/ui/cn.js').then((m) => m.self())\n"],
+    [
+      '.then((m) => (m?.self)())',
+      "export const p = import('@acme/ui/cn.js').then((m) => (m?.self)())\n",
+    ],
+  ] as const
+
+  it.each(FORMS)('fails for %s, whatever the application imports', async (_, text) => {
+    const packages = withOther(text, DECLARED)
+    const built = await run(ONLY_MENU, packages, {
+      keepFor: KEEP_FLEX,
+      cxModules: ['@acme/ui/cn.js'],
+    })
+
+    expect(heldLineOf(built.error)).toContain('node_modules/@acme/ui/other.js')
+  })
+
+  it('is green for .then((m) => m.cx(...)), a call of the cx export', async () => {
+    const text = "export const p = import('@acme/ui/cn.js').then((m) => m.cx('flex'))\n"
+    const built = await run(ONLY_MENU, withOther(text, DECLARED), {
+      keepFor: KEEP_FLEX,
+      cxModules: ['@acme/ui/cn.js'],
+    })
+
+    expect(built.error).toBeUndefined()
   })
 })
