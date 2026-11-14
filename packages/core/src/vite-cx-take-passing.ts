@@ -113,15 +113,32 @@ function isPatternCarried(analysis: ScopeAnalysis, pattern: AstNode, names: CxNa
 }
 
 /**
- * Whether a use of a namespace import reads a member by an inherited name, or carries a `cx` export
- * it reads (`ns.cn`, or a name destructured from it) on where the build cannot follow it.
+ * Whether `member` is called with its object as the receiver: `ns.x()`, `ns.x?.()`, `(ns.x)()` or a
+ * tagged template `` ns.x`...` ``. A call through a sequence (`(0, ns.x)()`) has none.
+ */
+function isCalledWithReceiver(analysis: ScopeAnalysis, member: AstNode): boolean {
+  let node = member
+  let parent = analysis.parentOf.get(node)
+  while (parent?.type === 'ParenthesizedExpression') {
+    node = parent
+    parent = analysis.parentOf.get(node)
+  }
+  if (parent?.type === 'CallExpression') return nodeAt(parent, 'callee') === node
+  return parent?.type === 'TaggedTemplateExpression' && nodeAt(parent, 'tag') === node
+}
+
+/**
+ * Whether a use of a namespace import reads a member by an inherited name, calls a member that is
+ * not a `cx` export with the namespace as its receiver (it may return `this`), or carries a `cx`
+ * export it reads (`ns.cn`, or a name destructured from it) on where the build cannot follow it.
  */
 function isUseCarried(analysis: ScopeAnalysis, node: AstNode, names: CxNames): boolean {
   const read = memberReadOf({ analysis }, node)
   if (read) {
-    if (read.key === undefined) return false
+    if (read.key === undefined) return isCalledWithReceiver(analysis, read.member)
     if (INHERITED_NAMES.has(read.key)) return true
-    return isCxName(names, read.key) && isValueCarried(analysis, read.member)
+    if (!isCxName(names, read.key)) return isCalledWithReceiver(analysis, read.member)
+    return isValueCarried(analysis, read.member)
   }
   const pattern = patternDestructuring({ analysis }, node)
   return pattern?.type === 'ObjectPattern' && isPatternCarried(analysis, pattern, names)

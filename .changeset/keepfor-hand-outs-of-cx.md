@@ -23,8 +23,9 @@ below built green and printed nothing.
 - A dependency takes a module that gives `cx` out in a form the build reads neither as calls only
   nor as a forward. This also fails the build whatever your code imports, with the same kind of
   line. Measured forms: `module.exports = Object.assign({}, require('./cn.js'), ...)`, a required
-  module that is stored or passed on, a namespace import that is passed on, names taken from a
-  dynamic `import()` and exported again, and the
+  module that is stored or passed on, a namespace import that is passed on, a call of another
+  member of the module (`ns.helper()`, which has the module as `this` and may return it), names
+  taken from a dynamic `import()` and exported again, and the
   CommonJS output of `export *` from Babel, from esbuild and from Rollup, and of `export { cn }`
   from esbuild. TypeScript's CommonJS output, and Babel's and Rollup's for `export { cn }`, are
   followed as forwards, and a dependency that only calls what it takes builds green, including

@@ -34,12 +34,12 @@ function importTakesOf(
 }
 
 /**
- * The take of an importer the build cannot read. A dependency's is held: the build cannot tell
- * where what it takes goes.
+ * The take of an importer the build cannot read, of the module labelled `module`. A dependency's is
+ * held: the build cannot tell where what it takes goes.
  */
-function unreadableFor(id: string): Taken {
+export function unreadableFor(id: string, module: string): Taken {
   return isDependencyId(id)
-    ? { ...UNREADABLE, isHeld: true, form: 'takes this module in a way the build cannot read' }
+    ? { ...UNREADABLE, isHeld: true, form: `takes ${module} in a way the build cannot read` }
     : UNREADABLE
 }
 
@@ -75,26 +75,28 @@ async function takenBy(
   input: {
     readonly file: string
     readonly id: string
+    readonly label: string
     readonly names: ReadonlySet<string>
     readonly resolutions: Resolutions
   },
 ): Promise<Taken[]> {
-  const { file, id, names, resolutions } = input
+  const { file, id, label, names, resolutions } = input
+  const unreadable = (): Taken => unreadableFor(id, label)
   const code = ctx.getModuleInfo?.(id)?.code
   try {
     const read =
       code === null || code === undefined
         ? undefined
         : await reachingSpecifiers(ctx, { code, file, id, resolutions })
-    if (!read) return [unreadableFor(id)]
+    if (!read) return [unreadable()]
     const { program, reaches, requires } = read
-    if (reaches.size === 0 && requires.size === 0) return [unreadableFor(id)]
+    if (reaches.size === 0 && requires.size === 0) return [unreadable()]
     return [
       ...importTakesOf(program, { isDependency: isDependencyId(id), names, reaches }),
       ...requireTakesOf(program, { id, names, requires }),
     ]
   } catch {
-    return [unreadableFor(id)]
+    return [unreadable()]
   }
 }
 
@@ -178,6 +180,7 @@ async function routesOf(
   const taken = await takenBy(ctx, {
     file: fileOf(holder.id),
     id: importer,
+    label: context.labelOf(fileOf(holder.id)),
     names: holder.names,
     resolutions,
   })

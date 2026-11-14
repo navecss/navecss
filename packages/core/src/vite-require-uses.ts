@@ -3,16 +3,16 @@
  * to a `then` callback, is used as calls only: it is bound to a name, or destructured into names, or
  * a member of it is bound to a name, and every use of them is a call through a member (`m.cn(...)`,
  * `(0, m.cn)(...)` as the compilers write it) or a call of the name. Such a take is the package's
- * own call. A result that is passed on, stored, returned or assigned is not: the build cannot tell
+ * own call, but for a call of a member that is no `cx` export (`m.helper()`), which has the module
+ * as `this` and may return it. A result that is passed on, stored, returned or assigned is not: the build cannot tell
  * where it goes.
  */
 import type { AstNode } from './vite-ast.ts'
 import type { ScopeAnalysis } from './vite-scope.ts'
 
-import { childrenOf, nodeAt, nodesAt, propertyNameOf, pushAll, staticStringOf } from './vite-ast.ts'
-import { flowOf } from './vite-cx-flow.ts'
+import { nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
+import { type CxNames, isCxName } from './vite-cx-take-keys.ts'
 import { unwrappedFromInterop } from './vite-require-interop.ts'
-import { analyze } from './vite-scope.ts'
 
 /**
  * The names every object and every function inherits, read from the engine so a name the platform
@@ -44,14 +44,24 @@ function isCalled(analysis: ScopeAnalysis, node: AstNode): boolean {
 }
 
 /**
- * Whether the use at `node` of a module's exports object is the object of a member that is called,
- * by a key that names an export.
+ * Whether the member is called with the module as its receiver (`m.x()`, `m.x?.()`), which a call
+ * through a sequence (`(0, m.x)()`) is not.
  */
-function isMemberCall(analysis: ScopeAnalysis, node: AstNode): boolean {
+function isCalledWithReceiver(analysis: ScopeAnalysis, member: AstNode): boolean {
+  return analysis.parentOf.get(member)?.type === 'CallExpression'
+}
+
+/**
+ * Whether the use at `node` of a module's exports object is the object of a member that is called,
+ * by a key that names an export. A member that is not one of the `cx` exports (`cxNames`) is called
+ * with the module as its receiver, and may return it, so such a call is not a call of the module's.
+ */
+function isMemberCall(analysis: ScopeAnalysis, node: AstNode, cxNames: CxNames): boolean {
   const member = analysis.parentOf.get(node)
   if (member?.type !== 'MemberExpression' || nodeAt(member, 'object') !== node) return false
   const key = propertyNameOf(nodeAt(member, 'property'), member.computed === true)
-  return isExportKey(key) && isCalled(analysis, member)
+  if (!isExportKey(key) || !isCalled(analysis, member)) return false
+  return isCxName(cxNames, key) || !isCalledWithReceiver(analysis, member)
 }
 
 /**
@@ -95,11 +105,12 @@ function isOnlyUsedAs(
  */
 function isBoundAndCalled(
   analysis: ScopeAnalysis,
-  pattern: AstNode | undefined,
+  input: { readonly cxNames: CxNames; readonly pattern: AstNode | undefined },
   isUsedAs: (names: readonly string[], isUse: (node: AstNode) => boolean) => boolean,
 ): boolean {
+  const { cxNames, pattern } = input
   if (pattern?.type === 'Identifier') {
-    return isUsedAs([pattern.name as string], (node) => isMemberCall(analysis, node))
+    return isUsedAs([pattern.name as string], (node) => isMemberCall(analysis, node, cxNames))
   }
   const names = pattern && destructuredNames(pattern)
   return names !== undefined && isUsedAs(names, (node) => isCalled(analysis, node))
@@ -120,10 +131,18 @@ function isExportedDeclarator(analysis: ScopeAnalysis, declarator: AstNode): boo
 /**
  * Whether the declarator that holds the result `top` binds it to names that are only called.
  */
-function isDeclaredAndCalled(analysis: ScopeAnalysis, declarator: AstNode, top: AstNode): boolean {
-  if (nodeAt(declarator, 'init') !== top || isExportedDeclarator(analysis, declarator)) return false
-  return isBoundAndCalled(analysis, nodeAt(declarator, 'id'), (names, isUse) =>
-    isOnlyUsedAs(analysis, names, isUse),
+function isDeclaredAndCalled(
+  analysis: ScopeAnalysis,
+  declarator: AstNode,
+  input: { readonly cxNames: CxNames; readonly top: AstNode },
+): boolean {
+  if (nodeAt(declarator, 'init') !== input.top || isExportedDeclarator(analysis, declarator)) {
+    return false
+  }
+  return isBoundAndCalled(
+    analysis,
+    { cxNames: input.cxNames, pattern: nodeAt(declarator, 'id') },
+    (names, isUse) => isOnlyUsedAs(analysis, names, isUse),
   )
 }
 
@@ -146,13 +165,17 @@ function isMemberDeclaredAndCalled(analysis: ScopeAnalysis, member: AstNode): bo
  * through. The callback must be an arrow function, which has no `arguments` of its own to reach the
  * module by; every reference of the parameter's names inside it counts, whatever binds it there.
  */
-function isCallbackCalledOnly(analysis: ScopeAnalysis, callback: AstNode | undefined): boolean {
+function isCallbackCalledOnly(
+  analysis: ScopeAnalysis,
+  callback: AstNode | undefined,
+  cxNames: CxNames,
+): boolean {
   if (callback?.type !== 'ArrowFunctionExpression') return false
   const parameter = nodesAt(callback, 'params')[0]
   if (!parameter) return true
   const isInside = (node: AstNode): boolean =>
     node.start >= callback.start && node.end <= callback.end
-  return isBoundAndCalled(analysis, parameter, (names, isUse) =>
+  return isBoundAndCalled(analysis, { cxNames, pattern: parameter }, (names, isUse) =>
     analysis.references
       .filter(({ node }) => isInside(node) && names.includes(node.name as string))
       .every(({ node }) => isUse(node)),
@@ -163,7 +186,11 @@ function isCallbackCalledOnly(analysis: ScopeAnalysis, callback: AstNode | undef
  * Whether the promise of an `import()` that is not awaited is used as calls only: evaluated for its
  * effect, or handed to `.then` with a callback that only calls through the module.
  */
-function isPromiseUsedAsCallsOnly(analysis: ScopeAnalysis, promise: AstNode): boolean {
+function isPromiseUsedAsCallsOnly(
+  analysis: ScopeAnalysis,
+  promise: AstNode,
+  cxNames: CxNames,
+): boolean {
   const member = analysis.parentOf.get(promise)
   if (member?.type === 'ExpressionStatement') return true
   if (member?.type !== 'MemberExpression' || nodeAt(member, 'object') !== promise) return false
@@ -172,7 +199,7 @@ function isPromiseUsedAsCallsOnly(analysis: ScopeAnalysis, promise: AstNode): bo
   if (name !== 'then' || call?.type !== 'CallExpression' || nodeAt(call, 'callee') !== member) {
     return false
   }
-  return isCallbackCalledOnly(analysis, nodesAt(call, 'arguments')[0])
+  return isCallbackCalledOnly(analysis, nodesAt(call, 'arguments')[0], cxNames)
 }
 
 /**
@@ -191,23 +218,31 @@ function isAwaitedUpTo(analysis: ScopeAnalysis, node: AstNode, top: AstNode): bo
  * Whether the result `top`, the require or the awaited import with any interop helper around it, is
  * used as calls only.
  */
-function isResultUsedAsCallsOnly(analysis: ScopeAnalysis, top: AstNode): boolean {
+function isResultUsedAsCallsOnly(analysis: ScopeAnalysis, top: AstNode, cxNames: CxNames): boolean {
   const parent = analysis.parentOf.get(top)
   if (parent?.type === 'ExpressionStatement') return true
   if (parent?.type === 'MemberExpression') {
-    return isMemberCall(analysis, top) || isMemberDeclaredAndCalled(analysis, parent)
+    return isMemberCall(analysis, top, cxNames) || isMemberDeclaredAndCalled(analysis, parent)
   }
-  return parent?.type === 'VariableDeclarator' && isDeclaredAndCalled(analysis, parent, top)
+  return (
+    parent?.type === 'VariableDeclarator' && isDeclaredAndCalled(analysis, parent, { cxNames, top })
+  )
 }
 
 /**
  * Whether the name `import x = require(...)` binds is only called through a member. The statement
  * is not an expression the result flows out of, so a name it exports leaves the module whole.
  */
-function isEqualsDeclaredAndCalled(analysis: ScopeAnalysis, declaration: AstNode): boolean {
+function isEqualsDeclaredAndCalled(
+  analysis: ScopeAnalysis,
+  declaration: AstNode,
+  cxNames: CxNames,
+): boolean {
   if (analysis.parentOf.get(declaration)?.type === 'ExportNamedDeclaration') return false
-  return isBoundAndCalled(analysis, nodeAt(declaration, 'id'), (names, isUse) =>
-    isOnlyUsedAs(analysis, names, isUse),
+  return isBoundAndCalled(
+    analysis,
+    { cxNames, pattern: nodeAt(declaration, 'id') },
+    (names, isUse) => isOnlyUsedAs(analysis, names, isUse),
   )
 }
 
@@ -215,70 +250,18 @@ function isEqualsDeclaredAndCalled(analysis: ScopeAnalysis, declaration: AstNode
  * Whether the require at `require` is used as calls only. A module that evaluates text can reach
  * any name in it, so it never is.
  */
-export function isUsedAsCallsOnly(analysis: ScopeAnalysis, require: AstNode): boolean {
+export function isUsedAsCallsOnly(
+  analysis: ScopeAnalysis,
+  require: AstNode,
+  cxNames: CxNames,
+): boolean {
   if (analysis.hasDirectEval) return false
   if (require.type === 'TSImportEqualsDeclaration') {
-    return isEqualsDeclaredAndCalled(analysis, require)
+    return isEqualsDeclaredAndCalled(analysis, require, cxNames)
   }
   const top = unwrappedFromInterop(analysis, require)
   if (require.type === 'ImportExpression' && !isAwaitedUpTo(analysis, require, top)) {
-    return isPromiseUsedAsCallsOnly(analysis, top)
+    return isPromiseUsedAsCallsOnly(analysis, top, cxNames)
   }
-  return isResultUsedAsCallsOnly(analysis, top)
-}
-
-/**
- * Every node of the tree, parents first.
- */
-function allNodes(program: AstNode): AstNode[] {
-  const found: AstNode[] = []
-  const stack: AstNode[] = [program]
-  while (stack.length > 0) {
-    const node = stack.pop()!
-    found.push(node)
-    pushAll(stack, childrenOf(node))
-  }
-  return found
-}
-
-/**
- * The node that imports the module named by the string at `offset`: the require or dynamic import
- * that holds it, or the import declaration.
- */
-function importAt(nodes: readonly AstNode[], offset: number): AstNode | undefined {
-  return nodes.find((node) => {
-    const literal =
-      node.type === 'CallExpression'
-        ? nodesAt(node, 'arguments')[0]
-        : (nodeAt(node, 'source') ?? nodeAt(nodeAt(node, 'moduleReference') ?? node, 'expression'))
-    return literal?.start === offset && node.type !== 'Literal'
-  })
-}
-
-/**
- * Whether the names an import declaration binds are handed out: some use of them is not a call.
- */
-function isDeclarationHandedOut(analysis: ScopeAnalysis, declaration: AstNode): boolean {
-  const source = staticStringOf(nodeAt(declaration, 'source'))
-  return analysis.references
-    .filter(({ binding }) => binding?.kind === 'import' && binding.source === source)
-    .some(({ node }) => {
-      const flow = flowOf(analysis, node)
-      return flow.isUnbound || flow.names.size > 0
-    })
-}
-
-/**
- * Whether a module of a dependency hands out the Nave `cx` it imports in a form the build does not
- * bind (a `require()`, a dynamic import, or a specifier other than the package's own), the string
- * naming it starting at `offset`: its result is used for more than calls, or the build cannot find
- * the import. A `cx` that is only called is the package's own call.
- */
-export function isImportedCxHandedOut(program: AstNode, offset: number): boolean {
-  const analysis = analyze(program)
-  const node = importAt(allNodes(program), offset)
-  if (!node) return true
-  if (node.type === 'ImportDeclaration') return isDeclarationHandedOut(analysis, node)
-  if (node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') return true
-  return !isUsedAsCallsOnly(analysis, node)
+  return isResultUsedAsCallsOnly(analysis, top, cxNames)
 }

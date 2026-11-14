@@ -21,6 +21,7 @@ const MANIFEST = JSON.stringify({
 })
 const CN_ESM = "export { cx as cn } from '@navecss/core/cx'\n"
 const MENU_ESM = `${IMPORT}export const Menu = (v) => cx('flex', v)\n`
+const CN_SELF = `${CN_ESM}export function self() { return this }\n`
 const TSLIB = {
   'package.json': JSON.stringify({ name: 'tslib', version: '2.8.1', main: './tslib.js' }),
   'tslib.js':
@@ -511,12 +512,12 @@ describe('AC-used-atoms-52 - a dependency’s import the build cannot follow', (
  * `@acme/ui` whose barrel re-exports `other.js`, written as `text`, beside the modules that give out
  * `cx`.
  */
-function withOther(text: string): Packages {
+function withOther(text: string, cn = CN_ESM): Packages {
   return {
     '@acme/ui': {
       'index.js': "export { Menu } from './menu.js'\nexport * from './other.js'\n",
       'menu.js': MENU_ESM,
-      'cn.js': CN_ESM,
+      'cn.js': cn,
       'other.js': text,
     },
   }
@@ -552,6 +553,63 @@ describe('AC-used-atoms-52 - a dependency’s namespace import whose cx member i
   it('is green when the dependency calls the member of the namespace', async () => {
     const text = `${NS}export const other = (v) => ns.cn('flex', v)\n`
     const built = await run(ONLY_MENU, withOther(text), { keepFor: KEEP_FLEX })
+
+    expect(built.error).toBeUndefined()
+    expect(built.warnings).toEqual([])
+  })
+})
+
+describe('AC-used-atoms-52 - a dependency that calls a member of the module giving out cx with the module as its receiver', () => {
+  const NS = "import * as ns from './cn.js'\n"
+  const received = [
+    ['ns.self()', `${NS}export const t = ns.self()\n`],
+    ['ns.self?.()', `${NS}export const t = ns.self?.()\n`],
+    ['(ns.self)()', `${NS}export const t = (ns.self)()\n`],
+    ['a tagged template ns.self`x`', `${NS}export const t = ns.self\`x\`\n`],
+    ['a computed key, ns[k]()', `${NS}export const t = ns[globalThis.k]()\n`],
+  ] as const
+
+  it.each(received)('fails for %s, whatever the application imports', async (_, text) => {
+    const built = await run(ONLY_MENU, withOther(text, CN_SELF), { keepFor: KEEP_FLEX })
+
+    expect(heldLineOf(built.error)).toContain('node_modules/@acme/ui/other.js')
+  })
+
+  it.each([
+    ['a cx member called, ns.cn()', `${NS}export const other = (v) => ns.cn('flex', v)\n`],
+    ['a call through a sequence, (0, ns.self)()', `${NS}export const t = (0, ns.self)()\n`],
+    ['a destructured name called', `${NS}const { self } = ns\nexport const t = self()\n`],
+  ])('is green for %s', async (_, text) => {
+    const built = await run(ONLY_MENU, withOther(text, CN_SELF), { keepFor: KEEP_FLEX })
+
+    expect(built.error).toBeUndefined()
+    expect(built.warnings).toEqual([])
+  })
+
+  it.each([
+    ['m.self() on a require result', "const m = require('./cn.js')\nexports.t = m.self()\n"],
+    ['m.self?.() on a require result', "const m = require('./cn.js')\nexports.t = m.self?.()\n"],
+    ['m[k]() on a require result', "const m = require('./cn.js')\nexports.t = m[globalThis.k]()\n"],
+  ])('fails for %s, whatever the application imports', async (_, text) => {
+    const packages = ui(`exports.Menu = require('./menu.js').Menu\n${text}`, { 'cn.js': CN_SELF })
+    const built = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX })
+
+    expect(heldLineOf(built.error)).toContain('node_modules/@acme/ui/index.js')
+  })
+
+  it.each([
+    [
+      'm.cn() on a require result',
+      "const m = require('./cn.js')\nexports.f = (v) => m.cn('flex', v)\n",
+    ],
+    [
+      '(0, m.self)() on a require result',
+      "const m = require('./cn.js')\nexports.t = (0, m.self)()\n",
+    ],
+    ['a destructured name called', "const { self } = require('./cn.js')\nexports.t = self()\n"],
+  ])('is green for %s', async (_, text) => {
+    const packages = ui(`exports.Menu = require('./menu.js').Menu\n${text}`, { 'cn.js': CN_SELF })
+    const built = await run(ONLY_MENU, packages, { keepFor: KEEP_FLEX })
 
     expect(built.error).toBeUndefined()
     expect(built.warnings).toEqual([])

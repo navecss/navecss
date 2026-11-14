@@ -112,7 +112,7 @@ function dynamicImportProblem(
   options: SourceFormOptions,
   analysis: ScopeAnalysis,
 ): Problem {
-  const isHandedOut = options.isDependency === true && !isUsedAsCallsOnly(analysis, node)
+  const isHandedOut = options.isDependency === true && !isUsedAsCallsOnly(analysis, node, undefined)
   return {
     kind: 'reference',
     offset: node.start,

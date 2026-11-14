@@ -253,7 +253,7 @@ export function requireTakesIn(
   if (input.readsForwards) {
     const analysisOf = forwardInput.analysis()
     for (const { node, specifier } of others) {
-      takes.push(isUsedAsCallsOnly(analysisOf, node) ? WHOLE : held(specifier))
+      takes.push(isUsedAsCallsOnly(analysisOf, node, input.names) ? WHOLE : held(specifier))
     }
   } else if (others.length > 0) takes.push(WHOLE)
   const given = new Set(forwards.flatMap((forward) => forward.given))

@@ -257,7 +257,7 @@ function takesOf(node: AstNode, scan: Scan): Taken[] {
     if (!scan.isDependency) return dynamicTakes(node, scan)
     // A dependency's names are read no further than the keys it takes, so a result that is not
     // used as calls only is a take of the whole module, which the build cannot follow.
-    const taken = isUsedAsCallsOnly(scan.analysis(), node)
+    const taken = isUsedAsCallsOnly(scan.analysis(), node, scan.names)
       ? dynamicTakes(node, scan)
       : [{ shape: 'dynamic-import' as const, names: [] }]
     return taken.map((one) => withHeld(one, source))
