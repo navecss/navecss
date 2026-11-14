@@ -1,6 +1,6 @@
 # Releasing
 
-How a new version of `@navecss/tokens` and `@navecss/core` gets to npm. These two packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of that pair ([ADR 0009](../04-adr/0009-release-topology.md)), and `@navecss/cli` and `@navecss/prune` are not published yet.
+How a new version of `@navecss/tokens`, `@navecss/core` and `@navecss/prune` gets to npm. These three packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`: `prune` calls core's reader, [ADR 0009](../04-adr/0009-release-topology.md)); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of them, and `@navecss/cli` is not published yet. `@navecss/prune` is not on npm yet either: its first version is published by hand, as "A package's first release" below describes.
 
 You need publish rights on both packages on npmjs.com, with two-factor authentication on your npm account.
 
@@ -20,7 +20,7 @@ Every pull request that changes a published package adds a changeset file under 
 pnpm changeset version
 ```
 
-This consumes every pending changeset, bumps each package a changeset names to its new version (`tokens` and `core` always move together), and writes the new section of each bumped package's `CHANGELOG.md`. Read the changelogs, commit, open a pull request (for example `chore/version-packages`) and merge it.
+This consumes every pending changeset, bumps each package a changeset names to its new version (`tokens`, `core` and `prune` always move together), and writes the new section of each bumped package's `CHANGELOG.md`. Read the changelogs, commit, open a pull request (for example `chore/version-packages`) and merge it.
 
 `.changeset/config.json` sets `onlyUpdatePeerDependentsWhenOutOfRange` so that this step never rewrites a peer range on its own. `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` each declare a peer range on `tokens` or `core` that states the oldest version they are known to work with, and a new release of `tokens` or `core` is not a reason to raise it. Without the option, Changesets moves that range to the new version on every release; with it, a peer range moves only when a release leaves it, for example when `core` reaches `1.0.0`. The option sits under an `experimental` key that Changesets validates loosely: if an upgrade renames or drops it, the key is ignored without an error. What catches that is the tests that pin the declared peer ranges, in `packages/stylelint-config` and `packages/eslint-plugin`. They fail on the version pull request when a range has been rewritten, so fix the range and the config key there, before merging.
 
@@ -50,7 +50,7 @@ It only runs on `main`: started from any other branch, the job is skipped.
 
 ## 3. Approve
 
-Approve `@navecss/tokens` first, then `@navecss/core`. `core` depends on the matching `tokens` version, so approving it first would put a `core` release live whose dependency does not exist yet.
+Approve `@navecss/tokens` first, then `@navecss/core`, then `@navecss/prune` once it is staged (from its second version on). `core` depends on the matching `tokens` version, so approving it first would put a `core` release live whose dependency does not exist yet, and `prune` peers on the matching `core`.
 
 Approve only versions staged by a release workflow run on `main`: each run's log lists what it staged. If the queue holds a version you cannot match to such a run, do not approve it; find out where it came from first.
 
