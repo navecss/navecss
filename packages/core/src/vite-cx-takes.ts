@@ -22,7 +22,7 @@ import {
 } from './vite-ast.ts'
 import { jsxMembersIn, jsxNameOf, namesIn, typeNameOf } from './vite-cx-reference-names.ts'
 import { type CxNames, dynamicKeys, isCxName, referenceTakes } from './vite-cx-take-keys.ts'
-import { isCarriedOn, passingOf, usesOf, withHeld } from './vite-cx-take-passing.ts'
+import { heldNamespace, isCarriedOn, passingOf, usesOf, withHeld } from './vite-cx-take-passing.ts'
 import { isUsedAsCallsOnly } from './vite-require-uses.ts'
 import { analyze, type Reference, type ScopeAnalysis } from './vite-scope.ts'
 
@@ -172,6 +172,9 @@ function namespaceTakesOf(scan: Scan, source: string, specifier: AstNode): Taken
  * it than forward it.
  */
 function namespaceTake(scan: Scan, source: string, specifier: AstNode): Taken | undefined {
+  const references = referencesTo(scan.analysis(), source, specifier)
+  const held = scan.isDependency && heldNamespace(scan.analysis(), references, scan.names, source)
+  if (held) return held
   const taken = namespaceTakesOf(scan, source, specifier)
   const isForward = passingOf(scan.analysis(), source, specifier).isForward
   const forwarded = taken && { ...taken, ...(isForward && { isForward }) }

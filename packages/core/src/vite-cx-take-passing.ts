@@ -8,8 +8,11 @@ import type { AstNode } from './vite-ast.ts'
 import type { Taken } from './vite-cx-takes.ts'
 import type { Reference, ScopeAnalysis } from './vite-scope.ts'
 
-import { exportNameOf, nodeAt } from './vite-ast.ts'
+import { exportNameOf, nodeAt, nodesAt, propertyNameOf } from './vite-ast.ts'
 import { type Flow, flowOf } from './vite-cx-flow.ts'
+import { memberReadOf, patternDestructuring } from './vite-cx-reference.ts'
+import { type CxNames, isCxName } from './vite-cx-take-keys.ts'
+import { INHERITED_NAMES } from './vite-require-uses.ts'
 
 /**
  * The references to the binding that the import specifier of `source` declares.
@@ -55,6 +58,87 @@ export function passingOf(
  */
 export function isCarriedOn(analysis: ScopeAnalysis, source: string, specifier: AstNode): boolean {
   return usesOf(analysis, source, specifier).some((use) => flowOf(analysis, use.node).isUnbound)
+}
+
+/**
+ * Whether the value `node` is read from the namespace reaches an export of the module or leaves it
+ * where the build cannot follow it. A call of it is the module's own call.
+ */
+function isValueCarried(analysis: ScopeAnalysis, node: AstNode): boolean {
+  const flow = flowOf(analysis, node)
+  return flow.isUnbound || flow.names.size > 0
+}
+
+/**
+ * Whether the declarator sits in an `export const` declaration.
+ */
+function isExportedDeclarator(analysis: ScopeAnalysis, declarator: AstNode): boolean {
+  const declaration = analysis.parentOf.get(declarator)
+  const statement = declaration && analysis.parentOf.get(declaration)
+  return statement?.type === 'ExportNamedDeclaration'
+}
+
+/**
+ * Whether the name that the destructuring property `property` binds is carried on. A binding that
+ * is not a plain declared name (a default, a nested pattern, an assignment target, an export)
+ * is.
+ */
+function isBoundNameCarried(analysis: ScopeAnalysis, property: AstNode): boolean {
+  const value = nodeAt(property, 'value')
+  const declarator = analysis.parentOf.get(analysis.parentOf.get(property) ?? property)
+  const alias = value?.type === 'Identifier' ? analysis.bindingDeclaredBy(value) : undefined
+  if (
+    !alias ||
+    declarator?.type !== 'VariableDeclarator' ||
+    isExportedDeclarator(analysis, declarator)
+  ) {
+    return true
+  }
+  return analysis.references.some(
+    (use) => use.binding === alias && isValueCarried(analysis, use.node),
+  )
+}
+
+/**
+ * Whether the destructuring `pattern` of a namespace reads a member by an inherited name, or
+ * carries on the name it binds to a `cx` export.
+ */
+function isPatternCarried(analysis: ScopeAnalysis, pattern: AstNode, names: CxNames): boolean {
+  return nodesAt(pattern, 'properties').some((property) => {
+    const key = propertyNameOf(nodeAt(property, 'key'), property.computed === true)
+    if (key === undefined) return false
+    if (INHERITED_NAMES.has(key)) return true
+    return isCxName(names, key) && isBoundNameCarried(analysis, property)
+  })
+}
+
+/**
+ * Whether a use of a namespace import reads a member by an inherited name, or carries a `cx` export
+ * it reads (`ns.cn`, or a name destructured from it) on where the build cannot follow it.
+ */
+function isUseCarried(analysis: ScopeAnalysis, node: AstNode, names: CxNames): boolean {
+  const read = memberReadOf({ analysis }, node)
+  if (read) {
+    if (read.key === undefined) return false
+    if (INHERITED_NAMES.has(read.key)) return true
+    return isCxName(names, read.key) && isValueCarried(analysis, read.member)
+  }
+  const pattern = patternDestructuring({ analysis }, node)
+  return pattern?.type === 'ObjectPattern' && isPatternCarried(analysis, pattern, names)
+}
+
+/**
+ * The held take of a namespace import of `source` when any of its `references` reads a member by an
+ * inherited name, or carries a `cx` export read off it on; otherwise `undefined`.
+ */
+export function heldNamespace(
+  analysis: ScopeAnalysis,
+  references: readonly Reference[],
+  names: CxNames,
+  source: string,
+): Taken | undefined {
+  const isCarried = references.some(({ node }) => isUseCarried(analysis, node, names))
+  return isCarried ? withHeld({ shape: 'namespace', names: [] }, source) : undefined
 }
 
 /**

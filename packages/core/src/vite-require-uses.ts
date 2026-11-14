@@ -19,7 +19,7 @@ import { analyze } from './vite-scope.ts'
  * adds later is held too. A key that is one of them does not name an export of the module taken:
  * some (`valueOf`, `bind`, `__lookupGetter__`) return the module or a function over it.
  */
-const INHERITED_NAMES: ReadonlySet<string> = new Set([
+export const INHERITED_NAMES: ReadonlySet<string> = new Set([
   ...Object.getOwnPropertyNames(Object.prototype),
   ...Object.getOwnPropertyNames(Function.prototype),
 ])

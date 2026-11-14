@@ -819,3 +819,53 @@ describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a dependency’s import the
     expect(outcome.report).toBeUndefined()
   })
 })
+
+/**
+ * `@acme/ui` whose barrel re-exports `other.js`, written as `text`, beside the modules that give out
+ * `cx`.
+ */
+function withOther(text: string): Packages {
+  return {
+    '@acme/ui': {
+      'index.js': "export { Menu } from './menu.js'\nexport * from './other.js'\n",
+      'menu.js': MENU_JS,
+      'cn.js': CN,
+      'other.js': text,
+    },
+  }
+}
+
+describe('AC-nextjs-used-atoms-17: AC-used-atoms-52, a dependency’s namespace import whose cx member it carries on', () => {
+  const APP_TABLE =
+    "import { Menu, table } from '@acme/ui'\nexport const A = [Menu, table.cn('block')]\n"
+  const NS = "import * as ns from './cn.js'\n"
+  const carried = [
+    ['a member stored in an object', `${NS}export const table = { cn: ns.cn }\n`],
+    ['a member exported', `${NS}export const c = ns.cn\n`],
+    [
+      'a destructured name passed as a value',
+      `${NS}const { cn } = ns\nexport const all = [1].map(cn)\n`,
+    ],
+    ['an inherited member', `${NS}export const t = ns.valueOf()\n`],
+  ] as const
+
+  it.each(carried)('fails for %s, whatever the application imports', async (_, text) => {
+    const outcome = await run(ONLY_MENU, withOther(text), { keepFor: KEEP_FLEX })
+
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/other.js')
+  })
+
+  it('fails when the application calls through the stored member', async () => {
+    const text = `${NS}export const table = { cn: ns.cn }\n`
+    const outcome = await run(APP_TABLE, withOther(text), { keepFor: KEEP_FLEX })
+
+    expect(outcome.text).toContain('uses cx in node_modules/@acme/ui/other.js')
+  })
+
+  it('is green when the dependency calls the member of the namespace', async () => {
+    const text = `${NS}export const other = (v) => ns.cn('flex', v)\n`
+    const outcome = await run(ONLY_MENU, withOther(text), { keepFor: KEEP_FLEX })
+
+    expect(outcome.report).toBeUndefined()
+  })
+})
