@@ -128,17 +128,16 @@ describe('AC-nextjs-used-atoms-12: the export map, the peers and the version gro
     expect(isAtLeast(range, '15.5.0')).toBe(false)
   })
 
-  // The package becomes publishable, and joins the tokens/core fixed group, in the release that
-  // ships the build check its trimming relies on.
-  it('is not published yet: private, ignored by Changesets and in no fixed group', () => {
+  it('is publishable, off the Changesets ignore list, and versions with tokens and core', () => {
     const config = readJson<{ fixed: string[][]; ignore: string[] }>(
       path.join(REPO_ROOT, '.changeset/config.json'),
     )
-    expect(manifest.private).toBe(true)
-    expect(config.ignore).toContain(manifest.name)
-    expect(config.fixed.flat()).not.toContain(manifest.name)
-    // Control: the group the package will join is there, holding tokens and core.
-    expect(config.fixed).toContainEqual(['@navecss/tokens', '@navecss/core'])
+    expect(manifest.private).not.toBe(true)
+    expect(config.ignore).not.toContain(manifest.name)
+    expect(config.fixed).toContainEqual(['@navecss/tokens', '@navecss/core', manifest.name])
+    // Control: the one `fixed` group holds all three, so the package is not in a second group
+    // that would version it apart from core.
+    expect(config.fixed.flat().filter((name) => name === manifest.name)).toHaveLength(1)
   })
 })
 
@@ -181,12 +180,13 @@ describe('the package check and the words npm shows', () => {
     expect(fingerprintOf(paragraph)).toEqual({ bytes: 221, sha256: '164a9f39337b5f89' })
   })
 
-  it('while the package is private, the README says under Installation that it is not on npm yet', () => {
+  // The sentence stays until the first version is published by hand. The release-day edit removes
+  // it and this row together, so a published package never says it is not on npm.
+  it('until the first version is published, the README says under Installation that it is not on npm yet', () => {
     const readme = readFileSync(path.join(PACKAGE_DIR, 'README.md'), 'utf8')
     const installation = readme.slice(readme.indexOf('## Installation'), readme.indexOf('```sh'))
-    // Control: the section is there, and the manifest is private.
+    // Control: the section is there.
     expect(installation).toMatch(/^## Installation/u)
-    expect(manifest.private).toBe(true)
     expect(installation).toMatch(/\bnot on npm yet\b/u)
   })
 
