@@ -6,6 +6,7 @@
  */
 import type { AstNode } from './vite-ast.ts'
 import type { Problem } from './vite-problems.ts'
+import type { ScopeAnalysis } from './vite-scope.ts'
 
 import {
   childrenOf,
@@ -17,6 +18,8 @@ import {
   stringAt,
   valueSpecifiersOf,
 } from './vite-ast.ts'
+import { CX_ONLY } from './vite-cx-take-keys.ts'
+import { isUsedAsCallsOnly } from './vite-require-uses.ts'
 
 export interface SourceFormOptions {
   /**
@@ -31,6 +34,10 @@ export interface SourceFormOptions {
    * Whether the module is itself listed.
    */
   readonly isDeclared?: boolean | undefined
+  /**
+   * Whether the module belongs to a dependency.
+   */
+  readonly isDependency?: boolean | undefined
 }
 
 const REEXPORT_TEXT =
@@ -96,12 +103,34 @@ function reexportProblem(code: string, node: AstNode, isListed: boolean): Proble
 }
 
 /**
+ * The problem a dynamic import of a `cx` source makes. A `cx` imported this way is bound to nothing
+ * the build reads: in a dependency, the calls made through it are its own, and any other use of it
+ * hands it out where the build cannot follow.
+ */
+function dynamicImportProblem(
+  code: string,
+  node: AstNode,
+  options: SourceFormOptions,
+  analysis: ScopeAnalysis,
+): Problem {
+  const isHandedOut = options.isDependency === true && !isUsedAsCallsOnly(analysis, node, CX_ONLY)
+  return {
+    kind: 'reference',
+    offset: node.start,
+    construct: code.slice(node.start, node.end),
+    text: DYNAMIC_IMPORT_TEXT,
+    ...(isHandedOut && { isUnboundHandOut: true }),
+  }
+}
+
+/**
  * The problem a node that names a `cx` source makes, if it makes one.
  */
 function sourceFormProblem(
   code: string,
   node: AstNode,
   options: SourceFormOptions,
+  analysis: ScopeAnalysis,
 ): Problem | undefined {
   const source = staticStringOf(nodeAt(node, 'source'))
   if (source === undefined || !options.cxSources.has(source)) return undefined
@@ -111,9 +140,9 @@ function sourceFormProblem(
     if (isTypeOnly(node) || options.isDeclared === true) return undefined
     return reexportProblem(code, node, options.declaredSources?.has(source) === true)
   }
-  if (node.type !== 'ImportExpression') return undefined
-  const construct = code.slice(node.start, node.end)
-  return { kind: 'reference', offset: node.start, construct, text: DYNAMIC_IMPORT_TEXT }
+  return node.type === 'ImportExpression'
+    ? dynamicImportProblem(code, node, options, analysis)
+    : undefined
 }
 
 /**
@@ -123,12 +152,13 @@ export function sourceFormProblems(
   code: string,
   program: AstNode,
   options: SourceFormOptions,
+  analysis: ScopeAnalysis,
 ): Problem[] {
   const problems: Problem[] = []
   const stack: AstNode[] = [program]
   while (stack.length > 0) {
     const node = stack.pop()!
-    const problem = sourceFormProblem(code, node, options)
+    const problem = sourceFormProblem(code, node, options, analysis)
     if (problem) problems.push(problem)
     pushAll(stack, childrenOf(node))
   }

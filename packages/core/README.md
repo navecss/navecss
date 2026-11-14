@@ -593,7 +593,7 @@ list: with an empty list, or none, it fails the build. Each client build records
 `nave-used-atoms.json` file described below, the atoms it read from each listed package's calls,
 where the calls it could not read are, and any `keepFor` key that names no package the build read.
 
-`keepFor` stands in for the package's own calls, never for a call your code makes, so three problems
+`keepFor` stands in for the package's own calls, never for a call your code makes, so four problems
 in a listed package still fail the build. A module of the package that re-exports `cx` under the
 name `cx` still fails when a file of yours imports `cx` from that module itself, in an `import` or
 `export ... from` statement, or a dependency that does more than re-export it imports it from there,
@@ -604,8 +604,16 @@ from `@navecss/core/cx` there instead. A CommonJS module that forwards it with
 `module.exports = require(...)` or `exports.cn = require(...).cn`, or with what TypeScript emits for
 `export { cn } from` and `export * from` when it compiles to CommonJS, counts as one that only
 re-exports it. A module that gives `cx` out under another name, as a default
-or inside a namespace, still fails when your code takes that export, and the report names each file
-of yours that does: import `cx` from `@navecss/core/cx` there instead. And a module of the package
+or inside a namespace, or by assigning it first (`export const cn = cx`), still fails when your code
+takes that export, and the report names each file of yours that does: import `cx` from
+`@navecss/core/cx` there instead. A module of the package that uses `cx` where the build cannot
+follow it to an export, such as `obj.cn = cx`, `memo(cx)` or `{ cn: cx }`, or that takes a module
+holding a `cx` export in a way the build reads neither as calls only nor as a forward,
+such as the CommonJS that Babel, esbuild or Rollup write for `export * from`, fails whenever it is
+part of the build, whatever your code takes from the package, because the build cannot tell whether
+a call of yours goes through it. The report names the file and the form. The fix is the package's,
+in a release of it or a patched copy: export `cx` by name from an ES module. Until then, ship every
+atom (below). And a module of the package
 that you list in `cxModules` but that does not re-export Nave's `cx` under that name still fails:
 remove it from `cxModules`.
 

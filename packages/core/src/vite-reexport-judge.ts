@@ -55,12 +55,18 @@ export async function judgeReexports(
       })),
     ),
   )
+  // A hand-out of `cx` the build cannot follow to an export is no call `keepFor` stands in for:
+  // it stays an error whatever the application imports.
+  const suppressed = modules.flatMap((module) => module.suppressed)
+  const held = suppressed
+    .filter((problem) => problem.isUnboundHandOut === true)
+    .map((problem) => ({ ...problem, isHeld: true }))
   // A dependency's re-export of a listed module's `cx` is judged by what takes it, listed or not.
   const standingIn = [
-    ...modules.flatMap((module) => module.suppressed),
+    ...suppressed.filter((problem) => problem.isUnboundHandOut !== true),
     ...kept.filter((problem) => isSecondHop(problem)),
   ]
   const rest = kept.filter((problem) => !isSecondHop(problem))
   const prepared = await prepareReexports(host, context, standingIn)
-  return { problems: [...rest, ...decideReexports(prepared, serverImports)], prepared }
+  return { problems: [...rest, ...held, ...decideReexports(prepared, serverImports)], prepared }
 }

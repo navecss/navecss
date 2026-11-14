@@ -7,10 +7,16 @@
  */
 import type { Take } from './vite-cx-takes.ts'
 import type { Problem, ProblemKind } from './vite-problems.ts'
+import type { HostPlaces } from './vite-used-package-lines.ts'
 
 import { availableLine } from './vite-atom-check.ts'
 import { compareText, cut, cxModulesArray, PROBLEM_KINDS } from './vite-problems.ts'
-import { isListableReexport, packageLines, withoutRemoved } from './vite-used-package-lines.ts'
+import {
+  EVERY_ATOM,
+  isListableReexport,
+  packageLines,
+  withoutRemoved,
+} from './vite-used-package-lines.ts'
 
 export interface LocatedProblem extends Problem {
   /**
@@ -59,6 +65,12 @@ export interface LocatedProblem extends Problem {
    * entry can stand in for.
    */
   readonly callers?: readonly string[] | undefined
+  /**
+   * For a dependency's problem that stays an error whatever the application imports, and that no
+   * `keepFor` entry clears: a hand-out of `cx` the build cannot follow to an export, or a take of a
+   * module that gives `cx` out that the build reads neither as calls only nor as a forward.
+   */
+  readonly isHeld?: boolean
 }
 
 export const LINE_UNKNOWN_WITHOUT_MAP =
@@ -145,6 +157,16 @@ function reexportRemedy(
 export type HostRemedies = (application: readonly LocatedProblem[]) => readonly string[]
 
 /**
+ * What a host adds to the report besides where its options are written: the remedy lines only it
+ * can write, and where its own documentation says how to ship every atom, which is the Vite
+ * plugin's README section when it names none.
+ */
+export interface ReportHost {
+  readonly remedies?: HostRemedies
+  readonly everyAtom?: string
+}
+
+/**
  * The application's remedy lines, in the fixed order of the kinds present.
  */
 function applicationLines(
@@ -170,13 +192,13 @@ function applicationLines(
 function remedyBlock(
   problems: readonly LocatedProblem[],
   listed: readonly string[],
-  home: string,
+  places: HostPlaces,
   hostRemedies?: HostRemedies,
 ): string[] {
   const configured = withoutRemoved(problems, listed)
   const application = problems.filter((problem) => problem.pkg === undefined)
   const lines = [
-    ...applicationLines(application, configured, home),
+    ...applicationLines(application, configured, places.home),
     ...(hostRemedies?.(application) ?? []),
   ]
   const byPackage = new Map<string, LocatedProblem[]>()
@@ -185,7 +207,7 @@ function remedyBlock(
       byPackage.set(problem.pkg, [...(byPackage.get(problem.pkg) ?? []), problem])
   }
   for (const pkg of byPackage.keys().toArray().toSorted(compareText)) {
-    lines.push(...packageLines(pkg, byPackage.get(pkg)!, configured, home))
+    lines.push(...packageLines(pkg, byPackage.get(pkg)!, configured, places))
   }
   if (application.some((problem) => problem.needsAvailable)) lines.push(availableLine())
   return lines
@@ -241,21 +263,24 @@ function noun(count: number, word: string): string {
 /**
  * The build report for every problem of an environment. `configured` is the `cxModules` list the
  * remedies that print one extend, and `home` is how the host spells where the options are written,
- * the call of its plugin or its wrapper: the one place the report names its host. `hostRemedies`
- * adds the lines only the host can write.
+ * the call of its plugin or its wrapper: the one place the report names its host. `host` adds
+ * what only the host can write, given as a {@link ReportHost} or, as before, as its remedy lines
+ * alone.
  */
 export function buildReport(
   problems: readonly LocatedProblem[],
   configured: readonly string[],
   home: string,
-  hostRemedies?: HostRemedies,
+  host?: HostRemedies | ReportHost,
 ): string {
+  const { remedies: hostRemedies, everyAtom = EVERY_ATOM } =
+    typeof host === 'function' ? { remedies: host } : (host ?? {})
   const files = new Set(problems.map((problem) => problem.file)).size
   const first = `${noun(problems.length, 'problem')} in ${noun(files, 'file')}: ${REPORT_CAUSE}`
   return [
     first,
     ...problemLines(problems),
-    ...remedyBlock(problems, configured, home, hostRemedies),
+    ...remedyBlock(problems, configured, { home, everyAtom }, hostRemedies),
   ].join('\n')
 }
 
@@ -267,5 +292,8 @@ export function moduleReport(
   configured: readonly string[],
   home: string,
 ): string {
-  return [...problemLines(problems), ...remedyBlock(problems, configured, home)].join('\n')
+  return [
+    ...problemLines(problems),
+    ...remedyBlock(problems, configured, { home, everyAtom: EVERY_ATOM }),
+  ].join('\n')
 }

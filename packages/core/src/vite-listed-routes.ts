@@ -24,9 +24,23 @@ import { requireTakesIn } from './vite-require-takes.ts'
  */
 function importTakesOf(
   program: AstNode,
-  input: { readonly names: ReadonlySet<string>; readonly reaches: ReadonlySet<string> },
+  input: {
+    readonly isDependency: boolean
+    readonly names: ReadonlySet<string>
+    readonly reaches: ReadonlySet<string>
+  },
 ): Taken[] {
   return input.reaches.size === 0 ? [] : takesIn(program, input)
+}
+
+/**
+ * The take of an importer the build cannot read, of the module labelled `module`. A dependency's is
+ * held: the build cannot tell where what it takes goes.
+ */
+export function unreadableFor(id: string, module: string): Taken {
+  return isDependencyId(id)
+    ? { ...UNREADABLE, isHeld: true, form: `takes ${module} in a way the build cannot read` }
+    : UNREADABLE
 }
 
 /**
@@ -61,26 +75,28 @@ async function takenBy(
   input: {
     readonly file: string
     readonly id: string
+    readonly label: string
     readonly names: ReadonlySet<string>
     readonly resolutions: Resolutions
   },
 ): Promise<Taken[]> {
-  const { file, id, names, resolutions } = input
+  const { file, id, label, names, resolutions } = input
+  const unreadable = (): Taken => unreadableFor(id, label)
   const code = ctx.getModuleInfo?.(id)?.code
   try {
     const read =
       code === null || code === undefined
         ? undefined
         : await reachingSpecifiers(ctx, { code, file, id, resolutions })
-    if (!read) return [UNREADABLE]
+    if (!read) return [unreadable()]
     const { program, reaches, requires } = read
-    if (reaches.size === 0 && requires.size === 0) return [UNREADABLE]
+    if (reaches.size === 0 && requires.size === 0) return [unreadable()]
     return [
-      ...importTakesOf(program, { names, reaches }),
+      ...importTakesOf(program, { isDependency: isDependencyId(id), names, reaches }),
       ...requireTakesOf(program, { id, names, requires }),
     ]
   } catch {
-    return [UNREADABLE]
+    return [unreadable()]
   }
 }
 
@@ -100,6 +116,17 @@ export function merged(takes: readonly Take[]): Take[] {
   return byKey.values().toArray()
 }
 
+/**
+ * A dependency's take of a module that gives out `cx` that the build reads neither as calls only
+ * nor as a forward: the importer's module, the package it belongs to and what it does, in words.
+ */
+export interface Held {
+  readonly form: string
+  readonly importer: string
+  readonly pkg: string
+  readonly taker: string
+}
+
 export interface Routes {
   readonly entry: Take[]
   readonly told: Take[]
@@ -107,6 +134,11 @@ export interface Routes {
    * The takes a dependency makes of the module that do more than re-export it: its calls.
    */
   readonly calls: Take[]
+  /**
+   * The takes a dependency makes of the module that the build reads neither as calls only nor as a
+   * forward, whatever the dependency is: they stay errors whatever the application imports.
+   */
+  readonly held: Held[]
 }
 
 /**
@@ -148,20 +180,27 @@ async function routesOf(
   const taken = await takenBy(ctx, {
     file: fileOf(holder.id),
     id: importer,
+    label: context.labelOf(fileOf(holder.id)),
     names: holder.names,
     resolutions,
   })
   const takes = taken.map((take) => ({ ...take, taker, isReached: holder.isReached }))
   if (isDependency) {
-    // A dependency that only re-exports is followed to what takes it; what else it does is a call.
-    const calls = takes.filter((take) => take.isForward !== true)
-    return { entry: isEntry ? calls : [], told: [], calls: wantCalls ? calls : [] }
+    // A dependency that only re-exports is followed to what takes it; what else it does is a call,
+    // unless the build cannot tell where what it takes goes, which is held and no call.
+    const pkg = (await context.packageOf(importer)) ?? taker
+    const held = takes
+      .filter((take) => take.isHeld === true)
+      .map((take) => ({ form: take.form ?? '', importer, pkg, taker }))
+    const calls = takes.filter((take) => take.isForward !== true && take.isHeld !== true)
+    return { entry: isEntry ? calls : [], told: [], calls: wantCalls ? calls : [], held }
   }
   const isCleared = (take: Take): boolean => isEntry && take.shape !== 'unreadable'
   return {
     entry: takes.filter((take) => isCleared(take)),
     told: takes.filter((take) => !isCleared(take)),
     calls: [],
+    held: [],
   }
 }
 
@@ -215,11 +254,8 @@ export async function takesFrom(
   const entry: Take[] = []
   const told: Take[] = []
   const calls: Take[] = []
+  const held: Held[] = []
   for (const importer of importers) {
-    if (!(await isCounted(context, { importer, isEntry, pkg, wantCalls }))) {
-      continue
-    }
-
     const routes = await routesOf(ctx, context, {
       holder,
       importer,
@@ -227,11 +263,14 @@ export async function takesFrom(
       resolutions,
       wantCalls,
     })
+    // A dependency's held take counts whoever the dependency is, the package itself included.
+    pushAll(held, routes.held)
+    if (!(await isCounted(context, { importer, isEntry, pkg, wantCalls }))) continue
     pushAll(entry, routes.entry)
     pushAll(told, routes.told)
     pushAll(calls, routes.calls)
   }
-  return { entry: merged(entry), told: merged(told), calls: merged(calls) }
+  return { entry: merged(entry), told: merged(told), calls: merged(calls), held }
 }
 
 /**

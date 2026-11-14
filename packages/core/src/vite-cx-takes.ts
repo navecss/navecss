@@ -22,6 +22,8 @@ import {
 } from './vite-ast.ts'
 import { jsxMembersIn, jsxNameOf, namesIn, typeNameOf } from './vite-cx-reference-names.ts'
 import { type CxNames, dynamicKeys, isCxName, referenceTakes } from './vite-cx-take-keys.ts'
+import { heldNamespace, isCarriedOn, passingOf, usesOf, withHeld } from './vite-cx-take-passing.ts'
+import { isUsedAsCallsOnly } from './vite-require-uses.ts'
 import { analyze, type Reference, type ScopeAnalysis } from './vite-scope.ts'
 
 /**
@@ -51,6 +53,12 @@ export interface Taken {
    * Whether the take comes from what an earlier server command left in the cache directory.
    */
   readonly isRecorded?: boolean
+  /**
+   * For a dependency's take: whether the build reads it neither as calls only nor as a forward, so
+   * it cannot tell where what is taken goes. `form` says what the dependency does, in words.
+   */
+  readonly isHeld?: boolean
+  readonly form?: string
 }
 
 export interface Take extends Taken {
@@ -108,6 +116,10 @@ function referencesTo(
 
 interface Scan {
   readonly analysis: () => ScopeAnalysis
+  /**
+   * Whether the importer belongs to a dependency, whose takes the build reads for where they go.
+   */
+  readonly isDependency: boolean
   readonly names: CxNames
   readonly reaches: ReadonlySet<string>
   /**
@@ -123,42 +135,6 @@ interface Scan {
    * The members of a namespace import that the module's JSX member tags read: `Cx` of `<UI.Cx />`.
    */
   readonly jsxMembers: (local: string) => ReadonlySet<string>
-}
-
-/**
- * The references to the binding that the import specifier of `source` declares.
- */
-function usesOf(analysis: ScopeAnalysis, source: string, specifier: AstNode): readonly Reference[] {
-  const local = exportNameOf(nodeAt(specifier, 'local'))
-  return analysis.references.filter(
-    ({ binding }) =>
-      binding?.kind === 'import' && binding.source === source && binding.name === local,
-  )
-}
-
-/**
- * Whether a reference is what an export statement exports.
- */
-function isExportOf(analysis: ScopeAnalysis, reference: Reference): boolean {
-  const parent = analysis.parentOf.get(reference.node)
-  return parent?.type === 'ExportSpecifier' || parent?.type === 'ExportDefaultDeclaration'
-}
-
-/**
- * How the module passes on what the import specifier declares: `isPassedOn` when it exports it,
- * `isForward` when it does nothing else with it.
- */
-function passingOf(
-  analysis: ScopeAnalysis,
-  source: string,
-  specifier: AstNode,
-): { isForward?: true; isPassedOn?: true } {
-  const uses = usesOf(analysis, source, specifier)
-  const exported = uses.filter((use) => isExportOf(analysis, use))
-  if (exported.length === 0) return {}
-  return exported.length === uses.length
-    ? { isForward: true, isPassedOn: true }
-    : { isPassedOn: true }
 }
 
 /**
@@ -192,28 +168,51 @@ function namespaceTakesOf(scan: Scan, source: string, specifier: AstNode): Taken
 }
 
 /**
+ * What the namespace import that `specifier` declares takes, held when a dependency does more with
+ * it than forward it.
+ */
+function namespaceTake(scan: Scan, source: string, specifier: AstNode): Taken | undefined {
+  const references = referencesTo(scan.analysis(), source, specifier)
+  const held = scan.isDependency && heldNamespace(scan.analysis(), references, scan.names, source)
+  if (held) return held
+  const taken = namespaceTakesOf(scan, source, specifier)
+  const isForward = passingOf(scan.analysis(), source, specifier).isForward
+  const forwarded = taken && { ...taken, ...(isForward && { isForward }) }
+  return forwarded && scan.isDependency ? withHeld(forwarded, source) : forwarded
+}
+
+/**
+ * What the named or default import that `specifier` declares takes, when it takes a `cx` export;
+ * held when a dependency carries it where the build cannot follow it.
+ */
+function namedTake(scan: Scan, source: string, specifier: AstNode): Taken | undefined {
+  const imported =
+    specifier.type === 'ImportDefaultSpecifier'
+      ? 'default'
+      : exportNameOf(nodeAt(specifier, 'imported'))
+  if (imported === undefined || !isCxName(scan.names, imported)) return undefined
+  if (isTypeUseOnly(scan, source, specifier)) return undefined
+  const isHeld = scan.isDependency && isCarriedOn(scan.analysis(), source, specifier)
+  const form = `uses ${imported} from ${source} where the build cannot follow it`
+  return {
+    shape: 'names',
+    names: [imported],
+    ...passingOf(scan.analysis(), source, specifier),
+    ...(isHeld && { isHeld: true, form }),
+  }
+}
+
+/**
  * What an `import` declaration takes.
  */
 function importTakes(node: AstNode, source: string, scan: Scan): Taken[] {
-  const found: Taken[] = []
-  for (const specifier of valueSpecifiersOf(node)) {
-    if (specifier.type === 'ImportNamespaceSpecifier') {
-      const taken = namespaceTakesOf(scan, source, specifier)
-      const isForward = passingOf(scan.analysis(), source, specifier).isForward
-      if (taken) found.push({ ...taken, ...(isForward && { isForward }) })
-      continue
-    }
-    const imported =
-      specifier.type === 'ImportDefaultSpecifier'
-        ? 'default'
-        : exportNameOf(nodeAt(specifier, 'imported'))
-    if (imported !== undefined && isCxName(scan.names, imported)) {
-      if (isTypeUseOnly(scan, source, specifier)) continue
-      const passing = passingOf(scan.analysis(), source, specifier)
-      found.push({ shape: 'names', names: [imported], ...passing })
-    }
-  }
-  return found
+  return valueSpecifiersOf(node).flatMap((specifier) => {
+    const taken =
+      specifier.type === 'ImportNamespaceSpecifier'
+        ? namespaceTake(scan, source, specifier)
+        : namedTake(scan, source, specifier)
+    return taken ? [taken] : []
+  })
 }
 
 /**
@@ -254,7 +253,15 @@ function takesOf(node: AstNode, scan: Scan): Taken[] {
   if (source === undefined || !scan.reaches.has(source)) return []
   if (isTypeOnly(node)) return []
   if (node.type === 'ImportDeclaration') return importTakes(node, source, scan)
-  if (node.type === 'ImportExpression') return dynamicTakes(node, scan)
+  if (node.type === 'ImportExpression') {
+    if (!scan.isDependency) return dynamicTakes(node, scan)
+    // A dependency's names are read no further than the keys it takes, so a result that is not
+    // used as calls only is a take of the whole module, which the build cannot follow.
+    const taken = isUsedAsCallsOnly(scan.analysis(), node, scan.names)
+      ? dynamicTakes(node, scan)
+      : [{ shape: 'dynamic-import' as const, names: [] }]
+    return taken.map((one) => withHeld(one, source))
+  }
   return exportTakes(node, scan)
 }
 
@@ -264,7 +271,11 @@ function takesOf(node: AstNode, scan: Scan): Taken[] {
  */
 export function takesIn(
   program: AstNode,
-  input: { readonly names: CxNames; readonly reaches: ReadonlySet<string> },
+  input: {
+    readonly isDependency?: boolean
+    readonly names: CxNames
+    readonly reaches: ReadonlySet<string>
+  },
 ): Taken[] {
   let analysis: ScopeAnalysis | undefined
   let typeNames: ReadonlySet<string> | undefined
@@ -272,6 +283,7 @@ export function takesIn(
   let jsxMembers: ReadonlyMap<string, ReadonlySet<string>> | undefined
   const scan: Scan = {
     ...input,
+    isDependency: input.isDependency === true,
     analysis: () => (analysis ??= analyze(program)),
     typeNames: () => (typeNames ??= namesIn(program, typeNameOf)),
     jsxNames: () => (jsxNames ??= namesIn(program, jsxNameOf)),

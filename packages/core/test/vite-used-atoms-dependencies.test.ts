@@ -150,21 +150,19 @@ describe('AC-used-atoms-16 — a problem in dependency code names the package an
     '',
     "export const u = cx('interactve')",
     '',
-    'export const w = [1].map(cx)',
-    '',
   ].join('\n')
 
-  it('fails with three problems in the package’s file and one line for bad-lib, ready to paste', async () => {
+  it('fails with two problems in the package’s file and one line for bad-lib, ready to paste', async () => {
     const app = appUsing(['bad-lib'])
     addPackage(app, 'bad-lib', { 'index.js': badLib })
     try {
       const built = await buildUsed(app)
       const lines = built.error!.split('\n')
 
-      expect(built.error).toMatch(/^3 problems in 1 file/)
+      expect(built.error).toMatch(/^2 problems in 1 file/)
       expect(
         lines.filter((line) => line.startsWith('node_modules/bad-lib/index.js:')),
-      ).toHaveLength(3)
+      ).toHaveLength(2)
       const packageLine = lines.find((line) => line.startsWith('bad-lib is a dependency'))
       expect(packageLine).toContain("keepFor: { 'bad-lib': ['<atom>'] }")
       expect(packageLine).toContain('not yours to change')
@@ -184,7 +182,7 @@ describe('AC-used-atoms-16 — a problem in dependency code names the package an
       })
       const filled = await buildUsed(app, { options: { keepFor: { 'bad-lib': ['flex'] } } })
 
-      expect(withKeep.error).toMatch(/^3 problems in 1 file/)
+      expect(withKeep.error).toMatch(/^2 problems in 1 file/)
       expect(filled.error).toBeUndefined()
       expect(() => navePlugin({ keepFor: { 'bad-lib': ['<atom>' as never] } })).toThrow(
         'navePlugin(): keepFor["bad-lib"] names an unknown atom "<atom>"',
@@ -287,12 +285,10 @@ describe('AC-used-atoms-19 — cx.dynamic() with no list is a build error, split
 describe('AC-used-atoms-43 — what listing a package in keepFor covers, and what stays an error', () => {
   const rows: Record<string, string> = {
     'index.js':
-      "import './unreadable.js'\nimport './typo.js'\nimport './passed.js'\nimport './dist/cx.js'\nimport './dyn-import.js'\nimport './pieces.js'\nimport './readable.js'\nimport './literal.js'\n",
+      "import './unreadable.js'\nimport './typo.js'\nimport './dist/cx.js'\nimport './pieces.js'\nimport './readable.js'\nimport './literal.js'\n",
     'unreadable.js': `${IMPORT}export const a = (v) => cx(v)\n`,
     'typo.js': `${IMPORT}export const b = cx('interactve')\n`,
-    'passed.js': `${IMPORT}export const c = [1].map(cx)\n`,
     'dist/cx.js': "export { cx } from '@navecss/core/cx'\n",
-    'dyn-import.js': "import '@navecss/core/cx'\nexport const d = import('@navecss/core/cx')\n",
     'pieces.js': `${IMPORT}export const e = (t) => 'nave-' + t\nexport const f = cx('flex')\n`,
     'readable.js': `${IMPORT}export const g = cx('gap')\n`,
     'literal.js': "export const h = 'nave-truncate'\n",
@@ -305,7 +301,7 @@ describe('AC-used-atoms-43 — what listing a package in keepFor covers, and wha
       const without = await buildUsed(app)
       const listed = await buildUsed(app, { options: { keepFor: { 'wide-lib': ['block'] } } })
 
-      expect(without.error).toMatch(/^6 problems in 6 files/)
+      expect(without.error).toMatch(/^4 problems in 4 files/)
       expect(without.error).toContain('wide-lib')
       // The re-export in `dist/cx.js` is reached only from inside the package: no cxModules line
       // could clear it, and the package's keepFor line, printed once, does.

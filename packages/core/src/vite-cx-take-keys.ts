@@ -16,6 +16,12 @@ import { memberReadOf, patternDestructuring } from './vite-cx-reference.ts'
 export type CxNames = ReadonlySet<string> | undefined
 
 /**
+ * The `cx` exports of Nave's own `cx` module and of a `cxModules` entry, which gives `cx` out
+ * only under the name `cx`.
+ */
+export const CX_ONLY: CxNames = new Set(['cx'])
+
+/**
  * Whether `name` is one of the `cx` exports.
  */
 export function isCxName(names: CxNames, name: string): boolean {

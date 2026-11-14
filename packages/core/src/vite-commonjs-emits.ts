@@ -65,14 +65,21 @@ function isTslibRequire(node: AstNode | undefined): boolean {
 }
 
 /**
+ * Whether `callee` reads a member off a name bound to `require('tslib')`.
+ */
+export function isTslibMember(callee: AstNode | undefined, analysis: ScopeAnalysis): boolean {
+  const member = memberOf(callee)
+  if (member?.object.type !== 'Identifier') return false
+  return isTslibRequire(initOf(analysis, member.object))
+}
+
+/**
  * Whether a callee is TypeScript's `__exportStar` helper: its own, a name bound to the helper it
  * writes, or `tslib`'s, read off a name bound to `require('tslib')`.
  */
 function isExportStarCallee(callee: AstNode | undefined, analysis: ScopeAnalysis): boolean {
   if (isName(callee, '__exportStar')) return isOwnHelper(initOf(analysis, callee!))
-  const member = memberOf(callee)
-  if (member?.name !== '__exportStar' || member.object.type !== 'Identifier') return false
-  return isTslibRequire(initOf(analysis, member.object))
+  return memberOf(callee)?.name === '__exportStar' && isTslibMember(callee, analysis)
 }
 
 /**

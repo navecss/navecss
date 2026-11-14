@@ -16,7 +16,8 @@ import {
   staticStringOf,
   stringAt,
 } from './vite-ast.ts'
-import { analyze, type Binding, type Reference, type ScopeAnalysis } from './vite-scope.ts'
+import { flowOf } from './vite-cx-flow.ts'
+import { analyze, type Binding } from './vite-scope.ts'
 
 interface Source {
   /**
@@ -124,15 +125,6 @@ function isImportedFrom(binding: Binding | undefined, source: Source): boolean {
 }
 
 /**
- * The name an export statement gives the reference, if the reference is what it exports.
- */
-function exportedAs(analysis: ScopeAnalysis, reference: Reference): string | undefined {
-  const parent = analysis.parentOf.get(reference.node)
-  if (parent?.type === 'ExportDefaultDeclaration') return 'default'
-  return parent?.type === 'ExportSpecifier' ? exportNameOf(nodeAt(parent, 'exported')) : undefined
-}
-
-/**
  * The specifiers of the `export * from` statements of the module.
  */
 export function starSources(program: AstNode): string[] {
@@ -160,10 +152,8 @@ export function reexportedNames(program: AstNode, source: Source): string[] {
   }
   const analysis = analyze(program)
   for (const reference of analysis.references) {
-    const name = isImportedFrom(reference.binding, source)
-      ? exportedAs(analysis, reference)
-      : undefined
-    if (name !== undefined) found.add(name)
+    if (!isImportedFrom(reference.binding, source)) continue
+    for (const name of flowOf(analysis, reference.node).names) found.add(name)
   }
   return [...found]
 }

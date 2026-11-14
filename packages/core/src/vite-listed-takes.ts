@@ -42,7 +42,7 @@ import type { LocatedProblem } from './vite-used-report.ts'
 import { fileOf } from './vite-cx-modules.ts'
 import { withClearingSpecifiers } from './vite-dependency-reexports.ts'
 import { type Holder, holdersOf } from './vite-listed-holders.ts'
-import { merged, type Routes, serverRoutes, takesFrom } from './vite-listed-routes.ts'
+import { type Held, merged, type Routes, serverRoutes, takesFrom } from './vite-listed-routes.ts'
 import { compareText } from './vite-problems.ts'
 import { isSecondHop } from './vite-used-package-lines.ts'
 
@@ -108,13 +108,51 @@ async function prepareOne(
 }
 
 /**
+ * The problems for the takes dependencies make that the build reads neither as calls only nor as a
+ * forward, one per module and form. They carry no position, since the build reads them in the
+ * module graph and not in the file as written.
+ */
+function heldProblemsOf(routed: readonly Routes[]): LocatedProblem[] {
+  const byKey = new Map<string, Held>()
+  const all = routed.flatMap((route) => route.held)
+  for (const held of all) byKey.set(`${held.importer}\0${held.form}`, held)
+  return byKey
+    .values()
+    .map((held) => ({
+      kind: 'reference' as const,
+      offset: 0,
+      construct: '',
+      text: `${held.form}.`,
+      file: held.taker,
+      line: 0,
+      column: 0,
+      unknownLine: '',
+      pkg: held.pkg,
+      moduleId: held.importer,
+      isHeld: true,
+    }))
+    .toArray()
+}
+
+/**
  * The problems of a module that gives out `cx` that stay errors, given the takes of the build and
  * of the server environments: for the takes only an application module can end (of the module, or
  * of a forward of it), the problems with those takes; a take a `cxModules` entry clears keeps only
  * the problems that have the specifier; a dependency module that re-exports a listed module's `cx`
- * also keeps the callers whose calls only the package's `keepFor` entry stands in for.
+ * also keeps the callers whose calls only the package's `keepFor` entry stands in for. The takes a
+ * dependency makes that the build cannot follow are problems of their own, whatever is imported.
  */
 function decideOne(
+  prepared: Prepared,
+  serverImports: readonly ResolvedServerImport[],
+): LocatedProblem[] {
+  return [...heldProblemsOf(prepared.routed), ...decidedByTakes(prepared, serverImports)]
+}
+
+/**
+ * The problems of the module itself that stay errors, given who takes it.
+ */
+function decidedByTakes(
   prepared: Prepared,
   serverImports: readonly ResolvedServerImport[],
 ): LocatedProblem[] {
@@ -187,5 +225,13 @@ export function decideReexports(
   prepared: readonly Prepared[],
   serverImports: readonly ResolvedServerImport[],
 ): LocatedProblem[] {
-  return prepared.flatMap((one) => decideOne(one, serverImports))
+  const decided = prepared.flatMap((one) => decideOne(one, serverImports))
+  // Two holders of one barrel make the same held take: it is one problem.
+  const isFirst = (problem: LocatedProblem, index: number): boolean =>
+    problem.isHeld !== true ||
+    decided.findIndex(
+      (other) =>
+        other.isHeld === true && other.moduleId === problem.moduleId && other.text === problem.text,
+    ) === index
+  return decided.filter((problem, index) => isFirst(problem, index))
 }

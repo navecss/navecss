@@ -40,6 +40,13 @@ export const ALIAS_REMEDY =
   "If Next.js resolves an import above through an alias set in next.config (turbopack.resolveAlias or webpack's resolve.alias), set the same alias in compilerOptions.paths in tsconfig.json or jsconfig.json."
 
 /**
+ * Where the report's reader learns to ship every atom, the end of the line for a listed package's
+ * held uses of `cx`: this package's section, since `@navecss/core`'s names an option it lacks.
+ */
+export const EVERY_ATOM =
+  'see "Shipping every atom" under "Which atoms the build ships" in the @navecss/prune README: https://github.com/navecss/navecss/tree/main/packages/prune#shipping-every-atom.'
+
+/**
  * The throw that ends a build the hook stopped, after the reason was printed.
  */
 export function stopLine(count: number): string {

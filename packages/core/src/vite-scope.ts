@@ -81,6 +81,7 @@ export function analyze(program: AstNode): ScopeAnalysis {
   const walker: Walker = {
     references: [],
     parentOf: new Map(),
+    declarations: new Map(),
     evalScopes: [],
     visit: (node, scope) => {
       visit(node, scope, walker)
@@ -104,5 +105,6 @@ export function analyze(program: AstNode): ScopeAnalysis {
     references: walker.references,
     parentOf: walker.parentOf,
     referenceOf: (node) => byNode.get(node),
+    bindingDeclaredBy: (node) => walker.declarations.get(node),
   }
 }
