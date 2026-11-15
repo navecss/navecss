@@ -10,6 +10,7 @@ type Manifest = Record<string, unknown> & {
   exports: Record<string, unknown>
   name: string
   peerDependencies: Record<string, string>
+  version: string
 }
 
 const DEPENDENCY_FIELDS = [
@@ -89,6 +90,29 @@ describe('AC-nextjs-used-atoms-11: the package carries the parser and the resolv
   })
 })
 
+/**
+ * Whether the core peer is exactly `workspace:^`, which `pnpm pack` turns into `^` and the core
+ * version of the release, so the peer follows core's version and is never pinned by hand.
+ */
+const isCorePeerFollowingCore = (range: string | undefined): boolean => range === 'workspace:^'
+
+/**
+ * Whether the Changesets config has one `fixed` group and it holds exactly these names, in any
+ * order, each once.
+ */
+function hasOneFixedGroupOf(
+  fixed: readonly (readonly string[])[],
+  names: readonly string[],
+): boolean {
+  const [group, ...others] = fixed
+  if (group === undefined || others.length > 0) return false
+  return (
+    group.length === names.length &&
+    new Set(group).size === group.length &&
+    names.every((name) => group.includes(name))
+  )
+}
+
 describe('AC-nextjs-used-atoms-12: the export map, the peers and the version group', () => {
   it('has exactly the export keys ., ./postcss and ./package.json', () => {
     expect(Object.keys(manifest.exports).toSorted((a, b) => a.localeCompare(b))).toEqual([
@@ -117,7 +141,7 @@ describe('AC-nextjs-used-atoms-12: the export map, the peers and the version gro
     ])
     expect(peerDependencies.next).toBe('>=16.2.0')
     expect(peerDependencies.postcss).toBe('^8')
-    expect(peerDependencies['@navecss/core']).toMatch(/^(workspace:)?\^/u)
+    expect(isCorePeerFollowingCore(peerDependencies['@navecss/core'])).toBe(true)
   })
 
   it('has a next range that 15.5.0 does not satisfy and 16.2.0 and 16.3.8 do', () => {
@@ -134,10 +158,43 @@ describe('AC-nextjs-used-atoms-12: the export map, the peers and the version gro
     )
     expect(manifest.private).not.toBe(true)
     expect(config.ignore).not.toContain(manifest.name)
-    expect(config.fixed).toContainEqual(['@navecss/tokens', '@navecss/core', manifest.name])
-    // Control: the one `fixed` group holds all three, so the package is not in a second group
-    // that would version it apart from core.
-    expect(config.fixed.flat().filter((name) => name === manifest.name)).toHaveLength(1)
+    expect(
+      hasOneFixedGroupOf(config.fixed, ['@navecss/tokens', '@navecss/core', manifest.name]),
+    ).toBe(true)
+  })
+
+  it('reads the fixed group as a set, and only one group', () => {
+    const names = ['@navecss/tokens', '@navecss/core', '@navecss/prune']
+    expect(
+      hasOneFixedGroupOf([['@navecss/core', '@navecss/tokens', '@navecss/prune']], names),
+    ).toBe(true)
+    expect(
+      hasOneFixedGroupOf(
+        [
+          ['@navecss/tokens', '@navecss/core', '@navecss/prune'],
+          ['@navecss/tokens', '@navecss/core'],
+        ],
+        names,
+      ),
+    ).toBe(false)
+    expect(
+      hasOneFixedGroupOf(
+        [
+          ['@navecss/tokens', '@navecss/core', '@navecss/prune'],
+          ['@navecss/base-ui', '@navecss/eslint-plugin'],
+        ],
+        names,
+      ),
+    ).toBe(false)
+    expect(hasOneFixedGroupOf([['@navecss/tokens', '@navecss/core']], names)).toBe(false)
+  })
+
+  it('reads only workspace:^ as a core peer that follows core’s version', () => {
+    expect(isCorePeerFollowingCore('workspace:^')).toBe(true)
+    expect(isCorePeerFollowingCore('^0.5.0')).toBe(false)
+    expect(isCorePeerFollowingCore('^')).toBe(false)
+    expect(isCorePeerFollowingCore('workspace:*')).toBe(false)
+    expect(isCorePeerFollowingCore(undefined)).toBe(false)
   })
 })
 
@@ -151,6 +208,12 @@ function fingerprintOf(text: string): { readonly bytes: number; readonly sha256:
     sha256: createHash('sha256').update(bytes).digest('hex').slice(0, 16),
   }
 }
+
+/**
+ * Whether the Installation text says "not on npm yet" exactly while the version is `0.0.0`.
+ */
+const isNotOnNpmYetRight = (installation: string, version: string): boolean =>
+  /\bnot on npm yet\b/u.test(installation) === (version === '0.0.0')
 
 describe('the package check and the words npm shows', () => {
   it('check:pack excludes no JavaScript entry point from the type check', () => {
@@ -180,14 +243,24 @@ describe('the package check and the words npm shows', () => {
     expect(fingerprintOf(paragraph)).toEqual({ bytes: 221, sha256: '164a9f39337b5f89' })
   })
 
-  // The sentence stays until the first version is published by hand. The release-day edit removes
-  // it and this row together, so a published package never says it is not on npm.
-  it('until the first version is published, the README says under Installation that it is not on npm yet', () => {
+  // The sentence stays until the first version is published by hand, and that version is never
+  // `0.0.0`. The version pull request, which moves the version, goes red until the sentence and
+  // this row are edited together, so a published package never says it is not on npm.
+  it('says under Installation that it is not on npm yet exactly while the version is 0.0.0', () => {
     const readme = readFileSync(path.join(PACKAGE_DIR, 'README.md'), 'utf8')
     const installation = readme.slice(readme.indexOf('## Installation'), readme.indexOf('```sh'))
     // Control: the section is there.
     expect(installation).toMatch(/^## Installation/u)
-    expect(installation).toMatch(/\bnot on npm yet\b/u)
+    expect(isNotOnNpmYetRight(installation, manifest.version)).toBe(true)
+  })
+
+  it('reads the sentence as right only while the version is 0.0.0', () => {
+    const says = '## Installation\n\nThis package is not on npm yet.\n'
+    const silent = '## Installation\n\nInstall it from npm.\n'
+    expect(isNotOnNpmYetRight(says, '0.6.0')).toBe(false)
+    expect(isNotOnNpmYetRight(says, '0.0.0')).toBe(true)
+    expect(isNotOnNpmYetRight(silent, '0.6.0')).toBe(true)
+    expect(isNotOnNpmYetRight(silent, '0.0.0')).toBe(false)
   })
 
   it('has the description npm shows, by its size and digest', () => {

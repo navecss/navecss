@@ -2,7 +2,7 @@
 
 How a new version of `@navecss/tokens`, `@navecss/core` and `@navecss/prune` gets to npm. These three packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`: `prune` calls core's reader, [ADR 0009](../04-adr/0009-release-topology.md)); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of them, and `@navecss/cli` is not published yet. `@navecss/prune` is not on npm yet either: its first version is published by hand, as "A package's first release" below describes.
 
-You need publish rights on both packages on npmjs.com, with two-factor authentication on your npm account.
+You need publish rights on all three packages on npmjs.com, with two-factor authentication on your npm account.
 
 ## How it works
 
@@ -44,7 +44,7 @@ From the **Actions** tab, open the **release** workflow and choose **Run workflo
 gh workflow run release.yml --ref main
 ```
 
-The workflow rebuilds from clean, runs the packaging checks, packs each package and stages it: `@navecss/tokens` first, then `@navecss/core`. The end of its log lists what was staged and the order to approve it in. Nothing is installable yet.
+The workflow rebuilds from clean, runs the packaging checks, packs each package and stages it: `@navecss/tokens` first, then `@navecss/core`, then `@navecss/prune` from its second version on. The end of its log lists what was staged and the order to approve it in. Nothing is installable yet.
 
 It only runs on `main`: started from any other branch, the job is skipped.
 
@@ -68,9 +68,10 @@ npm stage approve <stage-id>
 ```sh
 npm view @navecss/tokens version
 npm view @navecss/core version
+npm view @navecss/prune version
 ```
 
-Both should print the new version. On npmjs.com, each package page shows a provenance badge linking to the workflow run that built it.
+All three should print the new version. On npmjs.com, each package page shows a provenance badge linking to the workflow run that built it.
 
 For each release of `@navecss/base-ui` that ships the shadcn registry (`dist/registry/` in its tarball), also check that jsDelivr serves that registry as published and that a component installs from it:
 
@@ -82,7 +83,7 @@ It fetches every file of the released tarball's `dist/registry/` from jsDelivr a
 
 ## 5. Tag the release and create the GitHub Releases
 
-A staged version is not a release until it is approved, so the workflow creates no tags and no GitHub Releases. Once both versions are live, create one GitHub Release per package, which also creates its tag. Use the commit the workflow ran on and that version's section of the package's `CHANGELOG.md` as the notes. The target must be the full 40-character sha: the workflow run's page shows only the short one, and `gh release create` refuses a short sha when the tag does not exist yet. Get the full sha from the run (its id is the number after `/actions/runs/` in the run page's address, and `gh run list --workflow release.yml` lists it too):
+A staged version is not a release until it is approved, so the workflow creates no tags and no GitHub Releases. Once all three versions are live, create one GitHub Release per package, which also creates its tag. Use the commit the workflow ran on and that version's section of the package's `CHANGELOG.md` as the notes. The target must be the full 40-character sha: the workflow run's page shows only the short one, and `gh release create` refuses a short sha when the tag does not exist yet. Get the full sha from the run (its id is the number after `/actions/runs/` in the run page's address, and `gh run list --workflow release.yml` lists it too):
 
 ```sh
 gh run view <run-id> --json headSha -q .headSha
@@ -93,6 +94,8 @@ or expand the short one from a clone that has fetched `main`: `git rev-parse <sh
 ```sh
 awk '/^## 0.1.1$/{found=1; next} /^## /{found=0} found' packages/tokens/CHANGELOG.md > tokens-notes.md
 gh release create @navecss/tokens@0.1.1 --target <full-sha> --title "@navecss/tokens 0.1.1" --notes-file tokens-notes.md --latest=false
+awk '/^## 0.1.1$/{found=1; next} /^## /{found=0} found' packages/prune/CHANGELOG.md > prune-notes.md
+gh release create @navecss/prune@0.1.1 --target <full-sha> --title "@navecss/prune 0.1.1" --notes-file prune-notes.md --latest=false
 awk '/^## 0.1.1$/{found=1; next} /^## /{found=0} found' packages/core/CHANGELOG.md > core-notes.md
 gh release create @navecss/core@0.1.1 --target <full-sha> --title "@navecss/core 0.1.1" --notes-file core-notes.md --latest
 ```
@@ -131,4 +134,4 @@ After that, the package releases through the flow above like every other package
 - **A staged version is wrong**: reject it from the Staged Packages tab, or with `npm stage reject <stage-id>`. It never went live. Fix the problem, version again and run the workflow again.
 - **Do not run the workflow again while a staged version is waiting for approval.** It checks which versions are live, not which are staged, so it would try to stage the same version a second time. Approve or reject what is pending first.
 - **`HTTP 422 ... tag_name is not a valid tag ... Release.target_commitish is invalid` from `gh release create`**: the `--target` was not accepted, most often because it is a short sha and the tag does not exist yet. Run it again with the full 40-character sha of a commit that is on GitHub (section 5, "Tag the release and create the GitHub Releases", shows how to get it).
-- **Only one of the two packages went live**: approve the other one. If `tokens` is live and `core` is not, that is harmless for a while; the reverse is the case step 3 exists to prevent.
+- **Only some of the three packages went live**: approve the others, in step 3's order. If `tokens` is live and `core` is not, or `core` is live and `prune` is not, that is harmless for a while; the reverse of either is the case step 3 exists to prevent.

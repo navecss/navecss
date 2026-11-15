@@ -1101,7 +1101,7 @@ test('README.md: the "## Brand and name" section', () => {
   assertClearedText(
     'README.md ## Brand and name',
     wholeSectionText(README_DOC.lines, range),
-    '3568193eea6a12eb64760e2c386991f01377cc07e8ea262f6ac53886725dd041',
+    '044fb6bda5825093e22e5212179eb963e195a173149339587e81c13c34ba18dc',
   )
 })
 

@@ -101,7 +101,7 @@ visual change to the stylesheet is a `minor`, since a consumer's page looks diff
 ## Update: `@navecss/prune` joins the fixed pair
 
 A sixth published package, `@navecss/prune`, trims the atom layer of a Next.js build to the atoms
-its code uses. Unlike the three packages above it **joins the `fixed` group** with
+the build can read a use for. Unlike the three packages above it **joins the `fixed` group** with
 `@navecss/tokens` and `@navecss/core`, so the three always release at the same version.
 
 The reasoning is what it calls. `@navecss/prune` reads a project's `cx()` calls through core's

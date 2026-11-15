@@ -334,7 +334,7 @@ test('the mismatch report is byte-exact, not only opacity- and shape-checked', (
     assert.deepEqual(calls.error, [
       'The publishable package set does not match the set this repository intends to publish:\n',
       '  - @navecss/surprise: publishable (no "private": true) but not in the expected set',
-      '  - @navecss/core: "private": true but expected to publish at 0.1.0',
+      '  - @navecss/core: "private": true but is meant to publish',
       '\nIf this is a deliberate scope change, update PUBLISHABLE_SET in ' +
         'scripts/check-publishable-set.mjs alongside the manifest change. Making a package ' +
         'publish for the first time is a release decision and not only a manifest edit: do not ' +

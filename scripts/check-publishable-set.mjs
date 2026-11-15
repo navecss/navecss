@@ -49,7 +49,7 @@ import { findWorkspaceGlobViolation } from './check-license-parity.mjs'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
-The set of package names meant to publish at 0.1.0.
+The set of package names meant to publish.
  */
 export const PUBLISHABLE_SET = new Set([
   '@navecss/tokens',
@@ -330,7 +330,7 @@ export function main(rootDir = ROOT) {
       console.error(`  - ${name}: publishable (no "private": true) but not in the expected set`)
     }
     for (const name of unexpectedlyPrivate) {
-      console.error(`  - ${name}: "private": true but expected to publish at 0.1.0`)
+      console.error(`  - ${name}: "private": true but is meant to publish`)
     }
     console.error(
       '\nIf this is a deliberate scope change, update PUBLISHABLE_SET in ' +
