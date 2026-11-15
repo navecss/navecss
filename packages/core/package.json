@@ -115,7 +115,7 @@
     "@navecss/tokens": "workspace:^"
   },
   "devDependencies": {
-    "@astrojs/node": "11.1.11",
+    "@astrojs/node": "11.1.12",
     "@astrojs/react": "7.1.4",
     "@rmenke/css-tokenizer-tests": "1.4.0",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
