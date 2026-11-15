@@ -26,7 +26,7 @@ function firstReleaseNote(): { bump: string; text: string } {
     .map((name) => readFileSync(path.join(CHANGESET_DIR, name), 'utf8'))
     .find((text) => text.includes(`'${PACKAGE_NAME}':`))
   if (pending !== undefined) {
-    const bump = new RegExp(`^'${PACKAGE_NAME}':\\s*(\\w+)$`, 'mu').exec(pending)?.[1]
+    const bump = new RegExp(String.raw`^'${PACKAGE_NAME}':\s*(\w+)$`, 'mu').exec(pending)?.[1]
     return { bump: bump ?? 'none', text: flat(pending.replace(/^---[\s\S]*?\n---\n/u, '')) }
   }
   const changelog = path.join(PACKAGE_DIR, 'CHANGELOG.md')
