@@ -243,9 +243,9 @@ describe('the package check and the words npm shows', () => {
     expect(fingerprintOf(paragraph)).toEqual({ bytes: 221, sha256: '164a9f39337b5f89' })
   })
 
-  // The sentence stays until the first version is published by hand, and that version is never
-  // `0.0.0`. The version pull request, which moves the version, goes red until the sentence and
-  // this row are edited together, so a published package never says it is not on npm.
+  // The sentence stays until the version pull request moves the version off `0.0.0`. That pull
+  // request goes red until it also removes the sentence, so the version published by hand from it
+  // never says it is not on npm. This row passes unchanged once the sentence is gone.
   it('says under Installation that it is not on npm yet exactly while the version is 0.0.0', () => {
     const readme = readFileSync(path.join(PACKAGE_DIR, 'README.md'), 'utf8')
     const installation = readme.slice(readme.indexOf('## Installation'), readme.indexOf('```sh'))

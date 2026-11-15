@@ -6,10 +6,10 @@
  * package's oldest `CHANGELOG.md` section once a release has consumed it, so a later changeset or a
  * later release does not move what is read.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 
 const PACKAGE_DIR = path.resolve(import.meta.dirname, '..')
 const CHANGESET_DIR = path.resolve(PACKAGE_DIR, '../../.changeset')
@@ -68,7 +68,7 @@ const hasFloor = (text: string, peerDependencies: Record<string, string>): boole
  * Whether the note says the package is released at the same version as core.
  */
 const isVersionedWithCore = (text: string): boolean =>
-  text.includes('same version as `@navecss/core`')
+  text.includes('It is released at the same version as `@navecss/core`: upgrade the two together.')
 
 /**
  * Every spelling of the name of the framework that is not `Next.js`, as found.
@@ -77,10 +77,23 @@ const misspellingsOfNextjs = (text: string): string[] =>
   text.match(/next[. ]?js/giu)?.filter((found) => found !== 'Next.js') ?? []
 
 /**
+ * Every directory `fixture()` made, so the last hook can remove each one.
+ */
+const fixtureDirectories: string[] = []
+
+afterAll(() => {
+  for (const directory of fixtureDirectories) {
+    rmSync(directory, { recursive: true, force: true })
+    expect(existsSync(directory), `${directory} is removed`).toBe(false)
+  }
+})
+
+/**
  * Writes the files under a fresh temporary directory and returns it.
  */
 function fixture(files: Record<string, string>): string {
   const directory = mkdtempSync(path.join(tmpdir(), 'release-note-'))
+  fixtureDirectories.push(directory)
   for (const [name, content] of Object.entries(files)) {
     mkdirSync(path.dirname(path.join(directory, name)), { recursive: true })
     writeFileSync(path.join(directory, name), content)
@@ -168,9 +181,16 @@ describe('AC-nextjs-used-atoms-44: which note is read', () => {
 describe('AC-nextjs-used-atoms-44: what the note is checked for', () => {
   it('says the same version only when it says so', () => {
     expect(
-      isVersionedWithCore('It is released at the same version as `@navecss/core`: upgrade.'),
+      isVersionedWithCore(
+        'It is released at the same version as `@navecss/core`: upgrade the two together.',
+      ),
     ).toBe(true)
     expect(isVersionedWithCore('It is not released with `@navecss/core`.')).toBe(false)
+    expect(
+      isVersionedWithCore(
+        'It is not released at the same version as `@navecss/core`: upgrade the two together.',
+      ),
+    ).toBe(false)
   })
 
   it('asks the floor of the manifest’s next peer', () => {

@@ -1,6 +1,6 @@
 # Releasing
 
-How a new version of `@navecss/tokens`, `@navecss/core` and `@navecss/prune` gets to npm. These three packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`: `prune` calls core's reader, [ADR 0009](../04-adr/0009-release-topology.md)); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of them, and `@navecss/cli` is not published yet. `@navecss/prune` is not on npm yet either: its first version is published by hand, as "A package's first release" below describes.
+How a new version of `@navecss/tokens`, `@navecss/core` and `@navecss/prune` gets to npm. These three packages always release together at the same version (they are a `fixed` group in `.changeset/config.json`: `prune` calls core's reader, [ADR 0009](../04-adr/0009-release-topology.md)); `@navecss/stylelint-config`, `@navecss/eslint-plugin` and `@navecss/base-ui` version independently of them, and `@navecss/cli` is not published yet. `@navecss/prune`'s first version is published by hand, as "A package's first release" below describes, and every later one releases like the other two.
 
 You need publish rights on all three packages on npmjs.com, with two-factor authentication on your npm account.
 
@@ -109,7 +109,7 @@ Trusted publishing cannot create a package: every credential-free path npm offer
 A new publishable package's first version goes live by hand, the same way the first version (`0.1.0`) of `@navecss/tokens` and `@navecss/core` did:
 
 1. Merge the pull request that adds the package, as usual: with its changeset, and with the package added to `PUBLISHABLE_SET` in `scripts/check-publishable-set.mjs` (the full check fails until it is). If the package already exists in the workspace as a private package (as `@navecss/cli` does today), the same pull request also removes `"private": true` from its `package.json` and removes it from `ignore` in `.changeset/config.json`: Changesets never versions a package on that list, and the same full check fails while a publishable package is still on it.
-2. Version it as in "1. Version the packages" above, and merge the version pull request.
+2. Version it as in "1. Version the packages" above, and merge the version pull request. If the package's README says it is not on npm yet, remove that sentence in the version pull request, since step 3 publishes from the commit that merges it. `@navecss/prune`'s tests fail while the Installation section of its README says it is not on npm yet and its version is not `0.0.0`.
 3. From that commit, with a clean working tree, build, then pack and publish the package by hand under two-factor authentication. `dist` is not committed, so packing without building first would publish a package with nothing in it, and a published version can never be replaced:
    ```sh
    pnpm install --frozen-lockfile
